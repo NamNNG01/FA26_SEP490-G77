@@ -1,0 +1,10 @@
+{
+  "description": "An AI-powered exam platform offering students, content managers, and admins seamless course management, exam creation, and performance tracking in a clean, user-friendly interface.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
