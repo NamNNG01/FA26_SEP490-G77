@@ -1,6 +1,6 @@
 # Exam Preparation Platform - Backend Architecture Specification
 
-**Version:** 1.1.0  
+**Version:** 2.0.0  
 **Target Environment:** Spring Boot 3.x + Supabase (PostgreSQL)  
 **Status:** Approved Source of Truth  
 
@@ -11,8 +11,8 @@
 The **Exam Preparation Platform** backend provides a scalable, secure, and maintainable foundation for managing question banks, assembling exams, conducting timed exam attempts, auto-grading submissions, and analyzing student performance.
 
 ### Key Architectural Principles
-- **Clean Layered Architecture (Modular Monolith):** Decouples REST controllers, business services, domain models, and infrastructure persistence adapters.
-- **Stateless & Scalable Security:** Integrates Spring Security with JWT (aligned with Supabase Auth) for stateless HTTP request authentication.
+- **Package-by-Layer Architecture:** All code lives under the base package `com.examprep` and is organized into eight flat technical-layer packages (`controllers`, `services`, `repositories`, `entities`, `dto`, `security`, `config`, `exceptions`) — there are no feature-scoped packages.
+- **Stateless & Scalable Security:** Spring Security with stateless JWT authentication (HMAC-SHA256) and role-based authorization on every request.
 - **Database Schema Evolution:** Database schema updates are managed exclusively via Flyway migrations targeting Supabase PostgreSQL.
 - **Unified API Design & Standardized Contracts:** Consistent response wrappers (`ApiResponse<T>`), standardized error responses, and automated OpenAPI (Swagger) documentation.
 
@@ -22,7 +22,7 @@ The **Exam Preparation Platform** backend provides a scalable, secure, and maint
 
 | Component | Technology | Version / Tool | Purpose |
 | :--- | :--- | :--- | :--- |
-| **Language** | Java | 17 LTS / 21 | Core programming language |
+| **Language** | Java | 17 LTS | Core programming language |
 | **Framework** | Spring Boot | 3.3.x | Application framework |
 | **Security** | Spring Security + JJWT + BCrypt | 6.x / 0.12.x | Authentication, authorization, password hashing, JWT verification |
 | **Database** | Supabase PostgreSQL | 15+ | Relational database host |
@@ -37,52 +37,39 @@ The **Exam Preparation Platform** backend provides a scalable, secure, and maint
 ## 3. High-Level System Architecture
 
 ```
-                                +---------------------------+
-                                |  Client Apps (Web / Mobile)|
-                                +-------------+-------------+
-                                              |
-                                     HTTP / REST API (JSON)
-                                              v
-+-----------------------------------------------------------------------------------+
-| Spring Boot Backend (BE)                                                          |
-|                                                                                   |
-|  +-----------------------------------------------------------------------------+  |
-|  | Web / Security Layer                                                        |  |
-|  | - CorsFilter, JwtAuthenticationFilter                                       |  |
-|  | - Controllers (@RestController)                                              |  |
-|  | - Exception Handlers (@RestControllerAdvice)                                 |  |
-|  +--------------------------------------+--------------------------------------+  |
-|                                         |                                         |
-|                                         v                                         |
-|  +-----------------------------------------------------------------------------+  |
-|  | Business / Application Layer                                                |  |
-|  | - AuthService & Business Services (@Service)                                 |  |
-|  | - Refresh Token Rotation Engine                                             |  |
-|  | - DTO Mappers                                                               |  |
-|  +--------------------------------------+--------------------------------------+  |
-|                                         |                                         |
-|                                         v                                         |
-|  +-----------------------------------------------------------------------------+  |
-|  | Infrastructure / Data Layer                                                 |  |
-|  | - Spring Data JPA Repositories (@Repository)                                 |  |
-|  | - JPA Entities & Custom Types                                               |  |
-|  | - HikariCP Connection Pool                                                  |  |
-|  +--------------------------------------+--------------------------------------+  |
-|                                         |                                         |
-+-----------------------------------------|-----------------------------------------+
-                                          |
-                                          v
-                         +---------------------------------+
-                         | Supabase PostgreSQL Database    |
-                         | (Managed Tables & Flyway Schema)|
-                         +---------------------------------+
+Client Apps (Web / Mobile)
+        |
+        |  HTTP / REST API (JSON)
+        v
+Spring Boot Backend (BE)
+        |
+        +-- Presentation & Security Layer
+        |     controllers/   REST endpoints (AuthController, HealthController)
+        |     security/      JwtAuthenticationFilter, JwtTokenProvider,
+        |                    RestAuthenticationEntryPoint (401), RestAccessDeniedHandler (403)
+        |     exceptions/    GlobalExceptionHandler (@RestControllerAdvice)
+        |     config/        SecurityConfig, CorsConfig, SwaggerConfig, JpaAuditingConfig
+        |
+        v  delegates to
+        +-- Business Layer
+        |     services/      AuthService / AuthServiceImpl (@Service, @Transactional)
+        |     dto/           Request/Response DTOs + ApiResponse<T> envelope
+        |
+        v  persists via
+        +-- Data Layer
+        |     repositories/  Spring Data JPA repositories (@Repository)
+        |     entities/      JPA entities mapped to Flyway-managed tables
+        |     (HikariCP connection pool)
+        |
+        v
+Supabase PostgreSQL Database (Flyway-managed schema)
 ```
 
 ---
 
 ## 4. Package-by-Layer Architecture
 
-The codebase follows a simple **package-by-layer** structure: responsibilities are separated by technical layer rather than by feature, keeping the architecture easy to navigate as the platform grows.
+The codebase follows a **package-by-layer** structure: responsibilities are separated by technical layer rather than by feature, keeping the architecture easy to navigate as the platform grows.
 
 | Package                    | Responsibility                                                        |
 |----------------------------|-----------------------------------------------------------------------|
@@ -94,6 +81,46 @@ The codebase follows a simple **package-by-layer** structure: responsibilities a
 | `com.examprep.security`    | JWT provider, authentication filters, principal, entry points.       |
 | `com.examprep.config`      | Spring configuration (Security, CORS, OpenAPI, Auditing).            |
 | `com.examprep.exceptions`  | Custom exceptions and the global exception handler.                  |
+
+**Source tree (key classes):**
+
+```
+com.examprep/
+|-- ExamPrepBackendApplication.java      # Application entry point
+|-- controllers/
+|   |-- AuthController.java              # AUTH-01..05 endpoints
+|   +-- HealthController.java            # Health check
+|-- services/
+|   |-- AuthService.java                 # Auth service interface
+|   +-- AuthServiceImpl.java             # Auth business logic
+|-- repositories/
+|   |-- UserRepository.java
+|   |-- RoleRepository.java
+|   |-- RefreshTokenRepository.java
+|   +-- PasswordResetTokenRepository.java
+|-- entities/
+|   |-- User.java / Role.java
+|   |-- RefreshToken.java
+|   +-- PasswordResetToken.java
+|-- dto/
+|   |-- ApiResponse.java / ResponseCode.java          # Response envelope
+|   |-- RegisterRequest / LoginRequest / LoginResponse / LogoutRequest
+|   |-- RefreshTokenRequest / TokenResponse
+|   +-- UserResponse.java / RoleResponse.java
+|-- security/
+|   |-- JwtTokenProvider.java            # Issue/validate JWT, SHA-256 hashing
+|   |-- JwtAuthenticationFilter.java     # Per-request bearer-token filter
+|   |-- UserPrincipal.java               # Authenticated principal
+|   |-- RestAuthenticationEntryPoint.java      # 401 JSON body
+|   +-- RestAccessDeniedHandler.java           # 403 JSON body
+|-- config/
+|   |-- SecurityConfig.java / CorsConfig.java / SwaggerConfig.java
+|   +-- JpaAuditingConfig.java
++-- exceptions/
+    |-- BaseException.java / BadRequestException.java
+    |-- UnauthorizedException.java / ResourceNotFoundException.java
+    +-- GlobalExceptionHandler.java
+```
 
 Layering flows strictly downward: `controllers → services → repositories`. Functional areas are expressed as responsibilities of the service layer, pulling entities/repositories as needed:
 
@@ -136,7 +163,8 @@ Layering flows strictly downward: `controllers → services → repositories`. F
   }
   ```
 - **Token Hashing:** Raw refresh tokens are issued to clients; only SHA-256 hashes (`token_hash`) are persisted in `refresh_tokens`.
-- **Refresh Token Rotation (AUTH-03):** Using a refresh token invalidates it (`revoked_at = NOW()`) and generates a new Access Token + Refresh Token pair.
+- **Refresh Token Rotation (AUTH-03):** Using a refresh token revokes it atomically (`UPDATE ... WHERE revoked_at IS NULL`) and issues a new Access Token + Refresh Token pair. The atomic guard guarantees each refresh token can be redeemed at most once, even under concurrent requests.
+- **Credential Check Order (AUTH-02):** The password is verified *before* the account-status check, so inactive accounts and invalid credentials produce indistinguishable responses (prevents account-status enumeration).
 
 ### 5.2 Role-Based Access Control (RBAC) & Endpoint Matrix
 
@@ -178,6 +206,7 @@ These endpoints are part of the agreed API contract but intentionally deferred u
 
 2. **Entity Design Conventions:**
    - `User`, `Role`, `RefreshToken`, `PasswordResetToken` use `BIGSERIAL` PKs (`user_id`, `role_id`, `refresh_token_id`, `reset_token_id`).
+   - Audit timestamps (`created_at`) are mapped consistently with `@CreatedDate` + `AuditingEntityListener` on all four auth entities (enabled by `JpaAuditingConfig`).
    - No soft-delete flags (`deleted`): the schema declares no such columns, and entities MUST NOT declare columns absent from migrations (see `RULES.md` §3.3).
 
 ---
@@ -189,7 +218,21 @@ All REST endpoints return data wrapped in `ApiResponse<T>`:
 ```json
 {
   "success": true,
-  "message": "Operation completed successfully",
+  "message": "Login successful.",
   "data": { ... }
 }
 ```
+
+Errors use the same envelope with `success: false`:
+
+```json
+{
+  "success": false,
+  "message": "Access denied."
+}
+```
+
+**Status code semantics:**
+- `401 Unauthorized` — missing / invalid / expired authentication token (`RestAuthenticationEntryPoint`).
+- `403 Forbidden` — authenticated but insufficient role (`RestAccessDeniedHandler`).
+- `500 Internal Server Error` — unhandled exceptions; the full stack trace is logged server-side but never returned to the client (`GlobalExceptionHandler`).
