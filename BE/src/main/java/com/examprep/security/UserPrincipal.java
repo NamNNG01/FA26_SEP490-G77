@@ -1,6 +1,6 @@
 package com.examprep.security;
 
-import com.examprep.domain.user.entity.User;
+import com.examprep.entities.User;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;

@@ -8,7 +8,7 @@ Welcome to the backend service of the **Exam Preparation Platform**. This reposi
 
 Before contributing or modifying code, please review the following source-of-truth documents:
 
-- 🏛️ [ARCHITECTURE.md](ARCHITECTURE.md) — System Architecture, Tech Stack, Package Layout, Domain Boundaries & Security Design.
+- 🏛️ [ARCHITECTURE.md](ARCHITECTURE.md) — System Architecture, Tech Stack, Package Layout & Security Design.
 - 📜 [RULES.md](RULES.md) — Coding Standards, Layering Constraints, Flyway Migration Rules & Exception Conventions.
 
 ---
@@ -39,22 +39,31 @@ BE/
 ├── RULES.md                     # Coding Standards & Layering Rules
 ├── README.md                    # Developer Setup & Onboarding Guide (This file)
 ├── pom.xml                      # Maven Build Configuration
+├── .env.example                 # Environment variable template
 └── src/
     ├── main/
     │   ├── java/
     │   │   └── com/
-    │   │       └── examprep/
+    │   │       └── examprep/                  # Base package (package-by-layer)
     │   │           ├── ExamPrepBackendApplication.java
-    │   │           ├── common/  # Shared utilities, Exception handling, Response wrappers
-    │   │           ├── domain/  # Feature modules (user, question, exam, attempt, analytics)
-    │   │           └── security/# JWT Filter, Token Provider, Security Config
+    │   │           ├── controllers/           # @RestController (AuthController, HealthController)
+    │   │           ├── services/              # @Service (AuthService, AuthServiceImpl)
+    │   │           ├── repositories/          # Spring Data JPA repositories
+    │   │           ├── entities/              # JPA entities (User, Role, RefreshToken, PasswordResetToken)
+    │   │           ├── dto/                   # Request/Response DTOs + ApiResponse/ResponseCode wrappers
+    │   │           ├── security/              # JwtTokenProvider, JwtAuthenticationFilter, entry points
+    │   │           ├── config/                # Security, CORS, OpenAPI, Auditing configuration
+    │   │           └── exceptions/            # Custom exceptions + GlobalExceptionHandler
     │   └── resources/
     │       ├── application.yml         # Base Configuration
     │       ├── application-dev.yml     # Development Profile Config
     │       ├── application-prod.yml    # Production Profile Config
     │       └── db/
-    │           └── migration/          # Flyway Database Migration Scripts
-    └── test/                           # Unit & Integration Tests
+    │           └── migration/          # Flyway Database Migration Scripts (V1, V2)
+    └── test/
+        ├── java/com/examprep/          # Tests (controllers/, services/, context test)
+        └── resources/
+            └── application-test.yml    # Test Profile Config (H2 in-memory)
 ```
 
 ---
@@ -62,13 +71,14 @@ BE/
 ## 🚀 Quick Start & Local Setup
 
 ### 1. Configure Environment Variables
-Copy or set the following environment variables or configure them in `src/main/resources/application-dev.yml`:
+Copy `.env.example` and fill in the values, or set the following environment variables (they can also be defaulted in `src/main/resources/application-dev.yml`):
 
 ```properties
 SUPABASE_DB_URL=jdbc:postgresql://<your-supabase-host>:5432/<db_name>?sslmode=require
 SUPABASE_DB_USERNAME=postgres
 SUPABASE_DB_PASSWORD=<your-database-password>
 JWT_SECRET=<your-256-bit-secret-key-or-supabase-jwt-secret>
+CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
 ```
 
 ### 2. Build the Project
@@ -105,7 +115,7 @@ Once the application is running locally:
 
 ## 🧪 Testing & Verification
 
-Run the test suite:
+Run the test suite (tests run against an in-memory H2 database using the `test` profile configured in `src/test/resources/application-test.yml`):
 
 ```bash
 mvn test
@@ -125,3 +135,4 @@ mvn clean package -DskipTests=false
 2. Never commit hardcoded secret keys or database passwords.
 3. Ensure all entity changes are accompanied by a new Flyway migration script in `src/main/resources/db/migration/`.
 4. Wrap API responses in `ApiResponse<T>` and throw custom `BaseException` variants for error conditions.
+5. Place every new class in its layer package (`controllers/`, `services/`, `repositories/`, `entities/`, `dto/`, `security/`, `config/`, `exceptions/`) — see [RULES.md](RULES.md) §3.0. Do not create feature-scoped packages.

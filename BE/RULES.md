@@ -1,6 +1,6 @@
 # Exam Preparation Platform - Development Rules & Coding Standards
 
-**Version:** 1.0.0  
+**Version:** 1.1.0  
 **Scope:** Backend (`BE`) Engineering Team  
 **Status:** Mandatory Compliance Required  
 
@@ -9,7 +9,7 @@
 ## 1. Core Engineering Principles
 
 1. **Clean Code & Self-Documenting Design:** Code must be expressive, clean, and concise. Avoid redundant comments that restate what the code clearly does.
-2. **Explicit Layering & Single Responsibility:** Components must strictly adhere to their assigned architectural layer (Web $\rightarrow$ Service $\rightarrow$ Infrastructure).
+2. **Explicit Layering & Single Responsibility:** Components must strictly adhere to their assigned architectural layer (`controllers` → `services` → `repositories`).
 3. **No Direct Entity Exposure:** Database entities (`@Entity`) MUST NEVER be returned directly by Controller endpoints or accepted as request parameters. Use dedicated Data Transfer Objects (`DTO`s).
 4. **Zero Tolerance for Silent Error Swallowing:** Exceptions must be logged and handled explicitly via the global exception hierarchy. Never use empty `catch` blocks or fallback dummy returns.
 
@@ -46,6 +46,25 @@
 [ PostgreSQL / Supabase ]
 ```
 
+### 3.0 Package Layout (Package-by-Layer)
+All code lives under the base package `com.examprep` and follows a flat, layer-based layout:
+
+```
+com.examprep/
+├── controllers/   # @RestController
+├── services/      # @Service
+├── repositories/  # Spring Data JPA repositories
+├── entities/      # JPA @Entity
+├── dto/           # Request/Response DTOs + ApiResponse/ResponseCode wrappers
+├── security/      # JWT & Spring Security components
+├── config/        # @Configuration classes
+└── exceptions/    # Custom exceptions + GlobalExceptionHandler
+```
+
+- Layering flows strictly downward: `controllers → services → repositories`.
+- There are no feature-scoped packages — controllers and services MUST NOT introduce or depend on them; features are expressed through classes in the shared layer packages.
+- Cross-cutting types live in fixed homes: response wrappers (`ApiResponse`, `ResponseCode`) in `dto/`; custom exceptions in `exceptions/`; configuration in `config/`.
+
 ### 3.1 Controller Rules (`@RestController`)
 - Controllers MUST be light wrappers over services.
 - Controllers MUST return `ResponseEntity<ApiResponse<T>>`.
@@ -53,6 +72,7 @@
 - Controllers MUST NOT contain business decisions, direct entity references, or JDBC/JPA logic.
 
 ### 3.2 Service Rules (`@Service`)
+- Service interfaces MUST be named `*Service` (e.g., `AuthService`) and their implementations `*ServiceImpl` (e.g., `AuthServiceImpl`), both in `services/`.
 - All business operations MUST be declared within service classes/interfaces.
 - Read-only operations MUST be annotated with `@Transactional(readOnly = true)`.
 - State-modifying operations MUST be annotated with `@Transactional`.
