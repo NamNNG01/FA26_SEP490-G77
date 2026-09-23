@@ -1,0 +1,29 @@
+# Target build directories
+**/target/
+target/
+
+# IDE and Editor files
+.idea/
+*.iml
+.classpath
+.project
+.settings/
+.vscode/
+*.swp
+*.swo
+
+# Environment & Local Configuration Secrets
+*.env
+*.env.local
+.env.*.local
+
+# Operating System Files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Maven wrapper jar if generated
+.mvn/timing.properties
