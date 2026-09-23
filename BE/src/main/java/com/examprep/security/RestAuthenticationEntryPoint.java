@@ -1,7 +1,7 @@
 package com.examprep.security;
 
-import com.examprep.common.response.ApiResponse;
-import com.examprep.common.response.ResponseCode;
+import com.examprep.dto.ApiResponse;
+import com.examprep.dto.ResponseCode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
