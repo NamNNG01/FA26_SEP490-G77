@@ -5,8 +5,7 @@
 INSERT INTO roles (role_id, role_code, role_name) VALUES 
 (1, 'ADMIN', 'Quản trị viên'),
 (2, 'COURSE_MANAGER', 'Quản lý khóa học'),
-(3, 'STUDENT', 'Học viên'),
-(4, 'GRADER', 'Người chấm thi')
+(3, 'STUDENT', 'Học viên')
 ON CONFLICT (role_code) DO NOTHING;
 
 -- Reset roles sequence
