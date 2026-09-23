@@ -19,6 +19,8 @@ import java.time.Instant;
 @EntityListeners(AuditingEntityListener.class)
 public class User implements Serializable {
 
+    public static final String STATUS_ACTIVE = "ACTIVE";
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "user_id")
@@ -42,7 +44,7 @@ public class User implements Serializable {
 
     @Builder.Default
     @Column(name = "status", nullable = false, length = 50)
-    private String status = "ACTIVE";
+    private String status = STATUS_ACTIVE;
 
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)

@@ -14,7 +14,6 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
-import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -130,7 +129,6 @@ class AuthControllerTest {
     }
 
     @Test
-    @WithMockUser
     void logout_Success() throws Exception {
         LogoutRequest request = LogoutRequest.builder()
                 .refreshToken("someRefreshToken")
@@ -147,5 +145,18 @@ class AuthControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.message").value("Logout successful."));
+    }
+
+    @Test
+    void logoutAll_Success() throws Exception {
+        UserPrincipal principal = UserPrincipal.create(101L, "student@gmail.com", "STUDENT");
+        doNothing().when(authService).logoutAll(any());
+
+        mockMvc.perform(post("/api/v1/auth/logout-all")
+                        .with(csrf())
+                        .with(user(principal)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("All sessions have been logged out."));
     }
 }

@@ -157,6 +157,7 @@ class AuthServiceTest {
 
         when(tokenProvider.hashToken("oldRawRefreshToken")).thenReturn("oldHashedToken");
         when(refreshTokenRepository.findByTokenHash("oldHashedToken")).thenReturn(Optional.of(existingToken));
+        when(refreshTokenRepository.revokeIfActive(eq(1L), any(Instant.class))).thenReturn(1);
         when(tokenProvider.generateAccessToken(testUser)).thenReturn("newAccessToken");
         when(tokenProvider.generateRawRefreshToken()).thenReturn("newRawRefreshToken");
         when(tokenProvider.hashToken("newRawRefreshToken")).thenReturn("newHashedToken");
@@ -166,8 +167,98 @@ class AuthServiceTest {
         assertNotNull(response);
         assertEquals("newAccessToken", response.getAccessToken());
         assertEquals("newRawRefreshToken", response.getRefreshToken());
-        assertNotNull(existingToken.getRevokedAt()); // Verifies old token was revoked
-        verify(refreshTokenRepository, times(2)).save(any(RefreshToken.class));
+        verify(refreshTokenRepository).revokeIfActive(eq(1L), any(Instant.class));
+        verify(refreshTokenRepository, times(1)).save(any(RefreshToken.class));
+    }
+
+    @Test
+    void refreshToken_Revoked_ThrowsUnauthorizedException() {
+        RefreshTokenRequest request = RefreshTokenRequest.builder()
+                .refreshToken("rawRefreshToken")
+                .build();
+
+        RefreshToken revokedToken = RefreshToken.builder()
+                .refreshTokenId(1L)
+                .user(testUser)
+                .tokenHash("hashedToken")
+                .expiresAt(Instant.now().plusSeconds(3600))
+                .revokedAt(Instant.now())
+                .build();
+
+        when(tokenProvider.hashToken("rawRefreshToken")).thenReturn("hashedToken");
+        when(refreshTokenRepository.findByTokenHash("hashedToken")).thenReturn(Optional.of(revokedToken));
+
+        assertThrows(UnauthorizedException.class, () -> authService.refreshToken(request));
+        verify(refreshTokenRepository, never()).revokeIfActive(any(), any());
+    }
+
+    @Test
+    void refreshToken_AlreadyUsed_ThrowsUnauthorizedException() {
+        RefreshTokenRequest request = RefreshTokenRequest.builder()
+                .refreshToken("rawRefreshToken")
+                .build();
+
+        RefreshToken activeToken = RefreshToken.builder()
+                .refreshTokenId(1L)
+                .user(testUser)
+                .tokenHash("hashedToken")
+                .expiresAt(Instant.now().plusSeconds(3600))
+                .revokedAt(null)
+                .build();
+
+        when(tokenProvider.hashToken("rawRefreshToken")).thenReturn("hashedToken");
+        when(refreshTokenRepository.findByTokenHash("hashedToken")).thenReturn(Optional.of(activeToken));
+        when(refreshTokenRepository.revokeIfActive(eq(1L), any(Instant.class))).thenReturn(0);
+
+        assertThrows(UnauthorizedException.class, () -> authService.refreshToken(request));
+        verify(refreshTokenRepository, never()).save(any(RefreshToken.class));
+    }
+
+    @Test
+    void login_InactiveAccount_ThrowsUnauthorizedException() {
+        LoginRequest request = LoginRequest.builder()
+                .email("student@gmail.com")
+                .password("Password@123")
+                .build();
+
+        User inactiveUser = User.builder()
+                .userId(101L)
+                .email("student@gmail.com")
+                .passwordHash("hashedPassword")
+                .fullName("Nguyen Van A")
+                .role(studentRole)
+                .status("INACTIVE")
+                .build();
+
+        when(userRepository.findByEmail("student@gmail.com")).thenReturn(Optional.of(inactiveUser));
+        when(passwordEncoder.matches("Password@123", "hashedPassword")).thenReturn(true);
+
+        assertThrows(UnauthorizedException.class, () -> authService.login(request));
+        verify(refreshTokenRepository, never()).save(any(RefreshToken.class));
+    }
+
+    @Test
+    void logout_Success() {
+        LogoutRequest request = LogoutRequest.builder()
+                .refreshToken("rawRefreshToken")
+                .build();
+        UserPrincipal currentUser = UserPrincipal.create(101L, "student@gmail.com", "STUDENT");
+
+        RefreshToken activeToken = RefreshToken.builder()
+                .refreshTokenId(1L)
+                .user(testUser)
+                .tokenHash("hashedToken")
+                .expiresAt(Instant.now().plusSeconds(3600))
+                .revokedAt(null)
+                .build();
+
+        when(tokenProvider.hashToken("rawRefreshToken")).thenReturn("hashedToken");
+        when(refreshTokenRepository.findByTokenHash("hashedToken")).thenReturn(Optional.of(activeToken));
+
+        authService.logout(request, currentUser);
+
+        assertNotNull(activeToken.getRevokedAt());
+        verify(refreshTokenRepository, times(1)).save(activeToken);
     }
 
     @Test

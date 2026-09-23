@@ -19,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.Locale;
 
 @Slf4j
 @Service
@@ -35,14 +36,14 @@ public class AuthServiceImpl implements AuthService {
     @Transactional
     public UserResponse register(RegisterRequest request) {
         String email = normalizeEmail(request.getEmail());
-        log.info("Registering new user with email: {}", email);
+        log.info("Registering new user account");
 
         if (userRepository.existsByEmail(email)) {
             throw new BadRequestException("Email is already registered.");
         }
 
         // Always assign STUDENT role for registration
-        Role studentRole = roleRepository.findByRoleCode("STUDENT")
+        Role studentRole = roleRepository.findByRoleCode(Role.CODE_STUDENT)
                 .orElseThrow(() -> new ResourceNotFoundException("Default STUDENT role not found in database."));
 
         User user = User.builder()
@@ -50,7 +51,7 @@ public class AuthServiceImpl implements AuthService {
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
                 .fullName(request.getFullName().trim())
                 .role(studentRole)
-                .status("ACTIVE")
+                .status(User.STATUS_ACTIVE)
                 .build();
 
         User savedUser = userRepository.save(user);
@@ -62,35 +63,24 @@ public class AuthServiceImpl implements AuthService {
     @Transactional
     public LoginResponse login(LoginRequest request) {
         String email = normalizeEmail(request.getEmail());
-        log.info("Authenticating user: {}", email);
 
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new UnauthorizedException("Invalid email or password."));
+        log.info("Authenticating user ID: {}", user.getUserId());
 
         if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
             throw new UnauthorizedException("Invalid email or password.");
         }
 
-        if (!"ACTIVE".equalsIgnoreCase(user.getStatus())) {
+        if (!User.STATUS_ACTIVE.equalsIgnoreCase(user.getStatus())) {
             throw new UnauthorizedException("User account is inactive or blocked.");
         }
 
-        // Generate Access Token & Refresh Token
         String accessToken = tokenProvider.generateAccessToken(user);
         String rawRefreshToken = tokenProvider.generateRawRefreshToken();
-        String hashedRefreshToken = tokenProvider.hashToken(rawRefreshToken);
+        refreshTokenRepository.save(newRefreshToken(user, rawRefreshToken));
 
-        Instant expiresAt = Instant.now().plusMillis(JwtTokenProvider.REFRESH_TOKEN_EXPIRATION_MS);
-
-        RefreshToken refreshTokenEntity = RefreshToken.builder()
-                .user(user)
-                .tokenHash(hashedRefreshToken)
-                .expiresAt(expiresAt)
-                .build();
-
-        refreshTokenRepository.save(refreshTokenEntity);
-
-        log.info("User {} logged in successfully.", user.getEmail());
+        log.info("User ID {} logged in successfully.", user.getUserId());
 
         return LoginResponse.builder()
                 .accessToken(accessToken)
@@ -106,9 +96,8 @@ public class AuthServiceImpl implements AuthService {
     public TokenResponse refreshToken(RefreshTokenRequest request) {
         log.info("Processing Refresh Token Rotation");
 
-        String hashedInputToken = tokenProvider.hashToken(request.getRefreshToken());
-
-        RefreshToken refreshTokenEntity = refreshTokenRepository.findByTokenHash(hashedInputToken)
+        RefreshToken refreshTokenEntity = refreshTokenRepository
+                .findByTokenHash(tokenProvider.hashToken(request.getRefreshToken()))
                 .orElseThrow(() -> new UnauthorizedException("Invalid refresh token."));
 
         if (refreshTokenEntity.getRevokedAt() != null) {
@@ -122,30 +111,20 @@ public class AuthServiceImpl implements AuthService {
         }
 
         User user = refreshTokenEntity.getUser();
-        if (!"ACTIVE".equalsIgnoreCase(user.getStatus())) {
+        if (!User.STATUS_ACTIVE.equalsIgnoreCase(user.getStatus())) {
             throw new UnauthorizedException("User account is no longer active.");
         }
 
-        // 1. Revoke current refresh token (Rotation)
-        refreshTokenEntity.setRevokedAt(Instant.now());
-        refreshTokenRepository.save(refreshTokenEntity);
+        int revoked = refreshTokenRepository.revokeIfActive(refreshTokenEntity.getRefreshTokenId(), Instant.now());
+        if (revoked == 0) {
+            throw new UnauthorizedException("Refresh token has already been used.");
+        }
 
-        // 2. Generate new token pair
         String newAccessToken = tokenProvider.generateAccessToken(user);
         String newRawRefreshToken = tokenProvider.generateRawRefreshToken();
-        String newHashedRefreshToken = tokenProvider.hashToken(newRawRefreshToken);
+        refreshTokenRepository.save(newRefreshToken(user, newRawRefreshToken));
 
-        Instant newExpiresAt = Instant.now().plusMillis(JwtTokenProvider.REFRESH_TOKEN_EXPIRATION_MS);
-
-        RefreshToken newRefreshTokenEntity = RefreshToken.builder()
-                .user(user)
-                .tokenHash(newHashedRefreshToken)
-                .expiresAt(newExpiresAt)
-                .build();
-
-        refreshTokenRepository.save(newRefreshTokenEntity);
-
-        log.info("Refresh Token Rotation completed for user: {}", user.getEmail());
+        log.info("Refresh Token Rotation completed for user ID: {}", user.getUserId());
 
         return TokenResponse.builder()
                 .accessToken(newAccessToken)
@@ -178,7 +157,15 @@ public class AuthServiceImpl implements AuthService {
         refreshTokenRepository.revokeAllByUserId(currentUser.getId(), Instant.now());
     }
 
-    private String normalizeEmail(String email) {
-        return email == null ? null : email.trim().toLowerCase();
+    private RefreshToken newRefreshToken(User user, String rawToken) {
+        return RefreshToken.builder()
+                .user(user)
+                .tokenHash(tokenProvider.hashToken(rawToken))
+                .expiresAt(Instant.now().plusMillis(JwtTokenProvider.REFRESH_TOKEN_EXPIRATION_MS))
+                .build();
+    }
+
+    private static String normalizeEmail(String email) {
+        return email == null ? null : email.trim().toLowerCase(Locale.ROOT);
     }
 }

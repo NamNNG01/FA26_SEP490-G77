@@ -2,6 +2,8 @@ package com.examprep.entities;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.io.Serializable;
 import java.time.Instant;
@@ -13,7 +15,12 @@ import java.time.Instant;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@EntityListeners(AuditingEntityListener.class)
 public class Role implements Serializable {
+
+    public static final String CODE_ADMIN = "ADMIN";
+    public static final String CODE_COURSE_MANAGER = "COURSE_MANAGER";
+    public static final String CODE_STUDENT = "STUDENT";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -26,13 +33,7 @@ public class Role implements Serializable {
     @Column(name = "role_name", nullable = false, length = 100)
     private String roleName;
 
+    @CreatedDate
     @Column(name = "created_at", updatable = false)
     private Instant createdAt;
-
-    @PrePersist
-    public void prePersist() {
-        if (createdAt == null) {
-            createdAt = Instant.now();
-        }
-    }
 }

@@ -71,9 +71,9 @@ public class JwtTokenProvider {
                     .parseSignedClaims(token);
             return true;
         } catch (JwtException ex) {
-            log.error("Invalid or expired JWT token: {}", ex.getMessage());
+            log.debug("Invalid or expired JWT token: {}", ex.getMessage());
         } catch (IllegalArgumentException ex) {
-            log.error("JWT claims string is empty: {}", ex.getMessage());
+            log.debug("JWT claims string is empty: {}", ex.getMessage());
         }
         return false;
     }
