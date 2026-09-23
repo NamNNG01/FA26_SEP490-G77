@@ -22,6 +22,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(AuthController.class)
@@ -158,5 +159,39 @@ class AuthControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.message").value("All sessions have been logged out."));
+    }
+
+    @Test
+    void forgotPassword_IsPublic() throws Exception {
+        mockMvc.perform(post("/api/v1/auth/password/forgot")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"student@gmail.com\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+    }
+
+    @Test
+    void resetPassword_IsPublic() throws Exception {
+        mockMvc.perform(post("/api/v1/auth/password/reset")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"token\":\"reset-token\",\"password\":\"Password@123\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+    }
+
+    @Test
+    void changePassword_ChangesPasswordForAuthenticatedUser() throws Exception {
+        UserPrincipal principal = UserPrincipal.create(101L, "student@gmail.com", "STUDENT");
+        doNothing().when(authService).changePassword(any(ChangePasswordRequest.class), any());
+
+        mockMvc.perform(put("/api/v1/auth/password/change")
+                        .with(csrf())
+                        .with(user(principal))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"currentPassword\":\"Password@123\",\"newPassword\":\"NewPassword@123\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
     }
 }

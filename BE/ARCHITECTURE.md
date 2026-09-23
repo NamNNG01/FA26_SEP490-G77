@@ -88,7 +88,7 @@ The codebase follows a **package-by-layer** structure: responsibilities are sepa
 com.examprep/
 |-- ExamPrepBackendApplication.java      # Application entry point
 |-- controllers/
-|   |-- AuthController.java              # AUTH-01..05 endpoints
+|   |-- AuthController.java              # AUTH-01..08 endpoints
 |   +-- HealthController.java            # Health check
 |-- services/
 |   |-- AuthService.java                 # Auth service interface
@@ -125,7 +125,7 @@ com.examprep/
 Layering flows strictly downward: `controllers → services → repositories`. Functional areas are expressed as responsibilities of the service layer, pulling entities/repositories as needed:
 
 1. **User & Auth** — User profiles, role definitions (`ADMIN`, `COURSE_MANAGER`, `STUDENT`).
-   - Authentication APIs (AUTH-01 to AUTH-05): Register, Login, Refresh Token Rotation, Logout, Logout-all.
+   - Authentication APIs (AUTH-01 to AUTH-08): Register, Login, Refresh Token Rotation, Logout, Logout-all, Forgot Password, Reset Password, Change Password.
    - Token storage: `refresh_tokens`, `password_reset_tokens`.
 
 2. **Question Bank** (planned)
@@ -175,6 +175,9 @@ Layering flows strictly downward: `controllers → services → repositories`. F
 | `/api/v1/auth/refresh` | POST | Public | AUTH-03: Refresh Token Rotation |
 | `/api/v1/auth/logout` | POST | Authenticated | AUTH-04: Logout Session |
 | `/api/v1/auth/logout-all` | POST | Authenticated | AUTH-05: Logout All Sessions |
+| `/api/v1/auth/password/forgot` | POST | Public | AUTH-06: Send password-reset link |
+| `/api/v1/auth/password/reset` | POST | Public | AUTH-07: Reset password with one-time token |
+| `/api/v1/auth/password/change` | PUT | Authenticated | AUTH-08: Change password and revoke sessions |
 | `/api/v1/health` | GET | Public | Health Check |
 | `/v3/api-docs/**`, `/swagger-ui/**` | GET | Public | OpenAPI Documentation |
 | `/api/v1/student/**` | ANY | `STUDENT`, `ADMIN` | Student Features |
@@ -189,9 +192,6 @@ These endpoints are part of the agreed API contract but intentionally deferred u
 
 | ID | Endpoint | Notes |
 | :--- | :--- | :--- |
-| AUTH-06 | `POST /api/v1/auth/password/forgot` | Requires email delivery (SMTP) — deferred |
-| AUTH-07 | `POST /api/v1/auth/password/reset` | Uses `password_reset_tokens` — deferred |
-| AUTH-08 | `PUT /api/v1/auth/password/change` | Authenticated; revokes refresh tokens after change — deferred |
 | USER-01 | `GET /api/v1/users/me` | Requires `createdAt` added to `UserResponse` — deferred |
 | USER-02 | `PUT /api/v1/users/me` | Profile update (`fullName`, `avatarUrl`) — deferred |
 

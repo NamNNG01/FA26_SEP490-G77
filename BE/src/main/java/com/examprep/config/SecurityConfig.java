@@ -54,7 +54,9 @@ public class SecurityConfig {
                                 "/swagger-ui.html",
                                 "/api/v1/auth/register",
                                 "/api/v1/auth/login",
-                                "/api/v1/auth/refresh"
+                                "/api/v1/auth/refresh",
+                                "/api/v1/auth/password/forgot",
+                                "/api/v1/auth/password/reset"
                         ).permitAll()
                         // Role-restricted Endpoints
                         .requestMatchers("/api/v1/admin/**").hasRole(Role.CODE_ADMIN)

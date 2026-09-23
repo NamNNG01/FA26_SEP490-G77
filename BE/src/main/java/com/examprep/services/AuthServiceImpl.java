@@ -5,6 +5,8 @@ import com.examprep.exceptions.ResourceNotFoundException;
 import com.examprep.exceptions.UnauthorizedException;
 import com.examprep.dto.*;
 import com.examprep.entities.RefreshToken;
+import com.examprep.entities.PasswordResetToken;
+import com.examprep.repositories.PasswordResetTokenRepository;
 import com.examprep.repositories.RefreshTokenRepository;
 import com.examprep.entities.Role;
 import com.examprep.entities.User;
@@ -17,6 +19,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Instant;
 import java.util.Locale;
@@ -29,8 +33,10 @@ public class AuthServiceImpl implements AuthService {
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final RefreshTokenRepository refreshTokenRepository;
+    private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider tokenProvider;
+    private final PasswordResetEmailService passwordResetEmailService;
 
     @Override
     @Transactional
@@ -157,12 +163,75 @@ public class AuthServiceImpl implements AuthService {
         refreshTokenRepository.revokeAllByUserId(currentUser.getId(), Instant.now());
     }
 
+    @Override
+    @Transactional
+    public void forgotPassword(ForgotPasswordRequest request) {
+        userRepository.findByEmail(normalizeEmail(request.getEmail()))
+                .filter(user -> User.STATUS_ACTIVE.equalsIgnoreCase(user.getStatus()))
+                .ifPresent(user -> {
+                    String rawToken = tokenProvider.generateRawRefreshToken();
+                    passwordResetTokenRepository.save(PasswordResetToken.builder()
+                            .user(user)
+                            .tokenHash(tokenProvider.hashToken(rawToken))
+                            .expiresAt(Instant.now().plusSeconds(15 * 60))
+                            .build());
+                    sendPasswordResetEmailAfterCommit(user, rawToken);
+                });
+    }
+
+    @Override
+    @Transactional
+    public void resetPassword(ResetPasswordRequest request) {
+        PasswordResetToken resetToken = passwordResetTokenRepository
+                .findByTokenHash(tokenProvider.hashToken(request.getToken()))
+                .orElseThrow(() -> new BadRequestException("Invalid or expired reset token."));
+
+        if (resetToken.getUsedAt() != null || resetToken.getExpiresAt().isBefore(Instant.now())) {
+            throw new BadRequestException("Invalid or expired reset token.");
+        }
+
+        if (passwordResetTokenRepository.markUsedIfUnused(resetToken.getResetTokenId(), Instant.now()) == 0) {
+            throw new BadRequestException("Invalid or expired reset token.");
+        }
+
+        User user = resetToken.getUser();
+        user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
+        refreshTokenRepository.revokeAllByUserId(user.getUserId(), Instant.now());
+    }
+
+    @Override
+    @Transactional
+    public void changePassword(ChangePasswordRequest request, UserPrincipal currentUser) {
+        User user = userRepository.findById(currentUser.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("User not found."));
+
+        if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPasswordHash())) {
+            throw new BadRequestException("Current password is incorrect.");
+        }
+
+        user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
+        refreshTokenRepository.revokeAllByUserId(user.getUserId(), Instant.now());
+    }
+
     private RefreshToken newRefreshToken(User user, String rawToken) {
         return RefreshToken.builder()
                 .user(user)
                 .tokenHash(tokenProvider.hashToken(rawToken))
                 .expiresAt(Instant.now().plusMillis(JwtTokenProvider.REFRESH_TOKEN_EXPIRATION_MS))
                 .build();
+    }
+
+    private void sendPasswordResetEmailAfterCommit(User user, String rawToken) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    passwordResetEmailService.send(user.getUserId(), user.getEmail(), rawToken);
+                }
+            });
+            return;
+        }
+        passwordResetEmailService.send(user.getUserId(), user.getEmail(), rawToken);
     }
 
     private static String normalizeEmail(String email) {
