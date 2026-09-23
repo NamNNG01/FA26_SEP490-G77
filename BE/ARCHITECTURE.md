@@ -85,7 +85,7 @@ The **Exam Preparation Platform** backend provides a scalable, secure, and maint
 The system is partitioned logically into 5 domain modules:
 
 1. **User & Auth Module (`com.examprep.domain.auth`, `com.examprep.domain.user`)**
-   - User profiles, role definitions (`STUDENT`, `INSTRUCTOR`, `ADMIN`).
+   - User profiles, role definitions (`ADMIN`, `COURSE_MANAGER`, `STUDENT`, `GRADER`).
    - Authentication APIs (AUTH-01 to AUTH-05): Register, Login, Refresh Token Rotation, Logout, Logout-all.
    - Token storage: `refresh_tokens`, `password_reset_tokens`.
 
@@ -137,9 +137,12 @@ The system is partitioned logically into 5 domain modules:
 | `/api/v1/auth/logout-all` | POST | Authenticated | AUTH-05: Logout All Sessions |
 | `/api/v1/health` | GET | Public | Health Check |
 | `/v3/api-docs/**`, `/swagger-ui/**` | GET | Public | OpenAPI Documentation |
-| `/api/v1/student/**` | ANY | `STUDENT`, `INSTRUCTOR`, `ADMIN` | Student Features |
-| `/api/v1/instructor/**` | ANY | `INSTRUCTOR`, `ADMIN` | Instructor Management |
+| `/api/v1/student/**` | ANY | `STUDENT`, `ADMIN` | Student Features |
+| `/api/v1/manager/**` | ANY | `COURSE_MANAGER`, `ADMIN` | Course Manager Features |
 | `/api/v1/admin/**` | ANY | `ADMIN` | Administrative APIs |
+| `/api/v1/dashboard/student` | GET | `STUDENT` | DASH-01: Student Dashboard |
+| `/api/v1/dashboard/course-manager` | GET | `COURSE_MANAGER` | DASH-02: Course Manager Dashboard |
+| `/api/v1/dashboard/admin` | GET | `ADMIN` | DASH-03: Admin Dashboard |
 
 ---
 
@@ -162,9 +165,7 @@ All REST endpoints return data wrapped in `ApiResponse<T>`:
 ```json
 {
   "success": true,
-  "code": "SUCCESS",
   "message": "Operation completed successfully",
-  "data": { ... },
-  "timestamp": "2026-09-23T08:25:00Z"
+  "data": { ... }
 }
 ```

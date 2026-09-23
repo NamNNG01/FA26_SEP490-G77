@@ -18,3 +18,7 @@ logging:
   level:
     root: INFO
     com.examprep: DEBUG
+
+app:
+  jwt:
+    secret: test-only-jwt-secret-not-for-production-use-0123456789

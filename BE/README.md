@@ -27,7 +27,7 @@ Before contributing or modifying code, please review the following source-of-tru
 - **Migration:** Flyway Migration Core
 - **Authentication:** Spring Security + JWT
 - **Documentation:** Springdoc OpenAPI / Swagger UI
-- **Utilities:** Lombok, MapStruct
+- **Utilities:** Lombok
 
 ---
 
@@ -45,7 +45,7 @@ BE/
     │   │   └── com/
     │   │       └── examprep/
     │   │           ├── ExamPrepBackendApplication.java
-    │   │           ├── common/  # Shared utilities, BaseEntity, Exception handling, Response wrappers
+    │   │           ├── common/  # Shared utilities, Exception handling, Response wrappers
     │   │           ├── domain/  # Feature modules (user, question, exam, attempt, analytics)
     │   │           └── security/# JWT Filter, Token Provider, Security Config
     │   └── resources/

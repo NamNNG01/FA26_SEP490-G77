@@ -1,6 +1,8 @@
 package com.examprep.common.config;
 
 import com.examprep.security.JwtAuthenticationFilter;
+import com.examprep.security.RestAccessDeniedHandler;
+import com.examprep.security.RestAuthenticationEntryPoint;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -23,6 +25,8 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final RestAuthenticationEntryPoint authenticationEntryPoint;
+    private final RestAccessDeniedHandler accessDeniedHandler;
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -53,11 +57,17 @@ public class SecurityConfig {
                         ).permitAll()
                         // Role-restricted Endpoints
                         .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
-                        .requestMatchers("/api/v1/instructor/**").hasAnyRole("INSTRUCTOR", "ADMIN")
-                        .requestMatchers("/api/v1/student/**").hasAnyRole("STUDENT", "INSTRUCTOR", "ADMIN")
+                        .requestMatchers("/api/v1/manager/**").hasAnyRole("COURSE_MANAGER", "ADMIN")
+                        .requestMatchers("/api/v1/student/**").hasAnyRole("STUDENT", "ADMIN")
+                        .requestMatchers("/api/v1/dashboard/student").hasRole("STUDENT")
+                        .requestMatchers("/api/v1/dashboard/course-manager").hasRole("COURSE_MANAGER")
+                        .requestMatchers("/api/v1/dashboard/admin").hasRole("ADMIN")
                         // All other endpoints (including /api/v1/auth/logout, /api/v1/auth/logout-all) require authentication
                         .anyRequest().authenticated()
                 )
+                .exceptionHandling(ex -> ex
+                        .authenticationEntryPoint(authenticationEntryPoint)
+                        .accessDeniedHandler(accessDeniedHandler))
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();

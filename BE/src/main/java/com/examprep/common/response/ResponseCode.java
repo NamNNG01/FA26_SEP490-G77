@@ -13,7 +13,7 @@ public enum ResponseCode {
     // 4xx Client Errors
     BAD_REQUEST(HttpStatus.BAD_REQUEST, "BAD_REQUEST", "Invalid request parameters"),
     UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", "Authentication required or invalid token"),
-    FORBIDDEN(HttpStatus.FORBIDDEN, "FORBIDDEN", "Access denied for this resource"),
+    FORBIDDEN(HttpStatus.FORBIDDEN, "FORBIDDEN", "Access denied."),
     RESOURCE_NOT_FOUND(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", "Requested resource was not found"),
     METHOD_NOT_ALLOWED(HttpStatus.METHOD_NOT_ALLOWED, "METHOD_NOT_ALLOWED", "HTTP method not supported"),
     CONFLICT(HttpStatus.CONFLICT, "RESOURCE_CONFLICT", "Resource already exists or state conflict"),

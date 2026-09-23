@@ -3,8 +3,9 @@ package com.examprep.domain.auth.controller;
 import com.examprep.common.config.SecurityConfig;
 import com.examprep.domain.auth.dto.*;
 import com.examprep.domain.auth.service.AuthService;
-import com.examprep.security.JwtAuthenticationFilter;
 import com.examprep.security.JwtTokenProvider;
+import com.examprep.security.RestAccessDeniedHandler;
+import com.examprep.security.RestAuthenticationEntryPoint;
 import com.examprep.security.UserPrincipal;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -25,7 +26,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(AuthController.class)
-@Import(SecurityConfig.class)
+@Import({SecurityConfig.class, RestAuthenticationEntryPoint.class, RestAccessDeniedHandler.class})
 class AuthControllerTest {
 
     @Autowired
@@ -39,9 +40,6 @@ class AuthControllerTest {
 
     @MockBean
     private JwtTokenProvider jwtTokenProvider;
-
-    @MockBean
-    private JwtAuthenticationFilter jwtAuthenticationFilter;
 
     @Test
     void register_Success() throws Exception {

@@ -91,8 +91,8 @@ public class JwtTokenProvider {
         Long userId = Long.parseLong(claims.getSubject());
         String email = claims.get("email", String.class);
         String role = claims.get("role", String.class);
-        if (role == null) {
-            role = "STUDENT";
+        if (role == null || role.isBlank()) {
+            throw new JwtException("Token is missing required role claim");
         }
 
         return UserPrincipal.create(userId, email, role);

@@ -34,9 +34,10 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public UserResponse register(RegisterRequest request) {
-        log.info("Registering new user with email: {}", request.getEmail());
-        
-        if (userRepository.existsByEmail(request.getEmail())) {
+        String email = normalizeEmail(request.getEmail());
+        log.info("Registering new user with email: {}", email);
+
+        if (userRepository.existsByEmail(email)) {
             throw new BadRequestException("Email is already registered.");
         }
 
@@ -45,9 +46,9 @@ public class AuthServiceImpl implements AuthService {
                 .orElseThrow(() -> new ResourceNotFoundException("Default STUDENT role not found in database."));
 
         User user = User.builder()
-                .email(request.getEmail())
+                .email(email)
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
-                .fullName(request.getFullName())
+                .fullName(request.getFullName().trim())
                 .role(studentRole)
                 .status("ACTIVE")
                 .build();
@@ -60,17 +61,18 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public LoginResponse login(LoginRequest request) {
-        log.info("Authenticating user: {}", request.getEmail());
+        String email = normalizeEmail(request.getEmail());
+        log.info("Authenticating user: {}", email);
 
-        User user = userRepository.findByEmail(request.getEmail())
+        User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new UnauthorizedException("Invalid email or password."));
-
-        if (!"ACTIVE".equalsIgnoreCase(user.getStatus())) {
-            throw new UnauthorizedException("User account is inactive or blocked.");
-        }
 
         if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
             throw new UnauthorizedException("Invalid email or password.");
+        }
+
+        if (!"ACTIVE".equalsIgnoreCase(user.getStatus())) {
+            throw new UnauthorizedException("User account is inactive or blocked.");
         }
 
         // Generate Access Token & Refresh Token
@@ -174,5 +176,9 @@ public class AuthServiceImpl implements AuthService {
     public void logoutAll(UserPrincipal currentUser) {
         log.info("Logging out ALL active sessions for user ID: {}", currentUser.getId());
         refreshTokenRepository.revokeAllByUserId(currentUser.getId(), Instant.now());
+    }
+
+    private String normalizeEmail(String email) {
+        return email == null ? null : email.trim().toLowerCase();
     }
 }

@@ -59,8 +59,9 @@
 - Services MUST NOT import `jakarta.servlet.*` or Spring Web classes (`HttpServletRequest`, `HttpStatus`, etc.).
 
 ### 3.3 Entity & Repository Rules (`@Entity`, `@Repository`)
-- All entities MUST extend `BaseEntity` (`com.examprep.common.entity.BaseEntity`).
-- Entity relationships (`@ManyToOne`, `@OneToMany`) MUST default to `FetchType.LAZY` to prevent N+1 query problems.
+- Entities MUST match the Flyway-managed schema: `BIGINT`/`BIGSERIAL` IDENTITY primary keys (no UUID PKs unless the table declares one) and MUST NOT declare columns that do not exist in migrations (e.g., a `deleted` flag without a corresponding column).
+- Audit timestamps (`created_at`/`updated_at`) SHOULD be mapped with `@CreatedDate`/`@LastModifiedDate` + `AuditingEntityListener` where those columns exist.
+- Entity relationships (`@ManyToOne`, `@OneToMany`) MUST default to `FetchType.LAZY` to prevent N+1 query problems (except `@ManyToOne` lookups already proven hot, e.g., `User.role`).
 - Native SQL queries in repositories MUST use parameterized positional (`?1`) or named (`:param`) bindings to prevent SQL injection vulnerabilities.
 
 ---
@@ -92,7 +93,7 @@
 ## 6. Security & Sensitive Data Rules
 
 1. **No Sensitive Data Logging:** Passwords, JWT secrets, bearer tokens, or PII (Personally Identifiable Information) MUST NEVER be output to log files or standard output.
-2. **Method Security:** Secure service methods or controllers using `@PreAuthorize("hasRole('ADMIN')")` or `@PreAuthorize("hasAnyRole('INSTRUCTOR', 'ADMIN')")`.
+2. **Method Security:** Secure service methods or controllers using `@PreAuthorize("hasRole('ADMIN')")` or `@PreAuthorize("hasAnyRole('COURSE_MANAGER', 'ADMIN')")`.
 3. **Environment Configuration:** Secret keys and database credentials MUST be referenced via environment variables or Spring configuration placeholders (e.g., `${SUPABASE_DB_URL}`). Never hardcode credentials in `application.yml` or source code.
 
 ---
