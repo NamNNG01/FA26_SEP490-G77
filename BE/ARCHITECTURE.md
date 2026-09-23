@@ -1,6 +1,6 @@
 # Exam Preparation Platform - Backend Architecture Specification
 
-**Version:** 2.0.0  
+**Version:** 2.1.0  
 **Target Environment:** Spring Boot 3.x + Supabase (PostgreSQL)  
 **Status:** Approved Source of Truth  
 
@@ -194,7 +194,8 @@ These endpoints are part of the agreed API contract but intentionally deferred u
 | AUTH-08 | `PUT /api/v1/auth/password/change` | Authenticated; revokes refresh tokens after change — deferred |
 | USER-01 | `GET /api/v1/users/me` | Requires `createdAt` added to `UserResponse` — deferred |
 | USER-02 | `PUT /api/v1/users/me` | Profile update (`fullName`, `avatarUrl`) — deferred |
-| DASH-01/02/03 | `GET /api/v1/dashboard/student` / `course-manager` / `admin` | Requires course/exam/attempt domain code — deferred |
+
+DASH-01/02/03 (`GET /api/v1/dashboard/student` / `course-manager` / `admin`) are **implemented** — see §5.2.
 
 ---
 
