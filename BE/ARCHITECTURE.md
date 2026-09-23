@@ -80,30 +80,42 @@ The **Exam Preparation Platform** backend provides a scalable, secure, and maint
 
 ---
 
-## 4. Core Domain Boundaries & Modules
+## 4. Package-by-Layer Architecture
 
-The system is partitioned logically into 5 domain modules:
+The codebase follows a simple **package-by-layer** structure: responsibilities are separated by technical layer rather than by feature, keeping the architecture easy to navigate as the platform grows.
 
-1. **User & Auth Module (`com.examprep.domain.auth`, `com.examprep.domain.user`)**
-   - User profiles, role definitions (`ADMIN`, `COURSE_MANAGER`, `STUDENT`).
+| Package                    | Responsibility                                                        |
+|----------------------------|-----------------------------------------------------------------------|
+| `com.examprep.controllers` | REST Controllers: thin HTTP adapters that delegate to services.       |
+| `com.examprep.services`    | Business logic & transactions (`@Service`).                          |
+| `com.examprep.repositories`| Spring Data JPA repositories.                                        |
+| `com.examprep.entities`    | JPA entities mapped to Flyway-managed tables.                        |
+| `com.examprep.dto`         | Request/Response DTOs, validation, and the `ApiResponse` wrapper.    |
+| `com.examprep.security`    | JWT provider, authentication filters, principal, entry points.       |
+| `com.examprep.config`      | Spring configuration (Security, CORS, OpenAPI, Auditing).            |
+| `com.examprep.exceptions`  | Custom exceptions and the global exception handler.                  |
+
+Layering flows strictly downward: `controllers → services → repositories`. Functional areas are expressed as responsibilities of the service layer, pulling entities/repositories as needed:
+
+1. **User & Auth** — User profiles, role definitions (`ADMIN`, `COURSE_MANAGER`, `STUDENT`).
    - Authentication APIs (AUTH-01 to AUTH-05): Register, Login, Refresh Token Rotation, Logout, Logout-all.
    - Token storage: `refresh_tokens`, `password_reset_tokens`.
 
-2. **Question Bank Module (`com.examprep.domain.question`)**
+2. **Question Bank** (planned)
    - Question management: Single Choice (MCQ), Multiple Choice, True/False, Essay/Fill-in-the-blank.
    - Categorization: Subjects, topics, tags, difficulty levels (EASY, MEDIUM, HARD).
    - Answer choices and explanation metadata.
 
-3. **Exam & Quiz Engine (`com.examprep.domain.exam`)**
+3. **Exam & Quiz Engine** (planned)
    - Exam configuration: Duration (minutes), passing score, shuffle questions option, max attempt limit.
    - Question assignment: Static question lists or dynamic random question pools by topic/difficulty.
 
-4. **Exam Submission & Attempt Engine (`com.examprep.domain.attempt`)**
-   - Exam session lifecycle: Start Attempt $\rightarrow$ Submit Answers $\rightarrow$ Auto-Grade / Finalize Attempt.
+4. **Exam Submission & Attempt Engine** (planned)
+   - Exam session lifecycle: Start Attempt → Submit Answers → Auto-Grade / Finalize Attempt.
    - Timer validation (server-side elapsed time enforcement).
    - Automated scoring for objective questions and feedback generation.
 
-5. **Analytics & Analytics Module (`com.examprep.domain.analytics`)**
+5. **Analytics** (planned)
    - Student performance tracking, history reports, score distributions, and topic weakness analysis.
 
 ---

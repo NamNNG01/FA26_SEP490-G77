@@ -45,9 +45,14 @@ BE/
     │   │   └── com/
     │   │       └── examprep/
     │   │           ├── ExamPrepBackendApplication.java
-    │   │           ├── common/  # Shared utilities, Exception handling, Response wrappers
-    │   │           ├── domain/  # Feature modules (user, question, exam, attempt, analytics)
-    │   │           └── security/# JWT Filter, Token Provider, Security Config
+    │   │           ├── controllers/ # REST Controllers
+    │   │           ├── services/    # Business Services
+    │   │           ├── repositories/# Spring Data JPA Repositories
+    │   │           ├── entities/    # JPA Entities
+    │   │           ├── dto/         # Request/Response DTOs & Response Wrappers
+    │   │           ├── security/    # JWT Filter, Token Provider, Security Components
+    │   │           ├── config/      # Application Configuration
+    │   │           └── exceptions/  # Custom Exceptions & Global Handler
     │   └── resources/
     │       ├── application.yml         # Base Configuration
     │       ├── application-dev.yml     # Development Profile Config

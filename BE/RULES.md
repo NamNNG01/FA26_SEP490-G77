@@ -46,6 +46,25 @@
 [ PostgreSQL / Supabase ]
 ```
 
+### 3.0 Package Layout (Package-by-Layer)
+All code lives under the base package `com.examprep` and follows a flat, layer-based layout:
+
+```
+com.examprep/
+├── controllers/   # @RestController
+├── services/      # @Service
+├── repositories/  # Spring Data JPA repositories
+├── entities/      # JPA @Entity
+├── dto/           # Request/Response DTOs + ApiResponse/ResponseCode wrappers
+├── security/      # JWT & Spring Security components
+├── config/        # @Configuration classes
+└── exceptions/    # Custom exceptions + GlobalExceptionHandler
+```
+
+- Layering flows strictly downward: `controllers → services → repositories`.
+- Controllers and services MUST NOT depend on feature-scoped packages — there are none; features are expressed through classes in these shared layers.
+- DTO open/close access (`ApiResponse`, `ResponseCode`) lives in `dto/`; custom exceptions in `exceptions/`; configuration in `config/`.
+
 ### 3.1 Controller Rules (`@RestController`)
 - Controllers MUST be light wrappers over services.
 - Controllers MUST return `ResponseEntity<ApiResponse<T>>`.
