@@ -156,6 +156,18 @@ Layering flows strictly downward: `controllers → services → repositories`. F
 | `/api/v1/dashboard/course-manager` | GET | `COURSE_MANAGER` | DASH-02: Course Manager Dashboard |
 | `/api/v1/dashboard/admin` | GET | `ADMIN` | DASH-03: Admin Dashboard |
 
+### 5.3 Endpoint Roadmap (agreed in API contract, NOT yet implemented)
+These endpoints are part of the agreed API contract but intentionally deferred until their feature domains are built:
+
+| ID | Endpoint | Notes |
+| :--- | :--- | :--- |
+| AUTH-06 | `POST /api/v1/auth/password/forgot` | Requires email delivery (SMTP) — deferred |
+| AUTH-07 | `POST /api/v1/auth/password/reset` | Uses `password_reset_tokens` — deferred |
+| AUTH-08 | `PUT /api/v1/auth/password/change` | Authenticated; revokes refresh tokens after change — deferred |
+| USER-01 | `GET /api/v1/users/me` | Requires `createdAt` added to `UserResponse` — deferred |
+| USER-02 | `PUT /api/v1/users/me` | Profile update (`fullName`, `avatarUrl`) — deferred |
+| DASH-01/02/03 | `GET /api/v1/dashboard/student` / `course-manager` / `admin` | Requires course/exam/attempt domain code — deferred |
+
 ---
 
 ## 6. Database Strategy (Supabase PostgreSQL)
@@ -165,8 +177,8 @@ Layering flows strictly downward: `controllers → services → repositories`. F
    - `spring.jpa.hibernate.ddl-auto` is set to `validate` in `dev` and `none` in `prod`.
 
 2. **Entity Design Conventions:**
-   - `User`, `Role`, `RefreshToken`, `PasswordResetToken` use `BIGSERIAL` PKs (`user_id`, `id`, `refresh_token_id`, `reset_token_id`).
-   - Soft deletion with `deleted` boolean flag.
+   - `User`, `Role`, `RefreshToken`, `PasswordResetToken` use `BIGSERIAL` PKs (`user_id`, `role_id`, `refresh_token_id`, `reset_token_id`).
+   - No soft-delete flags (`deleted`): the schema declares no such columns, and entities MUST NOT declare columns absent from migrations (see `RULES.md` §3.3).
 
 ---
 
