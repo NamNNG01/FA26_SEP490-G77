@@ -27,3 +27,6 @@ logs/
 
 # Maven wrapper jar if generated
 .mvn/timing.properties
+.worktrees/
+.serena/project.yml
+.serena/project.local.yml
