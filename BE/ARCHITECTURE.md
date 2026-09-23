@@ -85,7 +85,7 @@ The **Exam Preparation Platform** backend provides a scalable, secure, and maint
 The system is partitioned logically into 5 domain modules:
 
 1. **User & Auth Module (`com.examprep.domain.auth`, `com.examprep.domain.user`)**
-   - User profiles, role definitions (`ADMIN`, `COURSE_MANAGER`, `STUDENT`, `GRADER`).
+   - User profiles, role definitions (`ADMIN`, `COURSE_MANAGER`, `STUDENT`).
    - Authentication APIs (AUTH-01 to AUTH-05): Register, Login, Refresh Token Rotation, Logout, Logout-all.
    - Token storage: `refresh_tokens`, `password_reset_tokens`.
 
