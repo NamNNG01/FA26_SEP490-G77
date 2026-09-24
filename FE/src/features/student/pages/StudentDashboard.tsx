@@ -1,71 +1,124 @@
 import React from 'react';
-import { Button } from '@/components/ui/Button';
-import { Progress } from '@/components/ui/Progress';
+import { useDashboard } from '@/hooks/useDashboard';
 import { StatCard } from '@/components/ui/StatCard';
-import { CourseCard, ExamCard } from '@/components/common/CourseCard';
+import { Progress } from '@/components/ui/Progress';
+import { Badge } from '@/components/ui/Badge';
+import { DashboardSkeleton, DashboardError } from '@/components/common/DashboardState';
 import { Icon } from '@/assets/icons';
 
+/**
+ * StudentDashboard
+ *
+ * Data source: GET /api/v1/dashboard/student (via useDashboard → role
+ * STUDENT). All numbers come from the backend — no mock data.
+ *
+ * UI unchanged: same stat-card row, course grid and activity layout, same
+ * colors and components.
+ */
 export function StudentDashboard() {
+  const { data, loading, error, refresh } = useDashboard();
+
+  if (loading) return <DashboardSkeleton />;
+  if (error || !data || data.kind !== 'student') {
+    return <DashboardError message={error ?? undefined} onRetry={refresh} />;
+  }
+
+  const { summary, recentCourses, recentAttempts } = data;
+
+  const stats = [
+    { title: 'Enrolled Courses', value: String(summary.enrolledCourses), icon: <Icon.Book />, color: '#2563EB' },
+    { title: 'Active Courses', value: String(summary.activeCourses), icon: <Icon.Book className="w-5 h-5" />, color: '#7C3AED' },
+    { title: 'Completed Courses', value: String(summary.completedCourses), icon: <Icon.CheckCircle className="w-5 h-5" />, color: '#059669' },
+    { title: 'Average Score', value: `${summary.averageScore}%`, icon: <Icon.TrendingUp />, color: '#D97706' },
+  ];
+
   return (
     <div className="p-8 space-y-7">
-      <div className="flex justify-end">
-        <Button icon={<Icon.Book className="w-4 h-4" />}>Continue Learning</Button>
-      </div>
-
+      {/* Statistics row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        <StatCard title="Courses Enrolled" value="6" change={0} changeLabel="" icon={<Icon.Book />} color="#2563EB" />
-        <StatCard title="Exams Completed" value="23" change={4.3} changeLabel="this month" icon={<Icon.ClipboardList />} color="#7C3AED" />
-        <StatCard title="Average Score" value="84.2%" change={2.1} changeLabel="vs last month" icon={<Icon.TrendingUp />} color="#059669" />
-        <StatCard title="Certificates" value="4" change={33.3} changeLabel="vs last month" icon={<Icon.Award />} color="#D97706" />
+        {stats.map((s) => (
+          <StatCard key={s.title} {...s} />
+        ))}
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        <div className="xl:col-span-2 space-y-5">
-          <h3 className="text-[16px] font-semibold text-[#111827]">My Courses</h3>
-          <div className="grid grid-cols-2 gap-4">
-            <CourseCard title="Machine Learning Fundamentals" subject="AI & Data Science" progress={67} examCount={8} difficulty="Medium" />
-            <CourseCard title="Python for Data Science" subject="Programming" progress={91} examCount={12} difficulty="Easy" />
-            <CourseCard title="Deep Neural Networks" subject="Advanced AI" progress={23} examCount={5} difficulty="Hard" />
-            <CourseCard title="Statistics for ML" subject="Mathematics" progress={55} examCount={6} difficulty="Medium" />
-          </div>
-
-          <h3 className="text-[16px] font-semibold text-[#111827]">Upcoming Exams</h3>
-          <div className="grid grid-cols-2 gap-4">
-            <ExamCard title="ML Fundamentals Final" duration={90} questions={45} passMark={70} status="upcoming" />
-            <ExamCard title="Statistics Mid-Exam" duration={60} questions={30} passMark={65} status="upcoming" />
-          </div>
-        </div>
-
-        <div className="space-y-4">
-          <div className="card p-5">
-            <h4 className="text-[14px] font-semibold text-[#111827] mb-4">Study Progress</h4>
-            <div className="space-y-3">
-              <Progress value={67} label="ML Fundamentals" color="#2563EB" />
-              <Progress value={91} label="Python Basics" color="#16A34A" />
-              <Progress value={23} label="Deep Learning" color="#D97706" />
-              <Progress value={55} label="Statistics" color="#7C3AED" />
-            </div>
-          </div>
-          <div className="card p-5">
-            <h4 className="text-[14px] font-semibold text-[#111827] mb-3">Recent Activity</h4>
-            <div className="space-y-3">
-              {[
-                { action: 'Completed Chapter 7', course: 'ML Fundamentals', time: '2h ago', icon: <Icon.CheckCircle className="w-4 h-4 text-[#16A34A]" /> },
-                { action: 'Practice exam: 76%', course: 'Statistics', time: '1d ago', icon: <Icon.ClipboardList className="w-4 h-4 text-[#2563EB]" /> },
-                { action: 'Certificate earned', course: 'Python Basics', time: '3d ago', icon: <Icon.Award className="w-4 h-4 text-[#D97706]" /> },
-                { action: 'Started Chapter 3', course: 'Deep Learning', time: '4d ago', icon: <Icon.Book className="w-4 h-4 text-[#7C3AED]" /> },
-              ].map((a, i) => (
-                <div key={i} className="flex gap-3">
-                  <div className="flex-shrink-0 mt-0.5">{a.icon}</div>
-                  <div>
-                    <p className="text-[13px] font-medium text-[#374151]">{a.action}</p>
-                    <p className="text-[12px] text-[#9CA3AF]">{a.course} · {a.time}</p>
+      {/* Recent Courses */}
+      <div className="space-y-5">
+        <h3 className="text-[16px] font-semibold text-foreground">My Courses</h3>
+        {recentCourses.length === 0 ? (
+          <p className="text-[13.5px] text-muted-foreground">
+            You are not enrolled in any courses yet.
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            {recentCourses.map((course) => (
+              <div key={course.courseId} className="card overflow-hidden flex flex-col">
+                {/* Thumbnail (placeholder when null) */}
+                {course.thumbnailUrl ? (
+                  <img
+                    src={course.thumbnailUrl}
+                    alt={course.title}
+                    className="w-full h-28 object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-28 bg-primary-light flex items-center justify-center">
+                    <Icon.Book className="w-8 h-8 text-primary" />
                   </div>
+                )}
+                <div className="p-4 flex flex-col gap-3 flex-1">
+                  <h4 className="text-[14px] font-semibold text-foreground leading-snug">
+                    {course.title}
+                  </h4>
+                  {course.progress !== null && (
+                    <Progress value={course.progress} label="Progress" size="sm" />
+                  )}
                 </div>
-              ))}
-            </div>
+              </div>
+            ))}
           </div>
-        </div>
+        )}
+      </div>
+
+      {/* Recent Attempts */}
+      <div className="space-y-4">
+        <h3 className="text-[16px] font-semibold text-foreground">Recent Attempts</h3>
+        {recentAttempts.length === 0 ? (
+          <p className="text-[13.5px] text-muted-foreground">
+            You have not taken any exams yet.
+          </p>
+        ) : (
+          <div className="card overflow-hidden">
+            {recentAttempts.map((attempt, i) => (
+              <div
+                key={attempt.attemptId}
+                className={`flex items-center gap-4 px-5 py-3.5 ${
+                  i > 0 ? 'border-t border-line' : ''
+                }`}
+              >
+                <div className="w-9 h-9 rounded-[10px] bg-primary-light flex items-center justify-center flex-shrink-0">
+                  <Icon.ClipboardList className="w-4.5 h-4.5 text-primary" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[13.5px] font-medium text-foreground truncate">
+                    {attempt.examTitle}
+                  </p>
+                  <p className="text-[12px] text-muted-foreground">
+                    {attempt.submittedAt
+                      ? new Date(attempt.submittedAt).toLocaleString()
+                      : '—'}
+                  </p>
+                </div>
+                <Badge
+                  variant={attempt.status === 'PASSED' ? 'success' : attempt.status === 'FAILED' ? 'danger' : 'info'}
+                >
+                  {attempt.status}
+                </Badge>
+                <span className="text-[14px] font-semibold text-foreground w-14 text-right">
+                  {attempt.score !== null ? `${attempt.score}%` : '—'}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
