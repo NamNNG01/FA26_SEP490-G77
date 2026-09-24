@@ -1,6 +1,9 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
 @import 'tailwindcss';
 
+/* Class-based dark mode (toggled on <html> by ThemeProvider). */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme inline {
   --color-primary: #2563EB;
   --color-primary-hover: #1D4ED8;
@@ -33,16 +36,62 @@
   --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.07), 0 2px 4px -2px rgb(0 0 0 / 0.05);
   --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.05);
   --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.08), 0 8px 10px -6px rgb(0 0 0 / 0.05);
+
+  /* Semantic surface/content tokens — resolved at use-time via
+     `@theme inline`, so they follow the runtime vars below and flip
+     automatically when <html> gets the `dark` class. */
+  --color-surface: var(--surface);
+  --color-surface-alt: var(--surface-alt);
+  --color-foreground: var(--content);
+  --color-content: var(--content);
+  --color-muted-foreground: var(--content-muted);
+  --color-content-muted: var(--content-muted);
+  --color-content-subtle: var(--content-subtle);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-brand: #2563EB;
+}
+
+/* Light theme (default) */
+:root {
+  --surface: #ffffff;
+  --surface-alt: #F9FAFB;
+  --content: #111827;
+  --content-muted: #4B5563;
+  --content-subtle: #9CA3AF;
+  --line: #E5E7EB;
+  --accent: #F3F4F6;
+  --accent-foreground: #111827;
+}
+
+/* Dark theme — same design tokens, dark values. */
+.dark {
+  --surface: #111827;
+  --surface-alt: #0B1220;
+  --content: #F9FAFB;
+  --content-muted: #D1D5DB;
+  --content-subtle: #6B7280;
+  --line: #1F2937;
+  --accent: #26324A;
+  --accent-foreground: #F9FAFB;
 }
 
 * {
   box-sizing: border-box;
 }
 
+html, body, #root {
+  height: 100%;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+}
+
 body {
   font-family: 'Inter', system-ui, sans-serif;
-  background: #F9FAFB;
-  color: #111827;
+  background: var(--surface-alt);
+  color: var(--content);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -70,28 +119,31 @@ body {
   border-radius: 8px;
   font-size: 13.5px;
   font-weight: 500;
-  color: #4B5563;
+  color: var(--content-muted);
   cursor: pointer;
   transition: all 0.15s;
   text-decoration: none;
   white-space: nowrap;
 }
 .sidebar-link:hover {
-  background: #F3F4F6;
-  color: #111827;
+  background: var(--line);
+  color: var(--content);
 }
 .sidebar-link.active {
   background: #EFF6FF;
   color: #2563EB;
+}
+.dark .sidebar-link.active {
+  background: rgba(37, 99, 235, 0.15);
 }
 .sidebar-link.active svg {
   color: #2563EB;
 }
 
 .card {
-  background: white;
+  background: var(--surface);
   border-radius: 10px;
-  border: 1px solid #E5E7EB;
+  border: 1px solid var(--line);
   box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
 }
 
@@ -153,3 +205,37 @@ body {
 .chart-bar:hover {
   opacity: 0.85;
 }
+
+/* --------------------------------------------------------------------- */
+/* Dark mode: centralized legacy-utility overrides. Components keep       */
+/* their light-mode Tailwind classes; the design system remaps the few    */
+/* hard-coded surface/content utilities when <html> has `.dark`.          */
+/* --------------------------------------------------------------------- */
+.dark .bg-white { background-color: var(--surface); }
+.dark .bg-\[\#F9FAFB\] { background-color: var(--surface-alt); }
+.dark .bg-\[\#F3F4F6\] { background-color: var(--line); }
+.dark .text-\[\#111827\] { color: var(--content); }
+.dark .text-\[\#374151\] { color: var(--content); }
+.dark .text-\[\#6B7280\] { color: var(--content-muted); }
+.dark .text-\[\#9CA3AF\] { color: var(--content-subtle); }
+.dark .border-\[\#E5E7EB\],
+.dark .border-\[\#F3F4F6\] { border-color: var(--line); }
+.dark input,
+.dark select,
+.dark textarea { background-color: var(--surface); color: var(--content); border-color: var(--line); }
+.dark input::placeholder { color: var(--content-subtle); }
+
+/* Keep brand-colored elements intact in dark mode. */
+.dark .bg-\[\#2563EB\] { background-color: #2563EB; }
+.dark .text-white { color: #ffffff; }
+
+/* Hover variants compile to DIFFERENT class names than their static
+   counterparts, so they need their own remaps — without these, dark mode
+   renders light text on a still-light hover background (invisible text).
+   Hover surfaces use --accent and hover text uses --content so contrast
+   is guaranteed in both themes. */
+.dark .hover\:bg-\[\#F3F4F6\]:hover { background-color: var(--accent); }
+.dark .hover\:bg-\[\#F9FAFB\]:hover { background-color: var(--accent); }
+.dark .hover\:bg-\[\#E5E7EB\]:hover { background-color: var(--accent); }
+.dark .hover\:text-\[\#374151\]:hover { color: var(--content); }
+.dark .hover\:bg-\[\#EFF6FF\]:hover { background-color: rgba(37, 99, 235, 0.15); }

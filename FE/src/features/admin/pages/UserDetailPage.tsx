@@ -1,4 +1,5 @@
 import React from 'react';
+import { useParams } from 'react-router';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Avatar } from '@/components/ui/Avatar';
@@ -7,7 +8,10 @@ import { Table } from '@/components/ui/Table';
 import { Icon } from '@/assets/icons';
 import { MOCK_USERS, USER_STATS, USER_ATTEMPTS, markPasswordReset, setUserStatus } from '../mockUsers';
 
-export function UserDetailPage({ onNavigate, params }: { onNavigate?: (id: string, params?: Record<string, string>) => void; params?: Record<string, string> }) {
+export function UserDetailPage({ onNavigate, params: paramsProp }: { onNavigate?: (id: string, params?: Record<string, string>) => void; params?: Record<string, string> }) {
+  // Support both direct props and the :userId route param.
+  const routeParams = useParams();
+  const params = paramsProp ?? (routeParams as Record<string, string>);
   const user = MOCK_USERS.find(u => u.id === params?.userId) ?? MOCK_USERS[0];
   const stats = USER_STATS[user.id];
   const attempts = USER_ATTEMPTS[user.id] ?? [];
