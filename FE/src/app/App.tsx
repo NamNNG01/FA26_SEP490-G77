@@ -5,6 +5,7 @@ import { renderPage } from './router';
 
 export default function App() {
   const [active, setActive] = useState('cover');
+  const [routeParams, setRouteParams] = useState<Record<string, string> | undefined>(undefined);
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['common']));
 
   const toggleSection = (id: string) => {
@@ -15,12 +16,15 @@ export default function App() {
     });
   };
 
-  const navigate = (id: string) => setActive(id);
+  const navigate = (id: string, params?: Record<string, string>) => {
+    setRouteParams(params);
+    setActive(id);
+  };
 
   if (FULLSCREEN.has(active)) {
     return (
       <div className="relative">
-        {renderPage(active, navigate)}
+        {renderPage(active, navigate, routeParams)}
         {/* Nav overlay for fullscreen pages */}
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-1 bg-white/95 backdrop-blur-sm border border-[#E5E7EB] rounded-full px-3 py-2 shadow-xl">
           {NAV.map(n => (
@@ -56,7 +60,7 @@ export default function App() {
     <div className="h-screen flex flex-col overflow-hidden bg-[#F9FAFB]">
       {/* Topbar */}
       <header className="h-14 bg-white border-b border-[#F3F4F6] flex items-center px-4 gap-3 flex-shrink-0 z-40">
-        <div className="flex items-center gap-2.5 w-56 flex-shrink-0">
+        <div className="flex items-center gap-2.5 w-56 max-w-[30%] flex-shrink-0">
           <div className="w-7 h-7 bg-[#2563EB] rounded-[8px] flex items-center justify-center">
             <Icon.Brain className="w-4 h-4 text-white" />
           </div>
@@ -100,7 +104,7 @@ export default function App() {
 
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar */}
-        <aside className="w-56 bg-white border-r border-[#F3F4F6] flex flex-col flex-shrink-0 overflow-y-auto">
+        <aside className="w-56 max-w-[25%] min-w-[200px] bg-white border-r border-[#F3F4F6] flex flex-col flex-shrink-0 overflow-y-auto">
           <div className="p-3 flex-1">
             {/* Overview items */}
             <div className="mb-2">
@@ -143,7 +147,7 @@ export default function App() {
 
         {/* Main content */}
         <main className="flex-1 overflow-y-auto">
-          {renderPage(active, navigate)}
+{renderPage(active, navigate, routeParams)}
         </main>
       </div>
     </div>

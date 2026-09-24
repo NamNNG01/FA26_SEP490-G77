@@ -43,7 +43,7 @@ export default function DesignSystemPage() {
   const typeScale = [
     { label: 'Display', size: '36px', weight: '800', sample: 'AI Certificate Platform' },
     { label: 'H1', size: '28px', weight: '700', sample: 'Dashboard Overview' },
-    { label: 'H2', size: '22px', weight: '700', sample: 'Question Bank' },
+    { label: 'H2', size: '22px', weight: '700', sample: 'Question' },
     { label: 'H3', size: '18px', weight: '600', sample: 'Exam Results' },
     { label: 'H4', size: '16px', weight: '600', sample: 'Section Title' },
     { label: 'Body Lg', size: '16px', weight: '400', sample: 'Regular body text for reading long content.' },

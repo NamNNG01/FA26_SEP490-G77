@@ -20,26 +20,20 @@ export function AdminDashboard() {
 
   return (
     <div className="p-8 space-y-7">
-      <div className="flex items-start justify-between">
-        <div>
-          <h2 className="text-[22px] font-bold text-[#111827]">Admin Dashboard</h2>
-          <p className="text-[14px] text-[#6B7280] mt-1">Platform overview and system health.</p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" icon={<Icon.Download className="w-4 h-4" />}>Export Report</Button>
-          <Button icon={<Icon.Plus className="w-4 h-4" />}>Add User</Button>
-        </div>
+      <div className="flex flex-wrap justify-end gap-2">
+        <Button variant="outline" icon={<Icon.Download className="w-4 h-4" />}>Export Report</Button>
+        <Button icon={<Icon.Plus className="w-4 h-4" />}>Add User</Button>
       </div>
 
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <StatCard title="Total Users" value="3,847" change={8.4} changeLabel="vs last month" icon={<Icon.Users />} color="#2563EB" />
         <StatCard title="Active Courses" value="48" change={4.2} changeLabel="vs last month" icon={<Icon.Book />} color="#7C3AED" />
         <StatCard title="Exams This Month" value="18,291" change={12.1} changeLabel="vs last month" icon={<Icon.ClipboardList />} color="#059669" />
         <StatCard title="Certificates Issued" value="1,204" change={21.8} changeLabel="vs last month" icon={<Icon.Award />} color="#D97706" />
       </div>
 
-      <div className="grid grid-cols-3 gap-6">
-        <div className="col-span-2 space-y-5">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        <div className="xl:col-span-2 space-y-5">
           {/* Chart */}
           <div className="card p-5">
             <div className="flex items-center justify-between mb-5">

@@ -28,7 +28,7 @@ export function ExamResultPage() {
         </div>
         <Badge variant={passed ? 'success' : 'danger'} className="mt-4 text-[14px] px-4 py-1">{passed ? 'PASSED' : 'FAILED'}</Badge>
       </div>
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { label: 'Total Questions', value: '45' },
           { label: 'Correct', value: '39' },
@@ -52,7 +52,7 @@ export function ExamResultPage() {
             { topic: 'Feature Engineering', correct: 6, total: 10, pct: 60 },
           ].map(t => (
             <div key={t.topic} className="flex items-center gap-4">
-              <span className="text-[13px] text-[#374151] w-48 flex-shrink-0">{t.topic}</span>
+              <span className="text-[13px] text-[#374151] w-40 sm:w-48 max-w-[40%] truncate flex-shrink-0" title={t.topic}>{t.topic}</span>
               <div className="flex-1">
                 <Progress value={t.pct} color={t.pct >= 80 ? '#16A34A' : t.pct >= 70 ? '#D97706' : '#DC2626'} size="sm" />
               </div>
