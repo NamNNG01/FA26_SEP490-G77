@@ -95,6 +95,36 @@ body {
   box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
 }
 
+.prose-block h2 {
+  font-size: 16px;
+  font-weight: 700;
+  color: #111827;
+  margin: 6px 0 10px;
+}
+.prose-block h3 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  margin: 4px 0 8px;
+}
+.prose-block p {
+  margin: 4px 0;
+  line-height: 1.6;
+}
+.prose-block ul,
+.prose-block ol {
+  margin: 4px 0;
+  padding-left: 22px;
+  list-style: revert;
+}
+.prose-block strong {
+  font-weight: 600;
+}
+.prose-block:empty::before {
+  content: attr(data-placeholder);
+  color: #9CA3AF;
+}
+
 .animate-pulse-slow {
   animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }

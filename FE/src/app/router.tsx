@@ -7,13 +7,16 @@ import { LoginPage, ForgotPasswordPage, ResetPasswordPage } from '@/features/aut
 import { ProfilePage, SettingsPage } from '@/features/profile';
 import { NotificationsPage } from '@/features/notification';
 import { StudentDashboard, ExamRulesPage } from '@/features/student';
-import { TakeExamPage, ExamResultPage, ExamBuilderPage } from '@/features/exam';
+import { TakeExamPage, ExamResultPage, ExamListPage, ExamFormPage } from '@/features/exam';
 import { CertificatesPage } from '@/features/certificate';
-import { CMDashboard, OCRImportPage } from '@/features/content-manager';
-import { QuestionBankPage } from '@/features/question';
-import { AdminDashboard, UsersPage, AnalyticsPage, AuditLogsPage, SystemSettingsPage } from '@/features/admin';
+import { CMDashboard } from '@/features/content-manager';
+import { QuestionBankPage, QuestionFormPage } from '@/features/question';
+import { LessonFormPage } from '@/features/lesson';
+import { ModuleDetailPage } from '@/features/module';
+import { CourseListPage, CourseFormPage, CourseDetailPage } from '@/features/course';
+import { AdminDashboard, UsersPage, UserDetailPage, FinancialDashboardPage, SubscriptionPackagesPage, AIUsagePage, AnalyticsPage, AuditLogsPage, SystemSettingsPage } from '@/features/admin';
 
-export function renderPage(id: string, navigate: (id: string) => void) {
+export function renderPage(id: string, navigate: (id: string) => void, params?: Record<string, string>) {
   switch (id) {
     case 'cover': return <CoverPage />;
     case 'design-system': return <DesignSystemPage />;
@@ -36,13 +39,29 @@ export function renderPage(id: string, navigate: (id: string) => void) {
     case 'exam-result': return <ExamResultPage />;
     case 'certificates': return <CertificatesPage />;
     // Content Manager
-    case 'cm-dashboard': return <CMDashboard />;
-    case 'question-bank': return <QuestionBankPage />;
-    case 'exam-builder': return <ExamBuilderPage />;
-    case 'ocr-import': return <OCRImportPage />;
+    case 'cm-dashboard': return <CMDashboard onNavigate={navigate} />;
+    case 'cm-courses': return <CourseListPage readonly onNavigate={navigate} />;
+    case 'course-detail': return <CourseDetailPage onNavigate={navigate} />;
+    case 'module-detail': return <ModuleDetailPage onNavigate={navigate} />;
+    case 'question-bank': return <QuestionBankPage onNavigate={navigate} />;
+    case 'question-create': return <QuestionFormPage mode="create" onNavigate={navigate} />;
+    case 'question-edit': return <QuestionFormPage mode="edit" onNavigate={navigate} />;
+    case 'exam-list': return <ExamListPage onNavigate={navigate} />;
+    case 'exam-builder': return <ExamFormPage mode="create" onNavigate={navigate} />;
+    case 'exam-create': return <ExamFormPage mode="create" onNavigate={navigate} />;
+    case 'exam-edit': return <ExamFormPage mode="edit" onNavigate={navigate} />;
+    case 'lesson-create': return <LessonFormPage mode="create" onNavigate={navigate} initialCourseId={params?.courseId} initialModuleId={params?.moduleId} />;
+    case 'lesson-edit': return <LessonFormPage mode="edit" onNavigate={navigate} />;
     // Admin
     case 'admin-dashboard': return <AdminDashboard />;
-    case 'users': return <UsersPage />;
+    case 'course-list': return <CourseListPage onNavigate={navigate} />;
+    case 'course-create': return <CourseFormPage mode="create" onNavigate={navigate} />;
+    case 'course-edit': return <CourseFormPage mode="edit" onNavigate={navigate} />;
+    case 'users': return <UsersPage onNavigate={navigate} />;
+    case 'user-detail': return <UserDetailPage key={params?.userId ?? 'default'} onNavigate={navigate} params={params} />;
+    case 'financial-dashboard': return <FinancialDashboardPage />;
+    case 'subscription-packages': return <SubscriptionPackagesPage />;
+    case 'ai-usage': return <AIUsagePage />;
     case 'analytics': return <AnalyticsPage />;
     case 'audit-logs': return <AuditLogsPage />;
     case 'system-settings': return <SystemSettingsPage />;

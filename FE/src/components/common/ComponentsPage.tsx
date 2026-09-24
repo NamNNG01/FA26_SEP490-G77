@@ -2,14 +2,17 @@ import React, { useState } from 'react';
 import {
   Button, Input, Badge, Chip, Checkbox, Radio, Switch, Select,
   Tabs, Breadcrumb, Toast, Alert, Progress, Skeleton, Modal, Avatar, StatCard,
-  Table, Pagination, Dropdown, Spinner,
+  Table, Dropdown, Spinner, Pagination,
 } from '@/components/ui';
 import { SearchInput } from './SearchInput';
+import { DEFAULT_PAGE_SIZE } from '@/components/ui/Pagination';
 import { AnswerOption } from './QuestionPalette';
 import { AIHintCard } from './AIHintCard';
 import { QuestionPalette } from './QuestionPalette';
 import { TimerDisplay } from './TimerDisplay';
 import { CourseCard, ExamCard } from './CourseCard';
+import { EditModuleModal } from '@/components/modules/EditModuleModal';
+import { type CourseModule } from '@/features/module/mockModules';
 import { Icon } from '@/assets/icons';
 
 const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
@@ -33,6 +36,16 @@ export default function ComponentsPage() {
   const [radio, setRadio] = useState('a');
   const [sw, setSw] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
+  const [editModuleOpen, setEditModuleOpen] = useState(false);
+  const sampleModule: CourseModule = {
+    id: 'mod-sample',
+    title: 'Supervised Learning',
+    courseId: 'ml',
+    order: 2,
+    description: 'Regression and classification algorithms from first principles.',
+    status: 'Active',
+    updated: '2d ago',
+  };
   const [answer, setAnswer] = useState<string | null>(null);
   const [hintOpen, setHintOpen] = useState(false);
   const [page, setPage] = useState(1);
@@ -96,17 +109,17 @@ export default function ComponentsPage() {
 
       {/* Inputs */}
       <Section title="Inputs & Forms">
-        <div className="grid grid-cols-3 gap-4 mb-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
           <Input label="Full Name" placeholder="John Doe" />
           <Input label="Email" placeholder="user@example.com" icon={<Icon.Mail className="w-4 h-4" />} />
           <Input label="Password" type="password" placeholder="••••••••" icon={<Icon.Lock className="w-4 h-4" />} />
         </div>
-        <div className="grid grid-cols-3 gap-4 mb-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
           <Input label="With Error" placeholder="Enter value" error="This field is required" />
           <Input label="With Hint" placeholder="Enter value" hint="Must be at least 8 characters" />
           <SearchInput placeholder="Search questions…" />
         </div>
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Select label="Difficulty" value="medium" options={[
             { label: 'Easy', value: 'easy' },
             { label: 'Medium', value: 'medium' },
@@ -174,7 +187,7 @@ export default function ComponentsPage() {
           <Tabs tabs={['Overview', 'Questions', 'Students', 'Analytics']} active={tab} onChange={setTab} />
           <Breadcrumb items={[
             { label: 'Admin', onClick: () => {} },
-            { label: 'Question Bank', onClick: () => {} },
+            { label: 'Question', onClick: () => {} },
             { label: 'ML Fundamentals', onClick: () => {} },
             { label: 'Question #142' },
           ]} />
@@ -183,7 +196,7 @@ export default function ComponentsPage() {
 
       {/* Alerts & Toasts */}
       <Section title="Alerts & Notifications">
-        <div className="grid grid-cols-2 gap-4 mb-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
           <Alert type="success" title="Exam Submitted" message="Your exam has been submitted successfully. Results will be available within 24 hours." />
           <Alert type="warning" title="Time Warning" message="You have 5 minutes remaining to complete this exam section." />
           <Alert type="error" title="Connection Error" message="Unable to save your answer. Please check your connection and try again." />
@@ -233,17 +246,21 @@ export default function ComponentsPage() {
       {/* Table */}
       <Section title="Data Table">
         <div className="card overflow-hidden">
-          <div className="flex items-center gap-3 px-4 py-3 border-b border-[#F3F4F6]">
-            <SearchInput className="w-56" placeholder="Search users…" />
-            <Select value="all" options={[{ label: 'All Roles', value: 'all' }, { label: 'Student', value: 'student' }, { label: 'Admin', value: 'admin' }]} className="w-36" />
+          <div className="flex flex-wrap items-center gap-3 px-4 py-3 border-b border-[#F3F4F6]">
+            <SearchInput className="w-full sm:w-56" placeholder="Search users…" />
+            <Select value="all" options={[{ label: 'All Roles', value: 'all' }, { label: 'Student', value: 'student' }, { label: 'Admin', value: 'admin' }]} className="w-full sm:w-36" />
             <div className="flex-1" />
             <Button variant="outline" size="sm" icon={<Icon.Download className="w-3.5 h-3.5" />}>Export</Button>
             <Button size="sm" icon={<Icon.Plus className="w-3.5 h-3.5" />}>Add User</Button>
           </div>
           <Table columns={tableColumns} data={mockTableData} selectable onSort={handleSort} sortKey={sortKey} sortDir={sortDir} />
-          <div className="border-t border-[#F3F4F6]">
-            <Pagination page={page} total={48} perPage={5} onChange={setPage} />
+        </div>
+
+        <div className="card overflow-hidden">
+          <div className="px-4 py-3 border-b border-[#F3F4F6]">
+            <p className="text-[13.5px] font-medium text-[#374151]">Pagination</p>
           </div>
+          <Pagination page={page} total={48} perPage={DEFAULT_PAGE_SIZE} onChange={setPage} />
         </div>
       </Section>
 
@@ -262,11 +279,14 @@ export default function ComponentsPage() {
             <Alert type="info" message="Questions will be reviewed by AI before publishing." />
           </div>
         </Modal>
+
+        <Button variant="outline" icon={<Icon.Edit className="w-4 h-4" />} onClick={() => setEditModuleOpen(true)}>Edit Module Modal</Button>
+        <EditModuleModal open={editModuleOpen} module={sampleModule} onClose={() => setEditModuleOpen(false)} onSaved={() => setEditModuleOpen(false)} />
       </Section>
 
       {/* Exam UI Components */}
       <Section title="Exam UI Components">
-        <div className="grid grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="space-y-3">
             <div className="card p-4">
               <p className="text-[13px] font-semibold text-[#374151] mb-3">Timer Display</p>
@@ -301,12 +321,12 @@ export default function ComponentsPage() {
 
       {/* Course & Exam Cards */}
       <Section title="Content Cards">
-        <div className="grid grid-cols-3 gap-4 mb-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
           <CourseCard title="Machine Learning Fundamentals" subject="Artificial Intelligence" progress={67} examCount={8} difficulty="Medium" />
           <CourseCard title="Deep Neural Networks" subject="AI & Deep Learning" progress={23} examCount={5} difficulty="Hard" />
           <CourseCard title="Python for Data Science" subject="Programming" progress={91} examCount={12} difficulty="Easy" />
         </div>
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <ExamCard title="ML Fundamentals — Mid Exam" duration={90} questions={45} passMark={70} status="upcoming" />
           <ExamCard title="Python Basics Final" duration={60} questions={30} passMark={60} status="completed" score={87} />
           <ExamCard title="Neural Networks Quiz" duration={45} questions={20} passMark={75} status="ongoing" />
@@ -333,7 +353,7 @@ export default function ComponentsPage() {
 
       {/* Stat Cards */}
       <Section title="Statistic Cards">
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
           <StatCard title="Total Students" value="2,847" change={12.5} changeLabel="vs last month" icon={<Icon.Users />} color="#2563EB" />
           <StatCard title="Exams Completed" value="18,291" change={8.3} changeLabel="vs last month" icon={<Icon.ClipboardList />} color="#7C3AED" />
           <StatCard title="Avg Pass Rate" value="73.4%" change={-2.1} changeLabel="vs last month" icon={<Icon.TrendingUp />} color="#D97706" />

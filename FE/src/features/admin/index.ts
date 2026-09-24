@@ -1,5 +1,9 @@
 export { AdminDashboard } from './pages/AdminDashboard';
 export { UsersPage } from './pages/UsersPage';
+export { UserDetailPage } from './pages/UserDetailPage';
+export { FinancialDashboardPage } from './pages/FinancialDashboardPage';
+export { SubscriptionPackagesPage } from './pages/SubscriptionPackagesPage';
+export { AIUsagePage } from './pages/AIUsagePage';
 export { AnalyticsPage } from './pages/AnalyticsPage';
 export { AuditLogsPage } from './pages/AuditLogsPage';
 export { SystemSettingsPage } from './pages/SystemSettingsPage';

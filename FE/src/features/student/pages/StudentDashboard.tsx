@@ -8,23 +8,19 @@ import { Icon } from '@/assets/icons';
 export function StudentDashboard() {
   return (
     <div className="p-8 space-y-7">
-      <div className="flex items-start justify-between">
-        <div>
-          <h2 className="text-[22px] font-bold text-[#111827]">Good morning, Alexandra 👋</h2>
-          <p className="text-[14px] text-[#6B7280] mt-1">You have 2 upcoming exams this week. Keep it up!</p>
-        </div>
+      <div className="flex justify-end">
         <Button icon={<Icon.Book className="w-4 h-4" />}>Continue Learning</Button>
       </div>
 
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <StatCard title="Courses Enrolled" value="6" change={0} changeLabel="" icon={<Icon.Book />} color="#2563EB" />
         <StatCard title="Exams Completed" value="23" change={4.3} changeLabel="this month" icon={<Icon.ClipboardList />} color="#7C3AED" />
         <StatCard title="Average Score" value="84.2%" change={2.1} changeLabel="vs last month" icon={<Icon.TrendingUp />} color="#059669" />
         <StatCard title="Certificates" value="4" change={33.3} changeLabel="vs last month" icon={<Icon.Award />} color="#D97706" />
       </div>
 
-      <div className="grid grid-cols-3 gap-6">
-        <div className="col-span-2 space-y-5">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        <div className="xl:col-span-2 space-y-5">
           <h3 className="text-[16px] font-semibold text-[#111827]">My Courses</h3>
           <div className="grid grid-cols-2 gap-4">
             <CourseCard title="Machine Learning Fundamentals" subject="AI & Data Science" progress={67} examCount={8} difficulty="Medium" />
