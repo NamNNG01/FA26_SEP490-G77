@@ -17,12 +17,12 @@ export function ExamResultPage() {
         <p className="text-[15px] text-[#6B7280] mt-1">ML Fundamentals Final Exam</p>
         <div className="mt-6 flex items-center justify-center gap-8">
           <div className="text-center">
-            <p className={`text-[56px] font-black leading-none ${passed ? 'text-[#16A34A]' : 'text-[#DC2626]'}`}>{score}%</p>
+            <p className={`text-[clamp(2.5rem,1.5rem+4vw,3.5rem)] font-black leading-none ${passed ? 'text-[#16A34A]' : 'text-[#DC2626]'}`}>{score}%</p>
             <p className="text-[13px] text-[#9CA3AF] mt-1">Your Score</p>
           </div>
           <div className="w-px h-16 bg-[#F3F4F6]" />
           <div className="text-center">
-            <p className="text-[56px] font-black leading-none text-[#9CA3AF]">70%</p>
+            <p className="text-[clamp(2.5rem,1.5rem+4vw,3.5rem)] font-black leading-none text-[#9CA3AF]">70%</p>
             <p className="text-[13px] text-[#9CA3AF] mt-1">Pass Mark</p>
           </div>
         </div>

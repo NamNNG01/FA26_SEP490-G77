@@ -24,7 +24,7 @@ export function AccessDeniedPage({
     : 'You are logged in.';
 
   return (
-    <div className="min-h-screen bg-[#F9FAFB] flex items-center justify-center p-6">
+    <div className="min-h-[100dvh] bg-[#F9FAFB] flex items-center justify-center p-6">
       <div className="w-full max-w-lg">
         <div className="card p-8 text-center">
           <div className="w-16 h-16 bg-[#FEE2E2] rounded-full flex items-center justify-center mx-auto mb-5">

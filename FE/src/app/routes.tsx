@@ -6,8 +6,13 @@ import { Icon } from '@/assets/icons';
  * Components import from here instead of hardcoding URLs.
  */
 export const ROUTES = {
+  landing: '/',
   login: '/login',
   register: '/register',
+
+  // Public marketing pages (no auth required)
+  examsIntro: '/exams',
+  pricing: '/pricing',
   forgotPassword: '/forgot-password',
   resetPassword: '/reset-password',
   profile: '/profile',

@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Alert } from '@/components/ui/Alert';
 import { useAuth, landingPathForRole } from '@/auth/authContext';
+import { AuthPageHeader } from '../components/AuthPageHeader';
 import { Icon } from '@/assets/icons';
 
 export function RegisterPage() {
@@ -88,26 +89,19 @@ export function RegisterPage() {
 
   return (
     <>
-      <div className="p-6 sm:p-8">
-        <div className="text-center mb-10">
-          <div className="w-12 h-12 bg-[#2563EB] rounded-[14px] flex items-center justify-center mx-auto mb-4 shadow-md">
-            <Icon.User className="w-7 h-7 text-white" />
-          </div>
-          <h1 className="text-[26px] font-bold text-[#111827]">
-            Create your account
-          </h1>
-          <p className="text-[14px] text-[#6B7280] mt-1">
-            Join CertifyAI to start learning.
-          </p>
-        </div>
+      {/* Compact, scroll-free layout: spacing comes from AuthLayout's flex
+          gap (16–20px), the card is width 100% of the 430px column with
+          auto height — the whole page fits the viewport on desktop/laptop. */}
+      <div className="flex flex-col">
+        <AuthPageHeader title="Create your account" subtitle="Join CertifyAI to start learning." />
 
-        <div className="card p-8 shadow-lg">
+        <div className="card p-6 [@media(max-height:850px)]:p-5 shadow-lg">
           {error && <Alert type="error" title="Registration failed" message={error} />}
           {confirmError && (
             <Alert type="error" title="Password mismatch" message={confirmError} />
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} className="space-y-[18px] [@media(max-height:850px)]:space-y-3.5">
             <Input
               label="Full name"
               placeholder="Enter your name"
@@ -160,11 +154,12 @@ export function RegisterPage() {
             </Button>
           </form>
 
-          <div className="mt-8 pt-6 border-t border-[#F3F4F6] flex flex-col gap-3 items-center">
+          <div className="mt-5 pt-5 border-t border-[#F3F4F6] flex flex-col gap-3 items-center">
             <p className="text-[13px] text-[#6B7280] flex items-center gap-2">
               Already have an account?{' '}
               <button
-                onClick={() => (window.location.href = '/login')}
+                type="button"
+                onClick={() => navigate('/login')}
                 className="text-[13px] text-[#2563EB] hover:underline font-medium"
               >
                 Sign in

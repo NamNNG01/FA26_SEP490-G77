@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/Button';
 
 export function LoadingPage() {
   return (
-    <div className="min-h-screen bg-white flex flex-col items-center justify-center gap-4">
+    <div className="min-h-[100dvh] bg-white flex flex-col items-center justify-center gap-4">
       <div className="w-12 h-12 bg-[#2563EB] rounded-[14px] flex items-center justify-center shadow-md">
         <Icon.Brain className="w-7 h-7 text-white" />
       </div>
@@ -16,7 +16,7 @@ export function LoadingPage() {
 
 export function EmptyStatePage() {
   return (
-    <div className="min-h-screen bg-[#F9FAFB] flex items-center justify-center">
+    <div className="min-h-[100dvh] bg-[#F9FAFB] flex items-center justify-center">
       <div className="text-center max-w-md">
         <div className="w-24 h-24 bg-[#F3F4F6] rounded-[24px] flex items-center justify-center mx-auto mb-6">
           <Icon.FileText className="w-12 h-12 text-[#D1D5DB]" />
