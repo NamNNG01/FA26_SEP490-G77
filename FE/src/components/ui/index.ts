@@ -18,6 +18,6 @@ export { Modal } from './Modal';
 export { Avatar } from './Avatar';
 export { StatCard } from './StatCard';
 export { Table } from './Table';
-export { Pagination } from './Pagination';
+export { Pagination, usePagination, DEFAULT_PAGE_SIZE } from './Pagination';
 export { Spinner } from './Spinner';
 export { Card, SectionHeader, EmptyState } from './Card';

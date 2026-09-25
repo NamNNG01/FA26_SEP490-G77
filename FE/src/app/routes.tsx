@@ -1,78 +1,90 @@
 import React from 'react';
 import { Icon } from '@/assets/icons';
 
-export const NAV = [
-  {
-    id: 'cover',
-    section: 'Overview',
-    icon: <Icon.Layers className="w-4 h-4" />,
-    label: 'Cover',
-    page: 'Cover',
-    showInNav: true,
-  },
-  {
-    id: 'design-system',
-    section: 'Overview',
-    icon: <Icon.Grid className="w-4 h-4" />,
-    label: 'Design System',
-    page: 'Design System',
-    showInNav: true,
-  },
-  {
-    id: 'components',
-    section: 'Overview',
-    icon: <Icon.Package className="w-4 h-4" />,
-    label: 'Components',
-    page: 'Components',
-    showInNav: true,
-  },
-];
+/**
+ * Central route registry — single source of truth for navigation paths.
+ * Components import from here instead of hardcoding URLs.
+ */
+export const ROUTES = {
+  landing: '/',
+  login: '/login',
+  register: '/register',
 
-export const SECTIONS: { id: string; label: string; color: string; icon: React.ReactNode; items: { id: string; label: string; icon: React.ReactNode }[] }[] = [
-  {
-    id: 'common', label: 'Common', color: '#059669', icon: <Icon.Shield className="w-4 h-4" />,
-    items: [
-      { id: 'login', label: 'Login', icon: <Icon.Lock className="w-4 h-4" /> },
-      { id: 'forgot-password', label: 'Forgot Password', icon: <Icon.Mail className="w-4 h-4" /> },
-      { id: 'reset-password', label: 'Reset Password', icon: <Icon.Lock className="w-4 h-4" /> },
-      { id: 'profile', label: 'Profile', icon: <Icon.User className="w-4 h-4" /> },
-      { id: 'settings', label: 'Settings', icon: <Icon.Settings className="w-4 h-4" /> },
-      { id: 'notifications', label: 'Notifications', icon: <Icon.Bell className="w-4 h-4" /> },
-      { id: 'loading', label: 'Loading', icon: <Icon.RefreshCw className="w-4 h-4" /> },
-      { id: 'empty-state', label: 'Empty State', icon: <Icon.FileText className="w-4 h-4" /> },
-      { id: 'error-404', label: 'Error 404', icon: <Icon.AlertCircle className="w-4 h-4" /> },
-      { id: 'error-500', label: 'Error 500', icon: <Icon.AlertCircle className="w-4 h-4" /> },
-    ],
-  },
-  {
-    id: 'student', label: 'Student', color: '#D97706', icon: <Icon.Book className="w-4 h-4" />,
-    items: [
-      { id: 'student-dashboard', label: 'Dashboard', icon: <Icon.Home className="w-4 h-4" /> },
-      { id: 'exam-rules', label: 'Exam Rules', icon: <Icon.Shield className="w-4 h-4" /> },
-      { id: 'take-exam', label: 'Take Exam', icon: <Icon.ClipboardList className="w-4 h-4" /> },
-      { id: 'exam-result', label: 'Exam Result', icon: <Icon.Trophy className="w-4 h-4" /> },
-      { id: 'certificates', label: 'Certificates', icon: <Icon.Award className="w-4 h-4" /> },
-    ],
-  },
-  {
-    id: 'content-manager', label: 'Content Manager', color: '#0891B2', icon: <Icon.FileText className="w-4 h-4" />,
-    items: [
-      { id: 'cm-dashboard', label: 'Dashboard', icon: <Icon.Home className="w-4 h-4" /> },
-      { id: 'question-bank', label: 'Question Bank', icon: <Icon.Database className="w-4 h-4" /> },
-      { id: 'exam-builder', label: 'Exam Builder', icon: <Icon.ClipboardList className="w-4 h-4" /> },
-      { id: 'ocr-import', label: 'OCR Import', icon: <Icon.Scan className="w-4 h-4" /> },
-    ],
-  },
-  {
-    id: 'admin', label: 'Admin', color: '#DC2626', icon: <Icon.Cpu className="w-4 h-4" />,
-    items: [
-      { id: 'admin-dashboard', label: 'Dashboard', icon: <Icon.Home className="w-4 h-4" /> },
-      { id: 'users', label: 'Users', icon: <Icon.Users className="w-4 h-4" /> },
-      { id: 'analytics', label: 'Analytics', icon: <Icon.BarChart className="w-4 h-4" /> },
-      { id: 'audit-logs', label: 'Audit Logs', icon: <Icon.Activity className="w-4 h-4" /> },
-      { id: 'system-settings', label: 'System Settings', icon: <Icon.Settings className="w-4 h-4" /> },
-    ],
-  },
-];
+  // Public marketing pages (no auth required)
+  examsIntro: '/exams',
+  pricing: '/pricing',
+  forgotPassword: '/forgot-password',
+  resetPassword: '/reset-password',
+  profile: '/profile',
 
-export const FULLSCREEN = new Set(['login', 'forgot-password', 'reset-password', 'loading', 'empty-state', 'error-404', 'error-500', 'take-exam', 'cover']);
+  // Student
+  studentDashboard: '/student/dashboard',
+  studentCourses: '/student/courses',
+  studentExams: '/student/exams',
+  studentExam: '/student/exam',
+  studentExamResult: '/student/exam-result',
+
+  // Content Manager (backend role: COURSE_MANAGER)
+  managerDashboard: '/manager/dashboard',
+  managerCourses: '/manager/courses',
+  managerQuestions: '/manager/questions',
+  managerExams: '/manager/exams',
+
+  // Admin
+  adminDashboard: '/admin/dashboard',
+  adminUsers: '/admin/users',
+  adminFinancial: '/admin/financial',
+  adminSubscriptions: '/admin/subscriptions',
+  adminAiUsage: '/admin/ai-usage',
+  adminAnalytics: '/admin/analytics',
+  adminAuditLogs: '/admin/audit-logs',
+  adminSettings: '/admin/settings',
+} as const;
+
+export interface MenuItem {
+  id: string;
+  title: string;
+  icon: React.ReactNode;
+  path: string;
+}
+
+/**
+ * Sidebar menu per role — keyed by the backend role code
+ * (com.examprep.entities.Role.CODE_*: STUDENT | COURSE_MANAGER | ADMIN).
+ *
+ * One flat list per role, NO section headers. The Sidebar renders exactly
+ * the list for the authenticated user's role (read from AuthContext) via a
+ * single map lookup — no if-chains, no per-role components, no hardcoded
+ * roles at call sites.
+ */
+export const menuByRole: Record<string, MenuItem[]> = {
+  STUDENT: [
+    { id: 'student-dashboard', title: 'Dashboard', icon: <Icon.Home className="w-4 h-4" />, path: ROUTES.studentDashboard },
+    { id: 'student-courses', title: 'My Courses', icon: <Icon.Book className="w-4 h-4" />, path: ROUTES.studentCourses },
+    { id: 'student-exams', title: 'My Exams', icon: <Icon.ClipboardList className="w-4 h-4" />, path: ROUTES.studentExams },
+  ],
+  COURSE_MANAGER: [
+    { id: 'manager-dashboard', title: 'Dashboard', icon: <Icon.Home className="w-4 h-4" />, path: ROUTES.managerDashboard },
+    { id: 'manager-courses', title: 'Courses', icon: <Icon.Book className="w-4 h-4" />, path: ROUTES.managerCourses },
+    { id: 'manager-questions', title: 'Question Bank', icon: <Icon.Database className="w-4 h-4" />, path: ROUTES.managerQuestions },
+    { id: 'manager-exams', title: 'Exams', icon: <Icon.ClipboardList className="w-4 h-4" />, path: ROUTES.managerExams },
+  ],
+  ADMIN: [
+    { id: 'admin-dashboard', title: 'Dashboard', icon: <Icon.Home className="w-4 h-4" />, path: ROUTES.adminDashboard },
+    { id: 'admin-users', title: 'User Management', icon: <Icon.Users className="w-4 h-4" />, path: ROUTES.adminUsers },
+    { id: 'admin-financial', title: 'Financial', icon: <Icon.TrendingUp className="w-4 h-4" />, path: ROUTES.adminFinancial },
+    { id: 'admin-subscriptions', title: 'Subscriptions', icon: <Icon.Package className="w-4 h-4" />, path: ROUTES.adminSubscriptions },
+    { id: 'admin-ai-usage', title: 'AI Usage', icon: <Icon.Brain className="w-4 h-4" />, path: ROUTES.adminAiUsage },
+    { id: 'admin-analytics', title: 'Analytics', icon: <Icon.BarChart className="w-4 h-4" />, path: ROUTES.adminAnalytics },
+    { id: 'admin-audit-logs', title: 'Audit Logs', icon: <Icon.Activity className="w-4 h-4" />, path: ROUTES.adminAuditLogs },
+    { id: 'admin-settings', title: 'System Settings', icon: <Icon.Settings className="w-4 h-4" />, path: ROUTES.adminSettings },
+  ],
+};
+
+/**
+ * Menu items for the given backend role code — a single map lookup.
+ * Unknown/missing roles get an empty list (no menu leaks).
+ */
+export function getMenuForRole(roleCode: string | null | undefined): MenuItem[] {
+  return (roleCode && menuByRole[roleCode]) || [];
+}

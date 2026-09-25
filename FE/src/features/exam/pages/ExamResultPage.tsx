@@ -17,18 +17,18 @@ export function ExamResultPage() {
         <p className="text-[15px] text-[#6B7280] mt-1">ML Fundamentals Final Exam</p>
         <div className="mt-6 flex items-center justify-center gap-8">
           <div className="text-center">
-            <p className={`text-[56px] font-black leading-none ${passed ? 'text-[#16A34A]' : 'text-[#DC2626]'}`}>{score}%</p>
+            <p className={`text-[clamp(2.5rem,1.5rem+4vw,3.5rem)] font-black leading-none ${passed ? 'text-[#16A34A]' : 'text-[#DC2626]'}`}>{score}%</p>
             <p className="text-[13px] text-[#9CA3AF] mt-1">Your Score</p>
           </div>
           <div className="w-px h-16 bg-[#F3F4F6]" />
           <div className="text-center">
-            <p className="text-[56px] font-black leading-none text-[#9CA3AF]">70%</p>
+            <p className="text-[clamp(2.5rem,1.5rem+4vw,3.5rem)] font-black leading-none text-[#9CA3AF]">70%</p>
             <p className="text-[13px] text-[#9CA3AF] mt-1">Pass Mark</p>
           </div>
         </div>
         <Badge variant={passed ? 'success' : 'danger'} className="mt-4 text-[14px] px-4 py-1">{passed ? 'PASSED' : 'FAILED'}</Badge>
       </div>
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { label: 'Total Questions', value: '45' },
           { label: 'Correct', value: '39' },
@@ -52,7 +52,7 @@ export function ExamResultPage() {
             { topic: 'Feature Engineering', correct: 6, total: 10, pct: 60 },
           ].map(t => (
             <div key={t.topic} className="flex items-center gap-4">
-              <span className="text-[13px] text-[#374151] w-48 flex-shrink-0">{t.topic}</span>
+              <span className="text-[13px] text-[#374151] w-40 sm:w-48 max-w-[40%] truncate flex-shrink-0" title={t.topic}>{t.topic}</span>
               <div className="flex-1">
                 <Progress value={t.pct} color={t.pct >= 80 ? '#16A34A' : t.pct >= 70 ? '#D97706' : '#DC2626'} size="sm" />
               </div>

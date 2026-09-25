@@ -1,9 +1,9 @@
 import React from 'react';
 import { Icon } from '@/assets/icons';
 
-export function Select({ label, options, value, onChange, className = '' }: {
+export function Select({ label, options, value, onChange, className = '', disabled }: {
   label?: string; options: { label: string; value: string }[]; value?: string;
-  onChange?: (v: string) => void; className?: string;
+  onChange?: (v: string) => void; className?: string; disabled?: boolean;
 }) {
   return (
     <div className={`flex flex-col gap-1.5 ${className}`}>
@@ -12,7 +12,8 @@ export function Select({ label, options, value, onChange, className = '' }: {
         <select
           value={value}
           onChange={e => onChange?.(e.target.value)}
-          className="w-full h-9 pl-3 pr-9 rounded-[10px] border border-[#E5E7EB] bg-white text-[14px] text-[#111827] appearance-none focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB] transition-all cursor-pointer"
+          disabled={disabled}
+          className={`w-full h-9 pl-3 pr-9 rounded-[10px] border border-[#E5E7EB] bg-white text-[14px] text-[#111827] appearance-none focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB] transition-all ${disabled ? 'cursor-not-allowed bg-[#F9FAFB] text-[#9CA3AF]' : 'cursor-pointer'}`}
         >
           {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>

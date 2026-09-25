@@ -15,7 +15,7 @@ export function TakeExamPage() {
   const [timeLeft] = useState(3284);
 
   return (
-    <div className="h-screen flex flex-col bg-[#F9FAFB]">
+    <div className="h-[100dvh] flex flex-col bg-[#F9FAFB]">
       {/* Exam Header */}
       <header className="h-14 bg-white border-b border-[#F3F4F6] flex items-center px-6 gap-4 flex-shrink-0">
         <div className="flex items-center gap-2">

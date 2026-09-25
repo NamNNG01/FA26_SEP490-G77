@@ -22,8 +22,8 @@ export function AuditLogsPage() {
       <div className="flex items-center justify-between">
         <h2 className="text-[22px] font-bold text-[#111827]">Audit Logs</h2>
         <div className="flex gap-2">
-          <SearchInput className="w-60" placeholder="Search logs…" />
-          <Select value="all" options={[{ label: 'All Types', value: 'all' }, { label: 'Permission', value: 'perm' }, { label: 'Content', value: 'content' }, { label: 'System', value: 'system' }]} className="w-36" />
+          <SearchInput className="w-full sm:w-60" placeholder="Search logs…" />
+          <Select value="all" options={[{ label: 'All Types', value: 'all' }, { label: 'Permission', value: 'perm' }, { label: 'Content', value: 'content' }, { label: 'System', value: 'system' }]} className="w-full sm:w-36" />
           <Button variant="outline" icon={<Icon.Download className="w-4 h-4" />}>Export</Button>
         </div>
       </div>

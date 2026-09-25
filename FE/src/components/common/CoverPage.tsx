@@ -3,7 +3,7 @@ import { Icon } from '@/assets/icons';
 
 export default function CoverPage() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#EFF6FF] via-white to-[#F5F3FF] flex flex-col">
+    <div className="min-h-[100dvh] bg-gradient-to-br from-[#EFF6FF] via-white to-[#F5F3FF] flex flex-col">
       {/* Header */}
       <header className="flex items-center gap-3 px-10 py-7">
         <div className="w-9 h-9 bg-[#2563EB] rounded-[10px] flex items-center justify-center shadow-sm">
@@ -26,7 +26,7 @@ export default function CoverPage() {
           <span className="text-[13px] font-semibold text-[#2563EB]">AI-Powered Certificate Exam Platform</span>
         </div>
 
-        <h1 className="text-[64px] font-extrabold text-[#111827] leading-none tracking-tight mb-6 max-w-3xl">
+        <h1 className="text-[clamp(2.5rem,1.5rem+4vw,4rem)] font-extrabold text-[#111827] leading-none tracking-tight mb-6 max-w-3xl">
           Design<br />
           <span className="text-[#2563EB]">System</span>
         </h1>

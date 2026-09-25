@@ -20,14 +20,14 @@ export function AnalyticsPage() {
       </div>
       <Tabs tabs={['Overview', 'Students', 'Exams', 'AI Performance']} active={tab} onChange={setTab} />
 
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <StatCard title="Total Exam Attempts" value="18,291" change={12.1} changeLabel="vs prev period" icon={<Icon.ClipboardList />} color="#2563EB" />
         <StatCard title="Overall Pass Rate" value="73.4%" change={-2.1} changeLabel="vs prev period" icon={<Icon.TrendingUp />} color="#D97706" />
         <StatCard title="Avg Completion Time" value="71m" change={-5.2} changeLabel="vs prev period" icon={<Icon.Clock />} color="#7C3AED" />
         <StatCard title="AI Hint Usage" value="34.2%" change={8.7} changeLabel="vs prev period" icon={<Icon.Brain />} color="#059669" />
       </div>
 
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="card p-5">
           <h4 className="text-[15px] font-semibold text-[#111827] mb-5">Pass Rate by Subject</h4>
           <div className="space-y-4">
