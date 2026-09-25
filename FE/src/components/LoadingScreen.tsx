@@ -9,7 +9,7 @@ import { Icon } from '@/assets/icons';
  */
 export function LoadingScreen() {
   return (
-    <div className="min-h-screen bg-[#F9FAFB] flex items-center justify-center">
+    <div className="min-h-[100dvh] bg-[#F9FAFB] flex items-center justify-center">
       <div className="text-center">
         <div className="w-12 h-12 bg-[#2563EB] rounded-[14px] flex items-center justify-center mx-auto mb-4">
           <Icon.Brain className="w-7 h-7 text-white" />

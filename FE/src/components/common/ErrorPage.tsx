@@ -10,7 +10,7 @@ export function ErrorPage({ code = 404 }: { code?: number }) {
   };
   const m = messages[code] || messages[404];
   return (
-    <div className="min-h-screen bg-[#F9FAFB] flex items-center justify-center">
+    <div className="min-h-[100dvh] bg-[#F9FAFB] flex items-center justify-center">
       <div className="text-center">
         <p className="text-[100px] font-black text-[#F3F4F6] leading-none">{code}</p>
         <h2 className="text-[26px] font-bold text-[#111827] -mt-4">{m.title}</h2>

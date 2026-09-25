@@ -12,8 +12,9 @@ import { Icon } from '@/assets/icons';
  * Data source: GET /api/v1/dashboard/student (via useDashboard → role
  * STUDENT). All numbers come from the backend — no mock data.
  *
- * UI unchanged: same stat-card row, course grid and activity layout, same
- * colors and components.
+ * Fluid layout: stat/course grids are auto-fit minmax(280px,1fr) so cards
+ * reflow smoothly at any width or zoom level; spacing uses clamp();
+ * thumbnails use aspect-ratio instead of fixed heights.
  */
 export function StudentDashboard() {
   const { data, loading, error, refresh } = useDashboard();
@@ -33,39 +34,41 @@ export function StudentDashboard() {
   ];
 
   return (
-    <div className="p-8 space-y-7">
-      {/* Statistics row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+    <div className="space-y-[clamp(1.25rem,2.5vw,1.75rem)]">
+      {/* Statistics row — auto-fit minmax(280px,1fr) */}
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-[clamp(1rem,2vw,1.25rem)]">
         {stats.map((s) => (
           <StatCard key={s.title} {...s} />
         ))}
       </div>
 
       {/* Recent Courses */}
-      <div className="space-y-5">
-        <h3 className="text-[16px] font-semibold text-foreground">My Courses</h3>
+      <div className="space-y-[clamp(1rem,2vw,1.25rem)]">
+        <h3 className="text-[clamp(1rem,0.95rem+0.3vw,1.125rem)] font-semibold text-foreground">My Courses</h3>
         {recentCourses.length === 0 ? (
-          <p className="text-[13.5px] text-muted-foreground">
+          <p className="text-[0.85rem] text-muted-foreground">
             You are not enrolled in any courses yet.
           </p>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-[clamp(1rem,2vw,1.25rem)]">
             {recentCourses.map((course) => (
               <div key={course.courseId} className="card overflow-hidden flex flex-col">
-                {/* Thumbnail (placeholder when null) */}
+                {/* Thumbnail (placeholder when null) — aspect-ratio, no fixed height */}
                 {course.thumbnailUrl ? (
                   <img
                     src={course.thumbnailUrl}
                     alt={course.title}
-                    className="w-full h-28 object-cover"
+                    width={640}
+                    height={360}
+                    className="w-full aspect-video object-cover"
                   />
                 ) : (
-                  <div className="w-full h-28 bg-primary-light flex items-center justify-center">
+                  <div className="w-full aspect-video bg-primary-light flex items-center justify-center">
                     <Icon.Book className="w-8 h-8 text-primary" />
                   </div>
                 )}
                 <div className="p-4 flex flex-col gap-3 flex-1">
-                  <h4 className="text-[14px] font-semibold text-foreground leading-snug">
+                  <h4 className="text-[0.875rem] font-semibold text-foreground leading-snug">
                     {course.title}
                   </h4>
                   {course.progress !== null && (
@@ -79,29 +82,29 @@ export function StudentDashboard() {
       </div>
 
       {/* Recent Attempts */}
-      <div className="space-y-4">
-        <h3 className="text-[16px] font-semibold text-foreground">Recent Attempts</h3>
+      <div className="space-y-[clamp(1rem,2vw,1.25rem)]">
+        <h3 className="text-[clamp(1rem,0.95rem+0.3vw,1.125rem)] font-semibold text-foreground">Recent Attempts</h3>
         {recentAttempts.length === 0 ? (
-          <p className="text-[13.5px] text-muted-foreground">
+          <p className="text-[0.85rem] text-muted-foreground">
             You have not taken any exams yet.
           </p>
         ) : (
-          <div className="card overflow-hidden">
+          <div className="card overflow-x-auto">
             {recentAttempts.map((attempt, i) => (
               <div
                 key={attempt.attemptId}
-                className={`flex items-center gap-4 px-5 py-3.5 ${
+                className={`flex flex-wrap items-center gap-x-4 gap-y-1 px-[clamp(0.875rem,1.5vw,1.25rem)] py-3.5 ${
                   i > 0 ? 'border-t border-line' : ''
                 }`}
               >
-                <div className="w-9 h-9 rounded-[10px] bg-primary-light flex items-center justify-center flex-shrink-0">
+                <div className="w-9 h-9 rounded-[0.625rem] bg-primary-light flex items-center justify-center flex-shrink-0">
                   <Icon.ClipboardList className="w-4.5 h-4.5 text-primary" />
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[13.5px] font-medium text-foreground truncate">
+                <div className="flex-1 min-w-[10rem]">
+                  <p className="text-[0.85rem] font-medium text-foreground break-words">
                     {attempt.examTitle}
                   </p>
-                  <p className="text-[12px] text-muted-foreground">
+                  <p className="text-[0.75rem] text-muted-foreground">
                     {attempt.submittedAt
                       ? new Date(attempt.submittedAt).toLocaleString()
                       : '—'}
@@ -112,7 +115,7 @@ export function StudentDashboard() {
                 >
                   {attempt.status}
                 </Badge>
-                <span className="text-[14px] font-semibold text-foreground w-14 text-right">
+                <span className="text-[0.875rem] font-semibold text-foreground w-14 text-right">
                   {attempt.score !== null ? `${attempt.score}%` : '—'}
                 </span>
               </div>

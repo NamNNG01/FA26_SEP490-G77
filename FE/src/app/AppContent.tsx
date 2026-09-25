@@ -12,6 +12,8 @@ import { DashboardLayout } from '@/layouts/DashboardLayout';
 import { LoadingScreen } from '@/components/LoadingScreen';
 
 import { LoginPage } from '@/features/auth';
+import { LandingPage } from '@/features/landing';
+import { PlaceholderPage } from '@/features/public';
 import { RegisterPage } from '@/features/auth/pages/RegisterPage';
 import { ForgotPasswordPage, ResetPasswordPage } from '@/features/auth/pages/AuthPages';
 import { ProfilePage } from '@/features/profile';
@@ -38,7 +40,9 @@ import {
  * Auth gate:
  *  - isLoading       → LoadingScreen (never render a redirect while the
  *                      session is being restored).
- *  - unauthenticated → AuthLayout (login / register / forgot / reset).
+ *  - unauthenticated → full-width public pages (landing / pricing / exams)
+ *                      rendered directly under the app root, plus auth
+ *                      forms wrapped in the narrow centered AuthLayout.
  *  - authenticated   → ONE layout route: DashboardLayout renders the
  *                      header + role-filtered Sidebar and swaps pages via
  *                      <Outlet />, so the sidebar is mounted exactly once
@@ -71,18 +75,51 @@ function AppRoutes() {
     return <LoadingScreen />;
   }
 
-  // 2. Not authenticated → auth layout only.
+  // 2. Not authenticated → public pages render FULL-WIDTH (they manage
+  //     their own responsive containers). Only the auth forms sit inside
+  //     AuthLayout's narrow centered column — previously ALL guest routes
+  //     were wrapped in it, which squeezed the landing page to ~460px on
+  //     every screen size.
   if (!isAuthenticated || user === null) {
     return (
-      <AuthLayout>
-        <Routes location={location}>
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
-          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-          <Route path="/reset-password" element={<ResetPasswordPage />} />
-          <Route path="*" element={<Navigate to="/login" replace />} />
-        </Routes>
-      </AuthLayout>
+      <Routes location={location}>
+        {/* Public pages — full-width responsive layouts. */}
+        <Route path="/" element={<LandingPage />} />
+        <Route
+          path="/pricing"
+          element={
+            <PlaceholderPage
+              title="Pricing Plans"
+              subtitle="Simple, student-friendly pricing is on the way. Create a free account to start practicing while we finish it."
+            />
+          }
+        />
+        <Route
+          path="/exams"
+          element={
+            <PlaceholderPage
+              title="Certification Exams"
+              subtitle="A catalog of supported certification exams is coming soon. Sign up to get access the moment it ships."
+            />
+          }
+        />
+
+        {/* Auth forms — centered narrow column (matched via the wildcard). */}
+        <Route
+          path="*"
+          element={
+            <AuthLayout>
+              <Routes location={location}>
+                <Route path="/login" element={<LoginPage />} />
+                <Route path="/register" element={<RegisterPage />} />
+                <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+                <Route path="/reset-password" element={<ResetPasswordPage />} />
+                <Route path="*" element={<Navigate to="/login" replace />} />
+              </Routes>
+            </AuthLayout>
+          }
+        />
+      </Routes>
     );
   }
 
@@ -96,8 +133,29 @@ function AppRoutes() {
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
 
-        {/* Role-based landing */}
-        <Route path="/" element={<Navigate to={landing} replace />} />
+        {/* Public landing page — authenticated users can visit it too;
+            its Primary CTA sends them straight to their role dashboard. */}
+        <Route path="/" element={<LandingPage />} />
+
+        {/* Public marketing placeholders (same as the guest branch). */}
+        <Route
+          path="/pricing"
+          element={
+            <PlaceholderPage
+              title="Pricing Plans"
+              subtitle="Simple, student-friendly pricing is on the way. Create a free account to start practicing while we finish it."
+            />
+          }
+        />
+        <Route
+          path="/exams"
+          element={
+            <PlaceholderPage
+              title="Certification Exams"
+              subtitle="A catalog of supported certification exams is coming soon. Sign up to get access the moment it ships."
+            />
+          }
+        />
 
         {/* Student */}
         <Route path="/student/dashboard" element={<StudentDashboard />} />

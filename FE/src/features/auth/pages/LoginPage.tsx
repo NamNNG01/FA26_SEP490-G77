@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Alert } from '@/components/ui/Alert';
 import { useAuth, landingPathForRole } from '@/auth/authContext';
+import { AuthPageHeader } from '../components/AuthPageHeader';
 import { Icon } from '@/assets/icons';
 
 export function LoginPage() {
@@ -42,21 +43,13 @@ export function LoginPage() {
 
   return (
     <>
-      <div className="p-6 sm:p-8">
-        <div className="text-center mb-10">
-          <div className="w-12 h-12 bg-[#2563EB] rounded-[14px] flex items-center justify-center mx-auto mb-4 shadow-md">
-            <Icon.Brain className="w-7 h-7 text-white" />
-          </div>
-          <h1 className="text-[26px] font-bold text-[#111827]">Welcome back</h1>
-          <p className="text-[14px] text-[#6B7280] mt-1">
-            Sign in to CertifyAI
-          </p>
-        </div>
+      <div className="flex flex-col">
+        <AuthPageHeader title="Welcome back" subtitle="Sign in to CertifyAI" />
 
-        <div className="card p-8 shadow-lg">
+        <div className="card p-6 [@media(max-height:850px)]:p-5 shadow-lg">
           {error && <Alert type="error" title="Authentication failed" message={error} />}
 
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} className="space-y-[18px] [@media(max-height:850px)]:space-y-3.5">
             <Input
               label="Email"
               placeholder="Enter your email"
@@ -90,15 +83,16 @@ export function LoginPage() {
             <p className="text-[13px] text-[#6B7280] flex items-center gap-2">
               Don't have an account?{' '}
               <button
-                onClick={() => (window.location.href = '/register')}
-                className="text-[13px] text-[#2563EB] hover:underline font-medium"
+                type="button"
+                onClick={() => navigate('/register')}
+                className="text-[13px] text-[#2563EB] hover:underline font-medium cursor-pointer"
               >
                 Create one
               </button>
             </p>
             <button
               type="button"
-              onClick={() => (window.location.href = '/forgot-password')}
+              onClick={() => navigate('/forgot-password')}
               className="text-[13px] text-[#2563EB] hover:underline font-medium"
             >
               Forgot password?
