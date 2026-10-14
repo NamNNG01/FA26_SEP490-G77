@@ -9,32 +9,31 @@ import java.io.Serializable;
 import java.time.Instant;
 
 @Entity
-@Table(name = "password_reset_tokens")
+@Table(name = "notifications")
 @Getter
 @Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 @EntityListeners(AuditingEntityListener.class)
-public class PasswordResetToken implements Serializable {
+public class Notification implements Serializable {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "reset_token_id")
-    private Long resetTokenId;
+    @Column(name = "notification_id")
+    private Long notificationId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false)
-    private User user;
+    @Column(name = "title", nullable = false, length = 255)
+    private String title;
 
-    @Column(name = "token_hash", nullable = false, length = 255)
-    private String tokenHash;
+    @Column(name = "content", nullable = false)
+    private String content;
 
-    @Column(name = "expires_at", nullable = false)
-    private Instant expiresAt;
+    @Column(name = "type", nullable = false, length = 50)
+    private String type;
 
-    @Column(name = "used_at")
-    private Instant usedAt;
+    @Column(name = "target_type", length = 50)
+    private String targetType;
 
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)

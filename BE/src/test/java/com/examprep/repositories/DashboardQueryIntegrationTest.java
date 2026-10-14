@@ -19,6 +19,7 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -44,10 +45,8 @@ class DashboardQueryIntegrationTest {
 
     @Test
     void studentSummary_CountsAndAverage_ScoredAttemptsOnly() {
-        Role studentRole = persistRole(Role.CODE_STUDENT, "Student");
-        Role managerRole = persistRole(Role.CODE_COURSE_MANAGER, "Manager");
-        User manager = persistUser("manager@gmail.com", "Manager One", managerRole);
-        User student = persistUser("student@gmail.com", "Nguyen Van A", studentRole);
+        User manager = persistUser("manager@gmail.com", "Manager One", User.ROLE_COURSE_MANAGER);
+        User student = persistUser("student@gmail.com", "Nguyen Van A", User.ROLE_STUDENT);
 
         Course active = persistCourse(manager, "IELTS Academic", true, "thumb.jpg");
         Course done = persistCourse(manager, "TOEFL Prep", true, null);
@@ -55,7 +54,7 @@ class DashboardQueryIntegrationTest {
         enroll(student, active, Enrollment.STATUS_ACTIVE, 65, Instant.parse("2026-09-10T00:00:00Z"));
         enroll(student, done, Enrollment.STATUS_COMPLETED, 100, Instant.parse("2026-09-05T00:00:00Z"));
 
-        Exam exam = persistExam(active, "IELTS Reading Mock Test 01");
+        Exam exam = persistExam(active, manager, "IELTS Reading Mock Test 01");
         persistAttempt(student, exam, Instant.parse("2026-09-18T10:00:00Z"), new BigDecimal("82.50"), "GRADED");
         persistAttempt(student, exam, Instant.parse("2026-09-19T14:20:00Z"), new BigDecimal("75.00"), "GRADED");
         persistAttempt(student, exam, null, null, "IN_PROGRESS");
@@ -73,10 +72,8 @@ class DashboardQueryIntegrationTest {
 
     @Test
     void studentRecentCourses_OrderedByEnrolledAtDesc_LimitedToFive() {
-        Role studentRole = persistRole(Role.CODE_STUDENT, "Student");
-        Role managerRole = persistRole(Role.CODE_COURSE_MANAGER, "Manager");
-        User manager = persistUser("manager@gmail.com", "Manager One", managerRole);
-        User student = persistUser("student@gmail.com", "Nguyen Van A", studentRole);
+        User manager = persistUser("manager@gmail.com", "Manager One", User.ROLE_COURSE_MANAGER);
+        User student = persistUser("student@gmail.com", "Nguyen Van A", User.ROLE_STUDENT);
 
         for (int i = 1; i <= 6; i++) {
             Course course = persistCourse(manager, "Course " + i, true, "thumb-" + i + ".jpg");
@@ -100,13 +97,11 @@ class DashboardQueryIntegrationTest {
 
     @Test
     void studentRecentAttempts_SubmittedOnly_OrderedBySubmitTimeDesc_LimitedToFive() {
-        Role studentRole = persistRole(Role.CODE_STUDENT, "Student");
-        Role managerRole = persistRole(Role.CODE_COURSE_MANAGER, "Manager");
-        User manager = persistUser("manager@gmail.com", "Manager One", managerRole);
-        User student = persistUser("student@gmail.com", "Nguyen Van A", studentRole);
+        User manager = persistUser("manager@gmail.com", "Manager One", User.ROLE_COURSE_MANAGER);
+        User student = persistUser("student@gmail.com", "Nguyen Van A", User.ROLE_STUDENT);
 
         Course course = persistCourse(manager, "IELTS Academic", true, "thumb.jpg");
-        Exam exam = persistExam(course, "IELTS Reading Mock Test 01");
+        Exam exam = persistExam(course, manager, "IELTS Reading Mock Test 01");
 
         for (int i = 1; i <= 6; i++) {
             persistAttempt(student, exam, Instant.parse(String.format("2026-09-%02dT14:20:00Z", 9 + i)),
@@ -131,13 +126,11 @@ class DashboardQueryIntegrationTest {
 
     @Test
     void managerCounts_PublishedDraftAndDistinctStudents() {
-        Role studentRole = persistRole(Role.CODE_STUDENT, "Student");
-        Role managerRole = persistRole(Role.CODE_COURSE_MANAGER, "Manager");
-        User manager1 = persistUser("manager1@gmail.com", "Manager One", managerRole);
-        User manager2 = persistUser("manager2@gmail.com", "Manager Two", managerRole);
-        User student1 = persistUser("student1@gmail.com", "Student One", studentRole);
-        User student2 = persistUser("student2@gmail.com", "Student Two", studentRole);
-        User student3 = persistUser("student3@gmail.com", "Student Three", studentRole);
+        User manager1 = persistUser("manager1@gmail.com", "Manager One", User.ROLE_COURSE_MANAGER);
+        User manager2 = persistUser("manager2@gmail.com", "Manager Two", User.ROLE_COURSE_MANAGER);
+        User student1 = persistUser("student1@gmail.com", "Student One", User.ROLE_STUDENT);
+        User student2 = persistUser("student2@gmail.com", "Student Two", User.ROLE_STUDENT);
+        User student3 = persistUser("student3@gmail.com", "Student Three", User.ROLE_STUDENT);
 
         Course published = persistCourse(manager1, "IELTS Academic", true, null);
         Course draft = persistCourse(manager1, "TOEFL Practice", false, null);
@@ -157,12 +150,10 @@ class DashboardQueryIntegrationTest {
 
     @Test
     void managerRecentCourses_StudentCountStatusAndOrder() {
-        Role studentRole = persistRole(Role.CODE_STUDENT, "Student");
-        Role managerRole = persistRole(Role.CODE_COURSE_MANAGER, "Manager");
-        User manager = persistUser("manager@gmail.com", "Manager One", managerRole);
-        User student1 = persistUser("student1@gmail.com", "Student One", studentRole);
-        User student2 = persistUser("student2@gmail.com", "Student Two", studentRole);
-        User student3 = persistUser("student3@gmail.com", "Student Three", studentRole);
+        User manager = persistUser("manager@gmail.com", "Manager One", User.ROLE_COURSE_MANAGER);
+        User student1 = persistUser("student1@gmail.com", "Student One", User.ROLE_STUDENT);
+        User student2 = persistUser("student2@gmail.com", "Student Two", User.ROLE_STUDENT);
+        User student3 = persistUser("student3@gmail.com", "Student Three", User.ROLE_STUDENT);
 
         Course courseA = persistCourse(manager, "Course A", true, null);
         Course courseB = persistCourse(manager, "Course B", false, null);
@@ -196,15 +187,11 @@ class DashboardQueryIntegrationTest {
 
     @Test
     void adminRecentUsers_RoleCountsAndOrder() {
-        Role studentRole = persistRole(Role.CODE_STUDENT, "Student");
-        Role managerRole = persistRole(Role.CODE_COURSE_MANAGER, "Manager");
-        Role adminRole = persistRole(Role.CODE_ADMIN, "Admin");
-
-        User admin = persistUser("admin@gmail.com", "Platform Admin", adminRole);
-        User manager = persistUser("manager@gmail.com", "Manager One", managerRole);
+        User admin = persistUser("admin@gmail.com", "Platform Admin", User.ROLE_ADMIN);
+        User manager = persistUser("manager@gmail.com", "Manager One", User.ROLE_COURSE_MANAGER);
         User[] students = new User[7];
         for (int i = 1; i <= 6; i++) {
-            students[i] = persistUser("student" + i + "@gmail.com", "Student " + toWord(i), studentRole);
+            students[i] = persistUser("student" + i + "@gmail.com", "Student " + toWord(i), User.ROLE_STUDENT);
         }
         em.flush();
 
@@ -222,14 +209,14 @@ class DashboardQueryIntegrationTest {
         assertEquals(5, recent.size());
         assertEquals("Student Six", recent.get(0).getFullName());
         assertEquals("student6@gmail.com", recent.get(0).getEmail());
-        assertEquals(Role.CODE_STUDENT, recent.get(0).getRole());
+        assertEquals(User.ROLE_STUDENT, recent.get(0).getRole());
         assertEquals(Instant.parse("2026-02-06T00:00:00Z"), recent.get(0).getCreatedAt());
         assertEquals("student5@gmail.com", recent.get(1).getEmail());
         assertEquals("student2@gmail.com", recent.get(4).getEmail());
 
-        assertEquals(6, userRepository.countByRoleCode(Role.CODE_STUDENT));
-        assertEquals(1, userRepository.countByRoleCode(Role.CODE_COURSE_MANAGER));
-        assertEquals(1, userRepository.countByRoleCode(Role.CODE_ADMIN));
+        assertEquals(6, userRepository.countByRoleName(User.ROLE_STUDENT));
+        assertEquals(1, userRepository.countByRoleName(User.ROLE_COURSE_MANAGER));
+        assertEquals(1, userRepository.countByRoleName(User.ROLE_ADMIN));
         assertEquals(8, userRepository.count());
     }
 
@@ -245,18 +232,12 @@ class DashboardQueryIntegrationTest {
         };
     }
 
-    private Role persistRole(String code, String name) {
-        Role role = Role.builder().roleCode(code).roleName(name).build();
-        em.persist(role);
-        return role;
-    }
-
-    private User persistUser(String email, String fullName, Role role) {
+    private User persistUser(String email, String fullName, String roleName) {
         User user = User.builder()
                 .email(email)
                 .passwordHash("$2a$10$examplehashexamplehashexamplehashexamplehash")
                 .fullName(fullName)
-                .role(role)
+                .roleName(roleName)
                 .status(User.STATUS_ACTIVE)
                 .build();
         em.persist(user);
@@ -265,9 +246,11 @@ class DashboardQueryIntegrationTest {
 
     private Course persistCourse(User manager, String title, boolean published, String thumbnailUrl) {
         Course course = Course.builder()
-                .categoryId(1)
+                .categoryId(1L)
                 .manager(manager)
                 .title(title)
+                .slug(UUID.randomUUID().toString().replace("-", "").substring(0, 20))
+                .price(BigDecimal.ZERO)
                 .thumbnailUrl(thumbnailUrl)
                 .isPublished(published)
                 .build();
@@ -282,18 +265,21 @@ class DashboardQueryIntegrationTest {
                 .enrolledAt(enrolledAt)
                 .status(status)
                 .progress(progress)
+                .paidAmount(BigDecimal.ZERO)
                 .build();
         em.persist(enrollment);
         return enrollment;
     }
 
-    private Exam persistExam(Course course, String title) {
+    private Exam persistExam(Course course, User createdBy, String title) {
         Exam exam = Exam.builder()
                 .course(course)
+                .createdBy(createdBy)
                 .title(title)
                 .durationMinutes(60)
                 .isPractice(false)
                 .generationType("FIXED")
+                .status("DRAFT")
                 .build();
         em.persist(exam);
         return exam;

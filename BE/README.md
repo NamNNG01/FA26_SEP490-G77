@@ -46,11 +46,11 @@ BE/
     │   │   └── com/
     │   │       └── examprep/                  # Base package (package-by-layer)
     │   │           ├── ExamPrepBackendApplication.java
-    │   │           ├── controllers/           # @RestController (AuthController, HealthController)
-    │   │           ├── services/              # @Service (AuthService, AuthServiceImpl)
-    │   │           ├── repositories/          # Spring Data JPA repositories
-    │   │           ├── entities/              # JPA entities (User, Role, RefreshToken, PasswordResetToken)
-    │   │           ├── dto/                   # Request/Response DTOs + ApiResponse/ResponseCode wrappers
+   │   │           ├── controllers/           # @RestController (AuthController, HealthController)
+   │   │           ├── services/              # @Service (AuthService, AuthServiceImpl)
+   │   │           ├── repositories/          # Spring Data JPA repositories
+   │   │           ├── entities/              # JPA entities (29: User, RefreshToken, Category, Course, Enrollment, Exam, ...)
+   │   │           ├── dto/                   # Request/Response DTOs + ApiResponse/ResponseCode wrappers
     │   │           ├── security/              # JwtTokenProvider, JwtAuthenticationFilter, entry points
     │   │           ├── config/                # Security, CORS, OpenAPI, Auditing configuration
     │   │           └── exceptions/            # Custom exceptions + GlobalExceptionHandler

@@ -25,21 +25,28 @@ public class Course implements Serializable {
     @Column(name = "course_id")
     private Long courseId;
 
-    @Column(name = "category_id")
-    private Integer categoryId;
+    @Column(name = "category_id", nullable = false)
+    private Long categoryId;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "manager_id", nullable = false)
     private User manager;
 
-    @Column(name = "title", nullable = false, length = 200)
+    @Column(name = "title", nullable = false, length = 255)
     private String title;
+
+    @Column(name = "slug", nullable = false, unique = true, length = 255)
+    private String slug;
 
     @Column(name = "description")
     private String description;
 
-    @Column(name = "thumbnail_url", length = 255)
+    @Column(name = "thumbnail_url", length = 512)
     private String thumbnailUrl;
+
+    @Builder.Default
+    @Column(name = "price", nullable = false, precision = 10, scale = 2)
+    private java.math.BigDecimal price = java.math.BigDecimal.ZERO;
 
     @Column(name = "is_published", nullable = false)
     private Boolean isPublished;

@@ -5,9 +5,7 @@ import com.examprep.exceptions.UnauthorizedException;
 import com.examprep.dto.*;
 import com.examprep.entities.RefreshToken;
 import com.examprep.repositories.RefreshTokenRepository;
-import com.examprep.entities.Role;
 import com.examprep.entities.User;
-import com.examprep.repositories.RoleRepository;
 import com.examprep.repositories.UserRepository;
 import com.examprep.security.JwtTokenProvider;
 import com.examprep.security.UserPrincipal;
@@ -33,9 +31,6 @@ class AuthServiceTest {
     private UserRepository userRepository;
 
     @Mock
-    private RoleRepository roleRepository;
-
-    @Mock
     private RefreshTokenRepository refreshTokenRepository;
 
     @Mock
@@ -47,23 +42,16 @@ class AuthServiceTest {
     @InjectMocks
     private AuthServiceImpl authService;
 
-    private Role studentRole;
     private User testUser;
 
     @BeforeEach
     void setUp() {
-        studentRole = Role.builder()
-                .roleId(3L)
-                .roleCode("STUDENT")
-                .roleName("Học viên")
-                .build();
-
         testUser = User.builder()
                 .userId(101L)
                 .email("student@gmail.com")
                 .passwordHash("hashedPassword")
                 .fullName("Nguyen Van A")
-                .role(studentRole)
+                .roleName(User.ROLE_STUDENT)
                 .status("ACTIVE")
                 .build();
     }
@@ -77,7 +65,6 @@ class AuthServiceTest {
                 .build();
 
         when(userRepository.existsByEmail(anyString())).thenReturn(false);
-        when(roleRepository.findByRoleCode("STUDENT")).thenReturn(Optional.of(studentRole));
         when(passwordEncoder.encode(anyString())).thenReturn("hashedPassword");
         when(userRepository.save(any(User.class))).thenReturn(testUser);
 
@@ -86,7 +73,7 @@ class AuthServiceTest {
         assertNotNull(response);
         assertEquals(101L, response.getUserId());
         assertEquals("student@gmail.com", response.getEmail());
-        assertEquals("STUDENT", response.getRole().getCode());
+        assertEquals("STUDENT", response.getRole());
         verify(userRepository, times(1)).save(any(User.class));
     }
 
@@ -226,7 +213,7 @@ class AuthServiceTest {
                 .email("student@gmail.com")
                 .passwordHash("hashedPassword")
                 .fullName("Nguyen Van A")
-                .role(studentRole)
+                .roleName(User.ROLE_STUDENT)
                 .status("INACTIVE")
                 .build();
 

@@ -2,7 +2,7 @@ package com.examprep.services;
 
 import com.examprep.dto.*;
 import com.examprep.entities.Enrollment;
-import com.examprep.entities.Role;
+import com.examprep.entities.User;
 import com.examprep.repositories.*;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -180,8 +180,8 @@ class DashboardServiceTest {
     @Test
     void getAdminDashboard_Success() {
         when(userRepository.count()).thenReturn(2450L);
-        when(userRepository.countByRoleCode(Role.CODE_STUDENT)).thenReturn(2200L);
-        when(userRepository.countByRoleCode(Role.CODE_COURSE_MANAGER)).thenReturn(15L);
+        when(userRepository.countByRoleName(User.ROLE_STUDENT)).thenReturn(2200L);
+        when(userRepository.countByRoleName(User.ROLE_COURSE_MANAGER)).thenReturn(15L);
         when(courseRepository.count()).thenReturn(120L);
         when(examRepository.count()).thenReturn(350L);
 
@@ -214,8 +214,8 @@ class DashboardServiceTest {
     @Test
     void getAdminDashboard_Empty_ReturnsZeroSummaryAndEmptyList() {
         when(userRepository.count()).thenReturn(0L);
-        when(userRepository.countByRoleCode(Role.CODE_STUDENT)).thenReturn(0L);
-        when(userRepository.countByRoleCode(Role.CODE_COURSE_MANAGER)).thenReturn(0L);
+        when(userRepository.countByRoleName(User.ROLE_STUDENT)).thenReturn(0L);
+        when(userRepository.countByRoleName(User.ROLE_COURSE_MANAGER)).thenReturn(0L);
         when(courseRepository.count()).thenReturn(0L);
         when(examRepository.count()).thenReturn(0L);
         when(userRepository.findRecentUsers(any(Pageable.class))).thenReturn(List.of());
@@ -230,3 +230,4 @@ class DashboardServiceTest {
         assertTrue(response.getRecentUsers().isEmpty());
     }
 }
+

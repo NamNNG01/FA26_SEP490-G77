@@ -2,7 +2,7 @@ package com.examprep.services;
 
 import com.examprep.dto.*;
 import com.examprep.entities.Enrollment;
-import com.examprep.entities.Role;
+import com.examprep.entities.User;
 import com.examprep.repositories.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -94,8 +94,8 @@ public class DashboardServiceImpl implements DashboardService {
         log.info("Building admin dashboard");
 
         long totalUsers = userRepository.count();
-        long totalStudents = userRepository.countByRoleCode(Role.CODE_STUDENT);
-        long totalManagers = userRepository.countByRoleCode(Role.CODE_COURSE_MANAGER);
+        long totalStudents = userRepository.countByRoleName(User.ROLE_STUDENT);
+        long totalManagers = userRepository.countByRoleName(User.ROLE_COURSE_MANAGER);
         long totalCourses = courseRepository.count();
         long totalExams = examRepository.count();
 

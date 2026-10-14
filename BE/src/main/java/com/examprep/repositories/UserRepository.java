@@ -16,10 +16,10 @@ public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByEmail(String email);
     boolean existsByEmail(String email);
 
-    @Query("SELECT COUNT(u) FROM User u WHERE u.role.roleCode = :roleCode")
-    long countByRoleCode(@Param("roleCode") String roleCode);
+    @Query("SELECT COUNT(u) FROM User u WHERE u.roleName = :roleName")
+    long countByRoleName(@Param("roleName") String roleName);
 
-    @Query("SELECT new com.examprep.dto.RecentUser(u.userId, u.fullName, u.email, r.roleCode, u.createdAt) " +
-            "FROM User u JOIN u.role r ORDER BY u.createdAt DESC")
+    @Query("SELECT new com.examprep.dto.RecentUser(u.userId, u.fullName, u.email, u.roleName, u.createdAt) " +
+            "FROM User u ORDER BY u.createdAt DESC")
     List<RecentUser> findRecentUsers(Pageable pageable);
 }

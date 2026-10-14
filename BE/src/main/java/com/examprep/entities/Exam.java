@@ -24,15 +24,22 @@ public class Exam implements Serializable {
     private Long examId;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "course_id", nullable = false)
+    @JoinColumn(name = "course_id")
     private Course course;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "created_by")
+    @JoinColumn(name = "module_id")
+    private Module module;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "created_by", nullable = false)
     private User createdBy;
 
-    @Column(name = "title", nullable = false, length = 200)
+    @Column(name = "title", nullable = false, length = 255)
     private String title;
+
+    @Column(name = "description")
+    private String description;
 
     @Column(name = "duration_minutes", nullable = false)
     private Integer durationMinutes;
@@ -42,6 +49,10 @@ public class Exam implements Serializable {
 
     @Column(name = "generation_type", nullable = false, length = 50)
     private String generationType;
+
+    @Builder.Default
+    @Column(name = "status", nullable = false, length = 20)
+    private String status = "DRAFT";
 
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)

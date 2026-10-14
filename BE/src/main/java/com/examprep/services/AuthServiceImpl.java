@@ -1,14 +1,11 @@
 package com.examprep.services;
 
 import com.examprep.exceptions.BadRequestException;
-import com.examprep.exceptions.ResourceNotFoundException;
 import com.examprep.exceptions.UnauthorizedException;
 import com.examprep.dto.*;
 import com.examprep.entities.RefreshToken;
 import com.examprep.repositories.RefreshTokenRepository;
-import com.examprep.entities.Role;
 import com.examprep.entities.User;
-import com.examprep.repositories.RoleRepository;
 import com.examprep.repositories.UserRepository;
 import com.examprep.security.JwtTokenProvider;
 import com.examprep.security.UserPrincipal;
@@ -27,7 +24,6 @@ import java.util.Locale;
 public class AuthServiceImpl implements AuthService {
 
     private final UserRepository userRepository;
-    private final RoleRepository roleRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider tokenProvider;
@@ -42,15 +38,12 @@ public class AuthServiceImpl implements AuthService {
             throw new BadRequestException("Email is already registered.");
         }
 
-        // Always assign STUDENT role for registration
-        Role studentRole = roleRepository.findByRoleCode(Role.CODE_STUDENT)
-                .orElseThrow(() -> new ResourceNotFoundException("Default STUDENT role not found in database."));
-
+        // Always assign STUDENT role for registration (role stored directly on users.role_name)
         User user = User.builder()
                 .email(email)
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
                 .fullName(request.getFullName().trim())
-                .role(studentRole)
+                .roleName(User.ROLE_STUDENT)
                 .status(User.STATUS_ACTIVE)
                 .build();
 

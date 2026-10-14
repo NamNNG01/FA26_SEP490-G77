@@ -202,13 +202,14 @@ DASH-01/02/03 (`GET /api/v1/dashboard/student` / `course-manager` / `admin`) are
 ## 6. Database Strategy (Supabase PostgreSQL)
 
 1. **Schema Evolution:**
-   - Managed exclusively via Flyway (`V1__init_schema.sql`, `V2__add_auth_tables.sql`).
-   - `spring.jpa.hibernate.ddl-auto` is set to `validate` in `dev` and `none` in `prod`.
+    - Managed exclusively via Flyway (`V1__init_schema.sql`, `V2__add_auth_tables.sql`, `V3__add_enrollment_progress.sql`, `V4__migrate_to_new_design.sql`).
+    - `spring.jpa.hibernate.ddl-auto` is set to `validate` in `dev` and `none` in `prod`.
 
 2. **Entity Design Conventions:**
-   - `User`, `Role`, `RefreshToken`, `PasswordResetToken` use `BIGSERIAL` PKs (`user_id`, `role_id`, `refresh_token_id`, `reset_token_id`).
-   - Audit timestamps (`created_at`) are mapped consistently with `@CreatedDate` + `AuditingEntityListener` on all four auth entities (enabled by `JpaAuditingConfig`).
-   - No soft-delete flags (`deleted`): the schema declares no such columns, and entities MUST NOT declare columns absent from migrations (see `RULES.md` §3.3).
+    - 29 JPA entities map the new DB design (28 design tables + `refresh_tokens` kept for Auth rotation/logout): `User` (with `role_name` string, no `roles` table), `RefreshToken`, `Category`, `Course`, `CourseManager`, `Enrollment`, `Module`, `QuestionGroup`, `Question`, `AnswerOption`, `Exam`, `ExamConfig` (table `exam_config`), `ExamQuestion` (surrogate PK), `ExamGroup`, `ExamAttempt`, `AttemptAnswer`, plus `SubscriptionPlan`, `UserSubscription`, `Document`, `Notification`, `UserNotification`, `Discount`, `UserDiscount`, `Contest`, `ContestParticipant`, `ContestReward`, `Deck`, `Flashcard`, `UserCardProgress`.
+    - `users.role_name` (`ADMIN` / `COURSE_MANAGER` / `STUDENT`) replaces the old `roles` table; `password_reset_tokens` and `system_settings` were dropped; `enrollments.progress`, `exam_attempts.status`, `categories.parent_id` and `lessons` are intentionally kept beyond the design to preserve dashboard/business functionality.
+    - `BIGSERIAL`/`BIGINT` IDENTITY primary keys; audit timestamps mapped with `@CreatedDate`/`@LastModifiedDate` + `AuditingEntityListener` where `created_at`/`updated_at` exist.
+    - No soft-delete flags (`deleted`): entities MUST NOT declare columns absent from migrations (see `RULES.md` §3.3).
 
 ---
 

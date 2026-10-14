@@ -52,7 +52,7 @@ class AuthControllerTest {
                 .userId(101L)
                 .email("student@gmail.com")
                 .fullName("Nguyen Van A")
-                .role(RoleResponse.builder().code("STUDENT").name("Student").build())
+                .role("STUDENT")
                 .status("ACTIVE")
                 .build();
 
@@ -66,7 +66,7 @@ class AuthControllerTest {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.userId").value(101))
                 .andExpect(jsonPath("$.data.email").value("student@gmail.com"))
-                .andExpect(jsonPath("$.data.role.code").value("STUDENT"));
+                .andExpect(jsonPath("$.data.role").value("STUDENT"));
     }
 
     @Test
@@ -85,7 +85,7 @@ class AuthControllerTest {
                         .userId(101L)
                         .email("student@gmail.com")
                         .fullName("Nguyen Van A")
-                        .role(RoleResponse.builder().code("STUDENT").name("Student").build())
+                        .role("STUDENT")
                         .status("ACTIVE")
                         .build())
                 .build();
@@ -160,3 +160,4 @@ class AuthControllerTest {
                 .andExpect(jsonPath("$.message").value("All sessions have been logged out."));
     }
 }
+

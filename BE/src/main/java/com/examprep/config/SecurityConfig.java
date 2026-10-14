@@ -1,6 +1,6 @@
 package com.examprep.config;
 
-import com.examprep.entities.Role;
+import com.examprep.entities.User;
 import com.examprep.security.JwtAuthenticationFilter;
 import com.examprep.security.RestAccessDeniedHandler;
 import com.examprep.security.RestAuthenticationEntryPoint;
@@ -57,12 +57,12 @@ public class SecurityConfig {
                                 "/api/v1/auth/refresh"
                         ).permitAll()
                         // Role-restricted Endpoints
-                        .requestMatchers("/api/v1/admin/**").hasRole(Role.CODE_ADMIN)
-                        .requestMatchers("/api/v1/manager/**").hasAnyRole(Role.CODE_COURSE_MANAGER, Role.CODE_ADMIN)
-                        .requestMatchers("/api/v1/student/**").hasAnyRole(Role.CODE_STUDENT, Role.CODE_ADMIN)
-                        .requestMatchers("/api/v1/dashboard/student").hasRole(Role.CODE_STUDENT)
-                        .requestMatchers("/api/v1/dashboard/course-manager").hasRole(Role.CODE_COURSE_MANAGER)
-                        .requestMatchers("/api/v1/dashboard/admin").hasRole(Role.CODE_ADMIN)
+                        .requestMatchers("/api/v1/admin/**").hasRole(User.ROLE_ADMIN)
+                        .requestMatchers("/api/v1/manager/**").hasAnyRole(User.ROLE_COURSE_MANAGER, User.ROLE_ADMIN)
+                        .requestMatchers("/api/v1/student/**").hasAnyRole(User.ROLE_STUDENT, User.ROLE_ADMIN)
+                        .requestMatchers("/api/v1/dashboard/student").hasRole(User.ROLE_STUDENT)
+                        .requestMatchers("/api/v1/dashboard/course-manager").hasRole(User.ROLE_COURSE_MANAGER)
+                        .requestMatchers("/api/v1/dashboard/admin").hasRole(User.ROLE_ADMIN)
                         // All other endpoints (including /api/v1/auth/logout, /api/v1/auth/logout-all) require authentication
                         .anyRequest().authenticated()
                 )

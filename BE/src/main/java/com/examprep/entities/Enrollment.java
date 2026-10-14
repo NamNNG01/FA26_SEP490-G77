@@ -34,9 +34,14 @@ public class Enrollment implements Serializable {
     @Column(name = "enrolled_at", nullable = false, updatable = false)
     private Instant enrolledAt;
 
-    @Column(name = "status", nullable = false, length = 50)
+    @Column(name = "status", nullable = false, length = 20)
     private String status;
 
+    @Builder.Default
+    @Column(name = "paid_amount", nullable = false, precision = 10, scale = 2)
+    private java.math.BigDecimal paidAmount = java.math.BigDecimal.ZERO;
+
+    @Builder.Default
     @Column(name = "progress", nullable = false)
-    private Integer progress;
+    private Integer progress = 0;
 }

@@ -16,7 +16,7 @@ public class UserResponse {
     private String email;
     private String fullName;
     private String avatarUrl;
-    private RoleResponse role;
+    private String role;
     private String status;
 
     public static UserResponse from(User user) {
@@ -26,7 +26,7 @@ public class UserResponse {
                 .email(user.getEmail())
                 .fullName(user.getFullName())
                 .avatarUrl(user.getAvatarUrl())
-                .role(RoleResponse.from(user.getRole()))
+                .role(user.getRoleName())
                 .status(user.getStatus())
                 .build();
     }
