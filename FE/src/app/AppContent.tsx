@@ -62,7 +62,7 @@ export function AppContent() {
  */
 function useLandingPath(): string {
   const { user } = useAuth();
-  return landingPathForRole(user?.role?.code);
+  return landingPathForRole(user?.role);
 }
 
 function AppRoutes() {

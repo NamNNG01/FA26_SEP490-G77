@@ -34,8 +34,7 @@ export function ProfileCard() {
 
   if (!user) return null;
 
-  const roleCode = user.role?.code ?? '—';
-  const roleName = user.role?.name ?? roleCode;
+  const roleCode = user.role ?? '—';
 
   return (
     <div className="card p-6 h-full flex flex-col">
@@ -52,7 +51,7 @@ export function ProfileCard() {
             <h3 className="text-[20px] font-bold text-foreground truncate">
               {user.fullName}
             </h3>
-            <Badge variant="info">{roleName}</Badge>
+            <Badge variant="info">{roleCode}</Badge>
           </div>
           <p className="text-[14px] text-muted-foreground truncate mt-0.5">
             {user.email}

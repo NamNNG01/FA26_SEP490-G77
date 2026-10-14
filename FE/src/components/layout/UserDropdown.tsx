@@ -114,7 +114,7 @@ export function UserDropdown() {
             {user.fullName}
           </p>
           <p className="text-[11px] leading-tight text-muted-foreground">
-            {user.role?.code}
+            {user.role}
           </p>
         </div>
         <Icon.ChevronDown

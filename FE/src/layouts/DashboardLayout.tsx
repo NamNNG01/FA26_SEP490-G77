@@ -21,7 +21,7 @@ export function DashboardLayout() {
   const { user } = useAuth();
   const location = useLocation();
   const [collapsed, setCollapsed] = React.useState(false);
-  const items = getMenuForRole(user?.role?.code);
+  const items = getMenuForRole(user?.role);
 
   // Take Exam is a fullscreen flow — hide header/sidebar for it.
   // Exact match only: '/student/exam-rules' and '/student/exam-result'

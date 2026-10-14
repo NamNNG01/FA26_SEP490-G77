@@ -26,14 +26,23 @@ export function getRefreshToken(): string | null {
 export function getUser(): UserResponse | null {
   try {
     const raw = localStorage.getItem(USER_KEY);
-    return raw ? (JSON.parse(raw) as UserResponse) : null;
+    if (!raw) return null;
+    const user = JSON.parse(raw) as UserResponse & { role?: unknown };
+    // Backward compat: sessions stored before the backend migration kept
+    // role as { code, name }. Normalize to the new plain-string shape.
+    if (user && typeof user.role !== 'string') {
+      const legacy = user.role as { code?: unknown } | null;
+      const code = typeof legacy?.code === 'string' ? legacy.code : '';
+      return { ...user, role: code } as UserResponse;
+    }
+    return user as UserResponse;
   } catch {
     return null;
   }
 }
 
 export function getUserRoleCode(): string {
-  return getUser()?.role?.code ?? '';
+  return getUser()?.role ?? '';
 }
 
 export function saveAuth(params: {

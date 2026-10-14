@@ -17,19 +17,16 @@ import {
 import { onSessionExpired } from './sessionExpired';
 
 /**
- * Backend DTO types (mirror com.examprep.dto)
+ * Backend DTO types (mirror com.examprep.dto).
+ * NOTE: backend UserResponse.role is a plain role-name string
+ * (users.role_name — ADMIN / COURSE_MANAGER / STUDENT), not an object.
  */
-export interface RoleResponse {
-  code: string;
-  name: string;
-}
-
 export interface UserResponse {
   userId: number; // Backend sends a numeric Long
   email: string;
   fullName: string;
   avatarUrl: string | null;
-  role: RoleResponse;
+  role: string;
   status: string;
 }
 
@@ -77,7 +74,7 @@ interface AuthContextValue extends AuthState {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 /**
- * Landing page per backend role code (Role.CODE_* constants).
+ * Landing page per backend role name (users.role_name constants).
  */
 export function landingPathForRole(roleCode: string | undefined | null): string {
   switch (roleCode) {

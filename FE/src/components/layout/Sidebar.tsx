@@ -7,7 +7,7 @@ import type { MenuItem } from '@/app/routes';
  * Sidebar
  *
  * SINGLE sidebar component for every role. It renders exactly the flat
- * menu list passed by DashboardLayout (menuByRole[user.role.code]) — no
+ * menu list passed by DashboardLayout (menuByRole[user.role]) — no
  * section headers, no role branching inside this component.
  *
  * - NavLink → the active item is derived from the current URL

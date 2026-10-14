@@ -53,7 +53,7 @@ const FETCHER_BY_ROLE: Record<string, () => Promise<DashboardData>> = {
 
 export function useDashboard(): UseDashboardResult {
   const { user } = useAuth();
-  const roleCode = user?.role?.code;
+  const roleCode = user?.role;
 
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);

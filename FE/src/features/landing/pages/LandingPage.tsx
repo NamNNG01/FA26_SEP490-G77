@@ -25,7 +25,7 @@ export function LandingPage() {
   const { isAuthenticated, user } = useAuth();
 
   const primaryCta = isAuthenticated
-    ? { label: 'Go to My Dashboard', to: landingPathForRole(user?.role?.code) }
+    ? { label: 'Go to My Dashboard', to: landingPathForRole(user?.role) }
     : { label: 'Start Learning for Free', to: '/register' };
 
   return (

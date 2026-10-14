@@ -29,7 +29,7 @@ export function LoginPage() {
       // returned by login(); the context value in this closure is stale.
       const loggedInUser = await login(email, password);
       const from = (location.state as { from?: string } | null)?.from;
-      navigate(from ?? landingPathForRole(loggedInUser.role?.code), { replace: true });
+      navigate(from ?? landingPathForRole(loggedInUser.role), { replace: true });
     } catch (err: unknown) {
       const message =
         err instanceof Error

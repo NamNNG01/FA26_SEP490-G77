@@ -77,7 +77,7 @@ export function RegisterPage() {
       // Backend register always creates STUDENT accounts; use the fresh
       // user returned by register() rather than stale context state.
       const registeredUser = await register(email, password, fullName);
-      navigate(landingPathForRole(registeredUser.role?.code), { replace: true });
+      navigate(landingPathForRole(registeredUser.role), { replace: true });
     } catch (err: unknown) {
       const message =
         err instanceof Error ? err.message : 'Registration failed. Please try again.';
