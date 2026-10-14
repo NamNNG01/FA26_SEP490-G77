@@ -6,6 +6,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.Instant;
+
 @Data
 @Builder
 @NoArgsConstructor
@@ -18,6 +20,7 @@ public class UserResponse {
     private String avatarUrl;
     private String role;
     private String status;
+    private Instant createdAt;
 
     public static UserResponse from(User user) {
         if (user == null) return null;
@@ -28,6 +31,7 @@ public class UserResponse {
                 .avatarUrl(user.getAvatarUrl())
                 .role(user.getRoleName())
                 .status(user.getStatus())
+                .createdAt(user.getCreatedAt())
                 .build();
     }
 }

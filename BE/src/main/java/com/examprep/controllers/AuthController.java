@@ -56,4 +56,26 @@ public class AuthController {
         authService.logoutAll(currentUser);
         return ResponseEntity.ok(ApiResponse.success(null, "All sessions have been logged out."));
     }
+
+    @PostMapping("/password/forgot")
+    @Operation(summary = "AUTH-06: Forgot Password", description = "Issues a password reset token. Always returns the same response to prevent email enumeration. Email delivery is deferred.")
+    public ResponseEntity<ApiResponse<Void>> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+        authService.forgotPassword(request);
+        return ResponseEntity.ok(ApiResponse.success(null, "If the email exists, a password reset link has been sent."));
+    }
+
+    @PostMapping("/password/reset")
+    @Operation(summary = "AUTH-07: Reset Password", description = "Resets the password with a valid reset token and revokes all sessions.")
+    public ResponseEntity<ApiResponse<Void>> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        authService.resetPassword(request);
+        return ResponseEntity.ok(ApiResponse.success(null, "Password reset successfully."));
+    }
+
+    @PutMapping("/password/change")
+    @Operation(summary = "AUTH-08: Change Password", description = "Changes the password of the logged-in user and revokes all other sessions.")
+    public ResponseEntity<ApiResponse<Void>> changePassword(@Valid @RequestBody ChangePasswordRequest request,
+                                                           @AuthenticationPrincipal UserPrincipal currentUser) {
+        authService.changePassword(request, currentUser);
+        return ResponseEntity.ok(ApiResponse.success(null, "Password changed successfully."));
+    }
 }

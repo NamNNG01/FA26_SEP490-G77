@@ -1,8 +1,11 @@
 package com.examprep.services;
 
 import com.examprep.exceptions.BadRequestException;
+import com.examprep.exceptions.ResourceNotFoundException;
 import com.examprep.exceptions.UnauthorizedException;
 import com.examprep.dto.*;
+import com.examprep.entities.PasswordResetToken;
+import com.examprep.repositories.PasswordResetTokenRepository;
 import com.examprep.entities.RefreshToken;
 import com.examprep.repositories.RefreshTokenRepository;
 import com.examprep.entities.User;
@@ -32,6 +35,9 @@ class AuthServiceTest {
 
     @Mock
     private RefreshTokenRepository refreshTokenRepository;
+
+    @Mock
+    private PasswordResetTokenRepository passwordResetTokenRepository;
 
     @Mock
     private PasswordEncoder passwordEncoder;
@@ -255,5 +261,224 @@ class AuthServiceTest {
         authService.logoutAll(currentUser);
 
         verify(refreshTokenRepository, times(1)).revokeAllByUserId(eq(101L), any(Instant.class));
+    }
+
+    @Test
+    void forgotPassword_ExistingEmail_IssuesToken() {
+        ForgotPasswordRequest request = ForgotPasswordRequest.builder()
+                .email("student@gmail.com")
+                .build();
+
+        when(userRepository.findByEmail("student@gmail.com")).thenReturn(Optional.of(testUser));
+        when(tokenProvider.generateRawRefreshToken()).thenReturn("rawResetToken");
+        when(tokenProvider.hashToken("rawResetToken")).thenReturn("hashedResetToken");
+
+        assertDoesNotThrow(() -> authService.forgotPassword(request));
+
+        verify(passwordResetTokenRepository, times(1)).save(any(PasswordResetToken.class));
+    }
+
+    @Test
+    void forgotPassword_UnknownEmail_SucceedsSilentlyWithoutToken() {
+        ForgotPasswordRequest request = ForgotPasswordRequest.builder()
+                .email("ghost@gmail.com")
+                .build();
+
+        when(userRepository.findByEmail("ghost@gmail.com")).thenReturn(Optional.empty());
+
+        assertDoesNotThrow(() -> authService.forgotPassword(request));
+
+        verify(passwordResetTokenRepository, never()).save(any(PasswordResetToken.class));
+    }
+
+    @Test
+    void resetPassword_Success_RevokesSessions() {
+        ResetPasswordRequest request = ResetPasswordRequest.builder()
+                .token("rawResetToken")
+                .newPassword("NewPassword@123")
+                .build();
+
+        PasswordResetToken resetToken = PasswordResetToken.builder()
+                .resetTokenId(1L)
+                .user(testUser)
+                .tokenHash("hashedResetToken")
+                .expiresAt(Instant.now().plusSeconds(900))
+                .usedAt(null)
+                .build();
+
+        when(tokenProvider.hashToken("rawResetToken")).thenReturn("hashedResetToken");
+        when(passwordResetTokenRepository.findByTokenHash("hashedResetToken"))
+                .thenReturn(Optional.of(resetToken));
+        when(passwordResetTokenRepository.markAsUsed(eq(1L), any(Instant.class))).thenReturn(1);
+        when(passwordEncoder.encode("NewPassword@123")).thenReturn("newHashedPassword");
+
+        authService.resetPassword(request);
+
+        assertEquals("newHashedPassword", testUser.getPasswordHash());
+        verify(userRepository, times(1)).save(testUser);
+        verify(refreshTokenRepository, times(1)).revokeAllByUserId(eq(101L), any(Instant.class));
+    }
+
+    @Test
+    void resetPassword_UnknownToken_ThrowsUnauthorizedException() {
+        ResetPasswordRequest request = ResetPasswordRequest.builder()
+                .token("bogus")
+                .newPassword("NewPassword@123")
+                .build();
+
+        when(tokenProvider.hashToken("bogus")).thenReturn("bogusHash");
+        when(passwordResetTokenRepository.findByTokenHash("bogusHash")).thenReturn(Optional.empty());
+
+        assertThrows(UnauthorizedException.class, () -> authService.resetPassword(request));
+        verify(userRepository, never()).save(any(User.class));
+    }
+
+    @Test
+    void resetPassword_UsedToken_ThrowsUnauthorizedException() {
+        ResetPasswordRequest request = ResetPasswordRequest.builder()
+                .token("rawResetToken")
+                .newPassword("NewPassword@123")
+                .build();
+
+        PasswordResetToken usedToken = PasswordResetToken.builder()
+                .resetTokenId(1L)
+                .user(testUser)
+                .tokenHash("hashedResetToken")
+                .expiresAt(Instant.now().plusSeconds(900))
+                .usedAt(Instant.now().minusSeconds(60))
+                .build();
+
+        when(tokenProvider.hashToken("rawResetToken")).thenReturn("hashedResetToken");
+        when(passwordResetTokenRepository.findByTokenHash("hashedResetToken"))
+                .thenReturn(Optional.of(usedToken));
+
+        assertThrows(UnauthorizedException.class, () -> authService.resetPassword(request));
+        verify(userRepository, never()).save(any(User.class));
+    }
+
+    @Test
+    void resetPassword_ExpiredToken_ThrowsUnauthorizedException() {
+        ResetPasswordRequest request = ResetPasswordRequest.builder()
+                .token("rawResetToken")
+                .newPassword("NewPassword@123")
+                .build();
+
+        PasswordResetToken expiredToken = PasswordResetToken.builder()
+                .resetTokenId(1L)
+                .user(testUser)
+                .tokenHash("hashedResetToken")
+                .expiresAt(Instant.now().minusSeconds(60))
+                .usedAt(null)
+                .build();
+
+        when(tokenProvider.hashToken("rawResetToken")).thenReturn("hashedResetToken");
+        when(passwordResetTokenRepository.findByTokenHash("hashedResetToken"))
+                .thenReturn(Optional.of(expiredToken));
+
+        assertThrows(UnauthorizedException.class, () -> authService.resetPassword(request));
+        verify(userRepository, never()).save(any(User.class));
+    }
+
+    @Test
+    void resetPassword_AlreadyConsumed_ThrowsUnauthorizedException() {        ResetPasswordRequest request = ResetPasswordRequest.builder()
+                .token("rawResetToken")
+                .newPassword("NewPassword@123")
+                .build();
+
+        PasswordResetToken activeToken = PasswordResetToken.builder()
+                .resetTokenId(1L)
+                .user(testUser)
+                .tokenHash("hashedResetToken")
+                .expiresAt(Instant.now().plusSeconds(900))
+                .usedAt(null)
+                .build();
+
+        when(tokenProvider.hashToken("rawResetToken")).thenReturn("hashedResetToken");
+        when(passwordResetTokenRepository.findByTokenHash("hashedResetToken"))
+                .thenReturn(Optional.of(activeToken));
+        when(passwordResetTokenRepository.markAsUsed(eq(1L), any(Instant.class))).thenReturn(0);
+
+        assertThrows(UnauthorizedException.class, () -> authService.resetPassword(request));
+        verify(userRepository, never()).save(any(User.class));
+    }
+
+    @Test
+    void resetPassword_InactiveAccount_ThrowsWithoutConsumingToken() {
+        ResetPasswordRequest request = ResetPasswordRequest.builder()
+                .token("rawResetToken")
+                .newPassword("NewPassword@123")
+                .build();
+
+        User inactiveUser = User.builder()
+                .userId(101L)
+                .email("student@gmail.com")
+                .passwordHash("hashedPassword")
+                .fullName("Nguyen Van A")
+                .roleName(User.ROLE_STUDENT)
+                .status("INACTIVE")
+                .build();
+
+        PasswordResetToken activeToken = PasswordResetToken.builder()
+                .resetTokenId(1L)
+                .user(inactiveUser)
+                .tokenHash("hashedResetToken")
+                .expiresAt(Instant.now().plusSeconds(900))
+                .usedAt(null)
+                .build();
+
+        when(tokenProvider.hashToken("rawResetToken")).thenReturn("hashedResetToken");
+        when(passwordResetTokenRepository.findByTokenHash("hashedResetToken"))
+                .thenReturn(Optional.of(activeToken));
+
+        assertThrows(UnauthorizedException.class, () -> authService.resetPassword(request));
+        verify(passwordResetTokenRepository, never()).markAsUsed(any(), any());
+        verify(userRepository, never()).save(any(User.class));
+    }
+
+    @Test
+    void changePassword_Success_RevokesSessions() {
+        ChangePasswordRequest request = ChangePasswordRequest.builder()
+                .currentPassword("Password@123")
+                .newPassword("NewPassword@123")
+                .build();
+        UserPrincipal currentUser = UserPrincipal.create(101L, "student@gmail.com", "STUDENT");
+
+        when(userRepository.findById(101L)).thenReturn(Optional.of(testUser));
+        when(passwordEncoder.matches("Password@123", "hashedPassword")).thenReturn(true);
+        when(passwordEncoder.encode("NewPassword@123")).thenReturn("newHashedPassword");
+
+        authService.changePassword(request, currentUser);
+
+        assertEquals("newHashedPassword", testUser.getPasswordHash());
+        verify(userRepository, times(1)).save(testUser);
+        verify(refreshTokenRepository, times(1)).revokeAllByUserId(eq(101L), any(Instant.class));
+    }
+
+    @Test
+    void changePassword_WrongCurrentPassword_ThrowsUnauthorizedException() {
+        ChangePasswordRequest request = ChangePasswordRequest.builder()
+                .currentPassword("WrongPassword")
+                .newPassword("NewPassword@123")
+                .build();
+        UserPrincipal currentUser = UserPrincipal.create(101L, "student@gmail.com", "STUDENT");
+
+        when(userRepository.findById(101L)).thenReturn(Optional.of(testUser));
+        when(passwordEncoder.matches("WrongPassword", "hashedPassword")).thenReturn(false);
+
+        assertThrows(UnauthorizedException.class, () -> authService.changePassword(request, currentUser));
+        verify(userRepository, never()).save(any(User.class));
+    }
+
+    @Test
+    void changePassword_UserNotFound_ThrowsResourceNotFoundException() {
+        ChangePasswordRequest request = ChangePasswordRequest.builder()
+                .currentPassword("Password@123")
+                .newPassword("NewPassword@123")
+                .build();
+        UserPrincipal currentUser = UserPrincipal.create(999L, "ghost@gmail.com", "STUDENT");
+
+        when(userRepository.findById(999L)).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class, () -> authService.changePassword(request, currentUser));
     }
 }

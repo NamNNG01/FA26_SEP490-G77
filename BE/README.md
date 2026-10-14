@@ -49,7 +49,7 @@ BE/
    │   │           ├── controllers/           # @RestController (AuthController, HealthController)
    │   │           ├── services/              # @Service (AuthService, AuthServiceImpl)
    │   │           ├── repositories/          # Spring Data JPA repositories
-   │   │           ├── entities/              # JPA entities (29: User, RefreshToken, Category, Course, Enrollment, Exam, ...)
+   │   │           ├── entities/              # JPA entities (30: User, RefreshToken, PasswordResetToken, Category, Course, Enrollment, Exam, ...)
    │   │           ├── dto/                   # Request/Response DTOs + ApiResponse/ResponseCode wrappers
     │   │           ├── security/              # JwtTokenProvider, JwtAuthenticationFilter, entry points
     │   │           ├── config/                # Security, CORS, OpenAPI, Auditing configuration

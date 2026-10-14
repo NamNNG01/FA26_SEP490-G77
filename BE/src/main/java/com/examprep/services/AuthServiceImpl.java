@@ -1,8 +1,11 @@
 package com.examprep.services;
 
 import com.examprep.exceptions.BadRequestException;
+import com.examprep.exceptions.ResourceNotFoundException;
 import com.examprep.exceptions.UnauthorizedException;
 import com.examprep.dto.*;
+import com.examprep.entities.PasswordResetToken;
+import com.examprep.repositories.PasswordResetTokenRepository;
 import com.examprep.entities.RefreshToken;
 import com.examprep.repositories.RefreshTokenRepository;
 import com.examprep.entities.User;
@@ -25,8 +28,11 @@ public class AuthServiceImpl implements AuthService {
 
     private final UserRepository userRepository;
     private final RefreshTokenRepository refreshTokenRepository;
+    private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider tokenProvider;
+
+    public static final long RESET_TOKEN_EXPIRATION_MS = 15 * 60 * 1000L;
 
     @Override
     @Transactional
@@ -148,6 +154,85 @@ public class AuthServiceImpl implements AuthService {
     public void logoutAll(UserPrincipal currentUser) {
         log.info("Logging out ALL active sessions for user ID: {}", currentUser.getId());
         refreshTokenRepository.revokeAllByUserId(currentUser.getId(), Instant.now());
+    }
+
+    @Override
+    @Transactional
+    public void forgotPassword(ForgotPasswordRequest request) {
+        String email = normalizeEmail(request.getEmail());
+        log.info("Password reset requested");
+
+        // Uniform response: never reveal whether the email exists.
+        userRepository.findByEmail(email).ifPresent(user -> {
+            String rawToken = tokenProvider.generateRawRefreshToken();
+            passwordResetTokenRepository.save(PasswordResetToken.builder()
+                    .user(user)
+                    .tokenHash(tokenProvider.hashToken(rawToken))
+                    .expiresAt(Instant.now().plusMillis(RESET_TOKEN_EXPIRATION_MS))
+                    .build());
+            // Email delivery (SMTP) is deferred; the hashed token is persisted
+            // so the reset link can be sent once mail is configured.
+            log.info("Password reset token issued");
+        });
+    }
+
+    @Override
+    @Transactional
+    public void resetPassword(ResetPasswordRequest request) {
+        log.info("Processing password reset");
+
+        PasswordResetToken resetToken = passwordResetTokenRepository
+                .findByTokenHash(tokenProvider.hashToken(request.getToken()))
+                .orElseThrow(() -> new UnauthorizedException("Invalid or expired reset token."));
+
+        if (resetToken.getUsedAt() != null) {
+            log.warn("Attempted use of already-used reset token");
+            throw new UnauthorizedException("Invalid or expired reset token.");
+        }
+
+        if (resetToken.getExpiresAt().isBefore(Instant.now())) {
+            log.warn("Expired reset token used");
+            throw new UnauthorizedException("Invalid or expired reset token.");
+        }
+
+        User user = resetToken.getUser();
+        if (!User.STATUS_ACTIVE.equalsIgnoreCase(user.getStatus())) {
+            throw new UnauthorizedException("User account is no longer active.");
+        }
+
+        int marked = passwordResetTokenRepository.markAsUsed(resetToken.getResetTokenId(), Instant.now());
+        if (marked == 0) {
+            throw new UnauthorizedException("Invalid or expired reset token.");
+        }
+
+        user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
+        userRepository.save(user);
+        refreshTokenRepository.revokeAllByUserId(user.getUserId(), Instant.now());
+
+        log.info("Password reset successfully for user ID: {}", user.getUserId());
+    }
+
+    @Override
+    @Transactional
+    public void changePassword(ChangePasswordRequest request, UserPrincipal currentUser) {
+        log.info("Changing password for user ID: {}", currentUser.getId());
+
+        User user = userRepository.findById(currentUser.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("User not found."));
+
+        if (!User.STATUS_ACTIVE.equalsIgnoreCase(user.getStatus())) {
+            throw new UnauthorizedException("User account is no longer active.");
+        }
+
+        if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPasswordHash())) {
+            throw new UnauthorizedException("Current password is incorrect.");
+        }
+
+        user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
+        userRepository.save(user);
+        refreshTokenRepository.revokeAllByUserId(user.getUserId(), Instant.now());
+
+        log.info("Password changed successfully for user ID: {}", user.getUserId());
     }
 
     private RefreshToken newRefreshToken(User user, String rawToken) {

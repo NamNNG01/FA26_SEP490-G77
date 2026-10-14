@@ -175,6 +175,11 @@ Layering flows strictly downward: `controllers → services → repositories`. F
 | `/api/v1/auth/refresh` | POST | Public | AUTH-03: Refresh Token Rotation |
 | `/api/v1/auth/logout` | POST | Authenticated | AUTH-04: Logout Session |
 | `/api/v1/auth/logout-all` | POST | Authenticated | AUTH-05: Logout All Sessions |
+| `/api/v1/auth/password/forgot` | POST | Public | AUTH-06: Forgot Password (uniform response; SMTP deferred) |
+| `/api/v1/auth/password/reset` | POST | Public | AUTH-07: Reset Password (single-use token, revokes sessions) |
+| `/api/v1/auth/password/change` | PUT | Authenticated | AUTH-08: Change Password (revokes sessions) |
+| `/api/v1/users/me` | GET | Authenticated | USER-01: Get Current User |
+| `/api/v1/users/me` | PUT | Authenticated | USER-02: Update Profile |
 | `/api/v1/health` | GET | Public | Health Check |
 | `/v3/api-docs/**`, `/swagger-ui/**` | GET | Public | OpenAPI Documentation |
 | `/api/v1/student/**` | ANY | `STUDENT`, `ADMIN` | Student Features |
@@ -184,30 +189,21 @@ Layering flows strictly downward: `controllers → services → repositories`. F
 | `/api/v1/dashboard/course-manager` | GET | `COURSE_MANAGER` | DASH-02: Course Manager Dashboard |
 | `/api/v1/dashboard/admin` | GET | `ADMIN` | DASH-03: Admin Dashboard |
 
-### 5.3 Endpoint Roadmap (agreed in API contract, NOT yet implemented)
-These endpoints are part of the agreed API contract but intentionally deferred until their feature domains are built:
-
-| ID | Endpoint | Notes |
-| :--- | :--- | :--- |
-| AUTH-06 | `POST /api/v1/auth/password/forgot` | Requires email delivery (SMTP) — deferred |
-| AUTH-07 | `POST /api/v1/auth/password/reset` | Uses `password_reset_tokens` — deferred |
-| AUTH-08 | `PUT /api/v1/auth/password/change` | Authenticated; revokes refresh tokens after change — deferred |
-| USER-01 | `GET /api/v1/users/me` | Requires `createdAt` added to `UserResponse` — deferred |
-| USER-02 | `PUT /api/v1/users/me` | Profile update (`fullName`, `avatarUrl`) — deferred |
-
-DASH-01/02/03 (`GET /api/v1/dashboard/student` / `course-manager` / `admin`) are **implemented** — see §5.2.
+### 5.3 Endpoint Roadmap
+All endpoints from the agreed API contract are now implemented (AUTH-01..08, USER-01/02, DASH-01/02/03 — see §5.2).
+Deferred item: email delivery (SMTP) for AUTH-06 — the API persists the hashed reset token and returns a uniform response until mail is configured.
 
 ---
 
 ## 6. Database Strategy (Supabase PostgreSQL)
 
 1. **Schema Evolution:**
-    - Managed exclusively via Flyway (`V1__init_schema.sql`, `V2__add_auth_tables.sql`, `V3__add_enrollment_progress.sql`, `V4__migrate_to_new_design.sql`).
+    - Managed exclusively via Flyway (`V1__init_schema.sql`, `V2__add_auth_tables.sql`, `V3__add_enrollment_progress.sql`, `V4__migrate_to_new_design.sql`, `V5__add_password_reset_tokens.sql`).
     - `spring.jpa.hibernate.ddl-auto` is set to `validate` in `dev` and `none` in `prod`.
 
 2. **Entity Design Conventions:**
-    - 29 JPA entities map the new DB design (28 design tables + `refresh_tokens` kept for Auth rotation/logout): `User` (with `role_name` string, no `roles` table), `RefreshToken`, `Category`, `Course`, `CourseManager`, `Enrollment`, `Module`, `QuestionGroup`, `Question`, `AnswerOption`, `Exam`, `ExamConfig` (table `exam_config`), `ExamQuestion` (surrogate PK), `ExamGroup`, `ExamAttempt`, `AttemptAnswer`, plus `SubscriptionPlan`, `UserSubscription`, `Document`, `Notification`, `UserNotification`, `Discount`, `UserDiscount`, `Contest`, `ContestParticipant`, `ContestReward`, `Deck`, `Flashcard`, `UserCardProgress`.
-    - `users.role_name` (`ADMIN` / `COURSE_MANAGER` / `STUDENT`) replaces the old `roles` table; `password_reset_tokens` and `system_settings` were dropped; `enrollments.progress`, `exam_attempts.status`, `categories.parent_id` and `lessons` are intentionally kept beyond the design to preserve dashboard/business functionality.
+    - 30 JPA entities map the new DB design (28 design tables + `refresh_tokens` kept for Auth rotation/logout + `password_reset_tokens` re-introduced in V5 for AUTH-06/07): `User` (with `role_name` string, no `roles` table), `RefreshToken`, `PasswordResetToken`, `Category`, `Course`, `CourseManager`, `Enrollment`, `Module`, `QuestionGroup`, `Question`, `AnswerOption`, `Exam`, `ExamConfig` (table `exam_config`), `ExamQuestion` (surrogate PK), `ExamGroup`, `ExamAttempt`, `AttemptAnswer`, plus `SubscriptionPlan`, `UserSubscription`, `Document`, `Notification`, `UserNotification`, `Discount`, `UserDiscount`, `Contest`, `ContestParticipant`, `ContestReward`, `Deck`, `Flashcard`, `UserCardProgress`.
+    - `users.role_name` (`ADMIN` / `COURSE_MANAGER` / `STUDENT`) replaces the old `roles` table; `system_settings` was dropped; `enrollments.progress`, `exam_attempts.status`, `categories.parent_id` and `lessons` are intentionally kept beyond the design to preserve dashboard/business functionality.
     - `BIGSERIAL`/`BIGINT` IDENTITY primary keys; audit timestamps mapped with `@CreatedDate`/`@LastModifiedDate` + `AuditingEntityListener` where `created_at`/`updated_at` exist.
     - No soft-delete flags (`deleted`): entities MUST NOT declare columns absent from migrations (see `RULES.md` §3.3).
 

@@ -28,6 +28,7 @@ export interface UserResponse {
   avatarUrl: string | null;
   role: string;
   status: string;
+  createdAt: string; // Instant → ISO string (added with USER-01)
 }
 
 export interface LoginResponse {

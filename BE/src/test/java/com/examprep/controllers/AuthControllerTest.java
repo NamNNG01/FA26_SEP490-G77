@@ -22,6 +22,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(AuthController.class)
@@ -158,6 +159,90 @@ class AuthControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.message").value("All sessions have been logged out."));
+    }
+
+    @Test
+    void forgotPassword_Success() throws Exception {
+        ForgotPasswordRequest request = ForgotPasswordRequest.builder()
+                .email("student@gmail.com")
+                .build();
+
+        doNothing().when(authService).forgotPassword(any(ForgotPasswordRequest.class));
+
+        mockMvc.perform(post("/api/v1/auth/password/forgot")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("If the email exists, a password reset link has been sent."));
+    }
+
+    @Test
+    void forgotPassword_InvalidEmail_Returns400() throws Exception {
+        ForgotPasswordRequest request = ForgotPasswordRequest.builder()
+                .email("not-an-email")
+                .build();
+
+        mockMvc.perform(post("/api/v1/auth/password/forgot")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
+    }
+
+    @Test
+    void resetPassword_Success() throws Exception {
+        ResetPasswordRequest request = ResetPasswordRequest.builder()
+                .token("rawResetToken")
+                .newPassword("NewPassword@123")
+                .build();
+
+        doNothing().when(authService).resetPassword(any(ResetPasswordRequest.class));
+
+        mockMvc.perform(post("/api/v1/auth/password/reset")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("Password reset successfully."));
+    }
+
+    @Test
+    void changePassword_Success() throws Exception {
+        ChangePasswordRequest request = ChangePasswordRequest.builder()
+                .currentPassword("Password@123")
+                .newPassword("NewPassword@123")
+                .build();
+
+        UserPrincipal principal = UserPrincipal.create(101L, "student@gmail.com", "STUDENT");
+        doNothing().when(authService).changePassword(any(ChangePasswordRequest.class), any());
+
+        mockMvc.perform(put("/api/v1/auth/password/change")
+                        .with(csrf())
+                        .with(user(principal))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("Password changed successfully."));
+    }
+
+    @Test
+    void changePassword_Unauthenticated_Returns401() throws Exception {
+        ChangePasswordRequest request = ChangePasswordRequest.builder()
+                .currentPassword("Password@123")
+                .newPassword("NewPassword@123")
+                .build();
+
+        mockMvc.perform(put("/api/v1/auth/password/change")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success").value(false));
     }
 }
 
