@@ -14,6 +14,7 @@ import com.examprep.security.JwtTokenProvider;
 import com.examprep.security.UserPrincipal;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,8 +32,16 @@ public class AuthServiceImpl implements AuthService {
     private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider tokenProvider;
+    private final PasswordResetMailService mailService;
+
+    @Value("${app.frontend.base-url:http://localhost:3000}")
+    private String frontendBaseUrl;
+
+    @Value("${app.frontend.password-reset-path:/reset-password}")
+    private String passwordResetPath;
 
     public static final long RESET_TOKEN_EXPIRATION_MS = 15 * 60 * 1000L;
+    public static final long RESET_TOKEN_EXPIRATION_MINUTES = RESET_TOKEN_EXPIRATION_MS / 60000L;
 
     @Override
     @Transactional
@@ -170,10 +179,25 @@ public class AuthServiceImpl implements AuthService {
                     .tokenHash(tokenProvider.hashToken(rawToken))
                     .expiresAt(Instant.now().plusMillis(RESET_TOKEN_EXPIRATION_MS))
                     .build());
-            // Email delivery (SMTP) is deferred; the hashed token is persisted
-            // so the reset link can be sent once mail is configured.
-            log.info("Password reset token issued");
+            String resetLink = buildResetLink(rawToken);
+            boolean delivered = mailService.sendPasswordResetEmail(
+                    user.getEmail(), user.getFullName(), resetLink, RESET_TOKEN_EXPIRATION_MINUTES);
+            if (delivered) {
+                log.info("Password reset email sent");
+            } else {
+                log.warn("Password reset token issued but email delivery is disabled or failed. "
+                        + "Set MAIL_ENABLED=true with a Gmail App Password to deliver reset emails.");
+            }
         });
+    }
+
+    private String buildResetLink(String rawToken) {
+        String base = frontendBaseUrl != null ? frontendBaseUrl.replaceAll("/+$", "") : "";
+        String path = passwordResetPath != null ? passwordResetPath : "/reset-password";
+        if (!path.startsWith("/")) {
+            path = "/" + path;
+        }
+        return base + path + "?token=" + rawToken;
     }
 
     @Override
@@ -200,14 +224,21 @@ public class AuthServiceImpl implements AuthService {
             throw new UnauthorizedException("User account is no longer active.");
         }
 
+        if (passwordEncoder.matches(request.getNewPassword(), user.getPasswordHash())) {
+            throw new BadRequestException("New password must be different from the current password.");
+        }
+
         int marked = passwordResetTokenRepository.markAsUsed(resetToken.getResetTokenId(), Instant.now());
         if (marked == 0) {
             throw new UnauthorizedException("Invalid or expired reset token.");
         }
 
+        Instant now = Instant.now();
         user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
+        user.setPasswordChangedAt(now);
         userRepository.save(user);
-        refreshTokenRepository.revokeAllByUserId(user.getUserId(), Instant.now());
+        refreshTokenRepository.revokeAllByUserId(user.getUserId(), now);
+        passwordResetTokenRepository.invalidateAllActiveByUserId(user.getUserId(), now);
 
         log.info("Password reset successfully for user ID: {}", user.getUserId());
     }
@@ -228,9 +259,17 @@ public class AuthServiceImpl implements AuthService {
             throw new UnauthorizedException("Current password is incorrect.");
         }
 
+        if (request.getCurrentPassword().equals(request.getNewPassword())
+                || passwordEncoder.matches(request.getNewPassword(), user.getPasswordHash())) {
+            throw new BadRequestException("New password must be different from the current password.");
+        }
+
+        Instant now = Instant.now();
         user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
+        user.setPasswordChangedAt(now);
         userRepository.save(user);
-        refreshTokenRepository.revokeAllByUserId(user.getUserId(), Instant.now());
+        refreshTokenRepository.revokeAllByUserId(user.getUserId(), now);
+        passwordResetTokenRepository.invalidateAllActiveByUserId(user.getUserId(), now);
 
         log.info("Password changed successfully for user ID: {}", user.getUserId());
     }

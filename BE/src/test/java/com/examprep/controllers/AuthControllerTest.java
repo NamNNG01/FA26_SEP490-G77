@@ -41,6 +41,9 @@ class AuthControllerTest {
     @MockBean
     private JwtTokenProvider jwtTokenProvider;
 
+    @MockBean
+    private com.examprep.repositories.UserRepository userRepository;
+
     @Test
     void register_Success() throws Exception {
         RegisterRequest request = RegisterRequest.builder()

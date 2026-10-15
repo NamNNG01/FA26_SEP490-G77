@@ -43,6 +43,8 @@ class DashboardQueryIntegrationTest {
     @Autowired
     private UserRepository userRepository;
 
+    private Category cachedCategory;
+
     @Test
     void studentSummary_CountsAndAverage_ScoredAttemptsOnly() {
         User manager = persistUser("manager@gmail.com", "Manager One", User.ROLE_COURSE_MANAGER);
@@ -245,8 +247,15 @@ class DashboardQueryIntegrationTest {
     }
 
     private Course persistCourse(User manager, String title, boolean published, String thumbnailUrl) {
+        if (cachedCategory == null) {
+            cachedCategory = Category.builder()
+                    .name("General")
+                    .slug("general-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12))
+                    .build();
+            em.persist(cachedCategory);
+        }
         Course course = Course.builder()
-                .categoryId(1L)
+                .categoryId(cachedCategory.getCategoryId())
                 .manager(manager)
                 .title(title)
                 .slug(UUID.randomUUID().toString().replace("-", "").substring(0, 20))

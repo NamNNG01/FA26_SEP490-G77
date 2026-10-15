@@ -1,5 +1,7 @@
 package com.examprep.security;
 
+import com.examprep.entities.User;
+import com.examprep.repositories.UserRepository;
 import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -22,6 +24,7 @@ import java.io.IOException;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtTokenProvider tokenProvider;
+    private final UserRepository userRepository;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -31,17 +34,39 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             String jwt = getJwtFromRequest(request);
             if (StringUtils.hasText(jwt) && tokenProvider.validateToken(jwt)) {
                 UserPrincipal userPrincipal = tokenProvider.getUserPrincipalFromToken(jwt);
-                UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
-                        userPrincipal, null, userPrincipal.getAuthorities());
-                authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                if (isTokenStillValid(userPrincipal.getId(), jwt)) {
+                    UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+                            userPrincipal, null, userPrincipal.getAuthorities());
+                    authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
 
-                SecurityContextHolder.getContext().setAuthentication(authentication);
+                    SecurityContextHolder.getContext().setAuthentication(authentication);
+                } else {
+                    log.debug("JWT rejected: user inactive, deleted, or token issued before password change");
+                }
             }
         } catch (JwtException | IllegalArgumentException ex) {
             log.debug("JWT authentication skipped: {}", ex.getMessage());
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    private boolean isTokenStillValid(Long userId, String jwt) {
+        User user = userRepository.findById(userId).orElse(null);
+        if (user == null || !User.STATUS_ACTIVE.equalsIgnoreCase(user.getStatus())) {
+            return false;
+        }
+        if (user.getPasswordChangedAt() != null) {
+            try {
+                java.util.Date issuedAt = tokenProvider.getIssuedAtFromToken(jwt);
+                if (issuedAt != null && issuedAt.toInstant().isBefore(user.getPasswordChangedAt())) {
+                    return false;
+                }
+            } catch (JwtException | IllegalArgumentException ex) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private String getJwtFromRequest(HttpServletRequest request) {

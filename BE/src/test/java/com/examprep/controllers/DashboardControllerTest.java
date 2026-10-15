@@ -43,6 +43,9 @@ class DashboardControllerTest {
     @MockBean
     private JwtTokenProvider jwtTokenProvider;
 
+    @MockBean
+    private com.examprep.repositories.UserRepository userRepository;
+
     @Test
     void studentDashboard_Success() throws Exception {
         StudentDashboardResponse body = StudentDashboardResponse.builder()

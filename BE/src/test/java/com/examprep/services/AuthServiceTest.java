@@ -45,6 +45,9 @@ class AuthServiceTest {
     @Mock
     private JwtTokenProvider tokenProvider;
 
+    @Mock
+    private PasswordResetMailService mailService;
+
     @InjectMocks
     private AuthServiceImpl authService;
 
@@ -272,10 +275,12 @@ class AuthServiceTest {
         when(userRepository.findByEmail("student@gmail.com")).thenReturn(Optional.of(testUser));
         when(tokenProvider.generateRawRefreshToken()).thenReturn("rawResetToken");
         when(tokenProvider.hashToken("rawResetToken")).thenReturn("hashedResetToken");
+        when(mailService.sendPasswordResetEmail(anyString(), any(), anyString(), anyLong())).thenReturn(true);
 
         assertDoesNotThrow(() -> authService.forgotPassword(request));
 
         verify(passwordResetTokenRepository, times(1)).save(any(PasswordResetToken.class));
+        verify(mailService, times(1)).sendPasswordResetEmail(eq("student@gmail.com"), any(), anyString(), anyLong());
     }
 
     @Test
@@ -309,14 +314,42 @@ class AuthServiceTest {
         when(tokenProvider.hashToken("rawResetToken")).thenReturn("hashedResetToken");
         when(passwordResetTokenRepository.findByTokenHash("hashedResetToken"))
                 .thenReturn(Optional.of(resetToken));
+        when(passwordEncoder.matches("NewPassword@123", "hashedPassword")).thenReturn(false);
         when(passwordResetTokenRepository.markAsUsed(eq(1L), any(Instant.class))).thenReturn(1);
         when(passwordEncoder.encode("NewPassword@123")).thenReturn("newHashedPassword");
 
         authService.resetPassword(request);
 
         assertEquals("newHashedPassword", testUser.getPasswordHash());
+        assertNotNull(testUser.getPasswordChangedAt());
         verify(userRepository, times(1)).save(testUser);
         verify(refreshTokenRepository, times(1)).revokeAllByUserId(eq(101L), any(Instant.class));
+        verify(passwordResetTokenRepository, times(1)).invalidateAllActiveByUserId(eq(101L), any(Instant.class));
+    }
+
+    @Test
+    void resetPassword_SameAsCurrent_ThrowsBadRequestException() {
+        ResetPasswordRequest request = ResetPasswordRequest.builder()
+                .token("rawResetToken")
+                .newPassword("Password@123")
+                .build();
+
+        PasswordResetToken resetToken = PasswordResetToken.builder()
+                .resetTokenId(1L)
+                .user(testUser)
+                .tokenHash("hashedResetToken")
+                .expiresAt(Instant.now().plusSeconds(900))
+                .usedAt(null)
+                .build();
+
+        when(tokenProvider.hashToken("rawResetToken")).thenReturn("hashedResetToken");
+        when(passwordResetTokenRepository.findByTokenHash("hashedResetToken"))
+                .thenReturn(Optional.of(resetToken));
+        when(passwordEncoder.matches("Password@123", "hashedPassword")).thenReturn(true);
+
+        assertThrows(BadRequestException.class, () -> authService.resetPassword(request));
+        verify(passwordResetTokenRepository, never()).markAsUsed(any(), any());
+        verify(userRepository, never()).save(any(User.class));
     }
 
     @Test
@@ -445,13 +478,32 @@ class AuthServiceTest {
 
         when(userRepository.findById(101L)).thenReturn(Optional.of(testUser));
         when(passwordEncoder.matches("Password@123", "hashedPassword")).thenReturn(true);
+        when(passwordEncoder.matches("NewPassword@123", "hashedPassword")).thenReturn(false);
         when(passwordEncoder.encode("NewPassword@123")).thenReturn("newHashedPassword");
 
         authService.changePassword(request, currentUser);
 
         assertEquals("newHashedPassword", testUser.getPasswordHash());
+        assertNotNull(testUser.getPasswordChangedAt());
         verify(userRepository, times(1)).save(testUser);
         verify(refreshTokenRepository, times(1)).revokeAllByUserId(eq(101L), any(Instant.class));
+        verify(passwordResetTokenRepository, times(1)).invalidateAllActiveByUserId(eq(101L), any(Instant.class));
+    }
+
+    @Test
+    void changePassword_SameAsCurrent_ThrowsBadRequestException() {
+        ChangePasswordRequest request = ChangePasswordRequest.builder()
+                .currentPassword("Password@123")
+                .newPassword("Password@123")
+                .build();
+        UserPrincipal currentUser = UserPrincipal.create(101L, "student@gmail.com", "STUDENT");
+
+        when(userRepository.findById(101L)).thenReturn(Optional.of(testUser));
+        when(passwordEncoder.matches("Password@123", "hashedPassword")).thenReturn(true);
+
+        assertThrows(BadRequestException.class, () -> authService.changePassword(request, currentUser));
+        verify(userRepository, never()).save(any(User.class));
+        verify(refreshTokenRepository, never()).revokeAllByUserId(any(), any());
     }
 
     @Test
