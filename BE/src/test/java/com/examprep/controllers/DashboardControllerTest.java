@@ -207,4 +207,50 @@ class DashboardControllerTest {
 
         verifyNoInteractions(dashboardService);
     }
+
+    @Test
+    void studentDashboard_AdminAllowed_ReturnsOk() throws Exception {
+        StudentDashboardResponse body = StudentDashboardResponse.builder()
+                .summary(StudentDashboardResponse.Summary.builder()
+                        .enrolledCourses(0)
+                        .activeCourses(0)
+                        .completedCourses(0)
+                        .totalAttempts(0)
+                        .averageScore(0.0)
+                        .build())
+                .recentCourses(List.of())
+                .recentAttempts(List.of())
+                .build();
+
+        UserPrincipal principal = UserPrincipal.create(1L, "admin@gmail.com", "ADMIN");
+        when(dashboardService.getStudentDashboard(1L)).thenReturn(body);
+
+        mockMvc.perform(get("/api/v1/dashboard/student").with(user(principal)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        verify(dashboardService).getStudentDashboard(1L);
+    }
+
+    @Test
+    void courseManagerDashboard_AdminAllowed_ReturnsOk() throws Exception {
+        CourseManagerDashboardResponse body = CourseManagerDashboardResponse.builder()
+                .summary(CourseManagerDashboardResponse.Summary.builder()
+                        .totalCourses(0)
+                        .publishedCourses(0)
+                        .draftCourses(0)
+                        .totalStudents(0)
+                        .build())
+                .recentCourses(List.of())
+                .build();
+
+        UserPrincipal principal = UserPrincipal.create(1L, "admin@gmail.com", "ADMIN");
+        when(dashboardService.getCourseManagerDashboard(1L)).thenReturn(body);
+
+        mockMvc.perform(get("/api/v1/dashboard/course-manager").with(user(principal)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        verify(dashboardService).getCourseManagerDashboard(1L);
+    }
 }

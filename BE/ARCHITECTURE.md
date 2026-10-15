@@ -181,12 +181,15 @@ Layering flows strictly downward: `controllers → services → repositories`. F
 | `/api/v1/users/me` | GET | Authenticated | USER-01: Get Current User |
 | `/api/v1/users/me` | PUT | Authenticated | USER-02: Update Profile |
 | `/api/v1/health` | GET | Public | Health Check |
+| `/api/v1/categories` | GET | Public | Category list for catalog filters |
+| `/api/v1/courses` | GET | Public | Published course list (search/filter/page) |
+| `/api/v1/courses/{idOrSlug}` | GET | Public | Published course detail + modules |
 | `/v3/api-docs/**`, `/swagger-ui/**` | GET | Public | OpenAPI Documentation |
 | `/api/v1/student/**` | ANY | `STUDENT`, `ADMIN` | Student Features |
 | `/api/v1/manager/**` | ANY | `COURSE_MANAGER`, `ADMIN` | Course Manager Features |
 | `/api/v1/admin/**` | ANY | `ADMIN` | Administrative APIs |
-| `/api/v1/dashboard/student` | GET | `STUDENT` | DASH-01: Student Dashboard |
-| `/api/v1/dashboard/course-manager` | GET | `COURSE_MANAGER` | DASH-02: Course Manager Dashboard |
+| `/api/v1/dashboard/student` | GET | `STUDENT`, `ADMIN` | DASH-01: Student Dashboard |
+| `/api/v1/dashboard/course-manager` | GET | `COURSE_MANAGER`, `ADMIN` | DASH-02: Course Manager Dashboard |
 | `/api/v1/dashboard/admin` | GET | `ADMIN` | DASH-03: Admin Dashboard |
 
 ### 5.3 Endpoint Roadmap
@@ -202,7 +205,7 @@ Deferred item: email delivery (SMTP) for AUTH-06 — the API persists the hashed
     - `spring.jpa.hibernate.ddl-auto` is set to `validate` in `dev` and `none` in `prod`.
 
 2. **Entity Design Conventions:**
-    - 30 JPA entities map the new DB design (28 design tables + `refresh_tokens` kept for Auth rotation/logout + `password_reset_tokens` re-introduced in V5 for AUTH-06/07): `User` (with `role_name` string, no `roles` table), `RefreshToken`, `PasswordResetToken`, `Category`, `Course`, `CourseManager`, `Enrollment`, `Module`, `QuestionGroup`, `Question`, `AnswerOption`, `Exam`, `ExamConfig` (table `exam_config`), `ExamQuestion` (surrogate PK), `ExamGroup`, `ExamAttempt`, `AttemptAnswer`, plus `SubscriptionPlan`, `UserSubscription`, `Document`, `Notification`, `UserNotification`, `Discount`, `UserDiscount`, `Contest`, `ContestParticipant`, `ContestReward`, `Deck`, `Flashcard`, `UserCardProgress`.
+    - 31 JPA entities map the new DB design (28 design tables + `refresh_tokens` kept for Auth rotation/logout + `password_reset_tokens` re-introduced in V5 for AUTH-06/07 + `attempt_answer_options` added in V6 for MULTI_CHOICE answers): `User` (with `role_name` string, no `roles` table), `RefreshToken`, `PasswordResetToken`, `Category`, `Course`, `CourseManager`, `Enrollment`, `Module`, `QuestionGroup`, `Question`, `AnswerOption`, `Exam`, `ExamConfig` (table `exam_config`), `ExamQuestion` (surrogate PK), `ExamGroup`, `ExamAttempt`, `AttemptAnswer`, `AttemptAnswerOption`, plus `SubscriptionPlan`, `UserSubscription`, `Document`, `Notification`, `UserNotification`, `Discount`, `UserDiscount`, `Contest`, `ContestParticipant`, `ContestReward` (table `contest_rewards` since V6), `Deck`, `Flashcard`, `UserCardProgress`.
     - `users.role_name` (`ADMIN` / `COURSE_MANAGER` / `STUDENT`) replaces the old `roles` table; `system_settings` was dropped; `enrollments.progress`, `exam_attempts.status`, `categories.parent_id` and `lessons` are intentionally kept beyond the design to preserve dashboard/business functionality.
     - `BIGSERIAL`/`BIGINT` IDENTITY primary keys; audit timestamps mapped with `@CreatedDate`/`@LastModifiedDate` + `AuditingEntityListener` where `created_at`/`updated_at` exist.
     - No soft-delete flags (`deleted`): entities MUST NOT declare columns absent from migrations (see `RULES.md` §3.3).

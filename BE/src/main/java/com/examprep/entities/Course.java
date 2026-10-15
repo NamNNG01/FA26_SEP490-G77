@@ -28,6 +28,16 @@ public class Course implements Serializable {
     @Column(name = "category_id", nullable = false)
     private Long categoryId;
 
+    /**
+     * Read-only view of {@code category_id} for joins/serialization.
+     * Kept {@code insertable = false, updatable = false} so the raw
+     * {@code categoryId} column stays the single write path — no schema
+     * change, no behavior change for existing writes.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "category_id", insertable = false, updatable = false)
+    private Category category;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "manager_id", nullable = false)
     private User manager;

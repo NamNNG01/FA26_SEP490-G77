@@ -54,6 +54,14 @@ public class Exam implements Serializable {
     @Column(name = "status", nullable = false, length = 20)
     private String status = "DRAFT";
 
+    @Builder.Default
+    @Column(name = "pass_mark", nullable = false)
+    private Integer passMark = 50;
+
+    @Builder.Default
+    @Column(name = "max_attempts", nullable = false)
+    private Integer maxAttempts = 1;
+
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;

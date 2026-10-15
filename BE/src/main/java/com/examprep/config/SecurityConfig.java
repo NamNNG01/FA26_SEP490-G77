@@ -7,6 +7,7 @@ import com.examprep.security.RestAuthenticationEntryPoint;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -58,12 +59,20 @@ public class SecurityConfig {
                                 "/api/v1/auth/password/forgot",
                                 "/api/v1/auth/password/reset"
                         ).permitAll()
+                        // Public catalog reads (SRS Permission Matrix grants Guests
+                        // Full View rights on the course list; unauthenticated
+                        // visitors must reach the landing / public-course screens).
+                        .requestMatchers(HttpMethod.GET,
+                                "/api/v1/categories",
+                                "/api/v1/courses",
+                                "/api/v1/courses/*"
+                        ).permitAll()
                         // Role-restricted Endpoints
                         .requestMatchers("/api/v1/admin/**").hasRole(User.ROLE_ADMIN)
                         .requestMatchers("/api/v1/manager/**").hasAnyRole(User.ROLE_COURSE_MANAGER, User.ROLE_ADMIN)
                         .requestMatchers("/api/v1/student/**").hasAnyRole(User.ROLE_STUDENT, User.ROLE_ADMIN)
-                        .requestMatchers("/api/v1/dashboard/student").hasRole(User.ROLE_STUDENT)
-                        .requestMatchers("/api/v1/dashboard/course-manager").hasRole(User.ROLE_COURSE_MANAGER)
+                        .requestMatchers("/api/v1/dashboard/student").hasAnyRole(User.ROLE_STUDENT, User.ROLE_ADMIN)
+                        .requestMatchers("/api/v1/dashboard/course-manager").hasAnyRole(User.ROLE_COURSE_MANAGER, User.ROLE_ADMIN)
                         .requestMatchers("/api/v1/dashboard/admin").hasRole(User.ROLE_ADMIN)
                         // All other endpoints (including /api/v1/auth/logout, /api/v1/auth/logout-all) require authentication
                         .anyRequest().authenticated()

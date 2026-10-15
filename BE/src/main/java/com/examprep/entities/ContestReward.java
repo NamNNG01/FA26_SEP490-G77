@@ -6,7 +6,7 @@ import lombok.*;
 import java.io.Serializable;
 
 @Entity
-@Table(name = "contest_reward")
+@Table(name = "contest_rewards")
 @Getter
 @Setter
 @Builder
