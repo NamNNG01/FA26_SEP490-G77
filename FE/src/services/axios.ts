@@ -76,8 +76,11 @@ apiClient.interceptors.response.use(
           // Backend contract: POST /auth/refresh with { refreshToken } in the
           // body (RefreshTokenRequest). No Authorization header needed — the
           // endpoint is permitAll. Response: ApiResponse<TokenResponse>.
+          // VITE_API_URL has no trailing slash — join with one explicitly, or
+          // the call hits ".../api/v1auth/refresh" (404) and every 401 ends
+          // in a silent logout.
           const res = await axios.post(
-            `${config.apiBaseUrl}auth/refresh`,
+            `${config.apiBaseUrl.replace(/\/+$/, '')}/auth/refresh`,
             { refreshToken },
           );
           const body = res.data as { success: boolean; data?: unknown };

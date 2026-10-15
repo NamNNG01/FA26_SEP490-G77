@@ -93,11 +93,13 @@ export function ChangePasswordModal({ open, onClose }: { open: boolean; onClose:
       navigate(ROUTES.login, { replace: true });
       toast.success('Password changed successfully. Please sign in with your new password.');
     } catch (err: unknown) {
-      setSubmitError(
+      // Stay on the profile page with the modal open so the user can retry.
+      const message =
         err instanceof Error && err.message
           ? err.message
-          : 'Unable to change password. Please try again.',
-      );
+          : 'Unable to change password. Please try again.';
+      setSubmitError(message);
+      toast.error(`Password not changed: ${message}`);
     } finally {
       setSaving(false);
     }
