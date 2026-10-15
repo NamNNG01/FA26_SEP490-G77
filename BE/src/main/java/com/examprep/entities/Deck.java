@@ -30,6 +30,13 @@ public class Deck implements Serializable {
     @Column(name = "title", nullable = false, length = 255)
     private String title;
 
+    /**
+     * Deck description shown on SRS 3.7 Flashcard Detail (V7).
+     * Nullable: decks created before V7 have none.
+     */
+    @Column(name = "description")
+    private String description;
+
     @Column(name = "is_public", nullable = false)
     private Boolean isPublic;
 }
