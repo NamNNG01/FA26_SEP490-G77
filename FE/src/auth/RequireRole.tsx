@@ -24,7 +24,7 @@ export function RequireRole({ roles }: { roles: Role[] }) {
   const { user, isAuthenticated } = useAuth();
   const location = useLocation();
 
-  const roleCode = user?.role?.code;
+  const roleCode = user?.role;
 
   // Unknown/missing role: refuse rather than guessing. AppContent's outer gate
   // already handles the signed-out case, so this only fires on a broken session.

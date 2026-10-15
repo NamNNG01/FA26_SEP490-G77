@@ -28,7 +28,7 @@ export function PublicNavbar() {
   const { isAuthenticated, user } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const dashboardPath = landingPathForRole(user?.role?.code);
+  const dashboardPath = landingPathForRole(user?.role);
 
   const navLinks = [
     { label: 'Home', to: ROUTES.landing },

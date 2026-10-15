@@ -60,7 +60,7 @@ function InfoCell({ icon, label, value, accent }: {
   const type = EXAM_TYPE_META[exam.examType];
   const difficulty = DIFFICULTY_ACCENT[exam.difficulty];
   // Stay inside whichever role area the card was rendered from.
-  const detailPath = publicExamPathFor(user?.role?.code, exam.id);
+  const detailPath = publicExamPathFor(user?.role, exam.id);
 
   return (
     <Link
