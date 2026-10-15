@@ -50,6 +50,9 @@ public class User implements Serializable {
     @Column(name = "status", nullable = false, length = 20)
     private String status = STATUS_ACTIVE;
 
+    @Column(name = "password_changed_at")
+    private Instant passwordChangedAt;
+
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;

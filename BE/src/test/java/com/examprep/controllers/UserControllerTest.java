@@ -44,6 +44,9 @@ class UserControllerTest {
     @MockBean
     private JwtTokenProvider jwtTokenProvider;
 
+    @MockBean
+    private com.examprep.repositories.UserRepository userRepository;
+
     @Test
     void getCurrentUser_Success() throws Exception {
         UserResponse userResponse = UserResponse.builder()

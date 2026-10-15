@@ -164,6 +164,7 @@ Layering flows strictly downward: `controllers → services → repositories`. F
   ```
 - **Token Hashing:** Raw refresh tokens are issued to clients; only SHA-256 hashes (`token_hash`) are persisted in `refresh_tokens`.
 - **Refresh Token Rotation (AUTH-03):** Using a refresh token revokes it atomically (`UPDATE ... WHERE revoked_at IS NULL`) and issues a new Access Token + Refresh Token pair. The atomic guard guarantees each refresh token can be redeemed at most once, even under concurrent requests.
+- **Access Token Invalidation on Password Change (AUTH-07/08):** `users.password_changed_at` is set whenever the password is reset or changed. `JwtAuthenticationFilter` loads the user on each authenticated request and rejects any access token issued before `password_changed_at`, and rejects tokens of inactive/deleted users. Refresh tokens and all active password-reset tokens are revoked at the same time, so the old password stops working immediately on every device.
 - **Credential Check Order (AUTH-02):** The password is verified *before* the account-status check, so inactive accounts and invalid credentials produce indistinguishable responses (prevents account-status enumeration).
 
 ### 5.2 Role-Based Access Control (RBAC) & Endpoint Matrix
@@ -175,9 +176,9 @@ Layering flows strictly downward: `controllers → services → repositories`. F
 | `/api/v1/auth/refresh` | POST | Public | AUTH-03: Refresh Token Rotation |
 | `/api/v1/auth/logout` | POST | Authenticated | AUTH-04: Logout Session |
 | `/api/v1/auth/logout-all` | POST | Authenticated | AUTH-05: Logout All Sessions |
-| `/api/v1/auth/password/forgot` | POST | Public | AUTH-06: Forgot Password (uniform response; SMTP deferred) |
-| `/api/v1/auth/password/reset` | POST | Public | AUTH-07: Reset Password (single-use token, revokes sessions) |
-| `/api/v1/auth/password/change` | PUT | Authenticated | AUTH-08: Change Password (revokes sessions) |
+| `/api/v1/auth/password/forgot` | POST | Public | AUTH-06: Forgot Password (uniform response; Gmail SMTP via App Password) |
+| `/api/v1/auth/password/reset` | POST | Public | AUTH-07: Reset Password (single-use token, revokes sessions + old access tokens) |
+| `/api/v1/auth/password/change` | PUT | Authenticated | AUTH-08: Change Password (revokes sessions + old access tokens; new must differ) |
 | `/api/v1/users/me` | GET | Authenticated | USER-01: Get Current User |
 | `/api/v1/users/me` | PUT | Authenticated | USER-02: Update Profile |
 | `/api/v1/health` | GET | Public | Health Check |
@@ -193,15 +194,14 @@ Layering flows strictly downward: `controllers → services → repositories`. F
 | `/api/v1/dashboard/admin` | GET | `ADMIN` | DASH-03: Admin Dashboard |
 
 ### 5.3 Endpoint Roadmap
-All endpoints from the agreed API contract are now implemented (AUTH-01..08, USER-01/02, DASH-01/02/03 — see §5.2).
-Deferred item: email delivery (SMTP) for AUTH-06 — the API persists the hashed reset token and returns a uniform response until mail is configured.
+All endpoints from the agreed API contract are now implemented end-to-end (AUTH-01..08, USER-01/02, DASH-01/02/03 — see §5.2), including Gmail delivery for AUTH-06 (configure `MAIL_ENABLED=true` with a Gmail App Password; see `.env.example`).
 
 ---
 
 ## 6. Database Strategy (Supabase PostgreSQL)
 
 1. **Schema Evolution:**
-    - Managed exclusively via Flyway (`V1__init_schema.sql`, `V2__add_auth_tables.sql`, `V3__add_enrollment_progress.sql`, `V4__migrate_to_new_design.sql`, `V5__add_password_reset_tokens.sql`).
+    - Managed exclusively via Flyway (`V1__init_schema.sql`, `V2__add_auth_tables.sql`, `V3__add_enrollment_progress.sql`, `V4__migrate_to_new_design.sql`, `V5__add_password_reset_tokens.sql`, `V8__add_password_changed_at.sql`).
     - `spring.jpa.hibernate.ddl-auto` is set to `validate` in `dev` and `none` in `prod`.
 
 2. **Entity Design Conventions:**

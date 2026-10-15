@@ -58,7 +58,7 @@ public class AuthController {
     }
 
     @PostMapping("/password/forgot")
-    @Operation(summary = "AUTH-06: Forgot Password", description = "Issues a password reset token. Always returns the same response to prevent email enumeration. Email delivery is deferred.")
+    @Operation(summary = "AUTH-06: Forgot Password", description = "Issues a password reset token and sends the reset link via Gmail SMTP. Always returns the same response to prevent email enumeration.")
     public ResponseEntity<ApiResponse<Void>> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
         authService.forgotPassword(request);
         return ResponseEntity.ok(ApiResponse.success(null, "If the email exists, a password reset link has been sent."));

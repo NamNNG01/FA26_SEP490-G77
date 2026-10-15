@@ -86,6 +86,10 @@ public class JwtTokenProvider {
                 .getPayload();
     }
 
+    public Date getIssuedAtFromToken(String token) {
+        return getClaimsFromToken(token).getIssuedAt();
+    }
+
     public UserPrincipal getUserPrincipalFromToken(String token) {
         Claims claims = getClaimsFromToken(token);
         Long userId = Long.parseLong(claims.getSubject());
