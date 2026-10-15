@@ -7,14 +7,17 @@ import { ROUTES } from '@/app/routes';
  * PlaceholderPage
  *
  * Shared shell for the public placeholder pages (/pricing, /exams): a
- * lightweight "coming soon" screen so landing CTAs resolve for guests.
+ * lightweight "coming soon" screen so header/footer CTAs resolve for guests.
  * The real pages will replace these.
+ *
+ * Height is `100dvh - 4rem` (minus the 64px public header) because this page
+ * renders inside PublicLayout, which supplies the header and footer.
  */
 export function PlaceholderPage({ title, subtitle }: { title: string; subtitle: string }) {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-[100dvh] bg-gradient-to-br from-[#EFF6FF] to-white dark:from-[#0B1220] dark:to-[#111827] flex items-center justify-center p-4 sm:p-6">
+    <div className="flex min-h-[calc(100dvh-4rem)] items-center justify-center bg-gradient-to-br from-[#EFF6FF] to-white p-4 sm:p-6 dark:from-[#0B1220] dark:to-[#111827]">
       <div className="max-w-md w-full text-center">
         <button
           type="button"

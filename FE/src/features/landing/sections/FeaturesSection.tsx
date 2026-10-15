@@ -1,6 +1,6 @@
 import React from 'react';
 import { Container } from '../components/Container';
-import { Reveal } from '../components/Reveal';
+import { Reveal } from '@/components/common/Reveal';
 import { FeatureCard } from '../components/FeatureCard';
 import { landingFeatures, featuresSectionContent } from '../data/landingData';
 

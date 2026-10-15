@@ -13,6 +13,7 @@ import {
   getUser,
   saveAuth,
   saveTokens,
+  saveUser,
 } from './storage';
 import { onSessionExpired } from './sessionExpired';
 
@@ -70,6 +71,8 @@ interface AuthContextValue extends AuthState {
   /** POST /auth/logout-all — revokes every session. Throws on failure. */
   logoutAll: () => Promise<void>;
   setAuth: (state: Partial<AuthState>) => void;
+  /** Replace the signed-in user (state + storage), e.g. after PUT /users/me. */
+  updateUser: (user: UserResponse) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -82,6 +85,7 @@ export function landingPathForRole(roleCode: string | undefined | null): string 
     case 'ADMIN':
       return '/admin/dashboard';
     case 'COURSE_MANAGER':
+    case 'CONTENT_MANAGER':
       return '/manager/dashboard';
     case 'STUDENT':
     default:
@@ -234,6 +238,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setState((prev) => ({ ...prev, ...next }));
   }
 
+  // ---- Update the signed-in user (profile edits) --------------------------
+  // Persisted too, so the new name survives a page refresh (session restore
+  // reads the user from storage — there is no fetch on boot).
+  function updateUser(user: UserResponse) {
+    saveUser(user);
+    setState((prev) => ({ ...prev, user }));
+  }
+
   return (
     <AuthContext.Provider
       value={{
@@ -243,6 +255,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         logout,
         logoutAll,
         setAuth,
+        updateUser,
       }}
     >
       {children}

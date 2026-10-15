@@ -9,7 +9,7 @@ import { ROUTES } from '@/app/routes';
  * Shared header for the Login / Register pages:
  *
  *   ← Back to Home        (top-left on ≥sm; full-width above the form on mobile)
- *   [Logo] CertifyAI      (clickable → landing page)
+ *   [Logo] PrepExam       (clickable → landing page)
  *   Title
  *   Subtitle
  *
@@ -48,7 +48,7 @@ export function AuthPageHeader({ title, subtitle }: { title: string; subtitle: s
           <span className="w-12 h-12 bg-[#2563EB] rounded-[14px] flex items-center justify-center shadow-md">
             <Icon.Brain className="w-7 h-7 text-white" />
           </span>
-          <span className="text-[1rem] font-bold text-[#111827]">CertifyAI</span>
+          <span className="text-[1rem] font-bold text-[#111827]">PrepExam</span>
         </button>
 
         {/* Fluid title — 28px on small screens up to 40px on wide ones;

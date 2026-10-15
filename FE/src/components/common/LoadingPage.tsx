@@ -9,7 +9,7 @@ export function LoadingPage() {
         <Icon.Brain className="w-7 h-7 text-white" />
       </div>
       <div className="w-8 h-8 border-4 border-[#2563EB]/20 border-t-[#2563EB] rounded-full" style={{ animation: 'spin 0.8s linear infinite' }} />
-      <p className="text-[14px] text-[#6B7280]">Loading CertifyAI…</p>
+      <p className="text-[14px] text-[#6B7280]">Loading PrepExam…</p>
     </div>
   );
 }

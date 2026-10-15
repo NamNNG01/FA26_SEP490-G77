@@ -4,9 +4,9 @@ import React, { useEffect, useRef, useState } from 'react';
  * Reveal
  *
  * Animates its children into view the first time they enter the viewport
- * (IntersectionObserver, fires once). Used by every landing card/section so
- * content fades+slides in on scroll. Degrades to "always visible" when
- * IntersectionObserver is unavailable.
+ * (IntersectionObserver, fires once). Shared by the landing and catalog
+ * sections so content fades+slides in on scroll. Degrades to "always visible"
+ * when IntersectionObserver is unavailable.
  */
 
 type RevealDirection = 'up' | 'down' | 'left' | 'right';

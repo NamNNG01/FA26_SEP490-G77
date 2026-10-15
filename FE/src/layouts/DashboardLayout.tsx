@@ -40,7 +40,7 @@ export function DashboardLayout() {
           <div className="w-7 h-7 bg-[#2563EB] rounded-[8px] flex items-center justify-center">
             <Icon.Brain className="w-4 h-4 text-white" />
           </div>
-          <span className="text-[15px] font-bold text-[#111827]">CertifyAI</span>
+          <span className="text-[15px] font-bold text-[#111827]">PrepExam</span>
         </div>
         <div className="flex-1" />
         <div className="flex items-center gap-2 ml-1 pl-3 border-l border-[#F3F4F6]">

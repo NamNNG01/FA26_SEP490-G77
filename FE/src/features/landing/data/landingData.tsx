@@ -4,33 +4,18 @@ import { ROUTES } from '@/app/routes';
 
 /**
  * Landing page content — single source of truth for every repeated UI
- * element. Sections render these arrays with map(), so copy, metrics and
- * cards can change without touching JSX.
+ * element. Sections render these arrays with map(), so copy and cards can
+ * change without touching JSX.
+ *
+ * Course content itself lives in features/catalog (data/publicCourses.ts) —
+ * this module only holds landing copy.
  *
  * Navigation targets only use the central ROUTES registry — no hardcoded
  * URLs at call sites.
  */
 
 // ---------------------------------------------------------------------
-// Platform statistics (4 cards)
-// ---------------------------------------------------------------------
-export interface LandingStat {
-  icon: ReactNode;
-  value: string;
-  label: string;
-  /** Accent color — used for the tinted icon chip. */
-  color: string;
-}
-
-export const landingStats: LandingStat[] = [
-  { icon: <Icon.Users className="w-6 h-6" />, value: '12,500+', label: 'Active Learners', color: '#2563EB' },
-  { icon: <Icon.TrendingUp className="w-6 h-6" />, value: '94%', label: 'Pass Rate', color: '#16A34A' },
-  { icon: <Icon.ClipboardList className="w-6 h-6" />, value: '85,000+', label: 'Exams Completed', color: '#7C3AED' },
-  { icon: <Icon.Award className="w-6 h-6" />, value: '23,000+', label: 'Certificates Issued', color: '#D97706' },
-];
-
-// ---------------------------------------------------------------------
-// Feature cards (rendered from this array)
+// Platform benefits (rendered from this array)
 // ---------------------------------------------------------------------
 export interface LandingFeature {
   icon: ReactNode;
@@ -41,140 +26,65 @@ export interface LandingFeature {
 
 export const landingFeatures: LandingFeature[] = [
   {
-    icon: <Icon.Brain className="w-5.5 h-5.5" />,
-    title: 'AI-Generated Practice Exams',
+    icon: <Icon.ClipboardList className="w-5.5 h-5.5" />,
+    title: 'Real Exam-Style Questions',
     description:
-      'Unlimited mock exams generated from real course content, tuned to your strengths and weaknesses.',
+      'Practise questions that mirror the real exam format, weighting and difficulty across every supported provider.',
     color: '#2563EB',
   },
   {
-    icon: <Icon.ClipboardList className="w-5.5 h-5.5" />,
-    title: 'Realistic Exam Simulator',
-    description:
-      'Timed, exam-day conditions with a question palette, flagging and instant scoring.',
+    icon: <Icon.Clock className="w-5.5 h-5.5" />,
+    title: 'Full Mock Exams',
+    description: 'Timed, exam-length mock exams with a question palette, flagging for review and instant scoring.',
     color: '#7C3AED',
   },
   {
-    icon: <Icon.Lightbulb className="w-5.5 h-5.5" />,
-    title: 'Detailed Explanations',
-    description:
-      'Every question comes with a clear, AI-written explanation so you learn from every mistake.',
-    color: '#D97706',
-  },
-  {
-    icon: <Icon.BarChart className="w-5.5 h-5.5" />,
-    title: 'Progress Analytics',
-    description:
-      'Track scores, spot weak topics and watch your readiness climb over time.',
+    icon: <Icon.Brain className="w-5.5 h-5.5" />,
+    title: 'AI-Powered Review',
+    description: 'After every attempt, AI explains what you missed and which topics to review next.',
     color: '#0891B2',
   },
   {
-    icon: <Icon.Zap className="w-5.5 h-5.5" />,
-    title: 'Smart Study Recommendations',
-    description:
-      'CertifyAI tells you exactly what to review next based on your latest attempts.',
-    color: '#DC2626',
-  },
-  {
-    icon: <Icon.Award className="w-5.5 h-5.5" />,
-    title: 'Recognized Certificates',
-    description:
-      'Earn verifiable certificates for every exam you pass and share them with employers.',
+    icon: <Icon.BarChart className="w-5.5 h-5.5" />,
+    title: 'Weak-Area Tracking',
+    description: 'Score by topic over time so you can see exactly which areas still need work.',
     color: '#16A34A',
   },
-];
-
-// ---------------------------------------------------------------------
-// Testimonial cards (rendered from this array)
-// ---------------------------------------------------------------------
-export interface LandingTestimonial {
-  /** Star rating 0–5. */
-  rating: number;
-  /** Exam score shown as a badge on the card. */
-  scoreBadge: string;
-  quote: string;
-  name: string;
-  role: string;
-}
-
-export const landingTestimonials: LandingTestimonial[] = [
   {
-    rating: 5,
-    scoreBadge: 'Score: 92%',
-    quote:
-      'The AI practice exams felt harder than the real thing — by exam day nothing surprised me. Passed on my first attempt with room to spare.',
-    name: 'Sarah Chen',
-    role: 'Cloud Solutions Architect',
+    icon: <Icon.Layers className="w-5.5 h-5.5" />,
+    title: 'Flashcards & Drills',
+    description: 'Reinforce terminology and definitions with quick flashcards built from each course.',
+    color: '#D97706',
   },
   {
-    rating: 5,
-    scoreBadge: 'Score: 88%',
-    quote:
-      'I loved how the platform told me exactly which topics to review after every mock exam. Three weeks of focused study and I was ready.',
-    name: 'Marcus Rivera',
-    role: 'DevOps Engineer',
-  },
-  {
-    rating: 4,
-    scoreBadge: 'Score: 95%',
-    quote:
-      'The detailed explanations are gold. I finally understood why answers were right instead of just memorizing patterns.',
-    name: 'Amina Yusuf',
-    role: 'Data Analyst',
+    icon: <Icon.TrendingUp className="w-5.5 h-5.5" />,
+    title: 'Readiness Tracking',
+    description: 'Follow practice streaks and readiness signals so you know when to sit the real exam.',
+    color: '#DC2626',
   },
 ];
 
 // ---------------------------------------------------------------------
-// Interactive exam preview (sample question — not scored)
-// ---------------------------------------------------------------------
-export const previewExam = {
-  examTitle: 'AWS Certified Cloud Practitioner',
-  questionNumber: 3,
-  totalQuestions: 20,
-  /** Countdown for the preview widget, in seconds (10:00). */
-  durationSeconds: 600,
-  question:
-    'Which AWS service provides a fully managed, serverless data warehouse that supports analytics workloads with petabyte-scale storage?',
-  options: [
-    { label: 'A', text: 'Amazon Redshift' },
-    { label: 'B', text: 'Amazon DynamoDB' },
-    { label: 'C', text: 'Amazon S3' },
-    { label: 'D', text: 'AWS Lambda' },
-  ],
-};
-
-// ---------------------------------------------------------------------
-// Hero & final CTA copy (navigation targets stay dynamic — they depend on
-// the auth state, see usePrimaryCtaPath)
+// Hero & final CTA copy
 // ---------------------------------------------------------------------
 export const heroContent = {
-  badge: 'AI-Powered Certification Prep',
-  title: 'Pass Your Certification Exams with Confidence',
+  badge: 'AI-Powered Exam Preparation Platform',
+  title: 'Prepare Smarter. Perform Better.',
   subtitle:
-    'CertifyAI generates realistic practice exams, tracks your progress and tells you exactly what to study next — so you walk into exam day fully prepared.',
-  secondaryCta: { label: 'Explore Certification Exams', to: ROUTES.examsIntro },
-  trustPoints: ['Free to start', 'No credit card required', 'Cancel anytime'],
-};
-
-export const statsSectionContent = {
-  title: 'Trusted by Learners Worldwide',
-  subtitle: 'Real numbers from a community that studies smarter, not longer.',
+    'Practice real exam-style questions, take mock exams, and improve weak areas with AI-powered learning tools.',
+  primaryCta: { label: 'Browse Courses', to: ROUTES.courses },
+  secondaryCtaLabel: 'Start Learning',
+  trustPoints: ['No account needed to browse', 'Free to start', 'No credit card required'],
 };
 
 export const featuresSectionContent = {
-  title: 'Everything You Need to Pass',
-  subtitle:
-    'A complete AI-powered toolkit that takes you from your first practice question to a recognized certificate.',
-};
-
-export const testimonialsSectionContent = {
-  title: 'Loved by Thousands of Learners',
-  subtitle: 'Hear from professionals who passed their certification exams with CertifyAI.',
+  title: 'Platform Benefits',
+  subtitle: 'Everything you need to turn exam anxiety into exam-day readiness.',
 };
 
 export const finalCtaContent = {
-  title: 'Ready to Get Certified?',
+  title: 'Ready to Start Preparing?',
   subtitle:
-    'Join thousands of learners who passed their certification exams with CertifyAI. Create your free account and take the first practice exam today.',
+    'Create a free account, pick a course and run your first practice set today. PrepExam is a preparation platform — it does not issue certificates.',
   secondaryCta: { label: 'View Pricing', to: ROUTES.pricing },
 };

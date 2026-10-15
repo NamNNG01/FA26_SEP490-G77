@@ -1,6 +1,6 @@
 import React from 'react';
 import { Card } from '@/components/ui/Card';
-import { Reveal } from './Reveal';
+import { Reveal } from '@/components/common/Reveal';
 import type { LandingFeature } from '../data/landingData';
 
 /**
