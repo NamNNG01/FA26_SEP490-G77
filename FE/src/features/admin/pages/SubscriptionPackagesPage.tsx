@@ -39,7 +39,7 @@ export function SubscriptionPackagesPage() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
         {packages.map(p => (
-          <div key={p.id} className="card p-5 flex flex-col gap-4 border-2 transition-all" style={{ borderColor: p.active ? '#BFDBFE' : '#E5E7EB' }}>
+          <div key={p.id} className={`card p-5 flex flex-col gap-4 border-2 transition-all ${p.active ? 'border-[#BFDBFE]' : 'border-[#E5E7EB]'}`}>
             <div className="flex items-start justify-between">
               <div>
                 <Badge variant={p.name === 'Enterprise' ? 'purple' : p.name === 'Free' ? 'default' : 'info'}>{p.name}</Badge>

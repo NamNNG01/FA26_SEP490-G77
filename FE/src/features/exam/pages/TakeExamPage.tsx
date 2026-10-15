@@ -84,13 +84,14 @@ export function TakeExamPage() {
           <QuestionPalette total={45} current={currentQ} answered={answered} flagged={flagged} onSelect={setCurrentQ} />
           <div className="mt-4 space-y-2 pt-4 border-t border-[#F3F4F6]">
             {[
-              { color: '#16A34A', bg: '#F0FDF4', border: '#BBF7D0', label: 'Answered', count: answered.size },
-              { color: '#D97706', bg: '#FFFBEB', border: '#FDE68A', label: 'Flagged', count: flagged.size },
-              { color: '#9CA3AF', bg: '#F9FAFB', border: '#E5E7EB', label: 'Unanswered', count: 45 - answered.size },
+              // Classes (not inline hexes) so the dark-mode remaps apply.
+              { swatch: 'bg-[#F0FDF4] border-[#BBF7D0]', label: 'Answered', count: answered.size },
+              { swatch: 'bg-[#FFFBEB] border-[#FDE68A]', label: 'Flagged', count: flagged.size },
+              { swatch: 'bg-[#F9FAFB] border-[#E5E7EB]', label: 'Unanswered', count: 45 - answered.size },
             ].map(s => (
               <div key={s.label} className="flex items-center justify-between text-[12px]">
                 <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 rounded-[4px] border" style={{ background: s.bg, borderColor: s.border }} />
+                  <div className={`w-4 h-4 rounded-[4px] border ${s.swatch}`} />
                   <span className="text-[#6B7280]">{s.label}</span>
                 </div>
                 <span className="font-semibold text-[#374151]">{s.count}</span>

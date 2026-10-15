@@ -3,7 +3,7 @@ import { Icon } from '@/assets/icons';
 
 export default function CoverPage() {
   return (
-    <div className="min-h-[100dvh] bg-gradient-to-br from-[#EFF6FF] via-white to-[#F5F3FF] flex flex-col">
+    <div className="min-h-[100dvh] bg-gradient-to-br from-[#EFF6FF] via-white to-[#F5F3FF] dark:from-[#0B1220] dark:via-[#111827] dark:to-[#111827] flex flex-col">
       {/* Header */}
       <header className="flex items-center gap-3 px-10 py-7">
         <div className="w-9 h-9 bg-[#2563EB] rounded-[10px] flex items-center justify-center shadow-sm">
