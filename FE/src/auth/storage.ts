@@ -57,6 +57,11 @@ export function saveAuth(params: {
   }
 }
 
+/** Replace the persisted user (e.g. after PUT /users/me) without touching tokens. */
+export function saveUser(user: UserResponse) {
+  localStorage.setItem(USER_KEY, JSON.stringify(user));
+}
+
 export function saveTokens(params: { accessToken: string; refreshToken: string }) {
   localStorage.setItem(ACCESS_TOKEN_KEY, params.accessToken);
   localStorage.setItem(REFRESH_TOKEN_KEY, params.refreshToken);

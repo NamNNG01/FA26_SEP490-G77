@@ -1,5 +1,6 @@
 import React from 'react';
 import { Icon } from '@/assets/icons';
+import { Role } from '@/utils/permissions';
 
 /**
  * Central route registry — single source of truth for navigation paths.
@@ -11,6 +12,9 @@ export const ROUTES = {
   register: '/register',
 
   // Public marketing pages (no auth required)
+  courses: '/courses',
+  /** Route pattern — render with coursePath(slug). */
+  courseDetail: '/courses/:slug',
   examsIntro: '/exams',
   pricing: '/pricing',
   forgotPassword: '/forgot-password',
@@ -21,14 +25,20 @@ export const ROUTES = {
   studentDashboard: '/student/dashboard',
   studentCourses: '/student/courses',
   studentExams: '/student/exams',
+  studentPublicExam: '/student/public-exam',
+  /** Route pattern — render with publicExamPath(id). */
+  studentPublicExamDetail: '/student/public-exam/:examId',
   studentExam: '/student/exam',
   studentExamResult: '/student/exam-result',
 
   // Content Manager (backend role: COURSE_MANAGER)
   managerDashboard: '/manager/dashboard',
   managerCourses: '/manager/courses',
-  managerQuestions: '/manager/questions',
+  managerQuestions: '/manager/question-bank',
   managerExams: '/manager/exams',
+  /** Same pages as the student practice-exam area, mounted under /manager. */
+  managerPracticeExams: '/manager/practice-exams',
+  managerPracticeExamDetail: '/manager/practice-exams/:examId',
 
   // Admin
   adminDashboard: '/admin/dashboard',
@@ -40,6 +50,37 @@ export const ROUTES = {
   adminAuditLogs: '/admin/audit-logs',
   adminSettings: '/admin/settings',
 } as const;
+
+/** Concrete course detail URL — e.g. coursePath('aws-cloud-practitioner') → '/courses/aws-cloud-practitioner'. */
+export function coursePath(slug: string): string {
+  return `${ROUTES.courses}/${slug}`;
+}
+
+/** Concrete practice exam detail URL — e.g. publicExamPath('EX-P-1001') → '/student/public-exam/EX-P-1001'. */
+export function publicExamPath(id: string): string {
+  return `${ROUTES.studentPublicExam}/${id}`;
+}
+
+/** Same page, manager-scoped URL — e.g. managerPublicExamPath('EX-P-1001') → '/manager/practice-exams/EX-P-1001'. */
+export function managerPublicExamPath(id: string): string {
+  return `${ROUTES.managerPracticeExams}/${id}`;
+}
+
+/**
+ * Detail URL for the signed-in role. The two role areas are separate mounts of
+ * the same components, so links must stay inside the area the user is in —
+ * otherwise a manager clicking a card from /manager/practice-exams would be
+ * bounced into the /student tree. Everyone else (students, admins) uses the
+ * student path.
+ */
+export function publicExamPathFor(roleCode: string | null | undefined, id: string): string {
+  return roleCode === Role.COURSE_MANAGER || roleCode === Role.CONTENT_MANAGER ? managerPublicExamPath(id) : publicExamPath(id);
+}
+
+/** List URL for the signed-in role — the "back" target for the detail page. */
+export function publicExamListPathFor(roleCode: string | null | undefined): string {
+  return roleCode === Role.COURSE_MANAGER || roleCode === Role.CONTENT_MANAGER ? ROUTES.managerPracticeExams : ROUTES.studentPublicExam;
+}
 
 export interface MenuItem {
   id: string;
@@ -62,12 +103,21 @@ export const menuByRole: Record<string, MenuItem[]> = {
     { id: 'student-dashboard', title: 'Dashboard', icon: <Icon.Home className="w-4 h-4" />, path: ROUTES.studentDashboard },
     { id: 'student-courses', title: 'My Courses', icon: <Icon.Book className="w-4 h-4" />, path: ROUTES.studentCourses },
     { id: 'student-exams', title: 'My Exams', icon: <Icon.ClipboardList className="w-4 h-4" />, path: ROUTES.studentExams },
+    { id: 'student-public-exam', title: 'Public Exam', icon: <Icon.Zap className="w-4 h-4" />, path: ROUTES.studentPublicExam },
   ],
   COURSE_MANAGER: [
     { id: 'manager-dashboard', title: 'Dashboard', icon: <Icon.Home className="w-4 h-4" />, path: ROUTES.managerDashboard },
     { id: 'manager-courses', title: 'Courses', icon: <Icon.Book className="w-4 h-4" />, path: ROUTES.managerCourses },
     { id: 'manager-questions', title: 'Question Bank', icon: <Icon.Database className="w-4 h-4" />, path: ROUTES.managerQuestions },
     { id: 'manager-exams', title: 'Exams', icon: <Icon.ClipboardList className="w-4 h-4" />, path: ROUTES.managerExams },
+    { id: 'manager-practice-exams', title: 'Public Exam', icon: <Icon.Zap className="w-4 h-4" />, path: ROUTES.managerPracticeExams },
+  ],
+  CONTENT_MANAGER: [
+    { id: 'manager-dashboard', title: 'Dashboard', icon: <Icon.Home className="w-4 h-4" />, path: ROUTES.managerDashboard },
+    { id: 'manager-courses', title: 'Courses', icon: <Icon.Book className="w-4 h-4" />, path: ROUTES.managerCourses },
+    { id: 'manager-questions', title: 'Question Bank', icon: <Icon.Database className="w-4 h-4" />, path: ROUTES.managerQuestions },
+    { id: 'manager-exams', title: 'Exams', icon: <Icon.ClipboardList className="w-4 h-4" />, path: ROUTES.managerExams },
+    { id: 'manager-practice-exams', title: 'Public Exam', icon: <Icon.Zap className="w-4 h-4" />, path: ROUTES.managerPracticeExams },
   ],
   ADMIN: [
     { id: 'admin-dashboard', title: 'Dashboard', icon: <Icon.Home className="w-4 h-4" />, path: ROUTES.adminDashboard },

@@ -7,6 +7,8 @@
  */
 export enum Role {
   STUDENT = 'STUDENT',
+  /** UI alias used by content-manager clients. */
+  CONTENT_MANAGER = 'CONTENT_MANAGER',
   COURSE_MANAGER = 'COURSE_MANAGER',
   ADMIN = 'ADMIN',
 }

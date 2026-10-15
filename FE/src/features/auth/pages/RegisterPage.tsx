@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router';
+import { isAxiosError } from 'axios';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Alert } from '@/components/ui/Alert';
@@ -79,8 +80,14 @@ export function RegisterPage() {
       const registeredUser = await register(email, password, fullName);
       navigate(landingPathForRole(registeredUser.role), { replace: true });
     } catch (err: unknown) {
-      const message =
-        err instanceof Error ? err.message : 'Registration failed. Please try again.';
+      // 409 = the backend hit a database conflict while saving the account
+      // (GlobalExceptionHandler → DataIntegrityViolationException); its
+      // generic message means nothing to a user, and retrying usually works.
+      const message = isAxiosError(err) && err.response?.status === 409
+        ? 'We could not create your account right now. Please try again in a moment.'
+        : err instanceof Error
+          ? err.message
+          : 'Registration failed. Please try again.';
       setError(message);
     } finally {
       setLoading(false);

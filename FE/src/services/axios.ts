@@ -14,7 +14,9 @@ export const apiClient = axios.create({
 /**
  * Endpoints that never carry an Authorization header.
  *
- * register, login, refresh: permitAll (no token required — SecurityConfig).
+ * register, login, refresh, password/forgot, password/reset: permitAll
+ *     (no token required — SecurityConfig). Being public also keeps a 401
+ *     "Invalid or expired reset token." out of the refresh flow below.
  * logout / logout-all: PROTECTED (require a Bearer token) — the backend
  *     enforces @AuthenticationPrincipal UserPrincipal on these routes.
  */
@@ -22,6 +24,8 @@ const PUBLIC_ENDPOINTS = [
   '/auth/register',
   '/auth/login',
   '/auth/refresh',
+  '/auth/password/forgot',
+  '/auth/password/reset',
 ];
 
 /**
@@ -104,6 +108,14 @@ apiClient.interceptors.response.use(
         clearAuth();
         emitSessionExpired();
       }
+    }
+
+    // Surface the backend's ApiResponse.message (e.g. "Email is already
+    // registered.") instead of Axios' generic "Request failed with status
+    // code 4xx". The error stays an AxiosError, so .response is still there.
+    const serverMessage = error.response?.data?.message;
+    if (typeof serverMessage === 'string' && serverMessage.trim()) {
+      error.message = serverMessage;
     }
 
     return Promise.reject(error);

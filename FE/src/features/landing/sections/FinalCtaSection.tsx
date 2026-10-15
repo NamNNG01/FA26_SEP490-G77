@@ -1,7 +1,7 @@
 import React from 'react';
 import { Container } from '../components/Container';
 import { CTAButton } from '../components/CTAButton';
-import { Reveal } from '../components/Reveal';
+import { Reveal } from '@/components/common/Reveal';
 import { finalCtaContent } from '../data/landingData';
 import { ROUTES } from '@/app/routes';
 

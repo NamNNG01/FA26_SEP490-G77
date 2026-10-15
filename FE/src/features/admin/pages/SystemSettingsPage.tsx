@@ -51,8 +51,8 @@ function ToggleRow({ label, desc, checked, onChange }: { label: string; desc?: s
 
 const INITIAL = {
   general: {
-    platformName: 'CertifyAI',
-    supportEmail: 'support@certifyai.com',
+    platformName: 'PrepExam',
+    supportEmail: 'support@prepexam.com',
     language: 'en',
     timezone: 'utc+7',
     dateFormat: 'dmy',
