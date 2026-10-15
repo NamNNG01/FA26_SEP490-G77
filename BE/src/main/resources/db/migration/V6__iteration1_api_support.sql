@@ -54,10 +54,32 @@ CREATE TABLE IF NOT EXISTS contest_rewards (
 
 -- Keep the index name consistent with the new table name (old name keeps
 -- working even without this, index names are independent of the table).
+--
+-- Index names share one namespace per schema, so a RENAME fails with
+-- "relation already exists" when the new name is taken. Cases handled:
+--   old only     -> rename old to new
+--   new only     -> nothing to rename
+--   both         -> keep new; drop old only if it is a duplicate on
+--                   contest_rewards, otherwise leave it on the legacy
+--                   contest_reward table untouched
+--   neither      -> CREATE INDEX IF NOT EXISTS below builds it
+-- to_regclass() resolves via search_path (no cross-schema false hits on
+-- Supabase) and returns NULL instead of raising when the name is absent.
 DO $$
+DECLARE
+    old_idx regclass := to_regclass('idx_contest_reward_contest');
+    new_idx regclass := to_regclass('idx_contest_rewards_contest');
 BEGIN
-    IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'idx_contest_reward_contest') THEN
-        ALTER INDEX IF EXISTS idx_contest_reward_contest RENAME TO idx_contest_rewards_contest;
+    IF old_idx IS NOT NULL AND new_idx IS NULL THEN
+        ALTER INDEX idx_contest_reward_contest RENAME TO idx_contest_rewards_contest;
+    ELSIF old_idx IS NOT NULL AND new_idx IS NOT NULL THEN
+        IF EXISTS (SELECT 1 FROM pg_index
+                   WHERE indexrelid = old_idx
+                     AND indrelid = to_regclass('contest_rewards')) THEN
+            DROP INDEX idx_contest_reward_contest;
+        ELSE
+            RAISE NOTICE 'V6: idx_contest_reward_contest kept on legacy table contest_reward';
+        END IF;
     END IF;
 END $$;
 CREATE INDEX IF NOT EXISTS idx_contest_rewards_contest ON contest_rewards(contest_id);
