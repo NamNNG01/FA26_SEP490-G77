@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '@/auth/authContext';
 import { Alert } from '@/components/ui/Alert';
-import { ChangePasswordForm } from '@/components/profile/ChangePasswordForm';
-import { SecurityCard } from '@/components/profile/SecurityCard';
 import { ProfileHeaderCard } from '../components/ProfileHeaderCard';
 import { PersonalInfoCard } from '../components/PersonalInfoCard';
 import { ProgressOverviewCard, FinishedCoursesCard } from '../components/LearningWidgets';
@@ -13,11 +11,11 @@ import { useProfileOverview } from '../hooks/useProfileOverview';
  *
  *  ┌ User Header Card (avatar, name, email, member details, role, stats) ┐
  *  ├ Personal Information (2/3) ──────────┬ Progress Overview (1/3) ─────┤
- *  │                                       ├ Finished Courses ────────────┤
- *  └ Account security: Change Password + Security (logout all devices) ──┘
+ *  └───────────────────────────────────────┴ Finished Courses ────────────┘
  *
  * The Edit Profile button in the header toggles edit mode of the Personal
- * Information form (Save → PUT /users/me, Cancel → revert).
+ * Information form (Save → PUT /users/me, Cancel → revert). Change Password
+ * (modal) and Logout All Devices sit right below it in the header card.
  */
 export function ProfilePage() {
   const { user } = useAuth();
@@ -58,16 +56,6 @@ export function ProfilePage() {
             tracksLearning={overview.tracksLearning}
           />
         </div>
-      </div>
-
-      {/* Not part of the profile wireframe — kept so password change and
-          "log out from all devices" stay reachable. */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
-        <div className="card p-6 flex flex-col">
-          <h4 className="text-[16px] font-semibold text-[#111827] mb-4">Change Password</h4>
-          <ChangePasswordForm />
-        </div>
-        <SecurityCard />
       </div>
     </div>
   );

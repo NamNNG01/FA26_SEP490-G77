@@ -28,6 +28,20 @@ export const passwordService = {
     return body.message;
   },
 
+  /**
+   * PUT /auth/password/change  { currentPassword, newPassword }  (ChangePasswordRequest)
+   * Authenticated. Answers 401 "Current password is incorrect." on a wrong
+   * current password and revokes every refresh token of the user on success.
+   */
+  async changePassword(currentPassword: string, newPassword: string): Promise<string> {
+    const body = await api.request<ApiResponse<null>>({
+      method: 'put',
+      url: '/auth/password/change',
+      data: { currentPassword, newPassword },
+    });
+    return body.message;
+  },
+
   /** Resolves with the backend's confirmation message. */
   async resetPassword(token: string, newPassword: string): Promise<string> {
     const body = await api.post<ApiResponse<null>>('/auth/password/reset', {

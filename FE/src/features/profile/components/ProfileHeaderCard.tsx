@@ -1,10 +1,12 @@
-import React from 'react';
+import React, { useState } from 'react';
 import type { UserResponse } from '@/auth/authContext';
 import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/assets/icons';
 import type { ProfileStat } from '../hooks/useProfileOverview';
+import { ChangePasswordModal } from './ChangePasswordModal';
+import { LogoutAllDevicesButton } from './LogoutAllDevicesButton';
 
 const ROLE_LABELS: Record<string, string> = {
   STUDENT: 'Student',
@@ -25,7 +27,8 @@ function memberDetails(user: UserResponse): string {
 
 /**
  * User Header Card: avatar, full name, email, member details, role badge,
- * Edit Profile button and 4 activity statistics.
+ * account actions (Edit Profile, Change Password modal, Logout All Devices)
+ * and 4 activity statistics.
  */
 export function ProfileHeaderCard({
   user,
@@ -40,6 +43,8 @@ export function ProfileHeaderCard({
   editing: boolean;
   onEdit: () => void;
 }) {
+  const [passwordOpen, setPasswordOpen] = useState(false);
+
   return (
     <div className="card p-6">
       <div className="flex flex-col sm:flex-row sm:items-start gap-4">
@@ -54,16 +59,29 @@ export function ProfileHeaderCard({
           <p className="text-[13px] text-[#6B7280] mt-1">{memberDetails(user)}</p>
         </div>
 
-        <Button
-          variant="outline"
-          icon={<Icon.Edit className="w-4 h-4" />}
-          onClick={onEdit}
-          disabled={editing}
-          className="self-start"
-        >
-          Edit Profile
-        </Button>
+        <div className="flex flex-col gap-2 self-start sm:w-auto w-full">
+          <Button
+            variant="outline"
+            icon={<Icon.Edit className="w-4 h-4" />}
+            onClick={onEdit}
+            disabled={editing}
+            className="w-full"
+          >
+            Edit Profile
+          </Button>
+          <Button
+            variant="outline"
+            icon={<Icon.Lock className="w-4 h-4" />}
+            onClick={() => setPasswordOpen(true)}
+            className="w-full"
+          >
+            Change Password
+          </Button>
+          <LogoutAllDevicesButton className="w-full" />
+        </div>
       </div>
+
+      <ChangePasswordModal open={passwordOpen} onClose={() => setPasswordOpen(false)} />
 
       <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-4">
         {statsLoading
