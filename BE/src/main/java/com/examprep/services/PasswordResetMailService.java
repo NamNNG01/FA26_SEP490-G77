@@ -28,7 +28,7 @@ public class PasswordResetMailService {
 
     public boolean sendPasswordResetEmail(String toEmail, String displayName, String resetLink, long expiresMinutes) {
         if (!mailEnabled) {
-            log.warn("Password reset email skipped (app.mail.enabled=false). Configure Gmail SMTP to deliver to {}.", toEmail);
+            log.warn("Password reset email skipped (app.mail.enabled=false). Configure Gmail SMTP to deliver reset emails.");
             return false;
         }
         try {

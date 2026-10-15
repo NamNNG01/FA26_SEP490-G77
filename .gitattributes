@@ -1,0 +1,5 @@
+# Pin Flyway migration checksums: Flyway CRC32s raw file bytes, so a
+# CRLF checkout computes different checksums than an LF checkout and
+# validation fails across OSes. Force LF for all migration SQL.
+# (Rule: applied migrations must never be edited - stable bytes required.)
+/BE/src/main/resources/db/migration/*.sql text eol=lf
