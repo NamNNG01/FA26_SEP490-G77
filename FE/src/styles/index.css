@@ -7,15 +7,18 @@
 @theme inline {
   --color-primary: #2563EB;
   --color-primary-hover: #1D4ED8;
-  --color-primary-light: #EFF6FF;
-  --color-success: #16A34A;
-  --color-success-light: #F0FDF4;
-  --color-warning: #D97706;
-  --color-warning-light: #FFFBEB;
-  --color-danger: #DC2626;
-  --color-danger-light: #FEF2F2;
-  --color-info: #0891B2;
-  --color-info-light: #ECFEFF;
+  /* Status colors + their tinted backgrounds follow the theme (see :root /
+     .dark below) — a fixed light tint under dark-mode text was what made
+     toasts and alerts render white-on-white. */
+  --color-primary-light: var(--primary-light);
+  --color-success: var(--success);
+  --color-success-light: var(--success-light);
+  --color-warning: var(--warning);
+  --color-warning-light: var(--warning-light);
+  --color-danger: var(--danger);
+  --color-danger-light: var(--danger-light);
+  --color-info: var(--info);
+  --color-info-light: var(--info-light);
   --color-gray-50: #F9FAFB;
   --color-gray-100: #F3F4F6;
   --color-gray-200: #E5E7EB;
@@ -63,6 +66,16 @@
   --line: #E5E7EB;
   --accent: #F3F4F6;
   --accent-foreground: #111827;
+  --primary-light: #EFF6FF;
+  --success: #16A34A;
+  --success-light: #F0FDF4;
+  --warning: #D97706;
+  --warning-light: #FFFBEB;
+  --danger: #DC2626;
+  --danger-light: #FEF2F2;
+  --info: #0891B2;
+  --info-light: #ECFEFF;
+  --purple-light: #F5F3FF;
 }
 
 /* Dark theme — same design tokens, dark values. */
@@ -75,6 +88,17 @@
   --line: #1F2937;
   --accent: #26324A;
   --accent-foreground: #F9FAFB;
+  /* Lighter status hues + deep tints keep >= 4.5:1 on dark surfaces. */
+  --primary-light: #172554;
+  --success: #4ADE80;
+  --success-light: #052E16;
+  --warning: #FBBF24;
+  --warning-light: #422006;
+  --danger: #F87171;
+  --danger-light: #450A0A;
+  --info: #22D3EE;
+  --info-light: #083344;
+  --purple-light: #2E1065;
 }
 
 * {
@@ -255,3 +279,65 @@ body {
 .dark .hover\:bg-\[\#E5E7EB\]:hover { background-color: var(--accent); }
 .dark .hover\:text-\[\#374151\]:hover { color: var(--content); }
 .dark .hover\:bg-\[\#EFF6FF\]:hover { background-color: rgba(37, 99, 235, 0.15); }
+
+/* Neutral fills/borders that the remaps above did not cover. */
+.dark .bg-\[\#E5E7EB\],
+.dark .bg-\[\#D1D5DB\] { background-color: #374151; }
+.dark .bg-\[\#111827\] { background-color: #374151; }
+.dark .active\:bg-\[\#E5E7EB\]:active,
+.dark .active\:bg-\[\#D1D5DB\]:active { background-color: var(--accent); }
+.dark .border-\[\#F9FAFB\],
+.dark .border-\[\#EEF2F7\],
+.dark .divide-\[\#F9FAFB\] > :not(:last-child) { border-color: var(--line); }
+.dark .border-\[\#D1D5DB\],
+.dark .hover\:border-\[\#D1D5DB\]:hover { border-color: #374151; }
+.dark .text-\[\#4B5563\] { color: var(--content-muted); }
+.dark .text-\[\#D1D5DB\] { color: var(--content-subtle); }
+.dark .text-\[\#F3F4F6\] { color: var(--line); }
+.dark .hover\:text-\[\#111827\]:hover { color: var(--content); }
+
+/* Status tints (alerts, notices, chips, highlighted rows): light pastel
+   fills become deep tints, and the dark status text on them becomes the
+   matching light hue, so text stays readable on top. */
+.dark .bg-\[\#EFF6FF\],
+.dark .bg-\[\#F0F9FF\],
+.dark .bg-blue-50 { background-color: var(--primary-light); }
+.dark .bg-\[\#F0FDF4\] { background-color: var(--success-light); }
+.dark .bg-\[\#FFFBEB\] { background-color: var(--warning-light); }
+.dark .bg-\[\#FEF2F2\],
+.dark .bg-\[\#FEE2E2\],
+.dark .hover\:bg-\[\#FEF2F2\]:hover { background-color: var(--danger-light); }
+.dark .bg-\[\#F5F3FF\] { background-color: var(--purple-light); }
+.dark .bg-\[\#BFDBFE\] { background-color: #1E3A8A; }
+
+.dark .border-\[\#BFDBFE\],
+.dark .hover\:border-\[\#BFDBFE\]:hover { border-color: #1E3A8A; }
+.dark .border-\[\#BBF7D0\] { border-color: #14532D; }
+.dark .border-\[\#FDE68A\] { border-color: #78350F; }
+.dark .border-\[\#FECACA\] { border-color: #7F1D1D; }
+
+.dark .text-\[\#2563EB\],
+.dark .hover\:text-\[\#2563EB\]:hover,
+.dark .group:hover .group-hover\:text-\[\#2563EB\],
+.dark .text-\[\#1E40AF\] { color: #93C5FD; }
+.dark .text-\[\#16A34A\],
+.dark .text-\[\#15803D\],
+.dark .text-\[\#059669\] { color: #4ADE80; }
+.dark .text-\[\#D97706\],
+.dark .text-\[\#92400E\] { color: #FBBF24; }
+.dark .text-\[\#DC2626\],
+.dark .hover\:text-\[\#DC2626\]:hover,
+.dark .text-\[\#B91C1C\] { color: #F87171; }
+.dark .text-\[\#7C3AED\] { color: #C4B5FD; }
+.dark .text-\[\#0891B2\] { color: #22D3EE; }
+
+/* Theme-aware pieces of the plain-CSS helpers above. */
+.dark ::-webkit-scrollbar-thumb { background: #374151; }
+.dark ::-webkit-scrollbar-thumb:hover { background: #4B5563; }
+.dark .skeleton {
+  background: linear-gradient(90deg, #1F2937 25%, #26324A 50%, #1F2937 75%);
+  background-size: 200% 100%;
+}
+.dark .prose-block h2 { color: var(--content); }
+.dark .prose-block h3 { color: var(--content-muted); }
+.dark .prose-block:empty::before { color: var(--content-subtle); }

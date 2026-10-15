@@ -6,13 +6,23 @@ import { Alert } from '@/components/ui/Alert';
 import { useAuth, landingPathForRole } from '@/auth/authContext';
 import { AuthPageHeader } from '../components/AuthPageHeader';
 import { Icon } from '@/assets/icons';
+import { ROUTES } from '@/app/routes';
+
+/**
+ * Router state LoginPage understands:
+ *   from          — where to go after signing in (set by the route guard)
+ *   email         — prefill (e.g. coming back from Forgot / Reset password)
+ *   passwordReset — show the "password updated" banner after AUTH-07
+ */
+type LoginLocationState = { from?: string; email?: string; passwordReset?: boolean } | null;
 
 export function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const locationState = location.state as LoginLocationState;
 
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(locationState?.email ?? '');
   const [password, setPassword] = useState('');
   const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -28,7 +38,7 @@ export function LoginPage() {
       // authenticated branch in the same commit. Use the FRESH user
       // returned by login(); the context value in this closure is stale.
       const loggedInUser = await login(email, password);
-      const from = (location.state as { from?: string } | null)?.from;
+      const from = locationState?.from;
       navigate(from ?? landingPathForRole(loggedInUser.role), { replace: true });
     } catch (err: unknown) {
       const message =
@@ -48,6 +58,13 @@ export function LoginPage() {
 
         <div className="card p-6 [@media(max-height:850px)]:p-5 shadow-lg">
           {error && <Alert type="error" title="Authentication failed" message={error} />}
+          {!error && locationState?.passwordReset && (
+            <Alert
+              type="success"
+              title="Password updated"
+              message="Sign in with your new password. All other sessions have been signed out."
+            />
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-[18px] [@media(max-height:850px)]:space-y-3.5">
             <Input
@@ -92,7 +109,7 @@ export function LoginPage() {
             </p>
             <button
               type="button"
-              onClick={() => navigate('/forgot-password')}
+              onClick={() => navigate(ROUTES.forgotPassword, { state: { email: email.trim() } })}
               className="text-[13px] text-[#2563EB] hover:underline font-medium"
             >
               Forgot password?
