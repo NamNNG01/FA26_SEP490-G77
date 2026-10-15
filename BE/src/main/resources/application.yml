@@ -3,6 +3,11 @@ spring:
     name: exam-prep-backend
   profiles:
     active: dev
+  # Load BE/.env (KEY=VALUE, same syntax as .properties) so `mvn spring-boot:run`
+  # picks up JWT_SECRET, DB and MAIL_* settings without sourcing it in the shell.
+  # Real OS environment variables still take precedence. Missing file is fine.
+  config:
+    import: optional:file:.env[.properties]
 
   jackson:
     serialization:
