@@ -5,7 +5,7 @@ const FOCUSABLE_SELECTOR = 'a[href], button:not([disabled]), textarea:not([disab
 
 export function Modal({ open, onClose, title, children, footer, size = 'md' }: {
   open: boolean; onClose: () => void; title?: string; children: React.ReactNode;
-  footer?: React.ReactNode; size?: 'sm' | 'md' | 'lg' | 'xl';
+  footer?: React.ReactNode; size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl';
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
@@ -48,7 +48,7 @@ export function Modal({ open, onClose, title, children, footer, size = 'md' }: {
   }, [open]);
 
   if (!open) return null;
-  const widths = { sm: 'max-w-sm', md: 'max-w-md', lg: 'max-w-2xl', xl: 'max-w-4xl' };
+  const widths = { sm: 'max-w-sm', md: 'max-w-md', lg: 'max-w-2xl', xl: 'max-w-4xl', '2xl': 'max-w-6xl' };
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" onClick={onClose} />

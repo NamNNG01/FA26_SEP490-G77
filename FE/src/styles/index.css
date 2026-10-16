@@ -287,6 +287,7 @@ body {
    is guaranteed in both themes. */
 .dark .hover\:bg-\[\#F3F4F6\]:hover { background-color: var(--accent); }
 .dark .hover\:bg-\[\#F9FAFB\]:hover { background-color: var(--accent); }
+.dark .group:hover .group-hover\:bg-\[\#F9FAFB\] { background-color: var(--accent); }
 .dark .hover\:bg-\[\#E5E7EB\]:hover { background-color: var(--accent); }
 .dark .hover\:text-\[\#374151\]:hover { color: var(--content); }
 .dark .hover\:bg-\[\#EFF6FF\]:hover { background-color: rgba(37, 99, 235, 0.15); }

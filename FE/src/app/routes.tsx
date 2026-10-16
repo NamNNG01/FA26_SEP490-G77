@@ -37,6 +37,8 @@ export const ROUTES = {
   managerQuestions: '/manager/question-bank',
   managerExams: '/manager/exams',
   managerFlashcards: '/manager/flashcards',
+  /** Route pattern — render with flashcardDeckPath(id). */
+  managerFlashcardDetail: '/manager/flashcards/:deckId',
   /** Same pages as the student practice-exam area, mounted under /manager. */
   managerPracticeExams: '/manager/practice-exams',
   managerPracticeExamDetail: '/manager/practice-exams/:examId',
@@ -60,6 +62,11 @@ export function coursePath(slug: string): string {
 /** Concrete practice exam detail URL — e.g. publicExamPath('EX-P-1001') → '/student/public-exam/EX-P-1001'. */
 export function publicExamPath(id: string): string {
   return `${ROUTES.studentPublicExam}/${id}`;
+}
+
+/** Flashcard deck detail URL — e.g. flashcardDeckPath('FD-1024') → '/manager/flashcards/FD-1024'. */
+export function flashcardDeckPath(id: string): string {
+  return `${ROUTES.managerFlashcards}/${encodeURIComponent(id)}`;
 }
 
 /** Same page, manager-scoped URL — e.g. managerPublicExamPath('EX-P-1001') → '/manager/practice-exams/EX-P-1001'. */

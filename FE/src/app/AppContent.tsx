@@ -27,7 +27,7 @@ import { PublicExamsPage, PublicExamDetailPage } from '@/features/public-exam';
 import { CMDashboard } from '@/features/content-manager';
 import { QuestionBankPage } from '@/features/question';
 import { CourseListPage } from '@/features/course';
-import { FlashcardManagementPage } from '@/features/flashcard';
+import { FlashcardManagementPage, FlashcardDeckDetailPage } from '@/features/flashcard';
 import { PublicCoursesPage, PublicCourseDetailPage } from '@/features/catalog';
 import {
   AdminDashboard,
@@ -214,6 +214,7 @@ function AppRoutes() {
         {/* COURSE_MANAGER only — ADMIN is NOT allowed here. */}
         <Route element={<RequireRole roles={ROLE_COURSE_MANAGER_ONLY} />}>
           <Route path={ROUTES.managerFlashcards} element={<FlashcardManagementPage />} />
+          <Route path={ROUTES.managerFlashcardDetail} element={<FlashcardDeckDetailPage />} />
         </Route>
 
         {/* ADMIN — system administration only. */}

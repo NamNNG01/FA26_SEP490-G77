@@ -1,30 +1,29 @@
-import React, { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router';
 import { Button } from '@/components/ui/Button';
-import { Badge, type BadgeVariant } from '@/components/ui/Badge';
+import { Badge } from '@/components/ui/Badge';
 import { Select } from '@/components/ui/Select';
 import { Table } from '@/components/ui/Table';
 import { Dropdown } from '@/components/ui/Dropdown';
-import { Modal } from '@/components/ui/Modal';
-import { Input } from '@/components/ui/Input';
 import { useToast } from '@/components/ui/ToastHost';
 import { SearchInput } from '@/components/common/SearchInput';
 import { Icon } from '@/assets/icons';
 import { useAuth } from '@/auth/authContext';
+import { flashcardDeckPath } from '@/app/routes';
 import {
   MOCK_FLASHCARD_DECKS,
+  setFlashcardDecks,
+  commitDeck,
   FLASHCARD_COURSES,
   DECK_STATUSES,
   courseTitle,
+  moduleTitle,
   formatDeckTimestamp,
   type DeckStatus,
   type FlashcardDeck,
 } from '../mockFlashcardDecks';
-
-const STATUS_VARIANT: Record<DeckStatus, BadgeVariant> = {
-  Published: 'success',
-  Draft: 'warning',
-  Archived: 'default',
-};
+import { STATUS_VARIANT } from '../components/DeckEditor';
+import { CreateDeckModal } from '../components/CreateDeckModal';
 
 type SortKey = 'name' | 'cards' | 'updatedAt';
 
@@ -35,8 +34,8 @@ const csvCell = (v: string | number) => {
 };
 
 function downloadCsv(decks: FlashcardDeck[]) {
-  const header = ['Deck ID', 'Deck Name', 'Course', 'Cards', 'Creator', 'Status', 'Updated'];
-  const rows = decks.map(d => [d.id, d.name, courseTitle(d.courseId), d.cards, d.creator, d.status, d.updatedAt]);
+  const header = ['Deck ID', 'Deck Name', 'Course', 'Module', 'Cards', 'Creator', 'Status', 'Updated'];
+  const rows = decks.map(d => [d.id, d.name, courseTitle(d.courseId), moduleTitle(d.moduleId), d.cards, d.creator, d.status, d.updatedAt]);
   const csv = [header, ...rows].map(r => r.map(csvCell).join(',')).join('\n');
   // BOM so Excel opens UTF-8 names correctly.
   const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
@@ -55,8 +54,11 @@ function downloadCsv(decks: FlashcardDeck[]) {
 export function FlashcardManagementPage() {
   const toast = useToast();
   const { user } = useAuth();
+  const navigate = useNavigate();
 
-  const [decks, setDecks] = useState<FlashcardDeck[]>(MOCK_FLASHCARD_DECKS);
+  const [decks, setDecks] = useState<FlashcardDeck[]>(() => [...MOCK_FLASHCARD_DECKS]);
+  // Write list edits through to the shared store so the detail page sees them.
+  useEffect(() => { setFlashcardDecks(decks); }, [decks]);
   const [query, setQuery] = useState('');
   const [course, setCourse] = useState('all');
   const [status, setStatus] = useState('all');
@@ -104,53 +106,51 @@ export function FlashcardManagementPage() {
     toast.success(`Exported ${rows.length} flashcard deck${rows.length > 1 ? 's' : ''}.`);
   };
 
-  const duplicateDeck = (d: FlashcardDeck) => {
-    const copy: FlashcardDeck = {
-      ...d,
-      id: `FD-${Date.now().toString().slice(-6)}`,
-      name: `${d.name} (Copy)`,
-      status: 'Draft',
-      creator: user?.fullName ?? d.creator,
-      updatedAt: new Date().toISOString().slice(0, 19),
-    };
-    setDecks(prev => [copy, ...prev]);
-    toast.success(`"${d.name}" duplicated as a draft.`);
-  };
-
   const columns = [
     {
       key: 'name', label: 'Deck Name', sortable: true,
       render: (r: Record<string, unknown>) => (
         <div className="min-w-0">
-          <p className="font-semibold text-[#111827] text-[13.5px] truncate" title={r.name as string}>{r.name as string}</p>
+          <button onClick={() => navigate(flashcardDeckPath(r.id as string))} title={r.name as string}
+            className="block max-w-full font-semibold text-[#111827] text-[13.5px] truncate text-left hover:text-[#2563EB] hover:underline">
+            {r.name as string}
+          </button>
           <p className="text-[11px] text-[#9CA3AF]">{r.id as string}</p>
         </div>
       ),
     },
-    { key: 'courseId', label: 'Course', render: (r: Record<string, unknown>) => <span className="block truncate text-[13px] text-[#374151]" title={courseTitle(r.courseId as string)}>{courseTitle(r.courseId as string)}</span> },
+    {
+      key: 'courseId', label: 'Course / Module',
+      render: (r: Record<string, unknown>) => (
+        <div className="min-w-0">
+          <span className="block truncate text-[13px] text-[#374151]" title={courseTitle(r.courseId as string)}>{courseTitle(r.courseId as string)}</span>
+          <span className="block truncate text-[11.5px] text-[#9CA3AF]" title={moduleTitle(r.moduleId as string)}>{moduleTitle(r.moduleId as string)}</span>
+        </div>
+      ),
+    },
     { key: 'cards', label: 'Cards', sortable: true, render: (r: Record<string, unknown>) => <span className="font-semibold text-[#111827]">{r.cards as number}</span> },
     { key: 'creator', label: 'Creator', render: (r: Record<string, unknown>) => <span className="block truncate text-[13px] text-[#374151]">{r.creator as string}</span> },
     { key: 'status', label: 'Status', render: (r: Record<string, unknown>) => <Badge variant={STATUS_VARIANT[r.status as DeckStatus]}>{r.status as string}</Badge> },
     { key: 'updatedAt', label: 'Updated', sortable: true, render: (r: Record<string, unknown>) => <span className="text-[13px] text-[#6B7280] whitespace-nowrap">{formatDeckTimestamp(r.updatedAt as string)}</span> },
     {
+      // Pinned right so the "..." menu stays reachable when the table scrolls sideways.
       key: 'actions', label: '', width: '48px',
+      className: 'sticky right-0 z-[1] bg-white group-hover:bg-[#F9FAFB] transition-colors',
       render: (r: Record<string, unknown>) => {
         const d = r as unknown as FlashcardDeck;
         return (
           <Dropdown
             trigger={<button aria-label={`Actions for ${d.name}`} className="p-1.5 hover:bg-[#F3F4F6] rounded-[6px]"><Icon.MoreHorizontal className="w-4 h-4 text-[#6B7280]" /></button>}
             items={[
-              { label: 'View', icon: <Icon.Eye />, onClick: () => toast.info(`Deck detail for "${d.name}" is coming soon.`) },
-              { label: 'Edit', icon: <Icon.Edit />, onClick: () => toast.info(`Deck editor for "${d.name}" is coming soon.`) },
-              { label: 'Preview', icon: <Icon.Layers />, onClick: () => toast.info(`Preview for "${d.name}" is coming soon.`) },
-              { label: 'Duplicate', icon: <Icon.Copy />, onClick: () => duplicateDeck(d) },
+              { label: 'Detail', icon: <Icon.Eye />, onClick: () => navigate(flashcardDeckPath(d.id)) },
+              // Published decks can be archived; Draft and Archived decks can be published.
               d.status === 'Published'
-                ? { label: 'Unpublish', icon: <Icon.EyeOff />, onClick: () => { updateStatus([d.id], 'Draft'); toast.success(`"${d.name}" moved to Draft.`); } }
-                : { label: 'Publish', icon: <Icon.CheckCircle />, onClick: () => { updateStatus([d.id], 'Published'); toast.success(`"${d.name}" published.`); } },
-              { divider: true } as { label: string; divider: true },
-              d.status === 'Archived'
-                ? { label: 'Restore', icon: <Icon.RefreshCw />, onClick: () => { updateStatus([d.id], 'Draft'); toast.success(`"${d.name}" restored to Draft.`); } }
-                : { label: 'Deactivate', icon: <Icon.X />, danger: true, onClick: () => { updateStatus([d.id], 'Archived'); toast.success(`"${d.name}" archived.`); } },
+                ? { label: 'Archive', icon: <Icon.Package />, danger: true, onClick: () => { updateStatus([d.id], 'Archived'); toast.success(`"${d.name}" archived.`); } }
+                : { label: 'Publish', icon: <Icon.CheckCircle />, onClick: () => {
+                    if (d.cards === 0) { toast.warning(`"${d.name}" has no cards yet — add cards before publishing.`); return; }
+                    updateStatus([d.id], 'Published');
+                    toast.success(`"${d.name}" published.`);
+                  } },
             ]}
           />
         );
@@ -220,67 +220,21 @@ export function FlashcardManagementPage() {
         )}
       </div>
 
-      <CreateDeckModal
-        open={createOpen}
-        onClose={() => setCreateOpen(false)}
-        onCreate={deck => {
-          const created: FlashcardDeck = {
-            ...deck,
-            id: `FD-${Date.now().toString().slice(-6)}`,
-            cards: 0,
-            creator: user?.fullName ?? 'You',
-            updatedAt: new Date().toISOString().slice(0, 19),
-          };
-          setDecks(prev => [created, ...prev]);
-          setCreateOpen(false);
-          toast.success(`Deck "${created.name}" created.`);
-        }}
-      />
+      {createOpen && (
+        <CreateDeckModal
+          onClose={() => setCreateOpen(false)}
+          onCreate={(info, draftCards) => {
+            const id = `FD-${Date.now().toString().slice(-6)}`;
+            const created = commitDeck(
+              { ...info, id, cards: 0, creator: user?.fullName ?? 'You', updatedAt: '' },
+              draftCards.map((c, i) => ({ ...c, id: `${id}-C${i + 1}` })),
+            );
+            setDecks(prev => [created, ...prev]);
+            setCreateOpen(false);
+            toast.success(`Deck "${created.name}" created with ${created.cards} card${created.cards === 1 ? '' : 's'}.`);
+          }}
+        />
+      )}
     </div>
-  );
-}
-
-function CreateDeckModal({ open, onClose, onCreate }: {
-  open: boolean;
-  onClose: () => void;
-  onCreate: (deck: Pick<FlashcardDeck, 'name' | 'courseId' | 'status'>) => void;
-}) {
-  const [name, setName] = useState('');
-  const [courseId, setCourseId] = useState(FLASHCARD_COURSES[0]?.id ?? '');
-  const [status, setStatus] = useState<DeckStatus>('Draft');
-  const [error, setError] = useState('');
-
-  const reset = () => { setName(''); setCourseId(FLASHCARD_COURSES[0]?.id ?? ''); setStatus('Draft'); setError(''); };
-  const close = () => { reset(); onClose(); };
-
-  const submit = (e?: React.FormEvent) => {
-    e?.preventDefault();
-    const trimmed = name.trim();
-    if (!trimmed) { setError('Deck name is required.'); return; }
-    if (trimmed.length > 120) { setError('Deck name must be 120 characters or fewer.'); return; }
-    onCreate({ name: trimmed, courseId, status });
-    reset();
-  };
-
-  return (
-    <Modal
-      open={open}
-      onClose={close}
-      title="New Flashcard Deck"
-      footer={
-        <>
-          <Button variant="outline" onClick={close}>Cancel</Button>
-          <Button onClick={() => submit()}>Create Deck</Button>
-        </>
-      }
-    >
-      <form onSubmit={submit} className="space-y-4">
-        <Input label="Deck name" placeholder="e.g. Gradient Descent Essentials" value={name} autoFocus
-          onChange={e => { setName(e.target.value); if (error) setError(''); }} error={error} />
-        <Select label="Course" value={courseId} onChange={setCourseId} options={FLASHCARD_COURSES.map(c => ({ label: c.title, value: c.id }))} />
-        <Select label="Status" value={status} onChange={v => setStatus(v as DeckStatus)} options={(['Draft', 'Published'] as DeckStatus[]).map(s => ({ label: s, value: s }))} />
-        <p className="text-[12px] text-[#9CA3AF]">You can add cards after the deck is created.</p>
-      </form>
-    </Modal>
   );
 }
