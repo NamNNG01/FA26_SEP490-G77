@@ -1,12 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Button } from '@/components/ui/Button';
-import { Badge, type BadgeVariant } from '@/components/ui/Badge';
+import { Badge } from '@/components/ui/Badge';
 import { Select } from '@/components/ui/Select';
 import { Table } from '@/components/ui/Table';
 import { Dropdown } from '@/components/ui/Dropdown';
-import { Modal } from '@/components/ui/Modal';
-import { Input } from '@/components/ui/Input';
 import { useToast } from '@/components/ui/ToastHost';
 import { SearchInput } from '@/components/common/SearchInput';
 import { Icon } from '@/assets/icons';
@@ -15,19 +13,17 @@ import { flashcardDeckPath } from '@/app/routes';
 import {
   MOCK_FLASHCARD_DECKS,
   setFlashcardDecks,
+  commitDeck,
   FLASHCARD_COURSES,
   DECK_STATUSES,
   courseTitle,
+  moduleTitle,
   formatDeckTimestamp,
   type DeckStatus,
   type FlashcardDeck,
 } from '../mockFlashcardDecks';
-
-const STATUS_VARIANT: Record<DeckStatus, BadgeVariant> = {
-  Published: 'success',
-  Draft: 'warning',
-  Archived: 'default',
-};
+import { STATUS_VARIANT } from '../components/DeckEditor';
+import { CreateDeckModal } from '../components/CreateDeckModal';
 
 type SortKey = 'name' | 'cards' | 'updatedAt';
 
@@ -38,8 +34,8 @@ const csvCell = (v: string | number) => {
 };
 
 function downloadCsv(decks: FlashcardDeck[]) {
-  const header = ['Deck ID', 'Deck Name', 'Course', 'Cards', 'Creator', 'Status', 'Updated'];
-  const rows = decks.map(d => [d.id, d.name, courseTitle(d.courseId), d.cards, d.creator, d.status, d.updatedAt]);
+  const header = ['Deck ID', 'Deck Name', 'Course', 'Module', 'Cards', 'Creator', 'Status', 'Updated'];
+  const rows = decks.map(d => [d.id, d.name, courseTitle(d.courseId), moduleTitle(d.moduleId), d.cards, d.creator, d.status, d.updatedAt]);
   const csv = [header, ...rows].map(r => r.map(csvCell).join(',')).join('\n');
   // BOM so Excel opens UTF-8 names correctly.
   const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
@@ -123,7 +119,15 @@ export function FlashcardManagementPage() {
         </div>
       ),
     },
-    { key: 'courseId', label: 'Course', render: (r: Record<string, unknown>) => <span className="block truncate text-[13px] text-[#374151]" title={courseTitle(r.courseId as string)}>{courseTitle(r.courseId as string)}</span> },
+    {
+      key: 'courseId', label: 'Course / Module',
+      render: (r: Record<string, unknown>) => (
+        <div className="min-w-0">
+          <span className="block truncate text-[13px] text-[#374151]" title={courseTitle(r.courseId as string)}>{courseTitle(r.courseId as string)}</span>
+          <span className="block truncate text-[11.5px] text-[#9CA3AF]" title={moduleTitle(r.moduleId as string)}>{moduleTitle(r.moduleId as string)}</span>
+        </div>
+      ),
+    },
     { key: 'cards', label: 'Cards', sortable: true, render: (r: Record<string, unknown>) => <span className="font-semibold text-[#111827]">{r.cards as number}</span> },
     { key: 'creator', label: 'Creator', render: (r: Record<string, unknown>) => <span className="block truncate text-[13px] text-[#374151]">{r.creator as string}</span> },
     { key: 'status', label: 'Status', render: (r: Record<string, unknown>) => <Badge variant={STATUS_VARIANT[r.status as DeckStatus]}>{r.status as string}</Badge> },
@@ -216,68 +220,21 @@ export function FlashcardManagementPage() {
         )}
       </div>
 
-      <CreateDeckModal
-        open={createOpen}
-        onClose={() => setCreateOpen(false)}
-        onCreate={deck => {
-          const created: FlashcardDeck = {
-            ...deck,
-            id: `FD-${Date.now().toString().slice(-6)}`,
-            cards: 0,
-            description: '',
-            creator: user?.fullName ?? 'You',
-            updatedAt: new Date().toISOString().slice(0, 19),
-          };
-          setDecks(prev => [created, ...prev]);
-          setCreateOpen(false);
-          toast.success(`Deck "${created.name}" created.`);
-        }}
-      />
+      {createOpen && (
+        <CreateDeckModal
+          onClose={() => setCreateOpen(false)}
+          onCreate={(info, draftCards) => {
+            const id = `FD-${Date.now().toString().slice(-6)}`;
+            const created = commitDeck(
+              { ...info, id, cards: 0, creator: user?.fullName ?? 'You', updatedAt: '' },
+              draftCards.map((c, i) => ({ ...c, id: `${id}-C${i + 1}` })),
+            );
+            setDecks(prev => [created, ...prev]);
+            setCreateOpen(false);
+            toast.success(`Deck "${created.name}" created with ${created.cards} card${created.cards === 1 ? '' : 's'}.`);
+          }}
+        />
+      )}
     </div>
-  );
-}
-
-function CreateDeckModal({ open, onClose, onCreate }: {
-  open: boolean;
-  onClose: () => void;
-  onCreate: (deck: Pick<FlashcardDeck, 'name' | 'courseId' | 'status'>) => void;
-}) {
-  const [name, setName] = useState('');
-  const [courseId, setCourseId] = useState(FLASHCARD_COURSES[0]?.id ?? '');
-  const [status, setStatus] = useState<DeckStatus>('Draft');
-  const [error, setError] = useState('');
-
-  const reset = () => { setName(''); setCourseId(FLASHCARD_COURSES[0]?.id ?? ''); setStatus('Draft'); setError(''); };
-  const close = () => { reset(); onClose(); };
-
-  const submit = (e?: React.FormEvent) => {
-    e?.preventDefault();
-    const trimmed = name.trim();
-    if (!trimmed) { setError('Deck name is required.'); return; }
-    if (trimmed.length > 120) { setError('Deck name must be 120 characters or fewer.'); return; }
-    onCreate({ name: trimmed, courseId, status });
-    reset();
-  };
-
-  return (
-    <Modal
-      open={open}
-      onClose={close}
-      title="New Flashcard Deck"
-      footer={
-        <>
-          <Button variant="outline" onClick={close}>Cancel</Button>
-          <Button onClick={() => submit()}>Create Deck</Button>
-        </>
-      }
-    >
-      <form onSubmit={submit} className="space-y-4">
-        <Input label="Deck name" placeholder="e.g. Gradient Descent Essentials" value={name} autoFocus
-          onChange={e => { setName(e.target.value); if (error) setError(''); }} error={error} />
-        <Select label="Course" value={courseId} onChange={setCourseId} options={FLASHCARD_COURSES.map(c => ({ label: c.title, value: c.id }))} />
-        <Select label="Status" value={status} onChange={v => setStatus(v as DeckStatus)} options={(['Draft', 'Published'] as DeckStatus[]).map(s => ({ label: s, value: s }))} />
-        <p className="text-[12px] text-[#9CA3AF]">You can add cards after the deck is created.</p>
-      </form>
-    </Modal>
   );
 }
