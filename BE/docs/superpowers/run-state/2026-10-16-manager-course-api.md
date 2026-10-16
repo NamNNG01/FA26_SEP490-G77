@@ -1,0 +1,28 @@
+# SDD ledger — plan: docs/superpowers/plans/2026-10-16-manager-course-api.md
+
+- Base: 2bd6364; branch: feat/manager-course-api.
+- Approval: user approved backend proposal and requested implementation, documentation and push.
+- Baseline: 66 tests passed in prior review, no source changes since that review.
+- Pre-flight: Task 1 HTTP tests define Task 2 contract; Task 3 retains the same tests on PostgreSQL. Existing dashboard signatures remain stable.
+- Ruling: Work in current checkout on a feature branch without creating an additional worktree; keep user edits outside the task untouched.
+- Ruling: Use native PowerShell commands and this tracked ledger instead of POSIX skill helper scripts on Windows.
+- Ruling: Block course/module deletion for question groups too; groups can lose their only ownership link on cascade/SET NULL.
+- Task 1: complete. Replaced the draft with the approved contract; 20 integration tests failed on absent routes/dashboard scope before implementation.
+- Task 2: complete. Focused tests: 20/20 pass; full H2 suite: 86/86 pass. Includes DTOs, scoped reads/counts, serialized writes, transfer revocation, guarded deletes and PUB-01.
+- Task 3: in progress. Local isolated PostgreSQL 16 container examprep-manager-api-test at 127.0.0.1:55439; never shared Supabase.
+- PostgreSQL RED: missing RESTRICT constraints (0/8), raw module deletion cascaded legacy lessons, Question metadata failed VARCHAR-to-JSON binding. V1–V8 migrations applied successfully.
+- Ruling: Protect legacy lessons in V9 too, because V4 intentionally preserved the lessons table; a FK conflict returns the existing 409 response.
+- Ruling: Add Hibernate JSON JDBC mapping to Question; real PostgreSQL fixtures exposed a pre-existing insert failure, verified by a dedicated JSON round-trip regression.
+- PostgreSQL test correction: compare JSON trees, not insignificant whitespace; PostgreSQL normalizes serialized JSON formatting.
+- PostgreSQL GREEN: 26/26 pass with V9 applied, real foreign-key deletion checks and Hibernate validate, including 3 concurrent-operation tests.
+- Unicode blank-title regression: observed HTTP 201 for U+2003-only title; switched all title constraints to Unicode-aware nonblank patterns. Included in final full-suite run.
+- Remote check: origin/main advanced to 9d81eb6 with frontend-only changes; backend paths have no upstream overlap.
+- Final review: dispatched a read-only fresh-context reviewer via requesting-code-review skill; awaiting findings.
+- Final review: no critical issues or deferred minors; one important issue: dashboard recent-course studentCount counted rows, not distinct students. Regression observed 2 instead of 1; changed COUNT to COUNT(DISTINCT e.user.userId).
+- Final: Ruling: Production migration duration/live data remains unverified; only isolated PostgreSQL was authorized for verification. Deployment must account for table locks.
+- Final: Ruling: Decimal-to-integer JSON coercion is a correctness issue at the new API trust boundary, not a deferred enhancement. HTTP regression observed orderIndex 1.9 accepted as 1 (201); disabled ACCEPT_FLOAT_AS_INT. Existing auth/profile DTOs have no integer fields.
+- Final: Ruling: Reviewer's independent execution was intentionally omitted to avoid concurrent test writers; root reads and verifies actual test output.
+- Final fixes GREEN on a second empty local PostgreSQL database: 31/31 pass, including distinct dashboard counts and rejected fractional IDs/orderIndex. Fresh V1–V9 and Hibernate validate passed; earlier local database also verified V8→V9 upgrade.
+- Final: fixed dashboard distinct-student count and fractional ID/order coercion; both regressions observed RED, PostgreSQL fresh GREEN, then full suite GREEN.
+- Final verification: `mvn -o -DpostgresTests=true package` → 122 tests, zero failures/errors/skips, BUILD SUCCESS and executable JAR packaged. `git diff --cached --check` passes.
+- Task 3: implementation and verification complete; requested commit/push follows. No frontend or `.env.example` edits are staged.

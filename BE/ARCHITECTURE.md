@@ -194,6 +194,8 @@ Layering flows strictly downward: `controllers → services → repositories`. F
 | `/api/v1/dashboard/admin` | GET | `ADMIN` | DASH-03: Admin Dashboard |
 
 ### 5.3 Endpoint Roadmap
+
+Course/module administration C-04–C-14 and public category list PUB-01 are defined in [function.md](function.md). Primary-or-assigned manager scope also applies to manager dashboard queries. Only Admin creates/publishes/deletes courses; protected content causes DELETE to return 409. See [backend handover](docs/manager-course-api.md) for migration V9 and verification instructions.
 All endpoints from the agreed API contract are now implemented end-to-end (AUTH-01..08, USER-01/02, DASH-01/02/03 — see §5.2), including Gmail delivery for AUTH-06 (configure `MAIL_ENABLED=true` with a Gmail App Password; see `.env.example`).
 
 ---

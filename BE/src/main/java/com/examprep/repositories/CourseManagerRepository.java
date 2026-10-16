@@ -6,5 +6,8 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface CourseManagerRepository extends JpaRepository<CourseManager, Long> {
+    boolean existsByCourseCourseIdAndUserUserId(Long courseId, Long userId);
+    void deleteByCourseCourseIdAndUserUserId(Long courseId, Long userId);
+    void deleteByCourseCourseId(Long courseId);
 }
 

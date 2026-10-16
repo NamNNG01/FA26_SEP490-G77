@@ -2,6 +2,8 @@ package com.examprep.entities;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
@@ -37,6 +39,7 @@ public class Question implements Serializable {
     @Column(name = "content", nullable = false)
     private String content;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "question_metadata", columnDefinition = "JSON")
     private String questionMetadata;
 

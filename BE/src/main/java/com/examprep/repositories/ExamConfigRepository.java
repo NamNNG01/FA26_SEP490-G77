@@ -6,5 +6,7 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface ExamConfigRepository extends JpaRepository<ExamConfig, Long> {
+    boolean existsByModuleModuleId(Long moduleId);
+    boolean existsByModuleCourseCourseId(Long courseId);
 }
 
