@@ -50,11 +50,9 @@ export function DashboardLayout() {
 
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar (mounted once; persists across route changes) */}
-        <aside
-          className={`bg-white border-r border-[#F3F4F6] flex flex-col flex-shrink-0 overflow-y-auto transition-all duration-200 ${
-            collapsed ? 'w-[clamp(3.5rem,4vw,4rem)]' : 'w-[clamp(13.75rem,18vw,17.5rem)]'
-          }`}
-        >
+        {/* No width of its own: it hugs the Sidebar (w-56 / w-16), so the
+            panel is exactly as wide as a hovered menu item — no dead space. */}
+        <aside className="bg-white border-r border-[#F3F4F6] flex flex-col flex-shrink-0 overflow-y-auto overflow-x-hidden">
           <Sidebar
             items={items}
             collapsed={collapsed}
@@ -64,7 +62,9 @@ export function DashboardLayout() {
 
         {/* Main content — swapped by the router, layout stays mounted */}
         <main className="flex-1 overflow-y-auto">
-          <div className="p-[clamp(1rem,2vw,1.5rem)]">
+          {/* .dashboard-content pins the gap under the header to 15px for every
+              page, overriding each page's own top padding (styles/index.css). */}
+          <div className="dashboard-content p-[clamp(1rem,2vw,1.5rem)]">
             <Outlet />
           </div>
         </main>

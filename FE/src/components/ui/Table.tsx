@@ -24,6 +24,8 @@ export function Table({
   unit,
   initialPage,
   onPageChange,
+  selectedKeys,
+  onSelectionChange,
 }: {
   columns: TableColumn[];
   data: Record<string, unknown>[];
@@ -41,10 +43,20 @@ export function Table({
   initialPage?: number;
   /** Notifies the parent of page changes so state can be preserved/restored. */
   onPageChange?: (page: number) => void;
+  /** Controlled selection (row ids). Omit to let the table track selection itself. */
+  selectedKeys?: Set<string>;
+  /** Notifies the parent of selection changes, e.g. to drive bulk actions. */
+  onSelectionChange?: (keys: Set<string>) => void;
 }) {
   const { page, total, pageItems, setPage } = usePagination(data, { perPage, resetKey, initialPage, onPageChange });
   const start = (page - 1) * perPage;
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [internalSelected, setInternalSelected] = useState<Set<string>>(new Set());
+  const selected = selectedKeys ?? internalSelected;
+  const setSelected = (update: (prev: Set<string>) => Set<string>) => {
+    const next = update(selected);
+    if (!selectedKeys) setInternalSelected(next);
+    onSelectionChange?.(next);
+  };
 
   // Stable row identity across pages: prefer row.id, fall back to the global index.
   const rowKeyOf = (row: Record<string, unknown>, i: number) => (row.id != null ? String(row.id) : `#${start + i}`);
@@ -84,7 +96,8 @@ export function Table({
                 <th className="w-10 px-2.5 sm:px-3 lg:px-4 py-3">
                   <Checkbox checked={allChecked} indeterminate={someChecked && !allChecked} onChange={toggleAll} />
                 </th>
-              )}                  {columns.map(col => (
+              )}
+              {columns.map(col => (
                     <th key={col.key} style={{ width: col.width }} onClick={() => col.sortable && onSort?.(col.key)}
                       className={`px-2.5 sm:px-3 lg:px-4 py-3 text-left text-[12px] font-semibold text-[#6B7280] uppercase tracking-wide whitespace-nowrap ${col.className ?? ''} ${col.sortable ? 'cursor-pointer hover:text-[#374151] select-none' : ''}`}>
                     <div className="flex items-center gap-1">
