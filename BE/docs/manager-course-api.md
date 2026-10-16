@@ -2,6 +2,8 @@
 
 Authoritative contract: [function.md](../function.md). Implements C-04–C-14 and PUB-01, with no frontend changes.
 
+Published implementation: commit `7326307` on [`feat/manager-course-api`](https://github.com/NamNNG01/FA26_SEP490-G77/tree/feat/manager-course-api/BE). This feature branch is ready for integration; it has not been merged into main or deployed to Supabase.
+
 ## Architecture
 
 Controllers consume validated DTOs and delegate to CourseService. CourseServiceImpl owns transactions and business rules. Repositories implement scoped/paged reads and grouped counts. Entities never appear in API responses.

@@ -54,4 +54,4 @@
 - [x] Add RESTRICT constraints to prevent cascades bypassing service deletion guards.
 - [x] Validate fresh migrations and actual FK deletion protection on PostgreSQL when a local instance can be provisioned.
 - [x] Run a fresh-context final review and address material findings with regression tests.
-- [ ] Record verification and limits in docs, commit only task files, push feature branch, report remote link.
+- [x] Record verification and limits in docs, commit only task files, push feature branch, report remote link.

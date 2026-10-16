@@ -25,4 +25,6 @@
 - Final fixes GREEN on a second empty local PostgreSQL database: 31/31 pass, including distinct dashboard counts and rejected fractional IDs/orderIndex. Fresh V1–V9 and Hibernate validate passed; earlier local database also verified V8→V9 upgrade.
 - Final: fixed dashboard distinct-student count and fractional ID/order coercion; both regressions observed RED, PostgreSQL fresh GREEN, then full suite GREEN.
 - Final verification: `mvn -o -DpostgresTests=true package` → 122 tests, zero failures/errors/skips, BUILD SUCCESS and executable JAR packaged. `git diff --cached --check` passes.
-- Task 3: implementation and verification complete; requested commit/push follows. No frontend or `.env.example` edits are staged.
+- Task 3: complete. Implementation commit `73263076884e4e3f125882dd40606fe3af6d6700` pushed to `origin/feat/manager-course-api`; frontend and `.env.example` excluded.
+- Remote branch: https://github.com/NamNNG01/FA26_SEP490-G77/tree/feat/manager-course-api/BE
+- Final source verification is unchanged by the documentation-only publication record. No shared database migration or main-branch merge performed.
