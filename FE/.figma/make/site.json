@@ -1,5 +1,9 @@
 {
+  "title": "PrepExam",
   "description": "An AI-powered exam platform offering students, content managers, and admins seamless course management, exam creation, and performance tracking in a clean, user-friendly interface.",
+  "icons": {
+    "icon": "/favicon.svg"
+  },
   "robots": {
     "index": false
   },

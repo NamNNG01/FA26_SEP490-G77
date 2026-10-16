@@ -36,6 +36,7 @@ export const ROUTES = {
   managerCourses: '/manager/courses',
   managerQuestions: '/manager/question-bank',
   managerExams: '/manager/exams',
+  managerFlashcards: '/manager/flashcards',
   /** Same pages as the student practice-exam area, mounted under /manager. */
   managerPracticeExams: '/manager/practice-exams',
   managerPracticeExamDetail: '/manager/practice-exams/:examId',
@@ -110,6 +111,7 @@ export const menuByRole: Record<string, MenuItem[]> = {
     { id: 'manager-courses', title: 'Courses', icon: <Icon.Book className="w-4 h-4" />, path: ROUTES.managerCourses },
     { id: 'manager-questions', title: 'Question Bank', icon: <Icon.Database className="w-4 h-4" />, path: ROUTES.managerQuestions },
     { id: 'manager-exams', title: 'Exams', icon: <Icon.ClipboardList className="w-4 h-4" />, path: ROUTES.managerExams },
+    { id: 'manager-flashcards', title: 'Flashcards', icon: <Icon.Layers className="w-4 h-4" />, path: ROUTES.managerFlashcards },
     { id: 'manager-practice-exams', title: 'Public Exam', icon: <Icon.Zap className="w-4 h-4" />, path: ROUTES.managerPracticeExams },
   ],
   CONTENT_MANAGER: [
@@ -117,6 +119,7 @@ export const menuByRole: Record<string, MenuItem[]> = {
     { id: 'manager-courses', title: 'Courses', icon: <Icon.Book className="w-4 h-4" />, path: ROUTES.managerCourses },
     { id: 'manager-questions', title: 'Question Bank', icon: <Icon.Database className="w-4 h-4" />, path: ROUTES.managerQuestions },
     { id: 'manager-exams', title: 'Exams', icon: <Icon.ClipboardList className="w-4 h-4" />, path: ROUTES.managerExams },
+    { id: 'manager-flashcards', title: 'Flashcards', icon: <Icon.Layers className="w-4 h-4" />, path: ROUTES.managerFlashcards },
     { id: 'manager-practice-exams', title: 'Public Exam', icon: <Icon.Zap className="w-4 h-4" />, path: ROUTES.managerPracticeExams },
   ],
   ADMIN: [

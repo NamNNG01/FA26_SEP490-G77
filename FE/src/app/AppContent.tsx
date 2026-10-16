@@ -7,7 +7,7 @@ import {
   useSearchParams,
 } from 'react-router';
 import { useAuth, landingPathForRole } from '@/auth/authContext';
-import { RequireRole, ROLE_ADMIN, ROLE_MANAGER, ROLE_STUDENT } from '@/auth/RequireRole';
+import { RequireRole, ROLE_ADMIN, ROLE_MANAGER, ROLE_STUDENT, ROLE_COURSE_MANAGER_ONLY } from '@/auth/RequireRole';
 import { ROUTES } from '@/app/routes';
 import { safeRedirect } from '@/hooks/useRequireAuth';
 import { AuthLayout } from '@/layouts/AuthLayout';
@@ -27,6 +27,7 @@ import { PublicExamsPage, PublicExamDetailPage } from '@/features/public-exam';
 import { CMDashboard } from '@/features/content-manager';
 import { QuestionBankPage } from '@/features/question';
 import { CourseListPage } from '@/features/course';
+import { FlashcardManagementPage } from '@/features/flashcard';
 import { PublicCoursesPage, PublicCourseDetailPage } from '@/features/catalog';
 import {
   AdminDashboard,
@@ -208,6 +209,11 @@ function AppRoutes() {
           {/* Same shared components as the student practice-exam area. */}
           <Route path={ROUTES.managerPracticeExams} element={<PublicExamsPage />} />
           <Route path={ROUTES.managerPracticeExamDetail} element={<PublicExamDetailPage />} />
+        </Route>
+
+        {/* COURSE_MANAGER only — ADMIN is NOT allowed here. */}
+        <Route element={<RequireRole roles={ROLE_COURSE_MANAGER_ONLY} />}>
+          <Route path={ROUTES.managerFlashcards} element={<FlashcardManagementPage />} />
         </Route>
 
         {/* ADMIN — system administration only. */}
