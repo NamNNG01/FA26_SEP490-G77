@@ -112,7 +112,7 @@ export function Table({
             {pageItems.map((row, i) => {
               const key = rowKeyOf(row, i);
               return (
-                <tr key={key} className="border-b border-[#F9FAFB] hover:bg-[#F9FAFB] transition-colors">
+                <tr key={key} className="group border-b border-[#F9FAFB] hover:bg-[#F9FAFB] transition-colors">
                   {selectable && (
                     <td className="px-2.5 sm:px-3 lg:px-4 py-3">
                       <Checkbox checked={selected.has(key)} onChange={() => toggleRow(key)} />

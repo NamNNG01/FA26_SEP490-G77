@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router';
 import { Button } from '@/components/ui/Button';
 import { Badge, type BadgeVariant } from '@/components/ui/Badge';
 import { Select } from '@/components/ui/Select';
@@ -10,8 +11,10 @@ import { useToast } from '@/components/ui/ToastHost';
 import { SearchInput } from '@/components/common/SearchInput';
 import { Icon } from '@/assets/icons';
 import { useAuth } from '@/auth/authContext';
+import { flashcardDeckPath } from '@/app/routes';
 import {
   MOCK_FLASHCARD_DECKS,
+  setFlashcardDecks,
   FLASHCARD_COURSES,
   DECK_STATUSES,
   courseTitle,
@@ -55,8 +58,11 @@ function downloadCsv(decks: FlashcardDeck[]) {
 export function FlashcardManagementPage() {
   const toast = useToast();
   const { user } = useAuth();
+  const navigate = useNavigate();
 
-  const [decks, setDecks] = useState<FlashcardDeck[]>(MOCK_FLASHCARD_DECKS);
+  const [decks, setDecks] = useState<FlashcardDeck[]>(() => [...MOCK_FLASHCARD_DECKS]);
+  // Write list edits through to the shared store so the detail page sees them.
+  useEffect(() => { setFlashcardDecks(decks); }, [decks]);
   const [query, setQuery] = useState('');
   const [course, setCourse] = useState('all');
   const [status, setStatus] = useState('all');
@@ -104,25 +110,15 @@ export function FlashcardManagementPage() {
     toast.success(`Exported ${rows.length} flashcard deck${rows.length > 1 ? 's' : ''}.`);
   };
 
-  const duplicateDeck = (d: FlashcardDeck) => {
-    const copy: FlashcardDeck = {
-      ...d,
-      id: `FD-${Date.now().toString().slice(-6)}`,
-      name: `${d.name} (Copy)`,
-      status: 'Draft',
-      creator: user?.fullName ?? d.creator,
-      updatedAt: new Date().toISOString().slice(0, 19),
-    };
-    setDecks(prev => [copy, ...prev]);
-    toast.success(`"${d.name}" duplicated as a draft.`);
-  };
-
   const columns = [
     {
       key: 'name', label: 'Deck Name', sortable: true,
       render: (r: Record<string, unknown>) => (
         <div className="min-w-0">
-          <p className="font-semibold text-[#111827] text-[13.5px] truncate" title={r.name as string}>{r.name as string}</p>
+          <button onClick={() => navigate(flashcardDeckPath(r.id as string))} title={r.name as string}
+            className="block max-w-full font-semibold text-[#111827] text-[13.5px] truncate text-left hover:text-[#2563EB] hover:underline">
+            {r.name as string}
+          </button>
           <p className="text-[11px] text-[#9CA3AF]">{r.id as string}</p>
         </div>
       ),
@@ -133,24 +129,24 @@ export function FlashcardManagementPage() {
     { key: 'status', label: 'Status', render: (r: Record<string, unknown>) => <Badge variant={STATUS_VARIANT[r.status as DeckStatus]}>{r.status as string}</Badge> },
     { key: 'updatedAt', label: 'Updated', sortable: true, render: (r: Record<string, unknown>) => <span className="text-[13px] text-[#6B7280] whitespace-nowrap">{formatDeckTimestamp(r.updatedAt as string)}</span> },
     {
+      // Pinned right so the "..." menu stays reachable when the table scrolls sideways.
       key: 'actions', label: '', width: '48px',
+      className: 'sticky right-0 z-[1] bg-white group-hover:bg-[#F9FAFB] transition-colors',
       render: (r: Record<string, unknown>) => {
         const d = r as unknown as FlashcardDeck;
         return (
           <Dropdown
             trigger={<button aria-label={`Actions for ${d.name}`} className="p-1.5 hover:bg-[#F3F4F6] rounded-[6px]"><Icon.MoreHorizontal className="w-4 h-4 text-[#6B7280]" /></button>}
             items={[
-              { label: 'View', icon: <Icon.Eye />, onClick: () => toast.info(`Deck detail for "${d.name}" is coming soon.`) },
-              { label: 'Edit', icon: <Icon.Edit />, onClick: () => toast.info(`Deck editor for "${d.name}" is coming soon.`) },
-              { label: 'Preview', icon: <Icon.Layers />, onClick: () => toast.info(`Preview for "${d.name}" is coming soon.`) },
-              { label: 'Duplicate', icon: <Icon.Copy />, onClick: () => duplicateDeck(d) },
+              { label: 'Detail', icon: <Icon.Eye />, onClick: () => navigate(flashcardDeckPath(d.id)) },
+              // Published decks can be archived; Draft and Archived decks can be published.
               d.status === 'Published'
-                ? { label: 'Unpublish', icon: <Icon.EyeOff />, onClick: () => { updateStatus([d.id], 'Draft'); toast.success(`"${d.name}" moved to Draft.`); } }
-                : { label: 'Publish', icon: <Icon.CheckCircle />, onClick: () => { updateStatus([d.id], 'Published'); toast.success(`"${d.name}" published.`); } },
-              { divider: true } as { label: string; divider: true },
-              d.status === 'Archived'
-                ? { label: 'Restore', icon: <Icon.RefreshCw />, onClick: () => { updateStatus([d.id], 'Draft'); toast.success(`"${d.name}" restored to Draft.`); } }
-                : { label: 'Deactivate', icon: <Icon.X />, danger: true, onClick: () => { updateStatus([d.id], 'Archived'); toast.success(`"${d.name}" archived.`); } },
+                ? { label: 'Archive', icon: <Icon.Package />, danger: true, onClick: () => { updateStatus([d.id], 'Archived'); toast.success(`"${d.name}" archived.`); } }
+                : { label: 'Publish', icon: <Icon.CheckCircle />, onClick: () => {
+                    if (d.cards === 0) { toast.warning(`"${d.name}" has no cards yet — add cards before publishing.`); return; }
+                    updateStatus([d.id], 'Published');
+                    toast.success(`"${d.name}" published.`);
+                  } },
             ]}
           />
         );
@@ -228,6 +224,7 @@ export function FlashcardManagementPage() {
             ...deck,
             id: `FD-${Date.now().toString().slice(-6)}`,
             cards: 0,
+            description: '',
             creator: user?.fullName ?? 'You',
             updatedAt: new Date().toISOString().slice(0, 19),
           };
