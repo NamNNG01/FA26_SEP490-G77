@@ -31,7 +31,7 @@ export function HeroSection() {
   const requireAuth = useRequireAuth();
 
   return (
-    <section className="relative overflow-hidden border-b border-[#F3F4F6] dark:border-[#1F2937]">
+    <section className="relative overflow-hidden border-b border-line-soft">
       {/* Faint ruled-paper texture — a nod to an answer sheet, not a glow blob. */}
       <div
         aria-hidden
@@ -43,19 +43,19 @@ export function HeroSection() {
           <div className="grid grid-cols-[repeat(auto-fit,minmax(350px,1fr))] items-center gap-[clamp(32px,4vw,64px)] py-[clamp(3rem,7vw,6rem)]">
             <div className="min-w-0 text-center min-[900px]:text-left">
               <div>
-                <p className="text-[12.5px] font-semibold tracking-[0.08em] text-[#0D7C6C] uppercase dark:text-[#6FCBB6]">
+                <p className="text-xs font-semibold tracking-[0.08em] text-brand-ink uppercase">
                   {heroContent.eyebrow}
                 </p>
               </div>
 
               <div>
-                <h1 className="mt-4 text-[clamp(2.4rem,1.4rem+4vw,4.5rem)] leading-[1.02] font-bold text-[#111827] dark:text-[#F9FAFB]">
+                <h1 className="mt-4 text-[clamp(2.4rem,1.4rem+4vw,4.5rem)] leading-[1.02] font-bold text-content">
                   {heroContent.title}
                 </h1>
               </div>
 
               <div>
-                <p className="mx-auto mt-[clamp(1.25rem,2.5vw,1.75rem)] max-w-[min(560px,100%)] text-[clamp(1rem,0.95rem+0.3vw,1.125rem)] leading-relaxed text-[#4B5563] min-[900px]:mx-0 dark:text-[#D1D5DB]">
+                <p className="mx-auto mt-[clamp(1.25rem,2.5vw,1.75rem)] max-w-[min(560px,100%)] text-[clamp(1rem,0.95rem+0.3vw,1.125rem)] leading-relaxed text-content-muted min-[900px]:mx-0">
                   {heroContent.subtitle}
                 </p>
               </div>
@@ -82,8 +82,8 @@ export function HeroSection() {
                   {catalogStats.map((stat) => (
                     // Label first in the DOM (dt → dd), number shown on top visually.
                     <div key={stat.label} className="flex flex-col-reverse text-left">
-                      <dt className="mt-1.5 text-[13px] text-[#6B7280] dark:text-[#9CA3AF]">{stat.label}</dt>
-                      <dd className="font-[family-name:var(--font-display)] text-[26px] leading-none font-bold text-[#111827] dark:text-[#F9FAFB]">
+                      <dt className="mt-1.5 text-sm text-content-soft">{stat.label}</dt>
+                      <dd className="font-[family-name:var(--font-display)] text-2xl leading-none font-bold text-content">
                         {stat.value}
                       </dd>
                     </div>

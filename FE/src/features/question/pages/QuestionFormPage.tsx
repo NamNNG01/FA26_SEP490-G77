@@ -95,7 +95,7 @@ export function QuestionFormPage({ mode, onNavigate }: { mode: 'create' | 'edit'
     <div className={pageCls}>
       <Breadcrumb items={[{ label: 'Question', onClick: () => onNavigate?.('question-bank') }, { label: isEdit ? 'Edit Question' : 'New Questions' }]} />
       <div className="flex items-center justify-between">
-        <h2 className="text-[22px] font-bold text-[#111827]">{isEdit ? 'Edit Question' : 'New Questions'}</h2>
+        <h2 className="text-xl font-bold text-content">{isEdit ? 'Edit Question' : 'New Questions'}</h2>
       </div>
 
       {saved && (
@@ -110,8 +110,8 @@ export function QuestionFormPage({ mode, onNavigate }: { mode: 'create' | 'edit'
         <div className="lg:col-span-4 space-y-3 lg:min-h-0 lg:overflow-y-auto lg:pr-2">
           {questions.length === 0 && (
             <div className="card p-10 text-center">
-              <p className="text-[14px] font-medium text-[#374151]">No questions yet</p>
-              <p className="text-[13px] text-[#9CA3AF] mt-1">Use "Add Question" or import a PDF to begin.</p>
+              <p className="text-base font-medium text-content-secondary">No questions yet</p>
+              <p className="text-sm text-content-subtle mt-1">Use "Add Question" or import a PDF to begin.</p>
             </div>
           )}
           {questions.map((q, i) => (

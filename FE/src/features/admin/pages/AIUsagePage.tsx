@@ -43,8 +43,8 @@ export function AIUsagePage() {
         <div className="xl:col-span-2 space-y-5">
           <div className="card p-5">
             <div className="flex items-center justify-between mb-5">
-              <h4 className="text-[15px] font-semibold text-[#111827]">Daily Token Usage (Millions)</h4>
-              <div className="text-[12px] text-[#9CA3AF]">Last 7 days</div>
+              <h4 className="text-lg font-semibold text-content">Daily Token Usage (Millions)</h4>
+              <div className="text-xs text-content-subtle">Last 7 days</div>
             </div>
             <div className="flex items-end gap-3 h-40">
               {dailyData.map(d => (
@@ -52,7 +52,7 @@ export function AIUsagePage() {
                   <div className="w-full h-32 flex items-end">
                     <div className="w-full rounded-t-[4px] chart-bar" style={{ height: `${(d.tokens / maxTokens) * 100}%`, background: '#7C3AED', minHeight: 4 }} />
                   </div>
-                  <span className="text-[11px] text-[#9CA3AF]">{d.day}</span>
+                  <span className="text-2xs text-content-subtle">{d.day}</span>
                 </div>
               ))}
             </div>
@@ -61,18 +61,18 @@ export function AIUsagePage() {
 
         <div className="space-y-4">
           <div className="card p-5">
-            <h4 className="text-[14px] font-semibold text-[#111827] mb-4">Monthly Quota Utilization</h4>
+            <h4 className="text-base font-semibold text-content mb-4">Monthly Quota Utilization</h4>
             <Progress value={78} label="Token quota" color="#7C3AED" />
-            <p className="text-[12px] text-[#9CA3AF] mt-3">78.2M of 100M tokens used. Resets in 6 days.</p>
+            <p className="text-xs text-content-subtle mt-3">78.2M of 100M tokens used. Resets in 6 days.</p>
           </div>
           <div className="card overflow-hidden">
-            <div className="px-5 py-4 border-b border-[#F3F4F6]"><h4 className="text-[14px] font-semibold text-[#111827]">Model Health</h4></div>
-            <div className="divide-y divide-[#F9FAFB]">
+            <div className="px-5 py-4 border-b border-line-soft"><h4 className="text-base font-semibold text-content">Model Health</h4></div>
+            <div className="divide-y divide-line-faint">
               {['certifyai-v3.2', 'embed-v2'].map(model => (
                 <div key={model} className="flex items-center gap-3 px-5 py-3">
-                  <div className="w-2 h-2 rounded-full bg-[#16A34A] flex-shrink-0" />
-                  <p className="text-[13px] font-medium text-[#374151] flex-1">{model}</p>
-                  <span className="text-[12px] text-[#9CA3AF]">Operational</span>
+                  <div className="w-2 h-2 rounded-full bg-success-solid flex-shrink-0" />
+                  <p className="text-sm font-medium text-content-secondary flex-1">{model}</p>
+                  <span className="text-xs text-content-subtle">Operational</span>
                 </div>
               ))}
             </div>
@@ -81,21 +81,21 @@ export function AIUsagePage() {
       </div>
 
       <div className="card overflow-hidden">
-        <div className="px-5 py-4 border-b border-[#F3F4F6]"><h4 className="text-[15px] font-semibold text-[#111827]">Usage by Feature</h4></div>
-        <div className="divide-y divide-[#F9FAFB]">
+        <div className="px-5 py-4 border-b border-line-soft"><h4 className="text-lg font-semibold text-content">Usage by Feature</h4></div>
+        <div className="divide-y divide-line-faint">
           {usageData.map((u, i) => (
-            <div key={i} className="flex items-center gap-4 px-5 py-3.5 hover:bg-[#F9FAFB]">
+            <div key={i} className="flex items-center gap-4 px-5 py-3.5 hover:bg-surface-hover">
               <div className="w-2 h-8 rounded-full flex-shrink-0" style={{ background: u.color }} />
               <div className="w-44">
-                <p className="text-[13.5px] font-medium text-[#374151]">{u.type}</p>
-                <p className="text-[11px] text-[#9CA3AF]">{u.model}</p>
+                <p className="text-sm font-medium text-content-secondary">{u.type}</p>
+                <p className="text-2xs text-content-subtle">{u.model}</p>
               </div>
               <div className="flex-1"><Progress value={u.quota} size="sm" /></div>
               <div className="w-24 text-right">
-                <p className="text-[13px] font-semibold text-[#374151]">{u.tokens}</p>
-                <p className="text-[11px] text-[#9CA3AF]">{u.requests.toLocaleString()} calls</p>
+                <p className="text-sm font-semibold text-content-secondary">{u.tokens}</p>
+                <p className="text-2xs text-content-subtle">{u.requests.toLocaleString()} calls</p>
               </div>
-              <span className="text-[13px] font-medium text-[#059669] w-20 text-right">{u.cost}</span>
+              <span className="text-sm font-medium text-success-strong w-20 text-right">{u.cost}</span>
               <Badge variant={u.status === 'Healthy' ? 'success' : 'warning'}>{u.status}</Badge>
             </div>
           ))}

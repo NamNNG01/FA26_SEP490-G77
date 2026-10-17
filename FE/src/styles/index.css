@@ -34,6 +34,18 @@
   /* Display face for page/section headings — gives the product a voice of
      its own instead of Inter-everywhere. Body copy stays on Inter. */
   --font-display: 'Space Grotesk', 'Inter', system-ui, sans-serif;
+  /* Type scale — the only font sizes the UI uses. Tailwind's default
+     text-* steps are cleared so nobody reaches for an off-scale size, and
+     no line-height is bundled: elements keep inheriting it (or set
+     leading-*), exactly as the old text-[Npx] utilities did. */
+  --text-*: initial;
+  --text-2xs: 11px;  /* micro labels, badges, table meta */
+  --text-xs: 12px;   /* captions, helper text */
+  --text-sm: 13px;   /* default UI text: table cells, nav, form labels */
+  --text-base: 14px; /* body copy, inputs */
+  --text-lg: 16px;   /* card titles, large buttons */
+  --text-xl: 20px;   /* page titles, section headings */
+  --text-2xl: 28px;  /* stat numbers, display figures */
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 14px;
@@ -54,6 +66,43 @@
   --color-content-muted: var(--content-muted);
   --color-content-subtle: var(--content-subtle);
   --color-line: var(--line);
+  /* Extended neutral ladder. Each name is a (light, dark) pair defined in
+     :root / .dark below, so components never need a dark: variant. */
+  --color-surface-muted: var(--surface-muted);
+  --color-surface-hover: var(--surface-hover);
+  --color-surface-pressed: var(--surface-pressed);
+  --color-surface-pressed-strong: var(--surface-pressed-strong);
+  --color-surface-brand: var(--surface-brand);
+  --color-surface-violet: var(--surface-violet);
+  --color-fill: var(--fill);
+  --color-fill-strong: var(--fill-strong);
+  --color-fill-inverse: var(--fill-inverse);
+  --color-content-secondary: var(--content-secondary);
+  --color-content-soft: var(--content-soft);
+  --color-content-faint: var(--content-faint);
+  --color-content-ghost: var(--content-ghost);
+  --color-line-soft: var(--line-soft);
+  --color-line-faint: var(--line-faint);
+  --color-line-strong: var(--line-strong);
+  /* Brand ink: jade text/borders that lift to a lighter jade in dark mode. */
+  --color-brand-ink: var(--brand-ink);
+  --color-brand-ink-strong: var(--brand-ink-strong);
+  --color-brand-ink-hover: var(--brand-ink-hover);
+  --color-brand-line: var(--brand-line);
+  --color-primary-hover-tint: var(--primary-hover-tint);
+  /* Status ink/lines — stronger text and the pastel borders around tints. */
+  --color-success-strong: var(--success-strong);
+  --color-success-line: var(--success-line);
+  --color-warning-strong: var(--warning-strong);
+  --color-warning-line: var(--warning-line);
+  --color-danger-strong: var(--danger-strong);
+  --color-danger-line: var(--danger-line);
+  --color-purple: var(--purple);
+  --color-purple-light: var(--purple-light);
+  /* Solid status fills (buttons, dots) — the same in both themes. */
+  --color-success-solid: #16A34A;
+  --color-danger-solid: #DC2626;
+  --color-danger-solid-hover: #B91C1C;
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-brand: #0D7C6C;
@@ -66,6 +115,9 @@
   --color-brand-700: #0A6458;
   --color-brand-800: #0B5047;
   --color-brand-900: #0F3B35;
+  --color-brand-950: #082B26;
+  /* Star-rating gold. */
+  --color-rating: #F59E0B;
   /* Warm accent, used sparingly (highlights, the exam-day marker). */
   --color-highlight: #F2A93B;
 }
@@ -89,7 +141,35 @@
   --danger-light: #FEF2F2;
   --info: #0891B2;
   --info-light: #ECFEFF;
+  --purple: #7C3AED;
   --purple-light: #F5F3FF;
+  --surface-muted: #F3F4F6;
+  --surface-hover: #F9FAFB;
+  --surface-pressed: #E5E7EB;
+  --surface-pressed-strong: #D1D5DB;
+  --surface-brand: #ECF7F4;
+  --surface-violet: #F5F3FF;
+  --fill: #E5E7EB;
+  --fill-strong: #D1D5DB;
+  --fill-inverse: #111827;
+  --content-secondary: #374151;
+  --content-soft: #6B7280;
+  --content-faint: #D1D5DB;
+  --content-ghost: #F3F4F6;
+  --line-soft: #F3F4F6;
+  --line-faint: #F9FAFB;
+  --line-strong: #D1D5DB;
+  --brand-ink: #0D7C6C;
+  --brand-ink-strong: #0B5047;
+  --brand-ink-hover: #0A6458;
+  --brand-line: #A7DCCF;
+  --primary-hover-tint: #ECF7F4;
+  --success-strong: #15803D;
+  --success-line: #BBF7D0;
+  --warning-strong: #92400E;
+  --warning-line: #FDE68A;
+  --danger-strong: #B91C1C;
+  --danger-line: #FECACA;
 }
 
 /* Dark theme — same design tokens, dark values. */
@@ -112,7 +192,35 @@
   --danger-light: #450A0A;
   --info: #22D3EE;
   --info-light: #083344;
+  --purple: #C4B5FD;
   --purple-light: #2E1065;
+  --surface-muted: #1F2937;
+  --surface-hover: #26324A;
+  --surface-pressed: #26324A;
+  --surface-pressed-strong: #26324A;
+  --surface-brand: #0B1220;
+  --surface-violet: #111827;
+  --fill: #374151;
+  --fill-strong: #374151;
+  --fill-inverse: #374151;
+  --content-secondary: #F9FAFB;
+  --content-soft: #D1D5DB;
+  --content-faint: #6B7280;
+  --content-ghost: #1F2937;
+  --line-soft: #1F2937;
+  --line-faint: #1F2937;
+  --line-strong: #374151;
+  --brand-ink: #6FCBB6;
+  --brand-ink-strong: #6FCBB6;
+  --brand-ink-hover: #6FCBB6;
+  --brand-line: #0F3B35;
+  --primary-hover-tint: rgba(13, 124, 108, 0.15);
+  --success-strong: #4ADE80;
+  --success-line: #14532D;
+  --warning-strong: #FBBF24;
+  --warning-line: #78350F;
+  --danger-strong: #F87171;
+  --danger-line: #7F1D1D;
 }
 
 * {
@@ -155,7 +263,7 @@ body {
   gap: 8px;
   padding: 8px 12px;
   border-radius: 0;
-  font-size: 13.5px;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--content-muted);
   cursor: pointer;
@@ -276,91 +384,13 @@ body {
   opacity: 0.85;
 }
 
-/* --------------------------------------------------------------------- */
-/* Dark mode: centralized legacy-utility overrides. Components keep       */
-/* their light-mode Tailwind classes; the design system remaps the few    */
-/* hard-coded surface/content utilities when <html> has `.dark`.          */
-/* --------------------------------------------------------------------- */
-.dark .bg-white { background-color: var(--surface); }
-.dark .bg-\[\#F9FAFB\] { background-color: var(--surface-alt); }
-.dark .bg-\[\#F3F4F6\] { background-color: var(--line); }
-.dark .text-\[\#111827\] { color: var(--content); }
-.dark .text-\[\#374151\] { color: var(--content); }
-.dark .text-\[\#6B7280\] { color: var(--content-muted); }
-.dark .text-\[\#9CA3AF\] { color: var(--content-subtle); }
-.dark .border-\[\#E5E7EB\],
-.dark .border-\[\#F3F4F6\] { border-color: var(--line); }
+/* Dark mode: form controls follow the theme even when a component forgot
+   to set its own colours. Everything else is driven by the semantic tokens
+   in @theme (surface/content/line/status) — no per-hex remaps. */
 .dark input,
 .dark select,
 .dark textarea { background-color: var(--surface); color: var(--content); border-color: var(--line); }
 .dark input::placeholder { color: var(--content-subtle); }
-
-/* Keep brand-colored elements intact in dark mode. */
-.dark .bg-\[\#0D7C6C\] { background-color: #0D7C6C; }
-.dark .text-white { color: #ffffff; }
-
-/* Hover variants compile to DIFFERENT class names than their static
-   counterparts, so they need their own remaps — without these, dark mode
-   renders light text on a still-light hover background (invisible text).
-   Hover surfaces use --accent and hover text uses --content so contrast
-   is guaranteed in both themes. */
-.dark .hover\:bg-\[\#F3F4F6\]:hover { background-color: var(--accent); }
-.dark .hover\:bg-\[\#F9FAFB\]:hover { background-color: var(--accent); }
-.dark .group:hover .group-hover\:bg-\[\#F9FAFB\] { background-color: var(--accent); }
-.dark .hover\:bg-\[\#E5E7EB\]:hover { background-color: var(--accent); }
-.dark .hover\:text-\[\#374151\]:hover { color: var(--content); }
-.dark .hover\:bg-\[\#ECF7F4\]:hover { background-color: rgba(13, 124, 108, 0.15); }
-
-/* Neutral fills/borders that the remaps above did not cover. */
-.dark .bg-\[\#E5E7EB\],
-.dark .bg-\[\#D1D5DB\] { background-color: #374151; }
-.dark .bg-\[\#111827\] { background-color: #374151; }
-.dark .active\:bg-\[\#E5E7EB\]:active,
-.dark .active\:bg-\[\#D1D5DB\]:active { background-color: var(--accent); }
-.dark .border-\[\#F9FAFB\],
-.dark .border-\[\#EEF2F7\],
-.dark .divide-\[\#F9FAFB\] > :not(:last-child) { border-color: var(--line); }
-.dark .border-\[\#D1D5DB\],
-.dark .hover\:border-\[\#D1D5DB\]:hover { border-color: #374151; }
-.dark .text-\[\#4B5563\] { color: var(--content-muted); }
-.dark .text-\[\#D1D5DB\] { color: var(--content-subtle); }
-.dark .text-\[\#F3F4F6\] { color: var(--line); }
-.dark .hover\:text-\[\#111827\]:hover { color: var(--content); }
-
-/* Status tints (alerts, notices, chips, highlighted rows): light pastel
-   fills become deep tints, and the dark status text on them becomes the
-   matching light hue, so text stays readable on top. */
-.dark .bg-\[\#ECF7F4\],
-.dark .bg-\[\#F0FAF7\],
-.dark .bg-blue-50 { background-color: var(--primary-light); }
-.dark .bg-\[\#F0FDF4\] { background-color: var(--success-light); }
-.dark .bg-\[\#FFFBEB\] { background-color: var(--warning-light); }
-.dark .bg-\[\#FEF2F2\],
-.dark .bg-\[\#FEE2E2\],
-.dark .hover\:bg-\[\#FEF2F2\]:hover { background-color: var(--danger-light); }
-.dark .bg-\[\#F5F3FF\] { background-color: var(--purple-light); }
-.dark .bg-\[\#A7DCCF\] { background-color: #0F3B35; }
-
-.dark .border-\[\#A7DCCF\],
-.dark .hover\:border-\[\#A7DCCF\]:hover { border-color: #0F3B35; }
-.dark .border-\[\#BBF7D0\] { border-color: #14532D; }
-.dark .border-\[\#FDE68A\] { border-color: #78350F; }
-.dark .border-\[\#FECACA\] { border-color: #7F1D1D; }
-
-.dark .text-\[\#0D7C6C\],
-.dark .hover\:text-\[\#0D7C6C\]:hover,
-.dark .group:hover .group-hover\:text-\[\#0D7C6C\],
-.dark .text-\[\#0B5047\] { color: #6FCBB6; }
-.dark .text-\[\#16A34A\],
-.dark .text-\[\#15803D\],
-.dark .text-\[\#059669\] { color: #4ADE80; }
-.dark .text-\[\#D97706\],
-.dark .text-\[\#92400E\] { color: #FBBF24; }
-.dark .text-\[\#DC2626\],
-.dark .hover\:text-\[\#DC2626\]:hover,
-.dark .text-\[\#B91C1C\] { color: #F87171; }
-.dark .text-\[\#7C3AED\] { color: #C4B5FD; }
-.dark .text-\[\#0891B2\] { color: #22D3EE; }
 
 /* Theme-aware pieces of the plain-CSS helpers above. */
 .dark ::-webkit-scrollbar-thumb { background: #374151; }

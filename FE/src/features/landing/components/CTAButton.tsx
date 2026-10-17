@@ -32,8 +32,8 @@ export interface CTAButtonProps {
 }
 
 const sizeClasses = {
-  md: 'h-10 px-5 text-[14px]',
-  lg: 'h-12 px-6 sm:px-7 text-[15px]',
+  md: 'h-10 px-5 text-base',
+  lg: 'h-12 px-6 sm:px-7 text-lg',
 };
 
 export function CTAButton({
@@ -59,11 +59,11 @@ export function CTAButton({
       type="button"
       onClick={handleActivate}
       className={`group inline-flex items-center justify-center gap-2 font-semibold rounded-[10px] transition-colors duration-200 cursor-pointer select-none
-        active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0D7C6C]/40 focus-visible:ring-offset-2
+        active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-600/40 focus-visible:ring-offset-2
         ${
           isPrimary
-            ? 'bg-[#0D7C6C] text-white hover:bg-[#0A6458]'
-            : 'bg-white text-[#374151] border border-[#E5E7EB] shadow-sm hover:bg-[#F9FAFB] hover:border-[#D1D5DB]'
+            ? 'bg-brand-600 text-white hover:bg-brand-700'
+            : 'bg-surface text-content-secondary border border-line shadow-sm hover:bg-surface-hover hover:border-line-strong'
         }
         ${sizeClasses[size]} ${className}`}
     >

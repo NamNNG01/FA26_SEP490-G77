@@ -50,23 +50,21 @@ export function TakeExamPage() {
   };
 
   return (
-    <div className="h-[100dvh] flex flex-col bg-[#F9FAFB]">
+    <div className="h-[100dvh] flex flex-col bg-surface-alt">
       {/* Exam Header */}
-      <header className="h-14 bg-white border-b border-[#F3F4F6] flex items-center px-6 gap-4 flex-shrink-0">
+      <header className="h-14 bg-surface border-b border-line-soft flex items-center px-6 gap-4 flex-shrink-0">
         <div className="flex items-center gap-2 min-w-0">
-          <div className="w-7 h-7 bg-[#0D7C6C] rounded-[8px] flex items-center justify-center flex-shrink-0">
-            <Icon.Logo className="w-4 h-4 text-white" />
-          </div>
-          <span className="text-[14px] font-bold text-[#111827] truncate">ML Fundamentals Final Exam</span>
-          <span className="hidden sm:inline-flex flex-shrink-0 rounded-[6px] border border-[#E5E7EB] px-2 py-0.5 text-[11.5px] font-medium text-[#6B7280]">
+          <Icon.Logo className="w-7 h-7 flex-shrink-0 text-brand-ink" aria-hidden="true" />
+          <span className="text-base font-bold text-content truncate">ML Fundamentals Final Exam</span>
+          <span className="hidden sm:inline-flex flex-shrink-0 rounded-[6px] border border-line px-2 py-0.5 text-2xs font-medium text-content-soft">
             {isPractice ? 'Practice mode' : 'Exam mode'}
           </span>
         </div>
         <div className="flex-1" />
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-[#F9FAFB] rounded-[8px] border border-[#E5E7EB]">
-            <span className="text-[12px] text-[#6B7280]">Question</span>
-            <span className="text-[14px] font-bold text-[#111827]">{currentQ} / {TOTAL_QUESTIONS}</span>
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-surface-alt rounded-[8px] border border-line">
+            <span className="text-xs text-content-soft">Question</span>
+            <span className="text-base font-bold text-content">{currentQ} / {TOTAL_QUESTIONS}</span>
           </div>
           <TimerDisplay seconds={timeLeft} warning={timeLeft < 600} />
           {/* Primary, not red: submitting is the expected finish, not a destructive action. */}
@@ -81,12 +79,12 @@ export function TakeExamPage() {
             <div className="flex items-center gap-2 mb-2">
               <Badge variant="info">Multiple Choice</Badge>
               <Badge variant="warning">Medium</Badge>
-              <span className="text-[12px] text-[#9CA3AF] ml-auto">Machine Learning · Optimization</span>
+              <span className="text-xs text-content-subtle ml-auto">Machine Learning · Optimization</span>
             </div>
 
             <div className="card p-6">
-              <p className="text-[12px] font-semibold text-[#9CA3AF] uppercase tracking-wide mb-3">Question {currentQ}</p>
-              <p className="text-[16px] text-[#111827] leading-relaxed font-medium">
+              <p className="text-xs font-semibold text-content-subtle uppercase tracking-wide mb-3">Question {currentQ}</p>
+              <p className="text-lg text-content leading-relaxed font-medium">
                 In the context of training deep neural networks, which optimization algorithm is most commonly used for its ability to adapt learning rates for each parameter individually and its effectiveness on sparse gradients?
               </p>
             </div>
@@ -116,8 +114,8 @@ export function TakeExamPage() {
                   variant="outline"
                   aria-pressed={isFlagged}
                   onClick={toggleFlag}
-                  icon={<Icon.Flag className={`w-4 h-4 ${isFlagged ? 'text-[#D97706]' : ''}`} />}
-                  className={isFlagged ? '!border-[#FDE68A] !bg-[#FFFBEB]' : ''}
+                  icon={<Icon.Flag className={`w-4 h-4 ${isFlagged ? 'text-warning' : ''}`} />}
+                  className={isFlagged ? '!border-warning-line !bg-warning-light' : ''}
                 >
                   {isFlagged ? 'Flagged' : 'Flag for review'}
                 </Button>
@@ -128,22 +126,22 @@ export function TakeExamPage() {
         </div>
 
         {/* Question palette sidebar */}
-        <div className="w-72 bg-white border-l border-[#F3F4F6] p-5 overflow-y-auto flex-shrink-0">
-          <h2 className="text-[14px] font-semibold text-[#111827] mb-4">Question navigator</h2>
+        <div className="w-72 bg-surface border-l border-line-soft p-5 overflow-y-auto flex-shrink-0">
+          <h2 className="text-base font-semibold text-content mb-4">Question navigator</h2>
           <QuestionPalette total={TOTAL_QUESTIONS} current={currentQ} answered={answered} flagged={flagged} onSelect={setCurrentQ} />
-          <div className="mt-4 space-y-2 pt-4 border-t border-[#F3F4F6]">
+          <div className="mt-4 space-y-2 pt-4 border-t border-line-soft">
             {[
               // Classes (not inline hexes) so the dark-mode remaps apply.
-              { swatch: 'bg-[#F0FDF4] border-[#BBF7D0]', label: 'Answered', count: answered.size },
-              { swatch: 'bg-[#FFFBEB] border-[#FDE68A]', label: 'Flagged', count: flagged.size },
-              { swatch: 'bg-[#F9FAFB] border-[#E5E7EB]', label: 'Unanswered', count: unanswered },
+              { swatch: 'bg-success-light border-success-line', label: 'Answered', count: answered.size },
+              { swatch: 'bg-warning-light border-warning-line', label: 'Flagged', count: flagged.size },
+              { swatch: 'bg-surface-alt border-line', label: 'Unanswered', count: unanswered },
             ].map(s => (
-              <div key={s.label} className="flex items-center justify-between text-[12px]">
+              <div key={s.label} className="flex items-center justify-between text-xs">
                 <div className="flex items-center gap-2">
                   <div className={`w-4 h-4 rounded-[4px] border ${s.swatch}`} />
-                  <span className="text-[#6B7280]">{s.label}</span>
+                  <span className="text-content-soft">{s.label}</span>
                 </div>
-                <span className="font-semibold text-[#374151]">{s.count}</span>
+                <span className="font-semibold text-content-secondary">{s.count}</span>
               </div>
             ))}
           </div>
@@ -162,7 +160,7 @@ export function TakeExamPage() {
           </>
         }
       >
-        <p className="text-[14px] text-[#374151] leading-relaxed">
+        <p className="text-base text-content-secondary leading-relaxed">
           You can't change your answers after submitting.
         </p>
         <dl className="mt-4 grid grid-cols-3 gap-2 text-center">
@@ -171,14 +169,14 @@ export function TakeExamPage() {
             { label: 'Unanswered', value: unanswered },
             { label: 'Flagged', value: flagged.size },
           ].map((s) => (
-            <div key={s.label} className="flex flex-col-reverse rounded-[10px] border border-[#E5E7EB] py-3">
-              <dt className="text-[12px] text-[#6B7280]">{s.label}</dt>
-              <dd className="text-[20px] font-semibold text-[#111827]">{s.value}</dd>
+            <div key={s.label} className="flex flex-col-reverse rounded-[10px] border border-line py-3">
+              <dt className="text-xs text-content-soft">{s.label}</dt>
+              <dd className="text-xl font-semibold text-content">{s.value}</dd>
             </div>
           ))}
         </dl>
         {unanswered > 0 && (
-          <p className="mt-3 text-[13px] text-[#D97706]">
+          <p className="mt-3 text-sm text-warning">
             {unanswered} question{unanswered === 1 ? ' is' : 's are'} still unanswered.
           </p>
         )}

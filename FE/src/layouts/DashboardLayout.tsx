@@ -33,17 +33,15 @@ export function DashboardLayout() {
   }
 
   return (
-    <div className="flex flex-col h-[100dvh] bg-[#F9FAFB] overflow-hidden">
+    <div className="flex flex-col h-[100dvh] bg-surface-alt overflow-hidden">
       {/* Header */}
-      <header className="h-14 bg-white border-b border-[#F3F4F6] flex items-center px-[clamp(0.75rem,1.5vw,1.25rem)] gap-3 flex-shrink-0 z-40">
+      <header className="h-14 bg-surface border-b border-line-soft flex items-center px-[clamp(0.75rem,1.5vw,1.25rem)] gap-3 flex-shrink-0 z-40">
         <div className="flex items-center gap-2.5 w-[clamp(11rem,22vw,14rem)] max-w-[30%] flex-shrink-0">
-          <div className="w-7 h-7 bg-[#0D7C6C] rounded-[8px] flex items-center justify-center">
-            <Icon.Logo className="w-4 h-4 text-white" />
-          </div>
-          <span className="text-[15px] font-bold text-[#111827]">PrepExam</span>
+          <Icon.Logo className="w-7 h-7 flex-shrink-0 text-brand-ink" aria-hidden="true" />
+          <span className="text-lg font-bold text-content">PrepExam</span>
         </div>
         <div className="flex-1" />
-        <div className="flex items-center gap-2 ml-1 pl-3 border-l border-[#F3F4F6]">
+        <div className="flex items-center gap-2 ml-1 pl-3 border-l border-line-soft">
           <UserDropdown />
         </div>
       </header>
@@ -52,7 +50,7 @@ export function DashboardLayout() {
         {/* Sidebar (mounted once; persists across route changes) */}
         {/* No width of its own: it hugs the Sidebar (w-56 / w-16), so the
             panel is exactly as wide as a hovered menu item — no dead space. */}
-        <aside className="bg-white border-r border-[#F3F4F6] flex flex-col flex-shrink-0 overflow-y-auto overflow-x-hidden">
+        <aside className="bg-surface border-r border-line-soft flex flex-col flex-shrink-0 overflow-y-auto overflow-x-hidden">
           <Sidebar
             items={items}
             collapsed={collapsed}

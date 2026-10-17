@@ -116,9 +116,9 @@ export function ForgotPasswordPage() {
         ) : (
           <div className="text-center space-y-4">
             <div>
-              <p className="text-[13px] text-[#6B7280]">{sentMessage}</p>
-              <p className="text-[13px] text-[#6B7280] mt-3">
-                Open the link sent to <span className="font-medium text-[#111827] break-all">{sentTo}</span>.
+              <p className="text-sm text-content-soft">{sentMessage}</p>
+              <p className="text-sm text-content-soft mt-3">
+                Open the link sent to <span className="font-medium text-content break-all">{sentTo}</span>.
                 It expires soon and can be used only once. Don't see it? Check your spam folder.
               </p>
             </div>
@@ -135,14 +135,14 @@ export function ForgotPasswordPage() {
               <button
                 type="button"
                 onClick={changeEmail}
-                className="text-[13px] text-[#0D7C6C] hover:underline font-medium"
+                className="text-sm text-brand-ink hover:underline font-medium"
               >
                 Use a different email
               </button>
               <button
                 type="button"
                 onClick={() => navigate(ROUTES.resetPassword)}
-                className="text-[13px] text-[#6B7280] hover:text-[#374151] hover:underline"
+                className="text-sm text-content-soft hover:text-content-secondary hover:underline"
               >
                 Link not opening? Paste it manually
               </button>
@@ -154,7 +154,7 @@ export function ForgotPasswordPage() {
           <button
             type="button"
             onClick={() => navigate(ROUTES.login, { state: { email: (sentTo || email).trim() } })}
-            className="text-[13px] font-medium text-[#6B7280] hover:text-[#0D7C6C] flex items-center justify-center gap-1.5 transition-colors"
+            className="text-sm font-medium text-content-soft hover:text-brand-ink flex items-center justify-center gap-1.5 transition-colors"
           >
             <Icon.ChevronLeft className="w-4 h-4" />
             Back to login

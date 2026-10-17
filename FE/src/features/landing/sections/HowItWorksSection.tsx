@@ -21,16 +21,16 @@ import {
  */
 export function HowItWorksSection() {
   return (
-    <section className="bg-[#F9FAFB] dark:bg-[#0B1220]">
+    <section className="bg-surface-alt">
       <Container className="py-[clamp(3.5rem,7vw,6rem)]">
         <Reveal className="max-w-[min(40rem,100%)]">
-          <p className="text-[12.5px] font-semibold tracking-[0.08em] text-[#0D7C6C] uppercase dark:text-[#6FCBB6]">
+          <p className="text-xs font-semibold tracking-[0.08em] text-brand-ink uppercase">
             {howItWorksContent.eyebrow}
           </p>
-          <h2 className="mt-3 text-[clamp(1.75rem,1.2rem+2vw,2.5rem)] leading-[1.1] font-bold text-[#111827] dark:text-[#F9FAFB]">
+          <h2 className="mt-3 text-[clamp(1.75rem,1.2rem+2vw,2.5rem)] leading-[1.1] font-bold text-content">
             {howItWorksContent.title}
           </h2>
-          <p className="mt-3 text-[clamp(0.95rem,0.9rem+0.25vw,1.0625rem)] text-[#4B5563] dark:text-[#D1D5DB]">
+          <p className="mt-3 text-[clamp(0.95rem,0.9rem+0.25vw,1.0625rem)] text-content-muted">
             {howItWorksContent.subtitle}
           </p>
         </Reveal>
@@ -40,11 +40,11 @@ export function HowItWorksSection() {
             <li key={step.step}>
               <Reveal className="grid items-center gap-[clamp(1.5rem,4vw,4rem)] md:grid-cols-2">
                 <div className={i % 2 === 1 ? 'md:order-2' : ''}>
-                  <span className="font-mono text-[13px] font-medium text-[#0D7C6C] dark:text-[#6FCBB6]">{step.step}</span>
-                  <h3 className="mt-2 text-[clamp(1.25rem,1.05rem+0.8vw,1.625rem)] leading-snug font-semibold text-[#111827] dark:text-[#F9FAFB]">
+                  <span className="font-mono text-sm font-medium text-brand-ink">{step.step}</span>
+                  <h3 className="mt-2 text-[clamp(1.25rem,1.05rem+0.8vw,1.625rem)] leading-snug font-semibold text-content">
                     {step.title}
                   </h3>
-                  <p className="mt-3 max-w-[30rem] text-[15px] leading-relaxed text-[#4B5563] dark:text-[#D1D5DB]">
+                  <p className="mt-3 max-w-[30rem] text-lg leading-relaxed text-content-muted">
                     {step.description}
                   </p>
                 </div>
@@ -56,9 +56,9 @@ export function HowItWorksSection() {
           ))}
         </ol>
 
-        <Reveal className="mt-[clamp(3rem,6vw,4.5rem)] border-t border-[#E5E7EB] pt-6 dark:border-[#1F2937]">
-          <p className="text-[14px] text-[#4B5563] dark:text-[#D1D5DB]">
-            <span className="font-semibold text-[#111827] dark:text-[#F9FAFB]">Also in every course: </span>
+        <Reveal className="mt-[clamp(3rem,6vw,4.5rem)] border-t border-line pt-6">
+          <p className="text-base text-content-muted">
+            <span className="font-semibold text-content">Also in every course: </span>
             {alsoIncluded.join(' · ')}
           </p>
         </Reveal>
@@ -77,7 +77,7 @@ function Panel({ children, label }: { children: React.ReactNode; label: string }
     <div
       role="img"
       aria-label={label}
-      className="rounded-[14px] border border-[#E5E7EB] bg-white p-5 dark:border-[#1F2937] dark:bg-[#111827]"
+      className="rounded-[14px] border border-line bg-surface p-5"
     >
       {children}
     </div>
@@ -94,16 +94,16 @@ function StepVisual({ kind }: { kind: HowItWorksVisual }) {
     ];
     return (
       <Panel label="Topic progress: four exam domains with their completion">
-        <p className="text-[12px] font-semibold tracking-[0.06em] text-[#6B7280] uppercase dark:text-[#9CA3AF]">Topic progress</p>
+        <p className="text-xs font-semibold tracking-[0.06em] text-content-soft uppercase">Topic progress</p>
         <ul className="mt-4 flex flex-col gap-3.5">
           {topics.map((t) => (
             <li key={t.name}>
-              <div className="flex items-baseline justify-between text-[13.5px]">
-                <span className="text-[#111827] dark:text-[#F9FAFB]">{t.name}</span>
-                <span className="font-mono text-[12.5px] text-[#6B7280] dark:text-[#9CA3AF]">{t.pct}%</span>
+              <div className="flex items-baseline justify-between text-sm">
+                <span className="text-content">{t.name}</span>
+                <span className="font-mono text-xs text-content-soft">{t.pct}%</span>
               </div>
-              <div className="mt-1.5 h-1.5 rounded-full bg-[#F3F4F6] dark:bg-[#1F2937]">
-                <div className="h-full rounded-full bg-[#0D7C6C] dark:bg-[#6FCBB6]" style={{ width: `${t.pct}%` }} />
+              <div className="mt-1.5 h-1.5 rounded-full bg-surface-muted">
+                <div className="h-full rounded-full bg-brand-600" style={{ width: `${t.pct}%` }} />
               </div>
             </li>
           ))}
@@ -118,9 +118,9 @@ function StepVisual({ kind }: { kind: HowItWorksVisual }) {
     return (
       <Panel label="Mock exam in progress: timer and question navigator">
         <div className="flex items-center justify-between">
-          <p className="text-[12px] font-semibold tracking-[0.06em] text-[#6B7280] uppercase dark:text-[#9CA3AF]">Mock exam 3</p>
-          <span className="inline-flex items-center gap-1.5 font-mono text-[15px] font-semibold text-[#111827] dark:text-[#F9FAFB]">
-            <Icon.Clock className="h-4 w-4 text-[#6B7280]" />
+          <p className="text-xs font-semibold tracking-[0.06em] text-content-soft uppercase">Mock exam 3</p>
+          <span className="inline-flex items-center gap-1.5 font-mono text-lg font-semibold text-content">
+            <Icon.Clock className="h-4 w-4 text-content-soft" />
             54:44
           </span>
         </div>
@@ -128,24 +128,24 @@ function StepVisual({ kind }: { kind: HowItWorksVisual }) {
           {cells.map((state, idx) => (
             <span
               key={idx}
-              className={`flex aspect-square items-center justify-center rounded-[6px] font-mono text-[11px] ${
+              className={`flex aspect-square items-center justify-center rounded-[6px] font-mono text-2xs ${
                 state === 3
-                  ? 'bg-[#0D7C6C] text-white'
+                  ? 'bg-brand-600 text-white'
                   : state === 2
-                    ? 'border border-[#F2A93B] text-[#92400E] dark:text-[#FBBF24]'
+                    ? 'border border-highlight text-warning-strong'
                     : state === 1
-                      ? 'bg-[#D3EEE7] text-[#0B5047] dark:bg-[#0F3B35] dark:text-[#6FCBB6]'
-                      : 'border border-[#E5E7EB] text-[#9CA3AF] dark:border-[#1F2937]'
+                      ? 'bg-brand-100 text-brand-ink-strong dark:bg-brand-900'
+                      : 'border border-line text-content-subtle'
               }`}
             >
               {idx + 1}
             </span>
           ))}
         </div>
-        <div className="mt-4 flex gap-4 text-[12px] text-[#6B7280] dark:text-[#9CA3AF]">
-          <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-[3px] bg-[#D3EEE7] dark:bg-[#0F3B35]" />Answered</span>
-          <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-[3px] border border-[#F2A93B]" />Flagged</span>
-          <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-[3px] border border-[#D1D5DB]" />Not yet</span>
+        <div className="mt-4 flex gap-4 text-xs text-content-soft">
+          <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-[3px] bg-brand-100 dark:bg-brand-900" />Answered</span>
+          <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-[3px] border border-highlight" />Flagged</span>
+          <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-[3px] border border-line-strong" />Not yet</span>
         </div>
       </Panel>
     );
@@ -159,23 +159,23 @@ function StepVisual({ kind }: { kind: HowItWorksVisual }) {
     <Panel label="Attempt review: overall score, weakest topics and an AI study note">
       <div className="flex items-end justify-between">
         <div>
-          <p className="text-[12px] font-semibold tracking-[0.06em] text-[#6B7280] uppercase dark:text-[#9CA3AF]">Attempt result</p>
-          <p className="mt-1 font-[family-name:var(--font-display)] text-[32px] leading-none font-bold text-[#111827] dark:text-[#F9FAFB]">
+          <p className="text-xs font-semibold tracking-[0.06em] text-content-soft uppercase">Attempt result</p>
+          <p className="mt-1 font-[family-name:var(--font-display)] text-2xl leading-none font-bold text-content">
             72%
           </p>
         </div>
-        <span className="text-[12.5px] text-[#6B7280] dark:text-[#9CA3AF]">Pass mark 70%</span>
+        <span className="text-xs text-content-soft">Pass mark 70%</span>
       </div>
-      <ul className="mt-4 divide-y divide-[#F3F4F6] border-y border-[#F3F4F6] dark:divide-[#1F2937] dark:border-[#1F2937]">
+      <ul className="mt-4 divide-y divide-line-soft border-y border-line-soft">
         {weak.map((w) => (
-          <li key={w.name} className="flex items-center justify-between py-2 text-[13.5px]">
-            <span className="text-[#111827] dark:text-[#F9FAFB]">{w.name}</span>
-            <span className="font-mono text-[12.5px] text-[#DC2626]">{w.score}</span>
+          <li key={w.name} className="flex items-center justify-between py-2 text-sm">
+            <span className="text-content">{w.name}</span>
+            <span className="font-mono text-xs text-danger">{w.score}</span>
           </li>
         ))}
       </ul>
-      <p className="mt-4 text-[13px] leading-relaxed text-[#4B5563] dark:text-[#D1D5DB]">
-        <span className="font-semibold text-[#0D7C6C] dark:text-[#6FCBB6]">AI review: </span>
+      <p className="mt-4 text-sm leading-relaxed text-content-muted">
+        <span className="font-semibold text-brand-ink">AI review: </span>
         Most misses mix up Savings Plans and Reserved Instances. Revisit the pricing-model lesson, then retry the 11 cost questions.
       </p>
     </Panel>

@@ -15,26 +15,26 @@ import { Icon } from '@/assets/icons';
 export type TabsVariant = 'pill' | 'solid' | 'underline';
 
 const containers: Record<TabsVariant, string> = {
-  pill: 'flex gap-0.5 bg-[#F3F4F6] p-1 rounded-[10px]',
+  pill: 'flex gap-0.5 bg-surface-muted p-1 rounded-[10px]',
   solid: 'flex flex-wrap items-center gap-1',
   underline: 'flex items-center gap-1 border-b border-line',
 };
 
 const tabBase: Record<TabsVariant, string> = {
-  pill: 'px-4 py-1.5 rounded-[8px] text-[13.5px] font-medium transition-all',
-  solid: 'px-3.5 py-2 rounded-[10px] text-[13.5px] font-medium transition-all',
+  pill: 'px-4 py-1.5 rounded-[8px] text-sm font-medium transition-all',
+  solid: 'px-3.5 py-2 rounded-[10px] text-sm font-medium transition-all',
   underline:
-    'relative px-3.5 py-2.5 text-[13.5px] font-medium transition-colors after:absolute after:inset-x-2 after:-bottom-px after:h-0.5 after:rounded-full',
+    'relative px-3.5 py-2.5 text-sm font-medium transition-colors after:absolute after:inset-x-2 after:-bottom-px after:h-0.5 after:rounded-full',
 };
 
 const tabActive: Record<TabsVariant, string> = {
-  pill: 'bg-white text-[#111827] shadow-sm',
+  pill: 'bg-surface text-content shadow-sm',
   solid: 'bg-primary text-white shadow-sm',
   underline: 'text-primary after:bg-primary',
 };
 
 const tabIdle: Record<TabsVariant, string> = {
-  pill: 'text-[#6B7280] hover:text-[#374151]',
+  pill: 'text-content-soft hover:text-content-secondary',
   solid: 'text-muted-foreground hover:bg-accent hover:text-foreground',
   underline: 'text-muted-foreground after:bg-transparent hover:text-foreground',
 };

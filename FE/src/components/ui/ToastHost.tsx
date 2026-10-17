@@ -40,19 +40,19 @@ const ToastContext = createContext<ToastContextValue | null>(null);
 const KIND_STYLES: Record<ToastKind, { icon: ReactNode; classes: string }> = {
   success: {
     icon: <Icon.CheckCircle className="w-5 h-5" />,
-    classes: 'text-success bg-success-light border-[#BBF7D0] dark:border-[#14532D]',
+    classes: 'text-success bg-success-light border-success-line',
   },
   error: {
     icon: <Icon.XCircle className="w-5 h-5" />,
-    classes: 'text-danger bg-danger-light border-[#FECACA] dark:border-[#7F1D1D]',
+    classes: 'text-danger bg-danger-light border-danger-line',
   },
   warning: {
     icon: <Icon.AlertCircle className="w-5 h-5" />,
-    classes: 'text-warning bg-warning-light border-[#FDE68A] dark:border-[#78350F]',
+    classes: 'text-warning bg-warning-light border-warning-line',
   },
   info: {
     icon: <Icon.Info className="w-5 h-5" />,
-    classes: 'text-info bg-info-light border-[#A7DCCF] dark:border-[#0F3B35]',
+    classes: 'text-info bg-info-light border-brand-line',
   },
 };
 
@@ -100,7 +100,7 @@ function ToastCard({
       className={`flex items-start gap-2.5 px-4 py-3 rounded-[10px] border shadow-lg max-w-sm ${style.classes}`}
     >
       <span className="flex-shrink-0 mt-0.5">{style.icon}</span>
-      <p className="text-[13.5px] flex-1 text-foreground">{toast.message}</p>
+      <p className="text-sm flex-1 text-foreground">{toast.message}</p>
       <button
         onClick={() => onDone(toast.id)}
         className="text-muted-foreground hover:text-foreground transition-colors cursor-pointer"

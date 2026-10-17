@@ -30,7 +30,7 @@ export const DESCRIPTION_MAX = 500;
 const SIDE_MAX = 500;
 
 export const textareaClass =
-  'w-full px-3 py-2.5 rounded-[10px] border bg-white text-[14px] text-[#111827] leading-relaxed resize-none placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#0D7C6C]/20 focus:border-[#0D7C6C]';
+  'w-full px-3 py-2.5 rounded-[10px] border bg-surface text-base text-content leading-relaxed resize-none placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600';
 
 // ── Deck info ────────────────────────────────────────────────────────────────
 
@@ -73,7 +73,7 @@ export function DeckInfoFields({ value, onChange, errors = {}, showStatus, idPre
             options={modules.length > 0
               ? modules.map(m => ({ label: m.title, value: m.id }))
               : [{ label: 'No modules in this course', value: '' }]} />
-          {errors.moduleId && <p className="mt-1.5 text-[12px] text-[#DC2626]">{errors.moduleId}</p>}
+          {errors.moduleId && <p className="mt-1.5 text-xs text-danger">{errors.moduleId}</p>}
         </div>
         {showStatus && (
           <Select label="Status" value={value.status} onChange={v => onChange({ status: v as DeckStatus })}
@@ -81,14 +81,14 @@ export function DeckInfoFields({ value, onChange, errors = {}, showStatus, idPre
         )}
       </div>
       <div>
-        <label htmlFor={`${idPrefix}-description`} className="block text-[13px] font-medium text-[#374151] mb-1.5">Description</label>
+        <label htmlFor={`${idPrefix}-description`} className="block text-sm font-medium text-content-secondary mb-1.5">Description</label>
         <textarea id={`${idPrefix}-description`} rows={3} maxLength={DESCRIPTION_MAX} value={value.description}
           onChange={e => onChange({ description: e.target.value })}
           placeholder="What does this deck cover?"
-          className={`${textareaClass} ${errors.description ? 'border-[#DC2626]' : 'border-[#E5E7EB]'}`} />
-        <div className="mt-1 flex justify-between gap-2 text-[11px]">
-          <span className="text-[#DC2626]">{errors.description}</span>
-          <span className="text-[#9CA3AF]">{value.description.length}/{DESCRIPTION_MAX}</span>
+          className={`${textareaClass} ${errors.description ? 'border-danger-solid' : 'border-line'}`} />
+        <div className="mt-1 flex justify-between gap-2 text-2xs">
+          <span className="text-danger">{errors.description}</span>
+          <span className="text-content-subtle">{value.description.length}/{DESCRIPTION_MAX}</span>
         </div>
       </div>
     </div>
@@ -197,42 +197,42 @@ export function CardList({ cards, editor, emptyHint = 'Use the card editor to ad
   return (
     <section aria-label="Flashcards in this deck" className="space-y-3">
       <div className="flex items-center justify-between">
-        <h3 className="text-[16px] font-semibold text-[#111827]">Flashcards in this Deck</h3>
-        <span className="text-[13px] text-[#6B7280]">{cards.length} card{cards.length === 1 ? '' : 's'}</span>
+        <h3 className="text-lg font-semibold text-content">Flashcards in this Deck</h3>
+        <span className="text-sm text-content-soft">{cards.length} card{cards.length === 1 ? '' : 's'}</span>
       </div>
 
       {cards.length === 0 ? (
         <div className="card px-4 py-12 text-center">
-          <Icon.Layers className="w-10 h-10 mx-auto text-[#D1D5DB]" />
-          <p className="mt-3 text-[14px] font-medium text-[#374151]">This deck has no cards yet</p>
-          <p className="text-[13px] text-[#9CA3AF]">{emptyHint}</p>
+          <Icon.Layers className="w-10 h-10 mx-auto text-content-faint" />
+          <p className="mt-3 text-base font-medium text-content-secondary">This deck has no cards yet</p>
+          <p className="text-sm text-content-subtle">{emptyHint}</p>
         </div>
       ) : (
         <ol className="space-y-3">
           {cards.map((card, i) => {
             const active = card.id === editor.editingId;
             return (
-              <li key={card.id} className={`card p-4 transition-colors ${active ? '!border-[#0D7C6C] ring-2 ring-[#0D7C6C]/15' : ''}`}>
+              <li key={card.id} className={`card p-4 transition-colors ${active ? '!border-brand-600 ring-2 ring-brand-600/15' : ''}`}>
                 <div className="flex items-start gap-3">
-                  <span className="mt-0.5 flex h-6 min-w-6 flex-shrink-0 items-center justify-center rounded-full bg-[#F3F4F6] px-1.5 text-[11px] font-semibold text-[#6B7280]">{i + 1}</span>
+                  <span className="mt-0.5 flex h-6 min-w-6 flex-shrink-0 items-center justify-center rounded-full bg-surface-muted px-1.5 text-2xs font-semibold text-content-soft">{i + 1}</span>
                   <div className="min-w-0 flex-1 space-y-2">
                     <div>
-                      <p className="text-[10.5px] font-semibold uppercase tracking-wider text-[#0D7C6C]">Front</p>
-                      <p className="mt-0.5 text-[14px] font-semibold text-[#111827] break-words whitespace-pre-line">{card.front}</p>
+                      <p className="text-2xs font-semibold uppercase tracking-wider text-brand-ink">Front</p>
+                      <p className="mt-0.5 text-base font-semibold text-content break-words whitespace-pre-line">{card.front}</p>
                     </div>
                     <div>
-                      <p className="text-[10.5px] font-semibold uppercase tracking-wider text-[#16A34A]">Back</p>
-                      <p className="mt-0.5 text-[13.5px] text-[#374151] break-words whitespace-pre-line">{card.back}</p>
+                      <p className="text-2xs font-semibold uppercase tracking-wider text-success">Back</p>
+                      <p className="mt-0.5 text-sm text-content-secondary break-words whitespace-pre-line">{card.back}</p>
                     </div>
                   </div>
                   <div className="flex flex-shrink-0 items-center gap-0.5">
                     {active && <Badge variant="info" className="mr-1">Editing</Badge>}
                     <button type="button" onClick={() => editor.load(card)} aria-label={`Edit card ${i + 1}`} title="Edit card"
-                      className="p-1.5 rounded-[6px] text-[#6B7280] hover:bg-[#ECF7F4] hover:text-[#0D7C6C]">
+                      className="p-1.5 rounded-[6px] text-content-soft hover:bg-primary-hover-tint hover:text-brand-ink">
                       <Icon.Edit className="w-4 h-4" />
                     </button>
                     <button type="button" onClick={() => editor.remove(card, i)} aria-label={`Delete card ${i + 1}`} title="Delete card"
-                      className="p-1.5 rounded-[6px] text-[#6B7280] hover:bg-[#FEF2F2] hover:text-[#DC2626]">
+                      className="p-1.5 rounded-[6px] text-content-soft hover:bg-danger-light hover:text-danger">
                       <Icon.Trash className="w-4 h-4" />
                     </button>
                   </div>
@@ -257,10 +257,10 @@ export function CardEditorPanel({ editor, idPrefix, footnote, className = '' }: 
   return (
     <aside className={`card p-5 space-y-4 ${className}`} aria-labelledby={`${idPrefix}-editor-title`}>
       <div className="flex items-center justify-between gap-2">
-        <h3 id={`${idPrefix}-editor-title`} className="text-[16px] font-semibold text-[#111827]">
+        <h3 id={`${idPrefix}-editor-title`} className="text-lg font-semibold text-content">
           {editor.editingId ? `Edit Card #${editor.editingIndex + 1}` : 'Card Editor'}
         </h3>
-        {!editor.editingId && <span className="text-[12px] text-[#9CA3AF]">New card</span>}
+        {!editor.editingId && <span className="text-xs text-content-subtle">New card</span>}
       </div>
 
       {/* A div, not a form: the editor also lives inside the create-deck modal. */}
@@ -280,7 +280,7 @@ export function CardEditorPanel({ editor, idPrefix, footnote, className = '' }: 
           </Button>
         </div>
       </div>
-      <p className="text-[12px] text-[#9CA3AF]">{footnote}</p>
+      <p className="text-xs text-content-subtle">{footnote}</p>
     </aside>
   );
 }
@@ -297,16 +297,16 @@ const EditorField = React.forwardRef<HTMLTextAreaElement, {
   return (
     <div>
       <div className="flex items-baseline justify-between gap-2 mb-1.5">
-        <label htmlFor={id} className="text-[13px] font-semibold text-[#374151]">{label}</label>
-        <span className="text-[11px] text-[#9CA3AF]">{hint}</span>
+        <label htmlFor={id} className="text-sm font-semibold text-content-secondary">{label}</label>
+        <span className="text-2xs text-content-subtle">{hint}</span>
       </div>
       <textarea ref={ref} id={id} rows={4} value={value} placeholder={placeholder} maxLength={SIDE_MAX}
         aria-invalid={!!error} aria-describedby={error ? `${id}-error` : undefined}
         onChange={e => onChange(e.target.value)}
-        className={`${textareaClass} ${error ? 'border-[#DC2626] focus:border-[#DC2626] focus:ring-[#DC2626]/20' : 'border-[#E5E7EB]'}`} />
-      <div className="mt-1 flex justify-between gap-2 text-[11px]">
-        <span id={`${id}-error`} className="text-[#DC2626]">{error}</span>
-        <span className="text-[#9CA3AF]">{value.length}/{SIDE_MAX}</span>
+        className={`${textareaClass} ${error ? 'border-danger-solid focus:border-danger-solid focus:ring-danger-solid/20' : 'border-line'}`} />
+      <div className="mt-1 flex justify-between gap-2 text-2xs">
+        <span id={`${id}-error`} className="text-danger">{error}</span>
+        <span className="text-content-subtle">{value.length}/{SIDE_MAX}</span>
       </div>
     </div>
   );

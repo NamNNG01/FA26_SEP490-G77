@@ -76,22 +76,22 @@ export function CourseDetailPage({ onNavigate }: { onNavigate?: (id: string, par
   }));
 
   const examColumns = [
-    { key: 'title', label: 'Exam', render: (r: Record<string, unknown>) => <span className="text-[13.5px] font-medium text-[#374151]">{r.title as string}</span> },
-    { key: 'moduleId', label: 'Module', render: (r: Record<string, unknown>) => <span className="text-[13px] text-[#6B7280]">{moduleLabel(r.moduleId as string)}</span> },
-    { key: 'questions', label: 'Questions', render: (r: Record<string, unknown>) => <span className="text-[13px] text-[#374151]">{r.questions as number}</span> },
+    { key: 'title', label: 'Exam', render: (r: Record<string, unknown>) => <span className="text-sm font-medium text-content-secondary">{r.title as string}</span> },
+    { key: 'moduleId', label: 'Module', render: (r: Record<string, unknown>) => <span className="text-sm text-content-soft">{moduleLabel(r.moduleId as string)}</span> },
+    { key: 'questions', label: 'Questions', render: (r: Record<string, unknown>) => <span className="text-sm text-content-secondary">{r.questions as number}</span> },
     { key: 'status', label: 'Status', render: (r: Record<string, unknown>) => <Badge variant={(r.status === 'Published' ? 'success' : r.status === 'Draft' ? 'warning' : 'default') as 'success' | 'warning' | 'default'}>{r.status as string}</Badge> },
-    { key: 'updated', label: 'Updated', render: (r: Record<string, unknown>) => <span className="text-[13px] text-[#6B7280]">{r.updated as string}</span> },
+    { key: 'updated', label: 'Updated', render: (r: Record<string, unknown>) => <span className="text-sm text-content-soft">{r.updated as string}</span> },
     { key: 'actions', label: '', render: () => (
-      <Dropdown trigger={<button className="p-1.5 hover:bg-[#F3F4F6] rounded-[6px]"><Icon.MoreHorizontal className="w-4 h-4 text-[#6B7280]" /></button>}
+      <Dropdown trigger={<button className="p-1.5 hover:bg-accent rounded-[6px]"><Icon.MoreHorizontal className="w-4 h-4 text-content-soft" /></button>}
         items={[{ label: 'Edit', icon: <Icon.Edit />, onClick: () => onNavigate?.('exam-edit') }, { label: 'Preview', icon: <Icon.Eye /> }, { divider: true } as { label: string; divider: true }, { label: 'Delete', icon: <Icon.Trash />, danger: true }]} />
     )},
   ];
 
   const studentColumns = [
-    { key: 'name', label: 'Student', render: (r: Record<string, unknown>) => <div className="flex items-center gap-2.5"><span className="w-7 h-7 rounded-full bg-[#ECF7F4] flex items-center justify-center text-[11px] font-bold text-[#0D7C6C]">{(r.name as string).split(' ').map(w => w[0]).join('')}</span><span className="text-[13.5px] font-medium text-[#374151]">{r.name as string}</span></div> },
-    { key: 'progress', label: 'Progress', render: (r: Record<string, unknown>) => <div className="flex items-center gap-2 w-40"><Progress value={Number(r.progress)} size="sm" /><span className="text-[12px] font-medium text-[#374151]">{r.progress as number}%</span></div> },
-    { key: 'exams', label: 'Exams Taken', render: (r: Record<string, unknown>) => <span className="text-[13px] text-[#374151]">{r.exams as number}</span> },
-    { key: 'lastActive', label: 'Last Active', render: (r: Record<string, unknown>) => <span className="text-[13px] text-[#6B7280]">{r.lastActive as string}</span> },
+    { key: 'name', label: 'Student', render: (r: Record<string, unknown>) => <div className="flex items-center gap-2.5"><span className="w-7 h-7 rounded-full bg-primary-light flex items-center justify-center text-2xs font-bold text-brand-ink">{(r.name as string).split(' ').map(w => w[0]).join('')}</span><span className="text-sm font-medium text-content-secondary">{r.name as string}</span></div> },
+    { key: 'progress', label: 'Progress', render: (r: Record<string, unknown>) => <div className="flex items-center gap-2 w-40"><Progress value={Number(r.progress)} size="sm" /><span className="text-xs font-medium text-content-secondary">{r.progress as number}%</span></div> },
+    { key: 'exams', label: 'Exams Taken', render: (r: Record<string, unknown>) => <span className="text-sm text-content-secondary">{r.exams as number}</span> },
+    { key: 'lastActive', label: 'Last Active', render: (r: Record<string, unknown>) => <span className="text-sm text-content-soft">{r.lastActive as string}</span> },
   ];
 
   return (
@@ -101,7 +101,7 @@ export function CourseDetailPage({ onNavigate }: { onNavigate?: (id: string, par
       <Tabs tabs={['Overview', 'Students', 'Analytics', 'Settings']} active={tab} onChange={setTab} />
 
       {tab !== 'Overview' && (
-        <p className="text-[12.5px] text-[#9CA3AF]">{courseLabel(courseId)} <span className="text-[#D1D5DB]">·</span> {tab}</p>
+        <p className="text-xs text-content-subtle">{courseLabel(courseId)} <span className="text-content-faint">·</span> {tab}</p>
       )}
 
       {tab === 'Overview' && (
@@ -149,8 +149,8 @@ export function CourseDetailPage({ onNavigate }: { onNavigate?: (id: string, par
 
       {tab === 'Exams' && (
         <div className="card overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-[#F3F4F6]">
-            <p className="text-[13.5px] font-medium text-[#374151]">Exams for this course</p>
+          <div className="flex items-center justify-between px-4 py-3 border-b border-line-soft">
+            <p className="text-sm font-medium text-content-secondary">Exams for this course</p>
             <Button icon={<Icon.Plus className="w-4 h-4" />} onClick={() => onNavigate?.('exam-create')}>New Exam</Button>
           </div>
           <Table columns={examColumns} data={courseExams as Record<string, unknown>[]} />
@@ -159,8 +159,8 @@ export function CourseDetailPage({ onNavigate }: { onNavigate?: (id: string, par
 
       {tab === 'Students' && (
         <div className="card overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-[#F3F4F6]">
-            <p className="text-[13.5px] font-medium text-[#374151]">Enrolled students</p>
+          <div className="flex items-center justify-between px-4 py-3 border-b border-line-soft">
+            <p className="text-sm font-medium text-content-secondary">Enrolled students</p>
             <Badge variant="default">1,247 students</Badge>
           </div>
           <Table columns={studentColumns} data={students as Record<string, unknown>[]} />
@@ -174,25 +174,25 @@ export function CourseDetailPage({ onNavigate }: { onNavigate?: (id: string, par
               <div key={s.label} className="card p-4 flex items-center gap-3">
                 <span className="w-2 h-10 rounded-full flex-shrink-0" style={{ background: s.color }} />
                 <div>
-                  <p className="text-[20px] font-bold text-[#111827]">{s.value}</p>
-                  <p className="text-[12px] text-[#9CA3AF]">{s.label}</p>
+                  <p className="text-xl font-bold text-content">{s.value}</p>
+                  <p className="text-xs text-content-subtle">{s.label}</p>
                 </div>
               </div>
             ))}
           </div>
           <div className="card overflow-hidden">
-            <div className="px-4 py-3 border-b border-[#F3F4F6]">
-              <p className="text-[13.5px] font-medium text-[#374151]">Module performance</p>
+            <div className="px-4 py-3 border-b border-line-soft">
+              <p className="text-sm font-medium text-content-secondary">Module performance</p>
             </div>
-            <div className="divide-y divide-[#F9FAFB]">
+            <div className="divide-y divide-line-faint">
               {modulePerformance.map(pm => (
                 <div key={pm.module} className="flex items-center gap-4 px-4 py-3">
-                  <span className="w-36 xl:w-44 max-w-[30%] text-[13px] font-medium text-[#374151] truncate" title={pm.module}>{pm.module}</span>
+                  <span className="w-36 xl:w-44 max-w-[30%] text-sm font-medium text-content-secondary truncate" title={pm.module}>{pm.module}</span>
                   <div className="flex-1 max-w-xs"><Progress value={pm.avg} size="sm" /></div>
-                  <span className="text-[12px] font-medium text-[#0D7C6C]">Avg {pm.avg}%</span>
+                  <span className="text-xs font-medium text-brand-ink">Avg {pm.avg}%</span>
                   <div className="flex-1 max-w-xs"><Progress value={pm.pass} size="sm" color="#16A34A" /></div>
-                  <span className="text-[12px] font-medium text-[#16A34A]">Pass {pm.pass}%</span>
-                  <span className="text-[12px] text-[#6B7280] w-20 text-right">{pm.attempts} attempts</span>
+                  <span className="text-xs font-medium text-success">Pass {pm.pass}%</span>
+                  <span className="text-xs text-content-soft w-20 text-right">{pm.attempts} attempts</span>
                 </div>
               ))}
             </div>
@@ -228,7 +228,7 @@ function WorkspaceSettings({ onNavigate }: { onNavigate?: (id: string) => void }
     <div className="max-w-3xl space-y-4">
       {saved && <Alert type="success" title="Settings saved" message="The course settings have been updated." />}
       <div className="card p-5 space-y-4">
-        <h4 className="text-[15px] font-semibold text-[#111827]">Course Settings</h4>
+        <h4 className="text-lg font-semibold text-content">Course Settings</h4>
         <div className="grid grid-cols-2 gap-3">
           <Select label="Status" value="Published" options={[{ label: 'Draft', value: 'Draft' }, { label: 'Published', value: 'Published' }, { label: 'Archived', value: 'Archived' }]} />
           <Select label="Difficulty" value="Medium" options={[{ label: 'Easy', value: 'Easy' }, { label: 'Medium', value: 'Medium' }, { label: 'Hard', value: 'Hard' }]} />
@@ -239,10 +239,10 @@ function WorkspaceSettings({ onNavigate }: { onNavigate?: (id: string) => void }
             { label: 'Require completion order', desc: 'Students must finish lessons in sequence', on: false },
             { label: 'Public visibility', desc: 'Visible to enrolled students only', on: true },
           ].map(s => (
-            <div key={s.label} className="flex items-start justify-between gap-4 py-3 border-t border-[#F9FAFB]">
+            <div key={s.label} className="flex items-start justify-between gap-4 py-3 border-t border-line-faint">
               <div>
-                <p className="text-[14px] font-medium text-[#374151]">{s.label}</p>
-                <p className="text-[12px] text-[#9CA3AF]">{s.desc}</p>
+                <p className="text-base font-medium text-content-secondary">{s.label}</p>
+                <p className="text-xs text-content-subtle">{s.desc}</p>
               </div>
               <Switch checked={s.on} />
             </div>

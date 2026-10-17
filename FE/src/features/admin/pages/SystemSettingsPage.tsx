@@ -25,10 +25,10 @@ type SectionId = (typeof SECTIONS)[number]['id'];
 
 function SettingRow({ label, desc, children }: { label: string; desc?: string; children: React.ReactNode }) {
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 py-3 border-t border-[#F3F4F6] first:border-t-0 first:pt-0">
+    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 py-3 border-t border-line-soft first:border-t-0 first:pt-0">
       <div className="min-w-0">
-        <p className="text-[14px] font-medium text-[#374151]">{label}</p>
-        {desc && <p className="text-[12px] text-[#9CA3AF] mt-0.5">{desc}</p>}
+        <p className="text-base font-medium text-content-secondary">{label}</p>
+        {desc && <p className="text-xs text-content-subtle mt-0.5">{desc}</p>}
       </div>
       <div className="flex-shrink-0">{children}</div>
     </div>
@@ -37,10 +37,10 @@ function SettingRow({ label, desc, children }: { label: string; desc?: string; c
 
 function ToggleRow({ label, desc, checked, onChange }: { label: string; desc?: string; checked: boolean; onChange: (v: boolean) => void }) {
   return (
-    <div className="flex items-start justify-between gap-4 py-3 border-t border-[#F3F4F6] first:border-t-0 first:pt-0">
+    <div className="flex items-start justify-between gap-4 py-3 border-t border-line-soft first:border-t-0 first:pt-0">
       <div className="min-w-0">
-        <p className="text-[14px] font-medium text-[#374151]">{label}</p>
-        {desc && <p className="text-[12px] text-[#9CA3AF] mt-0.5">{desc}</p>}
+        <p className="text-base font-medium text-content-secondary">{label}</p>
+        {desc && <p className="text-xs text-content-subtle mt-0.5">{desc}</p>}
       </div>
       <Switch checked={checked} onChange={onChange} />
     </div>
@@ -137,8 +137,8 @@ export function SystemSettingsPage() {
   return (
     <div className="p-8 space-y-5">
       <div>
-        <h2 className="text-[22px] font-bold text-[#111827]">System Settings</h2>
-        <p className="text-[13px] text-[#6B7280] mt-1">Configure platform behavior, security, and maintenance options.</p>
+        <h2 className="text-xl font-bold text-content">System Settings</h2>
+        <p className="text-sm text-content-soft mt-1">Configure platform behavior, security, and maintenance options.</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
@@ -162,7 +162,7 @@ export function SystemSettingsPage() {
           {/* ── General ── */}
           {section === 'general' && (
             <div className="card p-6 space-y-4">
-              <h4 className="text-[16px] font-semibold text-[#111827]">General</h4>
+              <h4 className="text-lg font-semibold text-content">General</h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Input label="Platform Name" value={settings.general.platformName} onChange={e => set('general', { platformName: e.target.value })} />
                 <Input label="Support Email" type="email" icon={<Icon.Mail className="w-4 h-4" />} value={settings.general.supportEmail} onChange={e => set('general', { supportEmail: e.target.value })} />
@@ -194,7 +194,7 @@ export function SystemSettingsPage() {
           {/* ── Authentication & Security ── */}
           {section === 'security' && (
             <div className="card p-6 space-y-4">
-              <h4 className="text-[16px] font-semibold text-[#111827]">Authentication & Security</h4>
+              <h4 className="text-lg font-semibold text-content">Authentication & Security</h4>
               <ToggleRow label="Enable User Registration" desc="Students can create their own accounts" checked={settings.security.allowRegistration} onChange={v => set('security', { allowRegistration: v })} />
               <ToggleRow label="Require Email Verification" desc="New accounts must confirm their email before logging in" checked={settings.security.requireEmailVerification} onChange={v => set('security', { requireEmailVerification: v })} />
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
@@ -211,7 +211,7 @@ export function SystemSettingsPage() {
           {/* ── Exam Defaults ── */}
           {section === 'exam' && (
             <div className="card p-6 space-y-4">
-              <h4 className="text-[16px] font-semibold text-[#111827]">Exam Defaults</h4>
+              <h4 className="text-lg font-semibold text-content">Exam Defaults</h4>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <Input label="Default Exam Duration" type="number" min={5} value={settings.exam.duration} onChange={e => set('exam', { duration: e.target.value })} suffix="min" />
                 <Input label="Default Pass Score" type="number" min={0} max={100} value={settings.exam.passScore} onChange={e => set('exam', { passScore: e.target.value })} suffix="%" />
@@ -229,7 +229,7 @@ export function SystemSettingsPage() {
           {/* ── Question Settings ── */}
           {section === 'question' && (
             <div className="card p-6 space-y-4">
-              <h4 className="text-[16px] font-semibold text-[#111827]">Question Settings</h4>
+              <h4 className="text-lg font-semibold text-content">Question Settings</h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Select
                   label="Default Difficulty"
@@ -248,7 +248,7 @@ export function SystemSettingsPage() {
           {/* ── File Upload ── */}
           {section === 'upload' && (
             <div className="card p-6 space-y-4">
-              <h4 className="text-[16px] font-semibold text-[#111827]">File Upload</h4>
+              <h4 className="text-lg font-semibold text-content">File Upload</h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Input label="Maximum PDF Size" type="number" min={1} value={settings.upload.pdfSize} onChange={e => set('upload', { pdfSize: e.target.value })} suffix="MB" />
                 <Input label="Maximum Image Size" type="number" min={1} value={settings.upload.imageSize} onChange={e => set('upload', { imageSize: e.target.value })} suffix="MB" />
@@ -262,7 +262,7 @@ export function SystemSettingsPage() {
           {section === 'maintenance' && (
             <div className="space-y-5">
               <div className="card p-6 space-y-4">
-                <h4 className="text-[16px] font-semibold text-[#111827]">Maintenance</h4>
+                <h4 className="text-lg font-semibold text-content">Maintenance</h4>
                 <ToggleRow
                   label="Enable Maintenance Mode"
                   desc="Disable access for all non-admin users while updates are applied"
@@ -280,22 +280,22 @@ export function SystemSettingsPage() {
                 </div>
               </div>
               <div className="card overflow-hidden">
-                <div className="px-5 py-4 border-b border-[#F3F4F6]"><h4 className="text-[15px] font-semibold text-[#111827]">Backup History</h4></div>
-                <div className="divide-y divide-[#F9FAFB]">
+                <div className="px-5 py-4 border-b border-line-soft"><h4 className="text-lg font-semibold text-content">Backup History</h4></div>
+                <div className="divide-y divide-line-faint">
                   {[
                     { date: '2026-09-21 03:00', size: '14.2 GB', status: 'Success', type: 'Auto' },
                     { date: '2026-09-20 03:00', size: '14.0 GB', status: 'Success', type: 'Auto' },
                     { date: '2026-09-19 14:35', size: '13.9 GB', status: 'Success', type: 'Manual' },
                   ].map(b => (
-                    <div key={b.date} className="flex items-center gap-4 px-5 py-3 hover:bg-[#F9FAFB]">
-                      <Icon.Database className="w-5 h-5 text-[#0D7C6C] flex-shrink-0" />
+                    <div key={b.date} className="flex items-center gap-4 px-5 py-3 hover:bg-surface-hover">
+                      <Icon.Database className="w-5 h-5 text-brand-ink flex-shrink-0" />
                       <div className="flex-1 min-w-0">
-                        <p className="text-[13px] font-medium text-[#374151] font-mono truncate">{b.date}</p>
-                        <p className="text-[12px] text-[#9CA3AF]">{b.size}</p>
+                        <p className="text-sm font-medium text-content-secondary font-mono truncate">{b.date}</p>
+                        <p className="text-xs text-content-subtle">{b.size}</p>
                       </div>
                       <Badge variant={b.type === 'Manual' ? 'purple' : 'default'}>{b.type}</Badge>
                       {statusPill(b.status === 'Success', b.status)}
-                      <button className="p-1.5 hover:bg-[#F3F4F6] rounded-[6px] flex-shrink-0"><Icon.Download className="w-4 h-4 text-[#6B7280]" /></button>
+                      <button className="p-1.5 hover:bg-accent rounded-[6px] flex-shrink-0"><Icon.Download className="w-4 h-4 text-content-soft" /></button>
                     </div>
                   ))}
                 </div>
@@ -330,7 +330,7 @@ export function SystemSettingsPage() {
           </>
         }
       >
-        <p className="text-[14px] text-[#374151]">
+        <p className="text-base text-content-secondary">
           This will restore the <span className="font-semibold">{SECTIONS.find(s => s.id === section)?.label}</span> settings to their default values. Any unsaved changes in this section will be lost.
         </p>
       </Modal>

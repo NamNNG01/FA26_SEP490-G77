@@ -44,13 +44,13 @@ export function DashboardError({
   return (
     <div className="p-8">
       <div className="card p-10 flex flex-col items-center text-center max-w-md mx-auto">
-        <div className="w-20 h-20 bg-[#F3F4F6] dark:bg-[#1F2937] rounded-[20px] flex items-center justify-center mb-5">
+        <div className="w-20 h-20 bg-surface-muted rounded-[20px] flex items-center justify-center mb-5">
           <Icon.AlertCircle className="w-10 h-10 text-muted-foreground" />
         </div>
-        <h3 className="text-[16px] font-semibold text-foreground mb-1.5">
+        <h3 className="text-lg font-semibold text-foreground mb-1.5">
           Something went wrong
         </h3>
-        <p className="text-[13.5px] text-muted-foreground mb-6">{message}</p>
+        <p className="text-sm text-muted-foreground mb-6">{message}</p>
         <Button variant="outline" icon={<Icon.RefreshCw className="w-4 h-4" />} onClick={onRetry}>
           Retry
         </Button>

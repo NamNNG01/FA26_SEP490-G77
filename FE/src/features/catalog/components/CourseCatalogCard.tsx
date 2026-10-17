@@ -25,38 +25,38 @@ export function CourseCatalogCard({ course }: { course: PublicCourse }) {
   ];
 
   return (
-    <article className="card group flex h-full flex-col p-5 transition-all hover:-translate-y-0.5 hover:border-[#A7DCCF] hover:shadow-lg dark:hover:border-[#0F3B35]">
+    <article className="card group flex h-full flex-col p-5 transition-all hover:-translate-y-0.5 hover:border-brand-line hover:shadow-lg">
       <div className="flex items-start gap-3">
         <ProviderLogo providerId={course.providerId} provider={course.provider} size={40} />
         <div className="min-w-0 flex-1">
-          <h3 className="text-[15px] leading-snug font-semibold text-[#111827] dark:text-[#F9FAFB]">
+          <h3 className="text-lg leading-snug font-semibold text-content">
             <button type="button" onClick={() => navigate(href)} className="text-left cursor-pointer">
               {course.name}
             </button>
           </h3>
-          <p className="mt-0.5 truncate text-[12.5px] text-[#9CA3AF]">{course.provider}</p>
+          <p className="mt-0.5 truncate text-xs text-content-subtle">{course.provider}</p>
         </div>
         <Badge variant={difficultyVariant(course.difficulty)}>{course.difficulty}</Badge>
       </div>
 
-      <p className="mt-3 line-clamp-2 text-[13px] leading-relaxed text-[#6B7280] dark:text-[#D1D5DB]">{course.tagline}</p>
+      <p className="mt-3 line-clamp-2 text-sm leading-relaxed text-content-soft">{course.tagline}</p>
 
       {/* Stats — 2×2 so each row stays readable at every card width */}
       <dl className="mt-4 grid grid-cols-2 gap-2">
         {stats.map((stat) => (
-          <div key={stat.label} className="rounded-[10px] bg-[#F9FAFB] px-3 py-2 dark:bg-[#0B1220]">
-            <dt className="text-[10.5px] tracking-wide text-[#9CA3AF] uppercase">{stat.label}</dt>
-            <dd className="mt-0.5 text-[13.5px] font-semibold text-[#111827] dark:text-[#F9FAFB]">{stat.value}</dd>
+          <div key={stat.label} className="rounded-[10px] bg-surface-alt px-3 py-2">
+            <dt className="text-2xs tracking-wide text-content-subtle uppercase">{stat.label}</dt>
+            <dd className="mt-0.5 text-sm font-semibold text-content">{stat.value}</dd>
           </div>
         ))}
       </dl>
 
       <div className="mt-auto pt-4">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-[#9CA3AF]">
-          <span className="inline-flex items-center gap-1 font-medium text-[#374151] dark:text-[#D1D5DB]">
-            <Icon.Star className="h-3.5 w-3.5 text-[#F59E0B]" />
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-content-subtle">
+          <span className="inline-flex items-center gap-1 font-medium text-content-secondary">
+            <Icon.Star className="h-3.5 w-3.5 text-rating" />
             {course.rating.toFixed(1)}
-            <span className="text-[#9CA3AF]">({course.ratingCount.toLocaleString()})</span>
+            <span className="text-content-subtle">({course.ratingCount.toLocaleString()})</span>
           </span>
           <span className="inline-flex items-center gap-1">
             <Icon.Clock className="h-3.5 w-3.5" />
@@ -64,10 +64,10 @@ export function CourseCatalogCard({ course }: { course: PublicCourse }) {
           </span>
         </div>
 
-        <div className="mt-3 flex items-center justify-between gap-3 border-t border-[#F3F4F6] pt-3 dark:border-[#1F2937]">
+        <div className="mt-3 flex items-center justify-between gap-3 border-t border-line-soft pt-3">
           <span
-            className={`text-[12.5px] font-semibold ${
-              course.priceLabel === 'Free' ? 'text-[#16A34A]' : 'text-[#0D7C6C]'
+            className={`text-xs font-semibold ${
+              course.priceLabel === 'Free' ? 'text-success' : 'text-brand-ink'
             }`}
           >
             {course.priceLabel}
@@ -75,7 +75,7 @@ export function CourseCatalogCard({ course }: { course: PublicCourse }) {
           <button
             type="button"
             onClick={() => navigate(href)}
-            className="inline-flex h-9 items-center gap-1 rounded-[10px] bg-[#0D7C6C] px-3.5 text-[13px] font-semibold text-white shadow-sm transition-colors hover:bg-[#0A6458] cursor-pointer"
+            className="inline-flex h-9 items-center gap-1 rounded-[10px] bg-brand-600 px-3.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-700 cursor-pointer"
           >
             View Course
             <Icon.ChevronRight className="h-3.5 w-3.5" />

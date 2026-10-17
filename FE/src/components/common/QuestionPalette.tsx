@@ -9,11 +9,11 @@ export function QuestionPalette({ total, current, answered, flagged, onSelect }:
         <button key={n} type="button" onClick={() => onSelect(n)}
           aria-current={n === current ? 'step' : undefined}
           aria-label={`Question ${n}${flagged.has(n) ? ', flagged' : answered.has(n) ? ', answered' : ''}`}
-          className={`w-9 h-9 rounded-[8px] text-[13px] font-semibold transition-all border
-            ${n === current ? 'bg-[#0D7C6C] text-white border-[#0D7C6C] shadow-sm' :
-              flagged.has(n) ? 'bg-[#FFFBEB] text-[#D97706] border-[#FDE68A]' :
-              answered.has(n) ? 'bg-[#F0FDF4] text-[#16A34A] border-[#BBF7D0]' :
-              'bg-white text-[#374151] border-[#E5E7EB] hover:bg-[#F3F4F6]'}`}>
+          className={`w-9 h-9 rounded-[8px] text-sm font-semibold transition-all border
+            ${n === current ? 'bg-brand-600 text-white border-brand-600 shadow-sm' :
+              flagged.has(n) ? 'bg-warning-light text-warning border-warning-line' :
+              answered.has(n) ? 'bg-success-light text-success border-success-line' :
+              'bg-surface text-content-secondary border-line hover:bg-accent'}`}>
           {n}
         </button>
       ))}
@@ -24,10 +24,10 @@ export function QuestionPalette({ total, current, answered, flagged, onSelect }:
 export function AnswerOption({ letter, text, selected, correct, incorrect, onChange }: {
   letter: string; text: string; selected?: boolean; correct?: boolean; incorrect?: boolean; onChange?: () => void;
 }) {
-  let cls = 'border-[#E5E7EB] bg-white hover:border-[#0D7C6C] hover:bg-[#F9FAFB]';
-  if (selected && !correct && !incorrect) cls = 'border-[#0D7C6C] bg-[#ECF7F4]';
-  if (correct) cls = 'border-[#16A34A] bg-[#F0FDF4]';
-  if (incorrect) cls = 'border-[#DC2626] bg-[#FEF2F2]';
+  let cls = 'border-line bg-surface hover:border-brand-600 hover:bg-surface-hover';
+  if (selected && !correct && !incorrect) cls = 'border-brand-600 bg-primary-light';
+  if (correct) cls = 'border-success-solid bg-success-light';
+  if (incorrect) cls = 'border-danger-solid bg-danger-light';
   return (
     <button
       type="button"
@@ -36,11 +36,11 @@ export function AnswerOption({ letter, text, selected, correct, incorrect, onCha
       onClick={onChange}
       className={`w-full text-left flex items-start gap-3 p-4 rounded-[10px] border-2 cursor-pointer transition-all ${cls}`}
     >
-      <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[13px] font-bold flex-shrink-0 mt-0.5
-        ${correct ? 'bg-[#16A34A] text-white' : incorrect ? 'bg-[#DC2626] text-white' : selected ? 'bg-[#0D7C6C] text-white' : 'bg-[#F3F4F6] text-[#374151]'}`}>
+      <div className={`w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 mt-0.5
+        ${correct ? 'bg-success-solid text-white' : incorrect ? 'bg-danger-solid text-white' : selected ? 'bg-brand-600 text-white' : 'bg-surface-muted text-content-secondary'}`}>
         {letter}
       </div>
-      <p className={`text-[14px] leading-relaxed ${correct ? 'text-[#15803D] font-medium' : incorrect ? 'text-[#B91C1C] font-medium' : 'text-[#374151]'}`}>{text}</p>
+      <p className={`text-base leading-relaxed ${correct ? 'text-success-strong font-medium' : incorrect ? 'text-danger-strong font-medium' : 'text-content-secondary'}`}>{text}</p>
     </button>
   );
 }

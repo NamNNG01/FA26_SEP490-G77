@@ -24,30 +24,30 @@ export function AccessDeniedPage({
     : 'You are logged in.';
 
   return (
-    <div className="min-h-[100dvh] bg-[#F9FAFB] flex items-center justify-center p-6">
+    <div className="min-h-[100dvh] bg-surface-alt flex items-center justify-center p-6">
       <div className="w-full max-w-lg">
         <div className="card p-8 text-center">
-          <div className="w-16 h-16 bg-[#FEE2E2] rounded-full flex items-center justify-center mx-auto mb-5">
-            <Icon.Shield className="w-8 h-8 text-[#DC2626]" />
+          <div className="w-16 h-16 bg-danger-light rounded-full flex items-center justify-center mx-auto mb-5">
+            <Icon.Shield className="w-8 h-8 text-danger" />
           </div>
 
-          <h2 className="text-[26px] font-extrabold text-[#111827] mb-2">Access Denied</h2>
-          <p className="text-[14px] text-[#6B7280] mb-6">{text}</p>
+          <h2 className="text-2xl font-extrabold text-content mb-2">Access Denied</h2>
+          <p className="text-base text-content-soft mb-6">{text}</p>
 
           <div className="space-y-3 mb-8 text-left">
             <div className="flex items-center gap-3">
-              <span className="w-2 h-2 rounded-full bg-[#DC2626]" />
-              <span className="text-[13px] text-[#6B7280]">Required Role</span>
-              <span className="text-[13px] font-semibold text-[#111827]">
+              <span className="w-2 h-2 rounded-full bg-danger-solid" />
+              <span className="text-sm text-content-soft">Required Role</span>
+              <span className="text-sm font-semibold text-content">
                 {requiredRole.length === 1
                   ? requiredRole[0][0]
                   : requiredRole.map((r) => `"${r[0]}"`).join(', ')}
               </span>
             </div>
             <div className="flex items-center gap-3">
-              <span className="w-2 h-2 rounded-full bg-[#0D7C6C]" />
-              <span className="text-[13px] text-[#6B7280]">Current User Role</span>
-              <span className="text-[13px] font-semibold text-[#111827]">
+              <span className="w-2 h-2 rounded-full bg-brand-600" />
+              <span className="text-sm text-content-soft">Current User Role</span>
+              <span className="text-sm font-semibold text-content">
                 {currentUserRole || '—'}{' '}
                 {currentUserRole ? '(view-only)' : ''}
               </span>

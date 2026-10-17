@@ -43,44 +43,44 @@ export function FinancialDashboardPage() {
         <div className="xl:col-span-2 space-y-5">
           <div className="card p-5">
             <div className="flex items-center justify-between mb-5">
-              <h4 className="text-[15px] font-semibold text-[#111827]">Revenue Trend</h4>
-              <div className="flex items-center gap-4 text-[12px]">
-                <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-[3px] bg-[#16A34A]" /><span className="text-[#6B7280]">Revenue ($)</span></div>
-                <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-[3px] bg-[#A7DCCF]" /><span className="text-[#6B7280]">Subscriptions</span></div>
+              <h4 className="text-lg font-semibold text-content">Revenue Trend</h4>
+              <div className="flex items-center gap-4 text-xs">
+                <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-[3px] bg-success-solid" /><span className="text-content-soft">Revenue ($)</span></div>
+                <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-[3px] bg-brand-line" /><span className="text-content-soft">Subscriptions</span></div>
               </div>
             </div>
             <div className="flex items-end gap-3 h-40">
               {revenueData.map(d => (
                 <div key={d.month} className="flex-1 flex flex-col items-center gap-1.5">
-                  <span className="text-[10px] text-[#9CA3AF]">{Math.round(d.revenue / 1000)}k</span>
+                  <span className="text-2xs text-content-subtle">{Math.round(d.revenue / 1000)}k</span>
                   <div className="w-full flex items-end gap-1 h-28">
                     <div className="flex-1 rounded-t-[4px] chart-bar" style={{ height: `${(d.revenue / maxRevenue) * 100}%`, background: '#16A34A', minHeight: 4 }} />
                     <div className="flex-1 rounded-t-[4px] chart-bar" style={{ height: `${(d.subs / 2210) * 100}%`, background: '#A7DCCF', minHeight: 4 }} />
                   </div>
-                  <span className="text-[11px] text-[#9CA3AF]">{d.month}</span>
+                  <span className="text-2xs text-content-subtle">{d.month}</span>
                 </div>
               ))}
             </div>
           </div>
 
           <div className="card overflow-hidden">
-            <div className="px-5 py-4 border-b border-[#F3F4F6] flex items-center justify-between">
-              <h4 className="text-[15px] font-semibold text-[#111827]">Recent Transactions</h4>
+            <div className="px-5 py-4 border-b border-line-soft flex items-center justify-between">
+              <h4 className="text-lg font-semibold text-content">Recent Transactions</h4>
               <Button variant="ghost" size="sm">View All</Button>
             </div>
-            <div className="divide-y divide-[#F9FAFB]">
+            <div className="divide-y divide-line-faint">
               {transactions.map(t => (
-                <div key={t.id} className="flex items-center gap-4 px-5 py-3.5 hover:bg-[#F9FAFB]">
-                  <div className="w-9 h-9 rounded-[10px] bg-[#F3F4F6] flex items-center justify-center flex-shrink-0">
-                    <Icon.FileText className="w-4 h-4 text-[#6B7280]" />
+                <div key={t.id} className="flex items-center gap-4 px-5 py-3.5 hover:bg-surface-hover">
+                  <div className="w-9 h-9 rounded-[10px] bg-surface-muted flex items-center justify-center flex-shrink-0">
+                    <Icon.FileText className="w-4 h-4 text-content-soft" />
                   </div>
                   <div className="flex-1">
-                    <p className="text-[13.5px] font-medium text-[#374151]">{t.customer}</p>
-                    <p className="text-[12px] text-[#9CA3AF]">{t.id} · {t.plan}</p>
+                    <p className="text-sm font-medium text-content-secondary">{t.customer}</p>
+                    <p className="text-xs text-content-subtle">{t.id} · {t.plan}</p>
                   </div>
                   <Badge variant={t.status === 'Paid' ? 'success' : 'danger'}>{t.status}</Badge>
-                  <span className="text-[13px] font-semibold text-[#111827] w-20 text-right">{t.amount}</span>
-                  <span className="text-[12px] text-[#9CA3AF] font-mono flex-shrink-0">{t.date}</span>
+                  <span className="text-sm font-semibold text-content w-20 text-right">{t.amount}</span>
+                  <span className="text-xs text-content-subtle font-mono flex-shrink-0">{t.date}</span>
                 </div>
               ))}
             </div>
@@ -89,7 +89,7 @@ export function FinancialDashboardPage() {
 
         <div className="space-y-4">
           <div className="card p-5">
-            <h4 className="text-[14px] font-semibold text-[#111827] mb-4">Revenue by Plan</h4>
+            <h4 className="text-base font-semibold text-content mb-4">Revenue by Plan</h4>
             <div className="space-y-3">
               {[
                 { plan: 'Enterprise', pct: 48, color: '#0D7C6C' },
@@ -99,22 +99,22 @@ export function FinancialDashboardPage() {
                 { plan: 'Free', pct: 4, color: '#9CA3AF' },
               ].map(p => (
                 <div key={p.plan} className="flex items-center gap-3">
-                  <span className="text-[13px] text-[#374151] w-24 flex-shrink-0">{p.plan}</span>
-                  <div className="flex-1 h-2 bg-[#F3F4F6] rounded-full overflow-hidden">
+                  <span className="text-sm text-content-secondary w-24 flex-shrink-0">{p.plan}</span>
+                  <div className="flex-1 h-2 bg-surface-muted rounded-full overflow-hidden">
                     <div className="h-full rounded-full transition-all" style={{ width: `${p.pct}%`, background: p.color }} />
                   </div>
-                  <span className="text-[12px] font-semibold text-[#374151] w-10 text-right">{p.pct}%</span>
+                  <span className="text-xs font-semibold text-content-secondary w-10 text-right">{p.pct}%</span>
                 </div>
               ))}
             </div>
           </div>
           <div className="card p-5">
-            <h4 className="text-[14px] font-semibold text-[#111827] mb-3">Billing Highlights</h4>
+            <h4 className="text-base font-semibold text-content mb-3">Billing Highlights</h4>
             <div className="space-y-2">
               {[['Payment success rate', '98.2%'], ['Avg revenue / active', '$9.68'], ['Churn rate', '3.1%'], ['Active trials', '214']].map(([k, v]) => (
-                <div key={k} className="flex justify-between py-2 border-b border-[#F9FAFB] last:border-0">
-                  <span className="text-[12px] text-[#9CA3AF]">{k}</span>
-                  <span className="text-[12px] font-semibold text-[#374151]">{v}</span>
+                <div key={k} className="flex justify-between py-2 border-b border-line-faint last:border-0">
+                  <span className="text-xs text-content-subtle">{k}</span>
+                  <span className="text-xs font-semibold text-content-secondary">{v}</span>
                 </div>
               ))}
             </div>

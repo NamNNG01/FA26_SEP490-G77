@@ -91,7 +91,7 @@ export function Table({
       <div className="w-full overflow-x-auto">
         <table className="w-full border-collapse">
           <thead>
-            <tr className="border-b border-[#F3F4F6]">
+            <tr className="border-b border-line-soft">
               {selectable && (
                 <th className="w-10 px-2.5 sm:px-3 lg:px-4 py-3">
                   <Checkbox checked={allChecked} indeterminate={someChecked && !allChecked} onChange={toggleAll} />
@@ -99,7 +99,7 @@ export function Table({
               )}
               {columns.map(col => (
                     <th key={col.key} style={{ width: col.width }} onClick={() => col.sortable && onSort?.(col.key)}
-                      className={`px-2.5 sm:px-3 lg:px-4 py-3 text-left text-[12px] font-semibold text-[#6B7280] uppercase tracking-wide whitespace-nowrap ${col.className ?? ''} ${col.sortable ? 'cursor-pointer hover:text-[#374151] select-none' : ''}`}>
+                      className={`px-2.5 sm:px-3 lg:px-4 py-3 text-left text-xs font-semibold text-content-soft uppercase tracking-wide whitespace-nowrap ${col.className ?? ''} ${col.sortable ? 'cursor-pointer hover:text-content-secondary select-none' : ''}`}>
                     <div className="flex items-center gap-1">
                       <span className="max-w-[220px] truncate" title={col.label}>{col.label}</span>
                       {col.sortable && sortKey === col.key && (sortDir === 'asc' ? <Icon.ArrowUp className="w-3 h-3 flex-shrink-0" /> : <Icon.ArrowDown className="w-3 h-3 flex-shrink-0" />)}
@@ -112,14 +112,14 @@ export function Table({
             {pageItems.map((row, i) => {
               const key = rowKeyOf(row, i);
               return (
-                <tr key={key} className="group border-b border-[#F9FAFB] hover:bg-[#F9FAFB] transition-colors">
+                <tr key={key} className="group border-b border-line-faint hover:bg-surface-hover transition-colors">
                   {selectable && (
                     <td className="px-2.5 sm:px-3 lg:px-4 py-3">
                       <Checkbox checked={selected.has(key)} onChange={() => toggleRow(key)} />
                     </td>
                   )}
                   {columns.map(col => (
-                    <td key={col.key} className={`px-2.5 sm:px-3 lg:px-4 py-3 text-[13.5px] text-[#374151] align-middle max-w-[280px] ${col.className ?? ''}`}>
+                    <td key={col.key} className={`px-2.5 sm:px-3 lg:px-4 py-3 text-sm text-content-secondary align-middle max-w-[280px] ${col.className ?? ''}`}>
                       <div className="min-w-0 overflow-hidden">
                         {col.render ? col.render(row) : <span className="block truncate">{String(row[col.key] ?? '')}</span>}
                       </div>
@@ -133,7 +133,7 @@ export function Table({
       </div>
 
       {/* Footer on every table: total count always visible; controls hide for a single page. */}
-      <div className="border-t border-[#F3F4F6]">
+      <div className="border-t border-line-soft">
         <Pagination page={page} total={total} perPage={perPage} onChange={setPage} unit={unit} />
       </div>
     </div>

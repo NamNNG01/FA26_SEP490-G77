@@ -33,7 +33,7 @@ export function PublicFooter() {
   ];
 
   return (
-    <footer className="border-t border-[#F3F4F6] bg-white dark:border-[#1F2937] dark:bg-[#111827]">
+    <footer className="border-t border-line-soft bg-surface">
       <Container className="py-10">
         <div className="flex flex-col gap-8 md:flex-row md:justify-between">
           <div className="max-w-sm">
@@ -43,12 +43,10 @@ export function PublicFooter() {
               aria-label="PrepExam home"
               className="flex cursor-pointer items-center gap-2.5"
             >
-              <span className="flex h-8 w-8 items-center justify-center rounded-[8px] bg-[#0D7C6C] shadow-sm">
-                <Icon.Logo className="h-4.5 w-4.5 text-white" />
-              </span>
-              <span className="text-[16px] font-bold text-[#111827] dark:text-[#F9FAFB]">PrepExam</span>
+              <Icon.Logo className="h-8 w-8 flex-shrink-0 text-brand-ink" aria-hidden="true" />
+              <span className="text-lg font-bold text-content">PrepExam</span>
             </button>
-            <p className="mt-3 text-[13.5px] leading-relaxed text-[#6B7280] dark:text-[#D1D5DB]">
+            <p className="mt-3 text-sm leading-relaxed text-content-soft">
               Exam preparation for cloud and security certifications. Browse courses, practise exam-style questions and sit mock exams —
               PrepExam does not issue certificates.
             </p>
@@ -57,7 +55,7 @@ export function PublicFooter() {
           <div className="flex gap-12">
             {columns.map((column) => (
               <div key={column.title}>
-                <p className="text-[12px] font-semibold tracking-wider text-[#111827] uppercase dark:text-[#F9FAFB]">
+                <p className="text-xs font-semibold tracking-wider text-content uppercase">
                   {column.title}
                 </p>
                 <ul className="mt-3 space-y-2">
@@ -66,7 +64,7 @@ export function PublicFooter() {
                       <button
                         type="button"
                         onClick={() => navigate(link.to)}
-                        className="cursor-pointer text-[13.5px] text-[#6B7280] transition-colors hover:text-[#0D7C6C] dark:text-[#D1D5DB]"
+                        className="cursor-pointer text-sm text-content-soft transition-colors hover:text-brand-ink"
                       >
                         {link.label}
                       </button>
@@ -78,9 +76,9 @@ export function PublicFooter() {
           </div>
         </div>
 
-        <div className="mt-8 flex flex-col items-center justify-between gap-2 border-t border-[#F3F4F6] pt-6 text-center sm:flex-row sm:text-left dark:border-[#1F2937]">
-          <p className="text-[13px] text-[#9CA3AF]">© {new Date().getFullYear()} PrepExam. All rights reserved.</p>
-          <p className="text-[13px] text-[#9CA3AF]">Practice questions · Mock exams · AI review</p>
+        <div className="mt-8 flex flex-col items-center justify-between gap-2 border-t border-line-soft pt-6 text-center sm:flex-row sm:text-left">
+          <p className="text-sm text-content-subtle">© {new Date().getFullYear()} PrepExam. All rights reserved.</p>
+          <p className="text-sm text-content-subtle">Practice questions · Mock exams · AI review</p>
         </div>
       </Container>
     </footer>

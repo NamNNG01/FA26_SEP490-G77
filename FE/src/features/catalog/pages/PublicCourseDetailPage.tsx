@@ -33,11 +33,11 @@ export function PublicCourseDetailPage() {
     return (
       <Container className="py-[clamp(3rem,8vw,6rem)]">
         <div className="mx-auto max-w-md text-center">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-[14px] bg-[#ECF7F4] dark:bg-[#0D7C6C]/15">
-            <Icon.Search className="h-6 w-6 text-[#0D7C6C]" />
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-[14px] bg-primary-light">
+            <Icon.Search className="h-6 w-6 text-brand-ink" />
           </div>
-          <h1 className="mt-5 text-[22px] font-bold text-[#111827] dark:text-[#F9FAFB]">Course not found</h1>
-          <p className="mt-2 text-[14px] leading-relaxed text-[#6B7280] dark:text-[#D1D5DB]">
+          <h1 className="mt-5 text-xl font-bold text-content">Course not found</h1>
+          <p className="mt-2 text-base leading-relaxed text-content-soft">
             We couldn’t find that course. Browse the catalog to see everything available right now.
           </p>
           <CTAButton label="Browse Courses" to={ROUTES.courses} className="mt-6" withArrow />
@@ -61,7 +61,7 @@ export function PublicCourseDetailPage() {
   return (
     <>
       {/* Hero strip — course identity */}
-      <div className="border-b border-[#F3F4F6] bg-[#F9FAFB] dark:border-[#1F2937] dark:bg-[#0B1220]">
+      <div className="border-b border-line-soft bg-surface-alt">
         <Container className="py-[clamp(1.75rem,4vw,2.75rem)]">
           <Breadcrumb
             items={[
@@ -76,15 +76,15 @@ export function PublicCourseDetailPage() {
 
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2.5">
-                <h1 className="text-[clamp(1.375rem,1.1rem+1.2vw,1.75rem)] font-bold tracking-tight text-[#111827] dark:text-[#F9FAFB]">
+                <h1 className="text-[clamp(1.375rem,1.1rem+1.2vw,1.75rem)] font-bold tracking-tight text-content">
                   {course.name}
                 </h1>
                 <Badge variant={course.difficulty === 'Beginner' ? 'success' : course.difficulty === 'Intermediate' ? 'warning' : 'danger'}>
                   {course.difficulty}
                 </Badge>
               </div>
-              <p className="mt-1.5 text-[14px] text-[#6B7280] dark:text-[#D1D5DB]">{course.provider}</p>
-              <p className="mt-3 max-w-[min(46rem,100%)] text-[15px] leading-relaxed text-[#374151] dark:text-[#D1D5DB]">
+              <p className="mt-1.5 text-base text-content-soft">{course.provider}</p>
+              <p className="mt-3 max-w-[min(46rem,100%)] text-lg leading-relaxed text-content-secondary">
                 {course.description}
               </p>
             </div>
@@ -99,40 +99,40 @@ export function PublicCourseDetailPage() {
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
               {stats.map((stat) => (
                 <div key={stat.label} className="card p-4">
-                  <span className="text-[#0D7C6C]">{stat.icon}</span>
-                  <p className="mt-2 text-[20px] leading-none font-bold text-[#111827] dark:text-[#F9FAFB]">{stat.value}</p>
-                  <p className="mt-1.5 text-[11.5px] leading-snug text-[#9CA3AF]">{stat.label}</p>
+                  <span className="text-brand-ink">{stat.icon}</span>
+                  <p className="mt-2 text-xl leading-none font-bold text-content">{stat.value}</p>
+                  <p className="mt-1.5 text-2xs leading-snug text-content-subtle">{stat.label}</p>
                 </div>
               ))}
             </div>
 
             <section className="mt-[clamp(1.5rem,3vw,2rem)]">
-              <h2 className="text-[17px] font-bold text-[#111827] dark:text-[#F9FAFB]">What you’ll get</h2>
+              <h2 className="text-lg font-bold text-content">What you’ll get</h2>
               <ul className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {course.features.map((feature) => (
-                  <li key={feature} className="flex items-center gap-2 text-[14px] text-[#374151] dark:text-[#D1D5DB]">
-                    <Icon.CheckCircle className="h-4 w-4 flex-shrink-0 text-[#16A34A]" />
+                  <li key={feature} className="flex items-center gap-2 text-base text-content-secondary">
+                    <Icon.CheckCircle className="h-4 w-4 flex-shrink-0 text-success" />
                     {feature}
                   </li>
                 ))}
-                <li className="flex items-center gap-2 text-[14px] text-[#374151] dark:text-[#D1D5DB]">
-                  <Icon.CheckCircle className="h-4 w-4 flex-shrink-0 text-[#16A34A]" />
+                <li className="flex items-center gap-2 text-base text-content-secondary">
+                  <Icon.CheckCircle className="h-4 w-4 flex-shrink-0 text-success" />
                   Exam-style explanations for every question
                 </li>
-                <li className="flex items-center gap-2 text-[14px] text-[#374151] dark:text-[#D1D5DB]">
-                  <Icon.CheckCircle className="h-4 w-4 flex-shrink-0 text-[#16A34A]" />
+                <li className="flex items-center gap-2 text-base text-content-secondary">
+                  <Icon.CheckCircle className="h-4 w-4 flex-shrink-0 text-success" />
                   Weak-topic review after every attempt
                 </li>
               </ul>
             </section>
 
             <section className="mt-[clamp(1.5rem,3vw,2rem)]">
-              <h2 className="text-[17px] font-bold text-[#111827] dark:text-[#F9FAFB]">Topics covered</h2>
+              <h2 className="text-lg font-bold text-content">Topics covered</h2>
               <ul className="mt-3 flex flex-wrap gap-2">
                 {course.topics.map((topic) => (
                   <li
                     key={topic}
-                    className="rounded-full border border-[#E5E7EB] bg-white px-3 py-1.5 text-[13px] text-[#374151] dark:border-[#1F2937] dark:bg-[#111827] dark:text-[#D1D5DB]"
+                    className="rounded-full border border-line bg-surface px-3 py-1.5 text-sm text-content-secondary"
                   >
                     {topic}
                   </li>
@@ -144,8 +144,8 @@ export function PublicCourseDetailPage() {
           {/* Action sidebar */}
           <aside className="min-w-0">
             <div className="card sticky top-24 p-5">
-              <p className="text-[20px] font-bold text-[#0D7C6C]">{course.priceLabel}</p>
-              <p className="mt-1 text-[12.5px] text-[#9CA3AF]">Last updated {course.updatedAt}</p>
+              <p className="text-xl font-bold text-brand-ink">{course.priceLabel}</p>
+              <p className="mt-1 text-xs text-content-subtle">Last updated {course.updatedAt}</p>
 
               <div className="mt-4 space-y-2">
                 <CTAButton label="Start Learning" onClick={() => requireAuth(actionTarget)} className="w-full" withArrow />
@@ -153,13 +153,13 @@ export function PublicCourseDetailPage() {
                 <CTAButton label="Take Exam" onClick={() => requireAuth(actionTarget)} variant="secondary" className="w-full" />
               </div>
 
-              <ul className="mt-4 space-y-2 border-t border-[#F3F4F6] pt-4 dark:border-[#1F2937]">
-                <li className="flex items-start gap-2 text-[12.5px] leading-relaxed text-[#6B7280] dark:text-[#D1D5DB]">
-                  <Icon.Lock className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-[#9CA3AF]" />
+              <ul className="mt-4 space-y-2 border-t border-line-soft pt-4">
+                <li className="flex items-start gap-2 text-xs leading-relaxed text-content-soft">
+                  <Icon.Lock className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-content-subtle" />
                   A free account is required to practise — you’ll come straight back to this course after signing in.
                 </li>
-                <li className="flex items-start gap-2 text-[12.5px] leading-relaxed text-[#6B7280] dark:text-[#D1D5DB]">
-                  <Icon.Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-[#9CA3AF]" />
+                <li className="flex items-start gap-2 text-xs leading-relaxed text-content-soft">
+                  <Icon.Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-content-subtle" />
                   PrepExam is a preparation platform. It does not issue certificates — you take the official exam with
                   the exam provider.
                 </li>
@@ -170,7 +170,7 @@ export function PublicCourseDetailPage() {
 
         {related.length > 0 && (
           <section className="mt-[clamp(2.5rem,5vw,3.5rem)]">
-            <h2 className="text-[17px] font-bold text-[#111827] dark:text-[#F9FAFB]">More from {course.provider}</h2>
+            <h2 className="text-lg font-bold text-content">More from {course.provider}</h2>
             <div className="mt-4 grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-[clamp(1rem,2vw,1.25rem)]">
               {related.map((item) => (
                 <CourseCatalogCard key={item.slug} course={item} />

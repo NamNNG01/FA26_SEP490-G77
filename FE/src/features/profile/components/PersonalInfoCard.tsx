@@ -83,7 +83,7 @@ export function PersonalInfoCard({
 
   return (
     <div className="card p-6 h-full flex flex-col">
-      <h4 className="text-[16px] font-semibold text-[#111827] mb-5">Personal Information</h4>
+      <h4 className="text-lg font-semibold text-content mb-5">Personal Information</h4>
 
       {error && <Alert type="error" title="Update failed" message={error} />}
       {success && <Alert type="success" message={success} />}

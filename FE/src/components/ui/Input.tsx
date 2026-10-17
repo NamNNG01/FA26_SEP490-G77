@@ -20,26 +20,26 @@ export function Input({
     <div className={`flex flex-col gap-1.5 ${className}`}>
       {(label || labelAction) && (
         <div className="flex items-center justify-between gap-2">
-          {label && <label htmlFor={inputId} className="text-[13px] font-medium text-[#374151]">{label}</label>}
+          {label && <label htmlFor={inputId} className="text-sm font-medium text-content-secondary">{label}</label>}
           {labelAction}
         </div>
       )}
       <div className="relative flex items-center">
-        {icon && <span className="absolute left-3 text-[#9CA3AF] w-4 h-4 flex items-center">{icon}</span>}
+        {icon && <span className="absolute left-3 text-content-subtle w-4 h-4 flex items-center">{icon}</span>}
         <input
           id={inputId}
           aria-invalid={error ? true : undefined}
           aria-describedby={hasMessage ? messageId : undefined}
-          className={`w-full h-9 rounded-[10px] border text-[14px] text-[#111827] placeholder:text-[#9CA3AF] bg-white transition-all
-            focus:outline-none focus:ring-2 focus:ring-[#0D7C6C]/20 focus:border-[#0D7C6C]
-            ${error ? 'border-[#DC2626]' : 'border-[#E5E7EB]'}
+          className={`w-full h-9 rounded-[10px] border text-base text-content placeholder:text-gray-400 bg-surface transition-all
+            focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600
+            ${error ? 'border-danger-solid' : 'border-line'}
             ${icon ? 'pl-9' : 'pl-3'} ${suffix ? 'pr-10' : 'pr-3'}`}
           {...props}
         />
-        {suffix && <span className="absolute right-3 flex items-center text-[#9CA3AF]">{suffix}</span>}
+        {suffix && <span className="absolute right-3 flex items-center text-content-subtle">{suffix}</span>}
       </div>
-      {error && <p id={messageId} className="text-[12px] text-[#DC2626]">{error}</p>}
-      {hint && !error && <p id={messageId} className="text-[12px] text-[#6B7280]">{hint}</p>}
+      {error && <p id={messageId} className="text-xs text-danger">{error}</p>}
+      {hint && !error && <p id={messageId} className="text-xs text-content-soft">{hint}</p>}
     </div>
   );
 }

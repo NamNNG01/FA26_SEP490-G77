@@ -46,11 +46,11 @@ export function ProfileHeaderCard({
 
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-3 flex-wrap">
-            <h3 className="text-[22px] font-bold text-[#111827] break-words min-w-0">{user.fullName}</h3>
+            <h3 className="text-xl font-bold text-content break-words min-w-0">{user.fullName}</h3>
             <Badge variant="info">{roleLabel(user.role)}</Badge>
           </div>
-          <p className="text-[14px] text-[#374151] break-all mt-1">{user.email}</p>
-          <p className="text-[13px] text-[#6B7280] mt-1">{memberDetails(user)}</p>
+          <p className="text-base text-content-secondary break-all mt-1">{user.email}</p>
+          <p className="text-sm text-content-soft mt-1">{memberDetails(user)}</p>
         </div>
 
         <div className="flex flex-col gap-2 self-start sm:w-auto w-full">
@@ -81,14 +81,14 @@ export function ProfileHeaderCard({
         {statsLoading
           ? [0, 1, 2, 3].map((i) => (
               <div key={i} className="space-y-1.5">
-                <div className="h-7 w-14 rounded bg-[#F3F4F6] animate-pulse" />
-                <div className="h-3 w-24 rounded bg-[#F3F4F6] animate-pulse" />
+                <div className="h-7 w-14 rounded bg-surface-muted animate-pulse" />
+                <div className="h-3 w-24 rounded bg-surface-muted animate-pulse" />
               </div>
             ))
           : stats.map((stat) => (
               <div key={stat.label}>
-                <p className="text-[22px] font-bold text-[#111827] leading-tight">{stat.value}</p>
-                <p className="text-[12px] text-[#6B7280] mt-0.5">{stat.label}</p>
+                <p className="text-xl font-bold text-content leading-tight">{stat.value}</p>
+                <p className="text-xs text-content-soft mt-0.5">{stat.label}</p>
               </div>
             ))}
       </div>

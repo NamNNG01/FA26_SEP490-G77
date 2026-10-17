@@ -41,12 +41,12 @@ export function CMDashboard() {
 
       {/* Recent Courses */}
       <div className="card overflow-hidden">
-        <div className="px-5 py-4 border-b border-[#F3F4F6] flex items-center justify-between">
-          <h4 className="text-[15px] font-semibold text-foreground">Recent Courses</h4>
+        <div className="px-5 py-4 border-b border-line-soft flex items-center justify-between">
+          <h4 className="text-lg font-semibold text-foreground">Recent Courses</h4>
           <Badge variant="default">{recentCourses.length} courses</Badge>
         </div>
         {recentCourses.length === 0 ? (
-          <p className="px-5 py-6 text-[13.5px] text-muted-foreground">
+          <p className="px-5 py-6 text-sm text-muted-foreground">
             You have not created any courses yet.
           </p>
         ) : (
@@ -56,7 +56,7 @@ export function CMDashboard() {
                 <div className="w-9 h-9 rounded-[10px] bg-primary-light flex items-center justify-center flex-shrink-0">
                   <Icon.Book className="w-4 h-4 text-primary" />
                 </div>
-                <p className="flex-1 min-w-0 text-[13.5px] font-medium text-foreground truncate">
+                <p className="flex-1 min-w-0 text-sm font-medium text-foreground truncate">
                   {course.title}
                 </p>
                 <Badge
@@ -70,7 +70,7 @@ export function CMDashboard() {
                 >
                   {course.status}
                 </Badge>
-                <div className="flex items-center gap-1.5 text-[12.5px] text-muted-foreground w-24 justify-end flex-shrink-0">
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground w-24 justify-end flex-shrink-0">
                   <Icon.Users className="w-3.5 h-3.5" />
                   {course.studentCount ?? 0} students
                 </div>

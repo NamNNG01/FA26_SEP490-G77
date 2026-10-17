@@ -15,7 +15,7 @@ export function AnalyticsPage() {
   return (
     <div className="p-8 space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-[22px] font-bold text-[#111827]">Analytics & Reports</h2>
+        <h2 className="text-xl font-bold text-content">Analytics & Reports</h2>
         <div className="flex gap-2">
           <Select value="30d" options={[{ label: 'Last 30 days', value: '30d' }, { label: 'Last 90 days', value: '90d' }, { label: 'This year', value: 'year' }]} />
           <Button variant="outline" icon={<Icon.Download className="w-4 h-4" />}>Export</Button>
@@ -33,9 +33,9 @@ export function AnalyticsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="card p-5">
           <div className="flex items-baseline justify-between gap-3 mb-5">
-            <h2 className="text-[15px] font-semibold text-[#111827]">Pass Rate by Subject</h2>
-            <span className="inline-flex items-center gap-1.5 text-[12px] text-[#6B7280]">
-              <span aria-hidden className="h-3 w-px bg-[#111827]" />
+            <h2 className="text-lg font-semibold text-content">Pass Rate by Subject</h2>
+            <span className="inline-flex items-center gap-1.5 text-xs text-content-soft">
+              <span aria-hidden className="h-3 w-px bg-fill-inverse" />
               {PASS_TARGET}% target
             </span>
           </div>
@@ -44,16 +44,16 @@ export function AnalyticsPage() {
               const below = p.rate < PASS_TARGET;
               return (
                 <div key={p.subject} className="flex items-center gap-3">
-                  <span className="text-[13px] text-[#374151] w-32 flex-shrink-0">{p.subject}</span>
+                  <span className="text-sm text-content-secondary w-32 flex-shrink-0">{p.subject}</span>
                   {/* One hue for every bar; only subjects under target get the warning tint. */}
-                  <div className="relative flex-1 h-6 bg-[#F3F4F6] rounded-[6px] overflow-hidden">
+                  <div className="relative flex-1 h-6 bg-surface-muted rounded-[6px] overflow-hidden">
                     <div className="h-full rounded-[6px] flex items-center pl-2"
                       style={{ width: `${p.rate}%`, background: below ? '#D97706' : '#0D7C6C' }}>
-                      <span className="text-[11px] font-bold text-white">{p.rate}%</span>
+                      <span className="text-2xs font-bold text-white">{p.rate}%</span>
                     </div>
-                    <span aria-hidden className="absolute inset-y-0 w-px bg-[#111827]" style={{ left: `${PASS_TARGET}%` }} />
+                    <span aria-hidden className="absolute inset-y-0 w-px bg-fill-inverse" style={{ left: `${PASS_TARGET}%` }} />
                   </div>
-                  <span className="text-[12px] text-[#6B7280] whitespace-nowrap tabular-nums w-[72px] text-right">
+                  <span className="text-xs text-content-soft whitespace-nowrap tabular-nums w-[72px] text-right">
                     {p.exams.toLocaleString('en-US')} exams
                   </span>
                 </div>
@@ -64,10 +64,10 @@ export function AnalyticsPage() {
 
         <div className="card p-5">
           <div className="flex items-baseline justify-between gap-3 mb-5">
-            <h2 className="text-[15px] font-semibold text-[#111827]">Score Distribution</h2>
-            <div className="flex items-center gap-3 text-[12px] text-[#6B7280]">
-              <span className="inline-flex items-center gap-1.5"><span aria-hidden className="h-2.5 w-2.5 rounded-[3px] bg-[#0D7C6C]" />Passed (71+)</span>
-              <span className="inline-flex items-center gap-1.5"><span aria-hidden className="h-2.5 w-2.5 rounded-[3px] bg-[#A7DCCF]" />Below pass</span>
+            <h2 className="text-lg font-semibold text-content">Score Distribution</h2>
+            <div className="flex items-center gap-3 text-xs text-content-soft">
+              <span className="inline-flex items-center gap-1.5"><span aria-hidden className="h-2.5 w-2.5 rounded-[3px] bg-brand-600" />Passed (71+)</span>
+              <span className="inline-flex items-center gap-1.5"><span aria-hidden className="h-2.5 w-2.5 rounded-[3px] bg-brand-line" />Below pass</span>
             </div>
           </div>
           <div className="flex items-end gap-2 h-40 mb-3">
@@ -81,13 +81,13 @@ export function AnalyticsPage() {
               { range: '91–100', pct: 5, count: 916 },
             ].map(d => (
               <div key={d.range} className="flex-1 flex flex-col items-center gap-1">
-                <span className="text-[11px] text-[#6B7280]">{d.pct}%</span>
+                <span className="text-2xs text-content-soft">{d.pct}%</span>
                 <div className="w-full rounded-t-[4px]" style={{ height: `${d.pct * 4}px`, background: d.range.startsWith('7') || d.range.startsWith('8') || d.range.startsWith('9') ? '#0D7C6C' : '#A7DCCF' }} />
-                <span className="text-[11px] text-[#6B7280] leading-tight text-center">{d.range}</span>
+                <span className="text-2xs text-content-soft leading-tight text-center">{d.range}</span>
               </div>
             ))}
           </div>
-          <p className="text-[12px] text-center text-[#9CA3AF]">Score range distribution across 18,291 attempts</p>
+          <p className="text-xs text-center text-content-subtle">Score range distribution across 18,291 attempts</p>
         </div>
       </div>
     </div>

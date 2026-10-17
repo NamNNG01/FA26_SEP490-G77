@@ -33,13 +33,13 @@ export function PublicStatCard({
     <div className="flex flex-col gap-3 rounded-[14px] border border-line bg-surface p-5 shadow-sm">
       <div className="flex items-center gap-2 text-muted-foreground">
         <span aria-hidden className="h-4 w-4 flex-shrink-0 [&>svg]:h-4 [&>svg]:w-4">{icon}</span>
-        <p className="text-[13px] font-medium">{title}</p>
+        <p className="text-sm font-medium">{title}</p>
       </div>
-      <p className="font-[family-name:var(--font-display)] text-[30px] font-bold leading-none tracking-tight text-foreground">{value}</p>
+      <p className="font-[family-name:var(--font-display)] text-2xl font-bold leading-none tracking-tight text-foreground">{value}</p>
 
-      <p className="flex flex-wrap items-center gap-x-1.5 text-[12.5px] text-muted-foreground">
+      <p className="flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
         {trend !== undefined && (
-          <span className="inline-flex items-center gap-0.5 font-semibold text-[#15803D] dark:text-[#4ADE80]">
+          <span className="inline-flex items-center gap-0.5 font-semibold text-success-strong">
             <Icon.TrendingUp className="h-3.5 w-3.5" />+{trend}%
           </span>
         )}

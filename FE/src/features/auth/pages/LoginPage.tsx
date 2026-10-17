@@ -82,7 +82,7 @@ export function LoginPage() {
                 <button
                   type="button"
                   onClick={() => navigate(ROUTES.forgotPassword, { state: { email: email.trim() } })}
-                  className="text-[12.5px] text-[#0D7C6C] hover:underline font-medium"
+                  className="text-xs text-brand-ink hover:underline font-medium"
                 >
                   Forgot password?
                 </button>
@@ -98,7 +98,7 @@ export function LoginPage() {
                   type="button"
                   aria-label={showPwd ? 'Hide password' : 'Show password'}
                   onClick={() => setShowPwd((s) => !s)}
-                  className="hover:text-[#374151] transition-colors"
+                  className="hover:text-content-secondary transition-colors"
                 >
                   {showPwd ? <Icon.EyeOff className="w-4 h-4" /> : <Icon.Eye className="w-4 h-4" />}
                 </button>
@@ -109,13 +109,13 @@ export function LoginPage() {
             </Button>
           </form>
 
-          <div className="mt-6 pt-5 border-t border-[#F3F4F6] flex justify-center">
-            <p className="text-[13px] text-[#6B7280] flex items-center gap-2">
+          <div className="mt-6 pt-5 border-t border-line-soft flex justify-center">
+            <p className="text-sm text-content-soft flex items-center gap-2">
               Don't have an account?{' '}
               <button
                 type="button"
                 onClick={() => navigate('/register')}
-                className="text-[13px] text-[#0D7C6C] hover:underline font-medium cursor-pointer"
+                className="text-sm text-brand-ink hover:underline font-medium cursor-pointer"
               >
                 Create one
               </button>

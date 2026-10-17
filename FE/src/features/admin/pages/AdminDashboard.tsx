@@ -44,14 +44,14 @@ export function AdminDashboard() {
 
       {/* Recent Registrations */}
       <div className="card overflow-hidden">
-        <div className="px-5 py-4 border-b border-[#F3F4F6] flex items-center justify-between">
-          <h4 className="text-[15px] font-semibold text-foreground">
+        <div className="px-5 py-4 border-b border-line-soft flex items-center justify-between">
+          <h4 className="text-lg font-semibold text-foreground">
             Recent Registrations
           </h4>
           <Badge variant="default">{recentUsers.length} users</Badge>
         </div>
         {recentUsers.length === 0 ? (
-          <p className="px-5 py-6 text-[13.5px] text-muted-foreground">
+          <p className="px-5 py-6 text-sm text-muted-foreground">
             No user registrations yet.
           </p>
         ) : (
@@ -60,10 +60,10 @@ export function AdminDashboard() {
               <div key={user.userId} className="flex items-center gap-3 px-5 py-3">
                 <Avatar name={user.fullName} size="sm" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-[13.5px] font-medium text-foreground truncate">
+                  <p className="text-sm font-medium text-foreground truncate">
                     {user.fullName}
                   </p>
-                  <p className="text-[12px] text-muted-foreground truncate">
+                  <p className="text-xs text-muted-foreground truncate">
                     {user.email}
                   </p>
                 </div>
@@ -75,11 +75,11 @@ export function AdminDashboard() {
                         ? 'purple'
                         : 'info'
                   }
-                  className="text-[11px]"
+                  className="text-2xs"
                 >
                   {user.role}
                 </Badge>
-                <span className="text-[12px] text-muted-foreground w-32 text-right flex-shrink-0">
+                <span className="text-xs text-muted-foreground w-32 text-right flex-shrink-0">
                   {user.createdAt
                     ? new Date(user.createdAt).toLocaleDateString()
                     : '—'}

@@ -56,7 +56,7 @@ export function Sidebar({
           type="button"
           onClick={onToggleCollapse}
           title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          className="sidebar-link w-full justify-center cursor-pointer border-t border-[#F3F4F6] py-3"
+          className="sidebar-link w-full justify-center cursor-pointer border-t border-line-soft py-3"
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
           {collapsed ? (

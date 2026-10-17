@@ -7,12 +7,12 @@ export function Checkbox({ label, checked, onChange, indeterminate }: { label?: 
       <div
         onClick={() => onChange?.(!checked)}
         className={`w-[18px] h-[18px] rounded-[5px] border-2 flex items-center justify-center transition-all
-          ${checked || indeterminate ? 'bg-[#0D7C6C] border-[#0D7C6C]' : 'border-[#D1D5DB] bg-white group-hover:border-[#0D7C6C]'}`}
+          ${checked || indeterminate ? 'bg-brand-600 border-brand-600' : 'border-line-strong bg-surface group-hover:border-brand-600'}`}
       >
         {checked && <Icon.Check className="w-2.5 h-2.5 text-white" />}
-        {indeterminate && !checked && <span className="w-2 h-0.5 bg-white rounded" />}
+        {indeterminate && !checked && <span className="w-2 h-0.5 bg-surface rounded" />}
       </div>
-      {label && <span className="text-[14px] text-[#374151]">{label}</span>}
+      {label && <span className="text-base text-content-secondary">{label}</span>}
     </label>
   );
 }

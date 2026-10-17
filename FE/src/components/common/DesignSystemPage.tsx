@@ -6,7 +6,7 @@ import { Icon } from '@/assets/icons';
 
 const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
   <div>
-    <h3 className="text-[13px] font-semibold text-[#9CA3AF] uppercase tracking-wider mb-4">{title}</h3>
+    <h3 className="text-sm font-semibold text-content-subtle uppercase tracking-wider mb-4">{title}</h3>
     {children}
   </div>
 );
@@ -69,9 +69,9 @@ export default function DesignSystemPage() {
         <div className="grid grid-cols-6 gap-3">
           {colors.map(c => (
             <div key={c.name}>
-              <div className="h-14 rounded-[10px] border border-[#00000010] mb-2" style={{ background: c.value }} />
-              <p className="text-[12px] font-medium text-[#374151]">{c.name}</p>
-              <p className="text-[11px] font-mono text-[#9CA3AF]">{c.value}</p>
+              <div className="h-14 rounded-[10px] border border-black/6 mb-2" style={{ background: c.value }} />
+              <p className="text-xs font-medium text-content-secondary">{c.name}</p>
+              <p className="text-2xs font-mono text-content-subtle">{c.value}</p>
             </div>
           ))}
         </div>
@@ -81,12 +81,12 @@ export default function DesignSystemPage() {
       <Section title="Typography Scale">
         <div className="card overflow-hidden">
           {typeScale.map((t, i) => (
-            <div key={t.label} className={`flex items-baseline gap-6 px-6 py-4 ${i > 0 ? 'border-t border-[#F3F4F6]' : ''}`}>
+            <div key={t.label} className={`flex items-baseline gap-6 px-6 py-4 ${i > 0 ? 'border-t border-line-soft' : ''}`}>
               <div className="w-20 flex-shrink-0">
-                <p className="text-[11px] font-mono text-[#9CA3AF]">{t.label}</p>
-                <p className="text-[11px] font-mono text-[#D1D5DB]">{t.size} / {t.weight}</p>
+                <p className="text-2xs font-mono text-content-subtle">{t.label}</p>
+                <p className="text-2xs font-mono text-content-faint">{t.size} / {t.weight}</p>
               </div>
-              <p style={{ fontSize: t.size, fontWeight: t.weight, fontFamily: t.label === 'Mono' ? 'JetBrains Mono, monospace' : undefined }} className="text-[#111827]">{t.sample}</p>
+              <p style={{ fontSize: t.size, fontWeight: t.weight, fontFamily: t.label === 'Mono' ? 'JetBrains Mono, monospace' : undefined }} className="text-content">{t.sample}</p>
             </div>
           ))}
         </div>
@@ -97,8 +97,8 @@ export default function DesignSystemPage() {
         <div className="flex items-end gap-4 flex-wrap">
           {spacing.map(s => (
             <div key={s} className="flex flex-col items-center gap-2">
-              <div className="bg-[#0D7C6C] rounded-[4px]" style={{ width: s, height: s }} />
-              <p className="text-[11px] font-mono text-[#9CA3AF]">{s}px</p>
+              <div className="bg-brand-600 rounded-[4px]" style={{ width: s, height: s }} />
+              <p className="text-2xs font-mono text-content-subtle">{s}px</p>
             </div>
           ))}
         </div>
@@ -109,9 +109,9 @@ export default function DesignSystemPage() {
         <div className="flex items-center gap-6 flex-wrap">
           {radii.map(r => (
             <div key={r.label} className="flex flex-col items-center gap-2">
-              <div className={`w-16 h-16 bg-[#ECF7F4] border-2 border-[#0D7C6C] ${r.cls}`} />
-              <p className="text-[12px] font-medium text-[#374151]">{r.label}</p>
-              <p className="text-[11px] font-mono text-[#9CA3AF]">{r.value}</p>
+              <div className={`w-16 h-16 bg-primary-light border-2 border-brand-600 ${r.cls}`} />
+              <p className="text-xs font-medium text-content-secondary">{r.label}</p>
+              <p className="text-2xs font-mono text-content-subtle">{r.value}</p>
             </div>
           ))}
         </div>
@@ -121,8 +121,8 @@ export default function DesignSystemPage() {
       <Section title="Elevation / Shadows">
         <div className="flex items-center gap-6 flex-wrap">
           {shadows.map(s => (
-            <div key={s.label} className={`w-28 h-20 bg-white rounded-[10px] border border-[#F3F4F6] flex items-center justify-center ${s.cls}`}>
-              <p className="text-[13px] font-medium text-[#374151]">{s.label}</p>
+            <div key={s.label} className={`w-28 h-20 bg-surface rounded-[10px] border border-line-soft flex items-center justify-center ${s.cls}`}>
+              <p className="text-sm font-medium text-content-secondary">{s.label}</p>
             </div>
           ))}
         </div>
@@ -132,8 +132,8 @@ export default function DesignSystemPage() {
       <Section title="Icon Set (24×24)">
         <div className="flex flex-wrap gap-3">
           {icons.map((IcoComp, i) => (
-            <div key={i} className="w-10 h-10 bg-[#F9FAFB] border border-[#F3F4F6] rounded-[8px] flex items-center justify-center hover:bg-[#ECF7F4] hover:border-[#A7DCCF] transition-colors cursor-pointer group">
-              <IcoComp className="w-5 h-5 text-[#6B7280] group-hover:text-[#0D7C6C]" />
+            <div key={i} className="w-10 h-10 bg-surface-alt border border-line-soft rounded-[8px] flex items-center justify-center hover:bg-primary-hover-tint hover:border-brand-line transition-colors cursor-pointer group">
+              <IcoComp className="w-5 h-5 text-content-soft group-hover:text-brand-ink" />
             </div>
           ))}
         </div>
@@ -143,20 +143,20 @@ export default function DesignSystemPage() {
       <Section title="Grid System (12-column)">
         <div className="grid grid-cols-12 gap-2">
           {Array.from({ length: 12 }).map((_, i) => (
-            <div key={i} className="h-8 bg-[#ECF7F4] border border-[#A7DCCF] rounded-[4px] flex items-center justify-center">
-              <span className="text-[10px] font-mono text-[#0D7C6C]">{i + 1}</span>
+            <div key={i} className="h-8 bg-primary-light border border-brand-line rounded-[4px] flex items-center justify-center">
+              <span className="text-2xs font-mono text-brand-ink">{i + 1}</span>
             </div>
           ))}
         </div>
         <div className="mt-3 grid grid-cols-12 gap-2">
-          <div className="col-span-4 h-12 bg-[#0D7C6C] rounded-[6px] flex items-center justify-center"><span className="text-[12px] text-white font-medium">4 cols</span></div>
-          <div className="col-span-8 h-12 bg-[#A7DCCF] rounded-[6px] flex items-center justify-center"><span className="text-[12px] text-[#0B5047] font-medium">8 cols</span></div>
+          <div className="col-span-4 h-12 bg-brand-600 rounded-[6px] flex items-center justify-center"><span className="text-xs text-white font-medium">4 cols</span></div>
+          <div className="col-span-8 h-12 bg-brand-line rounded-[6px] flex items-center justify-center"><span className="text-xs text-brand-ink-strong font-medium">8 cols</span></div>
         </div>
         <div className="mt-2 grid grid-cols-12 gap-2">
-          <div className="col-span-3 h-10 bg-[#A7DCCF] rounded-[6px] flex items-center justify-center"><span className="text-[11px] text-[#0B5047] font-medium">3</span></div>
-          <div className="col-span-3 h-10 bg-[#A7DCCF] rounded-[6px] flex items-center justify-center"><span className="text-[11px] text-[#0B5047] font-medium">3</span></div>
-          <div className="col-span-3 h-10 bg-[#A7DCCF] rounded-[6px] flex items-center justify-center"><span className="text-[11px] text-[#0B5047] font-medium">3</span></div>
-          <div className="col-span-3 h-10 bg-[#A7DCCF] rounded-[6px] flex items-center justify-center"><span className="text-[11px] text-[#0B5047] font-medium">3</span></div>
+          <div className="col-span-3 h-10 bg-brand-line rounded-[6px] flex items-center justify-center"><span className="text-2xs text-brand-ink-strong font-medium">3</span></div>
+          <div className="col-span-3 h-10 bg-brand-line rounded-[6px] flex items-center justify-center"><span className="text-2xs text-brand-ink-strong font-medium">3</span></div>
+          <div className="col-span-3 h-10 bg-brand-line rounded-[6px] flex items-center justify-center"><span className="text-2xs text-brand-ink-strong font-medium">3</span></div>
+          <div className="col-span-3 h-10 bg-brand-line rounded-[6px] flex items-center justify-center"><span className="text-2xs text-brand-ink-strong font-medium">3</span></div>
         </div>
       </Section>
 
@@ -164,7 +164,7 @@ export default function DesignSystemPage() {
       <Section title="Design Variables">
         <div className="grid grid-cols-2 gap-4">
           <div className="card p-4">
-            <p className="text-[12px] font-semibold text-[#9CA3AF] uppercase tracking-wide mb-3">Primitives</p>
+            <p className="text-xs font-semibold text-content-subtle uppercase tracking-wide mb-3">Primitives</p>
             <div className="space-y-2">
               {[
                 ['--color-primary', '#0D7C6C'],
@@ -175,14 +175,14 @@ export default function DesignSystemPage() {
                 ['--font-mono', 'JetBrains Mono'],
               ].map(([k, v]) => (
                 <div key={k} className="flex justify-between items-center">
-                  <code className="text-[12px] font-mono text-[#7C3AED]">{k}</code>
-                  <code className="text-[12px] font-mono text-[#374151]">{v}</code>
+                  <code className="text-xs font-mono text-purple">{k}</code>
+                  <code className="text-xs font-mono text-content-secondary">{v}</code>
                 </div>
               ))}
             </div>
           </div>
           <div className="card p-4">
-            <p className="text-[12px] font-semibold text-[#9CA3AF] uppercase tracking-wide mb-3">Semantic Tokens</p>
+            <p className="text-xs font-semibold text-content-subtle uppercase tracking-wide mb-3">Semantic Tokens</p>
             <div className="space-y-2">
               {[
                 ['--radius-sm', '6px'],
@@ -193,8 +193,8 @@ export default function DesignSystemPage() {
                 ['--transition', '150ms ease'],
               ].map(([k, v]) => (
                 <div key={k} className="flex justify-between items-center">
-                  <code className="text-[12px] font-mono text-[#0891B2]">{k}</code>
-                  <code className="text-[12px] font-mono text-[#374151]">{v}</code>
+                  <code className="text-xs font-mono text-info">{k}</code>
+                  <code className="text-xs font-mono text-content-secondary">{v}</code>
                 </div>
               ))}
             </div>
@@ -206,7 +206,7 @@ export default function DesignSystemPage() {
       <Section title="Effects & Motion">
         <div className="grid grid-cols-3 gap-4">
           <div className="card p-4">
-            <p className="text-[13px] font-semibold text-[#374151] mb-3">Progress Indicators</p>
+            <p className="text-sm font-semibold text-content-secondary mb-3">Progress Indicators</p>
             <div className="space-y-3">
               <Progress value={75} label="Course Completion" color="#0D7C6C" />
               <Progress value={45} label="Exam Score" color="#D97706" />
@@ -214,7 +214,7 @@ export default function DesignSystemPage() {
             </div>
           </div>
           <div className="card p-4">
-            <p className="text-[13px] font-semibold text-[#374151] mb-3">Skeleton Loading</p>
+            <p className="text-sm font-semibold text-content-secondary mb-3">Skeleton Loading</p>
             <div className="space-y-2.5">
               <Skeleton className="h-4 w-3/4" />
               <Skeleton className="h-4 w-full" />
@@ -223,7 +223,7 @@ export default function DesignSystemPage() {
             </div>
           </div>
           <div className="card p-4">
-            <p className="text-[13px] font-semibold text-[#374151] mb-3">Status Badges</p>
+            <p className="text-sm font-semibold text-content-secondary mb-3">Status Badges</p>
             <div className="flex flex-wrap gap-2">
               <Badge variant="info">Active</Badge>
               <Badge variant="success">Passed</Badge>

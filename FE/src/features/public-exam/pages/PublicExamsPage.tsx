@@ -138,8 +138,8 @@ export function PublicExamsPage() {
     <div className="mx-auto w-full max-w-[1400px] space-y-8">
       {/* Page header */}
       <header>
-        <h1 className="text-[26px] font-bold tracking-tight text-foreground">Public Exam</h1>
-        <p className="mt-2 max-w-2xl text-[14px] leading-relaxed text-muted-foreground">
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">Public Exam</h1>
+        <p className="mt-2 max-w-2xl text-base leading-relaxed text-muted-foreground">
           Practice with real exam-style questions to improve your skills and track your learning progress.
         </p>
       </header>
@@ -186,7 +186,7 @@ export function PublicExamsPage() {
       {/* Category tabs + result count */}
       <section className="flex flex-wrap items-center justify-between gap-4">
         <Tabs tabs={CATEGORY_TABS} active={category} onChange={setCategory} variant="solid" />
-        <p className="text-[13px] text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           Showing <span className="font-semibold text-foreground">{filtered.length}</span> of{' '}
           {PUBLIC_EXAMS.length} exams
         </p>

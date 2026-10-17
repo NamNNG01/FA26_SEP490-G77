@@ -48,7 +48,7 @@ export function ExamFormPage({ mode, onNavigate }: { mode: 'create' | 'edit'; on
     <div className="px-8 py-6 space-y-4 lg:h-full lg:flex lg:flex-col lg:overflow-hidden">
       <Breadcrumb items={[{ label: 'Exams', onClick: () => onNavigate?.('exam-list') }, { label: isEdit ? 'Edit Exam' : 'New Exam' }]} />
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-[22px] font-bold text-[#111827]">{isEdit ? 'Edit Exam' : 'New Exam'}</h2>
+        <h2 className="text-xl font-bold text-content">{isEdit ? 'Edit Exam' : 'New Exam'}</h2>
       </div>
 
       {savedAction && (
@@ -61,24 +61,24 @@ export function ExamFormPage({ mode, onNavigate }: { mode: 'create' | 'edit'; on
         {/* Left (75%): Select Questions */}
         <div className="lg:col-span-3 space-y-2 lg:min-h-0 lg:overflow-y-auto lg:pr-2">
           <div className="flex items-baseline gap-2 px-1">
-            <h4 className="text-[15px] font-semibold text-[#111827]">Select Questions</h4>
-            <span className="text-[12px] text-[#9CA3AF]">Questions are pulled from the module chosen in the sidebar.</span>
+            <h4 className="text-lg font-semibold text-content">Select Questions</h4>
+            <span className="text-xs text-content-subtle">Questions are pulled from the module chosen in the sidebar.</span>
           </div>
           <ModuleQuestionList moduleId={moduleId} selected={selected} onToggle={toggle} onPreview={setPreview} />
           {!canPublish && (
-            <p className="text-[12px] text-[#D97706] px-1">Complete the sidebar fields and select at least 1 question to save the exam.</p>
+            <p className="text-xs text-warning px-1">Complete the sidebar fields and select at least 1 question to save the exam.</p>
           )}
         </div>
 
         {/* Right (25%): sticky Exam Information sidebar */}
         <div className="lg:col-span-1 min-h-0 space-y-4">
           <div className="card p-4 space-y-3 lg:sticky lg:top-0">
-            <h4 className="text-[14px] font-semibold text-[#111827]">Exam Information</h4>
+            <h4 className="text-base font-semibold text-content">Exam Information</h4>
 
             <Input label="Exam Name *" value={title} onChange={e => setTitle(e.target.value)} placeholder="Enter exam name" />
             <div>
-              <label className="text-[13px] font-medium text-[#374151] block mb-1.5">Description <span className="text-[#9CA3AF] font-normal">(optional)</span></label>
-              <textarea className="w-full h-14 px-3 py-2 rounded-[10px] border border-[#E5E7EB] text-[13px] resize-none focus:outline-none focus:ring-2 focus:ring-[#0D7C6C]/20 focus:border-[#0D7C6C]" value={description} onChange={e => setDescription(e.target.value)} placeholder="Describe the exam scope..." />
+              <label className="text-sm font-medium text-content-secondary block mb-1.5">Description <span className="text-content-subtle font-normal">(optional)</span></label>
+              <textarea className="w-full h-14 px-3 py-2 rounded-[10px] border border-line text-sm resize-none focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600" value={description} onChange={e => setDescription(e.target.value)} placeholder="Describe the exam scope..." />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -88,7 +88,7 @@ export function ExamFormPage({ mode, onNavigate }: { mode: 'create' | 'edit'; on
             <Select label="Status" value={status} onChange={setStatus} options={[{ label: 'Draft', value: 'Draft' }, { label: 'Published', value: 'Published' }, { label: 'Archived', value: 'Archived' }]} />
             <Select label="Attempts Allowed" value={attempts} onChange={setAttempts} options={[{ label: '1 attempt', value: '1' }, { label: '2 attempts', value: '2' }, { label: 'Unlimited', value: '0' }]} />
 
-            <div className="pt-1 border-t border-[#F3F4F6]">
+            <div className="pt-1 border-t border-line-soft">
               <Select
                 label="Course *"
                 value={courseId}
@@ -105,10 +105,10 @@ export function ExamFormPage({ mode, onNavigate }: { mode: 'create' | 'edit'; on
             />
 
             {questionsCount > 0 && (
-              <p className="text-[12px] text-[#16A34A] font-medium">{questionsCount} question{questionsCount === 1 ? '' : 's'} selected</p>
+              <p className="text-xs text-success font-medium">{questionsCount} question{questionsCount === 1 ? '' : 's'} selected</p>
             )}
 
-            <div className="flex items-center gap-2 pt-2 border-t border-[#F3F4F6]">
+            <div className="flex items-center gap-2 pt-2 border-t border-line-soft">
               <Button className="flex-1" icon={<Icon.CheckCircle className="w-4 h-4" />} onClick={handlePublish} disabled={!canPublish}>Save Exam</Button>
               <Button variant="secondary" onClick={() => onNavigate?.('exam-list')}>Cancel</Button>
             </div>

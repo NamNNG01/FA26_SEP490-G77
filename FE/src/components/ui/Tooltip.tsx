@@ -11,7 +11,7 @@ export function Tooltip({ label, children, side = 'top' }: {
   return (
     <span className="relative inline-flex group">
       {children}
-      <span className={`pointer-events-none absolute z-20 ${pos} hidden group-hover:block whitespace-nowrap bg-[#111827] text-white text-[11px] px-2.5 py-1.5 rounded-[8px] shadow-lg`}>
+      <span className={`pointer-events-none absolute z-20 ${pos} hidden group-hover:block whitespace-nowrap bg-fill-inverse text-white text-2xs px-2.5 py-1.5 rounded-[8px] shadow-lg`}>
         {label}
       </span>
     </span>

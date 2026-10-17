@@ -81,7 +81,7 @@ export function LogoutAllDevicesButton({ className = '' }: { className?: string 
           </>
         }
       >
-        <p className="text-[14px] text-muted-foreground leading-relaxed">
+        <p className="text-base text-muted-foreground leading-relaxed">
           This will immediately sign you out from every device where you are currently logged in,
           including this one.
         </p>

@@ -136,7 +136,7 @@ export function RegisterPage() {
                   type="button"
                   aria-label={showPwd ? 'Hide password' : 'Show password'}
                   onClick={() => setShowPwd((s) => !s)}
-                  className="hover:text-[#374151] transition-colors"
+                  className="hover:text-content-secondary transition-colors"
                 >
                   {showPwd ? <Icon.EyeOff className="w-4 h-4" /> : <Icon.Eye className="w-4 h-4" />}
                 </button>
@@ -154,7 +154,7 @@ export function RegisterPage() {
                   type="button"
                   aria-label={showConfirm ? 'Hide password' : 'Show password'}
                   onClick={() => setShowConfirm((s) => !s)}
-                  className="hover:text-[#374151] transition-colors"
+                  className="hover:text-content-secondary transition-colors"
                 >
                   {showConfirm ? <Icon.EyeOff className="w-4 h-4" /> : <Icon.Eye className="w-4 h-4" />}
                 </button>
@@ -165,13 +165,13 @@ export function RegisterPage() {
             </Button>
           </form>
 
-          <div className="mt-5 pt-5 border-t border-[#F3F4F6] flex flex-col gap-3 items-center">
-            <p className="text-[13px] text-[#6B7280] flex items-center gap-2">
+          <div className="mt-5 pt-5 border-t border-line-soft flex flex-col gap-3 items-center">
+            <p className="text-sm text-content-soft flex items-center gap-2">
               Already have an account?{' '}
               <button
                 type="button"
                 onClick={() => navigate('/login')}
-                className="text-[13px] text-[#0D7C6C] hover:underline font-medium"
+                className="text-sm text-brand-ink hover:underline font-medium"
               >
                 Sign in
               </button>

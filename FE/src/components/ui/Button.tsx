@@ -5,16 +5,16 @@ export type BtnSize = 'sm' | 'md' | 'lg';
 
 const btnBase = 'inline-flex items-center justify-center gap-2 font-medium rounded-[10px] transition-all duration-150 cursor-pointer select-none disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap';
 const btnVariants: Record<BtnVariant, string> = {
-  primary: 'bg-[#0D7C6C] text-white hover:bg-[#0A6458] active:bg-[#0B5047] shadow-sm',
-  secondary: 'bg-[#F3F4F6] text-[#111827] hover:bg-[#E5E7EB] active:bg-[#D1D5DB]',
-  outline: 'border border-[#E5E7EB] bg-white text-[#374151] hover:bg-[#F9FAFB] hover:border-[#D1D5DB]',
-  ghost: 'text-[#374151] hover:bg-[#F3F4F6] active:bg-[#E5E7EB]',
-  danger: 'bg-[#DC2626] text-white hover:bg-[#B91C1C] shadow-sm',
+  primary: 'bg-brand-600 text-white hover:bg-brand-700 active:bg-brand-800 shadow-sm',
+  secondary: 'bg-surface-muted text-content hover:bg-surface-pressed active:bg-surface-pressed-strong',
+  outline: 'border border-line bg-surface text-content-secondary hover:bg-surface-hover hover:border-line-strong',
+  ghost: 'text-content-secondary hover:bg-accent active:bg-surface-pressed',
+  danger: 'bg-danger-solid text-white hover:bg-danger-solid-hover shadow-sm',
 };
 const btnSizes: Record<BtnSize, string> = {
-  sm: 'h-8 px-3 text-[13px]',
-  md: 'h-9 px-4 text-[14px]',
-  lg: 'h-11 px-6 text-[15px]',
+  sm: 'h-8 px-3 text-sm',
+  md: 'h-9 px-4 text-base',
+  lg: 'h-11 px-6 text-lg',
 };
 
 export function Button({

@@ -26,21 +26,21 @@ export function ModuleDetailPage({ onNavigate }: { onNavigate?: (id: string) => 
   const lessonDuration = lessons.reduce((s, l) => s + (parseInt(l.duration, 10) || 0), 0);
 
   const columns = [
-    { key: 'title', label: 'Lesson', sortable: true, render: (r: Record<string, unknown>) => <span className="text-[13.5px] font-medium text-[#374151]">{r.title as string}</span> },
-    { key: 'order', label: 'Order', sortable: true, render: (r: Record<string, unknown>) => <span className="text-[13px] text-[#374151]">{r.order as number}</span> },
+    { key: 'title', label: 'Lesson', sortable: true, render: (r: Record<string, unknown>) => <span className="text-sm font-medium text-content-secondary">{r.title as string}</span> },
+    { key: 'order', label: 'Order', sortable: true, render: (r: Record<string, unknown>) => <span className="text-sm text-content-secondary">{r.order as number}</span> },
     { key: 'blocks', label: 'Content Blocks', render: (r: Record<string, unknown>) => {
       const list = r.blocks as string[];
       return (
-        <Tooltip label={<span className="flex flex-wrap gap-1">{list.map(b => <Badge key={b} variant={blockVariant(b) as 'info' | 'purple' | 'warning' | 'success' | 'default'} className="text-[10px]">{b}</Badge>)}</span>}>
-          <span className="text-[13px] text-[#374151] cursor-help">{list.length} Block{list.length > 1 ? 's' : ''}</span>
+        <Tooltip label={<span className="flex flex-wrap gap-1">{list.map(b => <Badge key={b} variant={blockVariant(b) as 'info' | 'purple' | 'warning' | 'success' | 'default'} className="text-2xs">{b}</Badge>)}</span>}>
+          <span className="text-sm text-content-secondary cursor-help">{list.length} Block{list.length > 1 ? 's' : ''}</span>
         </Tooltip>
       );
     }},
-    { key: 'duration', label: 'Duration', render: (r: Record<string, unknown>) => <span className="text-[13px] text-[#6B7280]">{r.duration as string}</span> },
+    { key: 'duration', label: 'Duration', render: (r: Record<string, unknown>) => <span className="text-sm text-content-soft">{r.duration as string}</span> },
     { key: 'status', label: 'Status', sortable: true, render: (r: Record<string, unknown>) => <Badge variant={(r.status === 'Published' ? 'success' : r.status === 'Draft' ? 'warning' : 'default') as 'success' | 'warning' | 'default'}>{r.status as string}</Badge> },
-    { key: 'updated', label: 'Updated', render: (r: Record<string, unknown>) => <span className="text-[13px] text-[#6B7280]">{r.updated as string}</span> },
+    { key: 'updated', label: 'Updated', render: (r: Record<string, unknown>) => <span className="text-sm text-content-soft">{r.updated as string}</span> },
     { key: 'actions', label: '', render: () => (
-      <Dropdown trigger={<button className="p-1.5 hover:bg-[#F3F4F6] rounded-[6px]"><Icon.MoreHorizontal className="w-4 h-4 text-[#6B7280]" /></button>}
+      <Dropdown trigger={<button className="p-1.5 hover:bg-accent rounded-[6px]"><Icon.MoreHorizontal className="w-4 h-4 text-content-soft" /></button>}
         items={[{ label: 'Edit', icon: <Icon.Edit />, onClick: () => onNavigate?.('lesson-edit') }, { label: 'Duplicate', icon: <Icon.Copy /> }, { divider: true } as { label: string; divider: true }, { label: 'Delete', icon: <Icon.Trash />, danger: true }]} />
     )},
   ];
@@ -56,10 +56,10 @@ export function ModuleDetailPage({ onNavigate }: { onNavigate?: (id: string) => 
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2.5">
-            <span className="w-9 h-9 rounded-[10px] bg-[#ECF7F4] flex items-center justify-center"><Icon.Grid className="w-5 h-5 text-[#0D7C6C]" /></span>
+            <span className="w-9 h-9 rounded-[10px] bg-primary-light flex items-center justify-center"><Icon.Grid className="w-5 h-5 text-brand-ink" /></span>
             <div>
-              <h2 className="text-[22px] font-bold text-[#111827]">{module.title}</h2>
-              <p className="text-[12.5px] text-[#6B7280]">Module {module.order} · {courseLabel(module.courseId)}</p>
+              <h2 className="text-xl font-bold text-content">{module.title}</h2>
+              <p className="text-xs text-content-soft">Module {module.order} · {courseLabel(module.courseId)}</p>
             </div>
           </div>
         </div>
@@ -74,8 +74,8 @@ export function ModuleDetailPage({ onNavigate }: { onNavigate?: (id: string) => 
           <div key={s.label} className="card p-4 flex items-center gap-3">
             <div className="w-2 h-10 rounded-full flex-shrink-0" style={{ background: s.color }} />
             <div>
-              <p className="text-[20px] font-bold text-[#111827]">{s.value}</p>
-              <p className="text-[12px] text-[#9CA3AF]">{s.label}</p>
+              <p className="text-xl font-bold text-content">{s.value}</p>
+              <p className="text-xs text-content-subtle">{s.label}</p>
             </div>
           </div>
         ))}
@@ -83,15 +83,15 @@ export function ModuleDetailPage({ onNavigate }: { onNavigate?: (id: string) => 
 
       <div className="card p-5">
         <div className="flex items-center justify-between">
-          <h4 className="text-[14px] font-semibold text-[#111827]">Module Information</h4>
+          <h4 className="text-base font-semibold text-content">Module Information</h4>
           <Badge variant={module.status === 'Active' ? 'success' : module.status === 'Draft' ? 'warning' : 'default'}>{module.status}</Badge>
         </div>
-        <p className="text-[13px] text-[#6B7280] leading-relaxed mt-2">{module.description}</p>
+        <p className="text-sm text-content-soft leading-relaxed mt-2">{module.description}</p>
       </div>
 
       <div className="card overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-[#F3F4F6]">
-          <p className="text-[13.5px] font-medium text-[#374151]">Lessons</p>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-line-soft">
+          <p className="text-sm font-medium text-content-secondary">Lessons</p>
           <Badge variant="default">{lessons.length} lessons</Badge>
         </div>
         <Table columns={columns} data={lessons as Record<string, unknown>[]} selectable onSort={k => { sortKey === k ? setSortDir(d => d === 'asc' ? 'desc' : 'asc') : setSortKey(k); }} sortKey={sortKey} sortDir={sortDir} />
