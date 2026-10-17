@@ -5,10 +5,10 @@ import { Button } from '@/components/ui/Button';
 export function LoadingPage() {
   return (
     <div className="min-h-[100dvh] bg-white flex flex-col items-center justify-center gap-4">
-      <div className="w-12 h-12 bg-[#2563EB] rounded-[14px] flex items-center justify-center shadow-md">
-        <Icon.Brain className="w-7 h-7 text-white" />
+      <div className="w-12 h-12 bg-[#0D7C6C] rounded-[14px] flex items-center justify-center shadow-md">
+        <Icon.Logo className="w-7 h-7 text-white" />
       </div>
-      <div className="w-8 h-8 border-4 border-[#2563EB]/20 border-t-[#2563EB] rounded-full" style={{ animation: 'spin 0.8s linear infinite' }} />
+      <div className="w-8 h-8 border-4 border-[#0D7C6C]/20 border-t-[#0D7C6C] rounded-full" style={{ animation: 'spin 0.8s linear infinite' }} />
       <p className="text-[14px] text-[#6B7280]">Loading PrepExam…</p>
     </div>
   );

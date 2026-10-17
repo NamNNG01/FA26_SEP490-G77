@@ -56,7 +56,7 @@ export function ModuleDetailPage({ onNavigate }: { onNavigate?: (id: string) => 
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2.5">
-            <span className="w-9 h-9 rounded-[10px] bg-[#EFF6FF] flex items-center justify-center"><Icon.Grid className="w-5 h-5 text-[#2563EB]" /></span>
+            <span className="w-9 h-9 rounded-[10px] bg-[#ECF7F4] flex items-center justify-center"><Icon.Grid className="w-5 h-5 text-[#0D7C6C]" /></span>
             <div>
               <h2 className="text-[22px] font-bold text-[#111827]">{module.title}</h2>
               <p className="text-[12.5px] text-[#6B7280]">Module {module.order} · {courseLabel(module.courseId)}</p>
@@ -70,7 +70,7 @@ export function ModuleDetailPage({ onNavigate }: { onNavigate?: (id: string) => 
       </div>
 
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-        {[{ label: 'Lessons', value: String(lessons.length), color: '#7C3AED' }, { label: 'Questions', value: String(questionCount), color: '#D97706' }, { label: 'Estimated Duration', value: `${lessonDuration} min`, color: '#2563EB' }, { label: 'Status', value: module.status, color: module.status === 'Active' ? '#16A34A' : module.status === 'Draft' ? '#D97706' : '#9CA3AF' }].map(s => (
+        {[{ label: 'Lessons', value: String(lessons.length), color: '#7C3AED' }, { label: 'Questions', value: String(questionCount), color: '#D97706' }, { label: 'Estimated Duration', value: `${lessonDuration} min`, color: '#0D7C6C' }, { label: 'Status', value: module.status, color: module.status === 'Active' ? '#16A34A' : module.status === 'Draft' ? '#D97706' : '#9CA3AF' }].map(s => (
           <div key={s.label} className="card p-4 flex items-center gap-3">
             <div className="w-2 h-10 rounded-full flex-shrink-0" style={{ background: s.color }} />
             <div>

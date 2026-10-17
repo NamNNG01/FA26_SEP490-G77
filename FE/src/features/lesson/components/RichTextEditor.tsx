@@ -13,7 +13,7 @@ export function RichTextEditor({ html, onChange }: { html: string; onChange: (v:
   };
 
   return (
-    <div className="rounded-[10px] border border-[#E5E7EB] overflow-hidden bg-white focus-within:ring-2 focus-within:ring-[#2563EB]/20 focus-within:border-[#2563EB]">
+    <div className="rounded-[10px] border border-[#E5E7EB] overflow-hidden bg-white focus-within:ring-2 focus-within:ring-[#0D7C6C]/20 focus-within:border-[#0D7C6C]">
       <div className="flex items-center gap-0.5 px-2 py-1.5 border-b border-[#F3F4F6] bg-[#F9FAFB]">
         <button type="button" title="Bold" onMouseDown={e => e.preventDefault()} onClick={() => fire('bold')} className={`${toolbarBtn} font-bold text-[13px]`}>B</button>
         <button type="button" title="Italic" onMouseDown={e => e.preventDefault()} onClick={() => fire('italic')} className={`${toolbarBtn} italic text-[13px]`}>I</button>

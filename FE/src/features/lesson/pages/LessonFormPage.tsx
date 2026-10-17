@@ -75,7 +75,7 @@ export function LessonFormPage({ mode, onNavigate, initialCourseId, initialModul
               </div>
               <div>
                 <label className="text-[13px] font-medium text-[#374151] block mb-1.5">Description <span className="text-[#9CA3AF] font-normal">(optional)</span></label>
-                <textarea className="w-full h-20 px-3 py-2 rounded-[10px] border border-[#E5E7EB] text-[13px] resize-none focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB]" value={description} onChange={e => setDescription(e.target.value)} placeholder="Summarize what students will learn in this lesson…" />
+                <textarea className="w-full h-20 px-3 py-2 rounded-[10px] border border-[#E5E7EB] text-[13px] resize-none focus:outline-none focus:ring-2 focus:ring-[#0D7C6C]/20 focus:border-[#0D7C6C]" value={description} onChange={e => setDescription(e.target.value)} placeholder="Summarize what students will learn in this lesson…" />
               </div>
             </div>
           </div>
@@ -87,7 +87,7 @@ export function LessonFormPage({ mode, onNavigate, initialCourseId, initialModul
           <div className="card p-5">
             <h4 className="text-[14px] font-semibold text-[#111827] mb-3">Estimated Reading Time</h4>
             <div className="flex items-center gap-3">
-              <span className="w-10 h-10 rounded-[10px] bg-[#EFF6FF] flex items-center justify-center"><Icon.Clock className="w-5 h-5 text-[#2563EB]" /></span>
+              <span className="w-10 h-10 rounded-[10px] bg-[#ECF7F4] flex items-center justify-center"><Icon.Clock className="w-5 h-5 text-[#0D7C6C]" /></span>
               <div>
                 <p className="text-[18px] font-bold text-[#111827]">~{readingTime} min</p>
                 <p className="text-[12px] text-[#9CA3AF]">Based on content blocks</p>

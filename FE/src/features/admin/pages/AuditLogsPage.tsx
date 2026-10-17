@@ -15,7 +15,7 @@ export function AuditLogsPage() {
     { user: 'Tom Williams', action: 'User deactivated', target: 'li.wei@university.cn', time: '2026-09-20 16:22', type: 'permission' },
     { user: 'System', action: 'Backup completed', target: 'Full backup — 14.2 GB', time: '2026-09-20 03:00', type: 'system' },
   ];
-  const typeIcon = { permission: <Icon.Shield className="w-4 h-4 text-[#7C3AED]" />, content: <Icon.FileText className="w-4 h-4 text-[#2563EB]" />, system: <Icon.Cpu className="w-4 h-4 text-[#059669]" /> };
+  const typeIcon = { permission: <Icon.Shield className="w-4 h-4 text-[#7C3AED]" />, content: <Icon.FileText className="w-4 h-4 text-[#0D7C6C]" />, system: <Icon.Cpu className="w-4 h-4 text-[#059669]" /> };
   const typeBadge = { permission: 'purple' as const, content: 'info' as const, system: 'success' as const };
   return (
     <div className="p-8 space-y-5">

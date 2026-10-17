@@ -6,7 +6,7 @@ export function Switch({ checked, onChange, label, size = 'md' }: { checked?: bo
   const on = size === 'sm' ? 'translate-x-[17px]' : 'translate-x-[21px]';
   return (
     <label className="flex items-center gap-2 cursor-pointer select-none" onClick={() => onChange?.(!checked)}>
-      <div className={`${w} rounded-full transition-colors ${checked ? 'bg-[#2563EB]' : 'bg-[#D1D5DB]'} relative`}>
+      <div className={`${w} rounded-full transition-colors ${checked ? 'bg-[#0D7C6C]' : 'bg-[#D1D5DB]'} relative`}>
         <div className={`${knob} bg-white rounded-full shadow absolute top-0.5 transition-transform ${checked ? on : ''}`} />
       </div>
       {label && <span className="text-[14px] text-[#374151]">{label}</span>}

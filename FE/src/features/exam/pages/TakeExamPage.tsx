@@ -1,37 +1,76 @@
 import React, { useState } from 'react';
+import { useSearchParams } from 'react-router';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { Modal } from '@/components/ui/Modal';
 import { TimerDisplay } from '@/components/common/TimerDisplay';
 import { QuestionPalette, AnswerOption } from '@/components/common/QuestionPalette';
 import { AIHintCard } from '@/components/common/AIHintCard';
 import { Icon } from '@/assets/icons';
 
+const TOTAL_QUESTIONS = 45;
+
+/**
+ * TakeExamPage
+ *
+ * Two modes, picked with `?mode=practice` (default: exam):
+ *  - exam     — mirrors test-day conditions: no AI hint.
+ *  - practice — same screen, with the AI hint available under the options.
+ *
+ * Submitting always goes through a confirmation that shows how many
+ * questions are still unanswered or flagged.
+ */
 export function TakeExamPage() {
+  const [searchParams] = useSearchParams();
+  const isPractice = searchParams.get('mode') === 'practice';
+
   const [currentQ, setCurrentQ] = useState(3);
   const [selected, setSelected] = useState<string | null>('B');
-  const [answered] = useState(new Set([1, 2, 3, 5, 7, 8, 10, 12]));
-  const [flagged] = useState(new Set([4, 9]));
+  const [answered, setAnswered] = useState(() => new Set([1, 2, 3, 5, 7, 8, 10, 12]));
+  const [flagged, setFlagged] = useState(() => new Set([4, 9]));
   const [hintOpen, setHintOpen] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [timeLeft] = useState(3284);
+
+  const isFlagged = flagged.has(currentQ);
+  const unanswered = TOTAL_QUESTIONS - answered.size;
+
+  const selectAnswer = (letter: string) => {
+    setSelected(letter);
+    setAnswered((prev) => new Set(prev).add(currentQ));
+  };
+
+  const toggleFlag = () => {
+    setFlagged((prev) => {
+      const next = new Set(prev);
+      if (next.has(currentQ)) next.delete(currentQ);
+      else next.add(currentQ);
+      return next;
+    });
+  };
 
   return (
     <div className="h-[100dvh] flex flex-col bg-[#F9FAFB]">
       {/* Exam Header */}
       <header className="h-14 bg-white border-b border-[#F3F4F6] flex items-center px-6 gap-4 flex-shrink-0">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 bg-[#2563EB] rounded-[8px] flex items-center justify-center">
-            <Icon.Brain className="w-4 h-4 text-white" />
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="w-7 h-7 bg-[#0D7C6C] rounded-[8px] flex items-center justify-center flex-shrink-0">
+            <Icon.Logo className="w-4 h-4 text-white" />
           </div>
-          <span className="text-[14px] font-bold text-[#111827]">ML Fundamentals Final Exam</span>
+          <span className="text-[14px] font-bold text-[#111827] truncate">ML Fundamentals Final Exam</span>
+          <span className="hidden sm:inline-flex flex-shrink-0 rounded-[6px] border border-[#E5E7EB] px-2 py-0.5 text-[11.5px] font-medium text-[#6B7280]">
+            {isPractice ? 'Practice mode' : 'Exam mode'}
+          </span>
         </div>
         <div className="flex-1" />
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2 px-3 py-1.5 bg-[#F9FAFB] rounded-[8px] border border-[#E5E7EB]">
             <span className="text-[12px] text-[#6B7280]">Question</span>
-            <span className="text-[14px] font-bold text-[#111827]">{currentQ} / 45</span>
+            <span className="text-[14px] font-bold text-[#111827]">{currentQ} / {TOTAL_QUESTIONS}</span>
           </div>
           <TimerDisplay seconds={timeLeft} warning={timeLeft < 600} />
-          <Button variant="danger" size="sm">Submit Exam</Button>
+          {/* Primary, not red: submitting is the expected finish, not a destructive action. */}
+          <Button size="sm" onClick={() => setConfirmOpen(true)}>Submit exam</Button>
         </div>
       </header>
 
@@ -52,27 +91,37 @@ export function TakeExamPage() {
               </p>
             </div>
 
-            <div className="space-y-2.5">
+            <div role="radiogroup" aria-label={`Answer options for question ${currentQ}`} className="space-y-2.5">
               {[
                 { letter: 'A', text: 'Vanilla Stochastic Gradient Descent (SGD) with a fixed learning rate' },
                 { letter: 'B', text: 'Adam (Adaptive Moment Estimation) optimizer combining momentum and RMSprop' },
                 { letter: 'C', text: 'Gradient Descent with Nesterov momentum only' },
                 { letter: 'D', text: 'Adagrad with L1 regularization and weight decay' },
               ].map(opt => (
-                <AnswerOption key={opt.letter} {...opt} selected={selected === opt.letter} onChange={() => setSelected(opt.letter)} />
+                <AnswerOption key={opt.letter} {...opt} selected={selected === opt.letter} onChange={() => selectAnswer(opt.letter)} />
               ))}
             </div>
 
-            <AIHintCard
-              hint="Consider which optimizer was specifically designed to address the limitations of both momentum-based methods and adaptive learning rate methods. It maintains two moving averages: one for the gradients and one for the squared gradients."
-              expanded={hintOpen} onToggle={() => setHintOpen(o => !o)}
-            />
+            {isPractice && (
+              <AIHintCard
+                hint="Consider which optimizer was specifically designed to address the limitations of both momentum-based methods and adaptive learning rate methods. It maintains two moving averages: one for the gradients and one for the squared gradients."
+                expanded={hintOpen} onToggle={() => setHintOpen(o => !o)}
+              />
+            )}
 
             <div className="flex items-center justify-between">
               <Button variant="outline" icon={<Icon.ChevronLeft className="w-4 h-4" />} onClick={() => setCurrentQ(q => Math.max(1, q - 1))}>Previous</Button>
               <div className="flex gap-2">
-                <Button variant="outline" icon={<Icon.Star className="w-4 h-4" />}>Flag</Button>
-                <Button icon={<Icon.ChevronRight className="w-4 h-4" />} onClick={() => setCurrentQ(q => Math.min(45, q + 1))}>Next Question</Button>
+                <Button
+                  variant="outline"
+                  aria-pressed={isFlagged}
+                  onClick={toggleFlag}
+                  icon={<Icon.Flag className={`w-4 h-4 ${isFlagged ? 'text-[#D97706]' : ''}`} />}
+                  className={isFlagged ? '!border-[#FDE68A] !bg-[#FFFBEB]' : ''}
+                >
+                  {isFlagged ? 'Flagged' : 'Flag for review'}
+                </Button>
+                <Button iconRight={<Icon.ChevronRight className="w-4 h-4" />} onClick={() => setCurrentQ(q => Math.min(TOTAL_QUESTIONS, q + 1))}>Next question</Button>
               </div>
             </div>
           </div>
@@ -80,14 +129,14 @@ export function TakeExamPage() {
 
         {/* Question palette sidebar */}
         <div className="w-72 bg-white border-l border-[#F3F4F6] p-5 overflow-y-auto flex-shrink-0">
-          <h4 className="text-[14px] font-semibold text-[#111827] mb-4">Question Navigator</h4>
-          <QuestionPalette total={45} current={currentQ} answered={answered} flagged={flagged} onSelect={setCurrentQ} />
+          <h2 className="text-[14px] font-semibold text-[#111827] mb-4">Question navigator</h2>
+          <QuestionPalette total={TOTAL_QUESTIONS} current={currentQ} answered={answered} flagged={flagged} onSelect={setCurrentQ} />
           <div className="mt-4 space-y-2 pt-4 border-t border-[#F3F4F6]">
             {[
               // Classes (not inline hexes) so the dark-mode remaps apply.
               { swatch: 'bg-[#F0FDF4] border-[#BBF7D0]', label: 'Answered', count: answered.size },
               { swatch: 'bg-[#FFFBEB] border-[#FDE68A]', label: 'Flagged', count: flagged.size },
-              { swatch: 'bg-[#F9FAFB] border-[#E5E7EB]', label: 'Unanswered', count: 45 - answered.size },
+              { swatch: 'bg-[#F9FAFB] border-[#E5E7EB]', label: 'Unanswered', count: unanswered },
             ].map(s => (
               <div key={s.label} className="flex items-center justify-between text-[12px]">
                 <div className="flex items-center gap-2">
@@ -100,6 +149,40 @@ export function TakeExamPage() {
           </div>
         </div>
       </div>
+
+      <Modal
+        open={confirmOpen}
+        onClose={() => setConfirmOpen(false)}
+        title="Submit this exam?"
+        size="sm"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setConfirmOpen(false)}>Keep working</Button>
+            <Button onClick={() => setConfirmOpen(false)}>Submit exam</Button>
+          </>
+        }
+      >
+        <p className="text-[14px] text-[#374151] leading-relaxed">
+          You can't change your answers after submitting.
+        </p>
+        <dl className="mt-4 grid grid-cols-3 gap-2 text-center">
+          {[
+            { label: 'Answered', value: answered.size },
+            { label: 'Unanswered', value: unanswered },
+            { label: 'Flagged', value: flagged.size },
+          ].map((s) => (
+            <div key={s.label} className="flex flex-col-reverse rounded-[10px] border border-[#E5E7EB] py-3">
+              <dt className="text-[12px] text-[#6B7280]">{s.label}</dt>
+              <dd className="text-[20px] font-semibold text-[#111827]">{s.value}</dd>
+            </div>
+          ))}
+        </dl>
+        {unanswered > 0 && (
+          <p className="mt-3 text-[13px] text-[#D97706]">
+            {unanswered} question{unanswered === 1 ? ' is' : 's are'} still unanswered.
+          </p>
+        )}
+      </Modal>
     </div>
   );
 }

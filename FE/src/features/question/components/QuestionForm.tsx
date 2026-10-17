@@ -53,7 +53,7 @@ export function QuestionForm({ q, index, onChange, removable, onRemove, canMoveU
     <div className={`card px-4 py-3.5 space-y-3 ${invalid ? '!border-[#FDE68A]' : ''}`}>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="w-6 h-6 rounded-[6px] bg-[#2563EB]/10 text-[#2563EB] flex items-center justify-center text-[12px] font-bold">#{index + 1}</span>
+          <span className="w-6 h-6 rounded-[6px] bg-[#0D7C6C]/10 text-[#0D7C6C] flex items-center justify-center text-[12px] font-bold">#{index + 1}</span>
           <h4 className="text-[15px] font-semibold text-[#111827]">Question {index + 1}</h4>
         </div>
         <div className="flex items-center gap-1">
@@ -85,7 +85,7 @@ export function QuestionForm({ q, index, onChange, removable, onRemove, canMoveU
           value={q.text}
           onChange={e => onChange({ ...q, text: e.target.value })}
           className={`w-full h-[90px] px-3 py-2 rounded-[10px] border text-[14px] text-[#111827] resize-none focus:outline-none focus:ring-2 transition-all
-            ${textError ? 'border-[#DC2626] focus:ring-[#DC2626]/20 focus:border-[#DC2626]' : 'border-[#E5E7EB] focus:ring-[#2563EB]/20 focus:border-[#2563EB]'}`}
+            ${textError ? 'border-[#DC2626] focus:ring-[#DC2626]/20 focus:border-[#DC2626]' : 'border-[#E5E7EB] focus:ring-[#0D7C6C]/20 focus:border-[#0D7C6C]'}`}
           placeholder="Enter the question..."
         />
         {textError && <p className="text-[12px] text-[#DC2626] mt-1">{textError}</p>}
@@ -109,7 +109,7 @@ export function QuestionForm({ q, index, onChange, removable, onRemove, canMoveU
                 value={o.text}
                 onChange={e => setOptText(oi, e.target.value)}
                 className={`flex-1 h-10 px-3 rounded-[10px] border text-[14px] focus:outline-none focus:ring-2 transition-all
-                  ${optionsError && o.text.trim() === '' ? 'border-[#DC2626] focus:ring-[#DC2626]/20 focus:border-[#DC2626]' : 'border-[#E5E7EB] focus:ring-[#2563EB]/20 focus:border-[#2563EB]'}`}
+                  ${optionsError && o.text.trim() === '' ? 'border-[#DC2626] focus:ring-[#DC2626]/20 focus:border-[#DC2626]' : 'border-[#E5E7EB] focus:ring-[#0D7C6C]/20 focus:border-[#0D7C6C]'}`}
                 placeholder={`Option ${o.label}`}
               />
               <input

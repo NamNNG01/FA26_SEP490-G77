@@ -54,7 +54,7 @@ export function LoginPage() {
   return (
     <>
       <div className="flex flex-col">
-        <AuthPageHeader title="Welcome back" subtitle="Sign in to CertifyAI" />
+        <AuthPageHeader title="Welcome back" subtitle="Sign in to continue your exam prep" />
 
         <div className="card p-6 [@media(max-height:850px)]:p-5 shadow-lg">
           {error && <Alert type="error" title="Authentication failed" message={error} />}
@@ -69,7 +69,8 @@ export function LoginPage() {
           <form onSubmit={handleSubmit} className="space-y-[18px] [@media(max-height:850px)]:space-y-3.5">
             <Input
               label="Email"
-              placeholder="Enter your email"
+              placeholder="you@example.com"
+              autoComplete="email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -77,13 +78,25 @@ export function LoginPage() {
             />
             <Input
               label="Password"
+              labelAction={
+                <button
+                  type="button"
+                  onClick={() => navigate(ROUTES.forgotPassword, { state: { email: email.trim() } })}
+                  className="text-[12.5px] text-[#0D7C6C] hover:underline font-medium"
+                >
+                  Forgot password?
+                </button>
+              }
               placeholder="Enter your password"
+              autoComplete="current-password"
               type={showPwd ? 'text' : 'password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               icon={<Icon.Lock className="w-4 h-4" />}
               suffix={
                 <button
+                  type="button"
+                  aria-label={showPwd ? 'Hide password' : 'Show password'}
                   onClick={() => setShowPwd((s) => !s)}
                   className="hover:text-[#374151] transition-colors"
                 >
@@ -96,24 +109,17 @@ export function LoginPage() {
             </Button>
           </form>
 
-          <div className="mt-8 pt-6 border-t border-[#F3F4F6] flex flex-col gap-3 items-center">
+          <div className="mt-6 pt-5 border-t border-[#F3F4F6] flex justify-center">
             <p className="text-[13px] text-[#6B7280] flex items-center gap-2">
               Don't have an account?{' '}
               <button
                 type="button"
                 onClick={() => navigate('/register')}
-                className="text-[13px] text-[#2563EB] hover:underline font-medium cursor-pointer"
+                className="text-[13px] text-[#0D7C6C] hover:underline font-medium cursor-pointer"
               >
                 Create one
               </button>
             </p>
-            <button
-              type="button"
-              onClick={() => navigate(ROUTES.forgotPassword, { state: { email: email.trim() } })}
-              className="text-[13px] text-[#2563EB] hover:underline font-medium"
-            >
-              Forgot password?
-            </button>
           </div>
         </div>
       </div>

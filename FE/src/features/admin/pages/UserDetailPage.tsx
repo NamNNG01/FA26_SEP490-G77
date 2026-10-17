@@ -24,7 +24,7 @@ export function UserDetailPage({ onNavigate, params: paramsProp }: { onNavigate?
     { key: 'result', label: 'Result', render: (r: Record<string, unknown>) => <Badge variant={(r.result as string) === 'Passed' ? 'success' : 'danger'}>{r.result as string}</Badge> },
     { key: 'date', label: 'Date', render: (r: Record<string, unknown>) => <span className="text-[13px] text-[#6B7280]">{r.date as string}</span> },
     { key: 'actions', label: '', render: () => (
-      <button className="text-[13px] font-medium text-[#2563EB] hover:text-[#1D4ED8] inline-flex items-center gap-1">
+      <button className="text-[13px] font-medium text-[#0D7C6C] hover:text-[#0A6458] inline-flex items-center gap-1">
         View Result <Icon.ChevronRight className="w-3.5 h-3.5" />
       </button>
     )},
@@ -89,7 +89,7 @@ export function UserDetailPage({ onNavigate, params: paramsProp }: { onNavigate?
             <h3 className="text-[16px] font-semibold text-[#111827] mb-3">Learning Statistics</h3>
             <div className="grid grid-cols-2 xl:grid-cols-5 gap-3">
               {[
-                { label: 'Total Courses Enrolled', value: String(stats.enrolled), color: '#2563EB' },
+                { label: 'Total Courses Enrolled', value: String(stats.enrolled), color: '#0D7C6C' },
                 { label: 'Exams Taken', value: String(stats.examsTaken), color: '#059669' },
                 { label: 'Average Score', value: stats.examsTaken > 0 ? `${stats.avgScore}%` : '—', color: '#7C3AED' },
                 { label: 'Certificates Earned', value: String(stats.certificates), color: '#D97706' },

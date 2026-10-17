@@ -6,7 +6,7 @@ export function Toast({ type = 'success', message, onClose }: { type?: 'success'
     success: { icon: <Icon.CheckCircle className="w-5 h-5 text-[#16A34A]" />, bg: 'bg-white border-[#BBF7D0]' },
     error: { icon: <Icon.XCircle className="w-5 h-5 text-[#DC2626]" />, bg: 'bg-white border-[#FECACA]' },
     warning: { icon: <Icon.AlertCircle className="w-5 h-5 text-[#D97706]" />, bg: 'bg-white border-[#FDE68A]' },
-    info: { icon: <Icon.Info className="w-5 h-5 text-[#2563EB]" />, bg: 'bg-white border-[#BFDBFE]' },
+    info: { icon: <Icon.Info className="w-5 h-5 text-[#0D7C6C]" />, bg: 'bg-white border-[#A7DCCF]' },
   }[type];
   return (
     <div className={`flex items-start gap-3 p-3.5 pr-4 rounded-[10px] border shadow-lg max-w-sm ${cfg.bg}`}>
@@ -22,7 +22,7 @@ export function Alert({ type = 'info', title, message }: { type?: 'success' | 'e
     success: { icon: <Icon.CheckCircle className="w-5 h-5 text-[#16A34A]" />, bg: 'bg-[#F0FDF4] border-[#BBF7D0] text-[#15803D]' },
     error: { icon: <Icon.XCircle className="w-5 h-5 text-[#DC2626]" />, bg: 'bg-[#FEF2F2] border-[#FECACA] text-[#B91C1C]' },
     warning: { icon: <Icon.AlertCircle className="w-5 h-5 text-[#D97706]" />, bg: 'bg-[#FFFBEB] border-[#FDE68A] text-[#92400E]' },
-    info: { icon: <Icon.Info className="w-5 h-5 text-[#2563EB]" />, bg: 'bg-[#EFF6FF] border-[#BFDBFE] text-[#1E40AF]' },
+    info: { icon: <Icon.Info className="w-5 h-5 text-[#0D7C6C]" />, bg: 'bg-[#ECF7F4] border-[#A7DCCF] text-[#0B5047]' },
   }[type];
   return (
     <div className={`flex gap-3 p-4 rounded-[10px] border ${cfg.bg}`}>

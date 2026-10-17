@@ -194,7 +194,7 @@ export function ChangePasswordModal({ open, onClose }: { open: boolean; onClose:
             <ul className="mt-4 space-y-3.5">
               {PASSWORD_TIPS.map((tip) => (
                 <li key={tip} className="flex items-start gap-2.5 text-[13px] text-[#374151]">
-                  <Icon.CheckCircle className="w-4 h-4 text-[#2563EB] flex-shrink-0 mt-0.5" />
+                  <Icon.CheckCircle className="w-4 h-4 text-[#0D7C6C] flex-shrink-0 mt-0.5" />
                   <span>{tip}</span>
                 </li>
               ))}

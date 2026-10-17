@@ -36,20 +36,20 @@ const ALL = 'all';
 const CATEGORY_TABS = [ALL_CATEGORY, ...PUBLIC_EXAM_CATEGORIES];
 
 const COURSE_OPTIONS = [
-  { label: 'All Courses', value: ALL },
+  { label: 'All courses', value: ALL },
   // Some course names are long certifications — show the short label, match on the full name.
   ...PUBLIC_EXAM_COURSES.map(c => ({ label: c.shortName ?? c.name, value: c.name })),
 ];
 
 const DIFFICULTY_OPTIONS = [
-  { label: 'All', value: ALL },
+  { label: 'All difficulties', value: ALL },
   { label: 'Easy', value: 'Easy' },
   { label: 'Medium', value: 'Medium' },
   { label: 'Hard', value: 'Hard' },
 ];
 
 const STATUS_OPTIONS = [
-  { label: 'All', value: ALL },
+  { label: 'All statuses', value: ALL },
   { label: 'Not Started', value: 'available' },
   { label: 'In Progress', value: 'in-progress' },
   { label: 'Completed', value: 'completed' },
@@ -73,21 +73,18 @@ function usePublicExamStats() {
         value: String(PUBLIC_EXAMS.length),
         description: 'Available practice exams',
         icon: <Icon.Layers className="h-5 w-5" />,
-        accent: '#2563EB',
       },
       {
         title: 'Completed Exams',
         value: String(completed.length),
         description: 'Completed by you',
         icon: <Icon.CheckCircle className="h-5 w-5" />,
-        accent: '#16A34A',
       },
       {
         title: 'Average Score',
         value: `${averageScore}%`,
         description: 'compared to last month',
         icon: <Icon.Award className="h-5 w-5" />,
-        accent: '#D97706',
         trend: SCORE_TREND,
       },
       {
@@ -95,7 +92,6 @@ function usePublicExamStats() {
         value: String(PUBLIC_EXAMS.length - completed.length),
         description: 'Ready to start',
         icon: <Icon.Zap className="h-5 w-5" />,
-        accent: '#7C3AED',
       },
     ];
   }, []);

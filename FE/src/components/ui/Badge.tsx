@@ -15,7 +15,7 @@ const badgeVariants: Record<BadgeVariant, string> = {
   success: 'bg-[#F0FDF4] text-[#16A34A] dark:bg-[#052E16] dark:text-[#4ADE80]',
   warning: 'bg-[#FFFBEB] text-[#D97706] dark:bg-[#422006] dark:text-[#FBBF24]',
   danger: 'bg-[#FEF2F2] text-[#DC2626] dark:bg-[#450A0A] dark:text-[#F87171]',
-  info: 'bg-[#EFF6FF] text-[#2563EB] dark:bg-[#172554] dark:text-[#93C5FD]',
+  info: 'bg-[#ECF7F4] text-[#0D7C6C] dark:bg-[#082B26] dark:text-[#6FCBB6]',
   purple: 'bg-[#F5F3FF] text-[#7C3AED] dark:bg-[#2E1065] dark:text-[#C4B5FD]',
 };
 
@@ -28,7 +28,7 @@ export function Chip({ children, onRemove, active, onClick }: { children: React.
     <span
       onClick={onClick}
       className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[13px] font-medium border transition-all cursor-pointer
-        ${active ? 'bg-[#EFF6FF] text-[#2563EB] border-[#BFDBFE]' : 'bg-white text-[#374151] border-[#E5E7EB] hover:bg-[#F9FAFB]'}`}
+        ${active ? 'bg-[#ECF7F4] text-[#0D7C6C] border-[#A7DCCF]' : 'bg-white text-[#374151] border-[#E5E7EB] hover:bg-[#F9FAFB]'}`}
     >
       {children}
       {onRemove && <button onClick={e => { e.stopPropagation(); onRemove(); }} className="text-[#9CA3AF] hover:text-[#374151]"><Icon.X className="w-3 h-3" /></button>}

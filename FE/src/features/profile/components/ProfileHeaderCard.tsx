@@ -4,16 +4,10 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/assets/icons';
+import { roleLabel } from '@/utils/permissions';
 import type { ProfileStat } from '../hooks/useProfileOverview';
 import { ChangePasswordModal } from './ChangePasswordModal';
 import { LogoutAllDevicesButton } from './LogoutAllDevicesButton';
-
-const ROLE_LABELS: Record<string, string> = {
-  STUDENT: 'Student',
-  COURSE_MANAGER: 'Course Manager',
-  CONTENT_MANAGER: 'Course Manager',
-  ADMIN: 'Admin',
-};
 
 function memberDetails(user: UserResponse): string {
   const status = user.status ? user.status.charAt(0) + user.status.slice(1).toLowerCase() : '';
@@ -48,12 +42,12 @@ export function ProfileHeaderCard({
   return (
     <div className="card p-6">
       <div className="flex flex-col sm:flex-row sm:items-start gap-4">
-        <Avatar name={user.fullName} src={user.avatarUrl ?? undefined} size="xl" color="#2563EB" />
+        <Avatar name={user.fullName} src={user.avatarUrl ?? undefined} size="xl" color="#0D7C6C" />
 
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-3 flex-wrap">
             <h3 className="text-[22px] font-bold text-[#111827] break-words min-w-0">{user.fullName}</h3>
-            <Badge variant="info">{ROLE_LABELS[user.role] ?? user.role}</Badge>
+            <Badge variant="info">{roleLabel(user.role)}</Badge>
           </div>
           <p className="text-[14px] text-[#374151] break-all mt-1">{user.email}</p>
           <p className="text-[13px] text-[#6B7280] mt-1">{memberDetails(user)}</p>

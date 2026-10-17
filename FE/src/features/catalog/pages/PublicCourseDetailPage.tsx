@@ -33,8 +33,8 @@ export function PublicCourseDetailPage() {
     return (
       <Container className="py-[clamp(3rem,8vw,6rem)]">
         <div className="mx-auto max-w-md text-center">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-[14px] bg-[#EFF6FF] dark:bg-[#2563EB]/15">
-            <Icon.Search className="h-6 w-6 text-[#2563EB]" />
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-[14px] bg-[#ECF7F4] dark:bg-[#0D7C6C]/15">
+            <Icon.Search className="h-6 w-6 text-[#0D7C6C]" />
           </div>
           <h1 className="mt-5 text-[22px] font-bold text-[#111827] dark:text-[#F9FAFB]">Course not found</h1>
           <p className="mt-2 text-[14px] leading-relaxed text-[#6B7280] dark:text-[#D1D5DB]">
@@ -99,7 +99,7 @@ export function PublicCourseDetailPage() {
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
               {stats.map((stat) => (
                 <div key={stat.label} className="card p-4">
-                  <span className="text-[#2563EB]">{stat.icon}</span>
+                  <span className="text-[#0D7C6C]">{stat.icon}</span>
                   <p className="mt-2 text-[20px] leading-none font-bold text-[#111827] dark:text-[#F9FAFB]">{stat.value}</p>
                   <p className="mt-1.5 text-[11.5px] leading-snug text-[#9CA3AF]">{stat.label}</p>
                 </div>
@@ -144,7 +144,7 @@ export function PublicCourseDetailPage() {
           {/* Action sidebar */}
           <aside className="min-w-0">
             <div className="card sticky top-24 p-5">
-              <p className="text-[20px] font-bold text-[#2563EB]">{course.priceLabel}</p>
+              <p className="text-[20px] font-bold text-[#0D7C6C]">{course.priceLabel}</p>
               <p className="mt-1 text-[12.5px] text-[#9CA3AF]">Last updated {course.updatedAt}</p>
 
               <div className="mt-4 space-y-2">

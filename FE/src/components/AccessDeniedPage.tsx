@@ -45,7 +45,7 @@ export function AccessDeniedPage({
               </span>
             </div>
             <div className="flex items-center gap-3">
-              <span className="w-2 h-2 rounded-full bg-[#2563EB]" />
+              <span className="w-2 h-2 rounded-full bg-[#0D7C6C]" />
               <span className="text-[13px] text-[#6B7280]">Current User Role</span>
               <span className="text-[13px] font-semibold text-[#111827]">
                 {currentUserRole || '—'}{' '}

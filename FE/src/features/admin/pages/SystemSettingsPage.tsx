@@ -288,7 +288,7 @@ export function SystemSettingsPage() {
                     { date: '2026-09-19 14:35', size: '13.9 GB', status: 'Success', type: 'Manual' },
                   ].map(b => (
                     <div key={b.date} className="flex items-center gap-4 px-5 py-3 hover:bg-[#F9FAFB]">
-                      <Icon.Database className="w-5 h-5 text-[#2563EB] flex-shrink-0" />
+                      <Icon.Database className="w-5 h-5 text-[#0D7C6C] flex-shrink-0" />
                       <div className="flex-1 min-w-0">
                         <p className="text-[13px] font-medium text-[#374151] font-mono truncate">{b.date}</p>
                         <p className="text-[12px] text-[#9CA3AF]">{b.size}</p>

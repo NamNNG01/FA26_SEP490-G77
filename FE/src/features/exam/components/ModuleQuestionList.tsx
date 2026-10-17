@@ -54,7 +54,7 @@ export function ModuleQuestionList({ moduleId, selected, onToggle, onPreview }: 
                   </div>
                 </div>
                 <button onClick={e => { e.stopPropagation(); onPreview(b); }}
-                  className="flex items-center gap-1 text-[12px] font-medium text-[#2563EB] hover:underline">
+                  className="flex items-center gap-1 text-[12px] font-medium text-[#0D7C6C] hover:underline">
                   <Icon.Eye className="w-4 h-4" /> Preview
                 </button>
               </div>

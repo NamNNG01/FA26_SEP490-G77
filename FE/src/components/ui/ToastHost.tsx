@@ -52,7 +52,7 @@ const KIND_STYLES: Record<ToastKind, { icon: ReactNode; classes: string }> = {
   },
   info: {
     icon: <Icon.Info className="w-5 h-5" />,
-    classes: 'text-info bg-info-light border-[#BFDBFE] dark:border-[#1E3A8A]',
+    classes: 'text-info bg-info-light border-[#A7DCCF] dark:border-[#0F3B35]',
   },
 };
 

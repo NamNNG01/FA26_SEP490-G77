@@ -26,11 +26,11 @@ export function AdminDashboard() {
   const { summary, recentUsers } = data;
 
   const stats = [
-    { title: 'Total Users', value: String(summary.totalUsers), icon: <Icon.Users />, color: '#2563EB' },
-    { title: 'Students', value: String(summary.totalStudents), icon: <Icon.User />, color: '#059669' },
-    { title: 'Managers', value: String(summary.totalManagers), icon: <Icon.FileText />, color: '#7C3AED' },
-    { title: 'Courses', value: String(summary.totalCourses), icon: <Icon.Book />, color: '#D97706' },
-    { title: 'Exams', value: String(summary.totalExams), icon: <Icon.ClipboardList />, color: '#0891B2' },
+    { title: 'Total Users', value: String(summary.totalUsers), icon: <Icon.Users /> },
+    { title: 'Students', value: String(summary.totalStudents), icon: <Icon.User /> },
+    { title: 'Managers', value: String(summary.totalManagers), icon: <Icon.FileText /> },
+    { title: 'Courses', value: String(summary.totalCourses), icon: <Icon.Book /> },
+    { title: 'Exams', value: String(summary.totalExams), icon: <Icon.ClipboardList /> },
   ];
 
   return (

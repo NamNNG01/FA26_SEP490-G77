@@ -33,10 +33,10 @@ export function FinancialDashboardPage() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        <StatCard title="Total Revenue" value="$92,400" change={14.2} changeLabel="vs prev period" icon={<Icon.TrendingUp />} color="#16A34A" />
-        <StatCard title="MRR" value="$21,400" change={8.6} changeLabel="vs prev period" icon={<Icon.BarChart />} color="#2563EB" />
-        <StatCard title="Active Subscriptions" value="2,210" change={9.1} changeLabel="vs prev period" icon={<Icon.Users />} color="#7C3AED" />
-        <StatCard title="Refunds" value="$640" change={-12.4} changeLabel="vs prev period" icon={<Icon.AlertCircle />} color="#DC2626" />
+        <StatCard title="Total Revenue" value="$92,400" change={14.2} changeLabel="vs prev period" icon={<Icon.TrendingUp />} />
+        <StatCard title="MRR" value="$21,400" change={8.6} changeLabel="vs prev period" icon={<Icon.BarChart />} />
+        <StatCard title="Active Subscriptions" value="2,210" change={9.1} changeLabel="vs prev period" icon={<Icon.Users />} />
+        <StatCard title="Refunds" value="$640" change={-12.4} changeLabel="vs prev period" icon={<Icon.AlertCircle />} direction="down" />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
@@ -46,7 +46,7 @@ export function FinancialDashboardPage() {
               <h4 className="text-[15px] font-semibold text-[#111827]">Revenue Trend</h4>
               <div className="flex items-center gap-4 text-[12px]">
                 <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-[3px] bg-[#16A34A]" /><span className="text-[#6B7280]">Revenue ($)</span></div>
-                <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-[3px] bg-[#BFDBFE]" /><span className="text-[#6B7280]">Subscriptions</span></div>
+                <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-[3px] bg-[#A7DCCF]" /><span className="text-[#6B7280]">Subscriptions</span></div>
               </div>
             </div>
             <div className="flex items-end gap-3 h-40">
@@ -55,7 +55,7 @@ export function FinancialDashboardPage() {
                   <span className="text-[10px] text-[#9CA3AF]">{Math.round(d.revenue / 1000)}k</span>
                   <div className="w-full flex items-end gap-1 h-28">
                     <div className="flex-1 rounded-t-[4px] chart-bar" style={{ height: `${(d.revenue / maxRevenue) * 100}%`, background: '#16A34A', minHeight: 4 }} />
-                    <div className="flex-1 rounded-t-[4px] chart-bar" style={{ height: `${(d.subs / 2210) * 100}%`, background: '#BFDBFE', minHeight: 4 }} />
+                    <div className="flex-1 rounded-t-[4px] chart-bar" style={{ height: `${(d.subs / 2210) * 100}%`, background: '#A7DCCF', minHeight: 4 }} />
                   </div>
                   <span className="text-[11px] text-[#9CA3AF]">{d.month}</span>
                 </div>
@@ -92,7 +92,7 @@ export function FinancialDashboardPage() {
             <h4 className="text-[14px] font-semibold text-[#111827] mb-4">Revenue by Plan</h4>
             <div className="space-y-3">
               {[
-                { plan: 'Enterprise', pct: 48, color: '#2563EB' },
+                { plan: 'Enterprise', pct: 48, color: '#0D7C6C' },
                 { plan: 'Team', pct: 22, color: '#7C3AED' },
                 { plan: 'Pro Annual', pct: 18, color: '#059669' },
                 { plan: 'Pro Monthly', pct: 8, color: '#D97706' },

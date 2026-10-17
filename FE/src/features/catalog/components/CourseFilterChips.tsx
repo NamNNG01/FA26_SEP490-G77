@@ -40,8 +40,8 @@ function FilterChip({ label, active, onClick }: { label: string; active: boolean
       onClick={onClick}
       className={`h-9 rounded-full border px-4 text-[13px] font-medium transition-all cursor-pointer ${
         active
-          ? 'border-[#2563EB] bg-[#2563EB] text-white shadow-sm shadow-[#2563EB]/25'
-          : 'border-[#E5E7EB] bg-white text-[#374151] hover:border-[#BFDBFE] hover:text-[#2563EB] dark:border-[#1F2937] dark:bg-[#111827] dark:text-[#D1D5DB] dark:hover:border-[#1E3A5F] dark:hover:text-white'
+          ? 'border-[#0D7C6C] bg-[#0D7C6C] text-white shadow-sm shadow-[#0D7C6C]/25'
+          : 'border-[#E5E7EB] bg-white text-[#374151] hover:border-[#A7DCCF] hover:text-[#0D7C6C] dark:border-[#1F2937] dark:bg-[#111827] dark:text-[#D1D5DB] dark:hover:border-[#0F3B35] dark:hover:text-white'
       }`}
     >
       {label}

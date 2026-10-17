@@ -88,7 +88,7 @@ export function CourseDetailPage({ onNavigate }: { onNavigate?: (id: string, par
   ];
 
   const studentColumns = [
-    { key: 'name', label: 'Student', render: (r: Record<string, unknown>) => <div className="flex items-center gap-2.5"><span className="w-7 h-7 rounded-full bg-[#EFF6FF] flex items-center justify-center text-[11px] font-bold text-[#2563EB]">{(r.name as string).split(' ').map(w => w[0]).join('')}</span><span className="text-[13.5px] font-medium text-[#374151]">{r.name as string}</span></div> },
+    { key: 'name', label: 'Student', render: (r: Record<string, unknown>) => <div className="flex items-center gap-2.5"><span className="w-7 h-7 rounded-full bg-[#ECF7F4] flex items-center justify-center text-[11px] font-bold text-[#0D7C6C]">{(r.name as string).split(' ').map(w => w[0]).join('')}</span><span className="text-[13.5px] font-medium text-[#374151]">{r.name as string}</span></div> },
     { key: 'progress', label: 'Progress', render: (r: Record<string, unknown>) => <div className="flex items-center gap-2 w-40"><Progress value={Number(r.progress)} size="sm" /><span className="text-[12px] font-medium text-[#374151]">{r.progress as number}%</span></div> },
     { key: 'exams', label: 'Exams Taken', render: (r: Record<string, unknown>) => <span className="text-[13px] text-[#374151]">{r.exams as number}</span> },
     { key: 'lastActive', label: 'Last Active', render: (r: Record<string, unknown>) => <span className="text-[13px] text-[#6B7280]">{r.lastActive as string}</span> },
@@ -116,7 +116,7 @@ export function CourseDetailPage({ onNavigate }: { onNavigate?: (id: string, par
                 manager={course.manager}
                 updated={course.updated}
                 stats={[
-                  { label: 'Modules', value: modules.length, color: '#2563EB' },
+                  { label: 'Modules', value: modules.length, color: '#0D7C6C' },
                   { label: 'Lessons', value: totalLessons, color: '#7C3AED' },
                   { label: 'Exams', value: totalExams, color: '#059669' },
                   { label: 'Questions', value: totalQuestions, color: '#D97706' },
@@ -170,7 +170,7 @@ export function CourseDetailPage({ onNavigate }: { onNavigate?: (id: string, par
       {tab === 'Analytics' && (
         <div className="space-y-4">
           <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-            {[{ label: 'Average Score', value: '71%', color: '#2563EB' }, { label: 'Pass Rate', value: '68%', color: '#16A34A' }, { label: 'Attempts', value: '1,842', color: '#7C3AED' }, { label: 'Completion', value: '64%', color: '#D97706' }].map(s => (
+            {[{ label: 'Average Score', value: '71%', color: '#0D7C6C' }, { label: 'Pass Rate', value: '68%', color: '#16A34A' }, { label: 'Attempts', value: '1,842', color: '#7C3AED' }, { label: 'Completion', value: '64%', color: '#D97706' }].map(s => (
               <div key={s.label} className="card p-4 flex items-center gap-3">
                 <span className="w-2 h-10 rounded-full flex-shrink-0" style={{ background: s.color }} />
                 <div>
@@ -189,7 +189,7 @@ export function CourseDetailPage({ onNavigate }: { onNavigate?: (id: string, par
                 <div key={pm.module} className="flex items-center gap-4 px-4 py-3">
                   <span className="w-36 xl:w-44 max-w-[30%] text-[13px] font-medium text-[#374151] truncate" title={pm.module}>{pm.module}</span>
                   <div className="flex-1 max-w-xs"><Progress value={pm.avg} size="sm" /></div>
-                  <span className="text-[12px] font-medium text-[#2563EB]">Avg {pm.avg}%</span>
+                  <span className="text-[12px] font-medium text-[#0D7C6C]">Avg {pm.avg}%</span>
                   <div className="flex-1 max-w-xs"><Progress value={pm.pass} size="sm" color="#16A34A" /></div>
                   <span className="text-[12px] font-medium text-[#16A34A]">Pass {pm.pass}%</span>
                   <span className="text-[12px] text-[#6B7280] w-20 text-right">{pm.attempts} attempts</span>

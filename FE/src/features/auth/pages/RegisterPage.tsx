@@ -100,7 +100,7 @@ export function RegisterPage() {
           gap (16–20px), the card is width 100% of the 430px column with
           auto height — the whole page fits the viewport on desktop/laptop. */}
       <div className="flex flex-col">
-        <AuthPageHeader title="Create your account" subtitle="Join CertifyAI to start learning." />
+        <AuthPageHeader title="Create your account" subtitle="Join PrepExam and start practising today." />
 
         <div className="card p-6 [@media(max-height:850px)]:p-5 shadow-lg">
           {error && <Alert type="error" title="Registration failed" message={error} />}
@@ -133,6 +133,8 @@ export function RegisterPage() {
               icon={<Icon.Lock className="w-4 h-4" />}
               suffix={
                 <button
+                  type="button"
+                  aria-label={showPwd ? 'Hide password' : 'Show password'}
                   onClick={() => setShowPwd((s) => !s)}
                   className="hover:text-[#374151] transition-colors"
                 >
@@ -149,6 +151,8 @@ export function RegisterPage() {
               icon={<Icon.Lock className="w-4 h-4" />}
               suffix={
                 <button
+                  type="button"
+                  aria-label={showConfirm ? 'Hide password' : 'Show password'}
                   onClick={() => setShowConfirm((s) => !s)}
                   className="hover:text-[#374151] transition-colors"
                 >
@@ -167,7 +171,7 @@ export function RegisterPage() {
               <button
                 type="button"
                 onClick={() => navigate('/login')}
-                className="text-[13px] text-[#2563EB] hover:underline font-medium"
+                className="text-[13px] text-[#0D7C6C] hover:underline font-medium"
               >
                 Sign in
               </button>

@@ -216,7 +216,7 @@ export default function ComponentsPage() {
           <div className="card p-5 space-y-4">
             <p className="text-[14px] font-semibold text-[#374151]">Linear Progress</p>
             <Progress value={92} label="AI Accuracy" color="#16A34A" size="lg" />
-            <Progress value={67} label="Course Completion" color="#2563EB" />
+            <Progress value={67} label="Course Completion" color="#0D7C6C" />
             <Progress value={34} label="Exam Progress" color="#D97706" size="sm" />
           </div>
           <div className="card p-5 space-y-4">
@@ -354,10 +354,10 @@ export default function ComponentsPage() {
       {/* Stat Cards */}
       <Section title="Statistic Cards">
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-          <StatCard title="Total Students" value="2,847" change={12.5} changeLabel="vs last month" icon={<Icon.Users />} color="#2563EB" />
-          <StatCard title="Exams Completed" value="18,291" change={8.3} changeLabel="vs last month" icon={<Icon.ClipboardList />} color="#7C3AED" />
-          <StatCard title="Avg Pass Rate" value="73.4%" change={-2.1} changeLabel="vs last month" icon={<Icon.TrendingUp />} color="#D97706" />
-          <StatCard title="Certificates Issued" value="1,204" change={21.8} changeLabel="vs last month" icon={<Icon.Award />} color="#059669" />
+          <StatCard title="Total Students" value="2,847" change={12.5} changeLabel="vs last month" icon={<Icon.Users />} />
+          <StatCard title="Exams Completed" value="18,291" change={8.3} changeLabel="vs last month" icon={<Icon.ClipboardList />} />
+          <StatCard title="Avg Pass Rate" value="73.4%" change={-2.1} changeLabel="vs last month" icon={<Icon.TrendingUp />} />
+          <StatCard title="Certificates Issued" value="1,204" change={21.8} changeLabel="vs last month" icon={<Icon.Award />} />
         </div>
       </Section>
     </div>

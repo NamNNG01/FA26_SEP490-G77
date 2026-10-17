@@ -57,8 +57,8 @@ export function PublicNavbar() {
             aria-label="PrepExam home"
             className="flex flex-shrink-0 cursor-pointer items-center gap-2.5"
           >
-            <span className="flex h-8 w-8 items-center justify-center rounded-[8px] bg-[#2563EB] shadow-sm">
-              <Icon.Brain className="h-4.5 w-4.5 text-white" />
+            <span className="flex h-8 w-8 items-center justify-center rounded-[8px] bg-[#0D7C6C] shadow-sm">
+              <Icon.Logo className="h-4.5 w-4.5 text-white" />
             </span>
             <span className="text-[16px] font-bold text-[#111827] dark:text-[#F9FAFB]">PrepExam</span>
           </button>
@@ -76,7 +76,7 @@ export function PublicNavbar() {
                 aria-current={isActive(link.to) ? 'page' : undefined}
                 className={`rounded-[10px] px-3 py-2 text-[14px] font-medium transition-colors cursor-pointer ${
                   isActive(link.to)
-                    ? 'bg-[#EFF6FF] text-[#2563EB] dark:bg-[#2563EB]/15 dark:text-[#93C5FD]'
+                    ? 'bg-[#ECF7F4] text-[#0D7C6C] dark:bg-[#0D7C6C]/15 dark:text-[#6FCBB6]'
                     : 'text-[#4B5563] hover:bg-[#F3F4F6] hover:text-[#111827] dark:text-[#D1D5DB] dark:hover:bg-[#26324A] dark:hover:text-white'
                 }`}
               >
@@ -91,7 +91,7 @@ export function PublicNavbar() {
               <button
                 type="button"
                 onClick={() => goTo(dashboardPath)}
-                className="inline-flex h-9 items-center gap-1.5 rounded-[10px] bg-[#2563EB] px-4 text-[14px] font-semibold text-white shadow-sm transition-colors hover:bg-[#1D4ED8] cursor-pointer"
+                className="inline-flex h-9 items-center gap-1.5 rounded-[10px] bg-[#0D7C6C] px-4 text-[14px] font-semibold text-white shadow-sm transition-colors hover:bg-[#0A6458] cursor-pointer"
               >
                 Dashboard
                 <Icon.ChevronRight className="h-4 w-4" />
@@ -108,7 +108,7 @@ export function PublicNavbar() {
                 <button
                   type="button"
                   onClick={() => goTo(ROUTES.register)}
-                  className="inline-flex h-9 items-center rounded-[10px] bg-[#2563EB] px-4 text-[14px] font-semibold text-white shadow-sm transition-colors hover:bg-[#1D4ED8] cursor-pointer"
+                  className="inline-flex h-9 items-center rounded-[10px] bg-[#0D7C6C] px-4 text-[14px] font-semibold text-white shadow-sm transition-colors hover:bg-[#0A6458] cursor-pointer"
                 >
                   Get Started
                 </button>
@@ -144,7 +144,7 @@ export function PublicNavbar() {
                     onClick={() => goTo(link.to)}
                     className={`rounded-[10px] px-3 py-2.5 text-left text-[14px] font-medium transition-colors cursor-pointer ${
                       isActive(link.to)
-                        ? 'bg-[#EFF6FF] text-[#2563EB] dark:bg-[#2563EB]/15 dark:text-[#93C5FD]'
+                        ? 'bg-[#ECF7F4] text-[#0D7C6C] dark:bg-[#0D7C6C]/15 dark:text-[#6FCBB6]'
                         : 'text-[#4B5563] hover:bg-[#F3F4F6] dark:text-[#D1D5DB] dark:hover:bg-[#26324A]'
                     }`}
                   >
@@ -157,7 +157,7 @@ export function PublicNavbar() {
                 <button
                   type="button"
                   onClick={() => goTo(dashboardPath)}
-                  className="mt-3 inline-flex h-10 w-full items-center justify-center rounded-[10px] bg-[#2563EB] text-[14px] font-semibold text-white shadow-sm transition-colors hover:bg-[#1D4ED8] cursor-pointer"
+                  className="mt-3 inline-flex h-10 w-full items-center justify-center rounded-[10px] bg-[#0D7C6C] text-[14px] font-semibold text-white shadow-sm transition-colors hover:bg-[#0A6458] cursor-pointer"
                 >
                   Dashboard
                 </button>
@@ -173,7 +173,7 @@ export function PublicNavbar() {
                   <button
                     type="button"
                     onClick={() => goTo(ROUTES.register)}
-                    className="inline-flex h-10 items-center justify-center rounded-[10px] bg-[#2563EB] text-[14px] font-semibold text-white shadow-sm transition-colors hover:bg-[#1D4ED8] cursor-pointer"
+                    className="inline-flex h-10 items-center justify-center rounded-[10px] bg-[#0D7C6C] text-[14px] font-semibold text-white shadow-sm transition-colors hover:bg-[#0A6458] cursor-pointer"
                   >
                     Get Started
                   </button>

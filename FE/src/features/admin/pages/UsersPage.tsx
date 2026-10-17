@@ -54,7 +54,7 @@ export function UsersPage({ onNavigate }: { onNavigate?: (id: string, params?: R
       <button onClick={() => openDetail(r as unknown as MockUser)} className="flex items-center gap-2.5 text-left rounded-[6px] -ml-1 pl-1 pr-2 py-0.5 hover:bg-[#F3F4F6] transition-colors min-w-0">
         <Avatar name={r.name as string} size="sm" />
         <div className="min-w-0">
-          <p className="font-medium text-[#111827] text-[13.5px] truncate hover:text-[#2563EB] transition-colors">{r.name as string}</p>
+          <p className="font-medium text-[#111827] text-[13.5px] truncate hover:text-[#0D7C6C] transition-colors">{r.name as string}</p>
           <p className="text-[11px] text-[#9CA3AF] truncate">{r.email as string}</p>
         </div>
       </button>
@@ -75,7 +75,7 @@ export function UsersPage({ onNavigate }: { onNavigate?: (id: string, params?: R
         <h2 className="text-[22px] font-bold text-[#111827]">User List</h2>
       </div>
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-        {[{ label: 'Total Users', value: 3847, color: '#2563EB' }, { label: 'Active', value: 3612, color: '#16A34A' }, { label: 'Inactive', value: 235, color: '#9CA3AF' }, { label: 'New this month', value: 147, color: '#D97706' }].map(s => (
+        {[{ label: 'Total Users', value: 3847, color: '#0D7C6C' }, { label: 'Active', value: 3612, color: '#16A34A' }, { label: 'Inactive', value: 235, color: '#9CA3AF' }, { label: 'New this month', value: 147, color: '#D97706' }].map(s => (
           <div key={s.label} className="card p-4 flex items-center gap-3">
             <div className="w-2 h-10 rounded-full flex-shrink-0" style={{ background: s.color }} />
             <div>

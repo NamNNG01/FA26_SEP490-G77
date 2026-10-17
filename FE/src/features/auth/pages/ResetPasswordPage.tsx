@@ -67,7 +67,7 @@ export function ResetPasswordPage() {
   if (/[0-9]/.test(password)) strength++;
   if (/[^A-Za-z0-9]/.test(password)) strength++;
   const strengthLabel = ['', 'Weak', 'Fair', 'Good', 'Strong'];
-  const strengthColor = ['', '#DC2626', '#D97706', '#2563EB', '#16A34A'];
+  const strengthColor = ['', '#DC2626', '#D97706', '#0D7C6C', '#16A34A'];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

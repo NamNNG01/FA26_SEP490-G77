@@ -141,7 +141,7 @@ export function EditModuleModal({
             Description <span className="text-[#9CA3AF] font-normal">(optional)</span>
           </label>
           <textarea
-            className="w-full h-24 px-3 py-2.5 rounded-[10px] border border-[#E5E7EB] text-[14px] text-[#111827] resize-none focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB] transition-all"
+            className="w-full h-24 px-3 py-2.5 rounded-[10px] border border-[#E5E7EB] text-[14px] text-[#111827] resize-none focus:outline-none focus:ring-2 focus:ring-[#0D7C6C]/20 focus:border-[#0D7C6C] transition-all"
             value={description}
             onChange={e => setDescription(e.target.value)}
             placeholder="Summarize what this module covers…"

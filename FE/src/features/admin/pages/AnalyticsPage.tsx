@@ -5,6 +5,9 @@ import { Select } from '@/components/ui/Select';
 import { Tabs } from '@/components/ui/Tabs';
 import { Icon } from '@/assets/icons';
 
+/** Pass-rate target drawn as a marker on every subject bar. */
+const PASS_TARGET = 70;
+
 export function AnalyticsPage() {
   const [tab, setTab] = useState('Overview');
   const passRates = [{ subject: 'Python Basics', rate: 91, exams: 1247 }, { subject: 'ML Fundamentals', rate: 73, exams: 892 }, { subject: 'Deep Learning', rate: 58, exams: 634 }, { subject: 'Statistics', rate: 79, exams: 712 }, { subject: 'SQL', rate: 88, exams: 1054 }];
@@ -21,37 +24,52 @@ export function AnalyticsPage() {
       <Tabs tabs={['Overview', 'Students', 'Exams', 'AI Performance']} active={tab} onChange={setTab} />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        <StatCard title="Total Exam Attempts" value="18,291" change={12.1} changeLabel="vs prev period" icon={<Icon.ClipboardList />} color="#2563EB" />
-        <StatCard title="Overall Pass Rate" value="73.4%" change={-2.1} changeLabel="vs prev period" icon={<Icon.TrendingUp />} color="#D97706" />
-        <StatCard title="Avg Completion Time" value="71m" change={-5.2} changeLabel="vs prev period" icon={<Icon.Clock />} color="#7C3AED" />
-        <StatCard title="AI Hint Usage" value="34.2%" change={8.7} changeLabel="vs prev period" icon={<Icon.Brain />} color="#059669" />
+        <StatCard title="Total Exam Attempts" value="18,291" change={12.1} changeLabel="vs prev period" icon={<Icon.ClipboardList />} />
+        <StatCard title="Overall Pass Rate" value="73.4%" change={-2.1} changeLabel="vs prev period" icon={<Icon.TrendingUp />} />
+        <StatCard title="Avg Completion Time" value="71m" change={-5.2} changeLabel="vs prev period" icon={<Icon.Clock />} direction="neutral" />
+        <StatCard title="AI Hint Usage" value="34.2%" change={8.7} changeLabel="vs prev period" icon={<Icon.Brain />} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="card p-5">
-          <h4 className="text-[15px] font-semibold text-[#111827] mb-5">Pass Rate by Subject</h4>
+          <div className="flex items-baseline justify-between gap-3 mb-5">
+            <h2 className="text-[15px] font-semibold text-[#111827]">Pass Rate by Subject</h2>
+            <span className="inline-flex items-center gap-1.5 text-[12px] text-[#6B7280]">
+              <span aria-hidden className="h-3 w-px bg-[#111827]" />
+              {PASS_TARGET}% target
+            </span>
+          </div>
           <div className="space-y-4">
-            {passRates.map(p => (
-              <div key={p.subject} className="flex items-center gap-3">
-                <span className="text-[13px] text-[#374151] w-32 flex-shrink-0">{p.subject}</span>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 h-6 bg-[#F3F4F6] rounded-[6px] overflow-hidden">
-                      <div className="h-full rounded-[6px] flex items-center pl-2 transition-all"
-                        style={{ width: `${p.rate}%`, background: p.rate >= 80 ? '#16A34A' : p.rate >= 70 ? '#2563EB' : '#D97706' }}>
-                        <span className="text-[11px] font-bold text-white">{p.rate}%</span>
-                      </div>
+            {passRates.map(p => {
+              const below = p.rate < PASS_TARGET;
+              return (
+                <div key={p.subject} className="flex items-center gap-3">
+                  <span className="text-[13px] text-[#374151] w-32 flex-shrink-0">{p.subject}</span>
+                  {/* One hue for every bar; only subjects under target get the warning tint. */}
+                  <div className="relative flex-1 h-6 bg-[#F3F4F6] rounded-[6px] overflow-hidden">
+                    <div className="h-full rounded-[6px] flex items-center pl-2"
+                      style={{ width: `${p.rate}%`, background: below ? '#D97706' : '#0D7C6C' }}>
+                      <span className="text-[11px] font-bold text-white">{p.rate}%</span>
                     </div>
-                    <span className="text-[11px] text-[#9CA3AF] w-14 text-right">{p.exams} exams</span>
+                    <span aria-hidden className="absolute inset-y-0 w-px bg-[#111827]" style={{ left: `${PASS_TARGET}%` }} />
                   </div>
+                  <span className="text-[12px] text-[#6B7280] whitespace-nowrap tabular-nums w-[72px] text-right">
+                    {p.exams.toLocaleString('en-US')} exams
+                  </span>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
         <div className="card p-5">
-          <h4 className="text-[15px] font-semibold text-[#111827] mb-5">Score Distribution</h4>
+          <div className="flex items-baseline justify-between gap-3 mb-5">
+            <h2 className="text-[15px] font-semibold text-[#111827]">Score Distribution</h2>
+            <div className="flex items-center gap-3 text-[12px] text-[#6B7280]">
+              <span className="inline-flex items-center gap-1.5"><span aria-hidden className="h-2.5 w-2.5 rounded-[3px] bg-[#0D7C6C]" />Passed (71+)</span>
+              <span className="inline-flex items-center gap-1.5"><span aria-hidden className="h-2.5 w-2.5 rounded-[3px] bg-[#A7DCCF]" />Below pass</span>
+            </div>
+          </div>
           <div className="flex items-end gap-2 h-40 mb-3">
             {[
               { range: '0–40', pct: 8, count: 1463 },
@@ -63,9 +81,9 @@ export function AnalyticsPage() {
               { range: '91–100', pct: 5, count: 916 },
             ].map(d => (
               <div key={d.range} className="flex-1 flex flex-col items-center gap-1">
-                <span className="text-[10px] text-[#9CA3AF]">{d.pct}%</span>
-                <div className="w-full rounded-t-[4px]" style={{ height: `${d.pct * 4}px`, background: d.range.startsWith('7') || d.range.startsWith('8') || d.range.startsWith('9') ? '#2563EB' : '#BFDBFE' }} />
-                <span className="text-[9px] text-[#9CA3AF] leading-tight text-center">{d.range}</span>
+                <span className="text-[11px] text-[#6B7280]">{d.pct}%</span>
+                <div className="w-full rounded-t-[4px]" style={{ height: `${d.pct * 4}px`, background: d.range.startsWith('7') || d.range.startsWith('8') || d.range.startsWith('9') ? '#0D7C6C' : '#A7DCCF' }} />
+                <span className="text-[11px] text-[#6B7280] leading-tight text-center">{d.range}</span>
               </div>
             ))}
           </div>

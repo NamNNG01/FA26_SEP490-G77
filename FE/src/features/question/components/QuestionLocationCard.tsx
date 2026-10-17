@@ -27,7 +27,7 @@ export function QuestionLocationCard({ courseId, moduleId, onChange, className =
   return (
     <div className={`rounded-[10px] border border-[#E5E7EB] bg-[#F9FAFB] p-3 space-y-2.5 ${className}`}>
       <div className="flex items-center gap-1.5">
-        <Icon.FolderOpen className="w-3.5 h-3.5 text-[#2563EB] flex-shrink-0" />
+        <Icon.FolderOpen className="w-3.5 h-3.5 text-[#0D7C6C] flex-shrink-0" />
         <span className="text-[12px] font-semibold text-[#374151] uppercase tracking-wide">Location</span>
       </div>
       <Select

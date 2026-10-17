@@ -5,6 +5,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { ROUTES } from '@/app/routes';
 import { Avatar } from '@/components/ui/Avatar';
 import { Icon } from '@/assets/icons';
+import { roleLabel } from '@/utils/permissions';
 
 /**
  * UserDropdown
@@ -108,13 +109,13 @@ export function UserDropdown() {
         aria-expanded={open}
         className="flex items-center gap-2.5 rounded-[10px] px-1.5 py-1 cursor-pointer text-foreground hover:bg-accent hover:text-accent-foreground transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-primary/30"
       >
-        <Avatar name={user.fullName} src={user.avatarUrl ?? undefined} size="sm" color="#2563EB" />
+        <Avatar name={user.fullName} src={user.avatarUrl ?? undefined} size="sm" color="#0D7C6C" />
         <div className="hidden sm:block text-left">
           <p className="text-[13px] font-semibold leading-tight text-foreground">
             {user.fullName}
           </p>
           <p className="text-[11px] leading-tight text-muted-foreground">
-            {user.role}
+            {roleLabel(user.role)}
           </p>
         </div>
         <Icon.ChevronDown

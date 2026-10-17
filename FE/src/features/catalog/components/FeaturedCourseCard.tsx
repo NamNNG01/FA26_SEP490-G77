@@ -25,9 +25,9 @@ export function FeaturedCourseCard() {
   return (
     <div className="w-full max-w-[440px] min-w-0">
       {/* Wrapper carries the glow so the card itself keeps a clean 1px border */}
-      <div className="rounded-[20px] bg-gradient-to-br from-[#2563EB]/20 via-[#2563EB]/5 to-transparent p-px dark:from-[#2563EB]/35 dark:via-transparent">
+      <div className="rounded-[20px] bg-gradient-to-br from-[#0D7C6C]/20 via-[#0D7C6C]/5 to-transparent p-px dark:from-[#0D7C6C]/35 dark:via-transparent">
         <div className="card p-6 shadow-xl shadow-[#111827]/5">
-          <div className="flex items-center gap-2 text-[11px] font-semibold tracking-wider text-[#2563EB] uppercase dark:text-[#93C5FD]">
+          <div className="flex items-center gap-2 text-[11px] font-semibold tracking-wider text-[#0D7C6C] uppercase dark:text-[#6FCBB6]">
             <Icon.Zap className="h-3.5 w-3.5" />
             Featured Course
           </div>
@@ -55,7 +55,7 @@ export function FeaturedCourseCard() {
             {course.features.map((feature) => (
               <li
                 key={feature}
-                className="inline-flex items-center gap-1.5 rounded-full bg-[#EFF6FF] px-2.5 py-1 text-[12px] font-medium text-[#2563EB] dark:bg-[#2563EB]/15 dark:text-[#93C5FD]"
+                className="inline-flex items-center gap-1.5 rounded-full bg-[#ECF7F4] px-2.5 py-1 text-[12px] font-medium text-[#0D7C6C] dark:bg-[#0D7C6C]/15 dark:text-[#6FCBB6]"
               >
                 <Icon.Check className="h-3 w-3" />
                 {feature}
@@ -71,7 +71,7 @@ export function FeaturedCourseCard() {
             <button
               type="button"
               onClick={() => navigate(coursePath(course.slug))}
-              className="inline-flex h-10 items-center gap-1.5 rounded-[10px] bg-[#2563EB] px-4 text-[14px] font-semibold text-white shadow-sm shadow-[#2563EB]/25 transition-colors hover:bg-[#1D4ED8] cursor-pointer"
+              className="inline-flex h-10 items-center gap-1.5 rounded-[10px] bg-[#0D7C6C] px-4 text-[14px] font-semibold text-white shadow-sm shadow-[#0D7C6C]/25 transition-colors hover:bg-[#0A6458] cursor-pointer"
             >
               View Course
               <Icon.ChevronRight className="h-4 w-4" />

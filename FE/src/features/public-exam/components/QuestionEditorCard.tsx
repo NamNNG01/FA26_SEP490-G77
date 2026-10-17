@@ -23,15 +23,15 @@ const DIFFICULTY_VARIANT: Record<ExamDifficulty, 'success' | 'warning' | 'danger
  * ONE component renders a question for both roles. `canEdit` alone decides what
  * is editable, which controls exist, and whether correct answers are shown:
  *
- *   canEdit=true  (content manager) â€” type select, editable text, editable
+ *   canEdit=true  (content manager) — type select, editable text, editable
  *                  options/matching/ordering, group assignment, "mark correct"
  *                  markers, move up/down and remove controls.
- *   canEdit=false (student)          â€” every field read-only or disabled, no
+ *   canEdit=false (student)          — every field read-only or disabled, no
  *                  editing controls, and `isCorrect` is never rendered.
  *
  * The `isCorrect` marker is deliberately confined to the `{canEdit && ...}`
  * branches below. It is still present in the client bundle, so this is a UI
- * guarantee, not a security boundary â€” real answers must live server-side.
+ * guarantee, not a security boundary — real answers must live server-side.
  */
 
 const OPTION_LETTERS = ['A', 'B', 'C', 'D', 'E', 'F'];
@@ -107,7 +107,7 @@ export function QuestionEditorCard({
     ? 'bg-surface-alt px-4 py-4'
     : 'border border-line bg-surface p-5 shadow-sm';
 
-  /** Read-only rendering of one option â€” no correct marker, no radio affordance. */
+  /** Read-only rendering of one option — no correct marker, no radio affordance. */
   const optionRow = (option: ExamOption) => (
     <div
       key={option.label}
@@ -264,7 +264,7 @@ export function QuestionEditorCard({
               />
             ) : (
               <span className="text-[13px] text-muted-foreground">
-                Short answer â€” responses are matched against the expected wording.
+                Short answer — responses are matched against the expected wording.
               </span>
             )}
           </LabelledField>
@@ -345,7 +345,7 @@ export function QuestionEditorCard({
 
         {question.type === 'essay' && (
           <p className="text-[13px] text-muted-foreground">
-            Written response â€” graded against a rubric rather than an answer key.
+            Written response — graded against a rubric rather than an answer key.
           </p>
         )}
       </div>
@@ -358,7 +358,7 @@ export function QuestionEditorCard({
  *
  * Background is `bg-surface`, the same neutral token as every other card on the
  * page. It deliberately does NOT use `bg-primary-light`: that token is a plain
- * hex (#EFF6FF) rather than a `var(--surface-*)` reference, so it stays near-white
+ * hex (#ECF7F4) rather than a `var(--surface-*)` reference, so it stays near-white
  * in dark mode and puts #D1D5DB text on it at roughly 1.4:1. Only the Layers icon
  * and the count pill carry the blue accent.
  *
@@ -398,7 +398,7 @@ export function QuestionGroupCard({
             <h3 className="text-[15px] font-semibold leading-snug text-foreground">{group.title}</h3>
           )}
 
-          <p className="mt-0.5 text-[12.5px] font-medium text-primary dark:text-[#93C5FD]">
+          <p className="mt-0.5 text-[12.5px] font-medium text-primary dark:text-[#6FCBB6]">
             {count} Question{count === 1 ? '' : 's'}
           </p>
         </div>

@@ -43,13 +43,13 @@ export function PublicFooter() {
               aria-label="PrepExam home"
               className="flex cursor-pointer items-center gap-2.5"
             >
-              <span className="flex h-8 w-8 items-center justify-center rounded-[8px] bg-[#2563EB] shadow-sm">
-                <Icon.Brain className="h-4.5 w-4.5 text-white" />
+              <span className="flex h-8 w-8 items-center justify-center rounded-[8px] bg-[#0D7C6C] shadow-sm">
+                <Icon.Logo className="h-4.5 w-4.5 text-white" />
               </span>
               <span className="text-[16px] font-bold text-[#111827] dark:text-[#F9FAFB]">PrepExam</span>
             </button>
             <p className="mt-3 text-[13.5px] leading-relaxed text-[#6B7280] dark:text-[#D1D5DB]">
-              AI-powered exam preparation platform. Browse courses, practise exam-style questions and sit mock exams —
+              Exam preparation for cloud and security certifications. Browse courses, practise exam-style questions and sit mock exams —
               PrepExam does not issue certificates.
             </p>
           </div>
@@ -66,7 +66,7 @@ export function PublicFooter() {
                       <button
                         type="button"
                         onClick={() => navigate(link.to)}
-                        className="cursor-pointer text-[13.5px] text-[#6B7280] transition-colors hover:text-[#2563EB] dark:text-[#D1D5DB]"
+                        className="cursor-pointer text-[13.5px] text-[#6B7280] transition-colors hover:text-[#0D7C6C] dark:text-[#D1D5DB]"
                       >
                         {link.label}
                       </button>
@@ -80,7 +80,7 @@ export function PublicFooter() {
 
         <div className="mt-8 flex flex-col items-center justify-between gap-2 border-t border-[#F3F4F6] pt-6 text-center sm:flex-row sm:text-left dark:border-[#1F2937]">
           <p className="text-[13px] text-[#9CA3AF]">© {new Date().getFullYear()} PrepExam. All rights reserved.</p>
-          <p className="text-[13px] text-[#9CA3AF]">AI-powered exam preparation platform</p>
+          <p className="text-[13px] text-[#9CA3AF]">Practice questions · Mock exams · AI review</p>
         </div>
       </Container>
     </footer>

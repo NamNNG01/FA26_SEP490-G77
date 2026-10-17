@@ -43,7 +43,7 @@ function ContentPreview({ block }: { block: ContentBlock }) {
     case 'video':
       return block.source === 'upload'
         ? <p className="text-[13px] text-[#6B7280]"><Icon.Video className="w-4 h-4 inline text-[#DC2626] mr-1.5 -mt-0.5" />{block.fileName || 'No video selected'}</p>
-        : <a className="text-[13px] text-[#2563EB] hover:underline" href={block.value} target="_blank" rel="noreferrer">{block.value || `${block.source === 'youtube' ? 'YouTube' : 'Vimeo'} link pending`}</a>;
+        : <a className="text-[13px] text-[#0D7C6C] hover:underline" href={block.value} target="_blank" rel="noreferrer">{block.value || `${block.source === 'youtube' ? 'YouTube' : 'Vimeo'} link pending`}</a>;
     case 'image':
       return block.objectUrl ? (
         <div>

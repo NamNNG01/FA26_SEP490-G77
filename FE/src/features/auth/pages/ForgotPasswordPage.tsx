@@ -135,7 +135,7 @@ export function ForgotPasswordPage() {
               <button
                 type="button"
                 onClick={changeEmail}
-                className="text-[13px] text-[#2563EB] hover:underline font-medium"
+                className="text-[13px] text-[#0D7C6C] hover:underline font-medium"
               >
                 Use a different email
               </button>
@@ -154,7 +154,7 @@ export function ForgotPasswordPage() {
           <button
             type="button"
             onClick={() => navigate(ROUTES.login, { state: { email: (sentTo || email).trim() } })}
-            className="text-[13px] font-medium text-[#6B7280] hover:text-[#2563EB] flex items-center justify-center gap-1.5 transition-colors"
+            className="text-[13px] font-medium text-[#6B7280] hover:text-[#0D7C6C] flex items-center justify-center gap-1.5 transition-colors"
           >
             <Icon.ChevronLeft className="w-4 h-4" />
             Back to login

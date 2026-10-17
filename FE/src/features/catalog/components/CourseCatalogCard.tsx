@@ -25,7 +25,7 @@ export function CourseCatalogCard({ course }: { course: PublicCourse }) {
   ];
 
   return (
-    <article className="card group flex h-full flex-col p-5 transition-all hover:-translate-y-0.5 hover:border-[#BFDBFE] hover:shadow-lg dark:hover:border-[#1E3A5F]">
+    <article className="card group flex h-full flex-col p-5 transition-all hover:-translate-y-0.5 hover:border-[#A7DCCF] hover:shadow-lg dark:hover:border-[#0F3B35]">
       <div className="flex items-start gap-3">
         <ProviderLogo providerId={course.providerId} provider={course.provider} size={40} />
         <div className="min-w-0 flex-1">
@@ -67,7 +67,7 @@ export function CourseCatalogCard({ course }: { course: PublicCourse }) {
         <div className="mt-3 flex items-center justify-between gap-3 border-t border-[#F3F4F6] pt-3 dark:border-[#1F2937]">
           <span
             className={`text-[12.5px] font-semibold ${
-              course.priceLabel === 'Free' ? 'text-[#16A34A]' : 'text-[#2563EB]'
+              course.priceLabel === 'Free' ? 'text-[#16A34A]' : 'text-[#0D7C6C]'
             }`}
           >
             {course.priceLabel}
@@ -75,7 +75,7 @@ export function CourseCatalogCard({ course }: { course: PublicCourse }) {
           <button
             type="button"
             onClick={() => navigate(href)}
-            className="inline-flex h-9 items-center gap-1 rounded-[10px] bg-[#2563EB] px-3.5 text-[13px] font-semibold text-white shadow-sm transition-colors hover:bg-[#1D4ED8] cursor-pointer"
+            className="inline-flex h-9 items-center gap-1 rounded-[10px] bg-[#0D7C6C] px-3.5 text-[13px] font-semibold text-white shadow-sm transition-colors hover:bg-[#0A6458] cursor-pointer"
           >
             View Course
             <Icon.ChevronRight className="h-3.5 w-3.5" />

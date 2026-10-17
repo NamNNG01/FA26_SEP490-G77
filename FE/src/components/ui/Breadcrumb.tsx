@@ -10,7 +10,7 @@ export function Breadcrumb({ items }: { items: { label: string; onClick?: () => 
           <span
             onClick={item.onClick}
             title={item.label}
-            className={`text-[13.5px] min-w-0 max-w-[240px] truncate ${item.onClick ? 'text-[#2563EB] hover:underline cursor-pointer' : 'text-[#6B7280]'}`}
+            className={`text-[13.5px] min-w-0 max-w-[240px] truncate ${item.onClick ? 'text-[#0D7C6C] hover:underline cursor-pointer' : 'text-[#6B7280]'}`}
           >
             {item.label}
           </span>

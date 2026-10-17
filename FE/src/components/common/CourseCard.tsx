@@ -11,7 +11,7 @@ export function CourseCard({ title, description, subject, difficulty, progress, 
   const diffColor = { Easy: 'success', Medium: 'warning', Hard: 'danger' } as const;
   const statusVariant = status === 'Published' ? 'info' as const : status === 'Draft' ? 'warning' as const : 'default' as const;
   const metrics = [
-    { label: 'Modules', value: modules, color: '#2563EB' },
+    { label: 'Modules', value: modules, color: '#0D7C6C' },
     { label: 'Lessons', value: lessons, color: '#7C3AED' },
     { label: 'Questions', value: questions, color: '#D97706' },
     { label: 'Exams', value: examCount, color: '#059669' },
@@ -53,8 +53,8 @@ export function ExamCard({ title, duration, questions, passMark, status, score, 
   return (
     <div className="card p-5 cursor-pointer hover:shadow-md transition-all" onClick={onClick}>
       <div className="flex items-start justify-between gap-3 mb-4">
-        <div className="w-10 h-10 rounded-[10px] bg-[#EFF6FF] flex items-center justify-center flex-shrink-0">
-          <Icon.ClipboardList className="w-5 h-5 text-[#2563EB]" />
+        <div className="w-10 h-10 rounded-[10px] bg-[#ECF7F4] flex items-center justify-center flex-shrink-0">
+          <Icon.ClipboardList className="w-5 h-5 text-[#0D7C6C]" />
         </div>
         <Badge variant={s.variant}>{s.label}</Badge>
       </div>

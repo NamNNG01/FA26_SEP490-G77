@@ -78,7 +78,7 @@ export function ExamFormPage({ mode, onNavigate }: { mode: 'create' | 'edit'; on
             <Input label="Exam Name *" value={title} onChange={e => setTitle(e.target.value)} placeholder="Enter exam name" />
             <div>
               <label className="text-[13px] font-medium text-[#374151] block mb-1.5">Description <span className="text-[#9CA3AF] font-normal">(optional)</span></label>
-              <textarea className="w-full h-14 px-3 py-2 rounded-[10px] border border-[#E5E7EB] text-[13px] resize-none focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB]" value={description} onChange={e => setDescription(e.target.value)} placeholder="Describe the exam scope..." />
+              <textarea className="w-full h-14 px-3 py-2 rounded-[10px] border border-[#E5E7EB] text-[13px] resize-none focus:outline-none focus:ring-2 focus:ring-[#0D7C6C]/20 focus:border-[#0D7C6C]" value={description} onChange={e => setDescription(e.target.value)} placeholder="Describe the exam scope..." />
             </div>
 
             <div className="grid grid-cols-2 gap-3">

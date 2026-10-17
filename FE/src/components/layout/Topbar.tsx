@@ -38,10 +38,10 @@ export function AppTopbar({ user, notifications = 3 }: {
   return (
     <header className="h-14 bg-white border-b border-[#F3F4F6] flex items-center px-4 gap-3 flex-shrink-0 sticky top-0 z-40">
       <div className="flex items-center gap-2.5 w-56 flex-shrink-0">
-        <div className="w-7 h-7 bg-[#2563EB] rounded-[8px] flex items-center justify-center">
-          <Icon.Brain className="w-4 h-4 text-white" />
+        <div className="w-7 h-7 bg-[#0D7C6C] rounded-[8px] flex items-center justify-center">
+          <Icon.Logo className="w-4 h-4 text-white" />
         </div>
-        <span className="text-[15px] font-bold text-[#111827]">CertifyAI</span>
+        <span className="text-[15px] font-bold text-[#111827]">PrepExam</span>
       </div>
       <div className="flex-1" />
       <SearchInput className="w-64" placeholder="Search…" />

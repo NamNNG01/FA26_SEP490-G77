@@ -16,7 +16,7 @@ export function Select({ label, options, value, onChange, className = '', disabl
           onChange={e => onChange?.(e.target.value)}
           disabled={disabled}
           aria-label={ariaLabel}
-          className={`w-full h-9 pl-3 pr-9 rounded-[10px] border border-[#E5E7EB] bg-white text-[14px] text-[#111827] appearance-none focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB] transition-all ${disabled ? 'cursor-not-allowed bg-[#F9FAFB] text-[#9CA3AF]' : 'cursor-pointer'}`}
+          className={`w-full h-9 pl-3 pr-9 rounded-[10px] border border-[#E5E7EB] bg-white text-[14px] text-[#111827] appearance-none focus:outline-none focus:ring-2 focus:ring-[#0D7C6C]/20 focus:border-[#0D7C6C] transition-all ${disabled ? 'cursor-not-allowed bg-[#F9FAFB] text-[#9CA3AF]' : 'cursor-pointer'}`}
         >
           {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>

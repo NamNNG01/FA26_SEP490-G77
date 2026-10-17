@@ -3,7 +3,7 @@
  *
  * Self-consistent by construction so the statistic row is derived, never
  * hard-coded: 48 exams total, of which 12 are completed (scores average to
- * 78%), 2 are in progress and 34 are untouched â€” i.e. 36 "ready to start".
+ * 78%), 2 are in progress and 34 are untouched — i.e. 36 "ready to start".
  *
  * The first nine records are the headline cards and must stay first, in this
  * order, so page 1 always renders exactly the specified set.
@@ -12,13 +12,13 @@
 export type ExamDifficulty = 'Easy' | 'Medium' | 'Hard';
 
 /**
- * Question format. An exam is EITHER objective â€” multiple choice, true/false,
- * fill in the blank, matching, ordering â€” OR essay. Never both: the field is a
+ * Question format. An exam is EITHER objective — multiple choice, true/false,
+ * fill in the blank, matching, ordering — OR essay. Never both: the field is a
  * single value, not a list, so no card can render two types.
  */
 export type ExamType = 'objective' | 'essay';
 
-/** Lifecycle from the learner's point of view â€” NOT the authoring status. */
+/** Lifecycle from the learner's point of view — NOT the authoring status. */
 export type ExamStatus = 'available' | 'in-progress' | 'completed';
 
 /** Category drives the tab strip. */
@@ -35,11 +35,11 @@ export interface PublicExam {
   duration: number;
   /** Objective exams run 40-70 items; essay exams are a handful of long answers. */
   questions: number;
-  /** Required â€” an exam always belongs to exactly one question format. */
+  /** Required — an exam always belongs to exactly one question format. */
   examType: ExamType;
   difficulty: ExamDifficulty;
   status: ExamStatus;
-  /** Percent score â€” only ever set on completed exams. */
+  /** Percent score — only ever set on completed exams. */
   score?: number;
 }
 
@@ -47,16 +47,16 @@ export interface PublicExamCourseMeta {
   name: string;
   /** Short label for the Course dropdown when `name` is too long to fit. Falls back to `name`. */
   shortName?: string;
-  /** 2â€“3 character monogram rendered inside the card's logo tile. */
+  /** 2–3 character monogram rendered inside the card's logo tile. */
   monogram: string;
   /** Brand-ish accent used for the logo tile and its tint. */
   accent: string;
-  /** Units of study â€” the Module dropdown is scoped to the selected course. */
+  /** Units of study — the Module dropdown is scoped to the selected course. */
   modules: string[];
 }
 
 /**
- * Course metadata â€” one entry per distinct `PublicExam.course`. The accent
+ * Course metadata — one entry per distinct `PublicExam.course`. The accent
  * colours are the real vendor brand hues so the logo tiles read instantly.
  * `modules` scopes the Module dropdown to the selected course.
  */
@@ -74,35 +74,35 @@ export const PUBLIC_EXAM_COURSES: PublicExamCourseMeta[] = [
   { name: 'Java', monogram: 'JV', accent: '#DC2626', modules: ['Language Core', 'OOP & Collections', 'Concurrency', 'JVM & Performance'] },
   { name: 'React', monogram: 'RE', accent: '#0EA5E9', modules: ['Components & Props', 'Hooks', 'Routing & Data Fetching', 'State Management'] },
   { name: 'Angular', monogram: 'NG', accent: '#E11D48', modules: ['Components & Templates', 'Forms & Validation', 'Routing & Guards', 'RxJS & Signals'] },
-  { name: 'PostgreSQL', monogram: 'PG', accent: '#2563EB', modules: ['SQL Fundamentals', 'Joins & Subqueries', 'Indexing & Performance', 'Replication & High Availability'] },
+  { name: 'PostgreSQL', monogram: 'PG', accent: '#0D7C6C', modules: ['SQL Fundamentals', 'Joins & Subqueries', 'Indexing & Performance', 'Replication & High Availability'] },
   { name: 'Linux', monogram: 'LX', accent: '#65A30D', modules: ['Filesystem & Users', 'Shell & Scripting', 'Networking & DNS', 'Processes & Services'] },
   { name: 'Web Security', monogram: 'WS', accent: '#7C3AED', modules: ['Threats & OWASP Top 10', 'Authentication & Sessions', 'Applied Cryptography', 'Secure API Design'] },
-  { name: 'Database', monogram: 'DB', accent: '#2563EB', modules: ['Data Modelling', 'Query Design', 'Transactions & Concurrency', 'Performance Tuning'] },
+  { name: 'Database', monogram: 'DB', accent: '#0D7C6C', modules: ['Data Modelling', 'Query Design', 'Transactions & Concurrency', 'Performance Tuning'] },
   { name: 'Security', monogram: 'SEC', accent: '#7C3AED', modules: ['Threat Modelling', 'Network Security', 'Identity & Access', 'Incident Response'] },
   { name: 'Software Engineering', monogram: 'SE', accent: '#0F766E', modules: ['Requirements & Design', 'Architecture Patterns', 'Code Quality & Review', 'Delivery & CI'] },
 ];
 
 const courseMetaByName = new Map(PUBLIC_EXAM_COURSES.map(c => [c.name, c]));
 
-/** Metadata for a course name â€” falls back to the primary brand colour. */
+/** Metadata for a course name — falls back to the primary brand colour. */
 export function courseMeta(name: string): PublicExamCourseMeta {
   return (
     courseMetaByName.get(name) ?? {
       name,
       monogram: name.slice(0, 3).toUpperCase(),
-      accent: '#2563EB',
+      accent: '#0D7C6C',
       modules: ['General'],
     }
   );
 }
 
 /**
- * The card/detail subtitle: "Course Â· Category". Some courses share a name with
+ * The card/detail subtitle: "Course · Category". Some courses share a name with
  * their category (Database, Security), so the category is omitted there rather
  * than repeating itself. Shared so the card and the detail page cannot drift.
  */
 export function examSubtitle(exam: PublicExam): string {
-  return exam.course === exam.category ? exam.course : `${exam.course} Â· ${exam.category}`;
+  return exam.course === exam.category ? exam.course : `${exam.course} · ${exam.category}`;
 }
 
 /** Category tabs, in display order. "All Exams" is prepended by the page. */
@@ -128,7 +128,7 @@ export const EXAM_TYPE_META: Record<ExamType, { label: string; badge: 'info' | '
   essay: { label: 'Essay', badge: 'purple' },
 };
 
-/** Cards per page â€” 3 columns x 3 rows. */
+/** Cards per page — 3 columns x 3 rows. */
 export const PER_PAGE = 9;
 
 export const PUBLIC_EXAMS: PublicExam[] = [

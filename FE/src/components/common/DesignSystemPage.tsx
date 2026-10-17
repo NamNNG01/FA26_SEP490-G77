@@ -13,8 +13,8 @@ const Section = ({ title, children }: { title: string; children: React.ReactNode
 
 export default function DesignSystemPage() {
   const colors = [
-    { name: 'Primary', value: '#2563EB', shade: '600' },
-    { name: 'Primary Light', value: '#EFF6FF', shade: '50' },
+    { name: 'Primary', value: '#0D7C6C', shade: '600' },
+    { name: 'Primary Light', value: '#ECF7F4', shade: '50' },
     { name: 'Success', value: '#16A34A', shade: '' },
     { name: 'Warning', value: '#D97706', shade: '' },
     { name: 'Danger', value: '#DC2626', shade: '' },
@@ -97,7 +97,7 @@ export default function DesignSystemPage() {
         <div className="flex items-end gap-4 flex-wrap">
           {spacing.map(s => (
             <div key={s} className="flex flex-col items-center gap-2">
-              <div className="bg-[#2563EB] rounded-[4px]" style={{ width: s, height: s }} />
+              <div className="bg-[#0D7C6C] rounded-[4px]" style={{ width: s, height: s }} />
               <p className="text-[11px] font-mono text-[#9CA3AF]">{s}px</p>
             </div>
           ))}
@@ -109,7 +109,7 @@ export default function DesignSystemPage() {
         <div className="flex items-center gap-6 flex-wrap">
           {radii.map(r => (
             <div key={r.label} className="flex flex-col items-center gap-2">
-              <div className={`w-16 h-16 bg-[#EFF6FF] border-2 border-[#2563EB] ${r.cls}`} />
+              <div className={`w-16 h-16 bg-[#ECF7F4] border-2 border-[#0D7C6C] ${r.cls}`} />
               <p className="text-[12px] font-medium text-[#374151]">{r.label}</p>
               <p className="text-[11px] font-mono text-[#9CA3AF]">{r.value}</p>
             </div>
@@ -132,8 +132,8 @@ export default function DesignSystemPage() {
       <Section title="Icon Set (24×24)">
         <div className="flex flex-wrap gap-3">
           {icons.map((IcoComp, i) => (
-            <div key={i} className="w-10 h-10 bg-[#F9FAFB] border border-[#F3F4F6] rounded-[8px] flex items-center justify-center hover:bg-[#EFF6FF] hover:border-[#BFDBFE] transition-colors cursor-pointer group">
-              <IcoComp className="w-5 h-5 text-[#6B7280] group-hover:text-[#2563EB]" />
+            <div key={i} className="w-10 h-10 bg-[#F9FAFB] border border-[#F3F4F6] rounded-[8px] flex items-center justify-center hover:bg-[#ECF7F4] hover:border-[#A7DCCF] transition-colors cursor-pointer group">
+              <IcoComp className="w-5 h-5 text-[#6B7280] group-hover:text-[#0D7C6C]" />
             </div>
           ))}
         </div>
@@ -143,20 +143,20 @@ export default function DesignSystemPage() {
       <Section title="Grid System (12-column)">
         <div className="grid grid-cols-12 gap-2">
           {Array.from({ length: 12 }).map((_, i) => (
-            <div key={i} className="h-8 bg-[#EFF6FF] border border-[#BFDBFE] rounded-[4px] flex items-center justify-center">
-              <span className="text-[10px] font-mono text-[#2563EB]">{i + 1}</span>
+            <div key={i} className="h-8 bg-[#ECF7F4] border border-[#A7DCCF] rounded-[4px] flex items-center justify-center">
+              <span className="text-[10px] font-mono text-[#0D7C6C]">{i + 1}</span>
             </div>
           ))}
         </div>
         <div className="mt-3 grid grid-cols-12 gap-2">
-          <div className="col-span-4 h-12 bg-[#2563EB] rounded-[6px] flex items-center justify-center"><span className="text-[12px] text-white font-medium">4 cols</span></div>
-          <div className="col-span-8 h-12 bg-[#BFDBFE] rounded-[6px] flex items-center justify-center"><span className="text-[12px] text-[#1E40AF] font-medium">8 cols</span></div>
+          <div className="col-span-4 h-12 bg-[#0D7C6C] rounded-[6px] flex items-center justify-center"><span className="text-[12px] text-white font-medium">4 cols</span></div>
+          <div className="col-span-8 h-12 bg-[#A7DCCF] rounded-[6px] flex items-center justify-center"><span className="text-[12px] text-[#0B5047] font-medium">8 cols</span></div>
         </div>
         <div className="mt-2 grid grid-cols-12 gap-2">
-          <div className="col-span-3 h-10 bg-[#BFDBFE] rounded-[6px] flex items-center justify-center"><span className="text-[11px] text-[#1E40AF] font-medium">3</span></div>
-          <div className="col-span-3 h-10 bg-[#BFDBFE] rounded-[6px] flex items-center justify-center"><span className="text-[11px] text-[#1E40AF] font-medium">3</span></div>
-          <div className="col-span-3 h-10 bg-[#BFDBFE] rounded-[6px] flex items-center justify-center"><span className="text-[11px] text-[#1E40AF] font-medium">3</span></div>
-          <div className="col-span-3 h-10 bg-[#BFDBFE] rounded-[6px] flex items-center justify-center"><span className="text-[11px] text-[#1E40AF] font-medium">3</span></div>
+          <div className="col-span-3 h-10 bg-[#A7DCCF] rounded-[6px] flex items-center justify-center"><span className="text-[11px] text-[#0B5047] font-medium">3</span></div>
+          <div className="col-span-3 h-10 bg-[#A7DCCF] rounded-[6px] flex items-center justify-center"><span className="text-[11px] text-[#0B5047] font-medium">3</span></div>
+          <div className="col-span-3 h-10 bg-[#A7DCCF] rounded-[6px] flex items-center justify-center"><span className="text-[11px] text-[#0B5047] font-medium">3</span></div>
+          <div className="col-span-3 h-10 bg-[#A7DCCF] rounded-[6px] flex items-center justify-center"><span className="text-[11px] text-[#0B5047] font-medium">3</span></div>
         </div>
       </Section>
 
@@ -167,7 +167,7 @@ export default function DesignSystemPage() {
             <p className="text-[12px] font-semibold text-[#9CA3AF] uppercase tracking-wide mb-3">Primitives</p>
             <div className="space-y-2">
               {[
-                ['--color-primary', '#2563EB'],
+                ['--color-primary', '#0D7C6C'],
                 ['--color-success', '#16A34A'],
                 ['--color-warning', '#D97706'],
                 ['--color-danger', '#DC2626'],
@@ -208,7 +208,7 @@ export default function DesignSystemPage() {
           <div className="card p-4">
             <p className="text-[13px] font-semibold text-[#374151] mb-3">Progress Indicators</p>
             <div className="space-y-3">
-              <Progress value={75} label="Course Completion" color="#2563EB" />
+              <Progress value={75} label="Course Completion" color="#0D7C6C" />
               <Progress value={45} label="Exam Score" color="#D97706" />
               <Progress value={92} label="AI Accuracy" color="#16A34A" />
             </div>

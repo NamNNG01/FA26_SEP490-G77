@@ -24,10 +24,10 @@ export function CMDashboard() {
   const { summary, recentCourses } = data;
 
   const stats = [
-    { title: 'Total Courses', value: String(summary.totalCourses), icon: <Icon.Book />, color: '#2563EB' },
-    { title: 'Published Courses', value: String(summary.publishedCourses), icon: <Icon.CheckCircle />, color: '#059669' },
-    { title: 'Draft Courses', value: String(summary.draftCourses), icon: <Icon.FileText />, color: '#D97706' },
-    { title: 'Total Students', value: String(summary.totalStudents), icon: <Icon.Users />, color: '#7C3AED' },
+    { title: 'Total Courses', value: String(summary.totalCourses), icon: <Icon.Book /> },
+    { title: 'Published Courses', value: String(summary.publishedCourses), icon: <Icon.CheckCircle /> },
+    { title: 'Draft Courses', value: String(summary.draftCourses), icon: <Icon.FileText /> },
+    { title: 'Total Students', value: String(summary.totalStudents), icon: <Icon.Users /> },
   ];
 
   return (

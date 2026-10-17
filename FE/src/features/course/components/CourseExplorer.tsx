@@ -34,7 +34,7 @@ export function CourseExplorer({
     <div className="card overflow-hidden">
       <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-[#F3F4F6]">
         <div className="flex items-center gap-2">
-          <Icon.FolderOpen className="w-4 h-4 text-[#2563EB]" />
+          <Icon.FolderOpen className="w-4 h-4 text-[#0D7C6C]" />
           <div>
             <p className="text-[14px] font-semibold text-[#111827] leading-tight">Course Content</p>
             <p className="text-[11.5px] text-[#9CA3AF] leading-tight">{modules.length} modules · {totalLessons} lessons</p>
@@ -72,7 +72,7 @@ export function CourseExplorer({
                 <div className="flex-1" />
                 <div className="flex items-center gap-1 flex-shrink-0" onClick={e => e.stopPropagation()}>
                   <Button variant="ghost" size="sm" icon={<Icon.Plus className="w-3.5 h-3.5" />} onClick={() => onAddLesson(m.id)}>Add Lesson</Button>
-                  <button onClick={() => onEditModule?.(m.id)} className="p-1.5 rounded-[6px] text-[#9CA3AF] hover:bg-[#EFF6FF] hover:text-[#2563EB]" title="Edit Module"><Icon.Edit className="w-4 h-4" /></button>
+                  <button onClick={() => onEditModule?.(m.id)} className="p-1.5 rounded-[6px] text-[#9CA3AF] hover:bg-[#ECF7F4] hover:text-[#0D7C6C]" title="Edit Module"><Icon.Edit className="w-4 h-4" /></button>
                   <button className="p-1.5 rounded-[6px] text-[#9CA3AF] hover:bg-[#FEF2F2] hover:text-[#DC2626]" title="Delete Module"><Icon.Trash className="w-4 h-4" /></button>
                 </div>
               </div>
@@ -82,14 +82,14 @@ export function CourseExplorer({
                   {lessons.length === 0 && (
                     <div className="px-4 py-3 flex items-center gap-2 text-[12.5px] text-[#9CA3AF]">
                       <Icon.File className="w-3.5 h-3.5" />No lessons yet
-                      <button className="text-[#2563EB] font-medium hover:underline" onClick={() => onAddLesson(m.id)}>Add Lesson</button>
+                      <button className="text-[#0D7C6C] font-medium hover:underline" onClick={() => onAddLesson(m.id)}>Add Lesson</button>
                     </div>
                   )}
                   {lessons.map(l => (
                     <div key={l.id} className="group flex items-center gap-2 px-4 py-2.5 rounded-[8px] hover:bg-[#F9FAFB] transition-colors">
-                      <Icon.FileText className="w-4 h-4 text-[#9CA3AF] group-hover:text-[#2563EB] flex-shrink-0" />
+                      <Icon.FileText className="w-4 h-4 text-[#9CA3AF] group-hover:text-[#0D7C6C] flex-shrink-0" />
                       <button
-                        className="text-[13.5px] font-medium text-[#374151] group-hover:text-[#2563EB] text-left truncate"
+                        className="text-[13.5px] font-medium text-[#374151] group-hover:text-[#0D7C6C] text-left truncate"
                         onClick={() => onNavigate?.('lesson-edit')}
                         title="Open lesson detail"
                       >
@@ -109,8 +109,8 @@ export function CourseExplorer({
                       </div>
                       <div className="flex-1" />
                       <div className="flex items-center gap-1 flex-shrink-0">
-                        <button onClick={() => onNavigate?.('lesson-edit')} className="p-1.5 rounded-[6px] text-[#9CA3AF] hover:bg-[#EFF6FF] hover:text-[#2563EB]" title="Open"><Icon.Eye className="w-4 h-4" /></button>
-                        <button onClick={() => onNavigate?.('lesson-edit')} className="p-1.5 rounded-[6px] text-[#9CA3AF] hover:bg-[#EFF6FF] hover:text-[#2563EB]" title="Edit"><Icon.Edit className="w-4 h-4" /></button>
+                        <button onClick={() => onNavigate?.('lesson-edit')} className="p-1.5 rounded-[6px] text-[#9CA3AF] hover:bg-[#ECF7F4] hover:text-[#0D7C6C]" title="Open"><Icon.Eye className="w-4 h-4" /></button>
+                        <button onClick={() => onNavigate?.('lesson-edit')} className="p-1.5 rounded-[6px] text-[#9CA3AF] hover:bg-[#ECF7F4] hover:text-[#0D7C6C]" title="Edit"><Icon.Edit className="w-4 h-4" /></button>
                         <button className="p-1.5 rounded-[6px] text-[#9CA3AF] hover:bg-[#FEF2F2] hover:text-[#DC2626]" title="Delete"><Icon.Trash className="w-4 h-4" /></button>
                       </div>
                     </div>

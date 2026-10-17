@@ -44,7 +44,7 @@ export function ProfileCard() {
           name={user.fullName}
           src={user.avatarUrl ?? undefined}
           size="xl"
-          color="#2563EB"
+          color="#0D7C6C"
         />
         <div className="min-w-0">
           <div className="flex items-center gap-2.5 flex-wrap">

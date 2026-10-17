@@ -1,6 +1,6 @@
 import React from 'react';
 
-export function Progress({ value, max = 100, color = '#2563EB', size = 'md', label }: { value: number; max?: number; color?: string; size?: 'sm' | 'md' | 'lg'; label?: string }) {
+export function Progress({ value, max = 100, color = '#0D7C6C', size = 'md', label }: { value: number; max?: number; color?: string; size?: 'sm' | 'md' | 'lg'; label?: string }) {
   const pct = Math.round((value / max) * 100);
   const h = size === 'sm' ? 'h-1.5' : size === 'lg' ? 'h-3' : 'h-2';
   return (

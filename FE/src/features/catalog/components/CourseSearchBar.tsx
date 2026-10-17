@@ -128,7 +128,7 @@ export function CourseSearchBar({
       <div
         className={`flex h-10 items-center gap-2 rounded-[12px] border bg-[#F9FAFB] pr-2 pl-3 transition-all dark:bg-[#0B1220] ${
           expanded
-            ? 'border-[#2563EB] ring-2 ring-[#2563EB]/20'
+            ? 'border-[#0D7C6C] ring-2 ring-[#0D7C6C]/20'
             : 'border-[#E5E7EB] hover:border-[#D1D5DB] dark:border-[#1F2937] dark:hover:border-[#26324A]'
         }`}
       >
@@ -183,7 +183,7 @@ export function CourseSearchBar({
                   onMouseEnter={() => setActiveIndex(index)}
                   onClick={() => goToCourse(course)}
                   className={`flex w-full items-center gap-3 rounded-[10px] px-2.5 py-2.5 text-left transition-colors cursor-pointer ${
-                    index === activeIndex ? 'bg-[#EFF6FF] dark:bg-[#2563EB]/15' : 'hover:bg-[#F9FAFB] dark:hover:bg-[#26324A]'
+                    index === activeIndex ? 'bg-[#ECF7F4] dark:bg-[#0D7C6C]/15' : 'hover:bg-[#F9FAFB] dark:hover:bg-[#26324A]'
                   }`}
                 >
                   <ProviderLogo providerId={course.providerId} provider={course.provider} size={34} />
@@ -216,7 +216,7 @@ export function CourseSearchBar({
             <button
               type="button"
               onClick={goToAllResults}
-              className="flex w-full items-center justify-between gap-2 rounded-[10px] px-2.5 py-2 text-[13px] font-semibold text-[#2563EB] transition-colors hover:bg-[#EFF6FF] dark:hover:bg-[#2563EB]/15 cursor-pointer"
+              className="flex w-full items-center justify-between gap-2 rounded-[10px] px-2.5 py-2 text-[13px] font-semibold text-[#0D7C6C] transition-colors hover:bg-[#ECF7F4] dark:hover:bg-[#0D7C6C]/15 cursor-pointer"
             >
               <span>
                 {results.length > 0

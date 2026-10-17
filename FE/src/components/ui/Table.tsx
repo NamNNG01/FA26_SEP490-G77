@@ -33,7 +33,7 @@ export function Table({
   onSort?: (key: string) => void;
   sortKey?: string;
   sortDir?: 'asc' | 'desc';
-  /** Page size. Defaults to DEFAULT_PAGE_SIZE (7). */
+  /** Page size. Defaults to DEFAULT_PAGE_SIZE (10). */
   perPage?: number;
   /** Changing this value (joined search/filter state) resets pagination to page 1. */
   resetKey?: string | number;

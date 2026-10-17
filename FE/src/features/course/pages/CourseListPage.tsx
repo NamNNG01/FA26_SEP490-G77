@@ -42,7 +42,7 @@ export function CourseListPage({ onNavigate, readonly }: { onNavigate?: (id: str
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: 'Total Courses', value: 48, color: '#2563EB' },
+          { label: 'Total Courses', value: 48, color: '#0D7C6C' },
           { label: 'Published', value: 36, color: '#16A34A' },
           { label: 'Drafts', value: 8, color: '#D97706' },
           { label: 'Archived', value: 4, color: '#9CA3AF' },

@@ -52,7 +52,7 @@ export function PopularCoursesSection({
             <button
               type="button"
               onClick={() => navigate(ROUTES.courses)}
-              className="inline-flex h-10 flex-shrink-0 items-center gap-1.5 self-start rounded-[10px] border border-[#E5E7EB] px-4 text-[13.5px] font-semibold text-[#374151] transition-colors hover:border-[#BFDBFE] hover:text-[#2563EB] dark:border-[#1F2937] dark:text-[#D1D5DB] dark:hover:border-[#1E3A5F] cursor-pointer sm:self-auto"
+              className="inline-flex h-10 flex-shrink-0 items-center gap-1.5 self-start rounded-[10px] border border-[#E5E7EB] px-4 text-[13.5px] font-semibold text-[#374151] transition-colors hover:border-[#A7DCCF] hover:text-[#0D7C6C] dark:border-[#1F2937] dark:text-[#D1D5DB] dark:hover:border-[#0F3B35] cursor-pointer sm:self-auto"
             >
               View all courses
               <Icon.ChevronRight className="h-4 w-4" />
@@ -67,7 +67,7 @@ export function PopularCoursesSection({
         )}
 
         {visible.length > 0 ? (
-          <div className="mt-[clamp(1.5rem,3vw,2rem)] grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-[clamp(1rem,2vw,1.25rem)]">
+          <div className="mt-[clamp(1.5rem,3vw,2rem)] grid grid-cols-1 gap-[clamp(1rem,2vw,1.25rem)] sm:grid-cols-2 lg:grid-cols-3">
             {visible.map((course, index) => (
               <Reveal key={course.slug} delay={index * 60}>
                 <CourseCatalogCard course={course} />

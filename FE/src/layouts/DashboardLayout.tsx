@@ -37,8 +37,8 @@ export function DashboardLayout() {
       {/* Header */}
       <header className="h-14 bg-white border-b border-[#F3F4F6] flex items-center px-[clamp(0.75rem,1.5vw,1.25rem)] gap-3 flex-shrink-0 z-40">
         <div className="flex items-center gap-2.5 w-[clamp(11rem,22vw,14rem)] max-w-[30%] flex-shrink-0">
-          <div className="w-7 h-7 bg-[#2563EB] rounded-[8px] flex items-center justify-center">
-            <Icon.Brain className="w-4 h-4 text-white" />
+          <div className="w-7 h-7 bg-[#0D7C6C] rounded-[8px] flex items-center justify-center">
+            <Icon.Logo className="w-4 h-4 text-white" />
           </div>
           <span className="text-[15px] font-bold text-[#111827]">PrepExam</span>
         </div>
@@ -62,9 +62,10 @@ export function DashboardLayout() {
 
         {/* Main content — swapped by the router, layout stays mounted */}
         <main className="flex-1 overflow-y-auto">
-          {/* .dashboard-content pins the gap under the header to 15px for every
-              page, overriding each page's own top padding (styles/index.css). */}
-          <div className="dashboard-content p-[clamp(1rem,2vw,1.5rem)]">
+          {/* .dashboard-content owns the page gutter and max width for EVERY
+              page, overriding each page's own padding (styles/index.css), so
+              all dashboard screens line up on the same edges. */}
+          <div className="dashboard-content mx-auto w-full max-w-[1400px] px-[clamp(1rem,2.5vw,2rem)] pb-[clamp(1.5rem,3vw,2.5rem)]">
             <Outlet />
           </div>
         </main>

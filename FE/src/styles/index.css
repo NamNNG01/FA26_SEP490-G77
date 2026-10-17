@@ -1,12 +1,12 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 @import 'tailwindcss';
 
 /* Class-based dark mode (toggled on <html> by ThemeProvider). */
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme inline {
-  --color-primary: #2563EB;
-  --color-primary-hover: #1D4ED8;
+  --color-primary: #0D7C6C;
+  --color-primary-hover: #0A6458;
   /* Status colors + their tinted backgrounds follow the theme (see :root /
      .dark below) — a fixed light tint under dark-mode text was what made
      toasts and alerts render white-on-white. */
@@ -31,6 +31,9 @@
   --color-gray-900: #111827;
   --font-sans: 'Inter', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
+  /* Display face for page/section headings — gives the product a voice of
+     its own instead of Inter-everywhere. Body copy stays on Inter. */
+  --font-display: 'Space Grotesk', 'Inter', system-ui, sans-serif;
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 14px;
@@ -53,7 +56,18 @@
   --color-line: var(--line);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
-  --color-brand: #2563EB;
+  --color-brand: #0D7C6C;
+  /* PrepExam jade scale — the brand ramp every hard-coded brand hex maps to. */
+  --color-brand-50: #ECF7F4;
+  --color-brand-100: #D3EEE7;
+  --color-brand-200: #A7DCCF;
+  --color-brand-300: #6FCBB6;
+  --color-brand-600: #0D7C6C;
+  --color-brand-700: #0A6458;
+  --color-brand-800: #0B5047;
+  --color-brand-900: #0F3B35;
+  /* Warm accent, used sparingly (highlights, the exam-day marker). */
+  --color-highlight: #F2A93B;
 }
 
 /* Light theme (default) */
@@ -66,7 +80,7 @@
   --line: #E5E7EB;
   --accent: #F3F4F6;
   --accent-foreground: #111827;
-  --primary-light: #EFF6FF;
+  --primary-light: #ECF7F4;
   --success: #16A34A;
   --success-light: #F0FDF4;
   --warning: #D97706;
@@ -89,7 +103,7 @@
   --accent: #26324A;
   --accent-foreground: #F9FAFB;
   /* Lighter status hues + deep tints keep >= 4.5:1 on dark surfaces. */
-  --primary-light: #172554;
+  --primary-light: #082B26;
   --success: #4ADE80;
   --success-light: #052E16;
   --warning: #FBBF24;
@@ -154,24 +168,29 @@ body {
   color: var(--content);
 }
 .sidebar-link.active {
-  background: #EFF6FF;
-  color: #2563EB;
+  background: #ECF7F4;
+  color: #0D7C6C;
 }
 .dark .sidebar-link.active {
-  background: rgba(37, 99, 235, 0.15);
+  background: rgba(13, 124, 108, 0.18);
+  color: #6FCBB6;
+}
+.dark .sidebar-link.active svg {
+  color: #6FCBB6;
 }
 .sidebar-link.active svg {
-  color: #2563EB;
+  color: #0D7C6C;
 }
 
-/* Dashboard content: 15px between the header and the page, whatever top
-   padding the page itself declares (pages still own their side padding).
+/* Dashboard content: the layout owns the gutter (side/bottom padding and a
+   max width, see DashboardLayout) and pins the gap under the header, so every
+   page lines up on the same edges whatever padding it declares itself.
    Unlayered, so it wins over the pages' Tailwind p-* utilities. */
 .dashboard-content {
-  padding-top: 15px;
+  padding-top: 20px;
 }
 .dashboard-content > :first-child {
-  padding-top: 0;
+  padding: 0;
   margin-top: 0;
 }
 
@@ -185,13 +204,13 @@ body {
 .prose-block h2 {
   font-size: 16px;
   font-weight: 700;
-  color: #111827;
+  color: var(--content);
   margin: 6px 0 10px;
 }
 .prose-block h3 {
   font-size: 14px;
   font-weight: 600;
-  color: #374151;
+  color: var(--content-muted);
   margin: 4px 0 8px;
 }
 .prose-block p {
@@ -277,7 +296,7 @@ body {
 .dark input::placeholder { color: var(--content-subtle); }
 
 /* Keep brand-colored elements intact in dark mode. */
-.dark .bg-\[\#2563EB\] { background-color: #2563EB; }
+.dark .bg-\[\#0D7C6C\] { background-color: #0D7C6C; }
 .dark .text-white { color: #ffffff; }
 
 /* Hover variants compile to DIFFERENT class names than their static
@@ -290,7 +309,7 @@ body {
 .dark .group:hover .group-hover\:bg-\[\#F9FAFB\] { background-color: var(--accent); }
 .dark .hover\:bg-\[\#E5E7EB\]:hover { background-color: var(--accent); }
 .dark .hover\:text-\[\#374151\]:hover { color: var(--content); }
-.dark .hover\:bg-\[\#EFF6FF\]:hover { background-color: rgba(37, 99, 235, 0.15); }
+.dark .hover\:bg-\[\#ECF7F4\]:hover { background-color: rgba(13, 124, 108, 0.15); }
 
 /* Neutral fills/borders that the remaps above did not cover. */
 .dark .bg-\[\#E5E7EB\],
@@ -311,8 +330,8 @@ body {
 /* Status tints (alerts, notices, chips, highlighted rows): light pastel
    fills become deep tints, and the dark status text on them becomes the
    matching light hue, so text stays readable on top. */
-.dark .bg-\[\#EFF6FF\],
-.dark .bg-\[\#F0F9FF\],
+.dark .bg-\[\#ECF7F4\],
+.dark .bg-\[\#F0FAF7\],
 .dark .bg-blue-50 { background-color: var(--primary-light); }
 .dark .bg-\[\#F0FDF4\] { background-color: var(--success-light); }
 .dark .bg-\[\#FFFBEB\] { background-color: var(--warning-light); }
@@ -320,18 +339,18 @@ body {
 .dark .bg-\[\#FEE2E2\],
 .dark .hover\:bg-\[\#FEF2F2\]:hover { background-color: var(--danger-light); }
 .dark .bg-\[\#F5F3FF\] { background-color: var(--purple-light); }
-.dark .bg-\[\#BFDBFE\] { background-color: #1E3A8A; }
+.dark .bg-\[\#A7DCCF\] { background-color: #0F3B35; }
 
-.dark .border-\[\#BFDBFE\],
-.dark .hover\:border-\[\#BFDBFE\]:hover { border-color: #1E3A8A; }
+.dark .border-\[\#A7DCCF\],
+.dark .hover\:border-\[\#A7DCCF\]:hover { border-color: #0F3B35; }
 .dark .border-\[\#BBF7D0\] { border-color: #14532D; }
 .dark .border-\[\#FDE68A\] { border-color: #78350F; }
 .dark .border-\[\#FECACA\] { border-color: #7F1D1D; }
 
-.dark .text-\[\#2563EB\],
-.dark .hover\:text-\[\#2563EB\]:hover,
-.dark .group:hover .group-hover\:text-\[\#2563EB\],
-.dark .text-\[\#1E40AF\] { color: #93C5FD; }
+.dark .text-\[\#0D7C6C\],
+.dark .hover\:text-\[\#0D7C6C\]:hover,
+.dark .group:hover .group-hover\:text-\[\#0D7C6C\],
+.dark .text-\[\#0B5047\] { color: #6FCBB6; }
 .dark .text-\[\#16A34A\],
 .dark .text-\[\#15803D\],
 .dark .text-\[\#059669\] { color: #4ADE80; }
@@ -353,3 +372,35 @@ body {
 .dark .prose-block h2 { color: var(--content); }
 .dark .prose-block h3 { color: var(--content-muted); }
 .dark .prose-block:empty::before { color: var(--content-subtle); }
+
+/* --------------------------------------------------------------------- */
+/* Typography — headings use the display face. One place, so every page  */
+/* title, section title and card heading picks it up without per-file     */
+/* class edits.                                                           */
+/* --------------------------------------------------------------------- */
+h1, h2, h3 {
+  font-family: var(--font-display);
+  letter-spacing: -0.015em;
+}
+
+/* Visible keyboard focus everywhere. Many components drop the native
+   outline (`focus:outline-none`) for a mouse-friendly look; this restores
+   a clear ring for keyboard users only. */
+:where(a, button, [role='button'], [role='tab'], [role='menuitem'], summary):focus-visible {
+  outline: 2px solid #0D7C6C;
+  outline-offset: 2px;
+}
+.dark :where(a, button, [role='button'], [role='tab'], [role='menuitem'], summary):focus-visible {
+  outline-color: #6FCBB6;
+}
+
+/* Respect reduced-motion for every transition/animation, not just the
+   tab fade above. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

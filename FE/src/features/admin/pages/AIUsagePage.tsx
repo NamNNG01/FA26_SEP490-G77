@@ -8,7 +8,7 @@ import { Alert } from '@/components/ui/Alert';
 import { Icon } from '@/assets/icons';
 
 const usageData = [
-  { model: 'certifyai-v3.2', type: 'Question review', tokens: '48.2M', requests: 124301, cost: '$1,204', quota: 78, color: '#2563EB', status: 'Healthy' },
+  { model: 'certifyai-v3.2', type: 'Question review', tokens: '48.2M', requests: 124301, cost: '$1,204', quota: 78, color: '#0D7C6C', status: 'Healthy' },
   { model: 'certifyai-v3.2', type: 'AI hints', tokens: '22.1M', requests: 89342, cost: '$553', quota: 41, color: '#7C3AED', status: 'Healthy' },
   { model: 'certifyai-v3.2', type: 'Answer generation', tokens: '15.4M', requests: 62311, cost: '$386', quota: 26, color: '#059669', status: 'Healthy' },
   { model: 'certifyai-v2.8', type: 'Fallback inferences', tokens: '3.8M', requests: 12412, cost: '$95', quota: 12, color: '#D97706', status: 'Deprecated' },
@@ -33,10 +33,10 @@ export function AIUsagePage() {
       <Alert type="warning" title="Quota warning" message="Usage grew 12% this week. If growth holds, the monthly token quota will be exceeded in ~6 days. Consider raising the quota or optimizing hint generation." />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        <StatCard title="Total Tokens" value="90.7M" change={12.3} changeLabel="vs prev period" icon={<Icon.Brain />} color="#7C3AED" />
-        <StatCard title="Total Requests" value="652K" change={8.1} changeLabel="vs prev period" icon={<Icon.Zap />} color="#2563EB" />
-        <StatCard title="Total Cost" value="$2,256" change={9.4} changeLabel="vs prev period" icon={<Icon.TrendingUp />} color="#059669" />
-        <StatCard title="Error Rate" value="0.42%" change={-0.3} changeLabel="vs prev period" icon={<Icon.AlertCircle />} color="#D97706" />
+        <StatCard title="Total Tokens" value="90.7M" change={12.3} changeLabel="vs prev period" icon={<Icon.Brain />} />
+        <StatCard title="Total Requests" value="652K" change={8.1} changeLabel="vs prev period" icon={<Icon.Zap />} />
+        <StatCard title="Total Cost" value="$2,256" change={9.4} changeLabel="vs prev period" icon={<Icon.TrendingUp />} direction="down" />
+        <StatCard title="Error Rate" value="0.42%" change={-0.3} changeLabel="vs prev period" icon={<Icon.AlertCircle />} direction="down" />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">

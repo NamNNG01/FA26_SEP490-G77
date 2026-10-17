@@ -7,7 +7,7 @@ export function Checkbox({ label, checked, onChange, indeterminate }: { label?: 
       <div
         onClick={() => onChange?.(!checked)}
         className={`w-[18px] h-[18px] rounded-[5px] border-2 flex items-center justify-center transition-all
-          ${checked || indeterminate ? 'bg-[#2563EB] border-[#2563EB]' : 'border-[#D1D5DB] bg-white group-hover:border-[#2563EB]'}`}
+          ${checked || indeterminate ? 'bg-[#0D7C6C] border-[#0D7C6C]' : 'border-[#D1D5DB] bg-white group-hover:border-[#0D7C6C]'}`}
       >
         {checked && <Icon.Check className="w-2.5 h-2.5 text-white" />}
         {indeterminate && !checked && <span className="w-2 h-0.5 bg-white rounded" />}

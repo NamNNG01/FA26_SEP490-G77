@@ -5,7 +5,7 @@ export type BtnSize = 'sm' | 'md' | 'lg';
 
 const btnBase = 'inline-flex items-center justify-center gap-2 font-medium rounded-[10px] transition-all duration-150 cursor-pointer select-none disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap';
 const btnVariants: Record<BtnVariant, string> = {
-  primary: 'bg-[#2563EB] text-white hover:bg-[#1D4ED8] active:bg-[#1E40AF] shadow-sm',
+  primary: 'bg-[#0D7C6C] text-white hover:bg-[#0A6458] active:bg-[#0B5047] shadow-sm',
   secondary: 'bg-[#F3F4F6] text-[#111827] hover:bg-[#E5E7EB] active:bg-[#D1D5DB]',
   outline: 'border border-[#E5E7EB] bg-white text-[#374151] hover:bg-[#F9FAFB] hover:border-[#D1D5DB]',
   ghost: 'text-[#374151] hover:bg-[#F3F4F6] active:bg-[#E5E7EB]',
@@ -18,15 +18,19 @@ const btnSizes: Record<BtnSize, string> = {
 };
 
 export function Button({
-  variant = 'primary', size = 'md', className = '', children, icon, loading, ...props
+  variant = 'primary', size = 'md', className = '', children, icon, iconRight, loading, ...props
 }: {
   variant?: BtnVariant; size?: BtnSize; className?: string; children?: React.ReactNode;
-  icon?: React.ReactNode; loading?: boolean;
+  icon?: React.ReactNode;
+  /** Trailing icon, e.g. a chevron on a "Next" button. */
+  iconRight?: React.ReactNode;
+  loading?: boolean;
 } & React.ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
     <button className={`${btnBase} ${btnVariants[variant]} ${btnSizes[size]} ${className}`} {...props}>
       {loading ? <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full spinner" /> : icon}
       {children}
+      {!loading && iconRight}
     </button>
   );
 }

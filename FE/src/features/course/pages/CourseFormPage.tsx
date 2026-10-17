@@ -48,7 +48,7 @@ export function CourseFormPage({ mode, onNavigate }: { mode: 'create' | 'edit'; 
           </div>
           <div>
             <label className="text-[13px] font-medium text-[#374151] block mb-1.5">Description</label>
-            <textarea className="w-full h-28 px-3 py-2.5 rounded-[10px] border border-[#E5E7EB] text-[14px] text-[#111827] resize-none focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB]" placeholder="Describe the course curriculum, objectives, and target audience..." />
+            <textarea className="w-full h-28 px-3 py-2.5 rounded-[10px] border border-[#E5E7EB] text-[14px] text-[#111827] resize-none focus:outline-none focus:ring-2 focus:ring-[#0D7C6C]/20 focus:border-[#0D7C6C]" placeholder="Describe the course curriculum, objectives, and target audience..." />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Input label="Estimated Hours" type="number" defaultValue="30" />

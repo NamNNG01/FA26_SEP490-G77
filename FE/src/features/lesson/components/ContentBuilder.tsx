@@ -25,7 +25,7 @@ function VideoBody({ block, onPatch }: { block: Extract<ContentBlock, { type: 'v
       <div className="inline-flex items-center rounded-[8px] border border-[#E5E7EB] overflow-hidden">
         {sources.map(s => (
           <button key={s.id} type="button" onClick={() => onPatch({ source: s.id })}
-            className={`px-3 py-1.5 text-[12px] font-medium transition-colors ${block.source === s.id ? 'bg-[#2563EB] text-white' : 'bg-white text-[#6B7280] hover:bg-[#F9FAFB]'}`}>
+            className={`px-3 py-1.5 text-[12px] font-medium transition-colors ${block.source === s.id ? 'bg-[#0D7C6C] text-white' : 'bg-white text-[#6B7280] hover:bg-[#F9FAFB]'}`}>
             {s.label}
           </button>
         ))}
@@ -40,7 +40,7 @@ function VideoBody({ block, onPatch }: { block: Extract<ContentBlock, { type: 'v
               <p className="text-[11px] text-[#9CA3AF]">Video uploaded</p>
             </div>
             <div className="flex-1" />
-            <button type="button" onClick={() => onPatch({ fileName: '', value: '' })} className="text-[12px] font-medium text-[#2563EB] hover:underline">Replace</button>
+            <button type="button" onClick={() => onPatch({ fileName: '', value: '' })} className="text-[12px] font-medium text-[#0D7C6C] hover:underline">Replace</button>
           </div>
         ) : (
           <UploadArea accept="video/*" hint="MP4, WebM, MOV" onFile={f => onPatch({ fileName: f.fileName })} />
@@ -64,7 +64,7 @@ function ImageBody({ block, onPatch }: { block: Extract<ContentBlock, { type: 'i
           <div className="flex items-center gap-2 px-3 py-2 bg-[#F9FAFB]">
             <Icon.Image className="w-4 h-4 text-[#7C3AED]" />
             <span className="text-[12px] text-[#374151] truncate flex-1">{block.fileName}</span>
-            <button type="button" onClick={() => onPatch({ fileName: '', objectUrl: '' })} className="text-[12px] font-medium text-[#2563EB] hover:underline">Replace</button>
+            <button type="button" onClick={() => onPatch({ fileName: '', objectUrl: '' })} className="text-[12px] font-medium text-[#0D7C6C] hover:underline">Replace</button>
           </div>
         </div>
       ) : (
@@ -104,7 +104,7 @@ export function ContentBuilder({ blocks, onChange }: { blocks: ContentBlock[]; o
               {b.size && <p className="text-[11px] text-[#9CA3AF]">{b.size}</p>}
             </div>
             <div className="flex-1" />
-            <button type="button" onClick={() => patch(b.id, { fileName: '', size: '' })} className="text-[12px] font-medium text-[#2563EB] hover:underline">Replace</button>
+            <button type="button" onClick={() => patch(b.id, { fileName: '', size: '' })} className="text-[12px] font-medium text-[#0D7C6C] hover:underline">Replace</button>
           </div>
         ) : (
           <UploadArea accept="application/pdf" hint="PDF documents only" onFile={f => patch(b.id, { fileName: f.fileName, size: f.size })} />
@@ -143,7 +143,7 @@ export function ContentBuilder({ blocks, onChange }: { blocks: ContentBlock[]; o
 
       {blocks.length === 0 ? (
         <div className="border border-dashed border-[#D1D5DB] rounded-[10px] px-4 py-10 text-center">
-          <p className="text-[13px] text-[#9CA3AF]">No content blocks yet. Click <span className="font-medium text-[#2563EB]">Add Block</span> to build this lesson.</p>
+          <p className="text-[13px] text-[#9CA3AF]">No content blocks yet. Click <span className="font-medium text-[#0D7C6C]">Add Block</span> to build this lesson.</p>
         </div>
       ) : (
         <div className="space-y-3">

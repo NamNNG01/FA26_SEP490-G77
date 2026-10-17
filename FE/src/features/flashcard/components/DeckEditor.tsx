@@ -30,7 +30,7 @@ export const DESCRIPTION_MAX = 500;
 const SIDE_MAX = 500;
 
 export const textareaClass =
-  'w-full px-3 py-2.5 rounded-[10px] border bg-white text-[14px] text-[#111827] leading-relaxed resize-none placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB]';
+  'w-full px-3 py-2.5 rounded-[10px] border bg-white text-[14px] text-[#111827] leading-relaxed resize-none placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#0D7C6C]/20 focus:border-[#0D7C6C]';
 
 // ── Deck info ────────────────────────────────────────────────────────────────
 
@@ -212,12 +212,12 @@ export function CardList({ cards, editor, emptyHint = 'Use the card editor to ad
           {cards.map((card, i) => {
             const active = card.id === editor.editingId;
             return (
-              <li key={card.id} className={`card p-4 transition-colors ${active ? '!border-[#2563EB] ring-2 ring-[#2563EB]/15' : ''}`}>
+              <li key={card.id} className={`card p-4 transition-colors ${active ? '!border-[#0D7C6C] ring-2 ring-[#0D7C6C]/15' : ''}`}>
                 <div className="flex items-start gap-3">
                   <span className="mt-0.5 flex h-6 min-w-6 flex-shrink-0 items-center justify-center rounded-full bg-[#F3F4F6] px-1.5 text-[11px] font-semibold text-[#6B7280]">{i + 1}</span>
                   <div className="min-w-0 flex-1 space-y-2">
                     <div>
-                      <p className="text-[10.5px] font-semibold uppercase tracking-wider text-[#2563EB]">Front</p>
+                      <p className="text-[10.5px] font-semibold uppercase tracking-wider text-[#0D7C6C]">Front</p>
                       <p className="mt-0.5 text-[14px] font-semibold text-[#111827] break-words whitespace-pre-line">{card.front}</p>
                     </div>
                     <div>
@@ -228,7 +228,7 @@ export function CardList({ cards, editor, emptyHint = 'Use the card editor to ad
                   <div className="flex flex-shrink-0 items-center gap-0.5">
                     {active && <Badge variant="info" className="mr-1">Editing</Badge>}
                     <button type="button" onClick={() => editor.load(card)} aria-label={`Edit card ${i + 1}`} title="Edit card"
-                      className="p-1.5 rounded-[6px] text-[#6B7280] hover:bg-[#EFF6FF] hover:text-[#2563EB]">
+                      className="p-1.5 rounded-[6px] text-[#6B7280] hover:bg-[#ECF7F4] hover:text-[#0D7C6C]">
                       <Icon.Edit className="w-4 h-4" />
                     </button>
                     <button type="button" onClick={() => editor.remove(card, i)} aria-label={`Delete card ${i + 1}`} title="Delete card"

@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { Icon } from '@/assets/icons';
 
-export const DEFAULT_PAGE_SIZE = 7;
+export const DEFAULT_PAGE_SIZE = 10;
 
 export interface UsePaginationOptions {
-  /** Items per page. Defaults to DEFAULT_PAGE_SIZE (7). */
+  /** Items per page. Defaults to DEFAULT_PAGE_SIZE (10). */
   perPage?: number;
   /** Change this value (e.g. joined search/filter state) to reset back to page 1. */
   resetKey?: string | number;
@@ -133,7 +133,7 @@ export function Pagination({ page, total, perPage = DEFAULT_PAGE_SIZE, onChange,
                   onClick={() => onChange(item.page as number)}
                   aria-current={item.page === page ? 'page' : undefined}
                   aria-label={`Page ${item.page}`}
-                  className={`${pageButtonClass} ${item.page === page ? 'bg-[#2563EB] text-white' : 'border border-[#E5E7EB] bg-white text-[#374151] hover:bg-[#F3F4F6]'}`}
+                  className={`${pageButtonClass} ${item.page === page ? 'bg-[#0D7C6C] text-white' : 'border border-[#E5E7EB] bg-white text-[#374151] hover:bg-[#F3F4F6]'}`}
                 >
                   {item.page}
                 </button>

@@ -95,7 +95,7 @@ export function PublicCoursesPage() {
                   setQuery('');
                   setCategory('all');
                 }}
-                className="h-10 inline-flex items-center rounded-[10px] bg-[#2563EB] px-4 text-[13.5px] font-semibold text-white shadow-sm transition-colors hover:bg-[#1D4ED8] cursor-pointer"
+                className="h-10 inline-flex items-center rounded-[10px] bg-[#0D7C6C] px-4 text-[13.5px] font-semibold text-white shadow-sm transition-colors hover:bg-[#0A6458] cursor-pointer"
               >
                 Clear filters
               </button>
