@@ -27,8 +27,8 @@ export function CourseListPage({ onNavigate, readonly }: { onNavigate?: (id: str
     <div className="p-8 space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-[22px] font-bold text-[#111827]">Courses</h2>
-          {readonly && <p className="text-[13px] text-[#6B7280] mt-0.5">Read-only access — courses are created by administrators.</p>}
+          <h2 className="text-xl font-bold text-content">Courses</h2>
+          {readonly && <p className="text-sm text-content-soft mt-0.5">Read-only access — courses are created by administrators.</p>}
         </div>
         {!readonly && (
           <div className="flex gap-2">
@@ -42,7 +42,7 @@ export function CourseListPage({ onNavigate, readonly }: { onNavigate?: (id: str
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: 'Total Courses', value: 48, color: '#2563EB' },
+          { label: 'Total Courses', value: 48, color: '#0D7C6C' },
           { label: 'Published', value: 36, color: '#16A34A' },
           { label: 'Drafts', value: 8, color: '#D97706' },
           { label: 'Archived', value: 4, color: '#9CA3AF' },
@@ -50,8 +50,8 @@ export function CourseListPage({ onNavigate, readonly }: { onNavigate?: (id: str
           <div key={s.label} className="card p-4 flex items-center gap-3">
             <div className="w-2 h-10 rounded-full flex-shrink-0" style={{ background: s.color }} />
             <div>
-              <p className="text-[22px] font-bold text-[#111827]">{s.value}</p>
-              <p className="text-[12px] text-[#9CA3AF]">{s.label}</p>
+              <p className="text-xl font-bold text-content">{s.value}</p>
+              <p className="text-xs text-content-subtle">{s.label}</p>
             </div>
           </div>
         ))}

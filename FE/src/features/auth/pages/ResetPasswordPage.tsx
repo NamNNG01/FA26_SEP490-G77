@@ -67,7 +67,7 @@ export function ResetPasswordPage() {
   if (/[0-9]/.test(password)) strength++;
   if (/[^A-Za-z0-9]/.test(password)) strength++;
   const strengthLabel = ['', 'Weak', 'Fair', 'Good', 'Strong'];
-  const strengthColor = ['', '#DC2626', '#D97706', '#2563EB', '#16A34A'];
+  const strengthColor = ['', '#DC2626', '#D97706', '#0D7C6C', '#16A34A'];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -124,7 +124,7 @@ export function ResetPasswordPage() {
           subtitle="You can now sign in with your new password."
         />
         <div className="card p-6 [@media(max-height:850px)]:p-5 shadow-lg text-center space-y-4">
-          <p className="text-[13px] text-[#6B7280]">{successMessage}</p>
+          <p className="text-sm text-content-soft">{successMessage}</p>
           <Button className="w-full" onClick={goToLogin}>
             Back to Login
           </Button>
@@ -178,7 +178,7 @@ export function ResetPasswordPage() {
                 type="button"
                 aria-label={showPwd ? 'Hide password' : 'Show password'}
                 onClick={() => setShowPwd((s) => !s)}
-                className="hover:text-[#374151] transition-colors"
+                className="hover:text-content-secondary transition-colors"
               >
                 {showPwd ? <Icon.EyeOff className="w-4 h-4" /> : <Icon.Eye className="w-4 h-4" />}
               </button>
@@ -190,12 +190,12 @@ export function ResetPasswordPage() {
                 {[1, 2, 3, 4].map((i) => (
                   <div
                     key={i}
-                    className={`flex-1 h-1.5 rounded-full transition-colors ${i <= strength ? '' : 'bg-[#F3F4F6]'}`}
+                    className={`flex-1 h-1.5 rounded-full transition-colors ${i <= strength ? '' : 'bg-surface-muted'}`}
                     style={i <= strength ? { background: strengthColor[strength] } : undefined}
                   />
                 ))}
               </div>
-              <p className="text-[12px] font-medium" style={{ color: strengthColor[strength] }}>
+              <p className="text-xs font-medium" style={{ color: strengthColor[strength] }}>
                 {strengthLabel[strength]}
               </p>
             </div>
@@ -214,7 +214,7 @@ export function ResetPasswordPage() {
                 type="button"
                 aria-label={showConfirm ? 'Hide password' : 'Show password'}
                 onClick={() => setShowConfirm((s) => !s)}
-                className="hover:text-[#374151] transition-colors"
+                className="hover:text-content-secondary transition-colors"
               >
                 {showConfirm ? <Icon.EyeOff className="w-4 h-4" /> : <Icon.Eye className="w-4 h-4" />}
               </button>

@@ -15,12 +15,12 @@ export function AuditLogsPage() {
     { user: 'Tom Williams', action: 'User deactivated', target: 'li.wei@university.cn', time: '2026-09-20 16:22', type: 'permission' },
     { user: 'System', action: 'Backup completed', target: 'Full backup — 14.2 GB', time: '2026-09-20 03:00', type: 'system' },
   ];
-  const typeIcon = { permission: <Icon.Shield className="w-4 h-4 text-[#7C3AED]" />, content: <Icon.FileText className="w-4 h-4 text-[#2563EB]" />, system: <Icon.Cpu className="w-4 h-4 text-[#059669]" /> };
+  const typeIcon = { permission: <Icon.Shield className="w-4 h-4 text-purple" />, content: <Icon.FileText className="w-4 h-4 text-brand-ink" />, system: <Icon.Cpu className="w-4 h-4 text-success-strong" /> };
   const typeBadge = { permission: 'purple' as const, content: 'info' as const, system: 'success' as const };
   return (
     <div className="p-8 space-y-5">
       <div className="flex items-center justify-between">
-        <h2 className="text-[22px] font-bold text-[#111827]">Audit Logs</h2>
+        <h2 className="text-xl font-bold text-content">Audit Logs</h2>
         <div className="flex gap-2">
           <SearchInput className="w-full sm:w-60" placeholder="Search logs…" />
           <Select value="all" options={[{ label: 'All Types', value: 'all' }, { label: 'Permission', value: 'perm' }, { label: 'Content', value: 'content' }, { label: 'System', value: 'system' }]} className="w-full sm:w-36" />
@@ -28,20 +28,20 @@ export function AuditLogsPage() {
         </div>
       </div>
       <div className="card overflow-hidden">
-        <div className="divide-y divide-[#F9FAFB]">
+        <div className="divide-y divide-line-faint">
           {logs.map((log, i) => (
-            <div key={i} className="flex items-center gap-4 px-5 py-4 hover:bg-[#F9FAFB]">
+            <div key={i} className="flex items-center gap-4 px-5 py-4 hover:bg-surface-hover">
               <div className="flex-shrink-0">{typeIcon[log.type as keyof typeof typeIcon]}</div>
               <Avatar name={log.user === 'System' ? 'SY' : log.user} size="sm" color={log.user === 'System' ? '#059669' : undefined} />
               <div className="flex-1">
                 <div className="flex items-center gap-2">
-                  <span className="text-[13.5px] font-medium text-[#374151]">{log.user}</span>
-                  <span className="text-[13px] text-[#6B7280]">{log.action}</span>
+                  <span className="text-sm font-medium text-content-secondary">{log.user}</span>
+                  <span className="text-sm text-content-soft">{log.action}</span>
                 </div>
-                <p className="text-[12px] text-[#9CA3AF] mt-0.5 font-mono">{log.target}</p>
+                <p className="text-xs text-content-subtle mt-0.5 font-mono">{log.target}</p>
               </div>
               <Badge variant={typeBadge[log.type as keyof typeof typeBadge]}>{log.type}</Badge>
-              <span className="text-[12px] text-[#9CA3AF] font-mono flex-shrink-0">{log.time}</span>
+              <span className="text-xs text-content-subtle font-mono flex-shrink-0">{log.time}</span>
             </div>
           ))}
         </div>

@@ -61,12 +61,12 @@ export function Dropdown({ trigger, items }: {
       {open && createPortal(
         <div ref={menuRef} role="menu"
           style={{ position: 'fixed', top: pos?.top ?? 0, left: pos?.left ?? 0, width: MENU_WIDTH, visibility: pos ? 'visible' : 'hidden' }}
-          className="bg-white rounded-[10px] border border-[#E5E7EB] shadow-lg z-50 py-1">
+          className="bg-surface rounded-[10px] border border-line shadow-lg z-50 py-1">
           {items.map((item, i) => item.divider
-            ? <div key={i} className="my-1 border-t border-[#F3F4F6]" />
+            ? <div key={i} className="my-1 border-t border-line-soft" />
             : (
               <button key={i} role="menuitem" onClick={() => { item.onClick?.(); setOpen(false); }}
-                className={`w-full flex items-center gap-2.5 px-3 py-2 text-[13.5px] text-left hover:bg-[#F9FAFB] transition-colors ${item.danger ? 'text-[#DC2626]' : 'text-[#374151]'}`}>
+                className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left hover:bg-surface-hover transition-colors ${item.danger ? 'text-danger' : 'text-content-secondary'}`}>
                 {item.icon && <span className="w-4 h-4">{item.icon}</span>}
                 {item.label}
               </button>

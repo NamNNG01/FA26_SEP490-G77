@@ -78,7 +78,7 @@ export function CreateDeckModal({ onClose, onCreate }: {
     <Modal open onClose={requestClose} title="New Flashcard Deck" size="2xl"
       footer={confirmDiscard ? (
         <div className="flex w-full flex-wrap items-center justify-end gap-2">
-          <span className="mr-auto text-[13px] text-[#374151]">Discard this new deck? Everything entered will be lost.</span>
+          <span className="mr-auto text-sm text-content-secondary">Discard this new deck? Everything entered will be lost.</span>
           <Button variant="outline" onClick={() => setConfirmDiscard(false)}>Keep Editing</Button>
           <Button variant="danger" onClick={onClose}>Discard</Button>
         </div>
@@ -91,13 +91,13 @@ export function CreateDeckModal({ onClose, onCreate }: {
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px] items-start">
         <div className="space-y-5 min-w-0">
           <section className="card p-5" aria-label="Deck information">
-            <h3 className="mb-4 text-[15px] font-semibold text-[#111827]">Deck Information</h3>
+            <h3 className="mb-4 text-lg font-semibold text-content">Deck Information</h3>
             <DeckInfoFields idPrefix="new-deck" value={info} errors={errors} onChange={update} showStatus />
           </section>
           <CardList cards={cards} editor={editor} emptyHint="Add cards with the card editor — or create the deck now and add them later." />
         </div>
         <CardEditorPanel editor={editor} idPrefix="new-card" className="lg:sticky lg:top-0"
-          footnote={<>Cards are added to the list and created with the deck on <span className="font-medium text-[#6B7280]">Create Deck</span>.</>} />
+          footnote={<>Cards are added to the list and created with the deck on <span className="font-medium text-content-soft">Create Deck</span>.</>} />
       </div>
     </Modal>
   );

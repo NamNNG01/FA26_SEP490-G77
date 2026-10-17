@@ -52,15 +52,15 @@ export function Modal({ open, onClose, title, children, footer, size = 'md' }: {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" onClick={onClose} />
-      <div ref={panelRef} role="dialog" aria-modal="true" className={`relative bg-white rounded-[14px] shadow-xl w-full ${widths[size]} flex flex-col max-h-[90vh]`}>
+      <div ref={panelRef} role="dialog" aria-modal="true" className={`relative bg-surface rounded-[14px] shadow-xl w-full ${widths[size]} flex flex-col max-h-[90vh]`}>
         {title && (
-          <div className="flex items-center justify-between px-6 py-4 border-b border-[#F3F4F6]">
-            <h3 className="text-[16px] font-semibold text-[#111827]">{title}</h3>
-            <button onClick={onClose} className="text-[#9CA3AF] hover:text-[#374151] transition-colors"><Icon.X className="w-5 h-5" /></button>
+          <div className="flex items-center justify-between px-6 py-4 border-b border-line-soft">
+            <h3 className="text-lg font-semibold text-content">{title}</h3>
+            <button onClick={onClose} className="text-content-subtle hover:text-content-secondary transition-colors"><Icon.X className="w-5 h-5" /></button>
           </div>
         )}
         <div className="px-6 py-4 overflow-y-auto flex-1">{children}</div>
-        {footer && <div className="px-6 py-4 border-t border-[#F3F4F6] flex justify-end gap-2">{footer}</div>}
+        {footer && <div className="px-6 py-4 border-t border-line-soft flex justify-end gap-2">{footer}</div>}
       </div>
     </div>
   );

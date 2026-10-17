@@ -5,6 +5,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { ROUTES } from '@/app/routes';
 import { Avatar } from '@/components/ui/Avatar';
 import { Icon } from '@/assets/icons';
+import { roleLabel } from '@/utils/permissions';
 
 /**
  * UserDropdown
@@ -96,7 +97,7 @@ export function UserDropdown() {
   if (!user) return null;
 
   const menuItemClass =
-    'w-full flex items-center gap-2.5 px-3 py-2 text-[13.5px] text-left cursor-pointer rounded-[8px] text-foreground hover:bg-accent hover:text-accent-foreground transition-colors duration-150';
+    'w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left cursor-pointer rounded-[8px] text-foreground hover:bg-accent hover:text-accent-foreground transition-colors duration-150';
 
   return (
     <div ref={rootRef} className="relative">
@@ -108,13 +109,13 @@ export function UserDropdown() {
         aria-expanded={open}
         className="flex items-center gap-2.5 rounded-[10px] px-1.5 py-1 cursor-pointer text-foreground hover:bg-accent hover:text-accent-foreground transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-primary/30"
       >
-        <Avatar name={user.fullName} src={user.avatarUrl ?? undefined} size="sm" color="#2563EB" />
+        <Avatar name={user.fullName} src={user.avatarUrl ?? undefined} size="sm" color="#0D7C6C" />
         <div className="hidden sm:block text-left">
-          <p className="text-[13px] font-semibold leading-tight text-foreground">
+          <p className="text-sm font-semibold leading-tight text-foreground">
             {user.fullName}
           </p>
-          <p className="text-[11px] leading-tight text-muted-foreground">
-            {user.role}
+          <p className="text-2xs leading-tight text-muted-foreground">
+            {roleLabel(user.role)}
           </p>
         </div>
         <Icon.ChevronDown
@@ -152,7 +153,7 @@ export function UserDropdown() {
           >
             <Icon.Star className="w-4 h-4 text-muted-foreground" />
             <span className="flex-1">Theme</span>
-            <span className="text-[11px] capitalize text-muted-foreground">
+            <span className="text-2xs capitalize text-muted-foreground">
               {resolved}
             </span>
           </button>
@@ -165,7 +166,7 @@ export function UserDropdown() {
             role="menuitem"
             data-menu-item
             onClick={handleLogout}
-            className="w-full flex items-center gap-2.5 px-3 py-2 text-[13.5px] text-left cursor-pointer rounded-[8px] text-danger hover:bg-danger/10 hover:text-danger transition-colors duration-150"
+            className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left cursor-pointer rounded-[8px] text-danger hover:bg-danger/10 hover:text-danger transition-colors duration-150"
           >
             <Icon.LogOut className="w-4 h-4" />
             Logout

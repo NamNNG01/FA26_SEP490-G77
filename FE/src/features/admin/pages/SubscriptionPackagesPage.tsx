@@ -28,7 +28,7 @@ export function SubscriptionPackagesPage() {
   return (
     <div className="p-8 space-y-5">
       <div className="flex items-center justify-between">
-        <h2 className="text-[22px] font-bold text-[#111827]">Subscription Packages</h2>
+        <h2 className="text-xl font-bold text-content">Subscription Packages</h2>
         <div className="flex gap-2">
           <Button variant="outline" icon={<Icon.Download className="w-4 h-4" />}>Export</Button>
           <Button icon={<Icon.Plus className="w-4 h-4" />} onClick={() => setModalOpen(true)}>New Package</Button>
@@ -39,23 +39,23 @@ export function SubscriptionPackagesPage() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
         {packages.map(p => (
-          <div key={p.id} className={`card p-5 flex flex-col gap-4 border-2 transition-all ${p.active ? 'border-[#BFDBFE]' : 'border-[#E5E7EB]'}`}>
+          <div key={p.id} className={`card p-5 flex flex-col gap-4 border-2 transition-all ${p.active ? 'border-brand-line' : 'border-line'}`}>
             <div className="flex items-start justify-between">
               <div>
                 <Badge variant={p.name === 'Enterprise' ? 'purple' : p.name === 'Free' ? 'default' : 'info'}>{p.name}</Badge>
-                <p className="text-[28px] font-bold text-[#111827] mt-3">{p.price}<span className="text-[13px] font-medium text-[#9CA3AF]">{p.billing}</span></p>
-                <p className="text-[12px] text-[#6B7280] mt-1 leading-snug">{p.description}</p>
+                <p className="text-2xl font-bold text-content mt-3">{p.price}<span className="text-sm font-medium text-content-subtle">{p.billing}</span></p>
+                <p className="text-xs text-content-soft mt-1 leading-snug">{p.description}</p>
               </div>
             </div>
             <div className="flex-1 space-y-1.5">
               {p.features.map(f => (
-                <p key={f} className="flex items-center gap-1.5 text-[12.5px] text-[#374151]">
-                  <Icon.Check className="w-3.5 h-3.5 text-[#16A34A]" />{f}
+                <p key={f} className="flex items-center gap-1.5 text-xs text-content-secondary">
+                  <Icon.Check className="w-3.5 h-3.5 text-success" />{f}
                 </p>
               ))}
             </div>
-            <div className="flex items-center justify-between pt-3 border-t border-[#F3F4F6]">
-              <span className="text-[12px] text-[#9CA3AF]">{p.subs.toLocaleString()} subs</span>
+            <div className="flex items-center justify-between pt-3 border-t border-line-soft">
+              <span className="text-xs text-content-subtle">{p.subs.toLocaleString()} subs</span>
               <Switch checked={p.active} onChange={() => togglePackage(p.id)} size="sm" />
             </div>
           </div>
@@ -63,7 +63,7 @@ export function SubscriptionPackagesPage() {
       </div>
 
       <div className="card overflow-hidden">
-        <div className="px-5 py-4 border-b border-[#F3F4F6]"><h4 className="text-[15px] font-semibold text-[#111827]">Checkout Configuration</h4></div>
+        <div className="px-5 py-4 border-b border-line-soft"><h4 className="text-lg font-semibold text-content">Checkout Configuration</h4></div>
         <div className="p-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
           <Input label="Default Currency" defaultValue="USD" />
           <Input label="Trial Length (days)" type="number" defaultValue="14" />

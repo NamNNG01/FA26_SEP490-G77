@@ -22,10 +22,10 @@ function VideoBody({ block, onPatch }: { block: Extract<ContentBlock, { type: 'v
   ];
   return (
     <div className="space-y-3">
-      <div className="inline-flex items-center rounded-[8px] border border-[#E5E7EB] overflow-hidden">
+      <div className="inline-flex items-center rounded-[8px] border border-line overflow-hidden">
         {sources.map(s => (
           <button key={s.id} type="button" onClick={() => onPatch({ source: s.id })}
-            className={`px-3 py-1.5 text-[12px] font-medium transition-colors ${block.source === s.id ? 'bg-[#2563EB] text-white' : 'bg-white text-[#6B7280] hover:bg-[#F9FAFB]'}`}>
+            className={`px-3 py-1.5 text-xs font-medium transition-colors ${block.source === s.id ? 'bg-brand-600 text-white' : 'bg-surface text-content-soft hover:bg-surface-hover'}`}>
             {s.label}
           </button>
         ))}
@@ -33,14 +33,14 @@ function VideoBody({ block, onPatch }: { block: Extract<ContentBlock, { type: 'v
 
       {block.source === 'upload' ? (
         block.fileName ? (
-          <div className="flex items-center gap-3 rounded-[10px] border border-[#E5E7EB] px-4 py-3">
-            <Icon.Video className="w-5 h-5 text-[#DC2626]" />
+          <div className="flex items-center gap-3 rounded-[10px] border border-line px-4 py-3">
+            <Icon.Video className="w-5 h-5 text-danger" />
             <div className="min-w-0">
-              <p className="text-[13px] font-medium text-[#374151] truncate">{block.fileName}</p>
-              <p className="text-[11px] text-[#9CA3AF]">Video uploaded</p>
+              <p className="text-sm font-medium text-content-secondary truncate">{block.fileName}</p>
+              <p className="text-2xs text-content-subtle">Video uploaded</p>
             </div>
             <div className="flex-1" />
-            <button type="button" onClick={() => onPatch({ fileName: '', value: '' })} className="text-[12px] font-medium text-[#2563EB] hover:underline">Replace</button>
+            <button type="button" onClick={() => onPatch({ fileName: '', value: '' })} className="text-xs font-medium text-brand-ink hover:underline">Replace</button>
           </div>
         ) : (
           <UploadArea accept="video/*" hint="MP4, WebM, MOV" onFile={f => onPatch({ fileName: f.fileName })} />
@@ -59,12 +59,12 @@ function ImageBody({ block, onPatch }: { block: Extract<ContentBlock, { type: 'i
   return (
     <div className="space-y-3">
       {block.objectUrl ? (
-        <div className="rounded-[10px] border border-[#E5E7EB] overflow-hidden">
+        <div className="rounded-[10px] border border-line overflow-hidden">
           <img src={block.objectUrl} alt={block.fileName} className="max-h-56 w-full object-cover" />
-          <div className="flex items-center gap-2 px-3 py-2 bg-[#F9FAFB]">
-            <Icon.Image className="w-4 h-4 text-[#7C3AED]" />
-            <span className="text-[12px] text-[#374151] truncate flex-1">{block.fileName}</span>
-            <button type="button" onClick={() => onPatch({ fileName: '', objectUrl: '' })} className="text-[12px] font-medium text-[#2563EB] hover:underline">Replace</button>
+          <div className="flex items-center gap-2 px-3 py-2 bg-surface-alt">
+            <Icon.Image className="w-4 h-4 text-purple" />
+            <span className="text-xs text-content-secondary truncate flex-1">{block.fileName}</span>
+            <button type="button" onClick={() => onPatch({ fileName: '', objectUrl: '' })} className="text-xs font-medium text-brand-ink hover:underline">Replace</button>
           </div>
         </div>
       ) : (
@@ -97,14 +97,14 @@ export function ContentBuilder({ blocks, onChange }: { blocks: ContentBlock[]; o
       case 'image': return <ImageBody block={b} onPatch={p => patch(b.id, p)} />;
       case 'pdf':
         return b.fileName ? (
-          <div className="flex items-center gap-3 rounded-[10px] border border-[#E5E7EB] px-4 py-3">
-            <Icon.File className="w-5 h-5 text-[#D97706]" />
+          <div className="flex items-center gap-3 rounded-[10px] border border-line px-4 py-3">
+            <Icon.File className="w-5 h-5 text-warning" />
             <div className="min-w-0">
-              <p className="text-[13px] font-medium text-[#374151] truncate">{b.fileName}</p>
-              {b.size && <p className="text-[11px] text-[#9CA3AF]">{b.size}</p>}
+              <p className="text-sm font-medium text-content-secondary truncate">{b.fileName}</p>
+              {b.size && <p className="text-2xs text-content-subtle">{b.size}</p>}
             </div>
             <div className="flex-1" />
-            <button type="button" onClick={() => patch(b.id, { fileName: '', size: '' })} className="text-[12px] font-medium text-[#2563EB] hover:underline">Replace</button>
+            <button type="button" onClick={() => patch(b.id, { fileName: '', size: '' })} className="text-xs font-medium text-brand-ink hover:underline">Replace</button>
           </div>
         ) : (
           <UploadArea accept="application/pdf" hint="PDF documents only" onFile={f => patch(b.id, { fileName: f.fileName, size: f.size })} />
@@ -123,7 +123,7 @@ export function ContentBuilder({ blocks, onChange }: { blocks: ContentBlock[]; o
                 <Badge variant="default">{exam.duration} min</Badge>
               </div>
             )}
-            <p className="text-[12px] text-[#9CA3AF]">Create new exams from the Exams area — quizzes reference an existing exam.</p>
+            <p className="text-xs text-content-subtle">Create new exams from the Exams area — quizzes reference an existing exam.</p>
           </div>
         );
       }
@@ -135,15 +135,15 @@ export function ContentBuilder({ blocks, onChange }: { blocks: ContentBlock[]; o
   return (
     <div>
       <div className="flex items-center justify-between mb-3">
-        <h4 className="text-[14px] font-semibold text-[#111827]">Content Builder</h4>
+        <h4 className="text-base font-semibold text-content">Content Builder</h4>
         <Dropdown
           trigger={<Button icon={<Icon.Plus className="w-4 h-4" />}>Add Block</Button>}
           items={ADD_ITEMS.map(i => ({ label: blockMeta[i.type].label, icon: blockMeta[i.type].icon, onClick: () => add(i.type) }))} />
       </div>
 
       {blocks.length === 0 ? (
-        <div className="border border-dashed border-[#D1D5DB] rounded-[10px] px-4 py-10 text-center">
-          <p className="text-[13px] text-[#9CA3AF]">No content blocks yet. Click <span className="font-medium text-[#2563EB]">Add Block</span> to build this lesson.</p>
+        <div className="border border-dashed border-line-strong rounded-[10px] px-4 py-10 text-center">
+          <p className="text-sm text-content-subtle">No content blocks yet. Click <span className="font-medium text-brand-ink">Add Block</span> to build this lesson.</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -151,7 +151,7 @@ export function ContentBuilder({ blocks, onChange }: { blocks: ContentBlock[]; o
             const exam = quizExam(b);
             return (
               <ContentBlockCard key={b.id} block={b}
-                sub={exam ? <Badge variant="purple" className="text-[11px]">{exam.title}</Badge> : undefined}
+                sub={exam ? <Badge variant="purple" className="text-2xs">{exam.title}</Badge> : undefined}
                 onToggle={() => toggleCollapse(b.id)}
                 onDelete={() => remove(b.id)}
                 onDragStart={() => setDragIndex(i)}

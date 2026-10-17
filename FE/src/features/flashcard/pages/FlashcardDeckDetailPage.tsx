@@ -71,9 +71,9 @@ export function FlashcardDeckDetailPage() {
     return (
       <div className="p-4 sm:p-6 lg:p-8">
         <div className="card mx-auto max-w-md px-6 py-14 text-center">
-          <Icon.Layers className="w-10 h-10 mx-auto text-[#D1D5DB]" />
-          <h2 className="mt-4 text-[18px] font-bold text-[#111827]">Deck not found</h2>
-          <p className="mt-1 text-[13px] text-[#6B7280]">This flashcard deck does not exist or has been removed.</p>
+          <Icon.Layers className="w-10 h-10 mx-auto text-content-faint" />
+          <h2 className="mt-4 text-xl font-bold text-content">Deck not found</h2>
+          <p className="mt-1 text-sm text-content-soft">This flashcard deck does not exist or has been removed.</p>
           <Button className="mt-6" onClick={() => navigate(ROUTES.managerFlashcards)}>Back to Flashcards</Button>
         </div>
       </div>
@@ -122,10 +122,10 @@ export function FlashcardDeckDetailPage() {
         <Breadcrumb items={[{ label: 'Flashcards', onClick: handleCancel }, { label: committed.deck.name }]} />
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
-            <h2 className="text-[22px] font-bold text-[#111827]">Flashcard Detail</h2>
-            <p className="text-[13px] text-[#6B7280] mt-0.5">
+            <h2 className="text-xl font-bold text-content">Flashcard Detail</h2>
+            <p className="text-sm text-content-soft mt-0.5">
               {committed.deck.id} · Last updated {formatDeckTimestamp(committed.deck.updatedAt)}
-              {dirty && <span className="ml-2 font-medium text-[#D97706]">· Unsaved changes</span>}
+              {dirty && <span className="ml-2 font-medium text-warning">· Unsaved changes</span>}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -142,7 +142,7 @@ export function FlashcardDeckDetailPage() {
             {editingInfo ? (
               <div className="space-y-4">
                 <div className="flex items-center justify-between gap-3">
-                  <h3 id="deck-overview-title" className="text-[15px] font-semibold text-[#111827]">Edit Deck Info</h3>
+                  <h3 id="deck-overview-title" className="text-lg font-semibold text-content">Edit Deck Info</h3>
                   <Button size="sm" variant="ghost" onClick={() => setEditingInfo(false)}>Done</Button>
                 </div>
                 <DeckInfoFields idPrefix="deck" value={deck} errors={infoErrors} onChange={updateMeta} />
@@ -150,9 +150,9 @@ export function FlashcardDeckDetailPage() {
             ) : (
               <>
                 <div className="flex items-start justify-between gap-3">
-                  <h3 id="deck-overview-title" className="text-[20px] font-bold text-[#111827] break-words min-w-0">{deck.name}</h3>
+                  <h3 id="deck-overview-title" className="text-xl font-bold text-content break-words min-w-0">{deck.name}</h3>
                   <button onClick={() => setEditingInfo(true)} aria-label="Edit deck info" title="Edit deck info"
-                    className="flex-shrink-0 p-1.5 rounded-[6px] text-[#6B7280] hover:bg-[#F3F4F6] hover:text-[#111827]">
+                    className="flex-shrink-0 p-1.5 rounded-[6px] text-content-soft hover:bg-accent hover:text-content">
                     <Icon.Edit className="w-4 h-4" />
                   </button>
                 </div>
@@ -163,9 +163,9 @@ export function FlashcardDeckDetailPage() {
                   <OverviewItem label="Card Count">{cards.length}</OverviewItem>
                 </dl>
                 <div className="mt-4">
-                  <p className="text-[11px] font-medium uppercase tracking-wide text-[#9CA3AF]">Description</p>
-                  <p className="mt-1 text-[13.5px] leading-relaxed text-[#374151] whitespace-pre-line">
-                    {deck.description || <span className="italic text-[#9CA3AF]">No description yet.</span>}
+                  <p className="text-2xs font-medium uppercase tracking-wide text-content-subtle">Description</p>
+                  <p className="mt-1 text-sm leading-relaxed text-content-secondary whitespace-pre-line">
+                    {deck.description || <span className="italic text-content-subtle">No description yet.</span>}
                   </p>
                 </div>
               </>
@@ -176,7 +176,7 @@ export function FlashcardDeckDetailPage() {
         </div>
 
         <CardEditorPanel editor={editor} idPrefix="card" className="lg:sticky lg:top-4"
-          footnote={<>Cards are added to the list and saved with <span className="font-medium text-[#6B7280]">Save Changes</span>.</>} />
+          footnote={<>Cards are added to the list and saved with <span className="font-medium text-content-soft">Save Changes</span>.</>} />
       </div>
 
       <Modal open={confirmLeave} onClose={() => setConfirmLeave(false)} title="Discard changes?" size="sm"
@@ -186,7 +186,7 @@ export function FlashcardDeckDetailPage() {
             <Button variant="danger" onClick={leave}>Discard</Button>
           </>
         }>
-        <p className="text-[14px] text-[#374151]">You have unsaved changes to this deck. Leaving now will discard them.</p>
+        <p className="text-base text-content-secondary">You have unsaved changes to this deck. Leaving now will discard them.</p>
       </Modal>
     </div>
   );
@@ -195,8 +195,8 @@ export function FlashcardDeckDetailPage() {
 function OverviewItem({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="min-w-0">
-      <dt className="text-[11px] font-medium uppercase tracking-wide text-[#9CA3AF]">{label}</dt>
-      <dd className="mt-1 text-[14px] font-semibold text-[#111827]">{children}</dd>
+      <dt className="text-2xs font-medium uppercase tracking-wide text-content-subtle">{label}</dt>
+      <dd className="mt-1 text-base font-semibold text-content">{children}</dd>
     </div>
   );
 }

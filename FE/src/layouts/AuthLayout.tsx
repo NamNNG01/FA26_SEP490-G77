@@ -20,7 +20,7 @@ import React from 'react';
  */
 export function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="h-[100dvh] overflow-hidden [@media(max-height:760px)]:overflow-y-auto bg-gradient-to-br from-[#EFF6FF] to-white dark:from-[#0B1220] dark:to-[#111827] flex flex-col px-4 py-5 sm:px-6">
+    <div className="h-[100dvh] overflow-hidden [@media(max-height:760px)]:overflow-y-auto bg-gradient-to-br from-surface-brand to-surface flex flex-col px-4 py-5 sm:px-6">
       <div className="m-auto w-[min(100%,430px)] flex flex-col gap-4 sm:gap-5 [@media(max-height:850px)]:gap-3.5">
         {children}
       </div>
