@@ -2,44 +2,45 @@ import React, { useEffect, useState } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { Select } from '@/components/ui/Select';
 import { Alert } from '@/components/ui/Alert';
 import { Icon } from '@/assets/icons';
-import { updateModule } from '@/features/module/api';
-import { MOCK_COURSES, type CourseModule } from '@/features/module/mockModules';
+import { courseService, type CourseModuleResponse } from '@/services/course.service';
 
-/**
- * Reusable "Edit Module" dialog.
- * Opens centered on top of the current page (no navigation): the background
- * stays visible behind a dimmed overlay. Pre-fills all module fields, shows
- * inline validation messages, and reports the saved module via `onSaved`.
- */
+export interface EditableModule {
+  moduleId?: number;
+  id?: string | number;
+  courseId?: number | string;
+  title: string;
+  description?: string | null;
+  orderIndex?: number;
+  order?: number;
+  questionCount?: number;
+  examCount?: number;
+}
+
 export function EditModuleModal({
   module,
   open,
   onClose,
   onSaved,
 }: {
-  module: CourseModule | null;
+  module: EditableModule | null;
   open: boolean;
   onClose: () => void;
-  onSaved: (module: CourseModule) => void;
+  onSaved: (module: EditableModule | CourseModuleResponse) => void;
 }) {
   const [title, setTitle] = useState('');
-  const [order, setOrder] = useState('');
-  const [status, setStatus] = useState<CourseModule['status']>('Draft');
+  const [orderIndex, setOrderIndex] = useState('');
   const [description, setDescription] = useState('');
-  const [errors, setErrors] = useState<{ title?: string; order?: string }>({});
+  const [errors, setErrors] = useState<{ title?: string; orderIndex?: string }>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // Pre-fill with the module's current values each time the modal opens.
   useEffect(() => {
     if (open && module) {
-      setTitle(module.title);
-      setOrder(String(module.order));
-      setStatus(module.status);
-      setDescription(module.description);
+      setTitle(module.title ?? '');
+      setOrderIndex(module.orderIndex !== undefined ? String(module.orderIndex) : '');
+      setDescription(module.description ?? '');
       setErrors({});
       setSubmitError(null);
       setSubmitting(false);
@@ -53,10 +54,10 @@ export function EditModuleModal({
   const handleSubmit = async () => {
     if (submitting || !module) return;
 
-    const nextErrors: { title?: string; order?: string } = {};
-    if (!title.trim()) nextErrors.title = 'Module name is required.';
-    if (order.trim() && (Number.isNaN(Number(order)) || Number(order) < 1)) {
-      nextErrors.order = 'Order must be a number of 1 or greater.';
+    const nextErrors: { title?: string; orderIndex?: string } = {};
+    if (!title.trim()) nextErrors.title = 'Module title is required.';
+    if (orderIndex.trim() && (Number.isNaN(Number(orderIndex)) || Number(orderIndex) < 1)) {
+      nextErrors.orderIndex = 'Order index must be a number of 1 or greater.';
     }
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
@@ -64,16 +65,20 @@ export function EditModuleModal({
     setSubmitError(null);
     setSubmitting(true);
     try {
-      const updated = await updateModule(module.id, {
-        title,
-        order,
-        status,
-        description,
+      const targetId = module.moduleId ?? module.id;
+      if (!targetId) {
+        throw new Error('Module identifier is missing.');
+      }
+      const updated = await courseService.updateModule(targetId, {
+        title: title.trim(),
+        description: description.trim() || undefined,
+        orderIndex: orderIndex.trim() ? Number(orderIndex) : undefined,
       });
       onSaved(updated);
       onClose();
-    } catch {
-      setSubmitError('Failed to save the module. Please try again.');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to update module. Please try again.';
+      setSubmitError(message);
     } finally {
       setSubmitting(false);
     }
@@ -90,7 +95,12 @@ export function EditModuleModal({
           <Button variant="outline" onClick={handleClose} disabled={submitting}>
             Cancel
           </Button>
-          <Button onClick={handleSubmit} loading={submitting} disabled={submitting} icon={<Icon.Check className="w-4 h-4" />}>
+          <Button
+            onClick={handleSubmit}
+            loading={submitting}
+            disabled={submitting}
+            icon={<Icon.Check className="w-4 h-4" />}
+          >
             {submitting ? 'Saving…' : 'Save Changes'}
           </Button>
         </>
@@ -99,9 +109,6 @@ export function EditModuleModal({
       <div className="space-y-4">
         <p className="text-sm text-content-soft">
           Editing <span className="font-medium text-content-secondary">{module?.title}</span>
-          {module ? (
-            <span> · {MOCK_COURSES.find(c => c.id === module.courseId)?.title ?? module.courseId}</span>
-          ) : null}
         </p>
 
         <Input
@@ -114,31 +121,19 @@ export function EditModuleModal({
           placeholder="e.g. Supervised Learning"
         />
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <Input
-            label="Order"
-            type="number"
-            min={1}
-            value={order}
-            onChange={e => setOrder(e.target.value)}
-            error={errors.order}
-            hint="Optional"
-          />
-          <Select
-            label="Status"
-            value={status}
-            onChange={v => setStatus(v as CourseModule['status'])}
-            options={[
-              { label: 'Draft', value: 'Draft' },
-              { label: 'Active', value: 'Active' },
-              { label: 'Archived', value: 'Archived' },
-            ]}
-          />
-        </div>
+        <Input
+          label="Display Order"
+          type="number"
+          min={1}
+          value={orderIndex}
+          onChange={e => setOrderIndex(e.target.value)}
+          error={errors.orderIndex}
+          hint="Position in course curriculum"
+        />
 
         <div>
           <label className="text-sm font-medium text-content-secondary block mb-1.5">
-            Description <span className="text-content-subtle font-normal">(optional)</span>
+            Module Description <span className="text-content-subtle font-normal">(optional)</span>
           </label>
           <textarea
             className="w-full h-24 px-3 py-2.5 rounded-[10px] border border-line text-base text-content resize-none focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600 transition-all"

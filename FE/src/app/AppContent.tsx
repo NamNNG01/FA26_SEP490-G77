@@ -26,7 +26,7 @@ import { TakeExamPage, ExamResultPage, ExamListPage } from '@/features/exam';
 import { PublicExamsPage, PublicExamDetailPage } from '@/features/public-exam';
 import { CMDashboard } from '@/features/content-manager';
 import { QuestionBankPage } from '@/features/question';
-import { CourseListPage } from '@/features/course';
+import { CourseListPage, CourseDetailPage, CourseFormPage } from '@/features/course';
 import { FlashcardManagementPage, FlashcardDeckDetailPage } from '@/features/flashcard';
 import { PublicCoursesPage, PublicCourseDetailPage } from '@/features/catalog';
 import {
@@ -204,6 +204,8 @@ function AppRoutes() {
         <Route element={<RequireRole roles={ROLE_MANAGER} />}>
           <Route path={ROUTES.managerDashboard} element={<CMDashboard />} />
           <Route path={ROUTES.managerCourses} element={<CourseListPage />} />
+          <Route path={ROUTES.managerCourseCreate} element={<CourseFormPage mode="create" />} />
+          <Route path={ROUTES.managerCourseDetail} element={<CourseDetailPage />} />
           <Route path={ROUTES.managerQuestions} element={<QuestionBankPage />} />
           <Route path={ROUTES.managerExams} element={<ExamListPage />} />
           {/* Same shared components as the student practice-exam area. */}
