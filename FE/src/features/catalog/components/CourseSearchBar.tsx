@@ -126,13 +126,13 @@ export function CourseSearchBar({
     <div ref={containerRef} className={`relative min-w-0 ${className}`}>
       {/* Field — h-10 keeps it the most prominent control in the header */}
       <div
-        className={`flex h-10 items-center gap-2 rounded-[12px] border bg-[#F9FAFB] pr-2 pl-3 transition-all dark:bg-[#0B1220] ${
+        className={`flex h-10 items-center gap-2 rounded-[12px] border bg-surface-alt pr-2 pl-3 transition-all ${
           expanded
-            ? 'border-[#2563EB] ring-2 ring-[#2563EB]/20'
-            : 'border-[#E5E7EB] hover:border-[#D1D5DB] dark:border-[#1F2937] dark:hover:border-[#26324A]'
+            ? 'border-brand-600 ring-2 ring-brand-600/20'
+            : 'border-line hover:border-line-strong'
         }`}
       >
-        <Icon.Search className="w-4 h-4 flex-shrink-0 text-[#9CA3AF]" />
+        <Icon.Search className="w-4 h-4 flex-shrink-0 text-content-subtle" />
         <input
           ref={inputRef}
           type="search"
@@ -152,7 +152,7 @@ export function CourseSearchBar({
           }}
           onFocus={() => setOpen(true)}
           onKeyDown={handleKeyDown}
-          className="h-full w-full min-w-0 bg-transparent text-[14px] text-[#111827] outline-none placeholder:text-[#9CA3AF] dark:text-[#F9FAFB] [&::-webkit-search-cancel-button]:hidden"
+          className="h-full w-full min-w-0 bg-transparent text-base text-content outline-none placeholder:text-gray-400 [&::-webkit-search-cancel-button]:hidden"
         />
         {trimmed && (
           <button
@@ -163,7 +163,7 @@ export function CourseSearchBar({
               setActiveIndex(-1);
               inputRef.current?.focus();
             }}
-            className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-[6px] text-[#9CA3AF] transition-colors hover:bg-[#E5E7EB] hover:text-[#374151] dark:hover:bg-[#26324A] dark:hover:text-white cursor-pointer"
+            className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-[6px] text-content-subtle transition-colors hover:bg-surface-pressed hover:text-content-secondary cursor-pointer"
           >
             <Icon.X className="w-3.5 h-3.5" />
           </button>
@@ -172,7 +172,7 @@ export function CourseSearchBar({
 
       {/* Results dropdown */}
       {expanded && (
-        <div className="absolute top-[calc(100%+8px)] right-0 left-0 z-50 overflow-hidden rounded-[14px] border border-[#E5E7EB] bg-white shadow-xl shadow-[#111827]/10 dark:border-[#1F2937] dark:bg-[#111827]">
+        <div className="absolute top-[calc(100%+8px)] right-0 left-0 z-50 overflow-hidden rounded-[14px] border border-line bg-surface shadow-xl shadow-gray-900/10">
           <ul id={listboxId} role="listbox" aria-label="Course search results" className="max-h-[min(60vh,420px)] overflow-y-auto p-1.5">
             {visibleResults.map((course, index) => (
               <li key={course.slug} role="option" aria-selected={index === activeIndex} id={`${listboxId}-${index}`}>
@@ -183,40 +183,40 @@ export function CourseSearchBar({
                   onMouseEnter={() => setActiveIndex(index)}
                   onClick={() => goToCourse(course)}
                   className={`flex w-full items-center gap-3 rounded-[10px] px-2.5 py-2.5 text-left transition-colors cursor-pointer ${
-                    index === activeIndex ? 'bg-[#EFF6FF] dark:bg-[#2563EB]/15' : 'hover:bg-[#F9FAFB] dark:hover:bg-[#26324A]'
+                    index === activeIndex ? 'bg-primary-light' : 'hover:bg-surface-hover'
                   }`}
                 >
                   <ProviderLogo providerId={course.providerId} provider={course.provider} size={34} />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[14px] font-semibold text-[#111827] dark:text-[#F9FAFB]">
+                    <span className="block truncate text-base font-semibold text-content">
                       {course.name}
                     </span>
-                    <span className="mt-0.5 block truncate text-[12px] text-[#9CA3AF]">
+                    <span className="mt-0.5 block truncate text-xs text-content-subtle">
                       {course.provider}
-                      <span className="mx-1.5 text-[#D1D5DB]">·</span>
+                      <span className="mx-1.5 text-content-faint">·</span>
                       {course.questionCount.toLocaleString()} Questions
-                      <span className="mx-1.5 text-[#D1D5DB]">·</span>
+                      <span className="mx-1.5 text-content-faint">·</span>
                       {course.examCount} Exams
                     </span>
                   </span>
-                  <Icon.ChevronRight className="h-4 w-4 flex-shrink-0 text-[#D1D5DB]" />
+                  <Icon.ChevronRight className="h-4 w-4 flex-shrink-0 text-content-faint" />
                 </button>
               </li>
             ))}
 
             {isEmptyResult && (
               <li className="px-3 py-6 text-center">
-                <p className="text-[13.5px] font-medium text-[#374151] dark:text-[#D1D5DB]">No courses match “{trimmed}”</p>
-                <p className="mt-1 text-[12.5px] text-[#9CA3AF]">Try a provider like AWS, Microsoft or CompTIA.</p>
+                <p className="text-sm font-medium text-content-secondary">No courses match “{trimmed}”</p>
+                <p className="mt-1 text-xs text-content-subtle">Try a provider like AWS, Microsoft or CompTIA.</p>
               </li>
             )}
           </ul>
 
-          <div className="border-t border-[#F3F4F6] p-1.5 dark:border-[#1F2937]">
+          <div className="border-t border-line-soft p-1.5">
             <button
               type="button"
               onClick={goToAllResults}
-              className="flex w-full items-center justify-between gap-2 rounded-[10px] px-2.5 py-2 text-[13px] font-semibold text-[#2563EB] transition-colors hover:bg-[#EFF6FF] dark:hover:bg-[#2563EB]/15 cursor-pointer"
+              className="flex w-full items-center justify-between gap-2 rounded-[10px] px-2.5 py-2 text-sm font-semibold text-brand-ink transition-colors hover:bg-primary-hover-tint cursor-pointer"
             >
               <span>
                 {results.length > 0

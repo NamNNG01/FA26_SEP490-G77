@@ -132,9 +132,9 @@ export function CourseFormPage({
 
   if (loading) {
     return (
-      <div className="p-8 py-20 text-center text-[#9CA3AF]">
+      <div className="p-8 py-20 text-center text-content-subtle">
         <div className="inline-block w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mb-3" />
-        <p className="text-[14px]">Loading course details…</p>
+        <p className="text-base">Loading course details…</p>
       </div>
     );
   }
@@ -149,7 +149,7 @@ export function CourseFormPage({
       />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-[22px] font-bold text-[#111827]">
+        <h2 className="text-xl font-bold text-content">
           {isEdit ? 'Edit Course' : 'Create Course'}
         </h2>
         <div className="flex flex-wrap gap-2">
@@ -172,7 +172,7 @@ export function CourseFormPage({
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <div className="xl:col-span-2 card p-6 space-y-4">
-          <h4 className="text-[16px] font-semibold text-[#111827]">Course Information</h4>
+          <h4 className="text-lg font-semibold text-content">Course Information</h4>
 
           <Input
             label="Course Title"
@@ -204,11 +204,11 @@ export function CourseFormPage({
           </div>
 
           <div>
-            <label className="text-[13px] font-medium text-[#374151] block mb-1.5">
+            <label className="text-sm font-medium text-content-secondary block mb-1.5">
               Course Description
             </label>
             <textarea
-              className="w-full h-28 px-3 py-2.5 rounded-[10px] border border-[#E5E7EB] text-[14px] text-[#111827] resize-none focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB]"
+              className="w-full h-28 px-3 py-2.5 rounded-[10px] border border-line text-base text-content resize-none focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600"
               placeholder="Describe the course curriculum, learning objectives, and prerequisites…"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -229,8 +229,8 @@ export function CourseFormPage({
 
         <div className="space-y-4">
           <div className="card p-5">
-            <h4 className="text-[14px] font-semibold text-[#111827] mb-3">Course Guidelines</h4>
-            <ul className="text-[12.5px] text-[#6B7280] space-y-2 list-disc pl-4">
+            <h4 className="text-base font-semibold text-content mb-3">Course Guidelines</h4>
+            <ul className="text-xs text-content-soft space-y-2 list-disc pl-4">
               <li>Newly created courses are saved as drafts by default.</li>
               <li>A course requires at least 1 module before it can be published.</li>
               <li>Only administrators can assign or reassign course managers.</li>

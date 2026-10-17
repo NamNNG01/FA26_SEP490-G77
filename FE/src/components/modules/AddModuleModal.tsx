@@ -94,7 +94,7 @@ export function AddModuleModal({
       }
     >
       <div className="space-y-4">
-        <p className="text-[13px] text-[#6B7280]">
+        <p className="text-sm text-content-soft">
           Add a new module to organize questions and exams within this course.
         </p>
 
@@ -120,11 +120,11 @@ export function AddModuleModal({
         />
 
         <div>
-          <label className="text-[13px] font-medium text-[#374151] block mb-1.5">
-            Module Description <span className="text-[#9CA3AF] font-normal">(optional)</span>
+          <label className="text-sm font-medium text-content-secondary block mb-1.5">
+            Module Description <span className="text-content-subtle font-normal">(optional)</span>
           </label>
           <textarea
-            className="w-full h-24 px-3 py-2.5 rounded-[10px] border border-[#E5E7EB] text-[14px] text-[#111827] resize-none focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB]"
+            className="w-full h-24 px-3 py-2.5 rounded-[10px] border border-line text-base text-content resize-none focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600"
             value={description}
             onChange={e => setDescription(e.target.value)}
             placeholder="Summarize what this module covers…"

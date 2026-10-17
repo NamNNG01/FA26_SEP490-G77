@@ -11,27 +11,27 @@ export type BadgeVariant = 'default' | 'success' | 'warning' | 'danger' | 'info'
  * Every dark pair clears 4.5:1.
  */
 const badgeVariants: Record<BadgeVariant, string> = {
-  default: 'bg-[#F3F4F6] text-[#374151] dark:bg-[#1F2937] dark:text-[#F9FAFB]',
-  success: 'bg-[#F0FDF4] text-[#16A34A] dark:bg-[#052E16] dark:text-[#4ADE80]',
-  warning: 'bg-[#FFFBEB] text-[#D97706] dark:bg-[#422006] dark:text-[#FBBF24]',
-  danger: 'bg-[#FEF2F2] text-[#DC2626] dark:bg-[#450A0A] dark:text-[#F87171]',
-  info: 'bg-[#EFF6FF] text-[#2563EB] dark:bg-[#172554] dark:text-[#93C5FD]',
-  purple: 'bg-[#F5F3FF] text-[#7C3AED] dark:bg-[#2E1065] dark:text-[#C4B5FD]',
+  default: 'bg-surface-muted text-content-secondary',
+  success: 'bg-success-light text-success',
+  warning: 'bg-warning-light text-warning',
+  danger: 'bg-danger-light text-danger',
+  info: 'bg-primary-light text-brand-ink',
+  purple: 'bg-purple-light text-purple',
 };
 
 export function Badge({ variant = 'default', children, className = '' }: { variant?: BadgeVariant; children: React.ReactNode; className?: string }) {
-  return <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[12px] font-medium ${badgeVariants[variant]} ${className}`}>{children}</span>;
+  return <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${badgeVariants[variant]} ${className}`}>{children}</span>;
 }
 
 export function Chip({ children, onRemove, active, onClick }: { children: React.ReactNode; onRemove?: () => void; active?: boolean; onClick?: () => void }) {
   return (
     <span
       onClick={onClick}
-      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[13px] font-medium border transition-all cursor-pointer
-        ${active ? 'bg-[#EFF6FF] text-[#2563EB] border-[#BFDBFE]' : 'bg-white text-[#374151] border-[#E5E7EB] hover:bg-[#F9FAFB]'}`}
+      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium border transition-all cursor-pointer
+        ${active ? 'bg-primary-light text-brand-ink border-brand-line' : 'bg-surface text-content-secondary border-line hover:bg-surface-hover'}`}
     >
       {children}
-      {onRemove && <button onClick={e => { e.stopPropagation(); onRemove(); }} className="text-[#9CA3AF] hover:text-[#374151]"><Icon.X className="w-3 h-3" /></button>}
+      {onRemove && <button onClick={e => { e.stopPropagation(); onRemove(); }} className="text-content-subtle hover:text-content-secondary"><Icon.X className="w-3 h-3" /></button>}
     </span>
   );
 }

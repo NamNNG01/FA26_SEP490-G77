@@ -13,10 +13,10 @@ type RevealDirection = 'up' | 'down' | 'left' | 'right';
 
 /** Hidden state per direction — the element animates FROM this transform. */
 const hiddenByDirection: Record<RevealDirection, string> = {
-  up: 'opacity-0 translate-y-6',
-  down: 'opacity-0 -translate-y-6',
-  left: 'opacity-0 translate-x-6',
-  right: 'opacity-0 -translate-x-6',
+  up: 'opacity-0 translate-y-3',
+  down: 'opacity-0 -translate-y-3',
+  left: 'opacity-0 translate-x-3',
+  right: 'opacity-0 -translate-x-3',
 };
 
 interface RevealProps {
@@ -36,8 +36,9 @@ export function Reveal({ children, delay = 0, direction = 'up', className = '' }
     const el = ref.current;
     if (!el) return;
 
-    // SSR / very old browsers: just show the content.
-    if (typeof IntersectionObserver === 'undefined') {
+    // Old browsers, or the user asked for less motion: just show the content.
+    const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    if (typeof IntersectionObserver === 'undefined' || reducedMotion) {
       setVisible(true);
       return;
     }
@@ -49,7 +50,9 @@ export function Reveal({ children, delay = 0, direction = 'up', className = '' }
           observer.disconnect(); // animate once, then stop observing
         }
       },
-      { threshold: 0.15 },
+      // Start a little before the element scrolls in, so a fast scroll never
+      // lands on a screen of still-invisible content.
+      { threshold: 0, rootMargin: '0px 0px 120px 0px' },
     );
     observer.observe(el);
     return () => observer.disconnect();
@@ -59,7 +62,7 @@ export function Reveal({ children, delay = 0, direction = 'up', className = '' }
     <div
       ref={ref}
       style={{ transitionDelay: `${delay}ms` }}
-      className={`transition-all duration-700 ease-out will-change-transform ${
+      className={`transition-all duration-500 ease-out will-change-transform ${
         visible ? 'opacity-100 translate-x-0 translate-y-0' : hiddenByDirection[direction]
       } ${className}`}
     >

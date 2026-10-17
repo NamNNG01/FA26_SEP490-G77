@@ -38,10 +38,10 @@ function FilterChip({ label, active, onClick }: { label: string; active: boolean
       type="button"
       aria-pressed={active}
       onClick={onClick}
-      className={`h-9 rounded-full border px-4 text-[13px] font-medium transition-all cursor-pointer ${
+      className={`h-9 rounded-full border px-4 text-sm font-medium transition-all cursor-pointer ${
         active
-          ? 'border-[#2563EB] bg-[#2563EB] text-white shadow-sm shadow-[#2563EB]/25'
-          : 'border-[#E5E7EB] bg-white text-[#374151] hover:border-[#BFDBFE] hover:text-[#2563EB] dark:border-[#1F2937] dark:bg-[#111827] dark:text-[#D1D5DB] dark:hover:border-[#1E3A5F] dark:hover:text-white'
+          ? 'border-brand-600 bg-brand-600 text-white shadow-sm shadow-brand-600/25'
+          : 'border-line bg-surface text-content-secondary hover:border-brand-line hover:text-brand-ink'
       }`}
     >
       {label}

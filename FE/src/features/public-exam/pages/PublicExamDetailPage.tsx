@@ -109,8 +109,8 @@ export function PublicExamDetailPage() {
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-[14px] bg-primary-light dark:bg-primary/15">
             <Icon.Search className="h-6 w-6 text-primary" />
           </div>
-          <h1 className="mt-5 text-[22px] font-bold text-foreground">Exam not found</h1>
-          <p className="mt-2 text-[14px] leading-relaxed text-muted-foreground">
+          <h1 className="mt-5 text-xl font-bold text-foreground">Exam not found</h1>
+          <p className="mt-2 text-base leading-relaxed text-muted-foreground">
             We couldn’t find that exam. It may have been retired from the catalogue.
           </p>
           <Button className="mt-6" onClick={() => navigate(listPath)}>
@@ -202,7 +202,7 @@ export function PublicExamDetailPage() {
           <section className="rounded-[14px] border border-line bg-surface p-6 shadow-sm">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
               <span
-                className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-[12px] text-[14px] font-bold tracking-tight"
+                className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-[12px] text-base font-bold tracking-tight"
                 style={{ background: `${course.accent}1A`, color: course.accent }}
                 title={course.name}
               >
@@ -215,10 +215,10 @@ export function PublicExamDetailPage() {
                   <Badge variant={type.badge}>{type.label}</Badge>
                 </div>
 
-                <h1 className="mt-2.5 text-[24px] font-bold leading-tight tracking-tight text-foreground">
+                <h1 className="mt-2.5 text-2xl font-bold leading-tight tracking-tight text-foreground">
                   {draft.title}
                 </h1>
-                <p className="mt-1.5 text-[13.5px] text-muted-foreground">{examSubtitle({ ...exam, course: draft.course })}</p>
+                <p className="mt-1.5 text-sm text-muted-foreground">{examSubtitle({ ...exam, course: draft.course })}</p>
               </div>
             </div>
           </section>
@@ -241,15 +241,15 @@ export function PublicExamDetailPage() {
               <>
           {/* At-a-glance facts */}
           {!canEdit && <section aria-label="Exam details" className="rounded-[14px] border border-line bg-surface p-6 shadow-sm">
-            <h2 className="text-[15px] font-semibold text-foreground">Exam details</h2>
+            <h2 className="text-lg font-semibold text-foreground">Exam details</h2>
             <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-3">
               <div>
-                <dt className="text-[12.5px] text-muted-foreground">Exam Type</dt>
-                <dd className="mt-1 text-[15px] font-semibold text-foreground">{type.label}</dd>
+                <dt className="text-xs text-muted-foreground">Exam Type</dt>
+                <dd className="mt-1 text-lg font-semibold text-foreground">{type.label}</dd>
               </div>
 
               <div>
-                <dt className="text-[12.5px] text-muted-foreground">Duration</dt>
+                <dt className="text-xs text-muted-foreground">Duration</dt>
                 <dd className="mt-1 flex items-center gap-1.5">
                   {canEdit ? (
                     <input
@@ -258,28 +258,28 @@ export function PublicExamDetailPage() {
                       value={draft.duration}
                       onChange={e => editor.setField('duration', Math.max(1, Number(e.target.value) || 1))}
                       aria-label="Time limit in minutes"
-                      className="h-9 w-24 rounded-[10px] border border-line bg-surface px-3 text-[15px] font-semibold text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                      className="h-9 w-24 rounded-[10px] border border-line bg-surface px-3 text-lg font-semibold text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
                     />
                   ) : (
-                    <span className="text-[15px] font-semibold text-foreground">{draft.duration} min</span>
+                    <span className="text-lg font-semibold text-foreground">{draft.duration} min</span>
                   )}
                 </dd>
               </div>
 
               <div>
-                <dt className="text-[12.5px] text-muted-foreground">Questions</dt>
-                <dd className="mt-1 text-[15px] font-semibold text-foreground">{exam.questions}</dd>
+                <dt className="text-xs text-muted-foreground">Questions</dt>
+                <dd className="mt-1 text-lg font-semibold text-foreground">{exam.questions}</dd>
               </div>
 
               <div>
-                <dt className="text-[12.5px] text-muted-foreground">Difficulty</dt>
+                <dt className="text-xs text-muted-foreground">Difficulty</dt>
                 <dd className="mt-1">
                   {canEdit ? (
                     <select
                       value={draft.difficulty}
                       onChange={e => editor.setField('difficulty', e.target.value as typeof draft.difficulty)}
                       aria-label="Difficulty"
-                      className="h-9 w-full rounded-[10px] border border-line bg-surface pl-3 pr-8 text-[15px] font-semibold text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                      className="h-9 w-full rounded-[10px] border border-line bg-surface pl-3 pr-8 text-lg font-semibold text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
                     >
                       {DIFFICULTY_FILTER_OPTIONS.filter(o => o.value).map(o => (
                         <option key={o.value} value={o.value}>
@@ -288,7 +288,7 @@ export function PublicExamDetailPage() {
                       ))}
                     </select>
                   ) : (
-                    <span className="flex items-center gap-1.5 text-[15px] font-semibold text-foreground">
+                    <span className="flex items-center gap-1.5 text-lg font-semibold text-foreground">
                       <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full" style={{ background: difficulty }} />
                       {draft.difficulty}
                     </span>
@@ -297,14 +297,14 @@ export function PublicExamDetailPage() {
               </div>
 
               <div>
-                <dt className="text-[12.5px] text-muted-foreground">Status</dt>
+                <dt className="text-xs text-muted-foreground">Status</dt>
                 <dd className="mt-1">
                   {canEdit ? (
                     <select
                       value={draft.status}
                       onChange={e => editor.setField('status', e.target.value as typeof draft.status)}
                       aria-label="Status"
-                      className="h-9 w-full rounded-[10px] border border-line bg-surface pl-3 pr-8 text-[15px] font-semibold text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                      className="h-9 w-full rounded-[10px] border border-line bg-surface pl-3 pr-8 text-lg font-semibold text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
                     >
                       {EXAM_STATUS_OPTIONS.filter(o => o.value).map(o => (
                         <option key={o.value} value={o.value}>
@@ -313,15 +313,15 @@ export function PublicExamDetailPage() {
                       ))}
                     </select>
                   ) : (
-                    <span className="text-[15px] font-semibold text-foreground">{status.label}</span>
+                    <span className="text-lg font-semibold text-foreground">{status.label}</span>
                   )}
                 </dd>
               </div>
 
               {completed && exam.score !== undefined && (
                 <div>
-                  <dt className="text-[12.5px] text-muted-foreground">Your Score</dt>
-                  <dd className="mt-1 text-[15px] font-semibold text-foreground">{exam.score}%</dd>
+                  <dt className="text-xs text-muted-foreground">Your Score</dt>
+                  <dd className="mt-1 text-lg font-semibold text-foreground">{exam.score}%</dd>
                 </div>
               )}
             </dl>
@@ -330,8 +330,8 @@ export function PublicExamDetailPage() {
           {/* Score — completed exams only */}
           {!canEdit && completed && exam.score !== undefined && (
             <section className="rounded-[14px] border border-line bg-surface p-6 shadow-sm">
-              <h2 className="text-[15px] font-semibold text-foreground">Your result</h2>
-              <p className="mt-2 text-[14px] leading-relaxed text-muted-foreground">
+              <h2 className="text-lg font-semibold text-foreground">Your result</h2>
+              <p className="mt-2 text-base leading-relaxed text-muted-foreground">
                 You scored {exam.score}% on this attempt. Review every question with its explanation, or retake it
                 to improve your score.
               </p>
@@ -341,8 +341,8 @@ export function PublicExamDetailPage() {
                   dark mode. bg-accent + text-foreground follow the theme instead. */}
               <div className="mt-5">
                 <div className="flex items-baseline justify-between">
-                  <span className="text-[12.5px] text-muted-foreground">Score</span>
-                  <span className="text-[18px] font-bold text-foreground">{exam.score}%</span>
+                  <span className="text-xs text-muted-foreground">Score</span>
+                  <span className="text-xl font-bold text-foreground">{exam.score}%</span>
                 </div>
                 <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-accent">
                   <div
@@ -361,8 +361,8 @@ export function PublicExamDetailPage() {
           <section aria-label="Questions" className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h2 className="text-[15px] font-semibold text-foreground">Questions</h2>
-                <p className="mt-0.5 text-[12.5px] text-muted-foreground">
+                <h2 className="text-lg font-semibold text-foreground">Questions</h2>
+                <p className="mt-0.5 text-xs text-muted-foreground">
                   {canEdit ? `Showing ${draft.questions.length} questions` : `Showing ${draft.questions.length} of ${exam.questions}`}
                 </p>
               </div>
@@ -372,7 +372,7 @@ export function PublicExamDetailPage() {
               canEdit ? (
                 <NoQuestionsCard onAdd={editor.addQuestion} />
               ) : (
-                <p className="rounded-[14px] border border-line bg-surface px-6 py-10 text-center text-[13px] text-muted-foreground shadow-sm">
+                <p className="rounded-[14px] border border-line bg-surface px-6 py-10 text-center text-sm text-muted-foreground shadow-sm">
                   This exam has no questions yet. Check back soon.
                 </p>
               )
@@ -410,9 +410,9 @@ export function PublicExamDetailPage() {
                 {singles.length > 0 && (
                   <div className="space-y-4 pt-2">
                     <div className="flex items-center gap-3">
-                      <h3 className="text-[15px] font-semibold text-foreground">Single Questions</h3>
+                      <h3 className="text-lg font-semibold text-foreground">Single Questions</h3>
                       <span className="h-px flex-1 bg-line" />
-                      <span className="text-[12.5px] text-muted-foreground">
+                      <span className="text-xs text-muted-foreground">
                         {singles.length}
                       </span>
                     </div>
@@ -445,15 +445,15 @@ export function PublicExamDetailPage() {
           <div className="rounded-[14px] border border-line bg-surface p-5 shadow-sm">
             {canEdit && (
               <div className="mb-4 space-y-4">
-                <h2 className="text-[15px] font-semibold text-foreground">Exam Information</h2>
-                <label className="flex flex-col gap-1.5"><span className="text-[12.5px] text-muted-foreground">Exam Name</span><input value={draft.title} onChange={e => editor.setField('title', e.target.value)} aria-label="Exam Name" className="h-9 rounded-[10px] border border-line bg-surface px-3 text-[13px] text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20" /></label>
-                <label className="flex flex-col gap-1.5"><span className="text-[12.5px] text-muted-foreground">Course</span><select value={draft.course} onChange={e => editor.setField('course', e.target.value)} aria-label="Course" className="h-9 rounded-[10px] border border-line bg-surface pl-3 pr-8 text-[13px] text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20">{COURSE_FILTER_OPTIONS.filter(o => o.value).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</select></label>
-                <label className="flex flex-col gap-1.5"><span className="text-[12.5px] text-muted-foreground">Module</span><select value={draft.module} onChange={e => editor.setField('module', e.target.value)} aria-label="Module" className="h-9 rounded-[10px] border border-line bg-surface pl-3 pr-8 text-[13px] text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20">{moduleOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</select></label>
+                <h2 className="text-lg font-semibold text-foreground">Exam Information</h2>
+                <label className="flex flex-col gap-1.5"><span className="text-xs text-muted-foreground">Exam Name</span><input value={draft.title} onChange={e => editor.setField('title', e.target.value)} aria-label="Exam Name" className="h-9 rounded-[10px] border border-line bg-surface px-3 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20" /></label>
+                <label className="flex flex-col gap-1.5"><span className="text-xs text-muted-foreground">Course</span><select value={draft.course} onChange={e => editor.setField('course', e.target.value)} aria-label="Course" className="h-9 rounded-[10px] border border-line bg-surface pl-3 pr-8 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20">{COURSE_FILTER_OPTIONS.filter(o => o.value).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</select></label>
+                <label className="flex flex-col gap-1.5"><span className="text-xs text-muted-foreground">Module</span><select value={draft.module} onChange={e => editor.setField('module', e.target.value)} aria-label="Module" className="h-9 rounded-[10px] border border-line bg-surface pl-3 pr-8 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20">{moduleOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</select></label>
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <label className="flex min-w-0 flex-col gap-1.5"><span className="text-[12.5px] text-muted-foreground">Time (minutes)</span><input type="number" min={1} value={draft.duration} onChange={e => editor.setField('duration', Math.max(1, Number(e.target.value) || 1))} aria-label="Time in minutes" className="h-9 w-full rounded-[10px] border border-line bg-surface px-3 text-[13px] text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20" /></label>
-                  <label className="flex min-w-0 flex-col gap-1.5"><span className="text-[12.5px] text-muted-foreground">Number of Questions</span><input value={draft.questions.length} readOnly aria-label="Number of Questions" className="h-9 w-full rounded-[10px] border border-line bg-accent px-3 text-[13px] text-muted-foreground outline-none" /></label>
+                  <label className="flex min-w-0 flex-col gap-1.5"><span className="text-xs text-muted-foreground">Time (minutes)</span><input type="number" min={1} value={draft.duration} onChange={e => editor.setField('duration', Math.max(1, Number(e.target.value) || 1))} aria-label="Time in minutes" className="h-9 w-full rounded-[10px] border border-line bg-surface px-3 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20" /></label>
+                  <label className="flex min-w-0 flex-col gap-1.5"><span className="text-xs text-muted-foreground">Number of Questions</span><input value={draft.questions.length} readOnly aria-label="Number of Questions" className="h-9 w-full rounded-[10px] border border-line bg-accent px-3 text-sm text-muted-foreground outline-none" /></label>
                 </div>
-                <label className="flex flex-col gap-1.5"><span className="text-[12.5px] text-muted-foreground">Status</span><select value={publicationStatus} onChange={e => setPublicationStatus(e.target.value as typeof publicationStatus)} aria-label="Status" className="h-9 rounded-[10px] border border-line bg-surface pl-3 pr-8 text-[13px] text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20">{EXAM_PUBLICATION_STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</select></label>
+                <label className="flex flex-col gap-1.5"><span className="text-xs text-muted-foreground">Status</span><select value={publicationStatus} onChange={e => setPublicationStatus(e.target.value as typeof publicationStatus)} aria-label="Status" className="h-9 rounded-[10px] border border-line bg-surface pl-3 pr-8 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20">{EXAM_PUBLICATION_STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</select></label>
                 <Button className="w-full" icon={<Icon.Plus className="h-4 w-4" />} onClick={editor.addQuestion}>Add Question</Button>
               </div>
             )}
@@ -469,7 +469,7 @@ export function PublicExamDetailPage() {
             )}
 
             {!canEdit && <>
-            <p className="text-[13px] text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               {completed ? 'Finished' : draft.status === 'in-progress' ? 'Partially complete' : 'Ready when you are'}
             </p>
             <Button className="mt-3 w-full" icon={primary.icon} onClick={() => navigate(primary.route)}>
@@ -493,15 +493,15 @@ export function PublicExamDetailPage() {
                 { label: 'Exam type', value: type.label },
               ].map(row => (
                 <div key={row.label} className="flex items-center justify-between gap-3">
-                  <dt className="text-[13px] text-muted-foreground">{row.label}</dt>
-                  <dd className="text-[13px] font-semibold text-foreground">{row.value}</dd>
+                  <dt className="text-sm text-muted-foreground">{row.label}</dt>
+                  <dd className="text-sm font-semibold text-foreground">{row.value}</dd>
                 </div>
               ))}
             </dl>
             </>}
 
             {false && (
-              <p className="mt-4 border-t border-line pt-4 text-[12px] leading-relaxed text-content-subtle">
+              <p className="mt-4 border-t border-line pt-4 text-xs leading-relaxed text-content-subtle">
                 Answer keys and correct options are only visible to you — learners never see them on this page.
               </p>
             )}

@@ -266,9 +266,9 @@ export function CourseDetailPage({
 
   if (loading) {
     return (
-      <div className="p-8 py-24 text-center text-[#9CA3AF]">
+      <div className="p-8 py-24 text-center text-content-subtle">
         <div className="inline-block w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mb-3" />
-        <p className="text-[14px]">Loading course details…</p>
+        <p className="text-base">Loading course details…</p>
       </div>
     );
   }
@@ -298,8 +298,8 @@ export function CourseDetailPage({
           <div className="flex items-center gap-2.5">
             <Avatar name={s.fullName} size="sm" src={s.avatarUrl || undefined} />
             <div className="min-w-0">
-              <p className="text-[13.5px] font-medium text-[#111827] truncate">{s.fullName}</p>
-              <p className="text-[11px] text-[#9CA3AF] truncate">{s.email}</p>
+              <p className="text-sm font-medium text-content truncate">{s.fullName}</p>
+              <p className="text-2xs text-content-subtle truncate">{s.email}</p>
             </div>
           </div>
         );
@@ -309,7 +309,7 @@ export function CourseDetailPage({
       key: 'enrolledAt',
       label: 'Enrolled At',
       render: (r: Record<string, unknown>) => (
-        <span className="text-[13px] text-[#6B7280]">{formatTimestamp(r.enrolledAt as string)}</span>
+        <span className="text-sm text-content-soft">{formatTimestamp(r.enrolledAt as string)}</span>
       ),
     },
     {
@@ -325,7 +325,7 @@ export function CourseDetailPage({
       render: (r: Record<string, unknown>) => (
         <div className="flex items-center gap-2 w-36">
           <Progress value={Number(r.progress)} size="sm" />
-          <span className="text-[12px] font-medium text-[#374151]">{Number(r.progress)}%</span>
+          <span className="text-xs font-medium text-content-secondary">{Number(r.progress)}%</span>
         </div>
       ),
     },
@@ -341,7 +341,7 @@ export function CourseDetailPage({
               { label: course.title },
             ]}
           />
-          <h2 className="text-[22px] font-bold text-[#111827] mt-1">Course Detail</h2>
+          <h2 className="text-xl font-bold text-content mt-1">Course Detail</h2>
         </div>
 
         <div className="flex items-center gap-2">
@@ -369,7 +369,7 @@ export function CourseDetailPage({
         <div className="space-y-6">
           <div className="card p-6 space-y-5">
             <div className="flex items-center justify-between">
-              <h3 className="text-[16px] font-bold text-[#111827]">Course Details</h3>
+              <h3 className="text-lg font-bold text-content">Course Details</h3>
               <div className="flex items-center gap-2">
                 <Badge variant={isPublished ? 'success' : 'warning'}>
                   {isPublished ? 'Published' : 'Draft'}
@@ -377,7 +377,7 @@ export function CourseDetailPage({
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="text-red-500 hover:bg-red-50 hover:text-red-600"
+                  className="text-danger hover:bg-danger-light hover:text-danger"
                   icon={<Icon.Trash className="w-4 h-4" />}
                   onClick={() => setIsDeleteCourseOpen(true)}
                   title="Delete Course"
@@ -398,11 +398,11 @@ export function CourseDetailPage({
                 />
 
                 <div>
-                  <label className="text-[13px] font-medium text-[#374151] block mb-1.5">
+                  <label className="text-sm font-medium text-content-secondary block mb-1.5">
                     Course Description
                   </label>
                   <textarea
-                    className="w-full h-32 px-3.5 py-2.5 rounded-[10px] border border-[#E5E7EB] text-[14px] text-[#111827] resize-none focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB] transition-all"
+                    className="w-full h-32 px-3.5 py-2.5 rounded-[10px] border border-line text-base text-content resize-none focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600 transition-all"
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     placeholder="Describe the course curriculum, learning outcomes, and prerequisites…"
@@ -450,10 +450,10 @@ export function CourseDetailPage({
                     hint="0 = Free"
                   />
                   <div>
-                    <label className="text-[13px] font-medium text-[#374151] block mb-1.5">
+                    <label className="text-sm font-medium text-content-secondary block mb-1.5">
                       Manager
                     </label>
-                    <p className="h-9 px-3 flex items-center text-[13.5px] font-medium text-[#374151] bg-[#F9FAFB] rounded-[10px] border border-[#E5E7EB] truncate">
+                    <p className="h-9 px-3 flex items-center text-sm font-medium text-content-secondary bg-surface-alt rounded-[10px] border border-line truncate">
                       {course.managerName || `ID: ${course.managerId}`}
                     </p>
                   </div>
@@ -463,10 +463,10 @@ export function CourseDetailPage({
           </div>
 
           <div className="card overflow-hidden">
-            <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-b border-[#F3F4F6]">
+            <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-b border-line-faint">
               <div>
-                <h4 className="text-[15px] font-semibold text-[#111827]">Modules</h4>
-                <p className="text-[12px] text-[#9CA3AF] mt-0.5">
+                <h4 className="text-lg font-semibold text-content">Modules</h4>
+                <p className="text-xs text-content-subtle mt-0.5">
                   Manage curriculum modules, their display order, and associated exams.
                 </p>
               </div>
@@ -480,16 +480,16 @@ export function CourseDetailPage({
             </div>
 
             {modules.length === 0 ? (
-              <div className="p-10 text-center text-[#6B7280]">
-                <Icon.Folder className="w-9 h-9 mx-auto text-[#9CA3AF] mb-2" />
-                <p className="text-[14px] font-medium text-[#111827]">No modules added yet</p>
-                <p className="text-[12.5px] text-[#9CA3AF] mt-1 max-w-sm mx-auto">
+              <div className="p-10 text-center text-content-soft">
+                <Icon.Folder className="w-9 h-9 mx-auto text-content-subtle mb-2" />
+                <p className="text-base font-medium text-content">No modules added yet</p>
+                <p className="text-xs text-content-subtle mt-1 max-w-sm mx-auto">
                   Click the "Add Module" button to create the first curriculum module for this course.
                 </p>
               </div>
             ) : (
-              <div className="divide-y divide-[#F3F4F6]">
-                <div className="hidden sm:grid grid-cols-12 gap-4 px-6 py-3 bg-[#F9FAFB] text-[12px] font-semibold text-[#6B7280]">
+              <div className="divide-y divide-line-faint">
+                <div className="hidden sm:grid grid-cols-12 gap-4 px-6 py-3 bg-surface-alt text-xs font-semibold text-content-soft">
                   <span className="col-span-1">Order</span>
                   <span className="col-span-4">Module Name</span>
                   <span className="col-span-4">Description</span>
@@ -500,24 +500,24 @@ export function CourseDetailPage({
                 {modules.map((mod) => (
                   <div
                     key={mod.moduleId}
-                    className="grid grid-cols-1 sm:grid-cols-12 gap-2 sm:gap-4 px-6 py-3.5 items-center hover:bg-[#F9FAFB] transition-colors"
+                    className="grid grid-cols-1 sm:grid-cols-12 gap-2 sm:gap-4 px-6 py-3.5 items-center hover:bg-surface-alt transition-colors"
                   >
                     <div className="col-span-1 flex items-center gap-1.5">
-                      <span className="w-6 h-6 rounded-full bg-[#EFF6FF] text-[#2563EB] text-[12px] font-bold flex items-center justify-center">
+                      <span className="w-6 h-6 rounded-full bg-primary-light text-brand-ink text-xs font-bold flex items-center justify-center">
                         {mod.orderIndex}
                       </span>
                     </div>
 
                     <div className="col-span-4 min-w-0">
-                      <p className="text-[14px] font-semibold text-[#111827] truncate">{mod.title}</p>
-                      <p className="text-[11px] text-[#9CA3AF] sm:hidden">
+                      <p className="text-base font-semibold text-content truncate">{mod.title}</p>
+                      <p className="text-2xs text-content-subtle sm:hidden">
                         {mod.examCount} exam{mod.examCount === 1 ? '' : 's'} · {mod.questionCount} questions
                       </p>
                     </div>
 
                     <div className="col-span-4 min-w-0">
-                      <p className="text-[13px] text-[#6B7280] truncate">
-                        {mod.description || <span className="italic text-[#9CA3AF]">No description</span>}
+                      <p className="text-sm text-content-soft truncate">
+                        {mod.description || <span className="italic text-content-subtle">No description</span>}
                       </p>
                     </div>
 
@@ -538,7 +538,7 @@ export function CourseDetailPage({
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="text-red-500 hover:bg-red-50 hover:text-red-600"
+                        className="text-danger hover:bg-danger-light hover:text-danger"
                         icon={<Icon.Trash className="w-3.5 h-3.5" />}
                         onClick={() => setModuleToDelete(mod)}
                         title="Remove Module"
@@ -556,9 +556,9 @@ export function CourseDetailPage({
 
       {tab === 'Enrolled Students' && (
         <div className="card overflow-hidden">
-          <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-b border-[#F3F4F6]">
+          <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-b border-line-faint">
             <div className="flex items-center gap-3">
-              <h4 className="text-[15px] font-semibold text-[#111827]">Enrolled Students</h4>
+              <h4 className="text-lg font-semibold text-content">Enrolled Students</h4>
               <Badge variant="default">{studentTotal} students</Badge>
             </div>
             <Button
@@ -572,7 +572,7 @@ export function CourseDetailPage({
             </Button>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 p-4 border-b border-[#F3F4F6] bg-[#F9FAFB]">
+          <div className="flex flex-wrap items-center gap-3 p-4 border-b border-line-faint bg-surface-alt">
             <SearchInput
               className="w-full sm:w-64"
               placeholder="Search by name or email…"
@@ -598,15 +598,15 @@ export function CourseDetailPage({
           </div>
 
           {loadingStudents ? (
-            <div className="p-12 text-center text-[#9CA3AF]">
+            <div className="p-12 text-center text-content-subtle">
               <div className="inline-block w-6 h-6 border-3 border-primary border-t-transparent rounded-full animate-spin mb-2" />
-              <p className="text-[13px]">Loading enrolled students…</p>
+              <p className="text-sm">Loading enrolled students…</p>
             </div>
           ) : students.length === 0 ? (
-            <div className="p-12 text-center text-[#6B7280]">
-              <Icon.Users className="w-9 h-9 mx-auto text-[#9CA3AF] mb-2" />
-              <p className="text-[14px] font-medium text-[#111827]">No students enrolled yet</p>
-              <p className="text-[12.5px] text-[#9CA3AF] mt-1 max-w-sm mx-auto">
+            <div className="p-12 text-center text-content-soft">
+              <Icon.Users className="w-9 h-9 mx-auto text-content-subtle mb-2" />
+              <p className="text-base font-medium text-content">No students enrolled yet</p>
+              <p className="text-xs text-content-subtle mt-1 max-w-sm mx-auto">
                 Students will appear here once they enroll in this course.
               </p>
             </div>
@@ -616,7 +616,7 @@ export function CourseDetailPage({
                 columns={studentColumns}
                 data={students as unknown as Record<string, unknown>[]}
               />
-              <div className="border-t border-[#F3F4F6]">
+              <div className="border-t border-line-faint">
                 <Pagination
                   page={studentPage}
                   total={studentTotal}
@@ -669,9 +669,9 @@ export function CourseDetailPage({
         }
       >
         <div className="space-y-3">
-          <p className="text-[14px] text-[#374151]">
+          <p className="text-base text-content-secondary">
             Are you sure you want to remove the module{' '}
-            <span className="font-semibold text-[#111827]">"{moduleToDelete?.title}"</span>?
+            <span className="font-semibold text-content">"{moduleToDelete?.title}"</span>?
           </p>
           <Alert
             type="warning"
@@ -705,9 +705,9 @@ export function CourseDetailPage({
         }
       >
         <div className="space-y-3">
-          <p className="text-[14px] text-[#374151]">
+          <p className="text-base text-content-secondary">
             Are you sure you want to permanently delete{' '}
-            <span className="font-semibold text-[#111827]">"{course.title}"</span>?
+            <span className="font-semibold text-content">"{course.title}"</span>?
           </p>
           <Alert
             type="error"

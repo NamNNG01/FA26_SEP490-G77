@@ -17,7 +17,7 @@ import { PublicFooter } from '@/features/landing/components/PublicFooter';
  */
 export function PublicLayout() {
   return (
-    <div className="h-full min-h-0 overflow-y-auto overflow-x-hidden bg-white dark:bg-[#111827]">
+    <div className="h-full min-h-0 overflow-y-auto overflow-x-hidden bg-surface">
       <PublicNavbar />
 
       <main>

@@ -112,10 +112,10 @@ export function FlashcardManagementPage() {
       render: (r: Record<string, unknown>) => (
         <div className="min-w-0">
           <button onClick={() => navigate(flashcardDeckPath(r.id as string))} title={r.name as string}
-            className="block max-w-full font-semibold text-[#111827] text-[13.5px] truncate text-left hover:text-[#2563EB] hover:underline">
+            className="block max-w-full font-semibold text-content text-sm truncate text-left hover:text-brand-ink hover:underline">
             {r.name as string}
           </button>
-          <p className="text-[11px] text-[#9CA3AF]">{r.id as string}</p>
+          <p className="text-2xs text-content-subtle">{r.id as string}</p>
         </div>
       ),
     },
@@ -123,24 +123,24 @@ export function FlashcardManagementPage() {
       key: 'courseId', label: 'Course / Module',
       render: (r: Record<string, unknown>) => (
         <div className="min-w-0">
-          <span className="block truncate text-[13px] text-[#374151]" title={courseTitle(r.courseId as string)}>{courseTitle(r.courseId as string)}</span>
-          <span className="block truncate text-[11.5px] text-[#9CA3AF]" title={moduleTitle(r.moduleId as string)}>{moduleTitle(r.moduleId as string)}</span>
+          <span className="block truncate text-sm text-content-secondary" title={courseTitle(r.courseId as string)}>{courseTitle(r.courseId as string)}</span>
+          <span className="block truncate text-2xs text-content-subtle" title={moduleTitle(r.moduleId as string)}>{moduleTitle(r.moduleId as string)}</span>
         </div>
       ),
     },
-    { key: 'cards', label: 'Cards', sortable: true, render: (r: Record<string, unknown>) => <span className="font-semibold text-[#111827]">{r.cards as number}</span> },
-    { key: 'creator', label: 'Creator', render: (r: Record<string, unknown>) => <span className="block truncate text-[13px] text-[#374151]">{r.creator as string}</span> },
+    { key: 'cards', label: 'Cards', sortable: true, render: (r: Record<string, unknown>) => <span className="font-semibold text-content">{r.cards as number}</span> },
+    { key: 'creator', label: 'Creator', render: (r: Record<string, unknown>) => <span className="block truncate text-sm text-content-secondary">{r.creator as string}</span> },
     { key: 'status', label: 'Status', render: (r: Record<string, unknown>) => <Badge variant={STATUS_VARIANT[r.status as DeckStatus]}>{r.status as string}</Badge> },
-    { key: 'updatedAt', label: 'Updated', sortable: true, render: (r: Record<string, unknown>) => <span className="text-[13px] text-[#6B7280] whitespace-nowrap">{formatDeckTimestamp(r.updatedAt as string)}</span> },
+    { key: 'updatedAt', label: 'Updated', sortable: true, render: (r: Record<string, unknown>) => <span className="text-sm text-content-soft whitespace-nowrap">{formatDeckTimestamp(r.updatedAt as string)}</span> },
     {
       // Pinned right so the "..." menu stays reachable when the table scrolls sideways.
       key: 'actions', label: '', width: '48px',
-      className: 'sticky right-0 z-[1] bg-white group-hover:bg-[#F9FAFB] transition-colors',
+      className: 'sticky right-0 z-[1] bg-surface group-hover:bg-surface-hover transition-colors',
       render: (r: Record<string, unknown>) => {
         const d = r as unknown as FlashcardDeck;
         return (
           <Dropdown
-            trigger={<button aria-label={`Actions for ${d.name}`} className="p-1.5 hover:bg-[#F3F4F6] rounded-[6px]"><Icon.MoreHorizontal className="w-4 h-4 text-[#6B7280]" /></button>}
+            trigger={<button aria-label={`Actions for ${d.name}`} className="p-1.5 hover:bg-accent rounded-[6px]"><Icon.MoreHorizontal className="w-4 h-4 text-content-soft" /></button>}
             items={[
               { label: 'Detail', icon: <Icon.Eye />, onClick: () => navigate(flashcardDeckPath(d.id)) },
               // Published decks can be archived; Draft and Archived decks can be published.
@@ -162,19 +162,19 @@ export function FlashcardManagementPage() {
     <div className="p-4 sm:p-6 lg:p-8 space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-[22px] font-bold text-[#111827]">Flashcard Management</h2>
-          <p className="text-[13px] text-[#6B7280] mt-0.5">Manage flashcard decks across your courses.</p>
+          <h2 className="text-xl font-bold text-content">Flashcard Management</h2>
+          <p className="text-sm text-content-soft mt-0.5">Manage flashcard decks across your courses.</p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" icon={<Icon.Download className="w-4 h-4" />} onClick={handleExport}>
             Export{selectedVisible.length > 0 ? ` (${selectedVisible.length})` : ''}
           </Button>
-          <Button icon={<Icon.Plus className="w-4 h-4" />} onClick={() => setCreateOpen(true)}>New Flashcard</Button>
+          <Button icon={<Icon.Plus className="w-4 h-4" />} onClick={() => setCreateOpen(true)}>New deck</Button>
         </div>
       </div>
 
       <div className="card overflow-hidden">
-        <div className="flex flex-wrap items-center gap-3 px-4 py-3 border-b border-[#F3F4F6]">
+        <div className="flex flex-wrap items-center gap-3 px-4 py-3 border-b border-line-soft">
           <SearchInput className="w-full sm:w-64" placeholder="Search flashcard decks…" value={query} onChange={e => setQuery(e.target.value)} />
           <Select aria-label="Filter by course" value={course} onChange={setCourse}
             options={[{ label: 'All Courses', value: 'all' }, ...FLASHCARD_COURSES.map(c => ({ label: c.title, value: c.id }))]}
@@ -185,21 +185,21 @@ export function FlashcardManagementPage() {
         </div>
 
         {selectedVisible.length > 0 && (
-          <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 bg-[#EFF6FF] border-b border-[#BFDBFE] dark:bg-[#172554] dark:border-[#1E3A8A]">
-            <span className="text-[13px] font-medium text-[#1D4ED8] dark:text-[#93C5FD] mr-2">{selectedVisible.length} selected</span>
+          <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 bg-primary-light border-b border-brand-line">
+            <span className="text-sm font-medium text-brand-ink-hover mr-2">{selectedVisible.length} selected</span>
             <Button size="sm" variant="outline" icon={<Icon.CheckCircle className="w-3.5 h-3.5" />} onClick={() => bulkSetStatus('Published')}>Publish</Button>
             <Button size="sm" variant="outline" icon={<Icon.EyeOff className="w-3.5 h-3.5" />} onClick={() => bulkSetStatus('Draft')}>Move to Draft</Button>
             <Button size="sm" variant="outline" icon={<Icon.X className="w-3.5 h-3.5" />} onClick={() => bulkSetStatus('Archived')}>Deactivate</Button>
             <div className="flex-1" />
-            <button onClick={() => setSelected(new Set())} className="text-[13px] text-[#2563EB] hover:underline dark:text-[#93C5FD]">Clear selection</button>
+            <button onClick={() => setSelected(new Set())} className="text-sm text-brand-ink hover:underline">Clear selection</button>
           </div>
         )}
 
         {visible.length === 0 ? (
           <div className="px-4 py-16 text-center">
-            <Icon.Layers className="w-10 h-10 mx-auto text-[#D1D5DB]" />
-            <p className="mt-3 text-[14px] font-medium text-[#374151]">No flashcard decks found</p>
-            <p className="text-[13px] text-[#9CA3AF]">Try a different keyword or clear the filters.</p>
+            <Icon.Layers className="w-10 h-10 mx-auto text-content-faint" />
+            <p className="mt-3 text-base font-medium text-content-secondary">No flashcard decks found</p>
+            <p className="text-sm text-content-subtle">Try a different keyword or clear the filters.</p>
           </div>
         ) : (
           <Table
