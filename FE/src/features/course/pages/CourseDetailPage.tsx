@@ -1,258 +1,727 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
+import { useParams, useNavigate } from 'react-router';
 import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Select';
 import { Badge } from '@/components/ui/Badge';
 import { Table } from '@/components/ui/Table';
 import { Tabs } from '@/components/ui/Tabs';
-import { Dropdown } from '@/components/ui/Dropdown';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { Progress } from '@/components/ui/Progress';
-import { Switch } from '@/components/ui/Switch';
 import { Alert, Toast } from '@/components/ui/Alert';
-import { Select } from '@/components/ui/Select';
+import { Modal } from '@/components/ui/Modal';
+import { Avatar } from '@/components/ui/Avatar';
+import { SearchInput } from '@/components/common/SearchInput';
+import { Pagination } from '@/components/ui/Pagination';
 import { Icon } from '@/assets/icons';
-import { MOCK_COURSES, courseLabel, modulesByCourse, moduleLabel, type CourseModule } from '@/features/module/mockModules';
-import { MOCK_LESSONS } from '@/features/lesson/mockLessons';
-import { MOCK_QUESTION_BANK } from '@/features/exam/mockQuestionBank';
-import { MOCK_EXAMS } from '@/features/exam/mockExams';
-import { SectionHeader } from '@/components/ui/Card';
-import { CourseOverviewPanel } from '../components/CourseOverviewPanel';
-import { CourseExplorer } from '../components/CourseExplorer';
+import {
+  courseService,
+  type CourseDetailResponse,
+  type CourseModuleResponse,
+  type CategoryResponse,
+  type CourseStudentItem,
+} from '@/services/course.service';
 import { AddModuleModal } from '@/components/modules/AddModuleModal';
 import { EditModuleModal } from '@/components/modules/EditModuleModal';
 
-export function CourseDetailPage({ onNavigate }: { onNavigate?: (id: string, params?: Record<string, string>) => void }) {
-  const [tab, setTab] = useState('Overview');
-  const courseId = MOCK_COURSES[0].id;
+function formatTimestamp(isoString: string | null | undefined): string {
+  if (!isoString) return '—';
+  try {
+    const date = new Date(isoString);
+    if (Number.isNaN(date.getTime())) return isoString;
+    return date.toLocaleDateString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  } catch {
+    return isoString;
+  }
+}
 
-  const [modules, setModules] = useState<CourseModule[]>(() => modulesByCourse(courseId));
+function exportStudentsToCsv(students: CourseStudentItem[], courseTitle: string) {
+  if (!students.length) return;
+  const headers = ['User ID', 'Full Name', 'Email', 'Enrolled At', 'Status', 'Progress (%)'];
+  const rows = students.map((s) => [
+    s.userId,
+    `"${s.fullName.replace(/"/g, '""')}"`,
+    `"${s.email.replace(/"/g, '""')}"`,
+    `"${s.enrolledAt}"`,
+    s.status,
+    s.progress,
+  ]);
+  const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.setAttribute('href', url);
+  link.setAttribute('download', `${courseTitle.replace(/\s+/g, '_')}_students_${new Date().toISOString().slice(0, 10)}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+export function CourseDetailPage({
+  onNavigate,
+  params: paramsProp,
+}: {
+  onNavigate?: (id: string, params?: Record<string, string>) => void;
+  params?: Record<string, string>;
+}) {
+  const navigate = useNavigate();
+  const routeParams = useParams();
+  const rawId = paramsProp?.courseId ?? routeParams.courseId ?? '1';
+  const courseId = rawId;
+
+  const [tab, setTab] = useState('Course Details & Modules');
+
+  const [course, setCourse] = useState<CourseDetailResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [categoryId, setCategoryId] = useState('');
+  const [isPublished, setIsPublished] = useState(false);
+  const [price, setPrice] = useState('0');
+  const [saving, setSaving] = useState(false);
+
+  const [categories, setCategories] = useState<CategoryResponse[]>([]);
+
+  const [modules, setModules] = useState<CourseModuleResponse[]>([]);
   const [isAddModuleOpen, setIsAddModuleOpen] = useState(false);
-  const [editingModuleId, setEditingModuleId] = useState<string | null>(null);
+  const [editingModule, setEditingModule] = useState<CourseModuleResponse | null>(null);
+  const [moduleToDelete, setModuleToDelete] = useState<CourseModuleResponse | null>(null);
+  const [deletingModule, setDeletingModule] = useState(false);
+
+  const [isDeleteCourseOpen, setIsDeleteCourseOpen] = useState(false);
+  const [deletingCourse, setDeletingCourse] = useState(false);
+
+  const [students, setStudents] = useState<CourseStudentItem[]>([]);
+  const [studentTotal, setStudentTotal] = useState(0);
+  const [studentPage, setStudentPage] = useState(1);
+  const studentPageSize = 10;
+  const [studentSearch, setStudentSearch] = useState('');
+  const [studentStatus, setStudentStatus] = useState('all');
+  const [loadingStudents, setLoadingStudents] = useState(false);
+
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   useEffect(() => {
     if (!toast) return;
-    const t = setTimeout(() => setToast(null), 3000);
+    const t = setTimeout(() => setToast(null), 3500);
     return () => clearTimeout(t);
   }, [toast]);
 
-  const handleModuleCreated = (m: CourseModule) => {
-    setModules(prev => [...prev, m].sort((a, b) => a.order - b.order));
-    setToast({ type: 'success', message: `Module "${m.title}" created successfully.` });
+  useEffect(() => {
+    courseService
+      .getCategories()
+      .then(setCategories)
+      .catch(() => setCategories([]));
+  }, []);
+
+  const loadCourseData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await courseService.getCourseById(courseId);
+      setCourse(data);
+      setTitle(data.title);
+      setDescription(data.description ?? '');
+      setCategoryId(String(data.categoryId));
+      setIsPublished(data.isPublished);
+      setPrice(String(data.price ?? 0));
+      setModules(data.modules ?? []);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to load course details.';
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  }, [courseId]);
+
+  useEffect(() => {
+    loadCourseData();
+  }, [loadCourseData]);
+
+  const loadStudents = useCallback(async () => {
+    if (!courseId) return;
+    setLoadingStudents(true);
+    try {
+      const res = await courseService.getCourseStudents(courseId, {
+        search: studentSearch.trim() || undefined,
+        status: studentStatus !== 'all' ? studentStatus : undefined,
+        page: studentPage - 1,
+        size: studentPageSize,
+      });
+      setStudents(res.content);
+      setStudentTotal(res.totalElements);
+    } catch {
+      setStudents([]);
+      setStudentTotal(0);
+    } finally {
+      setLoadingStudents(false);
+    }
+  }, [courseId, studentSearch, studentStatus, studentPage, studentPageSize]);
+
+  useEffect(() => {
+    if (tab === 'Enrolled Students') {
+      loadStudents();
+    }
+  }, [tab, loadStudents]);
+
+  const handleSaveChanges = async () => {
+    if (!course) return;
+    if (!title.trim()) {
+      setToast({ type: 'error', message: 'Course title cannot be empty.' });
+      return;
+    }
+    setSaving(true);
+    try {
+      const updated = await courseService.updateCourse(course.courseId, {
+        title: title.trim(),
+        description: description.trim() || undefined,
+        categoryId: categoryId ? Number(categoryId) : undefined,
+        price: Number(price) >= 0 ? Number(price) : 0,
+      });
+
+      if (isPublished !== course.isPublished) {
+        if (isPublished && modules.length === 0) {
+          throw new Error('Course must have at least 1 module to be published.');
+        }
+        await courseService.publishCourse(course.courseId, isPublished);
+      }
+
+      setCourse({
+        ...updated,
+        isPublished,
+        modules,
+      });
+      setToast({ type: 'success', message: 'Course details successfully updated.' });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to save changes.';
+      setToast({ type: 'error', message: msg });
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleModuleUpdated = (m: CourseModule) => {
-    setModules(prev => prev.map(mod => (mod.id === m.id ? m : mod)).sort((a, b) => a.order - b.order));
-    setToast({ type: 'success', message: `Module "${m.title}" updated successfully.` });
+  const handleCancel = () => {
+    if (onNavigate) {
+      onNavigate('course-list');
+    } else {
+      navigate('/manager/courses');
+    }
   };
 
-  const editingModule = editingModuleId ? modules.find(m => m.id === editingModuleId) ?? null : null;
+  const handleModuleCreated = (newMod: CourseModuleResponse) => {
+    setModules((prev) => [...prev, newMod].sort((a, b) => a.orderIndex - b.orderIndex));
+    setToast({ type: 'success', message: `Module "${newMod.title}" added successfully.` });
+    courseService.getCourseModules(courseId).then(setModules).catch(() => {});
+  };
 
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set(modules.filter(m => MOCK_LESSONS.some(l => l.moduleId === m.id)).map(m => m.id)));
-  const toggleModule = (id: string) => setExpanded(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
-  const expandAll = () => setExpanded(new Set(modules.map(m => m.id)));
-  const collapseAll = () => setExpanded(new Set());
-  const addLesson = (moduleId: string) => onNavigate?.('lesson-create', { courseId, moduleId });
+  const handleModuleUpdated = (updatedMod: CourseModuleResponse | unknown) => {
+    const mod = updatedMod as CourseModuleResponse;
+    setModules((prev) =>
+      prev.map((m) => (m.moduleId === mod.moduleId ? mod : m)).sort((a, b) => a.orderIndex - b.orderIndex)
+    );
+    setToast({ type: 'success', message: `Module "${mod.title}" updated successfully.` });
+    courseService.getCourseModules(courseId).then(setModules).catch(() => {});
+  };
 
-  const totalLessons = MOCK_LESSONS.filter(l => l.courseId === courseId).length;
-  const totalQuestions = MOCK_QUESTION_BANK.filter(q => q.courseId === courseId).length;
-  const courseExams = MOCK_EXAMS.filter(e => modules.some(m => m.id === e.moduleId));
-  const totalExams = courseExams.length;
+  const handleRemoveModule = async () => {
+    if (!moduleToDelete) return;
+    setDeletingModule(true);
+    try {
+      await courseService.deleteModule(moduleToDelete.moduleId);
+      setModules((prev) => prev.filter((m) => m.moduleId !== moduleToDelete.moduleId));
+      setToast({ type: 'success', message: `Module "${moduleToDelete.title}" removed.` });
+      setModuleToDelete(null);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to delete module.';
+      setToast({ type: 'error', message: msg });
+    } finally {
+      setDeletingModule(false);
+    }
+  };
 
-  const course = MOCK_COURSES[0];
+  const handleDeleteCourse = async () => {
+    if (!course) return;
+    setDeletingCourse(true);
+    try {
+      await courseService.deleteCourse(course.courseId);
+      setIsDeleteCourseOpen(false);
+      if (onNavigate) {
+        onNavigate('course-list');
+      } else {
+        navigate('/manager/courses');
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to delete course.';
+      setToast({ type: 'error', message: msg });
+    } finally {
+      setDeletingCourse(false);
+    }
+  };
 
-  const students = [
-    { name: 'Aarav Mehta', progress: 92, exams: 7, lastActive: '2h ago' },
-    { name: 'Linh Tran', progress: 78, exams: 5, lastActive: '1d ago' },
-    { name: 'Diego Ramírez', progress: 64, exams: 3, lastActive: '3d ago' },
-    { name: 'Sofia Laurent', progress: 55, exams: 2, lastActive: '1w ago' },
-    { name: 'Kenji Watanabe', progress: 23, exams: 0, lastActive: '2w ago' },
-  ];
+  if (loading) {
+    return (
+      <div className="p-8 py-24 text-center text-[#9CA3AF]">
+        <div className="inline-block w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mb-3" />
+        <p className="text-[14px]">Loading course details…</p>
+      </div>
+    );
+  }
 
-  const modulePerformance = modules.map(m => ({
-    module: moduleLabel(m.id),
-    avg: 58 + (m.order * 7) % 40,
-    pass: 52 + (m.order * 9) % 38,
-    attempts: 40 + m.order * 26,
+  if (error || !course) {
+    return (
+      <div className="p-8 space-y-4">
+        <Breadcrumb items={[{ label: 'Courses', onClick: handleCancel }, { label: 'Course Detail' }]} />
+        <Alert type="error" title="Course Not Found" message={error || 'Unable to retrieve course details.'} />
+        <Button variant="outline" onClick={handleCancel}>Back to Courses</Button>
+      </div>
+    );
+  }
+
+  const categoryOptions = categories.map((c) => ({
+    label: c.name,
+    value: String(c.categoryId),
   }));
 
-  const examColumns = [
-    { key: 'title', label: 'Exam', render: (r: Record<string, unknown>) => <span className="text-[13.5px] font-medium text-[#374151]">{r.title as string}</span> },
-    { key: 'moduleId', label: 'Module', render: (r: Record<string, unknown>) => <span className="text-[13px] text-[#6B7280]">{moduleLabel(r.moduleId as string)}</span> },
-    { key: 'questions', label: 'Questions', render: (r: Record<string, unknown>) => <span className="text-[13px] text-[#374151]">{r.questions as number}</span> },
-    { key: 'status', label: 'Status', render: (r: Record<string, unknown>) => <Badge variant={(r.status === 'Published' ? 'success' : r.status === 'Draft' ? 'warning' : 'default') as 'success' | 'warning' | 'default'}>{r.status as string}</Badge> },
-    { key: 'updated', label: 'Updated', render: (r: Record<string, unknown>) => <span className="text-[13px] text-[#6B7280]">{r.updated as string}</span> },
-    { key: 'actions', label: '', render: () => (
-      <Dropdown trigger={<button className="p-1.5 hover:bg-[#F3F4F6] rounded-[6px]"><Icon.MoreHorizontal className="w-4 h-4 text-[#6B7280]" /></button>}
-        items={[{ label: 'Edit', icon: <Icon.Edit />, onClick: () => onNavigate?.('exam-edit') }, { label: 'Preview', icon: <Icon.Eye /> }, { divider: true } as { label: string; divider: true }, { label: 'Delete', icon: <Icon.Trash />, danger: true }]} />
-    )},
-  ];
-
   const studentColumns = [
-    { key: 'name', label: 'Student', render: (r: Record<string, unknown>) => <div className="flex items-center gap-2.5"><span className="w-7 h-7 rounded-full bg-[#EFF6FF] flex items-center justify-center text-[11px] font-bold text-[#2563EB]">{(r.name as string).split(' ').map(w => w[0]).join('')}</span><span className="text-[13.5px] font-medium text-[#374151]">{r.name as string}</span></div> },
-    { key: 'progress', label: 'Progress', render: (r: Record<string, unknown>) => <div className="flex items-center gap-2 w-40"><Progress value={Number(r.progress)} size="sm" /><span className="text-[12px] font-medium text-[#374151]">{r.progress as number}%</span></div> },
-    { key: 'exams', label: 'Exams Taken', render: (r: Record<string, unknown>) => <span className="text-[13px] text-[#374151]">{r.exams as number}</span> },
-    { key: 'lastActive', label: 'Last Active', render: (r: Record<string, unknown>) => <span className="text-[13px] text-[#6B7280]">{r.lastActive as string}</span> },
+    {
+      key: 'name',
+      label: 'Student',
+      render: (r: Record<string, unknown>) => {
+        const s = r as unknown as CourseStudentItem;
+        return (
+          <div className="flex items-center gap-2.5">
+            <Avatar name={s.fullName} size="sm" src={s.avatarUrl || undefined} />
+            <div className="min-w-0">
+              <p className="text-[13.5px] font-medium text-[#111827] truncate">{s.fullName}</p>
+              <p className="text-[11px] text-[#9CA3AF] truncate">{s.email}</p>
+            </div>
+          </div>
+        );
+      },
+    },
+    {
+      key: 'enrolledAt',
+      label: 'Enrolled At',
+      render: (r: Record<string, unknown>) => (
+        <span className="text-[13px] text-[#6B7280]">{formatTimestamp(r.enrolledAt as string)}</span>
+      ),
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      render: (r: Record<string, unknown>) => (
+        <Badge variant={r.status === 'ACTIVE' ? 'success' : 'default'}>{String(r.status)}</Badge>
+      ),
+    },
+    {
+      key: 'progress',
+      label: 'Progress',
+      render: (r: Record<string, unknown>) => (
+        <div className="flex items-center gap-2 w-36">
+          <Progress value={Number(r.progress)} size="sm" />
+          <span className="text-[12px] font-medium text-[#374151]">{Number(r.progress)}%</span>
+        </div>
+      ),
+    },
   ];
 
   return (
-    <div className="p-8 space-y-5">
-      <Breadcrumb items={[{ label: 'Courses', onClick: () => onNavigate?.('cm-courses') }, { label: courseLabel(courseId) }]} />
+    <div className="p-8 space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <Breadcrumb
+            items={[
+              { label: 'Courses', onClick: handleCancel },
+              { label: course.title },
+            ]}
+          />
+          <h2 className="text-[22px] font-bold text-[#111827] mt-1">Course Detail</h2>
+        </div>
 
-      <Tabs tabs={['Overview', 'Students', 'Analytics', 'Settings']} active={tab} onChange={setTab} />
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={handleCancel} disabled={saving}>
+            Cancel
+          </Button>
+          <Button
+            icon={<Icon.Check className="w-4 h-4" />}
+            onClick={handleSaveChanges}
+            loading={saving}
+            disabled={saving}
+          >
+            Save Changes
+          </Button>
+        </div>
+      </div>
 
-      {tab !== 'Overview' && (
-        <p className="text-[12.5px] text-[#9CA3AF]">{courseLabel(courseId)} <span className="text-[#D1D5DB]">·</span> {tab}</p>
-      )}
+      <Tabs
+        tabs={['Course Details & Modules', 'Enrolled Students']}
+        active={tab}
+        onChange={setTab}
+      />
 
-      {tab === 'Overview' && (
-        <div className="space-y-5">
-          <div>
-            <SectionHeader title="Course Information" subtitle="Course details, quick stats, and shortcuts." />
-            <div className="mt-3">
-              <CourseOverviewPanel
-                title={course.title}
-                description={course.description}
-                status="Published"
-                manager={course.manager}
-                updated={course.updated}
-                stats={[
-                  { label: 'Modules', value: modules.length, color: '#2563EB' },
-                  { label: 'Lessons', value: totalLessons, color: '#7C3AED' },
-                  { label: 'Exams', value: totalExams, color: '#059669' },
-                  { label: 'Questions', value: totalQuestions, color: '#D97706' },
-                  { label: 'Students', value: 1247, color: '#9CA3AF' },
-                ]}
-                onNavigate={onNavigate}
-              />
+      {tab === 'Course Details & Modules' && (
+        <div className="space-y-6">
+          <div className="card p-6 space-y-5">
+            <div className="flex items-center justify-between">
+              <h3 className="text-[16px] font-bold text-[#111827]">Course Details</h3>
+              <div className="flex items-center gap-2">
+                <Badge variant={isPublished ? 'success' : 'warning'}>
+                  {isPublished ? 'Published' : 'Draft'}
+                </Badge>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-red-500 hover:bg-red-50 hover:text-red-600"
+                  icon={<Icon.Trash className="w-4 h-4" />}
+                  onClick={() => setIsDeleteCourseOpen(true)}
+                  title="Delete Course"
+                >
+                  Delete
+                </Button>
+              </div>
             </div>
-          </div>
 
-          <div>
-            <SectionHeader title="Course Structure" subtitle="Expand modules to manage their lessons." />
-            <div className="mt-3">
-              <CourseExplorer
-                courseId={courseId}
-                modules={modules}
-                expanded={expanded}
-                onToggleModule={toggleModule}
-                onExpandAll={expandAll}
-                onCollapseAll={collapseAll}
-                onNavigate={onNavigate}
-                onAddLesson={addLesson}
-                onAddModule={() => setIsAddModuleOpen(true)}
-                onEditModule={setEditingModuleId}
-              />
-            </div>
-          </div>
-        </div>
-      )}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-2 space-y-4">
+                <Input
+                  label="Course Title"
+                  required
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="e.g. Machine Learning Fundamentals"
+                />
 
-      {tab === 'Exams' && (
-        <div className="card overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-[#F3F4F6]">
-            <p className="text-[13.5px] font-medium text-[#374151]">Exams for this course</p>
-            <Button icon={<Icon.Plus className="w-4 h-4" />} onClick={() => onNavigate?.('exam-create')}>New Exam</Button>
-          </div>
-          <Table columns={examColumns} data={courseExams as Record<string, unknown>[]} />
-        </div>
-      )}
-
-      {tab === 'Students' && (
-        <div className="card overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-[#F3F4F6]">
-            <p className="text-[13.5px] font-medium text-[#374151]">Enrolled students</p>
-            <Badge variant="default">1,247 students</Badge>
-          </div>
-          <Table columns={studentColumns} data={students as Record<string, unknown>[]} />
-        </div>
-      )}
-
-      {tab === 'Analytics' && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-            {[{ label: 'Average Score', value: '71%', color: '#2563EB' }, { label: 'Pass Rate', value: '68%', color: '#16A34A' }, { label: 'Attempts', value: '1,842', color: '#7C3AED' }, { label: 'Completion', value: '64%', color: '#D97706' }].map(s => (
-              <div key={s.label} className="card p-4 flex items-center gap-3">
-                <span className="w-2 h-10 rounded-full flex-shrink-0" style={{ background: s.color }} />
                 <div>
-                  <p className="text-[20px] font-bold text-[#111827]">{s.value}</p>
-                  <p className="text-[12px] text-[#9CA3AF]">{s.label}</p>
+                  <label className="text-[13px] font-medium text-[#374151] block mb-1.5">
+                    Course Description
+                  </label>
+                  <textarea
+                    className="w-full h-32 px-3.5 py-2.5 rounded-[10px] border border-[#E5E7EB] text-[14px] text-[#111827] resize-none focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB] transition-all"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Describe the course curriculum, learning outcomes, and prerequisites…"
+                  />
                 </div>
               </div>
-            ))}
-          </div>
-          <div className="card overflow-hidden">
-            <div className="px-4 py-3 border-b border-[#F3F4F6]">
-              <p className="text-[13.5px] font-medium text-[#374151]">Module performance</p>
-            </div>
-            <div className="divide-y divide-[#F9FAFB]">
-              {modulePerformance.map(pm => (
-                <div key={pm.module} className="flex items-center gap-4 px-4 py-3">
-                  <span className="w-36 xl:w-44 max-w-[30%] text-[13px] font-medium text-[#374151] truncate" title={pm.module}>{pm.module}</span>
-                  <div className="flex-1 max-w-xs"><Progress value={pm.avg} size="sm" /></div>
-                  <span className="text-[12px] font-medium text-[#2563EB]">Avg {pm.avg}%</span>
-                  <div className="flex-1 max-w-xs"><Progress value={pm.pass} size="sm" color="#16A34A" /></div>
-                  <span className="text-[12px] font-medium text-[#16A34A]">Pass {pm.pass}%</span>
-                  <span className="text-[12px] text-[#6B7280] w-20 text-right">{pm.attempts} attempts</span>
+
+              <div className="space-y-4">
+                <Select
+                  label="Publication Status"
+                  value={isPublished ? 'published' : 'draft'}
+                  onChange={(val) => setIsPublished(val === 'published')}
+                  options={[
+                    { label: 'Published', value: 'published' },
+                    { label: 'Draft', value: 'draft' },
+                  ]}
+                />
+
+                <Select
+                  label="Category"
+                  value={categoryId}
+                  onChange={setCategoryId}
+                  options={
+                    categoryOptions.length > 0
+                      ? categoryOptions
+                      : [{ label: 'Select Category', value: '' }]
+                  }
+                />
+
+                <Input
+                  label="URL Slug"
+                  value={course.slug}
+                  readOnly
+                  disabled
+                  hint="Slug is auto-generated by the server"
+                />
+
+                <div className="grid grid-cols-2 gap-3">
+                  <Input
+                    label="Price ($)"
+                    type="number"
+                    min={0}
+                    value={price}
+                    onChange={(e) => setPrice(e.target.value)}
+                    hint="0 = Free"
+                  />
+                  <div>
+                    <label className="text-[13px] font-medium text-[#374151] block mb-1.5">
+                      Manager
+                    </label>
+                    <p className="h-9 px-3 flex items-center text-[13.5px] font-medium text-[#374151] bg-[#F9FAFB] rounded-[10px] border border-[#E5E7EB] truncate">
+                      {course.managerName || `ID: ${course.managerId}`}
+                    </p>
+                  </div>
                 </div>
-              ))}
+              </div>
             </div>
+          </div>
+
+          <div className="card overflow-hidden">
+            <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-b border-[#F3F4F6]">
+              <div>
+                <h4 className="text-[15px] font-semibold text-[#111827]">Modules</h4>
+                <p className="text-[12px] text-[#9CA3AF] mt-0.5">
+                  Manage curriculum modules, their display order, and associated exams.
+                </p>
+              </div>
+
+              <Button
+                icon={<Icon.Plus className="w-4 h-4" />}
+                onClick={() => setIsAddModuleOpen(true)}
+              >
+                Add Module
+              </Button>
+            </div>
+
+            {modules.length === 0 ? (
+              <div className="p-10 text-center text-[#6B7280]">
+                <Icon.Folder className="w-9 h-9 mx-auto text-[#9CA3AF] mb-2" />
+                <p className="text-[14px] font-medium text-[#111827]">No modules added yet</p>
+                <p className="text-[12.5px] text-[#9CA3AF] mt-1 max-w-sm mx-auto">
+                  Click the "Add Module" button to create the first curriculum module for this course.
+                </p>
+              </div>
+            ) : (
+              <div className="divide-y divide-[#F3F4F6]">
+                <div className="hidden sm:grid grid-cols-12 gap-4 px-6 py-3 bg-[#F9FAFB] text-[12px] font-semibold text-[#6B7280]">
+                  <span className="col-span-1">Order</span>
+                  <span className="col-span-4">Module Name</span>
+                  <span className="col-span-4">Description</span>
+                  <span className="col-span-1 text-center">Exams</span>
+                  <span className="col-span-2 text-right">Actions</span>
+                </div>
+
+                {modules.map((mod) => (
+                  <div
+                    key={mod.moduleId}
+                    className="grid grid-cols-1 sm:grid-cols-12 gap-2 sm:gap-4 px-6 py-3.5 items-center hover:bg-[#F9FAFB] transition-colors"
+                  >
+                    <div className="col-span-1 flex items-center gap-1.5">
+                      <span className="w-6 h-6 rounded-full bg-[#EFF6FF] text-[#2563EB] text-[12px] font-bold flex items-center justify-center">
+                        {mod.orderIndex}
+                      </span>
+                    </div>
+
+                    <div className="col-span-4 min-w-0">
+                      <p className="text-[14px] font-semibold text-[#111827] truncate">{mod.title}</p>
+                      <p className="text-[11px] text-[#9CA3AF] sm:hidden">
+                        {mod.examCount} exam{mod.examCount === 1 ? '' : 's'} · {mod.questionCount} questions
+                      </p>
+                    </div>
+
+                    <div className="col-span-4 min-w-0">
+                      <p className="text-[13px] text-[#6B7280] truncate">
+                        {mod.description || <span className="italic text-[#9CA3AF]">No description</span>}
+                      </p>
+                    </div>
+
+                    <div className="col-span-1 text-center hidden sm:block">
+                      <Badge variant="default">{mod.examCount}</Badge>
+                    </div>
+
+                    <div className="col-span-2 flex items-center justify-end gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        icon={<Icon.Edit className="w-3.5 h-3.5" />}
+                        onClick={() => setEditingModule(mod)}
+                        title="Edit Module"
+                      >
+                        Edit
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-red-500 hover:bg-red-50 hover:text-red-600"
+                        icon={<Icon.Trash className="w-3.5 h-3.5" />}
+                        onClick={() => setModuleToDelete(mod)}
+                        title="Remove Module"
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
 
-      {tab === 'Settings' && (
-        <WorkspaceSettings onNavigate={onNavigate} />
+      {tab === 'Enrolled Students' && (
+        <div className="card overflow-hidden">
+          <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-b border-[#F3F4F6]">
+            <div className="flex items-center gap-3">
+              <h4 className="text-[15px] font-semibold text-[#111827]">Enrolled Students</h4>
+              <Badge variant="default">{studentTotal} students</Badge>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              icon={<Icon.Download className="w-4 h-4" />}
+              onClick={() => exportStudentsToCsv(students, course.title)}
+              disabled={students.length === 0}
+            >
+              Export CSV
+            </Button>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3 p-4 border-b border-[#F3F4F6] bg-[#F9FAFB]">
+            <SearchInput
+              className="w-full sm:w-64"
+              placeholder="Search by name or email…"
+              value={studentSearch}
+              onChange={(e) => {
+                setStudentSearch(e.target.value);
+                setStudentPage(1);
+              }}
+            />
+            <Select
+              value={studentStatus}
+              onChange={(v) => {
+                setStudentStatus(v);
+                setStudentPage(1);
+              }}
+              options={[
+                { label: 'All Status', value: 'all' },
+                { label: 'Active', value: 'ACTIVE' },
+                { label: 'Completed', value: 'COMPLETED' },
+              ]}
+              className="w-full sm:w-36"
+            />
+          </div>
+
+          {loadingStudents ? (
+            <div className="p-12 text-center text-[#9CA3AF]">
+              <div className="inline-block w-6 h-6 border-3 border-primary border-t-transparent rounded-full animate-spin mb-2" />
+              <p className="text-[13px]">Loading enrolled students…</p>
+            </div>
+          ) : students.length === 0 ? (
+            <div className="p-12 text-center text-[#6B7280]">
+              <Icon.Users className="w-9 h-9 mx-auto text-[#9CA3AF] mb-2" />
+              <p className="text-[14px] font-medium text-[#111827]">No students enrolled yet</p>
+              <p className="text-[12.5px] text-[#9CA3AF] mt-1 max-w-sm mx-auto">
+                Students will appear here once they enroll in this course.
+              </p>
+            </div>
+          ) : (
+            <>
+              <Table
+                columns={studentColumns}
+                data={students as unknown as Record<string, unknown>[]}
+              />
+              <div className="border-t border-[#F3F4F6]">
+                <Pagination
+                  page={studentPage}
+                  total={studentTotal}
+                  perPage={studentPageSize}
+                  onChange={setStudentPage}
+                  unit="students"
+                />
+              </div>
+            </>
+          )}
+        </div>
       )}
 
-      <AddModuleModal open={isAddModuleOpen} courseId={courseId} onClose={() => setIsAddModuleOpen(false)} onCreated={handleModuleCreated} />
+      <AddModuleModal
+        open={isAddModuleOpen}
+        courseId={course.courseId}
+        onClose={() => setIsAddModuleOpen(false)}
+        onCreated={handleModuleCreated}
+      />
 
       <EditModuleModal
         open={!!editingModule}
         module={editingModule}
-        onClose={() => setEditingModuleId(null)}
+        onClose={() => setEditingModule(null)}
         onSaved={handleModuleUpdated}
       />
+
+      <Modal
+        open={!!moduleToDelete}
+        onClose={() => setModuleToDelete(null)}
+        title="Remove Module"
+        footer={
+          <>
+            <Button
+              variant="outline"
+              onClick={() => setModuleToDelete(null)}
+              disabled={deletingModule}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={handleRemoveModule}
+              loading={deletingModule}
+              disabled={deletingModule}
+            >
+              {deletingModule ? 'Removing…' : 'Remove Module'}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <p className="text-[14px] text-[#374151]">
+            Are you sure you want to remove the module{' '}
+            <span className="font-semibold text-[#111827]">"{moduleToDelete?.title}"</span>?
+          </p>
+          <Alert
+            type="warning"
+            message="Questions and exams belonging to this module will not be deleted; they will become unassigned so you can reassign them later."
+          />
+        </div>
+      </Modal>
+
+      <Modal
+        open={isDeleteCourseOpen}
+        onClose={() => setIsDeleteCourseOpen(false)}
+        title="Delete Course"
+        footer={
+          <>
+            <Button
+              variant="outline"
+              onClick={() => setIsDeleteCourseOpen(false)}
+              disabled={deletingCourse}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={handleDeleteCourse}
+              loading={deletingCourse}
+              disabled={deletingCourse}
+            >
+              {deletingCourse ? 'Deleting…' : 'Delete Course'}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <p className="text-[14px] text-[#374151]">
+            Are you sure you want to permanently delete{' '}
+            <span className="font-semibold text-[#111827]">"{course.title}"</span>?
+          </p>
+          <Alert
+            type="error"
+            title="Destructive Action"
+            message="This action cannot be undone. Courses with enrolled students cannot be deleted; unpublish the course instead."
+          />
+        </div>
+      </Modal>
 
       {toast && (
         <div className="fixed top-4 right-4 z-[60]">
           <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} />
         </div>
       )}
-    </div>
-  );
-}
-
-function WorkspaceSettings({ onNavigate }: { onNavigate?: (id: string) => void }) {
-  const [saved, setSaved] = useState(false);
-  return (
-    <div className="max-w-3xl space-y-4">
-      {saved && <Alert type="success" title="Settings saved" message="The course settings have been updated." />}
-      <div className="card p-5 space-y-4">
-        <h4 className="text-[15px] font-semibold text-[#111827]">Course Settings</h4>
-        <div className="grid grid-cols-2 gap-3">
-          <Select label="Status" value="Published" options={[{ label: 'Draft', value: 'Draft' }, { label: 'Published', value: 'Published' }, { label: 'Archived', value: 'Archived' }]} />
-          <Select label="Difficulty" value="Medium" options={[{ label: 'Easy', value: 'Easy' }, { label: 'Medium', value: 'Medium' }, { label: 'Hard', value: 'Hard' }]} />
-        </div>
-        <div className="space-y-3 pt-1">
-          {[
-            { label: 'Issue certificate on completion', desc: 'Award a certificate when students pass all exams', on: true },
-            { label: 'Require completion order', desc: 'Students must finish lessons in sequence', on: false },
-            { label: 'Public visibility', desc: 'Visible to enrolled students only', on: true },
-          ].map(s => (
-            <div key={s.label} className="flex items-start justify-between gap-4 py-3 border-t border-[#F9FAFB]">
-              <div>
-                <p className="text-[14px] font-medium text-[#374151]">{s.label}</p>
-                <p className="text-[12px] text-[#9CA3AF]">{s.desc}</p>
-              </div>
-              <Switch checked={s.on} />
-            </div>
-          ))}
-        </div>
-        <div className="flex gap-2 pt-1">
-          <Button variant="outline" onClick={() => onNavigate?.('cm-courses')}>Cancel</Button>
-          <Button icon={<Icon.Check className="w-4 h-4" />} onClick={() => setSaved(true)}>Save Changes</Button>
-        </div>
-      </div>
     </div>
   );
 }

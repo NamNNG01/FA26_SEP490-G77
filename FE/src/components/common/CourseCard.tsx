@@ -3,42 +3,85 @@ import { Icon } from '@/assets/icons';
 import { Badge } from '@/components/ui/Badge';
 import { Progress } from '@/components/ui/Progress';
 
-export function CourseCard({ title, description, subject, difficulty, progress, modules, lessons, questions, examCount, status, updated, onClick }: {
-  title: string; description?: string; subject: string; difficulty: 'Easy' | 'Medium' | 'Hard';
-  progress?: number; modules?: number; lessons?: number; questions?: number; examCount?: number;
-  status?: string; updated?: string; onClick?: () => void;
+export interface CourseMetricItem {
+  label: string;
+  value?: number | string;
+  color?: string;
+}
+
+export function CourseCard({
+  title,
+  description,
+  subject,
+  difficulty,
+  progress,
+  modules,
+  lessons,
+  questions,
+  examCount,
+  customMetrics,
+  managerName,
+  status,
+  updated,
+  onClick,
+}: {
+  title: string;
+  description?: string;
+  subject: string;
+  difficulty?: 'Easy' | 'Medium' | 'Hard';
+  progress?: number;
+  modules?: number;
+  lessons?: number;
+  questions?: number;
+  examCount?: number;
+  customMetrics?: CourseMetricItem[];
+  managerName?: string;
+  status?: string;
+  updated?: string;
+  onClick?: () => void;
 }) {
   const diffColor = { Easy: 'success', Medium: 'warning', Hard: 'danger' } as const;
-  const statusVariant = status === 'Published' ? 'info' as const : status === 'Draft' ? 'warning' as const : 'default' as const;
-  const metrics = [
+  const statusVariant =
+    status === 'Published'
+      ? ('success' as const)
+      : status === 'Draft'
+        ? ('warning' as const)
+        : ('default' as const);
+
+  const displayMetrics: CourseMetricItem[] = customMetrics ?? [
     { label: 'Modules', value: modules, color: '#2563EB' },
     { label: 'Lessons', value: lessons, color: '#7C3AED' },
     { label: 'Questions', value: questions, color: '#D97706' },
     { label: 'Exams', value: examCount, color: '#059669' },
   ];
+
   return (
     <div className="card p-5 flex flex-col gap-3 cursor-pointer hover:shadow-md transition-all" onClick={onClick}>
       <div className="flex items-center justify-between gap-2">
-        <Badge variant={diffColor[difficulty]}>{difficulty}</Badge>
+        {difficulty ? (
+          <Badge variant={diffColor[difficulty]}>{difficulty}</Badge>
+        ) : (
+          <span className="text-[11.5px] font-medium text-[#6B7280]">{subject}</span>
+        )}
         {status && <Badge variant={statusVariant}>{status}</Badge>}
       </div>
       <div>
         <h3 className="text-[15px] font-semibold text-[#111827] leading-snug">{title}</h3>
-        <p className="text-[12px] text-[#9CA3AF] mt-0.5">{subject}</p>
+        {difficulty && <p className="text-[12px] text-[#9CA3AF] mt-0.5">{subject}</p>}
       </div>
       {description && <p className="text-[12.5px] text-[#6B7280] leading-relaxed line-clamp-2">{description}</p>}
-      <div className="grid grid-cols-4 gap-2">
-        {metrics.map(m => (
+      <div className={`grid gap-2 ${displayMetrics.length === 3 ? 'grid-cols-3' : 'grid-cols-4'}`}>
+        {displayMetrics.map(m => (
           <div key={m.label} className="bg-[#F9FAFB] rounded-[8px] px-2 py-2 text-center">
-            <span className="inline-block w-1.5 h-1.5 rounded-full mb-1" style={{ background: m.color }} />
-            <p className="text-[14px] font-semibold text-[#111827] leading-none">{m.value !== undefined ? m.value.toLocaleString() : '—'}</p>
+            <span className="inline-block w-1.5 h-1.5 rounded-full mb-1" style={{ background: m.color ?? '#2563EB' }} />
+            <p className="text-[14px] font-semibold text-[#111827] leading-none">{m.value !== undefined ? (typeof m.value === 'number' ? m.value.toLocaleString() : m.value) : '—'}</p>
             <p className="text-[10.5px] text-[#9CA3AF] mt-0.5">{m.label}</p>
           </div>
         ))}
       </div>
       {progress !== undefined && <Progress value={progress} label="Progress" size="sm" />}
       <div className="flex items-center justify-between text-[11.5px] text-[#9CA3AF] border-t border-[#F9FAFB] pt-2.5">
-        <span>{progress !== undefined ? `${progress}% complete` : 'Assigned course'}</span>
+        <span>{managerName ? `Manager: ${managerName}` : progress !== undefined ? `${progress}% complete` : 'Course'}</span>
         <span className="flex items-center gap-1"><Icon.Clock className="w-3 h-3" />{updated ?? '—'}</span>
       </div>
     </div>

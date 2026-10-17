@@ -34,6 +34,8 @@ export const ROUTES = {
   // Content Manager (backend role: COURSE_MANAGER)
   managerDashboard: '/manager/dashboard',
   managerCourses: '/manager/courses',
+  managerCourseCreate: '/manager/courses/new',
+  managerCourseDetail: '/manager/courses/:courseId',
   managerQuestions: '/manager/question-bank',
   managerExams: '/manager/exams',
   managerFlashcards: '/manager/flashcards',
@@ -57,6 +59,10 @@ export const ROUTES = {
 /** Concrete course detail URL — e.g. coursePath('aws-cloud-practitioner') → '/courses/aws-cloud-practitioner'. */
 export function coursePath(slug: string): string {
   return `${ROUTES.courses}/${slug}`;
+}
+
+export function managerCourseDetailPath(id: number | string): string {
+  return `${ROUTES.managerCourses}/${id}`;
 }
 
 /** Concrete practice exam detail URL — e.g. publicExamPath('EX-P-1001') → '/student/public-exam/EX-P-1001'. */
