@@ -48,9 +48,7 @@ export const ROUTES = {
   // Admin
   adminDashboard: '/admin/dashboard',
   adminUsers: '/admin/users',
-  adminFinancial: '/admin/financial',
   adminSubscriptions: '/admin/subscriptions',
-  adminAiUsage: '/admin/ai-usage',
   adminAnalytics: '/admin/analytics',
   adminAuditLogs: '/admin/audit-logs',
   adminSettings: '/admin/settings',
@@ -88,12 +86,12 @@ export function managerPublicExamPath(id: string): string {
  * student path.
  */
 export function publicExamPathFor(roleCode: string | null | undefined, id: string): string {
-  return roleCode === Role.COURSE_MANAGER || roleCode === Role.CONTENT_MANAGER ? managerPublicExamPath(id) : publicExamPath(id);
+  return roleCode === Role.COURSE_MANAGER ? managerPublicExamPath(id) : publicExamPath(id);
 }
 
 /** List URL for the signed-in role — the "back" target for the detail page. */
 export function publicExamListPathFor(roleCode: string | null | undefined): string {
-  return roleCode === Role.COURSE_MANAGER || roleCode === Role.CONTENT_MANAGER ? ROUTES.managerPracticeExams : ROUTES.studentPublicExam;
+  return roleCode === Role.COURSE_MANAGER ? ROUTES.managerPracticeExams : ROUTES.studentPublicExam;
 }
 
 export interface MenuItem {
@@ -127,20 +125,11 @@ export const menuByRole: Record<string, MenuItem[]> = {
     { id: 'manager-flashcards', title: 'Flashcards', icon: <Icon.Layers className="w-4 h-4" />, path: ROUTES.managerFlashcards },
     { id: 'manager-practice-exams', title: 'Public Exam', icon: <Icon.Zap className="w-4 h-4" />, path: ROUTES.managerPracticeExams },
   ],
-  CONTENT_MANAGER: [
-    { id: 'manager-dashboard', title: 'Dashboard', icon: <Icon.Home className="w-4 h-4" />, path: ROUTES.managerDashboard },
-    { id: 'manager-courses', title: 'Courses', icon: <Icon.Book className="w-4 h-4" />, path: ROUTES.managerCourses },
-    { id: 'manager-questions', title: 'Question Bank', icon: <Icon.Database className="w-4 h-4" />, path: ROUTES.managerQuestions },
-    { id: 'manager-exams', title: 'Exams', icon: <Icon.ClipboardList className="w-4 h-4" />, path: ROUTES.managerExams },
-    { id: 'manager-flashcards', title: 'Flashcards', icon: <Icon.Layers className="w-4 h-4" />, path: ROUTES.managerFlashcards },
-    { id: 'manager-practice-exams', title: 'Public Exam', icon: <Icon.Zap className="w-4 h-4" />, path: ROUTES.managerPracticeExams },
-  ],
   ADMIN: [
     { id: 'admin-dashboard', title: 'Dashboard', icon: <Icon.Home className="w-4 h-4" />, path: ROUTES.adminDashboard },
     { id: 'admin-users', title: 'User Management', icon: <Icon.Users className="w-4 h-4" />, path: ROUTES.adminUsers },
-    { id: 'admin-financial', title: 'Financial', icon: <Icon.TrendingUp className="w-4 h-4" />, path: ROUTES.adminFinancial },
+    { id: 'admin-courses', title: 'Courses', icon: <Icon.Book className="w-4 h-4" />, path: ROUTES.managerCourses },
     { id: 'admin-subscriptions', title: 'Subscriptions', icon: <Icon.Package className="w-4 h-4" />, path: ROUTES.adminSubscriptions },
-    { id: 'admin-ai-usage', title: 'AI Usage', icon: <Icon.Brain className="w-4 h-4" />, path: ROUTES.adminAiUsage },
     { id: 'admin-analytics', title: 'Analytics', icon: <Icon.BarChart className="w-4 h-4" />, path: ROUTES.adminAnalytics },
     { id: 'admin-audit-logs', title: 'Audit Logs', icon: <Icon.Activity className="w-4 h-4" />, path: ROUTES.adminAuditLogs },
     { id: 'admin-settings', title: 'System Settings', icon: <Icon.Settings className="w-4 h-4" />, path: ROUTES.adminSettings },

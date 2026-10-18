@@ -82,9 +82,7 @@ export function PublicExamDetailPage() {
   const toast = useToast();
 
   const roleCode = user?.role;
-  // COURSE_MANAGER is the backend role currently used by this application;
-  // CONTENT_MANAGER is accepted as the UI role name as well.
-  const canEdit = roleCode === Role.CONTENT_MANAGER || roleCode === Role.COURSE_MANAGER;
+  const canEdit = roleCode === Role.COURSE_MANAGER;
   const listPath = publicExamListPathFor(roleCode);
 
   const [tab, setTab] = useState(OVERVIEW_TAB);

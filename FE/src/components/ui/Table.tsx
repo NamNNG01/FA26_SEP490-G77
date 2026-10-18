@@ -9,6 +9,8 @@ export interface TableColumn {
   sortable?: boolean;
   width?: string;
   className?: string;
+  /** Don't clip the cell — needed when it renders a Tooltip. */
+  overflowVisible?: boolean;
   render?: (row: Record<string, unknown>) => React.ReactNode;
 }
 
@@ -26,6 +28,8 @@ export function Table({
   onPageChange,
   selectedKeys,
   onSelectionChange,
+  onRowClick,
+  isRowActive,
 }: {
   columns: TableColumn[];
   data: Record<string, unknown>[];
@@ -47,6 +51,10 @@ export function Table({
   selectedKeys?: Set<string>;
   /** Notifies the parent of selection changes, e.g. to drive bulk actions. */
   onSelectionChange?: (keys: Set<string>) => void;
+  /** Makes rows clickable (e.g. to filter another panel by the clicked row). */
+  onRowClick?: (row: Record<string, unknown>) => void;
+  /** Highlights rows for which this returns true, e.g. the current selection. */
+  isRowActive?: (row: Record<string, unknown>) => boolean;
 }) {
   const { page, total, pageItems, setPage } = usePagination(data, { perPage, resetKey, initialPage, onPageChange });
   const start = (page - 1) * perPage;
@@ -112,7 +120,12 @@ export function Table({
             {pageItems.map((row, i) => {
               const key = rowKeyOf(row, i);
               return (
-                <tr key={key} className="group border-b border-line-faint hover:bg-surface-hover transition-colors">
+                <tr
+                  key={key}
+                  onClick={onRowClick ? () => onRowClick(row) : undefined}
+                  aria-selected={isRowActive ? isRowActive(row) : undefined}
+                  className={`group border-b border-line-faint transition-colors ${isRowActive?.(row) ? 'bg-primary-light' : 'hover:bg-surface-hover'} ${onRowClick ? 'cursor-pointer' : ''}`}
+                >
                   {selectable && (
                     <td className="px-2.5 sm:px-3 lg:px-4 py-3">
                       <Checkbox checked={selected.has(key)} onChange={() => toggleRow(key)} />
@@ -120,7 +133,7 @@ export function Table({
                   )}
                   {columns.map(col => (
                     <td key={col.key} className={`px-2.5 sm:px-3 lg:px-4 py-3 text-sm text-content-secondary align-middle max-w-[280px] ${col.className ?? ''}`}>
-                      <div className="min-w-0 overflow-hidden">
+                      <div className={`min-w-0 ${col.overflowVisible ? '' : 'overflow-hidden'}`}>
                         {col.render ? col.render(row) : <span className="block truncate">{String(row[col.key] ?? '')}</span>}
                       </div>
                     </td>

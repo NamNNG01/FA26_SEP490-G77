@@ -41,7 +41,7 @@ export function RequireRole({ roles }: { roles: Role[] }) {
 
 /** Allow-lists per route group, so AppContent reads as a table of permissions. */
 export const ROLE_ADMIN: Role[] = [Role.ADMIN];
-export const ROLE_MANAGER: Role[] = [Role.COURSE_MANAGER, Role.CONTENT_MANAGER, Role.ADMIN];
+export const ROLE_MANAGER: Role[] = [Role.COURSE_MANAGER, Role.ADMIN];
 export const ROLE_STUDENT: Role[] = [Role.STUDENT];
-/** Course Manager only — ADMIN deliberately excluded. CONTENT_MANAGER is the UI alias of the same role. */
-export const ROLE_COURSE_MANAGER_ONLY: Role[] = [Role.COURSE_MANAGER, Role.CONTENT_MANAGER];
+/** Course Manager only — ADMIN deliberately excluded. */
+export const ROLE_COURSE_MANAGER_ONLY: Role[] = [Role.COURSE_MANAGER];
