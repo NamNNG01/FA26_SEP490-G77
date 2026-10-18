@@ -3,16 +3,17 @@ import { Icon } from '@/assets/icons';
 
 const FOCUSABLE_SELECTOR = 'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-export function Modal({ open, onClose, title, children, footer, size = 'md' }: {
-  open: boolean; onClose: () => void; title?: string; children: React.ReactNode;
+export function Modal({ open, isOpen, onClose, title, children, footer, size = 'md' }: {
+  open?: boolean; isOpen?: boolean; onClose: () => void; title?: string; children: React.ReactNode;
   footer?: React.ReactNode; size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl';
 }) {
+  const isVisible = Boolean(open ?? isOpen);
   const panelRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
 
   useEffect(() => {
-    if (!open) return;
+    if (!isVisible) return;
     const panel = panelRef.current;
     const previouslyFocused = document.activeElement as HTMLElement | null;
 
@@ -45,9 +46,9 @@ export function Modal({ open, onClose, title, children, footer, size = 'md' }: {
       document.removeEventListener('keydown', handleKeyDown);
       previouslyFocused?.focus?.();
     };
-  }, [open]);
+  }, [isVisible]);
 
-  if (!open) return null;
+  if (!isVisible) return null;
   const widths = { sm: 'max-w-sm', md: 'max-w-md', lg: 'max-w-2xl', xl: 'max-w-4xl', '2xl': 'max-w-6xl' };
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
