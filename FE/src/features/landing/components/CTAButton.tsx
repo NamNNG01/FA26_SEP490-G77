@@ -13,7 +13,7 @@ import { Icon } from '@/assets/icons';
  * never be clipped — even at 360px small-mobile widths.
  *
  * variant:
- *  - primary   → solid brand blue (main user journey)
+ *  - primary   → solid brand jade (main user journey)
  *  - secondary → white/outline (additional information)
  * size:
  *  - md for in-card CTAs, lg for hero / final CTA.
@@ -32,8 +32,8 @@ export interface CTAButtonProps {
 }
 
 const sizeClasses = {
-  md: 'h-10 px-5 text-[14px]',
-  lg: 'h-12 px-6 sm:px-7 text-[15px]',
+  md: 'h-10 px-5 text-base',
+  lg: 'h-12 px-6 sm:px-7 text-lg',
 };
 
 export function CTAButton({
@@ -58,12 +58,12 @@ export function CTAButton({
     <button
       type="button"
       onClick={handleActivate}
-      className={`group inline-flex items-center justify-center gap-2 font-semibold rounded-[12px] transition-all duration-200 cursor-pointer select-none
-        active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]/40 focus-visible:ring-offset-2
+      className={`group inline-flex items-center justify-center gap-2 font-semibold rounded-[10px] transition-colors duration-200 cursor-pointer select-none
+        active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-600/40 focus-visible:ring-offset-2
         ${
           isPrimary
-            ? 'bg-[#2563EB] text-white shadow-md shadow-[#2563EB]/25 hover:bg-[#1D4ED8] hover:shadow-lg hover:shadow-[#2563EB]/30 hover:-translate-y-0.5'
-            : 'bg-white text-[#374151] border border-[#E5E7EB] shadow-sm hover:bg-[#F9FAFB] hover:border-[#D1D5DB] hover:-translate-y-0.5'
+            ? 'bg-brand-600 text-white hover:bg-brand-700'
+            : 'bg-surface text-content-secondary border border-line shadow-sm hover:bg-surface-hover hover:border-line-strong'
         }
         ${sizeClasses[size]} ${className}`}
     >

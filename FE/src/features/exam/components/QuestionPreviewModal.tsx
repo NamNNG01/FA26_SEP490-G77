@@ -14,9 +14,9 @@ export function QuestionPreviewModal({ question, onClose }: { question: BankQues
               <Badge variant={difficultyVariant(question.difficulty)}>{difficultyLabel(question.difficulty)}</Badge>
               <Badge variant="default">{question.type.toUpperCase()}</Badge>
               <Badge variant="purple">{question.topic}</Badge>
-              <span className="text-[12px] text-[#9CA3AF]">{question.pts} pts</span>
+              <span className="text-xs text-content-subtle">{question.pts} pts</span>
             </div>
-            <p className="text-[14px] font-semibold text-[#111827] leading-snug">{question.text}</p>
+            <p className="text-base font-semibold text-content leading-snug">{question.text}</p>
           </div>
 
           {question.options.some(o => o.text) ? (
@@ -25,8 +25,8 @@ export function QuestionPreviewModal({ question, onClose }: { question: BankQues
                 const correct = o.label === question.correct;
                 return (
                   <div key={o.label}
-                    className={`flex items-start gap-2.5 px-3 py-2.5 rounded-[10px] border text-[13px] ${correct ? 'border-[#BBF7D0] bg-[#F0FDF4] text-[#15803D]' : 'border-[#E5E7EB] text-[#374151]'}`}>
-                    <span className={`w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center text-[11px] font-bold ${correct ? 'bg-[#16A34A] text-white' : 'bg-[#F3F4F6] text-[#6B7280]'}`}>{o.label}</span>
+                    className={`flex items-start gap-2.5 px-3 py-2.5 rounded-[10px] border text-sm ${correct ? 'border-success-line bg-success-light text-success-strong' : 'border-line text-content-secondary'}`}>
+                    <span className={`w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center text-2xs font-bold ${correct ? 'bg-success-solid text-white' : 'bg-surface-muted text-content-soft'}`}>{o.label}</span>
                     <span className="leading-snug">{o.text}</span>
                   </div>
                 );
@@ -34,9 +34,9 @@ export function QuestionPreviewModal({ question, onClose }: { question: BankQues
             </div>
           ) : (
             <div>
-              <p className="text-[13px] text-[#6B7280] mb-1">Correct answer</p>
+              <p className="text-sm text-content-soft mb-1">Correct answer</p>
               <Badge variant="success">Option {question.correct}</Badge>
-              <p className="text-[12px] text-[#9CA3AF] mt-2">Free-response question — no options to display.</p>
+              <p className="text-xs text-content-subtle mt-2">Free-response question — no options to display.</p>
             </div>
           )}
         </div>

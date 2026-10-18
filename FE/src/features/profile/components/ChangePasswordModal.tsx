@@ -110,7 +110,7 @@ export function ChangePasswordModal({ open, onClose }: { open: boolean; onClose:
     <button
       type="button"
       onClick={() => setShowPasswords((s) => !s)}
-      className="hover:text-[#374151] transition-colors"
+      className="hover:text-content-secondary transition-colors"
       aria-label={showPasswords ? 'Hide passwords' : 'Show passwords'}
     >
       {showPasswords ? <Icon.EyeOff className="w-4 h-4" /> : <Icon.Eye className="w-4 h-4" />}
@@ -121,8 +121,8 @@ export function ChangePasswordModal({ open, onClose }: { open: boolean; onClose:
     <Modal open={open} onClose={handleCancel} size="xl">
       <div className="flex items-start justify-between gap-4 pt-2">
         <div>
-          <h3 className="text-[22px] font-bold text-[#111827]">Change Password</h3>
-          <p className="text-[13px] text-[#6B7280] mt-1">
+          <h3 className="text-xl font-bold text-content">Change Password</h3>
+          <p className="text-sm text-content-soft mt-1">
             Enter your current password, then choose a new secure password. You will be signed out
             of all devices and need to sign in again with the new password.
           </p>
@@ -130,7 +130,7 @@ export function ChangePasswordModal({ open, onClose }: { open: boolean; onClose:
         <button
           type="button"
           onClick={handleCancel}
-          className="text-[#9CA3AF] hover:text-[#374151] transition-colors flex-shrink-0"
+          className="text-content-subtle hover:text-content-secondary transition-colors flex-shrink-0"
           aria-label="Close"
         >
           <Icon.X className="w-5 h-5" />
@@ -141,7 +141,7 @@ export function ChangePasswordModal({ open, onClose }: { open: boolean; onClose:
         <form
           onSubmit={handleSubmit}
           noValidate
-          className="md:col-span-3 rounded-[14px] border border-[#E5E7EB] p-5 space-y-4"
+          className="md:col-span-3 rounded-[14px] border border-line p-5 space-y-4"
         >
           <Input
             label="Current Password"
@@ -189,24 +189,24 @@ export function ChangePasswordModal({ open, onClose }: { open: boolean; onClose:
         </form>
 
         <div className="md:col-span-2 flex flex-col gap-5">
-          <section className="rounded-[14px] border border-[#E5E7EB] p-5">
-            <h4 className="text-[15px] font-semibold text-[#111827]">Password Tips</h4>
+          <section className="rounded-[14px] border border-line p-5">
+            <h4 className="text-lg font-semibold text-content">Password Tips</h4>
             <ul className="mt-4 space-y-3.5">
               {PASSWORD_TIPS.map((tip) => (
-                <li key={tip} className="flex items-start gap-2.5 text-[13px] text-[#374151]">
-                  <Icon.CheckCircle className="w-4 h-4 text-[#2563EB] flex-shrink-0 mt-0.5" />
+                <li key={tip} className="flex items-start gap-2.5 text-sm text-content-secondary">
+                  <Icon.CheckCircle className="w-4 h-4 text-brand-ink flex-shrink-0 mt-0.5" />
                   <span>{tip}</span>
                 </li>
               ))}
             </ul>
           </section>
 
-          <section className="rounded-[14px] border border-[#E5E7EB] p-5">
+          <section className="rounded-[14px] border border-line p-5">
             <div className="flex items-center gap-2.5">
-              <Icon.Shield className="w-4 h-4 text-[#D97706] flex-shrink-0" />
-              <h4 className="text-[15px] font-semibold text-[#111827]">Security Notice</h4>
+              <Icon.Shield className="w-4 h-4 text-warning flex-shrink-0" />
+              <h4 className="text-lg font-semibold text-content">Security Notice</h4>
             </div>
-            <p className="text-[13px] text-[#6B7280] mt-2 leading-relaxed">
+            <p className="text-sm text-content-soft mt-2 leading-relaxed">
               Never share your password with anyone — our staff will never ask for it. Changing
               your password signs you out of every device for your protection.
             </p>

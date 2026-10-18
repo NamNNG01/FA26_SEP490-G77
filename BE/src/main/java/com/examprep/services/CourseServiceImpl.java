@@ -48,11 +48,11 @@ public class CourseServiceImpl implements CourseService {
         Page<Course> result = courses.findManagedCourses(admin(user) ? null : user.getId(), categoryId, published,
                 searchPattern(search), paging(page, size, courseSort(sort)));
         List<Long> ids = result.getContent().stream().map(Course::getCourseId).toList();
-        if (ids.isEmpty()) return PageResponse.from(result, List.of());
+        if (ids.isEmpty()) return PageResponse.of(result, List.of());
         Map<Long, Long> moduleCounts = counts(modules.countByCourses(ids));
         Map<Long, Long> studentCounts = counts(enrollments.countByCourses(ids));
         Map<Long, Long> examCounts = counts(exams.countByCourses(ids));
-        return PageResponse.from(result, result.getContent().stream().map(c -> response(c,
+        return PageResponse.of(result, result.getContent().stream().map(c -> response(c,
                 moduleCounts.getOrDefault(c.getCourseId(), 0L), studentCounts.getOrDefault(c.getCourseId(), 0L),
                 examCounts.getOrDefault(c.getCourseId(), 0L), null)).toList());
     }
@@ -208,7 +208,7 @@ public class CourseServiceImpl implements CourseService {
             throw new BadRequestException("Status must be ACTIVE or COMPLETED.");
         Page<Enrollment> result = enrollments.findStudents(courseId, status, searchPattern(search),
                 paging(page, size, Sort.by(Sort.Direction.DESC, "enrolledAt", "enrollmentId")));
-        return PageResponse.from(result, result.getContent().stream().map(e -> new CourseStudentResponse(
+        return PageResponse.of(result, result.getContent().stream().map(e -> new CourseStudentResponse(
                 e.getUser().getUserId(), e.getUser().getFullName(), e.getUser().getEmail(), e.getUser().getAvatarUrl(),
                 e.getEnrolledAt(), e.getStatus(), e.getProgress())).toList());
     }

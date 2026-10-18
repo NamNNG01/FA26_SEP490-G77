@@ -27,10 +27,10 @@ export function StudentDashboard() {
   const { summary, recentCourses, recentAttempts } = data;
 
   const stats = [
-    { title: 'Enrolled Courses', value: String(summary.enrolledCourses), icon: <Icon.Book />, color: '#2563EB' },
-    { title: 'Active Courses', value: String(summary.activeCourses), icon: <Icon.Book className="w-5 h-5" />, color: '#7C3AED' },
-    { title: 'Completed Courses', value: String(summary.completedCourses), icon: <Icon.CheckCircle className="w-5 h-5" />, color: '#059669' },
-    { title: 'Average Score', value: `${summary.averageScore}%`, icon: <Icon.TrendingUp />, color: '#D97706' },
+    { title: 'Enrolled Courses', value: String(summary.enrolledCourses), icon: <Icon.Book /> },
+    { title: 'Active Courses', value: String(summary.activeCourses), icon: <Icon.Book className="w-5 h-5" /> },
+    { title: 'Completed Courses', value: String(summary.completedCourses), icon: <Icon.CheckCircle className="w-5 h-5" /> },
+    { title: 'Average Score', value: `${summary.averageScore}%`, icon: <Icon.TrendingUp /> },
   ];
 
   return (

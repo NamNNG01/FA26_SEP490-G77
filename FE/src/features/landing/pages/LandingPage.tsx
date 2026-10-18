@@ -1,7 +1,7 @@
 import React from 'react';
 import { PopularCoursesSection } from '@/features/catalog';
 import { HeroSection } from '../sections/HeroSection';
-import { FeaturesSection } from '../sections/FeaturesSection';
+import { HowItWorksSection } from '../sections/HowItWorksSection';
 import { FinalCtaSection } from '../sections/FinalCtaSection';
 
 /**
@@ -12,16 +12,16 @@ import { FinalCtaSection } from '../sections/FinalCtaSection';
  *
  * Content hierarchy:
  *   Header with course search
- *   → Hero (copy + Featured Course card)
+ *   → Hero (copy + answerable sample question)
  *   → Popular Courses
- *   → Platform Benefits
+ *   → How it works (three steps with product visuals)
  *   → CTA
  *   → Footer
  *
- * There is no question preview or multiple-choice sample on this page —
- * individual questions belong inside a course, not on the landing page.
+ * The hero carries ONE sample question so visitors can try the practice →
+ * explanation loop before signing up; full question sets stay inside courses.
  *
- * The hero's "Start Learning" CTA is auth-aware via useRequireAuth: guests are
+ * The hero's "Start practising free" CTA is auth-aware via useRequireAuth: guests are
  * redirected to login and continue to their dashboard afterwards.
  */
 export function LandingPage() {
@@ -29,7 +29,7 @@ export function LandingPage() {
     <>
       <HeroSection />
       <PopularCoursesSection limit={6} />
-      <FeaturesSection />
+      <HowItWorksSection />
       <FinalCtaSection />
     </>
   );

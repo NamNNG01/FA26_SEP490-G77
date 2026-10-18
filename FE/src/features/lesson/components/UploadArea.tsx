@@ -17,10 +17,10 @@ export function UploadArea({ accept, hint, onFile }: {
     <div>
       <input ref={ref} type="file" accept={accept} className="hidden" onChange={e => { handle(e.target.files); e.target.value = ''; }} />
       <button type="button" onClick={() => ref.current?.click()}
-        className="w-full border border-dashed border-[#D1D5DB] rounded-[10px] px-4 py-6 flex flex-col items-center gap-2 text-[#6B7280] hover:border-[#2563EB] hover:text-[#2563EB] hover:bg-[#EFF6FF]/40 transition-colors">
+        className="w-full border border-dashed border-line-strong rounded-[10px] px-4 py-6 flex flex-col items-center gap-2 text-content-soft hover:border-brand-600 hover:text-brand-ink hover:bg-brand-50/40 transition-colors">
         <Icon.Upload className="w-5 h-5" />
-        <span className="text-[13px] font-medium">Click to upload</span>
-        {hint && <span className="text-[11px] text-[#9CA3AF]">{hint}</span>}
+        <span className="text-sm font-medium">Click to upload</span>
+        {hint && <span className="text-2xs text-content-subtle">{hint}</span>}
       </button>
     </div>
   );

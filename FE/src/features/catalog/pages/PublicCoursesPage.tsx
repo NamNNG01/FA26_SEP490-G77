@@ -42,12 +42,12 @@ export function PublicCoursesPage() {
 
   return (
     <>
-      <div className="border-b border-[#F3F4F6] bg-[#F9FAFB] dark:border-[#1F2937] dark:bg-[#0B1220]">
+      <div className="border-b border-line-soft bg-surface-alt">
         <Container className="py-[clamp(2rem,4vw,3rem)]">
-          <h1 className="text-[clamp(1.5rem,1.1rem+1.6vw,2rem)] font-bold tracking-tight text-[#111827] dark:text-[#F9FAFB]">
+          <h1 className="text-[clamp(1.5rem,1.1rem+1.6vw,2rem)] font-bold tracking-tight text-content">
             Exam Preparation Courses
           </h1>
-          <p className="mt-1.5 text-[clamp(0.9rem,0.85rem+0.2vw,1rem)] text-[#6B7280] dark:text-[#D1D5DB]">
+          <p className="mt-1.5 text-[clamp(0.9rem,0.85rem+0.2vw,1rem)] text-content-soft">
             {PUBLIC_COURSES.length} courses across AWS, Microsoft, Google Cloud, CompTIA and Cisco. Browse freely — no
             account needed.
           </p>
@@ -60,7 +60,7 @@ export function PublicCoursesPage() {
               value={query}
               onChange={(event) => setQuery(event.target.value)}
             />
-            <span className="text-[13px] text-[#9CA3AF]">
+            <span className="text-sm text-content-subtle">
               {matches.length} {matches.length === 1 ? 'course' : 'courses'}
               {searching ? ` matching “${debouncedQuery.trim()}”` : ''}
             </span>
@@ -95,7 +95,7 @@ export function PublicCoursesPage() {
                   setQuery('');
                   setCategory('all');
                 }}
-                className="h-10 inline-flex items-center rounded-[10px] bg-[#2563EB] px-4 text-[13.5px] font-semibold text-white shadow-sm transition-colors hover:bg-[#1D4ED8] cursor-pointer"
+                className="h-10 inline-flex items-center rounded-[10px] bg-brand-600 px-4 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-700 cursor-pointer"
               >
                 Clear filters
               </button>

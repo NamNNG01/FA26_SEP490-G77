@@ -29,8 +29,8 @@ import type { PublicExam } from '../mockPublicExams';
 function SummaryRow({ label, value, accent }: { label: string; value: string; accent?: string }) {
   return (
     <div className="flex items-center justify-between gap-3 py-2">
-      <dt className="text-[13px] text-muted-foreground">{label}</dt>
-      <dd className="text-[13px] font-semibold" style={accent ? { color: accent } : undefined}>
+      <dt className="text-sm text-muted-foreground">{label}</dt>
+      <dd className="text-sm font-semibold" style={accent ? { color: accent } : undefined}>
         {value}
       </dd>
     </div>
@@ -59,7 +59,7 @@ function AttemptSummaryModal({
       title={`Attempt #${attempt.attemptNumber}`}
       footer={
         <div className="flex items-center justify-between gap-3">
-          <span className="text-[12.5px] text-muted-foreground">
+          <span className="text-xs text-muted-foreground">
             {formatAttemptDate(attempt.startedAt)}
           </span>
           <Badge variant={attemptStatusVariant(attempt.status)}>
@@ -73,17 +73,17 @@ function AttemptSummaryModal({
         <div className="rounded-[12px] border border-line bg-surface-alt p-4">
           {attempt.score !== undefined ? (
             <div className="flex items-baseline gap-2">
-              <span className="text-[28px] font-bold leading-none text-foreground">
+              <span className="text-2xl font-bold leading-none text-foreground">
                 {attempt.score}%
               </span>
-              <span className="text-[13px] text-muted-foreground">
+              <span className="text-sm text-muted-foreground">
                 {attempt.correct} of {exam.questions} correct
               </span>
             </div>
           ) : (
             <div className="flex items-baseline gap-2">
-              <span className="text-[20px] font-bold leading-none text-foreground">In progress</span>
-              <span className="text-[13px] text-muted-foreground">{progress}% answered</span>
+              <span className="text-xl font-bold leading-none text-foreground">In progress</span>
+              <span className="text-sm text-muted-foreground">{progress}% answered</span>
             </div>
           )}
 
@@ -120,10 +120,10 @@ export function AttemptHistory({ exam }: { exam: PublicExam }) {
         <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-[12px] bg-accent text-content-subtle">
           <Icon.Clock className="h-6 w-6" />
         </div>
-        <p className="mt-3 text-[15px] font-semibold text-foreground">
+        <p className="mt-3 text-lg font-semibold text-foreground">
           No attempt history available.
         </p>
-        <p className="mx-auto mt-1 max-w-xs text-[13px] text-muted-foreground">
+        <p className="mx-auto mt-1 max-w-xs text-sm text-muted-foreground">
           Start the exam to create your first attempt.
         </p>
       </section>
@@ -133,9 +133,9 @@ export function AttemptHistory({ exam }: { exam: PublicExam }) {
   return (
     <section aria-label="Attempt history" className="space-y-4">
       <div className="flex items-center gap-3">
-        <h2 className="text-[15px] font-semibold text-foreground">Attempt History</h2>
+        <h2 className="text-lg font-semibold text-foreground">Attempt History</h2>
         <span className="h-px flex-1 bg-line" />
-        <span className="text-[12.5px] text-muted-foreground">
+        <span className="text-xs text-muted-foreground">
           {attempts.length} attempt{attempts.length === 1 ? '' : 's'}
         </span>
       </div>
@@ -149,22 +149,22 @@ export function AttemptHistory({ exam }: { exam: PublicExam }) {
             className="flex w-full items-center gap-4 px-5 py-4 text-left transition-colors hover:bg-surface-alt focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/40"
           >
             <span className="min-w-0 flex-1">
-              <span className="block text-[14px] font-semibold text-foreground">
+              <span className="block text-base font-semibold text-foreground">
                 Attempt #{attempt.attemptNumber}
               </span>
-              <span className="mt-0.5 block text-[12.5px] text-muted-foreground">
+              <span className="mt-0.5 block text-xs text-muted-foreground">
                 {formatAttemptDate(attempt.startedAt)}
               </span>
             </span>
 
             <span className="flex flex-shrink-0 items-center gap-4">
-              <span className="text-[13px] font-semibold text-foreground">
+              <span className="text-sm font-semibold text-foreground">
                 {attempt.score !== undefined ? `${attempt.score}%` : '—'}
               </span>
-              <span className="text-[12.5px] text-muted-foreground">
+              <span className="text-xs text-muted-foreground">
                 {attempt.correct} / {exam.questions} Correct
               </span>
-              <span className="w-16 text-right text-[12.5px] text-muted-foreground">
+              <span className="w-16 text-right text-xs text-muted-foreground">
                 {formatDuration(attempt.timeSpentMin)}
               </span>
               <Badge variant={attemptStatusVariant(attempt.status)}>

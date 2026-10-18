@@ -13,7 +13,7 @@ export type BlockType = ContentBlock['type'];
 export const blockVariant = (b: string) => b === 'Video' ? 'info' : b === 'Quiz' ? 'purple' : b === 'PDF' ? 'warning' : b === 'Image' ? 'success' : 'default';
 
 export const blockMeta: Record<BlockType, { label: string; icon: React.ReactNode; accent: string }> = {
-  text: { label: 'Text', icon: <Icon.Type className="w-3.5 h-3.5" />, accent: '#EFF6FF' },
+  text: { label: 'Text', icon: <Icon.Type className="w-3.5 h-3.5" />, accent: '#ECF7F4' },
   video: { label: 'Video', icon: <Icon.Video className="w-3.5 h-3.5" />, accent: '#FEF2F2' },
   image: { label: 'Image', icon: <Icon.Image className="w-3.5 h-3.5" />, accent: '#F5F3FF' },
   pdf: { label: 'PDF', icon: <Icon.File className="w-3.5 h-3.5" />, accent: '#FFFBEB' },

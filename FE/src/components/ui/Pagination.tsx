@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { Icon } from '@/assets/icons';
 
-export const DEFAULT_PAGE_SIZE = 7;
+export const DEFAULT_PAGE_SIZE = 10;
 
 export interface UsePaginationOptions {
-  /** Items per page. Defaults to DEFAULT_PAGE_SIZE (7). */
+  /** Items per page. Defaults to DEFAULT_PAGE_SIZE (10). */
   perPage?: number;
   /** Change this value (e.g. joined search/filter state) to reset back to page 1. */
   resetKey?: string | number;
@@ -94,9 +94,9 @@ export interface PaginationProps {
 }
 
 const navButtonClass =
-  'flex h-9 w-9 sm:h-8 sm:w-8 flex-shrink-0 items-center justify-center rounded-[8px] border border-[#E5E7EB] bg-white text-[#374151] hover:bg-[#F3F4F6] disabled:cursor-not-allowed disabled:opacity-40 transition-colors';
+  'flex h-9 w-9 sm:h-8 sm:w-8 flex-shrink-0 items-center justify-center rounded-[8px] border border-line bg-surface text-content-secondary hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40 transition-colors';
 const pageButtonClass =
-  'flex h-9 w-9 sm:h-8 sm:w-8 flex-shrink-0 items-center justify-center rounded-[8px] text-[13px] font-medium transition-colors';
+  'flex h-9 w-9 sm:h-8 sm:w-8 flex-shrink-0 items-center justify-center rounded-[8px] text-sm font-medium transition-colors';
 
 export function Pagination({ page, total, perPage = DEFAULT_PAGE_SIZE, onChange, unit = 'items' }: PaginationProps) {
   const totalPages = Math.max(1, Math.ceil(total / perPage));
@@ -105,9 +105,9 @@ export function Pagination({ page, total, perPage = DEFAULT_PAGE_SIZE, onChange,
 
   return (
     <nav aria-label="Pagination" className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 px-3 py-3 sm:justify-between sm:px-4">
-      <p className="order-2 w-full text-center text-[12px] text-[#6B7280] sm:order-1 sm:w-auto sm:text-left sm:text-[13px]">
-        Showing <span className="font-medium text-[#374151]">{start}&ndash;{end}</span> of{' '}
-        <span className="font-medium text-[#374151]">{total.toLocaleString()}</span> {unit}
+      <p className="order-2 w-full text-center text-xs text-content-soft sm:order-1 sm:w-auto sm:text-left sm:text-sm">
+        Showing <span className="font-medium text-content-secondary">{start}&ndash;{end}</span> of{' '}
+        <span className="font-medium text-content-secondary">{total.toLocaleString()}</span> {unit}
       </p>
 
       {totalPages > 1 && (
@@ -117,7 +117,7 @@ export function Pagination({ page, total, perPage = DEFAULT_PAGE_SIZE, onChange,
           </button>
 
           {/* Mobile: page numbers collapse into a compact, always-visible indicator */}
-          <span className="px-1.5 text-[12.5px] font-medium text-[#374151] sm:hidden">
+          <span className="px-1.5 text-xs font-medium text-content-secondary sm:hidden">
             Page {page} of {totalPages}
           </span>
 
@@ -125,7 +125,7 @@ export function Pagination({ page, total, perPage = DEFAULT_PAGE_SIZE, onChange,
           <div className="hidden items-center gap-1 sm:flex">
             {buildPageList(page, totalPages).map(item =>
               item.page === null ? (
-                <span key={item.key} className="select-none px-0.5 text-[#9CA3AF]" aria-hidden="true">&hellip;</span>
+                <span key={item.key} className="select-none px-0.5 text-content-subtle" aria-hidden="true">&hellip;</span>
               ) : (
                 <button
                   key={item.key}
@@ -133,7 +133,7 @@ export function Pagination({ page, total, perPage = DEFAULT_PAGE_SIZE, onChange,
                   onClick={() => onChange(item.page as number)}
                   aria-current={item.page === page ? 'page' : undefined}
                   aria-label={`Page ${item.page}`}
-                  className={`${pageButtonClass} ${item.page === page ? 'bg-[#2563EB] text-white' : 'border border-[#E5E7EB] bg-white text-[#374151] hover:bg-[#F3F4F6]'}`}
+                  className={`${pageButtonClass} ${item.page === page ? 'bg-brand-600 text-white' : 'border border-line bg-surface text-content-secondary hover:bg-accent'}`}
                 >
                   {item.page}
                 </button>

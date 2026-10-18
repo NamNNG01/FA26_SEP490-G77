@@ -1,0 +1,240 @@
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router';
+import { Button } from '@/components/ui/Button';
+import { Badge } from '@/components/ui/Badge';
+import { Select } from '@/components/ui/Select';
+import { Table } from '@/components/ui/Table';
+import { Dropdown } from '@/components/ui/Dropdown';
+import { useToast } from '@/components/ui/ToastHost';
+import { SearchInput } from '@/components/common/SearchInput';
+import { Icon } from '@/assets/icons';
+import { useAuth } from '@/auth/authContext';
+import { flashcardDeckPath } from '@/app/routes';
+import {
+  MOCK_FLASHCARD_DECKS,
+  setFlashcardDecks,
+  commitDeck,
+  FLASHCARD_COURSES,
+  DECK_STATUSES,
+  courseTitle,
+  moduleTitle,
+  formatDeckTimestamp,
+  type DeckStatus,
+  type FlashcardDeck,
+} from '../mockFlashcardDecks';
+import { STATUS_VARIANT } from '../components/DeckEditor';
+import { CreateDeckModal } from '../components/CreateDeckModal';
+
+type SortKey = 'name' | 'cards' | 'updatedAt';
+
+/** Quotes a CSV cell when it contains a delimiter, quote or newline. */
+const csvCell = (v: string | number) => {
+  const s = String(v);
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+};
+
+function downloadCsv(decks: FlashcardDeck[]) {
+  const header = ['Deck ID', 'Deck Name', 'Course', 'Module', 'Cards', 'Creator', 'Status', 'Updated'];
+  const rows = decks.map(d => [d.id, d.name, courseTitle(d.courseId), moduleTitle(d.moduleId), d.cards, d.creator, d.status, d.updatedAt]);
+  const csv = [header, ...rows].map(r => r.map(csvCell).join(',')).join('\n');
+  // BOM so Excel opens UTF-8 names correctly.
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `flashcard-decks-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * Flashcard Management — Course Manager only (guarded in AppContent).
+ * Runs entirely on mock data until the flashcard API is available.
+ */
+export function FlashcardManagementPage() {
+  const toast = useToast();
+  const { user } = useAuth();
+  const navigate = useNavigate();
+
+  const [decks, setDecks] = useState<FlashcardDeck[]>(() => [...MOCK_FLASHCARD_DECKS]);
+  // Write list edits through to the shared store so the detail page sees them.
+  useEffect(() => { setFlashcardDecks(decks); }, [decks]);
+  const [query, setQuery] = useState('');
+  const [course, setCourse] = useState('all');
+  const [status, setStatus] = useState('all');
+  const [sortKey, setSortKey] = useState<SortKey>('updatedAt');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [createOpen, setCreateOpen] = useState(false);
+
+  const q = query.trim().toLowerCase();
+  const visible = useMemo(() => {
+    const filtered = decks.filter(d =>
+      (!q || d.name.toLowerCase().includes(q)) &&
+      (course === 'all' || d.courseId === course) &&
+      (status === 'all' || d.status === status));
+    const dir = sortDir === 'asc' ? 1 : -1;
+    return [...filtered].sort((a, b) => {
+      if (sortKey === 'cards') return dir * (a.cards - b.cards);
+      if (sortKey === 'name') return dir * a.name.localeCompare(b.name);
+      return dir * a.updatedAt.localeCompare(b.updatedAt);
+    });
+  }, [decks, q, course, status, sortKey, sortDir]);
+
+  // Bulk actions only ever touch decks the user can currently see.
+  const selectedVisible = visible.filter(d => selected.has(d.id));
+
+  const updateStatus = (ids: string[], next: DeckStatus) => {
+    const now = new Date().toISOString().slice(0, 19);
+    setDecks(prev => prev.map(d => (ids.includes(d.id) ? { ...d, status: next, updatedAt: now } : d)));
+  };
+
+  const bulkSetStatus = (next: DeckStatus) => {
+    const ids = selectedVisible.map(d => d.id);
+    updateStatus(ids, next);
+    setSelected(new Set());
+    toast.success(`${ids.length} deck${ids.length > 1 ? 's' : ''} moved to ${next}.`);
+  };
+
+  const handleExport = () => {
+    const rows = selectedVisible.length > 0 ? selectedVisible : visible;
+    if (rows.length === 0) {
+      toast.warning('There are no decks to export.');
+      return;
+    }
+    downloadCsv(rows);
+    toast.success(`Exported ${rows.length} flashcard deck${rows.length > 1 ? 's' : ''}.`);
+  };
+
+  const columns = [
+    {
+      key: 'name', label: 'Deck Name', sortable: true,
+      render: (r: Record<string, unknown>) => (
+        <div className="min-w-0">
+          <button onClick={() => navigate(flashcardDeckPath(r.id as string))} title={r.name as string}
+            className="block max-w-full font-semibold text-content text-sm truncate text-left hover:text-brand-ink hover:underline">
+            {r.name as string}
+          </button>
+          <p className="text-2xs text-content-subtle">{r.id as string}</p>
+        </div>
+      ),
+    },
+    {
+      key: 'courseId', label: 'Course / Module',
+      render: (r: Record<string, unknown>) => (
+        <div className="min-w-0">
+          <span className="block truncate text-sm text-content-secondary" title={courseTitle(r.courseId as string)}>{courseTitle(r.courseId as string)}</span>
+          <span className="block truncate text-2xs text-content-subtle" title={moduleTitle(r.moduleId as string)}>{moduleTitle(r.moduleId as string)}</span>
+        </div>
+      ),
+    },
+    { key: 'cards', label: 'Cards', sortable: true, render: (r: Record<string, unknown>) => <span className="font-semibold text-content">{r.cards as number}</span> },
+    { key: 'creator', label: 'Creator', render: (r: Record<string, unknown>) => <span className="block truncate text-sm text-content-secondary">{r.creator as string}</span> },
+    { key: 'status', label: 'Status', render: (r: Record<string, unknown>) => <Badge variant={STATUS_VARIANT[r.status as DeckStatus]}>{r.status as string}</Badge> },
+    { key: 'updatedAt', label: 'Updated', sortable: true, render: (r: Record<string, unknown>) => <span className="text-sm text-content-soft whitespace-nowrap">{formatDeckTimestamp(r.updatedAt as string)}</span> },
+    {
+      // Pinned right so the "..." menu stays reachable when the table scrolls sideways.
+      key: 'actions', label: '', width: '48px',
+      className: 'sticky right-0 z-[1] bg-surface group-hover:bg-surface-hover transition-colors',
+      render: (r: Record<string, unknown>) => {
+        const d = r as unknown as FlashcardDeck;
+        return (
+          <Dropdown
+            trigger={<button aria-label={`Actions for ${d.name}`} className="p-1.5 hover:bg-accent rounded-[6px]"><Icon.MoreHorizontal className="w-4 h-4 text-content-soft" /></button>}
+            items={[
+              { label: 'Detail', icon: <Icon.Eye />, onClick: () => navigate(flashcardDeckPath(d.id)) },
+              // Published decks can be archived; Draft and Archived decks can be published.
+              d.status === 'Published'
+                ? { label: 'Archive', icon: <Icon.Package />, danger: true, onClick: () => { updateStatus([d.id], 'Archived'); toast.success(`"${d.name}" archived.`); } }
+                : { label: 'Publish', icon: <Icon.CheckCircle />, onClick: () => {
+                    if (d.cards === 0) { toast.warning(`"${d.name}" has no cards yet — add cards before publishing.`); return; }
+                    updateStatus([d.id], 'Published');
+                    toast.success(`"${d.name}" published.`);
+                  } },
+            ]}
+          />
+        );
+      },
+    },
+  ];
+
+  return (
+    <div className="p-4 sm:p-6 lg:p-8 space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-bold text-content">Flashcard Management</h2>
+          <p className="text-sm text-content-soft mt-0.5">Manage flashcard decks across your courses.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" icon={<Icon.Download className="w-4 h-4" />} onClick={handleExport}>
+            Export{selectedVisible.length > 0 ? ` (${selectedVisible.length})` : ''}
+          </Button>
+          <Button icon={<Icon.Plus className="w-4 h-4" />} onClick={() => setCreateOpen(true)}>New deck</Button>
+        </div>
+      </div>
+
+      <div className="card overflow-hidden">
+        <div className="flex flex-wrap items-center gap-3 px-4 py-3 border-b border-line-soft">
+          <SearchInput className="w-full sm:w-64" placeholder="Search flashcard decks…" value={query} onChange={e => setQuery(e.target.value)} />
+          <Select aria-label="Filter by course" value={course} onChange={setCourse}
+            options={[{ label: 'All Courses', value: 'all' }, ...FLASHCARD_COURSES.map(c => ({ label: c.title, value: c.id }))]}
+            className="w-full sm:w-56" />
+          <Select aria-label="Filter by status" value={status} onChange={setStatus}
+            options={[{ label: 'All Status', value: 'all' }, ...DECK_STATUSES.map(s => ({ label: s, value: s }))]}
+            className="w-full sm:w-36" />
+        </div>
+
+        {selectedVisible.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 bg-primary-light border-b border-brand-line">
+            <span className="text-sm font-medium text-brand-ink-hover mr-2">{selectedVisible.length} selected</span>
+            <Button size="sm" variant="outline" icon={<Icon.CheckCircle className="w-3.5 h-3.5" />} onClick={() => bulkSetStatus('Published')}>Publish</Button>
+            <Button size="sm" variant="outline" icon={<Icon.EyeOff className="w-3.5 h-3.5" />} onClick={() => bulkSetStatus('Draft')}>Move to Draft</Button>
+            <Button size="sm" variant="outline" icon={<Icon.X className="w-3.5 h-3.5" />} onClick={() => bulkSetStatus('Archived')}>Deactivate</Button>
+            <div className="flex-1" />
+            <button onClick={() => setSelected(new Set())} className="text-sm text-brand-ink hover:underline">Clear selection</button>
+          </div>
+        )}
+
+        {visible.length === 0 ? (
+          <div className="px-4 py-16 text-center">
+            <Icon.Layers className="w-10 h-10 mx-auto text-content-faint" />
+            <p className="mt-3 text-base font-medium text-content-secondary">No flashcard decks found</p>
+            <p className="text-sm text-content-subtle">Try a different keyword or clear the filters.</p>
+          </div>
+        ) : (
+          <Table
+            columns={columns}
+            data={visible as unknown as Record<string, unknown>[]}
+            selectable
+            selectedKeys={selected}
+            onSelectionChange={setSelected}
+            unit="flashcard decks"
+            resetKey={[q, course, status].join('|')}
+            sortKey={sortKey}
+            sortDir={sortDir}
+            onSort={k => {
+              if (sortKey === k) setSortDir(d => (d === 'asc' ? 'desc' : 'asc'));
+              else { setSortKey(k as SortKey); setSortDir(k === 'name' ? 'asc' : 'desc'); }
+            }}
+          />
+        )}
+      </div>
+
+      {createOpen && (
+        <CreateDeckModal
+          onClose={() => setCreateOpen(false)}
+          onCreate={(info, draftCards) => {
+            const id = `FD-${Date.now().toString().slice(-6)}`;
+            const created = commitDeck(
+              { ...info, id, cards: 0, creator: user?.fullName ?? 'You', updatedAt: '' },
+              draftCards.map((c, i) => ({ ...c, id: `${id}-C${i + 1}` })),
+            );
+            setDecks(prev => [created, ...prev]);
+            setCreateOpen(false);
+            toast.success(`Deck "${created.name}" created with ${created.cards} card${created.cards === 1 ? '' : 's'}.`);
+          }}
+        />
+      )}
+    </div>
+  );
+}

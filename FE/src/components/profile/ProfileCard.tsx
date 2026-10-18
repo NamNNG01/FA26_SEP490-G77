@@ -44,19 +44,19 @@ export function ProfileCard() {
           name={user.fullName}
           src={user.avatarUrl ?? undefined}
           size="xl"
-          color="#2563EB"
+          color="#0D7C6C"
         />
         <div className="min-w-0">
           <div className="flex items-center gap-2.5 flex-wrap">
-            <h3 className="text-[20px] font-bold text-foreground truncate">
+            <h3 className="text-xl font-bold text-foreground truncate">
               {user.fullName}
             </h3>
             <Badge variant="info">{roleCode}</Badge>
           </div>
-          <p className="text-[14px] text-muted-foreground truncate mt-0.5">
+          <p className="text-base text-muted-foreground truncate mt-0.5">
             {user.email}
           </p>
-          <p className="text-[12px] font-medium uppercase tracking-wide text-content-subtle mt-1">
+          <p className="text-xs font-medium uppercase tracking-wide text-content-subtle mt-1">
             {user.status}
           </p>
         </div>

@@ -9,6 +9,8 @@ export interface TableColumn {
   sortable?: boolean;
   width?: string;
   className?: string;
+  /** Don't clip the cell — needed when it renders a Tooltip. */
+  overflowVisible?: boolean;
   render?: (row: Record<string, unknown>) => React.ReactNode;
 }
 
@@ -24,6 +26,10 @@ export function Table({
   unit,
   initialPage,
   onPageChange,
+  selectedKeys,
+  onSelectionChange,
+  onRowClick,
+  isRowActive,
 }: {
   columns: TableColumn[];
   data: Record<string, unknown>[];
@@ -31,7 +37,7 @@ export function Table({
   onSort?: (key: string) => void;
   sortKey?: string;
   sortDir?: 'asc' | 'desc';
-  /** Page size. Defaults to DEFAULT_PAGE_SIZE (7). */
+  /** Page size. Defaults to DEFAULT_PAGE_SIZE (10). */
   perPage?: number;
   /** Changing this value (joined search/filter state) resets pagination to page 1. */
   resetKey?: string | number;
@@ -41,10 +47,24 @@ export function Table({
   initialPage?: number;
   /** Notifies the parent of page changes so state can be preserved/restored. */
   onPageChange?: (page: number) => void;
+  /** Controlled selection (row ids). Omit to let the table track selection itself. */
+  selectedKeys?: Set<string>;
+  /** Notifies the parent of selection changes, e.g. to drive bulk actions. */
+  onSelectionChange?: (keys: Set<string>) => void;
+  /** Makes rows clickable (e.g. to filter another panel by the clicked row). */
+  onRowClick?: (row: Record<string, unknown>) => void;
+  /** Highlights rows for which this returns true, e.g. the current selection. */
+  isRowActive?: (row: Record<string, unknown>) => boolean;
 }) {
   const { page, total, pageItems, setPage } = usePagination(data, { perPage, resetKey, initialPage, onPageChange });
   const start = (page - 1) * perPage;
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [internalSelected, setInternalSelected] = useState<Set<string>>(new Set());
+  const selected = selectedKeys ?? internalSelected;
+  const setSelected = (update: (prev: Set<string>) => Set<string>) => {
+    const next = update(selected);
+    if (!selectedKeys) setInternalSelected(next);
+    onSelectionChange?.(next);
+  };
 
   // Stable row identity across pages: prefer row.id, fall back to the global index.
   const rowKeyOf = (row: Record<string, unknown>, i: number) => (row.id != null ? String(row.id) : `#${start + i}`);
@@ -79,14 +99,15 @@ export function Table({
       <div className="w-full overflow-x-auto">
         <table className="w-full border-collapse">
           <thead>
-            <tr className="border-b border-[#F3F4F6]">
+            <tr className="border-b border-line-soft">
               {selectable && (
                 <th className="w-10 px-2.5 sm:px-3 lg:px-4 py-3">
                   <Checkbox checked={allChecked} indeterminate={someChecked && !allChecked} onChange={toggleAll} />
                 </th>
-              )}                  {columns.map(col => (
+              )}
+              {columns.map(col => (
                     <th key={col.key} style={{ width: col.width }} onClick={() => col.sortable && onSort?.(col.key)}
-                      className={`px-2.5 sm:px-3 lg:px-4 py-3 text-left text-[12px] font-semibold text-[#6B7280] uppercase tracking-wide whitespace-nowrap ${col.className ?? ''} ${col.sortable ? 'cursor-pointer hover:text-[#374151] select-none' : ''}`}>
+                      className={`px-2.5 sm:px-3 lg:px-4 py-3 text-left text-xs font-semibold text-content-soft uppercase tracking-wide whitespace-nowrap ${col.className ?? ''} ${col.sortable ? 'cursor-pointer hover:text-content-secondary select-none' : ''}`}>
                     <div className="flex items-center gap-1">
                       <span className="max-w-[220px] truncate" title={col.label}>{col.label}</span>
                       {col.sortable && sortKey === col.key && (sortDir === 'asc' ? <Icon.ArrowUp className="w-3 h-3 flex-shrink-0" /> : <Icon.ArrowDown className="w-3 h-3 flex-shrink-0" />)}
@@ -99,15 +120,20 @@ export function Table({
             {pageItems.map((row, i) => {
               const key = rowKeyOf(row, i);
               return (
-                <tr key={key} className="border-b border-[#F9FAFB] hover:bg-[#F9FAFB] transition-colors">
+                <tr
+                  key={key}
+                  onClick={onRowClick ? () => onRowClick(row) : undefined}
+                  aria-selected={isRowActive ? isRowActive(row) : undefined}
+                  className={`group border-b border-line-faint transition-colors ${isRowActive?.(row) ? 'bg-primary-light' : 'hover:bg-surface-hover'} ${onRowClick ? 'cursor-pointer' : ''}`}
+                >
                   {selectable && (
                     <td className="px-2.5 sm:px-3 lg:px-4 py-3">
                       <Checkbox checked={selected.has(key)} onChange={() => toggleRow(key)} />
                     </td>
                   )}
                   {columns.map(col => (
-                    <td key={col.key} className={`px-2.5 sm:px-3 lg:px-4 py-3 text-[13.5px] text-[#374151] align-middle max-w-[280px] ${col.className ?? ''}`}>
-                      <div className="min-w-0 overflow-hidden">
+                    <td key={col.key} className={`px-2.5 sm:px-3 lg:px-4 py-3 text-sm text-content-secondary align-middle max-w-[280px] ${col.className ?? ''}`}>
+                      <div className={`min-w-0 ${col.overflowVisible ? '' : 'overflow-hidden'}`}>
                         {col.render ? col.render(row) : <span className="block truncate">{String(row[col.key] ?? '')}</span>}
                       </div>
                     </td>
@@ -120,7 +146,7 @@ export function Table({
       </div>
 
       {/* Footer on every table: total count always visible; controls hide for a single page. */}
-      <div className="border-t border-[#F3F4F6]">
+      <div className="border-t border-line-soft">
         <Pagination page={page} total={total} perPage={perPage} onChange={setPage} unit={unit} />
       </div>
     </div>

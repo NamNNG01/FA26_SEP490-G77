@@ -7,7 +7,7 @@ import {
   useSearchParams,
 } from 'react-router';
 import { useAuth, landingPathForRole } from '@/auth/authContext';
-import { RequireRole, ROLE_ADMIN, ROLE_MANAGER, ROLE_STUDENT } from '@/auth/RequireRole';
+import { RequireRole, ROLE_ADMIN, ROLE_MANAGER, ROLE_STUDENT, ROLE_COURSE_MANAGER_ONLY } from '@/auth/RequireRole';
 import { ROUTES } from '@/app/routes';
 import { safeRedirect } from '@/hooks/useRequireAuth';
 import { AuthLayout } from '@/layouts/AuthLayout';
@@ -26,18 +26,18 @@ import { TakeExamPage, ExamResultPage, ExamListPage } from '@/features/exam';
 import { PublicExamsPage, PublicExamDetailPage } from '@/features/public-exam';
 import { CMDashboard } from '@/features/content-manager';
 import { QuestionBankPage } from '@/features/question';
-import { CourseListPage } from '@/features/course';
+import { CourseListPage, CourseDetailPage, CourseFormPage } from '@/features/course';
+import { FlashcardManagementPage, FlashcardDeckDetailPage } from '@/features/flashcard';
 import { PublicCoursesPage, PublicCourseDetailPage } from '@/features/catalog';
 import {
   AdminDashboard,
   UsersPage,
   UserDetailPage,
-  FinancialDashboardPage,
   SubscriptionPackagesPage,
-  AIUsagePage,
   AnalyticsPage,
   AuditLogsPage,
   SystemSettingsPage,
+  CategoriesPage,
 } from '@/features/admin';
 
 /**
@@ -203,6 +203,7 @@ function AppRoutes() {
         <Route element={<RequireRole roles={ROLE_MANAGER} />}>
           <Route path={ROUTES.managerDashboard} element={<CMDashboard />} />
           <Route path={ROUTES.managerCourses} element={<CourseListPage />} />
+          <Route path={ROUTES.managerCourseDetail} element={<CourseDetailPage />} />
           <Route path={ROUTES.managerQuestions} element={<QuestionBankPage />} />
           <Route path={ROUTES.managerExams} element={<ExamListPage />} />
           {/* Same shared components as the student practice-exam area. */}
@@ -210,14 +211,21 @@ function AppRoutes() {
           <Route path={ROUTES.managerPracticeExamDetail} element={<PublicExamDetailPage />} />
         </Route>
 
+        {/* COURSE_MANAGER only — ADMIN is NOT allowed here. */}
+        <Route element={<RequireRole roles={ROLE_COURSE_MANAGER_ONLY} />}>
+          <Route path={ROUTES.managerFlashcards} element={<FlashcardManagementPage />} />
+          <Route path={ROUTES.managerFlashcardDetail} element={<FlashcardDeckDetailPage />} />
+        </Route>
+
         {/* ADMIN — system administration only. */}
         <Route element={<RequireRole roles={ROLE_ADMIN} />}>
           <Route path={ROUTES.adminDashboard} element={<AdminDashboard />} />
+          {/* Only administrators create courses; Course Managers edit their content. */}
+          <Route path={ROUTES.managerCourseCreate} element={<CourseFormPage mode="create" />} />
           <Route path={ROUTES.adminUsers} element={<UsersPage />} />
           <Route path={`${ROUTES.adminUsers}/:userId`} element={<UserDetailPage />} />
-          <Route path={ROUTES.adminFinancial} element={<FinancialDashboardPage />} />
+          <Route path={ROUTES.adminCategories} element={<CategoriesPage />} />
           <Route path={ROUTES.adminSubscriptions} element={<SubscriptionPackagesPage />} />
-          <Route path={ROUTES.adminAiUsage} element={<AIUsagePage />} />
           <Route path={ROUTES.adminAnalytics} element={<AnalyticsPage />} />
           <Route path={ROUTES.adminAuditLogs} element={<AuditLogsPage />} />
           <Route path={ROUTES.adminSettings} element={<SystemSettingsPage />} />

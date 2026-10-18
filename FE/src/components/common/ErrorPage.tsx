@@ -10,11 +10,11 @@ export function ErrorPage({ code = 404 }: { code?: number }) {
   };
   const m = messages[code] || messages[404];
   return (
-    <div className="min-h-[100dvh] bg-[#F9FAFB] flex items-center justify-center">
+    <div className="min-h-[100dvh] bg-surface-alt flex items-center justify-center">
       <div className="text-center">
-        <p className="text-[100px] font-black text-[#F3F4F6] leading-none">{code}</p>
-        <h2 className="text-[26px] font-bold text-[#111827] -mt-4">{m.title}</h2>
-        <p className="text-[15px] text-[#6B7280] mt-2 mb-8 max-w-sm">{m.desc}</p>
+        <p className="text-[100px] font-black text-content-ghost leading-none">{code}</p>
+        <h2 className="text-2xl font-bold text-content -mt-4">{m.title}</h2>
+        <p className="text-lg text-content-soft mt-2 mb-8 max-w-sm">{m.desc}</p>
         <div className="flex items-center justify-center gap-3">
           <Button variant="outline" icon={<Icon.ChevronLeft className="w-4 h-4" />}>Go Back</Button>
           <Button icon={<Icon.Home className="w-4 h-4" />}>Go Home</Button>
