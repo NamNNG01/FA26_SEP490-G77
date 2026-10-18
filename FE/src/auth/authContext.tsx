@@ -85,7 +85,6 @@ export function landingPathForRole(roleCode: string | undefined | null): string 
     case 'ADMIN':
       return '/admin/dashboard';
     case 'COURSE_MANAGER':
-    case 'CONTENT_MANAGER':
       return '/manager/dashboard';
     case 'STUDENT':
     default:

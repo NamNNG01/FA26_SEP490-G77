@@ -33,9 +33,7 @@ import {
   AdminDashboard,
   UsersPage,
   UserDetailPage,
-  FinancialDashboardPage,
   SubscriptionPackagesPage,
-  AIUsagePage,
   AnalyticsPage,
   AuditLogsPage,
   SystemSettingsPage,
@@ -204,7 +202,6 @@ function AppRoutes() {
         <Route element={<RequireRole roles={ROLE_MANAGER} />}>
           <Route path={ROUTES.managerDashboard} element={<CMDashboard />} />
           <Route path={ROUTES.managerCourses} element={<CourseListPage />} />
-          <Route path={ROUTES.managerCourseCreate} element={<CourseFormPage mode="create" />} />
           <Route path={ROUTES.managerCourseDetail} element={<CourseDetailPage />} />
           <Route path={ROUTES.managerQuestions} element={<QuestionBankPage />} />
           <Route path={ROUTES.managerExams} element={<ExamListPage />} />
@@ -222,11 +219,11 @@ function AppRoutes() {
         {/* ADMIN — system administration only. */}
         <Route element={<RequireRole roles={ROLE_ADMIN} />}>
           <Route path={ROUTES.adminDashboard} element={<AdminDashboard />} />
+          {/* Only administrators create courses; Course Managers edit their content. */}
+          <Route path={ROUTES.managerCourseCreate} element={<CourseFormPage mode="create" />} />
           <Route path={ROUTES.adminUsers} element={<UsersPage />} />
           <Route path={`${ROUTES.adminUsers}/:userId`} element={<UserDetailPage />} />
-          <Route path={ROUTES.adminFinancial} element={<FinancialDashboardPage />} />
           <Route path={ROUTES.adminSubscriptions} element={<SubscriptionPackagesPage />} />
-          <Route path={ROUTES.adminAiUsage} element={<AIUsagePage />} />
           <Route path={ROUTES.adminAnalytics} element={<AnalyticsPage />} />
           <Route path={ROUTES.adminAuditLogs} element={<AuditLogsPage />} />
           <Route path={ROUTES.adminSettings} element={<SystemSettingsPage />} />

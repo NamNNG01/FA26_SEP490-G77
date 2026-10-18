@@ -170,6 +170,9 @@
   --warning-line: #FDE68A;
   --danger-strong: #B91C1C;
   --danger-line: #FECACA;
+  /* Two-series chart palette (course sales / AI subscription), CVD-checked. */
+  --chart-1: #0A8F7A;
+  --chart-2: #D97706;
 }
 
 /* Dark theme — same design tokens, dark values. */
@@ -194,6 +197,8 @@
   --info-light: #083344;
   --purple: #C4B5FD;
   --purple-light: #2E1065;
+  --chart-1: #14A38B;
+  --chart-2: #D97706;
   --surface-muted: #1F2937;
   --surface-hover: #26324A;
   --surface-pressed: #26324A;

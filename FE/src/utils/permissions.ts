@@ -7,8 +7,6 @@
  */
 export enum Role {
   STUDENT = 'STUDENT',
-  /** UI alias used by content-manager clients. */
-  CONTENT_MANAGER = 'CONTENT_MANAGER',
   COURSE_MANAGER = 'COURSE_MANAGER',
   ADMIN = 'ADMIN',
 }
@@ -19,7 +17,6 @@ export type AllowedRoles = Role[] | Role[][];
 export const ROLE_LABELS: Record<string, string> = {
   [Role.STUDENT]: 'Student',
   [Role.COURSE_MANAGER]: 'Course Manager',
-  [Role.CONTENT_MANAGER]: 'Course Manager',
   [Role.ADMIN]: 'Admin',
 };
 

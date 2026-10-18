@@ -15,6 +15,8 @@ import {
 } from "@/services/course.service";
 import { dashboardService } from "@/services/dashboard.service";
 import { CreateCourseModal } from "@/components/courses/CreateCourseModal";
+import { useAuth } from "@/auth/authContext";
+import { Role } from "@/utils/permissions";
 
 function formatTimestamp(isoString: string): string {
   if (!isoString) return "—";
@@ -81,6 +83,9 @@ export function CourseListPage({
   readonly?: boolean;
 }) {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  // Only administrators create courses; Course Managers manage their content.
+  const canCreate = user?.role === Role.ADMIN;
 
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
@@ -242,18 +247,20 @@ export function CourseListPage({
             >
               Export
             </Button>
-            <Button
-              icon={<Icon.Plus className="w-4 h-4" />}
-              onClick={() => {
-                if (onNavigate) {
-                  onNavigate("course-create");
-                } else {
-                  setIsCreateOpen(true);
-                }
-              }}
-            >
-              New Course
-            </Button>
+            {canCreate && (
+              <Button
+                icon={<Icon.Plus className="w-4 h-4" />}
+                onClick={() => {
+                  if (onNavigate) {
+                    onNavigate("course-create");
+                  } else {
+                    setIsCreateOpen(true);
+                  }
+                }}
+              >
+                New Course
+              </Button>
+            )}
           </div>
         )}
       </div>

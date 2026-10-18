@@ -13,9 +13,11 @@ import { Icon } from '@/assets/icons';
  * rate, refunds, cost: a drop is green) or neutral (e.g. completion time,
  * where a change is neither good nor bad on its own — shown grey).
  */
-export function StatCard({ title, value, change, changeLabel, icon, direction = 'up' }: {
+export function StatCard({ title, value, change, changeLabel, icon, direction = 'up', footer }: {
   title: string; value: string; change?: number; changeLabel?: string; icon: React.ReactNode;
   direction?: 'up' | 'down' | 'neutral';
+  /** Extra line under the value, e.g. a quota bar or a short note. */
+  footer?: React.ReactNode;
 }) {
   const deltaTone =
     change === undefined || direction === 'neutral'
@@ -24,13 +26,16 @@ export function StatCard({ title, value, change, changeLabel, icon, direction = 
         ? 'text-success'
         : 'text-danger';
 
+  // Long values (e.g. VND totals) step down a size so they stay inside the card.
+  const valueSize = value.length > 16 ? 'text-lg' : value.length > 12 ? 'text-xl' : 'text-2xl';
+
   return (
-    <div className="card p-5 flex flex-col gap-3">
+    <div className="card p-5 flex flex-col gap-3 h-full min-w-0">
       <div className="flex items-center gap-2 text-content-soft">
         <span className="w-4 h-4 flex-shrink-0 [&>svg]:w-4 [&>svg]:h-4" aria-hidden>{icon}</span>
         <p className="text-sm font-medium">{title}</p>
       </div>
-      <p className="font-[family-name:var(--font-display)] text-2xl font-bold text-content leading-none tracking-tight">{value}</p>
+      <p className={`font-[family-name:var(--font-display)] ${valueSize} font-bold text-content leading-tight tracking-tight [overflow-wrap:anywhere]`}>{value}</p>
       {change !== undefined && (
         <div className="flex items-center gap-1.5">
           <div className={`flex items-center gap-0.5 text-sm font-medium ${deltaTone}`}>
@@ -40,6 +45,7 @@ export function StatCard({ title, value, change, changeLabel, icon, direction = 
           {changeLabel && <span className="text-sm text-content-subtle">{changeLabel}</span>}
         </div>
       )}
+      {footer && <div className="mt-auto">{footer}</div>}
     </div>
   );
 }
