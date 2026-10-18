@@ -27,3 +27,6 @@ logs/
 
 # Maven wrapper jar if generated
 .mvn/timing.properties
+
+# Local documentation (wireframes, specs)
+/docs/
