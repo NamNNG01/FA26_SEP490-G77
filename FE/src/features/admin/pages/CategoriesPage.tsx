@@ -1,49 +1,44 @@
-import React, { useEffect, useState, useMemo } from "react";
-import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
-import { Badge } from "@/components/ui/Badge";
-import { Modal } from "@/components/ui/Modal";
-import { Switch } from "@/components/ui/Switch";
-import { Select } from "@/components/ui/Select";
-import { Alert } from "@/components/ui/Alert";
-import { Icon } from "@/assets/icons";
+import React, { useEffect, useState, useMemo } from 'react';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { Badge } from '@/components/ui/Badge';
+import { Modal } from '@/components/ui/Modal';
+import { Switch } from '@/components/ui/Switch';
+import { Select } from '@/components/ui/Select';
+import { Alert } from '@/components/ui/Alert';
+import { Icon } from '@/assets/icons';
 import {
   categoryService,
   type AdminCategoryNode,
   type CreateCategoryRequest,
   type UpdateCategoryRequest,
-} from "@/services/category.service";
+} from '@/services/category.service';
 
 export function CategoriesPage() {
   const [categories, setCategories] = useState<AdminCategoryNode[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState<Record<number, boolean>>({});
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [addParentId, setAddParentId] = useState<number | null>(null);
-  const [addCode, setAddCode] = useState("");
-  const [addName, setAddName] = useState("");
-  const [addSortOrder, setAddSortOrder] = useState("0");
+  const [addCode, setAddCode] = useState('');
+  const [addName, setAddName] = useState('');
+  const [addSortOrder, setAddSortOrder] = useState('0');
   const [addIsActive, setAddIsActive] = useState(true);
   const [submittingAdd, setSubmittingAdd] = useState(false);
 
-  const [editingCategory, setEditingCategory] =
-    useState<AdminCategoryNode | null>(null);
-  const [editName, setEditName] = useState("");
-  const [editSortOrder, setEditSortOrder] = useState("0");
+  const [editingCategory, setEditingCategory] = useState<AdminCategoryNode | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editSortOrder, setEditSortOrder] = useState('0');
   const [editIsActive, setEditIsActive] = useState(true);
-  const [editParentId, setEditParentId] = useState<string>("root");
+  const [editParentId, setEditParentId] = useState<string>('root');
   const [submittingEdit, setSubmittingEdit] = useState(false);
 
-  const [deletingCategory, setDeletingCategory] =
-    useState<AdminCategoryNode | null>(null);
+  const [deletingCategory, setDeletingCategory] = useState<AdminCategoryNode | null>(null);
   const [submittingDelete, setSubmittingDelete] = useState(false);
 
-  const [toast, setToast] = useState<{
-    type: "success" | "error";
-    message: string;
-  } | null>(null);
+  const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   useEffect(() => {
     if (!toast) return;
@@ -62,7 +57,7 @@ export function CategoriesPage() {
       });
       setExpanded(initialExp);
     } catch {
-      setToast({ type: "error", message: "Failed to load categories." });
+      setToast({ type: 'error', message: 'Failed to load categories.' });
     } finally {
       setLoading(false);
     }
@@ -77,21 +72,16 @@ export function CategoriesPage() {
   };
 
   const parentOptions = useMemo(() => {
-    const list: { label: string; value: string }[] = [
-      { label: "Top Level (Root)", value: "root" },
-    ];
-    function traverse(nodes: AdminCategoryNode[], prefix = "") {
+    const list: { label: string; value: string }[] = [{ label: 'Top Level (Root)', value: 'root' }];
+    function traverse(nodes: AdminCategoryNode[], prefix = '') {
       for (const node of nodes) {
-        if (
-          !editingCategory ||
-          node.categoryId !== editingCategory.categoryId
-        ) {
+        if (!editingCategory || node.categoryId !== editingCategory.categoryId) {
           list.push({
             label: `${prefix}${node.name} (${node.code})`,
             value: String(node.categoryId),
           });
           if (node.children?.length) {
-            traverse(node.children, prefix + "— ");
+            traverse(node.children, prefix + '— ');
           }
         }
       }
@@ -102,9 +92,9 @@ export function CategoriesPage() {
 
   const handleOpenAdd = (parentId: number | null = null) => {
     setAddParentId(parentId);
-    setAddCode("");
-    setAddName("");
-    setAddSortOrder("0");
+    setAddCode('');
+    setAddName('');
+    setAddSortOrder('0');
     setAddIsActive(true);
     setIsAddModalOpen(true);
   };
@@ -112,7 +102,7 @@ export function CategoriesPage() {
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!addCode.trim() || !addName.trim()) {
-      setToast({ type: "error", message: "Code and Name are required." });
+      setToast({ type: 'error', message: 'Code and Name are required.' });
       return;
     }
     setSubmittingAdd(true);
@@ -125,11 +115,11 @@ export function CategoriesPage() {
         isActive: addIsActive,
       };
       await categoryService.createCategory(payload);
-      setToast({ type: "success", message: "Category created successfully." });
+      setToast({ type: 'success', message: 'Category created successfully.' });
       setIsAddModalOpen(false);
       await loadCategories();
     } catch {
-      setToast({ type: "error", message: "Failed to create category." });
+      setToast({ type: 'error', message: 'Failed to create category.' });
     } finally {
       setSubmittingAdd(false);
     }
@@ -140,13 +130,13 @@ export function CategoriesPage() {
     setEditName(category.name);
     setEditSortOrder(String(category.sortOrder || 0));
     setEditIsActive(category.isActive);
-    setEditParentId(category.parentId ? String(category.parentId) : "root");
+    setEditParentId(category.parentId ? String(category.parentId) : 'root');
   };
 
   const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingCategory || !editName.trim()) {
-      setToast({ type: "error", message: "Category name is required." });
+      setToast({ type: 'error', message: 'Category name is required.' });
       return;
     }
     setSubmittingEdit(true);
@@ -155,14 +145,14 @@ export function CategoriesPage() {
         name: editName.trim(),
         sortOrder: Number(editSortOrder) || 0,
         isActive: editIsActive,
-        parentId: editParentId === "root" ? null : Number(editParentId),
+        parentId: editParentId === 'root' ? null : Number(editParentId),
       };
       await categoryService.updateCategory(editingCategory.categoryId, payload);
-      setToast({ type: "success", message: "Category updated successfully." });
+      setToast({ type: 'success', message: 'Category updated successfully.' });
       setEditingCategory(null);
       await loadCategories();
     } catch {
-      setToast({ type: "error", message: "Failed to update category." });
+      setToast({ type: 'error', message: 'Failed to update category.' });
     } finally {
       setSubmittingEdit(false);
     }
@@ -173,27 +163,22 @@ export function CategoriesPage() {
     setSubmittingDelete(true);
     try {
       await categoryService.deleteCategory(deletingCategory.categoryId);
-      setToast({ type: "success", message: "Category deleted successfully." });
+      setToast({ type: 'success', message: 'Category deleted successfully.' });
       setDeletingCategory(null);
       await loadCategories();
     } catch {
-      setToast({ type: "error", message: "Failed to delete category." });
+      setToast({ type: 'error', message: 'Failed to delete category.' });
     } finally {
       setSubmittingDelete(false);
     }
   };
 
-  const filterTree = (
-    nodes: AdminCategoryNode[],
-    term: string,
-  ): AdminCategoryNode[] => {
+  const filterTree = (nodes: AdminCategoryNode[], term: string): AdminCategoryNode[] => {
     if (!term.trim()) return nodes;
     const lower = term.toLowerCase();
     const result: AdminCategoryNode[] = [];
     for (const node of nodes) {
-      const matchSelf =
-        node.name.toLowerCase().includes(lower) ||
-        node.code.toLowerCase().includes(lower);
+      const matchSelf = node.name.toLowerCase().includes(lower) || node.code.toLowerCase().includes(lower);
       const filteredChildren = filterTree(node.children || [], term);
       if (matchSelf || filteredChildren.length > 0) {
         result.push({
@@ -217,9 +202,7 @@ export function CategoriesPage() {
       <div key={node.categoryId} className="space-y-1">
         <div
           className={`group flex items-center justify-between p-3 rounded-lg border border-line-soft transition-colors ${
-            depth === 0
-              ? "bg-surface hover:border-line"
-              : "bg-surface-subtle/50 hover:bg-surface-subtle"
+            depth === 0 ? 'bg-surface hover:border-line' : 'bg-surface-subtle/50 hover:bg-surface-subtle'
           }`}
           style={{ marginLeft: `${depth * 24}px` }}
         >
@@ -249,8 +232,8 @@ export function CategoriesPage() {
               <span className="font-medium text-content">{node.name}</span>
             </div>
 
-            <Badge variant={node.isActive ? "success" : "default"} size="sm">
-              {node.isActive ? "Active" : "Inactive"}
+            <Badge variant={node.isActive ? 'success' : 'default'} size="sm">
+              {node.isActive ? 'Active' : 'Inactive'}
             </Badge>
 
             {hasChildren && (
@@ -311,9 +294,7 @@ export function CategoriesPage() {
 
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold text-content">
-            Category Management
-          </h2>
+          <h2 className="text-xl font-bold text-content">Category Management</h2>
           <p className="text-sm text-content-soft mt-0.5">
             Organize question bank hierarchies and course subject categories.
           </p>
@@ -362,13 +343,9 @@ export function CategoriesPage() {
       ) : filteredCategories.length === 0 ? (
         <div className="text-center py-16 bg-surface rounded-xl border border-dashed border-line-soft">
           <Icon.Folder className="w-12 h-12 text-content-soft mx-auto mb-3" />
-          <h3 className="text-base font-semibold text-content">
-            No categories found
-          </h3>
+          <h3 className="text-base font-semibold text-content">No categories found</h3>
           <p className="text-sm text-content-soft mt-1">
-            {search
-              ? "Try modifying your search query."
-              : "Create your first category to get started."}
+            {search ? 'Try modifying your search query.' : 'Create your first category to get started.'}
           </p>
           {!search && (
             <Button
@@ -392,7 +369,7 @@ export function CategoriesPage() {
         <Modal
           open={isAddModalOpen}
           onClose={() => setIsAddModalOpen(false)}
-          title={addParentId ? "Add Subcategory" : "Add Root Category"}
+          title={addParentId ? 'Add Subcategory' : 'Add Root Category'}
         >
           <form onSubmit={handleCreateSubmit} className="space-y-4">
             <Input
@@ -417,9 +394,7 @@ export function CategoriesPage() {
               onChange={(e) => setAddSortOrder(e.target.value)}
             />
             <div className="flex items-center justify-between py-2">
-              <span className="text-sm font-medium text-content">
-                Active in Dropdowns
-              </span>
+              <span className="text-sm font-medium text-content">Active in Dropdowns</span>
               <Switch checked={addIsActive} onChange={setAddIsActive} />
             </div>
 
@@ -478,9 +453,7 @@ export function CategoriesPage() {
               onChange={(e) => setEditSortOrder(e.target.value)}
             />
             <div className="flex items-center justify-between py-2">
-              <span className="text-sm font-medium text-content">
-                Active Status
-              </span>
+              <span className="text-sm font-medium text-content">Active Status</span>
               <Switch checked={editIsActive} onChange={setEditIsActive} />
             </div>
 
@@ -509,20 +482,19 @@ export function CategoriesPage() {
         >
           <div className="space-y-4">
             <p className="text-sm text-content">
-              Are you sure you want to delete category{" "}
+              Are you sure you want to delete category{' '}
               <strong className="text-content font-semibold">
                 {deletingCategory.name} ({deletingCategory.code})
               </strong>
               ?
             </p>
-            {deletingCategory.children &&
-              deletingCategory.children.length > 0 && (
-                <Alert
-                  type="warning"
-                  title="Subcategories warning"
-                  message="This category has child subcategories. Deleting it will remove the entire branch."
-                />
-              )}
+            {deletingCategory.children && deletingCategory.children.length > 0 && (
+              <Alert
+                type="warning"
+                title="Subcategories warning"
+                message="This category has child subcategories. Deleting it will remove the entire branch."
+              />
+            )}
             <div className="flex justify-end gap-2 pt-4 border-t border-line-soft">
               <Button
                 variant="outline"
@@ -545,3 +517,4 @@ export function CategoriesPage() {
     </div>
   );
 }
+
