@@ -37,10 +37,24 @@ export function DashboardSkeleton({ cards = 3 }: { cards?: number }) {
 export function DashboardError({
   message = 'Unable to load dashboard.',
   onRetry,
+  bare = false,
 }: {
   message?: string;
   onRetry: () => void;
+  /** Compact variant without page padding / card, for use inside a panel. */
+  bare?: boolean;
 }) {
+  if (bare) {
+    return (
+      <div className="px-5 py-8 flex flex-col items-center text-center gap-3">
+        <Icon.AlertCircle className="w-8 h-8 text-muted-foreground" />
+        <p className="text-sm text-muted-foreground">{message}</p>
+        <Button variant="outline" size="sm" icon={<Icon.RefreshCw className="w-4 h-4" />} onClick={onRetry}>
+          Retry
+        </Button>
+      </div>
+    );
+  }
   return (
     <div className="p-8">
       <div className="card p-10 flex flex-col items-center text-center max-w-md mx-auto">

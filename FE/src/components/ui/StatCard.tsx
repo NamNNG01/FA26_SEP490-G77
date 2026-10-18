@@ -14,7 +14,8 @@ import { Icon } from '@/assets/icons';
  * where a change is neither good nor bad on its own — shown grey).
  */
 export function StatCard({ title, value, change, changeLabel, icon, direction = 'up', footer }: {
-  title: string; value: string; change?: number; changeLabel?: string; icon: React.ReactNode;
+  /** Usually a string; a node allows e.g. a definition tooltip beside the label. */
+  title: React.ReactNode; value: string; change?: number; changeLabel?: string; icon: React.ReactNode;
   direction?: 'up' | 'down' | 'neutral';
   /** Extra line under the value, e.g. a quota bar or a short note. */
   footer?: React.ReactNode;
