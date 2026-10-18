@@ -45,9 +45,9 @@ export const ROUTES = {
   managerPracticeExams: '/manager/practice-exams',
   managerPracticeExamDetail: '/manager/practice-exams/:examId',
 
-  // Admin
   adminDashboard: '/admin/dashboard',
   adminUsers: '/admin/users',
+  adminCategories: '/admin/categories',
   adminSubscriptions: '/admin/subscriptions',
   adminAnalytics: '/admin/analytics',
   adminAuditLogs: '/admin/audit-logs',
@@ -128,6 +128,7 @@ export const menuByRole: Record<string, MenuItem[]> = {
   ADMIN: [
     { id: 'admin-dashboard', title: 'Dashboard', icon: <Icon.Home className="w-4 h-4" />, path: ROUTES.adminDashboard },
     { id: 'admin-users', title: 'User Management', icon: <Icon.Users className="w-4 h-4" />, path: ROUTES.adminUsers },
+    { id: 'admin-categories', title: 'Categories', icon: <Icon.Folder className="w-4 h-4" />, path: ROUTES.adminCategories },
     { id: 'admin-courses', title: 'Courses', icon: <Icon.Book className="w-4 h-4" />, path: ROUTES.managerCourses },
     { id: 'admin-subscriptions', title: 'Subscriptions', icon: <Icon.Package className="w-4 h-4" />, path: ROUTES.adminSubscriptions },
     { id: 'admin-analytics', title: 'Analytics', icon: <Icon.BarChart className="w-4 h-4" />, path: ROUTES.adminAnalytics },
