@@ -38,6 +38,10 @@ export const ROUTES = {
   managerCourseDetail: '/manager/courses/:courseId',
   managerQuestions: '/manager/question-bank',
   managerExams: '/manager/exams',
+  managerExamQuizNew: '/manager/exams/quiz/new',
+  managerExamQuizEdit: '/manager/exams/quiz/:id',
+  managerExamEssayNew: '/manager/exams/essay/new',
+  managerExamEssayEdit: '/manager/exams/essay/:id',
   managerFlashcards: '/manager/flashcards',
   /** Route pattern — render with flashcardDeckPath(id). */
   managerFlashcardDetail: '/manager/flashcards/:deckId',
@@ -61,6 +65,14 @@ export function coursePath(slug: string): string {
 
 export function managerCourseDetailPath(id: number | string): string {
   return `${ROUTES.managerCourses}/${id}`;
+}
+
+export function managerExamQuizEditPath(id: number | string): string {
+  return `/manager/exams/quiz/${id}`;
+}
+
+export function managerExamEssayEditPath(id: number | string): string {
+  return `/manager/exams/essay/${id}`;
 }
 
 /** Concrete practice exam detail URL — e.g. publicExamPath('EX-P-1001') → '/student/public-exam/EX-P-1001'. */
