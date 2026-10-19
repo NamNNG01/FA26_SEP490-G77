@@ -27,7 +27,7 @@ export function QuestionSidePanel({ mode, questions, courseId, moduleId, onLocat
 
       {/* Actions */}
       <div className="card p-4 space-y-2">
-        <h4 className="text-[14px] font-semibold text-[#111827] mb-1">Actions</h4>
+        <h4 className="text-base font-semibold text-content mb-1">Actions</h4>
         {isEdit ? (
           <>
             <Button className="w-full" icon={<Icon.CheckCircle className="w-4 h-4" />} onClick={onSave} disabled={saveDisabled}>Save Changes</Button>
@@ -40,7 +40,7 @@ export function QuestionSidePanel({ mode, questions, courseId, moduleId, onLocat
             <Button variant="outline" className="w-full" icon={<Icon.Scan className="w-4 h-4" />} onClick={onImport}>Import PDF</Button>
             <Button className="w-full" icon={<Icon.CheckCircle className="w-4 h-4" />} onClick={onSave} disabled={saveDisabled}>Save All ({questions.length})</Button>
             {saveDisabled && (
-              <p className="flex items-start gap-1.5 text-[12px] text-[#D97706]">
+              <p className="flex items-start gap-1.5 text-xs text-warning">
                 <Icon.AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />Set a course and module to enable saving.
               </p>
             )}

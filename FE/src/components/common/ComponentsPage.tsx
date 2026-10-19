@@ -17,7 +17,7 @@ import { Icon } from '@/assets/icons';
 
 const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
   <div>
-    <h3 className="text-[13px] font-semibold text-[#9CA3AF] uppercase tracking-wider mb-5 pb-2 border-b border-[#F3F4F6]">{title}</h3>
+    <h3 className="text-sm font-semibold text-content-subtle uppercase tracking-wider mb-5 pb-2 border-b border-line-soft">{title}</h3>
     {children}
   </div>
 );
@@ -64,15 +64,15 @@ export default function ComponentsPage() {
     { key: 'name', label: 'Name', sortable: true, render: (r: Record<string, unknown>) => (
       <div className="flex items-center gap-2.5">
         <Avatar name={r.name as string} size="sm" />
-        <span className="font-medium text-[#111827]">{r.name as string}</span>
+        <span className="font-medium text-content">{r.name as string}</span>
       </div>
     )},
     { key: 'email', label: 'Email', sortable: true },
     { key: 'role', label: 'Role', render: (r: Record<string, unknown>) => <Badge variant={r.role === 'Admin' ? 'danger' : r.role === 'Content Manager' ? 'purple' : 'info'}>{r.role as string}</Badge> },
     { key: 'status', label: 'Status', render: (r: Record<string, unknown>) => <Badge variant={r.status === 'Active' ? 'success' : 'default'}>{r.status as string}</Badge> },
-    { key: 'score', label: 'Score', sortable: true, render: (r: Record<string, unknown>) => r.score !== null ? <span className={(r.score as number) >= 80 ? 'text-[#16A34A] font-semibold' : 'text-[#DC2626] font-semibold'}>{r.score as number}%</span> : <span className="text-[#9CA3AF]">—</span> },
+    { key: 'score', label: 'Score', sortable: true, render: (r: Record<string, unknown>) => r.score !== null ? <span className={(r.score as number) >= 80 ? 'text-success font-semibold' : 'text-danger font-semibold'}>{r.score as number}%</span> : <span className="text-content-subtle">—</span> },
     { key: 'actions', label: '', width: '60px', render: () => (
-      <Dropdown trigger={<button className="p-1.5 hover:bg-[#F3F4F6] rounded-[6px]"><Icon.MoreHorizontal className="w-4 h-4 text-[#6B7280]" /></button>}
+      <Dropdown trigger={<button className="p-1.5 hover:bg-accent rounded-[6px]"><Icon.MoreHorizontal className="w-4 h-4 text-content-soft" /></button>}
         items={[
           { label: 'View Profile', icon: <Icon.Eye /> },
           { label: 'Edit', icon: <Icon.Edit /> },
@@ -142,20 +142,20 @@ export default function ComponentsPage() {
       <Section title="Selection Controls">
         <div className="flex flex-wrap gap-8">
           <div className="flex flex-col gap-3">
-            <p className="text-[13px] font-medium text-[#374151] mb-1">Checkbox</p>
+            <p className="text-sm font-medium text-content-secondary mb-1">Checkbox</p>
             <Checkbox label="I agree to terms" checked={checked} onChange={setChecked} />
             <Checkbox label="Checked state" checked />
             <Checkbox label="Indeterminate" indeterminate />
             <Checkbox label="Unchecked" />
           </div>
           <div className="flex flex-col gap-3">
-            <p className="text-[13px] font-medium text-[#374151] mb-1">Radio</p>
+            <p className="text-sm font-medium text-content-secondary mb-1">Radio</p>
             <Radio label="Option A" checked={radio === 'a'} onChange={() => setRadio('a')} />
             <Radio label="Option B" checked={radio === 'b'} onChange={() => setRadio('b')} />
             <Radio label="Option C" checked={radio === 'c'} onChange={() => setRadio('c')} />
           </div>
           <div className="flex flex-col gap-3">
-            <p className="text-[13px] font-medium text-[#374151] mb-1">Toggle Switch</p>
+            <p className="text-sm font-medium text-content-secondary mb-1">Toggle Switch</p>
             <Switch label="Enable AI hints" checked={sw} onChange={setSw} />
             <Switch label="Email notifications" checked={true} />
             <Switch label="Two-factor auth" checked={false} size="sm" />
@@ -214,13 +214,13 @@ export default function ComponentsPage() {
       <Section title="Progress Indicators">
         <div className="grid grid-cols-2 gap-6">
           <div className="card p-5 space-y-4">
-            <p className="text-[14px] font-semibold text-[#374151]">Linear Progress</p>
+            <p className="text-base font-semibold text-content-secondary">Linear Progress</p>
             <Progress value={92} label="AI Accuracy" color="#16A34A" size="lg" />
-            <Progress value={67} label="Course Completion" color="#2563EB" />
+            <Progress value={67} label="Course Completion" color="#0D7C6C" />
             <Progress value={34} label="Exam Progress" color="#D97706" size="sm" />
           </div>
           <div className="card p-5 space-y-4">
-            <p className="text-[14px] font-semibold text-[#374151]">Skeleton Loading</p>
+            <p className="text-base font-semibold text-content-secondary">Skeleton Loading</p>
             <Skeleton className="h-4 w-2/3" />
             <Skeleton className="h-4 w-full" />
             <Skeleton className="h-4 w-5/6" />
@@ -234,7 +234,7 @@ export default function ComponentsPage() {
           </div>
         </div>
         <div className="flex gap-6 items-center mt-4 p-5 card">
-          <p className="text-[14px] font-semibold text-[#374151]">Spinners</p>
+          <p className="text-base font-semibold text-content-secondary">Spinners</p>
           <Spinner size="sm" />
           <Spinner size="md" />
           <Spinner size="lg" />
@@ -246,7 +246,7 @@ export default function ComponentsPage() {
       {/* Table */}
       <Section title="Data Table">
         <div className="card overflow-hidden">
-          <div className="flex flex-wrap items-center gap-3 px-4 py-3 border-b border-[#F3F4F6]">
+          <div className="flex flex-wrap items-center gap-3 px-4 py-3 border-b border-line-soft">
             <SearchInput className="w-full sm:w-56" placeholder="Search users…" />
             <Select value="all" options={[{ label: 'All Roles', value: 'all' }, { label: 'Student', value: 'student' }, { label: 'Admin', value: 'admin' }]} className="w-full sm:w-36" />
             <div className="flex-1" />
@@ -257,8 +257,8 @@ export default function ComponentsPage() {
         </div>
 
         <div className="card overflow-hidden">
-          <div className="px-4 py-3 border-b border-[#F3F4F6]">
-            <p className="text-[13.5px] font-medium text-[#374151]">Pagination</p>
+          <div className="px-4 py-3 border-b border-line-soft">
+            <p className="text-sm font-medium text-content-secondary">Pagination</p>
           </div>
           <Pagination page={page} total={48} perPage={DEFAULT_PAGE_SIZE} onChange={setPage} />
         </div>
@@ -289,20 +289,20 @@ export default function ComponentsPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="space-y-3">
             <div className="card p-4">
-              <p className="text-[13px] font-semibold text-[#374151] mb-3">Timer Display</p>
+              <p className="text-sm font-semibold text-content-secondary mb-3">Timer Display</p>
               <div className="flex gap-6">
                 <TimerDisplay seconds={3725} />
                 <TimerDisplay seconds={284} warning />
               </div>
             </div>
             <div className="card p-4">
-              <p className="text-[13px] font-semibold text-[#374151] mb-3">Question Palette</p>
+              <p className="text-sm font-semibold text-content-secondary mb-3">Question Palette</p>
               <QuestionPalette total={15} current={3} answered={answered} flagged={flagged} onSelect={() => {}} />
             </div>
           </div>
           <div className="space-y-3">
             <div className="card p-4">
-              <p className="text-[13px] font-semibold text-[#374151] mb-3">Answer Options</p>
+              <p className="text-sm font-semibold text-content-secondary mb-3">Answer Options</p>
               <div className="space-y-2">
                 {[
                   { letter: 'A', text: 'Gradient descent with momentum optimization' },
@@ -339,14 +339,14 @@ export default function ComponentsPage() {
           {['Alex Johnson', 'Maria Santos', 'James Kim', 'Priya Nair', 'Tom Williams'].map(n => (
             <div key={n} className="flex flex-col items-center gap-2">
               <Avatar name={n} size="xl" />
-              <p className="text-[11px] text-[#9CA3AF]">{n.split(' ')[0]}</p>
+              <p className="text-2xs text-content-subtle">{n.split(' ')[0]}</p>
             </div>
           ))}
           <div className="ml-4 flex -space-x-2">
             {['Alex Johnson', 'Maria Santos', 'James Kim', 'Priya Nair'].map(n => (
               <Avatar key={n} name={n} size="md" />
             ))}
-            <div className="w-9 h-9 rounded-full bg-[#F3F4F6] border-2 border-white flex items-center justify-center text-[12px] font-semibold text-[#6B7280]">+8</div>
+            <div className="w-9 h-9 rounded-full bg-surface-muted border-2 border-white flex items-center justify-center text-xs font-semibold text-content-soft">+8</div>
           </div>
         </div>
       </Section>
@@ -354,10 +354,10 @@ export default function ComponentsPage() {
       {/* Stat Cards */}
       <Section title="Statistic Cards">
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-          <StatCard title="Total Students" value="2,847" change={12.5} changeLabel="vs last month" icon={<Icon.Users />} color="#2563EB" />
-          <StatCard title="Exams Completed" value="18,291" change={8.3} changeLabel="vs last month" icon={<Icon.ClipboardList />} color="#7C3AED" />
-          <StatCard title="Avg Pass Rate" value="73.4%" change={-2.1} changeLabel="vs last month" icon={<Icon.TrendingUp />} color="#D97706" />
-          <StatCard title="Certificates Issued" value="1,204" change={21.8} changeLabel="vs last month" icon={<Icon.Award />} color="#059669" />
+          <StatCard title="Total Students" value="2,847" change={12.5} changeLabel="vs last month" icon={<Icon.Users />} />
+          <StatCard title="Exams Completed" value="18,291" change={8.3} changeLabel="vs last month" icon={<Icon.ClipboardList />} />
+          <StatCard title="Avg Pass Rate" value="73.4%" change={-2.1} changeLabel="vs last month" icon={<Icon.TrendingUp />} />
+          <StatCard title="Certificates Issued" value="1,204" change={21.8} changeLabel="vs last month" icon={<Icon.Award />} />
         </div>
       </Section>
     </div>

@@ -99,12 +99,12 @@ export function ImportPdfModal({ open, onClose, onImported }: {
           onDragOver={e => { e.preventDefault(); setDragOver(true); }}
           onDragLeave={() => setDragOver(false)}
           onDrop={e => { e.preventDefault(); setDragOver(false); acceptFile(e.dataTransfer.files?.[0]); }}
-          className={`card p-8 text-center border-2 border-dashed transition-colors cursor-pointer ${dragOver ? 'border-[#2563EB] bg-[#EFF6FF]' : 'border-[#BFDBFE] bg-[#F0F9FF]'}`}
+          className={`card p-8 text-center border-2 border-dashed transition-colors cursor-pointer ${dragOver ? 'border-brand-600 bg-primary-light' : 'border-brand-line bg-primary-light'}`}
           onClick={() => document.getElementById('import-file-input')?.click()}
         >
-          <Icon.Upload className="w-10 h-10 text-[#2563EB] mx-auto mb-3" />
-          <p className="text-[14px] font-semibold text-[#1E40AF]">Drag & drop here or click to browse</p>
-          <p className="text-[12px] text-[#6B7280] mt-1">Supports PDF, PNG, JPG, JPEG up to 50MB</p>
+          <Icon.Upload className="w-10 h-10 text-brand-ink mx-auto mb-3" />
+          <p className="text-base font-semibold text-brand-ink-strong">Drag & drop here or click to browse</p>
+          <p className="text-xs text-content-soft mt-1">Supports PDF, PNG, JPG, JPEG up to 50MB</p>
           <input
             id="import-file-input"
             type="file"
@@ -115,13 +115,13 @@ export function ImportPdfModal({ open, onClose, onImported }: {
         </div>
 
         {file ? (
-          <div className="flex items-center gap-3 p-3 bg-[#F9FAFB] rounded-[10px]">
-            <Icon.FileText className="w-5 h-5 text-[#2563EB] flex-shrink-0" />
+          <div className="flex items-center gap-3 p-3 bg-surface-alt rounded-[10px]">
+            <Icon.FileText className="w-5 h-5 text-brand-ink flex-shrink-0" />
             <div className="flex-1 min-w-0">
-              <p className="text-[13px] font-medium text-[#374151] truncate">{file.name}</p>
-              <p className="text-[11px] text-[#9CA3AF]">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+              <p className="text-sm font-medium text-content-secondary truncate">{file.name}</p>
+              <p className="text-2xs text-content-subtle">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
             </div>
-            <button onClick={() => setFile(null)} disabled={uploading} className="text-[#9CA3AF] hover:text-[#DC2626] p-1"><Icon.X className="w-4 h-4" /></button>
+            <button onClick={() => setFile(null)} disabled={uploading} className="text-content-subtle hover:text-danger p-1"><Icon.X className="w-4 h-4" /></button>
           </div>
         ) : (
           <Alert type="info" title="No file selected" message="Choose a PDF or image to extract questions with AI." />

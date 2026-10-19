@@ -63,19 +63,19 @@ export function QuestionBankPage({ onNavigate }: { onNavigate?: (id: string) => 
     (!q || x.text.toLowerCase().includes(q)));
 
   const columns = [
-    { key: 'text', label: 'Question', render: (r: Record<string, unknown>) => <p className="text-[13.5px] text-[#374151] line-clamp-2">{r.text as string}</p> },
+    { key: 'text', label: 'Question', render: (r: Record<string, unknown>) => <p className="text-sm text-content-secondary line-clamp-2">{r.text as string}</p> },
     { key: 'moduleId', label: 'Module', render: (r: Record<string, unknown>) => (
       <div>
         <Badge variant="info">{moduleLabel(r.moduleId as string)}</Badge>
-        <p className="text-[11px] text-[#9CA3AF] mt-1">{courseLabel(r.courseId as string)}</p>
+        <p className="text-2xs text-content-subtle mt-1">{courseLabel(r.courseId as string)}</p>
       </div>
     ) },
     { key: 'type', label: 'Type', sortable: true, render: (r: Record<string, unknown>) => <Badge variant={(r.type === 'Essay' ? 'purple' : r.type === 'TrueFalse' ? 'success' : 'info') as 'purple' | 'success' | 'info'}>{r.type as string}</Badge> },
     { key: 'difficulty', label: 'Difficulty', sortable: true, render: (r: Record<string, unknown>) => <Badge variant={(r.difficulty === 'Hard' ? 'danger' : r.difficulty === 'Medium' ? 'warning' : 'success') as 'danger' | 'warning' | 'success'}>{r.difficulty as string}</Badge> },
     { key: 'status', label: 'Status', sortable: true, render: (r: Record<string, unknown>) => <Badge variant={(r.status === 'Active' ? 'success' : 'default') as 'success' | 'default'}>{r.status as string}</Badge> },
-    { key: 'updated', label: 'Updated', render: (r: Record<string, unknown>) => <span className="text-[13px] text-[#6B7280]">{r.updated as string}</span> },
+    { key: 'updated', label: 'Updated', render: (r: Record<string, unknown>) => <span className="text-sm text-content-soft">{r.updated as string}</span> },
     { key: 'actions', label: '', render: () => (
-      <Dropdown trigger={<button className="p-1.5 hover:bg-[#F3F4F6] rounded-[6px]"><Icon.MoreHorizontal className="w-4 h-4 text-[#6B7280]" /></button>}
+      <Dropdown trigger={<button className="p-1.5 hover:bg-accent rounded-[6px]"><Icon.MoreHorizontal className="w-4 h-4 text-content-soft" /></button>}
         items={[{ label: 'Edit', icon: <Icon.Edit />, onClick: () => onNavigate?.('question-edit') }, { label: 'Preview', icon: <Icon.Eye /> }, { label: 'Duplicate', icon: <Icon.Copy /> }, { divider: true } as {label: string; divider: true}, { label: 'Delete', icon: <Icon.Trash />, danger: true }]} />
     )},
   ];
@@ -83,12 +83,12 @@ export function QuestionBankPage({ onNavigate }: { onNavigate?: (id: string) => 
   return (
     <div className="p-8 space-y-5">
       <div className="flex items-center justify-between">
-        <h2 className="text-[22px] font-bold text-[#111827]">Question</h2>
+        <h2 className="text-xl font-bold text-content">Question</h2>
         <Button icon={<Icon.Plus className="w-4 h-4" />} onClick={() => onNavigate?.('question-create')}>Add Question</Button>
       </div>
 
       <div className="card overflow-hidden">
-        <div className="flex flex-wrap items-center gap-3 px-4 py-3 border-b border-[#F3F4F6]">
+        <div className="flex flex-wrap items-center gap-3 px-4 py-3 border-b border-line-soft">
           <SearchInput className="w-full sm:w-60" placeholder="Search questions…" value={query} onChange={e => setQuery(e.target.value)} />
           <Select value={course} onChange={v => { setCourse(v); setModule('all'); }} options={[{ label: 'All Courses', value: 'all' }, ...MOCK_COURSES.map(c => ({ label: c.title, value: c.id }))]} className="w-full sm:w-52" />
           <Select value={module} onChange={setModule} options={[{ label: 'All Modules', value: 'all' }, ...moduleOptions]} className="w-full sm:w-52" />

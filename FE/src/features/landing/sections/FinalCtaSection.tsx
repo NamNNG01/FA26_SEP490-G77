@@ -3,52 +3,42 @@ import { Container } from '../components/Container';
 import { CTAButton } from '../components/CTAButton';
 import { Reveal } from '@/components/common/Reveal';
 import { finalCtaContent } from '../data/landingData';
-import { ROUTES } from '@/app/routes';
 
 /**
  * FinalCtaSection
  *
- * Closing call-to-action band: title, subtitle, "Create Account" (→
- * /register) and "View Pricing" (→ /pricing). Fluid clamp typography and
- * spacing; buttons wrap (full-width stacked on mobile, row when wide).
+ * Closing call-to-action band: a solid deep-jade panel, copy on the left and
+ * the two actions on the right (stacked on narrow screens). No gradient or
+ * blurred glow — the contrast of the dark panel carries it.
  */
 export function FinalCtaSection() {
   return (
-    <section className="bg-[#F9FAFB] dark:bg-[#0B1220]">
-      <Container className="py-[clamp(3rem,6vw,5rem)]">
+    <section className="bg-surface-alt">
+      <Container className="pb-[clamp(3rem,6vw,5rem)]">
         <Reveal>
-          <div className="relative overflow-hidden rounded-[1.25rem] bg-gradient-to-br from-[#2563EB] to-[#1D4ED8] px-[clamp(1.25rem,4vw,2.5rem)] py-[clamp(2.5rem,6vw,3.5rem)] text-center shadow-xl shadow-[#2563EB]/20">
-            <div
-              aria-hidden
-              className="pointer-events-none absolute -top-24 -right-24 w-72 h-72 rounded-full bg-white/10 blur-2xl"
-            />
-            <div
-              aria-hidden
-              className="pointer-events-none absolute -bottom-28 -left-20 w-72 h-72 rounded-full bg-white/10 blur-2xl"
-            />
-
-            <div className="relative max-w-[min(42rem,100%)] mx-auto">
-              <h2 className="text-[clamp(1.625rem,1.3rem+1.8vw,2.125rem)] font-extrabold text-white tracking-tight leading-[1.15]">
+          <div className="flex flex-col gap-6 rounded-[16px] bg-brand-900 px-[clamp(1.5rem,4vw,3rem)] py-[clamp(2rem,4.5vw,3rem)] md:flex-row md:items-center md:justify-between dark:bg-brand-950 dark:ring-1 dark:ring-brand-900">
+            <div className="max-w-[min(36rem,100%)]">
+              <h2 className="text-[clamp(1.5rem,1.2rem+1.4vw,2rem)] leading-[1.15] font-bold text-white">
                 {finalCtaContent.title}
               </h2>
-              <p className="text-[clamp(0.9rem,0.85rem+0.3vw,1rem)] text-blue-100 leading-relaxed mt-[clamp(0.75rem,1.5vw,1rem)]">
+              <p className="mt-3 text-[clamp(0.9rem,0.85rem+0.25vw,1rem)] leading-relaxed text-brand-200">
                 {finalCtaContent.subtitle}
               </p>
+            </div>
 
-              <div className="flex flex-wrap justify-center gap-[clamp(0.75rem,1.5vw,1rem)] mt-[clamp(1.5rem,3vw,2rem)]">
-                <CTAButton
-                  label="Create Account"
-                  to={ROUTES.register}
-                  variant="secondary"
-                  className="w-full sm:w-auto !bg-white !text-[#2563EB] !border-transparent hover:!bg-blue-50"
-                />
-                <CTAButton
-                  label={finalCtaContent.secondaryCta.label}
-                  to={finalCtaContent.secondaryCta.to}
-                  variant="secondary"
-                  className="w-full sm:w-auto !bg-white/10 !text-white !border-white/30 hover:!bg-white/20"
-                />
-              </div>
+            <div className="flex flex-shrink-0 flex-wrap gap-3">
+              <CTAButton
+                label={finalCtaContent.primaryCta.label}
+                to={finalCtaContent.primaryCta.to}
+                variant="secondary"
+                className="w-full sm:w-auto !border-transparent !bg-white !text-brand-900 hover:!bg-brand-50"
+              />
+              <CTAButton
+                label={finalCtaContent.secondaryCta.label}
+                to={finalCtaContent.secondaryCta.to}
+                variant="secondary"
+                className="w-full sm:w-auto !border-white/30 !bg-transparent !text-white !shadow-none hover:!bg-white/10"
+              />
             </div>
           </div>
         </Reveal>

@@ -16,6 +16,9 @@ public interface CourseRepository extends JpaRepository<Course, Long> {
     @Query("SELECT COUNT(c) FROM Course c WHERE c.manager.userId = :managerId")
     long countByManagerId(@Param("managerId") Long managerId);
 
+    @Query("SELECT COUNT(c) FROM Course c WHERE c.courseId = :courseId AND c.manager.userId = :managerId")
+    long countOwnedCourse(@Param("courseId") Long courseId, @Param("managerId") Long managerId);
+
     @Query("SELECT COUNT(c) FROM Course c WHERE c.manager.userId = :managerId AND c.isPublished = :published")
     long countByManagerIdAndPublished(@Param("managerId") Long managerId, @Param("published") boolean published);
 

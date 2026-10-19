@@ -26,7 +26,7 @@ export function ProfilePage() {
 
   return (
     <div className="p-8 max-w-6xl mx-auto space-y-6">
-      <h2 className="text-[22px] font-bold text-[#111827]">My Profile</h2>
+      <h2 className="text-xl font-bold text-content">My Profile</h2>
 
       {overview.error && (
         <Alert type="warning" title="Statistics unavailable" message={overview.error} />

@@ -23,11 +23,11 @@ function InfoCell({ icon, label, value, accent }: {
 }) {
   return (
     <div className="flex flex-col items-center gap-1 px-2 py-2.5">
-      <span className="flex items-center gap-1 text-[12px] text-muted-foreground">
+      <span className="flex items-center gap-1 text-xs text-muted-foreground">
         <span className="h-3.5 w-3.5">{icon}</span>
         {label}
       </span>
-      <span className="flex items-center gap-1.5 text-[13px] font-semibold text-foreground">
+      <span className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
         {accent && <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full" style={{ background: accent }} />}
         {value}
       </span>
@@ -70,7 +70,7 @@ function InfoCell({ icon, label, value, accent }: {
       {/* Top row — course logo tile + status and exam-type badges */}
       <div className="flex items-start justify-between gap-3">
         <span
-          className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-[12px] text-[12px] font-bold tracking-tight transition-transform duration-200 group-hover:scale-105"
+          className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-[12px] text-xs font-bold tracking-tight transition-transform duration-200 group-hover:scale-105"
           style={{ background: `${course.accent}1A`, color: course.accent }}
           title={course.name}
         >
@@ -84,12 +84,12 @@ function InfoCell({ icon, label, value, accent }: {
 
       {/* Title + subtitle */}
       <div>
-        <h3 className="text-[15px] font-semibold leading-snug text-foreground transition-colors group-hover:text-primary">
+        <h3 className="text-lg font-semibold leading-snug text-foreground transition-colors group-hover:text-primary">
           {exam.title}
         </h3>
-        <p className="mt-1 text-[12.5px] text-muted-foreground">{examSubtitle(exam)}</p>
+        <p className="mt-1 text-xs text-muted-foreground">{examSubtitle(exam)}</p>
         {exam.score !== undefined && (
-          <p className="mt-1.5 inline-flex items-center gap-1 text-[12px] font-medium text-[#15803D] dark:text-[#4ADE80]">
+          <p className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-success-strong">
             <Icon.CheckCircle className="h-3.5 w-3.5" />
             Scored {exam.score}%
           </p>

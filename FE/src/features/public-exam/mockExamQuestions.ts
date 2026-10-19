@@ -3,13 +3,13 @@ import type { ExamDifficulty, ExamType, PublicExam } from './mockPublicExams';
 /**
  * Question fixtures for the exam detail page.
  *
- * IMPORTANT â€” the one-type-per-exam rule holds here too: objective exams only
+ * IMPORTANT — the one-type-per-exam rule holds here too: objective exams only
  * ever contain objective question types (mcq, true-false, fill-blank, matching,
  * ordering) and essay exams only contain `essay`. `questionsFor()` branches on
  * `exam.examType` so nothing downstream has to re-check it.
  *
  * Content is a deterministic SAMPLE (4-6 items per exam), not the full bank the
- * card advertises â€” see `sampleSizeFor()`.
+ * card advertises — see `sampleSizeFor()`.
  */
 
 export type QuestionType = 'mcq' | 'true-false' | 'fill-blank' | 'matching' | 'ordering' | 'essay';
@@ -46,7 +46,7 @@ export interface ExamOption {
   text: string;
   /**
    * Marks the correct option. Author-only: the detail page never renders this
-   * for students. Note it is still in the client bundle â€” a real deployment
+   * for students. Note it is still in the client bundle — a real deployment
    * must keep answers server-side.
    */
   isCorrect: boolean;
@@ -72,9 +72,9 @@ export interface ExamQuestion {
   options?: ExamOption[];
   /** Accepted response for fill-blank. Author-only. */
   answer?: string;
-  /** matching â€” left/right ends of the pair. */
+  /** matching — left/right ends of the pair. */
   pairs?: MatchingPair[];
-  /** ordering â€” array order IS the correct order. Author-only. */
+  /** ordering — array order IS the correct order. Author-only. */
   ordering?: OrderingItem[];
   /** Shared-passage group this question belongs to. */
   groupId?: string;
@@ -131,7 +131,7 @@ const DIFFICULTIES: ExamDifficulty[] = ['Easy', 'Medium', 'Hard'];
 
 /**
  * Deterministic sample set for an exam. Seeded from the exam id so the same
- * exam always yields the same questions â€” the fixture must be stable across
+ * exam always yields the same questions — the fixture must be stable across
  * renders, navigations and reloads.
  */
 export function questionsFor(exam: PublicExam): ExamQuestionSet {
@@ -152,7 +152,7 @@ export function questionsFor(exam: PublicExam): ExamQuestionSet {
     return { groups, questions };
   }
 
-  // Objective â€” the first two items share a passage, so the group concept is
+  // Objective — the first two items share a passage, so the group concept is
   // always exercised. The mix then covers every allowed type at least once.
   const groupId = `${exam.id}-G1`;
   const groups: QuestionGroup[] = [{ id: groupId, title: 'Shared scenario', passage: PASSAGE }];

@@ -25,36 +25,36 @@ export function ModuleQuestionList({ moduleId, selected, onToggle, onPreview }: 
 
   return (
     <div className="card overflow-hidden">
-      <div className="flex flex-wrap items-center gap-3 px-4 py-3 border-b border-[#F3F4F6]">
+      <div className="flex flex-wrap items-center gap-3 px-4 py-3 border-b border-line-soft">
         <SearchInput className="w-56" placeholder="Search questions…" value={query} onChange={e => setQuery(e.target.value)} />
         <div className="flex-1" />
         <Badge variant="default">{filtered.length} in module · {selected.length} selected</Badge>
       </div>
 
       {!moduleId ? (
-        <p className="px-4 py-10 text-[13px] text-[#9CA3AF] text-center">Select a module in the Exam Information panel to load its questions.</p>
+        <p className="px-4 py-10 text-sm text-content-subtle text-center">Select a module in the Exam Information panel to load its questions.</p>
       ) : filtered.length === 0 ? (
-        <p className="px-4 py-10 text-[13px] text-[#9CA3AF] text-center">No questions match the current search.</p>
+        <p className="px-4 py-10 text-sm text-content-subtle text-center">No questions match the current search.</p>
       ) : (
-        <div className="divide-y divide-[#F9FAFB]">
+        <div className="divide-y divide-line-faint">
           {paged.map(b => {
             const checked = selectedIds.has(b.id);
             return (
               <div key={b.id} onClick={() => onToggle(b)}
-                className={`flex items-center gap-3 px-4 py-3 cursor-pointer select-none hover:bg-[#F9FAFB] transition-colors ${checked ? 'bg-[#F0FDF4]' : ''}`}>
+                className={`flex items-center gap-3 px-4 py-3 cursor-pointer select-none hover:bg-surface-hover transition-colors ${checked ? 'bg-success-light' : ''}`}>
                 <span onClick={e => e.stopPropagation()}>
                   <Checkbox checked={checked} onChange={() => onToggle(b)} />
                 </span>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[13px] text-[#374151] line-clamp-1">{b.text}</p>
+                  <p className="text-sm text-content-secondary line-clamp-1">{b.text}</p>
                   <div className="flex items-center gap-1.5 mt-1">
-                    <Badge variant={difficultyVariant(b.difficulty)} className="text-[11px]">{difficultyLabel(b.difficulty)}</Badge>
-                    <Badge variant="default" className="text-[11px]">{b.type.toUpperCase()}</Badge>
-                    <span className="text-[11px] text-[#9CA3AF]">{b.pts} pts</span>
+                    <Badge variant={difficultyVariant(b.difficulty)} className="text-2xs">{difficultyLabel(b.difficulty)}</Badge>
+                    <Badge variant="default" className="text-2xs">{b.type.toUpperCase()}</Badge>
+                    <span className="text-2xs text-content-subtle">{b.pts} pts</span>
                   </div>
                 </div>
                 <button onClick={e => { e.stopPropagation(); onPreview(b); }}
-                  className="flex items-center gap-1 text-[12px] font-medium text-[#2563EB] hover:underline">
+                  className="flex items-center gap-1 text-xs font-medium text-brand-ink hover:underline">
                   <Icon.Eye className="w-4 h-4" /> Preview
                 </button>
               </div>
@@ -64,7 +64,7 @@ export function ModuleQuestionList({ moduleId, selected, onToggle, onPreview }: 
       )}
 
       {moduleId && (
-        <div className="border-t border-[#F3F4F6]">
+        <div className="border-t border-line-soft">
           <Pagination page={page} total={filtered.length} onChange={setPage} unit="questions" />
         </div>
       )}

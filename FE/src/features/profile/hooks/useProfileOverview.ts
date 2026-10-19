@@ -52,7 +52,7 @@ export function useProfileOverview(role: string | undefined) {
           tracksLearning: true,
         };
       }
-      if (role === Role.COURSE_MANAGER || role === Role.CONTENT_MANAGER) {
+      if (role === Role.COURSE_MANAGER) {
         const { summary } = await dashboardService.getManagerDashboard();
         return {
           ...EMPTY,
