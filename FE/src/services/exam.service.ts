@@ -150,18 +150,6 @@ export interface BankQuestionItem {
   updatedAt?: string;
 }
 
-export interface QuestionListParams {
-  search?: string;
-  courseId?: number;
-  moduleId?: number;
-  groupId?: number;
-  questionType?: string;
-  difficulty?: string;
-  status?: string;
-  page?: number;
-  size?: number;
-}
-
 export interface QuestionGroupItem {
   groupId: number;
   courseId?: number;
@@ -620,7 +608,7 @@ function loadStoredExams(): ExamDetail[] {
 function saveStoredExams(exams: ExamDetail[]): void {
   try {
     localStorage.setItem(EXAMS_STORAGE_KEY, JSON.stringify(exams));
-  } catch {}
+  } catch { }
 }
 
 function loadStoredQuestions(): BankQuestionItem[] {
@@ -639,7 +627,7 @@ function loadStoredQuestions(): BankQuestionItem[] {
 function saveStoredQuestions(questions: BankQuestionItem[]): void {
   try {
     localStorage.setItem(QUESTIONS_STORAGE_KEY, JSON.stringify(questions));
-  } catch {}
+  } catch { }
 }
 
 function loadStoredGroups(): QuestionGroupItem[] {
@@ -658,7 +646,7 @@ function loadStoredGroups(): QuestionGroupItem[] {
 function saveStoredGroups(groups: QuestionGroupItem[]): void {
   try {
     localStorage.setItem(GROUPS_STORAGE_KEY, JSON.stringify(groups));
-  } catch {}
+  } catch { }
 }
 
 export const examService = {
