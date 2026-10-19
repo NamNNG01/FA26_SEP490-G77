@@ -37,7 +37,7 @@ import java.util.*;
 @Transactional(readOnly = true)
 @PreAuthorize("hasAnyRole('COURSE_MANAGER', 'ADMIN')")
 public class ExamAiServiceImpl implements ExamAiService {
-    private static final Set<String> TYPES = Set.of("SINGLE_CHOICE", "MULTI_CHOICE", "TRUE_FALSE", "FILL_BLANK",
+    private static final Set<String> TYPES = Set.of("SINGLE_CHOICE", "MULTIPLE_CHOICE", "TRUE_FALSE", "FILL_BLANK",
             "MATCHING", "ORDERING", "ESSAY", "CODE", "DIAGRAM");
     private static final Set<String> DIFFICULTIES = Set.of("EASY", "MEDIUM", "HARD");
     private final CourseRepository courses;
@@ -48,12 +48,12 @@ public class ExamAiServiceImpl implements ExamAiService {
     private final ObjectMapper json;
     private final Validator validator;
     private final HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
-    @Value("${app.ai.api-key:${OPENAI_API_KEY:}}") private String apiKey;
-    @Value("${app.ai.model:${OPENAI_MODEL:gpt-4o-mini}}") private String model;
-    @Value("${app.ai.base-url:https://api.openai.com/v1}") private String baseUrl;
-    @Value("${app.ai.timeout-ms:30000}") private long timeoutMillis;
-    @Value("${app.ai.material-timeout-ms:45000}") private long materialTimeoutMillis;
-    @Value("${app.ai.daily-limit:20}") private int dailyLimit;
+    @Value("${app.exam-ai.api-key:${OPENAI_API_KEY:}}") private String apiKey;
+    @Value("${app.exam-ai.model:${OPENAI_MODEL:gpt-4o-mini}}") private String model;
+    @Value("${app.exam-ai.base-url:https://api.openai.com/v1}") private String baseUrl;
+    @Value("${app.exam-ai.timeout-ms:30000}") private long timeoutMillis;
+    @Value("${app.exam-ai.material-timeout-ms:45000}") private long materialTimeoutMillis;
+    @Value("${app.exam-ai.daily-limit:20}") private int dailyLimit;
     // shortcut: quotas are per application instance and reset on restart, use persistent counters before scaling out.
     private final Map<Long, Integer> accountCalls = new HashMap<>();
     private final Map<Long, Integer> courseCalls = new HashMap<>();
@@ -156,7 +156,7 @@ public class ExamAiServiceImpl implements ExamAiService {
         String instructions = "Generate an exam draft as a JSON object with title, description and questions array. "
                 + "Each question has content, questionType, difficulty, options, explanation, questionMetadata, essayGradingRubric. "
                 + "Options have optionText, isCorrect(boolean), orderIndex(integer), optional correctMatch. "
-                + "SINGLE_CHOICE:2-6 options exactly one correct; MULTI_CHOICE:2-8 options at least one correct; "
+                + "SINGLE_CHOICE:2-6 options exactly one correct; MULTIPLE_CHOICE:2-8 options at least one correct; "
                 + "TRUE_FALSE:exactly True/False options one correct; FILL_BLANK:optional answer options; "
                 + "MATCHING:even number of options each with correctMatch; ORDERING:at least2 options unique non-negative orderIndex; "
                 + "ESSAY:no options; CODE:no options, questionMetadata with language and nonempty testCases[{input,expectedOutput}]; "
@@ -240,10 +240,10 @@ public class ExamAiServiceImpl implements ExamAiService {
             if (option.hasNonNull("orderIndex")) order.add(option.get("orderIndex").asInt());
         }
         switch (type) {
-            case "SINGLE_CHOICE", "MULTI_CHOICE", "TRUE_FALSE" -> {
+            case "SINGLE_CHOICE", "MULTIPLE_CHOICE", "TRUE_FALSE" -> {
                 for (JsonNode option : choices) if (!option.path("isCorrect").isBoolean()) return "missing correct answer flag";
-                int max = type.equals("MULTI_CHOICE") ? 8 : type.equals("TRUE_FALSE") ? 2 : 6;
-                if (count < 2 || count > max || correct < 1 || (!type.equals("MULTI_CHOICE") && correct != 1))
+                int max = type.equals("MULTIPLE_CHOICE") ? 8 : type.equals("TRUE_FALSE") ? 2 : 6;
+                if (count < 2 || count > max || correct < 1 || (!type.equals("MULTIPLE_CHOICE") && correct != 1))
                     return "invalid choice answer count";
                 if (type.equals("TRUE_FALSE") && !Set.of("true", "false").equals(Set.of(
                         choices.get(0).path("optionText").asText().strip().toLowerCase(Locale.ROOT),

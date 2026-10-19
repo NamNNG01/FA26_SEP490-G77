@@ -15,6 +15,7 @@ import java.util.List;
 
 @Repository
 public interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
+    boolean existsByCourse_CourseIdAndUser_UserId(Long courseId, Long userId);
 
     @Query("SELECT COUNT(e) FROM Enrollment e WHERE e.user.userId = :userId")
     long countByUserId(@Param("userId") Long userId);

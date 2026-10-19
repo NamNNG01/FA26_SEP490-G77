@@ -21,7 +21,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@SpringBootTest(properties = "app.ai.api-key=")
+@SpringBootTest(properties = "app.exam-ai.api-key=")
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 @Transactional
@@ -39,7 +39,7 @@ class ExamAiUnavailableIntegrationTest {
                 .title("Algebra").slug(UUID.randomUUID().toString()).isPublished(false).build();
         em.persist(course);
         em.flush();
-        mvc.perform(post("/api/v1/manager/exams/ai/generate").with(user(UserPrincipal.create(manager)))
+        mvc.perform(post("/api/v1/manager/exam-builder/ai/generate").with(user(UserPrincipal.create(manager)))
                 .contentType(MediaType.APPLICATION_JSON).content("{\"courseId\":" + course.getCourseId()
                         + ",\"questionCount\":1,\"difficultyDistribution\":{\"EASY\":1},"
                         + "\"questionTypes\":[{\"questionType\":\"ESSAY\",\"count\":1}]}"))

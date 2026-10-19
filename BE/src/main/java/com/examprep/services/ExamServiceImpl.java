@@ -1,327 +1,715 @@
 package com.examprep.services;
 
-import com.examprep.dto.*;
+import com.examprep.ai.AiClient;
+import com.examprep.ai.AiRequest;
+import com.examprep.ai.AiResponse;
+import com.examprep.dto.exam.*;
+import com.examprep.dto.question.AnswerOptionDto;
 import com.examprep.entities.*;
-import com.examprep.entities.Module;
-import com.examprep.exceptions.*;
+import com.examprep.exceptions.BadRequestException;
+import com.examprep.exceptions.ResourceConflictException;
+import com.examprep.exceptions.ResourceNotFoundException;
+import com.examprep.exceptions.UnauthorizedException;
 import com.examprep.repositories.*;
-import com.examprep.security.UserPrincipal;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import jakarta.persistence.criteria.*;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.*;
-import org.springframework.data.jpa.domain.Specification;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+
 import java.math.BigDecimal;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
-@Transactional(readOnly=true)
 public class ExamServiceImpl implements ExamService {
-    private static final Set<String> TYPES=Set.of("SINGLE_CHOICE","MULTI_CHOICE","TRUE_FALSE","FILL_BLANK","MATCHING","ORDERING","ESSAY","CODE","DIAGRAM");
-    private static final List<String> KINDS=List.of("QUIZ","ESSAY","CODE","DIAGRAM");
-    private final ExamRepository exams;
-    private final ExamQuestionRepository links;
-    private final ExamGroupRepository groupLinks;
-    private final ExamConfigRepository configs;
-    private final ExamAttemptRepository attempts;
-    private final QuestionRepository questions;
-    private final QuestionGroupRepository groups;
-    private final AnswerOptionRepository options;
-    private final CourseRepository courses;
-    private final CourseManagerRepository assignments;
-    private final ModuleRepository modules;
-    private final UserRepository users;
-    private final ObjectMapper json;
+
+    private final ExamRepository examRepository;
+    private final ExamConfigRepository examConfigRepository;
+    private final ExamQuestionRepository examQuestionRepository;
+    private final CourseRepository courseRepository;
+    private final QuestionRepository questionRepository;
+    private final AnswerOptionRepository answerOptionRepository;
+    private final CourseManagerRepository courseManagerRepository;
+    private final EnrollmentRepository enrollmentRepository;
+    private final ExamAttemptRepository examAttemptRepository;
+    private final AttemptAnswerRepository attemptAnswerRepository;
+    private final AnswerRegradeLogRepository answerRegradeLogRepository;
+    private final AiUsageLogRepository aiUsageLogRepository;
+    private final UserSubscriptionRepository userSubscriptionRepository;
+    private final NotificationRepository notificationRepository;
+    private final UserNotificationRepository userNotificationRepository;
+    private final ScoringService scoringService;
+    private final AiClient aiClient;
+    private final ObjectMapper objectMapper;
 
     @Override
-    public PageResponse<ExamResponse> list(UserPrincipal user,String search,Long courseId,Long moduleId,String status,String kind,int page,int size) {
-        if(page<0 || size<1 || size>100 || (long)page*size>Integer.MAX_VALUE) throw bad("Invalid page or size (1-100).");
-        if(courseId!=null) access(user,courseId,false);
-        if(moduleId!=null) access(user,module(moduleId).getCourse().getCourseId(),false);
-        if(status!=null && !Set.of("DRAFT","PUBLISHED","ARCHIVED").contains(status)) throw bad("Invalid exam status.");
-        if(kind!=null && !kind.equals("all") && !KINDS.contains(kind) && !kind.equals("MIXED")) throw bad("Invalid examKind.");
-        Specification<Exam> filter=(root,query,cb)-> {
-            Join<Exam,Course> c=root.join("course",JoinType.LEFT);
-            Join<Exam,Module> m=root.join("module",JoinType.LEFT);
-            Join<Module,Course> mc=m.join("course",JoinType.LEFT);
-            List<Predicate> where=new ArrayList<>();
-            if(!admin(user)) {
-                where.add(cb.or(cb.isNull(c),scope(c,query,cb,user.getId())));
-                where.add(cb.or(cb.isNull(m),scope(mc,query,cb,user.getId())));
-                where.add(cb.or(cb.isNotNull(c),cb.isNotNull(m)));
+    @Transactional
+    public ExamResponse createRandomExam(ExamRandomRequest req, User currentUser) {
+        Course course = courseRepository.findById(req.getCourseId())
+                .orElseThrow(() -> new ResourceNotFoundException("Course not found"));
+
+        if (!User.ROLE_ADMIN.equals(currentUser.getRoleName())) {
+            boolean isManager = courseManagerRepository.existsByCourse_CourseIdAndUser_UserId(course.getCourseId(), currentUser.getUserId());
+            if (!isManager) {
+                throw new UnauthorizedException("You are not a manager of this course");
             }
-            if(courseId!=null) where.add(cb.or(cb.equal(c.get("courseId"),courseId),cb.and(cb.isNull(c),cb.equal(mc.get("courseId"),courseId))));
-            if(moduleId!=null) where.add(cb.equal(m.get("moduleId"),moduleId));
-            if(status!=null) where.add(cb.equal(root.get("status"),status));
-            if(search!=null && !search.isBlank()) where.add(cb.like(cb.lower(root.get("title")),pattern(search),'!'));
-            if(kind!=null && !kind.equals("all")) {
-                List<Predicate> present=KINDS.stream().map(k->familyPresent(root,query,cb,k)).toList();
-                if(kind.equals("MIXED")) {
-                    List<Predicate> pairs=new ArrayList<>();
-                    for(int i=0;i<4;i++) for(int j=i+1;j<4;j++) pairs.add(cb.and(present.get(i),present.get(j)));
-                    where.add(cb.or(pairs.toArray(Predicate[]::new)));
-                } else {
-                    for(int i=0;i<4;i++) if(!KINDS.get(i).equals(kind)) where.add(cb.not(present.get(i)));
-                    if(!kind.equals("QUIZ")) where.add(present.get(KINDS.indexOf(kind)));
+        }
+
+        Long seed = req.getSeed() != null ? req.getSeed() : System.currentTimeMillis();
+        Random random = new Random(seed);
+
+        Set<Long> selectedQuestionIds = new LinkedHashSet<>();
+        List<SelectedQuestionInfo> selectedInfos = new ArrayList<>();
+
+        for (int i = 0; i < req.getCriteria().size(); i++) {
+            ExamCriteriaDto crit = req.getCriteria().get(i);
+            List<Long> availableIds = questionRepository.findActiveIdsByCriteria(
+                    course.getCourseId(), crit.getQuestionType(), crit.getDifficulty(), crit.getModuleId());
+
+            List<Long> filteredIds = new ArrayList<>();
+            for (Long qId : availableIds) {
+                if (selectedQuestionIds.contains(qId)) continue;
+                Question q = questionRepository.findById(qId).orElse(null);
+                if (q == null) continue;
+                if (crit.getSkillTag() != null) {
+                    try {
+                        if (q.getQuestionMetadata() == null) continue;
+                        Map map = objectMapper.readValue(q.getQuestionMetadata(), Map.class);
+                        if (!crit.getSkillTag().equals(map.get("skillTag"))) continue;
+                    } catch (Exception e) {
+                        continue;
+                    }
+                }
+                filteredIds.add(qId);
+            }
+
+            if (filteredIds.size() < crit.getCount()) {
+                throw new ResourceConflictException("Insufficient questions for criteria index " + i + ": requested " + crit.getCount() + ", available " + filteredIds.size());
+            }
+
+            Collections.shuffle(filteredIds, random);
+            List<Long> chosenIds = filteredIds.subList(0, crit.getCount());
+            for (Long qId : chosenIds) {
+                selectedQuestionIds.add(qId);
+                Question q = questionRepository.findById(qId).orElseThrow();
+                BigDecimal pts = crit.getPointsEach() != null ? crit.getPointsEach() : q.getDefaultPoints();
+                selectedInfos.add(new SelectedQuestionInfo(q, pts));
+            }
+        }
+
+        Exam exam = Exam.builder()
+                .course(course)
+                .createdBy(currentUser)
+                .title(req.getTitle())
+                .description(req.getDescription())
+                .durationMinutes(req.getDurationMinutes())
+                .isPractice(req.getIsPractice() != null ? req.getIsPractice() : false)
+                .generationType("RANDOM")
+                .status("DRAFT")
+                .passMark(req.getPassMark() != null ? req.getPassMark() : 50)
+                .maxAttempts(req.getMaxAttempts() != null ? req.getMaxAttempts() : 1)
+                .build();
+
+        exam = examRepository.save(exam);
+
+        try {
+            String criteriaJson = objectMapper.writeValueAsString(req.getCriteria());
+            ExamConfig config = ExamConfig.builder()
+                    .exam(exam)
+                    .questionType(req.getCriteria().get(0).getQuestionType())
+                    .numberOfQuestions(selectedQuestionIds.size())
+                    .difficulty(req.getCriteria().get(0).getDifficulty())
+                    .criteria(criteriaJson)
+                    .seed(seed)
+                    .build();
+            examConfigRepository.save(config);
+        } catch (Exception ignored) {}
+
+        List<ExamQuestion> examQuestions = new ArrayList<>();
+        for (int i = 0; i < selectedInfos.size(); i++) {
+            SelectedQuestionInfo info = selectedInfos.get(i);
+            ExamQuestion eq = ExamQuestion.builder()
+                    .exam(exam)
+                    .question(info.question)
+                    .orderIndex(i)
+                    .points(info.points)
+                    .build();
+            examQuestions.add(examQuestionRepository.save(eq));
+        }
+
+        Long eId = exam.getExamId();
+        List<ExamQuestion> eqList = examQuestionRepository.findAll().stream()
+                .filter(eq -> eq.getExam().getExamId().equals(eId))
+                .collect(Collectors.toList());
+
+        return mapToExamResponse(exam, eqList, false);
+    }
+
+    @Override
+    @Transactional
+    public ExamResponse updateExam(Long examId, ExamUpdateRequest req, User currentUser) {
+        Exam exam = examRepository.findById(examId)
+                .orElseThrow(() -> new ResourceNotFoundException("Exam not found"));
+
+        if ("PUBLISHED".equals(exam.getStatus())) {
+            throw new ResourceConflictException("Cannot modify a published exam");
+        }
+
+        if (req.getTitle() != null) exam.setTitle(req.getTitle());
+        if (req.getDescription() != null) exam.setDescription(req.getDescription());
+        if (req.getDurationMinutes() != null) exam.setDurationMinutes(req.getDurationMinutes());
+        if (req.getPassMark() != null) exam.setPassMark(req.getPassMark());
+        if (req.getMaxAttempts() != null) exam.setMaxAttempts(req.getMaxAttempts());
+        if (req.getIsPractice() != null) exam.setIsPractice(req.getIsPractice());
+
+        exam = examRepository.save(exam);
+        Long examIdToFilter = exam.getExamId();
+        List<ExamQuestion> eqList = examQuestionRepository.findAll().stream()
+                .filter(eq -> eq.getExam().getExamId().equals(examIdToFilter))
+                .collect(Collectors.toList());
+
+        return mapToExamResponse(exam, eqList, false);
+    }
+
+    @Override
+    @Transactional
+    public ExamResponse publishExam(Long examId, User currentUser) {
+        Exam exam = examRepository.findById(examId)
+                .orElseThrow(() -> new ResourceNotFoundException("Exam not found"));
+
+        Long eId = exam.getExamId();
+        List<ExamQuestion> eqList = examQuestionRepository.findAll().stream()
+                .filter(eq -> eq.getExam().getExamId().equals(eId))
+                .collect(Collectors.toList());
+
+        if (eqList.isEmpty()) {
+            throw new BadRequestException("Cannot publish an exam with no questions");
+        }
+
+        BigDecimal totalPoints = eqList.stream().map(ExamQuestion::getPoints).reduce(BigDecimal.ZERO, BigDecimal::add);
+        if (totalPoints.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BadRequestException("Total exam points must be greater than zero");
+        }
+
+        for (ExamQuestion eq : eqList) {
+            Question q = eq.getQuestion();
+            if (!"ACTIVE".equals(q.getStatus()) || !"APPROVED".equals(q.getApprovalStatus()) || q.getDeletedAt() != null) {
+                throw new BadRequestException("Exam contains inactive, unapproved, or deleted questions");
+            }
+        }
+
+        exam.setStatus("PUBLISHED");
+        exam.setPublishedAt(Instant.now());
+        exam = examRepository.save(exam);
+
+        return mapToExamResponse(exam, eqList, false);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ExamResponse getExamDetail(Long examId, User currentUser, boolean studentView) {
+        Exam exam = examRepository.findById(examId)
+                .orElseThrow(() -> new ResourceNotFoundException("Exam not found"));
+
+        if (studentView) {
+            if (!"PUBLISHED".equals(exam.getStatus())) {
+                throw new UnauthorizedException("Exam is not published");
+            }
+            if (exam.getCourse() != null) {
+                boolean enrolled = enrollmentRepository.existsByCourse_CourseIdAndUser_UserId(
+                        exam.getCourse().getCourseId(), currentUser.getUserId());
+                if (!enrolled && !User.ROLE_ADMIN.equals(currentUser.getRoleName())) {
+                    throw new UnauthorizedException("You are not enrolled in this course");
                 }
             }
-            return cb.and(where.toArray(Predicate[]::new));
-        };
-        Page<Exam> result=exams.findAll(filter,PageRequest.of(page,size,Sort.by(Sort.Direction.DESC,"createdAt","examId")));
-        return PageResponse.of(result,result.getContent().stream().map(e->response(e,false)).toList());
-    }
-
-    private Predicate scope(Path<Course> course,CriteriaQuery<?> query,CriteriaBuilder cb,Long userId) {
-        Subquery<Long> assigned=query.subquery(Long.class);
-        Root<CourseManager> a=assigned.from(CourseManager.class);
-        assigned.select(a.get("courseManagerId")).where(cb.equal(a.get("course"),course),cb.equal(a.get("user").get("userId"),userId));
-        return cb.or(cb.equal(course.get("manager").get("userId"),userId),cb.exists(assigned));
-    }
-
-    private Predicate familyPresent(Root<Exam> exam,CriteriaQuery<?> query,CriteriaBuilder cb,String kind) {
-        Subquery<Long> q=query.subquery(Long.class); Root<Question> question=q.from(Question.class);
-        Subquery<Long> direct=q.subquery(Long.class); Root<ExamQuestion> link=direct.from(ExamQuestion.class);
-        direct.select(link.get("examQuestionId")).where(cb.equal(link.get("exam"),exam),cb.equal(link.get("question"),question));
-        Subquery<Long> grouped=q.subquery(Long.class); Root<ExamGroup> gl=grouped.from(ExamGroup.class);
-        grouped.select(gl.get("examGroupId")).where(cb.equal(gl.get("exam"),exam),cb.equal(gl.get("group"),question.get("group")));
-        q.select(question.get("questionId")).where(familyPredicate(question.get("questionType"),cb,kind),cb.or(cb.exists(direct),cb.exists(grouped)));
-        Subquery<Long> conf=query.subquery(Long.class); Root<ExamConfig> config=conf.from(ExamConfig.class);
-        conf.select(config.get("configId")).where(cb.equal(config.get("exam"),exam),familyPredicate(config.get("questionType"),cb,kind));
-        return cb.or(cb.exists(q),cb.exists(conf));
-    }
-    private Predicate familyPredicate(Path<String> type,CriteriaBuilder cb,String kind) {
-        return kind.equals("QUIZ")?cb.not(type.in("ESSAY","CODE","DIAGRAM")):cb.equal(type,kind);
-    }
-
-    @Override public ExamResponse detail(UserPrincipal user,Long id) { Exam e=read(id); check(user,e); return response(e,true); }
-
-    @Override @Transactional
-    public ExamResponse create(UserPrincipal user,ExamRequests.Create r) {
-        Module module=r.moduleId()==null?null:module(r.moduleId());
-        Long courseId=r.courseId()!=null?r.courseId():module==null?null:module.getCourse().getCourseId();
-        Course course=access(user,courseId,true);
-        if(module!=null && !module.getCourse().getCourseId().equals(courseId)) throw bad("Module must belong to the selected course.");
-        validateMode(r.generationType(),size(r.questionIds())+size(r.groupIds()),size(r.configs()));
-        // Validate every referenced object before saving an identity-backed exam.
-        Set<Long> ids=new HashSet<>();
-        for(var item:list(r.questionIds())) { if(!ids.add(item.questionId())) throw conflict("Question is duplicated."); active(user,question(item.questionId())); }
-        Set<Long> groupIds=new HashSet<>();
-        for(var item:list(r.groupIds())) { if(!groupIds.add(item.groupId())) throw conflict("Group is duplicated."); groupAccess(user,group(item.groupId())); }
-        validateConfigs(r.configs(),courseId);
-        Exam e=Exam.builder().course(course).module(module).createdBy(users.getReferenceById(user.getId()))
-                .title(r.title().strip()).description(r.description()).durationMinutes(r.durationMinutes()).isPractice(r.isPractice())
-                .generationType(r.generationType()).passMark(r.passMark()==null?50:r.passMark()).maxAttempts(r.maxAttempts()==null?1:r.maxAttempts()).status("DRAFT").build();
-        exams.save(e);
-        for(var item:list(r.questionIds())) attachQuestion(user,e,item,false);
-        for(var item:list(r.groupIds())) attachGroup(user,e,item);
-        saveConfigs(e,r.configs()); exams.flush(); return response(e,true);
-    }
-
-    @Override @Transactional
-    public ExamResponse update(UserPrincipal user,Long id,ExamRequests.Update r) {
-        Exam e=write(user,id);
-        boolean structural=r.title()!=null || r.courseId()!=null || r.moduleId()!=null || r.durationMinutes()!=null || r.isPractice()!=null
-                || r.generationType()!=null || r.passMark()!=null || r.maxAttempts()!=null || r.configs()!=null;
-        if(structural) editable(e);
-        Long courseId=r.courseId()==null?courseId(e):r.courseId();
-        Module module=r.moduleId()==null?e.getModule():module(r.moduleId());
-        if(module!=null && !module.getCourse().getCourseId().equals(courseId)) throw bad("Module must belong to the selected course.");
-        if(r.courseId()!=null && r.configs()==null)
-            for(ExamConfig config:configs.findByExamExamIdOrderByConfigIdAsc(id)) validateConfigModule(config.getModule(),courseId);
-        if(r.courseId()!=null || r.moduleId()!=null) { e.setCourse(access(user,courseId,true)); e.setModule(module); }
-        if(r.title()!=null) e.setTitle(r.title().strip());
-        if(r.description()!=null) e.setDescription(r.description());
-        if(r.durationMinutes()!=null) e.setDurationMinutes(r.durationMinutes());
-        if(r.isPractice()!=null) e.setIsPractice(r.isPractice());
-        if(r.passMark()!=null) e.setPassMark(r.passMark());
-        if(r.maxAttempts()!=null) e.setMaxAttempts(r.maxAttempts());
-        if(r.generationType()!=null) e.setGenerationType(r.generationType());
-        if(r.configs()!=null) { validateConfigs(r.configs(),courseId); configs.deleteByExamExamId(id); configs.flush(); saveConfigs(e,r.configs()); }
-        // Removing the last attachment is allowed while editing a draft; publish validates completeness.
-        if(r.generationType()!=null) validateMode(e.getGenerationType(),links.findByExamExamIdOrderByOrderIndexAscExamQuestionIdAsc(id).size()+groupLinks.findByExamExamIdOrderByOrderIndexAscExamGroupIdAsc(id).size(),configs.findByExamExamIdOrderByConfigIdAsc(id).size());
-        exams.flush(); return response(e,true);
-    }
-
-    @Override @Transactional
-    public ExamResponse.Published publish(UserPrincipal user,Long id,ExamRequests.Publish r) {
-        Exam e=write(user,id); ExamResponse state=response(e,true);
-        if(r.status().equals("PUBLISHED")) {
-            List<ExamConfig> configured=configs.findByExamExamIdOrderByConfigIdAsc(id);
-            validateMode(e.getGenerationType(),links.findByExamExamIdOrderByOrderIndexAscExamQuestionIdAsc(id).size()
-                    +groupLinks.findByExamExamIdOrderByOrderIndexAscExamGroupIdAsc(id).size(),configured.size());
-            for(ExamConfig config:configured) validateConfigModule(config.getModule(),courseId(e));
-            if(state.questionCount()==0) throw bad("Add at least one question before publishing.");
         }
-        e.setStatus(r.status()); exams.flush();
-        List<String> warnings=new ArrayList<>();
-        if(r.status().equals("PUBLISHED")) for(Question question:examQuestions(e).values())
-            if(Set.of("ESSAY","DIAGRAM").contains(question.getQuestionType()) && (question.getEssayGradingRubric()==null || question.getEssayGradingRubric().isBlank()))
-                warnings.add("Question "+question.getQuestionId()+" has no rubric.");
-        return new ExamResponse.Published(id,e.getTitle(),e.getStatus(),state.questionCount(),warnings);
-    }
-    @Override @Transactional public void delete(UserPrincipal user,Long id) {
-        Exam e=write(user,id); editable(e);
-        configs.deleteByExamExamId(id); links.deleteByExamExamId(id); groupLinks.deleteByExamExamId(id);
-        exams.delete(e); exams.flush();
-    }
-    @Override @Transactional public ExamResponse.QuestionLink addQuestion(UserPrincipal user,Long id,ExamRequests.QuestionLink r) {
-        Exam e=write(user,id); editable(e); return questionLink(attachQuestion(user,e,r,false));
-    }
-    @Override @Transactional public void removeQuestion(UserPrincipal user,Long id,Long linkId) {
-        Exam e=write(user,id); editable(e); positive(linkId);
-        ExamQuestion link=links.findById(linkId).filter(l->l.getExam().getExamId().equals(id)).orElseThrow(()->missing("Exam question link"));
-        links.delete(link); links.flush();
-    }
-    @Override @Transactional public ExamResponse.GroupLink addGroup(UserPrincipal user,Long id,ExamRequests.GroupLink r) {
-        Exam e=write(user,id); editable(e); return groupLink(attachGroup(user,e,r));
-    }
-    @Override @Transactional public void removeGroup(UserPrincipal user,Long id,Long linkId) {
-        Exam e=write(user,id); editable(e); positive(linkId);
-        ExamGroup link=groupLinks.findById(linkId).filter(l->l.getExam().getExamId().equals(id)).orElseThrow(()->missing("Exam group link"));
-        groupLinks.delete(link); groupLinks.flush();
+
+        Long eId = exam.getExamId();
+        List<ExamQuestion> eqList = examQuestionRepository.findAll().stream()
+                .filter(eq -> eq.getExam().getExamId().equals(eId))
+                .sorted(Comparator.comparing(ExamQuestion::getOrderIndex))
+                .collect(Collectors.toList());
+
+        return mapToExamResponse(exam, eqList, studentView);
     }
 
-    @Override @Transactional public Map<String,Object> rubric(UserPrincipal user,Long id,ExamRequests.Rubric r) {
-        Question q=question(id); questionAccess(user,q);
-        if(!Set.of("ESSAY","DIAGRAM","CODE").contains(q.getQuestionType())) throw bad("This question type does not use a rubric.");
-        BigDecimal total=r.criteria().stream().map(ExamRequests.Criterion::maxScore).reduce(BigDecimal.ZERO,BigDecimal::add);
-        if(r.totalPoints()!=null && r.totalPoints().compareTo(total)!=0) throw bad("totalPoints must equal the sum of criterion maxScore values.");
-        ExamRequests.Rubric normalized=new ExamRequests.Rubric(r.criteria(),total,r.notes());
-        try { q.setEssayGradingRubric(json.writeValueAsString(normalized)); questions.flush(); }
-        catch(JsonProcessingException ex) { throw bad("Could not encode rubric."); }
-        return Map.of("questionId",id,"content",q.getContent(),"questionType",q.getQuestionType(),"essayGradingRubric",normalized);
+    @Override
+    @Transactional(readOnly = true)
+    public List<ExamResponse> getExamsForCourse(Long courseId, User currentUser) {
+        List<Exam> exams = examRepository.findAll().stream()
+                .filter(e -> e.getCourse() != null && e.getCourse().getCourseId().equals(courseId))
+                .collect(Collectors.toList());
+
+        boolean isStudent = User.ROLE_STUDENT.equals(currentUser.getRoleName());
+        if (isStudent) {
+            exams = exams.stream().filter(e -> "PUBLISHED".equals(e.getStatus())).collect(Collectors.toList());
+        }
+
+        return exams.stream().map(e -> {
+            Long eId = e.getExamId();
+            List<ExamQuestion> eqList = examQuestionRepository.findAll().stream()
+                    .filter(eq -> eq.getExam().getExamId().equals(eId))
+                    .collect(Collectors.toList());
+            return mapToExamResponse(e, eqList, isStudent);
+        }).collect(Collectors.toList());
     }
 
-    @Override @Transactional
-    public ExamResponse.Imported importQuestions(UserPrincipal user,Long id,String text,BigDecimal points) {
-        Exam e=write(user,id); editable(e); points=points(points);
-        List<QuestionTextParser.Parsed> parsed=QuestionTextParser.parse(text);
-        Map<String,Question> bank=new LinkedHashMap<>();
-        for(Question q:questions.findImportBank(courseId(e),e.getModule()==null?null:e.getModule().getModuleId())) bank.putIfAbsent(QuestionTextParser.hash(q.getContent()),q);
-        Set<String> attached=new HashSet<>(); for(Question q:examQuestions(e).values()) attached.add(QuestionTextParser.hash(q.getContent()));
-        int imported=0,reused=0,skipped=0; List<Long> ids=new ArrayList<>(); QuestionGroup importGroup=null;
-        for(var item:parsed) {
-            String hash=QuestionTextParser.hash(item.content());
-            if(!attached.add(hash)) { skipped++; continue; }
-            Question q=bank.get(hash);
-            if(q==null) {
-                if(e.getModule()==null && importGroup==null) importGroup=groups.save(QuestionGroup.builder().course(e.getCourse()).title(e.getTitle()+" import").build());
-                q=questions.save(Question.builder().module(e.getModule()).group(importGroup).content(item.content()).questionType(item.type()).status("DRAFT").build());
-                for(int i=0;i<item.options().size();i++) options.save(AnswerOption.builder().question(q).optionText(item.options().get(i)).isCorrect(i==item.correctIndex()).orderIndex(i).build());
-                bank.put(hash,q); imported++;
-            } else reused++;
-            attachQuestion(user,e,new ExamRequests.QuestionLink(q.getQuestionId(),points,null),true); ids.add(q.getQuestionId());
+    @Override
+    @Transactional
+    public ExamResponse addQuestionToExam(Long examId, ExamAddQuestionRequest req, User currentUser) {
+        Exam exam = examRepository.findById(examId)
+                .orElseThrow(() -> new ResourceNotFoundException("Exam not found"));
+        if ("PUBLISHED".equals(exam.getStatus())) {
+            throw new ResourceConflictException("Cannot modify a published exam");
         }
-        links.flush(); return new ExamResponse.Imported(imported,reused,skipped,ids);
+        Question q = questionRepository.findActiveById(req.getQuestionId())
+                .orElseThrow(() -> new ResourceNotFoundException("Question not found"));
+        if (q.getCourse() == null || exam.getCourse() == null || !q.getCourse().getCourseId().equals(exam.getCourse().getCourseId())) {
+            throw new BadRequestException("Question does not belong to the same course as the exam");
+        }
+        if (!"ACTIVE".equals(q.getStatus()) || !"APPROVED".equals(q.getApprovalStatus())) {
+            throw new BadRequestException("Question must be active and approved");
+        }
+
+        Long eId = exam.getExamId();
+        List<ExamQuestion> existing = examQuestionRepository.findAll().stream()
+                .filter(eq -> eq.getExam().getExamId().equals(eId))
+                .collect(Collectors.toList());
+
+        boolean alreadyExists = existing.stream().anyMatch(eq -> eq.getQuestion().getQuestionId().equals(q.getQuestionId()));
+        if (alreadyExists) {
+            throw new ResourceConflictException("Question is already in the exam");
+        }
+
+        int maxOrder = existing.stream().mapToInt(ExamQuestion::getOrderIndex).max().orElse(-1);
+        BigDecimal pts = req.getPoints() != null ? req.getPoints() : q.getDefaultPoints();
+
+        ExamQuestion eq = ExamQuestion.builder()
+                .exam(exam)
+                .question(q)
+                .orderIndex(maxOrder + 1)
+                .points(pts)
+                .build();
+        examQuestionRepository.save(eq);
+
+        existing.add(eq);
+        return mapToExamResponse(exam, existing, false);
     }
 
-    private ExamQuestion attachQuestion(UserPrincipal user,Exam e,ExamRequests.QuestionLink r,boolean imported) {
-        Question q=question(r.questionId()); questionAccess(user,q); if(!imported) active(user,q);
-        if(examQuestions(e).containsKey(q.getQuestionId())) throw conflict("Question is already in this exam.");
-        List<ExamQuestion> existing=links.findByExamExamIdOrderByOrderIndexAscExamQuestionIdAsc(e.getExamId());
-        int order=r.orderIndex()==null?next(existing.stream().map(ExamQuestion::getOrderIndex).toList()):r.orderIndex();
-        return links.saveAndFlush(ExamQuestion.builder().exam(e).question(q).points(points(r.points())).orderIndex(order).build());
-    }
-    private ExamGroup attachGroup(UserPrincipal user,Exam e,ExamRequests.GroupLink r) {
-        QuestionGroup g=group(r.groupId()); groupAccess(user,g);
-        List<ExamGroup> existing=groupLinks.findByExamExamIdOrderByOrderIndexAscExamGroupIdAsc(e.getExamId());
-        if(existing.stream().anyMatch(l->l.getGroup().getGroupId().equals(r.groupId()))) throw conflict("Group is already in this exam.");
-        Map<Long,Question> used=examQuestions(e);
-        for(Question q:questions.findByGroupGroupIdOrderByQuestionIdAsc(r.groupId())) {
-            active(user,q); if(used.containsKey(q.getQuestionId())) throw conflict("A group question is already attached to this exam.");
+    @Override
+    @Transactional
+    public ExamResponse removeQuestionFromExam(Long examId, Long examQuestionId, User currentUser) {
+        Exam exam = examRepository.findById(examId)
+                .orElseThrow(() -> new ResourceNotFoundException("Exam not found"));
+        if ("PUBLISHED".equals(exam.getStatus())) {
+            throw new ResourceConflictException("Cannot modify a published exam");
         }
-        int order=r.orderIndex()==null?next(existing.stream().map(ExamGroup::getOrderIndex).toList()):r.orderIndex();
-        return groupLinks.saveAndFlush(ExamGroup.builder().exam(e).group(g).points(points(r.points())).orderIndex(order).build());
+        ExamQuestion eq = examQuestionRepository.findById(examQuestionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Exam question not found"));
+        if (!eq.getExam().getExamId().equals(exam.getExamId())) {
+            throw new BadRequestException("Exam question does not belong to this exam");
+        }
+
+        examQuestionRepository.delete(eq);
+
+        Long eId = exam.getExamId();
+        List<ExamQuestion> existing = examQuestionRepository.findAll().stream()
+                .filter(e -> e.getExam().getExamId().equals(eId))
+                .collect(Collectors.toList());
+
+        return mapToExamResponse(exam, existing, false);
     }
-    private void validateConfigs(List<ExamRequests.Config> values,Long courseId) {
-        for(var c:list(values)) {
-            if(!TYPES.contains(c.questionType())) throw bad("Invalid questionType.");
-            validateConfigModule(c.moduleId()==null?null:module(c.moduleId()),courseId);
+
+    @Override
+    @Transactional
+    public ExamResponse reorderExamQuestions(Long examId, ExamReorderRequest req, User currentUser) {
+        Exam exam = examRepository.findById(examId)
+                .orElseThrow(() -> new ResourceNotFoundException("Exam not found"));
+        if ("PUBLISHED".equals(exam.getStatus())) {
+            throw new ResourceConflictException("Cannot modify a published exam");
+        }
+
+        Long eId = exam.getExamId();
+        List<ExamQuestion> existing = examQuestionRepository.findAll().stream()
+                .filter(eq -> eq.getExam().getExamId().equals(eId))
+                .collect(Collectors.toList());
+
+        Map<Long, ExamQuestion> eqMap = existing.stream().collect(Collectors.toMap(ExamQuestion::getExamQuestionId, eq -> eq));
+
+        List<Long> ids = req.getExamQuestionIds();
+        for (int i = 0; i < ids.size(); i++) {
+            ExamQuestion eq = eqMap.get(ids.get(i));
+            if (eq != null) {
+                eq.setOrderIndex(i);
+                examQuestionRepository.save(eq);
+            }
+        }
+
+        List<ExamQuestion> updated = examQuestionRepository.findAll().stream()
+                .filter(eq -> eq.getExam().getExamId().equals(eId))
+                .sorted(Comparator.comparing(ExamQuestion::getOrderIndex))
+                .collect(Collectors.toList());
+
+        return mapToExamResponse(exam, updated, false);
+    }
+
+    @Override
+    @Transactional
+    public AttemptResponse submitAttempt(AttemptSubmitRequest req, User currentUser) {
+        Exam exam = examRepository.findById(req.getExamId())
+                .orElseThrow(() -> new ResourceNotFoundException("Exam not found"));
+
+        if (!"PUBLISHED".equals(exam.getStatus())) {
+            throw new BadRequestException("Exam is not published");
+        }
+
+        ExamAttempt attempt = ExamAttempt.builder()
+                .exam(exam)
+                .user(currentUser)
+                .startTime(Instant.now())
+                .status("IN_PROGRESS")
+                .build();
+        attempt = examAttemptRepository.save(attempt);
+
+        Long eId = exam.getExamId();
+        List<ExamQuestion> examQuestions = examQuestionRepository.findAll().stream()
+                .filter(eq -> eq.getExam().getExamId().equals(eId))
+                .collect(Collectors.toList());
+        Map<Long, ExamQuestion> eqMap = examQuestions.stream().collect(Collectors.toMap(eq -> eq.getQuestion().getQuestionId(), eq -> eq));
+
+        BigDecimal totalScore = BigDecimal.ZERO;
+        boolean hasPendingEssay = false;
+        List<AttemptResponse.AttemptAnswerDto> ansDtos = new ArrayList<>();
+
+        for (AttemptSubmitRequest.AnswerSubmitDto ansDto : req.getAnswers()) {
+            ExamQuestion eq = eqMap.get(ansDto.getQuestionId());
+            if (eq == null) continue;
+            Question q = eq.getQuestion();
+
+            String gradingStatus = "AUTO";
+            BigDecimal scoreEarned = BigDecimal.ZERO;
+            Boolean isCorrect = false;
+
+            String responseJson = null;
+            try {
+                if (ansDto.getResponse() != null) {
+                    responseJson = objectMapper.writeValueAsString(ansDto.getResponse());
+                }
+            } catch (Exception ignored) {}
+
+            if ("ESSAY".equals(q.getQuestionType())) {
+                gradingStatus = "PENDING_AI";
+                hasPendingEssay = true;
+                scoreEarned = BigDecimal.ZERO;
+                isCorrect = null;
+            } else {
+                List<AnswerOption> options = answerOptionRepository.findByQuestion_QuestionId(q.getQuestionId());
+                ScoringService.ScoreResult res = scoringService.calculateScore(
+                        q.getQuestionType(), eq.getPoints(), q.getAnswerKey(), options, responseJson);
+                scoreEarned = res.getScore();
+                isCorrect = res.isCorrect();
+                totalScore = totalScore.add(scoreEarned);
+            }
+
+            AttemptAnswer aa = AttemptAnswer.builder()
+                    .attempt(attempt)
+                    .question(q)
+                    .response(responseJson)
+                    .essayAnswer(ansDto.getEssayAnswer())
+                    .questionVersion(q.getScoringVersion())
+                    .gradingStatus(gradingStatus)
+                    .scoreEarned(scoreEarned)
+                    .isCorrect(isCorrect)
+                    .build();
+            aa = attemptAnswerRepository.save(aa);
+
+            ansDtos.add(AttemptResponse.AttemptAnswerDto.builder()
+                    .answerId(aa.getAttemptAnswerId())
+                    .questionId(q.getQuestionId())
+                    .gradingStatus(gradingStatus)
+                    .scoreEarned(scoreEarned)
+                    .isCorrect(isCorrect)
+                    .build());
+        }
+
+        attempt.setSubmitTime(Instant.now());
+        if (hasPendingEssay) {
+            attempt.setStatus("GRADING");
+            attempt.setTotalScore(totalScore);
+        } else {
+            attempt.setStatus("COMPLETED");
+            attempt.setTotalScore(totalScore);
+        }
+        attempt = examAttemptRepository.save(attempt);
+
+        return AttemptResponse.builder()
+                .attemptId(attempt.getAttemptId())
+                .examId(exam.getExamId())
+                .examTitle(exam.getTitle())
+                .startTime(attempt.getStartTime())
+                .submitTime(attempt.getSubmitTime())
+                .totalScore(attempt.getTotalScore())
+                .status(attempt.getStatus())
+                .answers(ansDtos)
+                .build();
+    }
+
+    @Override
+    @Scheduled(fixedDelayString = "${app.scheduler.delay:30000}")
+    public void processPendingAiEssays() {
+        List<AttemptAnswer> pendingList = attemptAnswerRepository.findByGradingStatus("PENDING_AI");
+        if (pendingList.isEmpty()) return;
+
+        for (AttemptAnswer aa : pendingList) {
+            try {
+                gradeSingleEssay(aa);
+            } catch (Exception ignored) {}
         }
     }
-    private void validateConfigModule(Module module,Long courseId) {
-        if(module!=null && !module.getCourse().getCourseId().equals(courseId)) throw bad("Config module must belong to the exam course.");
+
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public void gradeSingleEssay(AttemptAnswer aa) {
+        Question q = aa.getQuestion();
+        Course course = q.getCourse();
+        if (course == null || course.getManager() == null) return;
+        User manager = course.getManager();
+
+        Instant now = Instant.now();
+        UserSubscription sub = userSubscriptionRepository.findActiveSubscriptionByUser(manager.getUserId(), now).orElse(null);
+        if (sub != null) {
+            int usedTokens = aiUsageLogRepository.sumTokensByUserSince(manager.getUserId(), sub.getStartDate());
+            if (usedTokens + 300 > sub.getPlan().getAiTokenLimit()) {
+                return;
+            }
+        }
+
+        String prompt = "Grade the following essay answer according to rubric:\n" +
+                "Question: " + q.getContent() + "\n" +
+                "Rubric: " + q.getEssayGradingRubric() + "\n" +
+                "Student Answer: " + aa.getEssayAnswer() + "\n" +
+                "Return JSON with 'criteriaScores' (list of scores per criterion), 'totalScore', and 'feedback'.";
+
+        Instant start = Instant.now();
+        try {
+            AiResponse resp = aiClient.complete(AiRequest.builder()
+                    .prompt(prompt)
+                    .systemPrompt("You are an expert essay grader. Return strictly valid JSON.")
+                    .build());
+            long duration = Duration.between(start, Instant.now()).toMillis();
+
+            AiUsageLog log = AiUsageLog.builder()
+                    .user(manager)
+                    .course(course)
+                    .purpose("ESSAY_GRADING")
+                    .model(resp.getModel())
+                    .inputTokens(resp.getInputTokens())
+                    .outputTokens(resp.getOutputTokens())
+                    .status("SUCCESS")
+                    .durationMs((int) duration)
+                    .attemptAnswerId(aa.getAttemptAnswerId())
+                    .build();
+            aiUsageLogRepository.save(log);
+
+            Map<String, Object> resMap = objectMapper.readValue(resp.getText(), Map.class);
+            BigDecimal earnedScore = BigDecimal.valueOf(((Number) resMap.getOrDefault("totalScore", 0)).doubleValue());
+            if (earnedScore.compareTo(q.getDefaultPoints()) > 0) earnedScore = q.getDefaultPoints();
+
+            updateAttemptAnswerGraded(aa.getAttemptAnswerId(), earnedScore, objectMapper.writeValueAsString(resMap.get("criteriaScores")), objectMapper.writeValueAsString(resMap.get("feedback")));
+
+        } catch (Exception e) {
+            long duration = Duration.between(start, Instant.now()).toMillis();
+            failOrRetryEssay(aa.getAttemptAnswerId(), e.getMessage(), duration, manager, course);
+        }
     }
-    private void saveConfigs(Exam e,List<ExamRequests.Config> values) {
-        for(var c:list(values)) configs.save(ExamConfig.builder().exam(e).questionType(c.questionType()).numberOfQuestions(c.numberOfQuestions()).module(c.moduleId()==null?null:module(c.moduleId())).difficulty(c.difficulty()).build());
+
+    @Transactional
+    public void updateAttemptAnswerGraded(Long answerId, BigDecimal score, String criteriaScores, String feedback) {
+        AttemptAnswer aa = attemptAnswerRepository.findById(answerId).orElse(null);
+        if (aa == null) return;
+        aa.setScoreEarned(score);
+        aa.setAiCriteriaScores(criteriaScores);
+        aa.setAiFeedbackJson(feedback);
+        aa.setGradingStatus("AI_GRADED");
+        aa.setGradedAt(Instant.now());
+        attemptAnswerRepository.save(aa);
+
+        checkAndUpdateAttemptCompletion(aa.getAttempt());
     }
-    private void validateMode(String mode,int fixed,int random) {
-        if(!Set.of("STATIC","RANDOM","MIXED").contains(mode) || (mode.equals("STATIC") && (fixed==0 || random>0)) || (mode.equals("RANDOM") && (random==0 || fixed>0)) || (mode.equals("MIXED") && (fixed==0 || random==0)))
-            throw bad("STATIC requires fixed questions, RANDOM requires configs, MIXED requires both.");
+
+    @Transactional
+    public void failOrRetryEssay(Long answerId, String errorMsg, long duration, User manager, Course course) {
+        AttemptAnswer aa = attemptAnswerRepository.findById(answerId).orElse(null);
+        if (aa == null) return;
+        int retry = aa.getGradeRetryCount() + 1;
+        aa.setGradeRetryCount(retry);
+        if (retry >= 3) {
+            aa.setGradingStatus("FAILED");
+            aa.setScoreEarned(BigDecimal.ZERO);
+        }
+        attemptAnswerRepository.save(aa);
+
+        AiUsageLog errorLog = AiUsageLog.builder()
+                .user(manager)
+                .course(course)
+                .purpose("ESSAY_GRADING")
+                .status("FAILED")
+                .errorMessage(errorMsg)
+                .durationMs((int) duration)
+                .attemptAnswerId(aa.getAttemptAnswerId())
+                .build();
+        aiUsageLogRepository.save(errorLog);
+
+        if (retry >= 3) {
+            checkAndUpdateAttemptCompletion(aa.getAttempt());
+        }
     }
-    private void editable(Exam e) {
-        if(!"DRAFT".equals(e.getStatus()) || attempts.existsByExamExamId(e.getExamId())) throw conflict("Only draft exams with no attempts allow content changes. Archive exams with attempts.");
+
+    private void checkAndUpdateAttemptCompletion(ExamAttempt attempt) {
+        List<AttemptAnswer> answers = attemptAnswerRepository.findByAttempt_AttemptId(attempt.getAttemptId());
+        boolean hasPending = answers.stream().anyMatch(a -> "PENDING_AI".equals(a.getGradingStatus()));
+        if (!hasPending) {
+            BigDecimal total = answers.stream().map(a -> a.getScoreEarned() != null ? a.getScoreEarned() : BigDecimal.ZERO).reduce(BigDecimal.ZERO, BigDecimal::add);
+            attempt.setTotalScore(total);
+            attempt.setStatus("COMPLETED");
+            examAttemptRepository.save(attempt);
+        }
     }
-    private Exam read(Long id) { positive(id); return exams.findById(id).orElseThrow(()->missing("Exam")); }
-    private Exam write(UserPrincipal user,Long id) {
-        Exam e=read(id); access(user,courseId(e),true);
-        e=exams.findForUpdate(id).orElseThrow(()->missing("Exam")); check(user,e); return e;
+
+    @Override
+    @Scheduled(fixedDelayString = "${app.scheduler.delay:30000}")
+    public void processRegrades() {
+        List<AttemptAnswer> regradeList = attemptAnswerRepository.findAll().stream()
+                .filter(aa -> "AUTO".equals(aa.getGradingStatus()) && aa.getResponse() != null &&
+                        aa.getQuestionVersion() != null && aa.getQuestionVersion() < aa.getQuestion().getScoringVersion())
+                .limit(200)
+                .collect(Collectors.toList());
+
+        for (AttemptAnswer aa : regradeList) {
+            Question q = aa.getQuestion();
+            BigDecimal oldScore = aa.getScoreEarned() != null ? aa.getScoreEarned() : BigDecimal.ZERO;
+            List<AnswerOption> options = answerOptionRepository.findByQuestion_QuestionId(q.getQuestionId());
+            ScoringService.ScoreResult res = scoringService.calculateScore(
+                    q.getQuestionType(), q.getDefaultPoints(), q.getAnswerKey(), options, aa.getResponse());
+
+            BigDecimal newScore = res.getScore();
+            if (oldScore.compareTo(newScore) != 0) {
+                AnswerRegradeLog log = AnswerRegradeLog.builder()
+                        .attemptAnswer(aa)
+                        .oldScore(oldScore)
+                        .newScore(newScore)
+                        .questionVersionFrom(aa.getQuestionVersion())
+                        .questionVersionTo(q.getScoringVersion())
+                        .build();
+                answerRegradeLogRepository.save(log);
+            }
+
+            aa.setScoreEarned(newScore);
+            aa.setIsCorrect(res.isCorrect());
+            aa.setQuestionVersion(q.getScoringVersion());
+            attemptAnswerRepository.save(aa);
+
+            ExamAttempt att = aa.getAttempt();
+            List<AttemptAnswer> attAnswers = attemptAnswerRepository.findByAttempt_AttemptId(att.getAttemptId());
+            BigDecimal attTotal = attAnswers.stream().map(a -> a.getScoreEarned() != null ? a.getScoreEarned() : BigDecimal.ZERO).reduce(BigDecimal.ZERO, BigDecimal::add);
+            att.setTotalScore(attTotal);
+            examAttemptRepository.save(att);
+        }
     }
-    private void check(UserPrincipal user,Exam e) {
-        if(e.getCourse()!=null) access(user,e.getCourse().getCourseId(),false);
-        if(e.getModule()!=null) access(user,e.getModule().getCourse().getCourseId(),false);
-        if(e.getCourse()==null && e.getModule()==null && !admin(user)) throw new ForbiddenException("Exam has no managed course.");
+
+    @Override
+    @Transactional
+    public void manualEssayRegrade(Long questionId, User currentUser) {
+        Question q = questionRepository.findById(questionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Question not found"));
+        if (!"ESSAY".equals(q.getQuestionType())) {
+            throw new BadRequestException("Question is not an essay");
+        }
+        List<AttemptAnswer> answers = attemptAnswerRepository.findAll().stream()
+                .filter(aa -> aa.getQuestion().getQuestionId().equals(q.getQuestionId()) && "AI_GRADED".equals(aa.getGradingStatus()))
+                .collect(Collectors.toList());
+
+        for (AttemptAnswer aa : answers) {
+            aa.setGradingStatus("PENDING_AI");
+            aa.setGradeRetryCount(0);
+            attemptAnswerRepository.save(aa);
+
+            ExamAttempt att = aa.getAttempt();
+            att.setStatus("GRADING");
+            examAttemptRepository.save(att);
+        }
     }
-    private Long courseId(Exam e) { return e.getCourse()!=null?e.getCourse().getCourseId():e.getModule()==null?null:e.getModule().getCourse().getCourseId(); }
-    private Course access(UserPrincipal user,Long id,boolean lock) {
-        positive(id); Course c=(lock?courses.findForUpdate(id):courses.findById(id)).orElseThrow(()->missing("Course"));
-        if(!admin(user) && !c.getManager().getUserId().equals(user.getId()) && !assignments.existsByCourseCourseIdAndUserUserId(id,user.getId())) throw new ForbiddenException("Course is outside your management scope.");
-        return c;
+
+    private ExamResponse mapToExamResponse(Exam exam, List<ExamQuestion> eqList, boolean studentView) {
+        List<ExamResponse.ExamQuestionDto> qDtos = new ArrayList<>();
+        for (ExamQuestion eq : eqList) {
+            Question q = eq.getQuestion();
+            List<AnswerOption> opts = answerOptionRepository.findByQuestion_QuestionId(q.getQuestionId());
+
+            List<AnswerOptionDto> optDtos = opts.stream().map(o -> AnswerOptionDto.builder()
+                    .optionId(o.getOptionId())
+                    .optionText(o.getOptionText())
+                    .isCorrect(studentView ? null : o.getIsCorrect())
+                    .explanation(studentView ? null : o.getExplanation())
+                    .orderIndex(o.getOrderIndex())
+                    .build()).collect(Collectors.toList());
+
+            if (studentView && "MATCHING".equals(q.getQuestionType())) {
+                Collections.shuffle(optDtos);
+            }
+
+            qDtos.add(ExamResponse.ExamQuestionDto.builder()
+                    .examQuestionId(eq.getExamQuestionId())
+                    .questionId(q.getQuestionId())
+                    .content(q.getContent())
+                    .questionType(q.getQuestionType())
+                    .difficulty(q.getDifficulty())
+                    .orderIndex(eq.getOrderIndex())
+                    .points(eq.getPoints())
+                    .options(optDtos)
+                    .answerKey(studentView ? null : parseJson(q.getAnswerKey()))
+                    .aiExplanation(studentView ? null : q.getAiExplanation())
+                    .build());
+        }
+
+        return ExamResponse.builder()
+                .examId(exam.getExamId())
+                .courseId(exam.getCourse() != null ? exam.getCourse().getCourseId() : null)
+                .courseName(exam.getCourse() != null ? exam.getCourse().getTitle() : null)
+                .title(exam.getTitle())
+                .description(exam.getDescription())
+                .durationMinutes(exam.getDurationMinutes())
+                .isPractice(exam.getIsPractice())
+                .generationType(exam.getGenerationType())
+                .status(exam.getStatus())
+                .publishedAt(exam.getPublishedAt())
+                .passMark(exam.getPassMark())
+                .maxAttempts(exam.getMaxAttempts())
+                .createdBy(exam.getCreatedBy() != null ? exam.getCreatedBy().getUserId() : null)
+                .createdAt(exam.getCreatedAt())
+                .questions(qDtos)
+                .build();
     }
-    private Module module(Long id) { positive(id); return modules.findById(id).orElseThrow(()->missing("Module")); }
-    private Question question(Long id) { positive(id); return questions.findById(id).orElseThrow(()->missing("Question")); }
-    private QuestionGroup group(Long id) { positive(id); return groups.findById(id).orElseThrow(()->missing("Question group")); }
-    private void groupAccess(UserPrincipal user,QuestionGroup g) {
-        if(g.getCourse()!=null) access(user,g.getCourse().getCourseId(),false);
-        if(g.getModule()!=null) access(user,g.getModule().getCourse().getCourseId(),false);
-        if(g.getCourse()==null && g.getModule()==null && !admin(user)) throw new ForbiddenException("Group has no managed course.");
+
+    private Object parseJson(String jsonStr) {
+        if (jsonStr == null || jsonStr.trim().isEmpty()) return null;
+        try {
+            return objectMapper.readValue(jsonStr, Object.class);
+        } catch (Exception e) {
+            return null;
+        }
     }
-    private void questionAccess(UserPrincipal user,Question q) {
-        if(q.getModule()!=null) access(user,q.getModule().getCourse().getCourseId(),false);
-        if(q.getGroup()!=null) groupAccess(user,q.getGroup());
-        if(q.getModule()==null && q.getGroup()==null && !admin(user)) throw new ForbiddenException("Question has no managed course.");
+
+    private static class SelectedQuestionInfo {
+        Question question;
+        BigDecimal points;
+        SelectedQuestionInfo(Question q, BigDecimal p) {
+            this.question = q;
+            this.points = p;
+        }
     }
-    private void active(UserPrincipal user,Question q) { questionAccess(user,q); if(!"ACTIVE".equals(q.getStatus())) throw bad("Only ACTIVE questions can be selected from the bank."); }
-    private Map<Long,Question> examQuestions(Exam e) {
-        Map<Long,Question> result=new LinkedHashMap<>();
-        for(ExamQuestion l:links.findByExamExamIdOrderByOrderIndexAscExamQuestionIdAsc(e.getExamId())) result.put(l.getQuestion().getQuestionId(),l.getQuestion());
-        for(ExamGroup l:groupLinks.findByExamExamIdOrderByOrderIndexAscExamGroupIdAsc(e.getExamId()))
-            for(Question q:questions.findByGroupGroupIdOrderByQuestionIdAsc(l.getGroup().getGroupId())) result.put(q.getQuestionId(),q);
-        return result;
-    }
-    private ExamResponse response(Exam e,boolean detail) {
-        List<ExamQuestion> direct=links.findByExamExamIdOrderByOrderIndexAscExamQuestionIdAsc(e.getExamId());
-        List<ExamGroup> grouped=groupLinks.findByExamExamIdOrderByOrderIndexAscExamGroupIdAsc(e.getExamId());
-        List<ExamConfig> configured=configs.findByExamExamIdOrderByConfigIdAsc(e.getExamId());
-        Map<Long,Question> all=examQuestions(e); Set<String> families=new HashSet<>(); all.values().forEach(q->families.add(family(q.getQuestionType())));
-        configured.forEach(c->families.add(family(c.getQuestionType())));
-        String kind=families.size()>1?"MIXED":families.stream().findFirst().orElse("QUIZ");
-        int count=all.size()+configured.stream().mapToInt(ExamConfig::getNumberOfQuestions).sum();
-        BigDecimal total=direct.stream().map(ExamQuestion::getPoints).reduce(BigDecimal.ZERO,BigDecimal::add)
-                .add(grouped.stream().map(ExamGroup::getPoints).reduce(BigDecimal.ZERO,BigDecimal::add))
-                .add(BigDecimal.valueOf(configured.stream().mapToInt(ExamConfig::getNumberOfQuestions).sum()));
-        Course course=e.getCourse()!=null?e.getCourse():e.getModule()==null?null:e.getModule().getCourse();
-        return new ExamResponse(e.getExamId(),e.getTitle(),e.getDescription(),course==null?null:course.getCourseId(),course==null?null:course.getTitle(),
-                e.getModule()==null?null:e.getModule().getModuleId(),e.getModule()==null?null:e.getModule().getTitle(),kind,e.getDurationMinutes(),e.getPassMark(),e.getMaxAttempts(),count,total,
-                e.getStatus(),e.getGenerationType(),e.getIsPractice(),e.getCreatedAt(),
-                detail?configured.stream().map(c->new ExamResponse.Config(c.getConfigId(),c.getQuestionType(),c.getNumberOfQuestions(),c.getModule()==null?null:c.getModule().getModuleId(),c.getDifficulty())).toList():null,
-                detail?direct.stream().map(this::questionLink).toList():null,detail?grouped.stream().map(this::groupLink).toList():null);
-    }
-    private ExamResponse.QuestionLink questionLink(ExamQuestion l) { return new ExamResponse.QuestionLink(l.getExamQuestionId(),l.getExam().getExamId(),l.getQuestion().getQuestionId(),l.getQuestion().getContent(),l.getQuestion().getQuestionType(),l.getPoints(),l.getOrderIndex()); }
-    private ExamResponse.GroupLink groupLink(ExamGroup l) { return new ExamResponse.GroupLink(l.getExamGroupId(),l.getExam().getExamId(),l.getGroup().getGroupId(),l.getGroup().getTitle(),l.getPoints(),l.getOrderIndex()); }
-    private BigDecimal points(BigDecimal p) { if(p==null)return BigDecimal.ONE; if(p.signum()<=0 || p.compareTo(new BigDecimal("999.99"))>0 || p.scale()>2) throw bad("Points must be positive, at most 999.99 and have at most two decimal places."); return p; }
-    private int next(List<Integer> values) { int max=values.stream().mapToInt(Integer::intValue).max().orElse(-1); if(max==Integer.MAX_VALUE)throw conflict("Question order limit reached."); return max+1; }
-    private String family(String type) { return KINDS.contains(type)?type:"QUIZ"; }
-    private String pattern(String s) { return "%"+s.strip().toLowerCase(Locale.ROOT).replace("!","!!").replace("%","!%").replace("_","!_")+"%"; }
-    private boolean admin(UserPrincipal user) { return "ADMIN".equals(user.getRole()); }
-    private void positive(Long id) { if(id==null || id<=0)throw bad("ID must be a positive integer."); }
-    private <T> List<T> list(List<T> value) { return value==null?List.of():value; }
-    private int size(List<?> value) { return value==null?0:value.size(); }
-    private BadRequestException bad(String message) { return new BadRequestException(message); }
-    private ResourceConflictException conflict(String message) { return new ResourceConflictException(message); }
-    private ResourceNotFoundException missing(String type) { return new ResourceNotFoundException(type+" not found."); }
 }

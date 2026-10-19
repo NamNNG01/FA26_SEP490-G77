@@ -3,7 +3,9 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Alert';
 import { Icon } from '@/assets/icons';
-import type { QuestionForm } from './QuestionForm';
+import type { ExtractedQuestion } from '../model';
+
+type QuestionForm = ExtractedQuestion & { id: string; moduleId: string };
 
 const sampleExtracted: Omit<QuestionForm, 'id'>[] = [
   {

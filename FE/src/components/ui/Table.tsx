@@ -30,6 +30,8 @@ export function Table({
   onSelectionChange,
   onRowClick,
   isRowActive,
+  serverPagination,
+  emptyState,
 }: {
   columns: TableColumn[];
   data: Record<string, unknown>[];
@@ -55,8 +57,18 @@ export function Table({
   onRowClick?: (row: Record<string, unknown>) => void;
   /** Highlights rows for which this returns true, e.g. the current selection. */
   isRowActive?: (row: Record<string, unknown>) => boolean;
+  /**
+   * Server-side pagination: `data` is already the current page and `total`
+   * is the full record count. Pages are 1-based.
+   */
+  serverPagination?: { page: number; total: number; onChange: (page: number) => void };
+  /** Rendered in place of the rows when there is nothing to show. */
+  emptyState?: React.ReactNode;
 }) {
-  const { page, total, pageItems, setPage } = usePagination(data, { perPage, resetKey, initialPage, onPageChange });
+  const client = usePagination(data, { perPage, resetKey, initialPage, onPageChange });
+  const { page, total, pageItems, setPage } = serverPagination
+    ? { page: serverPagination.page, total: serverPagination.total, pageItems: data, setPage: serverPagination.onChange }
+    : client;
   const start = (page - 1) * perPage;
   const [internalSelected, setInternalSelected] = useState<Set<string>>(new Set());
   const selected = selectedKeys ?? internalSelected;
@@ -117,6 +129,13 @@ export function Table({
             </tr>
           </thead>
           <tbody>
+            {pageItems.length === 0 && emptyState != null && (
+              <tr>
+                <td colSpan={columns.length + (selectable ? 1 : 0)} className="px-4 py-10 text-center text-sm text-content-soft">
+                  {emptyState}
+                </td>
+              </tr>
+            )}
             {pageItems.map((row, i) => {
               const key = rowKeyOf(row, i);
               return (
@@ -127,7 +146,7 @@ export function Table({
                   className={`group border-b border-line-faint transition-colors ${isRowActive?.(row) ? 'bg-primary-light' : 'hover:bg-surface-hover'} ${onRowClick ? 'cursor-pointer' : ''}`}
                 >
                   {selectable && (
-                    <td className="px-2.5 sm:px-3 lg:px-4 py-3">
+                    <td className="px-2.5 sm:px-3 lg:px-4 py-3" onClick={e => e.stopPropagation()}>
                       <Checkbox checked={selected.has(key)} onChange={() => toggleRow(key)} />
                     </td>
                   )}

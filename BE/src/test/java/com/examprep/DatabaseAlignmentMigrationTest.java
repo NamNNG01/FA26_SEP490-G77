@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 /** Upgrade fixtures use a disposable database on the fixed localhost test server. */
 @EnabledIfSystemProperty(named = "postgresTests", matches = "true")
 class DatabaseAlignmentMigrationTest {
-    @Test void upgradePreservesJsonAndNormalizesLegacyQuestionTypesAndExamMode() throws Exception {
+    @Test void upgradePreservesJsonAndTeamQuestionTypesAndNormalizesExamMode() throws Exception {
         String server = "jdbc:postgresql://127.0.0.1:55439/";
         String database = "alignment_" + UUID.randomUUID().toString().replace("-", "");
         var configuration = Flyway.configure().dataSource(server + database, "examprep_test", "local-test-only")
@@ -25,9 +25,7 @@ class DatabaseAlignmentMigrationTest {
                 configuration.target("8").load().migrate();
                 sql.execute("INSERT INTO questions(question_type,content,question_metadata,essay_grading_rubric) "
                         + "VALUES ('MULTIPLE_CHOICE','Legacy quiz','{\"language\":\"java\"}','{\"totalPoints\":4}'),"
-                        + "('FILL_IN_BLANK','Legacy fill',NULL,NULL)");
-                sql.execute("ALTER TABLE questions ADD CONSTRAINT chk_question_type CHECK "
-                        + "(question_type IN ('MULTIPLE_CHOICE','FILL_IN_BLANK'))");
+                        + "('FILL_BLANK','Legacy fill',NULL,NULL)");
                 sql.execute("INSERT INTO users(email,password_hash,full_name,role_name) "
                         + "VALUES ('migration-test@example.com','test','Migration test','ADMIN')");
                 sql.execute("INSERT INTO exams(created_by,title,generation_type) SELECT user_id,'Legacy exam','FIXED' FROM users");
@@ -38,7 +36,7 @@ class DatabaseAlignmentMigrationTest {
                         + "pg_typeof(essay_grading_rubric)::text,question_metadata ->> 'language',"
                         + "essay_grading_rubric::jsonb ->> 'totalPoints' FROM questions WHERE content='Legacy quiz'")) {
                     rows.next();
-                    assertEquals("MULTI_CHOICE", rows.getString(1));
+                    assertEquals("MULTIPLE_CHOICE", rows.getString(1));
                     assertEquals("jsonb", rows.getString(2));
                     assertEquals("jsonb", rows.getString(3));
                     assertEquals("java", rows.getString(4));
@@ -47,12 +45,12 @@ class DatabaseAlignmentMigrationTest {
                 try (var rows = sql.executeQuery("SELECT question_type FROM questions WHERE content='Legacy fill'")) {
                     rows.next(); assertEquals("FILL_BLANK", rows.getString(1));
                 }
-                sql.execute("INSERT INTO questions(question_type,content) VALUES ('ORDERING','Order these'),('MULTI_CHOICE','Choose many')");
+                sql.execute("INSERT INTO questions(question_type,content) VALUES ('ORDERING','Order these'),('MULTIPLE_CHOICE','Choose many')");
                 try (var rows = sql.executeQuery("SELECT generation_type FROM exams")) {
                     rows.next(); assertEquals("STATIC", rows.getString(1));
                 }
                 try (var rows = sql.executeQuery("SELECT question_type FROM exam_config")) {
-                    rows.next(); assertEquals("MULTI_CHOICE", rows.getString(1));
+                    rows.next(); assertEquals("MULTIPLE_CHOICE", rows.getString(1));
                 }
                 configuration.load().validate();
             } finally {

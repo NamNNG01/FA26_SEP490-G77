@@ -77,12 +77,12 @@ class ExamAiApiIntegrationTest {
 
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) {
-        registry.add("app.ai.api-key", () -> "local-fake-provider-key");
-        registry.add("app.ai.model", () -> "fake-model");
-        registry.add("app.ai.base-url", () -> "http://127.0.0.1:" + PROVIDER.getAddress().getPort() + "/v1");
-        registry.add("app.ai.timeout-ms", () -> 250);
-        registry.add("app.ai.material-timeout-ms", () -> 350);
-        registry.add("app.ai.daily-limit", () -> 3);
+        registry.add("app.exam-ai.api-key", () -> "local-fake-provider-key");
+        registry.add("app.exam-ai.model", () -> "fake-model");
+        registry.add("app.exam-ai.base-url", () -> "http://127.0.0.1:" + PROVIDER.getAddress().getPort() + "/v1");
+        registry.add("app.exam-ai.timeout-ms", () -> 250);
+        registry.add("app.exam-ai.material-timeout-ms", () -> 350);
+        registry.add("app.exam-ai.daily-limit", () -> 3);
     }
 
     @AfterAll static void stopProvider() { PROVIDER.stop(0); WORKERS.shutdownNow(); }
@@ -173,7 +173,7 @@ class ExamAiApiIntegrationTest {
 
     @Test void supportsAllNineTypesAndValidatesTheirAnswerShapes() throws Exception {
         List<Map<String, Object>> questions = List.of(choice("SINGLE_CHOICE", "EASY"),
-                Map.of("content", "Pick the even numbers", "questionType", "MULTI_CHOICE", "difficulty", "EASY", "options", List.of(
+                Map.of("content", "Pick the even numbers", "questionType", "MULTIPLE_CHOICE", "difficulty", "EASY", "options", List.of(
                         Map.of("optionText", "2", "isCorrect", true, "orderIndex", 0), Map.of("optionText", "4", "isCorrect", true, "orderIndex", 1),
                         Map.of("optionText", "3", "isCorrect", false, "orderIndex", 2))),
                 Map.of("content", "True?", "questionType", "TRUE_FALSE", "difficulty", "EASY", "options", List.of(
@@ -265,7 +265,7 @@ class ExamAiApiIntegrationTest {
     private String body() throws Exception { return json.writeValueAsString(Map.of("courseId", course.getCourseId(), "moduleId", module.getModuleId(),
             "questionCount", 1, "difficultyDistribution", Map.of("EASY", 1, "MEDIUM", 0, "HARD", 0),
             "questionTypes", List.of(Map.of("questionType", "SINGLE_CHOICE", "count", 1)), "language", "en", "useExistingBank", false)); }
-    private static String path() { return "/api/v1/manager/exams/ai/generate"; }
+    private static String path() { return "/api/v1/manager/exam-builder/ai/generate"; }
     private long countQuestions() { return em.createQuery("select count(q) from Question q", Long.class).getSingleResult(); }
     private Map<String, Object> choice(String type, String difficulty) {
         return Map.of("content", "What is 2 + 2?", "questionType", type, "difficulty", difficulty, "options", List.of(

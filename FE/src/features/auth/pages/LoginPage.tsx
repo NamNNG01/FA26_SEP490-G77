@@ -13,8 +13,14 @@ import { ROUTES } from '@/app/routes';
  *   from          — where to go after signing in (set by the route guard)
  *   email         — prefill (e.g. coming back from Forgot / Reset password)
  *   passwordReset — show the "password updated" banner after AUTH-07
+ *   sessionChanged — the stored session was rejected on boot / refresh
  */
-type LoginLocationState = { from?: string; email?: string; passwordReset?: boolean } | null;
+type LoginLocationState = {
+  from?: string;
+  email?: string;
+  passwordReset?: boolean;
+  sessionChanged?: boolean;
+} | null;
 
 export function LoginPage() {
   const { login } = useAuth();
@@ -63,6 +69,13 @@ export function LoginPage() {
               type="success"
               title="Password updated"
               message="Sign in with your new password. All other sessions have been signed out."
+            />
+          )}
+          {!error && locationState?.sessionChanged && (
+            <Alert
+              type="warning"
+              title="Please sign in again"
+              message="Your session has expired or your account details have changed."
             />
           )}
 

@@ -102,16 +102,6 @@ apiClient.interceptors.response.use(
           original.headers.Authorization = `Bearer ${data.accessToken}`;
           return apiClient(original);
         } catch {
-          if (refreshToken.startsWith('mock-refresh-token')) {
-            const nextAccess = 'mock-access-token-' + Date.now();
-            const nextRefresh = 'mock-refresh-token-' + Date.now();
-            saveTokens({
-              accessToken: nextAccess,
-              refreshToken: nextRefresh,
-            });
-            original.headers.Authorization = `Bearer ${nextAccess}`;
-            return apiClient(original);
-          }
           clearAuth();
           emitSessionExpired();
         }

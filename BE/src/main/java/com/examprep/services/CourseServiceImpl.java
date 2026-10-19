@@ -38,6 +38,8 @@ public class CourseServiceImpl implements CourseService {
     private final ExamRepository exams;
     private final ExamConfigRepository configs;
     private final QuestionGroupRepository groups;
+    private final DocumentRepository documents;
+    private final AiUsageLogRepository aiLogs;
     private final CategoryRepository categories;
     private final CategoryService categoryService;
     private final UserRepository users;
@@ -137,7 +139,9 @@ public class CourseServiceImpl implements CourseService {
         Course course = writeCourse(id);
         if (enrollments.existsByCourseCourseId(id)
                 || exams.existsByCourseCourseIdOrModuleCourseCourseId(id, id)
-                || questions.existsByModuleCourseCourseId(id)
+                || questions.existsByCourseCourseIdOrModuleCourseCourseId(id, id)
+                || documents.existsByCourseCourseId(id)
+                || aiLogs.existsByCourseCourseId(id)
                 || configs.existsByModuleCourseCourseId(id)
                 || groups.existsByCourseCourseIdOrModuleCourseCourseId(id, id))
             throw conflict("Course has enrollments or dependent content. Unpublish it instead.");
