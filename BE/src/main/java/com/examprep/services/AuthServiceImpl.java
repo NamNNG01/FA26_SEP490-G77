@@ -71,17 +71,32 @@ public class AuthServiceImpl implements AuthService {
     @Transactional
     public LoginResponse login(LoginRequest request) {
         String email = normalizeEmail(request.getEmail());
-
+        log.info("Login email received: [{}]", email);
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new UnauthorizedException("Invalid email or password."));
-        log.info("Authenticating user ID: {}", user.getUserId());
+                .orElseThrow(() -> {
+                    log.warn("Login failed: email not found");
+                    return new UnauthorizedException(
+                            "Invalid email or password.");
+                });
 
-        if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
-            throw new UnauthorizedException("Invalid email or password.");
+        log.info("Login user found: id={}, email={}, status={}",
+                user.getUserId(), user.getEmail(), user.getStatus());
+
+        boolean passwordMatches =
+                passwordEncoder.matches(
+                        request.getPassword(),
+                        user.getPasswordHash());
+
+        log.info("Login password matches: {}", passwordMatches);
+
+        if (!passwordMatches) {
+            throw new UnauthorizedException(
+                    "Invalid email or password.");
         }
 
         if (!User.STATUS_ACTIVE.equalsIgnoreCase(user.getStatus())) {
-            throw new UnauthorizedException("User account is inactive or blocked.");
+            throw new UnauthorizedException(
+                    "User account is inactive or blocked.");
         }
 
         String accessToken = tokenProvider.generateAccessToken(user);

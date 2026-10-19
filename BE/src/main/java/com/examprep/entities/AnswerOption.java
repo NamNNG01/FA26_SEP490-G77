@@ -29,6 +29,9 @@ public class AnswerOption implements Serializable {
     @Column(name = "is_correct", nullable = false)
     private Boolean isCorrect;
 
+    @Column(name = "explanation")
+    private String explanation;
+
     @Builder.Default
     @Column(name = "order_index", nullable = false)
     private Integer orderIndex = 0;

@@ -23,6 +23,10 @@ public class Document implements Serializable {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "course_id")
+    private Course course;
+
     @Column(name = "generation_type", nullable = false, length = 50)
     private String generationType;
 

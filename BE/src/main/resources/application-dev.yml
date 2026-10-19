@@ -42,6 +42,11 @@ spring:
           timeout: 5000
           writetimeout: 5000
 
+# Application Custom Properties
+app:
+  scheduler:
+    delay: 3000
+
 logging:
   level:
     root: INFO

@@ -2,6 +2,8 @@ package com.examprep.entities;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.io.Serializable;
 
@@ -35,4 +37,11 @@ public class ExamConfig implements Serializable {
 
     @Column(name = "difficulty", length = 50)
     private String difficulty;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "criteria", columnDefinition = "jsonb")
+    private String criteria;
+
+    @Column(name = "seed")
+    private Long seed;
 }

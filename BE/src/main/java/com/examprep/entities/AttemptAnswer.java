@@ -2,9 +2,12 @@ package com.examprep.entities;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.io.Serializable;
 import java.math.BigDecimal;
+import java.time.Instant;
 
 @Entity
 @Table(name = "attempt_answers")
@@ -34,6 +37,33 @@ public class AttemptAnswer implements Serializable {
 
     @Column(name = "essay_answer")
     private String essayAnswer;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "response", columnDefinition = "jsonb")
+    private String response;
+
+    @Builder.Default
+    @Column(name = "question_version")
+    private Integer questionVersion = 1;
+
+    @Builder.Default
+    @Column(name = "grading_status", nullable = false, length = 15)
+    private String gradingStatus = "AUTO";
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "ai_criteria_scores", columnDefinition = "jsonb")
+    private String aiCriteriaScores;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "ai_feedback_json", columnDefinition = "jsonb")
+    private String aiFeedbackJson;
+
+    @Builder.Default
+    @Column(name = "grade_retry_count", nullable = false)
+    private Integer gradeRetryCount = 0;
+
+    @Column(name = "graded_at")
+    private Instant gradedAt;
 
     @Column(name = "is_correct")
     private Boolean isCorrect;
