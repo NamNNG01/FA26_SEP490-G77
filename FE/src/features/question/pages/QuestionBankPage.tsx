@@ -1,104 +1,353 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router';
 import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
+import { Badge, type BadgeVariant } from '@/components/ui/Badge';
 import { Select } from '@/components/ui/Select';
-import { Table } from '@/components/ui/Table';
+import { Table, type TableColumn } from '@/components/ui/Table';
+import { Alert } from '@/components/ui/Alert';
 import { Dropdown } from '@/components/ui/Dropdown';
+import { useToast } from '@/components/ui/ToastHost';
 import { SearchInput } from '@/components/common/SearchInput';
 import { Icon } from '@/assets/icons';
-import { MOCK_MODULES, MOCK_COURSES, modulesByCourse, courseLabel, moduleLabel } from '@/features/module/mockModules';
+import { useDebounce } from '@/hooks';
+import { ROUTES, managerQuestionEditPath } from '@/app/routes';
+import { courseService, type CourseModuleResponse, type CourseSummaryItem } from '@/services/course.service';
+import {
+  QUESTION_STATUS_LABELS,
+  questionService,
+  type QuestionListItem,
+  type QuestionPage,
+  type QuestionStatus,
+} from '@/services/question.service';
 
-const questions = [
-  { id: 'Q-1042', text: 'What is gradient descent and how does it work?', courseId: 'ml', moduleId: 'mod-3', type: 'MCQ', difficulty: 'Medium', status: 'Active', updated: '2h ago' },
-  { id: 'Q-1041', text: 'Explain the bias-variance tradeoff in machine learning.', courseId: 'ml', moduleId: 'mod-1', type: 'Essay', difficulty: 'Hard', status: 'Active', updated: '4d ago' },
-  { id: 'Q-1040', text: 'What is the purpose of the softmax function in classification?', courseId: 'dl', moduleId: 'mod-5', type: 'MCQ', difficulty: 'Medium', status: 'Draft', updated: '1d ago' },
-  { id: 'Q-1039', text: 'How does cross-entropy loss differ from mean squared error?', courseId: 'ml', moduleId: 'mod-1', type: 'MCQ', difficulty: 'Hard', status: 'Active', updated: '1w ago' },
-  { id: 'Q-1038', text: 'Is the statement "k-means is a supervised algorithm" true or false?', courseId: 'py', moduleId: 'mod-6', type: 'TrueFalse', difficulty: 'Easy', status: 'Active', updated: '3w ago' },
-  { id: 'Q-1037', text: '\u201CThe p-value is the probability that the null hypothesis is true.\u201D True or false?', courseId: 'stats', moduleId: 'mod-8', type: 'TrueFalse', difficulty: 'Easy', status: 'Active', updated: '2w ago' },
-  { id: 'Q-1036', text: 'How does batch normalization help training?', courseId: 'dl', moduleId: 'mod-5', type: 'Essay', difficulty: 'Hard', status: 'Draft', updated: '5h ago' },
-  { id: 'Q-1035', text: 'What is regularization and why is it used in model training?', courseId: 'ml', moduleId: 'mod-2', type: 'MCQ', difficulty: 'Medium', status: 'Active', updated: '3h ago' },
-  { id: 'Q-1034', text: 'Backpropagation computes gradients using the chain rule. True or false?', courseId: 'dl', moduleId: 'mod-4', type: 'TrueFalse', difficulty: 'Easy', status: 'Active', updated: '6h ago' },
-  { id: 'Q-1033', text: 'Which plot is best for visualizing the distribution of a single variable?', courseId: 'stats', moduleId: 'mod-8', type: 'MCQ', difficulty: 'Medium', status: 'Active', updated: '9h ago' },
-  { id: 'Q-1032', text: 'Write a Python list comprehension that squares the even numbers from 1 to 20.', courseId: 'py', moduleId: 'mod-6', type: 'Essay', difficulty: 'Easy', status: 'Draft', updated: '12h ago' },
-  { id: 'Q-1031', text: 'How does L1 regularization promote sparsity compared to L2?', courseId: 'ml', moduleId: 'mod-3', type: 'MCQ', difficulty: 'Hard', status: 'Active', updated: '16h ago' },
-  { id: 'Q-1030', text: 'What problem does dropout primarily mitigate in deep networks?', courseId: 'dl', moduleId: 'mod-5', type: 'MCQ', difficulty: 'Hard', status: 'Draft', updated: '20h ago' },
-  { id: 'Q-1029', text: 'Is a Python tuple mutable? True or false.', courseId: 'py', moduleId: 'mod-7', type: 'TrueFalse', difficulty: 'Medium', status: 'Active', updated: '1d ago' },
-  { id: 'Q-1028', text: 'The variance of a constant random variable is zero. True or false?', courseId: 'ml', moduleId: 'mod-1', type: 'TrueFalse', difficulty: 'Easy', status: 'Active', updated: '1d ago' },
-  { id: 'Q-1027', text: 'Explain Type I and Type II errors with a concrete example.', courseId: 'stats', moduleId: 'mod-9', type: 'Essay', difficulty: 'Hard', status: 'Draft', updated: '2d ago' },
-  { id: 'Q-1026', text: 'Describe how a decision tree selects the feature to split on at its root.', courseId: 'ml', moduleId: 'mod-2', type: 'Essay', difficulty: 'Medium', status: 'Active', updated: '2d ago' },
-  { id: 'Q-1025', text: 'What happens to training when the learning rate is set too high?', courseId: 'dl', moduleId: 'mod-4', type: 'MCQ', difficulty: 'Medium', status: 'Active', updated: '3d ago' },
-  { id: 'Q-1024', text: 'Which pandas method fills missing values with the previous row value?', courseId: 'py', moduleId: 'mod-6', type: 'MCQ', difficulty: 'Easy', status: 'Active', updated: '3d ago' },
-  { id: 'Q-1023', text: 'The standard error of the mean decreases as sample size grows. True or false?', courseId: 'stats', moduleId: 'mod-8', type: 'TrueFalse', difficulty: 'Medium', status: 'Active', updated: '4d ago' },
-  { id: 'Q-1022', text: 'Which metric is most appropriate for a highly imbalanced binary classifier?', courseId: 'ml', moduleId: 'mod-3', type: 'TrueFalse', difficulty: 'Medium', status: 'Draft', updated: '4d ago' },
-  { id: 'Q-1021', text: 'Compare ResNet skip connections with a plain deep feedforward network.', courseId: 'dl', moduleId: 'mod-5', type: 'Essay', difficulty: 'Hard', status: 'Active', updated: '5d ago' },
-  { id: 'Q-1020', text: 'How do you pivot a DataFrame from long format to wide format?', courseId: 'py', moduleId: 'mod-7', type: 'Essay', difficulty: 'Medium', status: 'Active', updated: '5d ago' },
-  { id: 'Q-1019', text: 'What does overfitting look like on training versus validation curves?', courseId: 'ml', moduleId: 'mod-1', type: 'MCQ', difficulty: 'Easy', status: 'Active', updated: '6d ago' },
-  { id: 'Q-1018', text: 'What does a 99% confidence interval communicate about an estimate?', courseId: 'stats', moduleId: 'mod-9', type: 'MCQ', difficulty: 'Medium', status: 'Draft', updated: '1w ago' },
-  { id: 'Q-1017', text: 'Which Python structure is immutable: list, tuple, dict, or set?', courseId: 'ml', moduleId: 'mod-2', type: 'TrueFalse', difficulty: 'Easy', status: 'Active', updated: '1w ago' },
-  { id: 'Q-1016', text: 'Explain how dropout is applied differently at train and inference time.', courseId: 'dl', moduleId: 'mod-4', type: 'Essay', difficulty: 'Medium', status: 'Active', updated: '2w ago' },
-  { id: 'Q-1015', text: 'Which pandas join type keeps all rows from the left table?', courseId: 'py', moduleId: 'mod-6', type: 'TrueFalse', difficulty: 'Medium', status: 'Active', updated: '2w ago' },
+const PAGE_SIZE = 10;
+const ALL = 'all';
+
+const TYPE_LABELS: Record<string, string> = {
+  SINGLE_CHOICE: 'Single Choice',
+  MULTIPLE_CHOICE: 'Multiple Choice',
+  TRUE_FALSE: 'True/False',
+  MATCHING: 'Matching',
+  FILL_BLANK: 'Fill in Blank',
+  ESSAY: 'Essay',
+  CODE: 'Code',
+  DIAGRAM: 'Diagram',
+};
+const DIFFICULTY_LABELS: Record<string, string> = { EASY: 'Easy', MEDIUM: 'Medium', HARD: 'Hard' };
+const STATUS_LABELS: Record<string, string> = QUESTION_STATUS_LABELS;
+
+const TYPE_VARIANT: Record<string, BadgeVariant> = { ESSAY: 'purple', TRUE_FALSE: 'success', CODE: 'warning', DIAGRAM: 'warning' };
+const DIFFICULTY_VARIANT: Record<string, BadgeVariant> = { EASY: 'success', MEDIUM: 'warning', HARD: 'danger' };
+const STATUS_VARIANT: Record<string, BadgeVariant> = { ACTIVE: 'success', INACTIVE: 'danger', DRAFT: 'default' };
+
+const toOptions = (allLabel: string, labels: Record<string, string>) => [
+  { label: allLabel, value: ALL },
+  ...Object.entries(labels).map(([value, label]) => ({ label, value })),
 ];
+const TYPE_OPTIONS = toOptions('All Types', TYPE_LABELS);
+const DIFFICULTY_OPTIONS = toOptions('All Difficulty', DIFFICULTY_LABELS);
+const STATUS_OPTIONS = toOptions('All Status', STATUS_LABELS);
 
-export function QuestionBankPage({ onNavigate }: { onNavigate?: (id: string) => void }) {
-  const [sortKey, setSortKey] = useState('updated');
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
-  const [course, setCourse] = useState('all');
-  const [module, setModule] = useState('all');
-  const [type, setType] = useState('all');
-  const [difficulty, setDifficulty] = useState('all');
-  const [status, setStatus] = useState('all');
+const relativeFormat = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
+const dateFormat = new Intl.DateTimeFormat('en', { dateStyle: 'medium' });
+
+/** "5 minutes ago" for the last week, then an absolute date. */
+function formatUpdated(iso: string | null): string {
+  if (!iso) return '—';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '—';
+  const seconds = Math.round((date.getTime() - Date.now()) / 1000);
+  const abs = Math.abs(seconds);
+  if (abs < 60) return relativeFormat.format(seconds, 'second');
+  if (abs < 3600) return relativeFormat.format(Math.round(seconds / 60), 'minute');
+  if (abs < 86400) return relativeFormat.format(Math.round(seconds / 3600), 'hour');
+  if (abs < 7 * 86400) return relativeFormat.format(Math.round(seconds / 86400), 'day');
+  return dateFormat.format(date);
+}
+
+const optionalNumber = (v: string) => (v === ALL ? undefined : Number(v));
+const optionalString = (v: string) => (v === ALL ? undefined : v);
+
+type Row = QuestionListItem & { id: number };
+const asRow = (r: Record<string, unknown>) => r as unknown as Row;
+
+export function QuestionBankPage() {
+  const navigate = useNavigate();
+  const toast = useToast();
+
   const [query, setQuery] = useState('');
+  const [course, setCourse] = useState(ALL);
+  const [module, setModule] = useState(ALL);
+  const [type, setType] = useState(ALL);
+  const [difficulty, setDifficulty] = useState(ALL);
+  const [status, setStatus] = useState(ALL);
+  const [page, setPage] = useState(1);
+  const debouncedQuery = useDebounce(query.trim(), 400);
 
-  const q = query.trim().toLowerCase();
-  const moduleOptions = course === 'all'
-    ? MOCK_MODULES.map(m => ({ label: m.title, value: m.id }))
-    : modulesByCourse(course).map(m => ({ label: m.title, value: m.id }));
+  const [courses, setCourses] = useState<CourseSummaryItem[]>([]);
+  const [modules, setModules] = useState<CourseModuleResponse[]>([]);
 
-  const filtered = questions.filter(x =>
-    (course === 'all' || x.courseId === course) &&
-    (module === 'all' || x.moduleId === module) &&
-    (type === 'all' || x.type === type) &&
-    (difficulty === 'all' || x.difficulty === difficulty) &&
-    (status === 'all' || x.status === status) &&
-    (!q || x.text.toLowerCase().includes(q)));
+  const [result, setResult] = useState<QuestionPage | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
-  const columns = [
-    { key: 'text', label: 'Question', render: (r: Record<string, unknown>) => <p className="text-sm text-content-secondary line-clamp-2">{r.text as string}</p> },
-    { key: 'moduleId', label: 'Module', render: (r: Record<string, unknown>) => (
-      <div>
-        <Badge variant="info">{moduleLabel(r.moduleId as string)}</Badge>
-        <p className="text-2xs text-content-subtle mt-1">{courseLabel(r.courseId as string)}</p>
-      </div>
-    ) },
-    { key: 'type', label: 'Type', sortable: true, render: (r: Record<string, unknown>) => <Badge variant={(r.type === 'Essay' ? 'purple' : r.type === 'TrueFalse' ? 'success' : 'info') as 'purple' | 'success' | 'info'}>{r.type as string}</Badge> },
-    { key: 'difficulty', label: 'Difficulty', sortable: true, render: (r: Record<string, unknown>) => <Badge variant={(r.difficulty === 'Hard' ? 'danger' : r.difficulty === 'Medium' ? 'warning' : 'success') as 'danger' | 'warning' | 'success'}>{r.difficulty as string}</Badge> },
-    { key: 'status', label: 'Status', sortable: true, render: (r: Record<string, unknown>) => <Badge variant={(r.status === 'Active' ? 'success' : 'default') as 'success' | 'default'}>{r.status as string}</Badge> },
-    { key: 'updated', label: 'Updated', render: (r: Record<string, unknown>) => <span className="text-sm text-content-soft">{r.updated as string}</span> },
-    { key: 'actions', label: '', render: () => (
-      <Dropdown trigger={<button className="p-1.5 hover:bg-accent rounded-[6px]"><Icon.MoreHorizontal className="w-4 h-4 text-content-soft" /></button>}
-        items={[{ label: 'Edit', icon: <Icon.Edit />, onClick: () => onNavigate?.('question-edit') }, { label: 'Preview', icon: <Icon.Eye /> }, { label: 'Duplicate', icon: <Icon.Copy /> }, { divider: true } as {label: string; divider: true}, { label: 'Delete', icon: <Icon.Trash />, danger: true }]} />
-    )},
+  // Course options load once; module options follow the selected course.
+  useEffect(() => {
+    let cancelled = false;
+    courseService.getCourses({ size: 100 }).then(res => {
+      if (!cancelled) setCourses(res.content);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (course === ALL) {
+      setModules([]);
+      return;
+    }
+    let cancelled = false;
+    courseService.getCourseModules(course).then(res => {
+      if (!cancelled) setModules([...res].sort((a, b) => a.orderIndex - b.orderIndex));
+    });
+    return () => { cancelled = true; };
+  }, [course]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    questionService
+      .getQuestions({
+        search: debouncedQuery || undefined,
+        courseId: optionalNumber(course),
+        moduleId: optionalNumber(module),
+        questionType: optionalString(type),
+        difficulty: optionalString(difficulty),
+        status: optionalString(status),
+        page: page - 1,
+        size: PAGE_SIZE,
+      })
+      .then(res => {
+        if (cancelled) return;
+        setResult(res);
+        // A filter change or deletion can leave us past the last page.
+        if (res.totalPages > 0 && page > res.totalPages) setPage(res.totalPages);
+      })
+      .catch((err: Error) => {
+        if (!cancelled) setError(err.message || 'Could not load questions.');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [debouncedQuery, course, module, type, difficulty, status, page, reloadKey]);
+
+  // Any filter change starts back at page 1.
+  const filterSetter = (setter: (v: string) => void) => (v: string) => {
+    setter(v);
+    setPage(1);
+  };
+  const changeCourse = (v: string) => {
+    setCourse(v);
+    setModule(ALL);
+    setPage(1);
+  };
+  const changeQuery = (v: string) => {
+    setQuery(v);
+    setPage(1);
+  };
+
+  const rows: Row[] = (result?.content ?? []).map(q => ({ ...q, id: q.questionId }));
+
+  const [statusBusyId, setStatusBusyId] = useState<number | null>(null);
+  const changeStatus = async (q: Row, next: QuestionStatus) => {
+    setStatusBusyId(q.questionId);
+    try {
+      await questionService.updateQuestionStatus(q.questionId, next, q.lockVersion);
+      toast.success(next === 'ACTIVE' ? 'Question published.' : 'Question archived.');
+      // Refetch so the row reflects the new status and still matches the active filter.
+      setReloadKey(k => k + 1);
+    } catch (err) {
+      toast.error(err instanceof Error && err.message ? err.message : 'Could not change the status.');
+    } finally {
+      setStatusBusyId(null);
+    }
+  };
+
+  const columns: TableColumn[] = [
+    {
+      key: 'content',
+      label: 'Question',
+      width: '40%',
+      render: r => (
+        <p className="text-sm font-medium text-content line-clamp-2 whitespace-normal" title={asRow(r).content}>
+          {asRow(r).content}
+        </p>
+      ),
+    },
+    {
+      key: 'module',
+      label: 'Module',
+      render: r => {
+        const q = asRow(r);
+        return (
+          <div className="min-w-0">
+            {q.moduleName ? <Badge variant="info">{q.moduleName}</Badge> : <span className="text-content-subtle">—</span>}
+            <p className="text-2xs text-content-subtle mt-1 truncate">{q.courseName ?? '—'}</p>
+          </div>
+        );
+      },
+    },
+    {
+      key: 'questionType',
+      label: 'Type',
+      render: r => {
+        const t = asRow(r).questionType;
+        return <Badge variant={TYPE_VARIANT[t] ?? 'info'}>{TYPE_LABELS[t] ?? t}</Badge>;
+      },
+    },
+    {
+      key: 'difficulty',
+      label: 'Difficulty',
+      render: r => {
+        const d = asRow(r).difficulty;
+        return d ? <Badge variant={DIFFICULTY_VARIANT[d] ?? 'default'}>{DIFFICULTY_LABELS[d] ?? d}</Badge> : <span className="text-content-subtle">—</span>;
+      },
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      render: r => {
+        const s = asRow(r).status;
+        return <Badge variant={STATUS_VARIANT[s] ?? 'default'}>{STATUS_LABELS[s] ?? s}</Badge>;
+      },
+    },
+    {
+      key: 'updatedAt',
+      label: 'Updated',
+      render: r => {
+        const iso = asRow(r).updatedAt;
+        return (
+          <span className="text-sm text-content-soft whitespace-nowrap" title={iso ? new Date(iso).toLocaleString() : undefined}>
+            {formatUpdated(iso)}
+          </span>
+        );
+      },
+    },
+    {
+      key: 'actions',
+      label: '',
+      width: '48px',
+      render: r => {
+        const q = asRow(r);
+        const published = q.status === 'ACTIVE';
+        return (
+          // The menu is portalled, but React events still bubble to the row's onClick.
+          <div onClick={e => e.stopPropagation()}>
+            <Dropdown
+              trigger={
+                <button
+                  type="button"
+                  aria-label="Question actions"
+                  disabled={statusBusyId === q.questionId}
+                  className="p-1.5 hover:bg-accent rounded-[6px] disabled:opacity-50"
+                >
+                  <Icon.MoreHorizontal className="w-4 h-4 text-content-soft" />
+                </button>
+              }
+              items={[
+                { label: 'Detail', icon: <Icon.Eye />, onClick: () => navigate(managerQuestionEditPath(q.questionId)) },
+                // Published questions can be archived; Draft and Archived ones can be published.
+                published
+                  ? { label: 'Archive', icon: <Icon.Package />, danger: true, onClick: () => changeStatus(q, 'INACTIVE') }
+                  : { label: 'Publish', icon: <Icon.CheckCircle />, onClick: () => changeStatus(q, 'ACTIVE') },
+              ]}
+            />
+          </div>
+        );
+      },
+    },
   ];
 
+  const filtersActive = query !== '' || [course, module, type, difficulty, status].some(v => v !== ALL);
+  const clearFilters = () => {
+    setQuery('');
+    setCourse(ALL);
+    setModule(ALL);
+    setType(ALL);
+    setDifficulty(ALL);
+    setStatus(ALL);
+    setPage(1);
+  };
+
   return (
-    <div className="p-8 space-y-5">
-      <div className="flex items-center justify-between">
+    <div className="p-4 sm:p-8 space-y-5">
+      <div className="flex items-center justify-between gap-3">
         <h2 className="text-xl font-bold text-content">Question</h2>
-        <Button icon={<Icon.Plus className="w-4 h-4" />} onClick={() => onNavigate?.('question-create')}>Add Question</Button>
+        <Button icon={<Icon.Plus className="w-4 h-4" />} onClick={() => navigate(ROUTES.managerQuestionCreate)}>
+          Add Question
+        </Button>
       </div>
 
-      <div className="card overflow-hidden">
-        <div className="flex flex-wrap items-center gap-3 px-4 py-3 border-b border-line-soft">
-          <SearchInput className="w-full sm:w-60" placeholder="Search questions…" value={query} onChange={e => setQuery(e.target.value)} />
-          <Select value={course} onChange={v => { setCourse(v); setModule('all'); }} options={[{ label: 'All Courses', value: 'all' }, ...MOCK_COURSES.map(c => ({ label: c.title, value: c.id }))]} className="w-full sm:w-52" />
-          <Select value={module} onChange={setModule} options={[{ label: 'All Modules', value: 'all' }, ...moduleOptions]} className="w-full sm:w-52" />
-          <Select value={type} onChange={setType} options={[{ label: 'All Types', value: 'all' }, { label: 'MCQ', value: 'MCQ' }, { label: 'True-False', value: 'TrueFalse' }, { label: 'Essay', value: 'Essay' }]} className="w-full sm:w-32" />
-          <Select value={difficulty} onChange={setDifficulty} options={[{ label: 'All Difficulty', value: 'all' }, { label: 'Easy', value: 'Easy' }, { label: 'Medium', value: 'Medium' }, { label: 'Hard', value: 'Hard' }]} className="w-full sm:w-36" />
-          <Select value={status} onChange={setStatus} options={[{ label: 'All Status', value: 'all' }, { label: 'Active', value: 'Active' }, { label: 'Draft', value: 'Draft' }]} className="w-full sm:w-32" />
-          <div className="flex-1" />
-          <Badge variant="default">{filtered.length} questions</Badge>
+      <div className="card px-4 py-3 flex flex-wrap lg:flex-nowrap items-center gap-3">
+        <SearchInput
+          className="w-full sm:w-60 lg:w-auto lg:min-w-0 lg:flex-[1.5]"
+          placeholder="Search questions…"
+          value={query}
+          onChange={e => changeQuery(e.target.value)}
+          aria-label="Search questions"
+        />
+        <Select
+          aria-label="Filter by course"
+          value={course}
+          onChange={changeCourse}
+          options={[{ label: 'All Courses', value: ALL }, ...courses.map(c => ({ label: c.title, value: String(c.courseId) }))]}
+          className="w-full sm:w-48 lg:w-auto lg:min-w-0 lg:flex-[1.25]"
+        />
+        <Select
+          aria-label="Filter by module"
+          value={module}
+          onChange={filterSetter(setModule)}
+          disabled={course === ALL}
+          options={[
+            { label: course === ALL ? 'Select a course first' : 'All Modules', value: ALL },
+            ...modules.map(m => ({ label: m.title, value: String(m.moduleId) })),
+          ]}
+          className="w-full sm:w-48 lg:w-auto lg:min-w-0 lg:flex-[1.25]"
+        />
+        <Select aria-label="Filter by type" value={type} onChange={filterSetter(setType)} options={TYPE_OPTIONS} className="w-full sm:w-40 lg:w-auto lg:min-w-0 lg:flex-1" />
+        <Select aria-label="Filter by difficulty" value={difficulty} onChange={filterSetter(setDifficulty)} options={DIFFICULTY_OPTIONS} className="w-full sm:w-36 lg:w-auto lg:min-w-0 lg:flex-1" />
+        <Select aria-label="Filter by status" value={status} onChange={filterSetter(setStatus)} options={STATUS_OPTIONS} className="w-full sm:w-32 lg:w-auto lg:min-w-0 lg:flex-1" />
+        {filtersActive && (
+          <button type="button" onClick={clearFilters} className="shrink-0 whitespace-nowrap text-sm font-medium text-brand-ink hover:underline">
+            Clear filters
+          </button>
+        )}
+      </div>
+
+      {error && (
+        <div className="space-y-2">
+          <Alert type="error" title="Could not load questions" message={error} />
+          <Button variant="secondary" size="sm" onClick={() => setReloadKey(k => k + 1)}>Try again</Button>
         </div>
-        <Table columns={columns} data={filtered as Record<string, unknown>[]} selectable resetKey={[course, module, type, difficulty, status, query].join('|')} unit="questions" onSort={k => { sortKey === k ? setSortDir(d => d === 'asc' ? 'desc' : 'asc') : setSortKey(k); }} sortKey={sortKey} sortDir={sortDir} />
+      )}
+
+      <div className={`card overflow-hidden transition-opacity ${loading && result ? 'opacity-60' : ''}`} aria-busy={loading}>
+        <Table
+          columns={columns}
+          data={rows as unknown as Record<string, unknown>[]}
+          perPage={PAGE_SIZE}
+          unit="questions"
+          serverPagination={{ page, total: result?.totalElements ?? 0, onChange: setPage }}
+          onRowClick={r => navigate(managerQuestionEditPath(asRow(r).questionId))}
+          emptyState={
+            loading ? 'Loading questions…'
+              : error ? null
+              : filtersActive ? 'No questions match your filters.'
+              : 'No questions yet. Click “Add Question” to create one.'
+          }
+        />
       </div>
     </div>
   );
