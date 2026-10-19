@@ -37,6 +37,9 @@ export const ROUTES = {
   managerCourseCreate: '/manager/courses/new',
   managerCourseDetail: '/manager/courses/:courseId',
   managerQuestions: '/manager/question-bank',
+  managerQuestionCreate: '/manager/question-bank/new',
+  /** Route pattern — render with managerQuestionEditPath(id). */
+  managerQuestionEdit: '/manager/question-bank/:questionId',
   managerExams: '/manager/exams',
   managerExamQuizNew: '/manager/exams/quiz/new',
   managerExamQuizEdit: '/manager/exams/quiz/:id',
@@ -61,6 +64,10 @@ export const ROUTES = {
 /** Concrete course detail URL — e.g. coursePath('aws-cloud-practitioner') → '/courses/aws-cloud-practitioner'. */
 export function coursePath(slug: string): string {
   return `${ROUTES.courses}/${slug}`;
+}
+
+export function managerQuestionEditPath(id: number | string): string {
+  return `${ROUTES.managerQuestions}/${id}`;
 }
 
 export function managerCourseDetailPath(id: number | string): string {

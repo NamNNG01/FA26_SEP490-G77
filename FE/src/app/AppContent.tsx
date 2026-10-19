@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   BrowserRouter,
   Routes,
   Route,
   Navigate,
+  useLocation,
   useSearchParams,
 } from 'react-router';
 import { useAuth, landingPathForRole } from '@/auth/authContext';
@@ -25,7 +26,7 @@ import { StudentDashboard } from '@/features/student';
 import { TakeExamPage, ExamResultPage, ExamListPage, ExamFormPage } from '@/features/exam';
 import { PublicExamsPage, PublicExamDetailPage } from '@/features/public-exam';
 import { CMDashboard } from '@/features/content-manager';
-import { QuestionBankPage } from '@/features/question';
+import { QuestionBankPage, QuestionDetailPage, QuestionFormPage } from '@/features/question';
 import { CourseListPage, CourseDetailPage, CourseFormPage } from '@/features/course';
 import { FlashcardManagementPage, FlashcardDeckDetailPage } from '@/features/flashcard';
 import { PublicCoursesPage, PublicCourseDetailPage } from '@/features/catalog';
@@ -92,11 +93,14 @@ const examsPlaceholder = (
   />
 );
 
-/** Public routes — identical for guests and signed-in users, always PublicLayout. */
-function publicRoutes() {
+/**
+ * Public routes — identical for guests and signed-in users, always
+ * PublicLayout. Only the "/" element differs (see SignedInHome).
+ */
+function publicRoutes(home: React.ReactNode = <LandingPage />) {
   return (
     <Route element={<PublicLayout />}>
-      <Route path={ROUTES.landing} element={<LandingPage />} />
+      <Route path={ROUTES.landing} element={home} />
       <Route path={ROUTES.courses} element={<PublicCoursesPage />} />
       <Route path={ROUTES.courseDetail} element={<PublicCourseDetailPage />} />
       <Route path={ROUTES.pricing} element={pricingPlaceholder} />
@@ -115,11 +119,36 @@ function LoggedInLoginRedirect() {
   return <Navigate to={safeRedirect(searchParams.get('redirect')) ?? landing} replace />;
 }
 
-function AppRoutes() {
-  const { isLoading, isAuthenticated, user } = useAuth();
+/**
+ * "/" for a signed-in user. Opening the site on "/" (the entry location of
+ * this page load) goes straight to the role dashboard; navigating to "/"
+ * inside the app — e.g. the header logo — still shows the landing page.
+ */
+function SignedInHome({ isEntry }: { isEntry: boolean }) {
   const landing = useLandingPath();
+  return isEntry ? <Navigate to={landing} replace /> : <LandingPage />;
+}
 
-  // 1. Loading → no redirect, no layout flash.
+function AppRoutes() {
+  const { isLoading, isAuthenticated, user, reauthRequired, clearReauthRequired } = useAuth();
+  const landing = useLandingPath();
+  const location = useLocation();
+
+  // Key of the location the page was loaded on. Every in-app navigation gets
+  // a new key, so `location.key === entryKey` means "the user just opened
+  // (or reloaded) this URL", not "clicked a link to it".
+  const [entryKey] = useState(location.key);
+
+  // A forced sign-out has landed on /login — the flag has done its job, so
+  // the visitor can browse public pages again without bouncing back.
+  useEffect(() => {
+    if (reauthRequired && location.pathname === ROUTES.login) {
+      clearReauthRequired();
+    }
+  }, [reauthRequired, location.pathname, clearReauthRequired]);
+
+  // 1. Loading → no redirect, no layout flash. While a stored session is
+  //    being verified (GET /users/me) we also stay here.
   if (isLoading) {
     return <LoadingScreen />;
   }
@@ -128,6 +157,13 @@ function AppRoutes() {
   //     their own responsive containers). Only the auth forms sit inside
   //     AuthLayout's narrow centered column.
   if (!isAuthenticated || user === null) {
+    // Stored session rejected (token dead, or account changed on the server)
+    // → straight to the login form, whatever page was requested.
+    if (reauthRequired && location.pathname !== ROUTES.login) {
+      const from = location.pathname === ROUTES.landing ? undefined : location.pathname + location.search;
+      return <Navigate to={ROUTES.login} replace state={{ from, sessionChanged: true }} />;
+    }
+
     return (
       <Routes>
         {publicRoutes()}
@@ -177,7 +213,7 @@ function AppRoutes() {
   //     exactly once and persists across route changes.
   return (
     <Routes>
-      {publicRoutes()}
+      {publicRoutes(<SignedInHome isEntry={location.key === entryKey} />)}
 
       <Route element={<DashboardLayout />}>
         {/* Already signed in — respect ?redirect= before falling back. */}
@@ -205,6 +241,8 @@ function AppRoutes() {
           <Route path={ROUTES.managerCourses} element={<CourseListPage />} />
           <Route path={ROUTES.managerCourseDetail} element={<CourseDetailPage />} />
           <Route path={ROUTES.managerQuestions} element={<QuestionBankPage />} />
+          <Route path={ROUTES.managerQuestionCreate} element={<QuestionFormPage mode="create" />} />
+          <Route path={ROUTES.managerQuestionEdit} element={<QuestionDetailPage />} />
           <Route path={ROUTES.managerExams} element={<ExamListPage />} />
           <Route path={ROUTES.managerExamQuizNew} element={<ExamFormPage formKind="QUIZ" mode="create" />} />
           <Route path={ROUTES.managerExamQuizEdit} element={<ExamFormPage formKind="QUIZ" mode="edit" />} />

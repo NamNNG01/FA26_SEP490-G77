@@ -5,6 +5,7 @@ import React, {
   useState,
   type ReactNode,
 } from 'react';
+import axios from 'axios';
 import { apiClient } from '@/services/axios';
 import {
   clearAuth,
@@ -12,7 +13,6 @@ import {
   getRefreshToken,
   getUser,
   saveAuth,
-  saveTokens,
   saveUser,
 } from './storage';
 import { onSessionExpired } from './sessionExpired';
@@ -62,6 +62,11 @@ export interface AuthState {
   accessToken: string | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  /**
+   * The stored session was rejected (token revoked/expired, or the account
+   * changed on the server). AppContent sends the visitor to /login while set.
+   */
+  reauthRequired: boolean;
 }
 
 interface AuthContextValue extends AuthState {
@@ -73,6 +78,8 @@ interface AuthContextValue extends AuthState {
   setAuth: (state: Partial<AuthState>) => void;
   /** Replace the signed-in user (state + storage), e.g. after PUT /users/me. */
   updateUser: (user: UserResponse) => void;
+  /** Called once the visitor has reached /login after a forced sign-out. */
+  clearReauthRequired: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -92,127 +99,150 @@ export function landingPathForRole(roleCode: string | undefined | null): string 
   }
 }
 
+/**
+ * Fields that define WHO the session belongs to and WHAT it may do. If any of
+ * them differs between the stored user and GET /users/me, the stored session
+ * is stale and the user must sign in again. fullName / avatarUrl are display
+ * data only — those are synced silently instead.
+ */
+function sessionStillValid(stored: UserResponse, server: UserResponse): boolean {
+  return (
+    stored.userId === server.userId &&
+    stored.email === server.email &&
+    stored.role === server.role &&
+    stored.status === server.status &&
+    server.status === 'ACTIVE'
+  );
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AuthState>({
     user: null,
     accessToken: null,
     isLoading: true,
     isAuthenticated: false,
+    reauthRequired: false,
   });
 
   // ---- Shared local cleanup for EVERY logout path -----------------------
-  // Used by logout(), logoutAll() and the session-expired bridge below so
-  // tokens/user cleanup and state reset live in exactly one place.
-  function clearLocalSession() {
+  // Used by logout(), logoutAll(), the boot check and the session-expired
+  // bridge below so tokens/user cleanup and state reset live in one place.
+  // `reauthRequired` marks a forced sign-out (vs. one the user asked for).
+  function clearLocalSession(reauthRequired = false) {
     clearAuth();
     setState({
       user: null,
       accessToken: null,
       isLoading: false,
       isAuthenticated: false,
+      reauthRequired,
     });
   }
 
   // ---- Boot session on mount (persistence after page refresh) ----------
   //
-  // The backend Authentication API exposes only:
-  //   POST /auth/register | /auth/login | /auth/refresh |
-  //   /auth/logout | /auth/logout-all
-  // There is NO /auth/me or /users/me endpoint, so the session is restored
-  // synchronously from storage — the user object (returned by /auth/login)
-  // is persisted at login time and read back here. No network call, no
-  // false logout.
+  // A stored session is NOT trusted blindly: the token is verified with
+  // GET /users/me (USER-01) before any route renders (isLoading stays true,
+  // so AppContent shows the LoadingScreen instead of redirecting early).
+  //   - 401 the interceptor cannot refresh, or another 4xx → re-login
+  //   - user id / email / role / status changed on the server → re-login
+  //   - only fullName / avatarUrl changed → synced silently
+  //   - backend unreachable (network error, timeout, 5xx) → keep the cached
+  //     session; the interceptor still catches a dead token on the next call.
   useEffect(() => {
     const accessToken = getAccessToken();
     const refreshToken = getRefreshToken();
-    const user = getUser();
+    const storedUser = getUser();
 
-    if (accessToken && refreshToken && user) {
-      setState({
-        user,
-        accessToken,
-        isLoading: false,
-        isAuthenticated: true,
-      });
-    } else {
+    if (!accessToken || !refreshToken || !storedUser) {
       // Incomplete session data — clean up so we don't half-restore.
-      clearAuth();
-      setState({
-        user: null,
-        accessToken: null,
-        isLoading: false,
-        isAuthenticated: false,
-      });
+      clearLocalSession();
+      return;
     }
+
+    let cancelled = false;
+
+    async function verifySession(cachedUser: UserResponse) {
+      try {
+        const res = await apiClient.get('/users/me');
+        const serverUser = (res.data as ApiResponse<UserResponse>).data;
+        if (cancelled) return;
+
+        if (!serverUser || !sessionStillValid(cachedUser, serverUser)) {
+          clearLocalSession(true);
+          return;
+        }
+
+        saveUser(serverUser);
+        setState({
+          user: serverUser,
+          // The interceptor may have rotated the token pair during the check.
+          accessToken: getAccessToken(),
+          isLoading: false,
+          isAuthenticated: true,
+          reauthRequired: false,
+        });
+      } catch (error) {
+        if (cancelled) return;
+
+        const status = axios.isAxiosError(error) ? error.response?.status : undefined;
+        const backendUnreachable = status === undefined || status >= 500;
+
+        // getAccessToken() is null when the interceptor's refresh failed and
+        // already cleared storage — that is a dead session, not an outage.
+        if (backendUnreachable && getAccessToken()) {
+          setState({
+            user: cachedUser,
+            accessToken: getAccessToken(),
+            isLoading: false,
+            isAuthenticated: true,
+            reauthRequired: false,
+          });
+        } else {
+          clearLocalSession(true);
+        }
+      }
+    }
+
+    void verifySession(storedUser);
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ---- React to session expiry detected by the Axios interceptor -------
   // A failed token refresh clears storage and emits this event; reset React
-  // state here so routing reacts (no hard page reload needed).
+  // state here so routing reacts (no hard page reload needed) and the user
+  // is sent to sign in again.
   useEffect(() => {
-    return onSessionExpired(() => clearLocalSession());
+    return onSessionExpired(() => clearLocalSession(true));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function getMockRole(emailStr: string): string {
-    const lower = emailStr.toLowerCase();
-    if (lower.includes('admin')) return 'ADMIN';
-    if (lower.includes('manager') || lower.includes('course')) return 'COURSE_MANAGER';
-    return 'STUDENT';
-  }
-
-  function createMockAuth(emailStr: string, name?: string): { user: UserResponse; accessToken: string; refreshToken: string } {
-    const role = getMockRole(emailStr);
-    const user: UserResponse = {
-      userId: Math.floor(Math.random() * 9000) + 1000,
-      email: emailStr,
-      fullName: name || emailStr.split('@')[0] || 'User',
-      avatarUrl: null,
-      role,
-      status: 'ACTIVE',
-      createdAt: new Date().toISOString(),
-    };
-    return {
-      user,
-      accessToken: 'mock-access-token-' + Date.now(),
-      refreshToken: 'mock-refresh-token-' + Date.now(),
-    };
-  }
-
   async function login(email: string, password: string): Promise<UserResponse> {
-    try {
-      const res = await apiClient.post('/auth/login', { email, password });
-      const body = res.data as ApiResponse<LoginResponse>;
-      const data = body.data;
+    const res = await apiClient.post('/auth/login', { email, password });
+    const body = res.data as ApiResponse<LoginResponse>;
+    const data = body.data;
 
-      if (!data?.accessToken || !data.user) {
-        throw new Error(body.message || 'Login failed');
-      }
-
-      saveAuth({
-        accessToken: data.accessToken,
-        refreshToken: data.refreshToken,
-        user: data.user,
-      });
-
-      setState({
-        user: data.user,
-        accessToken: data.accessToken,
-        isLoading: false,
-        isAuthenticated: true,
-      });
-      return data.user;
-    } catch {
-      const mock = createMockAuth(email);
-      saveAuth(mock);
-      setState({
-        user: mock.user,
-        accessToken: mock.accessToken,
-        isLoading: false,
-        isAuthenticated: true,
-      });
-      return mock.user;
+    if (!data?.accessToken || !data.user) {
+      throw new Error(body.message || 'Login failed');
     }
+
+    saveAuth({
+      accessToken: data.accessToken,
+      refreshToken: data.refreshToken,
+      user: data.user,
+    });
+
+    setState({
+      user: data.user,
+      accessToken: data.accessToken,
+      isLoading: false,
+      isAuthenticated: true,
+      reauthRequired: false,
+    });
+    return data.user;
   }
 
   async function register(
@@ -220,24 +250,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     password: string,
     fullName: string,
   ): Promise<UserResponse> {
-    try {
-      await apiClient.post('/auth/register', {
-        email,
-        password,
-        fullName,
-      });
-      return await login(email, password);
-    } catch {
-      const mock = createMockAuth(email, fullName);
-      saveAuth(mock);
-      setState({
-        user: mock.user,
-        accessToken: mock.accessToken,
-        isLoading: false,
-        isAuthenticated: true,
-      });
-      return mock.user;
-    }
+    await apiClient.post('/auth/register', {
+      email,
+      password,
+      fullName,
+    });
+    return login(email, password);
   }
 
   async function logout() {
@@ -266,11 +284,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   // ---- Update the signed-in user (profile edits) --------------------------
-  // Persisted too, so the new name survives a page refresh (session restore
-  // reads the user from storage — there is no fetch on boot).
+  // Persisted too, so the boot check compares against the latest profile.
   function updateUser(user: UserResponse) {
     saveUser(user);
     setState((prev) => ({ ...prev, user }));
+  }
+
+  function clearReauthRequired() {
+    setState((prev) => (prev.reauthRequired ? { ...prev, reauthRequired: false } : prev));
   }
 
   return (
@@ -283,6 +304,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         logoutAll,
         setAuth,
         updateUser,
+        clearReauthRequired,
       }}
     >
       {children}
