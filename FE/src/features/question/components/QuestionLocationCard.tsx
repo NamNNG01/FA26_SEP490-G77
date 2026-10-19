@@ -1,48 +1,81 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Select } from '@/components/ui/Select';
 import { Icon } from '@/assets/icons';
-import { LOCATION_COURSES, locationModulesByCourse } from '../mockQuestionLocation';
+import { courseService, type CourseModuleResponse, type CourseSummaryItem } from '@/services/course.service';
 
 /**
- * Location card with inline Course/Module dropdown selectors.
- * Sits at the top of the sticky sidebar. The Module dropdown stays disabled
- * until a Course is chosen and lists only that Course's modules.
+ * Course / Module pickers for where new questions are saved. Module options
+ * load for the selected course; switching course clears the module.
  */
-export function QuestionLocationCard({ courseId, moduleId, onChange, className = '' }: {
+export function QuestionLocationCard({ courseId, moduleId, onChange, courseLocked, showErrors }: {
   courseId: string;
   moduleId: string;
   onChange: (courseId: string, moduleId: string) => void;
-  className?: string;
+  /** Edit mode: a question can't move to another course (the update API has no courseId). */
+  courseLocked?: boolean;
+  showErrors?: boolean;
 }) {
-  const moduleOptions = [
-    { label: 'Select Module', value: '' },
-    ...locationModulesByCourse(courseId).map(m => ({ label: m.title, value: m.id })),
-  ];
+  const [courses, setCourses] = useState<CourseSummaryItem[]>([]);
+  const [modules, setModules] = useState<CourseModuleResponse[]>([]);
+  const [loadingModules, setLoadingModules] = useState(false);
 
-  const handleCourseChange = (v: string) => {
-    // Switching the course resets the module; options reload for the new course.
-    onChange(v, '');
-  };
+  useEffect(() => {
+    let cancelled = false;
+    courseService.getCourses({ size: 100 }).then(res => {
+      if (!cancelled) setCourses(res.content);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (!courseId) {
+      setModules([]);
+      return;
+    }
+    let cancelled = false;
+    setLoadingModules(true);
+    courseService
+      .getCourseModules(courseId)
+      .then(res => {
+        if (!cancelled) setModules([...res].sort((a, b) => a.orderIndex - b.orderIndex));
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingModules(false);
+      });
+    return () => { cancelled = true; };
+  }, [courseId]);
+
+  const courseOptions = courses.map(c => ({ label: c.title, value: String(c.courseId) }));
+  // Keep the current value selectable even if it isn't in the loaded list.
+  if (courseId && !courseOptions.some(o => o.value === courseId)) courseOptions.unshift({ label: `Course #${courseId}`, value: courseId });
+  const moduleOptions = modules.map(m => ({ label: m.title, value: String(m.moduleId) }));
+  if (moduleId && !loadingModules && !moduleOptions.some(o => o.value === moduleId)) moduleOptions.unshift({ label: `Module #${moduleId}`, value: moduleId });
 
   return (
-    <div className={`rounded-[10px] border border-line bg-surface-alt p-3 space-y-2.5 ${className}`}>
-      <div className="flex items-center gap-1.5">
-        <Icon.FolderOpen className="w-3.5 h-3.5 text-brand-ink flex-shrink-0" />
-        <span className="text-xs font-semibold text-content-secondary uppercase tracking-wide">Location</span>
+    <div className="space-y-3">
+      <h3 className="flex items-center gap-1.5 text-base font-semibold text-content">
+        <Icon.FolderOpen className="w-4 h-4 text-brand-ink" /> Location
+      </h3>
+      <div>
+        <Select
+          label="Course *"
+          value={courseId}
+          onChange={v => onChange(v, '')}
+          disabled={courseLocked}
+          options={[{ label: 'Select course', value: '' }, ...courseOptions]}
+        />
+        {showErrors && !courseId && <p className="text-xs text-danger mt-1">Select a course.</p>}
       </div>
-      <Select
-        label="Course *"
-        value={courseId}
-        onChange={handleCourseChange}
-        options={[{ label: 'Select Course', value: '' }, ...LOCATION_COURSES.map(c => ({ label: c.title, value: c.id }))]}
-      />
-      <Select
-        label="Module *"
-        value={moduleId}
-        onChange={v => onChange(courseId, v)}
-        disabled={courseId === ''}
-        options={moduleOptions}
-      />
+      <div>
+        <Select
+          label="Module *"
+          value={moduleId}
+          onChange={v => onChange(courseId, v)}
+          disabled={!courseId || loadingModules}
+          options={[{ label: !courseId ? 'Select a course first' : loadingModules ? 'Loading…' : 'Select module', value: '' }, ...moduleOptions]}
+        />
+        {showErrors && courseId && !moduleId && <p className="text-xs text-danger mt-1">Select a module.</p>}
+      </div>
     </div>
   );
 }

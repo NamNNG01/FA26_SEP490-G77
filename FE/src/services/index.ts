@@ -6,3 +6,4 @@ export * from './course.service';
 export * from './category.service';
 export * from './category.service';
 
+export * from './question.service';
