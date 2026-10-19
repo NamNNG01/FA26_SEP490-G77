@@ -7,13 +7,15 @@ import { courseService, type CourseModuleResponse, type CourseSummaryItem } from
  * Course / Module pickers for where new questions are saved. Module options
  * load for the selected course; switching course clears the module.
  */
-export function QuestionLocationCard({ courseId, moduleId, onChange, courseLocked, showErrors }: {
+export function QuestionLocationCard({ courseId, moduleId, onChange, courseLocked, showErrors, hideHeading }: {
   courseId: string;
   moduleId: string;
   onChange: (courseId: string, moduleId: string) => void;
   /** Edit mode: a question can't move to another course (the update API has no courseId). */
   courseLocked?: boolean;
   showErrors?: boolean;
+  /** Render only the pickers, for callers that supply their own card heading. */
+  hideHeading?: boolean;
 }) {
   const [courses, setCourses] = useState<CourseSummaryItem[]>([]);
   const [modules, setModules] = useState<CourseModuleResponse[]>([]);
@@ -53,9 +55,11 @@ export function QuestionLocationCard({ courseId, moduleId, onChange, courseLocke
 
   return (
     <div className="space-y-3">
-      <h3 className="flex items-center gap-1.5 text-base font-semibold text-content">
-        <Icon.FolderOpen className="w-4 h-4 text-brand-ink" /> Location
-      </h3>
+      {!hideHeading && (
+        <h3 className="flex items-center gap-1.5 text-base font-semibold text-content">
+          <Icon.FolderOpen className="w-4 h-4 text-brand-ink" /> Location
+        </h3>
+      )}
       <div>
         <Select
           label="Course *"

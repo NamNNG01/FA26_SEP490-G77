@@ -20,7 +20,7 @@ export function QuestionSidePanel({
   onImport?: () => void;
   onSave: () => void;
   onCancel: () => void;
-  /** Edit mode: activate / deactivate the question. */
+  /** Edit mode: publish / archive the question. */
   onToggleStatus?: () => void;
   saving?: boolean;
   statusBusy?: boolean;
@@ -53,12 +53,12 @@ export function QuestionSidePanel({
           <Button
             variant={isActive ? 'danger' : 'outline'}
             className="w-full"
-            icon={isActive ? <Icon.XCircle className="w-4 h-4" /> : <Icon.CheckCircle className="w-4 h-4" />}
+            icon={isActive ? <Icon.Package className="w-4 h-4" /> : <Icon.CheckCircle className="w-4 h-4" />}
             onClick={onToggleStatus}
             loading={statusBusy}
             disabled={saving || statusBusy}
           >
-            {isActive ? 'Deactivate' : 'Activate'}
+            {isActive ? 'Archive' : 'Publish'}
           </Button>
         )}
         <Button variant="ghost" className="w-full" onClick={onCancel} disabled={saving}>Cancel</Button>

@@ -27,6 +27,13 @@ export type QuestionDifficulty = 'EASY' | 'MEDIUM' | 'HARD';
 
 export type QuestionStatus = 'ACTIVE' | 'INACTIVE' | 'DRAFT';
 
+/** UI names for the stored statuses: ACTIVE shows as Published, INACTIVE as Archived. */
+export const QUESTION_STATUS_LABELS: Record<QuestionStatus, string> = {
+  ACTIVE: 'Published',
+  INACTIVE: 'Archived',
+  DRAFT: 'Draft',
+};
+
 /** QuestionListItemDto */
 export interface QuestionListItem {
   questionId: number;
@@ -123,6 +130,11 @@ export interface QuestionCreateRequest {
   content: string;
   options?: AnswerOption[];
   answerKey?: MatchingAnswerKey | FillBlankAnswerKey | null;
+  groupId?: number | null;
+  /** Stored as ai_explanation — shown to students during review. */
+  explanation?: string | null;
+  /** Free-form JSON; the editor keeps `title` and `skillTag` here. */
+  questionMetadata?: Record<string, unknown> | null;
 }
 
 /** QuestionUpdateRequest — every field optional; `lockVersion` guards concurrent edits. */
@@ -174,6 +186,17 @@ export const questionService = {
   /** Q-05 */
   async updateQuestion(id: number | string, payload: QuestionUpdateRequest): Promise<QuestionDetail> {
     const res = await api.request<ApiResponse<QuestionDetail>>({ method: 'put', url: `/manager/questions/${id}`, data: payload });
+    return res.data;
+  },
+
+  /** Q-06: soft delete. */
+  async deleteQuestion(id: number | string): Promise<void> {
+    await api.request<ApiResponse<void>>({ method: 'delete', url: `/manager/questions/${id}` });
+  },
+
+  /** Q-07: copies the question (options, answer key, group) and returns the new one. */
+  async duplicateQuestion(id: number | string): Promise<QuestionDetail> {
+    const res = await api.post<ApiResponse<QuestionDetail>>(`/manager/questions/${id}/duplicate`);
     return res.data;
   },
 

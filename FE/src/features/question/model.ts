@@ -15,8 +15,15 @@ import type {
  * the fields of the selected type are validated and sent to the backend.
  */
 
-/** Types the backend accepts today (QuestionValidator rejects CODE / DIAGRAM). */
-export type EditableQuestionType = Exclude<QuestionType, 'CODE' | 'DIAGRAM'>;
+/**
+ * Types the editor offers. The backend accepts all but ORDERING today
+ * (QuestionValidator rejects CODE / DIAGRAM, the CHECK constraint has no
+ * ORDERING) — ORDERING is authored in the UI but cannot be saved yet.
+ */
+export type EditableQuestionType = Exclude<QuestionType, 'CODE' | 'DIAGRAM'> | 'ORDERING';
+
+/** Types the editor shows but the backend can't store yet. */
+export const UNSAVEABLE_TYPES: EditableQuestionType[] = ['ORDERING'];
 
 export const QUESTION_TYPE_OPTIONS: { label: string; value: EditableQuestionType }[] = [
   { label: 'Single Choice', value: 'SINGLE_CHOICE' },
@@ -25,6 +32,7 @@ export const QUESTION_TYPE_OPTIONS: { label: string; value: EditableQuestionType
   { label: 'Matching', value: 'MATCHING' },
   { label: 'Fill in the Blank', value: 'FILL_BLANK' },
   { label: 'Essay', value: 'ESSAY' },
+  { label: 'Ordering (coming soon)', value: 'ORDERING' },
 ];
 
 export const DIFFICULTY_OPTIONS: { label: string; value: QuestionDifficulty }[] = [
@@ -52,10 +60,24 @@ export interface BlankDraft {
   caseSensitive: boolean;
 }
 
+export interface OrderItemDraft {
+  key: string;
+  text: string;
+}
+
 export interface QuestionDraft {
   key: string;
   questionId?: number;
   lockVersion?: number | null;
+  /** Kept in questionMetadata.title — the backend has no title column. */
+  title: string;
+  /** Rationale shown to students during review (ai_explanation). */
+  explanation: string;
+  /** Kept in questionMetadata.skillTag. */
+  skillTag: string;
+  groupId: number | null;
+  /** Original questionMetadata, so saving keeps keys the editor doesn't know about. */
+  metadata: Record<string, unknown>;
   type: EditableQuestionType;
   difficulty: QuestionDifficulty;
   content: string;
@@ -65,6 +87,8 @@ export interface QuestionDraft {
   pairs: PairDraft[];
   /** FILL_BLANK — keyed by the n in {{n}} */
   blanks: Record<number, BlankDraft>;
+  /** ORDERING — items in their correct order. */
+  ordering: OrderItemDraft[];
 }
 
 let seq = 0;
@@ -82,15 +106,23 @@ const trueFalseOptions = (): OptionDraft[] => [
 
 const emptyPairs = (): PairDraft[] => [0, 1].map(() => ({ key: newKey('pair'), left: '', right: '' }));
 
+const emptyOrdering = (): OrderItemDraft[] => [0, 1, 2].map(() => ({ key: newKey('ord'), text: '' }));
+
 export function emptyDraft(): QuestionDraft {
   return {
     key: newKey('q'),
+    title: '',
+    explanation: '',
+    skillTag: '',
+    groupId: null,
+    metadata: {},
     type: 'SINGLE_CHOICE',
     difficulty: 'MEDIUM',
     content: '',
     options: emptyOptions(),
     pairs: emptyPairs(),
     blanks: {},
+    ordering: emptyOrdering(),
   };
 }
 
@@ -129,6 +161,8 @@ const splitAccepted = (s: string) => s.split(';').map(a => a.trim()).filter(Bool
 // ---- Validation -----------------------------------------------------------
 
 export interface QuestionErrors {
+  /** The selected type can't be saved yet. */
+  type?: string;
   content?: string;
   answers?: string;
 }
@@ -136,6 +170,7 @@ export interface QuestionErrors {
 export function validateDraft(q: QuestionDraft): QuestionErrors {
   const errors: QuestionErrors = {};
   if (q.content.trim() === '') errors.content = 'Question text is required.';
+  if (UNSAVEABLE_TYPES.includes(q.type)) errors.type = "Ordering questions can't be saved yet — pick another type to save.";
 
   switch (q.type) {
     case 'SINGLE_CHOICE':
@@ -163,6 +198,12 @@ export function validateDraft(q: QuestionDraft): QuestionErrors {
         const missing = indexes.filter(n => splitAccepted(q.blanks[n]?.accepted ?? '').length === 0);
         if (missing.length) errors.answers = `Enter an accepted answer for blank ${missing.map(n => `{{${n}}}`).join(', ')}.`;
       }
+      break;
+    }
+    case 'ORDERING': {
+      const filled = q.ordering.filter(o => o.text.trim());
+      if (filled.length < 2) errors.answers = 'Add at least two items to order.';
+      else if (filled.length !== q.ordering.length) errors.answers = 'Fill in every item or remove the empty ones.';
       break;
     }
     case 'ESSAY':
@@ -209,7 +250,8 @@ export function toCreateRequest(q: QuestionDraft, courseId: number, moduleId: nu
   return {
     courseId,
     moduleId,
-    questionType: q.type,
+    // ORDERING never gets here — validateDraft blocks it.
+    questionType: q.type as QuestionType,
     difficulty: q.difficulty,
     content: q.content.trim(),
     options: toOptions(q),
@@ -217,10 +259,23 @@ export function toCreateRequest(q: QuestionDraft, courseId: number, moduleId: nu
   };
 }
 
-export function toUpdateRequest(q: QuestionDraft, moduleId: number | null): QuestionUpdateRequest {
+function toMetadata(q: QuestionDraft): Record<string, unknown> {
+  const { title: _t, skillTag: _s, ...rest } = q.metadata;
   return {
+    ...rest,
+    ...(q.title.trim() ? { title: q.title.trim() } : {}),
+    ...(q.skillTag.trim() ? { skillTag: q.skillTag.trim() } : {}),
+  };
+}
+
+export function toUpdateRequest(q: QuestionDraft, moduleId: number | null, extra: Pick<QuestionUpdateRequest, 'status'> = {}): QuestionUpdateRequest {
+  return {
+    ...extra,
     moduleId,
-    questionType: q.type,
+    groupId: q.groupId,
+    explanation: q.explanation.trim(),
+    questionMetadata: toMetadata(q),
+    questionType: q.type as QuestionType,
     difficulty: q.difficulty,
     content: q.content.trim(),
     // Sending [] for non-choice types tells the backend to drop old options.
@@ -229,6 +284,14 @@ export function toUpdateRequest(q: QuestionDraft, moduleId: number | null): Ques
     lockVersion: q.lockVersion ?? null,
   };
 }
+
+const safeParse = (s: string): unknown => {
+  try {
+    return JSON.parse(s);
+  } catch {
+    return null;
+  }
+};
 
 const asRecord = (v: unknown): Record<string, unknown> | null =>
   v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
@@ -241,6 +304,7 @@ export function fromDetail(d: QuestionDetail): QuestionDraft {
     .map(o => ({ key: newKey('opt'), optionId: o.optionId, text: o.optionText ?? '', isCorrect: Boolean(o.isCorrect) }));
 
   const key = asRecord(d.answerKey);
+  const metadata = asRecord(typeof d.questionMetadata === 'string' ? safeParse(d.questionMetadata) : d.questionMetadata) ?? {};
   const rawPairs = Array.isArray(key?.pairs) ? (key.pairs as { left?: unknown; right?: unknown }[]) : [];
   const rawBlanks = Array.isArray(key?.blanks) ? (key.blanks as { index?: unknown; accepted?: unknown; caseSensitive?: unknown }[]) : [];
 
@@ -258,6 +322,11 @@ export function fromDetail(d: QuestionDetail): QuestionDraft {
     ...base,
     questionId: d.questionId,
     lockVersion: d.lockVersion,
+    title: typeof metadata.title === 'string' ? metadata.title : '',
+    skillTag: typeof metadata.skillTag === 'string' ? metadata.skillTag : '',
+    explanation: d.aiExplanation ?? '',
+    groupId: d.groupId ?? null,
+    metadata,
     type,
     difficulty: (d.difficulty as QuestionDifficulty) ?? 'MEDIUM',
     content: d.content ?? '',

@@ -5,12 +5,20 @@ import { Badge, type BadgeVariant } from '@/components/ui/Badge';
 import { Select } from '@/components/ui/Select';
 import { Table, type TableColumn } from '@/components/ui/Table';
 import { Alert } from '@/components/ui/Alert';
+import { Dropdown } from '@/components/ui/Dropdown';
+import { useToast } from '@/components/ui/ToastHost';
 import { SearchInput } from '@/components/common/SearchInput';
 import { Icon } from '@/assets/icons';
 import { useDebounce } from '@/hooks';
 import { ROUTES, managerQuestionEditPath } from '@/app/routes';
 import { courseService, type CourseModuleResponse, type CourseSummaryItem } from '@/services/course.service';
-import { questionService, type QuestionListItem, type QuestionPage } from '@/services/question.service';
+import {
+  QUESTION_STATUS_LABELS,
+  questionService,
+  type QuestionListItem,
+  type QuestionPage,
+  type QuestionStatus,
+} from '@/services/question.service';
 
 const PAGE_SIZE = 10;
 const ALL = 'all';
@@ -26,7 +34,7 @@ const TYPE_LABELS: Record<string, string> = {
   DIAGRAM: 'Diagram',
 };
 const DIFFICULTY_LABELS: Record<string, string> = { EASY: 'Easy', MEDIUM: 'Medium', HARD: 'Hard' };
-const STATUS_LABELS: Record<string, string> = { ACTIVE: 'Active', INACTIVE: 'Inactive', DRAFT: 'Draft' };
+const STATUS_LABELS: Record<string, string> = QUESTION_STATUS_LABELS;
 
 const TYPE_VARIANT: Record<string, BadgeVariant> = { ESSAY: 'purple', TRUE_FALSE: 'success', CODE: 'warning', DIAGRAM: 'warning' };
 const DIFFICULTY_VARIANT: Record<string, BadgeVariant> = { EASY: 'success', MEDIUM: 'warning', HARD: 'danger' };
@@ -65,6 +73,7 @@ const asRow = (r: Record<string, unknown>) => r as unknown as Row;
 
 export function QuestionBankPage() {
   const navigate = useNavigate();
+  const toast = useToast();
 
   const [query, setQuery] = useState('');
   const [course, setCourse] = useState(ALL);
@@ -151,6 +160,21 @@ export function QuestionBankPage() {
 
   const rows: Row[] = (result?.content ?? []).map(q => ({ ...q, id: q.questionId }));
 
+  const [statusBusyId, setStatusBusyId] = useState<number | null>(null);
+  const changeStatus = async (q: Row, next: QuestionStatus) => {
+    setStatusBusyId(q.questionId);
+    try {
+      await questionService.updateQuestionStatus(q.questionId, next, q.lockVersion);
+      toast.success(next === 'ACTIVE' ? 'Question published.' : 'Question archived.');
+      // Refetch so the row reflects the new status and still matches the active filter.
+      setReloadKey(k => k + 1);
+    } catch (err) {
+      toast.error(err instanceof Error && err.message ? err.message : 'Could not change the status.');
+    } finally {
+      setStatusBusyId(null);
+    }
+  };
+
   const columns: TableColumn[] = [
     {
       key: 'content',
@@ -211,6 +235,39 @@ export function QuestionBankPage() {
         );
       },
     },
+    {
+      key: 'actions',
+      label: '',
+      width: '48px',
+      render: r => {
+        const q = asRow(r);
+        const published = q.status === 'ACTIVE';
+        return (
+          // The menu is portalled, but React events still bubble to the row's onClick.
+          <div onClick={e => e.stopPropagation()}>
+            <Dropdown
+              trigger={
+                <button
+                  type="button"
+                  aria-label="Question actions"
+                  disabled={statusBusyId === q.questionId}
+                  className="p-1.5 hover:bg-accent rounded-[6px] disabled:opacity-50"
+                >
+                  <Icon.MoreHorizontal className="w-4 h-4 text-content-soft" />
+                </button>
+              }
+              items={[
+                { label: 'Detail', icon: <Icon.Eye />, onClick: () => navigate(managerQuestionEditPath(q.questionId)) },
+                // Published questions can be archived; Draft and Archived ones can be published.
+                published
+                  ? { label: 'Archive', icon: <Icon.Package />, danger: true, onClick: () => changeStatus(q, 'INACTIVE') }
+                  : { label: 'Publish', icon: <Icon.CheckCircle />, onClick: () => changeStatus(q, 'ACTIVE') },
+              ]}
+            />
+          </div>
+        );
+      },
+    },
   ];
 
   const filtersActive = query !== '' || [course, module, type, difficulty, status].some(v => v !== ALL);
@@ -233,9 +290,9 @@ export function QuestionBankPage() {
         </Button>
       </div>
 
-      <div className="card px-4 py-3 flex flex-wrap items-center gap-3">
+      <div className="card px-4 py-3 flex flex-wrap lg:flex-nowrap items-center gap-3">
         <SearchInput
-          className="w-full sm:w-60"
+          className="w-full sm:w-60 lg:w-auto lg:min-w-0 lg:flex-[1.5]"
           placeholder="Search questions…"
           value={query}
           onChange={e => changeQuery(e.target.value)}
@@ -246,7 +303,7 @@ export function QuestionBankPage() {
           value={course}
           onChange={changeCourse}
           options={[{ label: 'All Courses', value: ALL }, ...courses.map(c => ({ label: c.title, value: String(c.courseId) }))]}
-          className="w-full sm:w-48"
+          className="w-full sm:w-48 lg:w-auto lg:min-w-0 lg:flex-[1.25]"
         />
         <Select
           aria-label="Filter by module"
@@ -257,13 +314,13 @@ export function QuestionBankPage() {
             { label: course === ALL ? 'Select a course first' : 'All Modules', value: ALL },
             ...modules.map(m => ({ label: m.title, value: String(m.moduleId) })),
           ]}
-          className="w-full sm:w-48"
+          className="w-full sm:w-48 lg:w-auto lg:min-w-0 lg:flex-[1.25]"
         />
-        <Select aria-label="Filter by type" value={type} onChange={filterSetter(setType)} options={TYPE_OPTIONS} className="w-full sm:w-40" />
-        <Select aria-label="Filter by difficulty" value={difficulty} onChange={filterSetter(setDifficulty)} options={DIFFICULTY_OPTIONS} className="w-full sm:w-36" />
-        <Select aria-label="Filter by status" value={status} onChange={filterSetter(setStatus)} options={STATUS_OPTIONS} className="w-full sm:w-32" />
+        <Select aria-label="Filter by type" value={type} onChange={filterSetter(setType)} options={TYPE_OPTIONS} className="w-full sm:w-40 lg:w-auto lg:min-w-0 lg:flex-1" />
+        <Select aria-label="Filter by difficulty" value={difficulty} onChange={filterSetter(setDifficulty)} options={DIFFICULTY_OPTIONS} className="w-full sm:w-36 lg:w-auto lg:min-w-0 lg:flex-1" />
+        <Select aria-label="Filter by status" value={status} onChange={filterSetter(setStatus)} options={STATUS_OPTIONS} className="w-full sm:w-32 lg:w-auto lg:min-w-0 lg:flex-1" />
         {filtersActive && (
-          <button type="button" onClick={clearFilters} className="text-sm font-medium text-brand-ink hover:underline">
+          <button type="button" onClick={clearFilters} className="shrink-0 whitespace-nowrap text-sm font-medium text-brand-ink hover:underline">
             Clear filters
           </button>
         )}
@@ -280,7 +337,6 @@ export function QuestionBankPage() {
         <Table
           columns={columns}
           data={rows as unknown as Record<string, unknown>[]}
-          selectable
           perPage={PAGE_SIZE}
           unit="questions"
           serverPagination={{ page, total: result?.totalElements ?? 0, onChange: setPage }}

@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { Badge } from '@/components/ui/Badge';
@@ -45,6 +45,7 @@ export function QuestionForm({ q, index, onChange, showErrors, removable, onRemo
   const invalid = Object.keys(errors).length > 0;
   const contentError = showErrors ? errors.content : undefined;
   const answersError = showErrors ? errors.answers : undefined;
+  const typeError = showErrors ? errors.type : undefined;
   const titleId = `${q.key}-title`;
 
   const set = (patch: Partial<QuestionDraft>) => onChange({ ...q, ...patch });
@@ -123,12 +124,14 @@ export function QuestionForm({ q, index, onChange, showErrors, removable, onRemo
         <Select label="Type" value={q.type} onChange={v => onChange(changeType(q, v as EditableQuestionType))} options={QUESTION_TYPE_OPTIONS} />
       </div>
 
+      {typeError && <p className="text-xs text-danger -mt-1.5">{typeError}</p>}
+
       <AnswerSection q={q} set={set} error={answersError} />
     </section>
   );
 }
 
-function AnswerSection({ q, set, error }: { q: QuestionDraft; set: (patch: Partial<QuestionDraft>) => void; error?: string }) {
+export function AnswerSection({ q, set, error }: { q: QuestionDraft; set: (patch: Partial<QuestionDraft>) => void; error?: string }) {
   switch (q.type) {
     case 'SINGLE_CHOICE':
     case 'MULTIPLE_CHOICE':
@@ -138,6 +141,8 @@ function AnswerSection({ q, set, error }: { q: QuestionDraft; set: (patch: Parti
       return <MatchingAnswers q={q} set={set} error={error} />;
     case 'FILL_BLANK':
       return <BlankAnswers q={q} set={set} error={error} />;
+    case 'ORDERING':
+      return <OrderingAnswers q={q} set={set} error={error} />;
     case 'ESSAY':
       return (
         <p className="flex items-start gap-2 rounded-[10px] bg-surface-alt px-3 py-2.5 text-sm text-content-soft">
@@ -322,6 +327,82 @@ function BlankAnswers({ q, set, error }: { q: QuestionDraft; set: (patch: Partia
         </div>
       )}
       {error && <p className="text-xs text-danger mt-1.5">{error}</p>}
+    </div>
+  );
+}
+
+function OrderingAnswers({ q, set, error }: { q: QuestionDraft; set: (patch: Partial<QuestionDraft>) => void; error?: string }) {
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [overIndex, setOverIndex] = useState<number | null>(null);
+
+  const setText = (i: number, text: string) => set({ ordering: q.ordering.map((o, oi) => (oi === i ? { ...o, text } : o)) });
+  const add = () => set({ ordering: [...q.ordering, { key: newKey('ord'), text: '' }] });
+  const remove = (i: number) => set({ ordering: q.ordering.filter((_, oi) => oi !== i) });
+  const moveTo = (from: number, to: number) => {
+    if (from === to || to < 0 || to >= q.ordering.length) return;
+    const next = [...q.ordering];
+    const [item] = next.splice(from, 1);
+    next.splice(to, 0, item);
+    set({ ordering: next });
+  };
+  const endDrag = () => { setDragIndex(null); setOverIndex(null); };
+
+  return (
+    <div>
+      <SectionHeader
+        label="Correct Order (drag to rearrange)"
+        action={
+          <Button type="button" variant="outline" size="sm" icon={<Icon.Plus className="w-3.5 h-3.5" />} onClick={add} disabled={q.ordering.length >= MAX_OPTIONS}>
+            Add Item
+          </Button>
+        }
+      />
+      <ol className="space-y-1.5">
+        {q.ordering.map((o, i) => (
+          <li
+            key={o.key}
+            draggable
+            onDragStart={e => { setDragIndex(i); e.dataTransfer.effectAllowed = 'move'; }}
+            onDragOver={e => { e.preventDefault(); setOverIndex(i); }}
+            onDrop={e => { e.preventDefault(); if (dragIndex != null) moveTo(dragIndex, i); endDrag(); }}
+            onDragEnd={endDrag}
+            className={`flex items-center gap-2 rounded-[10px] transition-all ${dragIndex === i ? 'opacity-40' : ''} ${overIndex === i && dragIndex !== i ? 'ring-2 ring-brand-600/30' : ''}`}
+          >
+            <span className="cursor-grab active:cursor-grabbing text-content-subtle flex-shrink-0" aria-hidden="true" title="Drag to reorder">
+              <Icon.GripVertical className="w-4 h-4" />
+            </span>
+            <span className="w-7 h-7 bg-surface-muted rounded-[6px] flex items-center justify-center text-xs font-bold text-content-soft flex-shrink-0">{i + 1}</span>
+            <input
+              value={o.text}
+              onChange={e => setText(i, e.target.value)}
+              aria-label={`Item ${i + 1}`}
+              placeholder={`Item ${i + 1}`}
+              className={inputCls(Boolean(error) && !o.text.trim())}
+            />
+            <button type="button" onClick={() => moveTo(i, i - 1)} disabled={i === 0} className={iconBtn} aria-label={`Move item ${i + 1} up`} title="Move up">
+              <Icon.ArrowUp className="w-4 h-4" />
+            </button>
+            <button type="button" onClick={() => moveTo(i, i + 1)} disabled={i === q.ordering.length - 1} className={iconBtn} aria-label={`Move item ${i + 1} down`} title="Move down">
+              <Icon.ArrowDown className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => remove(i)}
+              disabled={q.ordering.length <= 2}
+              aria-label={`Delete item ${i + 1}`}
+              title="Delete item"
+              className="p-1 flex-shrink-0 text-content-subtle hover:text-danger disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              <Icon.Trash className="w-4 h-4" />
+            </button>
+          </li>
+        ))}
+      </ol>
+      {error && <p className="text-xs text-danger mt-1.5">{error}</p>}
+      <p className="flex items-start gap-1.5 text-xs text-warning mt-2">
+        <Icon.AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+        Ordering questions are not supported by the server yet, so they can't be saved. Students will see these items shuffled.
+      </p>
     </div>
   );
 }

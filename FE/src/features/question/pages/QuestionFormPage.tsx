@@ -8,9 +8,11 @@ import { Spinner } from '@/components/ui/Spinner';
 import { useToast } from '@/components/ui/ToastHost';
 import { ROUTES } from '@/app/routes';
 import { questionService, type QuestionStatus } from '@/services/question.service';
+import { questionGroupService, type QuestionGroup } from '@/services/questionGroup.service';
 import { QuestionForm as QuestionFormBlock } from '../components/QuestionForm';
 import { QuestionSidePanel } from '../components/QuestionSidePanel';
 import { ImportPdfModal } from '../components/ImportPdfModal';
+import { GroupContextCard, emptyGroupContext, groupContextErrors, type GroupContextValue } from '../components/GroupContextCard';
 import {
   emptyDraft,
   fromDetail,
@@ -25,7 +27,7 @@ import {
 /** Q-03 accepts 1..50 questions per request. */
 const MAX_BATCH = 50;
 
-type Confirm = 'discard' | 'deactivate' | null;
+type Confirm = 'discard' | 'archive' | null;
 
 const errorMessage = (err: unknown, fallback: string) => (err instanceof Error && err.message ? err.message : fallback);
 const httpStatus = (err: unknown) => (err as { response?: { status?: number } })?.response?.status;
@@ -40,6 +42,10 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
   const [courseId, setCourseId] = useState('');
   const [moduleId, setModuleId] = useState('');
   const [status, setStatus] = useState<QuestionStatus>('ACTIVE');
+  /** Create mode: standalone batch, or questions that share one group passage. */
+  const [groupCtx, setGroupCtx] = useState<GroupContextValue>(emptyGroupContext);
+  const [groups, setGroups] = useState<QuestionGroup[]>([]);
+  const [groupsLoading, setGroupsLoading] = useState(false);
 
   /** Questions the user has edited — their errors show before the first save attempt. */
   const [touched, setTouched] = useState<Set<string>>(new Set());
@@ -82,6 +88,22 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
       });
     return () => { cancelled = true; };
   }, [isEdit, questionId, reloadKey]);
+
+  // Create mode: groups belong to a course — load them for the selected one.
+  useEffect(() => {
+    if (isEdit || !courseId) {
+      setGroups([]);
+      return;
+    }
+    let cancelled = false;
+    setGroupsLoading(true);
+    questionGroupService
+      .getQuestionGroups({ courseId: Number(courseId), size: 100 })
+      .then(res => { if (!cancelled) setGroups(res.content); })
+      .catch(() => { if (!cancelled) setGroups([]); })
+      .finally(() => { if (!cancelled) setGroupsLoading(false); });
+    return () => { cancelled = true; };
+  }, [isEdit, courseId]);
 
   // Warn before closing the tab with unsaved work.
   useEffect(() => {
@@ -132,7 +154,14 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
     setDirty(true);
   };
 
+  const changeGroupCtx = (v: GroupContextValue) => {
+    setGroupCtx(v);
+    setDirty(true);
+  };
+
   const changeLocation = (c: string, m: string) => {
+    // A group belongs to one course, so a picked group no longer applies.
+    if (c !== courseId) setGroupCtx(prev => ({ ...prev, existingGroupId: '' }));
     setCourseId(c);
     setModuleId(m);
     setDirty(true);
@@ -143,6 +172,25 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
       : !isEdit && questions.length > MAX_BATCH ? `You can save up to ${MAX_BATCH} questions at a time.`
       : null;
 
+  /**
+   * The group a new batch goes into. A new group is created here, at save time;
+   * if the batch then fails, the form switches to that group so a retry doesn't
+   * create a second copy.
+   */
+  const resolveGroupId = async (): Promise<number | null> => {
+    if (groupCtx.mode === 'standalone') return null;
+    if (groupCtx.mode === 'existing') return Number(groupCtx.existingGroupId);
+    const group = await questionGroupService.createQuestionGroup({
+      courseId: Number(courseId),
+      moduleId: moduleId ? Number(moduleId) : null,
+      title: groupCtx.newTitle.trim(),
+      passageText: groupCtx.newPassage.trim(),
+    });
+    setGroups(prev => [group, ...prev]);
+    setGroupCtx(prev => ({ ...prev, mode: 'existing', existingGroupId: String(group.groupId) }));
+    return group.groupId;
+  };
+
   const save = async () => {
     setSubmitted(true);
     setSaveError(null);
@@ -152,6 +200,10 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
       return;
     }
     if (locationNote || questions.length === 0) return;
+    if (!isEdit && Object.keys(groupContextErrors(groupCtx)).length > 0) {
+      listRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
 
     setSaving(true);
     try {
@@ -159,9 +211,10 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
         await questionService.updateQuestion(questions[0].questionId!, toUpdateRequest(questions[0], Number(moduleId)));
         toast.success('Question updated.');
       } else {
-        const payload = questions.map(q => toCreateRequest(q, Number(courseId), Number(moduleId)));
+        const groupId = await resolveGroupId();
+        const payload = questions.map(q => ({ ...toCreateRequest(q, Number(courseId), Number(moduleId)), groupId }));
         const created = await questionService.createQuestionsBatch(Number(courseId), Number(moduleId), payload);
-        toast.success(`${created.length} question${created.length === 1 ? '' : 's'} saved.`);
+        toast.success(`${created.length} question${created.length === 1 ? '' : 's'} saved${groupId != null ? ' to the question group' : ''}.`);
       }
       setDirty(false);
       goToBank();
@@ -187,7 +240,7 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
       const updated = await questionService.updateQuestionStatus(q.questionId, next, q.lockVersion);
       setStatus(updated.status);
       setQuestions(prev => prev.map(p => ({ ...p, lockVersion: updated.lockVersion })));
-      toast.success(next === 'ACTIVE' ? 'Question activated.' : 'Question deactivated.');
+      toast.success(next === 'ACTIVE' ? 'Question published.' : 'Question archived.');
     } catch (err) {
       setSaveError({ message: errorMessage(err, 'Could not change the status.'), conflict: httpStatus(err) === 409 });
     } finally {
@@ -242,6 +295,17 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px] gap-6 lg:flex-1 lg:min-h-0 items-start">
         {/* Question blocks — the only part that scrolls on desktop */}
         <div ref={listRef} className="space-y-3 lg:h-full lg:min-h-0 lg:overflow-y-auto lg:pr-2 pb-4">
+          {!isEdit && (
+            <GroupContextCard
+              value={groupCtx}
+              onChange={changeGroupCtx}
+              groups={groups}
+              loadingGroups={groupsLoading}
+              courseSelected={Boolean(courseId)}
+              showErrors={submitted}
+              disabled={saving}
+            />
+          )}
           {questions.length === 0 && (
             <div className="card p-10 text-center">
               <p className="text-base font-medium text-content-secondary">No questions yet</p>
@@ -278,7 +342,7 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
           onImport={() => { setImportedCount(0); setShowImport(true); }}
           onSave={save}
           onCancel={cancel}
-          onToggleStatus={isEdit ? () => (status === 'ACTIVE' ? setConfirm('deactivate') : changeStatus('ACTIVE')) : undefined}
+          onToggleStatus={isEdit ? () => (status === 'ACTIVE' ? setConfirm('archive') : changeStatus('ACTIVE')) : undefined}
           saving={saving}
           statusBusy={statusBusy}
           isActive={status === 'ACTIVE'}
@@ -305,18 +369,18 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
       </Modal>
 
       <Modal
-        open={confirm === 'deactivate'}
+        open={confirm === 'archive'}
         onClose={() => setConfirm(null)}
-        title="Deactivate question?"
+        title="Archive question?"
         size="sm"
         footer={
           <>
             <Button variant="ghost" onClick={() => setConfirm(null)} disabled={statusBusy}>Cancel</Button>
-            <Button variant="danger" onClick={() => changeStatus('INACTIVE')} loading={statusBusy}>Deactivate</Button>
+            <Button variant="danger" onClick={() => changeStatus('INACTIVE')} loading={statusBusy}>Archive</Button>
           </>
         }
       >
-        <p className="text-sm text-content-secondary">Inactive questions are no longer used when new exams are generated. You can activate it again later.</p>
+        <p className="text-sm text-content-secondary">Archived questions are no longer used when new exams are generated. You can publish it again later.</p>
       </Modal>
     </div>
   );
