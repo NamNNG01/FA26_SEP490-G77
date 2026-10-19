@@ -744,21 +744,11 @@ export function CourseDetailPage({
               </p>
             </div>
           ) : (
-            <>
-              <Table
-                columns={studentColumns}
-                data={students as unknown as Record<string, unknown>[]}
-              />
-              <div className="border-t border-line-faint">
-                <Pagination
-                  page={studentPage}
-                  total={studentTotal}
-                  perPage={studentPageSize}
-                  onChange={setStudentPage}
-                  unit="students"
-                />
-              </div>
-            </>
+            <Table
+              columns={studentColumns}
+              data={students as unknown as Record<string, unknown>[]}
+              unit="students"
+            />
           )}
         </div>
       )}
