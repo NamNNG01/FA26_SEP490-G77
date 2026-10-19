@@ -204,7 +204,7 @@ export function QuestionBankPage() {
       label: 'Type',
       render: r => {
         const t = asRow(r).questionType;
-        return <Badge variant={TYPE_VARIANT[t] ?? 'info'}>{TYPE_LABELS[t] ?? t}</Badge>;
+        return <Badge variant={TYPE_VARIANT[t] ?? 'info'} className="whitespace-nowrap">{TYPE_LABELS[t] ?? t}</Badge>;
       },
     },
     {
