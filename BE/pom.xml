@@ -24,6 +24,12 @@
     </properties>
 
     <dependencies>
+        <!-- PDF text extraction for exam import and material-based AI drafts. -->
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>3.0.8</version>
+        </dependency>
         <!-- Spring Boot Starters -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

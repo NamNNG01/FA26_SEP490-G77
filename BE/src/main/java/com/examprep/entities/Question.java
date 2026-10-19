@@ -40,7 +40,7 @@ public class Question implements Serializable {
     private String content;
 
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "question_metadata", columnDefinition = "JSON")
+    @Column(name = "question_metadata", columnDefinition = "jsonb")
     private String questionMetadata;
 
     @Column(name = "ai_explanation")
@@ -57,6 +57,7 @@ public class Question implements Serializable {
     @Column(name = "difficulty", length = 50)
     private String difficulty;
 
-    @Column(name = "essay_grading_rubric")
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "essay_grading_rubric", columnDefinition = "jsonb")
     private String essayGradingRubric;
 }

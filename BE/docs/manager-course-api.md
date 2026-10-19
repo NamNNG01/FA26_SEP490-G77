@@ -54,8 +54,20 @@ Use this isolated local database only: startup applies Flyway. Never override th
 - Fresh-context review completed; dashboard distinct-student counts and fractional JSON integer coercion were reproduced with failing tests, fixed, and passed on both H2 and PostgreSQL.
 - `git diff --check` passed. Existing `.env.example` changes and all frontend files are excluded from the implementation commit.
 
+### Database alignment on 2026-10-19
+
+The shared database has applied V9-V16 from another migration lineage. The feature's old V9 deletion guard and uncommitted V10 categories migration are now V19 and V18. V1-V8 are unchanged. V17 aligns rubric/metadata columns to JSONB, normalizes legacy question types and FIXED exams to the specification, and updates the question-type constraint.
+
+Deployment remains blocked until the exact original V9-V16 SQL files are recovered and their checksums match the shared history. Renumbering the feature's migrations does not recover those scripts. Do not run Flyway repair or disable validation to bypass missing history. An existing disposable local database with the feature's old V9/V10 must be recreated; never reset a shared database.
+
+Run `mvn "-DpostgresTests=true" test` against the isolated server above. This now includes Category, Deck and Exam HTTP tests on PostgreSQL, JSONB rubric insert/update checks, and a separate upgrade fixture from V8 with legacy data. The migration fixture creates and drops a temporary database on that localhost test server; its disposable test account needs CREATEDB. AI HTTP tests use a local fake provider and make no real provider calls.
+
+The shared database was inspected read-only; no migrations or application writes were run against it.
+
+Verification: `mvn -o "-DpostgresTests=true" test` passed all **281 tests**, with zero failures, errors or skipped tests. This proves the fresh local schema and the V8 upgrade fixture; it does not restore or validate the missing shared V9-V16 definitions.
+
 ### Deployment and handover
 
-Deploy backend with the new migration included; Flyway applies V9 before serving requests. It replaces eight foreign keys and validates existing references, which takes table locks: schedule deployment accordingly on a busy database. No existing migration checksums are changed and no rows are deleted.
+After recovering and validating the shared migration history, deploy with V17-V19 included. V19 replaces eight foreign keys and validates existing references, which takes table locks: schedule deployment accordingly on a busy database. V1-V8 checksums are unchanged and the new migrations delete no rows.
 
 Frontend can start against Swagger at `/swagger-ui/index.html` and the contract above. CourseManager selection must supply an existing active manager ID; a user-administration picker API is a separate responsibility. Any UI action receiving 409 should display the returned message and offer unpublish for courses.

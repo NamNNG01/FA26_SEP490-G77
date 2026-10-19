@@ -18,6 +18,9 @@ public enum ResponseCode {
     METHOD_NOT_ALLOWED(HttpStatus.METHOD_NOT_ALLOWED, "METHOD_NOT_ALLOWED", "HTTP method not supported"),
     CONFLICT(HttpStatus.CONFLICT, "RESOURCE_CONFLICT", "Resource already exists or state conflict"),
     VALIDATION_ERROR(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", "Request payload validation failed"),
+    AI_RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS, "AI_RATE_LIMITED", "AI daily quota exceeded"),
+    AI_UPSTREAM_ERROR(HttpStatus.BAD_GATEWAY, "AI_UPSTREAM_ERROR", "AI provider could not generate a draft"),
+    AI_TIMEOUT(HttpStatus.GATEWAY_TIMEOUT, "AI_TIMEOUT", "AI generation timed out"),
 
     // Domain Specific Errors
     EXAM_NOT_FOUND(HttpStatus.NOT_FOUND, "EXAM_NOT_FOUND", "Exam with the specified ID does not exist"),

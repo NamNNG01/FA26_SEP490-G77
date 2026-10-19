@@ -6,5 +6,6 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface AnswerOptionRepository extends JpaRepository<AnswerOption, Long> {
+    java.util.List<AnswerOption> findByQuestionQuestionIdOrderByOrderIndexAscOptionIdAsc(Long questionId);
 }
 

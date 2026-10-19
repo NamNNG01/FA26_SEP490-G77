@@ -1,3 +1,4 @@
+-- Forward migration: shared database versions V9-V16 are already occupied.
 -- Prevent accidental content/history loss, including concurrent inserts after
 -- the service's dependency checks. No rows are detached or removed.
 -- Discover names because renamed exam_configs retains its original FK name.

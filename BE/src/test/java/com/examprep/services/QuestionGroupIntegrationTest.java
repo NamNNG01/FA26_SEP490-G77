@@ -6,6 +6,7 @@ import com.examprep.dto.QuestionGroupResponse;
 import com.examprep.dto.QuestionGroupUpdateRequest;
 import com.examprep.entities.Category;
 import com.examprep.entities.Course;
+import com.examprep.entities.CourseManager;
 import com.examprep.entities.Exam;
 import com.examprep.entities.ExamGroup;
 import com.examprep.entities.ExamQuestion;
@@ -406,6 +407,60 @@ class QuestionGroupIntegrationTest {
         entityManager.flush();
         entityManager.clear();
         assertTrue(questionGroupRepository.findById(g4.getGroupId()).isEmpty());
+    }
+
+    @Test
+    void assignedManagerListsDirectModuleOnlyAndCourseOnlyGroupsWithoutDuplicates() {
+        User assigned = persistUser("assigned@gmail.com", "Assigned Manager", User.ROLE_COURSE_MANAGER);
+        entityManager.persist(CourseManager.builder().course(courseA).user(assigned).build());
+        entityManager.persist(CourseManager.builder().course(courseA).user(assigned).build());
+        QuestionGroup courseOnly = persistGroup(courseA, null, "Course-only", "Course-only passage");
+        entityManager.flush();
+        entityManager.clear();
+
+        PageResponse<QuestionGroupResponse> all = questionGroupService.getQuestionGroups(
+                assigned.getUserId(), User.ROLE_COURSE_MANAGER, null, null, null, 0, 20);
+        assertEquals(List.of(courseOnly.getGroupId(), g4.getGroupId(), g2.getGroupId(), g1.getGroupId()),
+                all.getContent().stream().map(QuestionGroupResponse::getGroupId).toList());
+        assertEquals(4L, all.getTotalElements());
+        PageResponse<QuestionGroupResponse> filtered = questionGroupService.getQuestionGroups(
+                assigned.getUserId(), User.ROLE_COURSE_MANAGER, courseA.getCourseId(), moduleA1.getModuleId(), null, 0, 20);
+        assertEquals(List.of(g4.getGroupId(), g1.getGroupId()),
+                filtered.getContent().stream().map(QuestionGroupResponse::getGroupId).toList());
+        assertThrows(ForbiddenException.class, () -> questionGroupService.getQuestionGroups(
+                assigned.getUserId(), User.ROLE_COURSE_MANAGER, courseB.getCourseId(), null, null, 0, 20));
+    }
+
+    @Test
+    void assignedManagerMutationsKeepForeignAndPublishedExamProtections() {
+        User assigned = persistUser("assigned@gmail.com", "Assigned Manager", User.ROLE_COURSE_MANAGER);
+        entityManager.persist(CourseManager.builder().course(courseA).user(assigned).build());
+        entityManager.flush();
+        entityManager.clear();
+
+        QuestionGroupResponse created = questionGroupService.createQuestionGroup(assigned.getUserId(), User.ROLE_COURSE_MANAGER,
+                QuestionGroupCreateRequest.builder().courseId(courseA.getCourseId()).moduleId(moduleA1.getModuleId())
+                        .title("Assigned content").build());
+        assertEquals(courseA.getCourseId(), created.getCourseId());
+        QuestionGroupResponse updated = questionGroupService.updateQuestionGroup(assigned.getUserId(), User.ROLE_COURSE_MANAGER,
+                g4.getGroupId(), QuestionGroupUpdateRequest.builder().title("Assigned edit").build());
+        assertEquals("Assigned edit", updated.getTitle());
+        assertEquals("Legacy shared passage", updated.getPassageText());
+
+        Long questionId = questionRepository.findAll().stream()
+                .filter(q -> q.getGroup() != null && q.getGroup().getGroupId().equals(g2.getGroupId()))
+                .findFirst().orElseThrow().getQuestionId();
+        questionGroupService.deleteQuestionGroup(assigned.getUserId(), User.ROLE_COURSE_MANAGER, g2.getGroupId());
+        entityManager.flush();
+        entityManager.clear();
+        assertTrue(questionGroupRepository.findById(g2.getGroupId()).isEmpty());
+        assertNull(questionRepository.findById(questionId).orElseThrow().getGroup());
+        assertEquals(1L, examGroupRepository.count());
+        assertThrows(ResourceConflictException.class, () -> questionGroupService.deleteQuestionGroup(
+                assigned.getUserId(), User.ROLE_COURSE_MANAGER, g1.getGroupId()));
+        assertThrows(ForbiddenException.class, () -> questionGroupService.updateQuestionGroup(
+                assigned.getUserId(), User.ROLE_COURSE_MANAGER, g3.getGroupId(),
+                QuestionGroupUpdateRequest.builder().title("Foreign edit").build()));
     }
 
     private long questionCountOf(PageResponse<QuestionGroupResponse> response, Long groupId) {

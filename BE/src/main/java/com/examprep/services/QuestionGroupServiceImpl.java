@@ -6,6 +6,7 @@ import com.examprep.dto.QuestionGroupResponse;
 import com.examprep.dto.QuestionGroupUpdateRequest;
 import com.examprep.dto.ResponseCode;
 import com.examprep.entities.Course;
+import com.examprep.entities.CourseManager;
 import com.examprep.entities.Module;
 import com.examprep.entities.QuestionGroup;
 import com.examprep.entities.User;
@@ -22,6 +23,8 @@ import com.examprep.repositories.QuestionRepository;
 import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
+import jakarta.persistence.criteria.Subquery;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -177,9 +180,17 @@ public class QuestionGroupServiceImpl implements QuestionGroupService {
                         criteriaBuilder.like(criteriaBuilder.lower(root.get("passageText")), pattern, LIKE_ESCAPE_CHAR)));
             }
             if (managerId != null) {
+                Subquery<Long> assigned = query.subquery(Long.class);
+                Root<CourseManager> assignment = assigned.from(CourseManager.class);
+                assigned.select(assignment.get("courseManagerId")).where(
+                        criteriaBuilder.or(
+                                criteriaBuilder.equal(assignment.get("course"), courseJoin),
+                                criteriaBuilder.equal(assignment.get("course"), moduleCourseJoin)),
+                        criteriaBuilder.equal(assignment.get("user").get("userId"), managerId));
                 predicates.add(criteriaBuilder.or(
                         criteriaBuilder.equal(courseJoin.get("manager").get("userId"), managerId),
-                        criteriaBuilder.equal(moduleCourseJoin.get("manager").get("userId"), managerId)));
+                        criteriaBuilder.equal(moduleCourseJoin.get("manager").get("userId"), managerId),
+                        criteriaBuilder.exists(assigned)));
             }
 
             return criteriaBuilder.and(predicates.toArray(new Predicate[0]));
@@ -242,7 +253,8 @@ public class QuestionGroupServiceImpl implements QuestionGroupService {
         if (isAdmin(role)) {
             return;
         }
-        if (course.getManager() == null || !userId.equals(course.getManager().getUserId())) {
+        boolean primary = course.getManager() != null && userId.equals(course.getManager().getUserId());
+        if (!primary && courseRepository.countOwnedCourse(course.getCourseId(), userId) == 0) {
             throw new ForbiddenException("You do not have access to this course.");
         }
     }

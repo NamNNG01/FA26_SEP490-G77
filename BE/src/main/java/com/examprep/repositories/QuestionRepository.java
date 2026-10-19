@@ -12,6 +12,20 @@ import java.util.List;
 
 @Repository
 public interface QuestionRepository extends JpaRepository<Question, Long> {
+    @Query("SELECT q FROM Question q LEFT JOIN q.module m LEFT JOIN q.group g LEFT JOIN g.module gm " +
+            "WHERE q.status = 'ACTIVE' AND (m.course.courseId = :courseId OR (q.module IS NULL AND " +
+            "(g.course.courseId = :courseId OR (g.course IS NULL AND gm.course.courseId = :courseId)))) " +
+            "AND (:moduleId IS NULL OR m.moduleId = :moduleId OR (q.module IS NULL AND gm.moduleId = :moduleId)) " +
+            "ORDER BY q.questionId")
+    List<Question> findAiBank(@Param("courseId") Long courseId, @Param("moduleId") Long moduleId);
+
+    List<Question> findByGroupGroupIdOrderByQuestionIdAsc(Long groupId);
+    List<Question> findByModuleModuleId(Long moduleId);
+
+    @Query("SELECT q FROM Question q LEFT JOIN q.module m LEFT JOIN q.group g LEFT JOIN g.module gm " +
+            "WHERE (m.course.courseId = :courseId OR (q.module IS NULL AND (g.course.courseId = :courseId OR (g.course IS NULL AND gm.course.courseId = :courseId)))) " +
+            "AND (:moduleId IS NULL OR m.moduleId = :moduleId OR (q.module IS NULL AND gm.moduleId = :moduleId)) ORDER BY q.questionId")
+    List<Question> findImportBank(@Param("courseId") Long courseId, @Param("moduleId") Long moduleId);
     boolean existsByModuleModuleId(Long moduleId);
     boolean existsByModuleCourseCourseId(Long courseId);
 

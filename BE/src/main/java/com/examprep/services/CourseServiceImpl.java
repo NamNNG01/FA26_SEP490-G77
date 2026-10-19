@@ -39,6 +39,7 @@ public class CourseServiceImpl implements CourseService {
     private final ExamConfigRepository configs;
     private final QuestionGroupRepository groups;
     private final CategoryRepository categories;
+    private final CategoryService categoryService;
     private final UserRepository users;
 
     @Override
@@ -215,8 +216,7 @@ public class CourseServiceImpl implements CourseService {
 
     @Override
     public List<CategoryResponse> categories() {
-        return categories.findAll(Sort.by("name", "categoryId")).stream().map(c -> new CategoryResponse(
-                c.getCategoryId(), c.getName(), c.getSlug(), c.getDescription(), c.getParent() == null ? null : c.getParent().getCategoryId())).toList();
+        return categoryService.list();
     }
 
     private Course readCourse(Long id) {

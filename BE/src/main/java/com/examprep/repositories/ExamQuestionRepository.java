@@ -8,6 +8,8 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface ExamQuestionRepository extends JpaRepository<ExamQuestion, Long> {
+    java.util.List<ExamQuestion> findByExamExamIdOrderByOrderIndexAscExamQuestionIdAsc(Long examId);
+    void deleteByExamExamId(Long examId);
 
     @Query("SELECT COUNT(eq) FROM ExamQuestion eq " +
             "WHERE eq.question.group.groupId = :groupId AND eq.exam.status = :examStatus")
