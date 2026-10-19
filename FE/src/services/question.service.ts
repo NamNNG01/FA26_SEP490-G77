@@ -57,13 +57,13 @@ export interface QuestionListItem {
 }
 
 export interface QuestionListParams {
+  search?: string;
   courseId?: number;
   moduleId?: number;
+  groupId?: number;
   questionType?: string;
   difficulty?: string;
   status?: string;
-  search?: string;
-  /** Zero-based, as Spring's PageRequest expects. */
   page?: number;
   size?: number;
 }

@@ -23,7 +23,7 @@ import { RegisterPage } from '@/features/auth/pages/RegisterPage';
 import { ForgotPasswordPage, ResetPasswordPage } from '@/features/auth/pages/AuthPages';
 import { ProfilePage } from '@/features/profile';
 import { StudentDashboard } from '@/features/student';
-import { TakeExamPage, ExamResultPage, ExamListPage } from '@/features/exam';
+import { TakeExamPage, ExamResultPage, ExamListPage, ExamFormPage } from '@/features/exam';
 import { PublicExamsPage, PublicExamDetailPage } from '@/features/public-exam';
 import { CMDashboard } from '@/features/content-manager';
 import { QuestionBankPage, QuestionDetailPage, QuestionFormPage } from '@/features/question';
@@ -244,6 +244,10 @@ function AppRoutes() {
           <Route path={ROUTES.managerQuestionCreate} element={<QuestionFormPage mode="create" />} />
           <Route path={ROUTES.managerQuestionEdit} element={<QuestionDetailPage />} />
           <Route path={ROUTES.managerExams} element={<ExamListPage />} />
+          <Route path={ROUTES.managerExamQuizNew} element={<ExamFormPage formKind="QUIZ" mode="create" />} />
+          <Route path={ROUTES.managerExamQuizEdit} element={<ExamFormPage formKind="QUIZ" mode="edit" />} />
+          <Route path={ROUTES.managerExamEssayNew} element={<ExamFormPage formKind="ESSAY" mode="create" />} />
+          <Route path={ROUTES.managerExamEssayEdit} element={<ExamFormPage formKind="ESSAY" mode="edit" />} />
           {/* Same shared components as the student practice-exam area. */}
           <Route path={ROUTES.managerPracticeExams} element={<PublicExamsPage />} />
           <Route path={ROUTES.managerPracticeExamDetail} element={<PublicExamDetailPage />} />
