@@ -1,36 +1,36 @@
-import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { Select } from '@/components/ui/Select';
-import { Alert } from '@/components/ui/Alert';
-import { Breadcrumb } from '@/components/ui/Breadcrumb';
-import { Icon } from '@/assets/icons';
-import { useAuth } from '@/auth/authContext';
+import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
+import { Alert } from "@/components/ui/Alert";
+import { Breadcrumb } from "@/components/ui/Breadcrumb";
+import { Icon } from "@/assets/icons";
+import { useAuth } from "@/auth/authContext";
 import {
   courseService,
   type CategoryResponse,
   type CourseDetailResponse,
-} from '@/services/course.service';
+} from "@/services/course.service";
 
 export function CourseFormPage({
-  mode = 'create',
+  mode = "create",
   courseId,
   onNavigate,
 }: {
-  mode?: 'create' | 'edit';
+  mode?: "create" | "edit";
   courseId?: string | number;
   onNavigate?: (id: string, params?: Record<string, string>) => void;
 }) {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const isEdit = mode === 'edit';
+  const isEdit = mode === "edit";
 
-  const [title, setTitle] = useState('');
-  const [categoryId, setCategoryId] = useState('');
-  const [description, setDescription] = useState('');
-  const [price, setPrice] = useState('0');
-  const [managerId, setManagerId] = useState('');
+  const [title, setTitle] = useState("");
+  const [categoryId, setCategoryId] = useState("");
+  const [description, setDescription] = useState("");
+  const [price, setPrice] = useState("0");
+  const [managerId, setManagerId] = useState("");
   const [categories, setCategories] = useState<CategoryResponse[]>([]);
   const [loading, setLoading] = useState(isEdit);
   const [submitting, setSubmitting] = useState(false);
@@ -57,34 +57,38 @@ export function CourseFormPage({
         .then((c) => {
           setTitle(c.title);
           setCategoryId(String(c.categoryId));
-          setDescription(c.description ?? '');
+          setDescription(c.description ?? "");
           setPrice(String(c.price ?? 0));
           setManagerId(String(c.managerId));
         })
         .catch((err) => {
-          setError(err instanceof Error ? err.message : 'Failed to load course details.');
+          setError(
+            err instanceof Error
+              ? err.message
+              : "Failed to load course details.",
+          );
         })
         .finally(() => setLoading(false));
     } else {
-      setManagerId(user?.id ? String(user.id) : '1');
+      setManagerId(user?.userId ? String(user.userId) : "1");
     }
-  }, [isEdit, courseId, user?.id]);
+  }, [isEdit, courseId, user?.userId]);
 
   const handleCancel = () => {
     if (onNavigate) {
-      onNavigate('course-list');
+      onNavigate("course-list");
     } else {
-      navigate('/manager/courses');
+      navigate("/manager/courses");
     }
   };
 
   const handleSubmit = async () => {
     if (!title.trim()) {
-      setError('Course title is required.');
+      setError("Course title is required.");
       return;
     }
     if (!categoryId) {
-      setError('Please select a category.');
+      setError("Please select a category.");
       return;
     }
     setError(null);
@@ -98,7 +102,7 @@ export function CourseFormPage({
           description: description.trim() || undefined,
           price: Number(price) >= 0 ? Number(price) : 0,
         });
-        setSuccess('Course updated successfully.');
+        setSuccess("Course updated successfully.");
         setTimeout(() => handleCancel(), 1000);
       } else {
         const created: CourseDetailResponse = await courseService.createCourse({
@@ -108,17 +112,20 @@ export function CourseFormPage({
           price: Number(price) >= 0 ? Number(price) : 0,
           managerId: Number(managerId) || 1,
         });
-        setSuccess('Course created successfully.');
+        setSuccess("Course created successfully.");
         setTimeout(() => {
           if (onNavigate) {
-            onNavigate('course-detail', { courseId: String(created.courseId) });
+            onNavigate("course-detail", { courseId: String(created.courseId) });
           } else {
             navigate(`/manager/courses/${created.courseId}`);
           }
         }, 1000);
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Operation failed. Please try again.';
+      const msg =
+        err instanceof Error
+          ? err.message
+          : "Operation failed. Please try again.";
       setError(msg);
     } finally {
       setSubmitting(false);
@@ -143,17 +150,21 @@ export function CourseFormPage({
     <div className="p-8 space-y-5">
       <Breadcrumb
         items={[
-          { label: 'Courses', onClick: handleCancel },
-          { label: isEdit ? 'Edit Course' : 'Create Course' },
+          { label: "Courses", onClick: handleCancel },
+          { label: isEdit ? "Edit Course" : "Create Course" },
         ]}
       />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-xl font-bold text-content">
-          {isEdit ? 'Edit Course' : 'Create Course'}
+          {isEdit ? "Edit Course" : "Create Course"}
         </h2>
         <div className="flex flex-wrap gap-2">
-          <Button variant="secondary" onClick={handleCancel} disabled={submitting}>
+          <Button
+            variant="secondary"
+            onClick={handleCancel}
+            disabled={submitting}
+          >
             Cancel
           </Button>
           <Button
@@ -162,7 +173,7 @@ export function CourseFormPage({
             loading={submitting}
             disabled={submitting}
           >
-            {isEdit ? 'Save Changes' : 'Create Course'}
+            {isEdit ? "Save Changes" : "Create Course"}
           </Button>
         </div>
       </div>
@@ -172,7 +183,9 @@ export function CourseFormPage({
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <div className="xl:col-span-2 card p-6 space-y-4">
-          <h4 className="text-lg font-semibold text-content">Course Information</h4>
+          <h4 className="text-lg font-semibold text-content">
+            Course Information
+          </h4>
 
           <Input
             label="Course Title"
@@ -190,7 +203,7 @@ export function CourseFormPage({
               options={
                 categoryOptions.length > 0
                   ? categoryOptions
-                  : [{ label: 'Select Category', value: '' }]
+                  : [{ label: "Select Category", value: "" }]
               }
             />
             <Input
@@ -229,12 +242,21 @@ export function CourseFormPage({
 
         <div className="space-y-4">
           <div className="card p-5">
-            <h4 className="text-base font-semibold text-content mb-3">Course Guidelines</h4>
+            <h4 className="text-base font-semibold text-content mb-3">
+              Course Guidelines
+            </h4>
             <ul className="text-xs text-content-soft space-y-2 list-disc pl-4">
               <li>Newly created courses are saved as drafts by default.</li>
-              <li>A course requires at least 1 module before it can be published.</li>
-              <li>Only administrators can assign or reassign course managers.</li>
-              <li>Course managers can add and organize modules, questions, and exams.</li>
+              <li>
+                A course requires at least 1 module before it can be published.
+              </li>
+              <li>
+                Only administrators can assign or reassign course managers.
+              </li>
+              <li>
+                Course managers can add and organize modules, questions, and
+                exams.
+              </li>
             </ul>
           </div>
           <Alert
