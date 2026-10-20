@@ -12,6 +12,7 @@ import { Icon } from '@/assets/icons';
 import { useDebounce } from '@/hooks';
 import { ROUTES, managerQuestionEditPath } from '@/app/routes';
 import { courseService, type CourseModuleResponse, type CourseSummaryItem } from '@/services/course.service';
+import { getUserRoleCode } from '@/auth/storage';
 import {
   QUESTION_STATUS_LABELS,
   questionService,
@@ -84,20 +85,22 @@ export function QuestionBankPage() {
   const [page, setPage] = useState(1);
   const debouncedQuery = useDebounce(query.trim(), 400);
 
-  const [courses, setCourses] = useState<CourseSummaryItem[]>([]);
+  const [courses, setCourses] = useState<CourseSummaryItem[] | null>(null);
   const [modules, setModules] = useState<CourseModuleResponse[]>([]);
+  /** Admins see every course; a course manager's "All Courses" means the courses assigned to them. */
+  const isAdmin = getUserRoleCode() === 'ADMIN';
 
   const [result, setResult] = useState<QuestionPage | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
-  // Course options load once; module options follow the selected course.
+  // Course options (the caller's courses) load once; module options follow the selected course.
   useEffect(() => {
     let cancelled = false;
-    courseService.getCourses({ size: 100 }).then(res => {
-      if (!cancelled) setCourses(res.content);
-    });
+    courseService.getCourses({ size: 100 })
+      .then(res => { if (!cancelled) setCourses(res.content); })
+      .catch(() => { if (!cancelled) setCourses([]); });
     return () => { cancelled = true; };
   }, []);
 
@@ -113,7 +116,19 @@ export function QuestionBankPage() {
     return () => { cancelled = true; };
   }, [course]);
 
+  // "All Courses" for a manager = only their assigned courses (Q-01 courseIds).
+  const scopeCourseIds = !isAdmin && course === ALL && courses ? courses.map(c => c.courseId) : undefined;
+  const scopeKey = scopeCourseIds?.join(',');
+  const notAssigned = !isAdmin && courses !== null && courses.length === 0;
+
   useEffect(() => {
+    // Wait for the manager's courses before asking for "All Courses".
+    if (!isAdmin && course === ALL && courses === null) return;
+    if (notAssigned) {
+      setResult({ content: [], page: 0, size: PAGE_SIZE, totalElements: 0, totalPages: 0 });
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     setLoading(true);
     setError(null);
@@ -121,6 +136,7 @@ export function QuestionBankPage() {
       .getQuestions({
         search: debouncedQuery || undefined,
         courseId: optionalNumber(course),
+        courseIds: scopeCourseIds,
         moduleId: optionalNumber(module),
         questionType: optionalString(type),
         difficulty: optionalString(difficulty),
@@ -141,7 +157,9 @@ export function QuestionBankPage() {
         if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
-  }, [debouncedQuery, course, module, type, difficulty, status, page, reloadKey]);
+    // scopeKey stands in for scopeCourseIds (a new array every render).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedQuery, course, module, type, difficulty, status, page, reloadKey, scopeKey, notAssigned]);
 
   // Any filter change starts back at page 1.
   const filterSetter = (setter: (v: string) => void) => (v: string) => {
@@ -205,6 +223,20 @@ export function QuestionBankPage() {
       render: r => {
         const t = asRow(r).questionType;
         return <Badge variant={TYPE_VARIANT[t] ?? 'info'} className="whitespace-nowrap">{TYPE_LABELS[t] ?? t}</Badge>;
+      },
+    },
+    {
+      key: 'groupId',
+      label: 'Format',
+      render: r => {
+        const groupId = asRow(r).groupId;
+        return groupId != null ? (
+          <span title={`Part of question group #${groupId} (shares one passage)`}>
+            <Badge variant="purple" className="whitespace-nowrap"><Icon.Layers className="w-3 h-3" /> Group #{groupId}</Badge>
+          </span>
+        ) : (
+          <Badge variant="default" className="whitespace-nowrap">Single</Badge>
+        );
       },
     },
     {
@@ -302,7 +334,7 @@ export function QuestionBankPage() {
           aria-label="Filter by course"
           value={course}
           onChange={changeCourse}
-          options={[{ label: 'All Courses', value: ALL }, ...courses.map(c => ({ label: c.title, value: String(c.courseId) }))]}
+          options={[{ label: 'All Courses', value: ALL }, ...(courses ?? []).map(c => ({ label: c.title, value: String(c.courseId) }))]}
           className="w-full sm:w-48 lg:w-auto lg:min-w-0 lg:flex-[1.25]"
         />
         <Select
@@ -345,6 +377,7 @@ export function QuestionBankPage() {
             loading ? 'Loading questions…'
               : error ? null
               : filtersActive ? 'No questions match your filters.'
+              : notAssigned ? 'You are not assigned to any course yet, so there are no questions to show.'
               : 'No questions yet. Click “Add Question” to create one.'
           }
         />

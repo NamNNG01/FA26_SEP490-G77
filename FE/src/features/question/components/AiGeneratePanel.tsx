@@ -7,7 +7,7 @@ import { Select } from '@/components/ui/Select';
 import { MultiSelect } from '@/components/ui/MultiSelect';
 import { Spinner } from '@/components/ui/Spinner';
 import { Icon } from '@/assets/icons';
-import { questionService, type QuestionAiGenerateRequest, type QuestionAiPreview, type QuestionDifficulty, type QuestionType } from '@/services/question.service';
+import { AI_CONTEXT_MAX, questionService, type QuestionAiGenerateRequest, type QuestionAiPreview, type QuestionDifficulty, type QuestionType } from '@/services/question.service';
 import {
   AI_QUESTION_TYPE_OPTIONS,
   DIFFICULTY_OPTIONS,
@@ -47,31 +47,16 @@ function aiErrorMessage(err: unknown): string {
     case 403: return 'You are not a manager of this course, so you cannot generate questions for it.';
     case 404: return e.response.data?.message || 'The course was not found.';
     case 429: return 'You have reached today’s AI generation limit. Try again tomorrow or write the questions manually.';
-    case 502: return 'The AI service returned an error. Please try again in a moment.';
+    case 502: return e.response.data?.message || 'The AI service returned an error. Please try again in a moment.';
+    case 503: return 'The AI service is busy right now. Please try again in a moment.';
     case 504: return 'The AI took too long to respond. Try fewer questions or try again.';
   }
   return e?.message || 'Could not generate questions. Please try again.';
 }
 
-/** One AI call: every picked type at one difficulty (the backend takes one difficulty per call). */
-interface RequestChunk {
-  difficulty: QuestionDifficulty;
-  counts: Partial<Record<QuestionType, number>>;
-  total: number;
-}
-
-/**
- * `perType` questions for each type, split as evenly as possible across the
- * difficulties (5 over Easy + Hard → 3 Easy, 2 Hard). Empty slices are skipped.
- */
-function planRequests(types: QuestionType[], difficulties: QuestionDifficulty[], perType: number): RequestChunk[] {
-  return difficulties
-    .map((difficulty, i) => {
-      const count = Math.floor(perType / difficulties.length) + (i < perType % difficulties.length ? 1 : 0);
-      const counts = Object.fromEntries(types.map(type => [type, count])) as Partial<Record<QuestionType, number>>;
-      return { difficulty, counts, total: count * types.length };
-    })
-    .filter(c => c.total > 0);
+/** `n` split as evenly as possible over `keys` (5 over Easy + Hard → 3 Easy, 2 Hard). */
+function spread<K extends string>(keys: K[], n: number): Partial<Record<K, number>> {
+  return Object.fromEntries(keys.map((k, i) => [k, Math.floor(n / keys.length) + (i < n % keys.length ? 1 : 0)])) as Partial<Record<K, number>>;
 }
 
 interface Preview {
@@ -92,7 +77,7 @@ interface Preview {
 const toPreview = (p: QuestionAiPreview, request: QuestionAiGenerateRequest): Preview => ({
   id: newKey('ai'),
   draft: fromAiDraft(p.question),
-  request: { ...request, questionTypeCounts: { [p.question.questionType]: 1 } },
+  request: { ...request, questionTypeCounts: { [p.question.questionType]: 1 }, difficultyCounts: { [p.question.difficulty ?? 'MEDIUM']: 1 } },
   duplicate: p.hasHashConflict,
   accepted: false,
   editing: false,
@@ -101,7 +86,7 @@ const toPreview = (p: QuestionAiPreview, request: QuestionAiGenerateRequest): Pr
 });
 
 /**
- * "AI Generate" tab: drafts questions with AI-03 for the manager to review.
+ * "AI Generate" tab: drafts questions with AI-01 for the manager to review.
  * Nothing is saved here — Accept hands a question to the editor, and it is
  * saved with the rest through Save All.
  */
@@ -140,8 +125,7 @@ export function AiGeneratePanel({ courseId, moduleId, onAccept, onPendingChange,
 
   const countNum = Number(count);
   const countValid = Number.isInteger(countNum) && countNum >= MIN_COUNT && countNum <= MAX_COUNT;
-  const plan = countValid ? planRequests(questionTypes, difficulties, countNum) : [];
-  const total = plan.reduce((n, c) => n + c.total, 0);
+  const total = countValid ? countNum * questionTypes.length : 0;
 
   const topicError = showErrors && !topic.trim() ? 'Enter a topic for the questions.' : undefined;
   const countError = showErrors && !countValid ? `Enter a number from ${MIN_COUNT} to ${MAX_COUNT}.` : undefined;
@@ -151,7 +135,7 @@ export function AiGeneratePanel({ courseId, moduleId, onAccept, onPendingChange,
 
   const generate = async () => {
     setShowErrors(true);
-    if (!courseId || !topic.trim() || !plan.length || totalError) return;
+    if (!courseId || !topic.trim() || !total || !difficulties.length || totalError) return;
 
     abortRef.current?.abort();
     abortRegenerations();
@@ -161,32 +145,22 @@ export function AiGeneratePanel({ courseId, moduleId, onAccept, onPendingChange,
     setError(null);
     setWarnings([]);
     try {
-      // One call drafts every type at one difficulty — fan out per difficulty and keep the plan's order.
-      const requests: QuestionAiGenerateRequest[] = plan.map(chunk => ({
+      // AI-01 drafts every type and difficulty in one call.
+      const request: QuestionAiGenerateRequest = {
         courseId: Number(courseId),
         ...(moduleId ? { moduleId: Number(moduleId) } : {}),
-        questionTypeCounts: chunk.counts,
-        difficulty: chunk.difficulty,
-        context: topic.trim(),
+        questionTypeCounts: Object.fromEntries(questionTypes.map(type => [type, countNum])),
+        difficultyCounts: spread(difficulties, total),
+        topic: topic.trim(),
         language,
-      }));
-      const results = await Promise.allSettled(requests.map(req => questionService.generateAiQuestions(req, controller.signal)));
+      };
+      const res = await questionService.generateAiQuestions(request, controller.signal);
       if (controller.signal.aborted) return;
-
-      const drafts: Preview[] = [];
-      const notes: string[] = [];
-      results.forEach((r, i) => {
-        if (r.status === 'fulfilled') r.value.questions.forEach(q => drafts.push(toPreview(q, requests[i])));
-        else notes.push(`${difficultyLabel(plan[i].difficulty)}: ${aiErrorMessage(r.reason)}`);
-      });
-      const failed = results.filter(r => r.status === 'rejected') as PromiseRejectedResult[];
-      if (failed.length === results.length) {
-        setError(aiErrorMessage(failed[0].reason));
-        return;
-      }
-      setPreviews(drafts);
-      setIsDemo(results.some(r => r.status === 'fulfilled' && r.value.mock));
-      setWarnings(notes);
+      setPreviews(res.questions.map(q => toPreview(q, request)));
+      setIsDemo(Boolean(res.mock));
+      setWarnings(res.warnings);
+    } catch (err) {
+      if (!controller.signal.aborted) setError(aiErrorMessage(err));
     } finally {
       if (abortRef.current === controller) {
         abortRef.current = null;
@@ -253,7 +227,7 @@ export function AiGeneratePanel({ courseId, moduleId, onAccept, onPendingChange,
           onKeyDown={e => { if (e.key === 'Enter' && !generating) generate(); }}
           placeholder="e.g. OOP inheritance"
           error={topicError}
-          maxLength={500}
+          maxLength={AI_CONTEXT_MAX}
           disabled={generating}
         />
 
@@ -273,13 +247,14 @@ export function AiGeneratePanel({ courseId, moduleId, onAccept, onPendingChange,
           <Select label="Language" value={language} onChange={v => setLanguage(v as Language)} options={LANGUAGE_OPTIONS} disabled={generating} />
         </div>
 
-        {plan.length > 0 && (
+        {total > 0 && difficulties.length > 0 && (
           <p className={`text-xs ${totalError ? 'text-danger' : 'text-content-soft'}`}>
             {totalError ?? (
               <>
                 Will generate <span className="font-medium text-content-secondary">{total} question{total === 1 ? '' : 's'}</span>
-                {difficulties.length > 1 && <> — each type split across {difficulties.map(difficultyLabel).join(' / ')}</>}
-                {plan.length > 1 && <> ({plan.length} AI requests)</>}.
+                {difficulties.length > 1 && (
+                  <> — {Object.entries(spread(difficulties, total)).filter(([, n]) => n).map(([d, n]) => `${n} ${difficultyLabel(d)}`).join(', ')}</>
+                )}.
               </>
             )}
           </p>
@@ -307,7 +282,7 @@ export function AiGeneratePanel({ courseId, moduleId, onAccept, onPendingChange,
       {warnings.length > 0 && (
         <Alert
           type="warning"
-          title="Some questions could not be generated"
+          title="Some drafts were skipped"
           message={warnings.join(' · ')}
         />
       )}
@@ -519,12 +494,19 @@ function AiPreviewView({ index, preview, actions }: { index: number; preview: Pr
         </div>
       )}
 
-      {q.type === 'ESSAY' && q.essayGradingRubric != null && (
+      {q.type === 'ESSAY' && (q.rubric.length > 0 || q.rubricNotes) && (
         <details className="text-sm text-content-secondary">
           <summary className="cursor-pointer select-none text-content-soft">Suggested grading rubric</summary>
-          <pre className="mt-1.5 p-2 rounded-[8px] bg-surface-alt text-xs overflow-x-auto whitespace-pre-wrap">
-            {typeof q.essayGradingRubric === 'string' ? q.essayGradingRubric : JSON.stringify(q.essayGradingRubric, null, 2)}
-          </pre>
+          <ul className="mt-1.5 space-y-1">
+            {q.rubric.map(c => (
+              <li key={c.key} className="rounded-[8px] bg-surface-alt px-2 py-1">
+                <span className="font-medium">{c.name || 'Unnamed criterion'}</span>
+                <span className="text-content-soft"> · {c.maxScore || '?'} pts</span>
+                {c.descriptors && <p className="text-xs text-content-soft">{c.descriptors}</p>}
+              </li>
+            ))}
+          </ul>
+          {q.rubricNotes && <p className="mt-1 text-xs text-content-soft">{q.rubricNotes}</p>}
         </details>
       )}
 

@@ -9,7 +9,7 @@ import type {
 } from './question.service';
 
 /**
- * Demo data for POST /manager/questions/ai/generate, used when
+ * Demo data for AI-01 (POST /manager/exams/ai/generate), used when
  * VITE_AI_MOCK=true so trying the UI spends no AI quota. Questions are built from
  * per-type templates and mention the requested topic, so a demo reads
  * naturally for any topic the manager types.
@@ -261,8 +261,9 @@ export async function mockGenerateAiQuestions(req: QuestionAiGenerateRequest, si
   await sleep(800 + Math.random() * 1200, signal);
 
   const lang: Lang = req.language === 'Vietnamese' ? 'vi' : 'en';
-  const topic = req.context?.trim() || t(lang, 'chủ đề', 'the topic');
-  const difficulty: QuestionDifficulty = req.difficulty ?? 'MEDIUM';
+  const topic = req.topic?.trim() || t(lang, 'chủ đề', 'the topic');
+  // Hand out the requested difficulties in order, one per question.
+  const difficulties = (Object.entries(req.difficultyCounts) as [QuestionDifficulty, number][]).flatMap(([d, n]) => Array<QuestionDifficulty>(n).fill(d));
 
   const questions: QuestionAiPreview[] = [];
   (Object.entries(req.questionTypeCounts) as [QuestionType, number][]).forEach(([questionType, count]) => {
@@ -274,6 +275,7 @@ export async function mockGenerateAiQuestions(req: QuestionAiGenerateRequest, si
       // Repeat templates get a numbered variant so the list doesn't look duplicated.
       const round = Math.floor(i / builders.length);
       const content = round > 0 ? `${built.content} (${t(lang, 'biến thể', 'variant')} ${round + 1})` : built.content;
+      const difficulty = difficulties[questions.length] ?? 'MEDIUM';
       questions.push({ question: { ...built, content, questionType, difficulty }, hasHashConflict: false, validationError: null });
     }
   });
@@ -284,5 +286,5 @@ export async function mockGenerateAiQuestions(req: QuestionAiGenerateRequest, si
     last.question = { ...last.question, options: last.question.options.map(o => ({ ...o, isCorrect: false })) };
     last.validationError = 'Question validation failed';
   }
-  return { logId: null, questions };
+  return { questions, warnings: [] };
 }
