@@ -274,7 +274,7 @@ public class CourseServiceImpl implements CourseService {
         return new CourseResponse(course.getCourseId(), course.getTitle(), course.getSlug(), course.getCategoryId(),
                 course.getCategory().getName(), course.getManager().getUserId(), course.getManager().getFullName(),
                 course.getThumbnailUrl(), course.getPrice(), course.getIsPublished(), moduleCount, studentCount, examCount,
-                course.getCreatedAt(), course.getUpdatedAt(), content == null ? null : course.getDescription(), content);
+                course.getCreatedAt(), course.getUpdatedAt(), course.getDescription(), content);
     }
 
     private List<ModuleResponse> moduleResponses(Long courseId) {
