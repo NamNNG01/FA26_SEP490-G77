@@ -5,6 +5,7 @@ import com.examprep.entities.Course;
 import com.examprep.entities.Enrollment;
 import com.examprep.entities.Exam;
 import com.examprep.entities.ExamAttempt;
+import com.examprep.entities.PasswordResetToken;
 import com.examprep.entities.RefreshToken;
 import com.examprep.entities.User;
 import com.examprep.repositories.UserRepository;
@@ -31,8 +32,10 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -73,7 +76,8 @@ class AdminUserApiIntegrationTest {
                 put(BASE + "/1").contentType(MediaType.APPLICATION_JSON)
                         .content(updateBody("Blocked", "blocked@example.com", User.ROLE_STUDENT, User.STATUS_ACTIVE)),
                 patch(BASE + "/1").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"status\":\"INACTIVE\"}"))) {
+                        .content("{\"status\":\"INACTIVE\"}"),
+                post(BASE + "/1/reset-password"))) {
             for (User actor : List.of(manager, student)) {
                 call(actor, request).andExpect(status().isForbidden());
             }
@@ -333,6 +337,33 @@ class AdminUserApiIntegrationTest {
         call(admin, patch(BASE + "/999999/status").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"status\":\"INACTIVE\"}"))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void resetPasswordPersistsOneTokenAndAlwaysAcknowledges() throws Exception {
+        User target = account(User.ROLE_STUDENT, "Reset Me", "reset.me@example.com", User.STATUS_ACTIVE);
+
+        call(admin, post(BASE + "/" + target.getUserId() + "/reset-password"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("Password reset email sent."))
+                .andExpect(jsonPath("$.data").doesNotExist());
+
+        em.flush();
+        em.clear();
+        assertEquals(1L, em.createQuery("select count(t) from PasswordResetToken t where t.user.userId = :id", Long.class)
+                .setParameter("id", target.getUserId()).getSingleResult());
+        PasswordResetToken stored = em.createQuery(
+                        "select t from PasswordResetToken t where t.user.userId = :id", PasswordResetToken.class)
+                .setParameter("id", target.getUserId()).getSingleResult();
+        assertNotNull(stored.getTokenHash());
+        assertFalse(stored.getTokenHash().isBlank());
+        assertNull(stored.getUsedAt());
+        // 15 minute validity window, same as AUTH-06
+        assertTrue(stored.getExpiresAt().isAfter(Instant.now().plusSeconds(800)));
+        assertTrue(stored.getExpiresAt().isBefore(Instant.now().plusSeconds(1000)));
+
+        call(admin, post(BASE + "/999999/reset-password")).andExpect(status().isNotFound());
     }
 
     @Test

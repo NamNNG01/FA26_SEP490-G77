@@ -17,6 +17,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -69,5 +70,14 @@ public class AdminUserController {
             @AuthenticationPrincipal UserPrincipal actor,
             @PathVariable Long id, @Valid @RequestBody AdminUserRequests.StatusUpdate request) {
         return ResponseEntity.ok(ApiResponse.success(service.updateStatus(actor, id, request)));
+    }
+
+    @PostMapping("/{id}/reset-password")
+    @Operation(summary = "UM-05: Send the password-reset e-mail to a user",
+            description = "ADMIN only. Reuses the AUTH-06 token flow. Always returns 200 once the token is issued; "
+                    + "mail delivery problems are logged server-side and never disclosed.")
+    public ResponseEntity<ApiResponse<Void>> resetPassword(@PathVariable Long id) {
+        service.resetPassword(id);
+        return ResponseEntity.ok(ApiResponse.success(null, "Password reset email sent."));
     }
 }

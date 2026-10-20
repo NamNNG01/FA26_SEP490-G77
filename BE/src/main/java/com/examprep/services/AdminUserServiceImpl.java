@@ -51,6 +51,7 @@ public class AdminUserServiceImpl implements AdminUserService {
     private final EnrollmentRepository enrollments;
     private final ExamAttemptRepository attempts;
     private final RefreshTokenRepository refreshTokens;
+    private final AuthService authService;
 
     @Override
     public AdminUserPageResponse list(String search, String role, String status, int page, int size) {
@@ -140,6 +141,12 @@ public class AdminUserServiceImpl implements AdminUserService {
             refreshTokens.revokeAllByUserId(id, Instant.now());
 
         return AdminUserResponse.from(user);
+    }
+
+    @Override
+    @Transactional
+    public void resetPassword(Long id) {
+        authService.sendPasswordResetEmail(requireUser(id));
     }
 
     private static void requireKnownRole(String role) {

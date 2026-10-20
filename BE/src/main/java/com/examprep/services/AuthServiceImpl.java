@@ -190,23 +190,27 @@ public class AuthServiceImpl implements AuthService {
         log.info("Password reset requested");
 
         // Uniform response: never reveal whether the email exists.
-        userRepository.findByEmail(email).ifPresent(user -> {
-            String rawToken = tokenProvider.generateRawRefreshToken();
-            passwordResetTokenRepository.save(PasswordResetToken.builder()
-                    .user(user)
-                    .tokenHash(tokenProvider.hashToken(rawToken))
-                    .expiresAt(Instant.now().plusMillis(RESET_TOKEN_EXPIRATION_MS))
-                    .build());
-            String resetLink = buildResetLink(rawToken);
-            boolean delivered = mailService.sendPasswordResetEmail(
-                    user.getEmail(), user.getFullName(), resetLink, RESET_TOKEN_EXPIRATION_MINUTES);
-            if (delivered) {
-                log.info("Password reset email sent");
-            } else {
-                log.warn("Password reset token issued but email delivery is disabled or failed. "
-                        + "Set MAIL_ENABLED=true with a Gmail App Password to deliver reset emails.");
-            }
-        });
+        userRepository.findByEmail(email).ifPresent(this::sendPasswordResetEmail);
+    }
+
+    @Override
+    @Transactional
+    public void sendPasswordResetEmail(User user) {
+        String rawToken = tokenProvider.generateRawRefreshToken();
+        passwordResetTokenRepository.save(PasswordResetToken.builder()
+                .user(user)
+                .tokenHash(tokenProvider.hashToken(rawToken))
+                .expiresAt(Instant.now().plusMillis(RESET_TOKEN_EXPIRATION_MS))
+                .build());
+        String resetLink = buildResetLink(rawToken);
+        boolean delivered = mailService.sendPasswordResetEmail(
+                user.getEmail(), user.getFullName(), resetLink, RESET_TOKEN_EXPIRATION_MINUTES);
+        if (delivered) {
+            log.info("Password reset email sent");
+        } else {
+            log.warn("Password reset token issued but email delivery is disabled or failed. "
+                    + "Set MAIL_ENABLED=true with a Gmail App Password to deliver reset emails.");
+        }
     }
 
     private String buildResetLink(String rawToken) {
