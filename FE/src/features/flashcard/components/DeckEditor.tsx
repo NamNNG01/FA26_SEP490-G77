@@ -1,84 +1,97 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { Badge, type BadgeVariant } from '@/components/ui/Badge';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { useToast } from '@/components/ui/ToastHost';
 import { Icon } from '@/assets/icons';
-import {
-  FLASHCARD_COURSES,
-  flashcardModules,
-  nextCardId,
-  type DeckStatus,
-  type Flashcard,
-  type FlashcardDeck,
-} from '../mockFlashcardDecks';
+import { courseService, type CourseSummaryItem } from '@/services/course.service';
+import { isCardApiMissing, type DeckCard } from '@/services/deck.service';
 
 /**
  * Building blocks shared by the Flashcard Detail page and the New Flashcard
- * modal: deck info inputs, the card list and the side card editor.
+ * Deck modal: deck info inputs, the visibility badge, the card list and the
+ * side card editor.
  */
 
-export const STATUS_VARIANT: Record<DeckStatus, BadgeVariant> = {
-  Published: 'success',
-  Draft: 'warning',
-  Archived: 'default',
-};
-
-export const NAME_MAX = 120;
+/** Matches DeckRequests.title's @Size(max = 255). */
+export const NAME_MAX = 255;
 export const DESCRIPTION_MAX = 500;
-const SIDE_MAX = 500;
 
 export const textareaClass =
   'w-full px-3 py-2.5 rounded-[10px] border bg-surface text-base text-content leading-relaxed resize-none placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600';
 
+export function VisibilityBadge({ isPublic }: { isPublic: boolean }) {
+  return <Badge variant={isPublic ? 'success' : 'default'}>{isPublic ? 'Public' : 'Private'}</Badge>;
+}
+
+/** Select value for "no course" — a personal deck only its owner can see. */
+export const NO_COURSE = '';
+
+export const errorMessage = (err: unknown, fallback: string) => (err instanceof Error && err.message ? err.message : fallback);
+
+/**
+ * Courses the signed-in Course Manager manages — GET /manager/courses is
+ * already scoped to them, so the course pickers only offer their own courses.
+ */
+export function useManagedCourses() {
+  const [courses, setCourses] = useState<CourseSummaryItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    let cancelled = false;
+    courseService.getCourses({ size: 100, sort: 'title,asc' })
+      .then(res => { if (!cancelled) setCourses(res.content); })
+      .catch(() => { if (!cancelled) setCourses([]); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+  return { courses, loading };
+}
+
 // ── Deck info ────────────────────────────────────────────────────────────────
 
-export type DeckInfo = Pick<FlashcardDeck, 'name' | 'courseId' | 'moduleId' | 'description' | 'status'>;
-export type DeckInfoErrors = Partial<Record<'name' | 'moduleId' | 'description', string>>;
+export interface DeckInfo {
+  title: string;
+  /** Course id as a select value; NO_COURSE for a personal deck. */
+  courseId: string;
+  isPublic: boolean;
+  description: string;
+}
+
+export type DeckInfoErrors = Partial<Record<'title' | 'description', string>>;
 
 export function validateDeckInfo(info: DeckInfo): DeckInfoErrors {
   const errors: DeckInfoErrors = {};
-  const name = info.name.trim();
-  if (!name) errors.name = 'Deck name is required.';
-  else if (name.length > NAME_MAX) errors.name = `Deck name must be ${NAME_MAX} characters or fewer.`;
-  if (!flashcardModules(info.courseId).some(m => m.id === info.moduleId)) errors.moduleId = 'Select a module.';
+  const title = info.title.trim();
+  if (!title) errors.title = 'Deck name is required.';
+  else if (title.length > NAME_MAX) errors.title = `Deck name must be ${NAME_MAX} characters or fewer.`;
   if (info.description.length > DESCRIPTION_MAX) errors.description = `Description must be ${DESCRIPTION_MAX} characters or fewer.`;
   return errors;
 }
 
-/** Module the deck should fall back to when its course changes. */
-export const firstModuleOf = (courseId: string) => flashcardModules(courseId)[0]?.id ?? '';
-
-export function DeckInfoFields({ value, onChange, errors = {}, showStatus, idPrefix }: {
+export function DeckInfoFields({ value, onChange, errors = {}, courses, coursesLoading, allowNoCourse, idPrefix }: {
   value: DeckInfo;
   onChange: (patch: Partial<DeckInfo>) => void;
   errors?: DeckInfoErrors;
-  /** Status is chosen when creating; afterwards it changes from the list's row menu. */
-  showStatus?: boolean;
+  courses: { id: string; title: string }[];
+  coursesLoading?: boolean;
+  /** The API cannot detach a deck from its course, so "No course" is only offered when it is allowed. */
+  allowNoCourse: boolean;
   idPrefix: string;
 }) {
-  const modules = flashcardModules(value.courseId);
+  const courseOptions = [
+    ...(allowNoCourse ? [{ label: 'No course (personal deck)', value: NO_COURSE }] : []),
+    ...courses.map(c => ({ label: c.title, value: c.id })),
+  ];
   return (
     <div className="space-y-4">
-      <Input label="Deck name" placeholder="e.g. Gradient Descent Essentials" value={value.name} maxLength={NAME_MAX}
-        error={errors.name} onChange={e => onChange({ name: e.target.value })} />
-      <div className={`grid gap-4 ${showStatus ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
-        <Select label="Course" value={value.courseId}
-          // Changing course re-scopes the module list; keep the two consistent.
-          onChange={v => onChange({ courseId: v, moduleId: firstModuleOf(v) })}
-          options={FLASHCARD_COURSES.map(c => ({ label: c.title, value: c.id }))} />
-        <div>
-          <Select label="Module" value={value.moduleId} onChange={v => onChange({ moduleId: v })}
-            options={modules.length > 0
-              ? modules.map(m => ({ label: m.title, value: m.id }))
-              : [{ label: 'No modules in this course', value: '' }]} />
-          {errors.moduleId && <p className="mt-1.5 text-xs text-danger">{errors.moduleId}</p>}
-        </div>
-        {showStatus && (
-          <Select label="Status" value={value.status} onChange={v => onChange({ status: v as DeckStatus })}
-            options={(['Draft', 'Published'] as DeckStatus[]).map(s => ({ label: s, value: s }))} />
-        )}
+      <Input label="Deck name" placeholder="e.g. Gradient Descent Essentials" value={value.title} maxLength={NAME_MAX}
+        error={errors.title} onChange={e => onChange({ title: e.target.value })} />
+      <div className="grid gap-4 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        <Select label="Course" value={value.courseId} onChange={v => onChange({ courseId: v })} disabled={coursesLoading}
+          options={coursesLoading ? [{ label: 'Loading courses…', value: value.courseId }] : courseOptions} />
+        <Select label="Visibility" value={value.isPublic ? 'public' : 'private'} onChange={v => onChange({ isPublic: v === 'public' })}
+          options={[{ label: 'Private', value: 'private' }, { label: 'Public', value: 'public' }]} />
       </div>
       <div>
         <label htmlFor={`${idPrefix}-description`} className="block text-sm font-medium text-content-secondary mb-1.5">Description</label>
@@ -97,6 +110,31 @@ export function DeckInfoFields({ value, onChange, errors = {}, showStatus, idPre
 
 // ── Card editor state ────────────────────────────────────────────────────────
 
+const SIDE_MAX = 500;
+
+/** A card as the editor sees it — saved cards use their cardId, drafts a temporary id. */
+export interface EditableCard {
+  id: string;
+  frontText: string;
+  backText: string;
+}
+
+export const toEditableCard = (c: DeckCard): EditableCard => ({ id: String(c.cardId), frontText: c.frontText, backText: c.backText });
+
+/**
+ * Where card edits go: the create modal keeps them in a local draft, the
+ * detail page sends them to the card API. Throw to keep the editor's input.
+ */
+export interface CardActions {
+  add: (frontText: string, backText: string) => Promise<void> | void;
+  update: (card: EditableCard, frontText: string, backText: string) => Promise<void> | void;
+  remove: (card: EditableCard) => Promise<void> | void;
+}
+
+/** Message for a failed card call — calls the BE does not have yet get a clear note. */
+export const cardErrorMessage = (err: unknown, fallback: string) =>
+  isCardApiMissing(err) ? 'The card API is not available on the server yet.' : errorMessage(err, fallback);
+
 export interface CardEditor {
   editingId: string | null;
   editingIndex: number;
@@ -105,22 +143,30 @@ export interface CardEditor {
   errors: { front?: string; back?: string };
   /** True when either side has text that has not been added to the list. */
   hasInput: boolean;
+  /** A card call is in flight. */
+  busy: boolean;
+  /** Card awaiting a delete confirmation (only with `confirmRemove`). */
+  pendingRemoveId: string | null;
   frontRef: React.RefObject<HTMLTextAreaElement | null>;
   setFront: (v: string) => void;
   setBack: (v: string) => void;
   clear: () => void;
-  load: (card: Flashcard) => void;
+  load: (card: EditableCard) => void;
   submit: () => void;
-  remove: (card: Flashcard, index: number) => void;
+  remove: (card: EditableCard, index: number) => void;
+  confirmRemove: (card: EditableCard, index: number) => void;
+  cancelRemove: () => void;
 }
 
-/** Authoring state for one deck's cards; `setCards` is the owner's draft setter. */
-export function useCardEditor(deckId: string, cards: Flashcard[], setCards: React.Dispatch<React.SetStateAction<Flashcard[]>>): CardEditor {
+/** Authoring state for one deck's cards; `actions` decides where edits are written. */
+export function useCardEditor(cards: EditableCard[], actions: CardActions, options: { confirmRemove?: boolean } = {}): CardEditor {
   const toast = useToast();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [front, setFrontRaw] = useState('');
   const [back, setBackRaw] = useState('');
   const [errors, setErrors] = useState<{ front?: string; back?: string }>({});
+  const [busy, setBusy] = useState(false);
+  const [pendingRemoveId, setPendingRemoveId] = useState<string | null>(null);
   const frontRef = useRef<HTMLTextAreaElement>(null);
 
   const editingIndex = editingId ? cards.findIndex(c => c.id === editingId) : -1;
@@ -132,21 +178,22 @@ export function useCardEditor(deckId: string, cards: Flashcard[], setCards: Reac
     setErrors({});
   };
 
-  const load = (card: Flashcard) => {
+  const load = (card: EditableCard) => {
     setEditingId(card.id);
-    setFrontRaw(card.front);
-    setBackRaw(card.back);
+    setFrontRaw(card.frontText);
+    setBackRaw(card.backText);
     setErrors({});
     frontRef.current?.focus({ preventScroll: window.innerWidth >= 1024 });
   };
 
-  const submit = () => {
+  const submit = async () => {
+    if (busy) return;
     const f = front.trim();
     const b = back.trim();
     const next: { front?: string; back?: string } = {};
     if (!f) next.front = 'Front side is required.';
     else if (f.length > SIDE_MAX) next.front = `Front side must be ${SIDE_MAX} characters or fewer.`;
-    else if (cards.some(c => c.id !== editingId && c.front.trim().toLowerCase() === f.toLowerCase())) {
+    else if (cards.some(c => c.id !== editingId && c.frontText.trim().toLowerCase() === f.toLowerCase())) {
       next.front = 'Another card in this deck already has this front text.';
     }
     if (!b) next.back = 'Back side is required.';
@@ -154,20 +201,36 @@ export function useCardEditor(deckId: string, cards: Flashcard[], setCards: Reac
     setErrors(next);
     if (next.front || next.back) return;
 
-    if (editingId) {
-      setCards(prev => prev.map(c => (c.id === editingId ? { ...c, front: f, back: b } : c)));
-      toast.success(`Card #${editingIndex + 1} updated.`);
-    } else {
-      setCards(prev => [...prev, { id: nextCardId(deckId), front: f, back: b }]);
-      toast.success('Card added to the deck.');
+    const editing = editingId ? cards.find(c => c.id === editingId) : undefined;
+    setBusy(true);
+    try {
+      if (editing) {
+        await actions.update(editing, f, b);
+        toast.success(`Card #${editingIndex + 1} updated.`);
+      } else {
+        await actions.add(f, b);
+        toast.success('Card added to the deck.');
+      }
+      clear();
+    } catch (err) {
+      toast.error(cardErrorMessage(err, editing ? 'Could not update the card.' : 'Could not add the card.'));
+    } finally {
+      setBusy(false);
     }
-    clear();
   };
 
-  const remove = (card: Flashcard, index: number) => {
-    setCards(prev => prev.filter(c => c.id !== card.id));
-    if (editingId === card.id) clear();
-    toast.info(`Card #${index + 1} removed.`);
+  const doRemove = async (card: EditableCard, index: number) => {
+    setBusy(true);
+    try {
+      await actions.remove(card);
+      if (editingId === card.id) clear();
+      setPendingRemoveId(null);
+      toast.info(`Card #${index + 1} removed.`);
+    } catch (err) {
+      toast.error(cardErrorMessage(err, 'Could not delete the card.'));
+    } finally {
+      setBusy(false);
+    }
   };
 
   return {
@@ -177,20 +240,24 @@ export function useCardEditor(deckId: string, cards: Flashcard[], setCards: Reac
     back,
     errors,
     hasInput: front.trim() !== '' || back.trim() !== '',
+    busy,
+    pendingRemoveId,
     frontRef,
     setFront: v => { setFrontRaw(v); if (errors.front) setErrors(p => ({ ...p, front: undefined })); },
     setBack: v => { setBackRaw(v); if (errors.back) setErrors(p => ({ ...p, back: undefined })); },
     clear,
     load,
     submit,
-    remove,
+    remove: (card, index) => { if (options.confirmRemove) setPendingRemoveId(card.id); else void doRemove(card, index); },
+    confirmRemove: (card, index) => { void doRemove(card, index); },
+    cancelRemove: () => setPendingRemoveId(null),
   };
 }
 
 // ── Card list ────────────────────────────────────────────────────────────────
 
 export function CardList({ cards, editor, emptyHint = 'Use the card editor to add the first one.' }: {
-  cards: Flashcard[];
+  cards: EditableCard[];
   editor: CardEditor;
   emptyHint?: string;
 }) {
@@ -211,6 +278,7 @@ export function CardList({ cards, editor, emptyHint = 'Use the card editor to ad
         <ol className="space-y-3">
           {cards.map((card, i) => {
             const active = card.id === editor.editingId;
+            const confirming = card.id === editor.pendingRemoveId;
             return (
               <li key={card.id} className={`card p-4 transition-colors ${active ? '!border-brand-600 ring-2 ring-brand-600/15' : ''}`}>
                 <div className="flex items-start gap-3">
@@ -218,25 +286,34 @@ export function CardList({ cards, editor, emptyHint = 'Use the card editor to ad
                   <div className="min-w-0 flex-1 space-y-2">
                     <div>
                       <p className="text-2xs font-semibold uppercase tracking-wider text-brand-ink">Front</p>
-                      <p className="mt-0.5 text-base font-semibold text-content break-words whitespace-pre-line">{card.front}</p>
+                      <p className="mt-0.5 text-base font-semibold text-content break-words whitespace-pre-line">{card.frontText}</p>
                     </div>
                     <div>
                       <p className="text-2xs font-semibold uppercase tracking-wider text-success">Back</p>
-                      <p className="mt-0.5 text-sm text-content-secondary break-words whitespace-pre-line">{card.back}</p>
+                      <p className="mt-0.5 text-sm text-content-secondary break-words whitespace-pre-line">{card.backText}</p>
                     </div>
                   </div>
                   <div className="flex flex-shrink-0 items-center gap-0.5">
                     {active && <Badge variant="info" className="mr-1">Editing</Badge>}
-                    <button type="button" onClick={() => editor.load(card)} aria-label={`Edit card ${i + 1}`} title="Edit card"
-                      className="p-1.5 rounded-[6px] text-content-soft hover:bg-primary-hover-tint hover:text-brand-ink">
+                    <button type="button" onClick={() => editor.load(card)} disabled={editor.busy} aria-label={`Edit card ${i + 1}`} title="Edit card"
+                      className="p-1.5 rounded-[6px] text-content-soft hover:bg-primary-hover-tint hover:text-brand-ink disabled:opacity-50">
                       <Icon.Edit className="w-4 h-4" />
                     </button>
-                    <button type="button" onClick={() => editor.remove(card, i)} aria-label={`Delete card ${i + 1}`} title="Delete card"
-                      className="p-1.5 rounded-[6px] text-content-soft hover:bg-danger-light hover:text-danger">
+                    <button type="button" onClick={() => editor.remove(card, i)} disabled={editor.busy} aria-label={`Delete card ${i + 1}`} title="Delete card"
+                      className="p-1.5 rounded-[6px] text-content-soft hover:bg-danger-light hover:text-danger disabled:opacity-50">
                       <Icon.Trash className="w-4 h-4" />
                     </button>
                   </div>
                 </div>
+                {confirming && (
+                  <div className="mt-3 flex flex-wrap items-center justify-end gap-2 border-t border-line-soft pt-3">
+                    <span className="mr-auto text-sm text-content-secondary">Delete this card permanently?</span>
+                    <Button size="sm" variant="outline" onClick={editor.cancelRemove} disabled={editor.busy}>Keep</Button>
+                    <Button size="sm" variant="danger" onClick={() => editor.confirmRemove(card, i)} disabled={editor.busy}>
+                      {editor.busy ? 'Deleting…' : 'Delete'}
+                    </Button>
+                  </div>
+                )}
               </li>
             );
           })}
@@ -251,7 +328,7 @@ export function CardList({ cards, editor, emptyHint = 'Use the card editor to ad
 export function CardEditorPanel({ editor, idPrefix, footnote, className = '' }: {
   editor: CardEditor;
   idPrefix: string;
-  footnote: React.ReactNode;
+  footnote?: React.ReactNode;
   className?: string;
 }) {
   return (
@@ -271,16 +348,17 @@ export function CardEditorPanel({ editor, idPrefix, footnote, className = '' }: 
           value={editor.back} error={editor.errors.back} placeholder="e.g. An optimisation algorithm that…" onChange={editor.setBack} />
 
         <div className="space-y-2 pt-1">
-          <Button type="button" className="w-full" onClick={editor.submit}
+          <Button type="button" className="w-full" onClick={editor.submit} disabled={editor.busy}
             icon={editor.editingId ? <Icon.Check className="w-4 h-4" /> : <Icon.Plus className="w-4 h-4" />}>
-            {editor.editingId ? 'Update Card' : 'Add Card'}
+            {editor.busy ? 'Saving…' : editor.editingId ? 'Update Card' : 'Add Card'}
           </Button>
-          <Button type="button" variant="outline" className="w-full" onClick={editor.clear} disabled={!editor.editingId && !editor.hasInput}>
+          <Button type="button" variant="outline" className="w-full" onClick={editor.clear}
+            disabled={editor.busy || (!editor.editingId && !editor.hasInput)}>
             {editor.editingId ? 'Cancel Editing' : 'Clear Editor'}
           </Button>
         </div>
       </div>
-      <p className="text-xs text-content-subtle">{footnote}</p>
+      {footnote && <p className="text-xs text-content-subtle">{footnote}</p>}
     </aside>
   );
 }
