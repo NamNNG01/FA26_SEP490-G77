@@ -3,6 +3,8 @@ package com.examprep.controllers;
 import com.examprep.entities.Category;
 import com.examprep.entities.Course;
 import com.examprep.entities.Enrollment;
+import com.examprep.entities.Exam;
+import com.examprep.entities.ExamAttempt;
 import com.examprep.entities.User;
 import com.examprep.repositories.UserRepository;
 import com.examprep.security.UserPrincipal;
@@ -21,6 +23,7 @@ import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -62,7 +65,7 @@ class AdminUserApiIntegrationTest {
     @Test
     void userEndpointsRequireAuthenticationAndAdminRole() throws Exception {
         mvc.perform(get(BASE)).andExpect(status().isUnauthorized());
-        for (MockHttpServletRequestBuilder request : List.of(get(BASE))) {
+        for (MockHttpServletRequestBuilder request : List.of(get(BASE), get(BASE + "/1"))) {
             for (User actor : List.of(manager, student)) {
                 call(actor, request).andExpect(status().isForbidden());
             }
@@ -137,6 +140,51 @@ class AdminUserApiIntegrationTest {
     }
 
     @Test
+    void detailReturnsProfileLearningStatsAndRecentAttempts() throws Exception {
+        User target = account(User.ROLE_STUDENT, "Detail Target", "detail-target@example.com", User.STATUS_ACTIVE);
+        enroll(target, course("Course one"));
+        enroll(target, course("Course two"));
+        Exam exam = exam("Quiz Unit 3");
+        for (int score = 1; score <= 6; score++) {
+            // six submitted attempts: detail must surface only the 5 newest
+            attempt(exam, target, score, Instant.parse("2026-10-0" + score + "T12:00:00Z"));
+        }
+
+        call(admin, get(BASE + "/" + target.getUserId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.userId").value(target.getUserId()))
+                .andExpect(jsonPath("$.data.fullName").value("Detail Target"))
+                .andExpect(jsonPath("$.data.email").value("detail-target@example.com"))
+                .andExpect(jsonPath("$.data.role").value(User.ROLE_STUDENT))
+                .andExpect(jsonPath("$.data.status").value(User.STATUS_ACTIVE))
+                .andExpect(jsonPath("$.data.createdAt").isNotEmpty())
+                .andExpect(jsonPath("$.data.stats.coursesEnrolled").value(2))
+                .andExpect(jsonPath("$.data.stats.examsTaken").value(6))
+                .andExpect(jsonPath("$.data.stats.averageScore").value(3.5))
+                .andExpect(jsonPath("$.data.stats.lastActivityAt").value("2026-10-06T12:00:00Z"))
+                .andExpect(jsonPath("$.data.recentAttempts.length()").value(5))
+                .andExpect(jsonPath("$.data.recentAttempts[0].examId").value(exam.getExamId()))
+                .andExpect(jsonPath("$.data.recentAttempts[0].examTitle").value("Quiz Unit 3"))
+                .andExpect(jsonPath("$.data.recentAttempts[0].score").value(6))
+                .andExpect(jsonPath("$.data.recentAttempts[0].status").value("COMPLETED"))
+                .andExpect(jsonPath("$.data.recentAttempts[0].submittedAt").value("2026-10-06T12:00:00Z"))
+                .andExpect(jsonPath("$.data.recentAttempts[4].score").value(2));
+    }
+
+    @Test
+    void detailOfFreshUserHasNoActivityAndUnknownIdIsNotFound() throws Exception {
+        call(admin, get(BASE + "/" + student.getUserId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.stats.coursesEnrolled").value(0))
+                .andExpect(jsonPath("$.data.stats.examsTaken").value(0))
+                .andExpect(jsonPath("$.data.stats.averageScore").doesNotExist())
+                .andExpect(jsonPath("$.data.stats.lastActivityAt").doesNotExist())
+                .andExpect(jsonPath("$.data.recentAttempts.length()").value(0));
+
+        call(admin, get(BASE + "/999999")).andExpect(status().isNotFound());
+    }
+
+    @Test
     void loginRecordsLastLoginAtAndFailureLeavesItUnset() throws Exception {
         User target = User.builder().email(UUID.randomUUID() + "@example.com").fullName("Login User")
                 .passwordHash(encoder.encode("Secret123!")).roleName(User.ROLE_STUDENT).build();
@@ -189,5 +237,18 @@ class AdminUserApiIntegrationTest {
     private void enroll(User actor, Course target) {
         em.persist(Enrollment.builder().course(target).user(actor)
                 .enrolledAt(Instant.now()).status(Enrollment.STATUS_ACTIVE).build());
+    }
+
+    private Exam exam(String title) {
+        Exam value = Exam.builder().createdBy(admin).title(title).durationMinutes(30)
+                .isPractice(true).generationType("MANUAL").build();
+        em.persist(value);
+        return value;
+    }
+
+    private void attempt(Exam target, User actor, int score, Instant submittedAt) {
+        em.persist(ExamAttempt.builder().exam(target).user(actor)
+                .startTime(submittedAt.minusSeconds(600)).submitTime(submittedAt)
+                .totalScore(BigDecimal.valueOf(score)).status("COMPLETED").build());
     }
 }

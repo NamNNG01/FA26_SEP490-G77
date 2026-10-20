@@ -1,13 +1,18 @@
 package com.examprep.services;
 
+import com.examprep.dto.AdminUserDetailResponse;
 import com.examprep.dto.AdminUserItem;
 import com.examprep.dto.AdminUserListStats;
 import com.examprep.dto.AdminUserPageResponse;
 import com.examprep.dto.IdCount;
 import com.examprep.dto.ResponseCode;
+import com.examprep.dto.StudentRecentAttempt;
+import com.examprep.dto.UserLearningStats;
 import com.examprep.entities.User;
 import com.examprep.exceptions.BadRequestException;
+import com.examprep.exceptions.ResourceNotFoundException;
 import com.examprep.repositories.EnrollmentRepository;
+import com.examprep.repositories.ExamAttemptRepository;
 import com.examprep.repositories.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -17,6 +22,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -37,6 +44,7 @@ public class AdminUserServiceImpl implements AdminUserService {
 
     private final UserRepository users;
     private final EnrollmentRepository enrollments;
+    private final ExamAttemptRepository attempts;
 
     @Override
     public AdminUserPageResponse list(String search, String role, String status, int page, int size) {
@@ -71,7 +79,30 @@ public class AdminUserServiceImpl implements AdminUserService {
         return AdminUserPageResponse.of(content, stats);
     }
 
+    @Override
+    public AdminUserDetailResponse detail(Long id) {
+        User user = requireUser(id);
+
+        List<StudentRecentAttempt> recent = attempts.findRecentAttemptsByUserId(id, PageRequest.of(0, 5));
+        UserLearningStats stats = UserLearningStats.builder()
+                .coursesEnrolled(enrollments.countByUserId(id))
+                .examsTaken(attempts.countByUserId(id))
+                .averageScore(roundedAverage(attempts.averageScoreByUserId(id)))
+                .lastActivityAt(recent.isEmpty() ? null : recent.get(0).getSubmittedAt())
+                .build();
+
+        return AdminUserDetailResponse.from(user, stats, recent);
+    }
+
+    private static BigDecimal roundedAverage(Number raw) {
+        return raw == null ? null : new BigDecimal(raw.toString()).setScale(2, RoundingMode.HALF_UP);
+    }
+
     private static Instant startOfCurrentMonth() {
         return LocalDate.now(ZoneOffset.UTC).withDayOfMonth(1).atStartOfDay(ZoneOffset.UTC).toInstant();
+    }
+
+    User requireUser(Long id) {
+        return users.findById(id).orElseThrow(() -> new ResourceNotFoundException("User not found."));
     }
 }

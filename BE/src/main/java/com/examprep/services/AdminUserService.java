@@ -1,5 +1,6 @@
 package com.examprep.services;
 
+import com.examprep.dto.AdminUserDetailResponse;
 import com.examprep.dto.AdminUserPageResponse;
 
 /**
@@ -11,4 +12,9 @@ public interface AdminUserService {
      * UM-01: paged user list with search, role and status filters plus overview counters.
      */
     AdminUserPageResponse list(String search, String role, String status, int page, int size);
+
+    /**
+     * UM-02: full profile with learning statistics and recent attempts.
+     */
+    AdminUserDetailResponse detail(Long id);
 }
