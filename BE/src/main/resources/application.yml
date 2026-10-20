@@ -10,6 +10,8 @@ spring:
     import: optional:file:.env[.properties]
 
   jackson:
+    deserialization:
+      accept-float-as-int: false
     serialization:
       write-dates-as-timestamps: false
     default-property-inclusion: non_null

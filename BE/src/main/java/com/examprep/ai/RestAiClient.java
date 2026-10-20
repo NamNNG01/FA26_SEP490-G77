@@ -89,8 +89,16 @@ public class RestAiClient implements AiClient {
                     .body(body)
                     .retrieve()
                     .onStatus(HttpStatusCode::isError, (req, res) -> {
+                        String errorBody = new String(
+                                res.getBody().readAllBytes(),
+                                java.nio.charset.StandardCharsets.UTF_8
+                        );
+
                         throw new RuntimeException(
-                                "Gemini API error: " + res.getStatusCode()
+                                "Gemini API error: HTTP "
+                                        + res.getStatusCode()
+                                        + " - "
+                                        + errorBody
                         );
                     })
                     .body(Map.class);

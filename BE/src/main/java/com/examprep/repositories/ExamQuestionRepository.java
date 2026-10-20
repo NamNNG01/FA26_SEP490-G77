@@ -10,6 +10,8 @@ import java.util.List;
 
 @Repository
 public interface ExamQuestionRepository extends JpaRepository<ExamQuestion, Long> {
+    java.util.List<ExamQuestion> findByExamExamIdOrderByOrderIndexAscExamQuestionIdAsc(Long examId);
+    void deleteByExamExamId(Long examId);
 
     // Hàm từ nhánh của bạn
     List<ExamQuestion> findByQuestion_QuestionId(Long questionId);

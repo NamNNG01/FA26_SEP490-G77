@@ -8,5 +8,7 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface QuestionGroupRepository extends JpaRepository<QuestionGroup, Long>,
         JpaSpecificationExecutor<QuestionGroup> {
+    boolean existsByModuleModuleId(Long moduleId);
+    boolean existsByCourseCourseIdOrModuleCourseCourseId(Long courseId, Long moduleCourseId);
 }
 

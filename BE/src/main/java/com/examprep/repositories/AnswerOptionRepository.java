@@ -9,5 +9,6 @@ import java.util.List;
 @Repository
 public interface AnswerOptionRepository extends JpaRepository<AnswerOption, Long> {
     List<AnswerOption> findByQuestion_QuestionId(Long questionId);
+    java.util.List<AnswerOption> findByQuestionQuestionIdOrderByOrderIndexAscOptionIdAsc(Long questionId);
 }
 

@@ -194,6 +194,8 @@ Layering flows strictly downward: `controllers → services → repositories`. F
 | `/api/v1/dashboard/admin` | GET | `ADMIN` | DASH-03: Admin Dashboard |
 
 ### 5.3 Endpoint Roadmap
+
+Course/module administration C-04–C-14 and public category list PUB-01 are defined in [function.md](function.md). Primary-or-assigned manager scope also applies to manager dashboard queries. Only Admin creates/publishes/deletes courses; protected content causes DELETE to return 409. See [backend handover](docs/manager-course-api.md) for migration V9 and verification instructions.
 All endpoints from the agreed API contract are now implemented end-to-end (AUTH-01..08, USER-01/02, DASH-01/02/03 — see §5.2), including Gmail delivery for AUTH-06 (configure `MAIL_ENABLED=true` with a Gmail App Password; see `.env.example`).
 
 ---
@@ -205,7 +207,7 @@ All endpoints from the agreed API contract are now implemented end-to-end (AUTH-
     - `spring.jpa.hibernate.ddl-auto` is set to `validate` in `dev` and `none` in `prod`.
 
 2. **Entity Design Conventions:**
-    - 31 JPA entities map the new DB design (28 design tables + `refresh_tokens` kept for Auth rotation/logout + `password_reset_tokens` re-introduced in V5 for AUTH-06/07 + `attempt_answer_options` added in V6 for MULTI_CHOICE answers): `User` (with `role_name` string, no `roles` table), `RefreshToken`, `PasswordResetToken`, `Category`, `Course`, `CourseManager`, `Enrollment`, `Module`, `QuestionGroup`, `Question`, `AnswerOption`, `Exam`, `ExamConfig` (table `exam_config`), `ExamQuestion` (surrogate PK), `ExamGroup`, `ExamAttempt`, `AttemptAnswer`, `AttemptAnswerOption`, plus `SubscriptionPlan`, `UserSubscription`, `Document`, `Notification`, `UserNotification`, `Discount`, `UserDiscount`, `Contest`, `ContestParticipant`, `ContestReward` (table `contest_rewards` since V6), `Deck`, `Flashcard`, `UserCardProgress`.
+    - 31 JPA entities map the new DB design (28 design tables + `refresh_tokens` kept for Auth rotation/logout + `password_reset_tokens` re-introduced in V5 for AUTH-06/07 + `attempt_answer_options` added in V6 for MULTIPLE_CHOICE answers): `User` (with `role_name` string, no `roles` table), `RefreshToken`, `PasswordResetToken`, `Category`, `Course`, `CourseManager`, `Enrollment`, `Module`, `QuestionGroup`, `Question`, `AnswerOption`, `Exam`, `ExamConfig` (table `exam_config`), `ExamQuestion` (surrogate PK), `ExamGroup`, `ExamAttempt`, `AttemptAnswer`, `AttemptAnswerOption`, plus `SubscriptionPlan`, `UserSubscription`, `Document`, `Notification`, `UserNotification`, `Discount`, `UserDiscount`, `Contest`, `ContestParticipant`, `ContestReward` (table `contest_rewards` since V6), `Deck`, `Flashcard`, `UserCardProgress`.
     - `users.role_name` (`ADMIN` / `COURSE_MANAGER` / `STUDENT`) replaces the old `roles` table; `system_settings` was dropped; `enrollments.progress`, `exam_attempts.status`, `categories.parent_id` and `lessons` are intentionally kept beyond the design to preserve dashboard/business functionality.
     - `BIGSERIAL`/`BIGINT` IDENTITY primary keys; audit timestamps mapped with `@CreatedDate`/`@LastModifiedDate` + `AuditingEntityListener` where `created_at`/`updated_at` exist.
     - No soft-delete flags (`deleted`): entities MUST NOT declare columns absent from migrations (see `RULES.md` §3.3).

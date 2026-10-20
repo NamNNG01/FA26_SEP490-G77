@@ -630,32 +630,6 @@ public class QuestionServiceImpl implements QuestionService {
             }
         }
 
-        Instant now = Instant.now();
-
-        UserSubscription sub =
-                userSubscriptionRepository
-                        .findActiveSubscriptionByUser(
-                                currentUser.getUserId(), now
-                        )
-                        .orElse(null);
-
-        if (sub != null) {
-            int usedTokens =
-                    aiUsageLogRepository.sumTokensByUserSince(
-                            currentUser.getUserId(),
-                            sub.getStartDate()
-                    );
-
-            int limit = sub.getPlan().getAiTokenLimit();
-
-            int estimatedNewTokens = Math.multiplyExact(totalCount, 300);
-
-            if ((long) usedTokens + estimatedNewTokens > limit) {
-                throw new ResourceConflictException(
-                        "AI token quota exceeded for current subscription period"
-                );
-            }
-        }
 
         Document document = null;
         String docContent = "";

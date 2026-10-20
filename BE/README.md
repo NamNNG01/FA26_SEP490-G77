@@ -10,6 +10,8 @@ Before contributing or modifying code, please review the following source-of-tru
 
 - 🏛️ [ARCHITECTURE.md](ARCHITECTURE.md) — System Architecture, Tech Stack, Package Layout & Security Design.
 - 📜 [RULES.md](RULES.md) — Coding Standards, Layering Constraints, Flyway Migration Rules & Exception Conventions.
+- [Course/module API contract](function.md) — C-04–C-14 and PUB-01 request/response, permissions and deletion rules.
+- [Course/module backend handover](docs/manager-course-api.md) — implementation decisions and H2/PostgreSQL verification.
 
 ---
 

@@ -10,6 +10,7 @@ import java.time.Instant;
 
 @Repository
 public interface AiUsageLogRepository extends JpaRepository<AiUsageLog, Long> {
+    boolean existsByCourseCourseId(Long courseId);
 
     @Query("SELECT COALESCE(SUM(l.inputTokens + l.outputTokens), 0) FROM AiUsageLog l WHERE l.user.userId = :userId AND l.createdAt >= :startDate")
     Integer sumTokensByUserSince(@Param("userId") Long userId, @Param("startDate") Instant startDate);

@@ -1,0 +1,27 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://127.0.0.1:55439/examprep_manager_test
+    username: examprep_test
+    password: local-test-only
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+  flyway:
+    enabled: true
+    baseline-on-migrate: false
+  mail:
+    host: localhost
+    port: 25
+app:
+  jwt:
+    secret: test-only-jwt-secret-not-for-production-use-0123456789
+  mail:
+    enabled: false
+logging:
+  level:
+    root: WARN
+    com.examprep: INFO
+    org.hibernate.SQL: WARN

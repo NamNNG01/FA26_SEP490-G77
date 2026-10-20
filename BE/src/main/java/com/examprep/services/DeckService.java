@@ -1,0 +1,14 @@
+package com.examprep.services;
+
+import com.examprep.dto.DeckRequests;
+import com.examprep.dto.DeckResponse;
+import com.examprep.dto.PageResponse;
+import com.examprep.security.UserPrincipal;
+
+public interface DeckService {
+    PageResponse<DeckResponse> list(UserPrincipal user, String search, Long courseId, Boolean isPublic, int page, int size);
+    DeckResponse detail(UserPrincipal user, Long id);
+    DeckResponse create(UserPrincipal user, DeckRequests.Create request);
+    DeckResponse update(UserPrincipal user, Long id, DeckRequests.Update request);
+    void delete(UserPrincipal user, Long id);
+}

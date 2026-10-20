@@ -9,7 +9,7 @@ import java.io.Serializable;
  * Selected options of one attempt answer.
  *
  * {@code attempt_answers.selected_option_id} stores a single option only,
- * so MULTI_CHOICE answers record every chosen option here instead
+ * so MULTIPLE_CHOICE answers record every chosen option here instead
  * (one row per chosen option, unique per answer + option).
  * Created by V6__iteration1_api_support.sql; consumed by the exam-submit
  * flow in Iteration 2.
