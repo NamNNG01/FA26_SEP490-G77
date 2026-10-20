@@ -22,7 +22,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/v1/manager/exam-builder/ai")
+@RequestMapping("/api/v1/manager/exams/ai")
 @PreAuthorize("hasAnyRole('COURSE_MANAGER', 'ADMIN')")
 @RequiredArgsConstructor
 public class ExamAiController {

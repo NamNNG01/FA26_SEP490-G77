@@ -42,17 +42,6 @@ public class ExamController {
                 .body(ApiResponse.success(exam, "Random exam created successfully"));
     }
 
-    @PutMapping("/api/v1/manager/exams/{examId}")
-    @Operation(summary = "Update draft exam details")
-    public ResponseEntity<ApiResponse<ExamResponse>> updateExam(
-            @PathVariable Long examId,
-            @RequestBody ExamUpdateRequest request,
-            @AuthenticationPrincipal UserPrincipal currentUser) {
-        User user = resolveUser(currentUser);
-        ExamResponse exam = examService.updateExam(examId, request, user);
-        return ResponseEntity.ok(ApiResponse.success(exam, "Exam updated successfully"));
-    }
-
     @PostMapping("/api/v1/manager/exams/{examId}/publish")
     @Operation(summary = "Publish draft exam")
     public ResponseEntity<ApiResponse<ExamResponse>> publishExam(
@@ -63,16 +52,6 @@ public class ExamController {
         return ResponseEntity.ok(ApiResponse.success(exam, "Exam published successfully"));
     }
 
-    @GetMapping("/api/v1/manager/exams/{examId}")
-    @Operation(summary = "Get manager exam detail")
-    public ResponseEntity<ApiResponse<ExamResponse>> getManagerExamDetail(
-            @PathVariable Long examId,
-            @AuthenticationPrincipal UserPrincipal currentUser) {
-        User user = resolveUser(currentUser);
-        ExamResponse exam = examService.getExamDetail(examId, user, false);
-        return ResponseEntity.ok(ApiResponse.success(exam, "Exam retrieved successfully"));
-    }
-
     @GetMapping("/api/v1/manager/exams/course/{courseId}")
     @Operation(summary = "Get exams for course (Manager)")
     public ResponseEntity<ApiResponse<List<ExamResponse>>> getManagerExamsForCourse(
@@ -81,29 +60,6 @@ public class ExamController {
         User user = resolveUser(currentUser);
         List<ExamResponse> exams = examService.getExamsForCourse(courseId, user);
         return ResponseEntity.ok(ApiResponse.success(exams, "Exams retrieved successfully"));
-    }
-
-    @PostMapping("/api/v1/manager/exams/{examId}/questions")
-    @Operation(summary = "Add question manually to draft exam")
-    public ResponseEntity<ApiResponse<ExamResponse>> addQuestionToExam(
-            @PathVariable Long examId,
-            @Valid @RequestBody ExamAddQuestionRequest request,
-            @AuthenticationPrincipal UserPrincipal currentUser) {
-        User user = resolveUser(currentUser);
-        ExamResponse exam = examService.addQuestionToExam(examId, request, user);
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success(exam, "Question added to exam successfully"));
-    }
-
-    @DeleteMapping("/api/v1/manager/exams/{examId}/questions/{examQuestionId}")
-    @Operation(summary = "Remove question from draft exam")
-    public ResponseEntity<ApiResponse<ExamResponse>> removeQuestionFromExam(
-            @PathVariable Long examId,
-            @PathVariable Long examQuestionId,
-            @AuthenticationPrincipal UserPrincipal currentUser) {
-        User user = resolveUser(currentUser);
-        ExamResponse exam = examService.removeQuestionFromExam(examId, examQuestionId, user);
-        return ResponseEntity.ok(ApiResponse.success(exam, "Question removed from exam successfully"));
     }
 
     @PutMapping("/api/v1/manager/exams/{examId}/questions/reorder")

@@ -27,6 +27,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
+import static org.hamcrest.Matchers.nullValue;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -216,8 +217,8 @@ public class ManagerCourseApiIntegrationTest {
                 .andExpect(jsonPath("$.data.price").value(0))
                 .andExpect(jsonPath("$.data.managerId").value(manager.getUserId()))
                 .andExpect(jsonPath("$.data.slug").value(slug))
-                .andExpect(jsonPath("$.data.description").doesNotExist())
-                .andExpect(jsonPath("$.data.thumbnailUrl").doesNotExist());
+                .andExpect(jsonPath("$.data.description").value(nullValue()))
+                .andExpect(jsonPath("$.data.thumbnailUrl").value(nullValue()));
         call(stranger, put(path()).contentType(MediaType.APPLICATION_JSON).content("{\"title\":\"Stolen\"}"))
                 .andExpect(status().isForbidden());
     }

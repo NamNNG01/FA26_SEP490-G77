@@ -39,7 +39,7 @@ class ExamAiUnavailableIntegrationTest {
                 .title("Algebra").slug(UUID.randomUUID().toString()).isPublished(false).build();
         em.persist(course);
         em.flush();
-        mvc.perform(post("/api/v1/manager/exam-builder/ai/generate").with(user(UserPrincipal.create(manager)))
+        mvc.perform(post("/api/v1/manager/exams/ai/generate").with(user(UserPrincipal.create(manager)))
                 .contentType(MediaType.APPLICATION_JSON).content("{\"courseId\":" + course.getCourseId()
                         + ",\"questionCount\":1,\"difficultyDistribution\":{\"EASY\":1},"
                         + "\"questionTypes\":[{\"questionType\":\"ESSAY\",\"count\":1}]}"))

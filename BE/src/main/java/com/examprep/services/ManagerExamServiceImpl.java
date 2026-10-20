@@ -312,8 +312,9 @@ public class ManagerExamServiceImpl implements ManagerExamService {
                 detail?configured.stream().map(c->new ExamResponse.Config(c.getConfigId(),c.getQuestionType(),c.getNumberOfQuestions(),c.getModule()==null?null:c.getModule().getModuleId(),c.getDifficulty())).toList():null,
                 detail?direct.stream().map(this::questionLink).toList():null,detail?grouped.stream().map(this::groupLink).toList():null);
     }
-    private ExamResponse.QuestionLink questionLink(ExamQuestion l) { return new ExamResponse.QuestionLink(l.getExamQuestionId(),l.getExam().getExamId(),l.getQuestion().getQuestionId(),l.getQuestion().getContent(),l.getQuestion().getQuestionType(),l.getPoints(),l.getOrderIndex()); }
-    private ExamResponse.GroupLink groupLink(ExamGroup l) { return new ExamResponse.GroupLink(l.getExamGroupId(),l.getExam().getExamId(),l.getGroup().getGroupId(),l.getGroup().getTitle(),l.getPoints(),l.getOrderIndex()); }
+    private ExamResponse.QuestionLink questionLink(ExamQuestion l) { return new ExamResponse.QuestionLink(l.getExamQuestionId(),l.getExam().getExamId(),l.getQuestion().getQuestionId(),l.getQuestion().getContent(),l.getQuestion().getQuestionType(),l.getPoints(),l.getOrderIndex(),l.getQuestion().getEssayGradingRubric()!=null); }
+    private ExamResponse.GroupLink groupLink(ExamGroup l) { return new ExamResponse.GroupLink(l.getExamGroupId(),l.getExam().getExamId(),l.getGroup().getGroupId(),l.getGroup().getTitle(),l.getPoints(),l.getOrderIndex(),
+            l.getGroup().getPassageText(),questions.findByGroupGroupIdOrderByQuestionIdAsc(l.getGroup().getGroupId()).size()); }
     private BigDecimal points(BigDecimal p) { if(p==null)return BigDecimal.ONE; if(p.signum()<=0 || p.compareTo(new BigDecimal("999.99"))>0 || p.scale()>2) throw bad("Points must be positive, at most 999.99 and have at most two decimal places."); return p; }
     private int next(List<Integer> values) { int max=values.stream().mapToInt(Integer::intValue).max().orElse(-1); if(max==Integer.MAX_VALUE)throw conflict("Question order limit reached."); return max+1; }
     private String family(String type) { return KINDS.contains(type)?type:"QUIZ"; }

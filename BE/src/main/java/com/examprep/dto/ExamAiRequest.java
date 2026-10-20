@@ -10,5 +10,8 @@ public record ExamAiRequest(@NotNull @Positive Long courseId, @Positive Long mod
         @NotNull Map<String, Integer> difficultyDistribution,
         @NotEmpty List<@NotNull @Valid TypeCount> questionTypes,
         @Min(1) @Max(600) Integer durationMinutes, @Pattern(regexp = "vi|en") String language, Boolean useExistingBank) {
-    public record TypeCount(@NotBlank String questionType, @NotNull @Min(1) @Max(50) Integer count) { }
+    public record TypeCount(@NotBlank String questionType, @NotNull @Min(1) @Max(50) Integer count) {
+        // The FE exam AI tab sends MULTI_CHOICE; the question bank stores MULTIPLE_CHOICE.
+        public TypeCount { if ("MULTI_CHOICE".equals(questionType)) questionType = "MULTIPLE_CHOICE"; }
+    }
 }
