@@ -7,9 +7,8 @@ import { Select } from '@/components/ui/Select';
 import { MultiSelect } from '@/components/ui/MultiSelect';
 import { Spinner } from '@/components/ui/Spinner';
 import { Icon } from '@/assets/icons';
-import { questionService, type QuestionAiDraft, type QuestionAiGenerateRequest, type QuestionDifficulty, type QuestionType } from '@/services/question.service';
+import { questionService, type QuestionAiGenerateRequest, type QuestionAiPreview, type QuestionDifficulty, type QuestionType } from '@/services/question.service';
 import {
-  AI_OPTION_COUNT_TYPES,
   AI_QUESTION_TYPE_OPTIONS,
   DIFFICULTY_OPTIONS,
   QUESTION_TYPE_OPTIONS,
@@ -25,41 +24,40 @@ import { QuestionForm } from './QuestionForm';
 
 const MIN_COUNT = 1;
 const MAX_COUNT = 10;
-/** One Save All takes at most 50 questions, so one run drafts no more than that. */
+/** The backend drafts at most 50 questions per AI call, and one Save All takes at most 50. */
 const MAX_TOTAL = 50;
 
-const OPTIONS_COUNT_OPTIONS = [
-  { label: 'Default', value: '' },
-  ...[2, 3, 4, 5, 6].map(n => ({ label: `${n} options`, value: String(n) })),
-];
+type Language = NonNullable<QuestionAiGenerateRequest['language']>;
 
-const LANGUAGE_OPTIONS = [
-  { label: 'English', value: 'en' },
-  { label: 'Vietnamese', value: 'vi' },
+const LANGUAGE_OPTIONS: { label: string; value: Language }[] = [
+  { label: 'English', value: 'English' },
+  { label: 'Vietnamese', value: 'Vietnamese' },
 ];
 
 const typeLabel = (t: string) => QUESTION_TYPE_OPTIONS.find(o => o.value === t)?.label ?? t;
 const difficultyLabel = (d: string) => DIFFICULTY_OPTIONS.find(o => o.value === d)?.label ?? d;
 
-/** AI-03 error codes → what the manager can do about them. */
+/** AI generation errors → what the manager can do about them. */
 function aiErrorMessage(err: unknown): string {
   const e = err as { code?: string; message?: string; response?: { status?: number; data?: { message?: string } } };
   if (e?.code === 'ECONNABORTED') return 'The AI took too long to respond. Try fewer questions or try again.';
   switch (e?.response?.status) {
-    case 400: return e.response.data?.message || 'Some settings are not valid. Check them and try again.';
-    case 403: return 'You do not have permission to generate questions.';
+    // Bad settings, or the AI's answer was unusable (e.g. "AI returned an incorrect question distribution").
+    case 400: return e.response.data?.message || 'The AI could not draft these questions. Try again.';
+    case 403: return 'You are not a manager of this course, so you cannot generate questions for it.';
+    case 404: return e.response.data?.message || 'The course was not found.';
     case 429: return 'You have reached today’s AI generation limit. Try again tomorrow or write the questions manually.';
     case 502: return 'The AI service returned an error. Please try again in a moment.';
-    case 504: return 'The AI took too long to respond (20s limit). Try fewer questions or try again.';
+    case 504: return 'The AI took too long to respond. Try fewer questions or try again.';
   }
   return e?.message || 'Could not generate questions. Please try again.';
 }
 
-/** One AI-03 call. */
+/** One AI call: every picked type at one difficulty (the backend takes one difficulty per call). */
 interface RequestChunk {
-  type: QuestionType;
   difficulty: QuestionDifficulty;
-  count: number;
+  counts: Partial<Record<QuestionType, number>>;
+  total: number;
 }
 
 /**
@@ -67,22 +65,23 @@ interface RequestChunk {
  * difficulties (5 over Easy + Hard → 3 Easy, 2 Hard). Empty slices are skipped.
  */
 function planRequests(types: QuestionType[], difficulties: QuestionDifficulty[], perType: number): RequestChunk[] {
-  if (!difficulties.length) return [];
-  return types.flatMap(type => difficulties
-    .map((difficulty, i) => ({
-      type,
-      difficulty,
-      count: Math.floor(perType / difficulties.length) + (i < perType % difficulties.length ? 1 : 0),
-    }))
-    .filter(c => c.count > 0));
+  return difficulties
+    .map((difficulty, i) => {
+      const count = Math.floor(perType / difficulties.length) + (i < perType % difficulties.length ? 1 : 0);
+      const counts = Object.fromEntries(types.map(type => [type, count])) as Partial<Record<QuestionType, number>>;
+      return { difficulty, counts, total: count * types.length };
+    })
+    .filter(c => c.total > 0);
 }
 
 interface Preview {
   /** Stable across regenerations (the draft's key changes). */
   id: string;
   draft: QuestionDraft;
-  /** The request that produced it, with count 1 — reused by "Regenerate". */
+  /** The request that produced it, narrowed to one question of its type — reused by "Regenerate". */
   request: QuestionAiGenerateRequest;
+  /** The backend found an active question with the same content in the course. */
+  duplicate: boolean;
   accepted: boolean;
   editing: boolean;
   edited: boolean;
@@ -90,10 +89,11 @@ interface Preview {
   regenerateError?: string;
 }
 
-const toPreview = (q: QuestionAiDraft, request: QuestionAiGenerateRequest): Preview => ({
+const toPreview = (p: QuestionAiPreview, request: QuestionAiGenerateRequest): Preview => ({
   id: newKey('ai'),
-  draft: fromAiDraft(q),
-  request: { ...request, count: 1 },
+  draft: fromAiDraft(p.question),
+  request: { ...request, questionTypeCounts: { [p.question.questionType]: 1 } },
+  duplicate: p.hasHashConflict,
   accepted: false,
   editing: false,
   edited: false,
@@ -118,8 +118,7 @@ export function AiGeneratePanel({ courseId, moduleId, onAccept, onPendingChange,
   const [topic, setTopic] = useState('');
   const [count, setCount] = useState('5');
   const [difficulties, setDifficulties] = useState<QuestionDifficulty[]>(['MEDIUM']);
-  const [optionsCount, setOptionsCount] = useState('');
-  const [language, setLanguage] = useState<'vi' | 'en'>('en');
+  const [language, setLanguage] = useState<Language>('English');
   const [showErrors, setShowErrors] = useState(false);
 
   const [generating, setGenerating] = useState(false);
@@ -139,11 +138,10 @@ export function AiGeneratePanel({ courseId, moduleId, onAccept, onPendingChange,
 
   useEffect(() => () => { abortRef.current?.abort(); abortRegenerations(); }, []);
 
-  const takesOptionsCount = questionTypes.some(t => AI_OPTION_COUNT_TYPES.includes(t));
   const countNum = Number(count);
   const countValid = Number.isInteger(countNum) && countNum >= MIN_COUNT && countNum <= MAX_COUNT;
   const plan = countValid ? planRequests(questionTypes, difficulties, countNum) : [];
-  const total = plan.reduce((n, c) => n + c.count, 0);
+  const total = plan.reduce((n, c) => n + c.total, 0);
 
   const topicError = showErrors && !topic.trim() ? 'Enter a topic for the questions.' : undefined;
   const countError = showErrors && !countValid ? `Enter a number from ${MIN_COUNT} to ${MAX_COUNT}.` : undefined;
@@ -153,7 +151,7 @@ export function AiGeneratePanel({ courseId, moduleId, onAccept, onPendingChange,
 
   const generate = async () => {
     setShowErrors(true);
-    if (!topic.trim() || !plan.length || totalError) return;
+    if (!courseId || !topic.trim() || !plan.length || totalError) return;
 
     abortRef.current?.abort();
     abortRegenerations();
@@ -163,15 +161,13 @@ export function AiGeneratePanel({ courseId, moduleId, onAccept, onPendingChange,
     setError(null);
     setWarnings([]);
     try {
-      // AI-03 drafts one type at one difficulty per call — fan out and keep the plan's order.
+      // One call drafts every type at one difficulty — fan out per difficulty and keep the plan's order.
       const requests: QuestionAiGenerateRequest[] = plan.map(chunk => ({
-        questionType: chunk.type,
-        topic: topic.trim(),
-        count: chunk.count,
-        difficulty: chunk.difficulty,
-        ...(courseId ? { courseId: Number(courseId) } : {}),
+        courseId: Number(courseId),
         ...(moduleId ? { moduleId: Number(moduleId) } : {}),
-        ...(AI_OPTION_COUNT_TYPES.includes(chunk.type) && optionsCount ? { optionsCount: Number(optionsCount) } : {}),
+        questionTypeCounts: chunk.counts,
+        difficulty: chunk.difficulty,
+        context: topic.trim(),
         language,
       }));
       const results = await Promise.allSettled(requests.map(req => questionService.generateAiQuestions(req, controller.signal)));
@@ -180,13 +176,8 @@ export function AiGeneratePanel({ courseId, moduleId, onAccept, onPendingChange,
       const drafts: Preview[] = [];
       const notes: string[] = [];
       results.forEach((r, i) => {
-        const where = `${typeLabel(plan[i].type)} · ${difficultyLabel(plan[i].difficulty)}`;
-        if (r.status === 'fulfilled') {
-          r.value.questions.forEach(q => drafts.push(toPreview(q, requests[i])));
-          r.value.warnings.forEach(w => notes.push(plan.length > 1 ? `${where}: ${w}` : w));
-        } else {
-          notes.push(`${where}: ${aiErrorMessage(r.reason)}`);
-        }
+        if (r.status === 'fulfilled') r.value.questions.forEach(q => drafts.push(toPreview(q, requests[i])));
+        else notes.push(`${difficultyLabel(plan[i].difficulty)}: ${aiErrorMessage(r.reason)}`);
       });
       const failed = results.filter(r => r.status === 'rejected') as PromiseRejectedResult[];
       if (failed.length === results.length) {
@@ -221,7 +212,7 @@ export function AiGeneratePanel({ courseId, moduleId, onAccept, onPendingChange,
   const patchPreview = (id: string, patch: Partial<Preview>) =>
     setPreviews(prev => prev && prev.map(p => (p.id === id ? { ...p, ...patch } : p)));
 
-  /** Ask AI-03 for one fresh question with the same settings, replacing this one. */
+  /** Ask the AI for one fresh question with the same settings, replacing this one. */
   const regenerate = async (p: Preview) => {
     regenRef.current.get(p.id)?.abort();
     const controller = new AbortController();
@@ -231,8 +222,8 @@ export function AiGeneratePanel({ courseId, moduleId, onAccept, onPendingChange,
       const res = await questionService.generateAiQuestions(p.request, controller.signal);
       if (controller.signal.aborted) return;
       const next = res.questions[0];
-      if (next) patchPreview(p.id, { draft: fromAiDraft(next), editing: false, edited: false, regenerating: false });
-      else patchPreview(p.id, { regenerating: false, regenerateError: res.warnings[0] ?? 'The AI returned no usable question. Try again.' });
+      if (next) patchPreview(p.id, { draft: fromAiDraft(next.question), duplicate: next.hasHashConflict, editing: false, edited: false, regenerating: false });
+      else patchPreview(p.id, { regenerating: false, regenerateError: 'The AI returned no usable question. Try again.' });
     } catch (err) {
       if (!controller.signal.aborted) patchPreview(p.id, { regenerating: false, regenerateError: aiErrorMessage(err) });
     } finally {
@@ -279,10 +270,7 @@ export function AiGeneratePanel({ courseId, moduleId, onAccept, onPendingChange,
             disabled={generating}
           />
           <MultiSelect label="Difficulties" value={difficulties} onChange={setDifficulties} options={DIFFICULTY_OPTIONS} placeholder="Pick difficulties" error={difficultiesError} disabled={generating} />
-          {takesOptionsCount && (
-            <Select label="Answer options (choice types)" value={optionsCount} onChange={setOptionsCount} options={OPTIONS_COUNT_OPTIONS} disabled={generating} />
-          )}
-          <Select label="Language" value={language} onChange={v => setLanguage(v as 'vi' | 'en')} options={LANGUAGE_OPTIONS} disabled={generating} />
+          <Select label="Language" value={language} onChange={v => setLanguage(v as Language)} options={LANGUAGE_OPTIONS} disabled={generating} />
         </div>
 
         {plan.length > 0 && (
@@ -298,14 +286,14 @@ export function AiGeneratePanel({ courseId, moduleId, onAccept, onPendingChange,
         )}
 
         {!courseId && (
-          <p className="flex items-start gap-1.5 text-xs text-content-soft">
+          <p className={`flex items-start gap-1.5 text-xs ${showErrors ? 'text-danger' : 'text-content-soft'}`}>
             <Icon.Info className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
-            Tip: pick a course and module on the right so the AI follows that material.
+            Pick a course on the right first — the AI drafts questions for that course (and module, if picked).
           </p>
         )}
 
         <div className="flex flex-wrap items-center gap-2">
-          <Button icon={<Icon.Zap className="w-4 h-4" />} onClick={generate} loading={generating} disabled={generating || disabled}>
+          <Button icon={<Icon.Zap className="w-4 h-4" />} onClick={generate} loading={generating} disabled={generating || disabled || !courseId}>
             {previews ? 'Generate again' : 'Generate'}
           </Button>
           {generating && <Button variant="ghost" onClick={stop}>Stop</Button>}
@@ -314,18 +302,18 @@ export function AiGeneratePanel({ courseId, moduleId, onAccept, onPendingChange,
 
       {error && <Alert type="error" title="Could not generate questions" message={error} />}
       {isDemo && previews && !error && (
-        <Alert type="info" title="Demo data" message="The AI service isn’t available yet, so these are sample questions. They can be accepted and edited like real suggestions." />
+        <Alert type="info" title="Demo data" message="AI demo mode is on (VITE_AI_MOCK), so these are sample questions. They can be accepted and edited like real suggestions." />
       )}
       {warnings.length > 0 && (
         <Alert
           type="warning"
-          title="Some suggestions were left out"
+          title="Some questions could not be generated"
           message={warnings.join(' · ')}
         />
       )}
 
       {generating && !previews && (
-        <div className="card p-10 flex items-center justify-center gap-3 text-content-soft"><Spinner size="sm" /> Generating questions… this can take up to 20 seconds.</div>
+        <div className="card p-10 flex items-center justify-center gap-3 text-content-soft"><Spinner size="sm" /> Generating questions… this can take up to a minute.</div>
       )}
 
       {previews && previews.length === 0 && !generating && (
@@ -443,7 +431,7 @@ function AiPreviewCard({ index, preview, onAccept, onEdit, onChange, onRegenerat
 
 /** Read-only view of one suggestion. */
 function AiPreviewView({ index, preview, actions }: { index: number; preview: Preview; actions: React.ReactNode }) {
-  const { draft: q, accepted, edited, regenerating, regenerateError } = preview;
+  const { draft: q, accepted, edited, duplicate, regenerating, regenerateError } = preview;
   const issues = validateDraft(q);
   const issue = issues.content ?? issues.answers;
   const plantUml = typeof q.metadata.plantUmlSource === 'string' ? q.metadata.plantUmlSource : '';
@@ -468,6 +456,11 @@ function AiPreviewView({ index, preview, actions }: { index: number; preview: Pr
           {edited && <Badge variant="purple"><Icon.Edit className="w-3 h-3" /> Edited</Badge>}
           {issue && !accepted && (
             <Badge variant="warning"><Icon.AlertCircle className="w-3.5 h-3.5" /> Needs edits</Badge>
+          )}
+          {duplicate && !edited && (
+            <span title="A question with the same content is already in this course. Saving it unchanged will fail.">
+              <Badge variant="warning"><Icon.Copy className="w-3.5 h-3.5" /> Already in bank</Badge>
+            </span>
           )}
         </div>
         {actions}

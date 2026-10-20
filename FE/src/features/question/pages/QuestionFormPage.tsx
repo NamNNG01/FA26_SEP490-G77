@@ -27,6 +27,8 @@ import {
   type ExtractedQuestion,
   type QuestionDraft,
 } from '../model';
+import { describeSaveError, type SaveError } from '../saveError';
+import { SaveErrorAlert } from '../components/SaveErrorAlert';
 
 /** Q-03 accepts 1..50 questions per request. */
 const MAX_BATCH = 50;
@@ -64,7 +66,7 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [statusBusy, setStatusBusy] = useState(false);
-  const [saveError, setSaveError] = useState<{ message: string; conflict?: boolean } | null>(null);
+  const [saveError, setSaveError] = useState<SaveError | null>(null);
   const [importedCount, setImportedCount] = useState(0);
   const [showImport, setShowImport] = useState(false);
   const [confirm, setConfirm] = useState<Confirm>(null);
@@ -251,11 +253,10 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
       // Saved — unaccepted AI suggestions are left behind on purpose.
       leave(goToBank);
     } catch (err) {
-      const message = errorMessage(err, 'Could not save. Please try again.');
-      setSaveError({ message, conflict: httpStatus(err) === 409 });
-      // Batch errors read "Error at index N: …" — jump to that question.
-      const idx = /index (\d+)/i.exec(message);
-      const target = idx ? questions[Number(idx[1])] : undefined;
+      const error = describeSaveError(err, 'Could not save. Please try again.');
+      setSaveError(error);
+      // Batch field errors carry "questions[i]." — jump to that question.
+      const target = error.questionIndex != null ? questions[error.questionIndex] : undefined;
       setTab('manual');
       if (target) requestAnimationFrame(() => scrollTo(target.key));
       else listRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
@@ -275,7 +276,7 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
       setQuestions(prev => prev.map(p => ({ ...p, lockVersion: updated.lockVersion })));
       toast.success(next === 'ACTIVE' ? 'Question published.' : 'Question archived.');
     } catch (err) {
-      setSaveError({ message: errorMessage(err, 'Could not change the status.'), conflict: httpStatus(err) === 409 });
+      setSaveError(describeSaveError(err, 'Could not change the status.'));
     } finally {
       setStatusBusy(false);
       setConfirm(null);
@@ -321,16 +322,7 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
         )}
       </div>
 
-      {saveError && (
-        <div className="space-y-2">
-          <Alert
-            type="error"
-            title={saveError.conflict ? 'This question was changed by someone else' : 'Could not save'}
-            message={saveError.conflict ? 'Reload to get the latest version, then apply your changes again.' : saveError.message}
-          />
-          {saveError.conflict && isEdit && <Button variant="secondary" size="sm" onClick={() => setReloadKey(k => k + 1)}>Reload question</Button>}
-        </div>
-      )}
+      {saveError && <SaveErrorAlert error={saveError} onReload={isEdit ? () => setReloadKey(k => k + 1) : undefined} />}
       {importedCount > 0 && (
         <Alert type="success" title={`${importedCount} question${importedCount === 1 ? '' : 's'} imported`} message="Review the extracted questions before saving." />
       )}
