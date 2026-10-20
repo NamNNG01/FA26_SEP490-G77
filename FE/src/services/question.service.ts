@@ -1,4 +1,6 @@
 import { api } from './api';
+import { apiClient } from './axios';
+import { mockGenerateAiQuestions } from './mockQuestionAiData';
 import type { ApiResponse } from '@/auth/authContext';
 
 /**
@@ -133,8 +135,11 @@ export interface QuestionCreateRequest {
   groupId?: number | null;
   /** Stored as ai_explanation — shown to students during review. */
   explanation?: string | null;
-  /** Free-form JSON; the editor keeps `title` and `skillTag` here. */
+  /** The backend accepts only the keys in QUESTION_METADATA_KEYS. */
   questionMetadata?: Record<string, unknown> | null;
+  /** Must equal the rubric's total maxScore for ESSAY; the backend defaults it to 1. */
+  defaultPoints?: number | null;
+  essayGradingRubric?: unknown;
 }
 
 /** QuestionUpdateRequest — every field optional; `lockVersion` guards concurrent edits. */
@@ -168,7 +173,97 @@ export interface QuestionDetail {
   updatedAt: string | null;
 }
 
+/** Keys QuestionValidator allows in questionMetadata — any other key fails the request. */
+export const QUESTION_METADATA_KEYS = ['skillTag', 'diagramType', 'plantUmlSource'] as const;
+
+/** ValidationError — one entry of a VALIDATION_ERROR response's `data`. */
+export interface QuestionValidationError {
+  /** Field path, e.g. "options", "answerKey.pairs[1].left"; batch paths start with "questions[i].". */
+  path: string;
+  message: string;
+}
+
+/** Field errors from a QuestionValidationException response, or [] for any other error. */
+export function questionValidationErrors(err: unknown): QuestionValidationError[] {
+  const data = (err as { response?: { data?: { data?: unknown } } })?.response?.data?.data;
+  if (!Array.isArray(data)) return [];
+  return data.filter((e): e is QuestionValidationError => typeof e?.path === 'string' && typeof e?.message === 'string');
+}
+
+/** AiGenerateRequest — one AI call drafts every requested type (1..50 questions in total). Nothing is saved. */
+export interface QuestionAiGenerateRequest {
+  courseId: number;
+  moduleId?: number | null;
+  /** Question type → how many to draft. */
+  questionTypeCounts: Partial<Record<QuestionType, number>>;
+  /** Applied to every drafted question; the backend defaults to MEDIUM. */
+  difficulty?: QuestionDifficulty;
+  /** Topic / extra instructions for the AI. */
+  context?: string;
+  /** A course document whose extracted text the AI draws on. */
+  documentId?: number | null;
+  /** Plain language name, written into the prompt. */
+  language?: 'Vietnamese' | 'English';
+}
+
+/** One drafted question — same fields as a create request, minus the location. */
+export interface QuestionAiDraft {
+  content: string;
+  questionType: QuestionType;
+  difficulty: QuestionDifficulty | null;
+  options: AnswerOption[];
+  answerKey?: unknown;
+  explanation?: string | null;
+  questionMetadata?: Record<string, unknown> | null;
+  essayGradingRubric?: unknown;
+}
+
+/** AiGenerateResponse.GeneratedQuestionPreview */
+interface RawAiPreview {
+  questionData: QuestionAiDraft;
+  hasHashConflict: boolean;
+  validationError: string | null;
+}
+
+/** One drafted question with the backend's checks on it. */
+export interface QuestionAiPreview {
+  question: QuestionAiDraft;
+  /** An active question with the same content already exists in the course. */
+  hasHashConflict: boolean;
+  /** Set when the draft fails QuestionValidator — it is still returned so it can be fixed. */
+  validationError: string | null;
+}
+
+export interface QuestionAiDraftResponse {
+  /** AI usage log of this run (needed only by POST /ai/save). */
+  logId: number | null;
+  questions: QuestionAiPreview[];
+  /** FE only: the drafts are demo data from mockQuestionAiData, not the AI. */
+  mock?: boolean;
+}
+
+/** `VITE_AI_MOCK=true` uses demo data for AI generation (no AI quota spent). */
+const AI_MOCK = import.meta.env.VITE_AI_MOCK === 'true';
+
 export const questionService = {
+  /** Drafts questions with AI — preview only; accepted drafts are saved later through Q-02 / Q-03. */
+  async generateAiQuestions(payload: QuestionAiGenerateRequest, signal?: AbortSignal): Promise<QuestionAiDraftResponse> {
+    if (AI_MOCK) return { ...(await mockGenerateAiQuestions(payload, signal)), mock: true };
+    // Up to 50 questions in one AI call — give it time.
+    const res = await apiClient.post<ApiResponse<{ logId: number | null; questions: RawAiPreview[] }>>(
+      '/manager/questions/ai/generate',
+      payload,
+      { timeout: 120000, signal },
+    );
+    const data = res.data?.data;
+    return {
+      logId: data?.logId ?? null,
+      questions: (data?.questions ?? [])
+        .filter(p => p?.questionData)
+        .map(p => ({ question: p.questionData, hasHashConflict: Boolean(p.hasHashConflict), validationError: p.validationError ?? null })),
+    };
+  },
+
   /** Q-03: creates 1..50 questions in one transaction — all or nothing. */
   async createQuestionsBatch(courseId: number, moduleId: number | null, questions: QuestionCreateRequest[]): Promise<QuestionDetail[]> {
     const query = new URLSearchParams({ courseId: String(courseId) });

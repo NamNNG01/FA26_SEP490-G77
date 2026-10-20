@@ -16,6 +16,7 @@ import {
   type QuestionDraft,
 } from '../model';
 import type { QuestionDifficulty } from '@/services/question.service';
+import { DiagramAnswer } from './DiagramAnswer';
 
 const MAX_OPTIONS = 10;
 
@@ -27,7 +28,7 @@ const inputCls = (invalid: boolean) =>
 const iconBtn = 'p-1.5 rounded-[6px] text-content-subtle hover:bg-accent hover:text-content-secondary disabled:opacity-30 disabled:cursor-not-allowed';
 
 /** One question block: header, text, difficulty/type, and the answer section for the selected type. */
-export function QuestionForm({ q, index, onChange, showErrors, removable, onRemove, canMoveUp, canMoveDown, onMoveUp, onMoveDown }: {
+export function QuestionForm({ q, index, onChange, showErrors, removable, onRemove, canMoveUp, canMoveDown, onMoveUp, onMoveDown, heading, actions }: {
   q: QuestionDraft;
   index: number;
   onChange: (q: QuestionDraft) => void;
@@ -39,6 +40,10 @@ export function QuestionForm({ q, index, onChange, showErrors, removable, onRemo
   canMoveDown?: boolean;
   onMoveUp?: () => void;
   onMoveDown?: () => void;
+  /** Header title; defaults to "Question N". */
+  heading?: string;
+  /** Extra header buttons (e.g. the AI preview's Done / Accept). */
+  actions?: React.ReactNode;
 }) {
   const textRef = useRef<HTMLTextAreaElement>(null);
   const errors = validateDraft(q);
@@ -68,7 +73,12 @@ export function QuestionForm({ q, index, onChange, showErrors, removable, onRemo
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <span className="min-w-6 h-6 px-1 rounded-[6px] bg-brand-600/10 text-brand-ink flex items-center justify-center text-xs font-bold">#{index + 1}</span>
-          <h3 id={titleId} className="text-lg font-semibold text-content truncate">Question {index + 1}</h3>
+          <h3 id={titleId} className="text-lg font-semibold text-content truncate">{heading ?? `Question ${index + 1}`}</h3>
+          {q.fromAi && (
+            <Badge variant="info" className="flex-shrink-0">
+              <Icon.Zap className="w-3 h-3" /> AI draft
+            </Badge>
+          )}
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
           {showErrors && (
@@ -92,6 +102,7 @@ export function QuestionForm({ q, index, onChange, showErrors, removable, onRemo
               <Icon.Trash className="w-4 h-4" />
             </button>
           )}
+          {actions}
         </div>
       </div>
 
@@ -127,6 +138,17 @@ export function QuestionForm({ q, index, onChange, showErrors, removable, onRemo
       {typeError && <p className="text-xs text-danger -mt-1.5">{typeError}</p>}
 
       <AnswerSection q={q} set={set} error={answersError} />
+
+      <div>
+        <label htmlFor={`${q.key}-explanation`} className="block text-sm font-medium text-content-secondary mb-1">Explanation <span className="font-normal text-content-subtle">(optional)</span></label>
+        <textarea
+          id={`${q.key}-explanation`}
+          value={q.explanation}
+          onChange={e => set({ explanation: e.target.value })}
+          className="w-full h-[64px] px-3 py-2 rounded-[10px] border border-line text-sm text-content bg-surface resize-y focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600 transition-all"
+          placeholder="Why the answer is correct — shown to students during review."
+        />
+      </div>
     </section>
   );
 }
@@ -143,6 +165,8 @@ export function AnswerSection({ q, set, error }: { q: QuestionDraft; set: (patch
       return <BlankAnswers q={q} set={set} error={error} />;
     case 'ORDERING':
       return <OrderingAnswers q={q} set={set} error={error} />;
+    case 'DIAGRAM':
+      return <DiagramAnswer q={q} set={set} error={error} />;
     case 'ESSAY':
       return (
         <p className="flex items-start gap-2 rounded-[10px] bg-surface-alt px-3 py-2.5 text-sm text-content-soft">

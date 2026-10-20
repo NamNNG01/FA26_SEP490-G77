@@ -4,19 +4,17 @@ import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { Alert } from '@/components/ui/Alert';
 import { Badge, type BadgeVariant } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { Select } from '@/components/ui/Select';
 import { Spinner } from '@/components/ui/Spinner';
 import { useToast } from '@/components/ui/ToastHost';
 import { Icon } from '@/assets/icons';
-import { ROUTES, managerQuestionEditPath } from '@/app/routes';
+import { ROUTES } from '@/app/routes';
 import { QUESTION_STATUS_LABELS, questionService, type QuestionDifficulty, type QuestionStatus } from '@/services/question.service';
 import { questionGroupService, type QuestionGroup } from '@/services/questionGroup.service';
 import { AnswerSection } from '../components/QuestionForm';
 import { QuestionLocationCard } from '../components/QuestionLocationCard';
 import { GroupInfoCard, QuestionGroupPicker } from '../components/QuestionGroupPicker';
-import { MediaDropzone } from '../components/MediaDropzone';
 import {
   DIFFICULTY_OPTIONS,
   QUESTION_TYPE_OPTIONS,
@@ -28,8 +26,10 @@ import {
   type EditableQuestionType,
   type QuestionDraft,
 } from '../model';
+import { describeSaveError, type SaveError } from '../saveError';
+import { SaveErrorAlert } from '../components/SaveErrorAlert';
 
-type Confirm = 'discard' | 'delete' | 'duplicate' | null;
+type Confirm = 'discard' | 'delete' | null;
 
 const STATUS_VARIANT: Record<QuestionStatus, BadgeVariant> = { ACTIVE: 'success', INACTIVE: 'danger', DRAFT: 'default' };
 const STATUS_OPTIONS = (Object.keys(QUESTION_STATUS_LABELS) as QuestionStatus[]).map(value => ({ label: QUESTION_STATUS_LABELS[value], value }));
@@ -57,7 +57,6 @@ export function QuestionDetailPage() {
   /** Values as last loaded/saved — the header badge and "Unsaved" hints compare against these. */
   const [savedStatus, setSavedStatus] = useState<QuestionStatus>('ACTIVE');
   const [savedGroupId, setSavedGroupId] = useState<number | null>(null);
-  const [media, setMedia] = useState<File[]>([]);
 
   const [groups, setGroups] = useState<QuestionGroup[]>([]);
   const [groupsLoading, setGroupsLoading] = useState(false);
@@ -69,7 +68,7 @@ export function QuestionDetailPage() {
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [saveError, setSaveError] = useState<{ message: string; conflict?: boolean } | null>(null);
+  const [saveError, setSaveError] = useState<SaveError | null>(null);
   const [confirm, setConfirm] = useState<Confirm>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -88,7 +87,6 @@ export function QuestionDetailPage() {
         setStatus(detail.status);
         setSavedStatus(detail.status);
         setSavedGroupId(detail.groupId ?? null);
-        setMedia([]);
         setDirty(false);
         setSubmitted(false);
         setSaveError(null);
@@ -152,6 +150,18 @@ export function QuestionDetailPage() {
     }
   };
 
+  /** Saved right away (not with Save Changes) — the passage is shared by every question in the group. */
+  const updateGroup = async (group: QuestionGroup, title: string, passageText: string) => {
+    try {
+      const updated = await questionGroupService.updateQuestionGroup(group.groupId, { title, passageText });
+      setGroups(prev => prev.map(g => (g.groupId === updated.groupId ? updated : g)));
+      toast.success(`Group “${updated.title || `Group #${updated.groupId}`}” updated.`);
+    } catch (err) {
+      toast.error(errorMessage(err, 'Could not update the question group.'));
+      throw err;
+    }
+  };
+
   const save = async () => {
     if (!q?.questionId) return;
     setSubmitted(true);
@@ -171,7 +181,7 @@ export function QuestionDetailPage() {
       setSubmitted(false);
       toast.success('Question updated.');
     } catch (err) {
-      setSaveError({ message: errorMessage(err, 'Could not save. Please try again.'), conflict: httpStatus(err) === 409 });
+      setSaveError(describeSaveError(err, 'Could not save. Please try again.'));
       scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
     } finally {
       setSaving(false);
@@ -188,22 +198,6 @@ export function QuestionDetailPage() {
       goToBank();
     } catch (err) {
       toast.error(errorMessage(err, 'Could not delete the question.'));
-    } finally {
-      setBusy(false);
-      setConfirm(null);
-    }
-  };
-
-  const duplicate = async () => {
-    if (!q?.questionId) return;
-    setBusy(true);
-    try {
-      const copy = await questionService.duplicateQuestion(q.questionId);
-      toast.success(`Question duplicated as #${copy.questionId}.`);
-      setDirty(false);
-      navigate(managerQuestionEditPath(copy.questionId));
-    } catch (err) {
-      toast.error(errorMessage(err, 'Could not duplicate the question.'));
     } finally {
       setBusy(false);
       setConfirm(null);
@@ -255,55 +249,26 @@ export function QuestionDetailPage() {
         </div>
       </div>
 
-      {saveError && (
-        <div className="space-y-2">
-          <Alert
-            type="error"
-            title={saveError.conflict ? 'This question was changed by someone else' : 'Could not save'}
-            message={saveError.conflict ? 'Reload to get the latest version, then apply your changes again.' : saveError.message}
-          />
-          {saveError.conflict && <Button variant="secondary" size="sm" onClick={() => setReloadKey(k => k + 1)}>Reload question</Button>}
-        </div>
-      )}
+      {saveError && <SaveErrorAlert error={saveError} onReload={() => setReloadKey(k => k + 1)} />}
 
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-6 lg:flex-1 lg:min-h-0 items-start">
         {/* Main editor — the only part that scrolls on desktop */}
         <div ref={scrollRef} className="lg:h-full lg:min-h-0 lg:overflow-y-auto lg:pr-2 pb-4">
           <section aria-labelledby="question-detail-title" className="card px-4 sm:px-5 py-4 space-y-4">
-            {/* Header: id, title, badges */}
-            <div className="flex flex-wrap items-start justify-between gap-2">
-              <div className="flex items-center gap-2 min-w-0 flex-1">
-                <span className="h-7 px-2 rounded-[6px] bg-brand-600/10 text-brand-ink flex items-center justify-center text-xs font-bold flex-shrink-0">#{q.questionId}</span>
-                <h3 id="question-detail-title" className="text-lg font-semibold text-content truncate">
-                  {q.title.trim() || `Question ${q.questionId}`}
-                </h3>
-              </div>
-              <div className="flex items-center gap-1.5 flex-shrink-0">
-                <Badge variant={STATUS_VARIANT[savedStatus] ?? 'default'}>{QUESTION_STATUS_LABELS[savedStatus] ?? savedStatus}</Badge>
-                <Badge variant={TYPE_VARIANT[q.type] ?? 'info'}>{typeLabel(q.type)}</Badge>
-              </div>
-            </div>
-
-            <Input
-              label="Question Title"
-              value={q.title}
-              onChange={e => update({ title: e.target.value })}
-              maxLength={200}
-              placeholder="Short name to find this question in the bank (optional)"
-              disabled={locked}
-            />
-
-            <QuestionGroupPicker
-              groups={groups}
-              loading={groupsLoading}
-              currentGroupId={q.groupId}
-              onAttach={attachGroup}
-              onCreate={createGroup}
-              disabled={locked}
-            />
-
+            {/* Header: id, question text label, badges */}
             <div>
-              <label htmlFor="question-content" className="block text-sm font-medium text-content-secondary mb-1">Question Text *</label>
+              <div className="flex flex-wrap items-start justify-between gap-2 mb-2">
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <span className="h-7 px-2 rounded-[6px] bg-brand-600/10 text-brand-ink flex items-center justify-center text-xs font-bold flex-shrink-0">#{q.questionId}</span>
+                  <h3 id="question-detail-title" className="text-lg font-semibold text-content">
+                    <label htmlFor="question-content">Question Text *</label>
+                  </h3>
+                </div>
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <Badge variant={STATUS_VARIANT[savedStatus] ?? 'default'}>{QUESTION_STATUS_LABELS[savedStatus] ?? savedStatus}</Badge>
+                  <Badge variant={TYPE_VARIANT[q.type] ?? 'info'}>{typeLabel(q.type)}</Badge>
+                </div>
+              </div>
               <textarea
                 id="question-content"
                 value={q.content}
@@ -316,13 +281,22 @@ export function QuestionDetailPage() {
               {errors.content && <p className="text-xs text-danger mt-1">{errors.content}</p>}
             </div>
 
+            <QuestionGroupPicker
+              groups={groups}
+              loading={groupsLoading}
+              currentGroupId={q.groupId}
+              onAttach={attachGroup}
+              onCreate={createGroup}
+              onUpdate={updateGroup}
+              disabled={locked}
+            />
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Select label="Difficulty" value={q.difficulty} onChange={v => update({ difficulty: v as QuestionDifficulty })} options={DIFFICULTY_OPTIONS} disabled={locked} />
               <Select label="Type" value={q.type} onChange={v => { setQ(changeType(q, v as EditableQuestionType)); setDirty(true); }} options={QUESTION_TYPE_OPTIONS} disabled={locked} />
             </div>
 
             <div className="border-t border-line pt-4">
-              <h4 className="text-base font-semibold text-content mb-2">Answer Configuration</h4>
               <AnswerSection q={q} set={update} error={errors.answers} />
             </div>
 
@@ -338,15 +312,10 @@ export function QuestionDetailPage() {
               />
             </div>
 
-            <MediaDropzone files={media} onChange={setMedia} disabled={locked} />
-
             {/* Lifecycle actions */}
             <div className="flex flex-wrap gap-2 border-t border-line pt-4">
               <Button variant="danger" icon={<Icon.Trash className="w-4 h-4" />} onClick={() => setConfirm('delete')} disabled={locked}>
                 Delete Question
-              </Button>
-              <Button variant="outline" icon={<Icon.Copy className="w-4 h-4" />} onClick={() => (dirty ? setConfirm('duplicate') : duplicate())} loading={busy && confirm !== 'delete'} disabled={locked}>
-                Duplicate Question
               </Button>
             </div>
           </section>
@@ -366,19 +335,11 @@ export function QuestionDetailPage() {
               showErrors={submitted}
               hideHeading
             />
-            <Input
-              label="Skill"
-              value={q.skillTag}
-              onChange={e => update({ skillTag: e.target.value })}
-              maxLength={100}
-              placeholder="e.g. Reading comprehension"
-              disabled={locked}
-            />
             <Select label="Status" value={status} onChange={markDirty(v => setStatus(v as QuestionStatus))} options={STATUS_OPTIONS} disabled={locked} />
             <p className="text-xs text-content-subtle">The course can't be changed after a question is created.</p>
           </div>
 
-          <GroupInfoCard group={linkedGroup} pending={groupPending} onUnlink={() => update({ groupId: savedGroupId })} />
+          <GroupInfoCard group={linkedGroup} groupId={q.groupId} loading={groupsLoading} pending={groupPending} onUnlink={() => update({ groupId: savedGroupId })} />
         </div>
       </div>
 
@@ -412,21 +373,6 @@ export function QuestionDetailPage() {
         <p className="text-sm text-content-secondary">
           Question #{q.questionId} will be removed from the question bank and won't be used in new exams. Questions already used by a published exam can't be deleted.
         </p>
-      </Modal>
-
-      <Modal
-        open={confirm === 'duplicate'}
-        onClose={() => !busy && setConfirm(null)}
-        title="Duplicate saved version?"
-        size="sm"
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setConfirm(null)} disabled={busy}>Cancel</Button>
-            <Button onClick={duplicate} loading={busy}>Duplicate</Button>
-          </>
-        }
-      >
-        <p className="text-sm text-content-secondary">The copy is made from the last saved version — your unsaved changes here won't be included and will be discarded.</p>
       </Modal>
     </div>
   );

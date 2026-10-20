@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
-  BrowserRouter,
+  createBrowserRouter,
+  RouterProvider,
   Routes,
   Route,
   Navigate,
@@ -58,12 +59,14 @@ import {
  * detail, pricing and course search.
  */
 export function AppContent() {
-  return (
-    <BrowserRouter>
-      <AppRoutes />
-    </BrowserRouter>
-  );
+  return <RouterProvider router={router} />;
 }
+
+/**
+ * A data router so pages can use `useBlocker` (unsaved-changes guard). The
+ * route table itself stays in <AppRoutes /> as descendant <Routes>.
+ */
+const router = createBrowserRouter([{ path: '*', element: <AppRoutes /> }]);
 
 /**
  * Landing route per role — keeps role-based routing in one place.

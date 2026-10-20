@@ -1,48 +1,63 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
+import { Alert } from '@/components/ui/Alert';
 import { useToast } from '@/components/ui/ToastHost';
 import { Icon } from '@/assets/icons';
-import { FLASHCARD_COURSES, type Flashcard } from '../mockFlashcardDecks';
+import { deckService, type Deck } from '@/services/deck.service';
 import {
   CardEditorPanel,
   CardList,
   DeckInfoFields,
-  firstModuleOf,
+  NO_COURSE,
+  cardErrorMessage,
+  errorMessage,
   useCardEditor,
+  useManagedCourses,
   validateDeckInfo,
   type DeckInfo,
   type DeckInfoErrors,
+  type EditableCard,
 } from './DeckEditor';
 
-/** Placeholder deck id for card ids until the deck is created and gets a real one. */
-const DRAFT_DECK_ID = 'FD-NEW';
+const BLANK: DeckInfo = { title: '', courseId: NO_COURSE, isPublic: false, description: '' };
 
-const initialInfo = (): DeckInfo => {
-  const courseId = FLASHCARD_COURSES[0]?.id ?? '';
-  return { name: '', courseId, moduleId: firstModuleOf(courseId), description: '', status: 'Draft' };
-};
+/** Outcome of creating the deck's cards after the deck itself was created. */
+export interface CreatedDeck {
+  deck: Deck;
+  cardsCreated: number;
+  /** Set when some cards could not be created — the deck exists regardless. */
+  cardError?: string;
+}
 
 /**
- * New Flashcard — the detail screen's layout with every field as an input:
- * deck info (name, course, module, status, description) and the card list +
- * card editor, created in one go. Mount it only while open so each opening
- * starts from a blank draft.
+ * New Flashcard Deck — deck info plus a draft card list built with the card
+ * editor. Create Deck creates the deck (F-02), then each card through the
+ * card API. Mount it only while open so each opening starts from a blank draft.
  */
-export function CreateDeckModal({ onClose, onCreate }: {
+export function CreateDeckModal({ onClose, onCreated, defaultCourseId }: {
   onClose: () => void;
-  onCreate: (info: DeckInfo, cards: Flashcard[]) => void;
+  onCreated: (result: CreatedDeck) => void;
+  /** Pre-selects the course the list is currently filtered by. */
+  defaultCourseId?: string;
 }) {
   const toast = useToast();
-  const [info, setInfo] = useState<DeckInfo>(initialInfo);
+  const { courses, loading: coursesLoading } = useManagedCourses();
+  const [info, setInfo] = useState<DeckInfo>(() => ({ ...BLANK, courseId: defaultCourseId ?? NO_COURSE }));
   const [errors, setErrors] = useState<DeckInfoErrors>({});
-  const [cards, setCards] = useState<Flashcard[]>([]);
+  const [cards, setCards] = useState<EditableCard[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
-  const editor = useCardEditor(DRAFT_DECK_ID, cards, setCards);
 
-  const blank = initialInfo();
-  const touched = info.name.trim() !== '' || info.description.trim() !== '' || info.courseId !== blank.courseId
-    || info.moduleId !== blank.moduleId || info.status !== blank.status || cards.length > 0 || editor.hasInput;
+  // Draft cards live here until the deck is created.
+  const editor = useCardEditor(cards, {
+    add: (frontText, backText) => setCards(prev => [...prev, { id: `draft-${Date.now()}-${prev.length}`, frontText, backText }]),
+    update: (card, frontText, backText) => setCards(prev => prev.map(c => (c.id === card.id ? { ...c, frontText, backText } : c))),
+    remove: card => setCards(prev => prev.filter(c => c.id !== card.id)),
+  });
+
+  const touched = info.title.trim() !== '' || info.description.trim() !== '' || info.isPublic || cards.length > 0 || editor.hasInput;
 
   const update = (patch: Partial<DeckInfo>) => {
     setInfo(prev => ({ ...prev, ...patch }));
@@ -53,25 +68,50 @@ export function CreateDeckModal({ onClose, onCreate }: {
     });
   };
 
-  const requestClose = () => (touched ? setConfirmDiscard(true) : onClose());
+  const requestClose = () => {
+    if (saving) return;
+    if (touched) setConfirmDiscard(true);
+    else onClose();
+  };
 
-  const submit = () => {
+  const submit = async () => {
     const found = validateDeckInfo(info);
     setErrors(found);
-    if (Object.keys(found).length > 0) {
-      toast.error('Please fix the highlighted deck fields.');
-      return;
-    }
-    if (info.status === 'Published' && cards.length === 0) {
-      toast.error('A published deck must contain at least one card — add cards or save it as Draft.');
-      return;
-    }
+    if (Object.keys(found).length > 0) return;
     if (editor.hasInput) {
       toast.warning(editor.editingId ? 'Update or clear the card in the editor first.' : 'Add or clear the card in the editor first.');
       editor.frontRef.current?.focus();
       return;
     }
-    onCreate({ ...info, name: info.name.trim(), description: info.description.trim() }, cards);
+    setSaving(true);
+    setSaveError(null);
+    let deck: Deck;
+    try {
+      deck = await deckService.createDeck({
+        title: info.title.trim(),
+        courseId: info.courseId === NO_COURSE ? undefined : Number(info.courseId),
+        isPublic: info.isPublic,
+        description: info.description.trim() || undefined,
+      });
+    } catch (err) {
+      setSaveError(errorMessage(err, 'Could not create the deck. Please try again.'));
+      setSaving(false);
+      return;
+    }
+    // Sequential so cards keep the order they were written in.
+    let cardsCreated = 0;
+    let cardError: string | undefined;
+    for (const card of cards) {
+      try {
+        await deckService.createCard(deck.deckId, { frontText: card.frontText, backText: card.backText });
+        cardsCreated++;
+      } catch (err) {
+        cardError = cardErrorMessage(err, 'Some cards could not be created.');
+        break;
+      }
+    }
+    setSaving(false);
+    onCreated({ deck, cardsCreated, cardError });
   };
 
   return (
@@ -84,15 +124,19 @@ export function CreateDeckModal({ onClose, onCreate }: {
         </div>
       ) : (
         <>
-          <Button variant="outline" onClick={requestClose}>Cancel</Button>
-          <Button icon={<Icon.Check className="w-4 h-4" />} onClick={submit}>Create Deck</Button>
+          <Button variant="outline" onClick={requestClose} disabled={saving}>Cancel</Button>
+          <Button icon={<Icon.Check className="w-4 h-4" />} onClick={submit} disabled={saving || coursesLoading}>
+            {saving ? 'Creating…' : 'Create Deck'}
+          </Button>
         </>
       )}>
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px] items-start">
         <div className="space-y-5 min-w-0">
-          <section className="card p-5" aria-label="Deck information">
-            <h3 className="mb-4 text-lg font-semibold text-content">Deck Information</h3>
-            <DeckInfoFields idPrefix="new-deck" value={info} errors={errors} onChange={update} showStatus />
+          <section className="card p-5 space-y-4" aria-label="Deck information">
+            <h3 className="text-lg font-semibold text-content">Deck Information</h3>
+            {saveError && <Alert type="error" message={saveError} />}
+            <DeckInfoFields idPrefix="new-deck" value={info} errors={errors} onChange={update} allowNoCourse
+              courses={courses.map(c => ({ id: String(c.courseId), title: c.title }))} coursesLoading={coursesLoading} />
           </section>
           <CardList cards={cards} editor={editor} emptyHint="Add cards with the card editor — or create the deck now and add them later." />
         </div>

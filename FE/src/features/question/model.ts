@@ -1,13 +1,16 @@
+import { QUESTION_METADATA_KEYS } from '@/services/question.service';
 import type {
   AnswerOption,
   FillBlankAnswerKey,
   MatchingAnswerKey,
   QuestionCreateRequest,
+  QuestionAiDraft,
   QuestionDetail,
   QuestionDifficulty,
   QuestionType,
   QuestionUpdateRequest,
 } from '@/services/question.service';
+import { hasDiagramContent, plantUmlToDrawioXml } from './diagram';
 
 /**
  * Editor-side model for one question. It keeps every type's fields side by
@@ -16,14 +19,15 @@ import type {
  */
 
 /**
- * Types the editor offers. The backend accepts all but ORDERING today
- * (QuestionValidator rejects CODE / DIAGRAM, the CHECK constraint has no
- * ORDERING) — ORDERING is authored in the UI but cannot be saved yet.
+ * Types the editor offers. QuestionValidator accepts SINGLE_CHOICE,
+ * MULTIPLE_CHOICE, TRUE_FALSE, MATCHING, FILL_BLANK and ESSAY. DIAGRAM (drawn
+ * in draw.io) and ORDERING can be authored in the UI but not saved yet.
+ * CODE has no editor yet.
  */
-export type EditableQuestionType = Exclude<QuestionType, 'CODE' | 'DIAGRAM'> | 'ORDERING';
+export type EditableQuestionType = Exclude<QuestionType, 'CODE'> | 'ORDERING';
 
 /** Types the editor shows but the backend can't store yet. */
-export const UNSAVEABLE_TYPES: EditableQuestionType[] = ['ORDERING'];
+export const UNSAVEABLE_TYPES: EditableQuestionType[] = ['DIAGRAM', 'ORDERING'];
 
 export const QUESTION_TYPE_OPTIONS: { label: string; value: EditableQuestionType }[] = [
   { label: 'Single Choice', value: 'SINGLE_CHOICE' },
@@ -32,8 +36,18 @@ export const QUESTION_TYPE_OPTIONS: { label: string; value: EditableQuestionType
   { label: 'Matching', value: 'MATCHING' },
   { label: 'Fill in the Blank', value: 'FILL_BLANK' },
   { label: 'Essay', value: 'ESSAY' },
+  { label: 'Diagram (coming soon)', value: 'DIAGRAM' },
   { label: 'Ordering (coming soon)', value: 'ORDERING' },
 ];
+
+/** Types the AI can draft — the ones the backend can save. */
+export const AI_QUESTION_TYPE_OPTIONS = QUESTION_TYPE_OPTIONS.filter(t => !UNSAVEABLE_TYPES.includes(t.value)) as { label: string; value: QuestionType }[];
+
+/** QuestionValidator limits. */
+export const MAX_CONTENT_LENGTH = 10000;
+export const MAX_SKILL_TAG_LENGTH = 100;
+export const MIN_OPTIONS = 2;
+export const MAX_OPTIONS = 10;
 
 export const DIFFICULTY_OPTIONS: { label: string; value: QuestionDifficulty }[] = [
   { label: 'Easy', value: 'EASY' },
@@ -69,8 +83,6 @@ export interface QuestionDraft {
   key: string;
   questionId?: number;
   lockVersion?: number | null;
-  /** Kept in questionMetadata.title — the backend has no title column. */
-  title: string;
   /** Rationale shown to students during review (ai_explanation). */
   explanation: string;
   /** Kept in questionMetadata.skillTag. */
@@ -89,6 +101,13 @@ export interface QuestionDraft {
   blanks: Record<number, BlankDraft>;
   /** ORDERING — items in their correct order. */
   ordering: OrderItemDraft[];
+  /** DIAGRAM — model answer as draw.io XML, plus an SVG snapshot for previews. */
+  diagramXml: string;
+  diagramSvg: string;
+  /** ESSAY rubric suggested by AI — passed through untouched; its total becomes defaultPoints. */
+  essayGradingRubric?: unknown;
+  /** Drafted by AI-03 and accepted into the form. */
+  fromAi?: boolean;
 }
 
 let seq = 0;
@@ -111,7 +130,6 @@ const emptyOrdering = (): OrderItemDraft[] => [0, 1, 2].map(() => ({ key: newKey
 export function emptyDraft(): QuestionDraft {
   return {
     key: newKey('q'),
-    title: '',
     explanation: '',
     skillTag: '',
     groupId: null,
@@ -123,6 +141,8 @@ export function emptyDraft(): QuestionDraft {
     pairs: emptyPairs(),
     blanks: {},
     ordering: emptyOrdering(),
+    diagramXml: '',
+    diagramSvg: '',
   };
 }
 
@@ -167,28 +187,41 @@ export interface QuestionErrors {
   answers?: string;
 }
 
+const typeName = (t: EditableQuestionType) => QUESTION_TYPE_OPTIONS.find(o => o.value === t)?.label.replace(/ \(.*\)$/, '') ?? t;
+
+/** Same text once whitespace and case are ignored (QuestionValidator's duplicate check). */
+const normalize = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ');
+const hasDuplicates = (texts: string[]) => new Set(texts.map(normalize)).size !== texts.length;
+
 export function validateDraft(q: QuestionDraft): QuestionErrors {
   const errors: QuestionErrors = {};
   if (q.content.trim() === '') errors.content = 'Question text is required.';
-  if (UNSAVEABLE_TYPES.includes(q.type)) errors.type = "Ordering questions can't be saved yet — pick another type to save.";
+  else if (q.content.trim().length > MAX_CONTENT_LENGTH) errors.content = `Question text can be at most ${MAX_CONTENT_LENGTH.toLocaleString()} characters.`;
+  if (UNSAVEABLE_TYPES.includes(q.type)) errors.type = `${typeName(q.type)} questions can't be saved yet — pick another type to save.`;
+  else if (q.skillTag.trim().length > MAX_SKILL_TAG_LENGTH) errors.type = `Skill tag can be at most ${MAX_SKILL_TAG_LENGTH} characters.`;
 
   switch (q.type) {
     case 'SINGLE_CHOICE':
     case 'MULTIPLE_CHOICE': {
-      if (q.options.length < 2) errors.answers = 'Add at least two answer options.';
+      const correct = q.options.filter(o => o.isCorrect).length;
+      if (q.options.length < MIN_OPTIONS) errors.answers = `Add at least ${MIN_OPTIONS} answer options.`;
+      else if (q.options.length > MAX_OPTIONS) errors.answers = `A question can have at most ${MAX_OPTIONS} options.`;
       else if (q.options.some(o => o.text.trim() === '')) errors.answers = 'Fill in every option or remove the empty ones.';
-      else if (new Set(q.options.map(o => o.text.trim().toLowerCase())).size !== q.options.length) errors.answers = 'Options must be different from each other.';
-      else if (!q.options.some(o => o.isCorrect)) errors.answers = 'Mark at least one correct answer.';
+      else if (hasDuplicates(q.options.map(o => o.text))) errors.answers = 'Options must be different from each other.';
+      else if (q.type === 'SINGLE_CHOICE' && correct !== 1) errors.answers = 'Mark exactly one correct answer.';
+      else if (q.type === 'MULTIPLE_CHOICE' && correct < 2) errors.answers = 'Mark at least two correct answers — use Single Choice for one.';
+      else if (q.type === 'MULTIPLE_CHOICE' && correct === q.options.length) errors.answers = 'Leave at least one option incorrect.';
       break;
     }
     case 'TRUE_FALSE':
-      if (!q.options.some(o => o.isCorrect)) errors.answers = 'Choose whether the statement is true or false.';
+      if (q.options.length !== 2 || q.options.filter(o => o.isCorrect).length !== 1) errors.answers = 'Choose whether the statement is true or false.';
       break;
     case 'MATCHING': {
       const filled = q.pairs.filter(p => p.left.trim() || p.right.trim());
       if (filled.length < 2) errors.answers = 'Add at least two matching pairs.';
       else if (filled.some(p => !p.left.trim() || !p.right.trim())) errors.answers = 'Every pair needs both a left and a right item.';
-      else if (new Set(filled.map(p => p.left.trim().toLowerCase())).size !== filled.length) errors.answers = 'Left items must be unique.';
+      else if (hasDuplicates(filled.map(p => p.left))) errors.answers = 'Left items must be unique.';
+      else if (hasDuplicates(filled.map(p => p.right))) errors.answers = 'Right items must be unique.';
       break;
     }
     case 'FILL_BLANK': {
@@ -206,10 +239,38 @@ export function validateDraft(q: QuestionDraft): QuestionErrors {
       else if (filled.length !== q.ordering.length) errors.answers = 'Fill in every item or remove the empty ones.';
       break;
     }
+    case 'DIAGRAM':
+      if (!hasDiagramContent(q.diagramXml)) errors.answers = 'Draw the model answer diagram.';
+      break;
     case 'ESSAY':
+      if (q.essayGradingRubric != null) {
+        const { error } = rubricTotal(q.essayGradingRubric);
+        if (error) errors.answers = error;
+      }
       break;
   }
   return errors;
+}
+
+/**
+ * Checks an ESSAY rubric the way QuestionValidator does and returns its total
+ * maxScore — sent as defaultPoints, which the backend requires to match it.
+ */
+export function rubricTotal(rubric: unknown): { total: number | null; error?: string } {
+  const bad = (error: string) => ({ total: null, error: `Grading rubric: ${error}` });
+  const criteria = asRecord(rubric)?.criteria;
+  if (!Array.isArray(criteria)) return bad('it needs a list of criteria.');
+  let total = 0;
+  for (const c of criteria) {
+    const item = asRecord(c);
+    if (!item || typeof item.name !== 'string' || !item.name.trim()) return bad('every criterion needs a name.');
+    const max = Number(item.maxScore);
+    if (!Number.isFinite(max) || max <= 0) return bad(`"${item.name}" needs a max score above 0.`);
+    total += max;
+  }
+  if (total <= 0) return bad('add at least one criterion.');
+  if (total > 1000) return bad('the total score can be at most 1000.');
+  return { total };
 }
 
 export const isDraftValid = (q: QuestionDraft) => Object.keys(validateDraft(q)).length === 0;
@@ -247,6 +308,7 @@ function toAnswerKey(q: QuestionDraft): MatchingAnswerKey | FillBlankAnswerKey |
 }
 
 export function toCreateRequest(q: QuestionDraft, courseId: number, moduleId: number | null): QuestionCreateRequest {
+  const metadata = toMetadata(q);
   return {
     courseId,
     moduleId,
@@ -256,14 +318,28 @@ export function toCreateRequest(q: QuestionDraft, courseId: number, moduleId: nu
     content: q.content.trim(),
     options: toOptions(q),
     answerKey: toAnswerKey(q),
+    ...(q.explanation.trim() ? { explanation: q.explanation.trim() } : {}),
+    ...(Object.keys(metadata).length ? { questionMetadata: metadata } : {}),
+    ...toRubric(q),
   };
 }
 
+/** ESSAY rubric plus the matching defaultPoints; nothing for other types or without a rubric. */
+function toRubric(q: QuestionDraft): Pick<QuestionCreateRequest, 'essayGradingRubric' | 'defaultPoints'> {
+  if (q.type !== 'ESSAY' || q.essayGradingRubric == null) return {};
+  const { total } = rubricTotal(q.essayGradingRubric);
+  return { essayGradingRubric: q.essayGradingRubric, ...(total != null ? { defaultPoints: total } : {}) };
+}
+
+/**
+ * Only the keys QuestionValidator allows — anything else (an old `title`, AI
+ * extras, draw.io XML) would fail the whole request.
+ */
 function toMetadata(q: QuestionDraft): Record<string, unknown> {
-  const { title: _t, skillTag: _s, ...rest } = q.metadata;
+  const allowed: readonly string[] = QUESTION_METADATA_KEYS;
+  const kept = Object.fromEntries(Object.entries(q.metadata).filter(([k, v]) => k !== 'skillTag' && v != null && allowed.includes(k)));
   return {
-    ...rest,
-    ...(q.title.trim() ? { title: q.title.trim() } : {}),
+    ...kept,
     ...(q.skillTag.trim() ? { skillTag: q.skillTag.trim() } : {}),
   };
 }
@@ -281,6 +357,7 @@ export function toUpdateRequest(q: QuestionDraft, moduleId: number | null, extra
     // Sending [] for non-choice types tells the backend to drop old options.
     options: toOptions(q),
     answerKey: toAnswerKey(q),
+    ...toRubric(q),
     lockVersion: q.lockVersion ?? null,
   };
 }
@@ -322,7 +399,6 @@ export function fromDetail(d: QuestionDetail): QuestionDraft {
     ...base,
     questionId: d.questionId,
     lockVersion: d.lockVersion,
-    title: typeof metadata.title === 'string' ? metadata.title : '',
     skillTag: typeof metadata.skillTag === 'string' ? metadata.skillTag : '',
     explanation: d.aiExplanation ?? '',
     groupId: d.groupId ?? null,
@@ -335,7 +411,43 @@ export function fromDetail(d: QuestionDetail): QuestionDraft {
       ? rawPairs.map(p => ({ key: newKey('pair'), left: String(p.left ?? ''), right: String(p.right ?? '') }))
       : base.pairs,
     blanks,
+    diagramXml: typeof metadata.drawioXml === 'string' ? metadata.drawioXml : '',
+    diagramSvg: typeof metadata.drawioSvg === 'string' ? metadata.drawioSvg : '',
+    essayGradingRubric: d.essayGradingRubric ?? undefined,
   };
+}
+
+/** An AI-03 preview question, accepted into the editor. */
+export function fromAiDraft(a: QuestionAiDraft): QuestionDraft {
+  const draft = fromDetail({
+    questionId: 0,
+    courseId: null,
+    moduleId: null,
+    groupId: null,
+    questionType: a.questionType,
+    difficulty: a.difficulty,
+    content: a.content ?? '',
+    questionMetadata: a.questionMetadata ?? {},
+    answerKey: a.answerKey ?? null,
+    defaultPoints: null,
+    source: 'AI',
+    creatorRole: '',
+    createdBy: null,
+    scoringVersion: null,
+    lockVersion: null,
+    aiExplanation: a.explanation ?? null,
+    status: 'ACTIVE',
+    approvalStatus: '',
+    essayGradingRubric: a.essayGradingRubric ?? null,
+    options: (a.options ?? []).map(o => ({ ...o, optionId: null })),
+    createdAt: null,
+    updatedAt: null,
+  });
+  const plantUml = typeof draft.metadata.plantUmlSource === 'string' ? draft.metadata.plantUmlSource : '';
+  const diagramXml = draft.type === 'DIAGRAM' && !draft.diagramXml && plantUml.trim() ? plantUmlToDrawioXml(plantUml) : draft.diagramXml;
+  // The editor can't fix a rubric, and ESSAY saves fine without one — drop a malformed AI rubric.
+  const essayGradingRubric = draft.essayGradingRubric != null && rubricTotal(draft.essayGradingRubric).error ? undefined : draft.essayGradingRubric;
+  return { ...draft, questionId: undefined, lockVersion: undefined, diagramXml, essayGradingRubric, fromAi: true };
 }
 
 /** Shape produced by the (still mocked) PDF import. */

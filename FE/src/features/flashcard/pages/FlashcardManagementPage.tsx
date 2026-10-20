@@ -1,31 +1,23 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
 import { Select } from '@/components/ui/Select';
 import { Table } from '@/components/ui/Table';
 import { Dropdown } from '@/components/ui/Dropdown';
+import { Modal } from '@/components/ui/Modal';
+import { Alert } from '@/components/ui/Alert';
+import { DEFAULT_PAGE_SIZE } from '@/components/ui/Pagination';
 import { useToast } from '@/components/ui/ToastHost';
 import { SearchInput } from '@/components/common/SearchInput';
 import { Icon } from '@/assets/icons';
-import { useAuth } from '@/auth/authContext';
+import { useDebounce } from '@/hooks';
 import { flashcardDeckPath } from '@/app/routes';
-import {
-  MOCK_FLASHCARD_DECKS,
-  setFlashcardDecks,
-  commitDeck,
-  FLASHCARD_COURSES,
-  DECK_STATUSES,
-  courseTitle,
-  moduleTitle,
-  formatDeckTimestamp,
-  type DeckStatus,
-  type FlashcardDeck,
-} from '../mockFlashcardDecks';
-import { STATUS_VARIANT } from '../components/DeckEditor';
+import type { PageResponse } from '@/services/course.service';
+import { deckService, type Deck, type DeckListParams } from '@/services/deck.service';
+import { VisibilityBadge, errorMessage, useManagedCourses } from '../components/DeckEditor';
 import { CreateDeckModal } from '../components/CreateDeckModal';
 
-type SortKey = 'name' | 'cards' | 'updatedAt';
+const ALL = 'all';
 
 /** Quotes a CSV cell when it contains a delimiter, quote or newline. */
 const csvCell = (v: string | number) => {
@@ -33,9 +25,9 @@ const csvCell = (v: string | number) => {
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
 
-function downloadCsv(decks: FlashcardDeck[]) {
-  const header = ['Deck ID', 'Deck Name', 'Course', 'Module', 'Cards', 'Creator', 'Status', 'Updated'];
-  const rows = decks.map(d => [d.id, d.name, courseTitle(d.courseId), moduleTitle(d.moduleId), d.cards, d.creator, d.status, d.updatedAt]);
+function downloadCsv(decks: Deck[]) {
+  const header = ['Deck ID', 'Deck Name', 'Course', 'Cards', 'Owner', 'Visibility'];
+  const rows = decks.map(d => [d.deckId, d.title, d.courseName ?? 'Personal', d.cardCount, d.ownerName, d.isPublic ? 'Public' : 'Private']);
   const csv = [header, ...rows].map(r => r.map(csvCell).join(',')).join('\n');
   // BOM so Excel opens UTF-8 names correctly.
   const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
@@ -49,114 +41,154 @@ function downloadCsv(decks: FlashcardDeck[]) {
 
 /**
  * Flashcard Management — Course Manager only (guarded in AppContent).
- * Runs entirely on mock data until the flashcard API is available.
+ * Lists decks from F-01, which only returns decks in the caller's courses or
+ * owned by them; the course filter likewise only offers the caller's courses.
  */
 export function FlashcardManagementPage() {
   const toast = useToast();
-  const { user } = useAuth();
   const navigate = useNavigate();
+  const { courses } = useManagedCourses();
 
-  const [decks, setDecks] = useState<FlashcardDeck[]>(() => [...MOCK_FLASHCARD_DECKS]);
-  // Write list edits through to the shared store so the detail page sees them.
-  useEffect(() => { setFlashcardDecks(decks); }, [decks]);
   const [query, setQuery] = useState('');
-  const [course, setCourse] = useState('all');
-  const [status, setStatus] = useState('all');
-  const [sortKey, setSortKey] = useState<SortKey>('updatedAt');
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [course, setCourse] = useState(ALL);
+  const [visibility, setVisibility] = useState(ALL);
+  const [page, setPage] = useState(1);
+  const debouncedQuery = useDebounce(query.trim(), 400);
+
+  const [result, setResult] = useState<PageResponse<Deck> | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+
   const [createOpen, setCreateOpen] = useState(false);
+  const [toDelete, setToDelete] = useState<Deck | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
-  const q = query.trim().toLowerCase();
-  const visible = useMemo(() => {
-    const filtered = decks.filter(d =>
-      (!q || d.name.toLowerCase().includes(q)) &&
-      (course === 'all' || d.courseId === course) &&
-      (status === 'all' || d.status === status));
-    const dir = sortDir === 'asc' ? 1 : -1;
-    return [...filtered].sort((a, b) => {
-      if (sortKey === 'cards') return dir * (a.cards - b.cards);
-      if (sortKey === 'name') return dir * a.name.localeCompare(b.name);
-      return dir * a.updatedAt.localeCompare(b.updatedAt);
-    });
-  }, [decks, q, course, status, sortKey, sortDir]);
-
-  // Bulk actions only ever touch decks the user can currently see.
-  const selectedVisible = visible.filter(d => selected.has(d.id));
-
-  const updateStatus = (ids: string[], next: DeckStatus) => {
-    const now = new Date().toISOString().slice(0, 19);
-    setDecks(prev => prev.map(d => (ids.includes(d.id) ? { ...d, status: next, updatedAt: now } : d)));
+  const filters: Omit<DeckListParams, 'page' | 'size'> = {
+    search: debouncedQuery || undefined,
+    courseId: course === ALL ? undefined : Number(course),
+    isPublic: visibility === ALL ? undefined : visibility === 'public',
   };
 
-  const bulkSetStatus = (next: DeckStatus) => {
-    const ids = selectedVisible.map(d => d.id);
-    updateStatus(ids, next);
-    setSelected(new Set());
-    toast.success(`${ids.length} deck${ids.length > 1 ? 's' : ''} moved to ${next}.`);
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setLoadError(null);
+    deckService.getDecks({ ...filters, page: page - 1, size: DEFAULT_PAGE_SIZE })
+      .then(res => {
+        if (cancelled) return;
+        // Deleting the last deck on a page leaves it empty — step back one.
+        if (res.content.length === 0 && page > 1 && res.totalElements > 0) setPage(p => p - 1);
+        else setResult(res);
+      })
+      .catch(err => { if (!cancelled) setLoadError(errorMessage(err, 'Could not load flashcard decks.')); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `filters` is derived from these values
+  }, [debouncedQuery, course, visibility, page, reloadKey]);
+
+  const reload = () => setReloadKey(k => k + 1);
+
+  // Any filter change starts back at page 1.
+  const filterSetter = (setter: (v: string) => void) => (v: string) => {
+    setter(v);
+    setPage(1);
   };
 
-  const handleExport = () => {
-    const rows = selectedVisible.length > 0 ? selectedVisible : visible;
-    if (rows.length === 0) {
-      toast.warning('There are no decks to export.');
-      return;
+  const setPublic = async (d: Deck, isPublic: boolean) => {
+    try {
+      await deckService.updateDeck(d.deckId, { isPublic });
+      toast.success(`"${d.title}" is now ${isPublic ? 'public' : 'private'}.`);
+      reload();
+    } catch (err) {
+      toast.error(errorMessage(err, 'Could not change the deck visibility.'));
     }
-    downloadCsv(rows);
-    toast.success(`Exported ${rows.length} flashcard deck${rows.length > 1 ? 's' : ''}.`);
+  };
+
+  const confirmDelete = async () => {
+    if (!toDelete) return;
+    setDeleting(true);
+    try {
+      await deckService.deleteDeck(toDelete.deckId);
+      toast.success(`"${toDelete.title}" deleted.`);
+      setToDelete(null);
+      reload();
+    } catch (err) {
+      toast.error(errorMessage(err, 'Could not delete the deck.'));
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const rows = await deckService.getAllDecks(filters);
+      if (rows.length === 0) {
+        toast.warning('There are no decks to export.');
+        return;
+      }
+      downloadCsv(rows);
+      toast.success(`Exported ${rows.length} flashcard deck${rows.length > 1 ? 's' : ''}.`);
+    } catch (err) {
+      toast.error(errorMessage(err, 'Could not export flashcard decks.'));
+    } finally {
+      setExporting(false);
+    }
   };
 
   const columns = [
     {
-      key: 'name', label: 'Deck Name', sortable: true,
-      render: (r: Record<string, unknown>) => (
-        <div className="min-w-0">
-          <button onClick={() => navigate(flashcardDeckPath(r.id as string))} title={r.name as string}
-            className="block max-w-full font-semibold text-content text-sm truncate text-left hover:text-brand-ink hover:underline">
-            {r.name as string}
-          </button>
-          <p className="text-2xs text-content-subtle">{r.id as string}</p>
-        </div>
-      ),
+      key: 'title', label: 'Deck Name',
+      render: (r: Record<string, unknown>) => {
+        const d = r as unknown as Deck;
+        return (
+          <div className="min-w-0">
+            <button onClick={() => navigate(flashcardDeckPath(String(d.deckId)))} title={d.title}
+              className="block max-w-full font-semibold text-content text-sm truncate text-left hover:text-brand-ink hover:underline">
+              {d.title}
+            </button>
+            <p className="text-2xs text-content-subtle">#{d.deckId}</p>
+          </div>
+        );
+      },
     },
     {
-      key: 'courseId', label: 'Course / Module',
-      render: (r: Record<string, unknown>) => (
-        <div className="min-w-0">
-          <span className="block truncate text-sm text-content-secondary" title={courseTitle(r.courseId as string)}>{courseTitle(r.courseId as string)}</span>
-          <span className="block truncate text-2xs text-content-subtle" title={moduleTitle(r.moduleId as string)}>{moduleTitle(r.moduleId as string)}</span>
-        </div>
-      ),
+      key: 'courseName', label: 'Course',
+      render: (r: Record<string, unknown>) => {
+        const name = r.courseName as string | null;
+        return name
+          ? <span className="block truncate text-sm text-content-secondary" title={name}>{name}</span>
+          : <span className="text-sm italic text-content-subtle">Personal</span>;
+      },
     },
-    { key: 'cards', label: 'Cards', sortable: true, render: (r: Record<string, unknown>) => <span className="font-semibold text-content">{r.cards as number}</span> },
-    { key: 'creator', label: 'Creator', render: (r: Record<string, unknown>) => <span className="block truncate text-sm text-content-secondary">{r.creator as string}</span> },
-    { key: 'status', label: 'Status', render: (r: Record<string, unknown>) => <Badge variant={STATUS_VARIANT[r.status as DeckStatus]}>{r.status as string}</Badge> },
-    { key: 'updatedAt', label: 'Updated', sortable: true, render: (r: Record<string, unknown>) => <span className="text-sm text-content-soft whitespace-nowrap">{formatDeckTimestamp(r.updatedAt as string)}</span> },
+    { key: 'cardCount', label: 'Cards', render: (r: Record<string, unknown>) => <span className="font-semibold text-content">{r.cardCount as number}</span> },
+    { key: 'ownerName', label: 'Owner', render: (r: Record<string, unknown>) => <span className="block truncate text-sm text-content-secondary">{r.ownerName as string}</span> },
+    { key: 'isPublic', label: 'Visibility', render: (r: Record<string, unknown>) => <VisibilityBadge isPublic={r.isPublic as boolean} /> },
     {
       // Pinned right so the "..." menu stays reachable when the table scrolls sideways.
       key: 'actions', label: '', width: '48px',
       className: 'sticky right-0 z-[1] bg-surface group-hover:bg-surface-hover transition-colors',
       render: (r: Record<string, unknown>) => {
-        const d = r as unknown as FlashcardDeck;
+        const d = r as unknown as Deck;
         return (
           <Dropdown
-            trigger={<button aria-label={`Actions for ${d.name}`} className="p-1.5 hover:bg-accent rounded-[6px]"><Icon.MoreHorizontal className="w-4 h-4 text-content-soft" /></button>}
+            trigger={<button aria-label={`Actions for ${d.title}`} className="p-1.5 hover:bg-accent rounded-[6px]"><Icon.MoreHorizontal className="w-4 h-4 text-content-soft" /></button>}
             items={[
-              { label: 'Detail', icon: <Icon.Eye />, onClick: () => navigate(flashcardDeckPath(d.id)) },
-              // Published decks can be archived; Draft and Archived decks can be published.
-              d.status === 'Published'
-                ? { label: 'Archive', icon: <Icon.Package />, danger: true, onClick: () => { updateStatus([d.id], 'Archived'); toast.success(`"${d.name}" archived.`); } }
-                : { label: 'Publish', icon: <Icon.CheckCircle />, onClick: () => {
-                    if (d.cards === 0) { toast.warning(`"${d.name}" has no cards yet — add cards before publishing.`); return; }
-                    updateStatus([d.id], 'Published');
-                    toast.success(`"${d.name}" published.`);
-                  } },
+              { label: 'Detail', icon: <Icon.Eye />, onClick: () => navigate(flashcardDeckPath(String(d.deckId))) },
+              d.isPublic
+                ? { label: 'Make private', icon: <Icon.Lock />, onClick: () => setPublic(d, false) }
+                : { label: 'Make public', icon: <Icon.Users />, onClick: () => setPublic(d, true) },
+              { label: 'Delete', icon: <Icon.Trash />, danger: true, onClick: () => setToDelete(d) },
             ]}
           />
         );
       },
     },
   ];
+
+  const decks = result?.content ?? [];
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-5">
@@ -166,75 +198,76 @@ export function FlashcardManagementPage() {
           <p className="text-sm text-content-soft mt-0.5">Manage flashcard decks across your courses.</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" icon={<Icon.Download className="w-4 h-4" />} onClick={handleExport}>
-            Export{selectedVisible.length > 0 ? ` (${selectedVisible.length})` : ''}
+          <Button variant="outline" icon={<Icon.Download className="w-4 h-4" />} onClick={handleExport} disabled={exporting}>
+            {exporting ? 'Exporting…' : 'Export'}
           </Button>
           <Button icon={<Icon.Plus className="w-4 h-4" />} onClick={() => setCreateOpen(true)}>New deck</Button>
         </div>
       </div>
 
+      {loadError && <Alert type="error" title="Could not load flashcard decks" message={loadError} />}
+
       <div className="card overflow-hidden">
         <div className="flex flex-wrap items-center gap-3 px-4 py-3 border-b border-line-soft">
-          <SearchInput className="w-full sm:w-64" placeholder="Search flashcard decks…" value={query} onChange={e => setQuery(e.target.value)} />
-          <Select aria-label="Filter by course" value={course} onChange={setCourse}
-            options={[{ label: 'All Courses', value: 'all' }, ...FLASHCARD_COURSES.map(c => ({ label: c.title, value: c.id }))]}
+          <SearchInput className="w-full sm:w-64" placeholder="Search flashcard decks…" value={query}
+            onChange={e => { setQuery(e.target.value); setPage(1); }} />
+          <Select aria-label="Filter by course" value={course} onChange={filterSetter(setCourse)}
+            options={[{ label: 'All my courses', value: ALL }, ...courses.map(c => ({ label: c.title, value: String(c.courseId) }))]}
             className="w-full sm:w-56" />
-          <Select aria-label="Filter by status" value={status} onChange={setStatus}
-            options={[{ label: 'All Status', value: 'all' }, ...DECK_STATUSES.map(s => ({ label: s, value: s }))]}
-            className="w-full sm:w-36" />
+          <Select aria-label="Filter by visibility" value={visibility} onChange={filterSetter(setVisibility)}
+            options={[{ label: 'All visibility', value: ALL }, { label: 'Public', value: 'public' }, { label: 'Private', value: 'private' }]}
+            className="w-full sm:w-40" />
         </div>
 
-        {selectedVisible.length > 0 && (
-          <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 bg-primary-light border-b border-brand-line">
-            <span className="text-sm font-medium text-brand-ink-hover mr-2">{selectedVisible.length} selected</span>
-            <Button size="sm" variant="outline" icon={<Icon.CheckCircle className="w-3.5 h-3.5" />} onClick={() => bulkSetStatus('Published')}>Publish</Button>
-            <Button size="sm" variant="outline" icon={<Icon.EyeOff className="w-3.5 h-3.5" />} onClick={() => bulkSetStatus('Draft')}>Move to Draft</Button>
-            <Button size="sm" variant="outline" icon={<Icon.X className="w-3.5 h-3.5" />} onClick={() => bulkSetStatus('Archived')}>Deactivate</Button>
-            <div className="flex-1" />
-            <button onClick={() => setSelected(new Set())} className="text-sm text-brand-ink hover:underline">Clear selection</button>
+        {loading && !result ? (
+          <div className="px-4 py-16 text-center text-content-subtle">
+            <div className="inline-block w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mb-3" />
+            <p className="text-sm">Loading flashcard decks…</p>
           </div>
-        )}
-
-        {visible.length === 0 ? (
+        ) : decks.length === 0 ? (
           <div className="px-4 py-16 text-center">
             <Icon.Layers className="w-10 h-10 mx-auto text-content-faint" />
             <p className="mt-3 text-base font-medium text-content-secondary">No flashcard decks found</p>
             <p className="text-sm text-content-subtle">Try a different keyword or clear the filters.</p>
           </div>
         ) : (
-          <Table
-            columns={columns}
-            data={visible as unknown as Record<string, unknown>[]}
-            selectable
-            selectedKeys={selected}
-            onSelectionChange={setSelected}
-            unit="flashcard decks"
-            resetKey={[q, course, status].join('|')}
-            sortKey={sortKey}
-            sortDir={sortDir}
-            onSort={k => {
-              if (sortKey === k) setSortDir(d => (d === 'asc' ? 'desc' : 'asc'));
-              else { setSortKey(k as SortKey); setSortDir(k === 'name' ? 'asc' : 'desc'); }
-            }}
-          />
+          <div className={loading ? 'opacity-60 transition-opacity' : 'transition-opacity'}>
+            <Table
+              columns={columns}
+              data={decks as unknown as Record<string, unknown>[]}
+              unit="flashcard decks"
+              perPage={DEFAULT_PAGE_SIZE}
+              serverPagination={{ page, total: result?.totalElements ?? 0, onChange: setPage }}
+            />
+          </div>
         )}
       </div>
 
       {createOpen && (
         <CreateDeckModal
+          defaultCourseId={course === ALL ? undefined : course}
           onClose={() => setCreateOpen(false)}
-          onCreate={(info, draftCards) => {
-            const id = `FD-${Date.now().toString().slice(-6)}`;
-            const created = commitDeck(
-              { ...info, id, cards: 0, creator: user?.fullName ?? 'You', updatedAt: '' },
-              draftCards.map((c, i) => ({ ...c, id: `${id}-C${i + 1}` })),
-            );
-            setDecks(prev => [created, ...prev]);
+          onCreated={({ deck, cardsCreated, cardError }) => {
             setCreateOpen(false);
-            toast.success(`Deck "${created.name}" created with ${created.cards} card${created.cards === 1 ? '' : 's'}.`);
+            toast.success(`Deck "${deck.title}" created with ${cardsCreated} card${cardsCreated === 1 ? '' : 's'}.`);
+            if (cardError) toast.warning(`${cardError} Add the remaining cards on the deck page.`);
+            navigate(flashcardDeckPath(String(deck.deckId)));
           }}
         />
       )}
+
+      <Modal open={!!toDelete} onClose={() => !deleting && setToDelete(null)} title="Delete deck?" size="sm"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setToDelete(null)} disabled={deleting}>Cancel</Button>
+            <Button variant="danger" onClick={confirmDelete} disabled={deleting}>{deleting ? 'Deleting…' : 'Delete'}</Button>
+          </>
+        }>
+        <p className="text-base text-content-secondary">
+          <span className="font-semibold text-content">"{toDelete?.title}"</span> and its {toDelete?.cardCount ?? 0} card{toDelete?.cardCount === 1 ? '' : 's'} will
+          be permanently deleted, together with every learner's progress on them. This cannot be undone.
+        </p>
+      </Modal>
     </div>
   );
 }
