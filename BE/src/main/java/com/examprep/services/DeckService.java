@@ -15,4 +15,7 @@ public interface DeckService {
 
     /** F-06: append a card; access is derived from the deck. */
     CardResponse addCard(UserPrincipal user, Long id, DeckRequests.CardCreate request);
+
+    /** F-07: partial card update; access is derived from the card's deck. */
+    CardResponse updateCard(UserPrincipal user, Long id, DeckRequests.CardUpdate request);
 }
