@@ -11,8 +11,11 @@ import { ROUTES } from '@/app/routes';
  * Call `leave(() => navigate(...))` for navigations that must not be
  * blocked, e.g. right after a successful save (the `when` flag only updates
  * on the next render, so it would still be true at that moment).
+ *
+ * `warnOnUnload` (default: `when`) controls the reload / tab-close prompt
+ * separately — pages that keep their work across a reload can turn it off.
  */
-export function useUnsavedChangesGuard(when: boolean) {
+export function useUnsavedChangesGuard(when: boolean, warnOnUnload: boolean = when) {
   const bypass = useRef(false);
 
   const blocker = useBlocker(({ currentLocation, nextLocation }) =>
@@ -23,11 +26,11 @@ export function useUnsavedChangesGuard(when: boolean) {
     && (currentLocation.pathname !== nextLocation.pathname || currentLocation.search !== nextLocation.search));
 
   useEffect(() => {
-    if (!when) return;
+    if (!warnOnUnload) return;
     const handler = (e: BeforeUnloadEvent) => e.preventDefault();
     window.addEventListener('beforeunload', handler);
     return () => window.removeEventListener('beforeunload', handler);
-  }, [when]);
+  }, [warnOnUnload]);
 
   // Nothing left to protect — let a held navigation through.
   useEffect(() => {

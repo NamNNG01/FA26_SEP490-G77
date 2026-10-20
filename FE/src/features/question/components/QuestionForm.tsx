@@ -5,15 +5,18 @@ import { Badge } from '@/components/ui/Badge';
 import { Icon } from '@/assets/icons';
 import {
   DIFFICULTY_OPTIONS,
+  MAX_RUBRIC_TOTAL,
   QUESTION_TYPE_OPTIONS,
   blankIndexes,
   changeType,
+  emptyCriterion,
   newKey,
   nextBlankIndex,
   optionLabel,
   validateDraft,
   type EditableQuestionType,
   type QuestionDraft,
+  type RubricCriterionDraft,
 } from '../model';
 import type { QuestionDifficulty } from '@/services/question.service';
 import { DiagramAnswer } from './DiagramAnswer';
@@ -168,13 +171,105 @@ export function AnswerSection({ q, set, error }: { q: QuestionDraft; set: (patch
     case 'DIAGRAM':
       return <DiagramAnswer q={q} set={set} error={error} />;
     case 'ESSAY':
-      return (
+      return <RubricAnswers q={q} set={set} error={error} />;
+  }
+}
+
+const MAX_CRITERIA = 20;
+
+function RubricAnswers({ q, set, error }: { q: QuestionDraft; set: (patch: Partial<QuestionDraft>) => void; error?: string }) {
+  const setCriterion = (i: number, patch: Partial<RubricCriterionDraft>) =>
+    set({ rubric: q.rubric.map((c, ci) => (ci === i ? { ...c, ...patch } : c)) });
+  const add = () => set({ rubric: [...q.rubric, emptyCriterion()] });
+  const remove = (i: number) => set({ rubric: q.rubric.filter((_, ci) => ci !== i) });
+  const total = q.rubric.reduce((sum, c) => sum + (Number(c.maxScore) > 0 ? Number(c.maxScore) : 0), 0);
+
+  return (
+    <div>
+      <SectionHeader
+        label="Grading Rubric"
+        action={
+          <Button type="button" variant="outline" size="sm" icon={<Icon.Plus className="w-3.5 h-3.5" />} onClick={add} disabled={q.rubric.length >= MAX_CRITERIA}>
+            Add Criterion
+          </Button>
+        }
+      />
+      {q.rubric.length === 0 ? (
         <p className="flex items-start gap-2 rounded-[10px] bg-surface-alt px-3 py-2.5 text-sm text-content-soft">
           <Icon.Info className="w-4 h-4 mt-0.5 flex-shrink-0" />
-          Essay answers are graded manually, so no answer options are needed.
+          No rubric — the essay is worth 1 point and graded without criteria. Add criteria to define how it is scored.
         </p>
-      );
-  }
+      ) : (
+        <div className="space-y-2">
+          <div className="hidden sm:grid grid-cols-[1.75rem_minmax(0,1fr)_6rem_2rem] gap-2 px-0.5 text-xs font-medium text-content-subtle">
+            <span />
+            <span>Criterion</span>
+            <span>Max score</span>
+            <span />
+          </div>
+          {q.rubric.map((c, i) => {
+            const nameMissing = Boolean(error) && !c.name.trim();
+            const scoreBad = Boolean(error) && !(Number(c.maxScore) > 0);
+            return (
+              <div key={c.key} className="rounded-[10px] border border-line-soft p-2 space-y-1.5">
+                <div className="grid grid-cols-[1.75rem_minmax(0,1fr)_6rem_2rem] gap-2 items-center">
+                  <span className="w-7 h-7 bg-surface-muted rounded-[6px] flex items-center justify-center text-xs font-bold text-content-soft">{i + 1}</span>
+                  <input
+                    value={c.name}
+                    onChange={e => setCriterion(i, { name: e.target.value })}
+                    aria-label={`Criterion ${i + 1} name`}
+                    placeholder="e.g. Argument & structure"
+                    maxLength={200}
+                    className={inputCls(nameMissing)}
+                  />
+                  <input
+                    type="number"
+                    min={0}
+                    step="any"
+                    inputMode="decimal"
+                    value={c.maxScore}
+                    onChange={e => setCriterion(i, { maxScore: e.target.value })}
+                    aria-label={`Criterion ${i + 1} max score`}
+                    placeholder="Points"
+                    className={inputCls(scoreBad)}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => remove(i)}
+                    aria-label={`Delete criterion ${i + 1}`}
+                    title="Delete criterion"
+                    className="p-1 justify-self-center text-content-subtle hover:text-danger"
+                  >
+                    <Icon.Trash className="w-4 h-4" />
+                  </button>
+                </div>
+                <textarea
+                  value={c.descriptors}
+                  onChange={e => setCriterion(i, { descriptors: e.target.value })}
+                  aria-label={`Criterion ${i + 1} description`}
+                  placeholder="What earns full marks for this criterion (optional)"
+                  className="w-full sm:ml-9 sm:w-[calc(100%-2.25rem)] h-[52px] px-3 py-1.5 rounded-[10px] border border-line text-sm text-content bg-surface resize-y focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600 transition-all"
+                />
+              </div>
+            );
+          })}
+          <p className={`text-xs font-medium ${total > MAX_RUBRIC_TOTAL ? 'text-danger' : 'text-success'}`}>
+            Total: {Number(total.toFixed(2))} point{total === 1 ? '' : 's'} — used as the question’s score.
+          </p>
+        </div>
+      )}
+      {error && <p className="text-xs text-danger mt-1.5">{error}</p>}
+      {(q.rubric.length > 0 || q.rubricNotes) && (
+        <textarea
+          value={q.rubricNotes}
+          onChange={e => set({ rubricNotes: e.target.value })}
+          aria-label="Rubric notes"
+          placeholder="Notes for graders (optional)"
+          className="mt-2 w-full h-[52px] px-3 py-1.5 rounded-[10px] border border-line text-sm text-content bg-surface resize-y focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600 transition-all"
+        />
+      )}
+    </div>
+  );
 }
 
 function SectionHeader({ label, action }: { label: string; action?: React.ReactNode }) {

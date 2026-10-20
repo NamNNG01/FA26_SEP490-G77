@@ -26,7 +26,7 @@ import {
   type EditableQuestionType,
   type QuestionDraft,
 } from '../model';
-import { describeSaveError, type SaveError } from '../saveError';
+import { describeSaveError, loadErrorMessage, type SaveError } from '../saveError';
 import { SaveErrorAlert } from '../components/SaveErrorAlert';
 
 type Confirm = 'discard' | 'delete' | null;
@@ -37,7 +37,6 @@ const TYPE_VARIANT: Partial<Record<EditableQuestionType, BadgeVariant>> = { ESSA
 const typeLabel = (t: EditableQuestionType) => QUESTION_TYPE_OPTIONS.find(o => o.value === t)?.label ?? t;
 
 const errorMessage = (err: unknown, fallback: string) => (err instanceof Error && err.message ? err.message : fallback);
-const httpStatus = (err: unknown) => (err as { response?: { status?: number } })?.response?.status;
 
 const textareaCls = (invalid: boolean) =>
   `w-full px-3 py-2 rounded-[10px] border text-base text-content bg-surface resize-y focus:outline-none focus:ring-2 transition-all ${
@@ -92,7 +91,7 @@ export function QuestionDetailPage() {
         setSaveError(null);
       })
       .catch(err => {
-        if (!cancelled) setLoadError(httpStatus(err) === 404 ? 'This question does not exist or has been deleted.' : errorMessage(err, 'Could not load the question.'));
+        if (!cancelled) setLoadError(loadErrorMessage(err));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);

@@ -6,7 +6,7 @@ import { Select } from '@/components/ui/Select';
 import { useToast } from '@/components/ui/ToastHost';
 import { Icon } from '@/assets/icons';
 import { courseService, type CourseSummaryItem } from '@/services/course.service';
-import { isCardApiMissing, type DeckCard } from '@/services/deck.service';
+import type { DeckCard } from '@/services/deck.service';
 
 /**
  * Building blocks shared by the Flashcard Detail page and the New Flashcard
@@ -131,9 +131,8 @@ export interface CardActions {
   remove: (card: EditableCard) => Promise<void> | void;
 }
 
-/** Message for a failed card call — calls the BE does not have yet get a clear note. */
-export const cardErrorMessage = (err: unknown, fallback: string) =>
-  isCardApiMissing(err) ? 'The card API is not available on the server yet.' : errorMessage(err, fallback);
+/** Message for a failed card call (F-06..F-08). */
+export const cardErrorMessage = (err: unknown, fallback: string) => errorMessage(err, fallback);
 
 export interface CardEditor {
   editingId: string | null;
