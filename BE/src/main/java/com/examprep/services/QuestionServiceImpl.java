@@ -65,14 +65,20 @@ public class QuestionServiceImpl implements QuestionService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<QuestionListItemDto> getQuestions(Long courseId, Long moduleId, Long groupId, String questionType,
+    public Page<QuestionListItemDto> getQuestions(Long courseId, List<Long> courseIds, Long moduleId, Long groupId, String questionType,
                                                   String difficulty, String status, String approvalStatus, String creatorRole,
                                                   String source, Long createdBy, String skillTag, String search,
                                                   Pageable pageable, User currentUser) {
-        if (!User.ROLE_ADMIN.equals(currentUser.getRoleName()) && courseId != null) {
-            boolean isManager = courseManagerRepository.existsByCourse_CourseIdAndUser_UserId(courseId, currentUser.getUserId());
-            if (!isManager) {
-                throw new ForbiddenException("You do not have access to this course");
+        // courseIds (repeated param) narrows the list to several courses, e.g. every course a manager is assigned to.
+        List<Long> scopeCourseIds = courseIds == null ? List.of()
+                : courseIds.stream().filter(Objects::nonNull).distinct().toList();
+        if (!User.ROLE_ADMIN.equals(currentUser.getRoleName())) {
+            List<Long> requested = new ArrayList<>(scopeCourseIds);
+            if (courseId != null) requested.add(courseId);
+            for (Long id : requested) {
+                if (!courseManagerRepository.existsByCourse_CourseIdAndUser_UserId(id, currentUser.getUserId())) {
+                    throw new ForbiddenException("You do not have access to this course");
+                }
             }
         }
 
@@ -80,6 +86,9 @@ public class QuestionServiceImpl implements QuestionService {
             var predicate = cb.isNull(root.get("deletedAt"));
             if (courseId != null) {
                 predicate = cb.and(predicate, cb.equal(root.get("course").get("courseId"), courseId));
+            }
+            if (!scopeCourseIds.isEmpty()) {
+                predicate = cb.and(predicate, root.get("course").get("courseId").in(scopeCourseIds));
             }
             if (moduleId != null) {
                 predicate = cb.and(predicate, cb.equal(root.get("module").get("moduleId"), moduleId));
