@@ -48,14 +48,14 @@ export function ExamAiGenerateTab({
 
   const allowedTypes =
     formKind === 'QUIZ'
-      ? ['SINGLE_CHOICE', 'MULTI_CHOICE', 'TRUE_FALSE', 'FILL_BLANK', 'MATCHING', 'ORDERING']
+      ? ['SINGLE_CHOICE', 'MULTIPLE_CHOICE', 'TRUE_FALSE', 'FILL_BLANK', 'MATCHING', 'ORDERING']
       : ['ESSAY'];
 
   const [typeCounts, setTypeCounts] = useState<Record<string, number>>(
     formKind === 'QUIZ'
       ? {
           SINGLE_CHOICE: 6,
-          MULTI_CHOICE: 2,
+          MULTIPLE_CHOICE: 2,
           TRUE_FALSE: 2,
           FILL_BLANK: 0,
           MATCHING: 0,
@@ -149,7 +149,7 @@ export function ExamAiGenerateTab({
       } else if (errorObj?.response?.status === 502) {
         setErrorMsg(MSG08);
       } else if (errorObj?.response?.status === 504) {
-        setErrorMsg('AI request timed out after 30 seconds. ' + MSG08);
+        setErrorMsg('AI request timed out after 90 seconds. ' + MSG08);
       } else if (errorObj?.response?.status === 400) {
         setErrorMsg(errorObj.response.data?.message || 'Invalid parameters for AI generation.');
       } else {
@@ -187,7 +187,7 @@ export function ExamAiGenerateTab({
       if (q.options.length < 2 || q.options.length > 6) return 'Single choice must have 2 to 6 options';
       const correctCount = q.options.filter((o) => o.isCorrect).length;
       if (correctCount !== 1) return 'Single choice must have exactly 1 correct answer';
-    } else if (q.questionType === 'MULTI_CHOICE') {
+    } else if (q.questionType === 'MULTIPLE_CHOICE') {
       if (q.options.length < 2 || q.options.length > 8) return 'Multiple choice must have 2 to 8 options';
       const correctCount = q.options.filter((o) => o.isCorrect).length;
       if (correctCount < 1) return 'Multiple choice must have at least 1 correct answer';

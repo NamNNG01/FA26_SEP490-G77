@@ -767,7 +767,13 @@ export function ExamListPage() {
                 icon={<Icon.Archive className="w-4 h-4" />}
                 onClick={async () => {
                   if (!deleteDialogTarget) return;
-                  await examService.patchPublishExam(deleteDialogTarget.examId, 'ARCHIVED');
+                  try {
+                    await examService.patchPublishExam(deleteDialogTarget.examId, 'ARCHIVED');
+                  } catch (err: unknown) {
+                    const errorObj = err as { response?: { data?: { message?: string } } };
+                    toast.error(errorObj?.response?.data?.message || 'Failed to archive exam.');
+                    return;
+                  }
                   toast.success('Exam archived successfully.');
                   setDeleteDialogTarget(null);
                   setDeleteConflict409(false);

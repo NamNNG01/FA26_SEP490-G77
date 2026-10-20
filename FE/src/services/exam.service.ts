@@ -260,7 +260,7 @@ const INITIAL_MOCK_EXAMS: ExamDetail[] = [
         examQuestionId: 303,
         questionId: 105,
         content: 'Which statements about ReLU activation are true?',
-        questionType: 'MULTI_CHOICE',
+        questionType: 'MULTIPLE_CHOICE',
         points: 4,
         orderIndex: 2,
       },
@@ -446,7 +446,7 @@ const INITIAL_MOCK_BANK_QUESTIONS: BankQuestionItem[] = [
     courseName: 'Python for Data Science',
     moduleId: 3,
     moduleName: 'Machine Learning Basics',
-    questionType: 'MULTI_CHOICE',
+    questionType: 'MULTIPLE_CHOICE',
     difficulty: 'MEDIUM',
     status: 'ACTIVE',
     optionCount: 4,
@@ -605,12 +605,6 @@ function loadStoredExams(): ExamDetail[] {
   }
 }
 
-function saveStoredExams(exams: ExamDetail[]): void {
-  try {
-    localStorage.setItem(EXAMS_STORAGE_KEY, JSON.stringify(exams));
-  } catch { }
-}
-
 function loadStoredQuestions(): BankQuestionItem[] {
   try {
     const raw = localStorage.getItem(QUESTIONS_STORAGE_KEY);
@@ -622,12 +616,6 @@ function loadStoredQuestions(): BankQuestionItem[] {
   } catch {
     return INITIAL_MOCK_BANK_QUESTIONS;
   }
-}
-
-function saveStoredQuestions(questions: BankQuestionItem[]): void {
-  try {
-    localStorage.setItem(QUESTIONS_STORAGE_KEY, JSON.stringify(questions));
-  } catch { }
 }
 
 function loadStoredGroups(): QuestionGroupItem[] {
@@ -756,332 +744,48 @@ export const examService = {
   },
 
   async createExam(payload: CreateExamRequest): Promise<ExamDetail> {
-    try {
-      const res = await api.post<ApiResponse<ExamDetail>>('/manager/exams', payload);
-      if (res.data && res.data.examId) {
-        return res.data;
-      }
-      return this.createMockExam(payload);
-    } catch {
-      return this.createMockExam(payload);
-    }
-  },
-
-  createMockExam(payload: CreateExamRequest): ExamDetail {
-    const list = loadStoredExams();
-    const bank = loadStoredQuestions();
-    const groupsBank = loadStoredGroups();
-    const newId = Date.now();
-
-    const questions: ExamQuestion[] = (payload.questionIds || []).map((q, idx) => {
-      const bq = bank.find((b) => b.questionId === q.questionId);
-      return {
-        examQuestionId: newId * 10 + idx + 1,
-        questionId: q.questionId,
-        content: bq?.content || 'Sample question',
-        questionType: bq?.questionType || 'SINGLE_CHOICE',
-        points: q.points || 1,
-        orderIndex: q.orderIndex ?? idx,
-        hasRubric: !!bq?.essayGradingRubric,
-      };
-    });
-
-    const groups: ExamGroup[] = (payload.groupIds || []).map((g, idx) => {
-      const bg = groupsBank.find((grp) => grp.groupId === g.groupId);
-      return {
-        examGroupId: newId * 100 + idx + 1,
-        groupId: g.groupId,
-        title: bg?.title || 'Group',
-        points: g.points || 1,
-        orderIndex: g.orderIndex ?? idx,
-        passageText: bg?.passageText,
-        questionCount: bg?.questionCount || 0,
-      };
-    });
-
-    const isEssay = questions.length > 0 && questions.every((q) => q.questionType === 'ESSAY');
-    const examKind: ExamKind = isEssay ? 'ESSAY' : 'QUIZ';
-
-    const newExam: ExamDetail = {
-      examId: newId,
-      title: payload.title,
-      description: payload.description,
-      courseId: payload.courseId,
-      courseName: payload.courseId ? `Course ${payload.courseId}` : undefined,
-      moduleId: payload.moduleId,
-      moduleName: payload.moduleId ? `Module ${payload.moduleId}` : undefined,
-      examKind,
-      durationMinutes: payload.durationMinutes,
-      passMark: payload.passMark ?? 50,
-      maxAttempts: payload.maxAttempts ?? 1,
-      questionCount: questions.length + groups.reduce((acc, g) => acc + (g.questionCount || 0), 0),
-      totalPoints: questions.reduce((acc, q) => acc + q.points, 0) + groups.reduce((acc, g) => acc + g.points, 0),
-      status: 'DRAFT',
-      generationType: payload.generationType,
-      isPractice: payload.isPractice,
-      createdAt: new Date().toISOString(),
-      configs: payload.configs || [],
-      questions,
-      groups,
-      warnings: [],
-    };
-
-    list.unshift(newExam);
-    saveStoredExams(list);
-    return newExam;
+    const res = await api.post<ApiResponse<ExamDetail>>('/manager/exams', payload);
+    return res.data;
   },
 
   async updateExam(id: number, payload: UpdateExamRequest): Promise<ExamDetail> {
-    try {
-      const res = await api.request<ApiResponse<ExamDetail>>({
-        method: 'put',
-        url: `/manager/exams/${id}`,
-        data: payload,
-      });
-      if (res.data) {
-        return res.data;
-      }
-      return this.updateMockExam(id, payload);
-    } catch {
-      return this.updateMockExam(id, payload);
-    }
-  },
-
-  updateMockExam(id: number, payload: UpdateExamRequest): ExamDetail {
-    const list = loadStoredExams();
-    const idx = list.findIndex((e) => e.examId === id);
-    if (idx === -1) {
-      throw { response: { status: 404, data: { message: 'Exam not found' } } };
-    }
-    const current = list[idx];
-    const updated: ExamDetail = {
-      ...current,
-      title: payload.title !== undefined ? payload.title : current.title,
-      description: payload.description !== undefined ? payload.description : current.description,
-      courseId: payload.courseId !== undefined ? payload.courseId : current.courseId,
-      moduleId: payload.moduleId !== undefined ? payload.moduleId : current.moduleId,
-      durationMinutes: payload.durationMinutes !== undefined ? payload.durationMinutes : current.durationMinutes,
-      isPractice: payload.isPractice !== undefined ? payload.isPractice : current.isPractice,
-      generationType: payload.generationType !== undefined ? payload.generationType : current.generationType,
-      passMark: payload.passMark !== undefined ? payload.passMark : current.passMark,
-      maxAttempts: payload.maxAttempts !== undefined ? payload.maxAttempts : current.maxAttempts,
-      configs: payload.configs !== undefined ? payload.configs : current.configs,
-    };
-    list[idx] = updated;
-    saveStoredExams(list);
-    return updated;
+    const res = await api.request<ApiResponse<ExamDetail>>({
+      method: 'put',
+      url: `/manager/exams/${id}`,
+      data: payload,
+    });
+    return res.data;
   },
 
   async patchPublishExam(id: number, status: ExamStatus): Promise<{ examId: number; status: ExamStatus; warnings?: string[] }> {
-    try {
-      const res = await api.request<ApiResponse<{ examId: number; status: ExamStatus; warnings?: string[] }>>({
-        method: 'patch',
-        url: `/manager/exams/${id}/publish`,
-        data: { status },
-      });
-      if (res.data) {
-        return res.data;
-      }
-      return this.patchMockPublishExam(id, status);
-    } catch (err: unknown) {
-      const errorObj = err as { response?: { status?: number; data?: unknown } };
-      if (errorObj?.response?.status === 400 || errorObj?.response?.status === 409) {
-        throw err;
-      }
-      return this.patchMockPublishExam(id, status);
-    }
-  },
-
-  patchMockPublishExam(id: number, status: ExamStatus): { examId: number; status: ExamStatus; warnings?: string[] } {
-    const list = loadStoredExams();
-    const idx = list.findIndex((e) => e.examId === id);
-    if (idx === -1) {
-      throw { response: { status: 404, data: { message: 'Exam not found' } } };
-    }
-    const current = list[idx];
-    const questionCount = current.questions.length + current.groups.reduce((acc, g) => acc + (g.questionCount || 0), 0);
-    if (status === 'PUBLISHED' && questionCount === 0 && current.generationType === 'STATIC') {
-      throw { response: { status: 400, data: { message: 'Exam has no questions and cannot be published' } } };
-    }
-    const warnings: string[] = [];
-    if (status === 'PUBLISHED') {
-      current.questions.forEach((q) => {
-        if (q.questionType === 'ESSAY' && !q.hasRubric) {
-          warnings.push(`Essay question #${q.questionId} is missing rubric`);
-        }
-      });
-    }
-    current.status = status;
-    current.warnings = warnings;
-    list[idx] = current;
-    saveStoredExams(list);
-    return { examId: id, status, warnings };
+    const res = await api.request<ApiResponse<{ examId: number; status: ExamStatus; warnings?: string[] }>>({
+      method: 'patch',
+      url: `/manager/exams/${id}/publish`,
+      data: { status },
+    });
+    return res.data;
   },
 
   async deleteExam(id: number): Promise<void> {
-    try {
-      await api.request<ApiResponse<null>>({
-        method: 'delete',
-        url: `/manager/exams/${id}`,
-      });
-    } catch (err: unknown) {
-      const errorObj = err as { response?: { status?: number; data?: unknown } };
-      if (errorObj?.response?.status === 409) {
-        throw err;
-      }
-      this.deleteMockExam(id);
-    }
-  },
-
-  deleteMockExam(id: number): void {
-    const list = loadStoredExams();
-    const idx = list.findIndex((e) => e.examId === id);
-    if (idx === -1) {
-      throw { response: { status: 404, data: { message: 'Exam not found' } } };
-    }
-    list.splice(idx, 1);
-    saveStoredExams(list);
+    await api.request<ApiResponse<null>>({ method: 'delete', url: `/manager/exams/${id}` });
   },
 
   async addQuestionToExam(id: number, payload: { questionId: number; points?: number }): Promise<ExamQuestion> {
-    try {
-      const res = await api.post<ApiResponse<ExamQuestion>>(`/manager/exams/${id}/questions`, payload);
-      if (res.data) {
-        return res.data;
-      }
-      return this.addMockQuestionToExam(id, payload);
-    } catch {
-      return this.addMockQuestionToExam(id, payload);
-    }
-  },
-
-  addMockQuestionToExam(id: number, payload: { questionId: number; points?: number }): ExamQuestion {
-    const list = loadStoredExams();
-    const exam = list.find((e) => e.examId === id);
-    if (!exam) {
-      throw { response: { status: 404, data: { message: 'Exam not found' } } };
-    }
-    if (exam.questions.some((q) => q.questionId === payload.questionId)) {
-      throw { response: { status: 409, data: { message: 'Question already exists in this exam' } } };
-    }
-    const bank = loadStoredQuestions();
-    const bq = bank.find((b) => b.questionId === payload.questionId);
-    if (bq?.status === 'DRAFT' || bq?.status === 'INACTIVE') {
-      throw { response: { status: 400, data: { message: 'Only ACTIVE questions can be added to exams' } } };
-    }
-    const newExamQuestion: ExamQuestion = {
-      examQuestionId: Date.now() + Math.floor(Math.random() * 1000),
-      questionId: payload.questionId,
-      content: bq?.content || 'Question content',
-      questionType: bq?.questionType || 'SINGLE_CHOICE',
-      points: payload.points || 1,
-      orderIndex: exam.questions.length,
-      hasRubric: !!bq?.essayGradingRubric,
-    };
-    exam.questions.push(newExamQuestion);
-    exam.questionCount = exam.questions.length + exam.groups.reduce((acc, g) => acc + (g.questionCount || 0), 0);
-    exam.totalPoints = exam.questions.reduce((acc, q) => acc + q.points, 0) + exam.groups.reduce((acc, g) => acc + g.points, 0);
-    saveStoredExams(list);
-    return newExamQuestion;
+    const res = await api.post<ApiResponse<ExamQuestion>>(`/manager/exams/${id}/questions`, payload);
+    return res.data;
   },
 
   async removeQuestionFromExam(id: number, examQuestionId: number): Promise<void> {
-    try {
-      await api.request<ApiResponse<null>>({
-        method: 'delete',
-        url: `/manager/exams/${id}/questions/${examQuestionId}`,
-      });
-    } catch (err: unknown) {
-      const errorObj = err as { response?: { status?: number; data?: unknown } };
-      if (errorObj?.response?.status === 409) {
-        throw err;
-      }
-      this.removeMockQuestionFromExam(id, examQuestionId);
-    }
-  },
-
-  removeMockQuestionFromExam(id: number, examQuestionId: number): void {
-    const list = loadStoredExams();
-    const exam = list.find((e) => e.examId === id);
-    if (!exam) {
-      throw { response: { status: 404, data: { message: 'Exam not found' } } };
-    }
-    if (exam.status === 'PUBLISHED') {
-      throw { response: { status: 409, data: { message: 'Cannot modify a published exam. Unpublish first.' } } };
-    }
-    exam.questions = exam.questions.filter((q) => q.examQuestionId !== examQuestionId);
-    exam.questionCount = exam.questions.length + exam.groups.reduce((acc, g) => acc + (g.questionCount || 0), 0);
-    exam.totalPoints = exam.questions.reduce((acc, q) => acc + q.points, 0) + exam.groups.reduce((acc, g) => acc + g.points, 0);
-    saveStoredExams(list);
+    await api.request<ApiResponse<null>>({ method: 'delete', url: `/manager/exams/${id}/questions/${examQuestionId}` });
   },
 
   async addGroupToExam(id: number, payload: { groupId: number; points?: number }): Promise<ExamGroup> {
-    try {
-      const res = await api.post<ApiResponse<ExamGroup>>(`/manager/exams/${id}/groups`, payload);
-      if (res.data) {
-        return res.data;
-      }
-      return this.addMockGroupToExam(id, payload);
-    } catch {
-      return this.addMockGroupToExam(id, payload);
-    }
-  },
-
-  addMockGroupToExam(id: number, payload: { groupId: number; points?: number }): ExamGroup {
-    const list = loadStoredExams();
-    const exam = list.find((e) => e.examId === id);
-    if (!exam) {
-      throw { response: { status: 404, data: { message: 'Exam not found' } } };
-    }
-    if (exam.groups.some((g) => g.groupId === payload.groupId)) {
-      throw { response: { status: 409, data: { message: 'Group already attached to this exam' } } };
-    }
-    const groupsBank = loadStoredGroups();
-    const bg = groupsBank.find((grp) => grp.groupId === payload.groupId);
-    const newGroup: ExamGroup = {
-      examGroupId: Date.now() + Math.floor(Math.random() * 1000),
-      groupId: payload.groupId,
-      title: bg?.title || 'Question Group',
-      points: payload.points || 1,
-      orderIndex: exam.groups.length,
-      passageText: bg?.passageText,
-      questionCount: bg?.questionCount || 0,
-    };
-    exam.groups.push(newGroup);
-    exam.questionCount = exam.questions.length + exam.groups.reduce((acc, g) => acc + (g.questionCount || 0), 0);
-    exam.totalPoints = exam.questions.reduce((acc, q) => acc + q.points, 0) + exam.groups.reduce((acc, g) => acc + g.points, 0);
-    saveStoredExams(list);
-    return newGroup;
+    const res = await api.post<ApiResponse<ExamGroup>>(`/manager/exams/${id}/groups`, payload);
+    return res.data;
   },
 
   async removeGroupFromExam(id: number, examGroupId: number): Promise<void> {
-    try {
-      await api.request<ApiResponse<null>>({
-        method: 'delete',
-        url: `/manager/exams/${id}/groups/${examGroupId}`,
-      });
-    } catch (err: unknown) {
-      const errorObj = err as { response?: { status?: number; data?: unknown } };
-      if (errorObj?.response?.status === 409) {
-        throw err;
-      }
-      this.removeMockGroupFromExam(id, examGroupId);
-    }
-  },
-
-  removeMockGroupFromExam(id: number, examGroupId: number): void {
-    const list = loadStoredExams();
-    const exam = list.find((e) => e.examId === id);
-    if (!exam) {
-      throw { response: { status: 404, data: { message: 'Exam not found' } } };
-    }
-    if (exam.status === 'PUBLISHED') {
-      throw { response: { status: 409, data: { message: 'Cannot modify a published exam. Unpublish first.' } } };
-    }
-    exam.groups = exam.groups.filter((g) => g.examGroupId !== examGroupId);
-    exam.questionCount = exam.questions.length + exam.groups.reduce((acc, g) => acc + (g.questionCount || 0), 0);
-    exam.totalPoints = exam.questions.reduce((acc, q) => acc + q.points, 0) + exam.groups.reduce((acc, g) => acc + g.points, 0);
-    saveStoredExams(list);
+    await api.request<ApiResponse<null>>({ method: 'delete', url: `/manager/exams/${id}/groups/${examGroupId}` });
   },
 
   async getQuestions(params?: QuestionListParams): Promise<PageResponse<BankQuestionItem>> {
@@ -1164,52 +868,12 @@ export const examService = {
   },
 
   async updateRubric(questionId: number, payload: RubricData): Promise<BankQuestionItem> {
-    try {
-      const res = await api.request<ApiResponse<BankQuestionItem>>({
-        method: 'put',
-        url: `/manager/questions/${questionId}/rubric`,
-        data: payload,
-      });
-      if (res.data) {
-        return res.data;
-      }
-      return this.updateMockRubric(questionId, payload);
-    } catch {
-      return this.updateMockRubric(questionId, payload);
-    }
-  },
-
-  updateMockRubric(questionId: number, payload: RubricData): BankQuestionItem {
-    if (!payload.criteria || payload.criteria.length === 0) {
-      throw { response: { status: 400, data: { message: 'Criteria list cannot be empty' } } };
-    }
-    const sumScore = payload.criteria.reduce((acc, c) => acc + (Number(c.maxScore) || 0), 0);
-    if (sumScore !== payload.totalPoints) {
-      throw { response: { status: 400, data: { message: 'Sum of criterion max scores must equal total points' } } };
-    }
-    const bank = loadStoredQuestions();
-    const q = bank.find((item) => item.questionId === questionId);
-    if (!q) {
-      throw { response: { status: 404, data: { message: 'Question not found' } } };
-    }
-    q.essayGradingRubric = {
-      criteria: payload.criteria,
-      totalPoints: payload.totalPoints,
-      notes: payload.notes,
-    };
-    saveStoredQuestions(bank);
-
-    const exams = loadStoredExams();
-    exams.forEach((ex) => {
-      ex.questions.forEach((eq) => {
-        if (eq.questionId === questionId) {
-          eq.hasRubric = true;
-        }
-      });
+    const res = await api.request<ApiResponse<BankQuestionItem>>({
+      method: 'put',
+      url: `/manager/questions/${questionId}/rubric`,
+      data: payload,
     });
-    saveStoredExams(exams);
-
-    return q;
+    return res.data;
   },
 
   async getQuestionGroups(params?: QuestionGroupListParams): Promise<PageResponse<QuestionGroupItem>> {
@@ -1292,232 +956,24 @@ export const examService = {
   },
 
   async batchCreateQuestions(payload: { moduleId?: number; questions: unknown[] }): Promise<{ questionId: number }[]> {
-    try {
-      const res = await api.post<ApiResponse<{ questionId: number }[]>>('/manager/questions/batch', payload);
-      if (res.data && Array.isArray(res.data)) {
-        return res.data;
-      }
-      return this.batchCreateMockQuestions(payload);
-    } catch {
-      return this.batchCreateMockQuestions(payload);
-    }
-  },
-
-  batchCreateMockQuestions(payload: { moduleId?: number; questions: unknown[] }): { questionId: number }[] {
-    const bank = loadStoredQuestions();
-    const created: { questionId: number }[] = [];
-    (payload.questions as {
-      content: string;
-      questionType: string;
-      difficulty?: Difficulty;
-      options?: { optionText: string; isCorrect: boolean; orderIndex: number }[];
-      explanation?: string;
-    }[]).forEach((q) => {
-      const id = Date.now() + Math.floor(Math.random() * 10000);
-      const bq: BankQuestionItem = {
-        questionId: id,
-        content: q.content,
-        moduleId: payload.moduleId,
-        questionType: q.questionType,
-        difficulty: q.difficulty || 'MEDIUM',
-        status: 'ACTIVE',
-        optionCount: q.options ? q.options.length : 0,
-        options: (q.options || []).map((o, idx) => ({ optionId: id * 10 + idx, ...o })),
-        explanation: q.explanation,
-      };
-      bank.push(bq);
-      created.push({ questionId: id });
-    });
-    saveStoredQuestions(bank);
-    return created;
+    const res = await api.post<ApiResponse<{ questionId: number }[]>>('/manager/questions/batch', payload);
+    return res.data;
   },
 
   async importQuestions(id: number, formData: FormData): Promise<ImportExamResponse> {
-    try {
-      const res = await apiClient.post<ApiResponse<ImportExamResponse>>(`/manager/exams/${id}/import`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-      if (res.data?.data) {
-        return res.data.data;
-      }
-      return this.mockImportQuestions(id);
-    } catch {
-      return this.mockImportQuestions(id);
-    }
-  },
-
-  mockImportQuestions(id: number): ImportExamResponse {
-    const list = loadStoredExams();
-    const exam = list.find((e) => e.examId === id);
-    if (!exam) {
-      throw { response: { status: 404, data: { message: 'Exam not found' } } };
-    }
-    if (exam.status === 'PUBLISHED') {
-      throw { response: { status: 409, data: { message: 'Exam is published. Unpublish first.' } } };
-    }
-    const importedCount = 3;
-    const reusedCount = 1;
-    const skippedCount = 1;
-    const newIds: number[] = [];
-
-    for (let i = 1; i <= importedCount; i++) {
-      const qid = Date.now() + i;
-      newIds.push(qid);
-      exam.questions.push({
-        examQuestionId: qid * 10,
-        questionId: qid,
-        content: `Imported sample question #${i} from syllabus document`,
-        questionType: 'SINGLE_CHOICE',
-        points: 1,
-        orderIndex: exam.questions.length,
-      });
-    }
-
-    exam.questionCount = exam.questions.length + exam.groups.reduce((acc, g) => acc + (g.questionCount || 0), 0);
-    exam.totalPoints = exam.questions.reduce((acc, q) => acc + q.points, 0) + exam.groups.reduce((acc, g) => acc + g.points, 0);
-    saveStoredExams(list);
-
-    return {
-      imported: importedCount,
-      reused: reusedCount,
-      skippedDuplicates: skippedCount,
-      questionIds: newIds,
-    };
+    const res = await apiClient.post<ApiResponse<ImportExamResponse>>(`/manager/exams/${id}/import`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return res.data.data;
   },
 
   async generateAiExam(payload: AiGenerateRequest, signal?: AbortSignal): Promise<AiExamDraftResponse> {
-    try {
-      const res = await apiClient.post<ApiResponse<AiExamDraftResponse>>('/manager/exams/ai/generate', payload, {
-        timeout: 35000,
-        signal,
-      });
-      if (res.data?.data) {
-        return res.data.data;
-      }
-      return this.mockGenerateAiExam(payload);
-    } catch (err: unknown) {
-      const errorObj = err as { response?: { status?: number; data?: unknown } };
-      if (errorObj?.response?.status === 429 || errorObj?.response?.status === 502 || errorObj?.response?.status === 504) {
-        throw err;
-      }
-      return this.mockGenerateAiExam(payload);
-    }
-  },
-
-  mockGenerateAiExam(payload: AiGenerateRequest): Promise<AiExamDraftResponse> {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        const questions: AiQuestionDraft[] = [];
-        let index = 0;
-
-        payload.questionTypes.forEach((qt) => {
-          for (let i = 0; i < qt.count; i++) {
-            index++;
-            let diff: Difficulty = 'MEDIUM';
-            if (index <= payload.difficultyDistribution.EASY) {
-              diff = 'EASY';
-            } else if (index > payload.questionCount - payload.difficultyDistribution.HARD) {
-              diff = 'HARD';
-            }
-
-            if (qt.questionType === 'SINGLE_CHOICE') {
-              questions.push({
-                content: `AI Generated Single Choice #${index}: What is the primary characteristic of supervised learning?`,
-                questionType: 'SINGLE_CHOICE',
-                difficulty: diff,
-                options: [
-                  { optionText: 'Training with labeled input-output pairs', isCorrect: true, orderIndex: 0 },
-                  { optionText: 'Grouping unlabelled inputs into latent clusters', isCorrect: false, orderIndex: 1 },
-                  { optionText: 'Reinforcement reward maximizing agent policy', isCorrect: false, orderIndex: 2 },
-                  { optionText: 'Generating synthetic data distribution', isCorrect: false, orderIndex: 3 },
-                ],
-                explanation: 'Supervised learning relies on paired features and corresponding ground truth targets.',
-              });
-            } else if (qt.questionType === 'MULTI_CHOICE') {
-              questions.push({
-                content: `AI Generated Multiple Choice #${index}: Select all valid regularization techniques for deep neural networks.`,
-                questionType: 'MULTI_CHOICE',
-                difficulty: diff,
-                options: [
-                  { optionText: 'Dropout', isCorrect: true, orderIndex: 0 },
-                  { optionText: 'L2 weight decay', isCorrect: true, orderIndex: 1 },
-                  { optionText: 'Batch Normalization', isCorrect: true, orderIndex: 2 },
-                  { optionText: 'Infinite learning rate', isCorrect: false, orderIndex: 3 },
-                ],
-                explanation: 'Dropout, weight decay and batch norm help mitigate model overfitting.',
-              });
-            } else if (qt.questionType === 'TRUE_FALSE') {
-              questions.push({
-                content: `AI Generated True/False #${index}: Gradient descent steps are computed in the positive direction of the gradient.`,
-                questionType: 'TRUE_FALSE',
-                difficulty: diff,
-                options: [
-                  { optionText: 'True', isCorrect: false, orderIndex: 0 },
-                  { optionText: 'False', isCorrect: true, orderIndex: 1 },
-                ],
-                explanation: 'Gradient descent moves in the negative direction to minimize cost.',
-              });
-            } else if (qt.questionType === 'ESSAY') {
-              questions.push({
-                content: `AI Generated Essay #${index}: Discuss the architectural innovations introduced by Transformer attention mechanisms compared to Recurrent Neural Networks.`,
-                questionType: 'ESSAY',
-                difficulty: diff,
-                options: [],
-                explanation: 'Key points: self-attention parallelism, resolving vanishing gradients across sequence lengths, and positional encodings.',
-              });
-            } else if (qt.questionType === 'FILL_BLANK') {
-              questions.push({
-                content: `AI Generated Fill-in-Blank #${index}: The function used to map input activations into a probability range between 0 and 1 in binary classification is ________.`,
-                questionType: 'FILL_BLANK',
-                difficulty: diff,
-                options: [{ optionText: 'sigmoid', isCorrect: true, orderIndex: 0 }],
-                explanation: 'Sigmoid is standard for binary classification.',
-              });
-            } else if (qt.questionType === 'MATCHING') {
-              questions.push({
-                content: `AI Generated Matching #${index}: Match the neural layer type with its primary functional domain.`,
-                questionType: 'MATCHING',
-                difficulty: diff,
-                options: [
-                  { optionText: 'Convolutional Layer', isCorrect: true, orderIndex: 0 },
-                  { optionText: 'Spatial feature extraction', isCorrect: true, orderIndex: 1 },
-                  { optionText: 'Recurrent Layer', isCorrect: true, orderIndex: 2 },
-                  { optionText: 'Sequential context tracking', isCorrect: true, orderIndex: 3 },
-                ],
-                explanation: 'CNN handles spatial grids and RNN processes temporal sequences.',
-              });
-            } else if (qt.questionType === 'ORDERING') {
-              questions.push({
-                content: `AI Generated Ordering #${index}: Order the lifecycle stages of developing an ML solution.`,
-                questionType: 'ORDERING',
-                difficulty: diff,
-                options: [
-                  { optionText: 'Data Ingestion and Exploration', isCorrect: true, orderIndex: 0 },
-                  { optionText: 'Feature Engineering', isCorrect: true, orderIndex: 1 },
-                  { optionText: 'Hyperparameter Tuning', isCorrect: true, orderIndex: 2 },
-                  { optionText: 'Model Deployment and Monitoring', isCorrect: true, orderIndex: 3 },
-                ],
-                explanation: 'Follow standard sequential ML engineering lifecycle.',
-              });
-            }
-          }
-        });
-
-        const warnings: string[] = [];
-        if (questions.length < payload.questionCount) {
-          warnings.push(`AI only generated ${questions.length}/${payload.questionCount} questions based on provided topic depth.`);
-        }
-
-        resolve({
-          title: payload.title || 'AI Generated Exam Draft',
-          description: 'AI synthesized assessment draft. Review and adjust questions before confirming.',
-          durationMinutes: payload.durationMinutes || 45,
-          questionCount: questions.length,
-          questions,
-          warnings,
-        });
-      }, 1500);
+    const res = await apiClient.post<ApiResponse<AiExamDraftResponse>>('/manager/exams/ai/generate', payload, {
+      timeout: 100000,
+      signal,
     });
+    return res.data.data;
   },
+
 };
 
