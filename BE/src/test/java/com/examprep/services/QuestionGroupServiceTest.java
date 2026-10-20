@@ -17,6 +17,7 @@ import com.examprep.repositories.ExamGroupRepository;
 import com.examprep.repositories.ExamQuestionRepository;
 import com.examprep.repositories.ModuleRepository;
 import com.examprep.repositories.QuestionGroupRepository;
+import com.examprep.repositories.QuestionRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

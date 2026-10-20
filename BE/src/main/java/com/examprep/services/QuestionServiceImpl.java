@@ -7,12 +7,16 @@ import com.examprep.dto.ResponseCode;
 import com.examprep.dto.question.*;
 import com.examprep.entities.*;
 import com.examprep.exceptions.BadRequestException;
+import com.examprep.exceptions.ForbiddenException;
+import com.examprep.exceptions.QuestionValidationException;
 import com.examprep.exceptions.ResourceConflictException;
 import com.examprep.exceptions.ResourceNotFoundException;
 import com.examprep.exceptions.UnauthorizedException;
 import com.examprep.repositories.*;
 import com.examprep.security.QuestionAccessPolicy;
+import com.examprep.validation.QuestionPayload;
 import com.examprep.validation.QuestionValidator;
+import com.examprep.validation.ValidationError;
 import com.examprep.util.ContentHashUtil;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -68,7 +72,7 @@ public class QuestionServiceImpl implements QuestionService {
         if (!User.ROLE_ADMIN.equals(currentUser.getRoleName()) && courseId != null) {
             boolean isManager = courseManagerRepository.existsByCourse_CourseIdAndUser_UserId(courseId, currentUser.getUserId());
             if (!isManager) {
-                throw new UnauthorizedException("You do not have access to this course");
+                throw new ForbiddenException("You do not have access to this course");
             }
         }
 
@@ -139,15 +143,20 @@ public class QuestionServiceImpl implements QuestionService {
     @Override
     @Transactional
     public QuestionDetailDto createQuestion(QuestionCreateRequest req, User currentUser) {
-        questionValidator.validateQuestionType(req.getQuestionType());
+        return createQuestionInternal(req, currentUser, "MANUAL", "MANAGER", "APPROVED");
+    }
 
+    public QuestionDetailDto createQuestionInternal(QuestionCreateRequest req, User currentUser, String source, String creatorRole, String approvalStatus) {
+        if (req.getCourseId() == null) {
+            throw new BadRequestException("Course ID is required");
+        }
         Course course = courseRepository.findById(req.getCourseId())
                 .orElseThrow(() -> new ResourceNotFoundException("Course not found"));
 
         if (!User.ROLE_ADMIN.equals(currentUser.getRoleName())) {
             boolean isManager = courseManagerRepository.existsByCourse_CourseIdAndUser_UserId(course.getCourseId(), currentUser.getUserId());
             if (!isManager) {
-                throw new UnauthorizedException("You are not a manager of this course");
+                throw new ForbiddenException("You are not a manager of this course");
             }
         }
 
@@ -164,51 +173,41 @@ public class QuestionServiceImpl implements QuestionService {
         if (req.getGroupId() != null) {
             group = questionGroupRepository.findById(req.getGroupId())
                     .orElseThrow(() -> new ResourceNotFoundException("Question group not found"));
+            if (group.getCourse() == null || !group.getCourse().getCourseId().equals(course.getCourseId())) {
+                throw new BadRequestException("Question group does not belong to the specified course");
+            }
+            if (req.getModuleId() != null && group.getModule() != null) {
+                if (!group.getModule().getModuleId().equals(req.getModuleId())) {
+                    throw new BadRequestException("Question group does not belong to the specified module");
+                }
+            }
         }
 
-        boolean isStudent = User.ROLE_STUDENT.equals(currentUser.getRoleName());
-        String creatorRole = isStudent ? "STUDENT" : "MANAGER";
-        String approvalStatus = isStudent ? "PENDING" : "APPROVED";
-        if ("IMPORT".equals(req.getSource())) {
-            creatorRole = "MANAGER";
-            approvalStatus = "APPROVED";
-        }
-        String status = isStudent ? "DRAFT" : (req.getStatus() != null ? req.getStatus() : "ACTIVE");
+        // Run shared validator
+        QuestionPayload payload = QuestionPayload.from(req);
+        questionValidator.validateOrThrow(payload);
 
         String sanitizedContent = questionValidator.sanitize(req.getContent());
         String sanitizedExplanation = questionValidator.sanitize(req.getExplanation());
 
-        String metadataJson = null;
-        if (req.getQuestionMetadata() != null) {
-            try {
-                metadataJson = objectMapper.writeValueAsString(req.getQuestionMetadata());
-            } catch (Exception e) {
-                metadataJson = "{}";
-            }
-        }
-
-        String answerKeyJson = null;
-        if (req.getAnswerKey() != null) {
-            try {
-                answerKeyJson = objectMapper.writeValueAsString(req.getAnswerKey());
-            } catch (Exception e) {
-                answerKeyJson = null;
-            }
-        }
-
-        String rubricJson = null;
-        if (req.getEssayGradingRubric() != null) {
-            try {
-                rubricJson = objectMapper.writeValueAsString(req.getEssayGradingRubric());
-            } catch (Exception e) {
-                rubricJson = null;
-            }
-        }
+        validateMetadataKeys(req.getQuestionMetadata());
+        String metadataJson = serializeJson(req.getQuestionMetadata(), "questionMetadata");
+        String answerKeyJson = serializeJson(req.getAnswerKey(), "answerKey");
+        String rubricJson = serializeJson(req.getEssayGradingRubric(), "essayGradingRubric");
 
         List<String> optionTexts = req.getOptions() != null ?
-                req.getOptions().stream().map(AnswerOptionDto::getOptionText).collect(Collectors.toList()) : null;
+                req.getOptions().stream().map(o -> questionValidator.sanitize(o.getOptionText())).collect(Collectors.toList()) : null;
 
         String contentHash = ContentHashUtil.computeHash(sanitizedContent, optionTexts, answerKeyJson);
+
+        // Check duplicate content hash in course (non-deleted)
+        checkContentHashConflict(course.getCourseId(), contentHash, null);
+
+        String status = req.getStatus() != null ? req.getStatus() : "ACTIVE";
+        if ("STUDENT".equals(creatorRole)) {
+            status = "DRAFT";
+            approvalStatus = "PENDING";
+        }
 
         Question question = Question.builder()
                 .course(course)
@@ -221,9 +220,9 @@ public class QuestionServiceImpl implements QuestionService {
                 .questionMetadata(metadataJson)
                 .answerKey(answerKeyJson)
                 .defaultPoints(req.getDefaultPoints() != null ? req.getDefaultPoints() : BigDecimal.ONE)
-                .source(req.getSource() != null ? req.getSource() : "MANUAL")
-                .creatorRole(creatorRole)
-                .approvalStatus(approvalStatus)
+                .source(source != null ? source : "MANUAL")
+                .creatorRole(creatorRole != null ? creatorRole : "MANAGER")
+                .approvalStatus(approvalStatus != null ? approvalStatus : "APPROVED")
                 .status(status)
                 .aiExplanation(sanitizedExplanation)
                 .essayGradingRubric(rubricJson)
@@ -234,7 +233,7 @@ public class QuestionServiceImpl implements QuestionService {
 
         question = questionRepository.save(question);
 
-        List<AnswerOption> savedOptions = new ArrayList<>();
+        List<AnswerOption> optionsToSave = new ArrayList<>();
         if (req.getOptions() != null) {
             for (int i = 0; i < req.getOptions().size(); i++) {
                 AnswerOptionDto optDto = req.getOptions().get(i);
@@ -245,9 +244,11 @@ public class QuestionServiceImpl implements QuestionService {
                         .explanation(questionValidator.sanitize(optDto.getExplanation()))
                         .orderIndex(optDto.getOrderIndex() != null ? optDto.getOrderIndex() : i)
                         .build();
-                savedOptions.add(answerOptionRepository.save(opt));
+                optionsToSave.add(opt);
             }
         }
+
+        List<AnswerOption> savedOptions = answerOptionRepository.saveAll(optionsToSave);
 
         return mapToDetailDto(question, savedOptions);
     }
@@ -258,18 +259,26 @@ public class QuestionServiceImpl implements QuestionService {
         if (requests == null || requests.isEmpty() || requests.size() > 50) {
             throw new BadRequestException("Batch size must be between 1 and 50");
         }
-        List<QuestionDetailDto> results = new ArrayList<>();
+
+        List<ValidationError> allErrors = new ArrayList<>();
         for (int i = 0; i < requests.size(); i++) {
             QuestionCreateRequest req = requests.get(i);
             req.setCourseId(courseId);
             if (moduleId != null) {
                 req.setModuleId(moduleId);
             }
-            try {
-                results.add(createQuestion(req, currentUser));
-            } catch (Exception e) {
-                throw new BadRequestException("Error at index " + i + ": " + e.getMessage());
-            }
+            QuestionPayload payload = QuestionPayload.from(req);
+            List<ValidationError> errs = questionValidator.validate(payload, "questions[" + i + "].");
+            allErrors.addAll(errs);
+        }
+
+        if (!allErrors.isEmpty()) {
+            throw new QuestionValidationException(allErrors);
+        }
+
+        List<QuestionDetailDto> results = new ArrayList<>();
+        for (QuestionCreateRequest req : requests) {
+            results.add(createQuestionInternal(req, currentUser, "MANUAL", "MANAGER", "APPROVED"));
         }
         return results;
     }
@@ -280,7 +289,7 @@ public class QuestionServiceImpl implements QuestionService {
         Question q = questionRepository.findActiveById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Question not found"));
         if (!accessPolicy.canView(currentUser, q)) {
-            throw new UnauthorizedException("You do not have permission to view this question");
+            throw new ForbiddenException("You do not have permission to view this question");
         }
         List<AnswerOption> options = answerOptionRepository.findByQuestion_QuestionId(q.getQuestionId());
         return mapToDetailDto(q, options);
@@ -293,13 +302,14 @@ public class QuestionServiceImpl implements QuestionService {
                 .orElseThrow(() -> new ResourceNotFoundException("Question not found"));
 
         if (!accessPolicy.canModify(currentUser, q)) {
-            throw new UnauthorizedException("You do not have permission to modify this question");
+            throw new ForbiddenException("You do not have permission to modify this question");
         }
 
         if (req.getLockVersion() != null && !req.getLockVersion().equals(q.getLockVersion())) {
             throw new ResourceConflictException("Resource was modified by another user (lock version mismatch)");
         }
 
+        String typeToValidate = req.getQuestionType() != null ? req.getQuestionType() : q.getQuestionType();
         if (req.getQuestionType() != null && !req.getQuestionType().equals(q.getQuestionType())) {
             if (attemptAnswerRepository.existsByQuestion_QuestionId(q.getQuestionId())) {
                 throw new ResourceConflictException("Cannot change question type when student attempts reference this question");
@@ -307,6 +317,41 @@ public class QuestionServiceImpl implements QuestionService {
             questionValidator.validateQuestionType(req.getQuestionType());
             q.setQuestionType(req.getQuestionType());
         }
+
+        // Build merged payload for validation
+        List<AnswerOptionDto> optionsToValidate = req.getOptions();
+        if (optionsToValidate == null) {
+            List<AnswerOption> existingOpts = answerOptionRepository.findByQuestion_QuestionId(q.getQuestionId());
+            optionsToValidate = existingOpts.stream().map(o -> AnswerOptionDto.builder()
+                    .optionId(o.getOptionId())
+                    .optionText(o.getOptionText())
+                    .isCorrect(o.getIsCorrect())
+                    .explanation(o.getExplanation())
+                    .orderIndex(o.getOrderIndex())
+                    .build()).collect(Collectors.toList());
+        }
+
+        Object metadataToValidate = req.getQuestionMetadata() != null ? req.getQuestionMetadata() : parseJson(q.getQuestionMetadata());
+        Object answerKeyToValidate = req.getAnswerKey() != null ? req.getAnswerKey() : parseJson(q.getAnswerKey());
+        Object rubricToValidate = req.getEssayGradingRubric() != null ? req.getEssayGradingRubric() : parseJson(q.getEssayGradingRubric());
+        BigDecimal pointsToValidate = req.getDefaultPoints() != null ? req.getDefaultPoints() : q.getDefaultPoints();
+        String contentToValidate = req.getContent() != null ? req.getContent() : q.getContent();
+        String difficultyToValidate = req.getDifficulty() != null ? req.getDifficulty() : q.getDifficulty();
+        String statusToValidate = req.getStatus() != null ? req.getStatus() : q.getStatus();
+
+        QuestionPayload payload = QuestionPayload.builder()
+                .questionType(typeToValidate)
+                .difficulty(difficultyToValidate)
+                .status(statusToValidate)
+                .content(contentToValidate)
+                .defaultPoints(pointsToValidate)
+                .questionMetadata(metadataToValidate)
+                .answerKey(answerKeyToValidate)
+                .essayGradingRubric(rubricToValidate)
+                .options(optionsToValidate)
+                .build();
+
+        questionValidator.validateOrThrow(payload);
 
         boolean scoreAffectingChanged = false;
 
@@ -328,29 +373,24 @@ public class QuestionServiceImpl implements QuestionService {
         }
 
         if (req.getQuestionMetadata() != null) {
-            try {
-                q.setQuestionMetadata(objectMapper.writeValueAsString(req.getQuestionMetadata()));
-            } catch (Exception ignored) {}
+            validateMetadataKeys(req.getQuestionMetadata());
+            q.setQuestionMetadata(serializeJson(req.getQuestionMetadata(), "questionMetadata"));
         }
 
         if (req.getAnswerKey() != null) {
-            try {
-                String akJson = objectMapper.writeValueAsString(req.getAnswerKey());
-                if (!akJson.equals(q.getAnswerKey())) {
-                    q.setAnswerKey(akJson);
-                    scoreAffectingChanged = true;
-                }
-            } catch (Exception ignored) {}
+            String akJson = serializeJson(req.getAnswerKey(), "answerKey");
+            if (!akJson.equals(q.getAnswerKey())) {
+                q.setAnswerKey(akJson);
+                scoreAffectingChanged = true;
+            }
         }
 
         if (req.getEssayGradingRubric() != null) {
-            try {
-                String rubricJson = objectMapper.writeValueAsString(req.getEssayGradingRubric());
-                if (!rubricJson.equals(q.getEssayGradingRubric())) {
-                    q.setEssayGradingRubric(rubricJson);
-                    scoreAffectingChanged = true;
-                }
-            } catch (Exception ignored) {}
+            String rubricJson = serializeJson(req.getEssayGradingRubric(), "essayGradingRubric");
+            if (!rubricJson.equals(q.getEssayGradingRubric())) {
+                q.setEssayGradingRubric(rubricJson);
+                scoreAffectingChanged = true;
+            }
         }
 
         List<AnswerOption> existingOptions = answerOptionRepository.findByQuestion_QuestionId(q.getQuestionId());
@@ -383,7 +423,7 @@ public class QuestionServiceImpl implements QuestionService {
                     opt.setIsCorrect(correct);
                     opt.setExplanation(questionValidator.sanitize(dto.getExplanation()));
                     opt.setOrderIndex(dto.getOrderIndex() != null ? dto.getOrderIndex() : i);
-                    updatedOptions.add(answerOptionRepository.save(opt));
+                    updatedOptions.add(opt);
                 } else {
                     AnswerOption opt = AnswerOption.builder()
                             .question(q)
@@ -392,10 +432,13 @@ public class QuestionServiceImpl implements QuestionService {
                             .explanation(questionValidator.sanitize(dto.getExplanation()))
                             .orderIndex(dto.getOrderIndex() != null ? dto.getOrderIndex() : i)
                             .build();
-                    updatedOptions.add(answerOptionRepository.save(opt));
+                    updatedOptions.add(opt);
                     scoreAffectingChanged = true;
                 }
             }
+            updatedOptions = answerOptionRepository.saveAll(updatedOptions);
+        } else {
+            updatedOptions = existingOptions;
         }
 
         if (scoreAffectingChanged) {
@@ -403,7 +446,9 @@ public class QuestionServiceImpl implements QuestionService {
         }
 
         List<String> optionTexts = updatedOptions.stream().map(AnswerOption::getOptionText).collect(Collectors.toList());
-        q.setContentHash(ContentHashUtil.computeHash(q.getContent(), optionTexts, q.getAnswerKey()));
+        String newHash = ContentHashUtil.computeHash(q.getContent(), optionTexts, q.getAnswerKey());
+        checkContentHashConflict(q.getCourse() != null ? q.getCourse().getCourseId() : null, newHash, q.getQuestionId());
+        q.setContentHash(newHash);
 
         q = questionRepository.save(q);
         return mapToDetailDto(q, updatedOptions);
@@ -416,7 +461,7 @@ public class QuestionServiceImpl implements QuestionService {
                 .orElseThrow(() -> new ResourceNotFoundException("Question not found"));
 
         if (!accessPolicy.canModify(currentUser, q)) {
-            throw new UnauthorizedException("You do not have permission to delete this question");
+            throw new ForbiddenException("You do not have permission to delete this question");
         }
 
         List<ExamQuestion> examQuestions = examQuestionRepository.findByQuestion_QuestionId(q.getQuestionId());
@@ -438,7 +483,7 @@ public class QuestionServiceImpl implements QuestionService {
                 .orElseThrow(() -> new ResourceNotFoundException("Question not found"));
 
         if (!accessPolicy.canView(currentUser, original)) {
-            throw new UnauthorizedException("You do not have access to this question");
+            throw new ForbiddenException("You do not have access to this question");
         }
 
         Question copy = Question.builder()
@@ -466,7 +511,7 @@ public class QuestionServiceImpl implements QuestionService {
         copy = questionRepository.save(copy);
 
         List<AnswerOption> originalOptions = answerOptionRepository.findByQuestion_QuestionId(original.getQuestionId());
-        List<AnswerOption> copiedOptions = new ArrayList<>();
+        List<AnswerOption> copiedOptionsToSave = new ArrayList<>();
         for (AnswerOption origOpt : originalOptions) {
             AnswerOption optCopy = AnswerOption.builder()
                     .question(copy)
@@ -475,8 +520,9 @@ public class QuestionServiceImpl implements QuestionService {
                     .explanation(origOpt.getExplanation())
                     .orderIndex(origOpt.getOrderIndex())
                     .build();
-            copiedOptions.add(answerOptionRepository.save(optCopy));
+            copiedOptionsToSave.add(optCopy);
         }
+        List<AnswerOption> copiedOptions = answerOptionRepository.saveAll(copiedOptionsToSave);
 
         return mapToDetailDto(copy, copiedOptions);
     }
@@ -488,7 +534,7 @@ public class QuestionServiceImpl implements QuestionService {
                 .orElseThrow(() -> new ResourceNotFoundException("Question not found"));
 
         if (!accessPolicy.canChangeStatus(currentUser, q)) {
-            throw new UnauthorizedException("You do not have permission to change status of this question");
+            throw new ForbiddenException("You do not have permission to change status of this question");
         }
 
         if (req.getLockVersion() != null && !req.getLockVersion().equals(q.getLockVersion())) {
@@ -500,21 +546,11 @@ public class QuestionServiceImpl implements QuestionService {
             if (!"APPROVED".equals(q.getApprovalStatus())) {
                 throw new BadRequestException("Cannot activate question that is not approved");
             }
-            if (q.getCourse() != null && q.getContentHash() != null) {
-                Long qId = q.getQuestionId();
-                Long cId = q.getCourse().getCourseId();
-                String cHash = q.getContentHash();
-                boolean duplicateHash = questionRepository.findAll().stream()
-                        .anyMatch(other -> !other.getQuestionId().equals(qId) &&
-                                other.getCourse() != null &&
-                                other.getCourse().getCourseId().equals(cId) &&
-                                "ACTIVE".equals(other.getStatus()) &&
-                                other.getDeletedAt() == null &&
-                                cHash.equals(other.getContentHash()));
-                if (duplicateHash) {
-                    throw new ResourceConflictException("Another active question with the same content hash exists in this course");
-                }
-            }
+            List<AnswerOption> options = answerOptionRepository.findByQuestion_QuestionId(q.getQuestionId());
+            QuestionPayload payload = QuestionPayload.fromEntity(q, options, objectMapper);
+            questionValidator.validateOrThrow(payload);
+
+            checkContentHashConflict(q.getCourse() != null ? q.getCourse().getCourseId() : null, q.getContentHash(), q.getQuestionId());
         }
 
         q.setStatus(newStatus);
@@ -524,7 +560,6 @@ public class QuestionServiceImpl implements QuestionService {
     }
 
     @Override
-
     public AiGenerateResponse generateAiQuestions(
             AiGenerateRequest request,
             User currentUser
@@ -589,7 +624,7 @@ public class QuestionServiceImpl implements QuestionService {
                             );
 
             if (!isManager) {
-                throw new UnauthorizedException(
+                throw new ForbiddenException(
                         "You are not a manager of this course"
                 );
             }
@@ -613,7 +648,6 @@ public class QuestionServiceImpl implements QuestionService {
 
             int limit = sub.getPlan().getAiTokenLimit();
 
-            // Estimate tokens based on the total requested questions.
             int estimatedNewTokens = Math.multiplyExact(totalCount, 300);
 
             if ((long) usedTokens + estimatedNewTokens > limit) {
@@ -709,12 +743,6 @@ public class QuestionServiceImpl implements QuestionService {
         usageLog = aiUsageLogRepository.save(usageLog);
         String aiText = aiResponse.getText();
 
-        log.info("AI model: {}", aiResponse.getModel());
-        log.info("AI response length: {}",
-                aiText == null ? 0 : aiText.length());
-        log.debug("AI raw response: {}", aiText);
-
-
         List<QuestionCreateRequest> parsedQuestions =
                 parseAiJson(aiResponse.getText());
 
@@ -747,10 +775,8 @@ public class QuestionServiceImpl implements QuestionService {
             );
         }
 
-
         List<AiGenerateResponse.GeneratedQuestionPreview> previews =
                 new ArrayList<>();
-
 
         List<Question> existingQuestions =
                 questionRepository.findAll().stream()
@@ -780,16 +806,8 @@ public class QuestionServiceImpl implements QuestionService {
             String validationError = null;
 
             try {
-                questionValidator.validateQuestionType(
-                        qReq.getQuestionType()
-                );
-
-                if (qReq.getContent() == null
-                        || qReq.getContent().trim().isEmpty()) {
-                    validationError = "Content is required";
-                }
-
-                // Add further type-specific validation here if needed.
+                QuestionPayload payload = QuestionPayload.from(qReq);
+                questionValidator.validateOrThrow(payload);
             } catch (Exception e) {
                 validationError = e.getMessage();
             }
@@ -800,19 +818,7 @@ public class QuestionServiceImpl implements QuestionService {
                     .collect(Collectors.toList())
                     : null;
 
-            String answerKeyJson = null;
-
-            try {
-                if (qReq.getAnswerKey() != null) {
-                    answerKeyJson = objectMapper.writeValueAsString(
-                            qReq.getAnswerKey()
-                    );
-                }
-            } catch (Exception e) {
-                validationError = validationError == null
-                        ? "Unable to serialize answer key"
-                        : validationError;
-            }
+            String answerKeyJson = serializeJson(qReq.getAnswerKey(), "answerKey");
 
             String hash = ContentHashUtil.computeHash(
                     qReq.getContent(), optionTexts, answerKeyJson
@@ -831,13 +837,11 @@ public class QuestionServiceImpl implements QuestionService {
             );
         }
 
-        // 12. Return previews; do not save questions automatically.
         return AiGenerateResponse.builder()
                 .logId(usageLog.getLogId())
                 .questions(previews)
                 .build();
     }
-
 
     private String buildMultiTypePrompt(
             AiGenerateRequest request,
@@ -921,7 +925,6 @@ public class QuestionServiceImpl implements QuestionService {
         );
     }
 
-
     @Override
     @Transactional
     public List<QuestionDetailDto> saveAiQuestions(AiSaveRequest request, User currentUser) {
@@ -933,22 +936,20 @@ public class QuestionServiceImpl implements QuestionService {
                 !"QUESTION_GEN".equals(log.getPurpose()) ||
                 !"SUCCESS".equals(log.getStatus()) ||
                 log.getSavedAt() != null) {
-            throw new UnauthorizedException("Invalid, already saved, or unauthorized AI usage log");
+            throw new ForbiddenException("Invalid, already saved, or unauthorized AI usage log");
         }
 
         log.setSavedAt(Instant.now());
         aiUsageLogRepository.save(log);
 
         List<QuestionDetailDto> savedQuestions = new ArrayList<>();
-        for (int i = 0; i < request.getQuestions().size(); i++) {
-            QuestionCreateRequest qReq = request.getQuestions().get(i);
+        for (QuestionCreateRequest qReq : request.getQuestions()) {
             qReq.setCourseId(request.getCourseId());
             if (request.getModuleId() != null) {
                 qReq.setModuleId(request.getModuleId());
             }
-            QuestionDetailDto dto = createQuestion(qReq, currentUser);
+            QuestionDetailDto dto = createQuestionInternal(qReq, currentUser, "AI", "MANAGER", "APPROVED");
             Question q = questionRepository.findById(dto.getQuestionId()).orElseThrow();
-            q.setSource("AI");
             q.setAiUsageLogId(log.getLogId());
             questionRepository.save(q);
             dto.setSource("AI");
@@ -1029,12 +1030,12 @@ public class QuestionServiceImpl implements QuestionService {
 
                     try {
                         QuestionCreateRequest req = parseRowToRequest(sheetName, row, courseId);
-                        questionValidator.validateQuestionType(req.getQuestionType());
+                        QuestionPayload payload = QuestionPayload.from(req);
+                        questionValidator.validateOrThrow(payload);
 
                         List<String> optTexts = req.getOptions() != null ?
-                                req.getOptions().stream().map(AnswerOptionDto::getOptionText).collect(Collectors.toList()) : null;
-                        String akJson = null;
-                        if (req.getAnswerKey() != null) akJson = objectMapper.writeValueAsString(req.getAnswerKey());
+                                req.getOptions().stream().map(o -> questionValidator.sanitize(o.getOptionText())).collect(Collectors.toList()) : null;
+                        String akJson = serializeJson(req.getAnswerKey(), "answerKey");
 
                         String hash = ContentHashUtil.computeHash(req.getContent(), optTexts, akJson);
                         if (fileHashes.contains(hash)) {
@@ -1067,15 +1068,13 @@ public class QuestionServiceImpl implements QuestionService {
         int savedCount = 0;
         if (!dryRun && errors.isEmpty()) {
             for (QuestionCreateRequest req : validRequests) {
-                req.setSource("IMPORT");
-                createQuestion(req, currentUser);
+                createQuestionInternal(req, currentUser, "IMPORT", "MANAGER", "APPROVED");
                 savedCount++;
             }
         } else if (!dryRun) {
             for (QuestionCreateRequest req : validRequests) {
                 try {
-                    req.setSource("IMPORT");
-                    createQuestion(req, currentUser);
+                    createQuestionInternal(req, currentUser, "IMPORT", "MANAGER", "APPROVED");
                     savedCount++;
                 } catch (Exception ignored) {}
             }
@@ -1156,7 +1155,7 @@ public class QuestionServiceImpl implements QuestionService {
         if (!User.ROLE_ADMIN.equals(currentUser.getRoleName())) {
             boolean isManager = courseManagerRepository.existsByCourse_CourseIdAndUser_UserId(courseId, currentUser.getUserId());
             if (!isManager) {
-                throw new UnauthorizedException("You do not have access to this course");
+                throw new ForbiddenException("You do not have access to this course");
             }
         }
     }
@@ -1352,6 +1351,55 @@ public class QuestionServiceImpl implements QuestionService {
             return objectMapper.readValue(jsonStr, Object.class);
         } catch (Exception e) {
             return null;
+        }
+    }
+
+    private String serializeJson(Object obj, String fieldName) {
+        if (obj == null) return null;
+        try {
+            return objectMapper.writeValueAsString(obj);
+        } catch (Exception e) {
+            throw new BadRequestException("Failed to serialize " + fieldName + ": " + e.getMessage());
+        }
+    }
+
+    private void validateMetadataKeys(Object metadata) {
+        if (metadata == null) return;
+        try {
+            Map<String, Object> map;
+            if (metadata instanceof Map) {
+                map = (Map<String, Object>) metadata;
+            } else {
+                map = objectMapper.convertValue(metadata, Map.class);
+            }
+            for (String key : map.keySet()) {
+                if (!key.equals("skillTag") && !key.equals("diagramType") && !key.equals("plantUmlSource")) {
+                    throw new BadRequestException("Unknown metadata key: " + key);
+                }
+                if (key.equals("skillTag")) {
+                    Object val = map.get(key);
+                    if (val != null && (val.toString().length() > 100 || val.toString().trim().isEmpty())) {
+                        throw new BadRequestException("skillTag must be a non-empty string up to 100 characters");
+                    }
+                }
+            }
+        } catch (BadRequestException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new BadRequestException("Invalid question metadata format");
+        }
+    }
+
+    private void checkContentHashConflict(Long courseId, String contentHash, Long excludeQuestionId) {
+        if (courseId == null || contentHash == null) return;
+        List<Question> existing = questionRepository.findAll().stream()
+                .filter(q -> q.getCourse() != null && q.getCourse().getCourseId().equals(courseId))
+                .filter(q -> q.getDeletedAt() == null)
+                .filter(q -> contentHash.equals(q.getContentHash()))
+                .filter(q -> excludeQuestionId == null || !q.getQuestionId().equals(excludeQuestionId))
+                .toList();
+        if (!existing.isEmpty()) {
+            throw new ResourceConflictException("Duplicate content hash with question id: " + existing.get(0).getQuestionId());
         }
     }
 }

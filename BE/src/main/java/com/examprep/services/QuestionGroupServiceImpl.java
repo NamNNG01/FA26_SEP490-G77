@@ -18,6 +18,7 @@ import com.examprep.repositories.ExamGroupRepository;
 import com.examprep.repositories.ExamQuestionRepository;
 import com.examprep.repositories.ModuleRepository;
 import com.examprep.repositories.QuestionGroupRepository;
+import com.examprep.repositories.QuestionRepository;
 import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;

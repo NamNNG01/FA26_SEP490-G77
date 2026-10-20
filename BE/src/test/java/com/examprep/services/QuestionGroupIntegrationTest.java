@@ -18,6 +18,7 @@ import com.examprep.exceptions.ResourceConflictException;
 import com.examprep.exceptions.ResourceNotFoundException;
 import com.examprep.repositories.ExamGroupRepository;
 import com.examprep.repositories.QuestionGroupRepository;
+import com.examprep.repositories.QuestionRepository;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
