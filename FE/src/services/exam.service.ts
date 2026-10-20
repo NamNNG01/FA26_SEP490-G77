@@ -174,14 +174,27 @@ export interface CreateQuestionGroupRequest {
   passageText: string;
 }
 
+export interface AiRubricCriterion {
+  name: string;
+  maxScore: number;
+  weight?: number;
+  descriptors?: string;
+}
+
+/** Same shape Q-03 (questions/batch) accepts, so a draft saves as-is. */
 export interface AiQuestionDraft {
-  questionId?: number;
   content: string;
   questionType: string;
   difficulty: Difficulty;
-  options: { optionText: string; isCorrect: boolean; orderIndex: number }[];
+  defaultPoints?: number;
+  options?: { optionText: string; isCorrect: boolean; orderIndex: number }[];
+  answerKey?: {
+    blanks?: { index: number; accepted: string[]; caseSensitive?: boolean }[];
+    pairs?: { left: string; right: string }[];
+  };
   explanation?: string;
-  questionMetadata?: unknown;
+  questionMetadata?: { skillTag?: string };
+  essayGradingRubric?: { criteria: AiRubricCriterion[]; totalPoints?: number; notes?: string };
 }
 
 export interface AiGenerateRequest {
@@ -200,7 +213,8 @@ export interface AiGenerateRequest {
   }[];
   durationMinutes?: number;
   language: string;
-  useExistingBank?: boolean;
+  /** Teacher's own instructions for the AI (focus, audience, style); max 2000 chars. */
+  context?: string;
 }
 
 export interface AiExamDraftResponse {
@@ -953,11 +967,6 @@ export const examService = {
     groups.unshift(newGroup);
     saveStoredGroups(groups);
     return newGroup;
-  },
-
-  async batchCreateQuestions(payload: { moduleId?: number; questions: unknown[] }): Promise<{ questionId: number }[]> {
-    const res = await api.post<ApiResponse<{ questionId: number }[]>>('/manager/questions/batch', payload);
-    return res.data;
   },
 
   async importQuestions(id: number, formData: FormData): Promise<ImportExamResponse> {

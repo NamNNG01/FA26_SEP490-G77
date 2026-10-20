@@ -44,6 +44,18 @@ public class RestAiClient implements AiClient {
                 .build();
     }
 
+    // Free-form JSON from Gemini is occasionally malformed; a response schema switches on constrained decoding.
+    private static Map<String, Object> generationConfig(int maxTokens, Map<String, Object> responseSchema) {
+        if (responseSchema == null) {
+            return Map.of("maxOutputTokens", maxTokens);
+        }
+        return Map.of(
+                "maxOutputTokens", maxTokens,
+                "responseMimeType", "application/json",
+                "responseSchema", responseSchema
+        );
+    }
+
     @Override
     public AiResponse complete(AiRequest request) {
         String model = request.getModel() != null
@@ -80,7 +92,7 @@ public class RestAiClient implements AiClient {
                         )
                 ),
                 "generationConfig",
-                Map.of("maxOutputTokens", maxTokens)
+                generationConfig(maxTokens, request.getResponseSchema())
         );
 
         try {
