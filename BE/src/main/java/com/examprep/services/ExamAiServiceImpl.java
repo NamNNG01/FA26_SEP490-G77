@@ -1,5 +1,7 @@
 package com.examprep.services;
 
+import com.examprep.ai.AiClient;
+import com.examprep.ai.AiRequest;
 import com.examprep.dto.*;
 import com.examprep.dto.ExamAiDraftResponse.DraftQuestion;
 import com.examprep.dto.ExamAiDraftResponse.Option;
@@ -16,22 +18,21 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.validation.Validator;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.io.IOException;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.net.http.HttpTimeoutException;
-import java.time.Duration;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -47,12 +48,10 @@ public class ExamAiServiceImpl implements ExamAiService {
     private final AnswerOptionRepository options;
     private final ObjectMapper json;
     private final Validator validator;
-    private final HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
-    @Value("${app.exam-ai.api-key:${OPENAI_API_KEY:}}") private String apiKey;
-    @Value("${app.exam-ai.model:${OPENAI_MODEL:gpt-4o-mini}}") private String model;
-    @Value("${app.exam-ai.base-url:https://api.openai.com/v1}") private String baseUrl;
-    @Value("${app.exam-ai.timeout-ms:30000}") private long timeoutMillis;
-    @Value("${app.exam-ai.material-timeout-ms:45000}") private long materialTimeoutMillis;
+    // Gemini via the shared AiClient (app.ai.* / GEMINI_API_KEY), the same provider the question AI uses.
+    private final AiClient aiClient;
+    @Value("${app.exam-ai.timeout-ms:90000}") private long timeoutMillis;
+    @Value("${app.exam-ai.material-timeout-ms:120000}") private long materialTimeoutMillis;
     @Value("${app.exam-ai.daily-limit:20}") private int dailyLimit;
     // shortcut: quotas are per application instance and reset on restart, use persistent counters before scaling out.
     private final Map<Long, Integer> accountCalls = new HashMap<>();
@@ -108,8 +107,6 @@ public class ExamAiServiceImpl implements ExamAiService {
 
         JsonNode generated = null;
         if (accepted.size() < request.questionCount()) {
-            if (apiKey == null || apiKey.isBlank())
-                throw new BaseException(ResponseCode.AI_UPSTREAM_ERROR, "AI generation is unavailable: configure OPENAI_API_KEY.");
             takeQuota(user.getId(), request.courseId());
             generated = generateQuestions(request, course, module, material, remainingTypes, remainingDifficulty);
             JsonNode rows = generated.path("questions");
@@ -171,32 +168,37 @@ public class ExamAiServiceImpl implements ExamAiService {
         context.put("questionTypes", types);
         context.put("difficultyDistribution", difficulty);
         if (material != null) context.put("material", material);
+        AiRequest call;
         try {
-            String body = json.writeValueAsString(Map.of("model", model, "store", false, "max_completion_tokens", 12000,
-                    "response_format", Map.of("type", "json_object"), "messages", List.of(
-                            Map.of("role", "system", "content", instructions), Map.of("role", "user", "content", json.writeValueAsString(context)))));
-            HttpRequest call = HttpRequest.newBuilder(URI.create(baseUrl.replaceAll("/+$", "") + "/chat/completions"))
-                    .timeout(Duration.ofMillis(material == null ? timeoutMillis : materialTimeoutMillis))
-                    .header("Authorization", "Bearer " + apiKey).header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString(body)).build();
-            HttpResponse<String> response = client.send(call, HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() == 429) throw new BaseException(ResponseCode.AI_RATE_LIMITED, "AI provider quota or rate limit exceeded.");
-            if (response.statusCode() < 200 || response.statusCode() >= 300)
-                throw upstream("AI provider returned an unsuccessful response.");
-            if (response.body().length() > 2_000_000) throw upstream("AI provider response was too large.");
-            JsonNode choice = json.readTree(response.body()).path("choices").path(0);
-            if (!"stop".equals(choice.path("finish_reason").asText()) || !text(choice.path("message").get("content")))
-                throw upstream("AI provider returned an incomplete draft or refused generation.");
-            JsonNode result = json.readTree(choice.path("message").path("content").asText());
-            if (!result.isObject()) throw upstream("AI provider returned an invalid draft.");
-            return result;
-        } catch (HttpTimeoutException ex) {
+            call = AiRequest.builder().systemPrompt(instructions + " Return only the JSON object, without Markdown code fences.")
+                    .prompt(json.writeValueAsString(context)).maxTokens(32768).build();
+        } catch (JsonProcessingException ex) {
+            throw upstream("Could not build the AI request.");
+        }
+        String text;
+        try {
+            // shortcut: runs on the common pool; a timed-out call keeps running until the provider answers.
+            text = CompletableFuture.supplyAsync(() -> aiClient.complete(call).getText())
+                    .get(material == null ? timeoutMillis : materialTimeoutMillis, TimeUnit.MILLISECONDS);
+        } catch (TimeoutException ex) {
             throw new BaseException(ResponseCode.AI_TIMEOUT);
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
             throw upstream("AI generation was interrupted.");
-        } catch (IOException | IllegalArgumentException ex) {
-            throw upstream("AI provider returned invalid data or could not be reached.");
+        } catch (ExecutionException ex) {
+            String reason = String.valueOf(ex.getCause() == null ? ex.getMessage() : ex.getCause().getMessage());
+            log.warn("Exam AI provider call failed: {}", reason);
+            if (reason.contains("HTTP 429")) throw new BaseException(ResponseCode.AI_RATE_LIMITED, "AI provider quota or rate limit exceeded.");
+            if (reason.contains("HTTP 503")) throw upstream("AI provider is overloaded right now. Please try again later.");
+            throw upstream("AI provider returned an unsuccessful response.");
+        }
+        int open = text.indexOf('{'), close = text.lastIndexOf('}');
+        try {
+            JsonNode result = open < 0 || close < open ? null : json.readTree(text.substring(open, close + 1));
+            if (result == null || !result.isObject()) throw upstream("AI provider returned an invalid draft.");
+            return result;
+        } catch (JsonProcessingException ex) {
+            throw upstream("AI provider returned an invalid draft.");
         }
     }
 

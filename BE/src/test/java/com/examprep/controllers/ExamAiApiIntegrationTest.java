@@ -44,6 +44,7 @@ class ExamAiApiIntegrationTest {
     private static final ExecutorService WORKERS = Executors.newCachedThreadPool();
     private static volatile String providerContent;
     private static volatile String receivedRequest;
+    private static volatile String receivedPath;
     private static volatile int providerStatus;
     private static volatile long delay;
     private static volatile int calls;
@@ -51,16 +52,17 @@ class ExamAiApiIntegrationTest {
         try {
             PROVIDER = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
             PROVIDER.setExecutor(WORKERS);
-            PROVIDER.createContext("/v1/chat/completions", exchange -> {
+            PROVIDER.createContext("/v1beta/models/", exchange -> {
                 calls++;
+                receivedPath = exchange.getRequestURI().getPath();
                 receivedRequest = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
                 String content = providerContent;
                 int responseStatus = providerStatus;
                 long sleep = delay;
                 try {
                     if (sleep > 0) Thread.sleep(sleep);
-                    byte[] bytes = JSON.writeValueAsBytes(Map.of("choices", List.of(Map.of("finish_reason", "stop",
-                            "message", Map.of("content", content)))));
+                    byte[] bytes = JSON.writeValueAsBytes(Map.of("candidates", List.of(Map.of("content",
+                            Map.of("parts", List.of(Map.of("text", content)))))));
                     exchange.getResponseHeaders().set("Content-Type", "application/json");
                     exchange.sendResponseHeaders(responseStatus, bytes.length);
                     exchange.getResponseBody().write(bytes);
@@ -77,9 +79,9 @@ class ExamAiApiIntegrationTest {
 
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) {
-        registry.add("app.exam-ai.api-key", () -> "local-fake-provider-key");
-        registry.add("app.exam-ai.model", () -> "fake-model");
-        registry.add("app.exam-ai.base-url", () -> "http://127.0.0.1:" + PROVIDER.getAddress().getPort() + "/v1");
+        registry.add("app.ai.api-key", () -> "local-fake-provider-key");
+        registry.add("app.ai.model", () -> "fake-model");
+        registry.add("app.ai.base-url", () -> "http://127.0.0.1:" + PROVIDER.getAddress().getPort() + "/v1beta");
         registry.add("app.exam-ai.timeout-ms", () -> 250);
         registry.add("app.exam-ai.material-timeout-ms", () -> 350);
         registry.add("app.exam-ai.daily-limit", () -> 3);
@@ -134,8 +136,8 @@ class ExamAiApiIntegrationTest {
         assertEquals(0L, em.createQuery("select count(e) from Exam e where e.course = :course", Long.class)
                 .setParameter("course", course).getSingleResult());
         JsonNode request = json.readTree(receivedRequest);
-        assertEquals("fake-model", request.path("model").asText());
-        assertEquals("json_object", request.path("response_format").path("type").asText());
+        assertEquals("/v1beta/models/fake-model:generateContent", receivedPath);
+        assertTrue(request.path("systemInstruction").toString().contains("JSON object"));
         assertTrue(receivedRequest.contains("Arithmetic"));
         assertTrue(receivedRequest.contains("Algebra"));
     }
