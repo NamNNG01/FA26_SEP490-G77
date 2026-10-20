@@ -125,6 +125,23 @@ public class AdminUserServiceImpl implements AdminUserService {
         return AdminUserResponse.from(user);
     }
 
+    @Override
+    @Transactional
+    public AdminUserResponse updateStatus(UserPrincipal actor, Long id, AdminUserRequests.StatusUpdate request) {
+        requireKnownStatus(request.status());
+        User user = requireUser(id);
+
+        if (actor.getId().equals(id) && !request.status().equals(user.getStatus()))
+            throw new BadRequestException(ResponseCode.VALIDATION_ERROR,
+                    "Admins cannot change their own role or status.");
+
+        user.setStatus(request.status());
+        if (User.STATUS_INACTIVE.equalsIgnoreCase(request.status()))
+            refreshTokens.revokeAllByUserId(id, Instant.now());
+
+        return AdminUserResponse.from(user);
+    }
+
     private static void requireKnownRole(String role) {
         if (role != null && !ROLES.contains(role))
             throw new BadRequestException(ResponseCode.VALIDATION_ERROR, "Unknown role: " + role);

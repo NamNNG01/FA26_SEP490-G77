@@ -16,6 +16,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -58,5 +59,15 @@ public class AdminUserController {
     public ResponseEntity<ApiResponse<AdminUserResponse>> update(@AuthenticationPrincipal UserPrincipal actor,
             @PathVariable Long id, @Valid @RequestBody AdminUserRequests.Update request) {
         return ResponseEntity.ok(ApiResponse.success(service.update(actor, id, request)));
+    }
+
+    @PatchMapping("/{id}/status")
+    @Operation(summary = "UM-04: Activate or deactivate an account",
+            description = "ADMIN only. Deactivating revokes every active session of that user; "
+                    + "admins may not deactivate themselves.")
+    public ResponseEntity<ApiResponse<AdminUserResponse>> updateStatus(
+            @AuthenticationPrincipal UserPrincipal actor,
+            @PathVariable Long id, @Valid @RequestBody AdminUserRequests.StatusUpdate request) {
+        return ResponseEntity.ok(ApiResponse.success(service.updateStatus(actor, id, request)));
     }
 }

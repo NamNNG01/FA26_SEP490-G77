@@ -26,4 +26,10 @@ public interface AdminUserService {
      * required. Switching the account to INACTIVE revokes every session.
      */
     AdminUserResponse update(UserPrincipal actor, Long id, AdminUserRequests.Update request);
+
+    /**
+     * UM-04: activate or deactivate an account. Deactivating revokes every
+     * active session; admins may not deactivate themselves.
+     */
+    AdminUserResponse updateStatus(UserPrincipal actor, Long id, AdminUserRequests.StatusUpdate request);
 }

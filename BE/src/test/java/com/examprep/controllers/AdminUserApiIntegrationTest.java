@@ -35,6 +35,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -70,7 +71,9 @@ class AdminUserApiIntegrationTest {
         mvc.perform(get(BASE)).andExpect(status().isUnauthorized());
         for (MockHttpServletRequestBuilder request : List.of(get(BASE), get(BASE + "/1"),
                 put(BASE + "/1").contentType(MediaType.APPLICATION_JSON)
-                        .content(updateBody("Blocked", "blocked@example.com", User.ROLE_STUDENT, User.STATUS_ACTIVE)))) {
+                        .content(updateBody("Blocked", "blocked@example.com", User.ROLE_STUDENT, User.STATUS_ACTIVE)),
+                patch(BASE + "/1").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"INACTIVE\"}"))) {
             for (User actor : List.of(manager, student)) {
                 call(actor, request).andExpect(status().isForbidden());
             }
@@ -283,6 +286,53 @@ class AdminUserApiIntegrationTest {
         assertNotNull(em.find(RefreshToken.class, first.getRefreshTokenId()).getRevokedAt());
         assertNotNull(em.find(RefreshToken.class, second.getRefreshTokenId()).getRevokedAt());
         assertNull(em.find(RefreshToken.class, foreign.getRefreshTokenId()).getRevokedAt());
+    }
+
+    @Test
+    void statusEndpointTogglesAccountAndRevokesSessionsOnDeactivate() throws Exception {
+        User target = account(User.ROLE_STUDENT, "Toggle", "toggle@example.com", User.STATUS_ACTIVE);
+        RefreshToken active = token(target);
+
+        call(admin, patch(BASE + "/" + target.getUserId() + "/status").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"INACTIVE\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.userId").value(target.getUserId()))
+                .andExpect(jsonPath("$.data.status").value(User.STATUS_INACTIVE));
+
+        em.flush();
+        em.clear();
+        assertNotNull(em.find(RefreshToken.class, active.getRefreshTokenId()).getRevokedAt());
+        assertEquals(User.STATUS_INACTIVE, em.find(User.class, target.getUserId()).getStatus());
+
+        // reactivating is allowed and does not touch status again
+        call(admin, patch(BASE + "/" + target.getUserId() + "/status").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"ACTIVE\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value(User.STATUS_ACTIVE));
+        em.flush();
+        em.clear();
+        assertEquals(User.STATUS_ACTIVE, em.find(User.class, target.getUserId()).getStatus());
+    }
+
+    @Test
+    void statusEndpointRejectsSelfDeactivationAndBadValues() throws Exception {
+        call(admin, patch(BASE + "/" + admin.getUserId() + "/status").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"INACTIVE\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Admins cannot change their own role or status."));
+
+        User target = account(User.ROLE_STUDENT, "Checker", "checker@example.com", User.STATUS_ACTIVE);
+        call(admin, patch(BASE + "/" + target.getUserId() + "/status").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"BOGUS\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Unknown status: BOGUS"));
+        call(admin, patch(BASE + "/" + target.getUserId() + "/status").contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Validation failed for request parameters"));
+        call(admin, patch(BASE + "/999999/status").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"INACTIVE\"}"))
+                .andExpect(status().isNotFound());
     }
 
     @Test
