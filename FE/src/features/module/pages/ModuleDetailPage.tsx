@@ -94,7 +94,7 @@ export function ModuleDetailPage({ onNavigate }: { onNavigate?: (id: string) => 
           <p className="text-sm font-medium text-content-secondary">Lessons</p>
           <Badge variant="default">{lessons.length} lessons</Badge>
         </div>
-        <Table columns={columns} data={lessons as Record<string, unknown>[]} selectable onSort={k => { sortKey === k ? setSortDir(d => d === 'asc' ? 'desc' : 'asc') : setSortKey(k); }} sortKey={sortKey} sortDir={sortDir} />
+        <Table columns={columns} data={lessons as Record<string, unknown>[]} onSort={k => { sortKey === k ? setSortDir(d => d === 'asc' ? 'desc' : 'asc') : setSortKey(k); }} sortKey={sortKey} sortDir={sortDir} />
       </div>
 
       <EditModuleModal

@@ -3,11 +3,13 @@ import type {
   FillBlankAnswerKey,
   MatchingAnswerKey,
   QuestionCreateRequest,
+  QuestionAiDraft,
   QuestionDetail,
   QuestionDifficulty,
   QuestionType,
   QuestionUpdateRequest,
 } from '@/services/question.service';
+import { hasDiagramContent, plantUmlToDrawioXml } from './diagram';
 
 /**
  * Editor-side model for one question. It keeps every type's fields side by
@@ -19,8 +21,10 @@ import type {
  * Types the editor offers. The backend accepts all but ORDERING today
  * (QuestionValidator rejects CODE / DIAGRAM, the CHECK constraint has no
  * ORDERING) — ORDERING is authored in the UI but cannot be saved yet.
+ * DIAGRAM is drawn in draw.io and saves once the backend accepts it.
+ * CODE has no editor yet.
  */
-export type EditableQuestionType = Exclude<QuestionType, 'CODE' | 'DIAGRAM'> | 'ORDERING';
+export type EditableQuestionType = Exclude<QuestionType, 'CODE'> | 'ORDERING';
 
 /** Types the editor shows but the backend can't store yet. */
 export const UNSAVEABLE_TYPES: EditableQuestionType[] = ['ORDERING'];
@@ -32,8 +36,15 @@ export const QUESTION_TYPE_OPTIONS: { label: string; value: EditableQuestionType
   { label: 'Matching', value: 'MATCHING' },
   { label: 'Fill in the Blank', value: 'FILL_BLANK' },
   { label: 'Essay', value: 'ESSAY' },
+  { label: 'Diagram', value: 'DIAGRAM' },
   { label: 'Ordering (coming soon)', value: 'ORDERING' },
 ];
+
+/** Types AI-03 can draft into the editor (ORDERING can't be saved, CODE has no editor yet). */
+export const AI_QUESTION_TYPE_OPTIONS = QUESTION_TYPE_OPTIONS.filter(t => t.value !== 'ORDERING') as { label: string; value: QuestionType }[];
+
+/** Types where AI-03 accepts `optionsCount`. */
+export const AI_OPTION_COUNT_TYPES: QuestionType[] = ['SINGLE_CHOICE', 'MULTIPLE_CHOICE'];
 
 export const DIFFICULTY_OPTIONS: { label: string; value: QuestionDifficulty }[] = [
   { label: 'Easy', value: 'EASY' },
@@ -89,6 +100,13 @@ export interface QuestionDraft {
   blanks: Record<number, BlankDraft>;
   /** ORDERING — items in their correct order. */
   ordering: OrderItemDraft[];
+  /** DIAGRAM — model answer as draw.io XML, plus an SVG snapshot for previews. */
+  diagramXml: string;
+  diagramSvg: string;
+  /** ESSAY rubric suggested by AI — passed through untouched. */
+  essayGradingRubric?: unknown;
+  /** Drafted by AI-03 and accepted into the form. */
+  fromAi?: boolean;
 }
 
 let seq = 0;
@@ -123,6 +141,8 @@ export function emptyDraft(): QuestionDraft {
     pairs: emptyPairs(),
     blanks: {},
     ordering: emptyOrdering(),
+    diagramXml: '',
+    diagramSvg: '',
   };
 }
 
@@ -206,6 +226,9 @@ export function validateDraft(q: QuestionDraft): QuestionErrors {
       else if (filled.length !== q.ordering.length) errors.answers = 'Fill in every item or remove the empty ones.';
       break;
     }
+    case 'DIAGRAM':
+      if (!hasDiagramContent(q.diagramXml)) errors.answers = 'Draw the model answer diagram.';
+      break;
     case 'ESSAY':
       break;
   }
@@ -247,6 +270,7 @@ function toAnswerKey(q: QuestionDraft): MatchingAnswerKey | FillBlankAnswerKey |
 }
 
 export function toCreateRequest(q: QuestionDraft, courseId: number, moduleId: number | null): QuestionCreateRequest {
+  const metadata = toMetadata(q);
   return {
     courseId,
     moduleId,
@@ -256,15 +280,19 @@ export function toCreateRequest(q: QuestionDraft, courseId: number, moduleId: nu
     content: q.content.trim(),
     options: toOptions(q),
     answerKey: toAnswerKey(q),
+    ...(q.explanation.trim() ? { explanation: q.explanation.trim() } : {}),
+    ...(Object.keys(metadata).length ? { questionMetadata: metadata } : {}),
+    ...(q.type === 'ESSAY' && q.essayGradingRubric != null ? { essayGradingRubric: q.essayGradingRubric } : {}),
   };
 }
 
 function toMetadata(q: QuestionDraft): Record<string, unknown> {
-  const { title: _t, skillTag: _s, ...rest } = q.metadata;
+  const { title: _t, skillTag: _s, drawioXml: _x, drawioSvg: _v, ...rest } = q.metadata;
   return {
     ...rest,
     ...(q.title.trim() ? { title: q.title.trim() } : {}),
     ...(q.skillTag.trim() ? { skillTag: q.skillTag.trim() } : {}),
+    ...(q.type === 'DIAGRAM' && q.diagramXml ? { drawioXml: q.diagramXml, ...(q.diagramSvg ? { drawioSvg: q.diagramSvg } : {}) } : {}),
   };
 }
 
@@ -335,7 +363,41 @@ export function fromDetail(d: QuestionDetail): QuestionDraft {
       ? rawPairs.map(p => ({ key: newKey('pair'), left: String(p.left ?? ''), right: String(p.right ?? '') }))
       : base.pairs,
     blanks,
+    diagramXml: typeof metadata.drawioXml === 'string' ? metadata.drawioXml : '',
+    diagramSvg: typeof metadata.drawioSvg === 'string' ? metadata.drawioSvg : '',
+    essayGradingRubric: d.essayGradingRubric ?? undefined,
   };
+}
+
+/** An AI-03 preview question, accepted into the editor. */
+export function fromAiDraft(a: QuestionAiDraft): QuestionDraft {
+  const draft = fromDetail({
+    questionId: 0,
+    courseId: null,
+    moduleId: null,
+    groupId: null,
+    questionType: a.questionType,
+    difficulty: a.difficulty,
+    content: a.content ?? '',
+    questionMetadata: a.questionMetadata ?? {},
+    answerKey: a.answerKey ?? null,
+    defaultPoints: null,
+    source: 'AI',
+    creatorRole: '',
+    createdBy: null,
+    scoringVersion: null,
+    lockVersion: null,
+    aiExplanation: a.explanation ?? null,
+    status: 'ACTIVE',
+    approvalStatus: '',
+    essayGradingRubric: a.essayGradingRubric ?? null,
+    options: (a.options ?? []).map(o => ({ ...o, optionId: null })),
+    createdAt: null,
+    updatedAt: null,
+  });
+  const plantUml = typeof draft.metadata.plantUmlSource === 'string' ? draft.metadata.plantUmlSource : '';
+  const diagramXml = draft.type === 'DIAGRAM' && !draft.diagramXml && plantUml.trim() ? plantUmlToDrawioXml(plantUml) : draft.diagramXml;
+  return { ...draft, questionId: undefined, lockVersion: undefined, diagramXml, fromAi: true };
 }
 
 /** Shape produced by the (still mocked) PDF import. */

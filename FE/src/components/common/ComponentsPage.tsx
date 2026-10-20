@@ -253,7 +253,7 @@ export default function ComponentsPage() {
             <Button variant="outline" size="sm" icon={<Icon.Download className="w-3.5 h-3.5" />}>Export</Button>
             <Button size="sm" icon={<Icon.Plus className="w-3.5 h-3.5" />}>Add User</Button>
           </div>
-          <Table columns={tableColumns} data={mockTableData} selectable onSort={handleSort} sortKey={sortKey} sortDir={sortDir} />
+          <Table columns={tableColumns} data={mockTableData} onSort={handleSort} sortKey={sortKey} sortDir={sortDir} />
         </div>
 
         <div className="card overflow-hidden">
