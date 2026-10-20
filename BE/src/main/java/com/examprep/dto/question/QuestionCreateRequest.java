@@ -31,7 +31,6 @@ public class QuestionCreateRequest {
     @NotBlank(message = "Content is required")
     private String content;
 
-    private String source;
     private String explanation; // maps to ai_explanation
     private BigDecimal defaultPoints;
     private Object questionMetadata;

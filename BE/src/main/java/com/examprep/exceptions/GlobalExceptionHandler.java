@@ -30,6 +30,18 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error(code, ex.getMessage()));
     }
 
+    @ExceptionHandler(QuestionValidationException.class)
+    public ResponseEntity<ApiResponse<Object>> handleQuestionValidationException(QuestionValidationException ex) {
+        log.warn("Question Validation Exception: {}", ex.getErrors());
+        ResponseCode code = ex.getResponseCode();
+        return ResponseEntity.status(code.getHttpStatus())
+                .body(ApiResponse.<Object>builder()
+                        .success(false)
+                        .message(ex.getMessage())
+                        .data(ex.getErrors())
+                        .build());
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponse<Map<String, String>>> handleValidationExceptions(MethodArgumentNotValidException ex) {
         Map<String, String> errors = new HashMap<>();
