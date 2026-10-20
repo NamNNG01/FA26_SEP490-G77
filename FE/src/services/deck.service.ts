@@ -11,13 +11,9 @@ import type { PageResponse } from './course.service';
  *   GET    /api/v1/manager/decks/{id}  (F-03) — includes cards
  *   PUT    /api/v1/manager/decks/{id}  (F-04) — only the supplied fields change
  *   DELETE /api/v1/manager/decks/{id}  (F-05) — also deletes the deck's cards and progress
- *
- * Card endpoints — PROPOSED, not implemented by the BE yet
- * (contract in docs/notes/flashcard-deck-be-gaps.md):
- *   POST   /api/v1/manager/decks/{deckId}/cards  — createCard
- *   PUT    /api/v1/manager/cards/{cardId}        — updateCard
- *   DELETE /api/v1/manager/cards/{cardId}        — deleteCard
- * Until they exist these calls fail; isCardApiMissing() recognises that.
+ *   POST   /api/v1/manager/decks/{id}/cards  (F-06) — appends a card
+ *   PUT    /api/v1/manager/cards/{cardId}    (F-07) — only non-blank faces change
+ *   DELETE /api/v1/manager/cards/{cardId}    (F-08) — also deletes the card's progress
  */
 
 /** DeckResponse.Card — `status` / `isStarred` are the deck owner's study progress. */
@@ -72,23 +68,21 @@ export interface DeckUpdateRequest {
   description?: string;
 }
 
-/** Proposed CardRequest — body of createCard / updateCard. */
+/** DeckRequests.CardCreate / CardUpdate — body of createCard / updateCard. */
 export interface CardRequest {
   frontText: string;
   backText: string;
 }
 
-export const DECK_PAGE_SIZE_MAX = 100;
-
-/**
- * True when a card call failed because the BE has no such route yet:
- * Spring answers unknown paths with 404 RESOURCE_NOT_FOUND and unsupported
- * methods with 405 — unlike a real "Card not found", which has its own message.
- */
-export function isCardApiMissing(err: unknown): boolean {
-  const res = (err as { response?: { status?: number; data?: { message?: string } } })?.response;
-  return res?.status === 405 || (res?.status === 404 && res.data?.message === 'Requested resource was not found');
+/** CardResponse — what F-06 / F-07 return (no study progress). */
+export interface CardResponse {
+  cardId: number;
+  deckId: number;
+  frontText: string;
+  backText: string;
 }
+
+export const DECK_PAGE_SIZE_MAX = 100;
 
 export const deckService = {
   async getDecks(params: DeckListParams = {}): Promise<PageResponse<Deck>> {
@@ -130,13 +124,13 @@ export const deckService = {
     await api.request<ApiResponse<null>>({ method: 'delete', url: `/manager/decks/${id}` });
   },
 
-  async createCard(deckId: number | string, payload: CardRequest): Promise<DeckCard> {
-    const res = await api.post<ApiResponse<DeckCard>>(`/manager/decks/${deckId}/cards`, payload);
+  async createCard(deckId: number | string, payload: CardRequest): Promise<CardResponse> {
+    const res = await api.post<ApiResponse<CardResponse>>(`/manager/decks/${deckId}/cards`, payload);
     return res.data;
   },
 
-  async updateCard(cardId: number | string, payload: CardRequest): Promise<DeckCard> {
-    const res = await api.request<ApiResponse<DeckCard>>({ method: 'put', url: `/manager/cards/${cardId}`, data: payload });
+  async updateCard(cardId: number | string, payload: CardRequest): Promise<CardResponse> {
+    const res = await api.request<ApiResponse<CardResponse>>({ method: 'put', url: `/manager/cards/${cardId}`, data: payload });
     return res.data;
   },
 
