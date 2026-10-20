@@ -86,7 +86,7 @@ export function DrawioEditorModal({ open, xml, onClose, onSave }: {
       open={open}
       onClose={onClose}
       title="Model answer diagram"
-      size="2xl"
+      size="full"
       footer={
         <>
           <Button variant="ghost" onClick={onClose} disabled={exporting}>Cancel</Button>
@@ -94,7 +94,7 @@ export function DrawioEditorModal({ open, xml, onClose, onSave }: {
         </>
       }
     >
-      <div className="relative h-[65vh] -mx-1 rounded-[10px] overflow-hidden border border-line bg-white">
+      <div className="relative h-full min-h-[300px] -mx-1 rounded-[10px] overflow-hidden border border-line bg-white">
         {!ready && !failed && (
           <div className="absolute inset-0 flex items-center justify-center gap-2 text-sm text-content-soft pointer-events-none">
             <Spinner size="sm" /> Loading draw.io…
@@ -113,7 +113,8 @@ export function DrawioEditorModal({ open, xml, onClose, onSave }: {
             <Button variant="secondary" icon={<Icon.RefreshCw className="w-4 h-4" />} onClick={() => setAttempt(a => a + 1)}>Try again</Button>
           </div>
         )}
-        {open && <iframe key={attempt} ref={frameRef} src={DRAWIO_EMBED_URL} title="draw.io diagram editor" className="w-full h-full border-0" />}
+        {/* no-referrer: embed.diagrams.net answers 403 to a localhost/127.0.0.1 Referer. */}
+        {open && <iframe key={attempt} ref={frameRef} src={DRAWIO_EMBED_URL} referrerPolicy="no-referrer" title="draw.io diagram editor" className="w-full h-full border-0" />}
       </div>
     </Modal>
   );
