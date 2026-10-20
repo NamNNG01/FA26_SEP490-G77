@@ -54,6 +54,48 @@ apiClient.interceptors.request.use(
 );
 
 /**
+ * In-flight refresh shared by every request that hits a 401 at the same time.
+ * The backend rotates refresh tokens, so a second parallel /auth/refresh with
+ * the same token fails ("Refresh token has already been used.") and would log
+ * the user out — all callers must wait on this one call instead.
+ */
+let refreshInFlight: Promise<string> | null = null;
+
+function refreshAccessToken(refreshToken: string): Promise<string> {
+  refreshInFlight ??= (async () => {
+    // Backend contract: POST /auth/refresh with { refreshToken } in the
+    // body (RefreshTokenRequest). No Authorization header needed — the
+    // endpoint is permitAll. Response: ApiResponse<TokenResponse>.
+    // VITE_API_URL has no trailing slash — join with one explicitly, or
+    // the call hits ".../api/v1auth/refresh" (404) and every 401 ends
+    // in a silent logout.
+    const res = await axios.post(
+      `${config.apiBaseUrl.replace(/\/+$/, '')}/auth/refresh`,
+      { refreshToken },
+    );
+    const body = res.data as { success: boolean; data?: unknown };
+    if (!body?.success || !body.data) {
+      throw new Error('Refresh failed');
+    }
+    const data = body.data as {
+      accessToken: string;
+      refreshToken: string;
+      tokenType: string;
+      expiresIn: number;
+    };
+
+    saveTokens({
+      accessToken: data.accessToken,
+      refreshToken: data.refreshToken,
+    });
+    return data.accessToken;
+  })().finally(() => {
+    refreshInFlight = null;
+  });
+  return refreshInFlight;
+}
+
+/**
  * Handle 401 responses from protected endpoints by refreshing the token.
  *
  * Public endpoints must never enter the refresh flow: a 401 from
@@ -73,33 +115,8 @@ apiClient.interceptors.response.use(
 
       if (refreshToken) {
         try {
-          // Backend contract: POST /auth/refresh with { refreshToken } in the
-          // body (RefreshTokenRequest). No Authorization header needed — the
-          // endpoint is permitAll. Response: ApiResponse<TokenResponse>.
-          // VITE_API_URL has no trailing slash — join with one explicitly, or
-          // the call hits ".../api/v1auth/refresh" (404) and every 401 ends
-          // in a silent logout.
-          const res = await axios.post(
-            `${config.apiBaseUrl.replace(/\/+$/, '')}/auth/refresh`,
-            { refreshToken },
-          );
-          const body = res.data as { success: boolean; data?: unknown };
-          if (!body?.success || !body.data) {
-            throw new Error('Refresh failed');
-          }
-          const data = body.data as {
-            accessToken: string;
-            refreshToken: string;
-            tokenType: string;
-            expiresIn: number;
-          };
-
-          saveTokens({
-            accessToken: data.accessToken,
-            refreshToken: data.refreshToken,
-          });
-
-          original.headers.Authorization = `Bearer ${data.accessToken}`;
+          const accessToken = await refreshAccessToken(refreshToken);
+          original.headers.Authorization = `Bearer ${accessToken}`;
           return apiClient(original);
         } catch {
           clearAuth();

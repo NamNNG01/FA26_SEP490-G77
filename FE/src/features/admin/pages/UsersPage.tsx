@@ -96,7 +96,6 @@ export function UsersPage({ onNavigate }: { onNavigate?: (id: string, params?: R
         <Table
           columns={columns}
           data={sorted as unknown as Record<string, unknown>[]}
-          selectable
           unit="users"
           onSort={k => {
             const dir = sortKey === k ? (sortDir === 'asc' ? 'desc' : 'asc') : 'asc';

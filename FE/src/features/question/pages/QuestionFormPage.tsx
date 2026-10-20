@@ -13,6 +13,10 @@ import { QuestionForm as QuestionFormBlock } from '../components/QuestionForm';
 import { QuestionSidePanel } from '../components/QuestionSidePanel';
 import { ImportPdfModal } from '../components/ImportPdfModal';
 import { GroupContextCard, emptyGroupContext, groupContextErrors, type GroupContextValue } from '../components/GroupContextCard';
+import { AiGeneratePanel } from '../components/AiGeneratePanel';
+import { Tabs } from '@/components/ui/Tabs';
+import { UnsavedChangesModal } from '@/components/common/UnsavedChangesModal';
+import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
 import {
   emptyDraft,
   fromDetail,
@@ -27,7 +31,11 @@ import {
 /** Q-03 accepts 1..50 questions per request. */
 const MAX_BATCH = 50;
 
-type Confirm = 'discard' | 'archive' | null;
+type Confirm = 'archive' | null;
+
+/** Create mode: write questions by hand, or draft them with AI (AI-03) and accept into the list. */
+type CreateTab = 'manual' | 'ai';
+const AI_TAB_LABEL = 'AI Generate';
 
 const errorMessage = (err: unknown, fallback: string) => (err instanceof Error && err.message ? err.message : fallback);
 const httpStatus = (err: unknown) => (err as { response?: { status?: number } })?.response?.status;
@@ -61,6 +69,8 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
   const [showImport, setShowImport] = useState(false);
   const [confirm, setConfirm] = useState<Confirm>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [tab, setTab] = useState<CreateTab>('manual');
+  const [aiPending, setAiPending] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
 
   // Edit mode: load the question.
@@ -105,14 +115,14 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
     return () => { cancelled = true; };
   }, [isEdit, courseId]);
 
-  // Warn before closing the tab with unsaved work.
-  useEffect(() => {
-    if (!dirty) return;
-    const handler = (e: BeforeUnloadEvent) => e.preventDefault();
-    window.addEventListener('beforeunload', handler);
-    return () => window.removeEventListener('beforeunload', handler);
-  }, [dirty]);
+  // Unsaved edits, or AI suggestions not accepted yet, hold any navigation away (and tab close) for confirmation.
+  const { blocker, leave } = useUnsavedChangesGuard(dirty || aiPending > 0);
+  const unsavedDetails = [
+    ...(dirty ? [isEdit ? 'Your changes to this question' : `${questions.length} question${questions.length === 1 ? '' : 's'} not saved yet`] : []),
+    ...(aiPending > 0 ? [`${aiPending} AI suggestion${aiPending === 1 ? '' : 's'} not accepted yet`] : []),
+  ];
 
+  /** Leaving through Cancel / breadcrumb goes through the guard's confirmation. */
   const goToBank = () => navigate(ROUTES.managerQuestions);
 
   const updateQuestion = (i: number, q: QuestionDraft) => {
@@ -142,16 +152,35 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
   const addQuestion = () => {
     const draft = emptyDraft();
     setQuestions(prev => [...prev, draft]);
+    setTab('manual');
     requestAnimationFrame(() => scrollTo(draft.key));
   };
 
-  const handleImported = (incoming: ExtractedQuestion[]) => {
-    // Replace the untouched blank starter question instead of keeping it around.
-    const drafts = incoming.map(fromExtracted);
+  /** Append drafts, replacing the untouched blank starter question instead of keeping it around. */
+  const appendDrafts = (drafts: QuestionDraft[]) => {
     setQuestions(prev => [...prev.filter(q => touched.has(q.key) || q.content.trim() !== ''), ...drafts]);
+    setDirty(true);
+  };
+
+  const handleImported = (incoming: ExtractedQuestion[]) => {
+    const drafts = incoming.map(fromExtracted);
+    appendDrafts(drafts);
     setImportedCount(drafts.length);
     setShowImport(false);
-    setDirty(true);
+    setTab('manual');
+  };
+
+  const kept = questions.filter(q => touched.has(q.key) || q.content.trim() !== '').length;
+  const aiRoom = MAX_BATCH - kept;
+
+  /** Returns how many drafts made it in (the batch is capped at MAX_BATCH). */
+  const handleAiAccepted = (drafts: QuestionDraft[]): number => {
+    const fitting = drafts.slice(0, Math.max(0, aiRoom));
+    if (fitting.length < drafts.length) toast.warning(`You can save up to ${MAX_BATCH} questions at a time — save these first.`);
+    if (!fitting.length) return 0;
+    appendDrafts(fitting);
+    toast.success(`${fitting.length} question${fitting.length === 1 ? '' : 's'} added. Review in the Manual tab, then Save All.`);
+    return fitting.length;
   };
 
   const changeGroupCtx = (v: GroupContextValue) => {
@@ -196,11 +225,13 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
     setSaveError(null);
     const firstInvalid = questions.find(q => !isDraftValid(q));
     if (firstInvalid) {
-      scrollTo(firstInvalid.key);
+      setTab('manual');
+      requestAnimationFrame(() => scrollTo(firstInvalid.key));
       return;
     }
     if (locationNote || questions.length === 0) return;
     if (!isEdit && Object.keys(groupContextErrors(groupCtx)).length > 0) {
+      setTab('manual');
       listRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
@@ -217,14 +248,16 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
         toast.success(`${created.length} question${created.length === 1 ? '' : 's'} saved${groupId != null ? ' to the question group' : ''}.`);
       }
       setDirty(false);
-      goToBank();
+      // Saved — unaccepted AI suggestions are left behind on purpose.
+      leave(goToBank);
     } catch (err) {
       const message = errorMessage(err, 'Could not save. Please try again.');
       setSaveError({ message, conflict: httpStatus(err) === 409 });
       // Batch errors read "Error at index N: …" — jump to that question.
       const idx = /index (\d+)/i.exec(message);
       const target = idx ? questions[Number(idx[1])] : undefined;
-      if (target) scrollTo(target.key);
+      setTab('manual');
+      if (target) requestAnimationFrame(() => scrollTo(target.key));
       else listRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
     } finally {
       setSaving(false);
@@ -249,9 +282,10 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
     }
   };
 
-  const cancel = () => (dirty ? setConfirm('discard') : goToBank());
+  const cancel = goToBank;
 
   const title = isEdit ? 'Edit Question' : 'New Questions';
+  const manualTabLabel = `Manual (${questions.length})`;
   const pageCls = 'px-4 sm:px-8 py-6 space-y-4 lg:h-full lg:flex lg:flex-col lg:overflow-hidden';
 
   if (isEdit && (loading || loadError)) {
@@ -276,7 +310,16 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
   return (
     <div className={pageCls}>
       <Breadcrumb items={[{ label: 'Question', onClick: cancel }, { label: title }]} />
-      <h2 className="text-xl font-bold text-content">{title}</h2>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-xl font-bold text-content">{title}</h2>
+        {!isEdit && (
+          <Tabs
+            tabs={[manualTabLabel, AI_TAB_LABEL]}
+            active={tab === 'manual' ? manualTabLabel : AI_TAB_LABEL}
+            onChange={t => setTab(t === AI_TAB_LABEL ? 'ai' : 'manual')}
+          />
+        )}
+      </div>
 
       {saveError && (
         <div className="space-y-2">
@@ -293,8 +336,15 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px] gap-6 lg:flex-1 lg:min-h-0 items-start">
+        {/* AI tab — kept mounted so its suggestions survive switching tabs */}
+        {!isEdit && (
+          <div className={`lg:h-full lg:min-h-0 lg:overflow-y-auto lg:pr-2 pb-4 ${tab === 'ai' ? '' : 'hidden'}`}>
+            <AiGeneratePanel courseId={courseId} moduleId={moduleId} onAccept={handleAiAccepted} onPendingChange={setAiPending} disabled={saving} />
+          </div>
+        )}
+
         {/* Question blocks — the only part that scrolls on desktop */}
-        <div ref={listRef} className="space-y-3 lg:h-full lg:min-h-0 lg:overflow-y-auto lg:pr-2 pb-4">
+        <div ref={listRef} className={`space-y-3 lg:h-full lg:min-h-0 lg:overflow-y-auto lg:pr-2 pb-4 ${tab === 'manual' ? '' : 'hidden'}`}>
           {!isEdit && (
             <GroupContextCard
               value={groupCtx}
@@ -309,7 +359,7 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
           {questions.length === 0 && (
             <div className="card p-10 text-center">
               <p className="text-base font-medium text-content-secondary">No questions yet</p>
-              <p className="text-sm text-content-subtle mt-1">Use “Add Question” or import a PDF to begin.</p>
+              <p className="text-sm text-content-subtle mt-1">Use “Add Question”, import a PDF, or draft questions in the AI Generate tab.</p>
             </div>
           )}
           {questions.map((q, i) => (
@@ -351,22 +401,11 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
 
       <ImportPdfModal open={showImport} onClose={() => setShowImport(false)} onImported={handleImported} />
 
-      <Modal
-        open={confirm === 'discard'}
-        onClose={() => setConfirm(null)}
-        title="Discard changes?"
-        size="sm"
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setConfirm(null)}>Keep editing</Button>
-            <Button variant="danger" onClick={() => { setDirty(false); goToBank(); }}>Discard</Button>
-          </>
-        }
-      >
-        <p className="text-sm text-content-secondary">
-          {isEdit ? 'Your unsaved changes to this question will be lost.' : 'The questions you have not saved will be lost.'}
-        </p>
-      </Modal>
+      <UnsavedChangesModal
+        blocker={blocker}
+        message="You have work on this page that hasn’t been saved. If you leave now, it will be lost:"
+        details={unsavedDetails}
+      />
 
       <Modal
         open={confirm === 'archive'}
