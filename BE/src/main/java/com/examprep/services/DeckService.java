@@ -1,5 +1,6 @@
 package com.examprep.services;
 
+import com.examprep.dto.CardResponse;
 import com.examprep.dto.DeckRequests;
 import com.examprep.dto.DeckResponse;
 import com.examprep.dto.PageResponse;
@@ -11,4 +12,7 @@ public interface DeckService {
     DeckResponse create(UserPrincipal user, DeckRequests.Create request);
     DeckResponse update(UserPrincipal user, Long id, DeckRequests.Update request);
     void delete(UserPrincipal user, Long id);
+
+    /** F-06: append a card; access is derived from the deck. */
+    CardResponse addCard(UserPrincipal user, Long id, DeckRequests.CardCreate request);
 }

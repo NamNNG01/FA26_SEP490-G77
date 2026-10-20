@@ -231,6 +231,57 @@ class DeckApiIntegrationTest {
         call(manager, get(BASE + "/0")).andExpect(status().isBadRequest());
     }
 
+    @Test
+    void addCardAppendsToDeckAndFollowsDeckPermissions() throws Exception {
+        Flashcard existing = card(deck, "Existing front");
+
+        // 201 with the documented payload shape, card appended after the existing one
+        call(manager, post(path(deck) + "/cards").contentType(MediaType.APPLICATION_JSON)
+                        .content(cardBody("Polymorphism la gi?", "Da hinh.")))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.message").value("Resource created successfully"))
+                .andExpect(jsonPath("$.data.cardId").isNumber())
+                .andExpect(jsonPath("$.data.deckId").value(deck.getDeckId()))
+                .andExpect(jsonPath("$.data.frontText").value("Polymorphism la gi?"))
+                .andExpect(jsonPath("$.data.backText").value("Da hinh."));
+
+        call(manager, get(path(deck)))
+                .andExpect(jsonPath("$.data.cardCount").value(2))
+                .andExpect(jsonPath("$.data.cards.length()").value(2))
+                .andExpect(jsonPath("$.data.cards[0].cardId").value(existing.getCardId()))
+                .andExpect(jsonPath("$.data.cards[1].frontText").value("Polymorphism la gi?"));
+
+        // both faces are required
+        call(manager, post(path(deck) + "/cards").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"frontText\":\"\",\"backText\":\"x\"}"))
+                .andExpect(status().isBadRequest());
+        call(manager, post(path(deck) + "/cards").contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest());
+
+        // unknown deck -> 404, deck of another manager -> 403, student -> 403, anonymous -> 401
+        call(manager, post(BASE + "/999999/cards").contentType(MediaType.APPLICATION_JSON)
+                        .content(cardBody("Q", "A")))
+                .andExpect(status().isNotFound());
+
+        Deck foreignDeck = deck(stranger, foreignCourse, "Foreign deck", false);
+        call(manager, post(path(foreignDeck) + "/cards").contentType(MediaType.APPLICATION_JSON)
+                        .content(cardBody("Q", "A")))
+                .andExpect(status().isForbidden());
+
+        call(student, post(path(deck) + "/cards").contentType(MediaType.APPLICATION_JSON)
+                        .content(cardBody("Q", "A")))
+                .andExpect(status().isForbidden());
+        mvc.perform(post(path(deck) + "/cards").contentType(MediaType.APPLICATION_JSON)
+                        .content(cardBody("Q", "A")))
+                .andExpect(status().isUnauthorized());
+
+        // admin may append to any deck
+        call(admin, post(path(foreignDeck) + "/cards").contentType(MediaType.APPLICATION_JSON)
+                        .content(cardBody("Admin card", "Yes")))
+                .andExpect(status().isCreated());
+    }
+
     private ResultActions call(User actor, MockHttpServletRequestBuilder request) throws Exception {
         em.flush();
         return mvc.perform(request.with(user(UserPrincipal.create(actor))));
@@ -241,6 +292,10 @@ class DeckApiIntegrationTest {
                 "isPublic", false, "description", "Description"));
         if (courseId != null) body.put("courseId", courseId);
         return json.writeValueAsString(body);
+    }
+
+    private String cardBody(String front, String back) throws Exception {
+        return json.writeValueAsString(Map.of("frontText", front, "backText", back));
     }
 
     private String path(Deck value) { return BASE + "/" + value.getDeckId(); }

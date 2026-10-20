@@ -90,6 +90,15 @@ public class DeckServiceImpl implements DeckService {
         decks.flush();
     }
 
+    @Override
+    @Transactional
+    public CardResponse addCard(UserPrincipal user, Long id, DeckRequests.CardCreate request) {
+        Deck deck = writeDeck(user, id);
+        Flashcard card = cards.save(Flashcard.builder().deck(deck)
+                .frontText(request.frontText().strip()).backText(request.backText().strip()).build());
+        return CardResponse.from(card);
+    }
+
     private Deck writeDeck(UserPrincipal user, Long id) {
         positiveId(id);
         Deck deck = decks.findForUpdate(id).orElseThrow(() -> new ResourceNotFoundException("Deck not found."));

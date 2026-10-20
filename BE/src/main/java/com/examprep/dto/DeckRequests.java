@@ -12,4 +12,7 @@ public final class DeckRequests {
     public record Update(@Size(max = 255)
                          @Pattern(regexp = "(?sU).*\\S.*", message = "must not be blank") String title,
                          @Positive Long courseId, Boolean isPublic, String description) {}
+
+    /** F-06 body: both faces are required. */
+    public record CardCreate(@NotBlank String frontText, @NotBlank String backText) {}
 }
