@@ -1,12 +1,12 @@
-import React, { useState } from 'react';
-import { useLocation, useNavigate } from 'react-router';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { Alert } from '@/components/ui/Alert';
-import { useAuth, landingPathForRole } from '@/auth/authContext';
-import { AuthPageHeader } from '../components/AuthPageHeader';
-import { Icon } from '@/assets/icons';
-import { ROUTES } from '@/app/routes';
+import React, { useState } from "react";
+import { useLocation, useNavigate } from "react-router";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { Alert } from "@/components/ui/Alert";
+import { useAuth, landingPathForRole } from "@/auth/authContext";
+import { AuthPageHeader } from "../components/AuthPageHeader";
+import { Icon } from "@/assets/icons";
+import { ROUTES } from "@/app/routes";
 
 /**
  * Router state LoginPage understands:
@@ -28,16 +28,16 @@ export function LoginPage() {
   const location = useLocation();
   const locationState = location.state as LoginLocationState;
 
-  const [email, setEmail] = useState(locationState?.email ?? '');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState(locationState?.email ?? "");
+  const [password, setPassword] = useState("");
   const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError('');
+    setError("");
     try {
       // Auth state is updated at this point (login() sets it before
       // resolving) — only NOW navigate, so the router renders the
@@ -45,12 +45,14 @@ export function LoginPage() {
       // returned by login(); the context value in this closure is stale.
       const loggedInUser = await login(email, password);
       const from = locationState?.from;
-      navigate(from ?? landingPathForRole(loggedInUser.role), { replace: true });
+      navigate(from ?? landingPathForRole(loggedInUser.role), {
+        replace: true,
+      });
     } catch (err: unknown) {
       const message =
         err instanceof Error
           ? err.message
-          : 'Authentication failed. Please try again.';
+          : "Authentication failed. Please try again.";
       setError(message);
     } finally {
       setLoading(false);
@@ -60,26 +62,42 @@ export function LoginPage() {
   return (
     <>
       <div className="flex flex-col">
-        <AuthPageHeader title="Welcome back" subtitle="Sign in to continue your exam prep" />
+        <div className="mb-4">
+          <AuthPageHeader
+            title="Welcome back"
+            subtitle="Sign in to continue your exam prep"
+          />
+        </div>
 
         <div className="card p-6 [@media(max-height:850px)]:p-5 shadow-lg">
-          {error && <Alert type="error" title="Authentication failed" message={error} />}
-          {!error && locationState?.passwordReset && (
-            <Alert
-              type="success"
-              title="Password updated"
-              message="Sign in with your new password. All other sessions have been signed out."
-            />
-          )}
-          {!error && locationState?.sessionChanged && (
-            <Alert
-              type="warning"
-              title="Please sign in again"
-              message="Your session has expired or your account details have changed."
-            />
-          )}
+          <div className="mb-4">
+            {error && (
+              <Alert
+                type="error"
+                title="Authentication failed"
+                message={error}
+              />
+            )}
+            {!error && locationState?.passwordReset && (
+              <Alert
+                type="success"
+                title="Password updated"
+                message="Sign in with your new password. All other sessions have been signed out."
+              />
+            )}
+            {!error && locationState?.sessionChanged && (
+              <Alert
+                type="warning"
+                title="Please sign in again"
+                message="Your session has expired or your account details have changed."
+              />
+            )}
+          </div>
 
-          <form onSubmit={handleSubmit} className="space-y-[18px] [@media(max-height:850px)]:space-y-3.5">
+          <form
+            onSubmit={handleSubmit}
+            className="space-y-[18px] [@media(max-height:850px)]:space-y-3.5"
+          >
             <Input
               label="Email"
               placeholder="you@example.com"
@@ -94,7 +112,11 @@ export function LoginPage() {
               labelAction={
                 <button
                   type="button"
-                  onClick={() => navigate(ROUTES.forgotPassword, { state: { email: email.trim() } })}
+                  onClick={() =>
+                    navigate(ROUTES.forgotPassword, {
+                      state: { email: email.trim() },
+                    })
+                  }
                   className="text-xs text-brand-ink hover:underline font-medium"
                 >
                   Forgot password?
@@ -102,18 +124,22 @@ export function LoginPage() {
               }
               placeholder="Enter your password"
               autoComplete="current-password"
-              type={showPwd ? 'text' : 'password'}
+              type={showPwd ? "text" : "password"}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               icon={<Icon.Lock className="w-4 h-4" />}
               suffix={
                 <button
                   type="button"
-                  aria-label={showPwd ? 'Hide password' : 'Show password'}
+                  aria-label={showPwd ? "Hide password" : "Show password"}
                   onClick={() => setShowPwd((s) => !s)}
                   className="hover:text-content-secondary transition-colors"
                 >
-                  {showPwd ? <Icon.EyeOff className="w-4 h-4" /> : <Icon.Eye className="w-4 h-4" />}
+                  {showPwd ? (
+                    <Icon.EyeOff className="w-4 h-4" />
+                  ) : (
+                    <Icon.Eye className="w-4 h-4" />
+                  )}
                 </button>
               }
             />
@@ -124,10 +150,10 @@ export function LoginPage() {
 
           <div className="mt-6 pt-5 border-t border-line-soft flex justify-center">
             <p className="text-sm text-content-soft flex items-center gap-2">
-              Don't have an account?{' '}
+              Don't have an account?{" "}
               <button
                 type="button"
-                onClick={() => navigate('/register')}
+                onClick={() => navigate("/register")}
                 className="text-sm text-brand-ink hover:underline font-medium cursor-pointer"
               >
                 Create one
