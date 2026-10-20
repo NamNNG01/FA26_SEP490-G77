@@ -12,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -35,5 +36,13 @@ public class ManagerCardController {
     public ResponseEntity<ApiResponse<CardResponse>> update(@AuthenticationPrincipal UserPrincipal user,
             @PathVariable Long id, @Valid @RequestBody DeckRequests.CardUpdate request) {
         return ResponseEntity.ok(ApiResponse.success(service.updateCard(user, id, request)));
+    }
+
+    @DeleteMapping("/{id}")
+    @Operation(summary = "F-08: Delete a card and its per-user progress",
+            description = "Removes the card; study progress recorded for that card goes with it.")
+    public ResponseEntity<ApiResponse<Void>> delete(@AuthenticationPrincipal UserPrincipal user, @PathVariable Long id) {
+        service.deleteCard(user, id);
+        return ResponseEntity.ok(ApiResponse.success(null, "Card deleted successfully."));
     }
 }

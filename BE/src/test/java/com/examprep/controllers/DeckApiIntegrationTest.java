@@ -347,6 +347,49 @@ class DeckApiIntegrationTest {
         assertEquals("Admin edit", em.find(Flashcard.class, foreignCard.getCardId()).getFrontText());
     }
 
+    @Test
+    void deleteCardRemovesCardAndProgressFollowingDeckPermissions() throws Exception {
+        String cards = "/api/v1/manager/cards";
+        Flashcard doomed = card(deck, "Doomed front");
+        Flashcard survivor = card(deck, "Survivor front");
+        progress(manager, doomed, "LEARNED", true);
+        progress(collaborator, doomed, "NEW", false);
+        progress(manager, survivor, "NEW", false);
+
+        // unknown card -> 404
+        call(manager, delete(cards + "/999999")).andExpect(status().isNotFound());
+
+        Deck foreignDeck = deck(stranger, foreignCourse, "Foreign deck", false);
+        Flashcard foreignCard = card(foreignDeck, "Foreign front");
+        call(manager, delete(cards + "/" + foreignCard.getCardId())).andExpect(status().isForbidden());
+        call(student, delete(cards + "/" + foreignCard.getCardId())).andExpect(status().isForbidden());
+        mvc.perform(delete(cards + "/" + foreignCard.getCardId())).andExpect(status().isUnauthorized());
+
+        call(manager, delete(cards + "/" + doomed.getCardId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Card deleted successfully."));
+
+        em.flush();
+        em.clear();
+        assertNull(em.find(Flashcard.class, doomed.getCardId()));
+        assertNotNull(em.find(Flashcard.class, survivor.getCardId()));
+        // every progress row of the deleted card is gone, other cards keep theirs
+        assertEquals(0L, em.createQuery("select count(p) from UserCardProgress p where p.card.cardId = :id", Long.class)
+                .setParameter("id", doomed.getCardId()).getSingleResult());
+        assertEquals(1L, em.createQuery("select count(p) from UserCardProgress p where p.card.cardId = :id", Long.class)
+                .setParameter("id", survivor.getCardId()).getSingleResult());
+
+        call(manager, get(path(deck)))
+                .andExpect(jsonPath("$.data.cardCount").value(1))
+                .andExpect(jsonPath("$.data.cards[0].cardId").value(survivor.getCardId()));
+
+        // admin may delete any card
+        call(admin, delete(cards + "/" + foreignCard.getCardId())).andExpect(status().isOk());
+        em.flush();
+        em.clear();
+        assertNull(em.find(Flashcard.class, foreignCard.getCardId()));
+    }
+
     private ResultActions call(User actor, MockHttpServletRequestBuilder request) throws Exception {
         em.flush();
         return mvc.perform(request.with(user(UserPrincipal.create(actor))));

@@ -110,6 +110,15 @@ public class DeckServiceImpl implements DeckService {
         return CardResponse.from(card);
     }
 
+    @Override
+    @Transactional
+    public void deleteCard(UserPrincipal user, Long id) {
+        Flashcard card = writeCard(user, id);
+        progress.deleteByCard(card.getCardId());
+        cards.delete(card);
+        cards.flush();
+    }
+
     private Flashcard writeCard(UserPrincipal user, Long id) {
         positiveId(id);
         Flashcard card = cards.findDetail(id).orElseThrow(() -> new ResourceNotFoundException("Card not found."));

@@ -18,4 +18,7 @@ public interface DeckService {
 
     /** F-07: partial card update; access is derived from the card's deck. */
     CardResponse updateCard(UserPrincipal user, Long id, DeckRequests.CardUpdate request);
+
+    /** F-08: delete a card together with its per-user progress. */
+    void deleteCard(UserPrincipal user, Long id);
 }
