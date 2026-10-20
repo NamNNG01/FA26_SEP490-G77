@@ -135,8 +135,10 @@ export interface QuestionCreateRequest {
   groupId?: number | null;
   /** Stored as ai_explanation — shown to students during review. */
   explanation?: string | null;
-  /** Free-form JSON; the editor keeps `title` and `skillTag` here. */
+  /** The backend accepts only the keys in QUESTION_METADATA_KEYS. */
   questionMetadata?: Record<string, unknown> | null;
+  /** Must equal the rubric's total maxScore for ESSAY; the backend defaults it to 1. */
+  defaultPoints?: number | null;
   essayGradingRubric?: unknown;
 }
 
@@ -171,20 +173,40 @@ export interface QuestionDetail {
   updatedAt: string | null;
 }
 
-/** AI-03 request: draft 1..10 questions of one type. Nothing is saved. */
-export interface QuestionAiGenerateRequest {
-  questionType: QuestionType;
-  topic: string;
-  count: number;
-  difficulty?: QuestionDifficulty;
-  courseId?: number | null;
-  moduleId?: number | null;
-  /** 2..6 — choice types only; the backend rejects it for others. */
-  optionsCount?: number;
-  language?: 'vi' | 'en';
+/** Keys QuestionValidator allows in questionMetadata — any other key fails the request. */
+export const QUESTION_METADATA_KEYS = ['skillTag', 'diagramType', 'plantUmlSource'] as const;
+
+/** ValidationError — one entry of a VALIDATION_ERROR response's `data`. */
+export interface QuestionValidationError {
+  /** Field path, e.g. "options", "answerKey.pairs[1].left"; batch paths start with "questions[i].". */
+  path: string;
+  message: string;
 }
 
-/** One AI-03 preview question — same fields as a create request, minus the location. */
+/** Field errors from a QuestionValidationException response, or [] for any other error. */
+export function questionValidationErrors(err: unknown): QuestionValidationError[] {
+  const data = (err as { response?: { data?: { data?: unknown } } })?.response?.data?.data;
+  if (!Array.isArray(data)) return [];
+  return data.filter((e): e is QuestionValidationError => typeof e?.path === 'string' && typeof e?.message === 'string');
+}
+
+/** AiGenerateRequest — one AI call drafts every requested type (1..50 questions in total). Nothing is saved. */
+export interface QuestionAiGenerateRequest {
+  courseId: number;
+  moduleId?: number | null;
+  /** Question type → how many to draft. */
+  questionTypeCounts: Partial<Record<QuestionType, number>>;
+  /** Applied to every drafted question; the backend defaults to MEDIUM. */
+  difficulty?: QuestionDifficulty;
+  /** Topic / extra instructions for the AI. */
+  context?: string;
+  /** A course document whose extracted text the AI draws on. */
+  documentId?: number | null;
+  /** Plain language name, written into the prompt. */
+  language?: 'Vietnamese' | 'English';
+}
+
+/** One drafted question — same fields as a create request, minus the location. */
 export interface QuestionAiDraft {
   content: string;
   questionType: QuestionType;
@@ -196,36 +218,50 @@ export interface QuestionAiDraft {
   essayGradingRubric?: unknown;
 }
 
-/** QuestionAiDraftResponse — invalid questions are dropped and reported in `warnings`. */
+/** AiGenerateResponse.GeneratedQuestionPreview */
+interface RawAiPreview {
+  questionData: QuestionAiDraft;
+  hasHashConflict: boolean;
+  validationError: string | null;
+}
+
+/** One drafted question with the backend's checks on it. */
+export interface QuestionAiPreview {
+  question: QuestionAiDraft;
+  /** An active question with the same content already exists in the course. */
+  hasHashConflict: boolean;
+  /** Set when the draft fails QuestionValidator — it is still returned so it can be fixed. */
+  validationError: string | null;
+}
+
 export interface QuestionAiDraftResponse {
-  questions: QuestionAiDraft[];
-  warnings: string[];
+  /** AI usage log of this run (needed only by POST /ai/save). */
+  logId: number | null;
+  questions: QuestionAiPreview[];
   /** FE only: the drafts are demo data from mockQuestionAiData, not the AI. */
   mock?: boolean;
 }
 
-/** `VITE_AI_MOCK=true` always uses demo data for AI-03 (no AI quota spent). */
+/** `VITE_AI_MOCK=true` uses demo data for AI generation (no AI quota spent). */
 const AI_MOCK = import.meta.env.VITE_AI_MOCK === 'true';
 
-/** AI-03 statuses shown to the user instead of falling back to demo data. */
-const REAL_AI_ERRORS = [403, 429, 502, 504];
-
 export const questionService = {
-  /** AI-03: preview only — accepted drafts are saved later through Q-02 / Q-03. */
+  /** Drafts questions with AI — preview only; accepted drafts are saved later through Q-02 / Q-03. */
   async generateAiQuestions(payload: QuestionAiGenerateRequest, signal?: AbortSignal): Promise<QuestionAiDraftResponse> {
     if (AI_MOCK) return { ...(await mockGenerateAiQuestions(payload, signal)), mock: true };
-    try {
-      // The backend gives the AI 20s; leave room for the round trip.
-      const res = await apiClient.post<ApiResponse<QuestionAiDraftResponse>>('/manager/questions/ai/generate', payload, { timeout: 30000, signal });
-      const data = res.data?.data;
-      if (Array.isArray(data?.questions)) return { questions: data.questions, warnings: data.warnings ?? [] };
-    } catch (err) {
-      // Real AI outcomes (no permission, quota, upstream down/slow) and cancels surface as-is.
-      const status = (err as { response?: { status?: number } })?.response?.status;
-      if (signal?.aborted || (status != null && REAL_AI_ERRORS.includes(status))) throw err;
-    }
-    // Backend doesn't serve the AI-03 contract yet — fall back to demo data.
-    return { ...(await mockGenerateAiQuestions(payload, signal)), mock: true };
+    // Up to 50 questions in one AI call — give it time.
+    const res = await apiClient.post<ApiResponse<{ logId: number | null; questions: RawAiPreview[] }>>(
+      '/manager/questions/ai/generate',
+      payload,
+      { timeout: 120000, signal },
+    );
+    const data = res.data?.data;
+    return {
+      logId: data?.logId ?? null,
+      questions: (data?.questions ?? [])
+        .filter(p => p?.questionData)
+        .map(p => ({ question: p.questionData, hasHashConflict: Boolean(p.hasHashConflict), validationError: p.validationError ?? null })),
+    };
   },
 
   /** Q-03: creates 1..50 questions in one transaction — all or nothing. */

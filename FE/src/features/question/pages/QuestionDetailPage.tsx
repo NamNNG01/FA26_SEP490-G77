@@ -26,6 +26,8 @@ import {
   type EditableQuestionType,
   type QuestionDraft,
 } from '../model';
+import { describeSaveError, type SaveError } from '../saveError';
+import { SaveErrorAlert } from '../components/SaveErrorAlert';
 
 type Confirm = 'discard' | 'delete' | null;
 
@@ -66,7 +68,7 @@ export function QuestionDetailPage() {
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [saveError, setSaveError] = useState<{ message: string; conflict?: boolean } | null>(null);
+  const [saveError, setSaveError] = useState<SaveError | null>(null);
   const [confirm, setConfirm] = useState<Confirm>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -179,7 +181,7 @@ export function QuestionDetailPage() {
       setSubmitted(false);
       toast.success('Question updated.');
     } catch (err) {
-      setSaveError({ message: errorMessage(err, 'Could not save. Please try again.'), conflict: httpStatus(err) === 409 });
+      setSaveError(describeSaveError(err, 'Could not save. Please try again.'));
       scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
     } finally {
       setSaving(false);
@@ -247,16 +249,7 @@ export function QuestionDetailPage() {
         </div>
       </div>
 
-      {saveError && (
-        <div className="space-y-2">
-          <Alert
-            type="error"
-            title={saveError.conflict ? 'This question was changed by someone else' : 'Could not save'}
-            message={saveError.conflict ? 'Reload to get the latest version, then apply your changes again.' : saveError.message}
-          />
-          {saveError.conflict && <Button variant="secondary" size="sm" onClick={() => setReloadKey(k => k + 1)}>Reload question</Button>}
-        </div>
-      )}
+      {saveError && <SaveErrorAlert error={saveError} onReload={() => setReloadKey(k => k + 1)} />}
 
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-6 lg:flex-1 lg:min-h-0 items-start">
         {/* Main editor — the only part that scrolls on desktop */}

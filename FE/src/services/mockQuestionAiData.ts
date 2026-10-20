@@ -3,13 +3,14 @@ import type {
   QuestionAiDraft,
   QuestionAiDraftResponse,
   QuestionAiGenerateRequest,
+  QuestionAiPreview,
   QuestionDifficulty,
   QuestionType,
 } from './question.service';
 
 /**
- * Demo data for AI-03 (POST /manager/questions/ai/generate), used while the
- * backend doesn't serve the spec'd contract yet. Questions are built from
+ * Demo data for POST /manager/questions/ai/generate, used when
+ * VITE_AI_MOCK=true so trying the UI spends no AI quota. Questions are built from
  * per-type templates and mention the requested topic, so a demo reads
  * naturally for any topic the manager types.
  */
@@ -184,12 +185,11 @@ const ESSAY: Builder[] = [
     options: [],
     explanation: t(lang, 'Bài tốt nêu ít nhất 2 ưu điểm, 2 nhược điểm và một ví dụ cụ thể.', 'A good answer gives at least two pros, two cons and a concrete example.'),
     essayGradingRubric: {
-      maxScore: 10,
       criteria: [
-        { name: t(lang, 'Ưu điểm', 'Advantages'), weight: 3, description: t(lang, 'Nêu và giải thích ít nhất 2 ưu điểm', 'States and explains at least two advantages') },
-        { name: t(lang, 'Nhược điểm', 'Drawbacks'), weight: 3, description: t(lang, 'Nêu và giải thích ít nhất 2 nhược điểm', 'States and explains at least two drawbacks') },
-        { name: t(lang, 'Ví dụ', 'Example'), weight: 3, description: t(lang, 'Ví dụ thực tế, đúng ngữ cảnh', 'A relevant real-world example') },
-        { name: t(lang, 'Trình bày', 'Clarity'), weight: 1, description: t(lang, 'Mạch lạc, đúng thuật ngữ', 'Clear and uses correct terms') },
+        { name: t(lang, 'Ưu điểm', 'Advantages'), maxScore: 3, description: t(lang, 'Nêu và giải thích ít nhất 2 ưu điểm', 'States and explains at least two advantages') },
+        { name: t(lang, 'Nhược điểm', 'Drawbacks'), maxScore: 3, description: t(lang, 'Nêu và giải thích ít nhất 2 nhược điểm', 'States and explains at least two drawbacks') },
+        { name: t(lang, 'Ví dụ', 'Example'), maxScore: 3, description: t(lang, 'Ví dụ thực tế, đúng ngữ cảnh', 'A relevant real-world example') },
+        { name: t(lang, 'Trình bày', 'Clarity'), maxScore: 1, description: t(lang, 'Mạch lạc, đúng thuật ngữ', 'Clear and uses correct terms') },
       ],
     },
   }),
@@ -198,11 +198,10 @@ const ESSAY: Builder[] = [
     options: [],
     explanation: t(lang, 'Cần nêu tiêu chí so sánh và tình huống áp dụng cụ thể.', 'The answer should name comparison criteria and concrete situations.'),
     essayGradingRubric: {
-      maxScore: 10,
       criteria: [
-        { name: t(lang, 'Tiêu chí so sánh', 'Comparison criteria'), weight: 4, description: t(lang, 'Ít nhất 3 tiêu chí rõ ràng', 'At least three clear criteria') },
-        { name: t(lang, 'Tình huống áp dụng', 'When to use'), weight: 4, description: t(lang, 'Tình huống hợp lý cho mỗi cách', 'A sensible situation for each approach') },
-        { name: t(lang, 'Lập luận', 'Reasoning'), weight: 2, description: t(lang, 'Lập luận chặt chẽ', 'Sound reasoning') },
+        { name: t(lang, 'Tiêu chí so sánh', 'Comparison criteria'), maxScore: 4, description: t(lang, 'Ít nhất 3 tiêu chí rõ ràng', 'At least three clear criteria') },
+        { name: t(lang, 'Tình huống áp dụng', 'When to use'), maxScore: 4, description: t(lang, 'Tình huống hợp lý cho mỗi cách', 'A sensible situation for each approach') },
+        { name: t(lang, 'Lập luận', 'Reasoning'), maxScore: 2, description: t(lang, 'Lập luận chặt chẽ', 'Sound reasoning') },
       ],
     },
   }),
@@ -257,34 +256,33 @@ const sleep = (ms: number, signal?: AbortSignal) =>
     });
   });
 
-/** Mock AI-03: same request/response shape as the spec, with a short "thinking" delay. */
+/** Mock AI generation: same request/response shape as the backend, with a short "thinking" delay. */
 export async function mockGenerateAiQuestions(req: QuestionAiGenerateRequest, signal?: AbortSignal): Promise<QuestionAiDraftResponse> {
   await sleep(800 + Math.random() * 1200, signal);
 
-  const lang: Lang = req.language === 'vi' ? 'vi' : 'en';
-  const topic = req.topic.trim() || t(lang, 'chủ đề', 'the topic');
-  const builders = BUILDERS[req.questionType] ?? SINGLE;
+  const lang: Lang = req.language === 'Vietnamese' ? 'vi' : 'en';
+  const topic = req.context?.trim() || t(lang, 'chủ đề', 'the topic');
   const difficulty: QuestionDifficulty = req.difficulty ?? 'MEDIUM';
 
-  // Random starting template and answer position, so "Regenerate" (count 1) gives something new.
-  const start = Math.floor(Math.random() * builders.length * 4);
-  const questions: QuestionAiDraft[] = Array.from({ length: req.count }, (_, i) => {
-    const built = builders[(start + i) % builders.length](topic, lang, start + i, req.optionsCount);
-    // Repeat templates get a numbered variant so the list doesn't look duplicated.
-    const round = Math.floor(i / builders.length);
-    return {
-      ...built,
-      content: round > 0 ? `${built.content} (${t(lang, 'biến thể', 'variant')} ${round + 1})` : built.content,
-      questionType: req.questionType,
-      difficulty,
-    };
+  const questions: QuestionAiPreview[] = [];
+  (Object.entries(req.questionTypeCounts) as [QuestionType, number][]).forEach(([questionType, count]) => {
+    const builders = BUILDERS[questionType] ?? SINGLE;
+    // Random starting template and answer position, so "Regenerate" (count 1) gives something new.
+    const start = Math.floor(Math.random() * builders.length * 4);
+    for (let i = 0; i < count; i++) {
+      const built = builders[(start + i) % builders.length](topic, lang, start + i);
+      // Repeat templates get a numbered variant so the list doesn't look duplicated.
+      const round = Math.floor(i / builders.length);
+      const content = round > 0 ? `${built.content} (${t(lang, 'biến thể', 'variant')} ${round + 1})` : built.content;
+      questions.push({ question: { ...built, content, questionType, difficulty }, hasHashConflict: false, validationError: null });
+    }
   });
 
-  // Like the real backend, drop a question that fails validation and say why.
-  const warnings: string[] = [];
-  if (questions.length >= 4) {
-    questions.pop();
-    warnings.push(t(lang, `Câu ${req.count} bị loại: đáp án đúng không khớp với nội dung câu hỏi.`, `Question ${req.count} was removed: its answer key didn’t match the question.`));
+  // Like the real backend, flag a draft that fails validation instead of dropping it.
+  const last = questions[questions.length - 1];
+  if (questions.length >= 4 && last.question.questionType === 'SINGLE_CHOICE') {
+    last.question = { ...last.question, options: last.question.options.map(o => ({ ...o, isCorrect: false })) };
+    last.validationError = 'Question validation failed';
   }
-  return { questions, warnings };
+  return { logId: null, questions };
 }
