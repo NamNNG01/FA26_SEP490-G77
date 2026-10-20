@@ -18,6 +18,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByEmail(String email);
     boolean existsByEmail(String email);
 
+    // UM-03: e-mail uniqueness check that excludes the user being edited.
+    boolean existsByEmailAndUserIdNot(String email, Long userId);
+
     @Query("SELECT COUNT(u) FROM User u WHERE u.roleName = :roleName")
     long countByRoleName(@Param("roleName") String roleName);
 

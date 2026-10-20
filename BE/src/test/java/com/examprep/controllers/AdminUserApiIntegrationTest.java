@@ -5,6 +5,7 @@ import com.examprep.entities.Course;
 import com.examprep.entities.Enrollment;
 import com.examprep.entities.Exam;
 import com.examprep.entities.ExamAttempt;
+import com.examprep.entities.RefreshToken;
 import com.examprep.entities.User;
 import com.examprep.repositories.UserRepository;
 import com.examprep.security.UserPrincipal;
@@ -29,11 +30,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -65,7 +68,9 @@ class AdminUserApiIntegrationTest {
     @Test
     void userEndpointsRequireAuthenticationAndAdminRole() throws Exception {
         mvc.perform(get(BASE)).andExpect(status().isUnauthorized());
-        for (MockHttpServletRequestBuilder request : List.of(get(BASE), get(BASE + "/1"))) {
+        for (MockHttpServletRequestBuilder request : List.of(get(BASE), get(BASE + "/1"),
+                put(BASE + "/1").contentType(MediaType.APPLICATION_JSON)
+                        .content(updateBody("Blocked", "blocked@example.com", User.ROLE_STUDENT, User.STATUS_ACTIVE)))) {
             for (User actor : List.of(manager, student)) {
                 call(actor, request).andExpect(status().isForbidden());
             }
@@ -185,6 +190,102 @@ class AdminUserApiIntegrationTest {
     }
 
     @Test
+    void updateRefreshesProfileAndNormalizesEmail() throws Exception {
+        User target = account(User.ROLE_STUDENT, "Old Name", "old.mail@example.com", User.STATUS_ACTIVE);
+
+        call(admin, put(BASE + "/" + target.getUserId()).contentType(MediaType.APPLICATION_JSON)
+                        .content(updateBody("New Name", "New.Mail@Example.com",
+                                User.ROLE_COURSE_MANAGER, User.STATUS_ACTIVE)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.userId").value(target.getUserId()))
+                .andExpect(jsonPath("$.data.fullName").value("New Name"))
+                .andExpect(jsonPath("$.data.email").value("new.mail@example.com"))
+                .andExpect(jsonPath("$.data.role").value(User.ROLE_COURSE_MANAGER))
+                .andExpect(jsonPath("$.data.status").value(User.STATUS_ACTIVE))
+                .andExpect(jsonPath("$.data.createdAt").isNotEmpty());
+
+        em.flush();
+        em.clear();
+        User reloaded = em.find(User.class, target.getUserId());
+        assertEquals("New Name", reloaded.getFullName());
+        assertEquals("new.mail@example.com", reloaded.getEmail());
+        assertEquals(User.ROLE_COURSE_MANAGER, reloaded.getRoleName());
+    }
+
+    @Test
+    void updateRejectsSelfRoleOrStatusChange() throws Exception {
+        String body = updateBody("Admin User", admin.getEmail(), User.ROLE_STUDENT, User.STATUS_ACTIVE);
+        call(admin, put(BASE + "/" + admin.getUserId()).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Admins cannot change their own role or status."));
+
+        body = updateBody("Admin User", admin.getEmail(), User.ROLE_ADMIN, User.STATUS_INACTIVE);
+        call(admin, put(BASE + "/" + admin.getUserId()).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Admins cannot change their own role or status."));
+
+        // sending the same role and status the admin already has is a plain no-op edit
+        body = updateBody("Renamed Admin", admin.getEmail(), User.ROLE_ADMIN, User.STATUS_ACTIVE);
+        call(admin, put(BASE + "/" + admin.getUserId()).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.fullName").value("Renamed Admin"));
+    }
+
+    @Test
+    void updateRejectsDuplicateEmailOwnedByAnotherUser() throws Exception {
+        User target = account(User.ROLE_STUDENT, "Target", "target@example.com", User.STATUS_ACTIVE);
+
+        String body = updateBody("Target", manager.getEmail(), User.ROLE_STUDENT, User.STATUS_ACTIVE);
+        call(admin, put(BASE + "/" + target.getUserId()).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isConflict());
+
+        // keeping the user's own e-mail is obviously not a conflict
+        body = updateBody("Target", "target@example.com", User.ROLE_STUDENT, User.STATUS_ACTIVE);
+        call(admin, put(BASE + "/" + target.getUserId()).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void updateValidatesFieldsAndUserExists() throws Exception {
+        call(admin, put(BASE + "/999999").contentType(MediaType.APPLICATION_JSON)
+                        .content(updateBody("Ghost", "ghost@example.com", User.ROLE_STUDENT, User.STATUS_ACTIVE)))
+                .andExpect(status().isNotFound());
+
+        User target = account(User.ROLE_STUDENT, "Validator", "validator@example.com", User.STATUS_ACTIVE);
+        call(admin, put(BASE + "/" + target.getUserId()).contentType(MediaType.APPLICATION_JSON)
+                        .content(updateBody("Validator", "validator@example.com", "BOGUS", User.STATUS_ACTIVE)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Unknown role: BOGUS"));
+        call(admin, put(BASE + "/" + target.getUserId()).contentType(MediaType.APPLICATION_JSON)
+                        .content(updateBody("Validator", "validator@example.com", User.ROLE_STUDENT, "BOGUS")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Unknown status: BOGUS"));
+        call(admin, put(BASE + "/" + target.getUserId()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"fullName\":\"Validator\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Validation failed for request parameters"));
+    }
+
+    @Test
+    void updateToInactiveRevokesEverySessionOfThatUserOnly() throws Exception {
+        User target = account(User.ROLE_STUDENT, "Doomed", "doomed@example.com", User.STATUS_ACTIVE);
+        RefreshToken first = token(target);
+        RefreshToken second = token(target);
+        RefreshToken foreign = token(student);
+
+        call(admin, put(BASE + "/" + target.getUserId()).contentType(MediaType.APPLICATION_JSON)
+                        .content(updateBody("Doomed", "doomed@example.com", User.ROLE_STUDENT, User.STATUS_INACTIVE)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value(User.STATUS_INACTIVE));
+
+        em.flush();
+        em.clear();
+        assertNotNull(em.find(RefreshToken.class, first.getRefreshTokenId()).getRevokedAt());
+        assertNotNull(em.find(RefreshToken.class, second.getRefreshTokenId()).getRevokedAt());
+        assertNull(em.find(RefreshToken.class, foreign.getRefreshTokenId()).getRevokedAt());
+    }
+
+    @Test
     void loginRecordsLastLoginAtAndFailureLeavesItUnset() throws Exception {
         User target = User.builder().email(UUID.randomUUID() + "@example.com").fullName("Login User")
                 .passwordHash(encoder.encode("Secret123!")).roleName(User.ROLE_STUDENT).build();
@@ -250,5 +351,17 @@ class AdminUserApiIntegrationTest {
         em.persist(ExamAttempt.builder().exam(target).user(actor)
                 .startTime(submittedAt.minusSeconds(600)).submitTime(submittedAt)
                 .totalScore(BigDecimal.valueOf(score)).status("COMPLETED").build());
+    }
+
+    private RefreshToken token(User owner) {
+        RefreshToken value = RefreshToken.builder().user(owner).tokenHash(UUID.randomUUID().toString())
+                .expiresAt(Instant.now().plusSeconds(3600)).build();
+        em.persist(value);
+        return value;
+    }
+
+    private static String updateBody(String fullName, String email, String role, String status) {
+        return "{\"fullName\":\"" + fullName + "\",\"email\":\"" + email
+                + "\",\"role\":\"" + role + "\",\"status\":\"" + status + "\"}";
     }
 }

@@ -4,16 +4,21 @@ import com.examprep.dto.AdminUserDetailResponse;
 import com.examprep.dto.AdminUserItem;
 import com.examprep.dto.AdminUserListStats;
 import com.examprep.dto.AdminUserPageResponse;
+import com.examprep.dto.AdminUserRequests;
+import com.examprep.dto.AdminUserResponse;
 import com.examprep.dto.IdCount;
 import com.examprep.dto.ResponseCode;
 import com.examprep.dto.StudentRecentAttempt;
 import com.examprep.dto.UserLearningStats;
 import com.examprep.entities.User;
 import com.examprep.exceptions.BadRequestException;
+import com.examprep.exceptions.BaseException;
 import com.examprep.exceptions.ResourceNotFoundException;
 import com.examprep.repositories.EnrollmentRepository;
 import com.examprep.repositories.ExamAttemptRepository;
+import com.examprep.repositories.RefreshTokenRepository;
 import com.examprep.repositories.UserRepository;
+import com.examprep.security.UserPrincipal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -45,16 +50,15 @@ public class AdminUserServiceImpl implements AdminUserService {
     private final UserRepository users;
     private final EnrollmentRepository enrollments;
     private final ExamAttemptRepository attempts;
+    private final RefreshTokenRepository refreshTokens;
 
     @Override
     public AdminUserPageResponse list(String search, String role, String status, int page, int size) {
         if (page < 0 || size < 1 || size > 100 || (long) page * size > Integer.MAX_VALUE)
             throw new BadRequestException(ResponseCode.VALIDATION_ERROR,
                     "Page must be nonnegative, size must be 1-100, and offset must fit a 32-bit integer.");
-        if (role != null && !ROLES.contains(role))
-            throw new BadRequestException(ResponseCode.VALIDATION_ERROR, "Unknown role: " + role);
-        if (status != null && !STATUSES.contains(status))
-            throw new BadRequestException(ResponseCode.VALIDATION_ERROR, "Unknown status: " + status);
+        requireKnownRole(role);
+        requireKnownStatus(status);
 
         String text = search == null ? "" : search.strip().toLowerCase(Locale.ROOT);
         String pattern = text.isEmpty() ? null
@@ -92,6 +96,43 @@ public class AdminUserServiceImpl implements AdminUserService {
                 .build();
 
         return AdminUserDetailResponse.from(user, stats, recent);
+    }
+
+    @Override
+    @Transactional
+    public AdminUserResponse update(UserPrincipal actor, Long id, AdminUserRequests.Update request) {
+        requireKnownRole(request.role());
+        requireKnownStatus(request.status());
+        User user = requireUser(id);
+
+        if (actor.getId().equals(id)
+                && (!request.role().equals(user.getRoleName()) || !request.status().equals(user.getStatus())))
+            throw new BadRequestException(ResponseCode.VALIDATION_ERROR,
+                    "Admins cannot change their own role or status.");
+
+        String email = request.email().trim().toLowerCase(Locale.ROOT);
+        if (users.existsByEmailAndUserIdNot(email, id))
+            throw new BaseException(ResponseCode.CONFLICT, "Email is already used by another account.");
+
+        user.setFullName(request.fullName().trim());
+        user.setEmail(email);
+        user.setRoleName(request.role());
+        user.setStatus(request.status());
+
+        if (User.STATUS_INACTIVE.equalsIgnoreCase(request.status()))
+            refreshTokens.revokeAllByUserId(id, Instant.now());
+
+        return AdminUserResponse.from(user);
+    }
+
+    private static void requireKnownRole(String role) {
+        if (role != null && !ROLES.contains(role))
+            throw new BadRequestException(ResponseCode.VALIDATION_ERROR, "Unknown role: " + role);
+    }
+
+    private static void requireKnownStatus(String status) {
+        if (status != null && !STATUSES.contains(status))
+            throw new BadRequestException(ResponseCode.VALIDATION_ERROR, "Unknown status: " + status);
     }
 
     private static BigDecimal roundedAverage(Number raw) {
