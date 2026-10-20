@@ -99,6 +99,9 @@ public class AuthServiceImpl implements AuthService {
                     "User account is inactive or blocked.");
         }
 
+        // UM-01..05: surface "Last Login" in the admin user screens.
+        user.setLastLoginAt(Instant.now());
+
         String accessToken = tokenProvider.generateAccessToken(user);
         String rawRefreshToken = tokenProvider.generateRawRefreshToken();
         refreshTokenRepository.save(newRefreshToken(user, rawRefreshToken));

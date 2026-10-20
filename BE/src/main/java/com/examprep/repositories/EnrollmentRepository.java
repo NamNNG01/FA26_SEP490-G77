@@ -37,6 +37,10 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
     @Query("SELECT new com.examprep.dto.IdCount(e.course.courseId, COUNT(DISTINCT e.user.userId)) FROM Enrollment e WHERE e.course.courseId IN :ids GROUP BY e.course.courseId")
     List<IdCount> countByCourses(@Param("ids") List<Long> ids);
 
+    // UM-01: enrolled-courses counter per user for one page of the admin user list.
+    @Query("SELECT new com.examprep.dto.IdCount(e.user.userId, COUNT(e)) FROM Enrollment e WHERE e.user.userId IN :ids GROUP BY e.user.userId")
+    List<IdCount> countByUserIds(@Param("ids") List<Long> ids);
+
     @EntityGraph(attributePaths = "user")
     @Query("SELECT e FROM Enrollment e WHERE e.course.courseId = :courseId AND (:status IS NULL OR e.status = :status) " +
             "AND (LOWER(e.user.fullName) LIKE :search ESCAPE '!' OR LOWER(e.user.email) LIKE :search ESCAPE '!')")

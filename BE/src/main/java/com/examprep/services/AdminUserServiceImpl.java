@@ -1,0 +1,77 @@
+package com.examprep.services;
+
+import com.examprep.dto.AdminUserItem;
+import com.examprep.dto.AdminUserListStats;
+import com.examprep.dto.AdminUserPageResponse;
+import com.examprep.dto.IdCount;
+import com.examprep.dto.ResponseCode;
+import com.examprep.entities.User;
+import com.examprep.exceptions.BadRequestException;
+import com.examprep.repositories.EnrollmentRepository;
+import com.examprep.repositories.UserRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+@Service
+@RequiredArgsConstructor
+@Transactional(readOnly = true)
+@PreAuthorize("hasRole('ADMIN')")
+public class AdminUserServiceImpl implements AdminUserService {
+
+    private static final Set<String> ROLES = Set.of(User.ROLE_STUDENT, User.ROLE_COURSE_MANAGER, User.ROLE_ADMIN);
+    private static final Set<String> STATUSES = Set.of(User.STATUS_ACTIVE, User.STATUS_INACTIVE);
+
+    private final UserRepository users;
+    private final EnrollmentRepository enrollments;
+
+    @Override
+    public AdminUserPageResponse list(String search, String role, String status, int page, int size) {
+        if (page < 0 || size < 1 || size > 100 || (long) page * size > Integer.MAX_VALUE)
+            throw new BadRequestException(ResponseCode.VALIDATION_ERROR,
+                    "Page must be nonnegative, size must be 1-100, and offset must fit a 32-bit integer.");
+        if (role != null && !ROLES.contains(role))
+            throw new BadRequestException(ResponseCode.VALIDATION_ERROR, "Unknown role: " + role);
+        if (status != null && !STATUSES.contains(status))
+            throw new BadRequestException(ResponseCode.VALIDATION_ERROR, "Unknown status: " + status);
+
+        String text = search == null ? "" : search.strip().toLowerCase(Locale.ROOT);
+        String pattern = text.isEmpty() ? null
+                : "%" + text.replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%";
+
+        Page<User> result = users.findUsers(pattern, role, status,
+                PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "userId")));
+
+        List<Long> ids = result.getContent().stream().map(User::getUserId).toList();
+        Map<Long, Long> counts = ids.isEmpty() ? Map.of()
+                : enrollments.countByUserIds(ids).stream().collect(Collectors.toMap(IdCount::id, IdCount::total));
+
+        Page<AdminUserItem> content = result.map(u -> AdminUserItem.from(u, counts.getOrDefault(u.getUserId(), 0L)));
+
+        AdminUserListStats stats = AdminUserListStats.builder()
+                .total(users.count())
+                .active(users.countByStatus(User.STATUS_ACTIVE))
+                .inactive(users.countByStatus(User.STATUS_INACTIVE))
+                .newThisMonth(users.countByCreatedAtAfter(startOfCurrentMonth()))
+                .build();
+
+        return AdminUserPageResponse.of(content, stats);
+    }
+
+    private static Instant startOfCurrentMonth() {
+        return LocalDate.now(ZoneOffset.UTC).withDayOfMonth(1).atStartOfDay(ZoneOffset.UTC).toInstant();
+    }
+}
