@@ -23,7 +23,7 @@ public class ManagerExamController {
     private final ManagerExamService service;
     private final MaterialTextReader reader;
 
-    @GetMapping("/exam-builder")
+    @GetMapping("/exams")
     public ResponseEntity<ApiResponse<PageResponse<ExamResponse>>> list(@AuthenticationPrincipal UserPrincipal user,
             @RequestParam(required=false) String search, @RequestParam(required=false) Long courseId,
             @RequestParam(required=false) Long moduleId, @RequestParam(required=false) String status,
@@ -31,39 +31,39 @@ public class ManagerExamController {
             @RequestParam(defaultValue="20") int size) {
         return ResponseEntity.ok(ApiResponse.success(service.list(user,search,courseId,moduleId,status,examKind,page,size)));
     }
-    @GetMapping("/exam-builder/{id}")
+    @GetMapping("/exams/{id}")
     public ResponseEntity<ApiResponse<ExamResponse>> detail(@AuthenticationPrincipal UserPrincipal user,@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.success(service.detail(user,id)));
     }
-    @PostMapping("/exam-builder")
+    @PostMapping("/exams")
     public ResponseEntity<ApiResponse<ExamResponse>> create(@AuthenticationPrincipal UserPrincipal user,@Valid @RequestBody ExamRequests.Create request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(service.create(user,request),ResponseCode.CREATED.getMessage()));
     }
-    @PutMapping("/exam-builder/{id}")
+    @PutMapping("/exams/{id}")
     public ResponseEntity<ApiResponse<ExamResponse>> update(@AuthenticationPrincipal UserPrincipal user,@PathVariable Long id,@Valid @RequestBody ExamRequests.Update request) {
         return ResponseEntity.ok(ApiResponse.success(service.update(user,id,request)));
     }
-    @PatchMapping("/exam-builder/{id}/publish")
+    @PatchMapping("/exams/{id}/publish")
     public ResponseEntity<ApiResponse<ExamResponse.Published>> publish(@AuthenticationPrincipal UserPrincipal user,@PathVariable Long id,@Valid @RequestBody ExamRequests.Publish request) {
         return ResponseEntity.ok(ApiResponse.success(service.publish(user,id,request)));
     }
-    @DeleteMapping("/exam-builder/{id}")
+    @DeleteMapping("/exams/{id}")
     public ResponseEntity<ApiResponse<Void>> delete(@AuthenticationPrincipal UserPrincipal user,@PathVariable Long id) {
         service.delete(user,id); return ResponseEntity.ok(ApiResponse.success(null,"Exam deleted successfully."));
     }
-    @PostMapping("/exam-builder/{id}/questions")
+    @PostMapping("/exams/{id}/questions")
     public ResponseEntity<ApiResponse<ExamResponse.QuestionLink>> addQuestion(@AuthenticationPrincipal UserPrincipal user,@PathVariable Long id,@Valid @RequestBody ExamRequests.QuestionLink request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(service.addQuestion(user,id,request),ResponseCode.CREATED.getMessage()));
     }
-    @DeleteMapping("/exam-builder/{id}/questions/{linkId}")
+    @DeleteMapping("/exams/{id}/questions/{linkId}")
     public ResponseEntity<ApiResponse<Void>> removeQuestion(@AuthenticationPrincipal UserPrincipal user,@PathVariable Long id,@PathVariable Long linkId) {
         service.removeQuestion(user,id,linkId); return ResponseEntity.ok(ApiResponse.success(null,"Question removed from exam."));
     }
-    @PostMapping("/exam-builder/{id}/groups")
+    @PostMapping("/exams/{id}/groups")
     public ResponseEntity<ApiResponse<ExamResponse.GroupLink>> addGroup(@AuthenticationPrincipal UserPrincipal user,@PathVariable Long id,@Valid @RequestBody ExamRequests.GroupLink request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(service.addGroup(user,id,request),ResponseCode.CREATED.getMessage()));
     }
-    @DeleteMapping("/exam-builder/{id}/groups/{linkId}")
+    @DeleteMapping("/exams/{id}/groups/{linkId}")
     public ResponseEntity<ApiResponse<Void>> removeGroup(@AuthenticationPrincipal UserPrincipal user,@PathVariable Long id,@PathVariable Long linkId) {
         service.removeGroup(user,id,linkId); return ResponseEntity.ok(ApiResponse.success(null,"Group removed from exam."));
     }
@@ -71,7 +71,7 @@ public class ManagerExamController {
     public ResponseEntity<ApiResponse<Map<String,Object>>> rubric(@AuthenticationPrincipal UserPrincipal user,@PathVariable Long id,@Valid @RequestBody ExamRequests.Rubric request) {
         return ResponseEntity.ok(ApiResponse.success(service.rubric(user,id,request)));
     }
-    @PostMapping(value="/exam-builder/{id}/import",consumes="multipart/form-data")
+    @PostMapping(value="/exams/{id}/import",consumes="multipart/form-data")
     public ResponseEntity<ApiResponse<ExamResponse.Imported>> importQuestions(@AuthenticationPrincipal UserPrincipal user,@PathVariable Long id,
             @RequestParam MultipartFile file,@RequestParam(defaultValue="1") BigDecimal defaultPoints) {
         // Check access/state before parsing untrusted files.

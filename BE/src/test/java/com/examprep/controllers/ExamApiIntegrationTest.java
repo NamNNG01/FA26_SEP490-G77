@@ -58,14 +58,14 @@ class ExamApiIntegrationTest {
 
     @Test void listAndDetailEnforcePrimaryAndAssignedOwnership() throws Exception {
         Exam owned = exam(course, module), foreign = exam(foreignCourse, foreignModule);
-        mvc.perform(get("/api/v1/manager/exam-builder")).andExpect(status().isUnauthorized());
-        call(student, get("/api/v1/manager/exam-builder")).andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/manager/exams")).andExpect(status().isUnauthorized());
+        call(student, get("/api/v1/manager/exams")).andExpect(status().isForbidden());
         call(collaborator, get(path(owned))).andExpect(status().isOk());
         call(manager, get(path(foreign))).andExpect(status().isForbidden());
-        call(manager, get("/api/v1/manager/exam-builder")).andExpect(status().isOk())
+        call(manager, get("/api/v1/manager/exams")).andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.totalElements").value(1));
-        call(admin, get("/api/v1/manager/exam-builder")).andExpect(jsonPath("$.data.totalElements").value(2));
-        call(manager, get("/api/v1/manager/exam-builder").param("size", "101")).andExpect(status().isBadRequest());
+        call(admin, get("/api/v1/manager/exams")).andExpect(jsonPath("$.data.totalElements").value(2));
+        call(manager, get("/api/v1/manager/exams").param("size", "101")).andExpect(status().isBadRequest());
     }
 
     @Test void createsDraftWithDirectAndGroupedQuestionsAndCountsPoints() throws Exception {
@@ -75,14 +75,14 @@ class ExamApiIntegrationTest {
         Map<String,Object> payload = create();
         payload.put("status", "PUBLISHED");
         payload.put("groupIds", List.of(Map.of("groupId", group.getGroupId(), "points", 5)));
-        JsonNode result = data(call(collaborator, post("/api/v1/manager/exam-builder").contentType(MediaType.APPLICATION_JSON)
+        JsonNode result = data(call(collaborator, post("/api/v1/manager/exams").contentType(MediaType.APPLICATION_JSON)
                 .content(json.writeValueAsString(payload))).andExpect(status().isCreated()));
         assertEquals("DRAFT", result.path("status").asText());
         assertEquals(2, result.path("questionCount").asInt());
         assertEquals(0, new BigDecimal("7").compareTo(result.path("totalPoints").decimalValue()));
         assertEquals(1, result.path("questions").size());
         assertEquals(1, result.path("groups").size());
-        call(manager, get("/api/v1/manager/exam-builder").param("search", "Final").param("examKind", "MIXED"))
+        call(manager, get("/api/v1/manager/exams").param("search", "Final").param("examKind", "MIXED"))
                 .andExpect(jsonPath("$.data.totalElements").value(1));
     }
 
@@ -210,7 +210,7 @@ class ExamApiIntegrationTest {
 
     @Test void changingCourseRejectsRetainedConfigFromPreviousCourse() throws Exception {
         long id = data(submit(random("ESSAY")).andExpect(status().isCreated())).path("examId").asLong();
-        call(admin, put("/api/v1/manager/exam-builder/" + id).contentType(MediaType.APPLICATION_JSON)
+        call(admin, put("/api/v1/manager/exams/" + id).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"courseId\":" + foreignCourse.getCourseId() + "}"))
                 .andExpect(status().isBadRequest());
     }
@@ -228,9 +228,9 @@ class ExamApiIntegrationTest {
 
     @Test void incompleteRandomDraftCanBeSavedButCannotPublish() throws Exception {
         long id = data(submit(random("ESSAY")).andExpect(status().isCreated())).path("examId").asLong();
-        call(manager, put("/api/v1/manager/exam-builder/" + id).contentType(MediaType.APPLICATION_JSON)
+        call(manager, put("/api/v1/manager/exams/" + id).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"configs\":[]}")).andExpect(status().isOk());
-        call(manager, patch("/api/v1/manager/exam-builder/" + id + "/publish").contentType(MediaType.APPLICATION_JSON)
+        call(manager, patch("/api/v1/manager/exams/" + id + "/publish").contentType(MediaType.APPLICATION_JSON)
                 .content("{\"status\":\"PUBLISHED\"}")).andExpect(status().isBadRequest());
     }
 
@@ -244,7 +244,7 @@ class ExamApiIntegrationTest {
     }
 
     private ResultActions submit(Map<String,Object> payload) throws Exception {
-        return call(manager, post("/api/v1/manager/exam-builder").contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(payload)));
+        return call(manager, post("/api/v1/manager/exams").contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(payload)));
     }
     private Map<String,Object> create() {
         Map<String,Object> result = new HashMap<>();
@@ -257,7 +257,7 @@ class ExamApiIntegrationTest {
         em.flush(); return mvc.perform(request.with(user(UserPrincipal.create(actor))));
     }
     private JsonNode data(ResultActions result) throws Exception { return json.readTree(result.andReturn().getResponse().getContentAsString()).path("data"); }
-    private String path(Exam exam) { return "/api/v1/manager/exam-builder/"+exam.getExamId(); }
+    private String path(Exam exam) { return "/api/v1/manager/exams/"+exam.getExamId(); }
     private User account(String role) { User result=User.builder().email(UUID.randomUUID()+"@example.com").fullName(role).passwordHash("test").roleName(role).build(); em.persist(result); return result; }
     private Course course(User owner, Category category) { Course result=Course.builder().manager(owner).category(category).categoryId(category.getCategoryId()).title("Course").slug(UUID.randomUUID().toString()).isPublished(false).build(); em.persist(result); return result; }
     private Module module(Course parent) { Module result=Module.builder().course(parent).title("Module").orderIndex(1).build(); em.persist(result); return result; }

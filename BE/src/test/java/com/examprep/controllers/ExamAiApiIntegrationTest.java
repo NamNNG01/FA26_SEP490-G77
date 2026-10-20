@@ -193,6 +193,14 @@ class ExamAiApiIntegrationTest {
         generate(manager, request).andExpect(status().isOk()).andExpect(jsonPath("$.data.questionCount").value(9));
     }
 
+    @Test void acceptsFrontendMultiChoiceAlias() throws Exception {
+        providerContent = json.writeValueAsString(Map.of("questions", List.of(Map.of("content", "Pick the even numbers",
+                "questionType", "MULTIPLE_CHOICE", "difficulty", "EASY", "options", List.of(
+                        Map.of("optionText", "2", "isCorrect", true, "orderIndex", 0), Map.of("optionText", "3", "isCorrect", false, "orderIndex", 1))))));
+        generate(manager, body().replace("SINGLE_CHOICE", "MULTI_CHOICE")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.questions[0].questionType").value("MULTIPLE_CHOICE"));
+    }
+
     @Test void mapsProviderErrorsAndTimeoutToDistinctStatuses() throws Exception {
         providerStatus = 429;
         generate(manager, body()).andExpect(status().isTooManyRequests());
@@ -265,7 +273,7 @@ class ExamAiApiIntegrationTest {
     private String body() throws Exception { return json.writeValueAsString(Map.of("courseId", course.getCourseId(), "moduleId", module.getModuleId(),
             "questionCount", 1, "difficultyDistribution", Map.of("EASY", 1, "MEDIUM", 0, "HARD", 0),
             "questionTypes", List.of(Map.of("questionType", "SINGLE_CHOICE", "count", 1)), "language", "en", "useExistingBank", false)); }
-    private static String path() { return "/api/v1/manager/exam-builder/ai/generate"; }
+    private static String path() { return "/api/v1/manager/exams/ai/generate"; }
     private long countQuestions() { return em.createQuery("select count(q) from Question q", Long.class).getSingleResult(); }
     private Map<String, Object> choice(String type, String difficulty) {
         return Map.of("content", "What is 2 + 2?", "questionType", type, "difficulty", difficulty, "options", List.of(
