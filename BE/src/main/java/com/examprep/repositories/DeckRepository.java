@@ -31,5 +31,15 @@ public interface DeckRepository extends JpaRepository<Deck, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT d FROM Deck d WHERE d.deckId = :id")
     Optional<Deck> findForUpdate(@Param("id") Long id);
+
+    @Query("SELECT COUNT(d) FROM Deck d WHERE d.course.courseId = :courseId " +
+            "AND LOWER(d.title) = LOWER(:title) AND d.deckId <> :excludeId")
+    long countByCourseAndTitle(@Param("courseId") Long courseId, @Param("title") String title,
+                               @Param("excludeId") Long excludeId);
+
+    @Query("SELECT COUNT(d) FROM Deck d WHERE d.user.userId = :userId AND d.course IS NULL " +
+            "AND LOWER(d.title) = LOWER(:title) AND d.deckId <> :excludeId")
+    long countByOwnerWithoutCourseAndTitle(@Param("userId") Long userId, @Param("title") String title,
+                                           @Param("excludeId") Long excludeId);
 }
 
