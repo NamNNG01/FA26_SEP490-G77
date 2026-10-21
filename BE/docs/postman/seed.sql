@@ -98,8 +98,12 @@ SET answer_key = '{"blanks":[{"index":1,"accepted":["extends"],"caseSensitive":f
 WHERE question_id = 5;
 
 UPDATE questions
-SET answer_key = '{"pairs":[{"left":"List","right":"Ordered collection"},{"left":"Set","right":"Unique elements"}]}'::jsonb
-WHERE question_id = 4;
+SET answer_key = json_build_object(
+    'correctOrder', ARRAY(
+        SELECT option_id FROM answer_options WHERE question_id = 8 ORDER BY order_index DESC
+    )
+)::jsonb
+WHERE question_id = 8;
 
 -- 11. Answer Options for Choice, True/False, and Ordering questions
 INSERT INTO answer_options (question_id, option_text, is_correct, order_index)

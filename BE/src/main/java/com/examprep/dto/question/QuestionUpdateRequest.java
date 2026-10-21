@@ -25,5 +25,6 @@ public class QuestionUpdateRequest {
     private Object answerKey;
     private Object essayGradingRubric;
     private List<AnswerOptionDto> options;
+    private List<Object> correctOrder;
     private Long lockVersion;
 }

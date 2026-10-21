@@ -166,7 +166,8 @@ public class QuestionValidator {
         }
 
         // 4. Type specific rules
-        boolean hasOptionsType = type.equals("SINGLE_CHOICE") || type.equals("MULTIPLE_CHOICE") || type.equals("TRUE_FALSE") || type.equals("ORDERING");
+        boolean hasOptionsType = type.equals("SINGLE_CHOICE") || type.equals("MULTIPLE_CHOICE") || type.equals("TRUE_FALSE");
+        boolean isOrdering = type.equals("ORDERING");
         boolean noOptionsType = type.equals("MATCHING") || type.equals("FILL_BLANK") || type.equals("ESSAY") || type.equals("DIAGRAM");
 
         if (hasOptionsType) {
@@ -223,16 +224,92 @@ public class QuestionValidator {
                     if (correctCount < 2 || incorrectCount < 1) {
                         errors.add(new ValidationError(prefix + "options", "Multiple choice question must have at least 2 correct options and at least 1 incorrect option"));
                     }
-                } else if (type.equals("ORDERING")) {
-                    for (int i = 0; i < opts.size(); i++) {
-                        AnswerOptionDto opt = opts.get(i);
-                        String optPrefix = prefix + "options[" + i + "].";
-                        if (opt != null && Boolean.TRUE.equals(opt.getIsCorrect())) {
-                            errors.add(new ValidationError(optPrefix + "isCorrect", "Ordering question options must have isCorrect=false"));
+                }
+            }
+        }
+
+        if (isOrdering) {
+            List<AnswerOptionDto> opts = payload.getOptions();
+            if (opts == null || opts.isEmpty() || opts.size() < 2 || opts.size() > 10) {
+                errors.add(new ValidationError(prefix + "options", "Number of options must be between 2 and 10"));
+            } else {
+                Set<String> keys = new HashSet<>();
+                Set<String> normalizedTexts = new HashSet<>();
+                Set<Integer> orderIndices = new HashSet<>();
+                boolean hasAnyOrderIndex = false;
+
+                for (int i = 0; i < opts.size(); i++) {
+                    AnswerOptionDto opt = opts.get(i);
+                    String optPrefix = prefix + "options[" + i + "].";
+                    if (opt == null) continue;
+
+                    if (opt.getIsCorrect() != null) {
+                        errors.add(new ValidationError(optPrefix + "isCorrect", "Ordering question options cannot have isCorrect"));
+                    }
+
+                    String key = opt.getKey();
+                    if (key == null || key.trim().isEmpty()) {
+                        errors.add(new ValidationError(optPrefix + "key", "Option key is required"));
+                    } else if (key.length() > 32) {
+                        errors.add(new ValidationError(optPrefix + "key", "Option key cannot exceed 32 characters"));
+                    } else if (!keys.add(key)) {
+                        errors.add(new ValidationError(optPrefix + "key", "Duplicate option key"));
+                    }
+
+                    String optText = sanitize(opt.getOptionText());
+                    if (optText == null || optText.trim().isEmpty()) {
+                        errors.add(new ValidationError(optPrefix + "optionText", "Option text is required"));
+                    } else {
+                        String normalized = optText.trim().toLowerCase().replaceAll("\\s+", " ");
+                        if (!normalizedTexts.add(normalized)) {
+                            errors.add(new ValidationError(optPrefix + "optionText", "Duplicate option text"));
                         }
-                        Integer orderIdx = opt != null ? opt.getOrderIndex() : null;
-                        if (orderIdx == null) {
-                            errors.add(new ValidationError(optPrefix + "orderIndex", "Order index is required for ordering question options"));
+                    }
+
+                    Integer orderIdx = opt.getOrderIndex();
+                    if (orderIdx != null) {
+                        hasAnyOrderIndex = true;
+                        if (!orderIndices.add(orderIdx)) {
+                            errors.add(new ValidationError(optPrefix + "orderIndex", "Duplicate order index"));
+                        }
+                    }
+                }
+
+                if (hasAnyOrderIndex) {
+                    if (orderIndices.size() != opts.size() || !orderIndices.contains(0) || !orderIndices.contains(opts.size() - 1)) {
+                        errors.add(new ValidationError(prefix + "options", "Order index must be unique and continuous from 0 to n-1"));
+                    }
+                }
+
+                List<?> correctOrder = null;
+                Object ak = payload.getAnswerKey();
+                if (payload.getCorrectOrder() != null) {
+                    correctOrder = payload.getCorrectOrder();
+                } else if (ak instanceof Map) {
+                    Object coObj = ((Map<?, ?>) ak).get("correctOrder");
+                    if (coObj instanceof List) {
+                        correctOrder = (List<?>) coObj;
+                    }
+                }
+
+                if (correctOrder == null || correctOrder.isEmpty()) {
+                    errors.add(new ValidationError(prefix + "correctOrder", "Correct order is required"));
+                } else {
+                    if (correctOrder.size() != opts.size()) {
+                        errors.add(new ValidationError(prefix + "correctOrder", "Correct order size must match options size"));
+                    } else {
+                        Set<String> seenCorrectKeys = new HashSet<>();
+                        for (int j = 0; j < correctOrder.size(); j++) {
+                            Object item = correctOrder.get(j);
+                            String itemStr = item != null ? item.toString() : null;
+                            String coPrefix = prefix + "correctOrder[" + j + "]";
+                            if (itemStr == null || itemStr.trim().isEmpty()) {
+                                errors.add(new ValidationError(coPrefix, "Correct order item cannot be empty"));
+                            } else if (!keys.contains(itemStr)) {
+                                errors.add(new ValidationError(coPrefix, "Unknown key in correct order: " + itemStr));
+                            } else if (!seenCorrectKeys.add(itemStr)) {
+                                errors.add(new ValidationError(coPrefix, "Duplicate key in correct order"));
+                            }
                         }
                     }
                 }

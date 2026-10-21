@@ -241,6 +241,7 @@ public class QuestionServiceImpl implements QuestionService {
 
         question = questionRepository.save(question);
 
+        boolean isOrdering = "ORDERING".equals(req.getQuestionType());
         List<AnswerOption> optionsToSave = new ArrayList<>();
         if (req.getOptions() != null) {
             for (int i = 0; i < req.getOptions().size(); i++) {
@@ -248,7 +249,7 @@ public class QuestionServiceImpl implements QuestionService {
                 AnswerOption opt = AnswerOption.builder()
                         .question(question)
                         .optionText(questionValidator.sanitize(optDto.getOptionText()))
-                        .isCorrect(optDto.getIsCorrect() != null ? optDto.getIsCorrect() : false)
+                        .isCorrect(isOrdering ? false : (optDto.getIsCorrect() != null ? optDto.getIsCorrect() : false))
                         .explanation(questionValidator.sanitize(optDto.getExplanation()))
                         .orderIndex(optDto.getOrderIndex() != null ? optDto.getOrderIndex() : i)
                         .build();
@@ -257,6 +258,56 @@ public class QuestionServiceImpl implements QuestionService {
         }
 
         List<AnswerOption> savedOptions = answerOptionRepository.saveAll(optionsToSave);
+
+        String finalAnswerKeyJson = answerKeyJson;
+        String finalContentHash = contentHash;
+
+        if (isOrdering) {
+            Map<String, Long> keyToIdMap = new HashMap<>();
+            for (int i = 0; i < req.getOptions().size(); i++) {
+                AnswerOptionDto dto = req.getOptions().get(i);
+                String k = dto.getKey() != null ? dto.getKey() : String.valueOf(i);
+                keyToIdMap.put(k, savedOptions.get(i).getOptionId());
+                keyToIdMap.put(String.valueOf(savedOptions.get(i).getOptionId()), savedOptions.get(i).getOptionId());
+            }
+
+            List<Object> coList = req.getCorrectOrder();
+            if (coList == null && req.getAnswerKey() instanceof Map) {
+                Object coObj = ((Map<?, ?>) req.getAnswerKey()).get("correctOrder");
+                if (coObj instanceof List) {
+                    coList = (List<Object>) coObj;
+                }
+            }
+
+            List<Long> orderedOptionIds = new ArrayList<>();
+            List<String> orderedOptionTexts = new ArrayList<>();
+            if (coList != null) {
+                for (Object item : coList) {
+                    String itemStr = item != null ? item.toString() : "";
+                    Long optId = keyToIdMap.get(itemStr);
+                    if (optId == null) {
+                        try {
+                            optId = Long.parseLong(itemStr);
+                        } catch (Exception ignored) {}
+                    }
+                    if (optId != null) {
+                        orderedOptionIds.add(optId);
+                        final Long targetId = optId;
+                        savedOptions.stream().filter(o -> o.getOptionId().equals(targetId)).findFirst()
+                                .ifPresent(o -> orderedOptionTexts.add(o.getOptionText()));
+                    }
+                }
+            }
+
+            finalAnswerKeyJson = serializeJson(Map.of("correctOrder", orderedOptionIds), "answerKey");
+            question.setAnswerKey(finalAnswerKeyJson);
+            finalContentHash = ContentHashUtil.computeOrderingHash(sanitizedContent, orderedOptionTexts);
+            question.setContentHash(finalContentHash);
+            checkContentHashConflict(course.getCourseId(), finalContentHash, null);
+            question = questionRepository.save(question);
+        } else {
+            checkContentHashConflict(course.getCourseId(), contentHash, null);
+        }
 
         return mapToDetailDto(question, savedOptions);
     }
@@ -400,6 +451,19 @@ public class QuestionServiceImpl implements QuestionService {
             }
         }
 
+        boolean isOrdering = "ORDERING".equals(typeToValidate);
+        List<Long> oldCorrectOrder = new ArrayList<>();
+        if (isOrdering && q.getAnswerKey() != null) {
+            try {
+                Map<String, Object> akMap = objectMapper.readValue(q.getAnswerKey(), Map.class);
+                if (akMap.get("correctOrder") instanceof List) {
+                    oldCorrectOrder = ((List<?>) akMap.get("correctOrder")).stream()
+                            .map(idObj -> Long.parseLong(idObj.toString()))
+                            .collect(Collectors.toList());
+                }
+            } catch (Exception ignored) {}
+        }
+
         List<AnswerOption> existingOptions = answerOptionRepository.findByQuestion_QuestionId(q.getQuestionId());
         Map<Long, AnswerOption> existingMap = existingOptions.stream().collect(Collectors.toMap(AnswerOption::getOptionId, o -> o));
 
@@ -423,11 +487,17 @@ public class QuestionServiceImpl implements QuestionService {
                     AnswerOption opt = existingMap.get(dto.getOptionId());
                     String text = questionValidator.sanitize(dto.getOptionText());
                     boolean correct = dto.getIsCorrect() != null ? dto.getIsCorrect() : false;
-                    if (!opt.getOptionText().equals(text) || !opt.getIsCorrect().equals(correct)) {
-                        scoreAffectingChanged = true;
+                    if (!isOrdering) {
+                        if (!opt.getOptionText().equals(text) || !opt.getIsCorrect().equals(correct)) {
+                            scoreAffectingChanged = true;
+                        }
+                    } else {
+                        if (!opt.getOptionText().equals(text)) {
+                            // scoring_version does not increase when only optionText changes for ORDERING
+                        }
                     }
                     opt.setOptionText(text);
-                    opt.setIsCorrect(correct);
+                    opt.setIsCorrect(isOrdering ? false : correct);
                     opt.setExplanation(questionValidator.sanitize(dto.getExplanation()));
                     opt.setOrderIndex(dto.getOrderIndex() != null ? dto.getOrderIndex() : i);
                     updatedOptions.add(opt);
@@ -435,7 +505,7 @@ public class QuestionServiceImpl implements QuestionService {
                     AnswerOption opt = AnswerOption.builder()
                             .question(q)
                             .optionText(questionValidator.sanitize(dto.getOptionText()))
-                            .isCorrect(dto.getIsCorrect() != null ? dto.getIsCorrect() : false)
+                            .isCorrect(false)
                             .explanation(questionValidator.sanitize(dto.getExplanation()))
                             .orderIndex(dto.getOrderIndex() != null ? dto.getOrderIndex() : i)
                             .build();
@@ -448,14 +518,88 @@ public class QuestionServiceImpl implements QuestionService {
             updatedOptions = existingOptions;
         }
 
-        if (scoreAffectingChanged) {
-            q.setScoringVersion(q.getScoringVersion() + 1);
-        }
+        if (isOrdering) {
+            Map<String, Long> keyToIdMap = new HashMap<>();
+            for (int i = 0; i < req.getOptions().size(); i++) {
+                AnswerOptionDto dto = req.getOptions().get(i);
+                String k = dto.getKey() != null ? dto.getKey() : (dto.getOptionId() != null ? String.valueOf(dto.getOptionId()) : String.valueOf(i));
+                AnswerOption matchedOpt = null;
+                if (dto.getOptionId() != null) {
+                    matchedOpt = updatedOptions.stream().filter(o -> o.getOptionId().equals(dto.getOptionId())).findFirst().orElse(null);
+                } else if (i < updatedOptions.size()) {
+                    matchedOpt = updatedOptions.get(i);
+                }
+                if (matchedOpt != null) {
+                    keyToIdMap.put(k, matchedOpt.getOptionId());
+                    keyToIdMap.put(String.valueOf(matchedOpt.getOptionId()), matchedOpt.getOptionId());
+                }
+            }
 
-        List<String> optionTexts = updatedOptions.stream().map(AnswerOption::getOptionText).collect(Collectors.toList());
-        String newHash = ContentHashUtil.computeHash(q.getContent(), optionTexts, q.getAnswerKey());
-        checkContentHashConflict(q.getCourse() != null ? q.getCourse().getCourseId() : null, newHash, q.getQuestionId());
-        q.setContentHash(newHash);
+            List<Object> coList = req.getCorrectOrder();
+            if (coList == null && req.getAnswerKey() instanceof Map) {
+                Object coObj = ((Map<?, ?>) req.getAnswerKey()).get("correctOrder");
+                if (coObj instanceof List) {
+                    coList = (List<Object>) coObj;
+                }
+            }
+
+            List<Long> newCorrectOrder = new ArrayList<>();
+            List<String> orderedOptionTexts = new ArrayList<>();
+            if (coList != null) {
+                for (Object item : coList) {
+                    String itemStr = item != null ? item.toString() : "";
+                    Long optId = keyToIdMap.get(itemStr);
+                    if (optId == null) {
+                        try {
+                            optId = Long.parseLong(itemStr);
+                        } catch (Exception ignored) {}
+                    }
+                    if (optId != null) {
+                        newCorrectOrder.add(optId);
+                        final Long targetId = optId;
+                        updatedOptions.stream().filter(o -> o.getOptionId().equals(targetId)).findFirst()
+                                .ifPresent(o -> orderedOptionTexts.add(o.getOptionText()));
+                    }
+                }
+            }
+
+            if (!newCorrectOrder.equals(oldCorrectOrder)) {
+                scoreAffectingChanged = true;
+            }
+
+            String akJson = serializeJson(Map.of("correctOrder", newCorrectOrder), "answerKey");
+            q.setAnswerKey(akJson);
+
+            if (scoreAffectingChanged) {
+                q.setScoringVersion(q.getScoringVersion() + 1);
+            }
+
+            String newHash = ContentHashUtil.computeOrderingHash(contentToValidate, orderedOptionTexts);
+            checkContentHashConflict(q.getCourse() != null ? q.getCourse().getCourseId() : null, newHash, q.getQuestionId());
+            q.setContentHash(newHash);
+        } else {
+            if (req.getAnswerKey() != null) {
+                String akJson = serializeJson(req.getAnswerKey(), "answerKey");
+                if (!akJson.equals(q.getAnswerKey())) {
+                    q.setAnswerKey(akJson);
+                    scoreAffectingChanged = true;
+                }
+            }
+            if (req.getEssayGradingRubric() != null) {
+                String rubricJson = serializeJson(req.getEssayGradingRubric(), "essayGradingRubric");
+                if (!rubricJson.equals(q.getEssayGradingRubric())) {
+                    q.setEssayGradingRubric(rubricJson);
+                    scoreAffectingChanged = true;
+                }
+            }
+            if (scoreAffectingChanged) {
+                q.setScoringVersion(q.getScoringVersion() + 1);
+            }
+            List<String> optionTexts = updatedOptions.stream().map(AnswerOption::getOptionText).collect(Collectors.toList());
+            String newHash = ContentHashUtil.computeHash(q.getContent(), optionTexts, q.getAnswerKey());
+            checkContentHashConflict(q.getCourse() != null ? q.getCourse().getCourseId() : null, newHash, q.getQuestionId());
+            q.setContentHash(newHash);
+        }
 
         q = questionRepository.save(q);
         return mapToDetailDto(q, updatedOptions);
@@ -519,6 +663,7 @@ public class QuestionServiceImpl implements QuestionService {
 
         List<AnswerOption> originalOptions = answerOptionRepository.findByQuestion_QuestionId(original.getQuestionId());
         List<AnswerOption> copiedOptionsToSave = new ArrayList<>();
+        Map<Long, Long> oldToNewIdMap = new HashMap<>();
         for (AnswerOption origOpt : originalOptions) {
             AnswerOption optCopy = AnswerOption.builder()
                     .question(copy)
@@ -530,6 +675,29 @@ public class QuestionServiceImpl implements QuestionService {
             copiedOptionsToSave.add(optCopy);
         }
         List<AnswerOption> copiedOptions = answerOptionRepository.saveAll(copiedOptionsToSave);
+        for (int i = 0; i < originalOptions.size(); i++) {
+            oldToNewIdMap.put(originalOptions.get(i).getOptionId(), copiedOptions.get(i).getOptionId());
+        }
+
+        if (original.getAnswerKey() != null) {
+            try {
+                Map<String, Object> akMap = objectMapper.readValue(original.getAnswerKey(), Map.class);
+                if (akMap.containsKey("correctOrder")) {
+                    List<?> coList = (List<?>) akMap.get("correctOrder");
+                    List<Long> remappedCo = new ArrayList<>();
+                    for (Object idObj : coList) {
+                        Long oldId = Long.parseLong(idObj.toString());
+                        Long newId = oldToNewIdMap.get(oldId);
+                        if (newId != null) {
+                            remappedCo.add(newId);
+                        }
+                    }
+                    akMap.put("correctOrder", remappedCo);
+                    copy.setAnswerKey(objectMapper.writeValueAsString(akMap));
+                    copy = questionRepository.save(copy);
+                }
+            } catch (Exception ignored) {}
+        }
 
         return mapToDetailDto(copy, copiedOptions);
     }
@@ -919,10 +1087,11 @@ public class QuestionServiceImpl implements QuestionService {
         Object answerKeyObj = parseJson(q.getAnswerKey());
         Object rubricObj = parseJson(q.getEssayGradingRubric());
 
+        boolean isOrdering = "ORDERING".equals(q.getQuestionType());
         List<AnswerOptionDto> optDtos = options.stream().map(o -> AnswerOptionDto.builder()
                 .optionId(o.getOptionId())
                 .optionText(o.getOptionText())
-                .isCorrect(o.getIsCorrect())
+                .isCorrect(isOrdering ? null : o.getIsCorrect())
                 .explanation(o.getExplanation())
                 .orderIndex(o.getOrderIndex())
                 .build()).collect(Collectors.toList());

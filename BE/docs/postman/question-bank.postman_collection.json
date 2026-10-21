@@ -139,7 +139,7 @@
             "header": [{"key": "Authorization", "value": "Bearer {{managerAToken}}"}, {"key": "Content-Type", "value": "application/json"}],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"courseId\": {{courseId}},\n  \"moduleId\": {{moduleId}},\n  \"questionType\": \"ORDERING\",\n  \"difficulty\": \"MEDIUM\",\n  \"content\": \"Order the HTTP methods by CRUD create\",\n  \"defaultPoints\": 2,\n  \"options\": [\n    {\"optionText\": \"POST\", \"isCorrect\": false, \"orderIndex\": 0},\n    {\"optionText\": \"GET\", \"isCorrect\": false, \"orderIndex\": 1}\n  ]\n}"
+              "raw": "{\n  \"courseId\": {{courseId}},\n  \"moduleId\": {{moduleId}},\n  \"questionType\": \"ORDERING\",\n  \"difficulty\": \"MEDIUM\",\n  \"content\": \"Order the steps of execution\",\n  \"defaultPoints\": 2,\n  \"options\": [\n    {\"key\": \"k1\", \"optionText\": \"Step 1\", \"orderIndex\": 0},\n    {\"key\": \"k2\", \"optionText\": \"Step 2\", \"orderIndex\": 1}\n  ],\n  \"correctOrder\": [\"k2\", \"k1\"]\n}"
             },
             "url": {"raw": "{{baseUrl}}/api/v1/manager/questions", "host": ["{{baseUrl}}"], "path": ["api", "v1", "manager", "questions"]}
           }
@@ -157,13 +157,13 @@
           }
         },
         {
-          "name": "Create ORDERING Question (isCorrect=true -> 400)",
+          "name": "Create ORDERING Question (isCorrect present -> 400)",
           "request": {
             "method": "POST",
             "header": [{"key": "Authorization", "value": "Bearer {{managerAToken}}"}, {"key": "Content-Type", "value": "application/json"}],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"courseId\": {{courseId}},\n  \"questionType\": \"ORDERING\",\n  \"difficulty\": \"MEDIUM\",\n  \"content\": \"Invalid ordering with isCorrect=true\",\n  \"defaultPoints\": 2,\n  \"options\": [\n    {\"optionText\": \"Step 1\", \"isCorrect\": true, \"orderIndex\": 0},\n    {\"optionText\": \"Step 2\", \"isCorrect\": false, \"orderIndex\": 1}\n  ]\n}"
+              "raw": "{\n  \"courseId\": {{courseId}},\n  \"questionType\": \"ORDERING\",\n  \"difficulty\": \"MEDIUM\",\n  \"content\": \"Invalid ordering with isCorrect\",\n  \"defaultPoints\": 2,\n  \"options\": [\n    {\"key\": \"k1\", \"optionText\": \"Step 1\", \"isCorrect\": false, \"orderIndex\": 0},\n    {\"key\": \"k2\", \"optionText\": \"Step 2\", \"isCorrect\": false, \"orderIndex\": 1}\n  ],\n  \"correctOrder\": [\"k1\", \"k2\"]\n}"
             },
             "url": {"raw": "{{baseUrl}}/api/v1/manager/questions", "host": ["{{baseUrl}}"], "path": ["api", "v1", "manager", "questions"]}
           }

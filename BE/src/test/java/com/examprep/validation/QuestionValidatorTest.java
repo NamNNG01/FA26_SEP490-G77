@@ -202,9 +202,10 @@ class QuestionValidatorTest {
                 .questionType("ORDERING")
                 .content("Order the steps")
                 .options(List.of(
-                        AnswerOptionDto.builder().optionText("Step 1").isCorrect(false).orderIndex(0).build(),
-                        AnswerOptionDto.builder().optionText("Step 2").isCorrect(false).orderIndex(1).build()
+                        AnswerOptionDto.builder().key("k1").optionText("Step 1").orderIndex(0).build(),
+                        AnswerOptionDto.builder().key("k2").optionText("Step 2").orderIndex(1).build()
                 ))
+                .correctOrder(List.of("k2", "k1"))
                 .build();
         List<ValidationError> errors = validator.validate(payload);
         assertTrue(errors.isEmpty(), "Expected no validation errors for ordering, got: " + errors);
@@ -215,16 +216,17 @@ class QuestionValidatorTest {
         QuestionPayload payload = QuestionPayload.builder()
                 .questionType("ORDERING")
                 .content("Order the steps")
-                .answerKey("invalidKey")
                 .options(List.of(
-                        AnswerOptionDto.builder().optionText("Step 1").isCorrect(true).orderIndex(0).build(),
-                        AnswerOptionDto.builder().optionText("Step 2").isCorrect(false).orderIndex(null).build()
+                        AnswerOptionDto.builder().key("k1").optionText("Step 1").isCorrect(false).orderIndex(0).build(),
+                        AnswerOptionDto.builder().key("k1").optionText("Step 1").isCorrect(true).orderIndex(0).build()
                 ))
+                .correctOrder(List.of("k1", "k3"))
                 .build();
         List<ValidationError> errors = validator.validate(payload);
         assertFalse(errors.isEmpty());
-        assertTrue(errors.stream().anyMatch(e -> e.getMessage().contains("Answer key is not allowed")));
-        assertTrue(errors.stream().anyMatch(e -> e.getMessage().contains("must have isCorrect=false")));
-        assertTrue(errors.stream().anyMatch(e -> e.getMessage().contains("Order index is required")));
+        assertTrue(errors.stream().anyMatch(e -> e.getMessage().contains("cannot have isCorrect")));
+        assertTrue(errors.stream().anyMatch(e -> e.getMessage().contains("Duplicate option key")));
+        assertTrue(errors.stream().anyMatch(e -> e.getMessage().contains("Duplicate option text")));
+        assertTrue(errors.stream().anyMatch(e -> e.getMessage().contains("Unknown key in correct order")));
     }
 }
