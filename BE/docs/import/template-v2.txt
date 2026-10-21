@@ -1,0 +1,80 @@
+APEPP — Question Import Template v2
+Course / Module: chọn trên giao diện (không ghi trong file)
+
+Quy tắc ngắn:
+- Mỗi câu bắt đầu bằng dòng [TYPE: ...], kết thúc khi gặp [TYPE: ...] tiếp theo hoặc hết file.
+- Dòng tùy chọn: DIFFICULTY: EASY | MEDIUM | HARD ; POINTS: số ; EXPLANATION: giải thích.
+- Điểm mặc định: 1 (riêng ESSAY bắt buộc có POINTS).
+
+PART 1 — SINGLE_CHOICE
+
+[TYPE: SINGLE_CHOICE]
+Q1. What is the output of 2 + 2?
+A. 3
+B. 4
+C. 5
+D. 6
+ANSWER: B
+
+PART 2 — MULTIPLE_CHOICE
+
+[TYPE: MULTIPLE_CHOICE]
+Q2. Which are programming languages?
+A. Java
+B. Python
+C. Photoshop
+D. C++
+ANSWER: A, B, D
+
+PART 3 — TRUE_FALSE
+
+[TYPE: TRUE_FALSE]
+Q3. Java is an object-oriented language.
+ANSWER: TRUE
+
+PART 4 — FILL_BLANK
+
+[TYPE: FILL_BLANK]
+Q4. The capital of Japan is ____.
+ANSWER: Tokyo
+
+[TYPE: FILL_BLANK]
+Q4b. Tokyo is in ____ and Osaka is in ____.
+ANSWER: 1=Japan; 2=Japan
+
+[TYPE: FILL_BLANK]
+Q4c. The HTTP method for creating a resource is ____.
+ANSWER: POST|post
+
+PART 5 — ORDERING
+
+[TYPE: ORDERING]
+Q5. Arrange the steps in the correct order.
+A. Execute the program
+B. Write the source code
+C. Compile the code
+D. Test the result
+ANSWER: B, C, A, D
+
+PART 6 — MATCHING
+
+[TYPE: MATCHING]
+Q6. Match each item with its definition.
+A. HTML
+B. Java
+1. Programming language
+2. Markup language
+ANSWER: A-2, B-1
+
+PART 7 — ESSAY
+
+[TYPE: ESSAY]
+Q7. Explain why Java uses garbage collection and what trade-off it brings.
+POINTS: 4
+RUBRIC:
+- Memory management | 2 | Explains that unreachable objects are reclaimed automatically
+- Trade-off | 2 | Mentions pause time or runtime overhead
+SAMPLE:
+Java reclaims memory of objects that are no longer referenced, so developers
+do not free memory manually. The cost is that collection runs at unpredictable
+times and can cause pauses.

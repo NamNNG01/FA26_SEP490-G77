@@ -6,6 +6,7 @@ import com.examprep.entities.User;
 import com.examprep.exceptions.ResourceNotFoundException;
 import com.examprep.repositories.UserRepository;
 import com.examprep.security.UserPrincipal;
+import com.examprep.services.QuestionImportService;
 import com.examprep.services.QuestionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -33,6 +34,7 @@ import java.util.List;
 public class QuestionController {
 
     private final QuestionService questionService;
+    private final QuestionImportService questionImportService;
     private final UserRepository userRepository;
 
     private User resolveUser(UserPrincipal principal) {
@@ -143,6 +145,28 @@ public class QuestionController {
         User user = resolveUser(currentUser);
         QuestionDetailDto updated = questionService.updateQuestionStatus(id, request, user);
         return ResponseEntity.ok(ApiResponse.success(updated, "Question status updated successfully"));
+    }
+
+    @GetMapping("/import-template")
+    @Operation(summary = "Q-09: Download question import template (PDF or DOCX)")
+    public ResponseEntity<org.springframework.core.io.Resource> downloadTemplate(
+            @RequestParam String format,
+            @AuthenticationPrincipal UserPrincipal currentUser) throws Exception {
+        resolveUser(currentUser);
+        return questionImportService.downloadTemplate(format);
+    }
+
+    @PostMapping("/import-preview")
+    @Operation(summary = "Q-09: Preview question import from PDF or DOCX file")
+    public ResponseEntity<ApiResponse<ImportPreviewResponse>> importPreview(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam Long courseId,
+            @RequestParam(required = false) Long moduleId,
+            @RequestParam(required = false, defaultValue = "MEDIUM") String difficulty,
+            @AuthenticationPrincipal UserPrincipal currentUser) throws Exception {
+        User user = resolveUser(currentUser);
+        ImportPreviewResponse preview = questionImportService.previewImport(file, courseId, moduleId, difficulty, user);
+        return ResponseEntity.ok(ApiResponse.success(preview, "Import preview generated successfully"));
     }
 
 }
