@@ -21,23 +21,14 @@ import { hasDiagramContent, plantUmlToDrawioXml } from './diagram';
 /**
  * Types the editor offers. QuestionValidator accepts SINGLE_CHOICE,
  * MULTIPLE_CHOICE, TRUE_FALSE, MATCHING, FILL_BLANK and ESSAY. DIAGRAM (drawn
- * in draw.io) and ORDERING can be authored in the UI but not saved yet.
- * CODE has no editor yet.
+ * in draw.io) is sent like the others, with its XML in questionMetadata, but
+ * the backend still rejects it — see docs/notes/diagram-question-be-gaps.md.
+ * ORDERING can be authored in the UI but not saved yet. CODE has no editor yet.
  */
 export type EditableQuestionType = Exclude<QuestionType, 'CODE'> | 'ORDERING';
 
-/**
- * Types the editor shows but the backend can't store yet.
- *
- * DIAGRAM: QuestionValidator (validate / validateQuestionType) still rejects
- * the type with "Question type not supported yet", and questionMetadata only
- * accepts skillTag / diagramType / plantUmlSource — there is no field for the
- * draw.io XML or its SVG snapshot. Checked against main on 2026-10-21; nothing
- * the FE sends can get a diagram saved. To enable: the BE accepts DIAGRAM and a
- * metadata key for the XML (e.g. `drawioXml`), then remove DIAGRAM here and
- * send the XML from toMetadata().
- */
-export const UNSAVEABLE_TYPES: EditableQuestionType[] = ['DIAGRAM', 'ORDERING'];
+/** Types the editor shows but never sends to the backend. */
+export const UNSAVEABLE_TYPES: EditableQuestionType[] = ['ORDERING'];
 
 export const QUESTION_TYPE_OPTIONS: { label: string; value: EditableQuestionType }[] = [
   { label: 'Single Choice', value: 'SINGLE_CHOICE' },
@@ -46,12 +37,12 @@ export const QUESTION_TYPE_OPTIONS: { label: string; value: EditableQuestionType
   { label: 'Matching', value: 'MATCHING' },
   { label: 'Fill in the Blank', value: 'FILL_BLANK' },
   { label: 'Essay', value: 'ESSAY' },
-  { label: 'Diagram (coming soon)', value: 'DIAGRAM' },
+  { label: 'Diagram', value: 'DIAGRAM' },
   { label: 'Ordering (coming soon)', value: 'ORDERING' },
 ];
 
-/** Types the AI can draft — the ones the backend can save. */
-export const AI_QUESTION_TYPE_OPTIONS = QUESTION_TYPE_OPTIONS.filter(t => !UNSAVEABLE_TYPES.includes(t.value)) as { label: string; value: QuestionType }[];
+/** Types the AI can draft — AI-01 doesn't generate DIAGRAM yet (ExamAiServiceImpl.TYPES). */
+export const AI_QUESTION_TYPE_OPTIONS = QUESTION_TYPE_OPTIONS.filter(t => !UNSAVEABLE_TYPES.includes(t.value) && t.value !== 'DIAGRAM') as { label: string; value: QuestionType }[];
 
 /** QuestionValidator limits. */
 export const MAX_CONTENT_LENGTH = 10000;
@@ -388,7 +379,8 @@ function fromRubric(raw: unknown): Pick<QuestionDraft, 'rubric' | 'rubricNotes'>
 
 /**
  * Only the keys QuestionValidator allows — anything else (an old `title`, AI
- * extras, draw.io XML) would fail the whole request.
+ * extras) would fail the whole request. A DIAGRAM also sends its draw.io XML
+ * and SVG snapshot (`drawioXml` / `drawioSvg`), which the backend doesn't accept yet.
  */
 function toMetadata(q: QuestionDraft): Record<string, unknown> {
   const allowed: readonly string[] = QUESTION_METADATA_KEYS;
@@ -396,6 +388,7 @@ function toMetadata(q: QuestionDraft): Record<string, unknown> {
   return {
     ...kept,
     ...(q.skillTag.trim() ? { skillTag: q.skillTag.trim() } : {}),
+    ...(q.type === 'DIAGRAM' ? { drawioXml: q.diagramXml, ...(q.diagramSvg ? { drawioSvg: q.diagramSvg } : {}) } : {}),
   };
 }
 
