@@ -15,6 +15,7 @@ import java.util.Optional;
 public interface ModuleRepository extends JpaRepository<Module, Long> {
     List<Module> findByCourseCourseIdOrderByOrderIndexAscModuleIdAsc(Long courseId);
     long countByCourseCourseId(Long courseId);
+    long countByCourseCourseIdAndStatus(Long courseId, String status);
     void deleteByCourseCourseId(Long courseId);
 
     @Query("SELECT new com.examprep.dto.IdCount(m.course.courseId, COUNT(m)) FROM Module m WHERE m.course.courseId IN :ids GROUP BY m.course.courseId")

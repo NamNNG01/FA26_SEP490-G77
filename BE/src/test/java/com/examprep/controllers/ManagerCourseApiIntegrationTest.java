@@ -300,6 +300,59 @@ public class ManagerCourseApiIntegrationTest {
     }
 
     @Test
+    void moduleStatusIsValidatedScopedAndKeepsPublishedCourseVisible() throws Exception {
+        Module first = module(course, "First", 1);
+        Module second = module(course, "Second", 2);
+        String status = modulePath(first) + "/status";
+        for (String bad : List.of("{}", "{\"status\":\"\"}", "{\"status\":\"hidden\"}", "{\"status\":\"ARCHIVED\"}"))
+            call(manager, patch(status).contentType(MediaType.APPLICATION_JSON).content(bad)).andExpect(status().isBadRequest());
+        call(stranger, patch(status).contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"HIDDEN\"}")).andExpect(status().isForbidden());
+        call(student, patch(status).contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"HIDDEN\"}")).andExpect(status().isForbidden());
+        call(manager, patch("/api/v1/manager/modules/9223372036854775807/status").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"status\":\"HIDDEN\"}")).andExpect(status().isNotFound());
+
+        call(collaborator, patch(status).contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"HIDDEN\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.status").value("HIDDEN"));
+        call(manager, patch(status).contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"HIDDEN\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.status").value("HIDDEN"));
+        call(manager, get(path() + "/modules")).andExpect(jsonPath("$.data[0].status").value("HIDDEN"))
+                .andExpect(jsonPath("$.data[1].status").value("VISIBLE"));
+
+        // Published course: the last visible module can be neither hidden nor deleted; hidden ones can.
+        call(admin, patch(path() + "/publish").contentType(MediaType.APPLICATION_JSON).content("{\"isPublished\":true}")).andExpect(status().isOk());
+        call(manager, patch(modulePath(second) + "/status").contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"HIDDEN\"}"))
+                .andExpect(status().isConflict());
+        call(manager, delete(modulePath(second))).andExpect(status().isConflict());
+        call(manager, delete(modulePath(first))).andExpect(status().isOk());
+        call(admin, patch(path() + "/publish").contentType(MediaType.APPLICATION_JSON).content("{\"isPublished\":false}")).andExpect(status().isOk());
+        call(manager, patch(modulePath(second) + "/status").contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"HIDDEN\"}"))
+                .andExpect(status().isOk());
+        // Only hidden modules left: publishing is refused.
+        call(admin, patch(path() + "/publish").contentType(MediaType.APPLICATION_JSON).content("{\"isPublished\":true}")).andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void studentsDoNotSeeOrAttemptExamsOfHiddenModules() throws Exception {
+        Module hidden = module(course, "Hidden", 1);
+        Module shown = module(course, "Shown", 2);
+        Exam hiddenExam = exam(course, hidden);
+        Exam shownExam = exam(course, shown);
+        hiddenExam.setStatus("PUBLISHED");
+        shownExam.setStatus("PUBLISHED");
+        enrollment(student, course, "ACTIVE", 0);
+        call(manager, patch(modulePath(hidden) + "/status").contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"HIDDEN\"}"))
+                .andExpect(status().isOk());
+        em.clear();
+        call(student, get("/api/v1/student/exams/course/" + course.getCourseId())).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(1))
+                .andExpect(jsonPath("$.data[0].examId").value(shownExam.getExamId()));
+        call(student, get("/api/v1/student/exams/" + hiddenExam.getExamId())).andExpect(jsonPath("$.message").value("Exam is not available"));
+        call(student, post("/api/v1/student/exams/attempts").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"examId\":" + hiddenExam.getExamId() + ",\"answers\":[]}")).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Exam is not available"));
+    }
+
+    @Test
     void moduleDeletionProtectsQuestionsExamsConfigurationsAndGroups() throws Exception {
         Module questions = module(course, "Questions", 1);
         Question question = question(questions);

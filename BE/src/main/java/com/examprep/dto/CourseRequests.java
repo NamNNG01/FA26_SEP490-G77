@@ -26,6 +26,8 @@ public final class CourseRequests {
     public record CreateModule(@NotBlank @Size(max = 255) @Pattern(regexp = "(?sU).*\\S.*", message = "must not be blank") String title,
                                String description, @Positive Integer orderIndex) {}
 
+    public record ModuleStatus(@NotBlank @Pattern(regexp = "VISIBLE|HIDDEN", message = "must be VISIBLE or HIDDEN") String status) {}
+
     public record UpdateModule(@Size(max = 255) @Pattern(regexp = "(?sU).*\\S.*", message = "must not be blank") String title,
                                String description, @Positive Integer orderIndex) {}
 }

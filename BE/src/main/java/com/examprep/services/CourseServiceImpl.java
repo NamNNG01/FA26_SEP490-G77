@@ -139,8 +139,8 @@ public class CourseServiceImpl implements CourseService {
     @PreAuthorize("hasRole('ADMIN')")
     public CourseResponse publish(Long id, CourseRequests.Publish request) {
         Course course = writeCourse(id);
-        if (request.isPublished() && modules.countByCourseCourseId(id) == 0)
-            throw new BadRequestException("Add at least one module before publishing the course.");
+        if (request.isPublished() && modules.countByCourseCourseIdAndStatus(id, Module.STATUS_VISIBLE) == 0)
+            throw new BadRequestException("Add at least one visible module before publishing the course.");
         course.setIsPublished(request.isPublished());
         courses.flush();
         return detailResponse(course);
@@ -212,11 +212,33 @@ public class CourseServiceImpl implements CourseService {
         if (questions.existsByModuleModuleId(id) || exams.existsByModuleModuleId(id)
                 || configs.existsByModuleModuleId(id) || groups.existsByModuleModuleId(id))
             throw conflict("Module has dependent content. Remove or reassign it explicitly before deleting.");
-        if (Boolean.TRUE.equals(course.getIsPublished()) && modules.countByCourseCourseId(course.getCourseId()) == 1)
-            throw conflict("Unpublish the course before deleting its last module.");
+        if (Boolean.TRUE.equals(course.getIsPublished()) && lastVisible(module))
+            throw conflict("Unpublish the course before deleting its last visible module.");
         modules.delete(module);
         course.setUpdatedAt(Instant.now());
         modules.flush();
+    }
+
+    @Override
+    @Transactional
+    public ModuleResponse updateModuleStatus(UserPrincipal user, Long id, CourseRequests.ModuleStatus request) {
+        Module module = writeModule(user, id);
+        Course course = module.getCourse();
+        if (!request.status().equals(module.getStatus())) {
+            // A published course must always show students at least one module.
+            if (Module.STATUS_HIDDEN.equals(request.status()) && Boolean.TRUE.equals(course.getIsPublished()) && lastVisible(module))
+                throw conflict("Unpublish the course before hiding its last visible module.");
+            module.setStatus(request.status());
+            course.setUpdatedAt(Instant.now());
+            modules.flush();
+        }
+        List<Long> ids = List.of(id);
+        return moduleResponse(module, counts(questions.countByModules(ids)).getOrDefault(id, 0L),
+                counts(exams.countByModules(ids)).getOrDefault(id, 0L));
+    }
+
+    private boolean lastVisible(Module module) {
+        return !module.isHidden() && modules.countByCourseCourseIdAndStatus(module.getCourse().getCourseId(), Module.STATUS_VISIBLE) == 1;
     }
 
     @Override
@@ -316,7 +338,7 @@ public class CourseServiceImpl implements CourseService {
 
     private ModuleResponse moduleResponse(Module module, long questionCount, long examCount) {
         return new ModuleResponse(module.getModuleId(), module.getCourse().getCourseId(), module.getTitle(),
-                module.getDescription(), module.getOrderIndex(), questionCount, examCount);
+                module.getDescription(), module.getOrderIndex(), module.getStatus(), questionCount, examCount);
     }
 
     private Map<Long, Long> counts(List<IdCount> values) {

@@ -14,6 +14,9 @@ import java.io.Serializable;
 @AllArgsConstructor
 public class Module implements Serializable {
 
+    public static final String STATUS_VISIBLE = "VISIBLE";
+    public static final String STATUS_HIDDEN = "HIDDEN";
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "module_id")
@@ -32,4 +35,11 @@ public class Module implements Serializable {
     @Builder.Default
     @Column(name = "order_index", nullable = false)
     private Integer orderIndex = 0;
+
+    // Hidden modules (and their exams) stay manageable but are invisible to students.
+    @Builder.Default
+    @Column(name = "status", nullable = false, length = 20)
+    private String status = STATUS_VISIBLE;
+
+    public boolean isHidden() { return STATUS_HIDDEN.equals(status); }
 }
