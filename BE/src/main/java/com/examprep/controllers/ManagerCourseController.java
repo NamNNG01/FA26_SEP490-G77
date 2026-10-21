@@ -88,6 +88,13 @@ public class ManagerCourseController {
         return ResponseEntity.ok(ApiResponse.success(service.updateModule(user, id, request)));
     }
 
+    @PatchMapping("/modules/{id}/status")
+    @Operation(summary = "C-15: Show or hide a module for students; hiding the last visible module of a published course returns 409")
+    public ResponseEntity<ApiResponse<ModuleResponse>> updateModuleStatus(@AuthenticationPrincipal UserPrincipal user, @PathVariable Long id,
+            @Valid @RequestBody CourseRequests.ModuleStatus request) {
+        return ResponseEntity.ok(ApiResponse.success(service.updateModuleStatus(user, id, request)));
+    }
+
     @DeleteMapping("/modules/{id}")
     @Operation(summary = "C-13: Delete empty module; content or last published module returns 409")
     public ResponseEntity<ApiResponse<Void>> deleteModule(@AuthenticationPrincipal UserPrincipal user, @PathVariable Long id) {

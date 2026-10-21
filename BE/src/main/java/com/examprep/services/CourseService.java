@@ -15,6 +15,7 @@ public interface CourseService {
     ModuleResponse createModule(UserPrincipal user, Long courseId, CourseRequests.CreateModule request);
     ModuleResponse updateModule(UserPrincipal user, Long id, CourseRequests.UpdateModule request);
     void deleteModule(UserPrincipal user, Long id);
+    ModuleResponse updateModuleStatus(UserPrincipal user, Long id, CourseRequests.ModuleStatus request);
     PageResponse<CourseStudentResponse> students(UserPrincipal user, Long courseId, String search, String status, int page, int size);
     List<CategoryResponse> categories();
 }

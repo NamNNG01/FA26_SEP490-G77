@@ -220,6 +220,9 @@ public class ExamServiceImpl implements ExamService {
             if (!"PUBLISHED".equals(exam.getStatus())) {
                 throw new UnauthorizedException("Exam is not published");
             }
+            if (exam.getModule() != null && exam.getModule().isHidden()) {
+                throw new UnauthorizedException("Exam is not available");
+            }
             if (exam.getCourse() != null) {
                 boolean enrolled = enrollmentRepository.existsByCourse_CourseIdAndUser_UserId(
                         exam.getCourse().getCourseId(), currentUser.getUserId());
@@ -247,7 +250,8 @@ public class ExamServiceImpl implements ExamService {
 
         boolean isStudent = User.ROLE_STUDENT.equals(currentUser.getRoleName());
         if (isStudent) {
-            exams = exams.stream().filter(e -> "PUBLISHED".equals(e.getStatus())).collect(Collectors.toList());
+            exams = exams.stream().filter(e -> "PUBLISHED".equals(e.getStatus()))
+                    .filter(e -> e.getModule() == null || !e.getModule().isHidden()).collect(Collectors.toList());
         }
 
         return exams.stream().map(e -> {
@@ -366,6 +370,9 @@ public class ExamServiceImpl implements ExamService {
 
         if (!"PUBLISHED".equals(exam.getStatus())) {
             throw new BadRequestException("Exam is not published");
+        }
+        if (exam.getModule() != null && exam.getModule().isHidden()) {
+            throw new BadRequestException("Exam is not available");
         }
 
         ExamAttempt attempt = ExamAttempt.builder()
