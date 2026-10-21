@@ -971,23 +971,35 @@ public class QuestionServiceImpl implements QuestionService {
         }
     }
 
+
     private void validateMetadataKeys(Object metadata) {
         if (metadata == null) return;
+
         try {
             Map<String, Object> map;
+
             if (metadata instanceof Map) {
                 map = (Map<String, Object>) metadata;
             } else {
                 map = objectMapper.convertValue(metadata, Map.class);
             }
+
             for (String key : map.keySet()) {
-                if (!key.equals("skillTag") && !key.equals("diagramType") && !key.equals("plantUmlSource")) {
+                if (!key.equals("skillTag")
+                        && !key.equals("diagramType")
+                        && !key.equals("plantUmlSource")
+                        && !key.equals("drawioXml")) {
                     throw new BadRequestException("Unknown metadata key: " + key);
                 }
+
                 if (key.equals("skillTag")) {
                     Object val = map.get(key);
-                    if (val != null && (val.toString().length() > 100 || val.toString().trim().isEmpty())) {
-                        throw new BadRequestException("skillTag must be a non-empty string up to 100 characters");
+
+                    if (val != null && (val.toString().length() > 100
+                            || val.toString().trim().isEmpty())) {
+                        throw new BadRequestException(
+                                "skillTag must be a non-empty string up to 100 characters"
+                        );
                     }
                 }
             }
