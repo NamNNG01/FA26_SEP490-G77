@@ -37,22 +37,25 @@ public class QuestionGroupController {
 
     @GetMapping
     @Operation(summary = "G-01: List question groups",
-            description = "Returns paginated question groups filtered by course, module and title/passage search.")
+            description = "Returns paginated question groups filtered by course, module, question type "
+                    + "(QUIZ, ESSAY, CODE or DIAGRAM) and title/passage search.")
     public ResponseEntity<ApiResponse<PageResponse<QuestionGroupResponse>>> getQuestionGroups(
             @AuthenticationPrincipal UserPrincipal currentUser,
             @RequestParam(required = false) Long courseId,
             @RequestParam(required = false) Long moduleId,
+            @RequestParam(required = false) String questionType,
             @RequestParam(required = false) String search,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         PageResponse<QuestionGroupResponse> body = questionGroupService.getQuestionGroups(
-                currentUser.getId(), currentUser.getRole(), courseId, moduleId, search, page, size);
+                currentUser.getId(), currentUser.getRole(), courseId, moduleId, questionType, search, page, size);
         return ResponseEntity.ok(ApiResponse.success(body));
     }
 
     @PostMapping
     @Operation(summary = "G-02: Create question group",
-            description = "Creates a question group (shared passage) for a course managed by the caller.")
+            description = "Creates a single-type question group (shared passage) for a course managed by the caller. "
+                    + "questionType is required and must be QUIZ, ESSAY, CODE or DIAGRAM.")
     public ResponseEntity<ApiResponse<QuestionGroupResponse>> createQuestionGroup(
             @AuthenticationPrincipal UserPrincipal currentUser,
             @Valid @RequestBody QuestionGroupCreateRequest request) {
@@ -64,7 +67,8 @@ public class QuestionGroupController {
 
     @PutMapping("/{id}")
     @Operation(summary = "G-03: Update question group",
-            description = "Updates the title and/or passage text of a question group.")
+            description = "Updates the title, passage text and/or question type of a question group. "
+                    + "The type can only change when every question in the group already matches the new type.")
     public ResponseEntity<ApiResponse<QuestionGroupResponse>> updateQuestionGroup(
             @AuthenticationPrincipal UserPrincipal currentUser,
             @PathVariable Long id,

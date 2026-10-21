@@ -8,8 +8,8 @@ import com.examprep.dto.QuestionGroupUpdateRequest;
 public interface QuestionGroupService {
 
     PageResponse<QuestionGroupResponse> getQuestionGroups(Long currentUserId, String currentUserRole,
-                                                          Long courseId, Long moduleId, String search,
-                                                          int page, int size);
+                                                          Long courseId, Long moduleId, String questionType,
+                                                          String search, int page, int size);
 
     QuestionGroupResponse createQuestionGroup(Long currentUserId, String currentUserRole,
                                               QuestionGroupCreateRequest request);

@@ -390,6 +390,72 @@ class DeckApiIntegrationTest {
         assertNull(em.find(Flashcard.class, foreignCard.getCardId()));
     }
 
+    @Test
+    void createRejectsDuplicateTitleWithinCourseCaseInsensitively() throws Exception {
+        call(collaborator, post(BASE).contentType(MediaType.APPLICATION_JSON)
+                .content(deckBody("  oop DECK  ", course.getCourseId())))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value("A deck with this title already exists in this course."));
+
+        call(stranger, post(BASE).contentType(MediaType.APPLICATION_JSON)
+                .content(deckBody("OOP deck", foreignCourse.getCourseId())))
+                .andExpect(status().isCreated());
+
+        call(collaborator, post(BASE).contentType(MediaType.APPLICATION_JSON)
+                .content(deckBody("Another deck", course.getCourseId())))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
+    void personalDeckTitlesAreUniquePerOwner() throws Exception {
+        deck(manager, null, "Personal", false);
+
+        call(manager, post(BASE).contentType(MediaType.APPLICATION_JSON)
+                .content(deckBody(" personal ", null)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("A deck with this title already exists."));
+
+        call(collaborator, post(BASE).contentType(MediaType.APPLICATION_JSON)
+                .content(deckBody("Personal", null)))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
+    void updateRejectsRenamingOrMovingIntoDuplicateTitle() throws Exception {
+        deck(manager, course, "Second deck", false);
+
+        call(collaborator, put(path(deck)).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"title\":\"  second DECK  \"}"))
+                .andExpect(status().isConflict());
+
+        call(collaborator, put(path(deck)).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"title\":\"oop DECK\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.title").value("oop DECK"));
+
+        Deck personal = deck(manager, null, "Second deck", false);
+        call(manager, put(path(personal)).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"courseId\":" + course.getCourseId() + "}"))
+                .andExpect(status().isConflict());
+
+        call(admin, put(path(personal)).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"courseId\":" + foreignCourse.getCourseId() + "}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.courseId").value(foreignCourse.getCourseId()));
+    }
+
+    @Test
+    void unrelatedUpdatesOnExistingDuplicateTitlesAreStillAllowed() throws Exception {
+        // Legacy data may already contain duplicates; editing other fields must keep working.
+        Deck duplicate = deck(manager, course, "OOP deck", false);
+
+        call(collaborator, put(path(duplicate)).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"isPublic\":true}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.isPublic").value(true));
+    }
+
     private ResultActions call(User actor, MockHttpServletRequestBuilder request) throws Exception {
         em.flush();
         return mvc.perform(request.with(user(UserPrincipal.create(actor))));
@@ -398,6 +464,12 @@ class DeckApiIntegrationTest {
     private String createBody(Long courseId) throws Exception {
         java.util.Map<String, Object> body = new java.util.HashMap<>(Map.of("title", " New deck ",
                 "isPublic", false, "description", "Description"));
+        if (courseId != null) body.put("courseId", courseId);
+        return json.writeValueAsString(body);
+    }
+
+    private String deckBody(String title, Long courseId) throws Exception {
+        java.util.Map<String, Object> body = new java.util.HashMap<>(Map.of("title", title, "isPublic", false));
         if (courseId != null) body.put("courseId", courseId);
         return json.writeValueAsString(body);
     }

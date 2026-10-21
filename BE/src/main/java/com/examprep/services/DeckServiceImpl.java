@@ -4,6 +4,7 @@ import com.examprep.dto.*;
 import com.examprep.entities.*;
 import com.examprep.exceptions.BadRequestException;
 import com.examprep.exceptions.BaseException;
+import com.examprep.exceptions.ResourceConflictException;
 import com.examprep.exceptions.ResourceNotFoundException;
 import com.examprep.repositories.*;
 import com.examprep.security.UserPrincipal;
@@ -62,7 +63,9 @@ public class DeckServiceImpl implements DeckService {
     public DeckResponse create(UserPrincipal user, DeckRequests.Create request) {
         Course course = request.courseId() == null ? null : managedCourse(user, request.courseId());
         User owner = users.findById(user.getId()).orElseThrow(() -> new ResourceNotFoundException("User not found."));
-        Deck deck = decks.saveAndFlush(Deck.builder().user(owner).course(course).title(request.title().strip())
+        String title = request.title().strip();
+        assertTitleAvailable(course, owner.getUserId(), title, -1L);
+        Deck deck = decks.saveAndFlush(Deck.builder().user(owner).course(course).title(title)
                 .description(optionalText(request.description())).isPublic(request.isPublic()).build());
         return response(deck, 0, List.of());
     }
@@ -72,7 +75,15 @@ public class DeckServiceImpl implements DeckService {
     public DeckResponse update(UserPrincipal user, Long id, DeckRequests.Update request) {
         Deck deck = writeDeck(user, id);
         Course destination = request.courseId() == null ? null : managedCourse(user, request.courseId());
-        if (request.title() != null) deck.setTitle(request.title().strip());
+        Course effectiveCourse = destination != null ? destination : deck.getCourse();
+        String title = request.title() != null ? request.title().strip() : deck.getTitle();
+        boolean titleChanged = request.title() != null && !title.equals(deck.getTitle());
+        boolean courseChanged = destination != null && (deck.getCourse() == null
+                || !destination.getCourseId().equals(deck.getCourse().getCourseId()));
+        if (titleChanged || courseChanged) {
+            assertTitleAvailable(effectiveCourse, deck.getUser().getUserId(), title, deck.getDeckId());
+        }
+        if (request.title() != null) deck.setTitle(title);
         if (request.description() != null) deck.setDescription(optionalText(request.description()));
         if (request.isPublic() != null) deck.setIsPublic(request.isPublic());
         if (destination != null) deck.setCourse(destination);
@@ -124,6 +135,17 @@ public class DeckServiceImpl implements DeckService {
         Flashcard card = cards.findDetail(id).orElseThrow(() -> new ResourceNotFoundException("Card not found."));
         checkAccess(user, card.getDeck());
         return card;
+    }
+
+    private void assertTitleAvailable(Course course, Long ownerId, String title, Long excludeDeckId) {
+        long duplicates = course != null
+                ? decks.countByCourseAndTitle(course.getCourseId(), title, excludeDeckId)
+                : decks.countByOwnerWithoutCourseAndTitle(ownerId, title, excludeDeckId);
+        if (duplicates > 0) {
+            throw new ResourceConflictException(course != null
+                    ? "A deck with this title already exists in this course."
+                    : "A deck with this title already exists.");
+        }
     }
 
     private Deck writeDeck(UserPrincipal user, Long id) {
