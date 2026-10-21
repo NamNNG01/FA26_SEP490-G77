@@ -1,18 +1,17 @@
-import React, { useEffect, useState } from "react";
-import { Modal } from "@/components/ui/Modal";
-import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
-import { Dropdown } from "@/components/ui/Dropdown";
-import { Alert } from "@/components/ui/Alert";
-import { Icon } from "@/assets/icons";
-import { useAuth } from "@/auth/authContext";
-import { api } from "@/services/api";
-import { MOCK_USERS } from "@/features/admin/mockUsers";
+import React, { useEffect, useState } from 'react';
+import { Modal } from '@/components/ui/Modal';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { Dropdown } from '@/components/ui/Dropdown';
+import { Alert } from '@/components/ui/Alert';
+import { Icon } from '@/assets/icons';
+import { api } from '@/services/api';
+import { MOCK_USERS } from '@/features/admin/mockUsers';
 import {
   courseService,
   type CategoryResponse,
   type CourseDetailResponse,
-} from "@/services/course.service";
+} from '@/services/course.service';
 
 interface ManagerOption {
   id: number;
@@ -29,12 +28,11 @@ export function CreateCourseModal({
   onClose: () => void;
   onCreated: (course: CourseDetailResponse) => void;
 }) {
-  const { user } = useAuth();
-  const [title, setTitle] = useState("");
-  const [categoryId, setCategoryId] = useState<string>("");
-  const [description, setDescription] = useState("");
-  const [price, setPrice] = useState("0");
-  const [managerId, setManagerId] = useState<string>("");
+  const [title, setTitle] = useState('');
+  const [categoryId, setCategoryId] = useState<string>('');
+  const [description, setDescription] = useState('');
+  const [price, setPrice] = useState('0');
+  const [managerIds, setManagerIds] = useState<string[]>([]);
   const [categories, setCategories] = useState<CategoryResponse[]>([]);
   const [managers, setManagers] = useState<ManagerOption[]>([]);
   const [loadingCategories, setLoadingCategories] = useState(false);
@@ -42,7 +40,7 @@ export function CreateCourseModal({
   const [errors, setErrors] = useState<{
     title?: string;
     categoryId?: string;
-    managerId?: string;
+    managerIds?: string;
     price?: string;
   }>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -51,9 +49,10 @@ export function CreateCourseModal({
   useEffect(() => {
     if (!open) return;
 
-    setTitle("");
-    setDescription("");
-    setPrice("0");
+    setTitle('');
+    setDescription('');
+    setPrice('0');
+    setManagerIds([]);
     setErrors({});
     setSubmitError(null);
     setSubmitting(false);
@@ -77,93 +76,44 @@ export function CreateCourseModal({
     const loadFallbackManagers = () => {
       const fallbackList: ManagerOption[] = MOCK_USERS.filter(
         (u) =>
-          (u.role === "Content Manager" ||
-            (u.role as string) === "COURSE_MANAGER") &&
-          (u.status === "Active" || (u.status as string) === "ACTIVE"),
+          (u.role === 'Content Manager' || (u.role as string) === 'COURSE_MANAGER') &&
+          (u.status === 'Active' || (u.status as string) === 'ACTIVE')
       ).map((u) => {
-        const numId = parseInt(u.id.replace(/\D/g, ""), 10) || 1;
-        return {
-          id: numId,
-          name: u.name,
-          email: u.email,
-        };
+        const numId = parseInt(u.id.replace(/\D/g, ''), 10) || 1;
+        return { id: numId, name: u.name, email: u.email };
       });
-
-      if (user?.userId && !fallbackList.some((m) => m.id === user.userId)) {
-        fallbackList.unshift({
-          id: user.userId,
-          name: user.fullName || "Current User",
-          email: user.email || "",
-        });
-      }
-
       setManagers(fallbackList);
-      if (fallbackList.length > 0) {
-        setManagerId(String(fallbackList[0].id));
-      }
     };
 
     setLoadingManagers(true);
     api
       .get<{
         data?:
-          | {
-              content?: Array<{
-                userId?: number;
-                id?: number;
-                fullName?: string;
-                name?: string;
-                email?: string;
-              }>;
-            }
-          | Array<{
-              userId?: number;
-              id?: number;
-              fullName?: string;
-              name?: string;
-              email?: string;
-            }>;
-      }>("/admin/users?role=COURSE_MANAGER&status=ACTIVE")
+          | { content?: Array<{ userId?: number; id?: number; fullName?: string; name?: string; email?: string }> }
+          | Array<{ userId?: number; id?: number; fullName?: string; name?: string; email?: string }>;
+      }>('/admin/users?role=COURSE_MANAGER&status=ACTIVE')
       .then((res) => {
         const payload = res.data;
-        let rawList: Array<{
-          userId?: number;
-          id?: number;
-          fullName?: string;
-          name?: string;
-          email?: string;
-        }> = [];
+        let rawList: Array<{ userId?: number; id?: number; fullName?: string; name?: string; email?: string }> = [];
         if (Array.isArray(payload)) {
           rawList = payload;
-        } else if (
-          payload &&
-          typeof payload === "object" &&
-          "content" in payload &&
-          Array.isArray(payload.content)
-        ) {
+        } else if (payload && typeof payload === 'object' && 'content' in payload && Array.isArray(payload.content)) {
           rawList = payload.content;
         }
-
         if (rawList.length > 0) {
-          const mapped: ManagerOption[] = rawList.map((m) => ({
-            id: Number(m.userId ?? m.id),
-            name: m.fullName || m.name || `Manager #${m.userId ?? m.id}`,
-            email: m.email || "",
-          }));
-          setManagers(mapped);
-          if (mapped.length > 0) {
-            setManagerId(String(mapped[0].id));
-          }
+          setManagers(
+            rawList.map((m) => ({
+              id: Number(m.userId ?? m.id),
+              name: m.fullName || m.name || `Manager #${m.userId ?? m.id}`,
+              email: m.email || '',
+            }))
+          );
         } else {
           loadFallbackManagers();
         }
       })
-      .catch(() => {
-        loadFallbackManagers();
-      })
-      .finally(() => {
-        setLoadingManagers(false);
-      });
+      .catch(() => loadFallbackManagers())
+      .finally(() => setLoadingManagers(false));
   }, [open]);
 
   const handleClose = () => {
@@ -173,21 +123,15 @@ export function CreateCourseModal({
   const handleSubmit = async () => {
     if (submitting) return;
 
-    const nextErrors: {
-      title?: string;
-      categoryId?: string;
-      managerId?: string;
-      price?: string;
-    } = {};
-    if (!title.trim()) nextErrors.title = "Course title is required.";
-    if (!categoryId) nextErrors.categoryId = "Please select a category.";
+    const nextErrors: { title?: string; categoryId?: string; managerIds?: string; price?: string } = {};
+    if (!title.trim()) nextErrors.title = 'Course title is required.';
+    if (!categoryId) nextErrors.categoryId = 'Please select a category.';
     const numPrice = Number(price);
     if (Number.isNaN(numPrice) || numPrice < 0) {
-      nextErrors.price = "Price must be 0 or greater.";
+      nextErrors.price = 'Price must be 0 or greater.';
     }
-    const numManager = Number(managerId);
-    if (!managerId || Number.isNaN(numManager) || numManager <= 0) {
-      nextErrors.managerId = "Please select a valid course manager.";
+    if (managerIds.length === 0) {
+      nextErrors.managerIds = 'Please select at least one course manager.';
     }
 
     setErrors(nextErrors);
@@ -201,27 +145,31 @@ export function CreateCourseModal({
         categoryId: Number(categoryId),
         description: description.trim() || undefined,
         price: numPrice,
-        managerId: numManager,
+        managerId: Number(managerIds[0]),
+        managerIds: managerIds.map(Number),
       });
       onCreated(created);
       onClose();
     } catch (err: unknown) {
-      const message =
-        err instanceof Error
-          ? err.message
-          : "Failed to create course. Please try again.";
+      const message = err instanceof Error ? err.message : 'Failed to create course. Please try again.';
       setSubmitError(message);
     } finally {
       setSubmitting(false);
     }
   };
 
-  const selectedCategory = categories.find(
-    (c) => String(c.categoryId) === String(categoryId),
-  );
-  const selectedManager = managers.find(
-    (m) => String(m.id) === String(managerId),
-  );
+  const selectedCategory = categories.find((c) => String(c.categoryId) === String(categoryId));
+  const selectedManagerObjs = managers.filter((m) => managerIds.includes(String(m.id)));
+
+  const managerTriggerLabel = loadingManagers
+    ? 'Loading managers…'
+    : managerIds.length === 0
+    ? 'Select course managers…'
+    : managerIds.length === 1
+    ? selectedManagerObjs[0]
+      ? `${selectedManagerObjs[0].name}`
+      : 'Select course managers…'
+    : `${managerIds.length} managers selected`;
 
   return (
     <Modal
@@ -240,15 +188,14 @@ export function CreateCourseModal({
             disabled={submitting}
             icon={<Icon.Check className="w-4 h-4" />}
           >
-            {submitting ? "Creating…" : "Create Course"}
+            {submitting ? 'Creating…' : 'Create Course'}
           </Button>
         </>
       }
     >
       <div className="space-y-4">
         <p className="text-[13px] text-[#6B7280]">
-          Enter course details to set up a new course catalog entry. Newly
-          created courses start as drafts.
+          Enter course details to set up a new course catalog entry. Newly created courses start as drafts.
         </p>
 
         <Input
@@ -282,22 +229,12 @@ export function CreateCourseModal({
                   disabled={loadingCategories || submitting}
                   className={`w-full flex items-center justify-between px-3 py-2 rounded-[10px] border bg-surface text-sm text-left transition-colors ${
                     errors.categoryId
-                      ? "border-red-500 ring-1 ring-red-500"
-                      : "border-[#E5E7EB] hover:border-[#9CA3AF]"
-                  } ${loadingCategories ? "opacity-60 cursor-not-allowed" : ""}`}
+                      ? 'border-red-500 ring-1 ring-red-500'
+                      : 'border-[#E5E7EB] hover:border-[#9CA3AF]'
+                  } ${loadingCategories ? 'opacity-60 cursor-not-allowed' : ''}`}
                 >
-                  <span
-                    className={
-                      selectedCategory
-                        ? "text-[#9CA3AF] truncate font-medium"
-                        : "text-[#9CA3AF]"
-                    }
-                  >
-                    {loadingCategories
-                      ? "Loading categories…"
-                      : selectedCategory
-                        ? selectedCategory.name
-                        : "Select category…"}
+                  <span className={selectedCategory ? 'text-content truncate' : 'text-[#9CA3AF]'}>
+                    {loadingCategories ? 'Loading categories…' : selectedCategory ? selectedCategory.name : 'Select category…'}
                   </span>
                   <Icon.ChevronDown className="w-4 h-4 text-[#9CA3AF] shrink-0 ml-2" />
                 </button>
@@ -305,20 +242,13 @@ export function CreateCourseModal({
               items={categories.map((cat) => ({
                 label: cat.name,
                 value: String(cat.categoryId),
-                selected: String(cat.categoryId) === String(categoryId),
                 onClick: () => {
                   setCategoryId(String(cat.categoryId));
-                  if (errors.categoryId) {
-                    setErrors((prev) => ({ ...prev, categoryId: undefined }));
-                  }
+                  if (errors.categoryId) setErrors((prev) => ({ ...prev, categoryId: undefined }));
                 },
               }))}
             />
-            {errors.categoryId && (
-              <p className="text-[12px] text-red-500 mt-1">
-                {errors.categoryId}
-              </p>
-            )}
+            {errors.categoryId && <p className="text-[12px] text-red-500 mt-1">{errors.categoryId}</p>}
           </div>
 
           <Input
@@ -334,40 +264,29 @@ export function CreateCourseModal({
 
         <div>
           <label className="text-[13px] font-medium text-[#374151] block mb-1.5">
-            Course Manager <span className="text-red-500">*</span>
+            Course Managers <span className="text-red-500">*</span>
           </label>
           <Dropdown
+            multi={true}
             search={true}
             searchPlaceholder="Search course manager..."
-            value={managerId}
-            onSelect={(val) => {
-              setManagerId(String(val));
-              if (errors.managerId) {
-                setErrors((prev) => ({ ...prev, managerId: undefined }));
-              }
+            values={managerIds}
+            onSelectMulti={(vals) => {
+              setManagerIds(vals.map(String));
+              if (errors.managerIds) setErrors((prev) => ({ ...prev, managerIds: undefined }));
             }}
             trigger={
               <button
                 type="button"
                 disabled={loadingManagers || submitting}
                 className={`w-full flex items-center justify-between px-3 py-2 rounded-[10px] border bg-surface text-sm text-left transition-colors ${
-                  errors.managerId
-                    ? "border-red-500 ring-1 ring-red-500"
-                    : "border-[#E5E7EB] hover:border-[#9CA3AF]"
-                } ${loadingManagers ? "opacity-60 cursor-not-allowed" : ""}`}
+                  errors.managerIds
+                    ? 'border-red-500 ring-1 ring-red-500'
+                    : 'border-[#E5E7EB] hover:border-[#9CA3AF]'
+                } ${loadingManagers ? 'opacity-60 cursor-not-allowed' : ''}`}
               >
-                <span
-                  className={
-                    selectedManager
-                      ? "text-[#9CA3AF] truncate font-medium"
-                      : "text-[#9CA3AF]"
-                  }
-                >
-                  {loadingManagers
-                    ? "Loading managers…"
-                    : selectedManager
-                      ? `${selectedManager.name} (${selectedManager.email || `ID: ${selectedManager.id}`})`
-                      : "Select course manager…"}
+                <span className={managerIds.length > 0 ? 'text-content truncate' : 'text-[#9CA3AF]'}>
+                  {managerTriggerLabel}
                 </span>
                 <Icon.ChevronDown className="w-4 h-4 text-[#9CA3AF] shrink-0 ml-2" />
               </button>
@@ -375,27 +294,41 @@ export function CreateCourseModal({
             items={managers.map((m) => ({
               label: m.email ? `${m.name} (${m.email})` : m.name,
               value: String(m.id),
-              selected: String(m.id) === String(managerId),
-              onClick: () => {
-                setManagerId(String(m.id));
-                if (errors.managerId) {
-                  setErrors((prev) => ({ ...prev, managerId: undefined }));
-                }
-              },
             }))}
           />
-          <p className="text-[12px] text-[#6B7280] mt-1">
-            Assign an active course manager to manage this course.
-          </p>
-          {errors.managerId && (
-            <p className="text-[12px] text-red-500 mt-1">{errors.managerId}</p>
+
+          {managerIds.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {selectedManagerObjs.map((m) => (
+                <span
+                  key={m.id}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-medium"
+                >
+                  {m.name}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setManagerIds((prev) => prev.filter((id) => id !== String(m.id)));
+                    }}
+                    className="hover:text-danger transition-colors"
+                    aria-label={`Remove ${m.name}`}
+                  >
+                    <Icon.X className="w-3 h-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
           )}
+
+          <p className="text-[12px] text-[#6B7280] mt-1">
+            Assign one or more active course managers. The first selected becomes the primary manager.
+          </p>
+          {errors.managerIds && <p className="text-[12px] text-red-500 mt-1">{errors.managerIds}</p>}
         </div>
 
         <div>
           <label className="text-[13px] font-medium text-[#374151] block mb-1.5">
-            Course Description{" "}
-            <span className="text-[#9CA3AF] font-normal">(optional)</span>
+            Course Description <span className="text-[#9CA3AF] font-normal">(optional)</span>
           </label>
           <textarea
             className="w-full h-24 px-3 py-2.5 rounded-[10px] border border-[#E5E7EB] text-[14px] text-[#111827] resize-none focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB] transition-all"
@@ -405,9 +338,7 @@ export function CreateCourseModal({
           />
         </div>
 
-        {submitError && (
-          <Alert type="error" title="Creation failed" message={submitError} />
-        )}
+        {submitError && <Alert type="error" title="Creation failed" message={submitError} />}
       </div>
     </Modal>
   );

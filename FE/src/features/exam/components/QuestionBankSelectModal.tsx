@@ -1,14 +1,18 @@
-import React, { useEffect, useState } from 'react';
-import { Modal } from '@/components/ui/Modal';
-import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
-import { Checkbox } from '@/components/ui/Checkbox';
-import { Select } from '@/components/ui/Select';
-import { Input } from '@/components/ui/Input';
-import { SearchInput } from '@/components/common/SearchInput';
-import { Icon } from '@/assets/icons';
-import { examService, type BankQuestionItem } from '@/services/exam.service';
-import { courseService, type CourseSummaryItem, type CourseModuleResponse } from '@/services/course.service';
+import React, { useEffect, useState } from "react";
+import { Modal } from "@/components/ui/Modal";
+import { Button } from "@/components/ui/Button";
+import { Badge } from "@/components/ui/Badge";
+import { Checkbox } from "@/components/ui/Checkbox";
+import { Select } from "@/components/ui/Select";
+import { Input } from "@/components/ui/Input";
+import { SearchInput } from "@/components/common/SearchInput";
+import { Icon } from "@/assets/icons";
+import { examService, type BankQuestionItem } from "@/services/exam.service";
+import {
+  courseService,
+  type CourseSummaryItem,
+  type CourseModuleResponse,
+} from "@/services/course.service";
 
 interface QuestionBankSelectModalProps {
   open: boolean;
@@ -34,13 +38,19 @@ export function QuestionBankSelectModal({
   const [questions, setQuestions] = useState<BankQuestionItem[]>([]);
   const [courses, setCourses] = useState<CourseSummaryItem[]>([]);
   const [modules, setModules] = useState<CourseModuleResponse[]>([]);
-  const [search, setSearch] = useState('');
-  const [courseId, setCourseId] = useState<string>(initialCourseId ? String(initialCourseId) : '');
-  const [moduleId, setModuleId] = useState<string>(initialModuleId ? String(initialModuleId) : '');
-  const [difficulty, setDifficulty] = useState<string>('all');
-  const [questionType, setQuestionType] = useState<string>('all');
+  const [search, setSearch] = useState("");
+  const [courseId, setCourseId] = useState<string>(
+    initialCourseId ? String(initialCourseId) : "",
+  );
+  const [moduleId, setModuleId] = useState<string>(
+    initialModuleId ? String(initialModuleId) : "",
+  );
+  const [difficulty, setDifficulty] = useState<string>("all");
+  const [questionType, setQuestionType] = useState<string>("all");
   const [defaultPoints, setDefaultPoints] = useState<number>(1);
-  const [selectedMap, setSelectedMap] = useState<Map<number, BankQuestionItem>>(new Map());
+  const [selectedMap, setSelectedMap] = useState<Map<number, BankQuestionItem>>(
+    new Map(),
+  );
   const [fetching, setFetching] = useState(false);
   const [page, setPage] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
@@ -61,7 +71,7 @@ export function QuestionBankSelectModal({
       });
     } else {
       setModules([]);
-      setModuleId('');
+      setModuleId("");
     }
   }, [open, courseId]);
 
@@ -74,14 +84,16 @@ export function QuestionBankSelectModal({
           search: search.trim() || undefined,
           courseId: courseId ? Number(courseId) : undefined,
           moduleId: moduleId ? Number(moduleId) : undefined,
-          difficulty: difficulty !== 'all' ? difficulty : undefined,
-          questionType: questionType !== 'all' ? questionType : undefined,
-          status: 'ACTIVE',
+          difficulty: difficulty !== "all" ? difficulty : undefined,
+          questionType: questionType !== "all" ? questionType : undefined,
+          status: "ACTIVE",
           page,
           size: 10,
         })
         .then((res) => {
-          const filtered = res.content.filter((q) => allowedQuestionTypes.includes(q.questionType));
+          const filtered = res.content.filter((q) =>
+            allowedQuestionTypes.includes(q.questionType),
+          );
           setQuestions(filtered);
           setTotalPages(res.totalPages || 1);
           setTotalElements(res.totalElements || filtered.length);
@@ -95,7 +107,16 @@ export function QuestionBankSelectModal({
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [open, search, courseId, moduleId, difficulty, questionType, page, allowedQuestionTypes]);
+  }, [
+    open,
+    search,
+    courseId,
+    moduleId,
+    difficulty,
+    questionType,
+    page,
+    allowedQuestionTypes,
+  ]);
 
   useEffect(() => {
     if (open) {
@@ -119,6 +140,17 @@ export function QuestionBankSelectModal({
     });
   };
 
+  const selectAllVisible = () => {
+    const visibleQuestions = questions.filter(
+      (q) => !existingQuestionIds.has(q.questionId),
+    );
+    setSelectedMap((prev) => {
+      const next = new Map(prev);
+      visibleQuestions.forEach((q) => next.set(q.questionId, q));
+      return next;
+    });
+  };
+
   const handleConfirm = () => {
     const list = Array.from(selectedMap.values()).map((q) => ({
       question: q,
@@ -128,8 +160,11 @@ export function QuestionBankSelectModal({
   };
 
   const typeOptions = [
-    { label: 'All Allowed Types', value: 'all' },
-    ...allowedQuestionTypes.map((t) => ({ label: t.replace('_', ' '), value: t })),
+    { label: "All Allowed Types", value: "all" },
+    ...allowedQuestionTypes.map((t) => ({
+      label: t.replace("_", " "),
+      value: t,
+    })),
   ];
 
   return (
@@ -141,17 +176,23 @@ export function QuestionBankSelectModal({
       footer={
         <div className="flex items-center justify-between w-full">
           <div className="flex items-center gap-2">
-            <span className="text-sm text-content-secondary font-medium">Default Points:</span>
+            <span className="text-sm text-content-secondary font-medium">
+              Default Points:
+            </span>
             <input
               type="number"
               min={1}
               max={100}
               value={defaultPoints}
-              onChange={(e) => setDefaultPoints(Math.max(1, Number(e.target.value) || 1))}
+              onChange={(e) =>
+                setDefaultPoints(Math.max(1, Number(e.target.value) || 1))
+              }
               className="w-16 px-2.5 py-1 text-sm rounded-[8px] border border-line bg-surface focus:outline-none focus:ring-1 focus:ring-brand-ink"
             />
             <span className="text-xs text-content-subtle ml-2">
-              Selected: <strong className="text-content">{selectedMap.size}</strong> questions
+              Selected:{" "}
+              <strong className="text-content">{selectedMap.size}</strong>{" "}
+              questions
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -184,12 +225,15 @@ export function QuestionBankSelectModal({
             value={courseId}
             onChange={(v) => {
               setCourseId(v);
-              setModuleId('');
+              setModuleId("");
               setPage(0);
             }}
             options={[
-              { label: 'All Courses', value: '' },
-              ...courses.map((c) => ({ label: c.title, value: String(c.courseId) })),
+              { label: "All Courses", value: "" },
+              ...courses.map((c) => ({
+                label: c.title,
+                value: String(c.courseId),
+              })),
             ]}
           />
           <Select
@@ -200,8 +244,11 @@ export function QuestionBankSelectModal({
             }}
             disabled={!courseId}
             options={[
-              { label: 'All Modules', value: '' },
-              ...modules.map((m) => ({ label: m.title, value: String(m.moduleId) })),
+              { label: "All Modules", value: "" },
+              ...modules.map((m) => ({
+                label: m.title,
+                value: String(m.moduleId),
+              })),
             ]}
           />
           <div className="flex gap-2">
@@ -213,10 +260,10 @@ export function QuestionBankSelectModal({
                 setPage(0);
               }}
               options={[
-                { label: 'All Diff', value: 'all' },
-                { label: 'Easy', value: 'EASY' },
-                { label: 'Medium', value: 'MEDIUM' },
-                { label: 'Hard', value: 'HARD' },
+                { label: "All Diff", value: "all" },
+                { label: "Easy", value: "EASY" },
+                { label: "Medium", value: "MEDIUM" },
+                { label: "Hard", value: "HARD" },
               ]}
             />
             <Select
@@ -231,9 +278,26 @@ export function QuestionBankSelectModal({
           </div>
         </div>
 
+        <div className="flex justify-end">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={selectAllVisible}
+            disabled={
+              fetching ||
+              questions.every((q) => existingQuestionIds.has(q.questionId))
+            }
+          >
+            Select All
+          </Button>
+        </div>
+
         <div className="border border-line rounded-[10px] overflow-hidden max-h-[380px] overflow-y-auto divide-y divide-line-faint">
           {fetching ? (
-            <div className="py-12 text-center text-sm text-content-subtle">Loading questions from bank…</div>
+            <div className="py-12 text-center text-sm text-content-subtle">
+              Loading questions from bank…
+            </div>
           ) : questions.length === 0 ? (
             <div className="py-12 text-center text-sm text-content-subtle">
               No matching ACTIVE questions found for the selected filters.
@@ -249,10 +313,10 @@ export function QuestionBankSelectModal({
                   onClick={() => !isAlreadyInExam && toggleSelect(q)}
                   className={`flex items-start gap-3 p-3.5 transition-colors select-none ${
                     isAlreadyInExam
-                      ? 'bg-surface-muted/60 opacity-60 cursor-not-allowed'
+                      ? "bg-surface-muted/60 opacity-60 cursor-not-allowed"
                       : isChecked
-                      ? 'bg-primary-light/40 cursor-pointer'
-                      : 'hover:bg-surface-hover cursor-pointer'
+                        ? "bg-primary-light/40 cursor-pointer"
+                        : "hover:bg-surface-hover cursor-pointer"
                   }`}
                 >
                   <div className="pt-0.5" onClick={(e) => e.stopPropagation()}>
@@ -263,28 +327,37 @@ export function QuestionBankSelectModal({
                     />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-content leading-snug line-clamp-2">{q.content}</p>
+                    <p className="text-sm font-medium text-content leading-snug line-clamp-2">
+                      {q.content}
+                    </p>
                     <div className="flex flex-wrap items-center gap-2 mt-1.5">
-                      <Badge variant="default" className="text-2xs font-semibold">
-                        {q.questionType.replace('_', ' ')}
+                      <Badge
+                        variant="default"
+                        className="text-2xs font-semibold"
+                      >
+                        {q.questionType.replace("_", " ")}
                       </Badge>
                       <Badge
                         variant={
-                          q.difficulty === 'EASY'
-                            ? 'success'
-                            : q.difficulty === 'MEDIUM'
-                            ? 'warning'
-                            : 'danger'
+                          q.difficulty === "EASY"
+                            ? "success"
+                            : q.difficulty === "MEDIUM"
+                              ? "warning"
+                              : "danger"
                         }
                         className="text-2xs"
                       >
                         {q.difficulty}
                       </Badge>
                       {q.moduleName && (
-                        <span className="text-2xs text-content-subtle">Module: {q.moduleName}</span>
+                        <span className="text-2xs text-content-subtle">
+                          Module: {q.moduleName}
+                        </span>
                       )}
                       {q.optionCount !== undefined && q.optionCount > 0 && (
-                        <span className="text-2xs text-content-subtle">· {q.optionCount} options</span>
+                        <span className="text-2xs text-content-subtle">
+                          · {q.optionCount} options
+                        </span>
                       )}
                       {isAlreadyInExam && (
                         <span className="text-2xs font-medium text-warning bg-warning-light px-1.5 py-0.5 rounded">
@@ -324,4 +397,3 @@ export function QuestionBankSelectModal({
     </Modal>
   );
 }
-

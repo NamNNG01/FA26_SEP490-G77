@@ -168,7 +168,7 @@ export interface QuestionGroupListParams {
 }
 
 export interface CreateQuestionGroupRequest {
-  courseId?: number;
+  courseId: number;
   moduleId?: number;
   title: string;
   passageText: string;
