@@ -13,6 +13,7 @@ import {
   newKey,
   nextBlankIndex,
   optionLabel,
+  rubricTotal,
   validateDraft,
   type EditableQuestionType,
   type QuestionDraft,
@@ -168,8 +169,16 @@ export function AnswerSection({ q, set, error }: { q: QuestionDraft; set: (patch
       return <BlankAnswers q={q} set={set} error={error} />;
     case 'ORDERING':
       return <OrderingAnswers q={q} set={set} error={error} />;
-    case 'DIAGRAM':
-      return <DiagramAnswer q={q} set={set} error={error} />;
+    case 'DIAGRAM': {
+      // One answers error for both parts — show it under the part it is about.
+      const rubricError = error && error === rubricTotal(q.rubric).error ? error : undefined;
+      return (
+        <div className="space-y-4">
+          <DiagramAnswer q={q} set={set} error={rubricError ? undefined : error} />
+          <RubricAnswers q={q} set={set} error={rubricError} />
+        </div>
+      );
+    }
     case 'ESSAY':
       return <RubricAnswers q={q} set={set} error={error} />;
   }
@@ -197,7 +206,7 @@ function RubricAnswers({ q, set, error }: { q: QuestionDraft; set: (patch: Parti
       {q.rubric.length === 0 ? (
         <p className="flex items-start gap-2 rounded-[10px] bg-surface-alt px-3 py-2.5 text-sm text-content-soft">
           <Icon.Info className="w-4 h-4 mt-0.5 flex-shrink-0" />
-          No rubric — the essay is worth 1 point and graded without criteria. Add criteria to define how it is scored.
+          No rubric — the {q.type === 'DIAGRAM' ? 'diagram' : 'essay'} is worth 1 point and graded without criteria. Add criteria to define how it is scored.
         </p>
       ) : (
         <div className="space-y-2">
@@ -518,10 +527,7 @@ function OrderingAnswers({ q, set, error }: { q: QuestionDraft; set: (patch: Par
         ))}
       </ol>
       {error && <p className="text-xs text-danger mt-1.5">{error}</p>}
-      <p className="flex items-start gap-1.5 text-xs text-warning mt-2">
-        <Icon.AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
-        Ordering questions are not supported by the server yet, so they can't be saved. Students will see these items shuffled.
-      </p>
+      <p className="text-xs text-content-subtle mt-2">Enter the items in their correct order — students see them shuffled.</p>
     </div>
   );
 }

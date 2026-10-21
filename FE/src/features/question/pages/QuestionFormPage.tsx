@@ -20,11 +20,9 @@ import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
 import {
   emptyDraft,
   fromDetail,
-  fromExtracted,
   isDraftValid,
   toCreateRequest,
   toUpdateRequest,
-  type ExtractedQuestion,
   type QuestionDraft,
 } from '../model';
 import { clearCreateDraft, loadCreateDraft, saveCreateDraft, type CreateDraftSnapshot } from '../createDraft';
@@ -196,8 +194,7 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
     setDirty(true);
   };
 
-  const handleImported = (incoming: ExtractedQuestion[]) => {
-    const drafts = incoming.map(fromExtracted);
+  const handleImported = (drafts: QuestionDraft[]) => {
     appendDrafts(drafts);
     setImportedCount(drafts.length);
     setShowImport(false);
@@ -266,7 +263,7 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
     if (locationNote || questions.length === 0) return;
     if (!isEdit && Object.keys(groupContextErrors(groupCtx)).length > 0) {
       setTab('manual');
-      listRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+      listRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       return;
     }
 
@@ -292,7 +289,7 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
       const target = error.questionIndex != null ? questions[error.questionIndex] : undefined;
       setTab('manual');
       if (target) requestAnimationFrame(() => scrollTo(target.key));
-      else listRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+      else listRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } finally {
       setSaving(false);
     }
@@ -320,7 +317,7 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
 
   const title = isEdit ? 'Edit Question' : 'New Questions';
   const manualTabLabel = `Manual (${questions.length})`;
-  const pageCls = 'px-4 sm:px-8 py-6 space-y-4 lg:h-full lg:flex lg:flex-col lg:overflow-hidden';
+  const pageCls = 'px-4 sm:px-8 py-6 space-y-4';
 
   if (isEdit && (loading || loadError)) {
     return (
@@ -344,16 +341,7 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
   return (
     <div className={pageCls}>
       <Breadcrumb items={[{ label: 'Question', onClick: cancel }, { label: title }]} />
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-xl font-bold text-content">{title}</h2>
-        {!isEdit && (
-          <Tabs
-            tabs={[manualTabLabel, AI_TAB_LABEL]}
-            active={tab === 'manual' ? manualTabLabel : AI_TAB_LABEL}
-            onChange={t => setTab(t === AI_TAB_LABEL ? 'ai' : 'manual')}
-          />
-        )}
-      </div>
+      <h2 className="text-xl font-bold text-content">{title}</h2>
 
       {showRestored && restored && (
         <div className="flex flex-wrap items-center gap-3 rounded-[10px] border border-brand-line bg-primary-light px-4 py-2.5 text-sm text-brand-ink-strong">
@@ -372,16 +360,16 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
         <Alert type="success" title={`${importedCount} question${importedCount === 1 ? '' : 's'} imported`} message="Review the extracted questions before saving." />
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px] gap-6 lg:flex-1 lg:min-h-0 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px] gap-6 items-start">
         {/* AI tab — kept mounted so its suggestions survive switching tabs */}
         {!isEdit && (
-          <div className={`lg:h-full lg:min-h-0 lg:overflow-y-auto lg:pr-2 pb-4 ${tab === 'ai' ? '' : 'hidden'}`}>
+          <div className={`min-w-0 pb-4 ${tab === 'ai' ? '' : 'hidden'}`}>
             <AiGeneratePanel courseId={courseId} moduleId={moduleId} onAccept={handleAiAccepted} onPendingChange={setAiPending} disabled={saving} />
           </div>
         )}
 
-        {/* Question blocks — the only part that scrolls on desktop */}
-        <div ref={listRef} className={`space-y-3 lg:h-full lg:min-h-0 lg:overflow-y-auto lg:pr-2 pb-4 ${tab === 'manual' ? '' : 'hidden'}`}>
+        {/* Question blocks — scroll with the page; the side panel stays pinned */}
+        <div ref={listRef} className={`min-w-0 space-y-3 pb-4 scroll-mt-5 ${tab === 'manual' ? '' : 'hidden'}`}>
           {!isEdit && (
             <GroupContextCard
               value={groupCtx}
@@ -396,7 +384,7 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
           {questions.length === 0 && (
             <div className="card p-10 text-center">
               <p className="text-base font-medium text-content-secondary">No questions yet</p>
-              <p className="text-sm text-content-subtle mt-1">Use “Add Question”, import a PDF, or draft questions in the AI Generate tab.</p>
+              <p className="text-sm text-content-subtle mt-1">Use “Add Question”, import a PDF or Word file, or draft questions in the AI Generate tab.</p>
             </div>
           )}
           {questions.map((q, i) => (
@@ -418,6 +406,16 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
         </div>
 
         <QuestionSidePanel
+          tabs={!isEdit && (
+            // Full-width segmented switch above the Location card.
+            <div className="[&>[role=tablist]]:w-full [&_[role=tab]]:flex-1">
+              <Tabs
+                tabs={[manualTabLabel, AI_TAB_LABEL]}
+                active={tab === 'manual' ? manualTabLabel : AI_TAB_LABEL}
+                onChange={t => setTab(t === AI_TAB_LABEL ? 'ai' : 'manual')}
+              />
+            </div>
+          )}
           mode={mode}
           count={questions.length}
           courseId={courseId}
@@ -436,7 +434,14 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
         />
       </div>
 
-      <ImportPdfModal open={showImport} onClose={() => setShowImport(false)} onImported={handleImported} />
+      <ImportPdfModal
+        open={showImport}
+        onClose={() => setShowImport(false)}
+        onImported={handleImported}
+        courseId={courseId}
+        moduleId={moduleId}
+        room={aiRoom}
+      />
 
       <UnsavedChangesModal
         blocker={blocker}

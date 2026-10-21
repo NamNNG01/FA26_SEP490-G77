@@ -12,6 +12,7 @@ import {
   AI_QUESTION_TYPE_OPTIONS,
   DIFFICULTY_OPTIONS,
   QUESTION_TYPE_OPTIONS,
+  RUBRIC_TYPES,
   blankIndexes,
   fromAiDraft,
   newKey,
@@ -494,7 +495,7 @@ function AiPreviewView({ index, preview, actions }: { index: number; preview: Pr
         </div>
       )}
 
-      {q.type === 'ESSAY' && (q.rubric.length > 0 || q.rubricNotes) && (
+      {RUBRIC_TYPES.includes(q.type) && (q.rubric.length > 0 || q.rubricNotes) && (
         <details className="text-sm text-content-secondary">
           <summary className="cursor-pointer select-none text-content-soft">Suggested grading rubric</summary>
           <ul className="mt-1.5 space-y-1">

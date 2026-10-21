@@ -24,7 +24,8 @@ export type QuestionType =
   | 'FILL_BLANK'
   | 'ESSAY'
   | 'CODE'
-  | 'DIAGRAM';
+  | 'DIAGRAM'
+  | 'ORDERING';
 
 export type QuestionDifficulty = 'EASY' | 'MEDIUM' | 'HARD';
 
@@ -106,11 +107,13 @@ function toQuestionPage(raw: RawSpringPage<QuestionListItem>): QuestionPage {
   };
 }
 
-/** AnswerOptionDto */
+/** AnswerOptionDto. ORDERING options carry a `key` and no `isCorrect` (the validator rejects one). */
 export interface AnswerOption {
   optionId?: number | null;
+  /** ORDERING only: what answerKey.correctOrder refers to (max 32 chars). */
+  key?: string;
   optionText: string;
-  isCorrect: boolean;
+  isCorrect?: boolean | null;
   explanation?: string | null;
   orderIndex?: number;
 }
@@ -125,6 +128,14 @@ export interface FillBlankAnswerKey {
   blanks: { index: number; accepted: string[]; caseSensitive: boolean }[];
 }
 
+/**
+ * answerKey for ORDERING. Sent as option keys; the backend stores and returns
+ * the optionIds of the options in their correct order.
+ */
+export interface OrderingAnswerKey {
+  correctOrder: (string | number)[];
+}
+
 /** QuestionCreateRequest */
 export interface QuestionCreateRequest {
   courseId: number;
@@ -134,13 +145,13 @@ export interface QuestionCreateRequest {
   status?: QuestionStatus;
   content: string;
   options?: AnswerOption[];
-  answerKey?: MatchingAnswerKey | FillBlankAnswerKey | null;
+  answerKey?: MatchingAnswerKey | FillBlankAnswerKey | OrderingAnswerKey | null;
   groupId?: number | null;
   /** Stored as ai_explanation — shown to students during review. */
   explanation?: string | null;
   /** The backend accepts only the keys in QUESTION_METADATA_KEYS. */
   questionMetadata?: Record<string, unknown> | null;
-  /** Must equal the rubric's total maxScore for ESSAY; the backend defaults it to 1. */
+  /** Must equal the rubric's total maxScore for ESSAY / DIAGRAM; the backend defaults it to 1. */
   defaultPoints?: number | null;
   essayGradingRubric?: unknown;
 }
@@ -178,7 +189,7 @@ export interface QuestionDetail {
 
 /**
  * Keys QuestionValidator allows in questionMetadata — any other key fails the
- * request. DIAGRAM questions also send `drawioXml`.
+ * request. DIAGRAM questions also send `drawioXml` (max 500 KB, starts with <mxfile or <mxGraphModel).
  */
 export const QUESTION_METADATA_KEYS = ['skillTag'] as const;
 
@@ -316,6 +327,52 @@ export interface QuestionAiDraftResponse {
   mock?: boolean;
 }
 
+/** One problem the Q-09 import found in a question block. */
+export interface ImportBlockError {
+  path: string;
+  message: string;
+  /** Line in the extracted text (0 when the error isn't tied to a line). */
+  line: number;
+}
+
+/** A question as Q-09 read it — QuestionCreateRequest without course / module. */
+export interface ImportedQuestionData extends QuestionAiDraft {
+  defaultPoints?: number | null;
+  /** ORDERING: option keys in the correct order (top level, not in answerKey). */
+  correctOrder?: string[] | null;
+}
+
+/** One `[TYPE: ...]` block of the import file (ImportBlockResult). */
+export interface ImportBlock {
+  index: number;
+  startLine: number;
+  questionType: string;
+  /** Missing when the block couldn't be read at all. */
+  questionData: ImportedQuestionData | null;
+  errors: ImportBlockError[];
+}
+
+/** Q-09 preview — nothing is saved; valid blocks go into the form and are saved through Q-03. */
+export interface ImportPreviewResponse {
+  fileName: string;
+  fileType: 'PDF' | 'DOCX';
+  totalBlocks: number;
+  totalValid: number;
+  totalErrors: number;
+  blocks: ImportBlock[];
+}
+
+export interface ImportPreviewParams {
+  courseId: number;
+  moduleId?: number | null;
+  /** Used for blocks without a DIFFICULTY line. */
+  difficulty?: QuestionDifficulty;
+}
+
+/** Import file limits (PdfTextExtractor / DocxTextExtractor). */
+export const IMPORT_MAX_BYTES = 10 * 1024 * 1024;
+export const IMPORT_EXTENSIONS = ['.pdf', '.docx'] as const;
+
 /** `VITE_AI_MOCK=true` uses demo data for AI generation (no AI quota spent). */
 const AI_MOCK = import.meta.env.VITE_AI_MOCK === 'true';
 
@@ -336,6 +393,22 @@ export const questionService = {
         .map(q => ({ question: fromExamAiDraft(q), hasHashConflict: false, validationError: null })),
       warnings: data?.warnings ?? [],
     };
+  },
+
+  /** Q-09: reads a PDF / DOCX in the import template and returns the questions found — saves nothing. */
+  async previewImport(file: File, params: ImportPreviewParams, signal?: AbortSignal): Promise<ImportPreviewResponse> {
+    const form = new FormData();
+    form.append('file', file);
+    form.append('courseId', String(params.courseId));
+    if (params.moduleId != null) form.append('moduleId', String(params.moduleId));
+    if (params.difficulty) form.append('difficulty', params.difficulty);
+    // The backend allows up to 20s to extract the text; leave room for the upload.
+    const res = await apiClient.post<ApiResponse<ImportPreviewResponse>>('/manager/questions/import-preview', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 60000,
+      signal,
+    });
+    return res.data.data;
   },
 
   /** Q-03: creates 1..50 questions in one transaction — all or nothing. */
