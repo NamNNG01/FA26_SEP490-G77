@@ -26,6 +26,7 @@ export function QuestionSidePanel({
   /** Why saving can't happen yet (shown under Save). */
   prerequisiteNote?: string | null;
   onAdd?: () => void;
+  /** Template import — the button is hidden without it (e.g. on the AI tab). */
   onImport?: () => void;
   onSave: () => void;
   onCancel: () => void;
@@ -48,7 +49,9 @@ export function QuestionSidePanel({
         {!isEdit && (
           <>
             <Button variant="secondary" className="w-full" icon={<Icon.Plus className="w-4 h-4" />} onClick={onAdd} disabled={saving}>Add Question</Button>
-            <Button variant="outline" className="w-full" icon={<Icon.Scan className="w-4 h-4" />} onClick={onImport} disabled={saving}>Import PDF / Word</Button>
+            {onImport && (
+              <Button variant="outline" className="w-full" icon={<Icon.Scan className="w-4 h-4" />} onClick={onImport} disabled={saving}>Import PDF / Word</Button>
+            )}
           </>
         )}
         <Button className="w-full" icon={<Icon.CheckCircle className="w-4 h-4" />} onClick={onSave} loading={saving} disabled={saving || statusBusy}>

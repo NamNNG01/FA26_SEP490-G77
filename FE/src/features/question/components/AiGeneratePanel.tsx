@@ -7,7 +7,7 @@ import { Select } from '@/components/ui/Select';
 import { MultiSelect } from '@/components/ui/MultiSelect';
 import { Spinner } from '@/components/ui/Spinner';
 import { Icon } from '@/assets/icons';
-import { AI_CONTEXT_MAX, questionService, type QuestionAiGenerateRequest, type QuestionAiPreview, type QuestionDifficulty, type QuestionType } from '@/services/question.service';
+import { AI_CONTEXT_MAX, AI_MATERIAL_EXTENSIONS, IMPORT_MAX_BYTES, questionService, type QuestionAiGenerateRequest, type QuestionAiPreview, type QuestionDifficulty, type QuestionType } from '@/services/question.service';
 import {
   AI_QUESTION_TYPE_OPTIONS,
   DIFFICULTY_OPTIONS,
@@ -66,6 +66,8 @@ interface Preview {
   draft: QuestionDraft;
   /** The request that produced it, narrowed to one question of its type — reused by "Regenerate". */
   request: QuestionAiGenerateRequest;
+  /** The file it was drafted from (AI-02) — "Regenerate" sends it again. */
+  material: File | null;
   /** The backend found an active question with the same content in the course. */
   duplicate: boolean;
   accepted: boolean;
@@ -75,8 +77,9 @@ interface Preview {
   regenerateError?: string;
 }
 
-const toPreview = (p: QuestionAiPreview, request: QuestionAiGenerateRequest): Preview => ({
+const toPreview = (p: QuestionAiPreview, request: QuestionAiGenerateRequest, material: File | null): Preview => ({
   id: newKey('ai'),
+  material,
   draft: fromAiDraft(p.question),
   request: { ...request, questionTypeCounts: { [p.question.questionType]: 1 }, difficultyCounts: { [p.question.difficulty ?? 'MEDIUM']: 1 } },
   duplicate: p.hasHashConflict,
@@ -86,10 +89,20 @@ const toPreview = (p: QuestionAiPreview, request: QuestionAiGenerateRequest): Pr
   regenerating: false,
 });
 
+/** Why a material file can't be sent, or null. Any layout works — the AI reads the text. */
+function materialProblem(f: File): string | null {
+  const name = f.name.toLowerCase();
+  if (!AI_MATERIAL_EXTENSIONS.some(ext => name.endsWith(ext))) return 'Only PDF, Word (.docx) and text (.txt) files can be used.';
+  if (f.size === 0) return 'This file is empty.';
+  if (f.size > IMPORT_MAX_BYTES) return `This file is ${(f.size / 1024 / 1024).toFixed(2)} MB — the limit is 10 MB.`;
+  return null;
+}
+
 /**
- * "AI Generate" tab: drafts questions with AI-01 for the manager to review.
- * Nothing is saved here — Accept hands a question to the editor, and it is
- * saved with the rest through Save All.
+ * "AI Generate" tab: drafts questions with AI-01 from a topic — or with AI-02
+ * from a file dropped on the card — for the manager to review. Nothing is
+ * saved here — Accept hands a question to the editor, and it is saved with
+ * the rest through Save All.
  */
 export function AiGeneratePanel({ courseId, moduleId, onAccept, onPendingChange, disabled }: {
   courseId: string;
@@ -102,6 +115,11 @@ export function AiGeneratePanel({ courseId, moduleId, onAccept, onPendingChange,
 }) {
   const [questionTypes, setQuestionTypes] = useState<QuestionType[]>(['SINGLE_CHOICE']);
   const [topic, setTopic] = useState('');
+  /** File the AI drafts from instead of the topic alone (AI-02). */
+  const [material, setMaterial] = useState<File | null>(null);
+  const [materialError, setMaterialError] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const materialInputRef = useRef<HTMLInputElement>(null);
   const [count, setCount] = useState('5');
   const [difficulties, setDifficulties] = useState<QuestionDifficulty[]>(['MEDIUM']);
   const [language, setLanguage] = useState<Language>('English');
@@ -128,15 +146,23 @@ export function AiGeneratePanel({ courseId, moduleId, onAccept, onPendingChange,
   const countValid = Number.isInteger(countNum) && countNum >= MIN_COUNT && countNum <= MAX_COUNT;
   const total = countValid ? countNum * questionTypes.length : 0;
 
-  const topicError = showErrors && !topic.trim() ? 'Enter a topic for the questions.' : undefined;
+  const topicError = showErrors && !material && !topic.trim() ? 'Enter a topic for the questions.' : undefined;
   const countError = showErrors && !countValid ? `Enter a number from ${MIN_COUNT} to ${MAX_COUNT}.` : undefined;
   const typesError = showErrors && !questionTypes.length ? 'Pick at least one question type.' : undefined;
   const difficultiesError = showErrors && !difficulties.length ? 'Pick at least one difficulty.' : undefined;
   const totalError = total > MAX_TOTAL ? `At most ${MAX_TOTAL} questions per run — lower the number or pick fewer types.` : undefined;
 
+  const pickMaterial = (f?: File | null) => {
+    if (!f || generating) return;
+    const problem = materialProblem(f);
+    setMaterialError(problem);
+    if (!problem) setMaterial(f);
+  };
+
   const generate = async () => {
     setShowErrors(true);
-    if (!courseId || !topic.trim() || !total || !difficulties.length || totalError) return;
+    if (!courseId || (!material && !topic.trim()) || !total || !difficulties.length || totalError) return;
+    const source = material;
 
     abortRef.current?.abort();
     abortRegenerations();
@@ -146,7 +172,7 @@ export function AiGeneratePanel({ courseId, moduleId, onAccept, onPendingChange,
     setError(null);
     setWarnings([]);
     try {
-      // AI-01 drafts every type and difficulty in one call.
+      // AI-01 / AI-02 draft every type and difficulty in one call.
       const request: QuestionAiGenerateRequest = {
         courseId: Number(courseId),
         ...(moduleId ? { moduleId: Number(moduleId) } : {}),
@@ -155,9 +181,11 @@ export function AiGeneratePanel({ courseId, moduleId, onAccept, onPendingChange,
         topic: topic.trim(),
         language,
       };
-      const res = await questionService.generateAiQuestions(request, controller.signal);
+      const res = source
+        ? await questionService.generateAiQuestionsFromMaterial(source, request, controller.signal)
+        : await questionService.generateAiQuestions(request, controller.signal);
       if (controller.signal.aborted) return;
-      setPreviews(res.questions.map(q => toPreview(q, request)));
+      setPreviews(res.questions.map(q => toPreview(q, request, source)));
       setIsDemo(Boolean(res.mock));
       setWarnings(res.warnings);
     } catch (err) {
@@ -194,7 +222,9 @@ export function AiGeneratePanel({ courseId, moduleId, onAccept, onPendingChange,
     regenRef.current.set(p.id, controller);
     patchPreview(p.id, { regenerating: true, regenerateError: undefined });
     try {
-      const res = await questionService.generateAiQuestions(p.request, controller.signal);
+      const res = p.material
+        ? await questionService.generateAiQuestionsFromMaterial(p.material, p.request, controller.signal)
+        : await questionService.generateAiQuestions(p.request, controller.signal);
       if (controller.signal.aborted) return;
       const next = res.questions[0];
       if (next) patchPreview(p.id, { draft: fromAiDraft(next.question), duplicate: next.hasHashConflict, editing: false, edited: false, regenerating: false });
@@ -221,12 +251,56 @@ export function AiGeneratePanel({ courseId, moduleId, onAccept, onPendingChange,
           </div>
         </div>
 
+        {material ? (
+          <div className="flex items-center gap-3 p-3 bg-surface-alt rounded-[10px]">
+            <Icon.FileText className="w-5 h-5 text-brand-ink flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-content-secondary truncate">{material.name}</p>
+              <p className="text-2xs text-content-subtle">The AI drafts the questions from this file.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setMaterial(null)}
+              disabled={generating}
+              aria-label="Remove file"
+              title="Generate from the topic only"
+              className="text-content-subtle hover:text-danger p-1"
+            >
+              <Icon.X className="w-4 h-4" />
+            </button>
+          </div>
+        ) : (
+          <div
+            role="button"
+            tabIndex={0}
+            aria-label="Add a file for the AI to draft questions from"
+            onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={e => { e.preventDefault(); setDragOver(false); pickMaterial(e.dataTransfer.files?.[0]); }}
+            onClick={() => { if (!generating) materialInputRef.current?.click(); }}
+            onKeyDown={e => { if ((e.key === 'Enter' || e.key === ' ') && !generating) { e.preventDefault(); materialInputRef.current?.click(); } }}
+            className={`rounded-[10px] px-4 py-5 text-center border-2 border-dashed transition-colors cursor-pointer bg-primary-light ${dragOver ? 'border-brand-600' : 'border-brand-line'}`}
+          >
+            <Icon.Upload className="w-7 h-7 text-brand-ink mx-auto mb-2" />
+            <p className="text-sm font-semibold text-brand-ink-strong">Drop a file here or click to browse (optional)</p>
+            <p className="text-xs text-content-soft mt-0.5">PDF, Word (.docx) or text (.txt), up to 10 MB, any layout — the AI writes questions from its content.</p>
+          </div>
+        )}
+        <input
+          ref={materialInputRef}
+          type="file"
+          accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
+          className="hidden"
+          onChange={e => { pickMaterial(e.target.files?.[0]); e.target.value = ''; }}
+        />
+        {materialError && <p className="text-xs text-danger -mt-1">{materialError}</p>}
+
         <Input
-          label="Topic *"
+          label={material ? 'Instructions for the AI (optional)' : 'Topic *'}
           value={topic}
           onChange={e => setTopic(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter' && !generating) generate(); }}
-          placeholder="e.g. OOP inheritance"
+          placeholder={material ? 'e.g. Only chapter 3, keep the questions in the file as they are' : 'e.g. OOP inheritance'}
           error={topicError}
           maxLength={AI_CONTEXT_MAX}
           disabled={generating}
@@ -289,7 +363,9 @@ export function AiGeneratePanel({ courseId, moduleId, onAccept, onPendingChange,
       )}
 
       {generating && !previews && (
-        <div className="card p-10 flex items-center justify-center gap-3 text-content-soft"><Spinner size="sm" /> Generating questions… this can take up to a minute.</div>
+        <div className="card p-10 flex items-center justify-center gap-3 text-content-soft">
+          <Spinner size="sm" /> {material ? `Generating questions from ${material.name}…` : 'Generating questions…'} this can take up to a minute.
+        </div>
       )}
 
       {previews && previews.length === 0 && !generating && (

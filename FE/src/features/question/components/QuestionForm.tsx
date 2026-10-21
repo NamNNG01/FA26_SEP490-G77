@@ -110,6 +110,27 @@ export function QuestionForm({ q, index, onChange, showErrors, removable, onRemo
         </div>
       </div>
 
+      {/* Import block the backend couldn't read — write the question here, or remove it */}
+      {q.importIssue && (
+        <div role="alert" className="flex gap-3 p-3 rounded-[10px] border bg-danger-light border-danger-line text-danger-strong">
+          <Icon.XCircle className="w-5 h-5 text-danger flex-shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold mb-0.5">
+              Couldn’t import question #{q.importIssue.block}{q.importIssue.line > 0 ? ` (line ${q.importIssue.line})` : ''}
+            </p>
+            <ul className="text-sm opacity-90 space-y-0.5">
+              {q.importIssue.errors.map((e, i) => (
+                <li key={i}>{e.line > 0 ? `Line ${e.line}: ` : ''}{e.message}</li>
+              ))}
+            </ul>
+            <p className="text-xs opacity-80 mt-1">Fill in the question below, or remove it.</p>
+          </div>
+          <button type="button" onClick={() => set({ importIssue: undefined })} className="self-start p-1 rounded-[6px] hover:bg-danger-line/40" aria-label="Dismiss import error">
+            <Icon.X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* Question text */}
       <div>
         <div className="flex items-center justify-between mb-1">

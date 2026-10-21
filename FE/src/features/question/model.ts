@@ -2,6 +2,7 @@ import { QUESTION_METADATA_KEYS } from '@/services/question.service';
 import type {
   AnswerOption,
   FillBlankAnswerKey,
+  ImportBlock,
   ImportedQuestionData,
   MatchingAnswerKey,
   OrderingAnswerKey,
@@ -124,6 +125,16 @@ export interface QuestionDraft {
   rubricNotes: string;
   /** Drafted by AI-03 and accepted into the form. */
   fromAi?: boolean;
+  /** A Q-09 import block the backend couldn't read — shown on the question until dismissed. */
+  importIssue?: ImportIssue;
+}
+
+export interface ImportIssue {
+  /** Block number in the file (1-based). */
+  block: number;
+  /** Line the block starts at (0 = unknown). */
+  line: number;
+  errors: { line: number; message: string }[];
 }
 
 let seq = 0;
@@ -549,4 +560,25 @@ export function fromImported(q: ImportedQuestionData): QuestionDraft {
     ? { ...key, correctOrder: q.correctOrder }
     : q.answerKey;
   return fromPreviewed({ ...q, answerKey });
+}
+
+/**
+ * Any Q-09 import block → editor draft. The backend sends no question data for
+ * a block with errors, so that one becomes a blank question of its type
+ * carrying the errors, for the manager to fill in or remove.
+ */
+export function fromImportBlock(b: ImportBlock, difficulty: QuestionDifficulty): QuestionDraft {
+  if (!b.errors?.length && b.questionData) return fromImported(b.questionData);
+  const type = QUESTION_TYPE_OPTIONS.find(o => o.value === b.questionType)?.value;
+  const blank = { ...emptyDraft(), difficulty };
+  return {
+    ...(type ? changeType(blank, type) : blank),
+    importIssue: {
+      block: b.index,
+      line: b.startLine,
+      errors: b.errors?.length
+        ? b.errors.map(e => ({ line: e.line, message: e.message }))
+        : [{ line: 0, message: 'This block could not be read.' }],
+    },
+  };
 }

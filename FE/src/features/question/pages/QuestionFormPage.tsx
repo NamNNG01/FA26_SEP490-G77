@@ -71,12 +71,16 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
   const [statusBusy, setStatusBusy] = useState(false);
   const [saveError, setSaveError] = useState<SaveError | null>(null);
   const [importedCount, setImportedCount] = useState(0);
+  /** Of the imported questions, how many the backend couldn't read. */
+  const [importedIssues, setImportedIssues] = useState(0);
   const [showImport, setShowImport] = useState(false);
   const [confirm, setConfirm] = useState<Confirm>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [tab, setTab] = useState<CreateTab>('manual');
   const [aiPending, setAiPending] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
+  /** Set once the user confirmed leaving without saving — stops the draft from being stored again. */
+  const leavingRef = useRef(false);
 
   // Edit mode: load the question.
   useEffect(() => {
@@ -122,9 +126,12 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
 
   // Create mode: keep the work in localStorage so a reload restores it.
   useEffect(() => {
-    if (isEdit || !dirty) return;
+    if (isEdit || !dirty || leavingRef.current) return;
     setDraftStored(false);
-    const id = setTimeout(() => setDraftStored(saveCreateDraft({ questions, courseId, moduleId, groupCtx, touched: [...touched] })), 400);
+    // A save still pending when the user leaves must not bring the draft back.
+    const id = setTimeout(() => {
+      if (!leavingRef.current) setDraftStored(saveCreateDraft({ questions, courseId, moduleId, groupCtx, touched: [...touched] }));
+    }, 400);
     return () => clearTimeout(id);
   }, [isEdit, dirty, questions, courseId, moduleId, groupCtx, touched]);
 
@@ -132,10 +139,16 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
   // Reloading only prompts for what the stored draft can't bring back.
   const { blocker, leave } = useUnsavedChangesGuard(dirty || aiPending > 0, (dirty && (isEdit || !draftStored)) || aiPending > 0);
 
-  // Leaving without saving was confirmed — the draft goes with it.
-  useEffect(() => {
-    if (!isEdit && blocker.state === 'proceeding') clearCreateDraft();
-  }, [isEdit, blocker.state]);
+  /**
+   * Leaving without saving was confirmed — the draft goes with it. Done in the
+   * click itself: the page unmounts as the navigation goes ahead, so an effect
+   * waiting for the blocker's 'proceeding' state may never run.
+   */
+  const discardOnLeave = () => {
+    if (isEdit) return;
+    leavingRef.current = true;
+    clearCreateDraft();
+  };
 
   const discardRestored = () => {
     clearCreateDraft();
@@ -188,20 +201,34 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
     requestAnimationFrame(() => scrollTo(draft.key));
   };
 
+  /** Untouched blank questions (the starter one) give way to appended drafts; flagged imports stay. */
+  const isKept = (q: QuestionDraft) => touched.has(q.key) || q.content.trim() !== '' || Boolean(q.importIssue);
+
   /** Append drafts, replacing the untouched blank starter question instead of keeping it around. */
   const appendDrafts = (drafts: QuestionDraft[]) => {
-    setQuestions(prev => [...prev.filter(q => touched.has(q.key) || q.content.trim() !== ''), ...drafts]);
+    setQuestions(prev => [...prev.filter(isKept), ...drafts]);
     setDirty(true);
   };
 
-  const handleImported = (drafts: QuestionDraft[]) => {
-    appendDrafts(drafts);
-    setImportedCount(drafts.length);
+  const kept = questions.filter(isKept).length;
+
+  /** Every block of the file comes in; ones that couldn't be read carry their errors. */
+  const handleImported = (drafts: QuestionDraft[], importCourseId: string, importModuleId: string) => {
+    // The questions belong where they were imported into.
+    if (importCourseId !== courseId || importModuleId !== moduleId) changeLocation(importCourseId, importModuleId);
+    const fitting = drafts.slice(0, Math.max(0, MAX_BATCH - kept));
+    if (fitting.length < drafts.length) {
+      toast.warning(`Only ${fitting.length} of ${drafts.length} questions were added — you can save up to ${MAX_BATCH} at a time.`);
+    }
     setShowImport(false);
     setTab('manual');
+    if (!fitting.length) return;
+    appendDrafts(fitting);
+    setImportedCount(fitting.length);
+    setImportedIssues(fitting.filter(d => d.importIssue).length);
+    requestAnimationFrame(() => scrollTo(fitting[0].key));
   };
 
-  const kept = questions.filter(q => touched.has(q.key) || q.content.trim() !== '').length;
   const aiRoom = MAX_BATCH - kept;
 
   /** Returns how many drafts made it in (the batch is capped at MAX_BATCH). */
@@ -357,7 +384,15 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
       )}
       {saveError && <SaveErrorAlert error={saveError} onReload={isEdit ? () => setReloadKey(k => k + 1) : undefined} />}
       {importedCount > 0 && (
-        <Alert type="success" title={`${importedCount} question${importedCount === 1 ? '' : 's'} imported`} message="Review the extracted questions before saving." />
+        importedIssues > 0 ? (
+          <Alert
+            type="warning"
+            title={`${importedCount} question${importedCount === 1 ? '' : 's'} imported — ${importedIssues} couldn’t be read`}
+            message="The questions marked in red came in blank. Fill them in or remove them, then review the rest before saving."
+          />
+        ) : (
+          <Alert type="success" title={`${importedCount} question${importedCount === 1 ? '' : 's'} imported`} message="Review the extracted questions before saving." />
+        )
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px] gap-6 items-start">
@@ -424,7 +459,8 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
           showErrors={submitted}
           prerequisiteNote={locationNote}
           onAdd={questions.length < MAX_BATCH ? addQuestion : undefined}
-          onImport={() => { setImportedCount(0); setShowImport(true); }}
+          // The AI tab takes files in its own card.
+          onImport={tab === 'manual' ? () => { setImportedCount(0); setShowImport(true); } : undefined}
           onSave={save}
           onCancel={cancel}
           onToggleStatus={isEdit ? () => (status === 'ACTIVE' ? setConfirm('archive') : changeStatus('ACTIVE')) : undefined}
@@ -440,11 +476,11 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
         onImported={handleImported}
         courseId={courseId}
         moduleId={moduleId}
-        room={aiRoom}
       />
 
       <UnsavedChangesModal
         blocker={blocker}
+        onLeave={discardOnLeave}
         message="You have work on this page that hasn’t been saved. If you leave now, it will be lost:"
         details={unsavedDetails}
       />
