@@ -193,8 +193,10 @@ export interface AiQuestionDraft {
     pairs?: { left: string; right: string }[];
   };
   explanation?: string;
-  questionMetadata?: { skillTag?: string };
+  questionMetadata?: { skillTag?: string; drawioXml?: string };
   essayGradingRubric?: { criteria: AiRubricCriterion[]; totalPoints?: number; notes?: string };
+  /** DIAGRAM only: PlantUML behind questionMetadata.drawioXml, for previews. Q-03 doesn't take it. */
+  plantUmlSource?: string;
 }
 
 export interface AiGenerateRequest {

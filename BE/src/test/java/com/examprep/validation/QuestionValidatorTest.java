@@ -197,6 +197,18 @@ class QuestionValidatorTest {
     }
 
     @Test
+    void testDiagramRubricMustAddUpToDefaultPoints() {
+        QuestionPayload payload = QuestionPayload.builder()
+                .questionType("DIAGRAM")
+                .content("Draw the class diagram")
+                .defaultPoints(BigDecimal.valueOf(4))
+                .questionMetadata(Map.of("drawioXml", "<mxfile>diagram content</mxfile>"))
+                .essayGradingRubric(Map.of("criteria", List.of(Map.of("name", "Classes", "maxScore", 3))))
+                .build();
+        assertTrue(validator.validate(payload).stream().anyMatch(e -> e.getMessage().contains("must equal defaultPoints")));
+    }
+
+    @Test
     void testOrderingHappyPath() {
         QuestionPayload payload = QuestionPayload.builder()
                 .questionType("ORDERING")

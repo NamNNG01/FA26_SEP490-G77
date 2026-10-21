@@ -218,18 +218,56 @@ class ExamAiApiIntegrationTest {
         assertEquals(1, calls);
     }
 
-    @Test void emptyAnswerKeyOnChoiceQuestionIsDropped() throws Exception {
+    @Test void emptyAnswerKeyAndRubricOnChoiceQuestionAreDropped() throws Exception {
         Map<String, Object> question = new java.util.HashMap<>(choice("SINGLE_CHOICE", "EASY"));
         question.put("answerKey", Map.of());
+        question.put("essayGradingRubric", Map.of("criteria", List.of(Map.of("name", "Accuracy", "maxScore", 1)), "notes", "n/a"));
         providerContent = json.writeValueAsString(Map.of("questions", List.of(question)));
         generate(manager, body()).andExpect(status().isOk()).andExpect(jsonPath("$.data.questionCount").value(1))
-                .andExpect(jsonPath("$.data.questions[0].answerKey").doesNotExist());
+                .andExpect(jsonPath("$.data.questions[0].answerKey").doesNotExist())
+                .andExpect(jsonPath("$.data.questions[0].essayGradingRubric").doesNotExist());
     }
 
     @Test void rejectsTypesTheQuestionBankCannotSaveBeforeProviderCall() throws Exception {
-        for (String type : List.of("CODE", "DIAGRAM", "ORDERING"))
+        for (String type : List.of("CODE", "ORDERING"))
             generate(manager, body().replace("SINGLE_CHOICE", type)).andExpect(status().isBadRequest());
         assertEquals(0, calls);
+    }
+
+    @Test void diagramDraftCarriesDrawioXmlAndRubric() throws Exception {
+        Map<String, Object> rubric = Map.of("criteria", List.of(Map.of("name", "Classes", "maxScore", 2, "descriptors", "Full: ..."),
+                Map.of("name", "Relations", "maxScore", 2, "descriptors", "Full: ...")), "notes", "Order has many lines");
+        String plantUml = "@startuml\nclass Order\nclass Line\nOrder \"1\" *-- \"many\" Line\n@enduml";
+        Map<String, Object> tag = Map.of("skillTag", "class diagram");
+        List<Map<String, Object>> questions = List.of(
+                Map.of("content", "Draw the class diagram of an order", "questionType", "DIAGRAM", "difficulty", "EASY",
+                        "defaultPoints", 4, "questionMetadata", tag, "plantUmlSource", plantUml, "essayGradingRubric", rubric),
+                Map.of("content", "Diagram without PlantUML", "questionType", "DIAGRAM", "difficulty", "EASY",
+                        "defaultPoints", 4, "questionMetadata", tag, "essayGradingRubric", rubric),
+                Map.of("content", "Diagram without rubric", "questionType", "DIAGRAM", "difficulty", "EASY",
+                        "defaultPoints", 4, "questionMetadata", tag, "plantUmlSource", plantUml));
+        providerContent = json.writeValueAsString(Map.of("questions", questions));
+        String request = json.writeValueAsString(Map.of("courseId", course.getCourseId(), "questionCount", 3,
+                "difficultyDistribution", Map.of("EASY", 3, "MEDIUM", 0, "HARD", 0),
+                "questionTypes", List.of(Map.of("questionType", "DIAGRAM", "count", 3))));
+        generate(manager, request).andExpect(status().isOk()).andExpect(jsonPath("$.data.questionCount").value(1))
+                .andExpect(jsonPath("$.data.questions[0].plantUmlSource").value(plantUml))
+                .andExpect(jsonPath("$.data.questions[0].questionMetadata.drawioXml").value(org.hamcrest.Matchers.allOf(
+                        org.hamcrest.Matchers.startsWith("<mxfile>"), org.hamcrest.Matchers.containsString("plantUmlData=\""),
+                        org.hamcrest.Matchers.containsString("@startuml\\nclass Order"), org.hamcrest.Matchers.containsString("\\&quot;1\\&quot;"))))
+                .andExpect(jsonPath("$.data.questions[0].essayGradingRubric.criteria[0].weight").value(50.0))
+                .andExpect(jsonPath("$.data.warnings[*]").value(org.hamcrest.Matchers.hasItems(
+                        org.hamcrest.Matchers.containsString("PlantUML"), org.hamcrest.Matchers.containsString("diagram requires an essayGradingRubric"))));
+        assertTrue(receivedRequest.contains("plantUmlSource"));
+        // Requests with ESSAY/DIAGRAM force the rubric; choice-only ones (body()) don't.
+        assertTrue(requiredQuestionFields().contains("essayGradingRubric"));
+        generate(manager, body()).andExpect(status().isOk());
+        assertFalse(requiredQuestionFields().contains("essayGradingRubric"));
+    }
+
+    private String requiredQuestionFields() throws Exception {
+        return json.readTree(receivedRequest).path("generationConfig").path("responseSchema").path("properties")
+                .path("questions").path("items").path("required").toString();
     }
 
     @Test void retriesOnceForRejectedQuestionsAndReportsWhy() throws Exception {

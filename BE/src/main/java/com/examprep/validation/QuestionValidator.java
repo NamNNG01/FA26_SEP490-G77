@@ -325,6 +325,8 @@ public class QuestionValidator {
                 if (payload.getAnswerKey() != null) {
                     errors.add(new ValidationError(prefix + "answerKey", "Answer key is not allowed for question type DIAGRAM"));
                 }
+                // E-11: DIAGRAM is graded by rubric like ESSAY.
+                validateEssayRubric(payload.getEssayGradingRubric(), payload.getDefaultPoints(), prefix + "essayGradingRubric", errors);
             } else if (type.equals("MATCHING")) {
                 validateMatchingAnswerKey(payload.getAnswerKey(), prefix + "answerKey", errors);
             } else if (type.equals("FILL_BLANK")) {
