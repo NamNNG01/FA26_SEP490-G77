@@ -176,7 +176,11 @@ export interface QuestionDetail {
   updatedAt: string | null;
 }
 
-/** Keys QuestionValidator allows in questionMetadata — any other key fails the request. */
+/**
+ * Keys QuestionValidator allows in questionMetadata — any other key fails the
+ * request. DIAGRAM questions also send `drawioXml` / `drawioSvg`, which the
+ * backend doesn't allow yet (docs/notes/diagram-question-be-gaps.md).
+ */
 export const QUESTION_METADATA_KEYS = ['skillTag', 'diagramType', 'plantUmlSource'] as const;
 
 /** ValidationError — one entry of a VALIDATION_ERROR response's `data`. */
