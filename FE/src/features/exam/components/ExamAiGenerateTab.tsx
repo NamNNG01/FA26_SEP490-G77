@@ -14,6 +14,7 @@ import {
 } from '@/services/exam.service';
 import { courseService, type CourseSummaryItem, type CourseModuleResponse } from '@/services/course.service';
 import { questionService, type QuestionCreateRequest } from '@/services/question.service';
+import { plantUmlSvgUrl } from '@/features/question/diagram';
 
 interface ExamAiGenerateTabProps {
   formKind: 'QUIZ' | 'ESSAY';
@@ -49,7 +50,7 @@ export function ExamAiGenerateTab({
   const allowedTypes =
     formKind === 'QUIZ'
       ? ['SINGLE_CHOICE', 'MULTIPLE_CHOICE', 'TRUE_FALSE', 'FILL_BLANK', 'MATCHING']
-      : ['ESSAY'];
+      : ['ESSAY', 'DIAGRAM'];
 
   const [typeCounts, setTypeCounts] = useState<Record<string, number>>(
     formKind === 'QUIZ'
@@ -62,6 +63,7 @@ export function ExamAiGenerateTab({
         }
       : {
           ESSAY: 10,
+          DIAGRAM: 0,
         }
   );
 
@@ -214,7 +216,7 @@ export function ExamAiGenerateTab({
 
     try {
       if (finalQuestionIds.length === 0) {
-        const questionsToSave = draft.questions.map((q) => ({
+        const questionsToSave = draft.questions.map(({ plantUmlSource: _preview, ...q }) => ({
           ...q,
           courseId: Number(courseId),
           moduleId: moduleId ? Number(moduleId) : null,
@@ -665,6 +667,16 @@ export function ExamAiGenerateTab({
                           {pair.left} → {pair.right}
                         </p>
                       ))}
+                    </div>
+                  )}
+
+                  {q.plantUmlSource && (
+                    <div className="p-3 rounded-[8px] border border-line bg-surface flex justify-center">
+                      <img
+                        src={plantUmlSvgUrl(q.plantUmlSource)}
+                        alt={`Model answer diagram for question ${idx + 1}`}
+                        className="max-h-[260px] max-w-full object-contain"
+                      />
                     </div>
                   )}
 

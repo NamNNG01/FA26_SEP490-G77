@@ -178,10 +178,9 @@ export interface QuestionDetail {
 
 /**
  * Keys QuestionValidator allows in questionMetadata — any other key fails the
- * request. DIAGRAM questions also send `drawioXml` / `drawioSvg`, which the
- * backend doesn't allow yet (docs/notes/diagram-question-be-gaps.md).
+ * request. DIAGRAM questions also send `drawioXml`.
  */
-export const QUESTION_METADATA_KEYS = ['skillTag', 'diagramType', 'plantUmlSource'] as const;
+export const QUESTION_METADATA_KEYS = ['skillTag'] as const;
 
 /** ValidationError — one entry of a VALIDATION_ERROR response's `data`. */
 export interface QuestionValidationError {
@@ -242,6 +241,8 @@ interface ExamAiDraftQuestion {
   explanation?: string | null;
   questionMetadata?: Record<string, unknown> | null;
   essayGradingRubric?: unknown;
+  /** DIAGRAM only: the PlantUML behind questionMetadata.drawioXml. */
+  plantUmlSource?: string | null;
 }
 
 interface ExamAiDraftResponse {
@@ -262,7 +263,8 @@ function fromExamAiDraft(d: ExamAiDraftQuestion): QuestionAiDraft {
     options,
     answerKey: d.answerKey ?? null,
     explanation: d.explanation ?? null,
-    questionMetadata: d.questionMetadata ?? null,
+    // plantUmlSource rides in metadata for the editor's preview; toMetadata never sends it.
+    questionMetadata: d.plantUmlSource ? { ...d.questionMetadata, plantUmlSource: d.plantUmlSource } : d.questionMetadata ?? null,
     essayGradingRubric: d.essayGradingRubric ?? undefined,
   };
 }
