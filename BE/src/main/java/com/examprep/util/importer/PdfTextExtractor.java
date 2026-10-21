@@ -1,4 +1,4 @@
-package com.examprep.question.importer;
+package com.examprep.util.importer;
 
 import com.examprep.exceptions.BadRequestException;
 import org.apache.pdfbox.Loader;
@@ -7,7 +7,6 @@ import org.apache.pdfbox.text.PDFTextStripper;
 import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
