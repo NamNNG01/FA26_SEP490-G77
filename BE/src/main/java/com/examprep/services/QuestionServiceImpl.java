@@ -155,39 +155,67 @@ public class QuestionServiceImpl implements QuestionService {
         return createQuestionInternal(req, currentUser, "MANUAL", "MANAGER", "APPROVED");
     }
 
-    public QuestionDetailDto createQuestionInternal(QuestionCreateRequest req, User currentUser, String source, String creatorRole, String approvalStatus) {
+
+    @SuppressWarnings("unchecked")
+    public QuestionDetailDto createQuestionInternal(
+            QuestionCreateRequest req,
+            User currentUser,
+            String source,
+            String creatorRole,
+            String approvalStatus
+    ) {
         if (req.getCourseId() == null) {
             throw new BadRequestException("Course ID is required");
         }
+
         Course course = courseRepository.findById(req.getCourseId())
                 .orElseThrow(() -> new ResourceNotFoundException("Course not found"));
 
         if (!User.ROLE_ADMIN.equals(currentUser.getRoleName())) {
-            boolean isManager = courseManagerRepository.existsByCourse_CourseIdAndUser_UserId(course.getCourseId(), currentUser.getUserId());
+            boolean isManager =
+                    courseManagerRepository.existsByCourse_CourseIdAndUser_UserId(
+                            course.getCourseId(),
+                            currentUser.getUserId()
+                    );
+
             if (!isManager) {
-                throw new ForbiddenException("You are not a manager of this course");
+                throw new ForbiddenException(
+                        "You are not a manager of this course"
+                );
             }
         }
 
         com.examprep.entities.Module module = null;
+
         if (req.getModuleId() != null) {
             module = moduleRepository.findById(req.getModuleId())
                     .orElseThrow(() -> new ResourceNotFoundException("Module not found"));
+
             if (!module.getCourse().getCourseId().equals(course.getCourseId())) {
-                throw new BadRequestException("Module does not belong to the specified course");
+                throw new BadRequestException(
+                        "Module does not belong to the specified course"
+                );
             }
         }
 
         QuestionGroup group = null;
+
         if (req.getGroupId() != null) {
             group = questionGroupRepository.findById(req.getGroupId())
                     .orElseThrow(() -> new ResourceNotFoundException("Question group not found"));
-            if (group.getCourse() == null || !group.getCourse().getCourseId().equals(course.getCourseId())) {
-                throw new BadRequestException("Question group does not belong to the specified course");
+
+            if (group.getCourse() == null
+                    || !group.getCourse().getCourseId().equals(course.getCourseId())) {
+                throw new BadRequestException(
+                        "Question group does not belong to the specified course"
+                );
             }
+
             if (req.getModuleId() != null && group.getModule() != null) {
                 if (!group.getModule().getModuleId().equals(req.getModuleId())) {
-                    throw new BadRequestException("Question group does not belong to the specified module");
+                    throw new BadRequestException(
+                            "Question group does not belong to the specified module"
+                    );
                 }
             }
         }
@@ -195,22 +223,97 @@ public class QuestionServiceImpl implements QuestionService {
         QuestionPayload payload = QuestionPayload.from(req);
         questionValidator.validateOrThrow(payload);
 
-        String sanitizedContent = questionValidator.sanitize(req.getContent());
-        String sanitizedExplanation = questionValidator.sanitize(req.getExplanation());
-
         validateMetadataKeys(req.getQuestionMetadata());
-        String metadataJson = serializeJson(req.getQuestionMetadata(), "questionMetadata");
-        String answerKeyJson = serializeJson(req.getAnswerKey(), "answerKey");
-        String rubricJson = serializeJson(req.getEssayGradingRubric(), "essayGradingRubric");
 
-        List<String> optionTexts = req.getOptions() != null ?
-                req.getOptions().stream().map(o -> questionValidator.sanitize(o.getOptionText())).collect(Collectors.toList()) : null;
+        String metadataJson =
+                serializeJson(req.getQuestionMetadata(), "questionMetadata");
 
-        String contentHash = ContentHashUtil.computeHash(sanitizedContent, optionTexts, answerKeyJson);
+        String answerKeyJson =
+                serializeJson(req.getAnswerKey(), "answerKey");
+
+        String rubricJson =
+                serializeJson(req.getEssayGradingRubric(), "essayGradingRubric");
+
+        List<String> optionTexts = req.getOptions() != null
+                ? req.getOptions().stream()
+                .map(AnswerOptionDto::getOptionText)
+                .collect(Collectors.toList())
+                : null;
+
+        boolean isOrdering = "ORDERING".equals(req.getQuestionType());
 
 
+        String finalContentHash;
 
-        String status = req.getStatus() != null ? req.getStatus() : "ACTIVE";
+        List<Object> correctOrder = null;
+
+        if (isOrdering) {
+            correctOrder = req.getCorrectOrder();
+
+            if (correctOrder == null && req.getAnswerKey() instanceof Map<?, ?>) {
+                Object value = ((Map<?, ?>) req.getAnswerKey()).get("correctOrder");
+
+                if (value instanceof List<?>) {
+                    correctOrder = new ArrayList<>((List<?>) value);
+                }
+            }
+
+
+            Map<String, String> keyToText = new HashMap<>();
+
+            if (req.getOptions() != null) {
+                for (int i = 0; i < req.getOptions().size(); i++) {
+                    AnswerOptionDto option = req.getOptions().get(i);
+
+                    String key = option.getKey() != null
+                            ? option.getKey()
+                            : String.valueOf(i);
+
+                    keyToText.put(key, option.getOptionText());
+                }
+            }
+
+
+            List<String> orderedOptionTexts = new ArrayList<>();
+
+            if (correctOrder != null) {
+                for (Object item : correctOrder) {
+                    String key = item != null ? item.toString() : "";
+                    String optionText = keyToText.get(key);
+
+                    if (optionText == null) {
+                        throw new BadRequestException(
+                                "Invalid key in correct order: " + key
+                        );
+                    }
+
+                    orderedOptionTexts.add(optionText);
+                }
+            }
+
+            finalContentHash = ContentHashUtil.computeOrderingHash(
+                    req.getContent(),
+                    orderedOptionTexts
+            );
+        } else {
+            finalContentHash = ContentHashUtil.computeHash(
+                    req.getContent(),
+                    optionTexts,
+                    answerKeyJson
+            );
+        }
+
+
+        checkContentHashConflict(
+                course.getCourseId(),
+                finalContentHash,
+                null
+        );
+
+        String status = req.getStatus() != null
+                ? req.getStatus()
+                : "ACTIVE";
+
         if ("STUDENT".equals(creatorRole)) {
             status = "DRAFT";
             approvalStatus = "PENDING";
@@ -222,91 +325,117 @@ public class QuestionServiceImpl implements QuestionService {
                 .group(group)
                 .createdBy(currentUser)
                 .questionType(req.getQuestionType())
-                .difficulty(req.getDifficulty() != null ? req.getDifficulty() : "MEDIUM")
-                .content(sanitizedContent)
+                .difficulty(req.getDifficulty() != null
+                        ? req.getDifficulty()
+                        : "MEDIUM")
+                .content(req.getContent())
                 .questionMetadata(metadataJson)
                 .answerKey(answerKeyJson)
-                .defaultPoints(req.getDefaultPoints() != null ? req.getDefaultPoints() : BigDecimal.ONE)
+                .defaultPoints(req.getDefaultPoints() != null
+                        ? req.getDefaultPoints()
+                        : BigDecimal.ONE)
                 .source(source != null ? source : "MANUAL")
                 .creatorRole(creatorRole != null ? creatorRole : "MANAGER")
-                .approvalStatus(approvalStatus != null ? approvalStatus : "APPROVED")
+                .approvalStatus(approvalStatus != null
+                        ? approvalStatus
+                        : "APPROVED")
                 .status(status)
-                .aiExplanation(sanitizedExplanation)
+                .aiExplanation(req.getExplanation())
                 .essayGradingRubric(rubricJson)
-                .contentHash(contentHash)
+                .contentHash(finalContentHash)
                 .scoringVersion(1)
                 .lockVersion(0L)
                 .build();
 
         question = questionRepository.save(question);
 
-        boolean isOrdering = "ORDERING".equals(req.getQuestionType());
+
         List<AnswerOption> optionsToSave = new ArrayList<>();
+
         if (req.getOptions() != null) {
             for (int i = 0; i < req.getOptions().size(); i++) {
                 AnswerOptionDto optDto = req.getOptions().get(i);
+
                 AnswerOption opt = AnswerOption.builder()
                         .question(question)
-                        .optionText(questionValidator.sanitize(optDto.getOptionText()))
-                        .isCorrect(isOrdering ? false : (optDto.getIsCorrect() != null ? optDto.getIsCorrect() : false))
-                        .explanation(questionValidator.sanitize(optDto.getExplanation()))
-                        .orderIndex(optDto.getOrderIndex() != null ? optDto.getOrderIndex() : i)
+                        .optionText(optDto.getOptionText())
+                        .isCorrect(
+                                isOrdering
+                                        ? false
+                                        : (optDto.getIsCorrect() != null
+                                        ? optDto.getIsCorrect()
+                                        : false)
+                        )
+                        .explanation(optDto.getExplanation())
+                        .orderIndex(
+                                optDto.getOrderIndex() != null
+                                        ? optDto.getOrderIndex()
+                                        : i
+                        )
                         .build();
+
                 optionsToSave.add(opt);
             }
         }
 
-        List<AnswerOption> savedOptions = answerOptionRepository.saveAll(optionsToSave);
+        List<AnswerOption> savedOptions =
+                answerOptionRepository.saveAll(optionsToSave);
 
-        String finalAnswerKeyJson = answerKeyJson;
-        String finalContentHash = contentHash;
 
         if (isOrdering) {
             Map<String, Long> keyToIdMap = new HashMap<>();
+
             for (int i = 0; i < req.getOptions().size(); i++) {
                 AnswerOptionDto dto = req.getOptions().get(i);
-                String k = dto.getKey() != null ? dto.getKey() : String.valueOf(i);
-                keyToIdMap.put(k, savedOptions.get(i).getOptionId());
-                keyToIdMap.put(String.valueOf(savedOptions.get(i).getOptionId()), savedOptions.get(i).getOptionId());
-            }
 
-            List<Object> coList = req.getCorrectOrder();
-            if (coList == null && req.getAnswerKey() instanceof Map) {
-                Object coObj = ((Map<?, ?>) req.getAnswerKey()).get("correctOrder");
-                if (coObj instanceof List) {
-                    coList = (List<Object>) coObj;
-                }
+                String key = dto.getKey() != null
+                        ? dto.getKey()
+                        : String.valueOf(i);
+
+                Long optionId = savedOptions.get(i).getOptionId();
+
+                keyToIdMap.put(key, optionId);
+                keyToIdMap.put(String.valueOf(optionId), optionId);
             }
 
             List<Long> orderedOptionIds = new ArrayList<>();
-            List<String> orderedOptionTexts = new ArrayList<>();
-            if (coList != null) {
-                for (Object item : coList) {
+
+            if (correctOrder != null) {
+                for (Object item : correctOrder) {
                     String itemStr = item != null ? item.toString() : "";
-                    Long optId = keyToIdMap.get(itemStr);
-                    if (optId == null) {
+
+                    Long optionId = keyToIdMap.get(itemStr);
+
+                    if (optionId == null) {
                         try {
-                            optId = Long.parseLong(itemStr);
-                        } catch (Exception ignored) {}
+                            optionId = Long.parseLong(itemStr);
+                        } catch (NumberFormatException ignored) {
+                            // Validator và bước tính hash đã kiểm tra key.
+                        }
                     }
-                    if (optId != null) {
-                        orderedOptionIds.add(optId);
-                        final Long targetId = optId;
-                        savedOptions.stream().filter(o -> o.getOptionId().equals(targetId)).findFirst()
-                                .ifPresent(o -> orderedOptionTexts.add(o.getOptionText()));
+
+                    if (optionId == null) {
+                        throw new BadRequestException(
+                                "Invalid option in correct order: " + itemStr
+                        );
                     }
+
+                    orderedOptionIds.add(optionId);
                 }
             }
 
-            finalAnswerKeyJson = serializeJson(Map.of("correctOrder", orderedOptionIds), "answerKey");
+            String finalAnswerKeyJson = serializeJson(
+                    Map.of("correctOrder", orderedOptionIds),
+                    "answerKey"
+            );
+
             question.setAnswerKey(finalAnswerKeyJson);
-            finalContentHash = ContentHashUtil.computeOrderingHash(sanitizedContent, orderedOptionTexts);
-            question.setContentHash(finalContentHash);
             question = questionRepository.save(question);
         }
 
         return mapToDetailDto(question, savedOptions);
     }
+
 
     @Override
     @Transactional
@@ -410,15 +539,13 @@ public class QuestionServiceImpl implements QuestionService {
         boolean scoreAffectingChanged = false;
 
         if (req.getContent() != null) {
-            String sanitized = questionValidator.sanitize(req.getContent());
-            if (!sanitized.equals(q.getContent())) {
-                q.setContent(sanitized);
-            }
+            q.setContent(req.getContent());
         }
         if (req.getDifficulty() != null) q.setDifficulty(req.getDifficulty());
         if (req.getStatus() != null) q.setStatus(req.getStatus());
-        if (req.getExplanation() != null) q.setAiExplanation(questionValidator.sanitize(req.getExplanation()));
-
+        if (req.getExplanation() != null) {
+            q.setAiExplanation(req.getExplanation());
+        }
         if (req.getDefaultPoints() != null) {
             if (req.getDefaultPoints().compareTo(q.getDefaultPoints()) != 0) {
                 q.setDefaultPoints(req.getDefaultPoints());
@@ -481,7 +608,7 @@ public class QuestionServiceImpl implements QuestionService {
                 AnswerOptionDto dto = req.getOptions().get(i);
                 if (dto.getOptionId() != null && existingMap.containsKey(dto.getOptionId())) {
                     AnswerOption opt = existingMap.get(dto.getOptionId());
-                    String text = questionValidator.sanitize(dto.getOptionText());
+                    String text = dto.getOptionText();
                     boolean correct = dto.getIsCorrect() != null ? dto.getIsCorrect() : false;
                     if (!isOrdering) {
                         if (!opt.getOptionText().equals(text) || !opt.getIsCorrect().equals(correct)) {
@@ -494,15 +621,15 @@ public class QuestionServiceImpl implements QuestionService {
                     }
                     opt.setOptionText(text);
                     opt.setIsCorrect(isOrdering ? false : correct);
-                    opt.setExplanation(questionValidator.sanitize(dto.getExplanation()));
+                    opt.setExplanation(dto.getExplanation());
                     opt.setOrderIndex(dto.getOrderIndex() != null ? dto.getOrderIndex() : i);
                     updatedOptions.add(opt);
                 } else {
                     AnswerOption opt = AnswerOption.builder()
                             .question(q)
-                            .optionText(questionValidator.sanitize(dto.getOptionText()))
+                            .optionText(dto.getOptionText())
                             .isCorrect(false)
-                            .explanation(questionValidator.sanitize(dto.getExplanation()))
+                            .explanation(dto.getExplanation())
                             .orderIndex(dto.getOrderIndex() != null ? dto.getOrderIndex() : i)
                             .build();
                     updatedOptions.add(opt);
@@ -821,6 +948,19 @@ public class QuestionServiceImpl implements QuestionService {
             throw e;
         } catch (Exception e) {
             throw new BadRequestException("Invalid question metadata format");
+        }
+    }
+
+    private void checkContentHashConflict(Long courseId, String contentHash, Long excludeQuestionId) {
+        if (courseId == null || contentHash == null) return;
+        List<Question> existing = questionRepository.findAll().stream()
+                .filter(q -> q.getCourse() != null && q.getCourse().getCourseId().equals(courseId))
+                .filter(q -> q.getDeletedAt() == null)
+                .filter(q -> contentHash.equals(q.getContentHash()))
+                .filter(q -> excludeQuestionId == null || !q.getQuestionId().equals(excludeQuestionId))
+                .toList();
+        if (!existing.isEmpty()) {
+            throw new ResourceConflictException("Duplicate content hash with question id: " + existing.get(0).getQuestionId());
         }
     }
 
