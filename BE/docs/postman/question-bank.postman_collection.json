@@ -1,7 +1,7 @@
 {
   "info": {
-    "_postman_id": "exam-prep-question-bank-collection",
-    "name": "ExamPrep Question Bank & Exam Collection",
+    "_postman_id": "exam-prep-question-bank-comprehensive-collection",
+    "name": "ExamPrep Question Bank Comprehensive Collection",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -17,7 +17,6 @@
                   "var jsonData = pm.response.json();",
                   "if (jsonData.data && jsonData.data.accessToken) {",
                   "    pm.environment.set(\"adminToken\", jsonData.data.accessToken);",
-                  "    console.log(\"Admin token saved\");",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -26,21 +25,9 @@
           ],
           "request": {
             "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/auth/login",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "auth", "login"]
-            }
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}"},
+            "url": {"raw": "{{baseUrl}}/api/v1/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "login"]}
           }
         },
         {
@@ -60,89 +47,9 @@
           ],
           "request": {
             "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"{{managerAEmail}}\",\n  \"password\": \"{{managerAPassword}}\"\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/auth/login",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "auth", "login"]
-            }
-          }
-        },
-        {
-          "name": "Login Manager B (Low Quota)",
-          "event": [
-            {
-              "script": {
-                "exec": [
-                  "var jsonData = pm.response.json();",
-                  "if (jsonData.data && jsonData.data.accessToken) {",
-                  "    pm.environment.set(\"managerBToken\", jsonData.data.accessToken);",
-                  "}"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"{{managerBEmail}}\",\n  \"password\": \"{{managerBPassword}}\"\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/auth/login",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "auth", "login"]
-            }
-          }
-        },
-        {
-          "name": "Login Manager C",
-          "event": [
-            {
-              "script": {
-                "exec": [
-                  "var jsonData = pm.response.json();",
-                  "if (jsonData.data && jsonData.data.accessToken) {",
-                  "    pm.environment.set(\"managerCToken\", jsonData.data.accessToken);",
-                  "}"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"{{managerCEmail}}\",\n  \"password\": \"{{managerCPassword}}\"\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/auth/login",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "auth", "login"]
-            }
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"email\": \"{{managerAEmail}}\",\n  \"password\": \"{{managerAPassword}}\"\n}"},
+            "url": {"raw": "{{baseUrl}}/api/v1/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "login"]}
           }
         },
         {
@@ -162,470 +69,150 @@
           ],
           "request": {
             "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"{{studentEmail}}\",\n  \"password\": \"{{studentPassword}}\"\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/auth/login",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "auth", "login"]
-            }
-          }
-        },
-        {
-          "name": "Login Student Not Enrolled",
-          "event": [
-            {
-              "script": {
-                "exec": [
-                  "var jsonData = pm.response.json();",
-                  "if (jsonData.data && jsonData.data.accessToken) {",
-                  "    pm.environment.set(\"studentNotEnrolledToken\", jsonData.data.accessToken);",
-                  "}"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"{{studentNotEnrolledEmail}}\",\n  \"password\": \"{{studentNotEnrolledPassword}}\"\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/auth/login",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "auth", "login"]
-            }
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"email\": \"{{studentEmail}}\",\n  \"password\": \"{{studentPassword}}\"\n}"},
+            "url": {"raw": "{{baseUrl}}/api/v1/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "login"]}
           }
         }
       ]
     },
     {
-      "name": "01 Question Management",
+      "name": "01 Question List (Q-01)",
       "item": [
         {
-          "name": "TC-Q01-01 List questions with filters",
-          "event": [
-            {
-              "script": {
-                "exec": [
-                  "pm.test(\"Status code is 200\", function () {",
-                  "    pm.response.to.have.status(200);",
-                  "});",
-                  "pm.test(\"Response has success true\", function () {",
-                  "    var jsonData = pm.response.json();",
-                  "    pm.expect(jsonData.success).to.be.true;",
-                  "});"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
+          "name": "List Questions by Course",
           "request": {
             "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{managerAToken}}"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/manager/questions?courseId={{courseId}}&page=0&size=20",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "manager", "questions"],
-              "query": [
-                {"key": "courseId", "value": "{{courseId}}"},
-                {"key": "page", "value": "0"},
-                {"key": "size", "value": "20"}
-              ]
-            }
+            "header": [{"key": "Authorization", "value": "Bearer {{managerAToken}}"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/manager/questions?courseId={{courseId}}&page=0&size=20", "host": ["{{baseUrl}}"], "path": ["api", "v1", "manager", "questions"], "query": [{"key": "courseId", "value": "{{courseId}}"}, {"key": "page", "value": "0"}, {"key": "size", "value": "20"}]}
           }
         },
         {
-          "name": "TC-Q02-01 Create Single Choice Question",
-          "event": [
-            {
-              "script": {
-                "exec": [
-                  "pm.test(\"Status code is 201 Created\", function () {",
-                  "    pm.response.to.have.status(201);",
-                  "});",
-                  "var jsonData = pm.response.json();",
-                  "if (jsonData.data && jsonData.data.questionId) {",
-                  "    pm.environment.set(\"questionId\", jsonData.data.questionId);",
-                  "}"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{managerAToken}}"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"courseId\": {{courseId}},\n  \"moduleId\": {{moduleId}},\n  \"groupId\": {{groupId}},\n  \"questionType\": \"SINGLE_CHOICE\",\n  \"difficulty\": \"MEDIUM\",\n  \"content\": \"What is dependency injection in Spring Boot?\",\n  \"explanation\": \"DI is a design pattern used to implement IoC.\",\n  \"defaultPoints\": 2,\n  \"options\": [\n    {\"optionText\": \"A design pattern for IoC\", \"isCorrect\": true},\n    {\"optionText\": \"A database migration tool\", \"isCorrect\": false}\n  ]\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/manager/questions",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "manager", "questions"]
-            }
-          }
-        },
-        {
-          "name": "TC-Q02-03 Create Question with Invalid Options -> 400",
-          "event": [
-            {
-              "script": {
-                "exec": [
-                  "pm.test(\"Status code is 400 Bad Request\", function () {",
-                  "    pm.response.to.have.status(400);",
-                  "});"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{managerAToken}}"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"courseId\": {{courseId}},\n  \"questionType\": \"SINGLE_CHOICE\",\n  \"difficulty\": \"EASY\",\n  \"content\": \"Invalid question without correct option\",\n  \"defaultPoints\": 1,\n  \"options\": [\n    {\"optionText\": \"Wrong 1\", \"isCorrect\": false},\n    {\"optionText\": \"Wrong 2\", \"isCorrect\": false}\n  ]\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/manager/questions",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "manager", "questions"]
-            }
-          }
-        },
-        {
-          "name": "TC-Q04-01 Get Question Detail",
-          "event": [
-            {
-              "script": {
-                "exec": [
-                  "pm.test(\"Status code is 200\", function () {",
-                  "    pm.response.to.have.status(200);",
-                  "});"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
+          "name": "List Questions Filter by Type (DIAGRAM)",
           "request": {
             "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{managerAToken}}"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/manager/questions/{{questionId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "manager", "questions", "{{questionId}}"]
-            }
+            "header": [{"key": "Authorization", "value": "Bearer {{managerAToken}}"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/manager/questions?courseId={{courseId}}&questionType=DIAGRAM", "host": ["{{baseUrl}}"], "path": ["api", "v1", "manager", "questions"], "query": [{"key": "courseId", "value": "{{courseId}}"}, {"key": "questionType", "value": "DIAGRAM"}]}
+          }
+        },
+        {
+          "name": "List Questions Filter by Type (ORDERING)",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{managerAToken}}"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/manager/questions?courseId={{courseId}}&questionType=ORDERING", "host": ["{{baseUrl}}"], "path": ["api", "v1", "manager", "questions"], "query": [{"key": "courseId", "value": "{{courseId}}"}, {"key": "questionType", "value": "ORDERING"}]}
           }
         }
       ]
     },
     {
-      "name": "02 AI Question Generation",
+      "name": "02 Create Questions (Q-02)",
       "item": [
         {
-          "name": "TC-AI-01 Generate AI Questions (Success)",
-          "event": [
-            {
-              "script": {
-                "exec": [
-                  "pm.test(\"Status code is 200\", function () {",
-                  "    pm.response.to.have.status(200);",
-                  "});",
-                  "var jsonData = pm.response.json();",
-                  "if (jsonData.data && jsonData.data.logId) {",
-                  "    pm.environment.set(\"logId\", jsonData.data.logId);",
-                  "}"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
+          "name": "Create SINGLE_CHOICE Question",
           "request": {
             "method": "POST",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{managerAToken}}"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
+            "header": [{"key": "Authorization", "value": "Bearer {{managerAToken}}"}, {"key": "Content-Type", "value": "application/json"}],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"courseId\": {{courseId}},\n  \"moduleId\": {{moduleId}},\n  \"questionType\": \"SINGLE_CHOICE\",\n  \"difficulty\": \"MEDIUM\",\n  \"count\": 1,\n  \"language\": \"en\",\n  \"context\": \"Generate question about Java Streams\"\n}"
+              "raw": "{\n  \"courseId\": {{courseId}},\n  \"moduleId\": {{moduleId}},\n  \"questionType\": \"SINGLE_CHOICE\",\n  \"difficulty\": \"EASY\",\n  \"content\": \"What is 2 + 2?\",\n  \"defaultPoints\": 1,\n  \"options\": [\n    {\"optionText\": \"3\", \"isCorrect\": false},\n    {\"optionText\": \"4\", \"isCorrect\": true}\n  ]\n}"
             },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/manager/questions/ai/generate",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "manager", "questions", "ai", "generate"]
-            }
+            "url": {"raw": "{{baseUrl}}/api/v1/manager/questions", "host": ["{{baseUrl}}"], "path": ["api", "v1", "manager", "questions"]}
           }
         },
         {
-          "name": "TC-AI-03 AI Timeout Error (__TIMEOUT__)",
-          "event": [
-            {
-              "script": {
-                "exec": [
-                  "pm.test(\"Status code is 400\", function () {",
-                  "    pm.response.to.have.status(400);",
-                  "});"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
+          "name": "Create DIAGRAM Question (Happy Path)",
           "request": {
             "method": "POST",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{managerAToken}}"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
+            "header": [{"key": "Authorization", "value": "Bearer {{managerAToken}}"}, {"key": "Content-Type", "value": "application/json"}],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"courseId\": {{courseId}},\n  \"questionType\": \"SINGLE_CHOICE\",\n  \"difficulty\": \"MEDIUM\",\n  \"count\": 1,\n  \"language\": \"en\",\n  \"context\": \"__TIMEOUT__\"\n}"
+              "raw": "{\n  \"courseId\": {{courseId}},\n  \"moduleId\": {{moduleId}},\n  \"questionType\": \"DIAGRAM\",\n  \"difficulty\": \"HARD\",\n  \"content\": \"Draw sequence diagram for login flow\",\n  \"defaultPoints\": 3,\n  \"questionMetadata\": {\n    \"drawioXml\": \"<mxfile><diagram>content</diagram></mxfile>\",\n    \"skillTag\": \"uml\"\n  }\n}"
             },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/manager/questions/ai/generate",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "manager", "questions", "ai", "generate"]
-            }
+            "url": {"raw": "{{baseUrl}}/api/v1/manager/questions", "host": ["{{baseUrl}}"], "path": ["api", "v1", "manager", "questions"]}
           }
         },
         {
-          "name": "TC-AI-05 AI Quota Exceeded (Manager B)",
-          "event": [
-            {
-              "script": {
-                "exec": [
-                  "pm.test(\"Status code is 409 Conflict\", function () {",
-                  "    pm.response.to.have.status(409);",
-                  "});"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
+          "name": "Create ORDERING Question (Happy Path)",
           "request": {
             "method": "POST",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{managerBToken}}"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
+            "header": [{"key": "Authorization", "value": "Bearer {{managerAToken}}"}, {"key": "Content-Type", "value": "application/json"}],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"courseId\": {{courseId}},\n  \"questionType\": \"SINGLE_CHOICE\",\n  \"difficulty\": \"MEDIUM\",\n  \"count\": 10,\n  \"language\": \"en\",\n  \"context\": \"__TOKENS_HUGE__\"\n}"
+              "raw": "{\n  \"courseId\": {{courseId}},\n  \"moduleId\": {{moduleId}},\n  \"questionType\": \"ORDERING\",\n  \"difficulty\": \"MEDIUM\",\n  \"content\": \"Order the HTTP methods by CRUD create\",\n  \"defaultPoints\": 2,\n  \"options\": [\n    {\"optionText\": \"POST\", \"isCorrect\": false, \"orderIndex\": 0},\n    {\"optionText\": \"GET\", \"isCorrect\": false, \"orderIndex\": 1}\n  ]\n}"
             },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/manager/questions/ai/generate",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "manager", "questions", "ai", "generate"]
-            }
+            "url": {"raw": "{{baseUrl}}/api/v1/manager/questions", "host": ["{{baseUrl}}"], "path": ["api", "v1", "manager", "questions"]}
+          }
+        },
+        {
+          "name": "Create DIAGRAM Question (Invalid XML -> 400)",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Authorization", "value": "Bearer {{managerAToken}}"}, {"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"courseId\": {{courseId}},\n  \"questionType\": \"DIAGRAM\",\n  \"difficulty\": \"HARD\",\n  \"content\": \"Invalid XML diagram\",\n  \"defaultPoints\": 3,\n  \"questionMetadata\": {\n    \"drawioXml\": \"<html>Invalid start</html>\"\n  }\n}"
+            },
+            "url": {"raw": "{{baseUrl}}/api/v1/manager/questions", "host": ["{{baseUrl}}"], "path": ["api", "v1", "manager", "questions"]}
+          }
+        },
+        {
+          "name": "Create ORDERING Question (isCorrect=true -> 400)",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Authorization", "value": "Bearer {{managerAToken}}"}, {"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"courseId\": {{courseId}},\n  \"questionType\": \"ORDERING\",\n  \"difficulty\": \"MEDIUM\",\n  \"content\": \"Invalid ordering with isCorrect=true\",\n  \"defaultPoints\": 2,\n  \"options\": [\n    {\"optionText\": \"Step 1\", \"isCorrect\": true, \"orderIndex\": 0},\n    {\"optionText\": \"Step 2\", \"isCorrect\": false, \"orderIndex\": 1}\n  ]\n}"
+            },
+            "url": {"raw": "{{baseUrl}}/api/v1/manager/questions", "host": ["{{baseUrl}}"], "path": ["api", "v1", "manager", "questions"]}
           }
         }
       ]
     },
     {
-      "name": "03 Exam & Attempt Management",
+      "name": "03 Detail, Update & Delete (Q-04 to Q-08)",
       "item": [
         {
-          "name": "TC-EX-01 Create Random Exam",
-          "event": [
-            {
-              "script": {
-                "exec": [
-                  "pm.test(\"Status code is 201 Created\", function () {",
-                  "    pm.response.to.have.status(201);",
-                  "});",
-                  "var jsonData = pm.response.json();",
-                  "if (jsonData.data && jsonData.data.examId) {",
-                  "    pm.environment.set(\"examId\", jsonData.data.examId);",
-                  "}"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{managerAToken}}"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"courseId\": {{courseId}},\n  \"title\": \"Postman Generated Exam\",\n  \"durationMinutes\": 45,\n  \"criteria\": [\n    {\n      \"questionType\": \"SINGLE_CHOICE\",\n      \"difficulty\": \"MEDIUM\",\n      \"count\": 1,\n      \"pointsPerQuestion\": 2\n    }\n  ]\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/manager/exams/random",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "manager", "exams", "random"]
-            }
-          }
-        },
-        {
-          "name": "TC-EX-03 Publish Exam",
-          "event": [
-            {
-              "script": {
-                "exec": [
-                  "pm.test(\"Status code is 200\", function () {",
-                  "    pm.response.to.have.status(200);",
-                  "});"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{managerAToken}}"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/manager/exams/{{examId}}/publish",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "manager", "exams", "{{examId}}", "publish"]
-            }
-          }
-        },
-        {
-          "name": "TC-EX-04 Get Student Exam View",
-          "event": [
-            {
-              "script": {
-                "exec": [
-                  "pm.test(\"Status code is 200\", function () {",
-                  "    pm.response.to.have.status(200);",
-                  "});"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
+          "name": "Get Question Detail (Q-04)",
           "request": {
             "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{studentToken}}"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/student/exams/{{examId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "student", "exams", "{{examId}}"]
-            }
+            "header": [{"key": "Authorization", "value": "Bearer {{managerAToken}}"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/manager/questions/{{questionId}}", "host": ["{{baseUrl}}"], "path": ["api", "v1", "manager", "questions", "{{questionId}}"]}
           }
         },
         {
-          "name": "TC-EX-05 Submit Student Exam Attempt",
-          "event": [
-            {
-              "script": {
-                "exec": [
-                  "pm.test(\"Status code is 201 Created\", function () {",
-                  "    pm.response.to.have.status(201);",
-                  "});",
-                  "var jsonData = pm.response.json();",
-                  "if (jsonData.data && jsonData.data.attemptId) {",
-                  "    pm.environment.set(\"attemptId\", jsonData.data.attemptId);",
-                  "}"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
+          "name": "Update Question (Q-05)",
+          "request": {
+            "method": "PUT",
+            "header": [{"key": "Authorization", "value": "Bearer {{managerAToken}}"}, {"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"content\": \"Updated question content\",\n  \"difficulty\": \"HARD\"\n}"},
+            "url": {"raw": "{{baseUrl}}/api/v1/manager/questions/{{questionId}}", "host": ["{{baseUrl}}"], "path": ["api", "v1", "manager", "questions", "{{questionId}}"]}
+          }
+        },
+        {
+          "name": "Duplicate Question (Q-07)",
           "request": {
             "method": "POST",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{studentToken}}"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"examId\": {{examId}},\n  \"answers\": [\n    {\n      \"questionId\": {{questionId}},\n      \"selectedOptionIds\": [1]\n    }\n  ]\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/student/exams/attempts",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "student", "exams", "attempts"]
-            }
+            "header": [{"key": "Authorization", "value": "Bearer {{managerAToken}}"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/manager/questions/{{questionId}}/duplicate", "host": ["{{baseUrl}}"], "path": ["api", "v1", "manager", "questions", "{{questionId}}", "duplicate"]}
+          }
+        },
+        {
+          "name": "Change Status (Q-08)",
+          "request": {
+            "method": "PATCH",
+            "header": [{"key": "Authorization", "value": "Bearer {{managerAToken}}"}, {"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"status\": \"INACTIVE\"\n}"},
+            "url": {"raw": "{{baseUrl}}/api/v1/manager/questions/{{questionId}}/status", "host": ["{{baseUrl}}"], "path": ["api", "v1", "manager", "questions", "{{questionId}}", "status"]}
+          }
+        },
+        {
+          "name": "Delete Question (Q-06)",
+          "request": {
+            "method": "DELETE",
+            "header": [{"key": "Authorization", "value": "Bearer {{managerAToken}}"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/manager/questions/{{questionId}}", "host": ["{{baseUrl}}"], "path": ["api", "v1", "manager", "questions", "{{questionId}}"]}
           }
         }
       ]
