@@ -2,7 +2,10 @@ import { QUESTION_METADATA_KEYS } from '@/services/question.service';
 import type {
   AnswerOption,
   FillBlankAnswerKey,
+  ImportBlock,
+  ImportedQuestionData,
   MatchingAnswerKey,
+  OrderingAnswerKey,
   QuestionCreateRequest,
   QuestionAiDraft,
   QuestionDetail,
@@ -19,16 +22,11 @@ import { hasDiagramContent, plantUmlToDrawioXml } from './diagram';
  */
 
 /**
- * Types the editor offers. QuestionValidator accepts SINGLE_CHOICE,
- * MULTIPLE_CHOICE, TRUE_FALSE, MATCHING, FILL_BLANK and ESSAY. DIAGRAM (drawn
- * in draw.io) is sent like the others, with its XML in questionMetadata, but
- * the backend still rejects it — see docs/notes/diagram-question-be-gaps.md.
- * ORDERING can be authored in the UI but not saved yet. CODE has no editor yet.
+ * Types the editor offers — all the ones QuestionValidator accepts. DIAGRAM
+ * sends its draw.io XML in questionMetadata.drawioXml; ORDERING sends keyed
+ * options plus answerKey.correctOrder. CODE has no editor yet.
  */
-export type EditableQuestionType = Exclude<QuestionType, 'CODE'> | 'ORDERING';
-
-/** Types the editor shows but never sends to the backend. */
-export const UNSAVEABLE_TYPES: EditableQuestionType[] = ['ORDERING'];
+export type EditableQuestionType = Exclude<QuestionType, 'CODE'>;
 
 export const QUESTION_TYPE_OPTIONS: { label: string; value: EditableQuestionType }[] = [
   { label: 'Single Choice', value: 'SINGLE_CHOICE' },
@@ -38,11 +36,17 @@ export const QUESTION_TYPE_OPTIONS: { label: string; value: EditableQuestionType
   { label: 'Fill in the Blank', value: 'FILL_BLANK' },
   { label: 'Essay', value: 'ESSAY' },
   { label: 'Diagram', value: 'DIAGRAM' },
-  { label: 'Ordering (coming soon)', value: 'ORDERING' },
+  { label: 'Ordering', value: 'ORDERING' },
 ];
 
-/** Types the AI can draft (ExamAiServiceImpl.TYPES). */
-export const AI_QUESTION_TYPE_OPTIONS = QUESTION_TYPE_OPTIONS.filter(t => !UNSAVEABLE_TYPES.includes(t.value)) as { label: string; value: QuestionType }[];
+/** Types the AI can draft (ExamAiServiceImpl.TYPES) — AI-01 doesn't draft ORDERING yet. */
+export const AI_QUESTION_TYPE_OPTIONS = QUESTION_TYPE_OPTIONS.filter(t => t.value !== 'ORDERING') as { label: string; value: QuestionType }[];
+
+/** QuestionValidator's drawioXml limit (500 KB, counted in UTF-8 bytes). */
+export const MAX_DRAWIO_XML_BYTES = 512000;
+
+/** Types graded by a rubric whose total is sent as defaultPoints (E-11: DIAGRAM like ESSAY). */
+export const RUBRIC_TYPES: EditableQuestionType[] = ['ESSAY', 'DIAGRAM'];
 
 /** QuestionValidator limits. */
 export const MAX_CONTENT_LENGTH = 10000;
@@ -76,7 +80,9 @@ export interface BlankDraft {
 }
 
 export interface OrderItemDraft {
+  /** Also sent as the option `key` that correctOrder refers to. */
   key: string;
+  optionId?: number | null;
   text: string;
 }
 
@@ -114,11 +120,21 @@ export interface QuestionDraft {
   /** DIAGRAM — model answer as draw.io XML, plus an SVG snapshot for previews. */
   diagramXml: string;
   diagramSvg: string;
-  /** ESSAY grading rubric; empty = no rubric. Its total maxScore is sent as defaultPoints. */
+  /** ESSAY / DIAGRAM grading rubric; empty = no rubric. Its total maxScore is sent as defaultPoints. */
   rubric: RubricCriterionDraft[];
   rubricNotes: string;
   /** Drafted by AI-03 and accepted into the form. */
   fromAi?: boolean;
+  /** A Q-09 import block the backend couldn't read — shown on the question until dismissed. */
+  importIssue?: ImportIssue;
+}
+
+export interface ImportIssue {
+  /** Block number in the file (1-based). */
+  block: number;
+  /** Line the block starts at (0 = unknown). */
+  line: number;
+  errors: { line: number; message: string }[];
 }
 
 let seq = 0;
@@ -176,8 +192,9 @@ export function changeType(q: QuestionDraft, type: EditableQuestionType): Questi
     const first = Math.max(0, options.findIndex(o => o.isCorrect));
     options = options.map((o, i) => ({ ...o, isCorrect: i === first }));
   }
-  // A new essay starts with one criterion to fill in; removing it saves the essay without a rubric.
-  const rubric = type === 'ESSAY' && q.type !== 'ESSAY' && q.rubric.length === 0 && !q.rubricNotes ? [emptyCriterion()] : q.rubric;
+  // A new essay / diagram starts with one criterion to fill in; removing it saves the question without a rubric.
+  const startsRubric = RUBRIC_TYPES.includes(type) && !RUBRIC_TYPES.includes(q.type) && q.rubric.length === 0 && !q.rubricNotes;
+  const rubric = startsRubric ? [emptyCriterion()] : q.rubric;
   return { ...q, type, options, rubric };
 }
 
@@ -198,13 +215,11 @@ const splitAccepted = (s: string) => s.split(';').map(a => a.trim()).filter(Bool
 // ---- Validation -----------------------------------------------------------
 
 export interface QuestionErrors {
-  /** The selected type can't be saved yet. */
+  /** Shown under the type / skill tag row. */
   type?: string;
   content?: string;
   answers?: string;
 }
-
-const typeName = (t: EditableQuestionType) => QUESTION_TYPE_OPTIONS.find(o => o.value === t)?.label.replace(/ \(.*\)$/, '') ?? t;
 
 /** Same text once whitespace and case are ignored (QuestionValidator's duplicate check). */
 const normalize = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ');
@@ -214,8 +229,7 @@ export function validateDraft(q: QuestionDraft): QuestionErrors {
   const errors: QuestionErrors = {};
   if (q.content.trim() === '') errors.content = 'Question text is required.';
   else if (q.content.trim().length > MAX_CONTENT_LENGTH) errors.content = `Question text can be at most ${MAX_CONTENT_LENGTH.toLocaleString()} characters.`;
-  if (UNSAVEABLE_TYPES.includes(q.type)) errors.type = `${typeName(q.type)} questions can't be saved yet — pick another type to save.`;
-  else if (q.skillTag.trim().length > MAX_SKILL_TAG_LENGTH) errors.type = `Skill tag can be at most ${MAX_SKILL_TAG_LENGTH} characters.`;
+  if (q.skillTag.trim().length > MAX_SKILL_TAG_LENGTH) errors.type = `Skill tag can be at most ${MAX_SKILL_TAG_LENGTH} characters.`;
 
   switch (q.type) {
     case 'SINGLE_CHOICE':
@@ -252,13 +266,21 @@ export function validateDraft(q: QuestionDraft): QuestionErrors {
     }
     case 'ORDERING': {
       const filled = q.ordering.filter(o => o.text.trim());
-      if (filled.length < 2) errors.answers = 'Add at least two items to order.';
+      if (filled.length < MIN_OPTIONS) errors.answers = `Add at least ${MIN_OPTIONS} items to order.`;
+      else if (q.ordering.length > MAX_OPTIONS) errors.answers = `A question can have at most ${MAX_OPTIONS} items.`;
       else if (filled.length !== q.ordering.length) errors.answers = 'Fill in every item or remove the empty ones.';
+      else if (hasDuplicates(filled.map(o => o.text))) errors.answers = 'Items must be different from each other.';
       break;
     }
-    case 'DIAGRAM':
-      if (!hasDiagramContent(q.diagramXml)) errors.answers = 'Draw the model answer diagram.';
+    case 'DIAGRAM': {
+      const xml = q.diagramXml.trim();
+      const { error } = rubricTotal(q.rubric);
+      if (!hasDiagramContent(xml)) errors.answers = 'Draw the model answer diagram.';
+      else if (!/^<(mxfile|mxGraphModel)\b/i.test(xml)) errors.answers = 'The diagram isn’t valid draw.io XML — open it in draw.io and save again.';
+      else if (new TextEncoder().encode(xml).length > MAX_DRAWIO_XML_BYTES) errors.answers = 'The diagram is too large (max 500 KB) — simplify it or remove embedded images.';
+      else if (error) errors.answers = error;
       break;
+    }
     case 'ESSAY': {
       const { error } = rubricTotal(q.rubric);
       if (error) errors.answers = error;
@@ -294,6 +316,15 @@ export const isDraftValid = (q: QuestionDraft) => Object.keys(validateDraft(q)).
 // ---- Mapping to / from the backend ---------------------------------------
 
 function toOptions(q: QuestionDraft): AnswerOption[] {
+  // Items in their correct order; no isCorrect — the validator rejects one on ORDERING options.
+  if (q.type === 'ORDERING') {
+    return q.ordering.map((o, i) => ({
+      optionId: o.optionId ?? null,
+      key: o.key,
+      optionText: o.text.trim(),
+      orderIndex: i,
+    }));
+  }
   if (q.type !== 'SINGLE_CHOICE' && q.type !== 'MULTIPLE_CHOICE' && q.type !== 'TRUE_FALSE') return [];
   return q.options.map((o, i) => ({
     optionId: o.optionId ?? null,
@@ -303,7 +334,9 @@ function toOptions(q: QuestionDraft): AnswerOption[] {
   }));
 }
 
-function toAnswerKey(q: QuestionDraft): MatchingAnswerKey | FillBlankAnswerKey | null {
+function toAnswerKey(q: QuestionDraft): MatchingAnswerKey | FillBlankAnswerKey | OrderingAnswerKey | null {
+  // In answerKey rather than top-level correctOrder: Q-05 only validates it there.
+  if (q.type === 'ORDERING') return { correctOrder: q.ordering.map(o => o.key) };
   if (q.type === 'MATCHING') {
     return {
       pairs: q.pairs
@@ -328,8 +361,7 @@ export function toCreateRequest(q: QuestionDraft, courseId: number, moduleId: nu
   return {
     courseId,
     moduleId,
-    // ORDERING never gets here — validateDraft blocks it.
-    questionType: q.type as QuestionType,
+    questionType: q.type,
     difficulty: q.difficulty,
     content: q.content.trim(),
     options: toOptions(q),
@@ -341,11 +373,11 @@ export function toCreateRequest(q: QuestionDraft, courseId: number, moduleId: nu
 }
 
 /**
- * ESSAY rubric plus the matching defaultPoints; nothing for other types or
- * without criteria. Same shape as the exam (E-08) rubric: criteria, totalPoints, notes.
+ * ESSAY / DIAGRAM rubric plus the matching defaultPoints; nothing for other
+ * types or without criteria. Same shape as the exam (E-08) rubric: criteria, totalPoints, notes.
  */
 function toRubric(q: QuestionDraft): Pick<QuestionCreateRequest, 'essayGradingRubric' | 'defaultPoints'> {
-  if (q.type !== 'ESSAY') return {};
+  if (!RUBRIC_TYPES.includes(q.type)) return {};
   const { total } = rubricTotal(q.rubric);
   if (total == null) return {};
   const criteria = q.rubric.map(c => ({
@@ -399,7 +431,7 @@ export function toUpdateRequest(q: QuestionDraft, moduleId: number | null, extra
     groupId: q.groupId,
     explanation: q.explanation.trim(),
     questionMetadata: toMetadata(q),
-    questionType: q.type as QuestionType,
+    questionType: q.type,
     difficulty: q.difficulty,
     content: q.content.trim(),
     // Sending [] for non-choice types tells the backend to drop old options.
@@ -435,6 +467,19 @@ export function fromDetail(d: QuestionDetail): QuestionDraft {
   const rawPairs = Array.isArray(key?.pairs) ? (key.pairs as { left?: unknown; right?: unknown }[]) : [];
   const rawBlanks = Array.isArray(key?.blanks) ? (key.blanks as { index?: unknown; accepted?: unknown; caseSensitive?: unknown }[]) : [];
 
+  // ORDERING: correctOrder lists optionIds once saved (option keys in an AI draft); else trust orderIndex.
+  const rawOrder = Array.isArray(key?.correctOrder) ? key.correctOrder.map(String) : [];
+  const rank = (o: AnswerOption, i: number) => {
+    const at = rawOrder.indexOf(String(o.optionId ?? o.key ?? ''));
+    return at >= 0 ? at : rawOrder.length + (o.orderIndex ?? i);
+  };
+  const ordering = type === 'ORDERING'
+    ? (d.options ?? [])
+        .map((o, i) => ({ o, r: rank(o, i) }))
+        .sort((a, b) => a.r - b.r)
+        .map(({ o }) => ({ key: newKey('ord'), optionId: o.optionId ?? null, text: o.optionText ?? '' }))
+    : [];
+
   const blanks: Record<number, BlankDraft> = {};
   rawBlanks.forEach(b => {
     const index = Number(b.index);
@@ -461,14 +506,15 @@ export function fromDetail(d: QuestionDetail): QuestionDraft {
       ? rawPairs.map(p => ({ key: newKey('pair'), left: String(p.left ?? ''), right: String(p.right ?? '') }))
       : base.pairs,
     blanks,
+    ordering: ordering.length ? ordering : base.ordering,
     diagramXml: typeof metadata.drawioXml === 'string' ? metadata.drawioXml : '',
     diagramSvg: typeof metadata.drawioSvg === 'string' ? metadata.drawioSvg : '',
     ...fromRubric(d.essayGradingRubric),
   };
 }
 
-/** An AI-03 preview question, accepted into the editor. */
-export function fromAiDraft(a: QuestionAiDraft): QuestionDraft {
+/** A previewed question (AI-03 draft or Q-09 import block) → editor draft. */
+function fromPreviewed(a: QuestionAiDraft): QuestionDraft {
   const draft = fromDetail({
     questionId: 0,
     courseId: null,
@@ -493,27 +539,46 @@ export function fromAiDraft(a: QuestionAiDraft): QuestionDraft {
     createdAt: null,
     updatedAt: null,
   });
+  return { ...draft, questionId: undefined, lockVersion: undefined };
+}
+
+/** An AI-03 preview question, accepted into the editor. */
+export function fromAiDraft(a: QuestionAiDraft): QuestionDraft {
+  const draft = fromPreviewed(a);
   const plantUml = typeof draft.metadata.plantUmlSource === 'string' ? draft.metadata.plantUmlSource : '';
   const diagramXml = draft.type === 'DIAGRAM' && !draft.diagramXml && plantUml.trim() ? plantUmlToDrawioXml(plantUml) : draft.diagramXml;
-  return { ...draft, questionId: undefined, lockVersion: undefined, diagramXml, fromAi: true };
+  return { ...draft, diagramXml, fromAi: true };
 }
 
-/** Shape produced by the (still mocked) PDF import. */
-export interface ExtractedQuestion {
-  text: string;
-  difficulty: string;
-  type: string;
-  options: { label: string; text: string }[];
-  correct: string;
+/**
+ * A valid Q-09 import block, added to the form. ORDERING sends the option keys
+ * in a top-level `correctOrder`; fromDetail reads them from answerKey.
+ */
+export function fromImported(q: ImportedQuestionData): QuestionDraft {
+  const key = asRecord(q.answerKey);
+  const answerKey = q.questionType === 'ORDERING' && Array.isArray(q.correctOrder) && !key?.correctOrder
+    ? { ...key, correctOrder: q.correctOrder }
+    : q.answerKey;
+  return fromPreviewed({ ...q, answerKey });
 }
 
-export function fromExtracted(x: ExtractedQuestion): QuestionDraft {
-  const draft = emptyDraft();
-  const difficulty = (x.difficulty.toUpperCase() as QuestionDifficulty) ?? 'MEDIUM';
-  const type: EditableQuestionType = x.type === 'essay' ? 'ESSAY' : x.type === 'tf' ? 'TRUE_FALSE' : 'SINGLE_CHOICE';
-  const options =
-    type === 'TRUE_FALSE'
-      ? trueFalseOptions()
-      : x.options.map(o => ({ key: newKey('opt'), text: o.text, isCorrect: o.label === x.correct }));
-  return { ...draft, type, difficulty: DIFFICULTY_OPTIONS.some(d => d.value === difficulty) ? difficulty : 'MEDIUM', content: x.text, options };
+/**
+ * Any Q-09 import block → editor draft. The backend sends no question data for
+ * a block with errors, so that one becomes a blank question of its type
+ * carrying the errors, for the manager to fill in or remove.
+ */
+export function fromImportBlock(b: ImportBlock, difficulty: QuestionDifficulty): QuestionDraft {
+  if (!b.errors?.length && b.questionData) return fromImported(b.questionData);
+  const type = QUESTION_TYPE_OPTIONS.find(o => o.value === b.questionType)?.value;
+  const blank = { ...emptyDraft(), difficulty };
+  return {
+    ...(type ? changeType(blank, type) : blank),
+    importIssue: {
+      block: b.index,
+      line: b.startLine,
+      errors: b.errors?.length
+        ? b.errors.map(e => ({ line: e.line, message: e.message }))
+        : [{ line: 0, message: 'This block could not be read.' }],
+    },
+  };
 }

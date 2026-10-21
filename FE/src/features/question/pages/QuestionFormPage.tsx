@@ -20,11 +20,9 @@ import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
 import {
   emptyDraft,
   fromDetail,
-  fromExtracted,
   isDraftValid,
   toCreateRequest,
   toUpdateRequest,
-  type ExtractedQuestion,
   type QuestionDraft,
 } from '../model';
 import { clearCreateDraft, loadCreateDraft, saveCreateDraft, type CreateDraftSnapshot } from '../createDraft';
@@ -73,12 +71,16 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
   const [statusBusy, setStatusBusy] = useState(false);
   const [saveError, setSaveError] = useState<SaveError | null>(null);
   const [importedCount, setImportedCount] = useState(0);
+  /** Of the imported questions, how many the backend couldn't read. */
+  const [importedIssues, setImportedIssues] = useState(0);
   const [showImport, setShowImport] = useState(false);
   const [confirm, setConfirm] = useState<Confirm>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [tab, setTab] = useState<CreateTab>('manual');
   const [aiPending, setAiPending] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
+  /** Set once the user confirmed leaving without saving — stops the draft from being stored again. */
+  const leavingRef = useRef(false);
 
   // Edit mode: load the question.
   useEffect(() => {
@@ -124,9 +126,12 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
 
   // Create mode: keep the work in localStorage so a reload restores it.
   useEffect(() => {
-    if (isEdit || !dirty) return;
+    if (isEdit || !dirty || leavingRef.current) return;
     setDraftStored(false);
-    const id = setTimeout(() => setDraftStored(saveCreateDraft({ questions, courseId, moduleId, groupCtx, touched: [...touched] })), 400);
+    // A save still pending when the user leaves must not bring the draft back.
+    const id = setTimeout(() => {
+      if (!leavingRef.current) setDraftStored(saveCreateDraft({ questions, courseId, moduleId, groupCtx, touched: [...touched] }));
+    }, 400);
     return () => clearTimeout(id);
   }, [isEdit, dirty, questions, courseId, moduleId, groupCtx, touched]);
 
@@ -134,10 +139,16 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
   // Reloading only prompts for what the stored draft can't bring back.
   const { blocker, leave } = useUnsavedChangesGuard(dirty || aiPending > 0, (dirty && (isEdit || !draftStored)) || aiPending > 0);
 
-  // Leaving without saving was confirmed — the draft goes with it.
-  useEffect(() => {
-    if (!isEdit && blocker.state === 'proceeding') clearCreateDraft();
-  }, [isEdit, blocker.state]);
+  /**
+   * Leaving without saving was confirmed — the draft goes with it. Done in the
+   * click itself: the page unmounts as the navigation goes ahead, so an effect
+   * waiting for the blocker's 'proceeding' state may never run.
+   */
+  const discardOnLeave = () => {
+    if (isEdit) return;
+    leavingRef.current = true;
+    clearCreateDraft();
+  };
 
   const discardRestored = () => {
     clearCreateDraft();
@@ -190,21 +201,34 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
     requestAnimationFrame(() => scrollTo(draft.key));
   };
 
+  /** Untouched blank questions (the starter one) give way to appended drafts; flagged imports stay. */
+  const isKept = (q: QuestionDraft) => touched.has(q.key) || q.content.trim() !== '' || Boolean(q.importIssue);
+
   /** Append drafts, replacing the untouched blank starter question instead of keeping it around. */
   const appendDrafts = (drafts: QuestionDraft[]) => {
-    setQuestions(prev => [...prev.filter(q => touched.has(q.key) || q.content.trim() !== ''), ...drafts]);
+    setQuestions(prev => [...prev.filter(isKept), ...drafts]);
     setDirty(true);
   };
 
-  const handleImported = (incoming: ExtractedQuestion[]) => {
-    const drafts = incoming.map(fromExtracted);
-    appendDrafts(drafts);
-    setImportedCount(drafts.length);
+  const kept = questions.filter(isKept).length;
+
+  /** Every block of the file comes in; ones that couldn't be read carry their errors. */
+  const handleImported = (drafts: QuestionDraft[], importCourseId: string, importModuleId: string) => {
+    // The questions belong where they were imported into.
+    if (importCourseId !== courseId || importModuleId !== moduleId) changeLocation(importCourseId, importModuleId);
+    const fitting = drafts.slice(0, Math.max(0, MAX_BATCH - kept));
+    if (fitting.length < drafts.length) {
+      toast.warning(`Only ${fitting.length} of ${drafts.length} questions were added — you can save up to ${MAX_BATCH} at a time.`);
+    }
     setShowImport(false);
     setTab('manual');
+    if (!fitting.length) return;
+    appendDrafts(fitting);
+    setImportedCount(fitting.length);
+    setImportedIssues(fitting.filter(d => d.importIssue).length);
+    requestAnimationFrame(() => scrollTo(fitting[0].key));
   };
 
-  const kept = questions.filter(q => touched.has(q.key) || q.content.trim() !== '').length;
   const aiRoom = MAX_BATCH - kept;
 
   /** Returns how many drafts made it in (the batch is capped at MAX_BATCH). */
@@ -266,7 +290,7 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
     if (locationNote || questions.length === 0) return;
     if (!isEdit && Object.keys(groupContextErrors(groupCtx)).length > 0) {
       setTab('manual');
-      listRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+      listRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       return;
     }
 
@@ -292,7 +316,7 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
       const target = error.questionIndex != null ? questions[error.questionIndex] : undefined;
       setTab('manual');
       if (target) requestAnimationFrame(() => scrollTo(target.key));
-      else listRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+      else listRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } finally {
       setSaving(false);
     }
@@ -320,7 +344,7 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
 
   const title = isEdit ? 'Edit Question' : 'New Questions';
   const manualTabLabel = `Manual (${questions.length})`;
-  const pageCls = 'px-4 sm:px-8 py-6 space-y-4 lg:h-full lg:flex lg:flex-col lg:overflow-hidden';
+  const pageCls = 'px-4 sm:px-8 py-6 space-y-4';
 
   if (isEdit && (loading || loadError)) {
     return (
@@ -344,16 +368,7 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
   return (
     <div className={pageCls}>
       <Breadcrumb items={[{ label: 'Question', onClick: cancel }, { label: title }]} />
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-xl font-bold text-content">{title}</h2>
-        {!isEdit && (
-          <Tabs
-            tabs={[manualTabLabel, AI_TAB_LABEL]}
-            active={tab === 'manual' ? manualTabLabel : AI_TAB_LABEL}
-            onChange={t => setTab(t === AI_TAB_LABEL ? 'ai' : 'manual')}
-          />
-        )}
-      </div>
+      <h2 className="text-xl font-bold text-content">{title}</h2>
 
       {showRestored && restored && (
         <div className="flex flex-wrap items-center gap-3 rounded-[10px] border border-brand-line bg-primary-light px-4 py-2.5 text-sm text-brand-ink-strong">
@@ -369,19 +384,27 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
       )}
       {saveError && <SaveErrorAlert error={saveError} onReload={isEdit ? () => setReloadKey(k => k + 1) : undefined} />}
       {importedCount > 0 && (
-        <Alert type="success" title={`${importedCount} question${importedCount === 1 ? '' : 's'} imported`} message="Review the extracted questions before saving." />
+        importedIssues > 0 ? (
+          <Alert
+            type="warning"
+            title={`${importedCount} question${importedCount === 1 ? '' : 's'} imported — ${importedIssues} couldn’t be read`}
+            message="The questions marked in red came in blank. Fill them in or remove them, then review the rest before saving."
+          />
+        ) : (
+          <Alert type="success" title={`${importedCount} question${importedCount === 1 ? '' : 's'} imported`} message="Review the extracted questions before saving." />
+        )
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px] gap-6 lg:flex-1 lg:min-h-0 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px] gap-6 items-start">
         {/* AI tab — kept mounted so its suggestions survive switching tabs */}
         {!isEdit && (
-          <div className={`lg:h-full lg:min-h-0 lg:overflow-y-auto lg:pr-2 pb-4 ${tab === 'ai' ? '' : 'hidden'}`}>
+          <div className={`min-w-0 pb-4 ${tab === 'ai' ? '' : 'hidden'}`}>
             <AiGeneratePanel courseId={courseId} moduleId={moduleId} onAccept={handleAiAccepted} onPendingChange={setAiPending} disabled={saving} />
           </div>
         )}
 
-        {/* Question blocks — the only part that scrolls on desktop */}
-        <div ref={listRef} className={`space-y-3 lg:h-full lg:min-h-0 lg:overflow-y-auto lg:pr-2 pb-4 ${tab === 'manual' ? '' : 'hidden'}`}>
+        {/* Question blocks — scroll with the page; the side panel stays pinned */}
+        <div ref={listRef} className={`min-w-0 space-y-3 pb-4 scroll-mt-5 ${tab === 'manual' ? '' : 'hidden'}`}>
           {!isEdit && (
             <GroupContextCard
               value={groupCtx}
@@ -396,7 +419,7 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
           {questions.length === 0 && (
             <div className="card p-10 text-center">
               <p className="text-base font-medium text-content-secondary">No questions yet</p>
-              <p className="text-sm text-content-subtle mt-1">Use “Add Question”, import a PDF, or draft questions in the AI Generate tab.</p>
+              <p className="text-sm text-content-subtle mt-1">Use “Add Question”, import a PDF or Word file, or draft questions in the AI Generate tab.</p>
             </div>
           )}
           {questions.map((q, i) => (
@@ -418,6 +441,16 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
         </div>
 
         <QuestionSidePanel
+          tabs={!isEdit && (
+            // Full-width segmented switch above the Location card.
+            <div className="[&>[role=tablist]]:w-full [&_[role=tab]]:flex-1">
+              <Tabs
+                tabs={[manualTabLabel, AI_TAB_LABEL]}
+                active={tab === 'manual' ? manualTabLabel : AI_TAB_LABEL}
+                onChange={t => setTab(t === AI_TAB_LABEL ? 'ai' : 'manual')}
+              />
+            </div>
+          )}
           mode={mode}
           count={questions.length}
           courseId={courseId}
@@ -426,7 +459,8 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
           showErrors={submitted}
           prerequisiteNote={locationNote}
           onAdd={questions.length < MAX_BATCH ? addQuestion : undefined}
-          onImport={() => { setImportedCount(0); setShowImport(true); }}
+          // The AI tab takes files in its own card.
+          onImport={tab === 'manual' ? () => { setImportedCount(0); setShowImport(true); } : undefined}
           onSave={save}
           onCancel={cancel}
           onToggleStatus={isEdit ? () => (status === 'ACTIVE' ? setConfirm('archive') : changeStatus('ACTIVE')) : undefined}
@@ -436,10 +470,17 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
         />
       </div>
 
-      <ImportPdfModal open={showImport} onClose={() => setShowImport(false)} onImported={handleImported} />
+      <ImportPdfModal
+        open={showImport}
+        onClose={() => setShowImport(false)}
+        onImported={handleImported}
+        courseId={courseId}
+        moduleId={moduleId}
+      />
 
       <UnsavedChangesModal
         blocker={blocker}
+        onLeave={discardOnLeave}
         message="You have work on this page that hasn’t been saved. If you leave now, it will be lost:"
         details={unsavedDetails}
       />

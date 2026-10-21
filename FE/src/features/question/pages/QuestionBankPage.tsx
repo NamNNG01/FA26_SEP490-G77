@@ -33,6 +33,7 @@ const TYPE_LABELS: Record<string, string> = {
   ESSAY: 'Essay',
   CODE: 'Code',
   DIAGRAM: 'Diagram',
+  ORDERING: 'Ordering',
 };
 const DIFFICULTY_LABELS: Record<string, string> = { EASY: 'Easy', MEDIUM: 'Medium', HARD: 'Hard' };
 const STATUS_LABELS: Record<string, string> = QUESTION_STATUS_LABELS;

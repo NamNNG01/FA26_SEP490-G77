@@ -3,7 +3,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
 import { Icon } from '@/assets/icons';
-import { DRAWIO_EMBED_URL, DRAWIO_ORIGIN } from '../diagram';
+import { DRAWIO_EMBED_URL, DRAWIO_ORIGIN, lightSvgDataUri } from '../diagram';
 
 type DrawioMessage = { event?: string; xml?: string; data?: string };
 
@@ -62,7 +62,7 @@ export function DrawioEditorModal({ open, xml, onClose, onSave }: {
           break;
         case 'export':
           if (typeof msg.xml === 'string') latestXml.current = msg.xml;
-          onSave(latestXml.current, typeof msg.data === 'string' ? msg.data : '');
+          onSave(latestXml.current, typeof msg.data === 'string' ? lightSvgDataUri(msg.data) : '');
           setExporting(false);
           break;
       }

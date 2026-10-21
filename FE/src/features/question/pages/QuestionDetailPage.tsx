@@ -14,6 +14,7 @@ import { QUESTION_STATUS_LABELS, questionService, type QuestionDifficulty, type 
 import { questionGroupService, type QuestionGroup } from '@/services/questionGroup.service';
 import { AnswerSection } from '../components/QuestionForm';
 import { QuestionLocationCard } from '../components/QuestionLocationCard';
+import { SIDEBAR_CLS } from '../components/QuestionSidePanel';
 import { GroupInfoCard, QuestionGroupPicker } from '../components/QuestionGroupPicker';
 import {
   DIFFICULTY_OPTIONS,
@@ -166,7 +167,7 @@ export function QuestionDetailPage() {
     setSubmitted(true);
     setSaveError(null);
     if (!isDraftValid(q) || !moduleId) {
-      scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+      scrollRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       return;
     }
     setSaving(true);
@@ -181,7 +182,7 @@ export function QuestionDetailPage() {
       toast.success('Question updated.');
     } catch (err) {
       setSaveError(describeSaveError(err, 'Could not save. Please try again.'));
-      scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+      scrollRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } finally {
       setSaving(false);
     }
@@ -203,7 +204,7 @@ export function QuestionDetailPage() {
     }
   };
 
-  const pageCls = 'px-4 sm:px-8 py-6 space-y-4 lg:h-full lg:flex lg:flex-col lg:overflow-hidden';
+  const pageCls = 'px-4 sm:px-8 py-6 space-y-4';
   const crumbs = [{ label: 'Question', onClick: cancel }, { label: 'Question Detail' }];
 
   if (loading || loadError || !q) {
@@ -231,28 +232,20 @@ export function QuestionDetailPage() {
   const locked = saving || busy;
 
   return (
-    <div className={pageCls}>
+    <div ref={scrollRef} className={`${pageCls} scroll-mt-5`}>
       <Breadcrumb items={crumbs} />
 
-      {/* Page header */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <h2 className="text-xl font-bold text-content">Question Detail</h2>
-          {dirty && <Badge variant="warning">Unsaved changes</Badge>}
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" onClick={cancel} disabled={saving}>Cancel</Button>
-          <Button icon={<Icon.CheckCircle className="w-4 h-4" />} onClick={save} loading={saving} disabled={locked || Boolean(validateDraft(q).type)}>
-            Save Changes
-          </Button>
-        </div>
+      {/* Page header — Save / Cancel live in the sidebar, under Status */}
+      <div className="flex items-center gap-2">
+        <h2 className="text-xl font-bold text-content">Question Detail</h2>
+        {dirty && <Badge variant="warning">Unsaved changes</Badge>}
       </div>
 
       {saveError && <SaveErrorAlert error={saveError} onReload={() => setReloadKey(k => k + 1)} />}
 
-      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-6 lg:flex-1 lg:min-h-0 items-start">
-        {/* Main editor — the only part that scrolls on desktop */}
-        <div ref={scrollRef} className="lg:h-full lg:min-h-0 lg:overflow-y-auto lg:pr-2 pb-4">
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-6 items-start">
+        {/* Main editor — scrolls with the page; the sidebar stays pinned */}
+        <div className="min-w-0 pb-4">
           <section aria-labelledby="question-detail-title" className="card px-4 sm:px-5 py-4 space-y-4">
             {/* Header: id, question text label, badges */}
             <div>
@@ -321,7 +314,7 @@ export function QuestionDetailPage() {
         </div>
 
         {/* Sidebar */}
-        <div className="space-y-4 lg:h-full lg:min-h-0 lg:overflow-y-auto pb-4">
+        <div className={SIDEBAR_CLS}>
           <div className="card p-4 space-y-3">
             <h3 className="flex items-center gap-1.5 text-base font-semibold text-content">
               <Icon.FolderOpen className="w-4 h-4 text-brand-ink" /> Classification
@@ -335,6 +328,12 @@ export function QuestionDetailPage() {
               hideHeading
             />
             <Select label="Status" value={status} onChange={markDirty(v => setStatus(v as QuestionStatus))} options={STATUS_OPTIONS} disabled={locked} />
+            <div className="space-y-2 pt-1">
+              <Button className="w-full" icon={<Icon.CheckCircle className="w-4 h-4" />} onClick={save} loading={saving} disabled={locked || Boolean(validateDraft(q).type)}>
+                Save Changes
+              </Button>
+              <Button variant="ghost" className="w-full" onClick={cancel} disabled={saving}>Cancel</Button>
+            </div>
             <p className="text-xs text-content-subtle">The course can't be changed after a question is created.</p>
           </div>
 
