@@ -24,6 +24,13 @@ export interface CategoryResponse {
   parentName: string | null;
 }
 
+export interface CourseManagerItem {
+  userId: number;
+  fullName: string;
+  email?: string;
+  avatarUrl?: string | null;
+}
+
 export interface CourseSummaryItem {
   courseId: number;
   title: string;
@@ -32,6 +39,7 @@ export interface CourseSummaryItem {
   categoryName: string;
   managerId: number;
   managerName: string;
+  managers?: CourseManagerItem[];
   thumbnailUrl: string | null;
   price: number;
   isPublished: boolean;
@@ -91,6 +99,7 @@ export interface CourseDetailResponse {
   categoryName: string;
   managerId: number;
   managerName: string;
+  managers?: CourseManagerItem[];
   thumbnailUrl: string | null;
   price: number;
   isPublished: boolean;
@@ -110,6 +119,7 @@ export interface CreateCourseRequest {
   thumbnailUrl?: string;
   price?: number;
   managerId: number;
+  managerIds?: number[];
 }
 
 export interface UpdateCourseRequest {
