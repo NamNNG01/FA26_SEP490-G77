@@ -28,9 +28,6 @@ public interface QuestionService {
 
     QuestionDetailDto updateQuestionStatus(Long id, QuestionStatusRequest request, User currentUser);
 
-    AiGenerateResponse generateAiQuestions(AiGenerateRequest request, User currentUser);
-
-    List<QuestionDetailDto> saveAiQuestions(AiSaveRequest request, User currentUser);
 
     byte[] generateExcelTemplate(Long courseId, User currentUser);
 

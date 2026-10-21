@@ -142,27 +142,6 @@ public class QuestionController {
         return ResponseEntity.ok(ApiResponse.success(updated, "Question status updated successfully"));
     }
 
-    @PostMapping("/ai/generate")
-    @Operation(summary = "Generate questions using AI")
-    public ResponseEntity<ApiResponse<AiGenerateResponse>> generateAiQuestions(
-            @Valid @RequestBody AiGenerateRequest request,
-            @AuthenticationPrincipal UserPrincipal currentUser) {
-        User user = resolveUser(currentUser);
-        AiGenerateResponse response = questionService.generateAiQuestions(request, user);
-        return ResponseEntity.ok(ApiResponse.success(response, "AI questions generated successfully"));
-    }
-
-    @PostMapping("/ai/save")
-    @Operation(summary = "Save AI generated questions")
-    public ResponseEntity<ApiResponse<List<QuestionDetailDto>>> saveAiQuestions(
-            @Valid @RequestBody AiSaveRequest request,
-            @AuthenticationPrincipal UserPrincipal currentUser) {
-        User user = resolveUser(currentUser);
-        List<QuestionDetailDto> saved = questionService.saveAiQuestions(request, user);
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success(saved, "AI questions saved successfully"));
-    }
-
     @GetMapping("/import/template")
     @Operation(summary = "Download Excel import template")
     public ResponseEntity<byte[]> downloadTemplate(
