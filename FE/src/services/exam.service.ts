@@ -19,7 +19,6 @@ export interface ExamListItem {
   examKind: ExamKind;
   durationMinutes: number;
   passMark: number;
-  maxAttempts: number;
   questionCount: number;
   totalPoints: number;
   status: ExamStatus;
@@ -67,7 +66,6 @@ export interface ExamDetail {
   examKind?: ExamKind;
   durationMinutes?: number;
   passMark?: number;
-  maxAttempts?: number;
   questionCount?: number;
   totalPoints?: number;
   status?: ExamStatus;
@@ -90,7 +88,6 @@ export interface CreateExamRequest {
   generationType: GenerationType;
   status?: ExamStatus;
   passMark?: number;
-  maxAttempts?: number;
   questionIds?: { questionId: number; points: number; orderIndex: number }[];
   configs?: ExamConfig[];
   groupIds?: { groupId: number; points: number; orderIndex: number }[];
@@ -105,7 +102,6 @@ export interface UpdateExamRequest {
   isPractice?: boolean;
   generationType?: GenerationType;
   passMark?: number;
-  maxAttempts?: number;
   configs?: ExamConfig[];
 }
 
@@ -247,7 +243,6 @@ const INITIAL_MOCK_EXAMS: ExamDetail[] = [
     examKind: 'QUIZ',
     durationMinutes: 90,
     passMark: 70,
-    maxAttempts: 2,
     questionCount: 3,
     totalPoints: 8,
     status: 'PUBLISHED',
@@ -305,7 +300,6 @@ const INITIAL_MOCK_EXAMS: ExamDetail[] = [
     examKind: 'ESSAY',
     durationMinutes: 60,
     passMark: 60,
-    maxAttempts: 1,
     questionCount: 2,
     totalPoints: 20,
     status: 'DRAFT',
@@ -347,7 +341,6 @@ const INITIAL_MOCK_EXAMS: ExamDetail[] = [
     examKind: 'QUIZ',
     durationMinutes: 45,
     passMark: 50,
-    maxAttempts: 3,
     questionCount: 0,
     totalPoints: 0,
     status: 'DRAFT',
@@ -385,7 +378,6 @@ const INITIAL_MOCK_EXAMS: ExamDetail[] = [
     examKind: 'QUIZ',
     durationMinutes: 75,
     passMark: 65,
-    maxAttempts: 1,
     questionCount: 2,
     totalPoints: 6,
     status: 'ARCHIVED',
@@ -718,7 +710,6 @@ export const examService = {
       examKind: e.examKind || 'QUIZ',
       durationMinutes: e.durationMinutes || 60,
       passMark: e.passMark || 50,
-      maxAttempts: e.maxAttempts || 1,
       questionCount: e.questions.length + e.groups.reduce((acc, g) => acc + (g.questionCount || 0), 0),
       totalPoints: e.questions.reduce((acc, q) => acc + q.points, 0) + e.groups.reduce((acc, g) => acc + g.points, 0),
       status: e.status || 'DRAFT',
