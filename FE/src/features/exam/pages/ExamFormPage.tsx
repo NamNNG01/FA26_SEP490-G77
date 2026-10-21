@@ -92,7 +92,7 @@ export function ExamFormPage({
 
   const allowedQuestionTypes =
     formKind === 'QUIZ'
-      ? ['SINGLE_CHOICE', 'MULTI_CHOICE', 'TRUE_FALSE', 'FILL_BLANK', 'MATCHING', 'ORDERING']
+      ? ['SINGLE_CHOICE', 'MULTIPLE_CHOICE', 'TRUE_FALSE', 'FILL_BLANK', 'MATCHING', 'ORDERING']
       : ['ESSAY'];
 
   const totalQuestionCount =

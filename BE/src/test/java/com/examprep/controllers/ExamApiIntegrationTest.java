@@ -94,6 +94,8 @@ class ExamApiIntegrationTest {
         submit(payload).andExpect(status().isForbidden());
         payload.put("questionIds", List.of(Map.of("questionId", question.getQuestionId())));
         question.setStatus("INACTIVE"); submit(payload).andExpect(status().isBadRequest());
+        question.setStatus("ACTIVE"); payload.remove("courseId"); payload.remove("moduleId");
+        submit(payload).andExpect(status().isBadRequest()).andExpect(jsonPath("$.message").value("courseId or moduleId is required."));
         assertEquals(0L, em.createQuery("select count(e) from Exam e", Long.class).getSingleResult());
     }
 

@@ -28,7 +28,9 @@ public class QuestionValidator {
 
     public String sanitize(String input) {
         if (input == null) return null;
-        return SANITIZER.sanitize(input);
+        // OWASP breaks "{{" with an HTML comment (Angular template guard); that also breaks FILL_BLANK {{n}} placeholders.
+        // The FE is React, which never evaluates {{ }}, so the guard is undone.
+        return SANITIZER.sanitize(input).replace("{<!-- -->{", "{{");
     }
 
     public void validateQuestionType(String questionType) {

@@ -30,3 +30,11 @@ logs/
 
 # Local documentation (wireframes, specs)
 /docs/
+
+# Local tooling state (Serena, worktrees, personal Claude settings)
+.serena/
+.worktrees/
+**/.claude/settings.local.json
+
+# Personal dev seed with plaintext test credentials for the shared dev DB
+BE/docs/seed-admin.sql

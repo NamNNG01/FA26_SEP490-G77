@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/v1/manager/decks")
 @RequiredArgsConstructor
 @PreAuthorize("hasAnyRole('COURSE_MANAGER', 'ADMIN')")
-@Tag(name = "Manager Decks", description = "Scoped flashcard deck administration (F-01..05)")
+@Tag(name = "Manager Decks", description = "Scoped flashcard deck and card administration (F-01..08)")
 public class ManagerDeckController {
     private final DeckService service;
 
@@ -57,5 +57,15 @@ public class ManagerDeckController {
     public ResponseEntity<ApiResponse<Void>> delete(@AuthenticationPrincipal UserPrincipal user, @PathVariable Long id) {
         service.delete(user, id);
         return ResponseEntity.ok(ApiResponse.success(null, "Deck deleted successfully."));
+    }
+
+    @PostMapping("/{id}/cards")
+    @ResponseStatus(HttpStatus.CREATED)
+    @Operation(summary = "F-06: Append a card to a deck",
+            description = "COURSE_MANAGER/ADMIN with access to the deck. Both faces are required.")
+    public ResponseEntity<ApiResponse<CardResponse>> addCard(@AuthenticationPrincipal UserPrincipal user,
+            @PathVariable Long id, @Valid @RequestBody DeckRequests.CardCreate request) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success(service.addCard(user, id, request), ResponseCode.CREATED.getMessage()));
     }
 }

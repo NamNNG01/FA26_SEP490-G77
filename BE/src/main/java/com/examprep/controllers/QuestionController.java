@@ -8,6 +8,7 @@ import com.examprep.repositories.UserRepository;
 import com.examprep.security.UserPrincipal;
 import com.examprep.services.QuestionService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -43,6 +44,8 @@ public class QuestionController {
     @Operation(summary = "Q-01: List questions with filters and pagination")
     public ResponseEntity<ApiResponse<Page<QuestionListItemDto>>> getQuestions(
             @RequestParam(required = false) Long courseId,
+            @Parameter(description = "Limit to these courses (repeat the param: courseIds=1&courseIds=2); each must be one the caller manages")
+            @RequestParam(required = false) List<Long> courseIds,
             @RequestParam(required = false) Long moduleId,
             @RequestParam(required = false) Long groupId,
             @RequestParam(required = false) String questionType,
@@ -60,7 +63,7 @@ public class QuestionController {
         User user = resolveUser(currentUser);
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "updatedAt"));
         Page<QuestionListItemDto> result = questionService.getQuestions(
-                courseId, moduleId, groupId, questionType, difficulty, status, approvalStatus,
+                courseId, courseIds, moduleId, groupId, questionType, difficulty, status, approvalStatus,
                 creatorRole, source, createdBy, skillTag, search, pageable, user);
         return ResponseEntity.ok(ApiResponse.success(result, "Questions retrieved successfully"));
     }

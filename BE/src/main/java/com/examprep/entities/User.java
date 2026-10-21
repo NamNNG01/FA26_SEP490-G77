@@ -20,6 +20,7 @@ import java.time.Instant;
 public class User implements Serializable {
 
     public static final String STATUS_ACTIVE = "ACTIVE";
+    public static final String STATUS_INACTIVE = "INACTIVE";
 
     public static final String ROLE_ADMIN = "ADMIN";
     public static final String ROLE_COURSE_MANAGER = "COURSE_MANAGER";
@@ -52,6 +53,9 @@ public class User implements Serializable {
 
     @Column(name = "password_changed_at")
     private Instant passwordChangedAt;
+
+    @Column(name = "last_login_at")
+    private Instant lastLoginAt;
 
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)

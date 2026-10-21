@@ -123,6 +123,17 @@ class QuestionValidatorTest {
     }
 
     @Test
+    void validFillBlankKeepsPlaceholdersThroughSanitizing() {
+        assertTrue(validator.sanitize("2 + {{1}} = 5").contains("{{1}}"));
+        QuestionPayload payload = QuestionPayload.builder()
+                .questionType("FILL_BLANK")
+                .content("Python is a {{1}} language.")
+                .answerKey(Map.of("blanks", List.of(Map.of("index", 1, "accepted", List.of("dynamic")))))
+                .build();
+        assertEquals(List.of(), validator.validate(payload));
+    }
+
+    @Test
     void testEssayRubricValidation() {
         QuestionPayload payload = QuestionPayload.builder()
                 .questionType("ESSAY")

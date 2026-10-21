@@ -90,6 +90,42 @@ public class DeckServiceImpl implements DeckService {
         decks.flush();
     }
 
+    @Override
+    @Transactional
+    public CardResponse addCard(UserPrincipal user, Long id, DeckRequests.CardCreate request) {
+        Deck deck = writeDeck(user, id);
+        Flashcard card = cards.save(Flashcard.builder().deck(deck)
+                .frontText(request.frontText().strip()).backText(request.backText().strip()).build());
+        return CardResponse.from(card);
+    }
+
+    @Override
+    @Transactional
+    public CardResponse updateCard(UserPrincipal user, Long id, DeckRequests.CardUpdate request) {
+        Flashcard card = writeCard(user, id);
+        if (request.frontText() != null && !request.frontText().isBlank())
+            card.setFrontText(request.frontText().strip());
+        if (request.backText() != null && !request.backText().isBlank())
+            card.setBackText(request.backText().strip());
+        return CardResponse.from(card);
+    }
+
+    @Override
+    @Transactional
+    public void deleteCard(UserPrincipal user, Long id) {
+        Flashcard card = writeCard(user, id);
+        progress.deleteByCard(card.getCardId());
+        cards.delete(card);
+        cards.flush();
+    }
+
+    private Flashcard writeCard(UserPrincipal user, Long id) {
+        positiveId(id);
+        Flashcard card = cards.findDetail(id).orElseThrow(() -> new ResourceNotFoundException("Card not found."));
+        checkAccess(user, card.getDeck());
+        return card;
+    }
+
     private Deck writeDeck(UserPrincipal user, Long id) {
         positiveId(id);
         Deck deck = decks.findForUpdate(id).orElseThrow(() -> new ResourceNotFoundException("Deck not found."));
