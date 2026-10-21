@@ -236,6 +236,33 @@ public class ManagerCourseApiIntegrationTest {
     }
 
     @Test
+    void adminAssignsAndReplacesCoManagers() throws Exception {
+        String body = json.writeValueAsString(java.util.Map.of("title", "Shared", "categoryId", category.getCategoryId(),
+                "managerId", manager.getUserId(), "managerIds", List.of(collaborator.getUserId(), manager.getUserId(), collaborator.getUserId())));
+        JsonNode data = body(call(admin, post("/api/v1/manager/courses").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.managers.length()").value(2))
+                .andExpect(jsonPath("$.data.managers[0].userId").value(manager.getUserId()))
+                .andExpect(jsonPath("$.data.managers[0].primary").value(true))
+                .andExpect(jsonPath("$.data.managers[1].userId").value(collaborator.getUserId())));
+        String shared = "/api/v1/manager/courses/" + data.get("courseId").asLong();
+        call(collaborator, get(shared)).andExpect(status().isOk());
+
+        call(collaborator, put(shared).contentType(MediaType.APPLICATION_JSON).content("{\"managerIds\":[]}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.managers.length()").value(2));
+        call(admin, put(shared).contentType(MediaType.APPLICATION_JSON).content("{\"managerIds\":[" + stranger.getUserId() + "]}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.managers.length()").value(2))
+                .andExpect(jsonPath("$.data.managers[1].userId").value(stranger.getUserId()));
+        call(collaborator, get(shared)).andExpect(status().isForbidden());
+        call(stranger, get(shared)).andExpect(status().isOk());
+        call(manager, get(shared)).andExpect(status().isOk());
+        call(admin, put(shared).contentType(MediaType.APPLICATION_JSON).content("{\"managerIds\":[" + student.getUserId() + "]}"))
+                .andExpect(status().isBadRequest());
+        call(admin, get("/api/v1/manager/courses")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content[0].managers").doesNotExist());
+    }
+
+    @Test
     void publishRequiresModuleAndAdminCanManageAnyCourse() throws Exception {
         call(admin, patch(path() + "/publish").contentType(MediaType.APPLICATION_JSON).content("{\"isPublished\":true}"))
                 .andExpect(status().isBadRequest());

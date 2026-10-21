@@ -13,6 +13,7 @@ import type { ApiResponse } from '@/auth/authContext';
  * Endpoints (QuestionController):
  *   GET /api/v1/manager/questions  (Q-01: list with filters + pagination)
  *   POST /api/v1/manager/exams/ai/generate  (AI-01: draft questions with AI)
+ *   POST /api/v1/manager/exams/ai/generate-from-material  (AI-02: draft questions with AI from a file)
  */
 
 /** Values accepted by the `questions.question_type` CHECK constraint. */
@@ -24,7 +25,8 @@ export type QuestionType =
   | 'FILL_BLANK'
   | 'ESSAY'
   | 'CODE'
-  | 'DIAGRAM';
+  | 'DIAGRAM'
+  | 'ORDERING';
 
 export type QuestionDifficulty = 'EASY' | 'MEDIUM' | 'HARD';
 
@@ -106,11 +108,13 @@ function toQuestionPage(raw: RawSpringPage<QuestionListItem>): QuestionPage {
   };
 }
 
-/** AnswerOptionDto */
+/** AnswerOptionDto. ORDERING options carry a `key` and no `isCorrect` (the validator rejects one). */
 export interface AnswerOption {
   optionId?: number | null;
+  /** ORDERING only: what answerKey.correctOrder refers to (max 32 chars). */
+  key?: string;
   optionText: string;
-  isCorrect: boolean;
+  isCorrect?: boolean | null;
   explanation?: string | null;
   orderIndex?: number;
 }
@@ -125,6 +129,14 @@ export interface FillBlankAnswerKey {
   blanks: { index: number; accepted: string[]; caseSensitive: boolean }[];
 }
 
+/**
+ * answerKey for ORDERING. Sent as option keys; the backend stores and returns
+ * the optionIds of the options in their correct order.
+ */
+export interface OrderingAnswerKey {
+  correctOrder: (string | number)[];
+}
+
 /** QuestionCreateRequest */
 export interface QuestionCreateRequest {
   courseId: number;
@@ -134,13 +146,13 @@ export interface QuestionCreateRequest {
   status?: QuestionStatus;
   content: string;
   options?: AnswerOption[];
-  answerKey?: MatchingAnswerKey | FillBlankAnswerKey | null;
+  answerKey?: MatchingAnswerKey | FillBlankAnswerKey | OrderingAnswerKey | null;
   groupId?: number | null;
   /** Stored as ai_explanation — shown to students during review. */
   explanation?: string | null;
   /** The backend accepts only the keys in QUESTION_METADATA_KEYS. */
   questionMetadata?: Record<string, unknown> | null;
-  /** Must equal the rubric's total maxScore for ESSAY; the backend defaults it to 1. */
+  /** Must equal the rubric's total maxScore for ESSAY / DIAGRAM; the backend defaults it to 1. */
   defaultPoints?: number | null;
   essayGradingRubric?: unknown;
 }
@@ -178,7 +190,7 @@ export interface QuestionDetail {
 
 /**
  * Keys QuestionValidator allows in questionMetadata — any other key fails the
- * request. DIAGRAM questions also send `drawioXml`.
+ * request. DIAGRAM questions also send `drawioXml` (max 500 KB, starts with <mxfile or <mxGraphModel).
  */
 export const QUESTION_METADATA_KEYS = ['skillTag'] as const;
 
@@ -269,6 +281,15 @@ function fromExamAiDraft(d: ExamAiDraftQuestion): QuestionAiDraft {
   };
 }
 
+function fromExamAiDraftResponse(data: ExamAiDraftResponse | undefined): QuestionAiDraftResponse {
+  return {
+    questions: (data?.questions ?? [])
+      .filter(q => q?.content?.trim())
+      .map(q => ({ question: fromExamAiDraft(q), hasHashConflict: false, validationError: null })),
+    warnings: data?.warnings ?? [],
+  };
+}
+
 const AI_LANGUAGE_CODES = { Vietnamese: 'vi', English: 'en' } as const;
 
 function toExamAiRequest(req: QuestionAiGenerateRequest): ExamAiRequest {
@@ -316,6 +337,54 @@ export interface QuestionAiDraftResponse {
   mock?: boolean;
 }
 
+/** One problem the Q-09 import found in a question block. */
+export interface ImportBlockError {
+  path: string;
+  message: string;
+  /** Line in the extracted text (0 when the error isn't tied to a line). */
+  line: number;
+}
+
+/** A question as Q-09 read it — QuestionCreateRequest without course / module. */
+export interface ImportedQuestionData extends QuestionAiDraft {
+  defaultPoints?: number | null;
+  /** ORDERING: option keys in the correct order (top level, not in answerKey). */
+  correctOrder?: string[] | null;
+}
+
+/** One `[TYPE: ...]` block of the import file (ImportBlockResult). */
+export interface ImportBlock {
+  index: number;
+  startLine: number;
+  questionType: string;
+  /** Missing when the block couldn't be read at all. */
+  questionData: ImportedQuestionData | null;
+  errors: ImportBlockError[];
+}
+
+/** Q-09 preview — nothing is saved; valid blocks go into the form and are saved through Q-03. */
+export interface ImportPreviewResponse {
+  fileName: string;
+  fileType: 'PDF' | 'DOCX';
+  totalBlocks: number;
+  totalValid: number;
+  totalErrors: number;
+  blocks: ImportBlock[];
+}
+
+export interface ImportPreviewParams {
+  courseId: number;
+  moduleId?: number | null;
+  /** Used for blocks without a DIFFICULTY line. */
+  difficulty?: QuestionDifficulty;
+}
+
+/** Import file limits (PdfTextExtractor / DocxTextExtractor). */
+export const IMPORT_MAX_BYTES = 10 * 1024 * 1024;
+export const IMPORT_EXTENSIONS = ['.pdf', '.docx'] as const;
+/** AI-02 material files (MaterialTextReader) — any layout, also plain text. */
+export const AI_MATERIAL_EXTENSIONS = ['.pdf', '.docx', '.txt'] as const;
+
 /** `VITE_AI_MOCK=true` uses demo data for AI generation (no AI quota spent). */
 const AI_MOCK = import.meta.env.VITE_AI_MOCK === 'true';
 
@@ -329,13 +398,49 @@ export const questionService = {
     if (AI_MOCK) return { ...(await mockGenerateAiQuestions(payload, signal)), mock: true };
     // Up to 50 questions in one AI call — give it time.
     const res = await apiClient.post<ApiResponse<ExamAiDraftResponse>>('/manager/exams/ai/generate', toExamAiRequest(payload), { timeout: 120000, signal });
-    const data = res.data?.data;
-    return {
-      questions: (data?.questions ?? [])
-        .filter(q => q?.content?.trim())
-        .map(q => ({ question: fromExamAiDraft(q), hasHashConflict: false, validationError: null })),
-      warnings: data?.warnings ?? [],
-    };
+    return fromExamAiDraftResponse(res.data?.data);
+  },
+
+  /**
+   * AI-02: drafts questions from an uploaded material (PDF / DOCX / TXT, any
+   * layout) with the same settings as AI-01. The backend reads the file's
+   * text (first 30,000 characters) and `topic` goes along as extra instructions.
+   */
+  async generateAiQuestionsFromMaterial(file: File, payload: QuestionAiGenerateRequest, signal?: AbortSignal): Promise<QuestionAiDraftResponse> {
+    if (AI_MOCK) return { ...(await mockGenerateAiQuestions(payload, signal)), mock: true };
+    const req = toExamAiRequest(payload);
+    const form = new FormData();
+    form.append('file', file);
+    form.append('courseId', String(req.courseId));
+    if (req.moduleId != null) form.append('moduleId', String(req.moduleId));
+    form.append('questionCount', String(req.questionCount));
+    form.append('difficultyDistribution', JSON.stringify(req.difficultyDistribution));
+    form.append('questionTypes', JSON.stringify(req.questionTypes));
+    form.append('language', req.language);
+    if (req.context) form.append('context', req.context);
+    // Upload + text extraction + up to 50 questions in one AI call.
+    const res = await apiClient.post<ApiResponse<ExamAiDraftResponse>>('/manager/exams/ai/generate-from-material', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 180000,
+      signal,
+    });
+    return fromExamAiDraftResponse(res.data?.data);
+  },
+
+  /** Q-09: reads a PDF / DOCX in the import template and returns the questions found — saves nothing. */
+  async previewImport(file: File, params: ImportPreviewParams, signal?: AbortSignal): Promise<ImportPreviewResponse> {
+    const form = new FormData();
+    form.append('file', file);
+    form.append('courseId', String(params.courseId));
+    if (params.moduleId != null) form.append('moduleId', String(params.moduleId));
+    if (params.difficulty) form.append('difficulty', params.difficulty);
+    // The backend allows up to 20s to extract the text; leave room for the upload.
+    const res = await apiClient.post<ApiResponse<ImportPreviewResponse>>('/manager/questions/import-preview', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 60000,
+      signal,
+    });
+    return res.data.data;
   },
 
   /** Q-03: creates 1..50 questions in one transaction — all or nothing. */

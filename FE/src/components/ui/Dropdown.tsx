@@ -15,25 +15,45 @@ export interface DropdownItem {
   divider?: boolean;
 }
 
-export interface DropdownProps {
+export interface DropdownBaseProps {
   trigger: React.ReactNode;
   items: DropdownItem[];
-  value?: string | number;
-  onSelect?: (value: string | number) => void;
   search?: boolean;
   searchPlaceholder?: string;
   className?: string;
 }
 
-export function Dropdown({
-  trigger,
-  items,
-  value,
-  onSelect,
-  search = false,
-  searchPlaceholder = 'Search...',
-  className = '',
-}: DropdownProps) {
+export interface DropdownSingleProps extends DropdownBaseProps {
+  multi?: false;
+  value?: string | number;
+  onSelect?: (value: string | number) => void;
+  values?: never;
+  onSelectMulti?: never;
+}
+
+export interface DropdownMultiProps extends DropdownBaseProps {
+  multi: true;
+  values?: (string | number)[];
+  onSelectMulti?: (values: (string | number)[]) => void;
+  value?: never;
+  onSelect?: never;
+}
+
+export type DropdownProps = DropdownSingleProps | DropdownMultiProps;
+
+export function Dropdown(props: DropdownProps) {
+  const {
+    trigger,
+    items,
+    search = false,
+    searchPlaceholder = 'Search...',
+    className = '',
+  } = props;
+
+  const isMulti = props.multi === true;
+  const singleValue = !isMulti ? props.value : undefined;
+  const multiValues = isMulti ? (props.values ?? []) : [];
+
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -49,6 +69,7 @@ export function Dropdown({
     const onDown = (e: MouseEvent) => {
       const t = e.target as Node;
       if (ref.current?.contains(t) || menuRef.current?.contains(t)) return;
+      if (isMulti) return;
       setOpen(false);
       setSearchQuery('');
     };
@@ -64,21 +85,21 @@ export function Dropdown({
       setOpen(false);
       setSearchQuery('');
     };
-    const close = () => {
+    const onResize = () => {
       setOpen(false);
       setSearchQuery('');
     };
     document.addEventListener('mousedown', onDown);
     document.addEventListener('keydown', onKey);
     window.addEventListener('scroll', onScroll, true);
-    window.addEventListener('resize', close);
+    window.addEventListener('resize', onResize);
     return () => {
       document.removeEventListener('mousedown', onDown);
       document.removeEventListener('keydown', onKey);
       window.removeEventListener('scroll', onScroll, true);
-      window.removeEventListener('resize', close);
+      window.removeEventListener('resize', onResize);
     };
-  }, [open]);
+  }, [open, isMulti]);
 
   useEffect(() => {
     if (open && search) {
@@ -121,18 +142,52 @@ export function Dropdown({
 
   const hasVisibleItems = filteredItems.some((item) => !item.divider);
 
-  const handleItemSelect = (item: DropdownItem) => {
-    item.onClick?.();
-    if (item.value !== undefined) {
-      onSelect?.(item.value);
+  const isItemSelected = (item: DropdownItem): boolean => {
+    if (item.selected) return true;
+    if (item.value === undefined) return false;
+    if (isMulti) {
+      return multiValues.some((v) => String(v) === String(item.value));
     }
-    setOpen(false);
-    setSearchQuery('');
+    return singleValue !== undefined && String(item.value) === String(singleValue);
+  };
+
+  const handleItemSelect = (item: DropdownItem) => {
+    if (isMulti) {
+      const itemValue = item.value;
+      if (itemValue === undefined) return;
+      const alreadySelected = multiValues.some((v) => String(v) === String(itemValue));
+      const next = alreadySelected
+        ? multiValues.filter((v) => String(v) !== String(itemValue))
+        : [...multiValues, itemValue];
+      (props as DropdownMultiProps).onSelectMulti?.(next);
+      item.onClick?.();
+    } else {
+      item.onClick?.();
+      if (item.value !== undefined) {
+        (props as DropdownSingleProps).onSelect?.(item.value);
+      }
+      setOpen(false);
+      setSearchQuery('');
+    }
+  };
+
+  const handleTriggerClick = () => {
+    if (isMulti) {
+      const onDown = (e: MouseEvent) => {
+        const t = e.target as Node;
+        if (ref.current?.contains(t) || menuRef.current?.contains(t)) return;
+        setOpen(false);
+        setSearchQuery('');
+        document.removeEventListener('mousedown', onDown);
+      };
+      if (!open) document.addEventListener('mousedown', onDown);
+    }
+    setOpen((o) => !o);
   };
 
   return (
     <div ref={ref} className={`relative ${className}`}>
-      <div onClick={() => setOpen((o) => !o)}>{trigger}</div>
+      <div onClick={handleTriggerClick}>{trigger}</div>
       {open &&
         createPortal(
           <div
@@ -145,10 +200,13 @@ export function Dropdown({
               width: pos?.width ?? MENU_WIDTH,
               visibility: pos ? 'visible' : 'hidden',
             }}
-            className="bg-surface rounded-[10px] border border-line shadow-xl z-[9999] py-1 overflow-hidden"
+            className="bg-surface rounded-[10px] border border-line shadow-xl z-[9999] overflow-hidden"
           >
             {search && (
-              <div className="p-2 border-b border-line-soft" onClick={(e) => e.stopPropagation()}>
+              <div
+                className="p-2 border-b border-line-soft"
+                onClick={(e) => e.stopPropagation()}
+              >
                 <div className="relative flex items-center">
                   <input
                     ref={searchInputRef}
@@ -162,14 +220,30 @@ export function Dropdown({
                     <button
                       type="button"
                       onClick={() => setSearchQuery('')}
-                      className="absolute right-2 text-content-soft hover:text-content text-xs font-bold leading-none"
+                      className="absolute right-2 text-content-soft hover:text-content"
                     >
-                      ×
+                      <Icon.X className="w-3 h-3" />
                     </button>
                   )}
                 </div>
               </div>
             )}
+
+            {isMulti && multiValues.length > 0 && (
+              <div className="px-3 py-1.5 border-b border-line-soft flex items-center justify-between">
+                <span className="text-xs text-content-soft">
+                  {multiValues.length} selected
+                </span>
+                <button
+                  type="button"
+                  onClick={() => (props as DropdownMultiProps).onSelectMulti?.([])}
+                  className="text-xs text-danger hover:underline"
+                >
+                  Clear all
+                </button>
+              </div>
+            )}
+
             <div className="max-h-60 overflow-y-auto py-1">
               {hasVisibleItems ? (
                 filteredItems.map((item, i) => {
@@ -177,39 +251,45 @@ export function Dropdown({
                     return <div key={i} className="my-1 border-t border-line-soft" />;
                   }
 
-                  const isSelected = Boolean(
-                    item.selected ||
-                      (value !== undefined &&
-                        item.value !== undefined &&
-                        String(item.value) === String(value))
-                  );
+                  const selected = isItemSelected(item);
 
                   return (
                     <button
                       key={i}
                       type="button"
                       role="menuitem"
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        handleItemSelect(item);
-                      }}
                       onClick={(e) => {
                         e.stopPropagation();
                         handleItemSelect(item);
                       }}
-                      className={`w-full flex items-center justify-between gap-2.5 px-3 py-2 text-sm text-left hover:bg-surface-hover transition-colors ${
-                        isSelected
+                      className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left hover:bg-surface-hover transition-colors ${
+                        selected
                           ? 'bg-primary/10 text-primary font-medium'
                           : item.danger
                           ? 'text-danger'
                           : 'text-content-secondary'
                       }`}
                     >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        {item.icon && <span className="w-4 h-4 shrink-0">{item.icon}</span>}
+                      {isMulti && (
+                        <span
+                          className={`w-4 h-4 shrink-0 rounded border flex items-center justify-center transition-colors ${
+                            selected
+                              ? 'bg-primary border-primary'
+                              : 'border-line bg-surface'
+                          }`}
+                        >
+                          {selected && <Icon.Check className="w-2.5 h-2.5 text-white" />}
+                        </span>
+                      )}
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        {item.icon && !isMulti && (
+                          <span className="w-4 h-4 shrink-0">{item.icon}</span>
+                        )}
                         <span className="truncate">{item.label}</span>
                       </div>
-                      {isSelected && <Icon.Check className="w-4 h-4 text-primary shrink-0" />}
+                      {!isMulti && selected && (
+                        <Icon.Check className="w-4 h-4 text-primary shrink-0" />
+                      )}
                     </button>
                   );
                 })
@@ -219,6 +299,21 @@ export function Dropdown({
                 </div>
               )}
             </div>
+
+            {isMulti && (
+              <div className="px-3 py-2 border-t border-line-soft flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpen(false);
+                    setSearchQuery('');
+                  }}
+                  className="text-xs font-medium text-primary hover:underline"
+                >
+                  Done
+                </button>
+              </div>
+            )}
           </div>,
           document.body
         )}

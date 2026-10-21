@@ -1,17 +1,22 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/assets/icons';
-import { hasDiagramContent, plantUmlSvgUrl } from '../diagram';
+import { Spinner } from '@/components/ui/Spinner';
+import { hasDiagramContent, plantUmlFromDrawioXml, plantUmlSvgUrl } from '../diagram';
 import type { QuestionDraft } from '../model';
 import { DrawioEditorModal } from './DrawioEditorModal';
+import { useDrawioSnapshot } from './useDrawioSnapshot';
 
 /** DIAGRAM answer: the model answer drawn in draw.io, shown as a snapshot. */
 export function DiagramAnswer({ q, set, error }: { q: QuestionDraft; set: (patch: Partial<QuestionDraft>) => void; error?: string }) {
   const [editing, setEditing] = useState(false);
   const plantUml = typeof q.metadata.plantUmlSource === 'string' ? q.metadata.plantUmlSource : '';
   const hasDiagram = hasDiagramContent(q.diagramXml);
-  // A diagram loaded from PlantUML has no snapshot until it's opened once — render the source instead.
-  const previewSrc = q.diagramSvg || (hasDiagram && plantUml ? plantUmlSvgUrl(plantUml) : '');
+  // The backend keeps only the XML, so a saved diagram has no snapshot: render a lone
+  // PlantUML shape (AI drafts) from its source, anything else with a hidden draw.io.
+  const plantUmlSource = hasDiagram && !q.diagramSvg ? plantUml || plantUmlFromDrawioXml(q.diagramXml) : '';
+  const snapshot = useDrawioSnapshot(hasDiagram && !q.diagramSvg && !plantUmlSource ? q.diagramXml : '');
+  const previewSrc = q.diagramSvg || (plantUmlSource ? plantUmlSvgUrl(plantUmlSource) : snapshot.svg);
 
   return (
     <div>
@@ -30,9 +35,11 @@ export function DiagramAnswer({ q, set, error }: { q: QuestionDraft; set: (patch
           aria-label="Edit the model answer diagram"
         >
           {previewSrc ? (
-            <img src={previewSrc} alt="Model answer diagram" className="max-h-[260px] max-w-full object-contain" />
+            <img src={previewSrc} alt="Model answer diagram" className="max-h-[360px] max-w-full object-contain" />
+          ) : snapshot.status === 'loading' ? (
+            <span className="flex items-center gap-2 text-sm text-content-soft"><Spinner size="sm" /> Rendering the diagram…</span>
           ) : (
-            <span className="text-sm text-content-soft">Diagram saved — open it to view.</span>
+            <span className="text-sm text-content-soft">Couldn’t render a preview (is diagrams.net reachable?) — click to open the diagram.</span>
           )}
         </button>
       ) : (
@@ -46,6 +53,7 @@ export function DiagramAnswer({ q, set, error }: { q: QuestionDraft; set: (patch
         </button>
       )}
       {error && <p className="text-xs text-danger mt-1.5">{error}</p>}
+      {snapshot.frame}
 
       {plantUml && (
         <details className="mt-2 text-xs text-content-soft">

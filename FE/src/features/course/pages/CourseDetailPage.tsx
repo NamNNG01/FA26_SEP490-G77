@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+﻿import React, { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -8,7 +8,8 @@ import { Table } from "@/components/ui/Table";
 import { Tabs } from "@/components/ui/Tabs";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { Progress } from "@/components/ui/Progress";
-import { Alert, Toast } from "@/components/ui/Alert";
+import { Alert } from "@/components/ui/Alert";
+import { ToastNotification } from "@/components/ui/ToastNotification";
 import { Modal } from "@/components/ui/Modal";
 import { Avatar } from "@/components/ui/Avatar";
 import { SearchInput } from "@/components/common/SearchInput";
@@ -17,6 +18,7 @@ import { Icon } from "@/assets/icons";
 import {
   courseService,
   type CourseDetailResponse,
+  type CourseManagerItem,
   type CourseModuleResponse,
   type CategoryResponse,
   type CourseStudentItem,
@@ -542,13 +544,15 @@ export function CourseDetailPage({
                   />
                   <div>
                     <label className="text-sm font-medium text-content-secondary block mb-1.5">
-                      Manager
+                      Primary Manager
                     </label>
                     <p className="h-9 px-3 flex items-center text-sm font-medium text-content-secondary bg-surface-alt rounded-[10px] border border-line truncate">
                       {course.managerName || `ID: ${course.managerId}`}
                     </p>
                   </div>
                 </div>
+
+                <CourseManagerList course={course} />
               </div>
             </div>
           </div>
@@ -845,14 +849,93 @@ export function CourseDetailPage({
       </Modal>
 
       {toast && (
-        <div className="fixed top-4 right-4 z-[60]">
-          <Toast
-            type={toast.type}
-            message={toast.message}
-            onClose={() => setToast(null)}
-          />
-        </div>
+        <ToastNotification
+          variant={toast.type}
+          message={toast.message}
+          onClose={() => setToast(null)}
+        />
       )}
+    </div>
+  );
+}
+
+function CourseManagerList({
+  course,
+}: {
+  course: CourseDetailResponse & { managers?: CourseManagerItem[] };
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  const managerList: CourseManagerItem[] =
+    course.managers && course.managers.length > 0
+      ? course.managers
+      : [
+          {
+            userId: course.managerId,
+            fullName: course.managerName || `Manager #${course.managerId}`,
+            email: undefined,
+          },
+        ];
+
+  const INITIAL_SHOW = 3;
+  const hasMore = managerList.length > INITIAL_SHOW;
+  const visible = expanded ? managerList : managerList.slice(0, INITIAL_SHOW);
+
+  return (
+    <div>
+      <label className="text-sm font-medium text-content-secondary block mb-2">
+        Course Managers
+        <span className="ml-1.5 text-xs font-normal text-content-soft">
+          ({managerList.length})
+        </span>
+      </label>
+      <div className="rounded-[10px] border border-line overflow-hidden">
+        {visible.map((m, idx) => (
+          <div
+            key={m.userId}
+            className={`flex items-center gap-3 px-3 py-2.5 text-sm ${idx > 0 ? "border-t border-line-faint" : ""} bg-surface-alt`}
+          >
+            <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+              <span className="text-xs font-bold text-primary">
+                {m.fullName.charAt(0).toUpperCase()}
+              </span>
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-content truncate">
+                {m.fullName}
+              </p>
+              {m.email && (
+                <p className="text-xs text-content-soft truncate">{m.email}</p>
+              )}
+            </div>
+            {idx === 0 && (
+              <span className="shrink-0 text-[11px] font-semibold text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">
+                Primary
+              </span>
+            )}
+          </div>
+        ))}
+        {hasMore && (
+          <button
+            type="button"
+            onClick={() => setExpanded((e) => !e)}
+            className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-content-soft hover:text-primary hover:bg-primary/5 border-t border-line-faint transition-colors"
+          >
+            {expanded ? (
+              <>
+                <Icon.ChevronDown className="w-3.5 h-3.5 rotate-180" />
+                Show less
+              </>
+            ) : (
+              <>
+                <Icon.ChevronDown className="w-3.5 h-3.5" />
+                Show {managerList.length - INITIAL_SHOW} more manager
+                {managerList.length - INITIAL_SHOW !== 1 ? "s" : ""}
+              </>
+            )}
+          </button>
+        )}
+      </div>
     </div>
   );
 }

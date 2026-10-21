@@ -50,6 +50,42 @@ export function plantUmlToDrawioXml(source: string): string {
   );
 }
 
+/**
+ * The PlantUML source when the diagram is just the single PlantUML shape
+ * plantUmlToDrawioXml makes (AI drafts), so it can be rendered without draw.io.
+ * '' for anything else, including diagrams that were edited further.
+ */
+export function plantUmlFromDrawioXml(xml: string): string {
+  if (!xml.includes('plantUmlData')) return '';
+  try {
+    const doc = new DOMParser().parseFromString(xml, 'application/xml');
+    if (doc.getElementsByTagName('parsererror').length) return '';
+    const shapes = Array.from(doc.querySelectorAll('mxCell[vertex="1"]'));
+    const objects = doc.querySelectorAll('[plantUmlData]');
+    if (shapes.length !== 1 || objects.length !== 1) return '';
+    const data = JSON.parse(objects[0].getAttribute('plantUmlData') ?? '');
+    return typeof data?.data === 'string' ? data.data : '';
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * draw.io exports SVG with `color-scheme: light dark`, so in a dark-themed app
+ * the shapes turn dark on the white preview box. Pin a base64 SVG data URI to light.
+ */
+export function lightSvgDataUri(uri: string): string {
+  const prefix = 'data:image/svg+xml;base64,';
+  if (!uri.startsWith(prefix)) return uri;
+  try {
+    const bytes = Uint8Array.from(atob(uri.slice(prefix.length)), c => c.charCodeAt(0));
+    const svg = new TextDecoder().decode(bytes).replace(/color-scheme:\s*light dark/g, 'color-scheme: light');
+    return prefix + btoa(Array.from(new TextEncoder().encode(svg), b => String.fromCharCode(b)).join(''));
+  } catch {
+    return uri;
+  }
+}
+
 /** True when the draw.io XML has at least one shape besides the two root cells. */
 export function hasDiagramContent(xml: string): boolean {
   if (!xml.trim()) return false;

@@ -10,8 +10,11 @@ export function UnsavedChangesModal({
   title = 'Leave without saving?',
   message = 'You have unsaved changes. If you leave this page now, they will be lost.',
   details,
+  onLeave,
 }: {
   blocker: Blocker;
+  /** Runs when the user confirms leaving, before the navigation goes ahead (e.g. drop a stored draft). */
+  onLeave?: () => void;
   title?: string;
   message?: string;
   /** Optional list of what will be lost, shown under the message. */
@@ -29,7 +32,7 @@ export function UnsavedChangesModal({
       footer={
         <>
           <Button variant="ghost" onClick={stay}>Keep editing</Button>
-          <Button variant="danger" onClick={() => blocker.proceed?.()}>Leave page</Button>
+          <Button variant="danger" onClick={() => { onLeave?.(); blocker.proceed?.(); }}>Leave page</Button>
         </>
       }
     >
