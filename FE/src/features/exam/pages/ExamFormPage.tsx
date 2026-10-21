@@ -481,7 +481,7 @@ export function ExamFormPage({
         passageText: group.passageText,
         questionCount: group.questionCount,
       };
-      setGroups((prev) => [...prev, ...added]);
+      setGroups((prev) => [...prev, added]);
       setIsDirty(true);
       setGroupModalOpen(false);
       toast.success('Reading passage group added to draft.');
