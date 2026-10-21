@@ -216,7 +216,7 @@ export function CourseListPage({
   };
 
   const subjectOptions = [
-    { label: "All Subjects", value: "all" },
+    { label: "All Categories", value: "all" },
     ...categories.map((c) => ({ label: c.name, value: String(c.categoryId) })),
   ];
 
