@@ -18,6 +18,7 @@ import com.examprep.validation.QuestionPayload;
 import com.examprep.validation.QuestionValidator;
 import com.examprep.validation.ValidationError;
 import com.examprep.util.ContentHashUtil;
+import com.examprep.util.QuestionTypeUtil;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -222,6 +223,10 @@ public class QuestionServiceImpl implements QuestionService {
 
         QuestionPayload payload = QuestionPayload.from(req);
         questionValidator.validateOrThrow(payload);
+
+        if (group != null) {
+            assertQuestionFitsGroup(group, req.getQuestionType());
+        }
 
         validateMetadataKeys(req.getQuestionMetadata());
 
@@ -493,13 +498,41 @@ public class QuestionServiceImpl implements QuestionService {
             throw new ResourceConflictException("Resource was modified by another user (lock version mismatch)");
         }
 
+        QuestionGroup targetGroup = q.getGroup();
+        if (req.getGroupId() != null) {
+            targetGroup = questionGroupRepository.findById(req.getGroupId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Question group not found"));
+
+            Long questionCourseId = q.getCourse() == null ? null : q.getCourse().getCourseId();
+            Long groupCourseId = targetGroup.getCourse() == null ? null : targetGroup.getCourse().getCourseId();
+            if (questionCourseId == null || groupCourseId == null || !questionCourseId.equals(groupCourseId)) {
+                throw new BadRequestException("Question group does not belong to the specified course");
+            }
+            if (q.getModule() != null && targetGroup.getModule() != null
+                    && !targetGroup.getModule().getModuleId().equals(q.getModule().getModuleId())) {
+                throw new BadRequestException("Question group does not belong to the specified module");
+            }
+        }
+
         String typeToValidate = req.getQuestionType() != null ? req.getQuestionType() : q.getQuestionType();
+        boolean attachingToAnotherGroup = req.getGroupId() != null
+                && (q.getGroup() == null || !req.getGroupId().equals(q.getGroup().getGroupId()));
+        boolean changingType = req.getQuestionType() != null
+                && !req.getQuestionType().equals(q.getQuestionType());
+        if (targetGroup != null && (attachingToAnotherGroup || changingType)) {
+            assertQuestionFitsGroup(targetGroup, typeToValidate);
+        }
+
         if (req.getQuestionType() != null && !req.getQuestionType().equals(q.getQuestionType())) {
             if (attemptAnswerRepository.existsByQuestion_QuestionId(q.getQuestionId())) {
                 throw new ResourceConflictException("Cannot change question type when student attempts reference this question");
             }
             questionValidator.validateQuestionType(req.getQuestionType());
             q.setQuestionType(req.getQuestionType());
+        }
+
+        if (req.getGroupId() != null) {
+            q.setGroup(targetGroup);
         }
 
         List<AnswerOptionDto> optionsToValidate = req.getOptions();
@@ -912,6 +945,35 @@ public class QuestionServiceImpl implements QuestionService {
         }
     }
 
+
+    private void assertQuestionFitsGroup(QuestionGroup group, String questionType) {
+        String kind = QuestionTypeUtil.kindOf(questionType);
+        if (kind == null) {
+            throw new BadRequestException("Unsupported question type: " + questionType);
+        }
+
+        String groupType = group.getQuestionType();
+        if (groupType != null) {
+            if (!groupType.equals(kind)) {
+                throw new BadRequestException("Question type " + questionType
+                        + " cannot be added to a group of type " + groupType + ".");
+            }
+            return;
+        }
+
+        Set<String> memberTypes = questionRepository.findDistinctQuestionTypesByGroupId(group.getGroupId()).stream()
+                .map(QuestionTypeUtil::kindOf)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (memberTypes.isEmpty() || (memberTypes.size() == 1 && memberTypes.contains(kind))) {
+            group.setQuestionType(kind);
+            questionGroupRepository.save(group);
+            return;
+        }
+
+        throw new ResourceConflictException(
+                "Question group contains mixed question types; assign a single type before adding more questions.");
+    }
 
     private void validateMetadataKeys(Object metadata) {
         if (metadata == null) return;

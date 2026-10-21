@@ -27,6 +27,9 @@ public class QuestionGroup implements Serializable {
     @JoinColumn(name = "module_id")
     private Module module;
 
+    @Column(name = "question_type", length = 20)
+    private String questionType;
+
     @Column(name = "title", length = 255)
     private String title;
 

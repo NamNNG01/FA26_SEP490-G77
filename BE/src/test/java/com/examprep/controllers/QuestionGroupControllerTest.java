@@ -72,6 +72,7 @@ class QuestionGroupControllerTest {
                 .groupId(7L)
                 .courseId(12L)
                 .moduleId(3L)
+                .questionType("QUIZ")
                 .title("Reading Passage 1")
                 .passageText("Đoạn văn...")
                 .questionCount(5L)
@@ -85,7 +86,7 @@ class QuestionGroupControllerTest {
                 .first(true)
                 .last(true)
                 .build();
-        when(questionGroupService.getQuestionGroups(101L, "COURSE_MANAGER", 12L, 3L, "reading", 0, 20))
+        when(questionGroupService.getQuestionGroups(101L, "COURSE_MANAGER", 12L, 3L, null, "reading", 0, 20))
                 .thenReturn(body);
 
         mockMvc.perform(get("/api/v1/manager/question-groups")
@@ -99,6 +100,7 @@ class QuestionGroupControllerTest {
                 .andExpect(jsonPath("$.data.content[0].groupId").value(7))
                 .andExpect(jsonPath("$.data.content[0].courseId").value(12))
                 .andExpect(jsonPath("$.data.content[0].moduleId").value(3))
+                .andExpect(jsonPath("$.data.content[0].questionType").value("QUIZ"))
                 .andExpect(jsonPath("$.data.content[0].title").value("Reading Passage 1"))
                 .andExpect(jsonPath("$.data.content[0].passageText").value("Đoạn văn..."))
                 .andExpect(jsonPath("$.data.content[0].questionCount").value(5))
@@ -121,7 +123,7 @@ class QuestionGroupControllerTest {
                 .first(true)
                 .last(true)
                 .build();
-        when(questionGroupService.getQuestionGroups(1L, "ADMIN", null, null, null, 0, 20))
+        when(questionGroupService.getQuestionGroups(1L, "ADMIN", null, null, null, null, 0, 20))
                 .thenReturn(body);
 
         mockMvc.perform(get("/api/v1/manager/question-groups").with(user(admin)))
@@ -129,7 +131,7 @@ class QuestionGroupControllerTest {
                 .andExpect(jsonPath("$.data.content").isArray())
                 .andExpect(jsonPath("$.data.content").isEmpty());
 
-        verify(questionGroupService).getQuestionGroups(1L, "ADMIN", null, null, null, 0, 20);
+        verify(questionGroupService).getQuestionGroups(1L, "ADMIN", null, null, null, null, 0, 20);
     }
 
     @Test
@@ -152,7 +154,7 @@ class QuestionGroupControllerTest {
 
     @Test
     void getQuestionGroups_ForeignCourse_Forbidden() throws Exception {
-        when(questionGroupService.getQuestionGroups(101L, "COURSE_MANAGER", 99L, null, null, 0, 20))
+        when(questionGroupService.getQuestionGroups(101L, "COURSE_MANAGER", 99L, null, null, null, 0, 20))
                 .thenThrow(new ForbiddenException("You do not have access to this course."));
 
         mockMvc.perform(get("/api/v1/manager/question-groups")
@@ -168,6 +170,7 @@ class QuestionGroupControllerTest {
         QuestionGroupCreateRequest request = QuestionGroupCreateRequest.builder()
                 .courseId(12L)
                 .moduleId(3L)
+                .questionType("QUIZ")
                 .title("Reading Passage 1")
                 .passageText("Đoạn văn dùng chung...")
                 .build();
@@ -175,6 +178,7 @@ class QuestionGroupControllerTest {
                 .groupId(7L)
                 .courseId(12L)
                 .moduleId(3L)
+                .questionType("QUIZ")
                 .title("Reading Passage 1")
                 .passageText("Đoạn văn dùng chung...")
                 .questionCount(0L)
@@ -193,12 +197,14 @@ class QuestionGroupControllerTest {
                 .andExpect(jsonPath("$.data.groupId").value(7))
                 .andExpect(jsonPath("$.data.courseId").value(12))
                 .andExpect(jsonPath("$.data.moduleId").value(3))
+                .andExpect(jsonPath("$.data.questionType").value("QUIZ"))
                 .andExpect(jsonPath("$.data.questionCount").value(0));
     }
 
     @Test
     void createQuestionGroup_MissingCourseId_ValidationError() throws Exception {
         QuestionGroupCreateRequest request = QuestionGroupCreateRequest.builder()
+                .questionType("QUIZ")
                 .title("Reading Passage 1")
                 .build();
 
@@ -218,6 +224,7 @@ class QuestionGroupControllerTest {
     void createQuestionGroup_CourseNotFound_NotFound() throws Exception {
         QuestionGroupCreateRequest request = QuestionGroupCreateRequest.builder()
                 .courseId(999L)
+                .questionType("QUIZ")
                 .title("Reading Passage 1")
                 .build();
         when(questionGroupService.createQuestionGroup(eq(101L), eq("COURSE_MANAGER"),
@@ -237,6 +244,7 @@ class QuestionGroupControllerTest {
     @Test
     void updateQuestionGroup_Success() throws Exception {
         QuestionGroupUpdateRequest request = QuestionGroupUpdateRequest.builder()
+                .questionType("ESSAY")
                 .title("Reading Passage 1 v2")
                 .passageText("Đoạn văn mới...")
                 .build();
@@ -244,6 +252,7 @@ class QuestionGroupControllerTest {
                 .groupId(7L)
                 .courseId(12L)
                 .moduleId(3L)
+                .questionType("ESSAY")
                 .title("Reading Passage 1 v2")
                 .passageText("Đoạn văn mới...")
                 .questionCount(5L)
@@ -260,6 +269,7 @@ class QuestionGroupControllerTest {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.message").value("Operation completed successfully"))
                 .andExpect(jsonPath("$.data.groupId").value(7))
+                .andExpect(jsonPath("$.data.questionType").value("ESSAY"))
                 .andExpect(jsonPath("$.data.title").value("Reading Passage 1 v2"))
                 .andExpect(jsonPath("$.data.questionCount").value(5));
     }
@@ -328,6 +338,7 @@ class QuestionGroupControllerTest {
     void createQuestionGroup_Admin_BypassesCourseOwnership() throws Exception {
         QuestionGroupCreateRequest request = QuestionGroupCreateRequest.builder()
                 .courseId(12L)
+                .questionType("QUIZ")
                 .title("Reading Passage 1")
                 .build();
         when(questionGroupService.createQuestionGroup(eq(1L), eq("ADMIN"),
@@ -364,7 +375,7 @@ class QuestionGroupControllerTest {
 
     @Test
     void getQuestionGroups_SearchOnly_UsesNullIds() throws Exception {
-        when(questionGroupService.getQuestionGroups(101L, "COURSE_MANAGER", null, null, "passage", 0, 20))
+        when(questionGroupService.getQuestionGroups(101L, "COURSE_MANAGER", null, null, null, "passage", 0, 20))
                 .thenReturn(PageResponse.<QuestionGroupResponse>builder()
                         .content(List.of())
                         .page(0)
@@ -381,6 +392,87 @@ class QuestionGroupControllerTest {
                 .andExpect(status().isOk());
 
         verify(questionGroupService).getQuestionGroups(eq(101L), eq("COURSE_MANAGER"),
-                isNull(), isNull(), eq("passage"), eq(0), eq(20));
+                isNull(), isNull(), isNull(), eq("passage"), eq(0), eq(20));
+    }
+
+    @Test
+    void getQuestionGroups_TypeFilter_PassesKindToService() throws Exception {
+        when(questionGroupService.getQuestionGroups(101L, "COURSE_MANAGER", null, null, "ESSAY", null, 0, 20))
+                .thenReturn(PageResponse.<QuestionGroupResponse>builder()
+                        .content(List.of())
+                        .page(0)
+                        .size(20)
+                        .totalElements(0L)
+                        .totalPages(0)
+                        .first(true)
+                        .last(true)
+                        .build());
+
+        mockMvc.perform(get("/api/v1/manager/question-groups")
+                        .param("questionType", "ESSAY")
+                        .with(user(manager)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content").isEmpty());
+
+        verify(questionGroupService).getQuestionGroups(101L, "COURSE_MANAGER", null, null, "ESSAY", null, 0, 20);
+    }
+
+    @Test
+    void createQuestionGroup_MissingQuestionType_ValidationError() throws Exception {
+        QuestionGroupCreateRequest request = QuestionGroupCreateRequest.builder()
+                .courseId(12L)
+                .title("Reading Passage 1")
+                .build();
+
+        mockMvc.perform(post("/api/v1/manager/question-groups")
+                        .with(user(manager))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.data.questionType").value("Question type is required"));
+
+        verifyNoInteractions(questionGroupService);
+    }
+
+    @Test
+    void createQuestionGroup_MixedType_ValidationError() throws Exception {
+        QuestionGroupCreateRequest request = QuestionGroupCreateRequest.builder()
+                .courseId(12L)
+                .questionType("MIXED")
+                .title("Reading Passage 1")
+                .build();
+
+        mockMvc.perform(post("/api/v1/manager/question-groups")
+                        .with(user(manager))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.data.questionType")
+                        .value("Question type must be one of QUIZ, ESSAY, CODE, DIAGRAM"));
+
+        verifyNoInteractions(questionGroupService);
+    }
+
+    @Test
+    void updateQuestionGroup_MixedType_ValidationError() throws Exception {
+        QuestionGroupUpdateRequest request = QuestionGroupUpdateRequest.builder()
+                .questionType("MIXED")
+                .build();
+
+        mockMvc.perform(put("/api/v1/manager/question-groups/7")
+                        .with(user(manager))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.data.questionType")
+                        .value("Question type must be one of QUIZ, ESSAY, CODE, DIAGRAM"));
+
+        verifyNoInteractions(questionGroupService);
     }
 }

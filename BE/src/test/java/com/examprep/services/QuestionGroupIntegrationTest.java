@@ -14,6 +14,7 @@ import com.examprep.entities.Module;
 import com.examprep.entities.Question;
 import com.examprep.entities.QuestionGroup;
 import com.examprep.entities.User;
+import com.examprep.exceptions.BadRequestException;
 import com.examprep.exceptions.ForbiddenException;
 import com.examprep.exceptions.ResourceConflictException;
 import com.examprep.exceptions.ResourceNotFoundException;
@@ -116,7 +117,7 @@ class QuestionGroupIntegrationTest {
     @Test
     void managerSeesOnlyOwnCourseGroupsOrderedByIdDescWithQuestionCounts() {
         PageResponse<QuestionGroupResponse> response = questionGroupService.getQuestionGroups(
-                manager1.getUserId(), User.ROLE_COURSE_MANAGER, null, null, null, 0, 20);
+                manager1.getUserId(), User.ROLE_COURSE_MANAGER, null, null, null, null, 0, 20);
 
         List<Long> ids = response.getContent().stream().map(QuestionGroupResponse::getGroupId).toList();
         assertEquals(List.of(g4.getGroupId(), g2.getGroupId(), g1.getGroupId()), ids);
@@ -133,7 +134,7 @@ class QuestionGroupIntegrationTest {
     @Test
     void adminSeesAllGroups() {
         PageResponse<QuestionGroupResponse> response = questionGroupService.getQuestionGroups(
-                admin.getUserId(), User.ROLE_ADMIN, null, null, null, 0, 20);
+                admin.getUserId(), User.ROLE_ADMIN, null, null, null, null, 0, 20);
 
         List<Long> ids = response.getContent().stream().map(QuestionGroupResponse::getGroupId).toList();
         assertEquals(List.of(g5.getGroupId(), g4.getGroupId(), g3.getGroupId(), g2.getGroupId(), g1.getGroupId()),
@@ -144,13 +145,13 @@ class QuestionGroupIntegrationTest {
     @Test
     void courseFilterMatchesGroupsLinkedThroughModule() {
         PageResponse<QuestionGroupResponse> managerView = questionGroupService.getQuestionGroups(
-                manager1.getUserId(), User.ROLE_COURSE_MANAGER, courseA.getCourseId(), null, null, 0, 20);
+                manager1.getUserId(), User.ROLE_COURSE_MANAGER, courseA.getCourseId(), null, null, null, 0, 20);
 
         List<Long> ids = managerView.getContent().stream().map(QuestionGroupResponse::getGroupId).toList();
         assertEquals(List.of(g4.getGroupId(), g2.getGroupId(), g1.getGroupId()), ids);
 
         PageResponse<QuestionGroupResponse> adminView = questionGroupService.getQuestionGroups(
-                admin.getUserId(), User.ROLE_ADMIN, courseB.getCourseId(), null, null, 0, 20);
+                admin.getUserId(), User.ROLE_ADMIN, courseB.getCourseId(), null, null, null, 0, 20);
 
         assertEquals(List.of(g3.getGroupId()),
                 adminView.getContent().stream().map(QuestionGroupResponse::getGroupId).toList());
@@ -159,7 +160,7 @@ class QuestionGroupIntegrationTest {
     @Test
     void moduleFilterLimitsResults() {
         PageResponse<QuestionGroupResponse> response = questionGroupService.getQuestionGroups(
-                manager1.getUserId(), User.ROLE_COURSE_MANAGER, null, moduleA1.getModuleId(), null, 0, 20);
+                manager1.getUserId(), User.ROLE_COURSE_MANAGER, null, moduleA1.getModuleId(), null, null, 0, 20);
 
         List<Long> ids = response.getContent().stream().map(QuestionGroupResponse::getGroupId).toList();
         assertEquals(List.of(g4.getGroupId(), g1.getGroupId()), ids);
@@ -168,19 +169,19 @@ class QuestionGroupIntegrationTest {
     @Test
     void searchMatchesTitleAndPassageCaseInsensitively() {
         PageResponse<QuestionGroupResponse> byTitle = questionGroupService.getQuestionGroups(
-                admin.getUserId(), User.ROLE_ADMIN, null, null, "READING", 0, 20);
+                admin.getUserId(), User.ROLE_ADMIN, null, null, null, "READING", 0, 20);
 
         assertEquals(List.of(g3.getGroupId(), g1.getGroupId()),
                 byTitle.getContent().stream().map(QuestionGroupResponse::getGroupId).toList());
 
         PageResponse<QuestionGroupResponse> byPassage = questionGroupService.getQuestionGroups(
-                admin.getUserId(), User.ROLE_ADMIN, null, null, "factory", 0, 20);
+                admin.getUserId(), User.ROLE_ADMIN, null, null, null, "factory", 0, 20);
 
         assertEquals(List.of(g3.getGroupId(), g1.getGroupId()),
                 byPassage.getContent().stream().map(QuestionGroupResponse::getGroupId).toList());
 
         PageResponse<QuestionGroupResponse> managerScope = questionGroupService.getQuestionGroups(
-                manager1.getUserId(), User.ROLE_COURSE_MANAGER, null, null, "factory", 0, 20);
+                manager1.getUserId(), User.ROLE_COURSE_MANAGER, null, null, null, "factory", 0, 20);
 
         assertEquals(List.of(g1.getGroupId()),
                 managerScope.getContent().stream().map(QuestionGroupResponse::getGroupId).toList());
@@ -189,7 +190,7 @@ class QuestionGroupIntegrationTest {
     @Test
     void searchEscapesLikeWildcards() {
         PageResponse<QuestionGroupResponse> response = questionGroupService.getQuestionGroups(
-                admin.getUserId(), User.ROLE_ADMIN, null, null, "%", 0, 20);
+                admin.getUserId(), User.ROLE_ADMIN, null, null, null, "%", 0, 20);
 
         assertTrue(response.getContent().isEmpty());
         assertEquals(0L, response.getTotalElements());
@@ -198,7 +199,7 @@ class QuestionGroupIntegrationTest {
     @Test
     void paginationReportsPageMetadata() {
         PageResponse<QuestionGroupResponse> firstPage = questionGroupService.getQuestionGroups(
-                admin.getUserId(), User.ROLE_ADMIN, null, null, null, 0, 2);
+                admin.getUserId(), User.ROLE_ADMIN, null, null, null, null, 0, 2);
 
         assertEquals(List.of(g5.getGroupId(), g4.getGroupId()),
                 firstPage.getContent().stream().map(QuestionGroupResponse::getGroupId).toList());
@@ -210,7 +211,7 @@ class QuestionGroupIntegrationTest {
         assertFalse(firstPage.isLast());
 
         PageResponse<QuestionGroupResponse> lastPage = questionGroupService.getQuestionGroups(
-                admin.getUserId(), User.ROLE_ADMIN, null, null, null, 2, 2);
+                admin.getUserId(), User.ROLE_ADMIN, null, null, null, null, 2, 2);
 
         assertEquals(List.of(g1.getGroupId()),
                 lastPage.getContent().stream().map(QuestionGroupResponse::getGroupId).toList());
@@ -221,12 +222,13 @@ class QuestionGroupIntegrationTest {
     @Test
     void managerFilteringForeignCourseIsForbidden() {
         assertThrows(ForbiddenException.class, () -> questionGroupService.getQuestionGroups(
-                manager2.getUserId(), User.ROLE_COURSE_MANAGER, courseA.getCourseId(), null, null, 0, 20));
+                manager2.getUserId(), User.ROLE_COURSE_MANAGER, courseA.getCourseId(), null, null, null, 0, 20));
     }
 
     @Test
     void createGroupPersistsAndStartsEmpty() {
         QuestionGroupCreateRequest request = QuestionGroupCreateRequest.builder()
+                .questionType("QUIZ")
                 .courseId(courseA.getCourseId())
                 .moduleId(moduleA1.getModuleId())
                 .title("Reading Passage 3")
@@ -251,6 +253,7 @@ class QuestionGroupIntegrationTest {
     @Test
     void createGroupWithoutModuleIsAllowed() {
         QuestionGroupCreateRequest request = QuestionGroupCreateRequest.builder()
+                .questionType("QUIZ")
                 .courseId(courseA.getCourseId())
                 .title("Course level group")
                 .passageText("Shared for the whole course")
@@ -271,21 +274,21 @@ class QuestionGroupIntegrationTest {
         entityManager.clear();
 
         PageResponse<QuestionGroupResponse> managerView = questionGroupService.getQuestionGroups(
-                manager1.getUserId(), User.ROLE_COURSE_MANAGER, null, null, null, 0, 20);
+                manager1.getUserId(), User.ROLE_COURSE_MANAGER, null, null, null, null, 0, 20);
         List<Long> managerIds = managerView.getContent().stream()
                 .map(QuestionGroupResponse::getGroupId).toList();
         assertTrue(managerIds.contains(courseOnly.getGroupId()),
                 "course-only group must be visible to its manager");
 
         PageResponse<QuestionGroupResponse> courseView = questionGroupService.getQuestionGroups(
-                manager1.getUserId(), User.ROLE_COURSE_MANAGER, courseA.getCourseId(), null, null, 0, 20);
+                manager1.getUserId(), User.ROLE_COURSE_MANAGER, courseA.getCourseId(), null, null, null, 0, 20);
         List<Long> courseIds = courseView.getContent().stream()
                 .map(QuestionGroupResponse::getGroupId).toList();
         assertTrue(courseIds.contains(courseOnly.getGroupId()),
                 "course-only group must match the courseId filter");
 
         PageResponse<QuestionGroupResponse> moduleView = questionGroupService.getQuestionGroups(
-                manager1.getUserId(), User.ROLE_COURSE_MANAGER, null, moduleA2.getModuleId(), null, 0, 20);
+                manager1.getUserId(), User.ROLE_COURSE_MANAGER, null, moduleA2.getModuleId(), null, null, 0, 20);
         assertFalse(moduleView.getContent().stream()
                         .map(QuestionGroupResponse::getGroupId)
                         .anyMatch(id -> id.equals(courseOnly.getGroupId())),
@@ -295,6 +298,7 @@ class QuestionGroupIntegrationTest {
     @Test
     void createGroupWithModuleOutsideCourseIsRejected() {
         QuestionGroupCreateRequest request = QuestionGroupCreateRequest.builder()
+                .questionType("QUIZ")
                 .courseId(courseB.getCourseId())
                 .moduleId(moduleA1.getModuleId())
                 .title("Misplaced group")
@@ -307,6 +311,7 @@ class QuestionGroupIntegrationTest {
     @Test
     void createGroupOnForeignCourseIsForbidden() {
         QuestionGroupCreateRequest request = QuestionGroupCreateRequest.builder()
+                .questionType("QUIZ")
                 .courseId(courseA.getCourseId())
                 .title("Another manager group")
                 .build();
@@ -385,7 +390,7 @@ class QuestionGroupIntegrationTest {
     @Test
     void globalGroupIsInvisibleAndImmutableForManagersButManageableByAdmin() {
         PageResponse<QuestionGroupResponse> managerView = questionGroupService.getQuestionGroups(
-                manager1.getUserId(), User.ROLE_COURSE_MANAGER, null, null, null, 0, 20);
+                manager1.getUserId(), User.ROLE_COURSE_MANAGER, null, null, null, null, 0, 20);
         assertTrue(managerView.getContent().stream()
                 .noneMatch(item -> item.getGroupId().equals(g5.getGroupId())));
 
@@ -419,16 +424,16 @@ class QuestionGroupIntegrationTest {
         entityManager.clear();
 
         PageResponse<QuestionGroupResponse> all = questionGroupService.getQuestionGroups(
-                assigned.getUserId(), User.ROLE_COURSE_MANAGER, null, null, null, 0, 20);
+                assigned.getUserId(), User.ROLE_COURSE_MANAGER, null, null, null, null, 0, 20);
         assertEquals(List.of(courseOnly.getGroupId(), g4.getGroupId(), g2.getGroupId(), g1.getGroupId()),
                 all.getContent().stream().map(QuestionGroupResponse::getGroupId).toList());
         assertEquals(4L, all.getTotalElements());
         PageResponse<QuestionGroupResponse> filtered = questionGroupService.getQuestionGroups(
-                assigned.getUserId(), User.ROLE_COURSE_MANAGER, courseA.getCourseId(), moduleA1.getModuleId(), null, 0, 20);
+                assigned.getUserId(), User.ROLE_COURSE_MANAGER, courseA.getCourseId(), moduleA1.getModuleId(), null, null, 0, 20);
         assertEquals(List.of(g4.getGroupId(), g1.getGroupId()),
                 filtered.getContent().stream().map(QuestionGroupResponse::getGroupId).toList());
         assertThrows(ForbiddenException.class, () -> questionGroupService.getQuestionGroups(
-                assigned.getUserId(), User.ROLE_COURSE_MANAGER, courseB.getCourseId(), null, null, 0, 20));
+                assigned.getUserId(), User.ROLE_COURSE_MANAGER, courseB.getCourseId(), null, null, null, 0, 20));
     }
 
     @Test
@@ -439,7 +444,7 @@ class QuestionGroupIntegrationTest {
         entityManager.clear();
 
         QuestionGroupResponse created = questionGroupService.createQuestionGroup(assigned.getUserId(), User.ROLE_COURSE_MANAGER,
-                QuestionGroupCreateRequest.builder().courseId(courseA.getCourseId()).moduleId(moduleA1.getModuleId())
+                QuestionGroupCreateRequest.builder().questionType("QUIZ").courseId(courseA.getCourseId()).moduleId(moduleA1.getModuleId())
                         .title("Assigned content").build());
         assertEquals(courseA.getCourseId(), created.getCourseId());
         QuestionGroupResponse updated = questionGroupService.updateQuestionGroup(assigned.getUserId(), User.ROLE_COURSE_MANAGER,
@@ -461,6 +466,56 @@ class QuestionGroupIntegrationTest {
         assertThrows(ForbiddenException.class, () -> questionGroupService.updateQuestionGroup(
                 assigned.getUserId(), User.ROLE_COURSE_MANAGER, g3.getGroupId(),
                 QuestionGroupUpdateRequest.builder().title("Foreign edit").build()));
+    }
+
+    @Test
+    void questionTypeFilterReturnsOnlyGroupsOfThatKind() {
+        QuestionGroup essayGroup = persistGroup(courseA, moduleA1, "ESSAY", "Essay group", "Essay passage");
+        entityManager.flush();
+        entityManager.clear();
+
+        PageResponse<QuestionGroupResponse> essays = questionGroupService.getQuestionGroups(
+                manager1.getUserId(), User.ROLE_COURSE_MANAGER, null, null, "ESSAY", null, 0, 20);
+
+        assertEquals(List.of(essayGroup.getGroupId()),
+                essays.getContent().stream().map(QuestionGroupResponse::getGroupId).toList());
+        assertEquals("ESSAY", essays.getContent().get(0).getQuestionType());
+
+        assertThrows(BadRequestException.class, () -> questionGroupService.getQuestionGroups(
+                manager1.getUserId(), User.ROLE_COURSE_MANAGER, null, null, "MIXED", null, 0, 20));
+    }
+
+    @Test
+    void createGroupRequiresAConcreteQuestionType() {
+        assertThrows(BadRequestException.class, () -> questionGroupService.createQuestionGroup(
+                manager1.getUserId(), User.ROLE_COURSE_MANAGER,
+                QuestionGroupCreateRequest.builder().courseId(courseA.getCourseId())
+                        .title("No type").build()));
+
+        assertThrows(BadRequestException.class, () -> questionGroupService.createQuestionGroup(
+                manager1.getUserId(), User.ROLE_COURSE_MANAGER,
+                QuestionGroupCreateRequest.builder().courseId(courseA.getCourseId())
+                        .questionType("MIXED").title("Mixed").build()));
+    }
+
+    @Test
+    void updateQuestionTypeIsRejectedWhenMemberQuestionsDiffer() {
+        QuestionGroup typed = persistGroup(courseA, moduleA1, "QUIZ", "Quiz group", "Quiz passage");
+        persistQuestion(moduleA1, typed, "Quiz member");
+        entityManager.flush();
+
+        assertThrows(ResourceConflictException.class, () -> questionGroupService.updateQuestionGroup(
+                manager1.getUserId(), User.ROLE_COURSE_MANAGER, typed.getGroupId(),
+                QuestionGroupUpdateRequest.builder().questionType("ESSAY").build()));
+
+        QuestionGroupResponse legacyBackfill = questionGroupService.updateQuestionGroup(
+                manager1.getUserId(), User.ROLE_COURSE_MANAGER, g4.getGroupId(),
+                QuestionGroupUpdateRequest.builder().questionType("QUIZ").build());
+        assertEquals("QUIZ", legacyBackfill.getQuestionType());
+
+        assertThrows(ResourceConflictException.class, () -> questionGroupService.updateQuestionGroup(
+                manager1.getUserId(), User.ROLE_COURSE_MANAGER, g4.getGroupId(),
+                QuestionGroupUpdateRequest.builder().questionType("ESSAY").build()));
     }
 
     private long questionCountOf(PageResponse<QuestionGroupResponse> response, Long groupId) {
@@ -507,9 +562,15 @@ class QuestionGroupIntegrationTest {
     }
 
     private QuestionGroup persistGroup(Course course, Module module, String title, String passageText) {
+        return persistGroup(course, module, null, title, passageText);
+    }
+
+    private QuestionGroup persistGroup(Course course, Module module, String questionType,
+                                       String title, String passageText) {
         QuestionGroup group = QuestionGroup.builder()
                 .course(course)
                 .module(module)
+                .questionType(questionType)
                 .title(title)
                 .passageText(passageText)
                 .build();

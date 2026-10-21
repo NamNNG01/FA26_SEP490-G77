@@ -104,6 +104,7 @@ class QuestionGroupServiceTest {
                 .groupId(7L)
                 .course(course)
                 .module(module)
+                .questionType("QUIZ")
                 .title("Reading Passage 1")
                 .passageText("Đoạn văn...")
                 .build();
@@ -116,7 +117,7 @@ class QuestionGroupServiceTest {
         when(questionRepository.countByGroupIds(List.of(7L))).thenReturn(Collections.singletonList(new Object[]{7L, 5L}));
 
         PageResponse<QuestionGroupResponse> response =
-                questionGroupService.getQuestionGroups(999L, User.ROLE_ADMIN, null, null, null, 0, 20);
+                questionGroupService.getQuestionGroups(999L, User.ROLE_ADMIN, null, null, null, null, 0, 20);
 
         assertEquals(1, response.getContent().size());
         QuestionGroupResponse item = response.getContent().get(0);
@@ -144,7 +145,7 @@ class QuestionGroupServiceTest {
         when(questionRepository.countByGroupIds(List.of(7L))).thenReturn(List.of());
 
         PageResponse<QuestionGroupResponse> response = questionGroupService.getQuestionGroups(
-                101L, User.ROLE_COURSE_MANAGER, 12L, null, null, 0, 20);
+                101L, User.ROLE_COURSE_MANAGER, 12L, null, null, null, 0, 20);
 
         assertEquals(1, response.getContent().size());
         assertEquals(0L, response.getContent().get(0).getQuestionCount());
@@ -155,7 +156,7 @@ class QuestionGroupServiceTest {
         when(courseRepository.countOwnedCourse(12L, 101L)).thenReturn(0L);
 
         assertThrows(ForbiddenException.class, () -> questionGroupService.getQuestionGroups(
-                101L, User.ROLE_COURSE_MANAGER, 12L, null, null, 0, 20));
+                101L, User.ROLE_COURSE_MANAGER, 12L, null, null, null, 0, 20));
 
         verifyNoInteractions(questionGroupRepository);
     }
@@ -166,7 +167,7 @@ class QuestionGroupServiceTest {
                 .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
 
         PageResponse<QuestionGroupResponse> response = questionGroupService.getQuestionGroups(
-                101L, User.ROLE_COURSE_MANAGER, null, null, null, 0, 20);
+                101L, User.ROLE_COURSE_MANAGER, null, null, null, null, 0, 20);
 
         assertTrue(response.getContent().isEmpty());
         assertEquals(0L, response.getTotalElements());
@@ -180,7 +181,7 @@ class QuestionGroupServiceTest {
         when(questionGroupRepository.findAll(any(Specification.class), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
 
-        questionGroupService.getQuestionGroups(999L, User.ROLE_ADMIN, null, null, null, -3, 0);
+        questionGroupService.getQuestionGroups(999L, User.ROLE_ADMIN, null, null, null, null, -3, 0);
 
         ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
         verify(questionGroupRepository).findAll(any(Specification.class), captor.capture());
@@ -200,6 +201,7 @@ class QuestionGroupServiceTest {
             return saved;
         });
         QuestionGroupCreateRequest request = QuestionGroupCreateRequest.builder()
+                .questionType("QUIZ")
                 .courseId(12L)
                 .moduleId(3L)
                 .title("  Reading Passage 1  ")
@@ -212,6 +214,7 @@ class QuestionGroupServiceTest {
         assertEquals(7L, response.getGroupId());
         assertEquals(12L, response.getCourseId());
         assertEquals(3L, response.getModuleId());
+        assertEquals("QUIZ", response.getQuestionType());
         assertEquals("Reading Passage 1", response.getTitle());
         assertEquals("Đoạn văn dùng chung...", response.getPassageText());
         assertEquals(0L, response.getQuestionCount());
@@ -222,6 +225,7 @@ class QuestionGroupServiceTest {
     void createQuestionGroup_CourseNotFound_ThrowsResourceNotFound() {
         when(courseRepository.findById(99L)).thenReturn(Optional.empty());
         QuestionGroupCreateRequest request = QuestionGroupCreateRequest.builder()
+                .questionType("QUIZ")
                 .courseId(99L)
                 .title("Reading Passage 1")
                 .build();
@@ -238,6 +242,7 @@ class QuestionGroupServiceTest {
         Course foreignCourse = Course.builder().courseId(12L).manager(otherManager).build();
         when(courseRepository.findById(12L)).thenReturn(Optional.of(foreignCourse));
         QuestionGroupCreateRequest request = QuestionGroupCreateRequest.builder()
+                .questionType("QUIZ")
                 .courseId(12L)
                 .title("Reading Passage 1")
                 .build();
@@ -259,6 +264,7 @@ class QuestionGroupServiceTest {
             return saved;
         });
         QuestionGroupCreateRequest request = QuestionGroupCreateRequest.builder()
+                .questionType("QUIZ")
                 .courseId(12L)
                 .title("Reading Passage 1")
                 .build();
@@ -278,6 +284,7 @@ class QuestionGroupServiceTest {
         when(courseRepository.findById(12L)).thenReturn(Optional.of(course));
         when(moduleRepository.findById(3L)).thenReturn(Optional.of(foreignModule));
         QuestionGroupCreateRequest request = QuestionGroupCreateRequest.builder()
+                .questionType("QUIZ")
                 .courseId(12L)
                 .moduleId(3L)
                 .title("Reading Passage 1")
@@ -294,6 +301,7 @@ class QuestionGroupServiceTest {
         when(courseRepository.findById(12L)).thenReturn(Optional.of(course));
         when(moduleRepository.findById(3L)).thenReturn(Optional.empty());
         QuestionGroupCreateRequest request = QuestionGroupCreateRequest.builder()
+                .questionType("QUIZ")
                 .courseId(12L)
                 .moduleId(3L)
                 .title("Reading Passage 1")
@@ -309,6 +317,7 @@ class QuestionGroupServiceTest {
     void createQuestionGroup_BlankTitleAndPassage_ThrowsValidationError() {
         when(courseRepository.findById(12L)).thenReturn(Optional.of(course));
         QuestionGroupCreateRequest request = QuestionGroupCreateRequest.builder()
+                .questionType("QUIZ")
                 .courseId(12L)
                 .title("   ")
                 .passageText("")
@@ -489,7 +498,7 @@ class QuestionGroupServiceTest {
         when(questionRepository.countByGroupIds(List.of(9L))).thenReturn(Collections.singletonList(new Object[]{9L, 2L}));
 
         PageResponse<QuestionGroupResponse> response = questionGroupService.getQuestionGroups(
-                101L, User.ROLE_COURSE_MANAGER, 12L, null, null, 0, 20);
+                101L, User.ROLE_COURSE_MANAGER, 12L, null, null, null, 0, 20);
 
         QuestionGroupResponse item = response.getContent().get(0);
         assertEquals(9L, item.getGroupId());
@@ -538,7 +547,7 @@ class QuestionGroupServiceTest {
         when(questionGroupRepository.findAll(any(Specification.class), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
 
-        questionGroupService.getQuestionGroups(999L, User.ROLE_ADMIN, null, null, null, 0, 0);
+        questionGroupService.getQuestionGroups(999L, User.ROLE_ADMIN, null, null, null, null, 0, 0);
 
         ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
         verify(questionGroupRepository).findAll(any(Specification.class), captor.capture());
@@ -550,7 +559,7 @@ class QuestionGroupServiceTest {
         when(questionGroupRepository.findAll(any(Specification.class), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 100), 0));
 
-        questionGroupService.getQuestionGroups(999L, User.ROLE_ADMIN, null, null, null, 0, 5000);
+        questionGroupService.getQuestionGroups(999L, User.ROLE_ADMIN, null, null, null, null, 0, 5000);
 
         ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
         verify(questionGroupRepository).findAll(any(Specification.class), captor.capture());
@@ -564,7 +573,7 @@ class QuestionGroupServiceTest {
         when(questionRepository.countByGroupIds(List.of(7L))).thenReturn(Collections.singletonList(new Object[]{7L, 5L}));
 
         PageResponse<QuestionGroupResponse> response =
-                questionGroupService.getQuestionGroups(999L, User.ROLE_ADMIN, null, null, null, 3, 20);
+                questionGroupService.getQuestionGroups(999L, User.ROLE_ADMIN, null, null, null, null, 3, 20);
 
         assertEquals(3, response.getPage());
         assertEquals(81L, response.getTotalElements());
@@ -596,7 +605,7 @@ class QuestionGroupServiceTest {
         when(questionRepository.countByGroupIds(List.of(7L))).thenReturn(Collections.singletonList(new Object[]{7L, 1L}));
 
         PageResponse<QuestionGroupResponse> response =
-                questionGroupService.getQuestionGroups(1L, "ROLE_ADMIN", null, null, null, 0, 20);
+                questionGroupService.getQuestionGroups(1L, "ROLE_ADMIN", null, null, null, null, 0, 20);
 
         assertEquals(1, response.getContent().size());
         assertEquals(1L, response.getContent().get(0).getQuestionCount());
@@ -608,10 +617,106 @@ class QuestionGroupServiceTest {
         when(questionGroupRepository.findAll(any(Specification.class), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
 
-        questionGroupService.getQuestionGroups(101L, User.ROLE_COURSE_MANAGER, null, null, null, 0, 20);
+        questionGroupService.getQuestionGroups(101L, User.ROLE_COURSE_MANAGER, null, null, null, null, 0, 20);
 
         verify(courseRepository, never()).countOwnedCourse(any(), any());
         verifyNoInteractions(questionRepository);
+    }
+
+    @Test
+    void createQuestionGroup_MissingType_ThrowsValidationError() {
+        QuestionGroupCreateRequest request = QuestionGroupCreateRequest.builder()
+                .courseId(12L)
+                .title("Reading Passage 1")
+                .build();
+
+        assertThrows(BadRequestException.class, () ->
+                questionGroupService.createQuestionGroup(101L, User.ROLE_COURSE_MANAGER, request));
+
+        verifyNoInteractions(courseRepository);
+    }
+
+    @Test
+    void createQuestionGroup_MixedType_ThrowsValidationError() {
+        QuestionGroupCreateRequest request = QuestionGroupCreateRequest.builder()
+                .courseId(12L)
+                .questionType("MIXED")
+                .title("Reading Passage 1")
+                .build();
+
+        assertThrows(BadRequestException.class, () ->
+                questionGroupService.createQuestionGroup(101L, User.ROLE_COURSE_MANAGER, request));
+
+        verifyNoInteractions(courseRepository);
+    }
+
+    @Test
+    void updateQuestionGroup_TypeChangeWithMatchingMembers_Succeeds() {
+        when(questionGroupRepository.findById(7L)).thenReturn(Optional.of(group));
+        when(courseRepository.countOwnedCourse(12L, 101L)).thenReturn(1L);
+        when(questionRepository.findDistinctQuestionTypesByGroupId(7L)).thenReturn(List.of("ESSAY"));
+        when(questionGroupRepository.save(any(QuestionGroup.class))).thenReturn(group);
+        when(questionRepository.countByGroupIds(List.of(7L))).thenReturn(List.of());
+
+        QuestionGroupResponse response = questionGroupService.updateQuestionGroup(
+                101L, User.ROLE_COURSE_MANAGER, 7L,
+                QuestionGroupUpdateRequest.builder().questionType("ESSAY").build());
+
+        assertEquals("ESSAY", response.getQuestionType());
+    }
+
+    @Test
+    void updateQuestionGroup_TypeChangeWithDifferentMembers_ThrowsConflict() {
+        when(questionGroupRepository.findById(7L)).thenReturn(Optional.of(group));
+        when(courseRepository.countOwnedCourse(12L, 101L)).thenReturn(1L);
+        when(questionRepository.findDistinctQuestionTypesByGroupId(7L)).thenReturn(List.of("SINGLE_CHOICE"));
+
+        assertThrows(ResourceConflictException.class, () -> questionGroupService.updateQuestionGroup(
+                101L, User.ROLE_COURSE_MANAGER, 7L,
+                QuestionGroupUpdateRequest.builder().questionType("ESSAY").build()));
+
+        verify(questionGroupRepository, never()).save(any(QuestionGroup.class));
+    }
+
+    @Test
+    void updateQuestionGroup_TypeChangeOnEmptyGroup_Succeeds() {
+        when(questionGroupRepository.findById(7L)).thenReturn(Optional.of(group));
+        when(courseRepository.countOwnedCourse(12L, 101L)).thenReturn(1L);
+        when(questionRepository.findDistinctQuestionTypesByGroupId(7L)).thenReturn(List.of());
+        when(questionGroupRepository.save(any(QuestionGroup.class))).thenReturn(group);
+        when(questionRepository.countByGroupIds(List.of(7L))).thenReturn(List.of());
+
+        QuestionGroupResponse response = questionGroupService.updateQuestionGroup(
+                101L, User.ROLE_COURSE_MANAGER, 7L,
+                QuestionGroupUpdateRequest.builder().questionType("DIAGRAM").build());
+
+        assertEquals("DIAGRAM", response.getQuestionType());
+    }
+
+    @Test
+    void updateQuestionGroup_SameType_DoesNotQueryMembers() {
+        when(questionGroupRepository.findById(7L)).thenReturn(Optional.of(group));
+        when(courseRepository.countOwnedCourse(12L, 101L)).thenReturn(1L);
+        when(questionGroupRepository.save(any(QuestionGroup.class))).thenReturn(group);
+        when(questionRepository.countByGroupIds(List.of(7L))).thenReturn(List.of());
+
+        questionGroupService.updateQuestionGroup(
+                101L, User.ROLE_COURSE_MANAGER, 7L,
+                QuestionGroupUpdateRequest.builder().questionType("QUIZ").build());
+
+        verify(questionRepository, never()).findDistinctQuestionTypesByGroupId(any());
+    }
+
+    @Test
+    void updateQuestionGroup_MixedType_ThrowsValidationError() {
+        when(questionGroupRepository.findById(7L)).thenReturn(Optional.of(group));
+        when(courseRepository.countOwnedCourse(12L, 101L)).thenReturn(1L);
+
+        assertThrows(BadRequestException.class, () -> questionGroupService.updateQuestionGroup(
+                101L, User.ROLE_COURSE_MANAGER, 7L,
+                QuestionGroupUpdateRequest.builder().questionType("MIXED").build()));
+
+        verify(questionGroupRepository, never()).save(any(QuestionGroup.class));
     }
 
     @Test
