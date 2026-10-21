@@ -147,4 +147,84 @@ class QuestionValidatorTest {
         assertFalse(errors.isEmpty());
         assertTrue(errors.stream().anyMatch(e -> e.getMessage().contains("must equal defaultPoints")));
     }
+
+    @Test
+    void testDiagramHappyPath() {
+        QuestionPayload payload = QuestionPayload.builder()
+                .questionType("DIAGRAM")
+                .content("Draw the architecture")
+                .questionMetadata(Map.of("drawioXml", "<mxfile>diagram content</mxfile>", "skillTag", "architecture"))
+                .build();
+        List<ValidationError> errors = validator.validate(payload);
+        assertTrue(errors.isEmpty(), "Expected no validation errors for diagram, got: " + errors);
+    }
+
+    @Test
+    void testDiagramErrors() {
+        // Missing drawioXml
+        QuestionPayload payload1 = QuestionPayload.builder()
+                .questionType("DIAGRAM")
+                .content("Draw")
+                .questionMetadata(Map.of())
+                .build();
+        List<ValidationError> errors1 = validator.validate(payload1);
+        assertFalse(errors1.isEmpty());
+        assertTrue(errors1.stream().anyMatch(e -> e.getMessage().contains("drawioXml is required")));
+
+        // Invalid start and forbidden DOCTYPE/ENTITY
+        QuestionPayload payload2 = QuestionPayload.builder()
+                .questionType("DIAGRAM")
+                .content("Draw")
+                .questionMetadata(Map.of("drawioXml", "<invalid> <!DOCTYPE foo> content</invalid>"))
+                .build();
+        List<ValidationError> errors2 = validator.validate(payload2);
+        assertFalse(errors2.isEmpty());
+        assertTrue(errors2.stream().anyMatch(e -> e.getMessage().contains("must start with <mxfile or <mxGraphModel")));
+        assertTrue(errors2.stream().anyMatch(e -> e.getMessage().contains("forbidden XML declarations")));
+
+        // Options and answerKey not allowed for diagram
+        QuestionPayload payload3 = QuestionPayload.builder()
+                .questionType("DIAGRAM")
+                .content("Draw")
+                .questionMetadata(Map.of("drawioXml", "<mxGraphModel>content</mxGraphModel>"))
+                .options(List.of(AnswerOptionDto.builder().optionText("Opt").build()))
+                .answerKey("key")
+                .build();
+        List<ValidationError> errors3 = validator.validate(payload3);
+        assertFalse(errors3.isEmpty());
+        assertTrue(errors3.stream().anyMatch(e -> e.getMessage().contains("Options are not allowed")));
+        assertTrue(errors3.stream().anyMatch(e -> e.getMessage().contains("Answer key is not allowed")));
+    }
+
+    @Test
+    void testOrderingHappyPath() {
+        QuestionPayload payload = QuestionPayload.builder()
+                .questionType("ORDERING")
+                .content("Order the steps")
+                .options(List.of(
+                        AnswerOptionDto.builder().optionText("Step 1").isCorrect(false).orderIndex(0).build(),
+                        AnswerOptionDto.builder().optionText("Step 2").isCorrect(false).orderIndex(1).build()
+                ))
+                .build();
+        List<ValidationError> errors = validator.validate(payload);
+        assertTrue(errors.isEmpty(), "Expected no validation errors for ordering, got: " + errors);
+    }
+
+    @Test
+    void testOrderingErrors() {
+        QuestionPayload payload = QuestionPayload.builder()
+                .questionType("ORDERING")
+                .content("Order the steps")
+                .answerKey("invalidKey")
+                .options(List.of(
+                        AnswerOptionDto.builder().optionText("Step 1").isCorrect(true).orderIndex(0).build(),
+                        AnswerOptionDto.builder().optionText("Step 2").isCorrect(false).orderIndex(null).build()
+                ))
+                .build();
+        List<ValidationError> errors = validator.validate(payload);
+        assertFalse(errors.isEmpty());
+        assertTrue(errors.stream().anyMatch(e -> e.getMessage().contains("Answer key is not allowed")));
+        assertTrue(errors.stream().anyMatch(e -> e.getMessage().contains("must have isCorrect=false")));
+        assertTrue(errors.stream().anyMatch(e -> e.getMessage().contains("Order index is required")));
+    }
 }
