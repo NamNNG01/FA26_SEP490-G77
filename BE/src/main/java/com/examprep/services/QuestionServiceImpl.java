@@ -209,7 +209,6 @@ public class QuestionServiceImpl implements QuestionService {
         String contentHash = ContentHashUtil.computeHash(sanitizedContent, optionTexts, answerKeyJson);
 
 
-        checkContentHashConflict(course.getCourseId(), contentHash, null);
 
         String status = req.getStatus() != null ? req.getStatus() : "ACTIVE";
         if ("STUDENT".equals(creatorRole)) {
@@ -303,10 +302,7 @@ public class QuestionServiceImpl implements QuestionService {
             question.setAnswerKey(finalAnswerKeyJson);
             finalContentHash = ContentHashUtil.computeOrderingHash(sanitizedContent, orderedOptionTexts);
             question.setContentHash(finalContentHash);
-            checkContentHashConflict(course.getCourseId(), finalContentHash, null);
             question = questionRepository.save(question);
-        } else {
-            checkContentHashConflict(course.getCourseId(), contentHash, null);
         }
 
         return mapToDetailDto(question, savedOptions);
@@ -575,7 +571,6 @@ public class QuestionServiceImpl implements QuestionService {
             }
 
             String newHash = ContentHashUtil.computeOrderingHash(contentToValidate, orderedOptionTexts);
-            checkContentHashConflict(q.getCourse() != null ? q.getCourse().getCourseId() : null, newHash, q.getQuestionId());
             q.setContentHash(newHash);
         } else {
             if (req.getAnswerKey() != null) {
@@ -597,7 +592,6 @@ public class QuestionServiceImpl implements QuestionService {
             }
             List<String> optionTexts = updatedOptions.stream().map(AnswerOption::getOptionText).collect(Collectors.toList());
             String newHash = ContentHashUtil.computeHash(q.getContent(), optionTexts, q.getAnswerKey());
-            checkContentHashConflict(q.getCourse() != null ? q.getCourse().getCourseId() : null, newHash, q.getQuestionId());
             q.setContentHash(newHash);
         }
 
@@ -725,361 +719,12 @@ public class QuestionServiceImpl implements QuestionService {
             QuestionPayload payload = QuestionPayload.fromEntity(q, options, objectMapper);
             questionValidator.validateOrThrow(payload);
 
-            checkContentHashConflict(q.getCourse() != null ? q.getCourse().getCourseId() : null, q.getContentHash(), q.getQuestionId());
         }
 
         q.setStatus(newStatus);
         q = questionRepository.save(q);
         List<AnswerOption> options = answerOptionRepository.findByQuestion_QuestionId(q.getQuestionId());
         return mapToDetailDto(q, options);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public byte[] generateExcelTemplate(Long courseId, User currentUser) {
-        validateCourseAccess(courseId, currentUser);
-        try (Workbook workbook = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
-            String[] sheets = {"SINGLE_CHOICE", "MULTIPLE_CHOICE", "TRUE_FALSE", "MATCHING", "FILL_BLANK", "ESSAY"};
-            for (String sheetName : sheets) {
-                Sheet sheet = workbook.createSheet(sheetName);
-                Row header = sheet.createRow(0);
-                String[] headers = {"Module ID", "Difficulty", "Content", "Default Points", "Explanation", "Skill Tag", "Status",
-                        "Option 1", "Option 2", "Option 3", "Option 4", "Correct 1", "Correct 2", "Correct 3", "Correct 4", "Answer Key / Rubric"};
-                for (int i = 0; i < headers.length; i++) {
-                    header.createCell(i).setCellValue(headers[i]);
-                }
-                Row example = sheet.createRow(1);
-                example.createCell(0).setCellValue(1);
-                example.createCell(1).setCellValue("MEDIUM");
-                example.createCell(2).setCellValue("Sample question content?");
-                example.createCell(3).setCellValue(1);
-                example.createCell(4).setCellValue("Sample explanation");
-                example.createCell(5).setCellValue("algebra");
-                example.createCell(6).setCellValue("ACTIVE");
-                example.createCell(7).setCellValue("Choice A");
-                example.createCell(8).setCellValue("Choice B");
-                example.createCell(9).setCellValue("Choice C");
-                example.createCell(10).setCellValue("Choice D");
-                example.createCell(11).setCellValue(true);
-                example.createCell(12).setCellValue(false);
-                example.createCell(13).setCellValue(false);
-                example.createCell(14).setCellValue(false);
-                example.createCell(15).setCellValue("");
-            }
-            workbook.write(out);
-            return out.toByteArray();
-        } catch (Exception e) {
-            throw new BadRequestException("Failed to generate template: " + e.getMessage());
-        }
-    }
-
-    @Override
-    @Transactional
-    public QuestionImportResult importExcel(Long courseId, MultipartFile file, boolean dryRun, User currentUser) {
-        validateCourseAccess(courseId, currentUser);
-        if (file.isEmpty() || file.getSize() > 5 * 1024 * 1024) {
-            throw new BadRequestException("File is empty or exceeds 5MB limit");
-        }
-        String originalFilename = file.getOriginalFilename();
-        if (originalFilename == null || !originalFilename.toLowerCase().endsWith(".xlsx")) {
-            throw new BadRequestException("Only .xlsx files are supported");
-        }
-
-        List<QuestionImportResult.ImportRowError> errors = new ArrayList<>();
-        List<QuestionCreateRequest> validRequests = new ArrayList<>();
-        Set<String> fileHashes = new HashSet<>();
-        int totalRows = 0;
-
-        try (InputStream is = file.getInputStream(); Workbook workbook = new XSSFWorkbook(is)) {
-            String[] sheets = {"SINGLE_CHOICE", "MULTIPLE_CHOICE", "TRUE_FALSE", "MATCHING", "FILL_BLANK", "ESSAY"};
-            for (String sheetName : sheets) {
-                Sheet sheet = workbook.getSheet(sheetName);
-                if (sheet == null) continue;
-
-                for (int r = 1; r <= sheet.getLastRowNum(); r++) {
-                    Row row = sheet.getRow(r);
-                    if (row == null || isRowEmpty(row)) continue;
-                    totalRows++;
-                    if (totalRows > 1000) {
-                        throw new BadRequestException("Import exceeds maximum limit of 1000 rows");
-                    }
-
-                    try {
-                        QuestionCreateRequest req = parseRowToRequest(sheetName, row, courseId);
-                        QuestionPayload payload = QuestionPayload.from(req);
-                        questionValidator.validateOrThrow(payload);
-
-                        List<String> optTexts = req.getOptions() != null ?
-                                req.getOptions().stream().map(o -> questionValidator.sanitize(o.getOptionText())).collect(Collectors.toList()) : null;
-                        String akJson = serializeJson(req.getAnswerKey(), "answerKey");
-
-                        String hash = ContentHashUtil.computeHash(req.getContent(), optTexts, akJson);
-                        if (fileHashes.contains(hash)) {
-                            errors.add(new QuestionImportResult.ImportRowError(sheetName, r + 1, "Duplicate content hash within import file"));
-                            continue;
-                        }
-
-                        boolean dbConflict = questionRepository.findAll().stream()
-                                .anyMatch(other -> other.getCourse() != null &&
-                                        other.getCourse().getCourseId().equals(courseId) &&
-                                        "ACTIVE".equals(other.getStatus()) &&
-                                        other.getDeletedAt() == null &&
-                                        hash.equals(other.getContentHash()));
-                        if (dbConflict) {
-                            errors.add(new QuestionImportResult.ImportRowError(sheetName, r + 1, "Content hash already exists in database"));
-                            continue;
-                        }
-
-                        fileHashes.add(hash);
-                        validRequests.add(req);
-                    } catch (Exception e) {
-                        errors.add(new QuestionImportResult.ImportRowError(sheetName, r + 1, e.getMessage()));
-                    }
-                }
-            }
-        } catch (Exception e) {
-            throw new BadRequestException("Failed to parse Excel file: " + e.getMessage());
-        }
-
-        int savedCount = 0;
-        if (!dryRun && errors.isEmpty()) {
-            for (QuestionCreateRequest req : validRequests) {
-                createQuestionInternal(req, currentUser, "IMPORT", "MANAGER", "APPROVED");
-                savedCount++;
-            }
-        } else if (!dryRun) {
-            for (QuestionCreateRequest req : validRequests) {
-                try {
-                    createQuestionInternal(req, currentUser, "IMPORT", "MANAGER", "APPROVED");
-                    savedCount++;
-                } catch (Exception ignored) {}
-            }
-        }
-
-        return QuestionImportResult.builder()
-                .saved(savedCount)
-                .skipped(totalRows - savedCount)
-                .errors(errors)
-                .build();
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public byte[] exportExcel(Long courseId, String questionType, String status, String difficulty, User currentUser) {
-        validateCourseAccess(courseId, currentUser);
-        Specification<Question> spec = (root, query, cb) -> {
-            var predicate = cb.and(cb.equal(root.get("course").get("courseId"), courseId), cb.isNull(root.get("deletedAt")));
-            if (questionType != null) predicate = cb.and(predicate, cb.equal(root.get("questionType"), questionType));
-            if (status != null) predicate = cb.and(predicate, cb.equal(root.get("status"), status));
-            if (difficulty != null) predicate = cb.and(predicate, cb.equal(root.get("difficulty"), difficulty));
-            return predicate;
-        };
-
-        List<Question> questions = questionRepository.findAll(spec);
-
-        try (Workbook workbook = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
-            String[] sheets = {"SINGLE_CHOICE", "MULTIPLE_CHOICE", "TRUE_FALSE", "MATCHING", "FILL_BLANK", "ESSAY"};
-            Map<String, List<Question>> grouped = questions.stream().collect(Collectors.groupingBy(Question::getQuestionType));
-
-            for (String sheetName : sheets) {
-                Sheet sheet = workbook.createSheet(sheetName);
-                Row header = sheet.createRow(0);
-                String[] headers = {"Module ID", "Difficulty", "Content", "Default Points", "Explanation", "Skill Tag", "Status",
-                        "Option 1", "Option 2", "Option 3", "Option 4", "Correct 1", "Correct 2", "Correct 3", "Correct 4", "Answer Key / Rubric"};
-                for (int i = 0; i < headers.length; i++) {
-                    header.createCell(i).setCellValue(headers[i]);
-                }
-
-                List<Question> qList = grouped.getOrDefault(sheetName, Collections.emptyList());
-                int r = 1;
-                for (Question q : qList) {
-                    Row row = sheet.createRow(r++);
-                    if (q.getModule() != null) row.createCell(0).setCellValue(q.getModule().getModuleId());
-                    row.createCell(1).setCellValue(safeExport(q.getDifficulty()));
-                    row.createCell(2).setCellValue(safeExport(q.getContent()));
-                    row.createCell(3).setCellValue(q.getDefaultPoints() != null ? q.getDefaultPoints().doubleValue() : 1.0);
-                    row.createCell(4).setCellValue(safeExport(q.getAiExplanation()));
-
-                    String skillTag = "";
-                    try {
-                        if (q.getQuestionMetadata() != null) {
-                            Map map = objectMapper.readValue(q.getQuestionMetadata(), Map.class);
-                            if (map.containsKey("skillTag")) skillTag = (String) map.get("skillTag");
-                        }
-                    } catch (Exception ignored) {}
-                    row.createCell(5).setCellValue(safeExport(skillTag));
-                    row.createCell(6).setCellValue(safeExport(q.getStatus()));
-
-                    List<AnswerOption> opts = answerOptionRepository.findByQuestion_QuestionId(q.getQuestionId());
-                    for (int o = 0; o < Math.min(opts.size(), 4); o++) {
-                        row.createCell(7 + o).setCellValue(safeExport(opts.get(o).getOptionText()));
-                        row.createCell(11 + o).setCellValue(Boolean.TRUE.equals(opts.get(o).getIsCorrect()));
-                    }
-
-                    String extra = q.getAnswerKey() != null ? q.getAnswerKey() : q.getEssayGradingRubric();
-                    row.createCell(15).setCellValue(safeExport(extra));
-                }
-            }
-            workbook.write(out);
-            return out.toByteArray();
-        } catch (Exception e) {
-            throw new BadRequestException("Failed to export Excel: " + e.getMessage());
-        }
-    }
-
-    private void validateCourseAccess(Long courseId, User currentUser) {
-        if (!User.ROLE_ADMIN.equals(currentUser.getRoleName())) {
-            boolean isManager = courseManagerRepository.existsByCourse_CourseIdAndUser_UserId(courseId, currentUser.getUserId());
-            if (!isManager) {
-                throw new ForbiddenException("You do not have access to this course");
-            }
-        }
-    }
-
-    private boolean isRowEmpty(Row row) {
-        for (int c = 0; c < row.getLastCellNum(); c++) {
-            Cell cell = row.getCell(c);
-            if (cell != null && cell.getCellType() != CellType.BLANK) return false;
-        }
-        return true;
-    }
-
-    private QuestionCreateRequest parseRowToRequest(String sheetName, Row row, Long courseId) {
-        Long moduleId = getCellLong(row.getCell(0));
-        String difficulty = getCellString(row.getCell(1));
-        String content = getCellString(row.getCell(2));
-        double points = getCellDouble(row.getCell(3), 1.0);
-        String explanation = getCellString(row.getCell(4));
-        String skillTag = getCellString(row.getCell(5));
-        String status = getCellString(row.getCell(6));
-
-        List<AnswerOptionDto> options = new ArrayList<>();
-        for (int o = 0; o < 4; o++) {
-            String optText = getCellString(row.getCell(7 + o));
-            if (optText != null && !optText.trim().isEmpty()) {
-                boolean isCorrect = getCellBoolean(row.getCell(11 + o));
-                options.add(AnswerOptionDto.builder()
-                        .optionText(parseCellInput(optText))
-                        .isCorrect(isCorrect)
-                        .orderIndex(o)
-                        .build());
-            }
-        }
-
-        String extra = getCellString(row.getCell(15));
-        Object answerKey = null;
-        Object rubric = null;
-        if (extra != null && !extra.trim().isEmpty()) {
-            try {
-                Object parsed = objectMapper.readValue(extra, Object.class);
-                if ("MATCHING".equals(sheetName) || "FILL_BLANK".equals(sheetName)) {
-                    answerKey = parsed;
-                } else if ("ESSAY".equals(sheetName)) {
-                    rubric = parsed;
-                }
-            } catch (Exception ignored) {}
-        }
-
-        Object metadata = null;
-        if (skillTag != null && !skillTag.trim().isEmpty()) {
-            metadata = Map.of("skillTag", parseCellInput(skillTag));
-        }
-
-        return QuestionCreateRequest.builder()
-                .courseId(courseId)
-                .moduleId(moduleId)
-                .questionType(sheetName)
-                .difficulty(difficulty != null ? difficulty : "MEDIUM")
-                .content(parseCellInput(content))
-                .defaultPoints(BigDecimal.valueOf(points))
-                .explanation(parseCellInput(explanation))
-                .status(status != null ? status : "ACTIVE")
-                .questionMetadata(metadata)
-                .answerKey(answerKey)
-                .essayGradingRubric(rubric)
-                .options(options)
-                .build();
-    }
-
-    private String getCellString(Cell cell) {
-        if (cell == null) return null;
-        if (cell.getCellType() == CellType.STRING) return cell.getStringCellValue();
-        if (cell.getCellType() == CellType.NUMERIC) return String.valueOf((long) cell.getNumericCellValue());
-        if (cell.getCellType() == CellType.BOOLEAN) return String.valueOf(cell.getBooleanCellValue());
-        return null;
-    }
-
-    private Long getCellLong(Cell cell) {
-        if (cell == null) return null;
-        if (cell.getCellType() == CellType.NUMERIC) return (long) cell.getNumericCellValue();
-        try {
-            String s = getCellString(cell);
-            if (s != null) return Long.valueOf(s.trim());
-        } catch (Exception ignored) {}
-        return null;
-    }
-
-    private double getCellDouble(Cell cell, double def) {
-        if (cell == null) return def;
-        if (cell.getCellType() == CellType.NUMERIC) return cell.getNumericCellValue();
-        try {
-            String s = getCellString(cell);
-            if (s != null) return Double.parseDouble(s.trim());
-        } catch (Exception ignored) {}
-        return def;
-    }
-
-    private boolean getCellBoolean(Cell cell) {
-        if (cell == null) return false;
-        if (cell.getCellType() == CellType.BOOLEAN) return cell.getBooleanCellValue();
-        if (cell.getCellType() == CellType.STRING) {
-            return Boolean.parseBoolean(cell.getStringCellValue().trim());
-        }
-        return false;
-    }
-
-    private String safeExport(String text) {
-        if (text == null) return "";
-        if (text.startsWith("=") || text.startsWith("+") || text.startsWith("-") || text.startsWith("@")) {
-            return "'" + text;
-        }
-        return text;
-    }
-
-    private String parseCellInput(String text) {
-        if (text != null && text.startsWith("'") && text.length() > 1) {
-            return text.substring(1);
-        }
-        return text;
-    }
-
-    private String loadPromptTemplate(String questionType) {
-        String fileName = questionType.toLowerCase() + ".txt";
-        try {
-            ClassPathResource resource = new ClassPathResource("prompts/" + fileName);
-            byte[] bytes = FileCopyUtils.copyToByteArray(resource.getInputStream());
-            return new String(bytes, StandardCharsets.UTF_8);
-        } catch (Exception e) {
-            return "Generate {count} questions of type {questionType} in {language} for difficulty {difficulty}.\nContext: {context}\nDocument: {document}";
-        }
-    }
-
-    private List<QuestionCreateRequest> parseAiJson(String jsonText) {
-        if (jsonText == null || jsonText.trim().isEmpty()) return Collections.emptyList();
-        try {
-            String cleaned = jsonText.trim();
-            if (cleaned.startsWith("```json")) {
-                cleaned = cleaned.substring(7);
-            } else if (cleaned.startsWith("```")) {
-                cleaned = cleaned.substring(3);
-            }
-            if (cleaned.endsWith("```")) {
-                cleaned = cleaned.substring(0, cleaned.length() - 3);
-            }
-            return objectMapper.readValue(cleaned.trim(), new TypeReference<List<QuestionCreateRequest>>() {});
-        } catch (Exception e) {
-            return Collections.emptyList();
-        }
     }
 
     private QuestionDetailDto mapToDetailDto(Question q, List<AnswerOption> options) {
@@ -1179,16 +824,5 @@ public class QuestionServiceImpl implements QuestionService {
         }
     }
 
-    private void checkContentHashConflict(Long courseId, String contentHash, Long excludeQuestionId) {
-        if (courseId == null || contentHash == null) return;
-        List<Question> existing = questionRepository.findAll().stream()
-                .filter(q -> q.getCourse() != null && q.getCourse().getCourseId().equals(courseId))
-                .filter(q -> q.getDeletedAt() == null)
-                .filter(q -> contentHash.equals(q.getContentHash()))
-                .filter(q -> excludeQuestionId == null || !q.getQuestionId().equals(excludeQuestionId))
-                .toList();
-        if (!existing.isEmpty()) {
-            throw new ResourceConflictException("Duplicate content hash with question id: " + existing.get(0).getQuestionId());
-        }
-    }
+
 }

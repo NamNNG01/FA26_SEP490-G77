@@ -145,44 +145,4 @@ public class QuestionController {
         return ResponseEntity.ok(ApiResponse.success(updated, "Question status updated successfully"));
     }
 
-    @GetMapping("/import/template")
-    @Operation(summary = "Download Excel import template")
-    public ResponseEntity<byte[]> downloadTemplate(
-            @RequestParam Long courseId,
-            @AuthenticationPrincipal UserPrincipal currentUser) {
-        User user = resolveUser(currentUser);
-        byte[] data = questionService.generateExcelTemplate(courseId, user);
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=question_import_template.xlsx")
-                .contentType(MediaType.APPLICATION_OCTET_STREAM)
-                .body(data);
-    }
-
-    @PostMapping("/import")
-    @Operation(summary = "Import questions from Excel file")
-    public ResponseEntity<ApiResponse<QuestionImportResult>> importQuestions(
-            @RequestParam Long courseId,
-            @RequestParam(defaultValue = "false") boolean dryRun,
-            @RequestParam("file") MultipartFile file,
-            @AuthenticationPrincipal UserPrincipal currentUser) {
-        User user = resolveUser(currentUser);
-        QuestionImportResult result = questionService.importExcel(courseId, file, dryRun, user);
-        return ResponseEntity.ok(ApiResponse.success(result, "Import process completed"));
-    }
-
-    @GetMapping("/export")
-    @Operation(summary = "Export questions to Excel file")
-    public ResponseEntity<byte[]> exportQuestions(
-            @RequestParam Long courseId,
-            @RequestParam(required = false) String questionType,
-            @RequestParam(required = false) String status,
-            @RequestParam(required = false) String difficulty,
-            @AuthenticationPrincipal UserPrincipal currentUser) {
-        User user = resolveUser(currentUser);
-        byte[] data = questionService.exportExcel(courseId, questionType, status, difficulty, user);
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=questions_export.xlsx")
-                .contentType(MediaType.APPLICATION_OCTET_STREAM)
-                .body(data);
-    }
 }

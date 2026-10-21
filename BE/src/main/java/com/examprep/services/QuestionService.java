@@ -28,10 +28,4 @@ public interface QuestionService {
 
     QuestionDetailDto updateQuestionStatus(Long id, QuestionStatusRequest request, User currentUser);
 
-
-    byte[] generateExcelTemplate(Long courseId, User currentUser);
-
-    QuestionImportResult importExcel(Long courseId, MultipartFile file, boolean dryRun, User currentUser);
-
-    byte[] exportExcel(Long courseId, String questionType, String status, String difficulty, User currentUser);
 }
