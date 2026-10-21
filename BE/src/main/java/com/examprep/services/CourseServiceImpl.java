@@ -19,12 +19,14 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.text.Normalizer;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Service
 @RequiredArgsConstructor
@@ -57,7 +59,7 @@ public class CourseServiceImpl implements CourseService {
         Map<Long, Long> examCounts = counts(exams.countByCourses(ids));
         return PageResponse.of(result, result.getContent().stream().map(c -> response(c,
                 moduleCounts.getOrDefault(c.getCourseId(), 0L), studentCounts.getOrDefault(c.getCourseId(), 0L),
-                examCounts.getOrDefault(c.getCourseId(), 0L), null)).toList());
+                examCounts.getOrDefault(c.getCourseId(), 0L), null, null)).toList());
     }
 
     @Override
@@ -73,6 +75,7 @@ public class CourseServiceImpl implements CourseService {
     public CourseResponse create(CourseRequests.Create request) {
         Category category = category(request.categoryId());
         User manager = manager(request.managerId());
+        List<User> coManagers = coManagers(request.managerIds(), manager.getUserId());
         Course course = Course.builder().title(request.title().strip()).categoryId(category.getCategoryId())
                 .category(category).manager(manager).description(optionalText(request.description()))
                 .thumbnailUrl(optionalText(request.thumbnailUrl()))
@@ -81,6 +84,7 @@ public class CourseServiceImpl implements CourseService {
         courses.saveAndFlush(course);
         course.setSlug(slug(course.getTitle(), course.getCourseId()));
         assignments.save(CourseManager.builder().course(course).user(manager).build());
+        coManagers.forEach(u -> assignments.save(CourseManager.builder().course(course).user(u).build()));
         courses.flush();
         return detailResponse(course);
     }
@@ -114,6 +118,16 @@ public class CourseServiceImpl implements CourseService {
                 }
                 if (!assignments.existsByCourseCourseIdAndUserUserId(id, replacement.getUserId()))
                     assignments.save(CourseManager.builder().course(course).user(replacement).build());
+            }
+            if (request.managerIds() != null) {
+                Long primaryId = course.getManager().getUserId();
+                Map<Long, User> wanted = new LinkedHashMap<>();
+                coManagers(request.managerIds(), primaryId).forEach(u -> wanted.put(u.getUserId(), u));
+                for (CourseManager current : assignments.findByCourseCourseIdOrderByCourseManagerIdAsc(id)) {
+                    Long userId = current.getUser().getUserId();
+                    if (!userId.equals(primaryId) && wanted.remove(userId) == null) assignments.delete(current);
+                }
+                wanted.values().forEach(u -> assignments.save(CourseManager.builder().course(course).user(u).build()));
             }
         }
         courses.flush();
@@ -263,16 +277,29 @@ public class CourseServiceImpl implements CourseService {
         return manager;
     }
 
+    // Distinct validated co-managers, excluding the primary (who always has its own assignment row).
+    private List<User> coManagers(List<Long> ids, Long primaryId) {
+        if (ids == null) return List.of();
+        return ids.stream().distinct().filter(id -> !id.equals(primaryId)).map(this::manager).toList();
+    }
+
     private CourseResponse detailResponse(Course course) {
         List<ModuleResponse> content = moduleResponses(course.getCourseId());
         List<Long> ids = List.of(course.getCourseId());
+        User primary = course.getManager();
+        List<CourseResponse.Manager> managers = Stream.concat(
+                Stream.of(new CourseResponse.Manager(primary.getUserId(), primary.getFullName(), true)),
+                assignments.findByCourseCourseIdOrderByCourseManagerIdAsc(course.getCourseId()).stream()
+                        .map(CourseManager::getUser).filter(u -> !u.getUserId().equals(primary.getUserId()))
+                        .map(u -> new CourseResponse.Manager(u.getUserId(), u.getFullName(), false))).toList();
         return response(course, content.size(), counts(enrollments.countByCourses(ids)).getOrDefault(course.getCourseId(), 0L),
-                counts(exams.countByCourses(ids)).getOrDefault(course.getCourseId(), 0L), content);
+                counts(exams.countByCourses(ids)).getOrDefault(course.getCourseId(), 0L), managers, content);
     }
 
-    private CourseResponse response(Course course, long moduleCount, long studentCount, long examCount, List<ModuleResponse> content) {
+    private CourseResponse response(Course course, long moduleCount, long studentCount, long examCount,
+                                    List<CourseResponse.Manager> managers, List<ModuleResponse> content) {
         return new CourseResponse(course.getCourseId(), course.getTitle(), course.getSlug(), course.getCategoryId(),
-                course.getCategory().getName(), course.getManager().getUserId(), course.getManager().getFullName(),
+                course.getCategory().getName(), course.getManager().getUserId(), course.getManager().getFullName(), managers,
                 course.getThumbnailUrl(), course.getPrice(), course.getIsPublished(), moduleCount, studentCount, examCount,
                 course.getCreatedAt(), course.getUpdatedAt(), course.getDescription(), content);
     }
