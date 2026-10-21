@@ -258,10 +258,6 @@ export function Dropdown(props: DropdownProps) {
                       key={i}
                       type="button"
                       role="menuitem"
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        handleItemSelect(item);
-                      }}
                       onClick={(e) => {
                         e.stopPropagation();
                         handleItemSelect(item);
