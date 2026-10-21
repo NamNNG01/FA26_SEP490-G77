@@ -488,7 +488,26 @@ public class QuestionServiceImpl implements QuestionService {
         if (!accessPolicy.canModify(currentUser, q)) {
             throw new ForbiddenException("You do not have permission to modify this question");
         }
+        if (req.getGroupId() == null) {
+            q.setGroup(null);
+        } else {
+            QuestionGroup group = questionGroupRepository.findById(req.getGroupId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Question group not found"));
 
+            if (q.getCourse() != null
+                    && (group.getCourse() == null
+                    || !q.getCourse().getCourseId().equals(group.getCourse().getCourseId()))) {
+                throw new ResourceConflictException("Question group must belong to the same course");
+            }
+
+            if (q.getModule() != null
+                    && (group.getModule() == null
+                    || !q.getModule().getModuleId().equals(group.getModule().getModuleId()))) {
+                throw new ResourceConflictException("Question group must belong to the same module");
+            }
+
+            q.setGroup(group);
+        }
         if (req.getLockVersion() != null && !req.getLockVersion().equals(q.getLockVersion())) {
             throw new ResourceConflictException("Resource was modified by another user (lock version mismatch)");
         }
