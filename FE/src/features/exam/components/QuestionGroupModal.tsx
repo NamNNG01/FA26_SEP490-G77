@@ -70,6 +70,10 @@ export function QuestionGroupModal({
   }, [open]);
 
   const handleCreateNewGroup = async () => {
+    if (!courseId) {
+      setErrorMsg('Select a course for the exam before creating a question group.');
+      return;
+    }
     if (!newTitle.trim()) {
       setErrorMsg('Please enter a group title.');
       return;
@@ -135,7 +139,7 @@ export function QuestionGroupModal({
             ) : (
               <Button
                 onClick={handleCreateNewGroup}
-                disabled={!newTitle.trim() || !newPassage.trim() || creating}
+                disabled={!courseId || !newTitle.trim() || !newPassage.trim() || creating}
                 loading={creating}
                 icon={<Icon.Check className="w-4 h-4" />}
               >
@@ -162,15 +166,25 @@ export function QuestionGroupModal({
           <button
             type="button"
             onClick={() => setTab('new')}
-            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors cursor-pointer ${
-              tab === 'new'
-                ? 'border-brand-ink text-brand-ink'
-                : 'border-transparent text-content-subtle hover:text-content'
+            disabled={!courseId}
+            title={!courseId ? 'Select a course for the exam before creating a question group.' : undefined}
+            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+              !courseId
+                ? 'border-transparent text-content-subtle opacity-50 cursor-not-allowed'
+                : tab === 'new'
+                ? 'border-brand-ink text-brand-ink cursor-pointer'
+                : 'border-transparent text-content-subtle hover:text-content cursor-pointer'
             }`}
           >
             Create New Group
           </button>
         </div>
+
+        {!courseId && (
+          <p className="text-xs text-content-subtle">
+            Select a course for the exam before creating a question group.
+          </p>
+        )}
 
         {tab === 'existing' ? (
           <div className="space-y-3">
