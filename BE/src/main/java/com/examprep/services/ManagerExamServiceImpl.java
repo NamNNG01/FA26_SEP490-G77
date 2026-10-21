@@ -103,6 +103,7 @@ public class ManagerExamServiceImpl implements ManagerExamService {
     public ExamResponse create(UserPrincipal user,ExamRequests.Create r) {
         Module module=r.moduleId()==null?null:module(r.moduleId());
         Long courseId=r.courseId()!=null?r.courseId():module==null?null:module.getCourse().getCourseId();
+        if(courseId==null) throw bad("courseId or moduleId is required.");
         Course course=access(user,courseId,true);
         if(module!=null && !module.getCourse().getCourseId().equals(courseId)) throw bad("Module must belong to the selected course.");
         validateMode(r.generationType(),size(r.questionIds())+size(r.groupIds()),size(r.configs()));

@@ -16,5 +16,11 @@ public interface UserCardProgressRepository extends JpaRepository<UserCardProgre
     @Query("DELETE FROM UserCardProgress p WHERE p.card.cardId IN " +
             "(SELECT f.cardId FROM Flashcard f WHERE f.deck.deckId = :deckId)")
     void deleteByDeck(@Param("deckId") Long deckId);
+
+    // F-08: the database also cascades this on Postgres, but Hibernate's own
+    // DDL (test schema) has no ON DELETE rule, so remove progress explicitly.
+    @Modifying
+    @Query("DELETE FROM UserCardProgress p WHERE p.card.cardId = :cardId")
+    void deleteByCard(@Param("cardId") Long cardId);
 }
 

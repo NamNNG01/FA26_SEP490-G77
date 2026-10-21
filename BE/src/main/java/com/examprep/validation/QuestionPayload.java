@@ -13,6 +13,7 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Data
@@ -29,6 +30,7 @@ public class QuestionPayload {
     private Object answerKey;
     private Object essayGradingRubric;
     private List<AnswerOptionDto> options;
+    private List<Object> correctOrder;
 
     public static QuestionPayload from(QuestionCreateRequest req) {
         if (req == null) return null;
@@ -42,6 +44,7 @@ public class QuestionPayload {
                 .answerKey(req.getAnswerKey())
                 .essayGradingRubric(req.getEssayGradingRubric())
                 .options(req.getOptions())
+                .correctOrder(req.getCorrectOrder())
                 .build();
     }
 
@@ -57,6 +60,7 @@ public class QuestionPayload {
                 .answerKey(req.getAnswerKey())
                 .essayGradingRubric(req.getEssayGradingRubric())
                 .options(req.getOptions())
+                .correctOrder(req.getCorrectOrder())
                 .build();
     }
 
@@ -78,9 +82,16 @@ public class QuestionPayload {
         } catch (Exception ignored) {}
 
         Object akObj = null;
+        List<Object> coList = null;
         try {
             if (q.getAnswerKey() != null && objectMapper != null) {
                 akObj = objectMapper.readValue(q.getAnswerKey(), Object.class);
+                if (akObj instanceof Map) {
+                    Object coObj = ((Map<?, ?>) akObj).get("correctOrder");
+                    if (coObj instanceof List) {
+                        coList = (List<Object>) coObj;
+                    }
+                }
             }
         } catch (Exception ignored) {}
 
@@ -101,6 +112,7 @@ public class QuestionPayload {
                 .answerKey(akObj)
                 .essayGradingRubric(rubricObj)
                 .options(optDtos)
+                .correctOrder(coList)
                 .build();
     }
 }

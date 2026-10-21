@@ -18,6 +18,11 @@ spring:
 app:
   jwt:
     secret: test-only-jwt-secret-not-for-production-use-0123456789
+  ai:
+    # RestAiClient refuses to start without a key. Tests never call the real
+    # provider: ExamAiApiIntegrationTest points app.ai.base-url at a local stub
+    # server, everything else never reaches the AI endpoints.
+    api-key: test-only-dummy-gemini-key
   mail:
     enabled: false
 logging:

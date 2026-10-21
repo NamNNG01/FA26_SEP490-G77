@@ -41,4 +41,29 @@ public class ContentHashUtil {
             throw new RuntimeException("SHA-256 algorithm not available", e);
         }
     }
+
+    public static String computeOrderingHash(String content, List<String> orderedOptionTexts) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("content:").append(normalizeText(content)).append("|");
+        if (orderedOptionTexts != null && !orderedOptionTexts.isEmpty()) {
+            List<String> normalized = orderedOptionTexts.stream()
+                    .map(ContentHashUtil::normalizeText)
+                    .collect(Collectors.toList());
+            sb.append("orderedOptions:").append(String.join(",", normalized)).append("|");
+        }
+
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hashBytes = digest.digest(sb.toString().getBytes(StandardCharsets.UTF_8));
+            StringBuilder hexString = new StringBuilder();
+            for (byte b : hashBytes) {
+                String hex = Integer.toHexString(0xff & b);
+                if (hex.length() == 1) hexString.append('0');
+                hexString.append(hex);
+            }
+            return hexString.toString();
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException("SHA-256 algorithm not available", e);
+        }
+    }
 }

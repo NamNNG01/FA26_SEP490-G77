@@ -27,7 +27,9 @@ import {
   type ExtractedQuestion,
   type QuestionDraft,
 } from '../model';
-import { describeSaveError, type SaveError } from '../saveError';
+import { clearCreateDraft, loadCreateDraft, saveCreateDraft, type CreateDraftSnapshot } from '../createDraft';
+import { Icon } from '@/assets/icons';
+import { describeSaveError, loadErrorMessage, type SaveError } from '../saveError';
 import { SaveErrorAlert } from '../components/SaveErrorAlert';
 
 /** Q-03 accepts 1..50 questions per request. */
@@ -39,8 +41,6 @@ type Confirm = 'archive' | null;
 type CreateTab = 'manual' | 'ai';
 const AI_TAB_LABEL = 'AI Generate';
 
-const errorMessage = (err: unknown, fallback: string) => (err instanceof Error && err.message ? err.message : fallback);
-const httpStatus = (err: unknown) => (err as { response?: { status?: number } })?.response?.status;
 
 export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
   const isEdit = mode === 'edit';
@@ -48,19 +48,24 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
   const navigate = useNavigate();
   const toast = useToast();
 
-  const [questions, setQuestions] = useState<QuestionDraft[]>(() => (isEdit ? [] : [emptyDraft()]));
-  const [courseId, setCourseId] = useState('');
-  const [moduleId, setModuleId] = useState('');
+  /** Create mode: unsaved work from before a reload, read once. */
+  const [restored] = useState<CreateDraftSnapshot | null>(() => (isEdit ? null : loadCreateDraft()));
+  const [questions, setQuestions] = useState<QuestionDraft[]>(() => (isEdit ? [] : restored?.questions.length ? restored.questions : [emptyDraft()]));
+  const [courseId, setCourseId] = useState(restored?.courseId ?? '');
+  const [moduleId, setModuleId] = useState(restored?.moduleId ?? '');
   const [status, setStatus] = useState<QuestionStatus>('ACTIVE');
   /** Create mode: standalone batch, or questions that share one group passage. */
-  const [groupCtx, setGroupCtx] = useState<GroupContextValue>(emptyGroupContext);
+  const [groupCtx, setGroupCtx] = useState<GroupContextValue>(() => restored?.groupCtx ?? emptyGroupContext());
   const [groups, setGroups] = useState<QuestionGroup[]>([]);
   const [groupsLoading, setGroupsLoading] = useState(false);
 
   /** Questions the user has edited — their errors show before the first save attempt. */
-  const [touched, setTouched] = useState<Set<string>>(new Set());
+  const [touched, setTouched] = useState<Set<string>>(() => new Set(restored?.touched ?? []));
   const [submitted, setSubmitted] = useState(false);
-  const [dirty, setDirty] = useState(false);
+  const [dirty, setDirty] = useState(Boolean(restored));
+  const [showRestored, setShowRestored] = useState(Boolean(restored));
+  /** The latest edits are in localStorage, so a reload needs no browser prompt. */
+  const [draftStored, setDraftStored] = useState(Boolean(restored));
 
   const [loading, setLoading] = useState(isEdit);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -93,7 +98,7 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
         setSaveError(null);
       })
       .catch(err => {
-        if (!cancelled) setLoadError(httpStatus(err) === 404 ? 'This question does not exist or has been deleted.' : errorMessage(err, 'Could not load the question.'));
+        if (!cancelled) setLoadError(loadErrorMessage(err));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -117,8 +122,35 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
     return () => { cancelled = true; };
   }, [isEdit, courseId]);
 
-  // Unsaved edits, or AI suggestions not accepted yet, hold any navigation away (and tab close) for confirmation.
-  const { blocker, leave } = useUnsavedChangesGuard(dirty || aiPending > 0);
+  // Create mode: keep the work in localStorage so a reload restores it.
+  useEffect(() => {
+    if (isEdit || !dirty) return;
+    setDraftStored(false);
+    const id = setTimeout(() => setDraftStored(saveCreateDraft({ questions, courseId, moduleId, groupCtx, touched: [...touched] })), 400);
+    return () => clearTimeout(id);
+  }, [isEdit, dirty, questions, courseId, moduleId, groupCtx, touched]);
+
+  // Unsaved edits, or AI suggestions not accepted yet, hold any navigation away for confirmation.
+  // Reloading only prompts for what the stored draft can't bring back.
+  const { blocker, leave } = useUnsavedChangesGuard(dirty || aiPending > 0, (dirty && (isEdit || !draftStored)) || aiPending > 0);
+
+  // Leaving without saving was confirmed — the draft goes with it.
+  useEffect(() => {
+    if (!isEdit && blocker.state === 'proceeding') clearCreateDraft();
+  }, [isEdit, blocker.state]);
+
+  const discardRestored = () => {
+    clearCreateDraft();
+    setQuestions([emptyDraft()]);
+    setCourseId('');
+    setModuleId('');
+    setGroupCtx(emptyGroupContext());
+    setTouched(new Set());
+    setSubmitted(false);
+    setSaveError(null);
+    setDirty(false);
+    setShowRestored(false);
+  };
   const unsavedDetails = [
     ...(dirty ? [isEdit ? 'Your changes to this question' : `${questions.length} question${questions.length === 1 ? '' : 's'} not saved yet`] : []),
     ...(aiPending > 0 ? [`${aiPending} AI suggestion${aiPending === 1 ? '' : 's'} not accepted yet`] : []),
@@ -250,6 +282,7 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
         toast.success(`${created.length} question${created.length === 1 ? '' : 's'} saved${groupId != null ? ' to the question group' : ''}.`);
       }
       setDirty(false);
+      if (!isEdit) clearCreateDraft();
       // Saved — unaccepted AI suggestions are left behind on purpose.
       leave(goToBank);
     } catch (err) {
@@ -322,6 +355,18 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
         )}
       </div>
 
+      {showRestored && restored && (
+        <div className="flex flex-wrap items-center gap-3 rounded-[10px] border border-brand-line bg-primary-light px-4 py-2.5 text-sm text-brand-ink-strong">
+          <Icon.RefreshCw className="w-4 h-4 flex-shrink-0 text-brand-ink" />
+          <span className="flex-1 min-w-[200px]">
+            Restored your unsaved draft from {new Date(restored.savedAt).toLocaleString()}.
+          </span>
+          <Button size="sm" variant="ghost" onClick={discardRestored}>Discard draft</Button>
+          <button type="button" onClick={() => setShowRestored(false)} className="p-1 rounded-[6px] hover:bg-accent" aria-label="Dismiss">
+            <Icon.X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
       {saveError && <SaveErrorAlert error={saveError} onReload={isEdit ? () => setReloadKey(k => k + 1) : undefined} />}
       {importedCount > 0 && (
         <Alert type="success" title={`${importedCount} question${importedCount === 1 ? '' : 's'} imported`} message="Review the extracted questions before saving." />

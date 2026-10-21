@@ -231,6 +231,165 @@ class DeckApiIntegrationTest {
         call(manager, get(BASE + "/0")).andExpect(status().isBadRequest());
     }
 
+    @Test
+    void addCardAppendsToDeckAndFollowsDeckPermissions() throws Exception {
+        Flashcard existing = card(deck, "Existing front");
+
+        // 201 with the documented payload shape, card appended after the existing one
+        call(manager, post(path(deck) + "/cards").contentType(MediaType.APPLICATION_JSON)
+                        .content(cardBody("Polymorphism la gi?", "Da hinh.")))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.message").value("Resource created successfully"))
+                .andExpect(jsonPath("$.data.cardId").isNumber())
+                .andExpect(jsonPath("$.data.deckId").value(deck.getDeckId()))
+                .andExpect(jsonPath("$.data.frontText").value("Polymorphism la gi?"))
+                .andExpect(jsonPath("$.data.backText").value("Da hinh."));
+
+        call(manager, get(path(deck)))
+                .andExpect(jsonPath("$.data.cardCount").value(2))
+                .andExpect(jsonPath("$.data.cards.length()").value(2))
+                .andExpect(jsonPath("$.data.cards[0].cardId").value(existing.getCardId()))
+                .andExpect(jsonPath("$.data.cards[1].frontText").value("Polymorphism la gi?"));
+
+        // both faces are required
+        call(manager, post(path(deck) + "/cards").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"frontText\":\"\",\"backText\":\"x\"}"))
+                .andExpect(status().isBadRequest());
+        call(manager, post(path(deck) + "/cards").contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest());
+
+        // unknown deck -> 404, deck of another manager -> 403, student -> 403, anonymous -> 401
+        call(manager, post(BASE + "/999999/cards").contentType(MediaType.APPLICATION_JSON)
+                        .content(cardBody("Q", "A")))
+                .andExpect(status().isNotFound());
+
+        Deck foreignDeck = deck(stranger, foreignCourse, "Foreign deck", false);
+        call(manager, post(path(foreignDeck) + "/cards").contentType(MediaType.APPLICATION_JSON)
+                        .content(cardBody("Q", "A")))
+                .andExpect(status().isForbidden());
+
+        call(student, post(path(deck) + "/cards").contentType(MediaType.APPLICATION_JSON)
+                        .content(cardBody("Q", "A")))
+                .andExpect(status().isForbidden());
+        mvc.perform(post(path(deck) + "/cards").contentType(MediaType.APPLICATION_JSON)
+                        .content(cardBody("Q", "A")))
+                .andExpect(status().isUnauthorized());
+
+        // admin may append to any deck
+        call(admin, post(path(foreignDeck) + "/cards").contentType(MediaType.APPLICATION_JSON)
+                        .content(cardBody("Admin card", "Yes")))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
+    void updateCardAppliesOnlySuppliedFacesAndFollowsDeckPermissions() throws Exception {
+        String cards = "/api/v1/manager/cards";
+        Flashcard mine = card(deck, "Original front");
+
+        call(manager, put(cards + "/" + mine.getCardId()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"frontText\":\"New front\",\"backText\":\"New back\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Operation completed successfully"))
+                .andExpect(jsonPath("$.data.cardId").value(mine.getCardId()))
+                .andExpect(jsonPath("$.data.deckId").value(deck.getDeckId()))
+                .andExpect(jsonPath("$.data.frontText").value("New front"))
+                .andExpect(jsonPath("$.data.backText").value("New back"));
+
+        // partial update: only the back face is supplied
+        call(manager, put(cards + "/" + mine.getCardId()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"backText\":\"Only back\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.frontText").value("New front"))
+                .andExpect(jsonPath("$.data.backText").value("Only back"));
+
+        // partial update: only the front face is supplied
+        call(manager, put(cards + "/" + mine.getCardId()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"frontText\":\"Only front\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.frontText").value("Only front"))
+                .andExpect(jsonPath("$.data.backText").value("Only back"));
+
+        // a blank face is treated as "not supplied" and leaves the stored value alone
+        call(manager, put(cards + "/" + mine.getCardId()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"frontText\":\"   \"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.frontText").value("Only front"));
+
+        // unknown card -> 404
+        call(manager, put(cards + "/999999").contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isNotFound());
+
+        Deck foreignDeck = deck(stranger, foreignCourse, "Foreign deck", false);
+        Flashcard foreignCard = card(foreignDeck, "Foreign front");
+
+        // card that belongs to another manager's deck -> 403
+        call(manager, put(cards + "/" + foreignCard.getCardId()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"frontText\":\"Nope\"}"))
+                .andExpect(status().isForbidden());
+        call(student, put(cards + "/" + foreignCard.getCardId()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"frontText\":\"Nope\"}"))
+                .andExpect(status().isForbidden());
+        mvc.perform(put(cards + "/" + foreignCard.getCardId()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"frontText\":\"Nope\"}"))
+                .andExpect(status().isUnauthorized());
+
+        // admin may edit any card
+        call(admin, put(cards + "/" + foreignCard.getCardId()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"frontText\":\"Admin edit\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.frontText").value("Admin edit"));
+
+        em.flush();
+        em.clear();
+        assertEquals("Only front", em.find(Flashcard.class, mine.getCardId()).getFrontText());
+        assertEquals("Admin edit", em.find(Flashcard.class, foreignCard.getCardId()).getFrontText());
+    }
+
+    @Test
+    void deleteCardRemovesCardAndProgressFollowingDeckPermissions() throws Exception {
+        String cards = "/api/v1/manager/cards";
+        Flashcard doomed = card(deck, "Doomed front");
+        Flashcard survivor = card(deck, "Survivor front");
+        progress(manager, doomed, "LEARNED", true);
+        progress(collaborator, doomed, "NEW", false);
+        progress(manager, survivor, "NEW", false);
+
+        // unknown card -> 404
+        call(manager, delete(cards + "/999999")).andExpect(status().isNotFound());
+
+        Deck foreignDeck = deck(stranger, foreignCourse, "Foreign deck", false);
+        Flashcard foreignCard = card(foreignDeck, "Foreign front");
+        call(manager, delete(cards + "/" + foreignCard.getCardId())).andExpect(status().isForbidden());
+        call(student, delete(cards + "/" + foreignCard.getCardId())).andExpect(status().isForbidden());
+        mvc.perform(delete(cards + "/" + foreignCard.getCardId())).andExpect(status().isUnauthorized());
+
+        call(manager, delete(cards + "/" + doomed.getCardId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Card deleted successfully."));
+
+        em.flush();
+        em.clear();
+        assertNull(em.find(Flashcard.class, doomed.getCardId()));
+        assertNotNull(em.find(Flashcard.class, survivor.getCardId()));
+        // every progress row of the deleted card is gone, other cards keep theirs
+        assertEquals(0L, em.createQuery("select count(p) from UserCardProgress p where p.card.cardId = :id", Long.class)
+                .setParameter("id", doomed.getCardId()).getSingleResult());
+        assertEquals(1L, em.createQuery("select count(p) from UserCardProgress p where p.card.cardId = :id", Long.class)
+                .setParameter("id", survivor.getCardId()).getSingleResult());
+
+        call(manager, get(path(deck)))
+                .andExpect(jsonPath("$.data.cardCount").value(1))
+                .andExpect(jsonPath("$.data.cards[0].cardId").value(survivor.getCardId()));
+
+        // admin may delete any card
+        call(admin, delete(cards + "/" + foreignCard.getCardId())).andExpect(status().isOk());
+        em.flush();
+        em.clear();
+        assertNull(em.find(Flashcard.class, foreignCard.getCardId()));
+    }
+
     private ResultActions call(User actor, MockHttpServletRequestBuilder request) throws Exception {
         em.flush();
         return mvc.perform(request.with(user(UserPrincipal.create(actor))));
@@ -241,6 +400,10 @@ class DeckApiIntegrationTest {
                 "isPublic", false, "description", "Description"));
         if (courseId != null) body.put("courseId", courseId);
         return json.writeValueAsString(body);
+    }
+
+    private String cardBody(String front, String back) throws Exception {
+        return json.writeValueAsString(Map.of("frontText", front, "backText", back));
     }
 
     private String path(Deck value) { return BASE + "/" + value.getDeckId(); }

@@ -11,6 +11,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class AnswerOptionDto {
     private Long optionId;
+    private String key;
     private String optionText;
     private Boolean isCorrect;
     private String explanation;

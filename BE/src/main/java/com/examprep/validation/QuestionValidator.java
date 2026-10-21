@@ -10,6 +10,7 @@ import org.owasp.html.PolicyFactory;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -28,17 +29,19 @@ public class QuestionValidator {
 
     public String sanitize(String input) {
         if (input == null) return null;
-        return SANITIZER.sanitize(input);
+        // OWASP breaks "{{" with an HTML comment (Angular template guard); that also breaks FILL_BLANK {{n}} placeholders.
+        // The FE is React, which never evaluates {{ }}, so the guard is undone.
+        return SANITIZER.sanitize(input).replace("{<!-- -->{", "{{");
     }
 
     public void validateQuestionType(String questionType) {
         if (questionType == null || questionType.trim().isEmpty()) {
             throw new BadRequestException("Question type is required");
         }
-        if (questionType.equals("CODE") || questionType.equals("DIAGRAM")) {
+        if (questionType.equals("CODE")) {
             throw new BadRequestException("Question type not supported yet");
         }
-        if (!questionType.matches("SINGLE_CHOICE|MULTIPLE_CHOICE|TRUE_FALSE|MATCHING|FILL_BLANK|ESSAY")) {
+        if (!questionType.matches("SINGLE_CHOICE|MULTIPLE_CHOICE|TRUE_FALSE|MATCHING|FILL_BLANK|ESSAY|DIAGRAM|ORDERING")) {
             throw new BadRequestException("Question type not supported yet");
         }
     }
@@ -76,7 +79,7 @@ public class QuestionValidator {
             errors.add(new ValidationError(prefix + "questionType", "Question type is required"));
             return errors; // Cannot validate further without type
         }
-        if (type.equals("CODE") || type.equals("DIAGRAM") || !type.matches("SINGLE_CHOICE|MULTIPLE_CHOICE|TRUE_FALSE|MATCHING|FILL_BLANK|ESSAY")) {
+        if (type.equals("CODE") || !type.matches("SINGLE_CHOICE|MULTIPLE_CHOICE|TRUE_FALSE|MATCHING|FILL_BLANK|ESSAY|DIAGRAM|ORDERING")) {
             errors.add(new ValidationError(prefix + "questionType", "Question type not supported yet"));
             return errors;
         }
@@ -107,6 +110,7 @@ public class QuestionValidator {
         }
 
         // 3. Question Metadata validation
+        boolean isDiagram = "DIAGRAM".equals(type);
         if (payload.getQuestionMetadata() != null) {
             try {
                 Map<String, Object> metaMap;
@@ -116,8 +120,14 @@ public class QuestionValidator {
                     metaMap = objectMapper.convertValue(payload.getQuestionMetadata(), Map.class);
                 }
                 for (String key : metaMap.keySet()) {
-                    if (!key.equals("skillTag") && !key.equals("diagramType") && !key.equals("plantUmlSource")) {
-                        errors.add(new ValidationError(prefix + "questionMetadata", "Unknown metadata key: " + key));
+                    if (isDiagram) {
+                        if (!key.equals("skillTag") && !key.equals("drawioXml")) {
+                            errors.add(new ValidationError(prefix + "questionMetadata", "Unknown metadata key: " + key));
+                        }
+                    } else {
+                        if (!key.equals("skillTag")) {
+                            errors.add(new ValidationError(prefix + "questionMetadata", "Unknown metadata key: " + key));
+                        }
                     }
                     if (key.equals("skillTag")) {
                         Object val = metaMap.get(key);
@@ -126,14 +136,39 @@ public class QuestionValidator {
                         }
                     }
                 }
+
+                if (isDiagram) {
+                    Object xmlObj = metaMap.get("drawioXml");
+                    if (xmlObj == null || xmlObj.toString().trim().isEmpty()) {
+                        errors.add(new ValidationError(prefix + "questionMetadata.drawioXml", "drawioXml is required"));
+                    } else {
+                        String xml = xmlObj.toString();
+                        if (xml.getBytes(StandardCharsets.UTF_8).length > 512000) {
+                            errors.add(new ValidationError(prefix + "questionMetadata.drawioXml", "drawioXml exceeds maximum size of 500 KB"));
+                        }
+                        String trimmed = xml.trim();
+                        if (!trimmed.toLowerCase().startsWith("<mxfile") && !trimmed.toLowerCase().startsWith("<mxgraphmodel")) {
+                            errors.add(new ValidationError(prefix + "questionMetadata.drawioXml", "drawioXml must start with <mxfile or <mxGraphModel"));
+                        }
+                        String upper = xml.toUpperCase();
+                        if (upper.contains("<!DOCTYPE") || upper.contains("<!ENTITY")) {
+                            errors.add(new ValidationError(prefix + "questionMetadata.drawioXml", "drawioXml contains forbidden XML declarations (DOCTYPE/ENTITY)"));
+                        }
+                    }
+                }
             } catch (Exception e) {
                 errors.add(new ValidationError(prefix + "questionMetadata", "Invalid question metadata format"));
+            }
+        } else {
+            if (isDiagram) {
+                errors.add(new ValidationError(prefix + "questionMetadata", "questionMetadata is required for diagram questions"));
             }
         }
 
         // 4. Type specific rules
         boolean hasOptionsType = type.equals("SINGLE_CHOICE") || type.equals("MULTIPLE_CHOICE") || type.equals("TRUE_FALSE");
-        boolean noOptionsType = type.equals("MATCHING") || type.equals("FILL_BLANK") || type.equals("ESSAY");
+        boolean isOrdering = type.equals("ORDERING");
+        boolean noOptionsType = type.equals("MATCHING") || type.equals("FILL_BLANK") || type.equals("ESSAY") || type.equals("DIAGRAM");
 
         if (hasOptionsType) {
             if (payload.getAnswerKey() != null) {
@@ -193,12 +228,106 @@ public class QuestionValidator {
             }
         }
 
+        if (isOrdering) {
+            List<AnswerOptionDto> opts = payload.getOptions();
+            if (opts == null || opts.isEmpty() || opts.size() < 2 || opts.size() > 10) {
+                errors.add(new ValidationError(prefix + "options", "Number of options must be between 2 and 10"));
+            } else {
+                Set<String> keys = new HashSet<>();
+                Set<String> normalizedTexts = new HashSet<>();
+                Set<Integer> orderIndices = new HashSet<>();
+                boolean hasAnyOrderIndex = false;
+
+                for (int i = 0; i < opts.size(); i++) {
+                    AnswerOptionDto opt = opts.get(i);
+                    String optPrefix = prefix + "options[" + i + "].";
+                    if (opt == null) continue;
+
+                    if (opt.getIsCorrect() != null) {
+                        errors.add(new ValidationError(optPrefix + "isCorrect", "Ordering question options cannot have isCorrect"));
+                    }
+
+                    String key = opt.getKey();
+                    if (key == null || key.trim().isEmpty()) {
+                        errors.add(new ValidationError(optPrefix + "key", "Option key is required"));
+                    } else if (key.length() > 32) {
+                        errors.add(new ValidationError(optPrefix + "key", "Option key cannot exceed 32 characters"));
+                    } else if (!keys.add(key)) {
+                        errors.add(new ValidationError(optPrefix + "key", "Duplicate option key"));
+                    }
+
+                    String optText = sanitize(opt.getOptionText());
+                    if (optText == null || optText.trim().isEmpty()) {
+                        errors.add(new ValidationError(optPrefix + "optionText", "Option text is required"));
+                    } else {
+                        String normalized = optText.trim().toLowerCase().replaceAll("\\s+", " ");
+                        if (!normalizedTexts.add(normalized)) {
+                            errors.add(new ValidationError(optPrefix + "optionText", "Duplicate option text"));
+                        }
+                    }
+
+                    Integer orderIdx = opt.getOrderIndex();
+                    if (orderIdx != null) {
+                        hasAnyOrderIndex = true;
+                        if (!orderIndices.add(orderIdx)) {
+                            errors.add(new ValidationError(optPrefix + "orderIndex", "Duplicate order index"));
+                        }
+                    }
+                }
+
+                if (hasAnyOrderIndex) {
+                    if (orderIndices.size() != opts.size() || !orderIndices.contains(0) || !orderIndices.contains(opts.size() - 1)) {
+                        errors.add(new ValidationError(prefix + "options", "Order index must be unique and continuous from 0 to n-1"));
+                    }
+                }
+
+                List<?> correctOrder = null;
+                Object ak = payload.getAnswerKey();
+                if (payload.getCorrectOrder() != null) {
+                    correctOrder = payload.getCorrectOrder();
+                } else if (ak instanceof Map) {
+                    Object coObj = ((Map<?, ?>) ak).get("correctOrder");
+                    if (coObj instanceof List) {
+                        correctOrder = (List<?>) coObj;
+                    }
+                }
+
+                if (correctOrder == null || correctOrder.isEmpty()) {
+                    errors.add(new ValidationError(prefix + "correctOrder", "Correct order is required"));
+                } else {
+                    if (correctOrder.size() != opts.size()) {
+                        errors.add(new ValidationError(prefix + "correctOrder", "Correct order size must match options size"));
+                    } else {
+                        Set<String> seenCorrectKeys = new HashSet<>();
+                        for (int j = 0; j < correctOrder.size(); j++) {
+                            Object item = correctOrder.get(j);
+                            String itemStr = item != null ? item.toString() : null;
+                            String coPrefix = prefix + "correctOrder[" + j + "]";
+                            if (itemStr == null || itemStr.trim().isEmpty()) {
+                                errors.add(new ValidationError(coPrefix, "Correct order item cannot be empty"));
+                            } else if (!keys.contains(itemStr)) {
+                                errors.add(new ValidationError(coPrefix, "Unknown key in correct order: " + itemStr));
+                            } else if (!seenCorrectKeys.add(itemStr)) {
+                                errors.add(new ValidationError(coPrefix, "Duplicate key in correct order"));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         if (noOptionsType) {
             if (payload.getOptions() != null && !payload.getOptions().isEmpty()) {
                 errors.add(new ValidationError(prefix + "options", "Options are not allowed for question type " + type));
             }
 
-            if (type.equals("MATCHING")) {
+            if (type.equals("DIAGRAM")) {
+                if (payload.getAnswerKey() != null) {
+                    errors.add(new ValidationError(prefix + "answerKey", "Answer key is not allowed for question type DIAGRAM"));
+                }
+                // E-11: DIAGRAM is graded by rubric like ESSAY.
+                validateEssayRubric(payload.getEssayGradingRubric(), payload.getDefaultPoints(), prefix + "essayGradingRubric", errors);
+            } else if (type.equals("MATCHING")) {
                 validateMatchingAnswerKey(payload.getAnswerKey(), prefix + "answerKey", errors);
             } else if (type.equals("FILL_BLANK")) {
                 validateFillBlank(content, payload.getAnswerKey(), prefix, errors);

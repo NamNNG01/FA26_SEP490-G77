@@ -123,6 +123,17 @@ class QuestionValidatorTest {
     }
 
     @Test
+    void validFillBlankKeepsPlaceholdersThroughSanitizing() {
+        assertTrue(validator.sanitize("2 + {{1}} = 5").contains("{{1}}"));
+        QuestionPayload payload = QuestionPayload.builder()
+                .questionType("FILL_BLANK")
+                .content("Python is a {{1}} language.")
+                .answerKey(Map.of("blanks", List.of(Map.of("index", 1, "accepted", List.of("dynamic")))))
+                .build();
+        assertEquals(List.of(), validator.validate(payload));
+    }
+
+    @Test
     void testEssayRubricValidation() {
         QuestionPayload payload = QuestionPayload.builder()
                 .questionType("ESSAY")
@@ -135,5 +146,99 @@ class QuestionValidatorTest {
         List<ValidationError> errors = validator.validate(payload);
         assertFalse(errors.isEmpty());
         assertTrue(errors.stream().anyMatch(e -> e.getMessage().contains("must equal defaultPoints")));
+    }
+
+    @Test
+    void testDiagramHappyPath() {
+        QuestionPayload payload = QuestionPayload.builder()
+                .questionType("DIAGRAM")
+                .content("Draw the architecture")
+                .questionMetadata(Map.of("drawioXml", "<mxfile>diagram content</mxfile>", "skillTag", "architecture"))
+                .build();
+        List<ValidationError> errors = validator.validate(payload);
+        assertTrue(errors.isEmpty(), "Expected no validation errors for diagram, got: " + errors);
+    }
+
+    @Test
+    void testDiagramErrors() {
+        // Missing drawioXml
+        QuestionPayload payload1 = QuestionPayload.builder()
+                .questionType("DIAGRAM")
+                .content("Draw")
+                .questionMetadata(Map.of())
+                .build();
+        List<ValidationError> errors1 = validator.validate(payload1);
+        assertFalse(errors1.isEmpty());
+        assertTrue(errors1.stream().anyMatch(e -> e.getMessage().contains("drawioXml is required")));
+
+        // Invalid start and forbidden DOCTYPE/ENTITY
+        QuestionPayload payload2 = QuestionPayload.builder()
+                .questionType("DIAGRAM")
+                .content("Draw")
+                .questionMetadata(Map.of("drawioXml", "<invalid> <!DOCTYPE foo> content</invalid>"))
+                .build();
+        List<ValidationError> errors2 = validator.validate(payload2);
+        assertFalse(errors2.isEmpty());
+        assertTrue(errors2.stream().anyMatch(e -> e.getMessage().contains("must start with <mxfile or <mxGraphModel")));
+        assertTrue(errors2.stream().anyMatch(e -> e.getMessage().contains("forbidden XML declarations")));
+
+        // Options and answerKey not allowed for diagram
+        QuestionPayload payload3 = QuestionPayload.builder()
+                .questionType("DIAGRAM")
+                .content("Draw")
+                .questionMetadata(Map.of("drawioXml", "<mxGraphModel>content</mxGraphModel>"))
+                .options(List.of(AnswerOptionDto.builder().optionText("Opt").build()))
+                .answerKey("key")
+                .build();
+        List<ValidationError> errors3 = validator.validate(payload3);
+        assertFalse(errors3.isEmpty());
+        assertTrue(errors3.stream().anyMatch(e -> e.getMessage().contains("Options are not allowed")));
+        assertTrue(errors3.stream().anyMatch(e -> e.getMessage().contains("Answer key is not allowed")));
+    }
+
+    @Test
+    void testDiagramRubricMustAddUpToDefaultPoints() {
+        QuestionPayload payload = QuestionPayload.builder()
+                .questionType("DIAGRAM")
+                .content("Draw the class diagram")
+                .defaultPoints(BigDecimal.valueOf(4))
+                .questionMetadata(Map.of("drawioXml", "<mxfile>diagram content</mxfile>"))
+                .essayGradingRubric(Map.of("criteria", List.of(Map.of("name", "Classes", "maxScore", 3))))
+                .build();
+        assertTrue(validator.validate(payload).stream().anyMatch(e -> e.getMessage().contains("must equal defaultPoints")));
+    }
+
+    @Test
+    void testOrderingHappyPath() {
+        QuestionPayload payload = QuestionPayload.builder()
+                .questionType("ORDERING")
+                .content("Order the steps")
+                .options(List.of(
+                        AnswerOptionDto.builder().key("k1").optionText("Step 1").orderIndex(0).build(),
+                        AnswerOptionDto.builder().key("k2").optionText("Step 2").orderIndex(1).build()
+                ))
+                .correctOrder(List.of("k2", "k1"))
+                .build();
+        List<ValidationError> errors = validator.validate(payload);
+        assertTrue(errors.isEmpty(), "Expected no validation errors for ordering, got: " + errors);
+    }
+
+    @Test
+    void testOrderingErrors() {
+        QuestionPayload payload = QuestionPayload.builder()
+                .questionType("ORDERING")
+                .content("Order the steps")
+                .options(List.of(
+                        AnswerOptionDto.builder().key("k1").optionText("Step 1").isCorrect(false).orderIndex(0).build(),
+                        AnswerOptionDto.builder().key("k1").optionText("Step 1").isCorrect(true).orderIndex(0).build()
+                ))
+                .correctOrder(List.of("k1", "k3"))
+                .build();
+        List<ValidationError> errors = validator.validate(payload);
+        assertFalse(errors.isEmpty());
+        assertTrue(errors.stream().anyMatch(e -> e.getMessage().contains("cannot have isCorrect")));
+        assertTrue(errors.stream().anyMatch(e -> e.getMessage().contains("Duplicate option key")));
+        assertTrue(errors.stream().anyMatch(e -> e.getMessage().contains("Duplicate option text")));
+        assertTrue(errors.stream().anyMatch(e -> e.getMessage().contains("Unknown key in correct order")));
     }
 }

@@ -4,7 +4,6 @@ import { getMockPublicCategories } from './mockCategoryData';
 import {
   getMockCourses,
   getMockCourseById,
-  createMockCourse,
   updateMockCourse,
   publishMockCourse,
   deleteMockCourse,
@@ -207,12 +206,9 @@ export const courseService = {
   },
 
   async createCourse(payload: CreateCourseRequest): Promise<CourseDetailResponse> {
-    try {
-      const res = await api.post<ApiResponse<CourseDetailResponse>>('/manager/courses', payload);
-      return res.data;
-    } catch {
-      return createMockCourse(payload);
-    }
+    // No mock fallback: a fake success hides BE validation errors (e.g. managerId not a COURSE_MANAGER).
+    const res = await api.post<ApiResponse<CourseDetailResponse>>('/manager/courses', payload);
+    return res.data;
   },
 
   async updateCourse(id: number | string, payload: UpdateCourseRequest): Promise<CourseDetailResponse> {

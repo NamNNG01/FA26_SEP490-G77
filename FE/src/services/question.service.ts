@@ -12,6 +12,7 @@ import type { ApiResponse } from '@/auth/authContext';
  *
  * Endpoints (QuestionController):
  *   GET /api/v1/manager/questions  (Q-01: list with filters + pagination)
+ *   POST /api/v1/manager/exams/ai/generate  (AI-01: draft questions with AI)
  */
 
 /** Values accepted by the `questions.question_type` CHECK constraint. */
@@ -61,6 +62,8 @@ export interface QuestionListItem {
 export interface QuestionListParams {
   search?: string;
   courseId?: number;
+  /** Several courses at once — sent as repeated `courseIds` params; each must be one the caller manages. */
+  courseIds?: number[];
   moduleId?: number;
   groupId?: number;
   questionType?: string;
@@ -173,8 +176,11 @@ export interface QuestionDetail {
   updatedAt: string | null;
 }
 
-/** Keys QuestionValidator allows in questionMetadata — any other key fails the request. */
-export const QUESTION_METADATA_KEYS = ['skillTag', 'diagramType', 'plantUmlSource'] as const;
+/**
+ * Keys QuestionValidator allows in questionMetadata — any other key fails the
+ * request. DIAGRAM questions also send `drawioXml`.
+ */
+export const QUESTION_METADATA_KEYS = ['skillTag'] as const;
 
 /** ValidationError — one entry of a VALIDATION_ERROR response's `data`. */
 export interface QuestionValidationError {
@@ -190,20 +196,95 @@ export function questionValidationErrors(err: unknown): QuestionValidationError[
   return data.filter((e): e is QuestionValidationError => typeof e?.path === 'string' && typeof e?.message === 'string');
 }
 
-/** AiGenerateRequest — one AI call drafts every requested type (1..50 questions in total). Nothing is saved. */
+/**
+ * What the AI tab asks for. Sent to AI-01 (POST /manager/exams/ai/generate):
+ * one call drafts 1..50 questions; the type counts and the difficulty counts
+ * must each add up to the same total. Nothing is saved.
+ */
 export interface QuestionAiGenerateRequest {
   courseId: number;
   moduleId?: number | null;
   /** Question type → how many to draft. */
   questionTypeCounts: Partial<Record<QuestionType, number>>;
-  /** Applied to every drafted question; the backend defaults to MEDIUM. */
-  difficulty?: QuestionDifficulty;
-  /** Topic / extra instructions for the AI. */
-  context?: string;
-  /** A course document whose extracted text the AI draws on. */
-  documentId?: number | null;
-  /** Plain language name, written into the prompt. */
+  /** Difficulty → how many to draft. */
+  difficultyCounts: Partial<Record<QuestionDifficulty, number>>;
+  /** Topic / instructions for the AI — sent as AI-01's `context` (max 2000). */
+  topic?: string;
   language?: 'Vietnamese' | 'English';
+}
+
+/** AI-01 `context` limit. */
+export const AI_CONTEXT_MAX = 2000;
+
+/** ExamAiRequest (AI-01). */
+interface ExamAiRequest {
+  courseId: number;
+  moduleId?: number | null;
+  questionCount: number;
+  difficultyDistribution: Record<QuestionDifficulty, number>;
+  questionTypes: { questionType: QuestionType; count: number }[];
+  language: 'vi' | 'en';
+  context?: string;
+}
+
+/**
+ * ExamAiDraftResponse.DraftQuestion (AI-01) — already in the Q-03 shape and
+ * checked by QuestionValidator; drafts that fail are skipped with a warning.
+ */
+interface ExamAiDraftQuestion {
+  content: string;
+  questionType: string;
+  difficulty: string | null;
+  defaultPoints?: number | null;
+  options?: { optionText: string; isCorrect?: boolean | null; orderIndex?: number | null }[] | null;
+  answerKey?: unknown;
+  explanation?: string | null;
+  questionMetadata?: Record<string, unknown> | null;
+  essayGradingRubric?: unknown;
+  /** DIAGRAM only: the PlantUML behind questionMetadata.drawioXml. */
+  plantUmlSource?: string | null;
+}
+
+interface ExamAiDraftResponse {
+  questions?: ExamAiDraftQuestion[];
+  warnings?: string[];
+}
+
+/** One AI-01 draft → the shape the editor accepts (same fields as a create request). */
+function fromExamAiDraft(d: ExamAiDraftQuestion): QuestionAiDraft {
+  const options = [...(d.options ?? [])]
+    .filter(o => o?.optionText?.trim())
+    .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0))
+    .map((o, i) => ({ optionText: o.optionText, isCorrect: Boolean(o.isCorrect), orderIndex: i }));
+  return {
+    content: d.content ?? '',
+    questionType: (d.questionType === 'MULTI_CHOICE' ? 'MULTIPLE_CHOICE' : d.questionType) as QuestionType,
+    difficulty: (d.difficulty as QuestionDifficulty) ?? null,
+    options,
+    answerKey: d.answerKey ?? null,
+    explanation: d.explanation ?? null,
+    // plantUmlSource rides in metadata for the editor's preview; toMetadata never sends it.
+    questionMetadata: d.plantUmlSource ? { ...d.questionMetadata, plantUmlSource: d.plantUmlSource } : d.questionMetadata ?? null,
+    essayGradingRubric: d.essayGradingRubric ?? undefined,
+  };
+}
+
+const AI_LANGUAGE_CODES = { Vietnamese: 'vi', English: 'en' } as const;
+
+function toExamAiRequest(req: QuestionAiGenerateRequest): ExamAiRequest {
+  const questionTypes = (Object.entries(req.questionTypeCounts) as [QuestionType, number][])
+    .filter(([, count]) => count > 0)
+    .map(([questionType, count]) => ({ questionType, count }));
+  const context = req.topic?.trim();
+  return {
+    courseId: req.courseId,
+    ...(req.moduleId != null ? { moduleId: req.moduleId } : {}),
+    questionCount: questionTypes.reduce((n, t) => n + t.count, 0),
+    difficultyDistribution: { EASY: req.difficultyCounts.EASY ?? 0, MEDIUM: req.difficultyCounts.MEDIUM ?? 0, HARD: req.difficultyCounts.HARD ?? 0 },
+    questionTypes,
+    language: AI_LANGUAGE_CODES[req.language ?? 'English'],
+    ...(context ? { context: context.slice(0, AI_CONTEXT_MAX) } : {}),
+  };
 }
 
 /** One drafted question — same fields as a create request, minus the location. */
@@ -218,13 +299,6 @@ export interface QuestionAiDraft {
   essayGradingRubric?: unknown;
 }
 
-/** AiGenerateResponse.GeneratedQuestionPreview */
-interface RawAiPreview {
-  questionData: QuestionAiDraft;
-  hasHashConflict: boolean;
-  validationError: string | null;
-}
-
 /** One drafted question with the backend's checks on it. */
 export interface QuestionAiPreview {
   question: QuestionAiDraft;
@@ -235,9 +309,9 @@ export interface QuestionAiPreview {
 }
 
 export interface QuestionAiDraftResponse {
-  /** AI usage log of this run (needed only by POST /ai/save). */
-  logId: number | null;
   questions: QuestionAiPreview[];
+  /** Drafts the backend skipped (invalid, duplicate, outside the requested counts). */
+  warnings: string[];
   /** FE only: the drafts are demo data from mockQuestionAiData, not the AI. */
   mock?: boolean;
 }
@@ -246,21 +320,21 @@ export interface QuestionAiDraftResponse {
 const AI_MOCK = import.meta.env.VITE_AI_MOCK === 'true';
 
 export const questionService = {
-  /** Drafts questions with AI — preview only; accepted drafts are saved later through Q-02 / Q-03. */
+  /**
+   * Drafts questions with AI-01 — preview only; accepted drafts are saved
+   * later through Q-03. AI-01 already drops drafts that fail its checks and
+   * reports them in `warnings`.
+   */
   async generateAiQuestions(payload: QuestionAiGenerateRequest, signal?: AbortSignal): Promise<QuestionAiDraftResponse> {
     if (AI_MOCK) return { ...(await mockGenerateAiQuestions(payload, signal)), mock: true };
     // Up to 50 questions in one AI call — give it time.
-    const res = await apiClient.post<ApiResponse<{ logId: number | null; questions: RawAiPreview[] }>>(
-      '/manager/questions/ai/generate',
-      payload,
-      { timeout: 120000, signal },
-    );
+    const res = await apiClient.post<ApiResponse<ExamAiDraftResponse>>('/manager/exams/ai/generate', toExamAiRequest(payload), { timeout: 120000, signal });
     const data = res.data?.data;
     return {
-      logId: data?.logId ?? null,
       questions: (data?.questions ?? [])
-        .filter(p => p?.questionData)
-        .map(p => ({ question: p.questionData, hasHashConflict: Boolean(p.hasHashConflict), validationError: p.validationError ?? null })),
+        .filter(q => q?.content?.trim())
+        .map(q => ({ question: fromExamAiDraft(q), hasHashConflict: false, validationError: null })),
+      warnings: data?.warnings ?? [],
     };
   },
 
@@ -309,7 +383,8 @@ export const questionService = {
     const query = new URLSearchParams();
     Object.entries(params).forEach(([key, value]) => {
       if (value === undefined || value === null || value === '') return;
-      query.set(key, String(value));
+      if (Array.isArray(value)) value.forEach(v => query.append(key, String(v)));
+      else query.set(key, String(value));
     });
     const queryString = query.toString();
     const res = await api.get<ApiResponse<RawSpringPage<QuestionListItem>>>(

@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
-import { Switch } from '@/components/ui/Switch';
 import { Badge } from '@/components/ui/Badge';
 import { Icon } from '@/assets/icons';
 import { useToast } from '@/components/ui/ToastHost';
@@ -14,6 +13,8 @@ import {
   type ExamDetail,
 } from '@/services/exam.service';
 import { courseService, type CourseSummaryItem, type CourseModuleResponse } from '@/services/course.service';
+import { questionService, type QuestionCreateRequest } from '@/services/question.service';
+import { plantUmlSvgUrl } from '@/features/question/diagram';
 
 interface ExamAiGenerateTabProps {
   formKind: 'QUIZ' | 'ESSAY';
@@ -38,7 +39,7 @@ export function ExamAiGenerateTab({
   const [questionCount, setQuestionCount] = useState<number>(10);
   const [durationMinutes, setDurationMinutes] = useState<number>(45);
   const [language, setLanguage] = useState<'en' | 'vi'>('en');
-  const [useExistingBank, setUseExistingBank] = useState(true);
+  const [context, setContext] = useState('');
 
   const [diffDist, setDiffDist] = useState<{ EASY: number; MEDIUM: number; HARD: number }>({
     EASY: 4,
@@ -48,21 +49,21 @@ export function ExamAiGenerateTab({
 
   const allowedTypes =
     formKind === 'QUIZ'
-      ? ['SINGLE_CHOICE', 'MULTI_CHOICE', 'TRUE_FALSE', 'FILL_BLANK', 'MATCHING', 'ORDERING']
-      : ['ESSAY'];
+      ? ['SINGLE_CHOICE', 'MULTIPLE_CHOICE', 'TRUE_FALSE', 'FILL_BLANK', 'MATCHING']
+      : ['ESSAY', 'DIAGRAM'];
 
   const [typeCounts, setTypeCounts] = useState<Record<string, number>>(
     formKind === 'QUIZ'
       ? {
           SINGLE_CHOICE: 6,
-          MULTI_CHOICE: 2,
+          MULTIPLE_CHOICE: 2,
           TRUE_FALSE: 2,
           FILL_BLANK: 0,
           MATCHING: 0,
-          ORDERING: 0,
         }
       : {
           ESSAY: 10,
+          DIAGRAM: 0,
         }
   );
 
@@ -130,7 +131,7 @@ export function ExamAiGenerateTab({
           questionTypes: payloadQuestionTypes,
           durationMinutes: Number(durationMinutes) > 0 ? Number(durationMinutes) : undefined,
           language,
-          useExistingBank,
+          context: context.trim() || undefined,
         },
         abortCtrl.signal
       );
@@ -149,7 +150,7 @@ export function ExamAiGenerateTab({
       } else if (errorObj?.response?.status === 502) {
         setErrorMsg(MSG08);
       } else if (errorObj?.response?.status === 504) {
-        setErrorMsg('AI request timed out after 30 seconds. ' + MSG08);
+        setErrorMsg('AI request timed out after 90 seconds. ' + MSG08);
       } else if (errorObj?.response?.status === 400) {
         setErrorMsg(errorObj.response.data?.message || 'Invalid parameters for AI generation.');
       } else {
@@ -181,25 +182,19 @@ export function ExamAiGenerateTab({
     setDraft({ ...draft, questions, questionCount: questions.length });
   };
 
+  // Mirrors the Q-03 rules the backend applies on save.
   const validateDraftQuestion = (q: AiQuestionDraft): string | null => {
     if (!q.content.trim()) return 'Question content cannot be empty';
-    if (q.questionType === 'SINGLE_CHOICE') {
-      if (q.options.length < 2 || q.options.length > 6) return 'Single choice must have 2 to 6 options';
-      const correctCount = q.options.filter((o) => o.isCorrect).length;
-      if (correctCount !== 1) return 'Single choice must have exactly 1 correct answer';
-    } else if (q.questionType === 'MULTI_CHOICE') {
-      if (q.options.length < 2 || q.options.length > 8) return 'Multiple choice must have 2 to 8 options';
-      const correctCount = q.options.filter((o) => o.isCorrect).length;
-      if (correctCount < 1) return 'Multiple choice must have at least 1 correct answer';
-    } else if (q.questionType === 'TRUE_FALSE') {
-      if (q.options.length !== 2) return 'True/False question must have exactly 2 options';
-      const correctCount = q.options.filter((o) => o.isCorrect).length;
-      if (correctCount !== 1) return 'True/False question must have exactly 1 correct answer';
-    } else if (q.questionType === 'MATCHING') {
-      if (q.options.length % 2 !== 0) return 'Matching question must have an even number of options';
-    } else if (q.questionType === 'ORDERING') {
-      if (q.options.length < 2) return 'Ordering question must have at least 2 options';
-    }
+    const options = q.options ?? [];
+    const correctCount = options.filter((o) => o.isCorrect).length;
+    if (['SINGLE_CHOICE', 'MULTIPLE_CHOICE', 'TRUE_FALSE'].includes(q.questionType) && (options.length < 2 || options.length > 10))
+      return 'Choice questions must have 2 to 10 options';
+    if (q.questionType === 'SINGLE_CHOICE' && correctCount !== 1) return 'Single choice must have exactly 1 correct answer';
+    if (q.questionType === 'MULTIPLE_CHOICE' && (correctCount < 2 || correctCount === options.length))
+      return 'Multiple choice needs at least 2 correct and 1 incorrect answer';
+    if (q.questionType === 'TRUE_FALSE' && (options.length !== 2 || correctCount !== 1))
+      return 'True/False question must have exactly 2 options and 1 correct answer';
+    if (q.questionType === 'FILL_BLANK' && !/\{\{\d+\}\}/.test(q.content)) return 'Fill blank content needs placeholders like {{1}}';
     return null;
   };
 
@@ -221,19 +216,18 @@ export function ExamAiGenerateTab({
 
     try {
       if (finalQuestionIds.length === 0) {
-        const questionsToSave = draft.questions.map((q) => ({
-          content: q.content,
-          questionType: q.questionType,
-          difficulty: q.difficulty,
+        const questionsToSave = draft.questions.map(({ plantUmlSource: _preview, ...q }) => ({
+          ...q,
+          courseId: Number(courseId),
+          moduleId: moduleId ? Number(moduleId) : null,
           status: 'ACTIVE',
-          options: q.options,
-          explanation: q.explanation,
-        }));
+        })) as QuestionCreateRequest[];
 
-        const batchRes = await examService.batchCreateQuestions({
-          moduleId: moduleId ? Number(moduleId) : undefined,
-          questions: questionsToSave,
-        });
+        const batchRes = await questionService.createQuestionsBatch(
+          Number(courseId),
+          moduleId ? Number(moduleId) : null,
+          questionsToSave,
+        );
 
         finalQuestionIds = batchRes.map((r) => r.questionId);
         setSavedQuestionIds(finalQuestionIds);
@@ -249,7 +243,7 @@ export function ExamAiGenerateTab({
         generationType: 'STATIC',
         questionIds: finalQuestionIds.map((qid, idx) => ({
           questionId: qid,
-          points: 1,
+          points: draft.questions[idx]?.defaultPoints ?? 1,
           orderIndex: idx,
         })),
       });
@@ -370,17 +364,23 @@ export function ExamAiGenerateTab({
               ]}
             />
 
-            <div className="flex items-center justify-between pt-6 px-1">
-              <div>
-                <span className="text-sm font-medium text-content-secondary block">
-                  Prioritize Existing Bank Questions
-                </span>
-                <span className="text-2xs text-content-subtle">
-                  Pull available questions first and synthesize AI only for shortfall.
-                </span>
-              </div>
-              <Switch checked={useExistingBank} onChange={setUseExistingBank} />
-            </div>
+          </div>
+
+          <div>
+            <label className="text-sm font-medium text-content-secondary block mb-1">
+              Instructions for AI (optional)
+            </label>
+            <textarea
+              rows={3}
+              maxLength={2000}
+              className="w-full px-3 py-1.5 text-sm rounded-[10px] border border-line bg-surface focus:outline-none focus:ring-1 focus:ring-brand-ink"
+              placeholder="e.g. Focus on recursion and Big-O, for second-year students, use real-world scenarios."
+              value={context}
+              onChange={(e) => setContext(e.target.value)}
+            />
+            <p className="text-2xs text-content-subtle mt-1">
+              Course and module descriptions plus existing bank questions are added automatically. {context.length}/2000
+            </p>
           </div>
 
           <div className="p-4 bg-surface-muted/60 rounded-[10px] border border-line space-y-3">
@@ -554,6 +554,12 @@ export function ExamAiGenerateTab({
                       <Badge variant="default" className="text-2xs font-semibold">
                         {q.questionType.replace('_', ' ')}
                       </Badge>
+                      {q.questionMetadata?.skillTag && (
+                        <Badge variant="purple" className="text-2xs">
+                          {q.questionMetadata.skillTag}
+                        </Badge>
+                      )}
+                      <span className="text-2xs text-content-subtle">{q.defaultPoints ?? 1} pt</span>
                       <Select
                         className="w-28 text-xs"
                         value={q.difficulty}
@@ -611,7 +617,7 @@ export function ExamAiGenerateTab({
                               name={`correct-${idx}`}
                               checked={opt.isCorrect}
                               onChange={(e) => {
-                                const newOpts = [...q.options];
+                                const newOpts = [...(q.options ?? [])];
                                 if (
                                   q.questionType === 'SINGLE_CHOICE' ||
                                   q.questionType === 'TRUE_FALSE'
@@ -631,7 +637,7 @@ export function ExamAiGenerateTab({
                               className="flex-1 px-2 py-1 text-xs rounded border border-line-soft bg-surface focus:outline-none"
                               value={opt.optionText}
                               onChange={(e) => {
-                                const newOpts = [...q.options];
+                                const newOpts = [...(q.options ?? [])];
                                 newOpts[oIdx].optionText = e.target.value;
                                 updateDraftQuestion(idx, { options: newOpts });
                               }}
@@ -639,6 +645,60 @@ export function ExamAiGenerateTab({
                           </div>
                         ))}
                       </div>
+                    </div>
+                  )}
+
+                  {q.answerKey?.blanks && (
+                    <div className="text-xs space-y-1">
+                      <span className="font-medium text-content-secondary block">Accepted answers</span>
+                      {q.answerKey.blanks.map((b) => (
+                        <p key={b.index}>
+                          <span className="font-semibold">{`{{${b.index}}}`}</span>: {b.accepted.join(' / ')}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+
+                  {q.answerKey?.pairs && (
+                    <div className="text-xs space-y-1">
+                      <span className="font-medium text-content-secondary block">Matching pairs</span>
+                      {q.answerKey.pairs.map((pair, pIdx) => (
+                        <p key={pIdx}>
+                          {pair.left} → {pair.right}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+
+                  {q.plantUmlSource && (
+                    <div className="p-3 rounded-[8px] border border-line bg-surface flex justify-center">
+                      <img
+                        src={plantUmlSvgUrl(q.plantUmlSource)}
+                        alt={`Model answer diagram for question ${idx + 1}`}
+                        className="max-h-[260px] max-w-full object-contain"
+                      />
+                    </div>
+                  )}
+
+                  {q.essayGradingRubric && (
+                    <div className="p-3 rounded-[8px] border border-line bg-surface-muted/40 text-xs space-y-2">
+                      <span className="font-medium text-content-secondary block">
+                        Grading rubric · {q.essayGradingRubric.totalPoints ?? q.defaultPoints} pts
+                      </span>
+                      {q.essayGradingRubric.criteria.map((c, cIdx) => (
+                        <div key={cIdx}>
+                          <p className="font-semibold text-content">
+                            {c.name} — {c.maxScore} pts{c.weight != null ? ` (${c.weight}%)` : ''}
+                          </p>
+                          {c.descriptors && <p className="text-content-subtle">{c.descriptors}</p>}
+                        </div>
+                      ))}
+                      {q.essayGradingRubric.notes && (
+                        <p className="text-content-subtle">
+                          <span className="font-medium">Model answer: </span>
+                          {q.essayGradingRubric.notes}
+                        </p>
+                      )}
                     </div>
                   )}
 

@@ -21,13 +21,14 @@ import { hasDiagramContent, plantUmlToDrawioXml } from './diagram';
 /**
  * Types the editor offers. QuestionValidator accepts SINGLE_CHOICE,
  * MULTIPLE_CHOICE, TRUE_FALSE, MATCHING, FILL_BLANK and ESSAY. DIAGRAM (drawn
- * in draw.io) and ORDERING can be authored in the UI but not saved yet.
- * CODE has no editor yet.
+ * in draw.io) is sent like the others, with its XML in questionMetadata, but
+ * the backend still rejects it — see docs/notes/diagram-question-be-gaps.md.
+ * ORDERING can be authored in the UI but not saved yet. CODE has no editor yet.
  */
 export type EditableQuestionType = Exclude<QuestionType, 'CODE'> | 'ORDERING';
 
-/** Types the editor shows but the backend can't store yet. */
-export const UNSAVEABLE_TYPES: EditableQuestionType[] = ['DIAGRAM', 'ORDERING'];
+/** Types the editor shows but never sends to the backend. */
+export const UNSAVEABLE_TYPES: EditableQuestionType[] = ['ORDERING'];
 
 export const QUESTION_TYPE_OPTIONS: { label: string; value: EditableQuestionType }[] = [
   { label: 'Single Choice', value: 'SINGLE_CHOICE' },
@@ -36,11 +37,11 @@ export const QUESTION_TYPE_OPTIONS: { label: string; value: EditableQuestionType
   { label: 'Matching', value: 'MATCHING' },
   { label: 'Fill in the Blank', value: 'FILL_BLANK' },
   { label: 'Essay', value: 'ESSAY' },
-  { label: 'Diagram (coming soon)', value: 'DIAGRAM' },
+  { label: 'Diagram', value: 'DIAGRAM' },
   { label: 'Ordering (coming soon)', value: 'ORDERING' },
 ];
 
-/** Types the AI can draft — the ones the backend can save. */
+/** Types the AI can draft (ExamAiServiceImpl.TYPES). */
 export const AI_QUESTION_TYPE_OPTIONS = QUESTION_TYPE_OPTIONS.filter(t => !UNSAVEABLE_TYPES.includes(t.value)) as { label: string; value: QuestionType }[];
 
 /** QuestionValidator limits. */
@@ -79,6 +80,15 @@ export interface OrderItemDraft {
   text: string;
 }
 
+/** One ESSAY rubric criterion. `maxScore` is kept as typed and sent as a number. */
+export interface RubricCriterionDraft {
+  key: string;
+  name: string;
+  maxScore: string;
+  /** What earns the points — guidance for graders (and AI grading). */
+  descriptors: string;
+}
+
 export interface QuestionDraft {
   key: string;
   questionId?: number;
@@ -104,8 +114,9 @@ export interface QuestionDraft {
   /** DIAGRAM — model answer as draw.io XML, plus an SVG snapshot for previews. */
   diagramXml: string;
   diagramSvg: string;
-  /** ESSAY rubric suggested by AI — passed through untouched; its total becomes defaultPoints. */
-  essayGradingRubric?: unknown;
+  /** ESSAY grading rubric; empty = no rubric. Its total maxScore is sent as defaultPoints. */
+  rubric: RubricCriterionDraft[];
+  rubricNotes: string;
   /** Drafted by AI-03 and accepted into the form. */
   fromAi?: boolean;
 }
@@ -127,6 +138,8 @@ const emptyPairs = (): PairDraft[] => [0, 1].map(() => ({ key: newKey('pair'), l
 
 const emptyOrdering = (): OrderItemDraft[] => [0, 1, 2].map(() => ({ key: newKey('ord'), text: '' }));
 
+export const emptyCriterion = (): RubricCriterionDraft => ({ key: newKey('crit'), name: '', maxScore: '', descriptors: '' });
+
 export function emptyDraft(): QuestionDraft {
   return {
     key: newKey('q'),
@@ -143,6 +156,8 @@ export function emptyDraft(): QuestionDraft {
     ordering: emptyOrdering(),
     diagramXml: '',
     diagramSvg: '',
+    rubric: [],
+    rubricNotes: '',
   };
 }
 
@@ -161,7 +176,9 @@ export function changeType(q: QuestionDraft, type: EditableQuestionType): Questi
     const first = Math.max(0, options.findIndex(o => o.isCorrect));
     options = options.map((o, i) => ({ ...o, isCorrect: i === first }));
   }
-  return { ...q, type, options };
+  // A new essay starts with one criterion to fill in; removing it saves the essay without a rubric.
+  const rubric = type === 'ESSAY' && q.type !== 'ESSAY' && q.rubric.length === 0 && !q.rubricNotes ? [emptyCriterion()] : q.rubric;
+  return { ...q, type, options, rubric };
 }
 
 /** Distinct {{n}} markers in the order they appear. */
@@ -242,34 +259,33 @@ export function validateDraft(q: QuestionDraft): QuestionErrors {
     case 'DIAGRAM':
       if (!hasDiagramContent(q.diagramXml)) errors.answers = 'Draw the model answer diagram.';
       break;
-    case 'ESSAY':
-      if (q.essayGradingRubric != null) {
-        const { error } = rubricTotal(q.essayGradingRubric);
-        if (error) errors.answers = error;
-      }
+    case 'ESSAY': {
+      const { error } = rubricTotal(q.rubric);
+      if (error) errors.answers = error;
       break;
+    }
   }
   return errors;
 }
 
+export const MAX_RUBRIC_TOTAL = 1000;
+
 /**
- * Checks an ESSAY rubric the way QuestionValidator does and returns its total
+ * Checks the ESSAY rubric the way QuestionValidator does and returns its total
  * maxScore — sent as defaultPoints, which the backend requires to match it.
+ * No criteria means no rubric, which is allowed.
  */
-export function rubricTotal(rubric: unknown): { total: number | null; error?: string } {
+export function rubricTotal(rubric: RubricCriterionDraft[]): { total: number | null; error?: string } {
+  if (rubric.length === 0) return { total: null };
   const bad = (error: string) => ({ total: null, error: `Grading rubric: ${error}` });
-  const criteria = asRecord(rubric)?.criteria;
-  if (!Array.isArray(criteria)) return bad('it needs a list of criteria.');
   let total = 0;
-  for (const c of criteria) {
-    const item = asRecord(c);
-    if (!item || typeof item.name !== 'string' || !item.name.trim()) return bad('every criterion needs a name.');
-    const max = Number(item.maxScore);
-    if (!Number.isFinite(max) || max <= 0) return bad(`"${item.name}" needs a max score above 0.`);
+  for (const [i, c] of rubric.entries()) {
+    if (!c.name.trim()) return bad(`criterion ${i + 1} needs a name.`);
+    const max = Number(c.maxScore);
+    if (c.maxScore.trim() === '' || !Number.isFinite(max) || max <= 0) return bad(`"${c.name.trim()}" needs a max score above 0.`);
     total += max;
   }
-  if (total <= 0) return bad('add at least one criterion.');
-  if (total > 1000) return bad('the total score can be at most 1000.');
+  if (total > MAX_RUBRIC_TOTAL) return bad(`the total score can be at most ${MAX_RUBRIC_TOTAL}.`);
   return { total };
 }
 
@@ -324,16 +340,47 @@ export function toCreateRequest(q: QuestionDraft, courseId: number, moduleId: nu
   };
 }
 
-/** ESSAY rubric plus the matching defaultPoints; nothing for other types or without a rubric. */
+/**
+ * ESSAY rubric plus the matching defaultPoints; nothing for other types or
+ * without criteria. Same shape as the exam (E-08) rubric: criteria, totalPoints, notes.
+ */
 function toRubric(q: QuestionDraft): Pick<QuestionCreateRequest, 'essayGradingRubric' | 'defaultPoints'> {
-  if (q.type !== 'ESSAY' || q.essayGradingRubric == null) return {};
-  const { total } = rubricTotal(q.essayGradingRubric);
-  return { essayGradingRubric: q.essayGradingRubric, ...(total != null ? { defaultPoints: total } : {}) };
+  if (q.type !== 'ESSAY') return {};
+  const { total } = rubricTotal(q.rubric);
+  if (total == null) return {};
+  const criteria = q.rubric.map(c => ({
+    name: c.name.trim(),
+    maxScore: Number(c.maxScore),
+    weight: Math.round((Number(c.maxScore) / total) * 10000) / 100,
+    ...(c.descriptors.trim() ? { descriptors: c.descriptors.trim() } : {}),
+  }));
+  const notes = q.rubricNotes.trim();
+  return { essayGradingRubric: { criteria, totalPoints: total, ...(notes ? { notes } : {}) }, defaultPoints: total };
+}
+
+/** A stored or AI-drafted rubric (object or JSON string) → editor rows. Plain text becomes the notes. */
+function fromRubric(raw: unknown): Pick<QuestionDraft, 'rubric' | 'rubricNotes'> {
+  const parsed = typeof raw === 'string' ? (safeParse(raw) ?? raw) : raw;
+  if (typeof parsed === 'string') return { rubric: [], rubricNotes: parsed.trim() };
+  const record = asRecord(parsed);
+  const criteria = Array.isArray(record?.criteria) ? record.criteria : [];
+  const rubric = criteria.flatMap(item => {
+    const c = asRecord(item);
+    if (!c) return [];
+    return [{
+      key: newKey('crit'),
+      name: text(c.name),
+      maxScore: c.maxScore != null && c.maxScore !== '' ? String(c.maxScore) : '',
+      descriptors: text(c.descriptors) || text(c.description),
+    }];
+  });
+  return { rubric, rubricNotes: text(record?.notes) };
 }
 
 /**
  * Only the keys QuestionValidator allows — anything else (an old `title`, AI
- * extras, draw.io XML) would fail the whole request.
+ * extras like plantUmlSource) would fail the whole request. A DIAGRAM also
+ * sends its draw.io XML; the validator rejects the SVG snapshot, so it stays local.
  */
 function toMetadata(q: QuestionDraft): Record<string, unknown> {
   const allowed: readonly string[] = QUESTION_METADATA_KEYS;
@@ -341,6 +388,7 @@ function toMetadata(q: QuestionDraft): Record<string, unknown> {
   return {
     ...kept,
     ...(q.skillTag.trim() ? { skillTag: q.skillTag.trim() } : {}),
+    ...(q.type === 'DIAGRAM' ? { drawioXml: q.diagramXml } : {}),
   };
 }
 
@@ -372,6 +420,8 @@ const safeParse = (s: string): unknown => {
 
 const asRecord = (v: unknown): Record<string, unknown> | null =>
   v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
+
+const text = (v: unknown) => (typeof v === 'string' ? v : '');
 
 export function fromDetail(d: QuestionDetail): QuestionDraft {
   const base = emptyDraft();
@@ -413,7 +463,7 @@ export function fromDetail(d: QuestionDetail): QuestionDraft {
     blanks,
     diagramXml: typeof metadata.drawioXml === 'string' ? metadata.drawioXml : '',
     diagramSvg: typeof metadata.drawioSvg === 'string' ? metadata.drawioSvg : '',
-    essayGradingRubric: d.essayGradingRubric ?? undefined,
+    ...fromRubric(d.essayGradingRubric),
   };
 }
 
@@ -445,9 +495,7 @@ export function fromAiDraft(a: QuestionAiDraft): QuestionDraft {
   });
   const plantUml = typeof draft.metadata.plantUmlSource === 'string' ? draft.metadata.plantUmlSource : '';
   const diagramXml = draft.type === 'DIAGRAM' && !draft.diagramXml && plantUml.trim() ? plantUmlToDrawioXml(plantUml) : draft.diagramXml;
-  // The editor can't fix a rubric, and ESSAY saves fine without one — drop a malformed AI rubric.
-  const essayGradingRubric = draft.essayGradingRubric != null && rubricTotal(draft.essayGradingRubric).error ? undefined : draft.essayGradingRubric;
-  return { ...draft, questionId: undefined, lockVersion: undefined, diagramXml, essayGradingRubric, fromAi: true };
+  return { ...draft, questionId: undefined, lockVersion: undefined, diagramXml, fromAi: true };
 }
 
 /** Shape produced by the (still mocked) PDF import. */

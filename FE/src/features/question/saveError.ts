@@ -35,6 +35,15 @@ function fieldLabel(path: string): string {
 const errorMessage = (err: unknown, fallback: string) => (err instanceof Error && err.message ? err.message : fallback);
 const httpStatus = (err: unknown) => (err as { response?: { status?: number } })?.response?.status;
 
+/** Why Q-04 couldn't open a question. 403 = the question's course isn't one the manager is assigned to. */
+export function loadErrorMessage(err: unknown): string {
+  switch (httpStatus(err)) {
+    case 404: return 'This question does not exist or has been deleted.';
+    case 403: return 'This question belongs to a course you are not assigned to, so you can’t view it. Ask an admin to add you to that course.';
+  }
+  return errorMessage(err, 'Could not load the question.');
+}
+
 export function describeSaveError(err: unknown, fallback: string): SaveError {
   const message = errorMessage(err, fallback);
 

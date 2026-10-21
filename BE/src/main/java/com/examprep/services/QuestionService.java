@@ -9,7 +9,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.List;
 
 public interface QuestionService {
-    Page<QuestionListItemDto> getQuestions(Long courseId, Long moduleId, Long groupId, String questionType,
+    Page<QuestionListItemDto> getQuestions(Long courseId, List<Long> courseIds, Long moduleId, Long groupId, String questionType,
                                           String difficulty, String status, String approvalStatus, String creatorRole,
                                           String source, Long createdBy, String skillTag, String search,
                                           Pageable pageable, User currentUser);
@@ -28,13 +28,4 @@ public interface QuestionService {
 
     QuestionDetailDto updateQuestionStatus(Long id, QuestionStatusRequest request, User currentUser);
 
-    AiGenerateResponse generateAiQuestions(AiGenerateRequest request, User currentUser);
-
-    List<QuestionDetailDto> saveAiQuestions(AiSaveRequest request, User currentUser);
-
-    byte[] generateExcelTemplate(Long courseId, User currentUser);
-
-    QuestionImportResult importExcel(Long courseId, MultipartFile file, boolean dryRun, User currentUser);
-
-    byte[] exportExcel(Long courseId, String questionType, String status, String difficulty, User currentUser);
 }
