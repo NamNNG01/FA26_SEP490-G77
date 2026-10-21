@@ -68,7 +68,6 @@ export function ExamFormPage({
   const [generationType, setGenerationType] =
     useState<GenerationType>("STATIC");
   const [passMark, setPassMark] = useState<number>(50);
-  const [maxAttempts, setMaxAttempts] = useState<number>(1);
   const [status, setStatus] = useState<ExamStatus>("DRAFT");
 
   const [questions, setQuestions] = useState<ExamQuestion[]>([]);
@@ -147,7 +146,6 @@ export function ExamFormPage({
       setIsPractice(!!data.isPractice);
       setGenerationType(data.generationType || "STATIC");
       setPassMark(data.passMark ?? 50);
-      setMaxAttempts(data.maxAttempts ?? 1);
       setStatus(data.status || "DRAFT");
       setConfigs(data.configs || []);
       setGroups(data.groups || []);
@@ -276,10 +274,6 @@ export function ExamFormPage({
       errors.passMark = "Pass mark must be between 0 and 100.";
     }
 
-    if (maxAttempts < 1) {
-      errors.maxAttempts = "Max attempts must be at least 1.";
-    }
-
     if (generationType === "RANDOM") {
       if (configs.length === 0) {
         errors.configs =
@@ -324,7 +318,6 @@ export function ExamFormPage({
           isPractice,
           generationType,
           passMark,
-          maxAttempts,
           questionIds: payloadQuestionIds,
           groupIds: payloadGroupIds,
           configs: generationType === "STATIC" ? [] : configs,
@@ -346,7 +339,6 @@ export function ExamFormPage({
           isPractice,
           generationType,
           passMark,
-          maxAttempts,
           configs: generationType === "STATIC" ? [] : configs,
         });
 
@@ -389,7 +381,6 @@ export function ExamFormPage({
         isPractice,
         generationType,
         passMark,
-        maxAttempts,
         questionIds: questions.map((q, idx) => ({
           questionId: q.questionId,
           points: q.points || 1,
@@ -922,23 +913,6 @@ export function ExamFormPage({
                       value={passMark}
                       onChange={(e) => {
                         setPassMark(Number(e.target.value) || 0);
-                        setIsDirty(true);
-                      }}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-medium text-content-secondary block mb-1">
-                      Max Attempts
-                    </label>
-                    <input
-                      type="number"
-                      min={1}
-                      disabled={isReadOnly}
-                      className="w-full px-3 py-1.5 text-sm rounded-[8px] border border-line bg-surface disabled:opacity-60"
-                      value={maxAttempts}
-                      onChange={(e) => {
-                        setMaxAttempts(Number(e.target.value) || 1);
                         setIsDirty(true);
                       }}
                     />
