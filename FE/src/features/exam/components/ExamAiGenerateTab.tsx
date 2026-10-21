@@ -17,7 +17,7 @@ import { questionService, type QuestionCreateRequest } from '@/services/question
 import { plantUmlSvgUrl } from '@/features/question/diagram';
 
 interface ExamAiGenerateTabProps {
-  formKind: 'QUIZ' | 'ESSAY';
+  formKind: 'QUIZ' | 'ESSAY' | 'DIAGRAM';
   onCreated: (createdExam: ExamDetail) => void;
   onCancel: () => void;
 }
@@ -50,7 +50,7 @@ export function ExamAiGenerateTab({
   const allowedTypes =
     formKind === 'QUIZ'
       ? ['SINGLE_CHOICE', 'MULTIPLE_CHOICE', 'TRUE_FALSE', 'FILL_BLANK', 'MATCHING']
-      : ['ESSAY', 'DIAGRAM'];
+      : [formKind];
 
   const [typeCounts, setTypeCounts] = useState<Record<string, number>>(
     formKind === 'QUIZ'
@@ -61,10 +61,7 @@ export function ExamAiGenerateTab({
           FILL_BLANK: 0,
           MATCHING: 0,
         }
-      : {
-          ESSAY: 10,
-          DIAGRAM: 0,
-        }
+      : { [formKind]: 10 }
   );
 
   const [generating, setGenerating] = useState(false);

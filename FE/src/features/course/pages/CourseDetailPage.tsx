@@ -12,6 +12,7 @@ import { Alert } from "@/components/ui/Alert";
 import { ToastNotification } from "@/components/ui/ToastNotification";
 import { Modal } from "@/components/ui/Modal";
 import { Avatar } from "@/components/ui/Avatar";
+import { Dropdown } from "@/components/ui/Dropdown";
 import { SearchInput } from "@/components/common/SearchInput";
 import { Pagination } from "@/components/ui/Pagination";
 import { Icon } from "@/assets/icons";
@@ -27,6 +28,13 @@ import { AddModuleModal } from "@/components/modules/AddModuleModal";
 import { EditModuleModal } from "@/components/modules/EditModuleModal";
 import { useAuth } from "@/auth/authContext";
 import { Role } from "@/utils/permissions";
+import { api } from "@/services/api";
+
+interface ManagerOption {
+  id: number;
+  name: string;
+  email?: string;
+}
 
 function formatTimestamp(isoString: string | null | undefined): string {
   if (!isoString) return "—";
@@ -108,6 +116,10 @@ export function CourseDetailPage({
   const [isPublished, setIsPublished] = useState(false);
   const [price, setPrice] = useState("0");
   const [saving, setSaving] = useState(false);
+  const [managerOptions, setManagerOptions] = useState<ManagerOption[]>([]);
+  const [selectedManagerIds, setSelectedManagerIds] = useState<string[]>([]);
+  const [loadingManagers, setLoadingManagers] = useState(false);
+  const [savingManagers, setSavingManagers] = useState(false);
 
   const [categories, setCategories] = useState<CategoryResponse[]>([]);
 
@@ -148,6 +160,55 @@ export function CourseDetailPage({
       .catch(() => setCategories([]));
   }, []);
 
+  useEffect(() => {
+    if (!isAdmin) return;
+    setLoadingManagers(true);
+    api
+      .get<{
+        data?:
+          | Array<{
+              userId?: number;
+              id?: number;
+              fullName?: string;
+              name?: string;
+              email?: string;
+            }>
+          | {
+              content?: Array<{
+                userId?: number;
+                id?: number;
+                fullName?: string;
+                name?: string;
+                email?: string;
+              }>;
+            };
+      }>("/admin/users?role=COURSE_MANAGER&status=ACTIVE")
+      .then((res) => {
+        const payload = res.data;
+        const users = Array.isArray(payload)
+          ? payload
+          : payload &&
+              typeof payload === "object" &&
+              Array.isArray(payload.content)
+            ? payload.content
+            : [];
+        setManagerOptions(
+          users
+            .map((manager) => ({
+              id: Number(manager.userId ?? manager.id),
+              name:
+                manager.fullName ||
+                manager.name ||
+                `Manager #${manager.userId ?? manager.id}`,
+              email: manager.email,
+            }))
+            .filter((manager) => Number.isFinite(manager.id) && manager.id > 0),
+        );
+      })
+      .catch(() => setManagerOptions([]))
+      .finally(() => setLoadingManagers(false));
+  }, [isAdmin]);
+
   const loadCourseData = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -160,6 +221,12 @@ export function CourseDetailPage({
       setIsPublished(data.isPublished);
       setPrice(String(data.price ?? 0));
       setModules(data.modules ?? []);
+      setSelectedManagerIds(
+        (data.managers?.length
+          ? data.managers.map((manager) => manager.userId)
+          : [data.managerId]
+        ).map(String),
+      );
     } catch (err: unknown) {
       const msg =
         err instanceof Error ? err.message : "Failed to load course details.";
@@ -207,12 +274,15 @@ export function CourseDetailPage({
     }
     setSaving(true);
     try {
-      const updated = await courseService.updateCourse(course.courseId, {
-        title: title.trim(),
-        description: description.trim() || undefined,
-        categoryId: categoryId ? Number(categoryId) : undefined,
-        price: Number(price) >= 0 ? Number(price) : 0,
-      });
+      const updated = await courseService.updateCourseManagers(
+        course.courseId,
+        {
+          title: title.trim(),
+          description: description.trim() || undefined,
+          categoryId: categoryId ? Number(categoryId) : undefined,
+          price: Number(price) >= 0 ? Number(price) : 0,
+        },
+      );
 
       if (isPublished !== course.isPublished) {
         if (isPublished && modules.length === 0) {
@@ -238,6 +308,56 @@ export function CourseDetailPage({
       setToast({ type: "error", message: msg });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSaveManagers = async () => {
+    if (!course) return;
+    const ids = selectedManagerIds
+      .map(Number)
+      .filter((id) => Number.isFinite(id) && id > 0);
+    if (ids.length === 0) {
+      setToast({
+        type: "error",
+        message: "Assign at least one course manager.",
+      });
+      return;
+    }
+    setSavingManagers(true);
+    try {
+      const updated = await courseService.updateCourse(course.courseId, {
+        managerId: ids[0],
+        managerIds: ids.slice(1),
+      });
+      const managers: CourseManagerItem[] = ids.map((id, index) => {
+        const option = managerOptions.find((manager) => manager.id === id);
+        const previous = course.managers?.find(
+          (manager) => manager.userId === id,
+        );
+        return {
+          userId: id,
+          fullName: option?.name || previous?.fullName || `Manager #${id}`,
+          email: option?.email || previous?.email,
+          primary: index === 0,
+        };
+      });
+      setCourse({
+        ...updated,
+        managerId: ids[0],
+        managerName: managers[0].fullName,
+        managers,
+        modules,
+      });
+      setSelectedManagerIds(ids.map(String));
+      setToast({ type: "success", message: "Course managers updated." });
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : "Failed to update course managers.";
+      setToast({ type: "error", message: msg });
+    } finally {
+      setSavingManagers(false);
     }
   };
 
@@ -424,22 +544,6 @@ export function CourseDetailPage({
           />
           <h2 className="text-xl font-bold text-content mt-1">Course Detail</h2>
         </div>
-
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={handleCancel} disabled={saving}>
-            {canManageCourse ? "Cancel" : "Back"}
-          </Button>
-          {canManageCourse && (
-            <Button
-              icon={<Icon.Check className="w-4 h-4" />}
-              onClick={handleSaveChanges}
-              loading={saving}
-              disabled={saving}
-            >
-              Save Changes
-            </Button>
-          )}
-        </div>
       </div>
 
       <Tabs
@@ -531,28 +635,35 @@ export function CourseDetailPage({
                   hint="Slug is auto-generated by the server"
                 />
 
-                <div className="grid grid-cols-2 gap-3">
-                  <Input
-                    label="Price ($)"
-                    type="number"
-                    min={0}
-                    value={price}
-                    disabled={!canManageCourse}
-                    readOnly={!canManageCourse}
-                    onChange={(e) => setPrice(e.target.value)}
-                    hint={canManageCourse ? "0 = Free" : undefined}
-                  />
-                  <div>
-                    <label className="text-sm font-medium text-content-secondary block mb-1.5">
-                      Primary Manager
-                    </label>
-                    <p className="h-9 px-3 flex items-center text-sm font-medium text-content-secondary bg-surface-alt rounded-[10px] border border-line truncate">
-                      {course.managerName || `ID: ${course.managerId}`}
-                    </p>
-                  </div>
-                </div>
+                <Input
+                  label="Price ($)"
+                  type="number"
+                  min={0}
+                  value={price}
+                  disabled={!canManageCourse}
+                  readOnly={!canManageCourse}
+                  onChange={(e) => setPrice(e.target.value)}
+                  hint={canManageCourse ? "0 = Free" : undefined}
+                />
 
-                <CourseManagerList course={course} />
+                <CourseManagerList
+                  course={course}
+                  canEdit={canManageCourse}
+                  managerOptions={managerOptions}
+                  selectedManagerIds={selectedManagerIds}
+                  onSelectedManagerIdsChange={setSelectedManagerIds}
+                  onSave={handleSaveManagers}
+                  onCancel={() =>
+                    setSelectedManagerIds(
+                      (course.managers?.length
+                        ? course.managers.map((manager) => manager.userId)
+                        : [course.managerId]
+                      ).map(String),
+                    )
+                  }
+                  loadingManagers={loadingManagers}
+                  savingManagers={savingManagers}
+                />
               </div>
             </div>
           </div>
@@ -861,11 +972,25 @@ export function CourseDetailPage({
 
 function CourseManagerList({
   course,
-}: {
+  canEdit,
+  managerOptions,
+  selectedManagerIds,
+  onSelectedManagerIdsChange,
+  onSave,
+  onCancel,
+  loadingManagers,
+  savingManagers,
+}: Readonly<{
   course: CourseDetailResponse & { managers?: CourseManagerItem[] };
-}) {
-  const [expanded, setExpanded] = useState(false);
-
+  canEdit: boolean;
+  managerOptions: ManagerOption[];
+  selectedManagerIds: string[];
+  onSelectedManagerIdsChange: (ids: string[]) => void;
+  onSave: () => void;
+  onCancel: () => void;
+  loadingManagers: boolean;
+  savingManagers: boolean;
+}>) {
   const managerList: CourseManagerItem[] =
     course.managers && course.managers.length > 0
       ? course.managers
@@ -877,65 +1002,119 @@ function CourseManagerList({
           },
         ];
 
-  const INITIAL_SHOW = 3;
-  const hasMore = managerList.length > INITIAL_SHOW;
-  const visible = expanded ? managerList : managerList.slice(0, INITIAL_SHOW);
+  const currentIds = managerList.map((manager) => String(manager.userId));
+  const hasChanges = currentIds.join(",") !== selectedManagerIds.join(",");
+  const availableManagers = [
+    ...managerOptions,
+    ...managerList
+      .filter(
+        (manager) =>
+          !managerOptions.some((option) => option.id === manager.userId),
+      )
+      .map((manager) => ({
+        id: manager.userId,
+        name: manager.fullName,
+        email: manager.email,
+      })),
+  ];
+  const selectedManagers = selectedManagerIds
+    .map((id) => availableManagers.find((manager) => String(manager.id) === id))
+    .filter((manager): manager is ManagerOption => Boolean(manager));
 
   return (
-    <div>
-      <label className="text-sm font-medium text-content-secondary block mb-2">
-        Course Managers
-        <span className="ml-1.5 text-xs font-normal text-content-soft">
-          ({managerList.length})
-        </span>
-      </label>
-      <div className="rounded-[10px] border border-line overflow-hidden">
-        {visible.map((m, idx) => (
-          <div
-            key={m.userId}
-            className={`flex items-center gap-3 px-3 py-2.5 text-sm ${idx > 0 ? "border-t border-line-faint" : ""} bg-surface-alt`}
-          >
-            <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-              <span className="text-xs font-bold text-primary">
-                {m.fullName.charAt(0).toUpperCase()}
-              </span>
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-content truncate">
-                {m.fullName}
-              </p>
-              {m.email && (
-                <p className="text-xs text-content-soft truncate">{m.email}</p>
-              )}
-            </div>
-            {idx === 0 && (
-              <span className="shrink-0 text-[11px] font-semibold text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">
-                Primary
-              </span>
-            )}
-          </div>
-        ))}
-        {hasMore && (
-          <button
-            type="button"
-            onClick={() => setExpanded((e) => !e)}
-            className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-content-soft hover:text-primary hover:bg-primary/5 border-t border-line-faint transition-colors"
-          >
-            {expanded ? (
-              <>
-                <Icon.ChevronDown className="w-3.5 h-3.5 rotate-180" />
-                Show less
-              </>
-            ) : (
-              <>
-                <Icon.ChevronDown className="w-3.5 h-3.5" />
-                Show {managerList.length - INITIAL_SHOW} more manager
-                {managerList.length - INITIAL_SHOW !== 1 ? "s" : ""}
-              </>
-            )}
-          </button>
-        )}
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <label className="text-sm font-medium text-content-secondary">
+          Course Managers
+          <span className="ml-1.5 text-xs font-normal text-content-soft">
+            ({managerList.length})
+          </span>
+        </label>
       </div>
+      {canEdit && (
+        <Dropdown
+          multi
+          search
+          searchPlaceholder="Search course managers..."
+          values={selectedManagerIds}
+          onSelectMulti={(values) =>
+            onSelectedManagerIdsChange(values.map(String))
+          }
+          trigger={
+            <button
+              type="button"
+              disabled={loadingManagers || savingManagers}
+              className="w-full flex items-center justify-between px-3 py-2 rounded-[10px] border border-line bg-surface text-sm text-left hover:border-primary disabled:opacity-60"
+            >
+              <span className="truncate text-content-secondary">
+                {loadingManagers
+                  ? "Loading course managers…"
+                  : selectedManagerIds.length > 0
+                    ? `${selectedManagerIds.length} manager${selectedManagerIds.length === 1 ? "" : "s"} selected`
+                    : "Select course managers…"}
+              </span>
+              <Icon.ChevronDown className="w-4 h-4 text-content-soft shrink-0 ml-2" />
+            </button>
+          }
+          items={availableManagers.map((manager) => ({
+            label: manager.email
+              ? `${manager.name} (${manager.email})`
+              : manager.name,
+            value: String(manager.id),
+          }))}
+        />
+      )}
+      {canEdit && selectedManagers.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {selectedManagers.map((manager) => (
+            <span
+              key={manager.id}
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-medium"
+            >
+              {manager.name}
+              <button
+                type="button"
+                onClick={() =>
+                  onSelectedManagerIdsChange(
+                    selectedManagerIds.filter(
+                      (id) => id !== String(manager.id),
+                    ),
+                  )
+                }
+                className="hover:text-danger transition-colors"
+                aria-label={`Remove ${manager.name}`}
+              >
+                <Icon.X className="w-3 h-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      {canEdit && (
+        <div className="flex justify-end gap-2 pt-1">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onCancel}
+            disabled={savingManagers || !hasChanges}
+          >
+            Cancel
+          </Button>
+          <Button
+            size="sm"
+            onClick={onSave}
+            loading={savingManagers}
+            disabled={
+              savingManagers ||
+              loadingManagers ||
+              !hasChanges ||
+              selectedManagerIds.length === 0
+            }
+          >
+            Save Managers
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

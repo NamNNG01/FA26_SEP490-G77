@@ -26,6 +26,7 @@ export interface CategoryResponse {
 export interface CourseManagerItem {
   userId: number;
   fullName: string;
+  primary?: boolean;
   email?: string;
   avatarUrl?: string | null;
 }
@@ -128,6 +129,7 @@ export interface UpdateCourseRequest {
   thumbnailUrl?: string;
   price?: number;
   managerId?: number;
+  managerIds?: number[];
 }
 
 export interface PublishCourseResponse {
@@ -222,6 +224,18 @@ export const courseService = {
     } catch {
       return updateMockCourse(id, payload);
     }
+  },
+
+  async updateCourseManagers(
+    id: number | string,
+    payload: Pick<UpdateCourseRequest, 'managerId' | 'managerIds'>,
+  ): Promise<CourseDetailResponse> {
+    const res = await api.request<ApiResponse<CourseDetailResponse>>({
+      method: 'put',
+      url: `/manager/courses/${id}`,
+      data: payload,
+    });
+    return res.data;
   },
 
   async publishCourse(id: number | string, isPublished: boolean): Promise<PublishCourseResponse> {

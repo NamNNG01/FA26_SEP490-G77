@@ -8,7 +8,7 @@ import { DrawioEditorModal } from './DrawioEditorModal';
 import { useDrawioSnapshot } from './useDrawioSnapshot';
 
 /** DIAGRAM answer: the model answer drawn in draw.io, shown as a snapshot. */
-export function DiagramAnswer({ q, set, error }: { q: QuestionDraft; set: (patch: Partial<QuestionDraft>) => void; error?: string }) {
+export function DiagramAnswer({ q, set, error, readOnly = false }: { q: QuestionDraft; set: (patch: Partial<QuestionDraft>) => void; error?: string; readOnly?: boolean }) {
   const [editing, setEditing] = useState(false);
   const plantUml = typeof q.metadata.plantUmlSource === 'string' ? q.metadata.plantUmlSource : '';
   const hasDiagram = hasDiagramContent(q.diagramXml);
@@ -22,17 +22,22 @@ export function DiagramAnswer({ q, set, error }: { q: QuestionDraft; set: (patch
     <div>
       <div className="flex items-center justify-between gap-2 mb-1.5">
         <span className="text-sm font-medium text-content-secondary">Model Answer Diagram *</span>
-        <Button type="button" variant="outline" size="sm" icon={<Icon.Edit className="w-3.5 h-3.5" />} onClick={() => setEditing(true)}>
-          {hasDiagram ? 'Edit in draw.io' : 'Draw in draw.io'}
-        </Button>
+        {readOnly ? (
+          <span className="text-xs text-content-subtle">Model answer</span>
+        ) : (
+          <Button type="button" variant="outline" size="sm" icon={<Icon.Edit className="w-3.5 h-3.5" />} onClick={() => setEditing(true)}>
+            {hasDiagram ? 'Edit in draw.io' : 'Draw in draw.io'}
+          </Button>
+        )}
       </div>
 
       {hasDiagram ? (
         <button
           type="button"
-          onClick={() => setEditing(true)}
-          className={`w-full rounded-[10px] border bg-white p-3 flex items-center justify-center min-h-[140px] hover:border-brand-600 transition-colors ${error ? 'border-danger-solid' : 'border-line'}`}
+          onClick={() => !readOnly && setEditing(true)}
+          className={`w-full rounded-[10px] border bg-white p-3 flex items-center justify-center min-h-[140px] transition-colors ${!readOnly ? 'hover:border-brand-600' : ''} ${error ? 'border-danger-solid' : 'border-line'}`}
           aria-label="Edit the model answer diagram"
+          disabled={readOnly}
         >
           {previewSrc ? (
             <img src={previewSrc} alt="Model answer diagram" className="max-h-[360px] max-w-full object-contain" />
@@ -45,11 +50,12 @@ export function DiagramAnswer({ q, set, error }: { q: QuestionDraft; set: (patch
       ) : (
         <button
           type="button"
-          onClick={() => setEditing(true)}
-          className={`w-full rounded-[10px] border border-dashed p-6 text-sm text-content-soft flex flex-col items-center gap-1.5 hover:border-brand-600 hover:text-content-secondary transition-colors ${error ? 'border-danger-solid' : 'border-line'}`}
+          onClick={() => !readOnly && setEditing(true)}
+          className={`w-full rounded-[10px] border border-dashed p-6 text-sm text-content-soft flex flex-col items-center gap-1.5 transition-colors ${!readOnly ? 'hover:border-brand-600 hover:text-content-secondary' : ''} ${error ? 'border-danger-solid' : 'border-line'}`}
+          disabled={readOnly}
         >
           <Icon.Layers className="w-5 h-5" />
-          No diagram yet — click to draw the model answer.
+          {readOnly ? 'No model answer diagram has been added.' : 'No diagram yet — click to draw the model answer.'}
         </button>
       )}
       {error && <p className="text-xs text-danger mt-1.5">{error}</p>}
@@ -63,7 +69,7 @@ export function DiagramAnswer({ q, set, error }: { q: QuestionDraft; set: (patch
       )}
       <p className="text-xs text-content-subtle mt-2">Students draw their own diagram; this one is the reference used for grading.</p>
 
-      <DrawioEditorModal
+      {!readOnly && <DrawioEditorModal
         open={editing}
         xml={q.diagramXml}
         onClose={() => setEditing(false)}
@@ -71,7 +77,7 @@ export function DiagramAnswer({ q, set, error }: { q: QuestionDraft; set: (patch
           set({ diagramXml, diagramSvg });
           setEditing(false);
         }}
-      />
+      />}
     </div>
   );
 }

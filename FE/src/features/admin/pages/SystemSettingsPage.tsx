@@ -67,7 +67,6 @@ const INITIAL = {
   },
   exam: {
     duration: '60',
-    passScore: '70',
     shuffleQuestions: true,
     shuffleOptions: true,
     autoSubmit: true,
@@ -211,9 +210,8 @@ export function SystemSettingsPage() {
           {section === 'exam' && (
             <div className="card p-6 space-y-4">
               <h4 className="text-lg font-semibold text-content">Exam Defaults</h4>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4">
                 <Input label="Default Exam Duration" type="number" min={5} value={settings.exam.duration} onChange={e => set('exam', { duration: e.target.value })} suffix="min" />
-                <Input label="Default Pass Score" type="number" min={0} max={100} value={settings.exam.passScore} onChange={e => set('exam', { passScore: e.target.value })} suffix="%" />
               </div>
               <div className="pt-1">
                 <ToggleRow label="Shuffle Questions" desc="Randomize question order for every attempt" checked={settings.exam.shuffleQuestions} onChange={v => set('exam', { shuffleQuestions: v })} />

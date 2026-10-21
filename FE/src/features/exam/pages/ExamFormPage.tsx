@@ -31,12 +31,15 @@ import { QuestionGroupModal } from "../components/QuestionGroupModal";
 import { RubricDetailModal } from "../components/RubricDetailModal";
 import { ImportQuestionsModal } from "../components/ImportQuestionsModal";
 import { ExamAiGenerateTab } from "../components/ExamAiGenerateTab";
+import { DiagramAnswer } from "@/features/question/components/DiagramAnswer";
+import { fromDetail, toUpdateRequest, type QuestionDraft } from "@/features/question/model";
+import { questionService, type QuestionDetail } from "@/services/question.service";
 
 export function ExamFormPage({
   formKind: propFormKind,
   mode: propMode,
 }: {
-  formKind?: "QUIZ" | "ESSAY";
+  formKind?: "QUIZ" | "ESSAY" | "DIAGRAM";
   mode?: "create" | "edit";
 }) {
   const { id } = useParams<{ id: string }>();
@@ -47,6 +50,9 @@ export function ExamFormPage({
   const isEdit = propMode === "edit" || (Boolean(id) && id !== "new");
   const isEssayFromPath = location.pathname.includes("/essay");
   const formKind = propFormKind || (isEssayFromPath ? "ESSAY" : "QUIZ");
+  const isAssessment = formKind !== "QUIZ";
+  const formLabel = formKind === "QUIZ" ? "Quiz" : formKind === "ESSAY" ? "Essay" : "Diagram";
+  const examPathKind = formKind === "QUIZ" ? "quiz" : formKind === "ESSAY" ? "essay" : "diagram";
 
   const [activeTab, setActiveTab] = useState<"manual" | "ai">("manual");
   const [courses, setCourses] = useState<CourseSummaryItem[]>([]);
@@ -67,7 +73,6 @@ export function ExamFormPage({
   const [isPractice, setIsPractice] = useState<boolean>(false);
   const [generationType, setGenerationType] =
     useState<GenerationType>("STATIC");
-  const [passMark, setPassMark] = useState<number>(50);
   const [status, setStatus] = useState<ExamStatus>("DRAFT");
 
   const [questions, setQuestions] = useState<ExamQuestion[]>([]);
@@ -107,7 +112,7 @@ export function ExamFormPage({
           "MATCHING",
           "ORDERING",
         ]
-      : ["ESSAY"];
+      : [formKind];
 
   const totalQuestionCount =
     questions.length +
@@ -145,7 +150,6 @@ export function ExamFormPage({
       setDurationMinutes(data.durationMinutes || 60);
       setIsPractice(!!data.isPractice);
       setGenerationType(data.generationType || "STATIC");
-      setPassMark(data.passMark ?? 50);
       setStatus(data.status || "DRAFT");
       setConfigs(data.configs || []);
       setGroups(data.groups || []);
@@ -154,9 +158,9 @@ export function ExamFormPage({
       const loadedQuestions = [...(data.questions || [])];
       setQuestions(loadedQuestions);
 
-      if (formKind === "ESSAY") {
+      if (isAssessment) {
         const missingRubricQuestions = loadedQuestions.filter(
-          (q) => q.questionType === "ESSAY" && q.hasRubric === undefined,
+          (q) => q.questionType === formKind && q.hasRubric === undefined,
         );
         if (missingRubricQuestions.length > 0) {
           Promise.allSettled(
@@ -270,10 +274,6 @@ export function ExamFormPage({
       errors.durationMinutes = "Duration must be between 1 and 600 minutes.";
     }
 
-    if (passMark < 0 || passMark > 100) {
-      errors.passMark = "Pass mark must be between 0 and 100.";
-    }
-
     if (generationType === "RANDOM") {
       if (configs.length === 0) {
         errors.configs =
@@ -317,7 +317,6 @@ export function ExamFormPage({
           durationMinutes,
           isPractice,
           generationType,
-          passMark,
           questionIds: payloadQuestionIds,
           groupIds: payloadGroupIds,
           configs: generationType === "STATIC" ? [] : configs,
@@ -327,7 +326,7 @@ export function ExamFormPage({
         const targetRoute =
           formKind === "QUIZ"
             ? `/manager/exams/quiz/${created.examId}`
-            : `/manager/exams/essay/${created.examId}`;
+            : `/manager/exams/${examPathKind}/${created.examId}`;
         navigate(targetRoute, { replace: true });
       } else {
         await examService.updateExam(Number(id), {
@@ -338,7 +337,6 @@ export function ExamFormPage({
           durationMinutes,
           isPractice,
           generationType,
-          passMark,
           configs: generationType === "STATIC" ? [] : configs,
         });
 
@@ -380,7 +378,6 @@ export function ExamFormPage({
         durationMinutes,
         isPractice,
         generationType,
-        passMark,
         questionIds: questions.map((q, idx) => ({
           questionId: q.questionId,
           points: q.points || 1,
@@ -399,7 +396,7 @@ export function ExamFormPage({
       const targetRoute =
         formKind === "QUIZ"
           ? `/manager/exams/quiz/${cloned.examId}`
-          : `/manager/exams/essay/${cloned.examId}`;
+        : `/manager/exams/${examPathKind}/${cloned.examId}`;
       navigate(targetRoute, { replace: true });
     } catch {
       toast.error("Failed to execute Archive and Clone workflow.");
@@ -629,8 +626,8 @@ export function ExamFormPage({
           { label: "Exams", onClick: () => navigate(ROUTES.managerExams) },
           {
             label: isEdit
-              ? `Edit ${formKind === "QUIZ" ? "Quiz" : "Essay"} Exam`
-              : `New ${formKind === "QUIZ" ? "Quiz" : "Essay"} Exam`,
+              ? `Edit ${formLabel} Exam`
+              : `New ${formLabel} Exam`,
           },
         ]}
       />
@@ -639,8 +636,8 @@ export function ExamFormPage({
         <div className="flex items-center gap-3">
           <h2 className="text-xl font-bold text-content">
             {isEdit
-              ? `Edit ${formKind === "QUIZ" ? "Quiz" : "Essay"} Exam`
-              : `Create ${formKind === "QUIZ" ? "Quiz" : "Essay"} Exam`}
+              ? `Edit ${formLabel} Exam`
+              : `Create ${formLabel} Exam`}
           </h2>
           <Badge
             variant={
@@ -653,7 +650,7 @@ export function ExamFormPage({
           >
             {status}
           </Badge>
-          <Badge variant="purple">{formKind}</Badge>
+          <Badge variant="purple">{formLabel}</Badge>
         </div>
 
         <div className="flex items-center gap-2">
@@ -779,7 +776,7 @@ export function ExamFormPage({
             const targetRoute =
               formKind === "QUIZ"
                 ? `/manager/exams/quiz/${created.examId}`
-                : `/manager/exams/essay/${created.examId}`;
+                : `/manager/exams/${examPathKind}/${created.examId}`;
             navigate(targetRoute, { replace: true });
           }}
           onCancel={() => setActiveTab("manual")}
@@ -876,7 +873,7 @@ export function ExamFormPage({
                   />
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="text-xs font-medium text-content-secondary block mb-1">
                       Duration (min) *
@@ -898,24 +895,6 @@ export function ExamFormPage({
                         {fieldErrors.durationMinutes}
                       </p>
                     )}
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-medium text-content-secondary block mb-1">
-                      Pass Mark (%)
-                    </label>
-                    <input
-                      type="number"
-                      min={0}
-                      max={100}
-                      disabled={isReadOnly}
-                      className="w-full px-3 py-1.5 text-sm rounded-[8px] border border-line bg-surface disabled:opacity-60"
-                      value={passMark}
-                      onChange={(e) => {
-                        setPassMark(Number(e.target.value) || 0);
-                        setIsDirty(true);
-                      }}
-                    />
                   </div>
 
                   <Select
@@ -1107,7 +1086,9 @@ export function ExamFormPage({
                   <p className="text-xs text-content-subtle">
                     {formKind === "QUIZ"
                       ? "Objective questions linked directly to this exam."
-                      : "Essay questions requiring student written responses and evaluation rubrics."}
+                      : formKind === "ESSAY"
+                        ? "Essay questions linked to this exam, with optional grading rubrics."
+                        : "Diagram questions linked to this exam, with optional grading rubrics."}
                   </p>
                 </div>
 
@@ -1168,7 +1149,7 @@ export function ExamFormPage({
                       <div
                         key={q.examQuestionId || idx}
                         className={`p-3.5 rounded-[10px] border transition-colors ${
-                          formKind === "ESSAY" && q.hasRubric === false
+                          isAssessment && q.questionType === formKind && q.hasRubric === false
                             ? "border-warning-line bg-warning-light/20"
                             : "border-line bg-surface"
                         }`}
@@ -1193,7 +1174,7 @@ export function ExamFormPage({
                                   Points: {q.points}
                                 </span>
 
-                                {formKind === "ESSAY" && (
+                                {isAssessment && q.questionType === formKind && (
                                   <>
                                     {q.hasRubric ? (
                                       <Badge
@@ -1247,6 +1228,9 @@ export function ExamFormPage({
                             </button>
                           )}
                         </div>
+                        {formKind === "DIAGRAM" && q.questionType === "DIAGRAM" && (
+                          <ExamDiagramAnswer questionId={q.questionId} readOnly={isReadOnly} />
+                        )}
                       </div>
                     ))}
                 </div>
@@ -1338,7 +1322,7 @@ export function ExamFormPage({
               <div className="space-y-2.5 text-sm">
                 <div className="flex items-center justify-between">
                   <span className="text-content-subtle">Exam Type:</span>
-                  <Badge variant="purple">{formKind}</Badge>
+                  <Badge variant="purple">{formLabel}</Badge>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-content-subtle">Status:</span>
@@ -1567,6 +1551,64 @@ export function ExamFormPage({
           leave?
         </p>
       </Modal>
+    </div>
+  );
+}
+
+function ExamDiagramAnswer({ questionId, readOnly }: { questionId: number; readOnly: boolean }) {
+  const [question, setQuestion] = useState<QuestionDetail | null>(null);
+  const [draft, setDraft] = useState<QuestionDraft | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setError("");
+    questionService.getQuestionById(questionId)
+      .then((detail) => {
+        if (!active) return;
+        setQuestion(detail);
+        setDraft(fromDetail(detail));
+      })
+      .catch(() => {
+        if (active) setError("Could not load the model answer diagram.");
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => { active = false; };
+  }, [questionId]);
+
+  const saveDiagram = async (patch: Partial<QuestionDraft>) => {
+    if (!question || !draft || readOnly || saving) return;
+    const updatedDraft = { ...draft, ...patch };
+    setDraft(updatedDraft);
+    setSaving(true);
+    setError("");
+    try {
+      const updated = await questionService.updateQuestion(
+        questionId,
+        toUpdateRequest(updatedDraft, question.moduleId, { status: question.status }),
+      );
+      setQuestion(updated);
+      setDraft(fromDetail(updated));
+    } catch {
+      setError("Could not save the model answer diagram. Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) return <div className="mt-3 text-xs text-content-subtle">Loading model answer diagram…</div>;
+  if (!draft) return <div className="mt-3 text-xs text-danger">{error || "Could not load the model answer diagram."}</div>;
+
+  return (
+    <div className="mt-4 border-t border-line-soft pt-4">
+      <DiagramAnswer q={draft} set={saveDiagram} readOnly={readOnly || saving} />
+      {saving && <p className="mt-2 text-xs text-content-subtle">Saving model answer diagram…</p>}
+      {error && <p className="mt-2 text-xs text-danger">{error}</p>}
     </div>
   );
 }
