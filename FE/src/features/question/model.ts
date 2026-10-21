@@ -41,8 +41,8 @@ export const QUESTION_TYPE_OPTIONS: { label: string; value: EditableQuestionType
   { label: 'Ordering (coming soon)', value: 'ORDERING' },
 ];
 
-/** Types the AI can draft — AI-01 doesn't generate DIAGRAM yet (ExamAiServiceImpl.TYPES). */
-export const AI_QUESTION_TYPE_OPTIONS = QUESTION_TYPE_OPTIONS.filter(t => !UNSAVEABLE_TYPES.includes(t.value) && t.value !== 'DIAGRAM') as { label: string; value: QuestionType }[];
+/** Types the AI can draft (ExamAiServiceImpl.TYPES). */
+export const AI_QUESTION_TYPE_OPTIONS = QUESTION_TYPE_OPTIONS.filter(t => !UNSAVEABLE_TYPES.includes(t.value)) as { label: string; value: QuestionType }[];
 
 /** QuestionValidator limits. */
 export const MAX_CONTENT_LENGTH = 10000;
@@ -379,8 +379,8 @@ function fromRubric(raw: unknown): Pick<QuestionDraft, 'rubric' | 'rubricNotes'>
 
 /**
  * Only the keys QuestionValidator allows — anything else (an old `title`, AI
- * extras) would fail the whole request. A DIAGRAM also sends its draw.io XML
- * and SVG snapshot (`drawioXml` / `drawioSvg`), which the backend doesn't accept yet.
+ * extras like plantUmlSource) would fail the whole request. A DIAGRAM also
+ * sends its draw.io XML; the validator rejects the SVG snapshot, so it stays local.
  */
 function toMetadata(q: QuestionDraft): Record<string, unknown> {
   const allowed: readonly string[] = QUESTION_METADATA_KEYS;
@@ -388,7 +388,7 @@ function toMetadata(q: QuestionDraft): Record<string, unknown> {
   return {
     ...kept,
     ...(q.skillTag.trim() ? { skillTag: q.skillTag.trim() } : {}),
-    ...(q.type === 'DIAGRAM' ? { drawioXml: q.diagramXml, ...(q.diagramSvg ? { drawioSvg: q.diagramSvg } : {}) } : {}),
+    ...(q.type === 'DIAGRAM' ? { drawioXml: q.diagramXml } : {}),
   };
 }
 
