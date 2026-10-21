@@ -1,35 +1,47 @@
-import React, { useEffect, useRef, useState, useMemo } from 'react';
-import { useSearchParams, useNavigate } from 'react-router';
-import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
-import { Select } from '@/components/ui/Select';
-import { Dropdown } from '@/components/ui/Dropdown';
-import { Modal } from '@/components/ui/Modal';
-import { Skeleton } from '@/components/ui/Skeleton';
-import { SearchInput } from '@/components/common/SearchInput';
-import { Icon } from '@/assets/icons';
-import { useToast } from '@/components/ui/ToastHost';
+import React, { useEffect, useRef, useState, useMemo } from "react";
+import { useSearchParams, useNavigate } from "react-router";
+import { Button } from "@/components/ui/Button";
+import { Badge } from "@/components/ui/Badge";
+import { Select } from "@/components/ui/Select";
+import { Dropdown } from "@/components/ui/Dropdown";
+import { Modal } from "@/components/ui/Modal";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { SearchInput } from "@/components/common/SearchInput";
+import { Icon } from "@/assets/icons";
+import { useToast } from "@/components/ui/ToastHost";
 import {
   examService,
   type ExamListItem,
   type ExamKind,
   type ExamStatus,
-} from '@/services/exam.service';
-import { courseService, type CourseSummaryItem, type CourseModuleResponse } from '@/services/course.service';
+} from "@/services/exam.service";
+import {
+  courseService,
+  type CourseSummaryItem,
+  type CourseModuleResponse,
+} from "@/services/course.service";
+
+type ExamListTab = "all" | "QUIZ" | "ASSESSMENT";
 
 export function ExamListPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const toast = useToast();
 
-  const tabParam = (searchParams.get('tab') as ExamKind | 'all') || 'all';
-  const searchParam = searchParams.get('search') || '';
-  const courseParam = searchParams.get('courseId') || '';
-  const moduleParam = searchParams.get('moduleId') || '';
-  const statusParam = searchParams.get('status') || 'all';
-  const pageParam = parseInt(searchParams.get('page') || '0', 10);
+  const rawTabParam = searchParams.get("tab") || "all";
+  const tabParam: ExamListTab =
+    rawTabParam === "all"
+      ? "all"
+      : rawTabParam === "QUIZ"
+        ? "QUIZ"
+        : "ASSESSMENT";
+  const searchParam = searchParams.get("search") || "";
+  const courseParam = searchParams.get("courseId") || "";
+  const moduleParam = searchParams.get("moduleId") || "";
+  const statusParam = searchParams.get("status") || "all";
+  const pageParam = parseInt(searchParams.get("page") || "0", 10);
 
-  const [activeTab, setActiveTab] = useState<ExamKind | 'all'>(tabParam);
+  const [activeTab, setActiveTab] = useState<ExamListTab>(tabParam);
   const [searchTerm, setSearchTerm] = useState(searchParam);
   const [selectedCourse, setSelectedCourse] = useState(courseParam);
   const [selectedModule, setSelectedModule] = useState(moduleParam);
@@ -44,7 +56,9 @@ export function ExamListPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [selectedExamIds, setSelectedExamIds] = useState<Set<number>>(new Set());
+  const [selectedExamIds, setSelectedExamIds] = useState<Set<number>>(
+    new Set(),
+  );
 
   const [statusDialogTarget, setStatusDialogTarget] = useState<{
     exam: ExamListItem;
@@ -53,7 +67,8 @@ export function ExamListPage() {
   const [statusUpdating, setStatusUpdating] = useState(false);
   const [statusWarnings, setStatusWarnings] = useState<string[]>([]);
 
-  const [deleteDialogTarget, setDeleteDialogTarget] = useState<ExamListItem | null>(null);
+  const [deleteDialogTarget, setDeleteDialogTarget] =
+    useState<ExamListItem | null>(null);
   const [deleteConflict409, setDeleteConflict409] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -78,15 +93,22 @@ export function ExamListPage() {
       });
     } else {
       setModules([]);
-      setSelectedModule('');
+      setSelectedModule("");
     }
   }, [selectedCourse]);
 
-  const updateUrlParams = (updates: Record<string, string | number | undefined>) => {
+  const updateUrlParams = (
+    updates: Record<string, string | number | undefined>,
+  ) => {
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
       Object.entries(updates).forEach(([key, val]) => {
-        if (val === undefined || val === '' || val === 'all' || (key === 'page' && val === 0)) {
+        if (
+          val === undefined ||
+          val === "" ||
+          val === "all" ||
+          (key === "page" && val === 0)
+        ) {
           next.delete(key);
         } else {
           next.set(key, String(val));
@@ -96,7 +118,7 @@ export function ExamListPage() {
     });
   };
 
-  const fetchExams = () => {
+  const fetchExams = async () => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
@@ -106,36 +128,72 @@ export function ExamListPage() {
     setLoading(true);
     setError(null);
 
-    examService
-      .getExams({
-        search: searchTerm.trim() || undefined,
-        courseId: selectedCourse ? Number(selectedCourse) : undefined,
-        moduleId: selectedModule ? Number(selectedModule) : undefined,
-        status: selectedStatus !== 'all' ? (selectedStatus as ExamStatus) : undefined,
-        examKind: activeTab !== 'all' ? activeTab : undefined,
-        page,
-        size: 15,
-      })
-      .then((res) => {
-        setExams(res.content || []);
-        setTotalElements(res.totalElements || 0);
-        setTotalPages(res.totalPages || 1);
-        setSelectedExamIds(new Set());
-      })
-      .catch((err: unknown) => {
-        const errorObj = err as { name?: string; response?: { status?: number; data?: { message?: string } } };
-        if (errorObj?.name === 'CanceledError' || errorObj?.name === 'AbortError') {
-          return;
-        }
-        if (errorObj?.response?.status === 403) {
-          setError('You do not have permission to view exams for this course.');
-        } else {
-          setError(errorObj?.response?.data?.message || 'Failed to load exams.');
-        }
-      })
-      .finally(() => {
-        setLoading(false);
-      });
+    const filters = {
+      search: searchTerm.trim() || undefined,
+      courseId: selectedCourse ? Number(selectedCourse) : undefined,
+      moduleId: selectedModule ? Number(selectedModule) : undefined,
+      status:
+        selectedStatus !== "all" ? (selectedStatus as ExamStatus) : undefined,
+    };
+
+    try {
+      if (activeTab === "ASSESSMENT") {
+        const kinds: ExamKind[] = ["ESSAY", "DIAGRAM"];
+        const pages = await Promise.all(
+          kinds.map(async (examKind) => {
+            const items: ExamListItem[] = [];
+            let currentPage = 0;
+            let hasMore = true;
+            while (hasMore) {
+              const response = await examService.getExams({
+                ...filters,
+                examKind,
+                page: currentPage,
+                size: 100,
+              });
+              items.push(...(response.content || []));
+              hasMore = !response.last && response.content.length > 0;
+              currentPage += 1;
+            }
+            return items;
+          }),
+        );
+        const unique = new Map<number, ExamListItem>();
+        pages.flat().forEach((exam) => unique.set(exam.examId, exam));
+        const allAssessments = [...unique.values()].sort(
+          (a, b) =>
+            b.createdAt.localeCompare(a.createdAt) || b.examId - a.examId,
+        );
+        setExams(allAssessments.slice(page * 15, page * 15 + 15));
+        setTotalElements(allAssessments.length);
+        setTotalPages(Math.max(1, Math.ceil(allAssessments.length / 15)));
+      } else {
+        const response = await examService.getExams({
+          ...filters,
+          examKind: activeTab === "QUIZ" ? "QUIZ" : undefined,
+          page,
+          size: 15,
+        });
+        setExams(response.content || []);
+        setTotalElements(response.totalElements || 0);
+        setTotalPages(response.totalPages || 1);
+      }
+      setSelectedExamIds(new Set());
+    } catch (err: unknown) {
+      const errorObj = err as {
+        name?: string;
+        response?: { status?: number; data?: { message?: string } };
+      };
+      if (errorObj?.name === "CanceledError" || errorObj?.name === "AbortError")
+        return;
+      if (errorObj?.response?.status === 403) {
+        setError("You do not have permission to view exams for this course.");
+      } else {
+        setError(errorObj?.response?.data?.message || "Failed to load exams.");
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -144,12 +202,23 @@ export function ExamListPage() {
     }, 400);
 
     return () => clearTimeout(handler);
-  }, [activeTab, searchTerm, selectedCourse, selectedModule, selectedStatus, page]);
+  }, [
+    activeTab,
+    searchTerm,
+    selectedCourse,
+    selectedModule,
+    selectedStatus,
+    page,
+  ]);
 
-  const handleTabChange = (tab: ExamKind | 'all') => {
+  const handleTabChange = (tab: ExamListTab) => {
     setActiveTab(tab);
     setPage(0);
     updateUrlParams({ tab, page: 0 });
+  };
+
+  const handleNewExam = (kind: "QUIZ" | "ESSAY" | "DIAGRAM") => {
+    navigate(`/manager/exams/${kind.toLowerCase()}/new`);
   };
 
   const handleSearchChange = (val: string) => {
@@ -160,9 +229,9 @@ export function ExamListPage() {
 
   const handleCourseChange = (val: string) => {
     setSelectedCourse(val);
-    setSelectedModule('');
+    setSelectedModule("");
     setPage(0);
-    updateUrlParams({ courseId: val, moduleId: '', page: 0 });
+    updateUrlParams({ courseId: val, moduleId: "", page: 0 });
   };
 
   const handleModuleChange = (val: string) => {
@@ -179,58 +248,63 @@ export function ExamListPage() {
 
   const handleExportCsv = () => {
     if (exams.length === 0) {
-      toast.warning('No exam rows to export.');
+      toast.warning("No exam rows to export.");
       return;
     }
 
     const headers = [
-      'ID',
-      'Title',
-      'Exam Kind',
-      'Course',
-      'Module',
-      'Questions',
-      'Total Points',
-      'Duration (min)',
-      'Status',
-      'Generation Type',
-      'Practice',
-      'Created At',
+      "ID",
+      "Title",
+      "Exam Kind",
+      "Course",
+      "Module",
+      "Questions",
+      "Total Points",
+      "Duration (min)",
+      "Status",
+      "Generation Type",
+      "Practice",
+      "Created At",
     ];
 
     const rows = exams.map((e) => [
       e.examId,
-      `"${(e.title || '').replace(/"/g, '""')}"`,
+      `"${(e.title || "").replace(/"/g, '""')}"`,
       e.examKind,
-      `"${(e.courseName || '').replace(/"/g, '""')}"`,
-      `"${(e.moduleName || '').replace(/"/g, '""')}"`,
+      `"${(e.courseName || "").replace(/"/g, '""')}"`,
+      `"${(e.moduleName || "").replace(/"/g, '""')}"`,
       e.questionCount,
       e.totalPoints,
       e.durationMinutes,
       e.status,
       e.generationType,
-      e.isPractice ? 'Yes' : 'No',
+      e.isPractice ? "Yes" : "No",
       `"${new Date(e.createdAt).toLocaleString()}"`,
     ]);
 
-    const csvContent = '\uFEFF' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\r\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const csvContent =
+      "\uFEFF" +
+      [headers.join(","), ...rows.map((r) => r.join(","))].join("\r\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
+    const link = document.createElement("a");
     link.href = url;
-    link.setAttribute('download', `exams_export_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute(
+      "download",
+      `exams_export_${new Date().toISOString().slice(0, 10)}.csv`,
+    );
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-    toast.success('Exams exported to CSV.');
+    toast.success("Exams exported to CSV.");
   };
 
   const handleEditExam = (exam: ExamListItem) => {
-    if (exam.examKind === 'QUIZ') {
+    if (exam.examKind === "QUIZ") {
       navigate(`/manager/exams/quiz/${exam.examId}`);
-    } else if (exam.examKind === 'ESSAY') {
-      navigate(`/manager/exams/essay/${exam.examId}`);
+    } else if (exam.examKind === "ESSAY" || exam.examKind === "DIAGRAM") {
+      navigate(`/manager/exams/${exam.examKind.toLowerCase()}/${exam.examId}`);
     }
   };
 
@@ -242,13 +316,15 @@ export function ExamListPage() {
     try {
       const res = await examService.patchPublishExam(
         statusDialogTarget.exam.examId,
-        statusDialogTarget.targetStatus
+        statusDialogTarget.targetStatus,
       );
 
       setExams((prev) =>
         prev.map((e) =>
-          e.examId === statusDialogTarget.exam.examId ? { ...e, status: res.status } : e
-        )
+          e.examId === statusDialogTarget.exam.examId
+            ? { ...e, status: res.status }
+            : e,
+        ),
       );
 
       if (res.warnings && res.warnings.length > 0) {
@@ -259,11 +335,18 @@ export function ExamListPage() {
         setStatusDialogTarget(null);
       }
     } catch (err: unknown) {
-      const errorObj = err as { response?: { status?: number; data?: { message?: string } } };
+      const errorObj = err as {
+        response?: { status?: number; data?: { message?: string } };
+      };
       if (errorObj?.response?.status === 400) {
-        toast.error(errorObj.response.data?.message || 'Exam has 0 questions and cannot be published.');
+        toast.error(
+          errorObj.response.data?.message ||
+            "Exam has 0 questions and cannot be published.",
+        );
       } else {
-        toast.error(errorObj?.response?.data?.message || 'Failed to update exam status.');
+        toast.error(
+          errorObj?.response?.data?.message || "Failed to update exam status.",
+        );
       }
       setStatusDialogTarget(null);
     } finally {
@@ -277,7 +360,7 @@ export function ExamListPage() {
 
     try {
       await examService.deleteExam(deleteDialogTarget.examId);
-      toast.success('Exam deleted successfully.');
+      toast.success("Exam deleted successfully.");
       setDeleteDialogTarget(null);
       setDeleteConflict409(false);
       fetchExams();
@@ -286,7 +369,7 @@ export function ExamListPage() {
       if (errorObj?.response?.status === 409) {
         setDeleteConflict409(true);
       } else {
-        toast.error('Failed to delete exam.');
+        toast.error("Failed to delete exam.");
         setDeleteDialogTarget(null);
       }
     } finally {
@@ -315,7 +398,8 @@ export function ExamListPage() {
   };
 
   const allPageIds = useMemo(() => exams.map((e) => e.examId), [exams]);
-  const isAllChecked = allPageIds.length > 0 && allPageIds.every((id) => selectedExamIds.has(id));
+  const isAllChecked =
+    allPageIds.length > 0 && allPageIds.every((id) => selectedExamIds.has(id));
   const isSomeChecked = allPageIds.some((id) => selectedExamIds.has(id));
 
   const toggleSelectAll = () => {
@@ -344,7 +428,8 @@ export function ExamListPage() {
         <div>
           <h2 className="text-xl font-bold text-content">Exams</h2>
           <p className="text-xs text-content-subtle mt-0.5">
-            Manage course examinations, questionnaires, and essay evaluations.
+            Manage quizzes and assessments, including essays, diagrams, and
+            other response types.
           </p>
         </div>
 
@@ -377,14 +462,19 @@ export function ExamListPage() {
             }
             items={[
               {
-                label: 'Quiz Exam (Objective)',
+                label: "Quiz Exam (Objective)",
                 icon: <Icon.HelpCircle className="w-4 h-4" />,
-                onClick: () => navigate('/manager/exams/quiz/new'),
+                onClick: () => navigate("/manager/exams/quiz/new"),
               },
               {
-                label: 'Essay Exam (Free Response)',
+                label: "Essay Exam",
                 icon: <Icon.FileText className="w-4 h-4" />,
-                onClick: () => navigate('/manager/exams/essay/new'),
+                onClick: () => handleNewExam("ESSAY"),
+              },
+              {
+                label: "Diagram Exam",
+                icon: <Icon.Edit className="w-4 h-4" />,
+                onClick: () => handleNewExam("DIAGRAM"),
               },
             ]}
           />
@@ -394,22 +484,22 @@ export function ExamListPage() {
       <div className="flex border-b border-line">
         <button
           type="button"
-          onClick={() => handleTabChange('all')}
+          onClick={() => handleTabChange("all")}
           className={`px-5 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors cursor-pointer ${
-            activeTab === 'all'
-              ? 'border-brand-ink text-brand-ink'
-              : 'border-transparent text-content-subtle hover:text-content'
+            activeTab === "all"
+              ? "border-brand-ink text-brand-ink"
+              : "border-transparent text-content-subtle hover:text-content"
           }`}
         >
           All Exams
         </button>
         <button
           type="button"
-          onClick={() => handleTabChange('QUIZ')}
+          onClick={() => handleTabChange("QUIZ")}
           className={`px-5 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors cursor-pointer flex items-center gap-1.5 ${
-            activeTab === 'QUIZ'
-              ? 'border-brand-ink text-brand-ink'
-              : 'border-transparent text-content-subtle hover:text-content'
+            activeTab === "QUIZ"
+              ? "border-brand-ink text-brand-ink"
+              : "border-transparent text-content-subtle hover:text-content"
           }`}
         >
           <Icon.HelpCircle className="w-4 h-4" />
@@ -417,15 +507,15 @@ export function ExamListPage() {
         </button>
         <button
           type="button"
-          onClick={() => handleTabChange('ESSAY')}
+          onClick={() => handleTabChange("ASSESSMENT")}
           className={`px-5 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors cursor-pointer flex items-center gap-1.5 ${
-            activeTab === 'ESSAY'
-              ? 'border-brand-ink text-brand-ink'
-              : 'border-transparent text-content-subtle hover:text-content'
+            activeTab === "ASSESSMENT"
+              ? "border-brand-ink text-brand-ink"
+              : "border-transparent text-content-subtle hover:text-content"
           }`}
         >
           <Icon.FileText className="w-4 h-4" />
-          Essay
+          Assessments
         </button>
       </div>
 
@@ -443,8 +533,11 @@ export function ExamListPage() {
             value={selectedCourse}
             onChange={handleCourseChange}
             options={[
-              { label: 'All Courses', value: '' },
-              ...courses.map((c) => ({ label: c.title, value: String(c.courseId) })),
+              { label: "All Courses", value: "" },
+              ...courses.map((c) => ({
+                label: c.title,
+                value: String(c.courseId),
+              })),
             ]}
           />
 
@@ -454,8 +547,11 @@ export function ExamListPage() {
             disabled={!selectedCourse}
             onChange={handleModuleChange}
             options={[
-              { label: 'All Modules', value: '' },
-              ...modules.map((m) => ({ label: m.title, value: String(m.moduleId) })),
+              { label: "All Modules", value: "" },
+              ...modules.map((m) => ({
+                label: m.title,
+                value: String(m.moduleId),
+              })),
             ]}
           />
 
@@ -464,10 +560,10 @@ export function ExamListPage() {
             value={selectedStatus}
             onChange={handleStatusChange}
             options={[
-              { label: 'All Status', value: 'all' },
-              { label: 'Draft', value: 'DRAFT' },
-              { label: 'Published', value: 'PUBLISHED' },
-              { label: 'Archived', value: 'ARCHIVED' },
+              { label: "All Status", value: "all" },
+              { label: "Draft", value: "DRAFT" },
+              { label: "Published", value: "PUBLISHED" },
+              { label: "Archived", value: "ARCHIVED" },
             ]}
           />
 
@@ -494,14 +590,42 @@ export function ExamListPage() {
         ) : exams.length === 0 ? (
           <div className="p-16 text-center space-y-3">
             <Icon.ClipboardList className="w-10 h-10 mx-auto text-content-subtle" />
-            <h4 className="text-base font-semibold text-content">No exams found</h4>
+            <h4 className="text-base font-semibold text-content">
+              No exams found
+            </h4>
             <p className="text-xs text-content-subtle max-w-sm mx-auto">
-              There are no exams matching your search criteria. Create a new Quiz or Essay exam to get started.
+              There are no exams matching your search criteria. Create a quiz or
+              assessment to get started.
             </p>
-            <div className="pt-2">
-              <Button onClick={() => navigate('/manager/exams/quiz/new')} icon={<Icon.Plus className="w-4 h-4" />}>
-                New Exam
-              </Button>
+            <div className="pt-2 flex justify-center">
+              {activeTab === "ASSESSMENT" ? (
+                <Dropdown
+                  trigger={
+                    <Button icon={<Icon.Plus className="w-4 h-4" />}>
+                      New Assessment
+                    </Button>
+                  }
+                  items={[
+                    {
+                      label: "Essay Exam",
+                      icon: <Icon.FileText className="w-4 h-4" />,
+                      onClick: () => handleNewExam("ESSAY"),
+                    },
+                    {
+                      label: "Diagram Exam",
+                      icon: <Icon.Edit className="w-4 h-4" />,
+                      onClick: () => handleNewExam("DIAGRAM"),
+                    },
+                  ]}
+                />
+              ) : (
+                <Button
+                  onClick={() => handleNewExam("QUIZ")}
+                  icon={<Icon.Plus className="w-4 h-4" />}
+                >
+                  New Exam
+                </Button>
+              )}
             </div>
           </div>
         ) : (
@@ -514,7 +638,8 @@ export function ExamListPage() {
                       type="checkbox"
                       checked={isAllChecked}
                       ref={(el) => {
-                        if (el) el.indeterminate = isSomeChecked && !isAllChecked;
+                        if (el)
+                          el.indeterminate = isSomeChecked && !isAllChecked;
                       }}
                       onChange={toggleSelectAll}
                       className="cursor-pointer"
@@ -535,13 +660,15 @@ export function ExamListPage() {
               <tbody className="divide-y divide-line-faint text-sm">
                 {exams.map((exam) => {
                   const isChecked = selectedExamIds.has(exam.examId);
-                  const isSupportedKind = exam.examKind === 'QUIZ' || exam.examKind === 'ESSAY';
+                  const isSupportedKind = ["QUIZ", "ESSAY", "DIAGRAM"].includes(
+                    exam.examKind,
+                  );
 
                   return (
                     <tr
                       key={exam.examId}
                       className={`hover:bg-surface-hover transition-colors ${
-                        isChecked ? 'bg-primary-light/40' : ''
+                        isChecked ? "bg-primary-light/40" : ""
                       }`}
                     >
                       <td className="px-3 py-3">
@@ -552,23 +679,32 @@ export function ExamListPage() {
                           className="cursor-pointer"
                         />
                       </td>
-                      <td className="px-3 py-3 font-semibold text-content max-w-xs truncate" title={exam.title}>
+                      <td
+                        className="px-3 py-3 font-semibold text-content max-w-xs truncate"
+                        title={exam.title}
+                      >
                         {exam.title}
                       </td>
-                      <td className="px-3 py-3 text-content-secondary max-w-[150px] truncate" title={exam.courseName}>
+                      <td
+                        className="px-3 py-3 text-content-secondary max-w-[150px] truncate"
+                        title={exam.courseName}
+                      >
                         {exam.courseName}
                       </td>
-                      <td className="px-3 py-3 text-content-subtle max-w-[130px] truncate" title={exam.moduleName || '—'}>
-                        {exam.moduleName || '—'}
+                      <td
+                        className="px-3 py-3 text-content-subtle max-w-[130px] truncate"
+                        title={exam.moduleName || "—"}
+                      >
+                        {exam.moduleName || "—"}
                       </td>
                       <td className="px-3 py-3">
                         <Badge
                           variant={
-                            exam.examKind === 'QUIZ'
-                              ? 'purple'
-                              : exam.examKind === 'ESSAY'
-                              ? 'default'
-                              : 'warning'
+                            exam.examKind === "QUIZ"
+                              ? "purple"
+                              : exam.examKind === "ESSAY"
+                                ? "default"
+                                : "warning"
                           }
                           className="text-2xs"
                         >
@@ -587,11 +723,11 @@ export function ExamListPage() {
                       <td className="px-3 py-3 text-center">
                         <Badge
                           variant={
-                            exam.status === 'PUBLISHED'
-                              ? 'success'
-                              : exam.status === 'ARCHIVED'
-                              ? 'default'
-                              : 'warning'
+                            exam.status === "PUBLISHED"
+                              ? "success"
+                              : exam.status === "ARCHIVED"
+                                ? "default"
+                                : "warning"
                           }
                           className="text-2xs"
                         >
@@ -610,37 +746,53 @@ export function ExamListPage() {
                           }
                           items={[
                             {
-                              label: isSupportedKind ? 'Edit' : 'Edit (Later Version)',
+                              label: isSupportedKind
+                                ? "Edit"
+                                : "Edit (Later Version)",
                               icon: <Icon.Edit className="w-4 h-4" />,
                               disabled: !isSupportedKind,
                               onClick: () => handleEditExam(exam),
                             },
                             {
-                              label: exam.status === 'PUBLISHED' ? 'Unpublish to Draft' : 'Publish',
-                              icon: exam.status === 'PUBLISHED' ? <Icon.EyeOff className="w-4 h-4" /> : <Icon.CheckCircle className="w-4 h-4" />,
+                              label:
+                                exam.status === "PUBLISHED"
+                                  ? "Unpublish to Draft"
+                                  : "Publish",
+                              icon:
+                                exam.status === "PUBLISHED" ? (
+                                  <Icon.EyeOff className="w-4 h-4" />
+                                ) : (
+                                  <Icon.CheckCircle className="w-4 h-4" />
+                                ),
                               disabled:
-                                exam.status !== 'PUBLISHED' &&
+                                exam.status !== "PUBLISHED" &&
                                 exam.questionCount === 0 &&
-                                exam.generationType === 'STATIC',
+                                exam.generationType === "STATIC",
                               onClick: () =>
                                 setStatusDialogTarget({
                                   exam,
-                                  targetStatus: exam.status === 'PUBLISHED' ? 'DRAFT' : 'PUBLISHED',
+                                  targetStatus:
+                                    exam.status === "PUBLISHED"
+                                      ? "DRAFT"
+                                      : "PUBLISHED",
                                 }),
                             },
                             {
-                              label: 'Archive',
+                              label: "Archive",
                               icon: <Icon.Archive className="w-4 h-4" />,
-                              disabled: exam.status === 'ARCHIVED',
+                              disabled: exam.status === "ARCHIVED",
                               onClick: () =>
                                 setStatusDialogTarget({
                                   exam,
-                                  targetStatus: 'ARCHIVED',
+                                  targetStatus: "ARCHIVED",
                                 }),
                             },
-                            { divider: true } as { label: string; divider: true },
+                            { divider: true } as {
+                              label: string;
+                              divider: true;
+                            },
                             {
-                              label: 'Delete',
+                              label: "Delete",
                               icon: <Icon.Trash className="w-4 h-4" />,
                               danger: true,
                               onClick: () => {
@@ -711,7 +863,7 @@ export function ExamListPage() {
               }}
               disabled={statusUpdating}
             >
-              {statusWarnings.length > 0 ? 'Close' : 'Cancel'}
+              {statusWarnings.length > 0 ? "Close" : "Cancel"}
             </Button>
             {statusWarnings.length === 0 && (
               <Button
@@ -727,13 +879,19 @@ export function ExamListPage() {
       >
         <div className="space-y-3 text-sm text-content">
           <p>
-            Are you sure you want to change the status of <strong>"{statusDialogTarget?.exam.title}"</strong> to{' '}
-            <strong className="text-brand-ink">{statusDialogTarget?.targetStatus}</strong>?
+            Are you sure you want to change the status of{" "}
+            <strong>"{statusDialogTarget?.exam.title}"</strong> to{" "}
+            <strong className="text-brand-ink">
+              {statusDialogTarget?.targetStatus}
+            </strong>
+            ?
           </p>
 
           {statusWarnings.length > 0 && (
             <div className="p-3 bg-warning-light/40 border border-warning-line rounded-[8px] space-y-1 text-xs text-warning-strong">
-              <p className="font-semibold">Published successfully with warnings:</p>
+              <p className="font-semibold">
+                Published successfully with warnings:
+              </p>
               {statusWarnings.map((w, idx) => (
                 <p key={idx}>• {w}</p>
               ))}
@@ -748,7 +906,9 @@ export function ExamListPage() {
           setDeleteDialogTarget(null);
           setDeleteConflict409(false);
         }}
-        title={deleteConflict409 ? 'Cannot Delete Active Exam (409)' : 'Delete Exam'}
+        title={
+          deleteConflict409 ? "Cannot Delete Active Exam (409)" : "Delete Exam"
+        }
         size="sm"
         footer={
           <div className="flex items-center justify-end gap-2 w-full">
@@ -768,13 +928,21 @@ export function ExamListPage() {
                 onClick={async () => {
                   if (!deleteDialogTarget) return;
                   try {
-                    await examService.patchPublishExam(deleteDialogTarget.examId, 'ARCHIVED');
+                    await examService.patchPublishExam(
+                      deleteDialogTarget.examId,
+                      "ARCHIVED",
+                    );
                   } catch (err: unknown) {
-                    const errorObj = err as { response?: { data?: { message?: string } } };
-                    toast.error(errorObj?.response?.data?.message || 'Failed to archive exam.');
+                    const errorObj = err as {
+                      response?: { data?: { message?: string } };
+                    };
+                    toast.error(
+                      errorObj?.response?.data?.message ||
+                        "Failed to archive exam.",
+                    );
                     return;
                   }
-                  toast.success('Exam archived successfully.');
+                  toast.success("Exam archived successfully.");
                   setDeleteDialogTarget(null);
                   setDeleteConflict409(false);
                   fetchExams();
@@ -783,7 +951,11 @@ export function ExamListPage() {
                 Archive Exam Instead
               </Button>
             ) : (
-              <Button variant="danger" onClick={handleDeleteExam} loading={deleting}>
+              <Button
+                variant="danger"
+                onClick={handleDeleteExam}
+                loading={deleting}
+              >
                 Delete Permanently
               </Button>
             )}
@@ -793,16 +965,25 @@ export function ExamListPage() {
         <div className="space-y-3 text-sm text-content">
           {deleteConflict409 ? (
             <p className="text-danger font-medium text-xs leading-relaxed">
-              This exam cannot be permanently deleted because students have already submitted attempts for it. Please Archive the exam instead to preserve student grading histories.
+              This exam cannot be permanently deleted because students have
+              already submitted attempts for it. Please Archive the exam instead
+              to preserve student grading histories.
             </p>
           ) : (
             <div className="space-y-2 text-xs text-content-secondary leading-relaxed">
               <p>
-                Are you sure you want to permanently delete <strong>"{deleteDialogTarget?.title}"</strong>?
+                Are you sure you want to permanently delete{" "}
+                <strong>"{deleteDialogTarget?.title}"</strong>?
               </p>
               <div className="p-2.5 bg-surface-muted rounded-[8px] border border-line space-y-1 text-2xs text-content-subtle">
-                <p><strong>Delete:</strong> Permanently removes draft exam with no test submissions.</p>
-                <p><strong>Archive:</strong> Preserves past attempt histories while hiding exam from new enrollments.</p>
+                <p>
+                  <strong>Delete:</strong> Permanently removes draft exam with
+                  no test submissions.
+                </p>
+                <p>
+                  <strong>Archive:</strong> Preserves past attempt histories
+                  while hiding exam from new enrollments.
+                </p>
               </div>
             </div>
           )}
@@ -815,9 +996,7 @@ export function ExamListPage() {
         title="Bulk Delete Summary"
         size="sm"
         footer={
-          <Button onClick={() => setBulkDeleteSummary(null)}>
-            Done
-          </Button>
+          <Button onClick={() => setBulkDeleteSummary(null)}>Done</Button>
         }
       >
         <div className="space-y-2 text-sm text-content">
@@ -826,7 +1005,8 @@ export function ExamListPage() {
           </p>
           {bulkDeleteSummary && bulkDeleteSummary.failed > 0 && (
             <p className="text-danger font-medium">
-              Failed to delete: {bulkDeleteSummary.failed} exam(s) (e.g. exams with student attempts).
+              Failed to delete: {bulkDeleteSummary.failed} exam(s) (e.g. exams
+              with student attempts).
             </p>
           )}
         </div>

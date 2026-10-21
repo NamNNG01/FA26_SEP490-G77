@@ -18,7 +18,6 @@ export interface ExamListItem {
   moduleName?: string;
   examKind: ExamKind;
   durationMinutes: number;
-  passMark: number;
   questionCount: number;
   totalPoints: number;
   status: ExamStatus;
@@ -65,7 +64,6 @@ export interface ExamDetail {
   moduleName?: string;
   examKind?: ExamKind;
   durationMinutes?: number;
-  passMark?: number;
   questionCount?: number;
   totalPoints?: number;
   status?: ExamStatus;
@@ -87,7 +85,6 @@ export interface CreateExamRequest {
   isPractice: boolean;
   generationType: GenerationType;
   status?: ExamStatus;
-  passMark?: number;
   questionIds?: { questionId: number; points: number; orderIndex: number }[];
   configs?: ExamConfig[];
   groupIds?: { groupId: number; points: number; orderIndex: number }[];
@@ -101,7 +98,6 @@ export interface UpdateExamRequest {
   durationMinutes?: number;
   isPractice?: boolean;
   generationType?: GenerationType;
-  passMark?: number;
   configs?: ExamConfig[];
 }
 
@@ -242,7 +238,6 @@ const INITIAL_MOCK_EXAMS: ExamDetail[] = [
     moduleName: 'Machine Learning Basics',
     examKind: 'QUIZ',
     durationMinutes: 90,
-    passMark: 70,
     questionCount: 3,
     totalPoints: 8,
     status: 'PUBLISHED',
@@ -299,7 +294,6 @@ const INITIAL_MOCK_EXAMS: ExamDetail[] = [
     moduleName: 'Ethics in AI',
     examKind: 'ESSAY',
     durationMinutes: 60,
-    passMark: 60,
     questionCount: 2,
     totalPoints: 20,
     status: 'DRAFT',
@@ -340,7 +334,6 @@ const INITIAL_MOCK_EXAMS: ExamDetail[] = [
     moduleName: 'Python Basics',
     examKind: 'QUIZ',
     durationMinutes: 45,
-    passMark: 50,
     questionCount: 0,
     totalPoints: 0,
     status: 'DRAFT',
@@ -377,7 +370,6 @@ const INITIAL_MOCK_EXAMS: ExamDetail[] = [
     moduleName: 'Data Preparation',
     examKind: 'QUIZ',
     durationMinutes: 75,
-    passMark: 65,
     questionCount: 2,
     totalPoints: 6,
     status: 'ARCHIVED',
@@ -709,7 +701,6 @@ export const examService = {
       moduleName: e.moduleName,
       examKind: e.examKind || 'QUIZ',
       durationMinutes: e.durationMinutes || 60,
-      passMark: e.passMark || 50,
       questionCount: e.questions.length + e.groups.reduce((acc, g) => acc + (g.questionCount || 0), 0),
       totalPoints: e.questions.reduce((acc, q) => acc + q.points, 0) + e.groups.reduce((acc, g) => acc + g.points, 0),
       status: e.status || 'DRAFT',

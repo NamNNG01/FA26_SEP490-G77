@@ -1,6 +1,6 @@
-import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
-import { createPortal } from 'react-dom';
-import { Icon } from '@/assets/icons';
+import React, { useState, useRef, useEffect, useLayoutEffect } from "react";
+import { createPortal } from "react-dom";
+import { Icon } from "@/assets/icons";
 
 const MENU_WIDTH = 192;
 const GAP = 6;
@@ -46,8 +46,8 @@ export function Dropdown(props: DropdownProps) {
     trigger,
     items,
     search = false,
-    searchPlaceholder = 'Search...',
-    className = '',
+    searchPlaceholder = "Search...",
+    className = "",
   } = props;
 
   const isMulti = props.multi === true;
@@ -55,15 +55,19 @@ export function Dropdown(props: DropdownProps) {
   const multiValues = isMulti ? (props.values ?? []) : [];
 
   const [open, setOpen] = useState(false);
-  const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [pos, setPos] = useState<{
+    top: number;
+    left: number;
+    width: number;
+  } | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
   const ref = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!open) {
-      setSearchQuery('');
+      setSearchQuery("");
       return;
     }
     const onDown = (e: MouseEvent) => {
@@ -71,33 +75,33 @@ export function Dropdown(props: DropdownProps) {
       if (ref.current?.contains(t) || menuRef.current?.contains(t)) return;
       if (isMulti) return;
       setOpen(false);
-      setSearchQuery('');
+      setSearchQuery("");
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      if (e.key === "Escape") {
         setOpen(false);
-        setSearchQuery('');
+        setSearchQuery("");
       }
     };
     const onScroll = (e: Event) => {
       const target = e.target as Node;
       if (menuRef.current?.contains(target)) return;
       setOpen(false);
-      setSearchQuery('');
+      setSearchQuery("");
     };
     const onResize = () => {
       setOpen(false);
-      setSearchQuery('');
+      setSearchQuery("");
     };
-    document.addEventListener('mousedown', onDown);
-    document.addEventListener('keydown', onKey);
-    window.addEventListener('scroll', onScroll, true);
-    window.addEventListener('resize', onResize);
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    window.addEventListener("scroll", onScroll, true);
+    window.addEventListener("resize", onResize);
     return () => {
-      document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('keydown', onKey);
-      window.removeEventListener('scroll', onScroll, true);
-      window.removeEventListener('resize', onResize);
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+      window.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("resize", onResize);
     };
   }, [open, isMulti]);
 
@@ -121,13 +125,17 @@ export function Dropdown(props: DropdownProps) {
     const width = Math.max(MENU_WIDTH, Math.round(anchor.width));
     const below = anchor.bottom + GAP;
     const top =
-      below + menuHeight > window.innerHeight - 8 && anchor.top - GAP - menuHeight > 8
+      below + menuHeight > window.innerHeight - 8 &&
+      anchor.top - GAP - menuHeight > 8
         ? anchor.top - GAP - menuHeight
         : below;
     const left =
       anchor.width >= MENU_WIDTH
         ? Math.min(Math.max(8, anchor.left), window.innerWidth - width - 8)
-        : Math.min(Math.max(8, anchor.right - width), window.innerWidth - width - 8);
+        : Math.min(
+            Math.max(8, anchor.right - width),
+            window.innerWidth - width - 8,
+          );
     setPos({ top, left, width });
   }, [open]);
 
@@ -136,7 +144,7 @@ export function Dropdown(props: DropdownProps) {
       ? items.filter(
           (item) =>
             item.divider ||
-            item.label.toLowerCase().includes(searchQuery.trim().toLowerCase())
+            item.label.toLowerCase().includes(searchQuery.trim().toLowerCase()),
         )
       : items;
 
@@ -148,14 +156,18 @@ export function Dropdown(props: DropdownProps) {
     if (isMulti) {
       return multiValues.some((v) => String(v) === String(item.value));
     }
-    return singleValue !== undefined && String(item.value) === String(singleValue);
+    return (
+      singleValue !== undefined && String(item.value) === String(singleValue)
+    );
   };
 
   const handleItemSelect = (item: DropdownItem) => {
     if (isMulti) {
       const itemValue = item.value;
       if (itemValue === undefined) return;
-      const alreadySelected = multiValues.some((v) => String(v) === String(itemValue));
+      const alreadySelected = multiValues.some(
+        (v) => String(v) === String(itemValue),
+      );
       const next = alreadySelected
         ? multiValues.filter((v) => String(v) !== String(itemValue))
         : [...multiValues, itemValue];
@@ -167,7 +179,7 @@ export function Dropdown(props: DropdownProps) {
         (props as DropdownSingleProps).onSelect?.(item.value);
       }
       setOpen(false);
-      setSearchQuery('');
+      setSearchQuery("");
     }
   };
 
@@ -177,10 +189,10 @@ export function Dropdown(props: DropdownProps) {
         const t = e.target as Node;
         if (ref.current?.contains(t) || menuRef.current?.contains(t)) return;
         setOpen(false);
-        setSearchQuery('');
-        document.removeEventListener('mousedown', onDown);
+        setSearchQuery("");
+        document.removeEventListener("mousedown", onDown);
       };
-      if (!open) document.addEventListener('mousedown', onDown);
+      if (!open) document.addEventListener("mousedown", onDown);
     }
     setOpen((o) => !o);
   };
@@ -194,11 +206,11 @@ export function Dropdown(props: DropdownProps) {
             ref={menuRef}
             role="menu"
             style={{
-              position: 'fixed',
+              position: "fixed",
               top: pos?.top ?? 0,
               left: pos?.left ?? 0,
               width: pos?.width ?? MENU_WIDTH,
-              visibility: pos ? 'visible' : 'hidden',
+              visibility: pos ? "visible" : "hidden",
             }}
             className="bg-surface rounded-[10px] border border-line shadow-xl z-[9999] overflow-hidden"
           >
@@ -219,7 +231,7 @@ export function Dropdown(props: DropdownProps) {
                   {searchQuery && (
                     <button
                       type="button"
-                      onClick={() => setSearchQuery('')}
+                      onClick={() => setSearchQuery("")}
                       className="absolute right-2 text-content-soft hover:text-content"
                     >
                       <Icon.X className="w-3 h-3" />
@@ -236,7 +248,9 @@ export function Dropdown(props: DropdownProps) {
                 </span>
                 <button
                   type="button"
-                  onClick={() => (props as DropdownMultiProps).onSelectMulti?.([])}
+                  onClick={() =>
+                    (props as DropdownMultiProps).onSelectMulti?.([])
+                  }
                   className="text-xs text-danger hover:underline"
                 >
                   Clear all
@@ -248,7 +262,9 @@ export function Dropdown(props: DropdownProps) {
               {hasVisibleItems ? (
                 filteredItems.map((item, i) => {
                   if (item.divider) {
-                    return <div key={i} className="my-1 border-t border-line-soft" />;
+                    return (
+                      <div key={i} className="my-1 border-t border-line-soft" />
+                    );
                   }
 
                   const selected = isItemSelected(item);
@@ -264,21 +280,23 @@ export function Dropdown(props: DropdownProps) {
                       }}
                       className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left hover:bg-surface-hover transition-colors ${
                         selected
-                          ? 'bg-primary/10 text-primary font-medium'
+                          ? "bg-primary/10 text-primary font-medium"
                           : item.danger
-                          ? 'text-danger'
-                          : 'text-content-secondary'
+                            ? "text-danger"
+                            : "text-content-secondary"
                       }`}
                     >
                       {isMulti && (
                         <span
                           className={`w-4 h-4 shrink-0 rounded border flex items-center justify-center transition-colors ${
                             selected
-                              ? 'bg-primary border-primary'
-                              : 'border-line bg-surface'
+                              ? "bg-primary border-primary"
+                              : "border-line bg-surface"
                           }`}
                         >
-                          {selected && <Icon.Check className="w-2.5 h-2.5 text-white" />}
+                          {selected && (
+                            <Icon.Check className="w-2.5 h-2.5 text-white" />
+                          )}
                         </span>
                       )}
                       <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -306,7 +324,7 @@ export function Dropdown(props: DropdownProps) {
                   type="button"
                   onClick={() => {
                     setOpen(false);
-                    setSearchQuery('');
+                    setSearchQuery("");
                   }}
                   className="text-xs font-medium text-primary hover:underline"
                 >
@@ -315,7 +333,7 @@ export function Dropdown(props: DropdownProps) {
               </div>
             )}
           </div>,
-          document.body
+          document.body,
         )}
     </div>
   );

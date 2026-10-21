@@ -322,7 +322,18 @@ export function updateMockCourse(id: number | string, payload: UpdateCourseReque
     if (payload.categoryId !== undefined) course.categoryId = payload.categoryId;
     if (payload.thumbnailUrl !== undefined) course.thumbnailUrl = payload.thumbnailUrl;
     if (payload.price !== undefined) course.price = payload.price;
-    if (payload.managerId !== undefined) course.managerId = payload.managerId;
+    if (payload.managerId !== undefined) {
+      course.managerId = payload.managerId;
+      course.managerName = `Manager #${payload.managerId}`;
+    }
+    if (payload.managerIds !== undefined) {
+      const managerIds = [payload.managerId ?? course.managerId, ...payload.managerIds];
+      course.managers = managerIds.map((userId, index) => ({
+        userId,
+        fullName: userId === course.managerId ? course.managerName : `Manager #${userId}`,
+        primary: index === 0,
+      }));
+    }
     course.updatedAt = now;
     return JSON.parse(JSON.stringify(course));
   }
