@@ -32,7 +32,8 @@ import { RubricDetailModal } from "../components/RubricDetailModal";
 import { ImportQuestionsModal } from "../components/ImportQuestionsModal";
 import { ExamAiGenerateTab } from "../components/ExamAiGenerateTab";
 import { DiagramAnswer } from "@/features/question/components/DiagramAnswer";
-import { fromDetail, toUpdateRequest, type QuestionDraft } from "@/features/question/model";
+import { QuestionForm } from "@/features/question/components/QuestionForm";
+import { fromDetail, isDraftValid, toUpdateRequest, type EditableQuestionType, type QuestionDraft } from "@/features/question/model";
 import { questionService, type QuestionDetail } from "@/services/question.service";
 import { getApiErrorMessage } from "@/utils/apiError";
 
@@ -89,6 +90,12 @@ export function ExamFormPage({
     id: number;
     content: string;
   } | null>(null);
+  const [questionEditTarget, setQuestionEditTarget] = useState<ExamQuestion | null>(null);
+  const [questionEditDraft, setQuestionEditDraft] = useState<QuestionDraft | null>(null);
+  const [questionEditLoading, setQuestionEditLoading] = useState(false);
+  const [questionEditSaving, setQuestionEditSaving] = useState(false);
+  const [questionEditSubmitted, setQuestionEditSubmitted] = useState(false);
+  const [questionEditError, setQuestionEditError] = useState("");
 
   const [removeConfirmTarget, setRemoveConfirmTarget] = useState<
     | { type: "question"; examQuestionId: number; title: string }
@@ -116,6 +123,54 @@ export function ExamFormPage({
           "ORDERING",
         ]
       : [formKind];
+
+  useEffect(() => {
+    if (!questionEditTarget) {
+      setQuestionEditDraft(null);
+      return;
+    }
+    let active = true;
+    setQuestionEditDraft(null);
+    setQuestionEditLoading(true);
+    setQuestionEditError("");
+    setQuestionEditSubmitted(false);
+    questionService.getQuestionById(questionEditTarget.questionId)
+      .then((detail) => {
+        if (active) setQuestionEditDraft(fromDetail(detail));
+      })
+      .catch((err) => {
+        if (active) setQuestionEditError(getApiErrorMessage(err, "Could not load this question."));
+      })
+      .finally(() => {
+        if (active) setQuestionEditLoading(false);
+      });
+    return () => { active = false; };
+  }, [questionEditTarget]);
+
+  const handleSaveQuestionEdit = async () => {
+    if (!questionEditTarget || !questionEditDraft || questionEditSaving) return;
+    setQuestionEditSubmitted(true);
+    setQuestionEditError("");
+    if (!isDraftValid(questionEditDraft)) return;
+    setQuestionEditSaving(true);
+    try {
+      const detail = await questionService.getQuestionById(questionEditTarget.questionId);
+      const updated = await questionService.updateQuestion(
+        questionEditTarget.questionId,
+        toUpdateRequest({ ...questionEditDraft, lockVersion: detail.lockVersion }, detail.moduleId, { status: detail.status }),
+      );
+      setQuestions((prev) => prev.map((q) => q.questionId === updated.questionId
+        ? { ...q, content: updated.content, questionType: updated.questionType }
+        : q));
+      toast.success("Question updated.");
+      setQuestionEditTarget(null);
+      setQuestionEditSubmitted(false);
+    } catch (err) {
+      setQuestionEditError(getApiErrorMessage(err, "Could not save this question."));
+    } finally {
+      setQuestionEditSaving(false);
+    }
+  };
 
   const totalQuestionCount =
     questions.length +
@@ -276,9 +331,8 @@ export function ExamFormPage({
       errors.title = "Title must be 255 characters or fewer.";
     }
 
-    if (!courseId && !moduleId) {
-      errors.courseId = "At least course or module is required.";
-    }
+    if (!courseId) errors.courseId = MSG01;
+    if (!moduleId) errors.moduleId = "Select a module.";
 
     if (durationMinutes < 1 || durationMinutes > 600) {
       errors.durationMinutes = "Duration must be between 1 and 600 minutes.";
@@ -858,9 +912,9 @@ export function ExamFormPage({
                       onChange={(v) => {
                         setCourseId(v);
                         setModuleId("");
+                        setModules([]);
                         setIsDirty(true);
-                        if (fieldErrors.courseId)
-                          setFieldErrors((p) => ({ ...p, courseId: "" }));
+                        setFieldErrors((p) => ({ ...p, courseId: "", moduleId: "" }));
                       }}
                       options={[
                         { label: "Select Course", value: "" },
@@ -877,22 +931,29 @@ export function ExamFormPage({
                     )}
                   </div>
 
-                  <Select
-                    label="Module (optional)"
-                    value={moduleId}
-                    disabled={isReadOnly || !courseId}
-                    onChange={(v) => {
-                      setModuleId(v);
-                      setIsDirty(true);
-                    }}
-                    options={[
-                      { label: "Select Module", value: "" },
-                      ...modules.map((m) => ({
-                        label: m.title,
-                        value: String(m.moduleId),
-                      })),
-                    ]}
-                  />
+                  <div>
+                    <Select
+                      label="Module *"
+                      value={moduleId}
+                      disabled={isReadOnly || !courseId}
+                      onChange={(v) => {
+                        setModuleId(v);
+                        setIsDirty(true);
+                        if (fieldErrors.moduleId)
+                          setFieldErrors((p) => ({ ...p, moduleId: "" }));
+                      }}
+                      options={[
+                        { label: "Select Module", value: "" },
+                        ...modules.map((m) => ({
+                          label: m.title,
+                          value: String(m.moduleId),
+                        })),
+                      ]}
+                    />
+                    {fieldErrors.moduleId && (
+                      <p className="text-xs text-danger mt-1">{fieldErrors.moduleId}</p>
+                    )}
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1234,20 +1295,32 @@ export function ExamFormPage({
                           </div>
 
                           {!isReadOnly && (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setRemoveConfirmTarget({
-                                  type: "question",
-                                  examQuestionId: q.examQuestionId,
-                                  title: q.content,
-                                })
-                              }
-                              className="text-content-subtle hover:text-danger p-1 rounded hover:bg-danger-light cursor-pointer"
-                              title="Remove Question from Exam"
-                            >
-                              <Icon.Trash className="w-4 h-4" />
-                            </button>
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => setQuestionEditTarget(q)}
+                                className="text-content-subtle hover:text-brand-ink p-1 rounded hover:bg-surface-hover cursor-pointer"
+                                title="Edit Question"
+                                aria-label={`Edit question ${idx + 1}`}
+                              >
+                                <Icon.Edit className="w-4 h-4" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setRemoveConfirmTarget({
+                                    type: "question",
+                                    examQuestionId: q.examQuestionId,
+                                    title: q.content,
+                                  })
+                                }
+                                className="text-content-subtle hover:text-danger p-1 rounded hover:bg-danger-light cursor-pointer"
+                                title="Remove Question from Exam"
+                                aria-label={`Remove question ${idx + 1} from exam`}
+                              >
+                                <Icon.Trash className="w-4 h-4" />
+                              </button>
+                            </div>
                           )}
                         </div>
                         {formKind === "DIAGRAM" && q.questionType === "DIAGRAM" && (
@@ -1433,6 +1506,41 @@ export function ExamFormPage({
         questionType={formKind}
         loading={loading}
       />
+
+      <Modal
+        open={questionEditTarget !== null}
+        onClose={() => !questionEditSaving && setQuestionEditTarget(null)}
+        title="Edit Question"
+        size="2xl"
+        footer={
+          <div className="flex items-center justify-end gap-2 w-full">
+            <Button variant="outline" onClick={() => setQuestionEditTarget(null)} disabled={questionEditSaving}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveQuestionEdit} loading={questionEditSaving} disabled={questionEditLoading || !questionEditDraft}>
+              Save Question
+            </Button>
+          </div>
+        }
+      >
+        {questionEditLoading ? (
+          <p className="py-8 text-center text-sm text-content-subtle">Loading question…</p>
+        ) : questionEditError && !questionEditDraft ? (
+          <div role="alert" className="py-5 text-sm text-danger">{questionEditError}</div>
+        ) : questionEditDraft ? (
+          <div className="space-y-3">
+            {questionEditError && <div role="alert" className="rounded border border-danger-line bg-danger-light p-3 text-sm text-danger">{questionEditError}</div>}
+            <QuestionForm
+              q={questionEditDraft}
+              index={0}
+              onChange={setQuestionEditDraft}
+              showErrors={questionEditSubmitted}
+              allowedTypes={allowedQuestionTypes as EditableQuestionType[]}
+            />
+            <p className="text-xs text-content-subtle">Saving updates this question in the Question Bank as well as in this exam.</p>
+          </div>
+        ) : null}
+      </Modal>
 
       <RubricDetailModal
         open={rubricModalQuestion !== null}

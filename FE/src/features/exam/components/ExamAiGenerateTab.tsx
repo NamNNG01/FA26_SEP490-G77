@@ -110,11 +110,14 @@ export function ExamAiGenerateTab({
   const totalTypes = Object.values(typeCounts).reduce((sum, count) => sum + (Number(count) || 0), 0);
   const isDiffMatch = totalDiff === questionCount;
   const isTypeMatch = totalTypes === questionCount;
-  const canGenerate = courseId !== '' && questionCount >= 1 && questionCount <= 50 && isDiffMatch && isTypeMatch;
+  const canGenerate = courseId !== '' && moduleId !== '' && questionCount >= 1 && questionCount <= 50 && isDiffMatch && isTypeMatch;
 
   const handleGenerate = async () => {
-    if (!courseId) {
-      setFieldErrors({ courseId: MSG01 });
+    const errors: Record<string, string> = {};
+    if (!courseId) errors.courseId = MSG01;
+    if (!moduleId) errors.moduleId = 'Select a module.';
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
       return;
     }
     setFieldErrors({});
@@ -208,6 +211,11 @@ export function ExamAiGenerateTab({
 
   const handleConfirmSave = async () => {
     if (!draft || draft.questions.length === 0) return;
+    if (!moduleId) {
+      setFieldErrors({ moduleId: 'Select a module before saving the exam.' });
+      setErrorMsg('Select a module before saving the exam.');
+      return;
+    }
 
     for (let i = 0; i < draft.questions.length; i++) {
       const err = validateDraftQuestion(draft.questions[i]);
@@ -305,6 +313,8 @@ export function ExamAiGenerateTab({
                 onChange={(v) => {
                   setCourseId(v);
                   setModuleId('');
+                  setModules([]);
+                  setFieldErrors((prev) => ({ ...prev, courseId: '', moduleId: '' }));
                 }}
                 options={[
                   { label: 'Select Course', value: '' },
@@ -316,16 +326,22 @@ export function ExamAiGenerateTab({
               )}
             </div>
 
-            <Select
-              label="Module Scope (optional)"
-              value={moduleId}
-              onChange={setModuleId}
-              disabled={!courseId}
-              options={[
-                { label: 'All Modules in Course', value: '' },
-                ...modules.map((m) => ({ label: m.title, value: String(m.moduleId) })),
-              ]}
-            />
+            <div>
+              <Select
+                label="Module *"
+                value={moduleId}
+                onChange={(value) => {
+                  setModuleId(value);
+                  if (fieldErrors.moduleId) setFieldErrors((prev) => ({ ...prev, moduleId: '' }));
+                }}
+                disabled={!courseId}
+                options={[
+                  { label: 'Select Module', value: '' },
+                  ...modules.map((m) => ({ label: m.title, value: String(m.moduleId) })),
+                ]}
+              />
+              {fieldErrors.moduleId && <p className="text-xs text-danger mt-1">{fieldErrors.moduleId}</p>}
+            </div>
 
             <Input
               label="Suggested Exam Title"

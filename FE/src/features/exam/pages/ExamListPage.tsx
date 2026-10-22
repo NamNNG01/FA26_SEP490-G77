@@ -500,7 +500,7 @@ export function ExamListPage() {
             }
             items={[
               {
-                label: "Quiz Exam (Objective)",
+                label: "Quiz Exam",
                 icon: <Icon.HelpCircle className="w-4 h-4" />,
                 onClick: () => navigate("/manager/exams/quiz/new"),
               },
@@ -705,11 +705,15 @@ export function ExamListPage() {
                   return (
                     <tr
                       key={exam.examId}
-                      className={`hover:bg-surface-hover transition-colors ${
+                      onClick={() => handleEditExam(exam)}
+                      className={`cursor-pointer hover:bg-surface-hover transition-colors ${
                         isChecked ? "bg-primary-light/40" : ""
                       }`}
                     >
-                      <td className="px-3 py-3">
+                      <td
+                        className="px-3 py-3"
+                        onClick={(event) => event.stopPropagation()}
+                      >
                         <input
                           type="checkbox"
                           checked={isChecked}
@@ -775,7 +779,10 @@ export function ExamListPage() {
                       <td className="px-3 py-3 text-xs text-content-subtle whitespace-nowrap">
                         {new Date(exam.createdAt).toLocaleDateString()}
                       </td>
-                      <td className="px-3 py-3 text-right">
+                      <td
+                        className="px-3 py-3 text-right"
+                        onClick={(event) => event.stopPropagation()}
+                      >
                         <Dropdown
                           trigger={
                             <button className="p-1.5 hover:bg-surface-hover rounded-[6px] text-content-subtle hover:text-content cursor-pointer">
