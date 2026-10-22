@@ -10,7 +10,7 @@ import { Tabs } from "@/components/ui/Tabs";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { Progress } from "@/components/ui/Progress";
 import { Alert } from "@/components/ui/Alert";
-import { ToastNotification } from "@/components/ui/ToastNotification";
+import { useToast } from "@/components/ui/ToastHost";
 import { Modal } from "@/components/ui/Modal";
 import { Avatar } from "@/components/ui/Avatar";
 import { Dropdown } from "@/components/ui/Dropdown";
@@ -102,6 +102,7 @@ export function CourseDetailPage({
   const rawId = paramsProp?.courseId ?? routeParams.courseId ?? "1";
   const courseId = rawId;
   const { user } = useAuth();
+  const notification = useToast();
   const isAdmin = user?.role === Role.ADMIN;
   const canManageCourse = isAdmin;
   const canCreateModule = !isAdmin;
@@ -150,16 +151,9 @@ export function CourseDetailPage({
   const [loadingStudents, setLoadingStudents] = useState(false);
   const [studentsError, setStudentsError] = useState<string | null>(null);
 
-  const [toast, setToast] = useState<{
-    type: "success" | "error";
-    message: string;
-  } | null>(null);
-
-  useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(null), 3500);
-    return () => clearTimeout(t);
-  }, [toast]);
+  const setToast = (value: { type: "success" | "error"; message: string } | null) => {
+    if (value) notification[value.type](value.message);
+  };
 
   useEffect(() => {
     courseService
@@ -1068,13 +1062,6 @@ export function CourseDetailPage({
         </div>
       </Modal>
 
-      {toast && (
-        <ToastNotification
-          variant={toast.type}
-          message={toast.message}
-          onClose={() => setToast(null)}
-        />
-      )}
     </div>
   );
 }

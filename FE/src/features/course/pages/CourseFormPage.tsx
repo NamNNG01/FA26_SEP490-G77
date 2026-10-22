@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Alert } from "@/components/ui/Alert";
+import { useToast } from "@/components/ui/ToastHost";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { Icon } from "@/assets/icons";
 import { useAuth } from "@/auth/authContext";
@@ -25,6 +26,7 @@ export function CourseFormPage({
 }) {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const notification = useToast();
   const isEdit = mode === "edit";
 
   const [title, setTitle] = useState("");
@@ -36,7 +38,6 @@ export function CourseFormPage({
   const [loading, setLoading] = useState(isEdit);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
   const [categoryError, setCategoryError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -86,15 +87,13 @@ export function CourseFormPage({
 
   const handleSubmit = async () => {
     if (!title.trim()) {
-      setError("Course title is required.");
+      notification.error("Course title is required.");
       return;
     }
     if (!categoryId) {
-      setError("Please select a category.");
+      notification.error("Please select a category.");
       return;
     }
-    setError(null);
-    setSuccess(null);
     setSubmitting(true);
 
     try {
@@ -105,7 +104,7 @@ export function CourseFormPage({
           description: description.trim() || undefined,
           price: Number(price) >= 0 ? Number(price) : 0,
         });
-        setSuccess("Course updated successfully.");
+        notification.success("Course updated successfully.");
         setTimeout(() => handleCancel(), 1000);
       } else {
         const created: CourseDetailResponse = await courseService.createCourse({
@@ -115,7 +114,7 @@ export function CourseFormPage({
           price: Number(price) >= 0 ? Number(price) : 0,
           managerId: Number(managerId) || 1,
         });
-        setSuccess("Course created successfully.");
+        notification.success("Course created successfully.");
         setTimeout(() => {
           if (onNavigate) {
             onNavigate("course-detail", { courseId: String(created.courseId) });
@@ -125,7 +124,7 @@ export function CourseFormPage({
         }, 1000);
       }
     } catch (err: unknown) {
-      setError(getApiErrorMessage(err, "Operation failed. Please try again."));
+      notification.error(getApiErrorMessage(err, "Operation failed. Please try again."));
     } finally {
       setSubmitting(false);
     }
@@ -181,7 +180,6 @@ export function CourseFormPage({
       {categoryError && (
         <Alert type="error" title="Could not load categories" message={categoryError} />
       )}
-      {success && <Alert type="success" title="Success" message={success} />}
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <div className="xl:col-span-2 card p-6 space-y-4">

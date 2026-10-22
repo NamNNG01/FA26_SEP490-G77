@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { Switch } from '@/components/ui/Switch';
-import { Alert } from '@/components/ui/Alert';
+import { useToast } from '@/components/ui/ToastHost';
 import { Icon } from '@/assets/icons';
 import {
   categoryService,
@@ -15,6 +15,7 @@ import {
 import { getApiErrorMessage } from '@/utils/apiError';
 
 export function CategoriesPage() {
+  const notification = useToast();
   const [categories, setCategories] = useState<AdminCategoryNode[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -32,24 +33,13 @@ export function CategoriesPage() {
   const [deletingCategory, setDeletingCategory] = useState<AdminCategoryNode | null>(null);
   const [submittingDelete, setSubmittingDelete] = useState(false);
 
-  const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-
-  useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(null), 3500);
-    return () => clearTimeout(t);
-  }, [toast]);
-
   const loadCategories = async () => {
     setLoading(true);
     try {
       const data = await categoryService.getAdminCategories();
       setCategories(data);
     } catch (error) {
-      setToast({
-        type: 'error',
-        message: getApiErrorMessage(error, 'Failed to load categories.'),
-      });
+      notification.error(getApiErrorMessage(error, 'Failed to load categories.'));
     } finally {
       setLoading(false);
     }
@@ -68,7 +58,7 @@ export function CategoriesPage() {
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!addName.trim()) {
-      setToast({ type: 'error', message: 'Category name is required.' });
+      notification.error('Category name is required.');
       return;
     }
     setSubmittingAdd(true);
@@ -78,14 +68,11 @@ export function CategoriesPage() {
         isActive: addIsActive,
       };
       await categoryService.createCategory(payload);
-      setToast({ type: 'success', message: 'Category created successfully.' });
+      notification.success('Category created successfully.');
       setIsAddModalOpen(false);
       await loadCategories();
     } catch (error) {
-      setToast({
-        type: 'error',
-        message: getApiErrorMessage(error, 'Failed to create category.'),
-      });
+      notification.error(getApiErrorMessage(error, 'Failed to create category.'));
     } finally {
       setSubmittingAdd(false);
     }
@@ -100,7 +87,7 @@ export function CategoriesPage() {
   const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingCategory || !editName.trim()) {
-      setToast({ type: 'error', message: 'Category name is required.' });
+      notification.error('Category name is required.');
       return;
     }
     setSubmittingEdit(true);
@@ -110,14 +97,11 @@ export function CategoriesPage() {
         isActive: editIsActive,
       };
       await categoryService.updateCategory(editingCategory.categoryId, payload);
-      setToast({ type: 'success', message: 'Category updated successfully.' });
+      notification.success('Category updated successfully.');
       setEditingCategory(null);
       await loadCategories();
     } catch (error) {
-      setToast({
-        type: 'error',
-        message: getApiErrorMessage(error, 'Failed to update category.'),
-      });
+      notification.error(getApiErrorMessage(error, 'Failed to update category.'));
     } finally {
       setSubmittingEdit(false);
     }
@@ -128,14 +112,11 @@ export function CategoriesPage() {
     setSubmittingDelete(true);
     try {
       await categoryService.deleteCategory(deletingCategory.categoryId);
-      setToast({ type: 'success', message: 'Category deleted successfully.' });
+      notification.success('Category deleted successfully.');
       setDeletingCategory(null);
       await loadCategories();
     } catch (error) {
-      setToast({
-        type: 'error',
-        message: getApiErrorMessage(error, 'Failed to delete category.'),
-      });
+      notification.error(getApiErrorMessage(error, 'Failed to delete category.'));
     } finally {
       setSubmittingDelete(false);
     }
@@ -198,12 +179,6 @@ export function CategoriesPage() {
 
   return (
     <div className="p-8 space-y-6">
-      {toast && (
-        <div className="fixed top-5 right-5 z-50">
-          <Alert type={toast.type} message={toast.message} />
-        </div>
-      )}
-
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold text-content">Category Management</h2>
