@@ -28,42 +28,21 @@ public class CategoryServiceImpl implements CategoryService {
     public List<CategoryResponse> list() {
         return categories.findTree().stream().filter(this::visible)
                 .sorted(Comparator.comparing(Category::getName).thenComparing(Category::getCategoryId))
-                .map(c -> new CategoryResponse(c.getCategoryId(), c.getName(), c.getSlug(), c.getDescription(),
-                        parentId(c), c.getParent() == null ? null : c.getParent().getName())).toList();
+                .map(c -> new CategoryResponse(c.getCategoryId(), c.getName(), c.getSlug(), c.getDescription())).toList();
     }
 
     @Override
     @PreAuthorize("hasRole('ADMIN')")
-    public CategoryTreeResponse list(boolean includeDeleted) {
-        List<Category> values = categories.findTree().stream()
-                .filter(c -> includeDeleted || !c.getIsDeleted()).toList();
-        Map<Long, CategoryAdminResponse> nodes = new LinkedHashMap<>();
-        for (Category category : values) nodes.put(category.getCategoryId(), response(category));
-        List<CategoryAdminResponse> roots = new ArrayList<>();
-        for (Category category : values) {
-            CategoryAdminResponse node = nodes.get(category.getCategoryId());
-            CategoryAdminResponse parent = nodes.get(parentId(category));
-            if (parent == null) roots.add(node);
-            else parent.children().add(node);
-        }
-        return new CategoryTreeResponse(roots);
+    public CategoryTreeResponse adminList() {
+        return new CategoryTreeResponse(categories.findTree().stream()
+                .filter(c -> !c.getIsDeleted()).map(this::response).toList());
     }
 
     @Override
     @PreAuthorize("hasRole('ADMIN')")
     public List<CategorySelectResponse> buildTree() {
-        Map<Long, CategorySelectResponse> nodes = new LinkedHashMap<>();
-        List<Category> values = categories.findTree().stream().filter(c -> !c.getIsDeleted()).toList();
-        for (Category category : values) nodes.put(category.getCategoryId(), new CategorySelectResponse(
-                category.getCategoryId(), category.getName(), category.getCategoryId(), !visible(category), new ArrayList<>()));
-        List<CategorySelectResponse> roots = new ArrayList<>();
-        for (Category category : values) {
-            CategorySelectResponse node = nodes.get(category.getCategoryId());
-            CategorySelectResponse parent = nodes.get(parentId(category));
-            if (parent == null) roots.add(node);
-            else parent.children().add(node);
-        }
-        return roots;
+        return categories.findTree().stream().filter(c -> !c.getIsDeleted())
+                .map(c -> new CategorySelectResponse(c.getCategoryId(), c.getName(), c.getCategoryId(), !visible(c))).toList();
     }
 
     @Override
@@ -71,10 +50,9 @@ public class CategoryServiceImpl implements CategoryService {
     @PreAuthorize("hasRole('ADMIN')")
     public CategoryAdminResponse create(UserPrincipal actor, CategoryRequests.Create request) {
         String code = normalizeCode(request.code());
-        List<Category> locked = categories.lockTree();
+        categories.lockTree();
         if (categories.existsByCode(code)) throw validation("Category code already exists.");
-        Category parent = request.parentId() == null ? null : activeCategory(locked, request.parentId());
-        Category category = Category.builder().code(code).name(request.name().strip()).parent(parent)
+        Category category = Category.builder().code(code).name(request.name().strip())
                 .slug("category-" + UUID.randomUUID())
                 .sortOrder(request.sortOrder() == null ? 0 : request.sortOrder())
                 .isActive(request.isActive() == null || request.isActive()).build();
@@ -94,16 +72,6 @@ public class CategoryServiceImpl implements CategoryService {
     public CategoryAdminResponse update(UserPrincipal actor, Long id, CategoryRequests.Update request) {
         List<Category> locked = categories.lockTree();
         Category category = activeCategory(locked, id);
-        Category parent = category.getParent();
-        if (request.isParentSpecified()) {
-            parent = request.getParentId() == null ? null : activeCategory(locked, request.getParentId());
-            Set<Long> seen = new HashSet<>();
-            for (Category ancestor = parent; ancestor != null; ancestor = ancestor.getParent()) {
-                if (ancestor.getCategoryId().equals(id) || !seen.add(ancestor.getCategoryId()))
-                    throw validation("Category parent would create a cycle.");
-            }
-        }
-        category.setParent(parent);
         if (request.getName() != null) category.setName(request.getName().strip());
         if (request.getSortOrder() != null) category.setSortOrder(request.getSortOrder());
         if (request.getIsActive() != null) category.setIsActive(request.getIsActive());
@@ -116,9 +84,6 @@ public class CategoryServiceImpl implements CategoryService {
     @PreAuthorize("hasRole('ADMIN')")
     public void delete(UserPrincipal actor, Long id) {
         Category category = activeCategory(categories.lockTree(), id);
-        long children = categories.countByParentCategoryIdAndIsDeletedFalse(id);
-        if (children > 0) throw new BaseException(ResponseCode.CONFLICT,
-                "Category has " + children + " child categories. Remove them first.");
         long courses = categories.countCourses(id);
         if (courses > 0) throw new BaseException(ResponseCode.CONFLICT,
                 "Category is used by " + courses + " courses and their questions.");
@@ -133,20 +98,12 @@ public class CategoryServiceImpl implements CategoryService {
     }
 
     private boolean visible(Category category) {
-        Set<Long> seen = new HashSet<>();
-        for (Category current = category; current != null; current = current.getParent()) {
-            if (!current.getIsActive() || current.getIsDeleted() || !seen.add(current.getCategoryId())) return false;
-        }
-        return true;
+        return category.getIsActive() && !category.getIsDeleted();
     }
 
     private CategoryAdminResponse response(Category category) {
-        return new CategoryAdminResponse(category.getCategoryId(), category.getCode(), category.getName(), parentId(category),
-                category.getSortOrder(), category.getIsActive(), category.getIsDeleted(), new ArrayList<>());
-    }
-
-    private Long parentId(Category category) {
-        return category.getParent() == null ? null : category.getParent().getCategoryId();
+        return new CategoryAdminResponse(category.getCategoryId(), category.getCode(), category.getName(),
+                category.getSortOrder(), category.getIsActive());
     }
 
     private void audit(UserPrincipal actor, Category category, String eventType) {

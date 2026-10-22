@@ -7,7 +7,7 @@ import java.util.List;
 
 public interface CategoryService {
     List<CategoryResponse> list();
-    CategoryTreeResponse list(boolean includeDeleted);
+    CategoryTreeResponse adminList();
     List<CategorySelectResponse> buildTree();
     CategoryAdminResponse create(UserPrincipal actor, CategoryRequests.Create request);
     CategoryAdminResponse update(UserPrincipal actor, Long id, CategoryRequests.Update request);

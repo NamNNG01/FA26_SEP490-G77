@@ -24,9 +24,9 @@ public class AdminCategoryController {
     private final CategoryService service;
 
     @GetMapping
-    @Operation(summary = "CAT-01: Category administration tree")
-    public ResponseEntity<ApiResponse<CategoryTreeResponse>> list(@RequestParam(defaultValue = "false") boolean includeDeleted) {
-        return ResponseEntity.ok(ApiResponse.success(service.list(includeDeleted)));
+    @Operation(summary = "CAT-01: Category administration list")
+    public ResponseEntity<ApiResponse<CategoryTreeResponse>> list() {
+        return ResponseEntity.ok(ApiResponse.success(service.adminList()));
     }
 
     @PostMapping

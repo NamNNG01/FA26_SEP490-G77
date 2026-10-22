@@ -94,7 +94,11 @@ public class CourseServiceImpl implements CourseService {
     public CourseResponse update(UserPrincipal user, Long id, CourseRequests.Update request) {
         Course course = writeCourse(id);
         checkAccess(user, course);
-        if (request.title() != null) course.setTitle(request.title().strip());
+        if (request.title() != null) {
+            course.setTitle(request.title().strip());
+            // Published slugs stay stable so shared links keep working.
+            if (!Boolean.TRUE.equals(course.getIsPublished())) course.setSlug(slug(course.getTitle(), course.getCourseId()));
+        }
         if (request.description() != null) course.setDescription(optionalText(request.description()));
         if (request.thumbnailUrl() != null) course.setThumbnailUrl(optionalText(request.thumbnailUrl()));
         if (request.categoryId() != null) {

@@ -207,8 +207,8 @@ public class ManagerCourseApiIntegrationTest {
     }
 
     @Test
-    void managerEditsOnlyAllowedFieldsAndSlugRemainsStable() throws Exception {
-        String slug = course.getSlug();
+    void managerEditsOnlyAllowedFieldsAndDraftSlugFollowsTitle() throws Exception {
+        String slug = "updated-" + course.getCourseId();
         course.setDescription("Old description");
         course.setThumbnailUrl("https://example.com/old.png");
         call(collaborator, put(path()).contentType(MediaType.APPLICATION_JSON)
@@ -221,6 +221,9 @@ public class ManagerCourseApiIntegrationTest {
                 .andExpect(jsonPath("$.data.thumbnailUrl").value(nullValue()));
         call(stranger, put(path()).contentType(MediaType.APPLICATION_JSON).content("{\"title\":\"Stolen\"}"))
                 .andExpect(status().isForbidden());
+        course.setIsPublished(true);
+        call(collaborator, put(path()).contentType(MediaType.APPLICATION_JSON).content("{\"title\":\"Renamed live\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.slug").value(slug));
     }
 
     @Test

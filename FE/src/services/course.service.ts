@@ -6,8 +6,6 @@ export interface CategoryResponse {
   name: string;
   slug: string;
   description: string | null;
-  parentId: number | null;
-  parentName: string | null;
 }
 
 export interface CourseManagerItem {

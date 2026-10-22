@@ -129,20 +129,12 @@ export function CategoriesPage() {
   };
 
   const filteredCategories = useMemo(() => {
-    const flat: AdminCategoryNode[] = [];
-    const flatten = (nodes: AdminCategoryNode[]) => {
-      for (const node of nodes) {
-        flat.push(node);
-        if (node.children?.length) flatten(node.children);
-      }
-    };
-    flatten(categories);
     const term = search.trim().toLowerCase();
     return term
-      ? flat.filter((category) =>
+      ? categories.filter((category) =>
           `${category.name} ${category.slug || ''}`.toLowerCase().includes(term),
         )
-      : flat;
+      : categories;
   }, [categories, search]);
 
   const renderCategory = (node: AdminCategoryNode) => {

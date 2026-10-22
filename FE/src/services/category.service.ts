@@ -6,10 +6,8 @@ export interface AdminCategoryNode {
   slug?: string;
   code: string;
   name: string;
-  parentId: number | null;
   sortOrder: number;
   isActive: boolean;
-  children: AdminCategoryNode[];
 }
 
 export interface AdminCategoryTreeResponse {
@@ -31,7 +29,6 @@ export interface AdminCategoryItem {
   slug?: string;
   code: string;
   name: string;
-  parentId: number | null;
   sortOrder: number;
   isActive: boolean;
 }
@@ -41,7 +38,6 @@ export interface CategoryTreeSelectNode {
   label: string;
   value: number;
   disabled: boolean;
-  children: CategoryTreeSelectNode[];
 }
 
 export const categoryService = {
