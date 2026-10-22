@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
 import { SearchInput } from '@/components/common/SearchInput';
 import { Icon } from '@/assets/icons';
-import { examService, type QuestionGroupItem } from '@/services/exam.service';
+import { examService, type ExamKind, type QuestionGroupItem } from '@/services/exam.service';
 
 interface QuestionGroupModalProps {
   open: boolean;
@@ -14,6 +14,7 @@ interface QuestionGroupModalProps {
   existingGroupIds: Set<number>;
   courseId?: number;
   moduleId?: number;
+  questionType: ExamKind;
   loading?: boolean;
 }
 
@@ -24,6 +25,7 @@ export function QuestionGroupModal({
   existingGroupIds,
   courseId,
   moduleId,
+  questionType,
   loading = false,
 }: QuestionGroupModalProps) {
   const [tab, setTab] = useState<'existing' | 'new'>('existing');
@@ -45,6 +47,7 @@ export function QuestionGroupModal({
       .getQuestionGroups({
         courseId,
         moduleId,
+        questionType,
         search: search.trim() || undefined,
       })
       .then((res) => {
@@ -56,7 +59,7 @@ export function QuestionGroupModal({
       .finally(() => {
         setFetching(false);
       });
-  }, [open, search, courseId, moduleId]);
+  }, [open, search, courseId, moduleId, questionType]);
 
   useEffect(() => {
     if (open) {
@@ -88,6 +91,7 @@ export function QuestionGroupModal({
       const created = await examService.createQuestionGroup({
         courseId,
         moduleId,
+        questionType,
         title: newTitle.trim(),
         passageText: newPassage.trim(),
       });

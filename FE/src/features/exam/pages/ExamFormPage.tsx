@@ -1408,6 +1408,7 @@ export function ExamFormPage({
         existingGroupIds={existingGroupIds}
         courseId={courseId ? Number(courseId) : undefined}
         moduleId={moduleId ? Number(moduleId) : undefined}
+        questionType={formKind}
         loading={loading}
       />
 

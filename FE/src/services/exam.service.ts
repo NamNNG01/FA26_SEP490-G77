@@ -146,6 +146,7 @@ export interface QuestionGroupItem {
   groupId: number;
   courseId?: number;
   moduleId?: number;
+  questionType: ExamKind;
   title: string;
   passageText: string;
   questionCount: number;
@@ -154,6 +155,7 @@ export interface QuestionGroupItem {
 export interface QuestionGroupListParams {
   courseId?: number;
   moduleId?: number;
+  questionType?: ExamKind;
   search?: string;
   page?: number;
   size?: number;
@@ -162,6 +164,7 @@ export interface QuestionGroupListParams {
 export interface CreateQuestionGroupRequest {
   courseId: number;
   moduleId?: number;
+  questionType: ExamKind;
   title: string;
   passageText: string;
 }
@@ -574,6 +577,7 @@ const INITIAL_MOCK_GROUPS: QuestionGroupItem[] = [
     groupId: 7,
     courseId: 12,
     moduleId: 3,
+    questionType: 'QUIZ',
     title: 'Reading Passage: Neural Optimization',
     passageText: 'Deep learning models optimize loss functions across multi-dimensional parameter spaces. Stochastic gradient descent and its adaptive variants such as Adam dynamically regulate learning rates across diverse gradient trajectories.',
     questionCount: 3,
@@ -582,6 +586,7 @@ const INITIAL_MOCK_GROUPS: QuestionGroupItem[] = [
     groupId: 8,
     courseId: 12,
     moduleId: 3,
+    questionType: 'ESSAY',
     title: 'Case Study: AI Governance in Healthcare',
     passageText: 'Deploying machine learning models in diagnostic pipelines introduces regulatory scrutiny around explainability, patient data consent, and algorithmic accountability.',
     questionCount: 2,
@@ -880,6 +885,7 @@ export const examService = {
       if (params?.search) q.set('search', params.search);
       if (params?.courseId) q.set('courseId', String(params.courseId));
       if (params?.moduleId) q.set('moduleId', String(params.moduleId));
+      if (params?.questionType) q.set('questionType', params.questionType);
       if (params?.page !== undefined) q.set('page', String(params.page));
       if (params?.size !== undefined) q.set('size', String(params.size));
 
@@ -905,6 +911,7 @@ export const examService = {
       }
       if (params?.courseId && g.courseId !== params.courseId) return false;
       if (params?.moduleId && g.moduleId !== params.moduleId) return false;
+      if (params?.questionType && g.questionType !== params.questionType) return false;
       return true;
     });
 
@@ -944,6 +951,7 @@ export const examService = {
       groupId: Date.now(),
       courseId: payload.courseId,
       moduleId: payload.moduleId,
+      questionType: payload.questionType,
       title: payload.title,
       passageText: payload.passageText,
       questionCount: 0,
