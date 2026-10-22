@@ -62,6 +62,7 @@ export interface CourseModuleResponse {
   title: string;
   description: string | null;
   orderIndex: number;
+  status: 'VISIBLE' | 'HIDDEN';
   questionCount: number;
   examCount: number;
 }
@@ -77,6 +78,8 @@ export interface UpdateModuleRequest {
   description?: string;
   orderIndex?: number;
 }
+
+export type ModuleStatus = CourseModuleResponse['status'];
 
 export interface CourseDetailResponse {
   courseId: number;
@@ -237,6 +240,15 @@ export const courseService = {
       method: 'put',
       url: `/manager/modules/${moduleId}`,
       data: payload,
+    });
+    return res.data;
+  },
+
+  async updateModuleStatus(moduleId: number | string, status: ModuleStatus): Promise<CourseModuleResponse> {
+    const res = await api.request<ApiResponse<CourseModuleResponse>>({
+      method: 'patch',
+      url: `/manager/modules/${moduleId}/status`,
+      data: { status },
     });
     return res.data;
   },

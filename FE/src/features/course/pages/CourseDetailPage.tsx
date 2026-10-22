@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Badge } from "@/components/ui/Badge";
+import { Switch } from "@/components/ui/Switch";
 import { Table } from "@/components/ui/Table";
 import { Tabs } from "@/components/ui/Tabs";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
@@ -133,6 +134,9 @@ export function CourseDetailPage({
   const [moduleToDelete, setModuleToDelete] =
     useState<CourseModuleResponse | null>(null);
   const [deletingModule, setDeletingModule] = useState(false);
+  const [updatingModuleStatusId, setUpdatingModuleStatusId] = useState<
+    number | null
+  >(null);
 
   const [isDeleteCourseOpen, setIsDeleteCourseOpen] = useState(false);
   const [deletingCourse, setDeletingCourse] = useState(false);
@@ -403,7 +407,10 @@ export function CourseDetailPage({
       .catch((err) => {
         setToast({
           type: "error",
-          message: getApiErrorMessage(err, "Module was added, but the module list could not be refreshed."),
+          message: getApiErrorMessage(
+            err,
+            "Module was added, but the module list could not be refreshed.",
+          ),
         });
       });
   };
@@ -425,7 +432,10 @@ export function CourseDetailPage({
       .catch((err) => {
         setToast({
           type: "error",
-          message: getApiErrorMessage(err, "Module was updated, but the module list could not be refreshed."),
+          message: getApiErrorMessage(
+            err,
+            "Module was updated, but the module list could not be refreshed.",
+          ),
         });
       });
   };
@@ -449,6 +459,34 @@ export function CourseDetailPage({
       setToast({ type: "error", message: msg });
     } finally {
       setDeletingModule(false);
+    }
+  };
+
+  const handleModuleStatusChange = async (module: CourseModuleResponse) => {
+    if (updatingModuleStatusId !== null) return;
+    const nextStatus = module.status === "VISIBLE" ? "HIDDEN" : "VISIBLE";
+    setUpdatingModuleStatusId(module.moduleId);
+    try {
+      const updated = await courseService.updateModuleStatus(
+        module.moduleId,
+        nextStatus,
+      );
+      setModules((prev) =>
+        prev.map((item) =>
+          item.moduleId === updated.moduleId ? updated : item,
+        ),
+      );
+      setToast({
+        type: "success",
+        message: `Module "${updated.title}" is now ${updated.status.toLowerCase()}.`,
+      });
+    } catch (err: unknown) {
+      setToast({
+        type: "error",
+        message: getApiErrorMessage(err, "Failed to update module status."),
+      });
+    } finally {
+      setUpdatingModuleStatusId(null);
     }
   };
 
@@ -577,7 +615,11 @@ export function CourseDetailPage({
       </div>
 
       {categoryError && (
-        <Alert type="error" title="Could not load categories" message={categoryError} />
+        <Alert
+          type="error"
+          title="Could not load categories"
+          message={categoryError}
+        />
       )}
       {managerLoadError && (
         <Alert
@@ -746,18 +788,19 @@ export function CourseDetailPage({
                 <div className="hidden sm:grid grid-cols-12 gap-4 px-6 py-3 bg-surface-alt text-xs font-semibold text-content-soft">
                   <span className="col-span-1">Order</span>
                   <span
-                    className={canCreateModule ? "col-span-4" : "col-span-5"}
+                    className={canCreateModule ? "col-span-3" : "col-span-4"}
                   >
                     Module Name
                   </span>
                   <span
-                    className={canCreateModule ? "col-span-4" : "col-span-5"}
+                    className={canCreateModule ? "col-span-2" : "col-span-4"}
                   >
                     Description
                   </span>
+                  <span className="col-span-2 text-center">Status</span>
                   <span className="col-span-1 text-center">Exams</span>
                   {canCreateModule && (
-                    <span className="col-span-2 text-right">Actions</span>
+                    <span className="col-span-3 text-right">Actions</span>
                   )}
                 </div>
 
@@ -775,8 +818,8 @@ export function CourseDetailPage({
                     <div
                       className={
                         canCreateModule
-                          ? "col-span-4 min-w-0"
-                          : "col-span-5 min-w-0"
+                          ? "col-span-3 min-w-0"
+                          : "col-span-4 min-w-0"
                       }
                     >
                       <p className="text-base font-semibold text-content truncate">
@@ -791,8 +834,8 @@ export function CourseDetailPage({
                     <div
                       className={
                         canCreateModule
-                          ? "col-span-4 min-w-0"
-                          : "col-span-5 min-w-0"
+                          ? "col-span-2 min-w-0"
+                          : "col-span-4 min-w-0"
                       }
                     >
                       <p className="text-sm text-content-soft truncate">
@@ -804,12 +847,29 @@ export function CourseDetailPage({
                       </p>
                     </div>
 
+                    <div className="col-span-2 flex flex-wrap items-center justify-center gap-2">
+                      <Badge
+                        variant={
+                          mod.status === "VISIBLE" ? "success" : "default"
+                        }
+                      >
+                        {mod.status === "VISIBLE" ? "Visible" : "Hidden"}
+                      </Badge>
+                    </div>
+
                     <div className="col-span-1 text-center hidden sm:block">
                       <Badge variant="default">{mod.examCount}</Badge>
                     </div>
 
                     {canCreateModule && (
-                      <div className="col-span-2 flex items-center justify-end gap-1">
+                      <div className="col-span-3 flex items-center justify-end gap-1">
+                        <Switch
+                          size="sm"
+                          checked={mod.status === "VISIBLE"}
+                          onChange={() => void handleModuleStatusChange(mod)}
+                          disabled={updatingModuleStatusId !== null}
+                          label={mod.status === "VISIBLE" ? "Shown" : "Hidden"}
+                        />
                         <Button
                           variant="ghost"
                           size="sm"
@@ -1040,6 +1100,8 @@ function CourseManagerList({
   loadingManagers: boolean;
   savingManagers: boolean;
 }>) {
+  const INITIAL_SHOW = 3;
+  const [expanded, setExpanded] = useState(false);
   const managerList: CourseManagerItem[] =
     course.managers && course.managers.length > 0
       ? course.managers
@@ -1069,6 +1131,10 @@ function CourseManagerList({
   const selectedManagers = selectedManagerIds
     .map((id) => availableManagers.find((manager) => String(manager.id) === id))
     .filter((manager): manager is ManagerOption => Boolean(manager));
+  const hasMore = managerList.length > INITIAL_SHOW;
+  const visible = expanded || !hasMore
+    ? managerList
+    : managerList.slice(0, INITIAL_SHOW);
 
   return (
     <div className="space-y-2">
@@ -1137,6 +1203,50 @@ function CourseManagerList({
               </button>
             </span>
           ))}
+        </div>
+      )}
+      {!canEdit && (
+        <div className="rounded-[10px] border border-line overflow-hidden">
+          {visible.map((manager, idx) => (
+            <div
+              key={manager.userId}
+              className={`flex items-center gap-3 px-3 py-2.5 text-sm ${idx > 0 ? "border-t border-line-faint" : ""} bg-surface-alt`}
+            >
+              <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                <span className="text-xs font-bold text-primary">
+                  {manager.fullName.charAt(0).toUpperCase()}
+                </span>
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-content truncate">
+                  {manager.fullName}
+                </p>
+                {manager.email && (
+                  <p className="text-xs text-content-soft truncate">{manager.email}</p>
+                )}
+              </div>
+            </div>
+          ))}
+          {hasMore && (
+            <button
+              type="button"
+              onClick={() => setExpanded((value) => !value)}
+              className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-content-soft hover:text-primary hover:bg-primary/5 border-t border-line-faint transition-colors"
+            >
+              {expanded ? (
+                <>
+                  <Icon.ChevronDown className="w-3.5 h-3.5 rotate-180" />
+                  Show less
+                </>
+              ) : (
+                <>
+                  <Icon.ChevronDown className="w-3.5 h-3.5" />
+                  Show {managerList.length - INITIAL_SHOW} more manager
+                  {managerList.length - INITIAL_SHOW !== 1 ? "s" : ""}
+                </>
+              )}
+            </button>
+          )}
         </div>
       )}
       {canEdit && (
