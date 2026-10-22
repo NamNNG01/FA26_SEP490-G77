@@ -331,9 +331,8 @@ export function ExamFormPage({
       errors.title = "Title must be 255 characters or fewer.";
     }
 
-    if (!courseId && !moduleId) {
-      errors.courseId = "At least course or module is required.";
-    }
+    if (!courseId) errors.courseId = MSG01;
+    if (!moduleId) errors.moduleId = "Select a module.";
 
     if (durationMinutes < 1 || durationMinutes > 600) {
       errors.durationMinutes = "Duration must be between 1 and 600 minutes.";
@@ -913,9 +912,9 @@ export function ExamFormPage({
                       onChange={(v) => {
                         setCourseId(v);
                         setModuleId("");
+                        setModules([]);
                         setIsDirty(true);
-                        if (fieldErrors.courseId)
-                          setFieldErrors((p) => ({ ...p, courseId: "" }));
+                        setFieldErrors((p) => ({ ...p, courseId: "", moduleId: "" }));
                       }}
                       options={[
                         { label: "Select Course", value: "" },
@@ -932,22 +931,29 @@ export function ExamFormPage({
                     )}
                   </div>
 
-                  <Select
-                    label="Module (optional)"
-                    value={moduleId}
-                    disabled={isReadOnly || !courseId}
-                    onChange={(v) => {
-                      setModuleId(v);
-                      setIsDirty(true);
-                    }}
-                    options={[
-                      { label: "Select Module", value: "" },
-                      ...modules.map((m) => ({
-                        label: m.title,
-                        value: String(m.moduleId),
-                      })),
-                    ]}
-                  />
+                  <div>
+                    <Select
+                      label="Module *"
+                      value={moduleId}
+                      disabled={isReadOnly || !courseId}
+                      onChange={(v) => {
+                        setModuleId(v);
+                        setIsDirty(true);
+                        if (fieldErrors.moduleId)
+                          setFieldErrors((p) => ({ ...p, moduleId: "" }));
+                      }}
+                      options={[
+                        { label: "Select Module", value: "" },
+                        ...modules.map((m) => ({
+                          label: m.title,
+                          value: String(m.moduleId),
+                        })),
+                      ]}
+                    />
+                    {fieldErrors.moduleId && (
+                      <p className="text-xs text-danger mt-1">{fieldErrors.moduleId}</p>
+                    )}
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
