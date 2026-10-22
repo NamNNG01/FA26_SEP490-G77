@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { Alert } from '@/components/ui/Alert';
@@ -12,17 +12,23 @@ import { questionGroupService, type QuestionGroup } from '@/services/questionGro
 import { QuestionForm as QuestionFormBlock } from '../components/QuestionForm';
 import { QuestionSidePanel } from '../components/QuestionSidePanel';
 import { ImportPdfModal } from '../components/ImportPdfModal';
-import { GroupContextCard, emptyGroupContext, groupContextErrors, type GroupContextValue } from '../components/GroupContextCard';
-import { AiGeneratePanel } from '../components/AiGeneratePanel';
-import { Tabs } from '@/components/ui/Tabs';
+import { GroupContextCard, contextKind, emptyGroupContext, groupContextErrors, type GroupContextValue } from '../components/GroupContextCard';
+import { AiGeneratePanel, type AiGeneratePanelHandle } from '../components/AiGeneratePanel';
 import { UnsavedChangesModal } from '@/components/common/UnsavedChangesModal';
 import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
 import {
+  GROUP_KIND_LABELS,
+  QUESTION_TYPE_OPTIONS,
+  asGroupKind,
+  changeType,
   emptyDraft,
   fromDetail,
   isDraftValid,
+  kindOf,
   toCreateRequest,
   toUpdateRequest,
+  typesOfKind,
+  type GroupKind,
   type QuestionDraft,
 } from '../model';
 import { clearCreateDraft, loadCreateDraft, saveCreateDraft, type CreateDraftSnapshot } from '../createDraft';
@@ -35,10 +41,14 @@ const MAX_BATCH = 50;
 
 type Confirm = 'archive' | null;
 
-/** Create mode: write questions by hand, or draft them with AI (AI-03) and accept into the list. */
-type CreateTab = 'manual' | 'ai';
-const AI_TAB_LABEL = 'AI Generate';
+/**
+ * Create mode: write questions by hand, or draft them with AI (AI-01/02). The
+ * two are separate — each saves its own questions, and the page only switches
+ * to the other one when nothing is left unsaved in the current one.
+ */
+type CreateMode = 'manual' | 'ai';
 
+const typeLabel = (t: string) => QUESTION_TYPE_OPTIONS.find(o => o.value === t)?.label ?? t;
 
 export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
   const isEdit = mode === 'edit';
@@ -76,8 +86,15 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
   const [showImport, setShowImport] = useState(false);
   const [confirm, setConfirm] = useState<Confirm>(null);
   const [reloadKey, setReloadKey] = useState(0);
-  const [tab, setTab] = useState<CreateTab>('manual');
+  const [createMode, setCreateMode] = useState<CreateMode>('manual');
+  /** Asks before throwing away one mode's unsaved work to switch to the other. */
+  const [confirmDiscard, setConfirmDiscard] = useState<CreateMode | null>(null);
+  /** Index of a written question waiting for a delete confirmation (blank ones go at once). */
+  const [confirmRemove, setConfirmRemove] = useState<number | null>(null);
+  /** AI suggestions on the page, accepted or not — none of them saved yet. */
   const [aiPending, setAiPending] = useState(0);
+  const [aiAccepted, setAiAccepted] = useState<QuestionDraft[]>([]);
+  const aiRef = useRef<AiGeneratePanelHandle>(null);
   const listRef = useRef<HTMLDivElement>(null);
   /** Set once the user confirmed leaving without saving — stops the draft from being stored again. */
   const leavingRef = useRef(false);
@@ -135,9 +152,60 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
     return () => clearTimeout(id);
   }, [isEdit, dirty, questions, courseId, moduleId, groupCtx, touched]);
 
-  // Unsaved edits, or AI suggestions not accepted yet, hold any navigation away for confirmation.
+  /** Untouched blank questions (the starter one) give way to appended drafts; flagged imports stay. */
+  const isKept = (q: QuestionDraft) => touched.has(q.key) || q.content.trim() !== '' || Boolean(q.importIssue);
+  const kept = questions.filter(isKept).length;
+
+  /**
+   * Kinds of the questions already written (manual mode). A group holds one
+   * kind, so they decide which groups the batch can go into: one kind → only
+   * groups of it; several → none until the questions agree.
+   */
+  const writtenKinds = isEdit || createMode === 'ai'
+    ? []
+    : [...new Set(questions.filter(isKept).map(q => kindOf(q.type)).filter((k): k is GroupKind => k != null))];
+  const writtenKey = writtenKinds.join(',');
+
+  // Keep the group context in line with the written questions: a new group takes their kind,
+  // and an existing group of another kind is unpicked.
+  useEffect(() => {
+    if (!writtenKinds.length) return;
+    setGroupCtx(prev => {
+      if (prev.mode === 'new' && writtenKinds.length === 1 && prev.newKind !== writtenKinds[0]) return { ...prev, newKind: writtenKinds[0] };
+      if (prev.mode === 'existing' && prev.existingGroupId) {
+        const picked = asGroupKind(groups.find(g => String(g.groupId) === prev.existingGroupId)?.questionType);
+        if (writtenKinds.length > 1 || (picked && picked !== writtenKinds[0])) return { ...prev, existingGroupId: '' };
+      }
+      return prev;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- writtenKey stands in for writtenKinds (a new array every render)
+  }, [writtenKey, groupCtx.mode, groups]);
+
+  // In a group every question must be of the group's kind (QUIZ / ESSAY / CODE / DIAGRAM).
+  const kind = isEdit ? null : contextKind(groupCtx, groups);
+  const allowedTypes = kind ? typesOfKind(kind) : undefined;
+  const kindError = (q: QuestionDraft) =>
+    allowedTypes && !allowedTypes.includes(q.type) && kind
+      ? `${typeLabel(q.type)} questions can’t go into a ${GROUP_KIND_LABELS[kind].toLowerCase()} group — pick a ${GROUP_KIND_LABELS[kind].toLowerCase()} type.`
+      : undefined;
+  /** A blank question starts on the first type the group allows. */
+  const newDraft = () => (allowedTypes && !allowedTypes.includes(emptyDraft().type) ? changeType(emptyDraft(), allowedTypes[0]) : emptyDraft());
+
+  // Picking a group kind moves the untouched starter questions onto an allowed type; written ones keep theirs (and show an error).
+  const kindKey = allowedTypes?.join(',');
+  useEffect(() => {
+    if (!allowedTypes) return;
+    setQuestions(prev => prev.map(q => (allowedTypes.includes(q.type) || isKept(q) ? q : changeType(q, allowedTypes[0]))));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- kindKey stands in for allowedTypes (a new array every render)
+  }, [kindKey]);
+
+  /** Manual mode holds work that would be lost by switching to AI. */
+  const manualBusy = !isEdit && dirty && kept > 0;
+  const aiBusy = aiPending > 0;
+
+  // Unsaved edits, or AI suggestions not saved yet, hold any navigation away for confirmation.
   // Reloading only prompts for what the stored draft can't bring back.
-  const { blocker, leave } = useUnsavedChangesGuard(dirty || aiPending > 0, (dirty && (isEdit || !draftStored)) || aiPending > 0);
+  const { blocker, leave } = useUnsavedChangesGuard(dirty || aiBusy, (dirty && (isEdit || !draftStored)) || aiBusy);
 
   /**
    * Leaving without saving was confirmed — the draft goes with it. Done in the
@@ -150,25 +218,59 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
     clearCreateDraft();
   };
 
-  const discardRestored = () => {
+  /** Back to one blank question; the location and group context stay. */
+  const resetManual = () => {
     clearCreateDraft();
+    setQuestions([newDraft()]);
+    setTouched(new Set());
+    setSubmitted(false);
+    setSaveError(null);
+    setImportedCount(0);
+    setDirty(false);
+    setShowRestored(false);
+  };
+
+  const discardRestored = () => {
+    resetManual();
     setQuestions([emptyDraft()]);
     setCourseId('');
     setModuleId('');
     setGroupCtx(emptyGroupContext());
-    setTouched(new Set());
-    setSubmitted(false);
-    setSaveError(null);
-    setDirty(false);
-    setShowRestored(false);
   };
+
   const unsavedDetails = [
     ...(dirty ? [isEdit ? 'Your changes to this question' : `${questions.length} question${questions.length === 1 ? '' : 's'} not saved yet`] : []),
-    ...(aiPending > 0 ? [`${aiPending} AI suggestion${aiPending === 1 ? '' : 's'} not accepted yet`] : []),
+    ...(aiPending > 0 ? [`${aiPending} AI suggestion${aiPending === 1 ? '' : 's'} not saved yet`] : []),
   ];
 
   /** Leaving through Cancel / breadcrumb goes through the guard's confirmation. */
   const goToBank = () => navigate(ROUTES.managerQuestions);
+
+  const switchMode = (next: CreateMode) => {
+    if (next === createMode) return;
+    // The current mode's unsaved work must be saved or discarded first.
+    if ((createMode === 'manual' && manualBusy) || (createMode === 'ai' && aiBusy)) {
+      setConfirmDiscard(createMode);
+      return;
+    }
+    setSaveError(null);
+    setSubmitted(false);
+    // Only blank starter questions are left — nothing of manual mode to keep.
+    if (next === 'ai') setDirty(false);
+    setCreateMode(next);
+  };
+
+  const discardAndSwitch = () => {
+    if (confirmDiscard === 'manual') {
+      resetManual();
+      setCreateMode('ai');
+    } else if (confirmDiscard === 'ai') {
+      aiRef.current?.clear();
+      setSaveError(null);
+      setCreateMode('manual');
+    }
+    setConfirmDiscard(null);
+  };
 
   const updateQuestion = (i: number, q: QuestionDraft) => {
     setQuestions(prev => prev.map((p, pi) => (pi === i ? q : p)));
@@ -195,22 +297,20 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
   const scrollTo = (key: string) => document.getElementById(key)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   const addQuestion = () => {
-    const draft = emptyDraft();
+    if (questions.length >= MAX_BATCH) {
+      toast.warning(`You can save up to ${MAX_BATCH} questions at a time — save these first.`);
+      return;
+    }
+    const draft = newDraft();
     setQuestions(prev => [...prev, draft]);
-    setTab('manual');
     requestAnimationFrame(() => scrollTo(draft.key));
   };
-
-  /** Untouched blank questions (the starter one) give way to appended drafts; flagged imports stay. */
-  const isKept = (q: QuestionDraft) => touched.has(q.key) || q.content.trim() !== '' || Boolean(q.importIssue);
 
   /** Append drafts, replacing the untouched blank starter question instead of keeping it around. */
   const appendDrafts = (drafts: QuestionDraft[]) => {
     setQuestions(prev => [...prev.filter(isKept), ...drafts]);
     setDirty(true);
   };
-
-  const kept = questions.filter(isKept).length;
 
   /** Every block of the file comes in; ones that couldn't be read carry their errors. */
   const handleImported = (drafts: QuestionDraft[], importCourseId: string, importModuleId: string) => {
@@ -221,7 +321,6 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
       toast.warning(`Only ${fitting.length} of ${drafts.length} questions were added — you can save up to ${MAX_BATCH} at a time.`);
     }
     setShowImport(false);
-    setTab('manual');
     if (!fitting.length) return;
     appendDrafts(fitting);
     setImportedCount(fitting.length);
@@ -229,34 +328,24 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
     requestAnimationFrame(() => scrollTo(fitting[0].key));
   };
 
-  const aiRoom = MAX_BATCH - kept;
-
-  /** Returns how many drafts made it in (the batch is capped at MAX_BATCH). */
-  const handleAiAccepted = (drafts: QuestionDraft[]): number => {
-    const fitting = drafts.slice(0, Math.max(0, aiRoom));
-    if (fitting.length < drafts.length) toast.warning(`You can save up to ${MAX_BATCH} questions at a time — save these first.`);
-    if (!fitting.length) return 0;
-    appendDrafts(fitting);
-    toast.success(`${fitting.length} question${fitting.length === 1 ? '' : 's'} added. Review in the Manual tab, then Save All.`);
-    return fitting.length;
-  };
+  const onAiAccepted = useCallback((drafts: QuestionDraft[]) => setAiAccepted(drafts), []);
 
   const changeGroupCtx = (v: GroupContextValue) => {
     setGroupCtx(v);
-    setDirty(true);
+    if (createMode === 'manual') setDirty(true);
   };
 
   const changeLocation = (c: string, m: string) => {
-    // A group belongs to one course, so a picked group no longer applies.
-    if (c !== courseId) setGroupCtx(prev => ({ ...prev, existingGroupId: '' }));
+    // A group belongs to one course (and maybe one module), so a picked group may no longer apply.
+    if (c !== courseId || m !== moduleId) setGroupCtx(prev => ({ ...prev, existingGroupId: '' }));
     setCourseId(c);
     setModuleId(m);
-    setDirty(true);
+    if (createMode === 'manual') setDirty(true);
   };
 
   const locationNote =
-    !courseId || !moduleId ? 'Select a course and module to save.'
-      : !isEdit && questions.length > MAX_BATCH ? `You can save up to ${MAX_BATCH} questions at a time.`
+    !courseId ? 'Select a course to save.'
+      : !isEdit && createMode === 'manual' && questions.length > MAX_BATCH ? `You can save up to ${MAX_BATCH} questions at a time.`
       : null;
 
   /**
@@ -270,6 +359,7 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
     const group = await questionGroupService.createQuestionGroup({
       courseId: Number(courseId),
       moduleId: moduleId ? Number(moduleId) : null,
+      questionType: groupCtx.newKind,
       title: groupCtx.newTitle.trim(),
       passageText: groupCtx.newPassage.trim(),
     });
@@ -278,49 +368,87 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
     return group.groupId;
   };
 
-  const save = async () => {
+  /** Q-03 for a batch of new questions, in the picked group. Returns how many were saved. */
+  const createBatch = async (drafts: QuestionDraft[]): Promise<number> => {
+    const groupId = await resolveGroupId();
+    const module = moduleId ? Number(moduleId) : null;
+    const payload = drafts.map(q => ({ ...toCreateRequest(q, Number(courseId), module), groupId }));
+    const created = await questionService.createQuestionsBatch(Number(courseId), module, payload);
+    toast.success(`${created.length} question${created.length === 1 ? '' : 's'} saved${groupId != null ? ' to the question group' : ''}.`);
+    return created.length;
+  };
+
+  const groupReady = () => {
+    if (Object.keys(groupContextErrors(groupCtx)).length === 0) return true;
+    setSubmitted(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    return false;
+  };
+
+  const saveManual = async () => {
     setSubmitted(true);
     setSaveError(null);
-    const firstInvalid = questions.find(q => !isDraftValid(q));
+    const firstInvalid = questions.find(q => !isDraftValid(q) || kindError(q));
     if (firstInvalid) {
-      setTab('manual');
       requestAnimationFrame(() => scrollTo(firstInvalid.key));
       return;
     }
     if (locationNote || questions.length === 0) return;
-    if (!isEdit && Object.keys(groupContextErrors(groupCtx)).length > 0) {
-      setTab('manual');
-      listRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      return;
-    }
+    if (!isEdit && !groupReady()) return;
 
     setSaving(true);
     try {
       if (isEdit) {
-        await questionService.updateQuestion(questions[0].questionId!, toUpdateRequest(questions[0], Number(moduleId)));
+        await questionService.updateQuestion(questions[0].questionId!, toUpdateRequest(questions[0], moduleId ? Number(moduleId) : null));
         toast.success('Question updated.');
       } else {
-        const groupId = await resolveGroupId();
-        const payload = questions.map(q => ({ ...toCreateRequest(q, Number(courseId), Number(moduleId)), groupId }));
-        const created = await questionService.createQuestionsBatch(Number(courseId), Number(moduleId), payload);
-        toast.success(`${created.length} question${created.length === 1 ? '' : 's'} saved${groupId != null ? ' to the question group' : ''}.`);
+        await createBatch(questions);
       }
       setDirty(false);
       if (!isEdit) clearCreateDraft();
-      // Saved — unaccepted AI suggestions are left behind on purpose.
       leave(goToBank);
     } catch (err) {
       const error = describeSaveError(err, 'Could not save. Please try again.');
       setSaveError(error);
       // Batch field errors carry "questions[i]." — jump to that question.
       const target = error.questionIndex != null ? questions[error.questionIndex] : undefined;
-      setTab('manual');
       if (target) requestAnimationFrame(() => scrollTo(target.key));
       else listRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } finally {
       setSaving(false);
     }
   };
+
+  /** Saves the accepted AI suggestions; the rest stay for review. */
+  const saveAi = async () => {
+    setSubmitted(true);
+    setSaveError(null);
+    if (!courseId) return;
+    if (!aiAccepted.length) {
+      toast.warning('Accept at least one suggestion to save.');
+      return;
+    }
+    if (!groupReady()) return;
+    const misfit = aiAccepted.find(q => kindError(q));
+    if (misfit) {
+      toast.error(kindError(misfit)!);
+      return;
+    }
+    setSaving(true);
+    try {
+      await createBatch(aiAccepted);
+      setSubmitted(false);
+      const left = aiRef.current?.removeAccepted() ?? 0;
+      if (left === 0) leave(goToBank);
+    } catch (err) {
+      setSaveError(describeSaveError(err, 'Could not save. Please try again.'));
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const save = !isEdit && createMode === 'ai' ? saveAi : saveManual;
 
   const changeStatus = async (next: QuestionStatus) => {
     const q = questions[0];
@@ -343,7 +471,6 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
   const cancel = goToBank;
 
   const title = isEdit ? 'Edit Question' : 'New Questions';
-  const manualTabLabel = `Manual (${questions.length})`;
   const pageCls = 'px-4 sm:px-8 py-6 space-y-4';
 
   if (isEdit && (loading || loadError)) {
@@ -365,6 +492,42 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
     );
   }
 
+  const modeSwitch = !isEdit && (
+    <div className="card p-1.5 space-y-1.5">
+      <div role="tablist" aria-label="How to create questions" className="grid grid-cols-2 gap-1 bg-surface-muted p-1 rounded-[10px]">
+        {([
+          { value: 'manual', label: 'Manual', icon: <Icon.Edit className="w-3.5 h-3.5" />, busy: manualBusy },
+          { value: 'ai', label: 'AI Generate', icon: <Icon.Zap className="w-3.5 h-3.5" />, busy: aiBusy },
+        ] as const).map(t => {
+          const active = createMode === t.value;
+          // The other mode is closed while this one has unsaved work.
+          const locked = !active && ((createMode === 'manual' && manualBusy) || (createMode === 'ai' && aiBusy));
+          return (
+            <button
+              key={t.value}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              aria-disabled={locked}
+              onClick={() => switchMode(t.value)}
+              title={locked ? `Save or discard the ${createMode === 'manual' ? 'manual questions' : 'AI suggestions'} first` : undefined}
+              className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-[8px] text-sm font-medium transition-all ${
+                active ? 'bg-surface text-content shadow-sm' : locked ? 'text-content-faint cursor-not-allowed' : 'text-content-soft hover:text-content-secondary'
+              }`}
+            >
+              {locked ? <Icon.Lock className="w-3.5 h-3.5" /> : t.icon} {t.label}
+            </button>
+          );
+        })}
+      </div>
+      {((createMode === 'manual' && manualBusy) || (createMode === 'ai' && aiBusy)) && (
+        <p className="px-1.5 pb-0.5 text-xs text-content-subtle">
+          Save {createMode === 'manual' ? 'these questions' : 'the accepted suggestions'} before switching to {createMode === 'manual' ? 'AI Generate' : 'Manual'}.
+        </p>
+      )}
+    </div>
+  );
+
   return (
     <div className={pageCls}>
       <Breadcrumb items={[{ label: 'Question', onClick: cancel }, { label: title }]} />
@@ -383,7 +546,7 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
         </div>
       )}
       {saveError && <SaveErrorAlert error={saveError} onReload={isEdit ? () => setReloadKey(k => k + 1) : undefined} />}
-      {importedCount > 0 && (
+      {importedCount > 0 && createMode === 'manual' && (
         importedIssues > 0 ? (
           <Alert
             type="warning"
@@ -396,15 +559,8 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px] gap-6 items-start">
-        {/* AI tab — kept mounted so its suggestions survive switching tabs */}
-        {!isEdit && (
-          <div className={`min-w-0 pb-4 ${tab === 'ai' ? '' : 'hidden'}`}>
-            <AiGeneratePanel courseId={courseId} moduleId={moduleId} onAccept={handleAiAccepted} onPendingChange={setAiPending} disabled={saving} />
-          </div>
-        )}
-
-        {/* Question blocks — scroll with the page; the side panel stays pinned */}
-        <div ref={listRef} className={`min-w-0 space-y-3 pb-4 scroll-mt-5 ${tab === 'manual' ? '' : 'hidden'}`}>
+        <div className="min-w-0 space-y-3 pb-4">
+          {/* Shared by both modes: the questions saved from either go into this group */}
           {!isEdit && (
             <GroupContextCard
               value={groupCtx}
@@ -412,45 +568,59 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
               groups={groups}
               loadingGroups={groupsLoading}
               courseSelected={Boolean(courseId)}
+              moduleId={moduleId}
+              questionKinds={writtenKinds}
               showErrors={submitted}
               disabled={saving}
             />
           )}
-          {questions.length === 0 && (
-            <div className="card p-10 text-center">
-              <p className="text-base font-medium text-content-secondary">No questions yet</p>
-              <p className="text-sm text-content-subtle mt-1">Use “Add Question”, import a PDF or Word file, or draft questions in the AI Generate tab.</p>
-            </div>
-          )}
-          {questions.map((q, i) => (
-            <div key={q.key} id={q.key} className="scroll-mt-4">
-              <QuestionFormBlock
-                q={q}
-                index={i}
-                onChange={updated => updateQuestion(i, updated)}
-                showErrors={submitted || touched.has(q.key)}
-                removable={!isEdit && questions.length > 1}
-                onRemove={() => remove(i)}
-                canMoveUp={i > 0}
-                canMoveDown={i < questions.length - 1}
-                onMoveUp={isEdit ? undefined : () => move(i, -1)}
-                onMoveDown={isEdit ? undefined : () => move(i, 1)}
+
+          {/* AI mode — kept mounted while hidden so its settings stay as they were */}
+          {!isEdit && (
+            <div className={createMode === 'ai' ? '' : 'hidden'}>
+              <AiGeneratePanel
+                ref={aiRef}
+                courseId={courseId}
+                moduleId={moduleId}
+                allowedTypes={allowedTypes}
+                onAcceptedChange={onAiAccepted}
+                onPendingChange={setAiPending}
+                disabled={saving}
               />
             </div>
-          ))}
+          )}
+
+          {/* Manual mode — question blocks scroll with the page; the side panel stays pinned */}
+          <div ref={listRef} className={`space-y-3 scroll-mt-5 ${createMode === 'manual' ? '' : 'hidden'}`}>
+            {questions.length === 0 && (
+              <div className="card p-10 text-center">
+                <p className="text-base font-medium text-content-secondary">No questions yet</p>
+                <p className="text-sm text-content-subtle mt-1">Use “Add Question” or import a PDF or Word file.</p>
+              </div>
+            )}
+            {questions.map((q, i) => (
+              <div key={q.key} id={q.key} className="scroll-mt-4">
+                <QuestionFormBlock
+                  q={q}
+                  index={i}
+                  onChange={updated => updateQuestion(i, updated)}
+                  showErrors={submitted || touched.has(q.key)}
+                  removable={!isEdit}
+                  onRemove={() => (isKept(q) ? setConfirmRemove(i) : remove(i))}
+                  canMoveUp={i > 0}
+                  canMoveDown={i < questions.length - 1}
+                  onMoveUp={isEdit ? undefined : () => move(i, -1)}
+                  onMoveDown={isEdit ? undefined : () => move(i, 1)}
+                  allowedTypes={allowedTypes}
+                  kindError={kindError(q)}
+                />
+              </div>
+            ))}
+          </div>
         </div>
 
         <QuestionSidePanel
-          tabs={!isEdit && (
-            // Full-width segmented switch above the Location card.
-            <div className="[&>[role=tablist]]:w-full [&_[role=tab]]:flex-1">
-              <Tabs
-                tabs={[manualTabLabel, AI_TAB_LABEL]}
-                active={tab === 'manual' ? manualTabLabel : AI_TAB_LABEL}
-                onChange={t => setTab(t === AI_TAB_LABEL ? 'ai' : 'manual')}
-              />
-            </div>
-          )}
+          tabs={modeSwitch}
           mode={mode}
           count={questions.length}
           courseId={courseId}
@@ -458,10 +628,10 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
           onLocationChange={changeLocation}
           showErrors={submitted}
           prerequisiteNote={locationNote}
-          onAdd={questions.length < MAX_BATCH ? addQuestion : undefined}
-          // The AI tab takes files in its own card.
-          onImport={tab === 'manual' ? () => { setImportedCount(0); setShowImport(true); } : undefined}
+          onAdd={createMode === 'manual' ? addQuestion : undefined}
+          onImport={createMode === 'manual' ? () => { setImportedCount(0); setShowImport(true); } : undefined}
           onSave={save}
+          saveLabel={!isEdit && createMode === 'ai' ? `Save Accepted (${aiAccepted.length})` : undefined}
           onCancel={cancel}
           onToggleStatus={isEdit ? () => (status === 'ACTIVE' ? setConfirm('archive') : changeStatus('ACTIVE')) : undefined}
           saving={saving}
@@ -484,6 +654,40 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
         message="You have work on this page that hasn’t been saved. If you leave now, it will be lost:"
         details={unsavedDetails}
       />
+
+      <Modal
+        open={confirmDiscard != null}
+        onClose={() => setConfirmDiscard(null)}
+        title={confirmDiscard === 'manual' ? 'Switch to AI Generate?' : 'Switch to Manual?'}
+        size="sm"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setConfirmDiscard(null)}>Keep working</Button>
+            <Button variant="danger" onClick={discardAndSwitch}>Discard &amp; switch</Button>
+          </>
+        }
+      >
+        <p className="text-sm text-content-secondary">
+          {confirmDiscard === 'manual'
+            ? `Your ${kept} manual question${kept === 1 ? ' hasn’t' : 's haven’t'} been saved. Save them first, or discard them to draft questions with AI.`
+            : `${aiPending} AI suggestion${aiPending === 1 ? ' hasn’t' : 's haven’t'} been saved. Save the accepted ones first, or discard them to write questions by hand.`}
+        </p>
+      </Modal>
+
+      <Modal
+        open={confirmRemove != null}
+        onClose={() => setConfirmRemove(null)}
+        title={`Delete question ${confirmRemove != null ? confirmRemove + 1 : ''}?`}
+        size="sm"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setConfirmRemove(null)}>Keep it</Button>
+            <Button variant="danger" onClick={() => { if (confirmRemove != null) remove(confirmRemove); setConfirmRemove(null); }}>Delete</Button>
+          </>
+        }
+      >
+        <p className="text-sm text-content-secondary">This question hasn’t been saved yet, so what you wrote for it will be lost.</p>
+      </Modal>
 
       <Modal
         open={confirm === 'archive'}

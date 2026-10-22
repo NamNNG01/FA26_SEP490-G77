@@ -8,10 +8,12 @@ import { deckService, type Deck } from '@/services/deck.service';
 import {
   CardEditorPanel,
   CardList,
+  DUPLICATE_TITLE_MESSAGE,
   DeckInfoFields,
   NO_COURSE,
   cardErrorMessage,
   errorMessage,
+  hasDuplicateTitle,
   useCardEditor,
   useManagedCourses,
   validateDeckInfo,
@@ -57,7 +59,8 @@ export function CreateDeckModal({ onClose, onCreated, defaultCourseId }: {
     remove: card => setCards(prev => prev.filter(c => c.id !== card.id)),
   });
 
-  const touched = info.title.trim() !== '' || info.description.trim() !== '' || info.isPublic || cards.length > 0 || editor.hasInput;
+  const touched = info.title.trim() !== '' || info.description.trim() !== '' || info.isPublic
+    || info.courseId !== (defaultCourseId ?? NO_COURSE) || cards.length > 0 || editor.hasInput;
 
   const update = (patch: Partial<DeckInfo>) => {
     setInfo(prev => ({ ...prev, ...patch }));
@@ -75,7 +78,7 @@ export function CreateDeckModal({ onClose, onCreated, defaultCourseId }: {
   };
 
   const submit = async () => {
-    const found = validateDeckInfo(info);
+    const found = validateDeckInfo(info, { requireCourse: true });
     setErrors(found);
     if (Object.keys(found).length > 0) return;
     if (editor.hasInput) {
@@ -85,11 +88,16 @@ export function CreateDeckModal({ onClose, onCreated, defaultCourseId }: {
     }
     setSaving(true);
     setSaveError(null);
+    if (await hasDuplicateTitle(info.title, info.courseId)) {
+      setErrors({ title: DUPLICATE_TITLE_MESSAGE });
+      setSaving(false);
+      return;
+    }
     let deck: Deck;
     try {
       deck = await deckService.createDeck({
         title: info.title.trim(),
-        courseId: info.courseId === NO_COURSE ? undefined : Number(info.courseId),
+        courseId: Number(info.courseId),
         isPublic: info.isPublic,
         description: info.description.trim() || undefined,
       });
@@ -115,27 +123,22 @@ export function CreateDeckModal({ onClose, onCreated, defaultCourseId }: {
   };
 
   return (
+    <>
     <Modal open onClose={requestClose} title="New Flashcard Deck" size="2xl"
-      footer={confirmDiscard ? (
-        <div className="flex w-full flex-wrap items-center justify-end gap-2">
-          <span className="mr-auto text-sm text-content-secondary">Discard this new deck? Everything entered will be lost.</span>
-          <Button variant="outline" onClick={() => setConfirmDiscard(false)}>Keep Editing</Button>
-          <Button variant="danger" onClick={onClose}>Discard</Button>
-        </div>
-      ) : (
+      footer={
         <>
           <Button variant="outline" onClick={requestClose} disabled={saving}>Cancel</Button>
           <Button icon={<Icon.Check className="w-4 h-4" />} onClick={submit} disabled={saving || coursesLoading}>
             {saving ? 'Creating…' : 'Create Deck'}
           </Button>
         </>
-      )}>
+      }>
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px] items-start">
         <div className="space-y-5 min-w-0">
           <section className="card p-5 space-y-4" aria-label="Deck information">
             <h3 className="text-lg font-semibold text-content">Deck Information</h3>
             {saveError && <Alert type="error" message={saveError} />}
-            <DeckInfoFields idPrefix="new-deck" value={info} errors={errors} onChange={update} allowNoCourse
+            <DeckInfoFields idPrefix="new-deck" value={info} errors={errors} onChange={update} allowNoCourse={false}
               courses={courses.map(c => ({ id: String(c.courseId), title: c.title }))} coursesLoading={coursesLoading} />
           </section>
           <CardList cards={cards} editor={editor} emptyHint="Add cards with the card editor — or create the deck now and add them later." />
@@ -144,5 +147,24 @@ export function CreateDeckModal({ onClose, onCreated, defaultCourseId }: {
           footnote={<>Cards are added to the list and created with the deck on <span className="font-medium text-content-soft">Create Deck</span>.</>} />
       </div>
     </Modal>
+
+    {/* Its own dialog over the form, so the form's buttons never change under the cursor. */}
+    <Modal open={confirmDiscard} onClose={() => setConfirmDiscard(false)} title="Discard this new deck?" size="sm"
+      footer={
+        <>
+          <Button variant="outline" onClick={() => setConfirmDiscard(false)}>Keep Editing</Button>
+          <Button variant="danger" onClick={onClose}>Discard</Button>
+        </>
+      }>
+      <div className="flex items-start gap-3">
+        <span className="w-9 h-9 rounded-full bg-warning-light flex items-center justify-center flex-shrink-0">
+          <Icon.AlertCircle className="w-5 h-5 text-warning" />
+        </span>
+        <p className="text-sm text-content-secondary">
+          The deck hasn’t been created yet. Everything you entered{cards.length > 0 ? ` — including ${cards.length} card${cards.length === 1 ? '' : 's'} —` : ''} will be lost.
+        </p>
+      </div>
+    </Modal>
+    </>
   );
 }

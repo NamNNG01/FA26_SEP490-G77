@@ -1,5 +1,5 @@
 import { getUser } from '@/auth/storage';
-import type { GroupContextValue } from './components/GroupContextCard';
+import { emptyGroupContext, type GroupContextValue } from './components/GroupContextCard';
 import type { QuestionDraft } from './model';
 
 /**
@@ -34,7 +34,7 @@ export function loadCreateDraft(): CreateDraftSnapshot | null {
       questions: s.questions.map(q => ({ ...q, rubric: Array.isArray(q.rubric) ? q.rubric : [], rubricNotes: q.rubricNotes ?? '' })),
       courseId: typeof s.courseId === 'string' ? s.courseId : '',
       moduleId: typeof s.moduleId === 'string' ? s.moduleId : '',
-      groupCtx: s.groupCtx,
+      groupCtx: { ...emptyGroupContext(), ...s.groupCtx },
       touched: Array.isArray(s.touched) ? s.touched : [],
     };
   } catch {
