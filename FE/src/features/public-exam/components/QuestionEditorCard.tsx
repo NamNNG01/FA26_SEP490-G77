@@ -1,6 +1,7 @@
 import React from 'react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { Select } from '@/components/ui/Select';
 import { Icon } from '@/assets/icons';
 import type { ExamDifficulty } from '../mockPublicExams';
 import {
@@ -160,21 +161,16 @@ export function QuestionEditorCard({
         </span>
 
         {canEdit ? (
-          <select
+          <Select
             value={question.type}
-            onChange={e => onChange({ type: e.target.value as ExamQuestion['type'] })}
+            onChange={v => onChange({ type: v as ExamQuestion['type'] })}
             aria-label={`Question ${index} type`}
-            className="h-7 rounded-full border border-line bg-surface pl-2.5 pr-7 text-xs font-medium text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
-          >
-            {(question.type === 'essay'
+            triggerClassName="h-7 pl-2.5 pr-8 rounded-full text-xs font-medium"
+            options={(question.type === 'essay'
               ? ['essay']
               : ['mcq', 'true-false', 'fill-blank', 'matching', 'ordering']
-            ).map(t => (
-              <option key={t} value={t}>
-                {QUESTION_TYPE_LABEL[t as ExamQuestion['type']]}
-              </option>
-            ))}
-          </select>
+            ).map(t => ({ value: t, label: QUESTION_TYPE_LABEL[t as ExamQuestion['type']] }))}
+          />
         ) : (
           <Badge variant="default">{QUESTION_TYPE_LABEL[question.type]}</Badge>
         )}
@@ -186,22 +182,16 @@ export function QuestionEditorCard({
 
         {canEdit && (
           <span className="ml-auto flex items-center gap-1">
-            <label className="flex items-center gap-1.5">
+            <span className="flex items-center gap-1.5">
               <span className="text-xs text-muted-foreground">Group</span>
-              <select
+              <Select
                 value={question.groupId ?? ''}
-                onChange={e => onChange({ groupId: e.target.value || undefined })}
+                onChange={v => onChange({ groupId: v || undefined })}
                 aria-label={`Group assignment for question ${index}`}
-                className="h-8 max-w-[11rem] rounded-[10px] border border-line bg-surface pl-2.5 pr-8 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
-              >
-                <option value="">No group</option>
-                {groups.map(g => (
-                  <option key={g.id} value={g.id}>
-                    {g.title}
-                  </option>
-                ))}
-              </select>
-            </label>
+                triggerClassName="h-8 w-[11rem] pl-2.5 pr-8 rounded-[10px] text-sm"
+                options={[{ value: '', label: 'No group' }, ...groups.map(g => ({ value: g.id, label: g.title }))]}
+              />
+            </span>
 
             <button
               type="button"

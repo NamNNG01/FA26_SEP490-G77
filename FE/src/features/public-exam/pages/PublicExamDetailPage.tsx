@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router';
 import { Badge } from '@/components/ui/Badge';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { Button } from '@/components/ui/Button';
+import { Select } from '@/components/ui/Select';
 import { Tabs } from '@/components/ui/Tabs';
 import { Icon } from '@/assets/icons';
 import { useAuth } from '@/auth/authContext';
@@ -74,6 +75,10 @@ const EXAM_PUBLICATION_STATUS_OPTIONS = [
   { label: 'Public', value: 'Public' },
   { label: 'Private', value: 'Private' },
 ] as const;
+
+/** <Select> trigger sizes: the editor's form fields, and the big values in the stats row. */
+const FIELD_SELECT = 'w-full h-9 pl-3 pr-9 rounded-[10px] text-sm';
+const STAT_SELECT = 'w-full h-9 pl-3 pr-9 rounded-[10px] text-lg font-semibold';
 
 export function PublicExamDetailPage() {
   const { examId } = useParams<{ examId: string }>();
@@ -273,18 +278,13 @@ export function PublicExamDetailPage() {
                 <dt className="text-xs text-muted-foreground">Difficulty</dt>
                 <dd className="mt-1">
                   {canEdit ? (
-                    <select
+                    <Select
                       value={draft.difficulty}
-                      onChange={e => editor.setField('difficulty', e.target.value as typeof draft.difficulty)}
+                      onChange={v => editor.setField('difficulty', v as typeof draft.difficulty)}
                       aria-label="Difficulty"
-                      className="h-9 w-full rounded-[10px] border border-line bg-surface pl-3 pr-8 text-lg font-semibold text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
-                    >
-                      {DIFFICULTY_FILTER_OPTIONS.filter(o => o.value).map(o => (
-                        <option key={o.value} value={o.value}>
-                          {o.label}
-                        </option>
-                      ))}
-                    </select>
+                      triggerClassName={STAT_SELECT}
+                      options={DIFFICULTY_FILTER_OPTIONS.filter(o => o.value)}
+                    />
                   ) : (
                     <span className="flex items-center gap-1.5 text-lg font-semibold text-foreground">
                       <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full" style={{ background: difficulty }} />
@@ -298,18 +298,13 @@ export function PublicExamDetailPage() {
                 <dt className="text-xs text-muted-foreground">Status</dt>
                 <dd className="mt-1">
                   {canEdit ? (
-                    <select
+                    <Select
                       value={draft.status}
-                      onChange={e => editor.setField('status', e.target.value as typeof draft.status)}
+                      onChange={v => editor.setField('status', v as typeof draft.status)}
                       aria-label="Status"
-                      className="h-9 w-full rounded-[10px] border border-line bg-surface pl-3 pr-8 text-lg font-semibold text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
-                    >
-                      {EXAM_STATUS_OPTIONS.filter(o => o.value).map(o => (
-                        <option key={o.value} value={o.value}>
-                          {o.label}
-                        </option>
-                      ))}
-                    </select>
+                      triggerClassName={STAT_SELECT}
+                      options={EXAM_STATUS_OPTIONS.filter(o => o.value)}
+                    />
                   ) : (
                     <span className="text-lg font-semibold text-foreground">{status.label}</span>
                   )}
@@ -445,13 +440,13 @@ export function PublicExamDetailPage() {
               <div className="mb-4 space-y-4">
                 <h2 className="text-lg font-semibold text-foreground">Exam Information</h2>
                 <label className="flex flex-col gap-1.5"><span className="text-xs text-muted-foreground">Exam Name</span><input value={draft.title} onChange={e => editor.setField('title', e.target.value)} aria-label="Exam Name" className="h-9 rounded-[10px] border border-line bg-surface px-3 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20" /></label>
-                <label className="flex flex-col gap-1.5"><span className="text-xs text-muted-foreground">Course</span><select value={draft.course} onChange={e => editor.setField('course', e.target.value)} aria-label="Course" className="h-9 rounded-[10px] border border-line bg-surface pl-3 pr-8 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20">{COURSE_FILTER_OPTIONS.filter(o => o.value).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</select></label>
-                <label className="flex flex-col gap-1.5"><span className="text-xs text-muted-foreground">Module</span><select value={draft.module} onChange={e => editor.setField('module', e.target.value)} aria-label="Module" className="h-9 rounded-[10px] border border-line bg-surface pl-3 pr-8 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20">{moduleOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</select></label>
+                <div className="flex flex-col gap-1.5"><span className="text-xs text-muted-foreground">Course</span><Select value={draft.course} onChange={v => editor.setField('course', v)} aria-label="Course" triggerClassName={FIELD_SELECT} options={COURSE_FILTER_OPTIONS.filter(o => o.value)} /></div>
+                <div className="flex flex-col gap-1.5"><span className="text-xs text-muted-foreground">Module</span><Select value={draft.module} onChange={v => editor.setField('module', v)} aria-label="Module" triggerClassName={FIELD_SELECT} options={moduleOptions} /></div>
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <label className="flex min-w-0 flex-col gap-1.5"><span className="text-xs text-muted-foreground">Time (minutes)</span><input type="number" min={1} value={draft.duration} onChange={e => editor.setField('duration', Math.max(1, Number(e.target.value) || 1))} aria-label="Time in minutes" className="h-9 w-full rounded-[10px] border border-line bg-surface px-3 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20" /></label>
                   <label className="flex min-w-0 flex-col gap-1.5"><span className="text-xs text-muted-foreground">Number of Questions</span><input value={draft.questions.length} readOnly aria-label="Number of Questions" className="h-9 w-full rounded-[10px] border border-line bg-accent px-3 text-sm text-muted-foreground outline-none" /></label>
                 </div>
-                <label className="flex flex-col gap-1.5"><span className="text-xs text-muted-foreground">Status</span><select value={publicationStatus} onChange={e => setPublicationStatus(e.target.value as typeof publicationStatus)} aria-label="Status" className="h-9 rounded-[10px] border border-line bg-surface pl-3 pr-8 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20">{EXAM_PUBLICATION_STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</select></label>
+                <div className="flex flex-col gap-1.5"><span className="text-xs text-muted-foreground">Status</span><Select value={publicationStatus} onChange={v => setPublicationStatus(v as typeof publicationStatus)} aria-label="Status" triggerClassName={FIELD_SELECT} options={[...EXAM_PUBLICATION_STATUS_OPTIONS]} /></div>
                 <Button className="w-full" icon={<Icon.Plus className="h-4 w-4" />} onClick={editor.addQuestion}>Add Question</Button>
               </div>
             )}

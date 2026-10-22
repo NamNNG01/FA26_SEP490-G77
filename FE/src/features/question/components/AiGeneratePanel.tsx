@@ -2,7 +2,6 @@ import React, { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, use
 import { Alert } from '@/components/ui/Alert';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { MultiSelect } from '@/components/ui/MultiSelect';
 import { Spinner } from '@/components/ui/Spinner';
@@ -109,7 +108,7 @@ export interface AiGeneratePanelHandle {
 }
 
 /**
- * "AI Generate" mode: drafts questions with AI-01 from a topic for the
+ * "AI Generate" mode: drafts questions with AI-01 from a context for the
  * manager to review. Accepted
  * suggestions are reported through onAcceptedChange; the page saves them.
  */
@@ -127,7 +126,7 @@ export const AiGeneratePanel = forwardRef<AiGeneratePanelHandle, {
   const toast = useToast();
   const typeOptions = allowedTypes ? AI_QUESTION_TYPE_OPTIONS.filter(o => allowedTypes.includes(o.value)) : AI_QUESTION_TYPE_OPTIONS;
   const [typeCounts, setTypeCounts] = useState<TypeCounts<QuestionType>>({ SINGLE_CHOICE: String(DEFAULT_COUNT) });
-  const [topic, setTopic] = useState('');
+  const [context, setContext] = useState('');
   const [difficulties, setDifficulties] = useState<QuestionDifficulty[]>(['MEDIUM']);
   const [language, setLanguage] = useState<Language>('English');
   const [showErrors, setShowErrors] = useState(false);
@@ -166,7 +165,7 @@ export const AiGeneratePanel = forwardRef<AiGeneratePanelHandle, {
   const countsValid = counts.length > 0 && counts.every(([, n]) => Number.isInteger(n) && n >= MIN_COUNT && n <= MAX_COUNT);
   const total = countsValid ? counts.reduce((sum, [, n]) => sum + n, 0) : 0;
 
-  const topicError = showErrors && !topic.trim() ?'Enter a topic for the questions.' : undefined;
+  const contextError = showErrors && !context.trim() ? 'Describe what the questions should be about.' : undefined;
   const typesError = !showErrors ? undefined
     : !counts.length ? 'Pick at least one question type.'
     : !countsValid ? `Enter a number from ${MIN_COUNT} to ${MAX_COUNT} for each type.`
@@ -176,7 +175,7 @@ export const AiGeneratePanel = forwardRef<AiGeneratePanelHandle, {
 
   const generate = async () => {
     setShowErrors(true);
-    if (!courseId || !moduleId || !topic.trim() || !total || !difficulties.length || totalError) return;
+    if (!courseId || !moduleId || !context.trim() || !total || !difficulties.length || totalError) return;
 
     abortRef.current?.abort();
     abortRegenerations();
@@ -192,7 +191,7 @@ export const AiGeneratePanel = forwardRef<AiGeneratePanelHandle, {
         moduleId: Number(moduleId),
         questionTypeCounts: Object.fromEntries(counts),
         difficultyCounts: spread(difficulties, total),
-        topic: topic.trim(),
+        topic: context.trim(),
         language,
       };
       const res = await questionService.generateAiQuestions(request, controller.signal);
@@ -288,20 +287,33 @@ export const AiGeneratePanel = forwardRef<AiGeneratePanelHandle, {
           </div>
         </div>
 
-        <Input
-          label="Topic *"
-          value={topic}
-          onChange={e => setTopic(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter' && !generating) generate(); }}
-          placeholder="e.g. OOP inheritance"
-          error={topicError}
-          maxLength={AI_CONTEXT_MAX}
-          disabled={generating}
-        />
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center justify-between gap-2">
+            <label htmlFor="ai-gen-context" className="text-sm font-medium text-content-secondary">Context *</label>
+            <span className="text-2xs text-content-subtle">{context.length}/{AI_CONTEXT_MAX}</span>
+          </div>
+          <textarea
+            id="ai-gen-context"
+            value={context}
+            onChange={e => setContext(e.target.value)}
+            // Enter starts a new line; Ctrl/Cmd + Enter generates.
+            onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && !generating) generate(); }}
+            placeholder={'What the questions should be about, e.g.\nOOP inheritance in Java: extends, method overriding, super, and when to prefer composition.'}
+            maxLength={AI_CONTEXT_MAX}
+            disabled={generating}
+            aria-invalid={contextError ? true : undefined}
+            aria-describedby={contextError ? 'ai-gen-context-error' : undefined}
+            className={`w-full h-[120px] px-3 py-2 rounded-[10px] border text-base text-content placeholder:text-gray-400 bg-surface resize-y focus:outline-none focus:ring-2 transition-all disabled:opacity-60 ${
+              contextError ? 'border-danger-solid focus:ring-danger-solid/20 focus:border-danger-solid' : 'border-line focus:ring-brand-600/20 focus:border-brand-600'
+            }`}
+          />
+          {contextError
+            ? <p id="ai-gen-context-error" className="text-xs text-danger">{contextError}</p>
+            : <p className="text-xs text-content-soft">The more detail you give, the closer the questions match what you want. Ctrl + Enter to generate.</p>}
+        </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)] gap-3 items-start">
           <TypeCountSelect
-            className="sm:col-span-3"
             label="Question types & number of each"
             value={typeCounts}
             onChange={setTypeCounts}
@@ -365,7 +377,7 @@ export const AiGeneratePanel = forwardRef<AiGeneratePanelHandle, {
       {previews && previews.length === 0 && !generating && (
         <div className="card p-10 text-center">
           <p className="text-base font-medium text-content-secondary">No usable questions came back</p>
-          <p className="text-sm text-content-subtle mt-1">Try a more specific topic or generate again.</p>
+          <p className="text-sm text-content-subtle mt-1">Try a more specific context or generate again.</p>
         </div>
       )}
 
