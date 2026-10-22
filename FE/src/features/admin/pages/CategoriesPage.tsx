@@ -84,6 +84,12 @@ export function CategoriesPage() {
     setEditIsActive(category.isActive);
   };
 
+  const hasEditChanges = Boolean(
+    editingCategory &&
+      (editName.trim() !== editingCategory.name ||
+        editIsActive !== editingCategory.isActive),
+  );
+
   const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingCategory || !editName.trim()) {
@@ -334,7 +340,12 @@ export function CategoriesPage() {
               >
                 Cancel
               </Button>
-              <Button type="submit" variant="primary" loading={submittingEdit}>
+              <Button
+                type="submit"
+                variant="primary"
+                loading={submittingEdit}
+                disabled={submittingEdit || !hasEditChanges}
+              >
                 Save Changes
               </Button>
             </div>

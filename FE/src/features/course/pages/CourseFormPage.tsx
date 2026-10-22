@@ -24,6 +24,13 @@ export function CourseFormPage({
   courseId?: string | number;
   onNavigate?: (id: string, params?: Record<string, string>) => void;
 }) {
+  type CourseFormValues = {
+    title: string;
+    categoryId: string;
+    description: string;
+    price: string;
+  };
+
   const navigate = useNavigate();
   const { user } = useAuth();
   const notification = useToast();
@@ -35,6 +42,7 @@ export function CourseFormPage({
   const [price, setPrice] = useState("0");
   const [managerId, setManagerId] = useState("");
   const [categories, setCategories] = useState<CategoryResponse[]>([]);
+  const [initialValues, setInitialValues] = useState<CourseFormValues | null>(null);
   const [loading, setLoading] = useState(isEdit);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -58,14 +66,22 @@ export function CourseFormPage({
 
   useEffect(() => {
     if (isEdit && courseId) {
+      setInitialValues(null);
       setLoading(true);
       courseService
         .getCourseById(courseId)
         .then((c) => {
-          setTitle(c.title);
-          setCategoryId(String(c.categoryId));
-          setDescription(c.description ?? "");
-          setPrice(String(c.price ?? 0));
+          const values = {
+            title: c.title,
+            categoryId: String(c.categoryId),
+            description: c.description ?? "",
+            price: String(c.price ?? 0),
+          };
+          setTitle(values.title);
+          setCategoryId(values.categoryId);
+          setDescription(values.description);
+          setPrice(values.price);
+          setInitialValues(values);
           setManagerId(String(c.managerId));
         })
         .catch((err) => {
@@ -134,6 +150,14 @@ export function CourseFormPage({
     label: c.name,
     value: String(c.categoryId),
   }));
+  const hasChanges = !isEdit || Boolean(
+    initialValues && (
+      title.trim() !== initialValues.title.trim() ||
+      categoryId !== initialValues.categoryId ||
+      description.trim() !== initialValues.description.trim() ||
+      Number(price) !== Number(initialValues.price)
+    ),
+  );
 
   if (loading) {
     return (
@@ -169,7 +193,7 @@ export function CourseFormPage({
             icon={<Icon.Check className="w-4 h-4" />}
             onClick={handleSubmit}
             loading={submitting}
-            disabled={submitting}
+            disabled={submitting || (isEdit && (!initialValues || !hasChanges))}
           >
             {isEdit ? "Save Changes" : "Create Course"}
           </Button>

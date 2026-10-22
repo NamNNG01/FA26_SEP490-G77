@@ -1393,7 +1393,7 @@ export function ExamFormPage({
                     icon={<Icon.Check className="w-4 h-4" />}
                     onClick={handleSaveExam}
                     loading={saving}
-                    disabled={saving || loading}
+                    disabled={saving || loading || (isEdit && !isDirty)}
                   >
                     {isEdit ? "Save Changes" : "Create Exam"}
                   </Button>

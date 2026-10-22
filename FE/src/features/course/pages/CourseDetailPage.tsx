@@ -24,6 +24,7 @@ import {
   type CourseModuleResponse,
   type CategoryResponse,
   type CourseStudentItem,
+  type UpdateCourseRequest,
 } from "@/services/course.service";
 import { AddModuleModal } from "@/components/modules/AddModuleModal";
 import { EditModuleModal } from "@/components/modules/EditModuleModal";
@@ -119,10 +120,26 @@ export function CourseDetailPage({
   const [isPublished, setIsPublished] = useState(false);
   const [price, setPrice] = useState("0");
   const [saving, setSaving] = useState(false);
+  const hasCourseChanges = Boolean(
+    course &&
+      (title.trim() !== course.title.trim() ||
+        description.trim() !== (course.description ?? "").trim() ||
+        categoryId !== String(course.categoryId) ||
+        Number(price) !== Number(course.price) ||
+        isPublished !== course.isPublished),
+  );
   const [managerOptions, setManagerOptions] = useState<ManagerOption[]>([]);
   const [selectedManagerIds, setSelectedManagerIds] = useState<string[]>([]);
   const [loadingManagers, setLoadingManagers] = useState(false);
-  const [savingManagers, setSavingManagers] = useState(false);
+  const savedManagerIds = course
+    ? (course.managers?.length
+        ? course.managers.map((manager) => manager.userId)
+        : [course.managerId]
+      ).map(String)
+    : [];
+  const hasManagerChanges = canManageCourse &&
+    savedManagerIds.join(",") !== selectedManagerIds.join(",");
+  const hasAnyChanges = hasCourseChanges || hasManagerChanges;
 
   const [categories, setCategories] = useState<CategoryResponse[]>([]);
   const [categoryError, setCategoryError] = useState<string | null>(null);
@@ -286,21 +303,36 @@ export function CourseDetailPage({
 
   const handleSaveChanges = async () => {
     if (!course) return;
-    if (!title.trim()) {
+    if (!hasAnyChanges) return;
+    if (hasCourseChanges && !title.trim()) {
       setToast({ type: "error", message: "Course title cannot be empty." });
+      return;
+    }
+    const managerIds = selectedManagerIds
+      .map(Number)
+      .filter((id) => Number.isFinite(id) && id > 0);
+    if (hasManagerChanges && managerIds.length === 0) {
+      setToast({ type: "error", message: "Assign at least one course manager." });
       return;
     }
     setSaving(true);
     try {
-      const updated = await courseService.updateCourseManagers(
-        course.courseId,
-        {
-          title: title.trim(),
-          description: description.trim() || undefined,
-          categoryId: categoryId ? Number(categoryId) : undefined,
-          price: Number(price) >= 0 ? Number(price) : 0,
-        },
-      );
+      const updatePayload: UpdateCourseRequest = {};
+      if (hasCourseChanges) {
+        updatePayload.title = title.trim();
+        updatePayload.description = description.trim() || undefined;
+        updatePayload.categoryId = categoryId ? Number(categoryId) : undefined;
+        updatePayload.price = Number(price) >= 0 ? Number(price) : 0;
+      }
+      if (hasManagerChanges) {
+        updatePayload.managerId = managerIds[0];
+        updatePayload.managerIds = managerIds.slice(1);
+      }
+
+      let updated = course;
+      if (Object.keys(updatePayload).length > 0) {
+        updated = await courseService.updateCourse(course.courseId, updatePayload);
+      }
 
       if (isPublished !== course.isPublished) {
         if (isPublished && modules.length === 0) {
@@ -311,14 +343,40 @@ export function CourseDetailPage({
         await courseService.publishCourse(course.courseId, isPublished);
       }
 
+      let savedManagers = updated.managers ?? course.managers;
+      let savedManagerId = updated.managerId;
+      let savedManagerName = updated.managerName;
+      if (hasManagerChanges) {
+        savedManagers = managerIds.map((userId, index) => {
+          const option = managerOptions.find((manager) => manager.id === userId);
+          const previous = course.managers?.find(
+            (manager) => manager.userId === userId,
+          );
+          return {
+            userId,
+            fullName: option?.name || previous?.fullName || `Manager #${userId}`,
+            email: option?.email || previous?.email,
+            primary: index === 0,
+          };
+        });
+        savedManagerId = managerIds[0];
+        savedManagerName = savedManagers[0].fullName;
+      }
+
       setCourse({
         ...updated,
+        managerId: savedManagerId,
+        managerName: savedManagerName,
+        managers: savedManagers,
         isPublished,
         modules,
       });
+      setSelectedManagerIds(
+        hasManagerChanges ? managerIds.map(String) : savedManagerIds,
+      );
       setToast({
         type: "success",
-        message: "Course details successfully updated.",
+        message: "Course changes saved successfully.",
       });
     } catch (err: unknown) {
       const msg =
@@ -326,56 +384,6 @@ export function CourseDetailPage({
       setToast({ type: "error", message: msg });
     } finally {
       setSaving(false);
-    }
-  };
-
-  const handleSaveManagers = async () => {
-    if (!course) return;
-    const ids = selectedManagerIds
-      .map(Number)
-      .filter((id) => Number.isFinite(id) && id > 0);
-    if (ids.length === 0) {
-      setToast({
-        type: "error",
-        message: "Assign at least one course manager.",
-      });
-      return;
-    }
-    setSavingManagers(true);
-    try {
-      const updated = await courseService.updateCourse(course.courseId, {
-        managerId: ids[0],
-        managerIds: ids.slice(1),
-      });
-      const managers: CourseManagerItem[] = ids.map((id, index) => {
-        const option = managerOptions.find((manager) => manager.id === id);
-        const previous = course.managers?.find(
-          (manager) => manager.userId === id,
-        );
-        return {
-          userId: id,
-          fullName: option?.name || previous?.fullName || `Manager #${id}`,
-          email: option?.email || previous?.email,
-          primary: index === 0,
-        };
-      });
-      setCourse({
-        ...updated,
-        managerId: ids[0],
-        managerName: managers[0].fullName,
-        managers,
-        modules,
-      });
-      setSelectedManagerIds(ids.map(String));
-      setToast({ type: "success", message: "Course managers updated." });
-    } catch (err: unknown) {
-      const msg =
-        err instanceof Error
-          ? err.message
-          : "Failed to update course managers.";
-      setToast({ type: "error", message: msg });
-    } finally {
-      setSavingManagers(false);
     }
   };
 
@@ -640,6 +648,17 @@ export function CourseDetailPage({
                 </Badge>
                 {canManageCourse && (
                   <Button
+                    size="sm"
+                    icon={<Icon.Check className="w-4 h-4" />}
+                    onClick={handleSaveChanges}
+                    loading={saving}
+                    disabled={saving || !hasAnyChanges}
+                  >
+                    Save Changes
+                  </Button>
+                )}
+                {canManageCourse && (
+                  <Button
                     variant="ghost"
                     size="sm"
                     className="text-danger hover:bg-danger-light hover:text-danger"
@@ -729,17 +748,8 @@ export function CourseDetailPage({
                   managerOptions={managerOptions}
                   selectedManagerIds={selectedManagerIds}
                   onSelectedManagerIdsChange={setSelectedManagerIds}
-                  onSave={handleSaveManagers}
-                  onCancel={() =>
-                    setSelectedManagerIds(
-                      (course.managers?.length
-                        ? course.managers.map((manager) => manager.userId)
-                        : [course.managerId]
-                      ).map(String),
-                    )
-                  }
                   loadingManagers={loadingManagers}
-                  savingManagers={savingManagers}
+                  saving={saving}
                 />
               </div>
             </div>
@@ -1072,20 +1082,16 @@ function CourseManagerList({
   managerOptions,
   selectedManagerIds,
   onSelectedManagerIdsChange,
-  onSave,
-  onCancel,
   loadingManagers,
-  savingManagers,
+  saving,
 }: Readonly<{
   course: CourseDetailResponse & { managers?: CourseManagerItem[] };
   canEdit: boolean;
   managerOptions: ManagerOption[];
   selectedManagerIds: string[];
   onSelectedManagerIdsChange: (ids: string[]) => void;
-  onSave: () => void;
-  onCancel: () => void;
   loadingManagers: boolean;
-  savingManagers: boolean;
+  saving: boolean;
 }>) {
   const INITIAL_SHOW = 3;
   const [expanded, setExpanded] = useState(false);
@@ -1100,8 +1106,6 @@ function CourseManagerList({
           },
         ];
 
-  const currentIds = managerList.map((manager) => String(manager.userId));
-  const hasChanges = currentIds.join(",") !== selectedManagerIds.join(",");
   const availableManagers = [
     ...managerOptions,
     ...managerList
@@ -1145,7 +1149,7 @@ function CourseManagerList({
           trigger={
             <button
               type="button"
-              disabled={loadingManagers || savingManagers}
+              disabled={loadingManagers || saving}
               className="w-full flex items-center justify-between px-3 py-2 rounded-[10px] border border-line bg-surface text-sm text-left hover:border-primary disabled:opacity-60"
             >
               <span className="truncate text-content-secondary">
@@ -1234,31 +1238,6 @@ function CourseManagerList({
               )}
             </button>
           )}
-        </div>
-      )}
-      {canEdit && (
-        <div className="flex justify-end gap-2 pt-1">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onCancel}
-            disabled={savingManagers || !hasChanges}
-          >
-            Cancel
-          </Button>
-          <Button
-            size="sm"
-            onClick={onSave}
-            loading={savingManagers}
-            disabled={
-              savingManagers ||
-              loadingManagers ||
-              !hasChanges ||
-              selectedManagerIds.length === 0
-            }
-          >
-            Save Managers
-          </Button>
         </div>
       )}
     </div>
