@@ -15,6 +15,7 @@ import {
 import { courseService, type CourseSummaryItem, type CourseModuleResponse } from '@/services/course.service';
 import { questionService, type QuestionCreateRequest } from '@/services/question.service';
 import { plantUmlSvgUrl } from '@/features/question/diagram';
+import { getApiErrorMessage } from '@/utils/apiError';
 
 interface ExamAiGenerateTabProps {
   formKind: 'QUIZ' | 'ESSAY' | 'DIAGRAM';
@@ -68,6 +69,8 @@ export function ExamAiGenerateTab({
   const [saving, setSaving] = useState(false);
   const [draft, setDraft] = useState<AiExamDraftResponse | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
+  const [courseLoadError, setCourseLoadError] = useState('');
+  const [moduleLoadError, setModuleLoadError] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [savedQuestionIds, setSavedQuestionIds] = useState<number[]>([]);
 
@@ -78,9 +81,12 @@ export function ExamAiGenerateTab({
   useEffect(() => {
     courseService.getCourses().then((res) => {
       setCourses(res.content || []);
+      setCourseLoadError('');
       if (res.content?.length > 0 && !courseId) {
         setCourseId(String(res.content[0].courseId));
       }
+    }).catch((err) => {
+      setCourseLoadError(getApiErrorMessage(err, 'Failed to load courses.'));
     });
   }, []);
 
@@ -88,10 +94,15 @@ export function ExamAiGenerateTab({
     if (courseId) {
       courseService.getCourseModules(courseId).then((mods) => {
         setModules(mods || []);
+        setModuleLoadError('');
+      }).catch((err) => {
+        setModules([]);
+        setModuleLoadError(getApiErrorMessage(err, 'Failed to load course modules.'));
       });
     } else {
       setModules([]);
       setModuleId('');
+      setModuleLoadError('');
     }
   }, [courseId]);
 
@@ -151,7 +162,7 @@ export function ExamAiGenerateTab({
       } else if (errorObj?.response?.status === 400) {
         setErrorMsg(errorObj.response.data?.message || 'Invalid parameters for AI generation.');
       } else {
-        setErrorMsg(errorObj?.response?.data?.message || MSG08);
+        setErrorMsg(getApiErrorMessage(err, MSG08));
       }
     } finally {
       setGenerating(false);
@@ -254,7 +265,7 @@ export function ExamAiGenerateTab({
           'Questions have already been saved to the Question Bank. Saving the exam failed. You can click Confirm & Save again to retry creating the exam without duplicating questions.'
         );
       } else {
-        setErrorMsg(errorObj?.response?.data?.message || 'Failed to save generated questions or create exam.');
+        setErrorMsg(getApiErrorMessage(err, 'Failed to save generated questions or create exam.'));
       }
     } finally {
       setSaving(false);
@@ -263,6 +274,8 @@ export function ExamAiGenerateTab({
 
   return (
     <div className="space-y-6">
+      {courseLoadError && <div className="p-3 text-sm text-danger bg-danger-light border border-danger-line rounded-[8px]">{courseLoadError}</div>}
+      {moduleLoadError && <div className="p-3 text-sm text-danger bg-danger-light border border-danger-line rounded-[8px]">{moduleLoadError}</div>}
       {!draft ? (
         <div className="card p-6 space-y-5 max-w-4xl">
           <div className="border-b border-line-soft pb-3">

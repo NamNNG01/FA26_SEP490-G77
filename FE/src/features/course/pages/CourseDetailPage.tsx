@@ -29,6 +29,7 @@ import { EditModuleModal } from "@/components/modules/EditModuleModal";
 import { useAuth } from "@/auth/authContext";
 import { Role } from "@/utils/permissions";
 import { api } from "@/services/api";
+import { getApiErrorMessage } from "@/utils/apiError";
 
 interface ManagerOption {
   id: number;
@@ -122,6 +123,8 @@ export function CourseDetailPage({
   const [savingManagers, setSavingManagers] = useState(false);
 
   const [categories, setCategories] = useState<CategoryResponse[]>([]);
+  const [categoryError, setCategoryError] = useState<string | null>(null);
+  const [managerLoadError, setManagerLoadError] = useState<string | null>(null);
 
   const [modules, setModules] = useState<CourseModuleResponse[]>([]);
   const [isAddModuleOpen, setIsAddModuleOpen] = useState(false);
@@ -141,6 +144,7 @@ export function CourseDetailPage({
   const [studentSearch, setStudentSearch] = useState("");
   const [studentStatus, setStudentStatus] = useState("all");
   const [loadingStudents, setLoadingStudents] = useState(false);
+  const [studentsError, setStudentsError] = useState<string | null>(null);
 
   const [toast, setToast] = useState<{
     type: "success" | "error";
@@ -156,13 +160,20 @@ export function CourseDetailPage({
   useEffect(() => {
     courseService
       .getCategories()
-      .then(setCategories)
-      .catch(() => setCategories([]));
+      .then((items) => {
+        setCategories(items);
+        setCategoryError(null);
+      })
+      .catch((err) => {
+        setCategories([]);
+        setCategoryError(getApiErrorMessage(err, "Failed to load categories."));
+      });
   }, []);
 
   useEffect(() => {
     if (!isAdmin) return;
     setLoadingManagers(true);
+    setManagerLoadError(null);
     api
       .get<{
         data?:
@@ -205,7 +216,12 @@ export function CourseDetailPage({
             .filter((manager) => Number.isFinite(manager.id) && manager.id > 0),
         );
       })
-      .catch(() => setManagerOptions([]))
+      .catch((err) => {
+        setManagerOptions([]);
+        setManagerLoadError(
+          getApiErrorMessage(err, "Failed to load course managers."),
+        );
+      })
       .finally(() => setLoadingManagers(false));
   }, [isAdmin]);
 
@@ -243,6 +259,7 @@ export function CourseDetailPage({
   const loadStudents = useCallback(async () => {
     if (!courseId) return;
     setLoadingStudents(true);
+    setStudentsError(null);
     try {
       const res = await courseService.getCourseStudents(courseId, {
         search: studentSearch.trim() || undefined,
@@ -252,9 +269,12 @@ export function CourseDetailPage({
       });
       setStudents(res.content);
       setStudentTotal(res.totalElements);
-    } catch {
+    } catch (err) {
       setStudents([]);
       setStudentTotal(0);
+      setStudentsError(
+        getApiErrorMessage(err, "Failed to load enrolled students."),
+      );
     } finally {
       setLoadingStudents(false);
     }
@@ -380,7 +400,12 @@ export function CourseDetailPage({
     courseService
       .getCourseModules(courseId)
       .then(setModules)
-      .catch(() => {});
+      .catch((err) => {
+        setToast({
+          type: "error",
+          message: getApiErrorMessage(err, "Module was added, but the module list could not be refreshed."),
+        });
+      });
   };
 
   const handleModuleUpdated = (updatedMod: CourseModuleResponse | unknown) => {
@@ -397,7 +422,12 @@ export function CourseDetailPage({
     courseService
       .getCourseModules(courseId)
       .then(setModules)
-      .catch(() => {});
+      .catch((err) => {
+        setToast({
+          type: "error",
+          message: getApiErrorMessage(err, "Module was updated, but the module list could not be refreshed."),
+        });
+      });
   };
 
   const handleRemoveModule = async () => {
@@ -545,6 +575,17 @@ export function CourseDetailPage({
           <h2 className="text-xl font-bold text-content mt-1">Course Detail</h2>
         </div>
       </div>
+
+      {categoryError && (
+        <Alert type="error" title="Could not load categories" message={categoryError} />
+      )}
+      {managerLoadError && (
+        <Alert
+          type="error"
+          title="Could not load course managers"
+          message={managerLoadError}
+        />
+      )}
 
       <Tabs
         tabs={["Course Details & Modules", "Enrolled Students"]}
@@ -847,6 +888,14 @@ export function CourseDetailPage({
             <div className="p-12 text-center text-content-subtle">
               <div className="inline-block w-6 h-6 border-3 border-primary border-t-transparent rounded-full animate-spin mb-2" />
               <p className="text-sm">Loading enrolled students…</p>
+            </div>
+          ) : studentsError ? (
+            <div className="p-6">
+              <Alert
+                type="error"
+                title="Could not load enrolled students"
+                message={studentsError}
+              />
             </div>
           ) : students.length === 0 ? (
             <div className="p-12 text-center text-content-soft">

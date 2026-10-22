@@ -12,6 +12,7 @@ import {
   type CategoryResponse,
   type CourseDetailResponse,
 } from "@/services/course.service";
+import { getApiErrorMessage } from "@/utils/apiError";
 
 export function CourseFormPage({
   mode = "create",
@@ -36,17 +37,22 @@ export function CourseFormPage({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [categoryError, setCategoryError] = useState<string | null>(null);
 
   useEffect(() => {
     courseService
       .getCategories()
       .then((cats) => {
         setCategories(cats);
+        setCategoryError(null);
         if (!isEdit && cats.length > 0) {
           setCategoryId(String(cats[0].categoryId));
         }
       })
-      .catch(() => setCategories([]));
+      .catch((err) => {
+        setCategories([]);
+        setCategoryError(getApiErrorMessage(err, "Failed to load categories."));
+      });
   }, [isEdit]);
 
   useEffect(() => {
@@ -62,11 +68,7 @@ export function CourseFormPage({
           setManagerId(String(c.managerId));
         })
         .catch((err) => {
-          setError(
-            err instanceof Error
-              ? err.message
-              : "Failed to load course details.",
-          );
+          setError(getApiErrorMessage(err, "Failed to load course details."));
         })
         .finally(() => setLoading(false));
     } else {
@@ -92,6 +94,7 @@ export function CourseFormPage({
       return;
     }
     setError(null);
+    setSuccess(null);
     setSubmitting(true);
 
     try {
@@ -122,11 +125,7 @@ export function CourseFormPage({
         }, 1000);
       }
     } catch (err: unknown) {
-      const msg =
-        err instanceof Error
-          ? err.message
-          : "Operation failed. Please try again.";
-      setError(msg);
+      setError(getApiErrorMessage(err, "Operation failed. Please try again."));
     } finally {
       setSubmitting(false);
     }
@@ -179,6 +178,9 @@ export function CourseFormPage({
       </div>
 
       {error && <Alert type="error" title="Error" message={error} />}
+      {categoryError && (
+        <Alert type="error" title="Could not load categories" message={categoryError} />
+      )}
       {success && <Alert type="success" title="Success" message={success} />}
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">

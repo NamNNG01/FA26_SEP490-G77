@@ -12,6 +12,7 @@ import {
   type CreateCategoryRequest,
   type UpdateCategoryRequest,
 } from '@/services/category.service';
+import { getApiErrorMessage } from '@/utils/apiError';
 
 export function CategoriesPage() {
   const [categories, setCategories] = useState<AdminCategoryNode[]>([]);
@@ -44,8 +45,11 @@ export function CategoriesPage() {
     try {
       const data = await categoryService.getAdminCategories();
       setCategories(data);
-    } catch {
-      setToast({ type: 'error', message: 'Failed to load categories.' });
+    } catch (error) {
+      setToast({
+        type: 'error',
+        message: getApiErrorMessage(error, 'Failed to load categories.'),
+      });
     } finally {
       setLoading(false);
     }
@@ -77,8 +81,11 @@ export function CategoriesPage() {
       setToast({ type: 'success', message: 'Category created successfully.' });
       setIsAddModalOpen(false);
       await loadCategories();
-    } catch {
-      setToast({ type: 'error', message: 'Failed to create category.' });
+    } catch (error) {
+      setToast({
+        type: 'error',
+        message: getApiErrorMessage(error, 'Failed to create category.'),
+      });
     } finally {
       setSubmittingAdd(false);
     }
@@ -106,8 +113,11 @@ export function CategoriesPage() {
       setToast({ type: 'success', message: 'Category updated successfully.' });
       setEditingCategory(null);
       await loadCategories();
-    } catch {
-      setToast({ type: 'error', message: 'Failed to update category.' });
+    } catch (error) {
+      setToast({
+        type: 'error',
+        message: getApiErrorMessage(error, 'Failed to update category.'),
+      });
     } finally {
       setSubmittingEdit(false);
     }
@@ -121,8 +131,11 @@ export function CategoriesPage() {
       setToast({ type: 'success', message: 'Category deleted successfully.' });
       setDeletingCategory(null);
       await loadCategories();
-    } catch {
-      setToast({ type: 'error', message: 'Failed to delete category.' });
+    } catch (error) {
+      setToast({
+        type: 'error',
+        message: getApiErrorMessage(error, 'Failed to delete category.'),
+      });
     } finally {
       setSubmittingDelete(false);
     }

@@ -644,27 +644,23 @@ function saveStoredGroups(groups: QuestionGroupItem[]): void {
 
 export const examService = {
   async getExams(params?: ExamListParams): Promise<PageResponse<ExamListItem>> {
-    try {
-      const q = new URLSearchParams();
-      if (params?.search) q.set('search', params.search);
-      if (params?.courseId) q.set('courseId', String(params.courseId));
-      if (params?.moduleId) q.set('moduleId', String(params.moduleId));
-      if (params?.status && params.status !== 'all') q.set('status', params.status);
-      if (params?.examKind && params.examKind !== 'all') q.set('examKind', params.examKind);
-      if (params?.page !== undefined) q.set('page', String(params.page));
-      if (params?.size !== undefined) q.set('size', String(params.size));
+    const q = new URLSearchParams();
+    if (params?.search) q.set('search', params.search);
+    if (params?.courseId) q.set('courseId', String(params.courseId));
+    if (params?.moduleId) q.set('moduleId', String(params.moduleId));
+    if (params?.status && params.status !== 'all') q.set('status', params.status);
+    if (params?.examKind && params.examKind !== 'all') q.set('examKind', params.examKind);
+    if (params?.page !== undefined) q.set('page', String(params.page));
+    if (params?.size !== undefined) q.set('size', String(params.size));
 
-      const queryStr = q.toString();
-      const res = await api.get<ApiResponse<PageResponse<ExamListItem>>>(
-        `/manager/exams${queryStr ? `?${queryStr}` : ''}`
-      );
-      if (res.data && Array.isArray(res.data.content)) {
-        return res.data;
-      }
-      return this.getMockExams(params);
-    } catch {
-      return this.getMockExams(params);
+    const queryStr = q.toString();
+    const res = await api.get<ApiResponse<PageResponse<ExamListItem>>>(
+      `/manager/exams${queryStr ? `?${queryStr}` : ''}`
+    );
+    if (!res.data || !Array.isArray(res.data.content)) {
+      throw new Error('The exam response is invalid.');
     }
+    return res.data;
   },
 
   getMockExams(params?: ExamListParams): PageResponse<ExamListItem> {
@@ -726,15 +722,9 @@ export const examService = {
   },
 
   async getExamById(id: number): Promise<ExamDetail> {
-    try {
-      const res = await api.get<ApiResponse<ExamDetail>>(`/manager/exams/${id}`);
-      if (res.data && res.data.examId) {
-        return res.data;
-      }
-      return this.getMockExamById(id);
-    } catch {
-      return this.getMockExamById(id);
-    }
+    const res = await api.get<ApiResponse<ExamDetail>>(`/manager/exams/${id}`);
+    if (!res.data?.examId) throw new Error('The exam response is invalid.');
+    return res.data;
   },
 
   getMockExamById(id: number): ExamDetail {
@@ -792,28 +782,24 @@ export const examService = {
   },
 
   async getQuestions(params?: QuestionListParams): Promise<PageResponse<BankQuestionItem>> {
-    try {
-      const q = new URLSearchParams();
-      if (params?.search) q.set('search', params.search);
-      if (params?.courseId) q.set('courseId', String(params.courseId));
-      if (params?.moduleId) q.set('moduleId', String(params.moduleId));
-      if (params?.questionType) q.set('questionType', params.questionType);
-      if (params?.difficulty) q.set('difficulty', params.difficulty);
-      if (params?.status) q.set('status', params.status);
-      if (params?.page !== undefined) q.set('page', String(params.page));
-      if (params?.size !== undefined) q.set('size', String(params.size));
+    const q = new URLSearchParams();
+    if (params?.search) q.set('search', params.search);
+    if (params?.courseId) q.set('courseId', String(params.courseId));
+    if (params?.moduleId) q.set('moduleId', String(params.moduleId));
+    if (params?.questionType) q.set('questionType', params.questionType);
+    if (params?.difficulty) q.set('difficulty', params.difficulty);
+    if (params?.status) q.set('status', params.status);
+    if (params?.page !== undefined) q.set('page', String(params.page));
+    if (params?.size !== undefined) q.set('size', String(params.size));
 
-      const queryStr = q.toString();
-      const res = await api.get<ApiResponse<PageResponse<BankQuestionItem>>>(
-        `/manager/questions${queryStr ? `?${queryStr}` : ''}`
-      );
-      if (res.data && Array.isArray(res.data.content)) {
-        return res.data;
-      }
-      return this.getMockQuestions(params);
-    } catch {
-      return this.getMockQuestions(params);
+    const queryStr = q.toString();
+    const res = await api.get<ApiResponse<PageResponse<BankQuestionItem>>>(
+      `/manager/questions${queryStr ? `?${queryStr}` : ''}`
+    );
+    if (!res.data || !Array.isArray(res.data.content)) {
+      throw new Error('The question response is invalid.');
     }
+    return res.data;
   },
 
   getMockQuestions(params?: QuestionListParams): PageResponse<BankQuestionItem> {
@@ -850,15 +836,9 @@ export const examService = {
   },
 
   async getQuestionById(id: number): Promise<BankQuestionItem> {
-    try {
-      const res = await api.get<ApiResponse<BankQuestionItem>>(`/manager/questions/${id}`);
-      if (res.data && res.data.questionId) {
-        return res.data;
-      }
-      return this.getMockQuestionById(id);
-    } catch {
-      return this.getMockQuestionById(id);
-    }
+    const res = await api.get<ApiResponse<BankQuestionItem>>(`/manager/questions/${id}`);
+    if (!res.data?.questionId) throw new Error('The question response is invalid.');
+    return res.data;
   },
 
   getMockQuestionById(id: number): BankQuestionItem {
@@ -880,26 +860,22 @@ export const examService = {
   },
 
   async getQuestionGroups(params?: QuestionGroupListParams): Promise<PageResponse<QuestionGroupItem>> {
-    try {
-      const q = new URLSearchParams();
-      if (params?.search) q.set('search', params.search);
-      if (params?.courseId) q.set('courseId', String(params.courseId));
-      if (params?.moduleId) q.set('moduleId', String(params.moduleId));
-      if (params?.questionType) q.set('questionType', params.questionType);
-      if (params?.page !== undefined) q.set('page', String(params.page));
-      if (params?.size !== undefined) q.set('size', String(params.size));
+    const q = new URLSearchParams();
+    if (params?.search) q.set('search', params.search);
+    if (params?.courseId) q.set('courseId', String(params.courseId));
+    if (params?.moduleId) q.set('moduleId', String(params.moduleId));
+    if (params?.questionType) q.set('questionType', params.questionType);
+    if (params?.page !== undefined) q.set('page', String(params.page));
+    if (params?.size !== undefined) q.set('size', String(params.size));
 
-      const queryStr = q.toString();
-      const res = await api.get<ApiResponse<PageResponse<QuestionGroupItem>>>(
-        `/manager/question-groups${queryStr ? `?${queryStr}` : ''}`
-      );
-      if (res.data && Array.isArray(res.data.content)) {
-        return res.data;
-      }
-      return this.getMockQuestionGroups(params);
-    } catch {
-      return this.getMockQuestionGroups(params);
+    const queryStr = q.toString();
+    const res = await api.get<ApiResponse<PageResponse<QuestionGroupItem>>>(
+      `/manager/question-groups${queryStr ? `?${queryStr}` : ''}`
+    );
+    if (!res.data || !Array.isArray(res.data.content)) {
+      throw new Error('The question group response is invalid.');
     }
+    return res.data;
   },
 
   getMockQuestionGroups(params?: QuestionGroupListParams): PageResponse<QuestionGroupItem> {
@@ -934,15 +910,9 @@ export const examService = {
   },
 
   async createQuestionGroup(payload: CreateQuestionGroupRequest): Promise<QuestionGroupItem> {
-    try {
-      const res = await api.post<ApiResponse<QuestionGroupItem>>('/manager/question-groups', payload);
-      if (res.data) {
-        return res.data;
-      }
-      return this.createMockQuestionGroup(payload);
-    } catch {
-      return this.createMockQuestionGroup(payload);
-    }
+    const res = await api.post<ApiResponse<QuestionGroupItem>>('/manager/question-groups', payload);
+    if (!res.data) throw new Error('The question group response is invalid.');
+    return res.data;
   },
 
   createMockQuestionGroup(payload: CreateQuestionGroupRequest): QuestionGroupItem {
@@ -965,6 +935,9 @@ export const examService = {
     const res = await apiClient.post<ApiResponse<ImportExamResponse>>(`/manager/exams/${id}/import`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
+    if (res.data?.success === false) {
+      throw new Error(res.data.message || 'Failed to import questions.');
+    }
     return res.data.data;
   },
 

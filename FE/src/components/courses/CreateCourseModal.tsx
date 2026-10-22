@@ -6,7 +6,7 @@ import { Dropdown } from '@/components/ui/Dropdown';
 import { Alert } from '@/components/ui/Alert';
 import { Icon } from '@/assets/icons';
 import { api } from '@/services/api';
-import { MOCK_USERS } from '@/features/admin/mockUsers';
+import { getApiErrorMessage } from '@/utils/apiError';
 import {
   courseService,
   type CategoryResponse,
@@ -37,6 +37,8 @@ export function CreateCourseModal({
   const [managers, setManagers] = useState<ManagerOption[]>([]);
   const [loadingCategories, setLoadingCategories] = useState(false);
   const [loadingManagers, setLoadingManagers] = useState(false);
+  const [categoryLoadError, setCategoryLoadError] = useState<string | null>(null);
+  const [managerLoadError, setManagerLoadError] = useState<string | null>(null);
   const [errors, setErrors] = useState<{
     title?: string;
     categoryId?: string;
@@ -55,6 +57,8 @@ export function CreateCourseModal({
     setManagerIds([]);
     setErrors({});
     setSubmitError(null);
+    setCategoryLoadError(null);
+    setManagerLoadError(null);
     setSubmitting(false);
 
     setLoadingCategories(true);
@@ -62,28 +66,20 @@ export function CreateCourseModal({
       .getCategories()
       .then((cats) => {
         setCategories(cats);
+        setCategoryLoadError(null);
         if (cats.length > 0) {
           setCategoryId(String(cats[0].categoryId));
         }
       })
-      .catch(() => {
+      .catch((err) => {
         setCategories([]);
+        setCategoryLoadError(
+          getApiErrorMessage(err, 'Failed to load categories.'),
+        );
       })
       .finally(() => {
         setLoadingCategories(false);
       });
-
-    const loadFallbackManagers = () => {
-      const fallbackList: ManagerOption[] = MOCK_USERS.filter(
-        (u) =>
-          (u.role === 'Content Manager' || (u.role as string) === 'COURSE_MANAGER') &&
-          (u.status === 'Active' || (u.status as string) === 'ACTIVE')
-      ).map((u) => {
-        const numId = parseInt(u.id.replace(/\D/g, ''), 10) || 1;
-        return { id: numId, name: u.name, email: u.email };
-      });
-      setManagers(fallbackList);
-    };
 
     setLoadingManagers(true);
     api
@@ -109,10 +105,16 @@ export function CreateCourseModal({
             }))
           );
         } else {
-          loadFallbackManagers();
+          setManagers([]);
         }
+        setManagerLoadError(null);
       })
-      .catch(() => loadFallbackManagers())
+      .catch((err) => {
+        setManagers([]);
+        setManagerLoadError(
+          getApiErrorMessage(err, 'Failed to load course managers.'),
+        );
+      })
       .finally(() => setLoadingManagers(false));
   }, [open]);
 
@@ -151,8 +153,9 @@ export function CreateCourseModal({
       onCreated(created);
       onClose();
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to create course. Please try again.';
-      setSubmitError(message);
+      setSubmitError(
+        getApiErrorMessage(err, 'Failed to create course. Please try again.'),
+      );
     } finally {
       setSubmitting(false);
     }
@@ -197,6 +200,13 @@ export function CreateCourseModal({
         <p className="text-[13px] text-[#6B7280]">
           Enter course details to set up a new course catalog entry. Newly created courses start as drafts.
         </p>
+
+        {categoryLoadError && (
+          <Alert type="error" title="Could not load categories" message={categoryLoadError} />
+        )}
+        {managerLoadError && (
+          <Alert type="error" title="Could not load course managers" message={managerLoadError} />
+        )}
 
         <Input
           label="Course Title"

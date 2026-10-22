@@ -17,6 +17,7 @@ import { dashboardService } from "@/services/dashboard.service";
 import { CreateCourseModal } from "@/components/courses/CreateCourseModal";
 import { useAuth } from "@/auth/authContext";
 import { Role } from "@/utils/permissions";
+import { getApiErrorMessage } from "@/utils/apiError";
 
 function formatTimestamp(isoString: string): string {
   if (!isoString) return "—";
@@ -99,6 +100,8 @@ export function CourseListPage({
   const [error, setError] = useState<string | null>(null);
 
   const [categories, setCategories] = useState<CategoryResponse[]>([]);
+  const [categoryError, setCategoryError] = useState<string | null>(null);
+  const [dashboardError, setDashboardError] = useState<string | null>(null);
 
   const [summaryStats, setSummaryStats] = useState({
     total: 0,
@@ -111,21 +114,32 @@ export function CourseListPage({
   useEffect(() => {
     courseService
       .getCategories()
-      .then((res) => setCategories(res))
-      .catch(() => setCategories([]));
+      .then((res) => {
+        setCategories(res);
+        setCategoryError(null);
+      })
+      .catch((err) => {
+        setCategories([]);
+        setCategoryError(getApiErrorMessage(err, "Failed to load categories."));
+      });
   }, []);
 
   useEffect(() => {
     dashboardService
       .getManagerDashboard()
       .then((data) => {
+        setDashboardError(null);
         setSummaryStats({
           total: data.summary.totalCourses,
           published: data.summary.publishedCourses,
           drafts: data.summary.draftCourses,
         });
       })
-      .catch(() => {});
+      .catch((err) => {
+        setDashboardError(
+          getApiErrorMessage(err, "Failed to load course summary."),
+        );
+      });
   }, []);
 
   const fetchCourses = useCallback(async () => {
@@ -166,10 +180,10 @@ export function CourseListPage({
         };
       });
     } catch (err: unknown) {
-      const msg =
-        err instanceof Error
-          ? err.message
-          : "Failed to load courses. Please try again.";
+      const msg = getApiErrorMessage(
+        err,
+        "Failed to load courses. Please try again.",
+      );
       setError(msg);
       setCourses([]);
       setTotalElements(0);
@@ -264,6 +278,13 @@ export function CourseListPage({
           </div>
         )}
       </div>
+
+      {categoryError && (
+        <Alert type="error" title="Could not load categories" message={categoryError} />
+      )}
+      {dashboardError && (
+        <Alert type="error" title="Could not load course summary" message={dashboardError} />
+      )}
 
       {readonly && (
         <Alert
