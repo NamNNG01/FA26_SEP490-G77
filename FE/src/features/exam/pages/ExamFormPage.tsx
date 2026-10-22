@@ -34,6 +34,7 @@ import { ExamAiGenerateTab } from "../components/ExamAiGenerateTab";
 import { DiagramAnswer } from "@/features/question/components/DiagramAnswer";
 import { fromDetail, toUpdateRequest, type QuestionDraft } from "@/features/question/model";
 import { questionService, type QuestionDetail } from "@/services/question.service";
+import { getApiErrorMessage } from "@/utils/apiError";
 
 export function ExamFormPage({
   formKind: propFormKind,
@@ -63,6 +64,8 @@ export function ExamFormPage({
   const [isDirty, setIsDirty] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [errorBanner, setErrorBanner] = useState<string>("");
+  const [courseLoadError, setCourseLoadError] = useState("");
+  const [moduleLoadError, setModuleLoadError] = useState("");
   const [warningsList, setWarningsList] = useState<string[]>([]);
 
   const [title, setTitle] = useState("");
@@ -124,6 +127,9 @@ export function ExamFormPage({
   useEffect(() => {
     courseService.getCourses().then((res) => {
       setCourses(res.content || []);
+      setCourseLoadError("");
+    }).catch((err) => {
+      setCourseLoadError(getApiErrorMessage(err, "Failed to load courses."));
     });
   }, []);
 
@@ -131,9 +137,14 @@ export function ExamFormPage({
     if (courseId) {
       courseService.getCourseModules(courseId).then((mods) => {
         setModules(mods || []);
+        setModuleLoadError("");
+      }).catch((err) => {
+        setModules([]);
+        setModuleLoadError(getApiErrorMessage(err, "Failed to load course modules."));
       });
     } else {
       setModules([]);
+      setModuleLoadError("");
       setModuleId("");
     }
   }, [courseId]);
@@ -194,7 +205,9 @@ export function ExamFormPage({
         toast.error("Exam not found. Returning to exam list.");
         navigate(ROUTES.managerExams);
       } else {
-        setErrorBanner("Failed to load exam details. Please try again.");
+        setErrorBanner(
+          getApiErrorMessage(err, "Failed to load exam details. Please try again."),
+        );
       }
     } finally {
       setLoading(false);
@@ -246,10 +259,7 @@ export function ExamFormPage({
             "Exam cannot be published. Ensure questions are attached.",
         );
       } else {
-        toast.error(
-          errorObj?.response?.data?.message ||
-            "Failed to update exam publish status.",
-        );
+        toast.error(getApiErrorMessage(err, "Failed to update exam publish status."));
       }
     } finally {
       setSaving(false);
@@ -352,13 +362,10 @@ export function ExamFormPage({
         setArchiveCloneModalOpen(true);
       } else if (errorObj?.response?.status === 400) {
         setErrorBanner(
-          errorObj.response.data?.message ||
-            "Validation error while saving exam.",
+          getApiErrorMessage(err, "Validation error while saving exam."),
         );
       } else {
-        setErrorBanner(
-          errorObj?.response?.data?.message || "Failed to save exam.",
-        );
+        setErrorBanner(getApiErrorMessage(err, "Failed to save exam."));
       }
     } finally {
       setSaving(false);
@@ -398,8 +405,10 @@ export function ExamFormPage({
           ? `/manager/exams/quiz/${cloned.examId}`
         : `/manager/exams/${examPathKind}/${cloned.examId}`;
       navigate(targetRoute, { replace: true });
-    } catch {
-      toast.error("Failed to execute Archive and Clone workflow.");
+    } catch (err) {
+      toast.error(
+        getApiErrorMessage(err, "Failed to execute Archive and Clone workflow."),
+      );
     } finally {
       setArchiveCloning(false);
     }
@@ -414,8 +423,8 @@ export function ExamFormPage({
       setArchiveCloneModalOpen(false);
       setSaveDescriptionOnly(false);
       loadExamDetail(Number(id));
-    } catch {
-      toast.error("Failed to update description.");
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, "Failed to update description."));
     } finally {
       setSaving(false);
     }
@@ -463,17 +472,20 @@ export function ExamFormPage({
             );
           } else {
             failures.push(
-              `Question #${item.question.questionId}: ${errObj?.response?.data?.message || "Error"}`,
+              `Question #${item.question.questionId}: ${getApiErrorMessage(err, "Request failed.")}`,
             );
           }
         }
       }
 
-      if (successCount > 0) {
-        toast.success(`Successfully attached ${successCount} question(s).`);
-      }
       if (failures.length > 0) {
-        toast.warning(failures.join(" "));
+        toast.error(
+          successCount > 0
+            ? `Attached ${successCount} question(s); some questions failed: ${failures.join(" ")}`
+            : failures.join(" "),
+        );
+      } else if (successCount > 0) {
+        toast.success(`Successfully attached ${successCount} question(s).`);
       }
       loadExamDetail(Number(id));
     }
@@ -500,7 +512,7 @@ export function ExamFormPage({
             "Cannot remove questions from a published exam. Please unpublish first.",
           );
         } else {
-          toast.error("Failed to remove question.");
+          toast.error(getApiErrorMessage(err, "Failed to remove question."));
         }
       } finally {
         setLoading(false);
@@ -541,7 +553,7 @@ export function ExamFormPage({
           toast.error("This question group is already attached to this exam.");
         } else {
           toast.error(
-            errorObj?.response?.data?.message || "Failed to attach group.",
+            getApiErrorMessage(err, "Failed to attach group."),
           );
         }
       } finally {
@@ -569,7 +581,7 @@ export function ExamFormPage({
             "Cannot remove groups from a published exam. Unpublish first.",
           );
         } else {
-          toast.error("Failed to remove group.");
+          toast.error(getApiErrorMessage(err, "Failed to remove group."));
         }
       } finally {
         setLoading(false);
@@ -738,6 +750,16 @@ export function ExamFormPage({
           <button onClick={() => setErrorBanner("")} className="cursor-pointer">
             <Icon.X className="w-4 h-4" />
           </button>
+        </div>
+      )}
+      {courseLoadError && (
+        <div className="mb-4 rounded-lg border border-danger-line bg-danger-light p-3 text-sm text-danger">
+          {courseLoadError}
+        </div>
+      )}
+      {moduleLoadError && (
+        <div className="mb-4 rounded-lg border border-danger-line bg-danger-light p-3 text-sm text-danger">
+          {moduleLoadError}
         </div>
       )}
 
@@ -1371,7 +1393,7 @@ export function ExamFormPage({
                     icon={<Icon.Check className="w-4 h-4" />}
                     onClick={handleSaveExam}
                     loading={saving}
-                    disabled={saving || loading}
+                    disabled={saving || loading || (isEdit && !isDirty)}
                   >
                     {isEdit ? "Save Changes" : "Create Exam"}
                   </Button>
@@ -1408,6 +1430,7 @@ export function ExamFormPage({
         existingGroupIds={existingGroupIds}
         courseId={courseId ? Number(courseId) : undefined}
         moduleId={moduleId ? Number(moduleId) : undefined}
+        questionType={formKind}
         loading={loading}
       />
 
@@ -1572,8 +1595,12 @@ function ExamDiagramAnswer({ questionId, readOnly }: { questionId: number; readO
         setQuestion(detail);
         setDraft(fromDetail(detail));
       })
-      .catch(() => {
-        if (active) setError("Could not load the model answer diagram.");
+      .catch((err) => {
+        if (active) {
+          setError(
+            getApiErrorMessage(err, "Could not load the model answer diagram."),
+          );
+        }
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -1594,8 +1621,10 @@ function ExamDiagramAnswer({ questionId, readOnly }: { questionId: number; readO
       );
       setQuestion(updated);
       setDraft(fromDetail(updated));
-    } catch {
-      setError("Could not save the model answer diagram. Please try again.");
+    } catch (err) {
+      setError(
+        getApiErrorMessage(err, "Could not save the model answer diagram. Please try again."),
+      );
     } finally {
       setSaving(false);
     }

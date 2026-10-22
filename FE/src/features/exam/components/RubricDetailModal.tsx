@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Icon } from '@/assets/icons';
 import { examService, type RubricCriterion } from '@/services/exam.service';
+import { getApiErrorMessage } from '@/utils/apiError';
 
 interface RubricDetailModalProps {
   open: boolean;
@@ -27,12 +28,14 @@ export function RubricDetailModal({
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [loadFailed, setLoadFailed] = useState(false);
   const [invalidRowIdx, setInvalidRowIdx] = useState<number | null>(null);
 
   useEffect(() => {
     if (!open || !questionId) return;
     setLoading(true);
     setErrorMsg('');
+    setLoadFailed(false);
     setInvalidRowIdx(null);
     examService
       .getQuestionById(questionId)
@@ -45,8 +48,9 @@ export function RubricDetailModal({
           setNotes('');
         }
       })
-      .catch(() => {
-        setCriteria([{ name: '', maxScore: 5, weight: 100, descriptors: '' }]);
+      .catch((err) => {
+        setLoadFailed(true);
+        setErrorMsg(getApiErrorMessage(err, 'Failed to load grading rubric.'));
       })
       .finally(() => {
         setLoading(false);
@@ -104,8 +108,7 @@ export function RubricDetailModal({
       onSaved(questionId);
       onClose();
     } catch (err: unknown) {
-      const errorObj = err as { response?: { data?: { message?: string } } };
-      setErrorMsg(errorObj?.response?.data?.message || 'Failed to save grading rubric.');
+      setErrorMsg(getApiErrorMessage(err, 'Failed to save grading rubric.'));
     } finally {
       setSaving(false);
     }
@@ -133,7 +136,7 @@ export function RubricDetailModal({
             </Button>
             <Button
               onClick={handleSave}
-              disabled={criteria.length === 0 || saving || loading}
+              disabled={criteria.length === 0 || saving || loading || loadFailed}
               loading={saving}
               icon={<Icon.Check className="w-4 h-4" />}
             >

@@ -115,7 +115,19 @@ export const initialMockCategories: AdminCategoryNode[] = [
 let mockCategoriesStore: AdminCategoryNode[] = JSON.parse(JSON.stringify(initialMockCategories));
 
 export function getMockAdminCategories(): AdminCategoryNode[] {
-  return JSON.parse(JSON.stringify(mockCategoriesStore));
+  const categories: AdminCategoryNode[] = JSON.parse(JSON.stringify(mockCategoriesStore));
+  const addSlugs = (nodes: AdminCategoryNode[]) => {
+    for (const node of nodes) {
+      node.slug = node.slug || slugify(node.name);
+      if (node.children?.length) addSlugs(node.children);
+    }
+  };
+  addSlugs(categories);
+  return categories;
+}
+
+function slugify(name: string): string {
+  return name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 }
 
 export function getMockPublicCategories(): CategoryResponse[] {
@@ -158,10 +170,11 @@ export function createMockCategory(payload: CreateCategoryRequest): AdminCategor
   const newId = Date.now();
   const newItem: AdminCategoryItem = {
     categoryId: newId,
-    code: payload.code.toUpperCase().trim(),
+    code: `CAT-${newId}`,
+    slug: slugify(payload.name),
     name: payload.name.trim(),
-    parentId: payload.parentId ?? null,
-    sortOrder: payload.sortOrder ?? 0,
+    parentId: null,
+    sortOrder: mockCategoriesStore.length + 1,
     isActive: payload.isActive ?? true,
   };
 
@@ -170,50 +183,12 @@ export function createMockCategory(payload: CreateCategoryRequest): AdminCategor
     children: [],
   };
 
-  if (!payload.parentId) {
-    mockCategoriesStore.push(newNode);
-    return newItem;
-  }
-
-  function insertChild(nodes: AdminCategoryNode[]): boolean {
-    for (const node of nodes) {
-      if (node.categoryId === payload.parentId) {
-        node.children = node.children || [];
-        node.children.push(newNode);
-        return true;
-      }
-      if (node.children?.length && insertChild(node.children)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  const inserted = insertChild(mockCategoriesStore);
-  if (!inserted) {
-    mockCategoriesStore.push(newNode);
-  }
-
+  mockCategoriesStore.push(newNode);
   return newItem;
 }
 
 export function updateMockCategory(id: number | string, payload: UpdateCategoryRequest): AdminCategoryItem {
   const numId = Number(id);
-  let targetNode: AdminCategoryNode | null = null;
-
-  function detachNode(nodes: AdminCategoryNode[]): boolean {
-    const idx = nodes.findIndex((n) => n.categoryId === numId);
-    if (idx !== -1) {
-      targetNode = nodes.splice(idx, 1)[0];
-      return true;
-    }
-    for (const node of nodes) {
-      if (node.children?.length && detachNode(node.children)) {
-        return true;
-      }
-    }
-    return false;
-  }
 
   function findNode(nodes: AdminCategoryNode[]): AdminCategoryNode | null {
     for (const node of nodes) {
@@ -229,37 +204,13 @@ export function updateMockCategory(id: number | string, payload: UpdateCategoryR
   const existing = findNode(mockCategoriesStore);
   if (existing) {
     if (payload.name !== undefined) existing.name = payload.name;
-    if (payload.sortOrder !== undefined) existing.sortOrder = payload.sortOrder;
+    existing.slug = slugify(existing.name);
     if (payload.isActive !== undefined) existing.isActive = payload.isActive;
-
-    if (payload.parentId !== undefined && payload.parentId !== existing.parentId) {
-      detachNode(mockCategoriesStore);
-      existing.parentId = payload.parentId;
-      if (!payload.parentId) {
-        mockCategoriesStore.push(existing);
-      } else {
-        function attachNode(nodes: AdminCategoryNode[]): boolean {
-          for (const node of nodes) {
-            if (node.categoryId === payload.parentId) {
-              node.children = node.children || [];
-              node.children.push(existing!);
-              return true;
-            }
-            if (node.children?.length && attachNode(node.children)) {
-              return true;
-            }
-          }
-          return false;
-        }
-        if (!attachNode(mockCategoriesStore)) {
-          mockCategoriesStore.push(existing);
-        }
-      }
-    }
 
     return {
       categoryId: existing.categoryId,
       code: existing.code,
+      slug: existing.slug || slugify(existing.name),
       name: existing.name,
       parentId: existing.parentId,
       sortOrder: existing.sortOrder,
@@ -270,8 +221,9 @@ export function updateMockCategory(id: number | string, payload: UpdateCategoryR
   return {
     categoryId: numId,
     code: `CAT-${numId}`,
+    slug: slugify(payload.name ?? 'Updated Category'),
     name: payload.name ?? 'Updated Category',
-    parentId: payload.parentId ?? null,
+    parentId: null,
     sortOrder: payload.sortOrder ?? 1,
     isActive: payload.isActive ?? true,
   };

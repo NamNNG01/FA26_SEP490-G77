@@ -6,9 +6,11 @@ import { Select } from "@/components/ui/Select";
 import { Dropdown } from "@/components/ui/Dropdown";
 import { Modal } from "@/components/ui/Modal";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { Alert } from "@/components/ui/Alert";
 import { SearchInput } from "@/components/common/SearchInput";
 import { Icon } from "@/assets/icons";
 import { useToast } from "@/components/ui/ToastHost";
+import { getApiErrorMessage } from "@/utils/apiError";
 import {
   examService,
   type ExamListItem,
@@ -55,6 +57,8 @@ export function ExamListPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [coursesError, setCoursesError] = useState<string | null>(null);
+  const [modulesError, setModulesError] = useState<string | null>(null);
 
   const [selectedExamIds, setSelectedExamIds] = useState<Set<number>>(
     new Set(),
@@ -76,23 +80,41 @@ export function ExamListPage() {
   const [bulkDeleteSummary, setBulkDeleteSummary] = useState<{
     success: number;
     failed: number;
+    errors: string[];
   } | null>(null);
 
   const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    courseService.getCourses().then((res) => {
-      setCourses(res.content || []);
-    });
+    courseService
+      .getCourses()
+      .then((res) => {
+        setCourses(res.content || []);
+        setCoursesError(null);
+      })
+      .catch((err) => {
+        setCourses([]);
+        setCoursesError(getApiErrorMessage(err, "Failed to load courses."));
+      });
   }, []);
 
   useEffect(() => {
     if (selectedCourse) {
-      courseService.getCourseModules(selectedCourse).then((mods) => {
-        setModules(mods || []);
-      });
+      courseService
+        .getCourseModules(selectedCourse)
+        .then((mods) => {
+          setModules(mods || []);
+          setModulesError(null);
+        })
+        .catch((err) => {
+          setModules([]);
+          setModulesError(
+            getApiErrorMessage(err, "Failed to load course modules."),
+          );
+        });
     } else {
       setModules([]);
+      setModulesError(null);
       setSelectedModule("");
     }
   }, [selectedCourse]);
@@ -189,7 +211,7 @@ export function ExamListPage() {
       if (errorObj?.response?.status === 403) {
         setError("You do not have permission to view exams for this course.");
       } else {
-        setError(errorObj?.response?.data?.message || "Failed to load exams.");
+        setError(getApiErrorMessage(err, "Failed to load exams."));
       }
     } finally {
       setLoading(false);
@@ -335,18 +357,16 @@ export function ExamListPage() {
         setStatusDialogTarget(null);
       }
     } catch (err: unknown) {
-      const errorObj = err as {
-        response?: { status?: number; data?: { message?: string } };
-      };
+      const errorObj = err as { response?: { status?: number } };
       if (errorObj?.response?.status === 400) {
         toast.error(
-          errorObj.response.data?.message ||
+          getApiErrorMessage(
+            err,
             "Exam has 0 questions and cannot be published.",
+          ),
         );
       } else {
-        toast.error(
-          errorObj?.response?.data?.message || "Failed to update exam status.",
-        );
+        toast.error(getApiErrorMessage(err, "Failed to update exam status."));
       }
       setStatusDialogTarget(null);
     } finally {
@@ -369,7 +389,7 @@ export function ExamListPage() {
       if (errorObj?.response?.status === 409) {
         setDeleteConflict409(true);
       } else {
-        toast.error("Failed to delete exam.");
+        toast.error(getApiErrorMessage(err, "Failed to delete exam."));
         setDeleteDialogTarget(null);
       }
     } finally {
@@ -382,17 +402,21 @@ export function ExamListPage() {
     setBulkDeleting(true);
     let success = 0;
     let failed = 0;
+    const errors: string[] = [];
 
     for (const examId of selectedExamIds) {
       try {
         await examService.deleteExam(examId);
         success++;
-      } catch {
+      } catch (err) {
         failed++;
+        errors.push(
+          getApiErrorMessage(err, "Failed to delete exam #" + examId + "."),
+        );
       }
     }
 
-    setBulkDeleteSummary({ success, failed });
+    setBulkDeleteSummary({ success, failed, errors });
     setBulkDeleting(false);
     fetchExams();
   };
@@ -424,6 +448,20 @@ export function ExamListPage() {
 
   return (
     <div className="p-8 space-y-5">
+      {coursesError && (
+        <Alert
+          type="error"
+          title="Could not load courses"
+          message={coursesError}
+        />
+      )}
+      {modulesError && (
+        <Alert
+          type="error"
+          title="Could not load course modules"
+          message={modulesError}
+        />
+      )}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold text-content">Exams</h2>
@@ -933,12 +971,8 @@ export function ExamListPage() {
                       "ARCHIVED",
                     );
                   } catch (err: unknown) {
-                    const errorObj = err as {
-                      response?: { data?: { message?: string } };
-                    };
                     toast.error(
-                      errorObj?.response?.data?.message ||
-                        "Failed to archive exam.",
+                      getApiErrorMessage(err, "Failed to archive exam."),
                     );
                     return;
                   }
@@ -1000,14 +1034,20 @@ export function ExamListPage() {
         }
       >
         <div className="space-y-2 text-sm text-content">
-          <p className="text-success font-medium">
-            Successfully deleted: {bulkDeleteSummary?.success} exam(s).
-          </p>
-          {bulkDeleteSummary && bulkDeleteSummary.failed > 0 && (
-            <p className="text-danger font-medium">
-              Failed to delete: {bulkDeleteSummary.failed} exam(s) (e.g. exams
-              with student attempts).
+          {bulkDeleteSummary && bulkDeleteSummary.success > 0 && (
+            <p className="text-success font-medium">
+              Successfully deleted: {bulkDeleteSummary.success} exam(s).
             </p>
+          )}
+          {bulkDeleteSummary && bulkDeleteSummary.failed > 0 && (
+            <div className="text-danger font-medium">
+              <p>Failed to delete {bulkDeleteSummary.failed} exam(s).</p>
+              {bulkDeleteSummary.errors.slice(0, 3).map((message, index) => (
+                <p key={index} className="mt-1 text-xs font-normal">
+                  {message}
+                </p>
+              ))}
+            </div>
           )}
         </div>
       </Modal>
