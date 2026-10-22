@@ -44,7 +44,7 @@ export function QuestionSidePanel({
     <div className={SIDEBAR_CLS}>
       {tabs}
       <div className="card p-4">
-        <QuestionLocationCard courseId={courseId} moduleId={moduleId} onChange={onLocationChange} courseLocked={isEdit} showErrors={showErrors} />
+        <QuestionLocationCard courseId={courseId} moduleId={moduleId} onChange={onLocationChange} courseLocked={isEdit} moduleRequired={!isEdit} showErrors={showErrors} />
       </div>
 
       <div className="card p-4 space-y-2">

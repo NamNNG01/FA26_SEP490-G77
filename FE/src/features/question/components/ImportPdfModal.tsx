@@ -87,7 +87,7 @@ export function ImportPdfModal({ open, onClose, onImported, courseId: pageCourse
   };
 
   const handleImport = async () => {
-    if (!file || !courseId || uploading) return;
+    if (!file || !courseId || !moduleId || uploading) return;
     const controller = new AbortController();
     abortRef.current = controller;
     setUploading(true);
@@ -132,7 +132,7 @@ export function ImportPdfModal({ open, onClose, onImported, courseId: pageCourse
   const footer = (
     <>
       <Button variant="outline" onClick={close}>Cancel</Button>
-      <Button onClick={handleImport} loading={uploading} disabled={!file || !courseId} icon={<Icon.Upload className="w-4 h-4" />}>
+      <Button onClick={handleImport} loading={uploading} disabled={!file || !courseId || !moduleId} icon={<Icon.Upload className="w-4 h-4" />}>
         {uploading ? 'Reading file…' : 'Import'}
       </Button>
     </>
@@ -147,8 +147,9 @@ export function ImportPdfModal({ open, onClose, onImported, courseId: pageCourse
           moduleId={moduleId}
           onChange={(c, m) => { setCourseId(c); setModuleId(m); setError(null); }}
           courseLocked={uploading}
+          moduleRequired
         />
-        <p className="-mt-2 text-xs text-content-subtle">The imported questions go into this course (and module, if picked).</p>
+        <p className="-mt-2 text-xs text-content-subtle">The imported questions go into this course and module.</p>
 
         <div className="flex flex-wrap items-center gap-2 rounded-[10px] border border-line px-3 py-2.5">
           <Icon.FileText className="w-4 h-4 text-brand-ink flex-shrink-0" />

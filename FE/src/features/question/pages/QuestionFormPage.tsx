@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
@@ -21,6 +21,7 @@ import {
   QUESTION_TYPE_OPTIONS,
   asGroupKind,
   changeType,
+  copyDraft,
   emptyDraft,
   fromDetail,
   isDraftValid,
@@ -53,11 +54,14 @@ const typeLabel = (t: string) => QUESTION_TYPE_OPTIONS.find(o => o.value === t)?
 export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
   const isEdit = mode === 'edit';
   const { questionId } = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  /** Create mode: "Duplicate" in the bank — start from a copy of this question (replaces any stored draft). */
+  const [duplicateOf] = useState(() => (isEdit ? null : searchParams.get('duplicate')));
   const navigate = useNavigate();
   const toast = useToast();
 
   /** Create mode: unsaved work from before a reload, read once. */
-  const [restored] = useState<CreateDraftSnapshot | null>(() => (isEdit ? null : loadCreateDraft()));
+  const [restored] = useState<CreateDraftSnapshot | null>(() => (isEdit || duplicateOf ? null : loadCreateDraft()));
   const [questions, setQuestions] = useState<QuestionDraft[]>(() => (isEdit ? [] : restored?.questions.length ? restored.questions : [emptyDraft()]));
   const [courseId, setCourseId] = useState(restored?.courseId ?? '');
   const [moduleId, setModuleId] = useState(restored?.moduleId ?? '');
@@ -75,7 +79,11 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
   /** The latest edits are in localStorage, so a reload needs no browser prompt. */
   const [draftStored, setDraftStored] = useState(Boolean(restored));
 
-  const [loading, setLoading] = useState(isEdit);
+  const [loading, setLoading] = useState(isEdit || Boolean(duplicateOf));
+  /** Create mode: the question the starter copy came from (shown until the user dismisses it). */
+  const [duplicatedFrom, setDuplicatedFrom] = useState<number | null>(null);
+  /** Keys of questions the backend found already in the course — they can't be saved until changed. */
+  const [inBank, setInBank] = useState<Set<string>>(() => new Set());
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [statusBusy, setStatusBusy] = useState(false);
@@ -124,6 +132,41 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
       });
     return () => { cancelled = true; };
   }, [isEdit, questionId, reloadKey]);
+
+  // Create mode, from "Duplicate": load the question and start from an unsaved copy of it.
+  useEffect(() => {
+    if (!duplicateOf) return;
+    let cancelled = false;
+    setLoading(true);
+    setLoadError(null);
+    questionService
+      .getQuestionById(duplicateOf)
+      .then(detail => {
+        if (cancelled) return;
+        const copy = copyDraft(fromDetail(detail));
+        setQuestions([copy]);
+        setTouched(new Set([copy.key]));
+        setCourseId(detail.courseId != null ? String(detail.courseId) : '');
+        setModuleId(detail.moduleId != null ? String(detail.moduleId) : '');
+        setGroupCtx(detail.groupId != null ? { ...emptyGroupContext(), mode: 'existing', existingGroupId: String(detail.groupId) } : emptyGroupContext());
+        setDuplicatedFrom(detail.questionId);
+        // Stored as the draft from here on, so a reload keeps the copy (and its edits).
+        setDirty(true);
+        setSearchParams(prev => {
+          const next = new URLSearchParams(prev);
+          next.delete('duplicate');
+          return next;
+        }, { replace: true });
+      })
+      .catch(err => {
+        if (!cancelled) setLoadError(loadErrorMessage(err));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once for the question the page opened with
+  }, [duplicateOf, reloadKey]);
 
   // Create mode: groups belong to a course — load them for the selected one.
   useEffect(() => {
@@ -182,7 +225,8 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
   }, [writtenKey, groupCtx.mode, groups]);
 
   // In a group every question must be of the group's kind (QUIZ / ESSAY / CODE / DIAGRAM).
-  const kind = isEdit ? null : contextKind(groupCtx, groups);
+  // AI suggestions are saved as standalone questions, so no group limits them.
+  const kind = isEdit || createMode === 'ai' ? null : contextKind(groupCtx, groups);
   const allowedTypes = kind ? typesOfKind(kind) : undefined;
   const kindError = (q: QuestionDraft) =>
     allowedTypes && !allowedTypes.includes(q.type) && kind
@@ -226,6 +270,8 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
     setSubmitted(false);
     setSaveError(null);
     setImportedCount(0);
+    setInBank(new Set());
+    setDuplicatedFrom(null);
     setDirty(false);
     setShowRestored(false);
   };
@@ -275,7 +321,27 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
   const updateQuestion = (i: number, q: QuestionDraft) => {
     setQuestions(prev => prev.map((p, pi) => (pi === i ? q : p)));
     setTouched(prev => (prev.has(q.key) ? prev : new Set(prev).add(q.key)));
+    // Changed since the backend said it was already in the course — let the next save check it again.
+    setInBank(prev => {
+      if (!prev.has(q.key)) return prev;
+      const next = new Set(prev);
+      next.delete(q.key);
+      return next;
+    });
     setDirty(true);
+  };
+
+  /** Adds an unsaved copy right below question i. */
+  const duplicateQuestion = (i: number) => {
+    if (questions.length >= MAX_BATCH) {
+      toast.warning(`You can save up to ${MAX_BATCH} questions at a time — save these first.`);
+      return;
+    }
+    const copy = copyDraft(questions[i]);
+    setQuestions(prev => [...prev.slice(0, i + 1), copy, ...prev.slice(i + 1)]);
+    setTouched(prev => new Set(prev).add(copy.key));
+    setDirty(true);
+    requestAnimationFrame(() => scrollTo(copy.key));
   };
 
   const move = (i: number, dir: -1 | 1) => {
@@ -345,6 +411,7 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
 
   const locationNote =
     !courseId ? 'Select a course to save.'
+      : !isEdit && !moduleId ? 'Select a module to save.'
       : !isEdit && createMode === 'manual' && questions.length > MAX_BATCH ? `You can save up to ${MAX_BATCH} questions at a time.`
       : null;
 
@@ -368,9 +435,9 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
     return group.groupId;
   };
 
-  /** Q-03 for a batch of new questions, in the picked group. Returns how many were saved. */
+  /** Q-03 for a batch of new questions — in the picked group (manual), standalone (AI). Returns how many were saved. */
   const createBatch = async (drafts: QuestionDraft[]): Promise<number> => {
-    const groupId = await resolveGroupId();
+    const groupId = createMode === 'ai' ? null : await resolveGroupId();
     const module = moduleId ? Number(moduleId) : null;
     const payload = drafts.map(q => ({ ...toCreateRequest(q, Number(courseId), module), groupId }));
     const created = await questionService.createQuestionsBatch(Number(courseId), module, payload);
@@ -388,8 +455,9 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
   const saveManual = async () => {
     setSubmitted(true);
     setSaveError(null);
-    const firstInvalid = questions.find(q => !isDraftValid(q) || kindError(q));
+    const firstInvalid = questions.find(q => !isDraftValid(q) || kindError(q) || inBank.has(q.key));
     if (firstInvalid) {
+      if (inBank.has(firstInvalid.key)) toast.error('Some questions already exist in this course — change them before saving.');
       requestAnimationFrame(() => scrollTo(firstInvalid.key));
       return;
     }
@@ -410,6 +478,9 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
     } catch (err) {
       const error = describeSaveError(err, 'Could not save. Please try again.');
       setSaveError(error);
+      if (error.duplicateIndexes?.length) {
+        setInBank(new Set(error.duplicateIndexes.map(i => questions[i]?.key).filter((k): k is string => Boolean(k))));
+      }
       // Batch field errors carry "questions[i]." — jump to that question.
       const target = error.questionIndex != null ? questions[error.questionIndex] : undefined;
       if (target) requestAnimationFrame(() => scrollTo(target.key));
@@ -423,15 +494,9 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
   const saveAi = async () => {
     setSubmitted(true);
     setSaveError(null);
-    if (!courseId) return;
+    if (!courseId || !moduleId) return;
     if (!aiAccepted.length) {
       toast.warning('Accept at least one suggestion to save.');
-      return;
-    }
-    if (!groupReady()) return;
-    const misfit = aiAccepted.find(q => kindError(q));
-    if (misfit) {
-      toast.error(kindError(misfit)!);
       return;
     }
     setSaving(true);
@@ -473,7 +538,7 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
   const title = isEdit ? 'Edit Question' : 'New Questions';
   const pageCls = 'px-4 sm:px-8 py-6 space-y-4';
 
-  if (isEdit && (loading || loadError)) {
+  if ((isEdit || duplicateOf) && (loading || loadError)) {
     return (
       <div className={pageCls}>
         <Breadcrumb items={[{ label: 'Question', onClick: goToBank }, { label: title }]} />
@@ -545,6 +610,17 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
           </button>
         </div>
       )}
+      {duplicatedFrom != null && createMode === 'manual' && (
+        <div className="flex flex-wrap items-center gap-3 rounded-[10px] border border-brand-line bg-primary-light px-4 py-2.5 text-sm text-brand-ink-strong">
+          <Icon.Copy className="w-4 h-4 flex-shrink-0 text-brand-ink" />
+          <span className="flex-1 min-w-[200px]">
+            Copied from question #{duplicatedFrom}. Change it before saving — a question that already exists in the course can’t be saved again.
+          </span>
+          <button type="button" onClick={() => setDuplicatedFrom(null)} className="p-1 rounded-[6px] hover:bg-accent" aria-label="Dismiss">
+            <Icon.X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
       {saveError && <SaveErrorAlert error={saveError} onReload={isEdit ? () => setReloadKey(k => k + 1) : undefined} />}
       {importedCount > 0 && createMode === 'manual' && (
         importedIssues > 0 ? (
@@ -560,8 +636,8 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
 
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px] gap-6 items-start">
         <div className="min-w-0 space-y-3 pb-4">
-          {/* Shared by both modes: the questions saved from either go into this group */}
-          {!isEdit && (
+          {/* Manual mode only: the questions written here go into this group (AI suggestions are saved standalone) */}
+          {!isEdit && createMode === 'manual' && (
             <GroupContextCard
               value={groupCtx}
               onChange={changeGroupCtx}
@@ -607,6 +683,8 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
                   showErrors={submitted || touched.has(q.key)}
                   removable={!isEdit}
                   onRemove={() => (isKept(q) ? setConfirmRemove(i) : remove(i))}
+                  onDuplicate={isEdit ? undefined : () => duplicateQuestion(i)}
+                  duplicateError={inBank.has(q.key) ? 'This question already exists in this course. Change its content or answers before saving, or remove it.' : undefined}
                   canMoveUp={i > 0}
                   canMoveDown={i < questions.length - 1}
                   onMoveUp={isEdit ? undefined : () => move(i, -1)}

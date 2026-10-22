@@ -72,6 +72,11 @@ export function managerQuestionEditPath(id: number | string): string {
   return `${ROUTES.managerQuestions}/${id}`;
 }
 
+/** New Questions, prefilled with a copy of question `id` (unsaved until the manager saves it). */
+export function managerQuestionDuplicatePath(id: number | string): string {
+  return `${ROUTES.managerQuestionCreate}?duplicate=${encodeURIComponent(String(id))}`;
+}
+
 export function managerCourseDetailPath(id: number | string): string {
   return `${ROUTES.managerCourses}/${id}`;
 }

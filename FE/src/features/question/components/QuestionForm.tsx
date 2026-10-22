@@ -32,7 +32,7 @@ const inputCls = (invalid: boolean) =>
 const iconBtn = 'p-1.5 rounded-[6px] text-content-subtle hover:bg-accent hover:text-content-secondary disabled:opacity-30 disabled:cursor-not-allowed';
 
 /** One question block: header, text, difficulty/type, and the answer section for the selected type. */
-export function QuestionForm({ q, index, onChange, showErrors, removable, onRemove, canMoveUp, canMoveDown, onMoveUp, onMoveDown, heading, actions, allowedTypes, kindError }: {
+export function QuestionForm({ q, index, onChange, showErrors, removable, onRemove, onDuplicate, canMoveUp, canMoveDown, onMoveUp, onMoveDown, heading, actions, allowedTypes, kindError, duplicateError }: {
   q: QuestionDraft;
   index: number;
   onChange: (q: QuestionDraft) => void;
@@ -40,6 +40,8 @@ export function QuestionForm({ q, index, onChange, showErrors, removable, onRemo
   showErrors: boolean;
   removable?: boolean;
   onRemove?: () => void;
+  /** Adds a copy of this question right below it; hidden without it. */
+  onDuplicate?: () => void;
   canMoveUp?: boolean;
   canMoveDown?: boolean;
   onMoveUp?: () => void;
@@ -52,10 +54,12 @@ export function QuestionForm({ q, index, onChange, showErrors, removable, onRemo
   allowedTypes?: EditableQuestionType[];
   /** The question's type doesn't fit its group's kind — always shown, like an import error. */
   kindError?: string;
+  /** The backend found this question's content already in the course — it can't be saved until changed. */
+  duplicateError?: string;
 }) {
   const textRef = useRef<HTMLTextAreaElement>(null);
   const errors = validateDraft(q);
-  const invalid = Object.keys(errors).length > 0 || Boolean(kindError);
+  const invalid = Object.keys(errors).length > 0 || Boolean(kindError) || Boolean(duplicateError);
   const contentError = showErrors ? errors.content : undefined;
   const answersError = showErrors ? errors.answers : undefined;
   const typeError = kindError ?? (showErrors ? errors.type : undefined);
@@ -106,6 +110,11 @@ export function QuestionForm({ q, index, onChange, showErrors, removable, onRemo
               <Icon.ArrowDown className="w-4 h-4" />
             </button>
           )}
+          {onDuplicate && (
+            <button type="button" onClick={onDuplicate} className={iconBtn} aria-label={`Duplicate question ${index + 1}`} title="Duplicate question">
+              <Icon.Copy className="w-4 h-4" />
+            </button>
+          )}
           {removable && (
             <button type="button" onClick={onRemove} className={`${iconBtn} hover:!text-danger hover:!bg-danger-light`} aria-label={`Delete question ${index + 1}`} title="Delete question">
               <Icon.Trash className="w-4 h-4" />
@@ -114,6 +123,13 @@ export function QuestionForm({ q, index, onChange, showErrors, removable, onRemo
           {actions}
         </div>
       </div>
+
+      {duplicateError && (
+        <div role="alert" className="flex gap-3 p-3 rounded-[10px] border bg-danger-light border-danger-line text-danger-strong">
+          <Icon.Copy className="w-5 h-5 text-danger flex-shrink-0" />
+          <p className="text-sm">{duplicateError}</p>
+        </div>
+      )}
 
       {/* Import block the backend couldn't read — write the question here, or remove it */}
       {q.importIssue && (
