@@ -348,7 +348,8 @@ export function ExamFormPage({
       const errorObj = err as {
         response?: { status?: number; data?: { message?: string } };
       };
-      if (errorObj?.response?.status === 409) {
+      // A new exam can't have attempts; create-time 409s are duplicate questions/groups.
+      if (isEdit && errorObj?.response?.status === 409) {
         setArchiveCloneModalOpen(true);
       } else if (errorObj?.response?.status === 400) {
         setErrorBanner(
