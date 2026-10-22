@@ -2,13 +2,12 @@ import React, { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, use
 import { Alert } from '@/components/ui/Alert';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { MultiSelect } from '@/components/ui/MultiSelect';
 import { Spinner } from '@/components/ui/Spinner';
 import { useToast } from '@/components/ui/ToastHost';
 import { Icon } from '@/assets/icons';
-import { AI_CONTEXT_MAX, AI_MATERIAL_EXTENSIONS, IMPORT_MAX_BYTES, questionService, type QuestionAiGenerateRequest, type QuestionAiPreview, type QuestionDifficulty, type QuestionType } from '@/services/question.service';
+import { AI_CONTEXT_MAX, questionService, type QuestionAiGenerateRequest, type QuestionAiPreview, type QuestionDifficulty, type QuestionType } from '@/services/question.service';
 import {
   AI_QUESTION_TYPE_OPTIONS,
   DIFFICULTY_OPTIONS,
@@ -50,6 +49,9 @@ const kindIssue = (q: QuestionDraft, allowedTypes?: QuestionType[]) =>
 /** Ready to be saved as it is. */
 const acceptable = (q: QuestionDraft, allowedTypes?: QuestionType[]) => isDraftValid(q) && !kindIssue(q, allowedTypes);
 
+/** Same content as a question already in the course — saving it unchanged is rejected (409). */
+const inBank = (p: Preview) => p.duplicate && !p.edited;
+
 /** AI generation errors → what the manager can do about them. */
 function aiErrorMessage(err: unknown): string {
   const e = err as { code?: string; message?: string; response?: { status?: number; data?: { message?: string } } };
@@ -78,8 +80,6 @@ interface Preview {
   draft: QuestionDraft;
   /** The request that produced it, narrowed to one question of its type — reused by "Regenerate". */
   request: QuestionAiGenerateRequest;
-  /** The file it was drafted from (AI-02) — "Regenerate" sends it again. */
-  material: File | null;
   /** The backend found an active question with the same content in the course. */
   duplicate: boolean;
   accepted: boolean;
@@ -89,9 +89,8 @@ interface Preview {
   regenerateError?: string;
 }
 
-const toPreview = (p: QuestionAiPreview, request: QuestionAiGenerateRequest, material: File | null): Preview => ({
+const toPreview = (p: QuestionAiPreview, request: QuestionAiGenerateRequest): Preview => ({
   id: newKey('ai'),
-  material,
   draft: fromAiDraft(p.question),
   request: { ...request, questionTypeCounts: { [p.question.questionType]: 1 }, difficultyCounts: { [p.question.difficulty ?? 'MEDIUM']: 1 } },
   duplicate: p.hasHashConflict,
@@ -101,15 +100,6 @@ const toPreview = (p: QuestionAiPreview, request: QuestionAiGenerateRequest, mat
   regenerating: false,
 });
 
-/** Why a material file can't be sent, or null. Any layout works — the AI reads the text. */
-function materialProblem(f: File): string | null {
-  const name = f.name.toLowerCase();
-  if (!AI_MATERIAL_EXTENSIONS.some(ext => name.endsWith(ext))) return 'Only PDF, Word (.docx) and text (.txt) files can be used.';
-  if (f.size === 0) return 'This file is empty.';
-  if (f.size > IMPORT_MAX_BYTES) return `This file is ${(f.size / 1024 / 1024).toFixed(2)} MB — the limit is 10 MB.`;
-  return null;
-}
-
 export interface AiGeneratePanelHandle {
   /** Drops the accepted suggestions once they are saved; returns how many suggestions are left. */
   removeAccepted: () => number;
@@ -118,8 +108,8 @@ export interface AiGeneratePanelHandle {
 }
 
 /**
- * "AI Generate" mode: drafts questions with AI-01 from a topic — or with AI-02
- * from a file dropped on the card — for the manager to review. Accepted
+ * "AI Generate" mode: drafts questions with AI-01 from a context for the
+ * manager to review. Accepted
  * suggestions are reported through onAcceptedChange; the page saves them.
  */
 export const AiGeneratePanel = forwardRef<AiGeneratePanelHandle, {
@@ -136,12 +126,7 @@ export const AiGeneratePanel = forwardRef<AiGeneratePanelHandle, {
   const toast = useToast();
   const typeOptions = allowedTypes ? AI_QUESTION_TYPE_OPTIONS.filter(o => allowedTypes.includes(o.value)) : AI_QUESTION_TYPE_OPTIONS;
   const [typeCounts, setTypeCounts] = useState<TypeCounts<QuestionType>>({ SINGLE_CHOICE: String(DEFAULT_COUNT) });
-  const [topic, setTopic] = useState('');
-  /** File the AI drafts from instead of the topic alone (AI-02). */
-  const [material, setMaterial] = useState<File | null>(null);
-  const [materialError, setMaterialError] = useState<string | null>(null);
-  const [dragOver, setDragOver] = useState(false);
-  const materialInputRef = useRef<HTMLInputElement>(null);
+  const [context, setContext] = useState('');
   const [difficulties, setDifficulties] = useState<QuestionDifficulty[]>(['MEDIUM']);
   const [language, setLanguage] = useState<Language>('English');
   const [showErrors, setShowErrors] = useState(false);
@@ -180,7 +165,7 @@ export const AiGeneratePanel = forwardRef<AiGeneratePanelHandle, {
   const countsValid = counts.length > 0 && counts.every(([, n]) => Number.isInteger(n) && n >= MIN_COUNT && n <= MAX_COUNT);
   const total = countsValid ? counts.reduce((sum, [, n]) => sum + n, 0) : 0;
 
-  const topicError = showErrors && !material && !topic.trim() ? 'Enter a topic for the questions.' : undefined;
+  const contextError = showErrors && !context.trim() ? 'Describe what the questions should be about.' : undefined;
   const typesError = !showErrors ? undefined
     : !counts.length ? 'Pick at least one question type.'
     : !countsValid ? `Enter a number from ${MIN_COUNT} to ${MAX_COUNT} for each type.`
@@ -188,17 +173,9 @@ export const AiGeneratePanel = forwardRef<AiGeneratePanelHandle, {
   const difficultiesError = showErrors && !difficulties.length ? 'Pick at least one difficulty.' : undefined;
   const totalError = total > MAX_TOTAL ? `At most ${MAX_TOTAL} questions per run — lower the numbers or pick fewer types.` : undefined;
 
-  const pickMaterial = (f?: File | null) => {
-    if (!f || generating) return;
-    const problem = materialProblem(f);
-    setMaterialError(problem);
-    if (!problem) setMaterial(f);
-  };
-
   const generate = async () => {
     setShowErrors(true);
-    if (!courseId || (!material && !topic.trim()) || !total || !difficulties.length || totalError) return;
-    const source = material;
+    if (!courseId || !moduleId || !context.trim() || !total || !difficulties.length || totalError) return;
 
     abortRef.current?.abort();
     abortRegenerations();
@@ -208,20 +185,18 @@ export const AiGeneratePanel = forwardRef<AiGeneratePanelHandle, {
     setError(null);
     setWarnings([]);
     try {
-      // AI-01 / AI-02 draft every type and difficulty in one call.
+      // AI-01 drafts every type and difficulty in one call.
       const request: QuestionAiGenerateRequest = {
         courseId: Number(courseId),
-        ...(moduleId ? { moduleId: Number(moduleId) } : {}),
+        moduleId: Number(moduleId),
         questionTypeCounts: Object.fromEntries(counts),
         difficultyCounts: spread(difficulties, total),
-        topic: topic.trim(),
+        topic: context.trim(),
         language,
       };
-      const res = source
-        ? await questionService.generateAiQuestionsFromMaterial(source, request, controller.signal)
-        : await questionService.generateAiQuestions(request, controller.signal);
+      const res = await questionService.generateAiQuestions(request, controller.signal);
       if (controller.signal.aborted) return;
-      setPreviews(res.questions.map(q => toPreview(q, request, source)));
+      setPreviews(res.questions.map(q => toPreview(q, request)));
       setIsDemo(Boolean(res.mock));
       setWarnings(res.warnings);
     } catch (err) {
@@ -243,7 +218,7 @@ export const AiGeneratePanel = forwardRef<AiGeneratePanelHandle, {
   /** Accepts the suggestions that are ready to save (valid, and of an allowed type), up to one save's worth. */
   const accept = (indexes: number[]) => {
     if (!previews) return;
-    const ready = indexes.filter(i => !previews[i].accepted && acceptable(previews[i].draft, allowedTypes));
+    const ready = indexes.filter(i => !previews[i].accepted && !inBank(previews[i]) && acceptable(previews[i].draft, allowedTypes));
     const room = Math.max(0, MAX_TOTAL - previews.filter(p => p.accepted).length);
     const taken = ready.slice(0, room);
     if (taken.length < ready.length) toast.warning(`You can save up to ${MAX_TOTAL} questions at a time — save these first.`);
@@ -283,9 +258,7 @@ export const AiGeneratePanel = forwardRef<AiGeneratePanelHandle, {
     regenRef.current.set(p.id, controller);
     patchPreview(p.id, { regenerating: true, regenerateError: undefined });
     try {
-      const res = p.material
-        ? await questionService.generateAiQuestionsFromMaterial(p.material, p.request, controller.signal)
-        : await questionService.generateAiQuestions(p.request, controller.signal);
+      const res = await questionService.generateAiQuestions(p.request, controller.signal);
       if (controller.signal.aborted) return;
       const next = res.questions[0];
       if (next) patchPreview(p.id, { draft: fromAiDraft(next.question), duplicate: next.hasHashConflict, editing: false, edited: false, regenerating: false });
@@ -314,64 +287,33 @@ export const AiGeneratePanel = forwardRef<AiGeneratePanelHandle, {
           </div>
         </div>
 
-        {material ? (
-          <div className="flex items-center gap-3 p-3 bg-surface-alt rounded-[10px]">
-            <Icon.FileText className="w-5 h-5 text-brand-ink flex-shrink-0" />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-content-secondary truncate">{material.name}</p>
-              <p className="text-2xs text-content-subtle">The AI drafts the questions from this file.</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setMaterial(null)}
-              disabled={generating}
-              aria-label="Remove file"
-              title="Generate from the topic only"
-              className="text-content-subtle hover:text-danger p-1"
-            >
-              <Icon.X className="w-4 h-4" />
-            </button>
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center justify-between gap-2">
+            <label htmlFor="ai-gen-context" className="text-sm font-medium text-content-secondary">Context *</label>
+            <span className="text-2xs text-content-subtle">{context.length}/{AI_CONTEXT_MAX}</span>
           </div>
-        ) : (
-          <div
-            role="button"
-            tabIndex={0}
-            aria-label="Add a file for the AI to draft questions from"
-            onDragOver={e => { e.preventDefault(); setDragOver(true); }}
-            onDragLeave={() => setDragOver(false)}
-            onDrop={e => { e.preventDefault(); setDragOver(false); pickMaterial(e.dataTransfer.files?.[0]); }}
-            onClick={() => { if (!generating) materialInputRef.current?.click(); }}
-            onKeyDown={e => { if ((e.key === 'Enter' || e.key === ' ') && !generating) { e.preventDefault(); materialInputRef.current?.click(); } }}
-            className={`rounded-[10px] px-4 py-5 text-center border-2 border-dashed transition-colors cursor-pointer bg-primary-light ${dragOver ? 'border-brand-600' : 'border-brand-line'}`}
-          >
-            <Icon.Upload className="w-7 h-7 text-brand-ink mx-auto mb-2" />
-            <p className="text-sm font-semibold text-brand-ink-strong">Drop a file here or click to browse (optional)</p>
-            <p className="text-xs text-content-soft mt-0.5">PDF, Word (.docx) or text (.txt), up to 10 MB, any layout — the AI writes questions from its content.</p>
-          </div>
-        )}
-        <input
-          ref={materialInputRef}
-          type="file"
-          accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
-          className="hidden"
-          onChange={e => { pickMaterial(e.target.files?.[0]); e.target.value = ''; }}
-        />
-        {materialError && <p className="text-xs text-danger -mt-1">{materialError}</p>}
+          <textarea
+            id="ai-gen-context"
+            value={context}
+            onChange={e => setContext(e.target.value)}
+            // Enter starts a new line; Ctrl/Cmd + Enter generates.
+            onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && !generating) generate(); }}
+            placeholder={'What the questions should be about, e.g.\nOOP inheritance in Java: extends, method overriding, super, and when to prefer composition.'}
+            maxLength={AI_CONTEXT_MAX}
+            disabled={generating}
+            aria-invalid={contextError ? true : undefined}
+            aria-describedby={contextError ? 'ai-gen-context-error' : undefined}
+            className={`w-full h-[120px] px-3 py-2 rounded-[10px] border text-base text-content placeholder:text-gray-400 bg-surface resize-y focus:outline-none focus:ring-2 transition-all disabled:opacity-60 ${
+              contextError ? 'border-danger-solid focus:ring-danger-solid/20 focus:border-danger-solid' : 'border-line focus:ring-brand-600/20 focus:border-brand-600'
+            }`}
+          />
+          {contextError
+            ? <p id="ai-gen-context-error" className="text-xs text-danger">{contextError}</p>
+            : <p className="text-xs text-content-soft">The more detail you give, the closer the questions match what you want. Ctrl + Enter to generate.</p>}
+        </div>
 
-        <Input
-          label={material ? 'Instructions for the AI (optional)' : 'Topic *'}
-          value={topic}
-          onChange={e => setTopic(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter' && !generating) generate(); }}
-          placeholder={material ? 'e.g. Only chapter 3, keep the questions in the file as they are' : 'e.g. OOP inheritance'}
-          error={topicError}
-          maxLength={AI_CONTEXT_MAX}
-          disabled={generating}
-        />
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)] gap-3 items-start">
           <TypeCountSelect
-            className="sm:col-span-3"
             label="Question types & number of each"
             value={typeCounts}
             onChange={setTypeCounts}
@@ -399,15 +341,15 @@ export const AiGeneratePanel = forwardRef<AiGeneratePanelHandle, {
           </p>
         )}
 
-        {!courseId && (
+        {(!courseId || !moduleId) && (
           <p className={`flex items-start gap-1.5 text-xs ${showErrors ? 'text-danger' : 'text-content-soft'}`}>
             <Icon.Info className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
-            Pick a course on the right first — the AI drafts questions for that course (and module, if picked).
+            Pick a course and module on the right first — the AI drafts questions for that module.
           </p>
         )}
 
         <div className="flex flex-wrap items-center gap-2">
-          <Button icon={<Icon.Zap className="w-4 h-4" />} onClick={generate} loading={generating} disabled={generating || disabled || !courseId}>
+          <Button icon={<Icon.Zap className="w-4 h-4" />} onClick={generate} loading={generating} disabled={generating || disabled || !courseId || !moduleId}>
             {previews ? 'Generate again' : 'Generate'}
           </Button>
           {generating && <Button variant="ghost" onClick={stop}>Stop</Button>}
@@ -428,14 +370,14 @@ export const AiGeneratePanel = forwardRef<AiGeneratePanelHandle, {
 
       {generating && !previews && (
         <div className="card p-10 flex items-center justify-center gap-3 text-content-soft">
-          <Spinner size="sm" /> {material ? `Generating questions from ${material.name}…` : 'Generating questions…'} this can take up to a minute.
+          <Spinner size="sm" /> Generating questions… this can take up to a minute.
         </div>
       )}
 
       {previews && previews.length === 0 && !generating && (
         <div className="card p-10 text-center">
           <p className="text-base font-medium text-content-secondary">No usable questions came back</p>
-          <p className="text-sm text-content-subtle mt-1">Try a more specific topic or generate again.</p>
+          <p className="text-sm text-content-subtle mt-1">Try a more specific context or generate again.</p>
         </div>
       )}
 
@@ -500,7 +442,7 @@ function AiPreviewCard({ index, preview, allowedTypes, onAccept, onEdit, onChang
       <Icon.RefreshCw className={`w-4 h-4 ${regenerating ? 'animate-spin' : ''}`} />
     </button>
   );
-  const ready = acceptable(q, allowedTypes);
+  const ready = acceptable(q, allowedTypes) && !inBank(preview);
   const acceptBtn = (
     <Button
       size="sm"
@@ -509,7 +451,7 @@ function AiPreviewCard({ index, preview, allowedTypes, onAccept, onEdit, onChang
       onClick={onAccept}
       // Accepted ones can be un-accepted until they are saved.
       disabled={regenerating || disabled || (!accepted && !ready)}
-      title={accepted ? 'Accepted — click to undo' : ready ? 'Accept to save with the others' : 'Fix this suggestion before accepting it'}
+      title={accepted ? 'Accepted — click to undo' : ready ? 'Accept to save with the others' : inBank(preview) ? 'Already in the bank — edit or regenerate it first' : 'Fix this suggestion before accepting it'}
     >
       {accepted ? 'Accepted' : 'Accept'}
     </Button>
@@ -581,13 +523,16 @@ function AiPreviewView({ index, preview, allowedTypes, actions }: { index: numbe
             <Badge variant="warning"><Icon.AlertCircle className="w-3.5 h-3.5" /> Needs edits</Badge>
           )}
           {duplicate && !edited && (
-            <span title="A question with the same content is already in this course. Saving it unchanged will fail.">
+            <span title="A question with the same content is already in this course. Edit or regenerate it before accepting.">
               <Badge variant="warning"><Icon.Copy className="w-3.5 h-3.5" /> Already in bank</Badge>
             </span>
           )}
         </div>
         {actions}
       </div>
+      {duplicate && !edited && !accepted && (
+        <p className="text-xs text-warning">This question already exists in the course, so it can’t be saved as is. Edit or regenerate it first.</p>
+      )}
 
       {regenerating && (
         <div className="absolute inset-0 rounded-[inherit] bg-surface/70 flex items-center justify-center gap-2 text-sm text-content-soft z-10">

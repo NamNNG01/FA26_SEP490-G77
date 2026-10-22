@@ -207,6 +207,27 @@ export function emptyDraft(): QuestionDraft {
   };
 }
 
+/**
+ * A new, unsaved copy of a question (Duplicate): fresh keys everywhere, and no
+ * saved ids, so it is created as a question of its own.
+ */
+export function copyDraft(q: QuestionDraft): QuestionDraft {
+  return {
+    ...q,
+    key: newKey('q'),
+    questionId: undefined,
+    lockVersion: undefined,
+    fromAi: undefined,
+    importIssue: undefined,
+    metadata: { ...q.metadata },
+    options: q.options.map(o => ({ ...o, key: newKey('opt'), optionId: undefined })),
+    pairs: q.pairs.map(p => ({ ...p, key: newKey('pair') })),
+    blanks: Object.fromEntries(Object.entries(q.blanks).map(([n, b]) => [n, { ...b }])),
+    ordering: q.ordering.map(o => ({ ...o, key: newKey('ord'), optionId: undefined })),
+    rubric: q.rubric.map(c => ({ ...c, key: newKey('crit') })),
+  };
+}
+
 const isTrueFalseSet = (options: OptionDraft[]) =>
   options.length === 2 && options[0].text === 'True' && options[1].text === 'False';
 

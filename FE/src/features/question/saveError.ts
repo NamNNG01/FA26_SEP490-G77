@@ -10,6 +10,8 @@ export interface SaveError {
   conflict?: boolean;
   /** Batch save: index of the first question the backend rejected. */
   questionIndex?: number;
+  /** Batch save: indexes (0-based) of questions whose content is already in the course. */
+  duplicateIndexes?: number[];
 }
 
 const FIELD_LABELS: Record<string, string> = {
@@ -62,7 +64,19 @@ export function describeSaveError(err: unknown, fallback: string): SaveError {
   }
 
   if (httpStatus(err) === 409) {
-    const duplicate = /Duplicate content hash with question id: (\d+)/i.exec(message);
+    // Q-03: "Duplicate questions at index: 1, 3" (1-based).
+    const batch = /Duplicate questions at index:\s*([\d,\s]+)/i.exec(message);
+    if (batch) {
+      const duplicateIndexes = batch[1].split(',').map(n => Number(n.trim()) - 1).filter(n => n >= 0);
+      const list = duplicateIndexes.map(i => i + 1).join(', ');
+      return {
+        message: `${duplicateIndexes.length === 1 ? `Question ${list} already exists` : `Questions ${list} already exist`} in this course. Change ${duplicateIndexes.length === 1 ? 'it' : 'them'} or remove ${duplicateIndexes.length === 1 ? 'it' : 'them'} before saving.`,
+        duplicateIndexes,
+        questionIndex: duplicateIndexes[0],
+      };
+    }
+    // Q-05: "... is duplicated with existing question ID: 12"
+    const duplicate = /(?:Duplicate content hash with question id|duplicated with existing question ID):\s*(\d+)/i.exec(message);
     if (duplicate) return { message: `A question with the same content already exists in this course (question #${duplicate[1]}). Change it before saving.` };
     // Other 409s (e.g. "Cannot change question type when student attempts reference this question") say why themselves.
     if (/lock version|modified by another user/i.test(message)) return { message, conflict: true };

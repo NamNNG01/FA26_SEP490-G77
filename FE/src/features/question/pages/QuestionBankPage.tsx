@@ -7,11 +7,12 @@ import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { Table, type TableColumn } from '@/components/ui/Table';
 import { Alert } from '@/components/ui/Alert';
 import { Dropdown } from '@/components/ui/Dropdown';
+import { Modal } from '@/components/ui/Modal';
 import { useToast } from '@/components/ui/ToastHost';
 import { SearchInput } from '@/components/common/SearchInput';
 import { Icon } from '@/assets/icons';
 import { useDebounce } from '@/hooks';
-import { ROUTES, managerQuestionEditPath } from '@/app/routes';
+import { ROUTES, managerQuestionDuplicatePath, managerQuestionEditPath } from '@/app/routes';
 import { courseService, type CourseModuleResponse, type CourseSummaryItem } from '@/services/course.service';
 import { getUserRoleCode } from '@/auth/storage';
 import {
@@ -22,6 +23,7 @@ import {
   type QuestionStatus,
 } from '@/services/question.service';
 import { GROUP_KIND_LABELS, asGroupKind, kindOf } from '../model';
+import { loadCreateDraft } from '../createDraft';
 
 const PAGE_SIZE = 10;
 const ALL = 'all';
@@ -212,6 +214,15 @@ export function QuestionBankPage() {
     }
   };
 
+  /** Question waiting for a confirmation to replace the unsaved New Questions draft. */
+  const [confirmDuplicate, setConfirmDuplicate] = useState<number | null>(null);
+  /** Opens New Questions prefilled with a copy — the copy is only saved from there. */
+  const duplicate = (q: Row) => {
+    const draft = loadCreateDraft();
+    if (draft?.questions.some(d => d.content.trim() !== '')) setConfirmDuplicate(q.questionId);
+    else navigate(managerQuestionDuplicatePath(q.questionId));
+  };
+
   const columns: TableColumn[] = [
     {
       key: 'content',
@@ -312,6 +323,7 @@ export function QuestionBankPage() {
               }
               items={[
                 { label: 'Detail', icon: <Icon.Eye />, onClick: () => navigate(managerQuestionEditPath(q.questionId)) },
+                { label: 'Duplicate', icon: <Icon.Copy />, onClick: () => duplicate(q) },
                 // Published questions can be archived; Draft and Archived ones can be published.
                 published
                   ? { label: 'Archive', icon: <Icon.Package />, danger: true, onClick: () => changeStatus(q, 'INACTIVE') }
@@ -411,6 +423,25 @@ export function QuestionBankPage() {
           }
         />
       </div>
+
+      <Modal
+        open={confirmDuplicate != null}
+        onClose={() => setConfirmDuplicate(null)}
+        title="Replace your unsaved draft?"
+        size="sm"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setConfirmDuplicate(null)}>Cancel</Button>
+            <Button variant="danger" onClick={() => { if (confirmDuplicate != null) navigate(managerQuestionDuplicatePath(confirmDuplicate)); setConfirmDuplicate(null); }}>
+              Discard &amp; duplicate
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-content-secondary">
+          You have new questions that haven’t been saved yet. Duplicating this question replaces them. Save them first if you want to keep them.
+        </p>
+      </Modal>
     </div>
   );
 }

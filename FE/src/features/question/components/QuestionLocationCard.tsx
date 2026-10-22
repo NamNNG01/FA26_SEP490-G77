@@ -5,10 +5,10 @@ import { courseService, type CourseModuleResponse, type CourseSummaryItem } from
 
 /**
  * Course / Module pickers for where new questions are saved. The course is
- * required, the module optional. Module options load for the selected course;
- * switching course clears the module.
+ * required; the module too with `moduleRequired` (new questions). Module
+ * options load for the selected course; switching course clears the module.
  */
-export function QuestionLocationCard({ courseId, moduleId, onChange, courseLocked, showErrors, hideHeading }: {
+export function QuestionLocationCard({ courseId, moduleId, onChange, courseLocked, showErrors, hideHeading, moduleRequired }: {
   courseId: string;
   moduleId: string;
   onChange: (courseId: string, moduleId: string) => void;
@@ -17,6 +17,8 @@ export function QuestionLocationCard({ courseId, moduleId, onChange, courseLocke
   showErrors?: boolean;
   /** Render only the pickers, for callers that supply their own card heading. */
   hideHeading?: boolean;
+  /** New questions must go into a module (Q-03 rejects a batch without one). */
+  moduleRequired?: boolean;
 }) {
   const [courses, setCourses] = useState<CourseSummaryItem[]>([]);
   const [modules, setModules] = useState<CourseModuleResponse[]>([]);
@@ -73,12 +75,17 @@ export function QuestionLocationCard({ courseId, moduleId, onChange, courseLocke
       </div>
       <div>
         <Select
-          label="Module (optional)"
+          label={moduleRequired ? 'Module *' : 'Module (optional)'}
           value={moduleId}
           onChange={v => onChange(courseId, v)}
           disabled={!courseId || loadingModules}
-          options={[{ label: !courseId ? 'Select a course first' : loadingModules ? 'Loading…' : 'No module', value: '' }, ...moduleOptions]}
+          options={[{ label: !courseId ? 'Select a course first' : loadingModules ? 'Loading…' : moduleRequired ? 'Select module' : 'No module', value: '' }, ...moduleOptions]}
         />
+        {moduleRequired && courseId && !loadingModules && modules.length === 0 ? (
+          <p className="text-xs text-warning mt-1">This course has no modules yet — add one to the course first.</p>
+        ) : (
+          moduleRequired && showErrors && courseId && !moduleId && <p className="text-xs text-danger mt-1">Select a module.</p>
+        )}
       </div>
     </div>
   );
