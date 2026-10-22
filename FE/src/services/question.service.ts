@@ -68,6 +68,8 @@ export interface QuestionListParams {
   courseIds?: number[];
   moduleId?: number;
   groupId?: number;
+  /** Kind of the question's group: QUIZ | ESSAY | CODE | DIAGRAM, or NONE for standalone questions. */
+  groupType?: string;
   questionType?: string;
   difficulty?: string;
   status?: string;
@@ -441,6 +443,19 @@ export const questionService = {
       signal,
     });
     return res.data.data;
+  },
+
+  /** Q-09: the blank import template, saved through the browser's download. */
+  async downloadImportTemplate(format: 'pdf' | 'docx'): Promise<void> {
+    const res = await apiClient.get<Blob>('/manager/questions/import-template', { params: { format }, responseType: 'blob' });
+    const disposition = String(res.headers['content-disposition'] ?? '');
+    const filename = /filename="?([^";]+)"?/.exec(disposition)?.[1] ?? `question-import-template.${format}`;
+    const url = URL.createObjectURL(res.data);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
   },
 
   /** Q-03: creates 1..50 questions in one transaction — all or nothing. */

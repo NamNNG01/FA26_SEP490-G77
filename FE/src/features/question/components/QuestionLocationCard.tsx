@@ -4,8 +4,9 @@ import { Icon } from '@/assets/icons';
 import { courseService, type CourseModuleResponse, type CourseSummaryItem } from '@/services/course.service';
 
 /**
- * Course / Module pickers for where new questions are saved. Module options
- * load for the selected course; switching course clears the module.
+ * Course / Module pickers for where new questions are saved. The course is
+ * required, the module optional. Module options load for the selected course;
+ * switching course clears the module.
  */
 export function QuestionLocationCard({ courseId, moduleId, onChange, courseLocked, showErrors, hideHeading }: {
   courseId: string;
@@ -72,13 +73,12 @@ export function QuestionLocationCard({ courseId, moduleId, onChange, courseLocke
       </div>
       <div>
         <Select
-          label="Module *"
+          label="Module (optional)"
           value={moduleId}
           onChange={v => onChange(courseId, v)}
           disabled={!courseId || loadingModules}
-          options={[{ label: !courseId ? 'Select a course first' : loadingModules ? 'Loading…' : 'Select module', value: '' }, ...moduleOptions]}
+          options={[{ label: !courseId ? 'Select a course first' : loadingModules ? 'Loading…' : 'No module', value: '' }, ...moduleOptions]}
         />
-        {showErrors && courseId && !moduleId && <p className="text-xs text-danger mt-1">Select a module.</p>}
       </div>
     </div>
   );

@@ -32,7 +32,7 @@ const inputCls = (invalid: boolean) =>
 const iconBtn = 'p-1.5 rounded-[6px] text-content-subtle hover:bg-accent hover:text-content-secondary disabled:opacity-30 disabled:cursor-not-allowed';
 
 /** One question block: header, text, difficulty/type, and the answer section for the selected type. */
-export function QuestionForm({ q, index, onChange, showErrors, removable, onRemove, canMoveUp, canMoveDown, onMoveUp, onMoveDown, heading, actions }: {
+export function QuestionForm({ q, index, onChange, showErrors, removable, onRemove, canMoveUp, canMoveDown, onMoveUp, onMoveDown, heading, actions, allowedTypes, kindError }: {
   q: QuestionDraft;
   index: number;
   onChange: (q: QuestionDraft) => void;
@@ -48,13 +48,18 @@ export function QuestionForm({ q, index, onChange, showErrors, removable, onRemo
   heading?: string;
   /** Extra header buttons (e.g. the AI preview's Done / Accept). */
   actions?: React.ReactNode;
+  /** Types the Type dropdown offers (a group holds one kind); all when omitted. */
+  allowedTypes?: EditableQuestionType[];
+  /** The question's type doesn't fit its group's kind — always shown, like an import error. */
+  kindError?: string;
 }) {
   const textRef = useRef<HTMLTextAreaElement>(null);
   const errors = validateDraft(q);
-  const invalid = Object.keys(errors).length > 0;
+  const invalid = Object.keys(errors).length > 0 || Boolean(kindError);
   const contentError = showErrors ? errors.content : undefined;
   const answersError = showErrors ? errors.answers : undefined;
-  const typeError = showErrors ? errors.type : undefined;
+  const typeError = kindError ?? (showErrors ? errors.type : undefined);
+  const typeOptions = allowedTypes ? QUESTION_TYPE_OPTIONS.filter(o => o.value === q.type || allowedTypes.includes(o.value)) : QUESTION_TYPE_OPTIONS;
   const titleId = `${q.key}-title`;
 
   const set = (patch: Partial<QuestionDraft>) => onChange({ ...q, ...patch });
@@ -102,7 +107,7 @@ export function QuestionForm({ q, index, onChange, showErrors, removable, onRemo
             </button>
           )}
           {removable && (
-            <button type="button" onClick={onRemove} className={`${iconBtn} hover:!text-danger hover:!bg-danger-light`} aria-label={`Remove question ${index + 1}`} title="Remove question">
+            <button type="button" onClick={onRemove} className={`${iconBtn} hover:!text-danger hover:!bg-danger-light`} aria-label={`Delete question ${index + 1}`} title="Delete question">
               <Icon.Trash className="w-4 h-4" />
             </button>
           )}
@@ -157,7 +162,7 @@ export function QuestionForm({ q, index, onChange, showErrors, removable, onRemo
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Select label="Difficulty" value={q.difficulty} onChange={v => set({ difficulty: v as QuestionDifficulty })} options={DIFFICULTY_OPTIONS} />
-        <Select label="Type" value={q.type} onChange={v => onChange(changeType(q, v as EditableQuestionType))} options={QUESTION_TYPE_OPTIONS} />
+        <Select label="Type" value={q.type} onChange={v => onChange(changeType(q, v as EditableQuestionType))} options={typeOptions} />
       </div>
 
       {typeError && <p className="text-xs text-danger -mt-1.5">{typeError}</p>}

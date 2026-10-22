@@ -13,7 +13,7 @@ export const SIDEBAR_CLS = 'space-y-4 pb-4 lg:sticky lg:top-[10px] lg:max-h-[cal
 /** Right-hand column: optional tabs, Location card + Actions card. */
 export function QuestionSidePanel({
   mode, count, courseId, moduleId, onLocationChange, showErrors, prerequisiteNote,
-  onAdd, onImport, onSave, onCancel, onToggleStatus, saving, statusBusy, isActive, tabs,
+  onAdd, onImport, onSave, saveLabel, onCancel, onToggleStatus, saving, statusBusy, isActive, tabs,
 }: {
   /** Shown above the Location card (the create page's Manual / AI Generate switch). */
   tabs?: React.ReactNode;
@@ -25,10 +25,13 @@ export function QuestionSidePanel({
   showErrors: boolean;
   /** Why saving can't happen yet (shown under Save). */
   prerequisiteNote?: string | null;
+  /** Hidden without it (e.g. in AI mode). */
   onAdd?: () => void;
   /** Template import — the button is hidden without it (e.g. on the AI tab). */
   onImport?: () => void;
   onSave: () => void;
+  /** Defaults to "Save Changes" / "Save All (n)". */
+  saveLabel?: string;
   onCancel: () => void;
   /** Edit mode: publish / archive the question. */
   onToggleStatus?: () => void;
@@ -48,14 +51,16 @@ export function QuestionSidePanel({
         <h3 className="text-base font-semibold text-content mb-1">Actions</h3>
         {!isEdit && (
           <>
-            <Button variant="secondary" className="w-full" icon={<Icon.Plus className="w-4 h-4" />} onClick={onAdd} disabled={saving}>Add Question</Button>
+            {onAdd && (
+              <Button variant="secondary" className="w-full" icon={<Icon.Plus className="w-4 h-4" />} onClick={onAdd} disabled={saving}>Add Question</Button>
+            )}
             {onImport && (
               <Button variant="outline" className="w-full" icon={<Icon.Scan className="w-4 h-4" />} onClick={onImport} disabled={saving}>Import PDF / Word</Button>
             )}
           </>
         )}
         <Button className="w-full" icon={<Icon.CheckCircle className="w-4 h-4" />} onClick={onSave} loading={saving} disabled={saving || statusBusy}>
-          {isEdit ? 'Save Changes' : `Save All (${count})`}
+          {saveLabel ?? (isEdit ? 'Save Changes' : `Save All (${count})`)}
         </Button>
         {prerequisiteNote && (
           <p className="flex items-start gap-1.5 text-xs text-warning">

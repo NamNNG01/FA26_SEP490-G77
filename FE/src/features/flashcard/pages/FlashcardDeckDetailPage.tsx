@@ -13,7 +13,9 @@ import { deckService, type Deck, type DeckUpdateRequest } from '@/services/deck.
 import {
   CardEditorPanel,
   CardList,
+  DUPLICATE_TITLE_MESSAGE,
   DeckInfoFields,
+  hasDuplicateTitle,
   toEditableCard,
   useCardEditor,
   NO_COURSE,
@@ -134,11 +136,17 @@ export function FlashcardDeckDetailPage() {
 
   const handleSave = async () => {
     if (!draft) return;
-    const errors = validateDeckInfo(draft);
+    const errors = validateDeckInfo(draft, { requireCourse: deck.courseId != null });
     setInfoErrors(errors);
     if (Object.keys(errors).length > 0) return;
     setSaving(true);
     setSaveError(null);
+    const renamedOrMoved = draft.title.trim().toLowerCase() !== saved.title.trim().toLowerCase() || draft.courseId !== saved.courseId;
+    if (renamedOrMoved && await hasDuplicateTitle(draft.title, draft.courseId, deck.deckId)) {
+      setInfoErrors({ title: DUPLICATE_TITLE_MESSAGE });
+      setSaving(false);
+      return;
+    }
     try {
       const updated = await deckService.updateDeck(deck.deckId, diff(saved, draft));
       setDeck(updated);
@@ -188,15 +196,7 @@ export function FlashcardDeckDetailPage() {
           <section className="card p-5 space-y-4" aria-labelledby="deck-overview-title">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h3 id="deck-overview-title" className="text-lg font-semibold text-content">Deck Information</h3>
-              <div className="flex items-center gap-2">
-                {dirty && <Button variant="ghost" onClick={discardChanges} disabled={saving}>Discard</Button>}
-                <Button variant="danger" icon={<Icon.Trash className="w-4 h-4" />} onClick={() => setConfirmDelete(true)} disabled={saving}>
-                  Delete
-                </Button>
-                <Button icon={<Icon.Check className="w-4 h-4" />} onClick={handleSave} disabled={!dirty || saving}>
-                  {saving ? 'Saving…' : 'Save'}
-                </Button>
-              </div>
+              {dirty && <Button variant="ghost" size="sm" onClick={discardChanges} disabled={saving}>Discard changes</Button>}
             </div>
             {saveError && <Alert type="error" message={saveError} />}
             {/* Always editable — Save sends only the changed fields. */}
@@ -204,6 +204,16 @@ export function FlashcardDeckDetailPage() {
               courses={courseOptions} coursesLoading={coursesLoading}
               // A deck can move between courses but never back to "no course".
               allowNoCourse={deck.courseId == null} />
+            <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line-soft pt-4">
+              <Button variant="danger" icon={<Icon.Trash className="w-4 h-4" />} onClick={() => setConfirmDelete(true)} disabled={saving}>
+                Delete
+              </Button>
+              {/* Back to the list — unsaved changes are confirmed first (UnsavedChangesModal). */}
+              <Button variant="outline" onClick={backToList} disabled={saving}>Cancel</Button>
+              <Button icon={<Icon.Check className="w-4 h-4" />} onClick={handleSave} disabled={!dirty || saving}>
+                {saving ? 'Saving…' : 'Save'}
+              </Button>
+            </div>
           </section>
 
           <CardList cards={cards} editor={editor} />

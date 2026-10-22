@@ -6,7 +6,7 @@ import { Select } from '@/components/ui/Select';
 import { useToast } from '@/components/ui/ToastHost';
 import { Icon } from '@/assets/icons';
 import { courseService, type CourseSummaryItem } from '@/services/course.service';
-import type { DeckCard } from '@/services/deck.service';
+import { deckService, type DeckCard } from '@/services/deck.service';
 
 /**
  * Building blocks shared by the Flashcard Detail page and the New Flashcard
@@ -58,15 +58,34 @@ export interface DeckInfo {
   description: string;
 }
 
-export type DeckInfoErrors = Partial<Record<'title' | 'description', string>>;
+export type DeckInfoErrors = Partial<Record<'title' | 'courseId' | 'description', string>>;
 
-export function validateDeckInfo(info: DeckInfo): DeckInfoErrors {
+export function validateDeckInfo(info: DeckInfo, { requireCourse = false } = {}): DeckInfoErrors {
   const errors: DeckInfoErrors = {};
   const title = info.title.trim();
   if (!title) errors.title = 'Deck name is required.';
   else if (title.length > NAME_MAX) errors.title = `Deck name must be ${NAME_MAX} characters or fewer.`;
+  if (requireCourse && info.courseId === NO_COURSE) errors.courseId = 'Select a course for this deck.';
   if (info.description.length > DESCRIPTION_MAX) errors.description = `Description must be ${DESCRIPTION_MAX} characters or fewer.`;
   return errors;
+}
+
+export const DUPLICATE_TITLE_MESSAGE = 'A deck with this name already exists in this course.';
+
+/**
+ * Is another deck in the course already called `title` (ignoring case and
+ * surrounding spaces)? F-02/F-04 reject that too; checking first keeps the
+ * error on the name field. A failed lookup returns false and leaves it to the API.
+ */
+export async function hasDuplicateTitle(title: string, courseId: string, excludeDeckId?: number): Promise<boolean> {
+  if (courseId === NO_COURSE) return false;
+  const wanted = title.trim().toLowerCase();
+  try {
+    const res = await deckService.getDecks({ courseId: Number(courseId), search: title.trim(), size: 100 });
+    return res.content.some(d => d.deckId !== excludeDeckId && d.title.trim().toLowerCase() === wanted);
+  } catch {
+    return false;
+  }
 }
 
 export function DeckInfoFields({ value, onChange, errors = {}, courses, coursesLoading, allowNoCourse, idPrefix }: {
@@ -80,16 +99,21 @@ export function DeckInfoFields({ value, onChange, errors = {}, courses, coursesL
   idPrefix: string;
 }) {
   const courseOptions = [
-    ...(allowNoCourse ? [{ label: 'No course (personal deck)', value: NO_COURSE }] : []),
+    ...(allowNoCourse ? [{ label: 'No course (personal deck)', value: NO_COURSE }]
+      // No course picked yet on a deck that needs one.
+      : value.courseId === NO_COURSE ? [{ label: 'Select a course', value: NO_COURSE }] : []),
     ...courses.map(c => ({ label: c.title, value: c.id })),
   ];
   return (
     <div className="space-y-4">
-      <Input label="Deck name" placeholder="e.g. Gradient Descent Essentials" value={value.title} maxLength={NAME_MAX}
+      <Input label="Deck name *" placeholder="e.g. Gradient Descent Essentials" value={value.title} maxLength={NAME_MAX}
         error={errors.title} onChange={e => onChange({ title: e.target.value })} />
       <div className="grid gap-4 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-        <Select label="Course" value={value.courseId} onChange={v => onChange({ courseId: v })} disabled={coursesLoading}
-          options={coursesLoading ? [{ label: 'Loading courses…', value: value.courseId }] : courseOptions} />
+        <div>
+          <Select label={allowNoCourse ? 'Course' : 'Course *'} value={value.courseId} onChange={v => onChange({ courseId: v })} disabled={coursesLoading}
+            options={coursesLoading ? [{ label: 'Loading courses…', value: value.courseId }] : courseOptions} />
+          {errors.courseId && <p className="text-xs text-danger mt-1">{errors.courseId}</p>}
+        </div>
         <Select label="Visibility" value={value.isPublic ? 'public' : 'private'} onChange={v => onChange({ isPublic: v === 'public' })}
           options={[{ label: 'Private', value: 'private' }, { label: 'Public', value: 'public' }]} />
       </div>
@@ -282,12 +306,13 @@ export function CardList({ cards, editor, emptyHint = 'Use the card editor to ad
               <li key={card.id} className={`card p-4 transition-colors ${active ? '!border-brand-600 ring-2 ring-brand-600/15' : ''}`}>
                 <div className="flex items-start gap-3">
                   <span className="mt-0.5 flex h-6 min-w-6 flex-shrink-0 items-center justify-center rounded-full bg-surface-muted px-1.5 text-2xs font-semibold text-content-soft">{i + 1}</span>
-                  <div className="min-w-0 flex-1 space-y-2">
-                    <div>
+                  {/* Front | Back side by side, split by a divider (stacked on narrow screens) */}
+                  <div className="min-w-0 flex-1 grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-line">
+                    <div className="min-w-0 pb-2 sm:pb-0 sm:pr-4">
                       <p className="text-2xs font-semibold uppercase tracking-wider text-brand-ink">Front</p>
                       <p className="mt-0.5 text-base font-semibold text-content break-words whitespace-pre-line">{card.frontText}</p>
                     </div>
-                    <div>
+                    <div className="min-w-0 pt-2 sm:pt-0 sm:pl-4">
                       <p className="text-2xs font-semibold uppercase tracking-wider text-success">Back</p>
                       <p className="mt-0.5 text-sm text-content-secondary break-words whitespace-pre-line">{card.backText}</p>
                     </div>
