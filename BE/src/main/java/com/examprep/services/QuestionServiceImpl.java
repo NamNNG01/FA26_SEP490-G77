@@ -66,7 +66,7 @@ public class QuestionServiceImpl implements QuestionService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<QuestionListItemDto> getQuestions(Long courseId, List<Long> courseIds, Long moduleId, Long groupId, String questionType,
+    public Page<QuestionListItemDto> getQuestions(Long courseId, List<Long> courseIds, Long moduleId, Long groupId, String groupType, String questionType,
                                                   String difficulty, String status, String approvalStatus, String creatorRole,
                                                   String source, Long createdBy, String skillTag, String search,
                                                   Pageable pageable, User currentUser) {
@@ -96,6 +96,16 @@ public class QuestionServiceImpl implements QuestionService {
             }
             if (groupId != null) {
                 predicate = cb.and(predicate, cb.equal(root.get("group").get("groupId"), groupId));
+            }
+            // NONE = standalone questions; a kind = questions in a group of that kind.
+            if (groupType != null && !groupType.isBlank()) {
+                if ("NONE".equalsIgnoreCase(groupType)) {
+                    predicate = cb.and(predicate, cb.isNull(root.get("group")));
+                } else {
+                    String kind = QuestionTypeUtil.requireKind(groupType.trim().toUpperCase());
+                    var group = root.join("group");
+                    predicate = cb.and(predicate, cb.equal(group.get("questionType"), kind));
+                }
             }
             if (questionType != null) {
                 predicate = cb.and(predicate, cb.equal(root.get("questionType"), questionType));

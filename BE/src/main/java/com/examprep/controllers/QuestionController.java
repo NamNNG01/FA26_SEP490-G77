@@ -50,6 +50,8 @@ public class QuestionController {
             @RequestParam(required = false) List<Long> courseIds,
             @RequestParam(required = false) Long moduleId,
             @RequestParam(required = false) Long groupId,
+            @Parameter(description = "Kind of the group the question is in: QUIZ, ESSAY, CODE, DIAGRAM, or NONE for standalone questions")
+            @RequestParam(required = false) String groupType,
             @RequestParam(required = false) String questionType,
             @RequestParam(required = false) String difficulty,
             @RequestParam(required = false) String status,
@@ -65,7 +67,7 @@ public class QuestionController {
         User user = resolveUser(currentUser);
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "updatedAt"));
         Page<QuestionListItemDto> result = questionService.getQuestions(
-                courseId, courseIds, moduleId, groupId, questionType, difficulty, status, approvalStatus,
+                courseId, courseIds, moduleId, groupId, groupType, questionType, difficulty, status, approvalStatus,
                 creatorRole, source, createdBy, skillTag, search, pageable, user);
         return ResponseEntity.ok(ApiResponse.success(result, "Questions retrieved successfully"));
     }
