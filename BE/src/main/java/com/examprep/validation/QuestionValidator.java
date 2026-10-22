@@ -53,12 +53,6 @@ public class QuestionValidator {
         }
     }
 
-    public void validateOrThrow(QuestionPayload payload, String pathPrefix) {
-        List<ValidationError> errors = validate(payload, pathPrefix);
-        if (!errors.isEmpty()) {
-            throw new QuestionValidationException(errors);
-        }
-    }
 
     public List<ValidationError> validate(QuestionPayload payload) {
         return validate(payload, "");

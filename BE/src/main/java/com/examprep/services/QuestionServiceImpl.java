@@ -152,22 +152,23 @@ public class QuestionServiceImpl implements QuestionService {
     @Override
     @Transactional
     public QuestionDetailDto createQuestion(QuestionCreateRequest req, User currentUser) {
-        return createQuestionInternal(req, currentUser, "MANUAL", "MANAGER", "APPROVED");
+        return createQuestionInternal(req, currentUser, "MANUAL", "MANAGER", "APPROVED",1);
     }
 
-
-    @SuppressWarnings("unchecked")
     public QuestionDetailDto createQuestionInternal(
             QuestionCreateRequest req,
             User currentUser,
             String source,
             String creatorRole,
-            String approvalStatus
+            String approvalStatus,
+            int questionNumber
     ) {
         if (req.getCourseId() == null) {
             throw new BadRequestException("Course ID is required");
         }
-
+        if (req.getModuleId() == null) {
+            throw new BadRequestException("Module ID is required");
+        }
         Course course = courseRepository.findById(req.getCourseId())
                 .orElseThrow(() -> new ResourceNotFoundException("Course not found"));
 
@@ -185,17 +186,13 @@ public class QuestionServiceImpl implements QuestionService {
             }
         }
 
-        com.examprep.entities.Module module = null;
+        com.examprep.entities.Module module = moduleRepository.findById(req.getModuleId())
+                .orElseThrow(() -> new ResourceNotFoundException("Module not found"));
 
-        if (req.getModuleId() != null) {
-            module = moduleRepository.findById(req.getModuleId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Module not found"));
-
-            if (!module.getCourse().getCourseId().equals(course.getCourseId())) {
-                throw new BadRequestException(
-                        "Module does not belong to the specified course"
-                );
-            }
+        if (!module.getCourse().getCourseId().equals(course.getCourseId())) {
+            throw new BadRequestException(
+                    "Module does not belong to the specified course"
+            );
         }
 
         QuestionGroup group = null;
@@ -307,7 +304,8 @@ public class QuestionServiceImpl implements QuestionService {
         checkContentHashConflict(
                 course.getCourseId(),
                 finalContentHash,
-                null
+                null,
+                questionNumber
         );
 
         String status = req.getStatus() != null
@@ -439,20 +437,33 @@ public class QuestionServiceImpl implements QuestionService {
 
     @Override
     @Transactional
-    public List<QuestionDetailDto> createQuestionsBatch(Long courseId, Long moduleId, List<QuestionCreateRequest> requests, User currentUser) {
+    public List<QuestionDetailDto> createQuestionsBatch(
+            Long courseId,
+            Long moduleId,
+            List<QuestionCreateRequest> requests,
+            User currentUser
+    ) {
         if (requests == null || requests.isEmpty() || requests.size() > 50) {
             throw new BadRequestException("Batch size must be between 1 and 50");
         }
 
+        if (moduleId == null) {
+            throw new BadRequestException("Module ID is required");
+        }
+
         List<ValidationError> allErrors = new ArrayList<>();
+
         for (int i = 0; i < requests.size(); i++) {
             QuestionCreateRequest req = requests.get(i);
+
             req.setCourseId(courseId);
-            if (moduleId != null) {
-                req.setModuleId(moduleId);
-            }
+            req.setModuleId(moduleId);
+
             QuestionPayload payload = QuestionPayload.from(req);
-            List<ValidationError> errs = questionValidator.validate(payload, "questions[" + i + "].");
+
+            List<ValidationError> errs =
+                    questionValidator.validate(payload, "questions[" + i + "].");
+
             allErrors.addAll(errs);
         }
 
@@ -461,9 +472,34 @@ public class QuestionServiceImpl implements QuestionService {
         }
 
         List<QuestionDetailDto> results = new ArrayList<>();
-        for (QuestionCreateRequest req : requests) {
-            results.add(createQuestionInternal(req, currentUser, "MANUAL", "MANAGER", "APPROVED"));
+        List<String> duplicateErrors = new ArrayList<>();
+
+        for (int i = 0; i < requests.size(); i++) {
+            QuestionCreateRequest req = requests.get(i);
+
+            try {
+                results.add(
+                        createQuestionInternal(
+                                req,
+                                currentUser,
+                                "MANUAL",
+                                "MANAGER",
+                                "APPROVED",
+                                i + 1
+                        )
+                );
+            } catch (ResourceConflictException e) {
+                duplicateErrors.add(String.valueOf(i + 1));
+            }
         }
+
+        if (!duplicateErrors.isEmpty()) {
+            throw new ResourceConflictException(
+                    "Duplicate questions at index: "
+                            + String.join(", ", duplicateErrors)
+            );
+        }
+
         return results;
     }
 
@@ -487,6 +523,21 @@ public class QuestionServiceImpl implements QuestionService {
 
         if (!accessPolicy.canModify(currentUser, q)) {
             throw new ForbiddenException("You do not have permission to modify this question");
+        }
+        if (req.getModuleId() != null) {
+            com.examprep.entities.Module module = moduleRepository.findById(req.getModuleId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Module not found"));
+
+            if (q.getCourse() == null
+                    || !module.getCourse().getCourseId().equals(q.getCourse().getCourseId())) {
+                throw new BadRequestException(
+                        "Module does not belong to the question's course"
+                );
+            }
+
+            q.setModule(module);
+        } else if (q.getModule() == null) {
+            throw new BadRequestException("Module ID is required");
         }
         if (req.getGroupId() == null) {
             q.setGroup(null);
@@ -970,7 +1021,8 @@ public class QuestionServiceImpl implements QuestionService {
         }
     }
 
-    private void checkContentHashConflict(Long courseId, String contentHash, Long excludeQuestionId) {
+    private void checkContentHashConflict(Long courseId, String contentHash, Long excludeQuestionId,        int questionNumber
+    ) {
         if (courseId == null || contentHash == null) return;
         List<Question> existing = questionRepository.findAll().stream()
                 .filter(q -> q.getCourse() != null && q.getCourse().getCourseId().equals(courseId))
@@ -979,8 +1031,11 @@ public class QuestionServiceImpl implements QuestionService {
                 .filter(q -> excludeQuestionId == null || !q.getQuestionId().equals(excludeQuestionId))
                 .toList();
         if (!existing.isEmpty()) {
-            throw new ResourceConflictException("Duplicate content hash with question id: " + existing.get(0).getQuestionId());
-        }
+            throw new ResourceConflictException(
+                    "Question at index " + questionNumber
+                            + " is duplicated with existing question ID: "
+                            + existing.get(0).getQuestionId()
+            );        }
     }
 
 
