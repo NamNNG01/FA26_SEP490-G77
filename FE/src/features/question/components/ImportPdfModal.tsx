@@ -3,6 +3,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Alert';
 import { Select } from '@/components/ui/Select';
+import { useToast } from '@/components/ui/ToastHost';
 import { Icon } from '@/assets/icons';
 import {
   IMPORT_EXTENSIONS,
@@ -57,6 +58,7 @@ export function ImportPdfModal({ open, onClose, onImported, courseId: pageCourse
   const [dragOver, setDragOver] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const toast = useToast();
 
   // Each time it opens, start from the location picked on the page.
   useEffect(() => {
@@ -85,7 +87,7 @@ export function ImportPdfModal({ open, onClose, onImported, courseId: pageCourse
   };
 
   const handleImport = async () => {
-    if (!file || !courseId || !moduleId || uploading) return;
+    if (!file || !courseId || uploading) return;
     const controller = new AbortController();
     abortRef.current = controller;
     setUploading(true);
@@ -93,7 +95,7 @@ export function ImportPdfModal({ open, onClose, onImported, courseId: pageCourse
     try {
       const res = await questionService.previewImport(
         file,
-        { courseId: Number(courseId), moduleId: Number(moduleId), difficulty },
+        { courseId: Number(courseId), moduleId: moduleId ? Number(moduleId) : null, difficulty },
         controller.signal,
       );
       if (controller.signal.aborted) return;
@@ -110,6 +112,18 @@ export function ImportPdfModal({ open, onClose, onImported, courseId: pageCourse
     }
   };
 
+  const [templateBusy, setTemplateBusy] = useState<'pdf' | 'docx' | null>(null);
+  const downloadTemplate = async (format: 'pdf' | 'docx') => {
+    setTemplateBusy(format);
+    try {
+      await questionService.downloadImportTemplate(format);
+    } catch {
+      toast.error('Could not download the template. Please try again.');
+    } finally {
+      setTemplateBusy(null);
+    }
+  };
+
   const close = () => {
     abortRef.current?.abort();
     onClose();
@@ -118,7 +132,7 @@ export function ImportPdfModal({ open, onClose, onImported, courseId: pageCourse
   const footer = (
     <>
       <Button variant="outline" onClick={close}>Cancel</Button>
-      <Button onClick={handleImport} loading={uploading} disabled={!file || !courseId || !moduleId} icon={<Icon.Upload className="w-4 h-4" />}>
+      <Button onClick={handleImport} loading={uploading} disabled={!file || !courseId} icon={<Icon.Upload className="w-4 h-4" />}>
         {uploading ? 'Reading file…' : 'Import'}
       </Button>
     </>
@@ -134,7 +148,18 @@ export function ImportPdfModal({ open, onClose, onImported, courseId: pageCourse
           onChange={(c, m) => { setCourseId(c); setModuleId(m); setError(null); }}
           courseLocked={uploading}
         />
-        <p className="-mt-2 text-xs text-content-subtle">The imported questions go into this course and module.</p>
+        <p className="-mt-2 text-xs text-content-subtle">The imported questions go into this course (and module, if picked).</p>
+
+        <div className="flex flex-wrap items-center gap-2 rounded-[10px] border border-line px-3 py-2.5">
+          <Icon.FileText className="w-4 h-4 text-brand-ink flex-shrink-0" />
+          <p className="flex-1 min-w-[160px] text-sm text-content-secondary">Write the questions in the import template.</p>
+          <Button size="sm" variant="outline" icon={<Icon.Download className="w-3.5 h-3.5" />} onClick={() => downloadTemplate('docx')} loading={templateBusy === 'docx'} disabled={templateBusy != null}>
+            Word
+          </Button>
+          <Button size="sm" variant="outline" icon={<Icon.Download className="w-3.5 h-3.5" />} onClick={() => downloadTemplate('pdf')} loading={templateBusy === 'pdf'} disabled={templateBusy != null}>
+            PDF
+          </Button>
+        </div>
 
         <div
           role="button"

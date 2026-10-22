@@ -15,6 +15,8 @@ export interface QuestionGroup {
   groupId: number;
   courseId: number | null;
   moduleId: number | null;
+  /** The one kind of question the group holds: QUIZ | ESSAY | CODE | DIAGRAM (null on groups made before kinds). */
+  questionType: string | null;
   title: string | null;
   passageText: string | null;
   questionCount: number;
@@ -23,12 +25,15 @@ export interface QuestionGroup {
 export interface QuestionGroupCreateRequest {
   courseId: number;
   moduleId?: number | null;
+  /** Required: QUIZ | ESSAY | CODE | DIAGRAM. */
+  questionType: string;
   title?: string;
   passageText?: string;
 }
 
 /** QuestionGroupUpdateRequest */
 export interface QuestionGroupUpdateRequest {
+  questionType?: string;
   title?: string;
   passageText?: string;
 }

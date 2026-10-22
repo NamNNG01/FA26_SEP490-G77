@@ -15,13 +15,16 @@ import { questionGroupService, type QuestionGroup } from '@/services/questionGro
 import { AnswerSection } from '../components/QuestionForm';
 import { QuestionLocationCard } from '../components/QuestionLocationCard';
 import { SIDEBAR_CLS } from '../components/QuestionSidePanel';
-import { GroupInfoCard, QuestionGroupPicker } from '../components/QuestionGroupPicker';
+import { GroupInfoCard, QuestionGroupPicker, groupFits } from '../components/QuestionGroupPicker';
 import {
   DIFFICULTY_OPTIONS,
   QUESTION_TYPE_OPTIONS,
   changeType,
   fromDetail,
+  asGroupKind,
   isDraftValid,
+  kindOf,
+  typesOfKind,
   toUpdateRequest,
   validateDraft,
   type EditableQuestionType,
@@ -129,21 +132,23 @@ export function QuestionDetailPage() {
   };
   const markDirty = <T,>(setter: (v: T) => void) => (v: T) => { setter(v); setDirty(true); };
 
-  const attachGroup = (group: QuestionGroup) => {
-    setGroups(prev => (prev.some(g => g.groupId === group.groupId) ? prev : [group, ...prev]));
-    update({ groupId: group.groupId });
-    toast.info(`Linked to “${group.title || `Group #${group.groupId}`}”. Save changes to keep it.`);
-  };
+  /** Linked in the draft only — Save Changes stores it. */
+  const selectGroup = (group: QuestionGroup | null) => update({ groupId: group?.groupId ?? null });
 
   const createGroup = async (title: string, passageText: string) => {
+    if (!q) return;
     try {
       const group = await questionGroupService.createQuestionGroup({
         courseId: Number(courseId),
         moduleId: moduleId ? Number(moduleId) : null,
+        // A group holds one kind — the one of the question it is created for.
+        questionType: kindOf(q.type) ?? 'QUIZ',
         title,
         passageText,
       });
-      attachGroup(group);
+      setGroups(prev => [group, ...prev]);
+      selectGroup(group);
+      toast.success(`Group “${group.title || `Group #${group.groupId}`}” created. Save changes to link this question to it.`);
     } catch (err) {
       toast.error(errorMessage(err, 'Could not create the question group.'));
       throw err;
@@ -166,13 +171,14 @@ export function QuestionDetailPage() {
     if (!q?.questionId) return;
     setSubmitted(true);
     setSaveError(null);
-    if (!isDraftValid(q) || !moduleId) {
+    const group = groups.find(g => g.groupId === q.groupId);
+    if (!isDraftValid(q) || (group && !groupFits(group, kindOf(q.type), moduleId))) {
       scrollRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       return;
     }
     setSaving(true);
     try {
-      const updated = await questionService.updateQuestion(q.questionId, toUpdateRequest(q, Number(moduleId), { status }));
+      const updated = await questionService.updateQuestion(q.questionId, toUpdateRequest(q, moduleId ? Number(moduleId) : null, { status }));
       setQ(fromDetail(updated));
       setStatus(updated.status);
       setSavedStatus(updated.status);
@@ -229,6 +235,9 @@ export function QuestionDetailPage() {
   const errors = submitted ? validateDraft(q) : {};
   const linkedGroup = groups.find(g => g.groupId === q.groupId) ?? null;
   const groupPending = q.groupId !== savedGroupId;
+  // In a group, the type stays within the group's kind (unlink the group to pick another kind).
+  const groupKind = asGroupKind(linkedGroup?.questionType);
+  const typeOptions = QUESTION_TYPE_OPTIONS.filter(o => o.value === q.type || typesOfKind(groupKind).includes(o.value));
   const locked = saving || busy;
 
   return (
@@ -277,7 +286,9 @@ export function QuestionDetailPage() {
               groups={groups}
               loading={groupsLoading}
               currentGroupId={q.groupId}
-              onAttach={attachGroup}
+              kind={kindOf(q.type)}
+              moduleId={moduleId}
+              onSelect={selectGroup}
               onCreate={createGroup}
               onUpdate={updateGroup}
               disabled={locked}
@@ -285,7 +296,7 @@ export function QuestionDetailPage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Select label="Difficulty" value={q.difficulty} onChange={v => update({ difficulty: v as QuestionDifficulty })} options={DIFFICULTY_OPTIONS} disabled={locked} />
-              <Select label="Type" value={q.type} onChange={v => { setQ(changeType(q, v as EditableQuestionType)); setDirty(true); }} options={QUESTION_TYPE_OPTIONS} disabled={locked} />
+              <Select label="Type" value={q.type} onChange={v => { setQ(changeType(q, v as EditableQuestionType)); setDirty(true); }} options={typeOptions} disabled={locked} />
             </div>
 
             <div className="border-t border-line pt-4">

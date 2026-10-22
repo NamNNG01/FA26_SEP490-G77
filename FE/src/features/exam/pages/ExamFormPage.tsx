@@ -31,12 +31,16 @@ import { QuestionGroupModal } from "../components/QuestionGroupModal";
 import { RubricDetailModal } from "../components/RubricDetailModal";
 import { ImportQuestionsModal } from "../components/ImportQuestionsModal";
 import { ExamAiGenerateTab } from "../components/ExamAiGenerateTab";
+import { DiagramAnswer } from "@/features/question/components/DiagramAnswer";
+import { fromDetail, toUpdateRequest, type QuestionDraft } from "@/features/question/model";
+import { questionService, type QuestionDetail } from "@/services/question.service";
+import { getApiErrorMessage } from "@/utils/apiError";
 
 export function ExamFormPage({
   formKind: propFormKind,
   mode: propMode,
 }: {
-  formKind?: "QUIZ" | "ESSAY";
+  formKind?: "QUIZ" | "ESSAY" | "DIAGRAM";
   mode?: "create" | "edit";
 }) {
   const { id } = useParams<{ id: string }>();
@@ -47,6 +51,9 @@ export function ExamFormPage({
   const isEdit = propMode === "edit" || (Boolean(id) && id !== "new");
   const isEssayFromPath = location.pathname.includes("/essay");
   const formKind = propFormKind || (isEssayFromPath ? "ESSAY" : "QUIZ");
+  const isAssessment = formKind !== "QUIZ";
+  const formLabel = formKind === "QUIZ" ? "Quiz" : formKind === "ESSAY" ? "Essay" : "Diagram";
+  const examPathKind = formKind === "QUIZ" ? "quiz" : formKind === "ESSAY" ? "essay" : "diagram";
 
   const [activeTab, setActiveTab] = useState<"manual" | "ai">("manual");
   const [courses, setCourses] = useState<CourseSummaryItem[]>([]);
@@ -57,6 +64,8 @@ export function ExamFormPage({
   const [isDirty, setIsDirty] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [errorBanner, setErrorBanner] = useState<string>("");
+  const [courseLoadError, setCourseLoadError] = useState("");
+  const [moduleLoadError, setModuleLoadError] = useState("");
   const [warningsList, setWarningsList] = useState<string[]>([]);
 
   const [title, setTitle] = useState("");
@@ -67,7 +76,6 @@ export function ExamFormPage({
   const [isPractice, setIsPractice] = useState<boolean>(false);
   const [generationType, setGenerationType] =
     useState<GenerationType>("STATIC");
-  const [passMark, setPassMark] = useState<number>(50);
   const [status, setStatus] = useState<ExamStatus>("DRAFT");
 
   const [questions, setQuestions] = useState<ExamQuestion[]>([]);
@@ -107,7 +115,7 @@ export function ExamFormPage({
           "MATCHING",
           "ORDERING",
         ]
-      : ["ESSAY"];
+      : [formKind];
 
   const totalQuestionCount =
     questions.length +
@@ -119,6 +127,9 @@ export function ExamFormPage({
   useEffect(() => {
     courseService.getCourses().then((res) => {
       setCourses(res.content || []);
+      setCourseLoadError("");
+    }).catch((err) => {
+      setCourseLoadError(getApiErrorMessage(err, "Failed to load courses."));
     });
   }, []);
 
@@ -126,9 +137,14 @@ export function ExamFormPage({
     if (courseId) {
       courseService.getCourseModules(courseId).then((mods) => {
         setModules(mods || []);
+        setModuleLoadError("");
+      }).catch((err) => {
+        setModules([]);
+        setModuleLoadError(getApiErrorMessage(err, "Failed to load course modules."));
       });
     } else {
       setModules([]);
+      setModuleLoadError("");
       setModuleId("");
     }
   }, [courseId]);
@@ -145,7 +161,6 @@ export function ExamFormPage({
       setDurationMinutes(data.durationMinutes || 60);
       setIsPractice(!!data.isPractice);
       setGenerationType(data.generationType || "STATIC");
-      setPassMark(data.passMark ?? 50);
       setStatus(data.status || "DRAFT");
       setConfigs(data.configs || []);
       setGroups(data.groups || []);
@@ -154,9 +169,9 @@ export function ExamFormPage({
       const loadedQuestions = [...(data.questions || [])];
       setQuestions(loadedQuestions);
 
-      if (formKind === "ESSAY") {
+      if (isAssessment) {
         const missingRubricQuestions = loadedQuestions.filter(
-          (q) => q.questionType === "ESSAY" && q.hasRubric === undefined,
+          (q) => q.questionType === formKind && q.hasRubric === undefined,
         );
         if (missingRubricQuestions.length > 0) {
           Promise.allSettled(
@@ -190,7 +205,9 @@ export function ExamFormPage({
         toast.error("Exam not found. Returning to exam list.");
         navigate(ROUTES.managerExams);
       } else {
-        setErrorBanner("Failed to load exam details. Please try again.");
+        setErrorBanner(
+          getApiErrorMessage(err, "Failed to load exam details. Please try again."),
+        );
       }
     } finally {
       setLoading(false);
@@ -242,10 +259,7 @@ export function ExamFormPage({
             "Exam cannot be published. Ensure questions are attached.",
         );
       } else {
-        toast.error(
-          errorObj?.response?.data?.message ||
-            "Failed to update exam publish status.",
-        );
+        toast.error(getApiErrorMessage(err, "Failed to update exam publish status."));
       }
     } finally {
       setSaving(false);
@@ -268,10 +282,6 @@ export function ExamFormPage({
 
     if (durationMinutes < 1 || durationMinutes > 600) {
       errors.durationMinutes = "Duration must be between 1 and 600 minutes.";
-    }
-
-    if (passMark < 0 || passMark > 100) {
-      errors.passMark = "Pass mark must be between 0 and 100.";
     }
 
     if (generationType === "RANDOM") {
@@ -317,7 +327,6 @@ export function ExamFormPage({
           durationMinutes,
           isPractice,
           generationType,
-          passMark,
           questionIds: payloadQuestionIds,
           groupIds: payloadGroupIds,
           configs: generationType === "STATIC" ? [] : configs,
@@ -327,7 +336,7 @@ export function ExamFormPage({
         const targetRoute =
           formKind === "QUIZ"
             ? `/manager/exams/quiz/${created.examId}`
-            : `/manager/exams/essay/${created.examId}`;
+            : `/manager/exams/${examPathKind}/${created.examId}`;
         navigate(targetRoute, { replace: true });
       } else {
         await examService.updateExam(Number(id), {
@@ -338,7 +347,6 @@ export function ExamFormPage({
           durationMinutes,
           isPractice,
           generationType,
-          passMark,
           configs: generationType === "STATIC" ? [] : configs,
         });
 
@@ -354,13 +362,10 @@ export function ExamFormPage({
         setArchiveCloneModalOpen(true);
       } else if (errorObj?.response?.status === 400) {
         setErrorBanner(
-          errorObj.response.data?.message ||
-            "Validation error while saving exam.",
+          getApiErrorMessage(err, "Validation error while saving exam."),
         );
       } else {
-        setErrorBanner(
-          errorObj?.response?.data?.message || "Failed to save exam.",
-        );
+        setErrorBanner(getApiErrorMessage(err, "Failed to save exam."));
       }
     } finally {
       setSaving(false);
@@ -380,7 +385,6 @@ export function ExamFormPage({
         durationMinutes,
         isPractice,
         generationType,
-        passMark,
         questionIds: questions.map((q, idx) => ({
           questionId: q.questionId,
           points: q.points || 1,
@@ -399,10 +403,12 @@ export function ExamFormPage({
       const targetRoute =
         formKind === "QUIZ"
           ? `/manager/exams/quiz/${cloned.examId}`
-          : `/manager/exams/essay/${cloned.examId}`;
+        : `/manager/exams/${examPathKind}/${cloned.examId}`;
       navigate(targetRoute, { replace: true });
-    } catch {
-      toast.error("Failed to execute Archive and Clone workflow.");
+    } catch (err) {
+      toast.error(
+        getApiErrorMessage(err, "Failed to execute Archive and Clone workflow."),
+      );
     } finally {
       setArchiveCloning(false);
     }
@@ -417,8 +423,8 @@ export function ExamFormPage({
       setArchiveCloneModalOpen(false);
       setSaveDescriptionOnly(false);
       loadExamDetail(Number(id));
-    } catch {
-      toast.error("Failed to update description.");
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, "Failed to update description."));
     } finally {
       setSaving(false);
     }
@@ -466,17 +472,20 @@ export function ExamFormPage({
             );
           } else {
             failures.push(
-              `Question #${item.question.questionId}: ${errObj?.response?.data?.message || "Error"}`,
+              `Question #${item.question.questionId}: ${getApiErrorMessage(err, "Request failed.")}`,
             );
           }
         }
       }
 
-      if (successCount > 0) {
-        toast.success(`Successfully attached ${successCount} question(s).`);
-      }
       if (failures.length > 0) {
-        toast.warning(failures.join(" "));
+        toast.error(
+          successCount > 0
+            ? `Attached ${successCount} question(s); some questions failed: ${failures.join(" ")}`
+            : failures.join(" "),
+        );
+      } else if (successCount > 0) {
+        toast.success(`Successfully attached ${successCount} question(s).`);
       }
       loadExamDetail(Number(id));
     }
@@ -503,7 +512,7 @@ export function ExamFormPage({
             "Cannot remove questions from a published exam. Please unpublish first.",
           );
         } else {
-          toast.error("Failed to remove question.");
+          toast.error(getApiErrorMessage(err, "Failed to remove question."));
         }
       } finally {
         setLoading(false);
@@ -544,7 +553,7 @@ export function ExamFormPage({
           toast.error("This question group is already attached to this exam.");
         } else {
           toast.error(
-            errorObj?.response?.data?.message || "Failed to attach group.",
+            getApiErrorMessage(err, "Failed to attach group."),
           );
         }
       } finally {
@@ -572,7 +581,7 @@ export function ExamFormPage({
             "Cannot remove groups from a published exam. Unpublish first.",
           );
         } else {
-          toast.error("Failed to remove group.");
+          toast.error(getApiErrorMessage(err, "Failed to remove group."));
         }
       } finally {
         setLoading(false);
@@ -629,8 +638,8 @@ export function ExamFormPage({
           { label: "Exams", onClick: () => navigate(ROUTES.managerExams) },
           {
             label: isEdit
-              ? `Edit ${formKind === "QUIZ" ? "Quiz" : "Essay"} Exam`
-              : `New ${formKind === "QUIZ" ? "Quiz" : "Essay"} Exam`,
+              ? `Edit ${formLabel} Exam`
+              : `New ${formLabel} Exam`,
           },
         ]}
       />
@@ -639,8 +648,8 @@ export function ExamFormPage({
         <div className="flex items-center gap-3">
           <h2 className="text-xl font-bold text-content">
             {isEdit
-              ? `Edit ${formKind === "QUIZ" ? "Quiz" : "Essay"} Exam`
-              : `Create ${formKind === "QUIZ" ? "Quiz" : "Essay"} Exam`}
+              ? `Edit ${formLabel} Exam`
+              : `Create ${formLabel} Exam`}
           </h2>
           <Badge
             variant={
@@ -653,7 +662,7 @@ export function ExamFormPage({
           >
             {status}
           </Badge>
-          <Badge variant="purple">{formKind}</Badge>
+          <Badge variant="purple">{formLabel}</Badge>
         </div>
 
         <div className="flex items-center gap-2">
@@ -743,6 +752,16 @@ export function ExamFormPage({
           </button>
         </div>
       )}
+      {courseLoadError && (
+        <div className="mb-4 rounded-lg border border-danger-line bg-danger-light p-3 text-sm text-danger">
+          {courseLoadError}
+        </div>
+      )}
+      {moduleLoadError && (
+        <div className="mb-4 rounded-lg border border-danger-line bg-danger-light p-3 text-sm text-danger">
+          {moduleLoadError}
+        </div>
+      )}
 
       {!isEdit && (
         <div className="flex border-b border-line">
@@ -779,7 +798,7 @@ export function ExamFormPage({
             const targetRoute =
               formKind === "QUIZ"
                 ? `/manager/exams/quiz/${created.examId}`
-                : `/manager/exams/essay/${created.examId}`;
+                : `/manager/exams/${examPathKind}/${created.examId}`;
             navigate(targetRoute, { replace: true });
           }}
           onCancel={() => setActiveTab("manual")}
@@ -876,7 +895,7 @@ export function ExamFormPage({
                   />
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="text-xs font-medium text-content-secondary block mb-1">
                       Duration (min) *
@@ -898,24 +917,6 @@ export function ExamFormPage({
                         {fieldErrors.durationMinutes}
                       </p>
                     )}
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-medium text-content-secondary block mb-1">
-                      Pass Mark (%)
-                    </label>
-                    <input
-                      type="number"
-                      min={0}
-                      max={100}
-                      disabled={isReadOnly}
-                      className="w-full px-3 py-1.5 text-sm rounded-[8px] border border-line bg-surface disabled:opacity-60"
-                      value={passMark}
-                      onChange={(e) => {
-                        setPassMark(Number(e.target.value) || 0);
-                        setIsDirty(true);
-                      }}
-                    />
                   </div>
 
                   <Select
@@ -1107,7 +1108,9 @@ export function ExamFormPage({
                   <p className="text-xs text-content-subtle">
                     {formKind === "QUIZ"
                       ? "Objective questions linked directly to this exam."
-                      : "Essay questions requiring student written responses and evaluation rubrics."}
+                      : formKind === "ESSAY"
+                        ? "Essay questions linked to this exam, with optional grading rubrics."
+                        : "Diagram questions linked to this exam, with optional grading rubrics."}
                   </p>
                 </div>
 
@@ -1168,7 +1171,7 @@ export function ExamFormPage({
                       <div
                         key={q.examQuestionId || idx}
                         className={`p-3.5 rounded-[10px] border transition-colors ${
-                          formKind === "ESSAY" && q.hasRubric === false
+                          isAssessment && q.questionType === formKind && q.hasRubric === false
                             ? "border-warning-line bg-warning-light/20"
                             : "border-line bg-surface"
                         }`}
@@ -1193,7 +1196,7 @@ export function ExamFormPage({
                                   Points: {q.points}
                                 </span>
 
-                                {formKind === "ESSAY" && (
+                                {isAssessment && q.questionType === formKind && (
                                   <>
                                     {q.hasRubric ? (
                                       <Badge
@@ -1247,6 +1250,9 @@ export function ExamFormPage({
                             </button>
                           )}
                         </div>
+                        {formKind === "DIAGRAM" && q.questionType === "DIAGRAM" && (
+                          <ExamDiagramAnswer questionId={q.questionId} readOnly={isReadOnly} />
+                        )}
                       </div>
                     ))}
                 </div>
@@ -1338,7 +1344,7 @@ export function ExamFormPage({
               <div className="space-y-2.5 text-sm">
                 <div className="flex items-center justify-between">
                   <span className="text-content-subtle">Exam Type:</span>
-                  <Badge variant="purple">{formKind}</Badge>
+                  <Badge variant="purple">{formLabel}</Badge>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-content-subtle">Status:</span>
@@ -1387,7 +1393,7 @@ export function ExamFormPage({
                     icon={<Icon.Check className="w-4 h-4" />}
                     onClick={handleSaveExam}
                     loading={saving}
-                    disabled={saving || loading}
+                    disabled={saving || loading || (isEdit && !isDirty)}
                   >
                     {isEdit ? "Save Changes" : "Create Exam"}
                   </Button>
@@ -1424,6 +1430,7 @@ export function ExamFormPage({
         existingGroupIds={existingGroupIds}
         courseId={courseId ? Number(courseId) : undefined}
         moduleId={moduleId ? Number(moduleId) : undefined}
+        questionType={formKind}
         loading={loading}
       />
 
@@ -1567,6 +1574,70 @@ export function ExamFormPage({
           leave?
         </p>
       </Modal>
+    </div>
+  );
+}
+
+function ExamDiagramAnswer({ questionId, readOnly }: { questionId: number; readOnly: boolean }) {
+  const [question, setQuestion] = useState<QuestionDetail | null>(null);
+  const [draft, setDraft] = useState<QuestionDraft | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setError("");
+    questionService.getQuestionById(questionId)
+      .then((detail) => {
+        if (!active) return;
+        setQuestion(detail);
+        setDraft(fromDetail(detail));
+      })
+      .catch((err) => {
+        if (active) {
+          setError(
+            getApiErrorMessage(err, "Could not load the model answer diagram."),
+          );
+        }
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => { active = false; };
+  }, [questionId]);
+
+  const saveDiagram = async (patch: Partial<QuestionDraft>) => {
+    if (!question || !draft || readOnly || saving) return;
+    const updatedDraft = { ...draft, ...patch };
+    setDraft(updatedDraft);
+    setSaving(true);
+    setError("");
+    try {
+      const updated = await questionService.updateQuestion(
+        questionId,
+        toUpdateRequest(updatedDraft, question.moduleId, { status: question.status }),
+      );
+      setQuestion(updated);
+      setDraft(fromDetail(updated));
+    } catch (err) {
+      setError(
+        getApiErrorMessage(err, "Could not save the model answer diagram. Please try again."),
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) return <div className="mt-3 text-xs text-content-subtle">Loading model answer diagram…</div>;
+  if (!draft) return <div className="mt-3 text-xs text-danger">{error || "Could not load the model answer diagram."}</div>;
+
+  return (
+    <div className="mt-4 border-t border-line-soft pt-4">
+      <DiagramAnswer q={draft} set={saveDiagram} readOnly={readOnly || saving} />
+      {saving && <p className="mt-2 text-xs text-content-subtle">Saving model answer diagram…</p>}
+      {error && <p className="mt-2 text-xs text-danger">{error}</p>}
     </div>
   );
 }

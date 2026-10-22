@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router';
 import { Button } from '@/components/ui/Button';
 import { Badge, type BadgeVariant } from '@/components/ui/Badge';
 import { Select } from '@/components/ui/Select';
+import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { Table, type TableColumn } from '@/components/ui/Table';
 import { Alert } from '@/components/ui/Alert';
 import { Dropdown } from '@/components/ui/Dropdown';
@@ -20,6 +21,7 @@ import {
   type QuestionPage,
   type QuestionStatus,
 } from '@/services/question.service';
+import { GROUP_KIND_LABELS, asGroupKind, kindOf } from '../model';
 
 const PAGE_SIZE = 10;
 const ALL = 'all';
@@ -30,10 +32,10 @@ const TYPE_LABELS: Record<string, string> = {
   TRUE_FALSE: 'True/False',
   MATCHING: 'Matching',
   FILL_BLANK: 'Fill in Blank',
+  ORDERING: 'Ordering',
   ESSAY: 'Essay',
   CODE: 'Code',
   DIAGRAM: 'Diagram',
-  ORDERING: 'Ordering',
 };
 const DIFFICULTY_LABELS: Record<string, string> = { EASY: 'Easy', MEDIUM: 'Medium', HARD: 'Hard' };
 const STATUS_LABELS: Record<string, string> = QUESTION_STATUS_LABELS;
@@ -49,6 +51,11 @@ const toOptions = (allLabel: string, labels: Record<string, string>) => [
 const TYPE_OPTIONS = toOptions('All Types', TYPE_LABELS);
 const DIFFICULTY_OPTIONS = toOptions('All Difficulty', DIFFICULTY_LABELS);
 const STATUS_OPTIONS = toOptions('All Status', STATUS_LABELS);
+/** Q-01 groupType: the kind of the group a question is in, or NONE for standalone questions. */
+const GROUP_TYPE_OPTIONS = toOptions('All Formats', {
+  NONE: 'Standalone (no group)',
+  ...Object.fromEntries(Object.entries(GROUP_KIND_LABELS).map(([k, label]) => [k, `${label} group`])),
+});
 
 const relativeFormat = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
 const dateFormat = new Intl.DateTimeFormat('en', { dateStyle: 'medium' });
@@ -80,6 +87,7 @@ export function QuestionBankPage() {
   const [query, setQuery] = useState('');
   const [course, setCourse] = useState(ALL);
   const [module, setModule] = useState(ALL);
+  const [groupType, setGroupType] = useState(ALL);
   const [type, setType] = useState(ALL);
   const [difficulty, setDifficulty] = useState(ALL);
   const [status, setStatus] = useState(ALL);
@@ -139,6 +147,7 @@ export function QuestionBankPage() {
         courseId: optionalNumber(course),
         courseIds: scopeCourseIds,
         moduleId: optionalNumber(module),
+        groupType: optionalString(groupType),
         questionType: optionalString(type),
         difficulty: optionalString(difficulty),
         status: optionalString(status),
@@ -160,7 +169,7 @@ export function QuestionBankPage() {
     return () => { cancelled = true; };
     // scopeKey stands in for scopeCourseIds (a new array every render).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedQuery, course, module, type, difficulty, status, page, reloadKey, scopeKey, notAssigned]);
+  }, [debouncedQuery, course, module, groupType, type, difficulty, status, page, reloadKey, scopeKey, notAssigned]);
 
   // Any filter change starts back at page 1.
   const filterSetter = (setter: (v: string) => void) => (v: string) => {
@@ -170,6 +179,15 @@ export function QuestionBankPage() {
   const changeCourse = (v: string) => {
     setCourse(v);
     setModule(ALL);
+    setPage(1);
+  };
+  // A group holds one kind, so a group type narrows the question types to that kind.
+  const groupKind = groupType === ALL || groupType === 'NONE' ? null : asGroupKind(groupType);
+  const typeOptions = TYPE_OPTIONS.filter(o => o.value === ALL || !groupKind || kindOf(o.value) === groupKind);
+  const changeGroupType = (v: string) => {
+    setGroupType(v);
+    const kind = v === ALL || v === 'NONE' ? null : asGroupKind(v);
+    if (kind && type !== ALL && kindOf(type) !== kind) setType(ALL);
     setPage(1);
   };
   const changeQuery = (v: string) => {
@@ -230,10 +248,13 @@ export function QuestionBankPage() {
       key: 'groupId',
       label: 'Format',
       render: r => {
-        const groupId = asRow(r).groupId;
+        const { groupId, questionType } = asRow(r);
+        // A group holds one kind of question, so the question's own kind is the group's.
+        const kind = kindOf(questionType);
+        const label = kind ? GROUP_KIND_LABELS[kind] : 'Group';
         return groupId != null ? (
-          <span title={`Part of question group #${groupId} (shares one passage)`}>
-            <Badge variant="purple" className="whitespace-nowrap"><Icon.Layers className="w-3 h-3" /> Group #{groupId}</Badge>
+          <span title={`Part of ${label.toLowerCase()} group #${groupId} (shares one passage)`}>
+            <Badge variant="purple" className="whitespace-nowrap"><Icon.Layers className="w-3 h-3" /> {label} #{groupId}</Badge>
           </span>
         ) : (
           <Badge variant="default" className="whitespace-nowrap">Single</Badge>
@@ -303,11 +324,12 @@ export function QuestionBankPage() {
     },
   ];
 
-  const filtersActive = query !== '' || [course, module, type, difficulty, status].some(v => v !== ALL);
+  const filtersActive = query !== '' || [course, module, groupType, type, difficulty, status].some(v => v !== ALL);
   const clearFilters = () => {
     setQuery('');
     setCourse(ALL);
     setModule(ALL);
+    setGroupType(ALL);
     setType(ALL);
     setDifficulty(ALL);
     setStatus(ALL);
@@ -323,39 +345,45 @@ export function QuestionBankPage() {
         </Button>
       </div>
 
-      <div className="card px-4 py-3 flex flex-wrap lg:flex-nowrap items-center gap-3">
+      {/* Search on its own row, then the six filters in two even rows, Clear at the bottom right */}
+      <div className="card px-4 py-4 space-y-3">
         <SearchInput
-          className="w-full sm:w-60 lg:w-auto lg:min-w-0 lg:flex-[1.5]"
+          className="w-full"
           placeholder="Search questions…"
           value={query}
           onChange={e => changeQuery(e.target.value)}
           aria-label="Search questions"
         />
-        <Select
-          aria-label="Filter by course"
-          value={course}
-          onChange={changeCourse}
-          options={[{ label: 'All Courses', value: ALL }, ...(courses ?? []).map(c => ({ label: c.title, value: String(c.courseId) }))]}
-          className="w-full sm:w-48 lg:w-auto lg:min-w-0 lg:flex-[1.25]"
-        />
-        <Select
-          aria-label="Filter by module"
-          value={module}
-          onChange={filterSetter(setModule)}
-          disabled={course === ALL}
-          options={[
-            { label: course === ALL ? 'Select a course first' : 'All Modules', value: ALL },
-            ...modules.map(m => ({ label: m.title, value: String(m.moduleId) })),
-          ]}
-          className="w-full sm:w-48 lg:w-auto lg:min-w-0 lg:flex-[1.25]"
-        />
-        <Select aria-label="Filter by type" value={type} onChange={filterSetter(setType)} options={TYPE_OPTIONS} className="w-full sm:w-40 lg:w-auto lg:min-w-0 lg:flex-1" />
-        <Select aria-label="Filter by difficulty" value={difficulty} onChange={filterSetter(setDifficulty)} options={DIFFICULTY_OPTIONS} className="w-full sm:w-36 lg:w-auto lg:min-w-0 lg:flex-1" />
-        <Select aria-label="Filter by status" value={status} onChange={filterSetter(setStatus)} options={STATUS_OPTIONS} className="w-full sm:w-32 lg:w-auto lg:min-w-0 lg:flex-1" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <SearchableSelect
+            label="Course"
+            value={course}
+            onChange={changeCourse}
+            options={[{ label: 'All Courses', value: ALL }, ...(courses ?? []).map(c => ({ label: c.title, value: String(c.courseId) }))]}
+            searchPlaceholder="Search courses…"
+            emptyText="No courses match"
+          />
+          <Select
+            label="Module"
+            value={module}
+            onChange={filterSetter(setModule)}
+            disabled={course === ALL}
+            options={[
+              { label: course === ALL ? 'Select a course first' : 'All Modules', value: ALL },
+              ...modules.map(m => ({ label: m.title, value: String(m.moduleId) })),
+            ]}
+          />
+          <Select label="Group type" value={groupType} onChange={changeGroupType} options={GROUP_TYPE_OPTIONS} />
+          <Select label="Question type" value={type} onChange={filterSetter(setType)} options={typeOptions} />
+          <Select label="Difficulty" value={difficulty} onChange={filterSetter(setDifficulty)} options={DIFFICULTY_OPTIONS} />
+          <Select label="Status" value={status} onChange={filterSetter(setStatus)} options={STATUS_OPTIONS} />
+        </div>
         {filtersActive && (
-          <button type="button" onClick={clearFilters} className="shrink-0 whitespace-nowrap text-sm font-medium text-brand-ink hover:underline">
-            Clear filters
-          </button>
+          <div className="flex justify-end">
+            <button type="button" onClick={clearFilters} className="inline-flex items-center gap-1 whitespace-nowrap text-sm font-medium text-brand-ink hover:underline">
+              <Icon.X className="w-3.5 h-3.5" /> Clear filters
+            </button>
+          </div>
         )}
       </div>
 

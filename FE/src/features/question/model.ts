@@ -34,13 +34,43 @@ export const QUESTION_TYPE_OPTIONS: { label: string; value: EditableQuestionType
   { label: 'True / False', value: 'TRUE_FALSE' },
   { label: 'Matching', value: 'MATCHING' },
   { label: 'Fill in the Blank', value: 'FILL_BLANK' },
+  { label: 'Ordering', value: 'ORDERING' },
   { label: 'Essay', value: 'ESSAY' },
   { label: 'Diagram', value: 'DIAGRAM' },
-  { label: 'Ordering', value: 'ORDERING' },
 ];
 
 /** Types the AI can draft (ExamAiServiceImpl.TYPES) — AI-01 doesn't draft ORDERING yet. */
 export const AI_QUESTION_TYPE_OPTIONS = QUESTION_TYPE_OPTIONS.filter(t => t.value !== 'ORDERING') as { label: string; value: QuestionType }[];
+
+/**
+ * A question group holds exactly one kind (QuestionTypeUtil): every choice /
+ * blank / matching / ordering type is a QUIZ, the others are their own kind.
+ */
+export type GroupKind = 'QUIZ' | 'ESSAY' | 'CODE' | 'DIAGRAM';
+
+const QUIZ_TYPES: QuestionType[] = ['SINGLE_CHOICE', 'MULTIPLE_CHOICE', 'TRUE_FALSE', 'MATCHING', 'FILL_BLANK', 'ORDERING'];
+
+export const GROUP_KIND_LABELS: Record<GroupKind, string> = { QUIZ: 'Quiz', ESSAY: 'Essay', CODE: 'Code', DIAGRAM: 'Diagram' };
+
+/** Kinds a new group can be created with — CODE has no question editor yet. */
+export const GROUP_KIND_OPTIONS: { label: string; value: GroupKind; hint: string }[] = [
+  { label: 'Quiz', value: 'QUIZ', hint: 'Single choice, multiple choice, true/false, matching, fill in the blank, ordering' },
+  { label: 'Essay', value: 'ESSAY', hint: 'Written answers graded by a rubric' },
+  { label: 'Diagram', value: 'DIAGRAM', hint: 'Diagram answers graded by a rubric' },
+];
+
+export function kindOf(type: string | null | undefined): GroupKind | null {
+  if (!type) return null;
+  if (QUIZ_TYPES.includes(type as QuestionType)) return 'QUIZ';
+  return type === 'ESSAY' || type === 'CODE' || type === 'DIAGRAM' ? type : null;
+}
+
+export const asGroupKind = (v: string | null | undefined): GroupKind | null =>
+  v === 'QUIZ' || v === 'ESSAY' || v === 'CODE' || v === 'DIAGRAM' ? v : null;
+
+/** The editor's types a group of `kind` accepts (all of them when the kind is not set). */
+export const typesOfKind = (kind: GroupKind | null): EditableQuestionType[] =>
+  QUESTION_TYPE_OPTIONS.map(o => o.value).filter(t => !kind || kindOf(t) === kind);
 
 /** QuestionValidator's drawioXml limit (500 KB, counted in UTF-8 bytes). */
 export const MAX_DRAWIO_XML_BYTES = 512000;

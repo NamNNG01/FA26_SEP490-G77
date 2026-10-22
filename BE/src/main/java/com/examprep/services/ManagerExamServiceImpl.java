@@ -6,6 +6,7 @@ import com.examprep.entities.Module;
 import com.examprep.exceptions.*;
 import com.examprep.repositories.*;
 import com.examprep.security.UserPrincipal;
+import com.examprep.util.QuestionTypeUtil;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.criteria.*;
@@ -43,7 +44,7 @@ public class ManagerExamServiceImpl implements ManagerExamService {
         if(courseId!=null) access(user,courseId,false);
         if(moduleId!=null) access(user,module(moduleId).getCourse().getCourseId(),false);
         if(status!=null && !Set.of("DRAFT","PUBLISHED","ARCHIVED").contains(status)) throw bad("Invalid exam status.");
-        if(kind!=null && !kind.equals("all") && !KINDS.contains(kind) && !kind.equals("MIXED")) throw bad("Invalid examKind.");
+        if(kind!=null && !kind.equals("all") && !KINDS.contains(kind)) throw bad("Invalid examKind.");
         Specification<Exam> filter=(root,query,cb)-> {
             Join<Exam,Course> c=root.join("course",JoinType.LEFT);
             Join<Exam,Module> m=root.join("module",JoinType.LEFT);
@@ -60,14 +61,8 @@ public class ManagerExamServiceImpl implements ManagerExamService {
             if(search!=null && !search.isBlank()) where.add(cb.like(cb.lower(root.get("title")),pattern(search),'!'));
             if(kind!=null && !kind.equals("all")) {
                 List<Predicate> present=KINDS.stream().map(k->familyPresent(root,query,cb,k)).toList();
-                if(kind.equals("MIXED")) {
-                    List<Predicate> pairs=new ArrayList<>();
-                    for(int i=0;i<4;i++) for(int j=i+1;j<4;j++) pairs.add(cb.and(present.get(i),present.get(j)));
-                    where.add(cb.or(pairs.toArray(Predicate[]::new)));
-                } else {
-                    for(int i=0;i<4;i++) if(!KINDS.get(i).equals(kind)) where.add(cb.not(present.get(i)));
-                    if(!kind.equals("QUIZ")) where.add(present.get(KINDS.indexOf(kind)));
-                }
+                for(int i=0;i<4;i++) if(!KINDS.get(i).equals(kind)) where.add(cb.not(present.get(i)));
+                if(!kind.equals("QUIZ")) where.add(present.get(KINDS.indexOf(kind)));
             }
             return cb.and(where.toArray(Predicate[]::new));
         };
@@ -204,13 +199,17 @@ public class ManagerExamServiceImpl implements ManagerExamService {
         Map<String,Question> bank=new LinkedHashMap<>();
         for(Question q:questions.findImportBank(courseId(e),e.getModule()==null?null:e.getModule().getModuleId())) bank.putIfAbsent(QuestionTextParser.hash(q.getContent()),q);
         Set<String> attached=new HashSet<>(); for(Question q:examQuestions(e).values()) attached.add(QuestionTextParser.hash(q.getContent()));
-        int imported=0,reused=0,skipped=0; List<Long> ids=new ArrayList<>(); QuestionGroup importGroup=null;
+        int imported=0,reused=0,skipped=0; List<Long> ids=new ArrayList<>(); Map<String,QuestionGroup> importGroups=new LinkedHashMap<>();
         for(var item:parsed) {
             String hash=QuestionTextParser.hash(item.content());
             if(!attached.add(hash)) { skipped++; continue; }
             Question q=bank.get(hash);
             if(q==null) {
-                if(e.getModule()==null && importGroup==null) importGroup=groups.save(QuestionGroup.builder().course(e.getCourse()).title(e.getTitle()+" import").build());
+                QuestionGroup importGroup=null;
+                if(e.getModule()==null) {
+                    String kind=QuestionTypeUtil.kindOf(item.type());
+                    importGroup=importGroups.computeIfAbsent(kind,k->groups.save(QuestionGroup.builder().course(e.getCourse()).questionType(k).title(e.getTitle()+" import ("+k+")").build()));
+                }
                 q=questions.save(Question.builder().course(e.getCourse()!=null?e.getCourse():e.getModule().getCourse()).module(e.getModule()).group(importGroup).content(item.content()).questionType(item.type()).status("DRAFT").build());
                 for(int i=0;i<item.options().size();i++) options.save(AnswerOption.builder().question(q).optionText(item.options().get(i)).isCorrect(i==item.correctIndex()).orderIndex(i).build());
                 bank.put(hash,q); imported++;
@@ -301,7 +300,7 @@ public class ManagerExamServiceImpl implements ManagerExamService {
         List<ExamConfig> configured=configs.findByExamExamIdOrderByConfigIdAsc(e.getExamId());
         Map<Long,Question> all=examQuestions(e); Set<String> families=new HashSet<>(); all.values().forEach(q->families.add(family(q.getQuestionType())));
         configured.forEach(c->families.add(family(c.getQuestionType())));
-        String kind=families.size()>1?"MIXED":families.stream().findFirst().orElse("QUIZ");
+        String kind=families.size()>1?null:families.stream().findFirst().orElse("QUIZ");
         int count=all.size()+configured.stream().mapToInt(ExamConfig::getNumberOfQuestions).sum();
         BigDecimal total=direct.stream().map(ExamQuestion::getPoints).reduce(BigDecimal.ZERO,BigDecimal::add)
                 .add(grouped.stream().map(ExamGroup::getPoints).reduce(BigDecimal.ZERO,BigDecimal::add))
@@ -318,7 +317,7 @@ public class ManagerExamServiceImpl implements ManagerExamService {
             l.getGroup().getPassageText(),questions.findByGroupGroupIdOrderByQuestionIdAsc(l.getGroup().getGroupId()).size()); }
     private BigDecimal points(BigDecimal p) { if(p==null)return BigDecimal.ONE; if(p.signum()<=0 || p.compareTo(new BigDecimal("999.99"))>0 || p.scale()>2) throw bad("Points must be positive, at most 999.99 and have at most two decimal places."); return p; }
     private int next(List<Integer> values) { int max=values.stream().mapToInt(Integer::intValue).max().orElse(-1); if(max==Integer.MAX_VALUE)throw conflict("Question order limit reached."); return max+1; }
-    private String family(String type) { return KINDS.contains(type)?type:"QUIZ"; }
+    private String family(String type) { String kind=QuestionTypeUtil.kindOf(type); return kind==null?"QUIZ":kind; }
     private String pattern(String s) { return "%"+s.strip().toLowerCase(Locale.ROOT).replace("!","!!").replace("%","!%").replace("_","!_")+"%"; }
     private boolean admin(UserPrincipal user) { return "ADMIN".equals(user.getRole()); }
     private void positive(Long id) { if(id==null || id<=0)throw bad("ID must be a positive integer."); }

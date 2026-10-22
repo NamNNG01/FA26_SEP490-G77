@@ -4,14 +4,16 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Badge } from "@/components/ui/Badge";
+import { Switch } from "@/components/ui/Switch";
 import { Table } from "@/components/ui/Table";
 import { Tabs } from "@/components/ui/Tabs";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { Progress } from "@/components/ui/Progress";
 import { Alert } from "@/components/ui/Alert";
-import { ToastNotification } from "@/components/ui/ToastNotification";
+import { useToast } from "@/components/ui/ToastHost";
 import { Modal } from "@/components/ui/Modal";
 import { Avatar } from "@/components/ui/Avatar";
+import { Dropdown } from "@/components/ui/Dropdown";
 import { SearchInput } from "@/components/common/SearchInput";
 import { Pagination } from "@/components/ui/Pagination";
 import { Icon } from "@/assets/icons";
@@ -22,11 +24,20 @@ import {
   type CourseModuleResponse,
   type CategoryResponse,
   type CourseStudentItem,
+  type UpdateCourseRequest,
 } from "@/services/course.service";
 import { AddModuleModal } from "@/components/modules/AddModuleModal";
 import { EditModuleModal } from "@/components/modules/EditModuleModal";
 import { useAuth } from "@/auth/authContext";
 import { Role } from "@/utils/permissions";
+import { api } from "@/services/api";
+import { getApiErrorMessage } from "@/utils/apiError";
+
+interface ManagerOption {
+  id: number;
+  name: string;
+  email?: string;
+}
 
 function formatTimestamp(isoString: string | null | undefined): string {
   if (!isoString) return "—";
@@ -92,6 +103,7 @@ export function CourseDetailPage({
   const rawId = paramsProp?.courseId ?? routeParams.courseId ?? "1";
   const courseId = rawId;
   const { user } = useAuth();
+  const notification = useToast();
   const isAdmin = user?.role === Role.ADMIN;
   const canManageCourse = isAdmin;
   const canCreateModule = !isAdmin;
@@ -108,8 +120,30 @@ export function CourseDetailPage({
   const [isPublished, setIsPublished] = useState(false);
   const [price, setPrice] = useState("0");
   const [saving, setSaving] = useState(false);
+  const hasCourseChanges = Boolean(
+    course &&
+      (title.trim() !== course.title.trim() ||
+        description.trim() !== (course.description ?? "").trim() ||
+        categoryId !== String(course.categoryId) ||
+        Number(price) !== Number(course.price) ||
+        isPublished !== course.isPublished),
+  );
+  const [managerOptions, setManagerOptions] = useState<ManagerOption[]>([]);
+  const [selectedManagerIds, setSelectedManagerIds] = useState<string[]>([]);
+  const [loadingManagers, setLoadingManagers] = useState(false);
+  const savedManagerIds = course
+    ? (course.managers?.length
+        ? course.managers.map((manager) => manager.userId)
+        : [course.managerId]
+      ).map(String)
+    : [];
+  const hasManagerChanges = canManageCourse &&
+    savedManagerIds.join(",") !== selectedManagerIds.join(",");
+  const hasAnyChanges = hasCourseChanges || hasManagerChanges;
 
   const [categories, setCategories] = useState<CategoryResponse[]>([]);
+  const [categoryError, setCategoryError] = useState<string | null>(null);
+  const [managerLoadError, setManagerLoadError] = useState<string | null>(null);
 
   const [modules, setModules] = useState<CourseModuleResponse[]>([]);
   const [isAddModuleOpen, setIsAddModuleOpen] = useState(false);
@@ -118,6 +152,9 @@ export function CourseDetailPage({
   const [moduleToDelete, setModuleToDelete] =
     useState<CourseModuleResponse | null>(null);
   const [deletingModule, setDeletingModule] = useState(false);
+  const [updatingModuleStatusId, setUpdatingModuleStatusId] = useState<
+    number | null
+  >(null);
 
   const [isDeleteCourseOpen, setIsDeleteCourseOpen] = useState(false);
   const [deletingCourse, setDeletingCourse] = useState(false);
@@ -129,24 +166,79 @@ export function CourseDetailPage({
   const [studentSearch, setStudentSearch] = useState("");
   const [studentStatus, setStudentStatus] = useState("all");
   const [loadingStudents, setLoadingStudents] = useState(false);
+  const [studentsError, setStudentsError] = useState<string | null>(null);
 
-  const [toast, setToast] = useState<{
-    type: "success" | "error";
-    message: string;
-  } | null>(null);
-
-  useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(null), 3500);
-    return () => clearTimeout(t);
-  }, [toast]);
+  const setToast = (value: { type: "success" | "error"; message: string } | null) => {
+    if (value) notification[value.type](value.message);
+  };
 
   useEffect(() => {
     courseService
       .getCategories()
-      .then(setCategories)
-      .catch(() => setCategories([]));
+      .then((items) => {
+        setCategories(items);
+        setCategoryError(null);
+      })
+      .catch((err) => {
+        setCategories([]);
+        setCategoryError(getApiErrorMessage(err, "Failed to load categories."));
+      });
   }, []);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    setLoadingManagers(true);
+    setManagerLoadError(null);
+    api
+      .get<{
+        data?:
+          | Array<{
+              userId?: number;
+              id?: number;
+              fullName?: string;
+              name?: string;
+              email?: string;
+            }>
+          | {
+              content?: Array<{
+                userId?: number;
+                id?: number;
+                fullName?: string;
+                name?: string;
+                email?: string;
+              }>;
+            };
+      }>("/admin/users?role=COURSE_MANAGER&status=ACTIVE")
+      .then((res) => {
+        const payload = res.data;
+        const users = Array.isArray(payload)
+          ? payload
+          : payload &&
+              typeof payload === "object" &&
+              Array.isArray(payload.content)
+            ? payload.content
+            : [];
+        setManagerOptions(
+          users
+            .map((manager) => ({
+              id: Number(manager.userId ?? manager.id),
+              name:
+                manager.fullName ||
+                manager.name ||
+                `Manager #${manager.userId ?? manager.id}`,
+              email: manager.email,
+            }))
+            .filter((manager) => Number.isFinite(manager.id) && manager.id > 0),
+        );
+      })
+      .catch((err) => {
+        setManagerOptions([]);
+        setManagerLoadError(
+          getApiErrorMessage(err, "Failed to load course managers."),
+        );
+      })
+      .finally(() => setLoadingManagers(false));
+  }, [isAdmin]);
 
   const loadCourseData = useCallback(async () => {
     setLoading(true);
@@ -160,6 +252,12 @@ export function CourseDetailPage({
       setIsPublished(data.isPublished);
       setPrice(String(data.price ?? 0));
       setModules(data.modules ?? []);
+      setSelectedManagerIds(
+        (data.managers?.length
+          ? data.managers.map((manager) => manager.userId)
+          : [data.managerId]
+        ).map(String),
+      );
     } catch (err: unknown) {
       const msg =
         err instanceof Error ? err.message : "Failed to load course details.";
@@ -176,6 +274,7 @@ export function CourseDetailPage({
   const loadStudents = useCallback(async () => {
     if (!courseId) return;
     setLoadingStudents(true);
+    setStudentsError(null);
     try {
       const res = await courseService.getCourseStudents(courseId, {
         search: studentSearch.trim() || undefined,
@@ -185,9 +284,12 @@ export function CourseDetailPage({
       });
       setStudents(res.content);
       setStudentTotal(res.totalElements);
-    } catch {
+    } catch (err) {
       setStudents([]);
       setStudentTotal(0);
+      setStudentsError(
+        getApiErrorMessage(err, "Failed to load enrolled students."),
+      );
     } finally {
       setLoadingStudents(false);
     }
@@ -201,18 +303,36 @@ export function CourseDetailPage({
 
   const handleSaveChanges = async () => {
     if (!course) return;
-    if (!title.trim()) {
+    if (!hasAnyChanges) return;
+    if (hasCourseChanges && !title.trim()) {
       setToast({ type: "error", message: "Course title cannot be empty." });
+      return;
+    }
+    const managerIds = selectedManagerIds
+      .map(Number)
+      .filter((id) => Number.isFinite(id) && id > 0);
+    if (hasManagerChanges && managerIds.length === 0) {
+      setToast({ type: "error", message: "Assign at least one course manager." });
       return;
     }
     setSaving(true);
     try {
-      const updated = await courseService.updateCourse(course.courseId, {
-        title: title.trim(),
-        description: description.trim() || undefined,
-        categoryId: categoryId ? Number(categoryId) : undefined,
-        price: Number(price) >= 0 ? Number(price) : 0,
-      });
+      const updatePayload: UpdateCourseRequest = {};
+      if (hasCourseChanges) {
+        updatePayload.title = title.trim();
+        updatePayload.description = description.trim() || undefined;
+        updatePayload.categoryId = categoryId ? Number(categoryId) : undefined;
+        updatePayload.price = Number(price) >= 0 ? Number(price) : 0;
+      }
+      if (hasManagerChanges) {
+        updatePayload.managerId = managerIds[0];
+        updatePayload.managerIds = managerIds.slice(1);
+      }
+
+      let updated = course;
+      if (Object.keys(updatePayload).length > 0) {
+        updated = await courseService.updateCourse(course.courseId, updatePayload);
+      }
 
       if (isPublished !== course.isPublished) {
         if (isPublished && modules.length === 0) {
@@ -223,14 +343,40 @@ export function CourseDetailPage({
         await courseService.publishCourse(course.courseId, isPublished);
       }
 
+      let savedManagers = updated.managers ?? course.managers;
+      let savedManagerId = updated.managerId;
+      let savedManagerName = updated.managerName;
+      if (hasManagerChanges) {
+        savedManagers = managerIds.map((userId, index) => {
+          const option = managerOptions.find((manager) => manager.id === userId);
+          const previous = course.managers?.find(
+            (manager) => manager.userId === userId,
+          );
+          return {
+            userId,
+            fullName: option?.name || previous?.fullName || `Manager #${userId}`,
+            email: option?.email || previous?.email,
+            primary: index === 0,
+          };
+        });
+        savedManagerId = managerIds[0];
+        savedManagerName = savedManagers[0].fullName;
+      }
+
       setCourse({
         ...updated,
+        managerId: savedManagerId,
+        managerName: savedManagerName,
+        managers: savedManagers,
         isPublished,
         modules,
       });
+      setSelectedManagerIds(
+        hasManagerChanges ? managerIds.map(String) : savedManagerIds,
+      );
       setToast({
         type: "success",
-        message: "Course details successfully updated.",
+        message: "Course changes saved successfully.",
       });
     } catch (err: unknown) {
       const msg =
@@ -260,7 +406,15 @@ export function CourseDetailPage({
     courseService
       .getCourseModules(courseId)
       .then(setModules)
-      .catch(() => {});
+      .catch((err) => {
+        setToast({
+          type: "error",
+          message: getApiErrorMessage(
+            err,
+            "Module was added, but the module list could not be refreshed.",
+          ),
+        });
+      });
   };
 
   const handleModuleUpdated = (updatedMod: CourseModuleResponse | unknown) => {
@@ -277,7 +431,15 @@ export function CourseDetailPage({
     courseService
       .getCourseModules(courseId)
       .then(setModules)
-      .catch(() => {});
+      .catch((err) => {
+        setToast({
+          type: "error",
+          message: getApiErrorMessage(
+            err,
+            "Module was updated, but the module list could not be refreshed.",
+          ),
+        });
+      });
   };
 
   const handleRemoveModule = async () => {
@@ -299,6 +461,34 @@ export function CourseDetailPage({
       setToast({ type: "error", message: msg });
     } finally {
       setDeletingModule(false);
+    }
+  };
+
+  const handleModuleStatusChange = async (module: CourseModuleResponse) => {
+    if (updatingModuleStatusId !== null) return;
+    const nextStatus = module.status === "VISIBLE" ? "HIDDEN" : "VISIBLE";
+    setUpdatingModuleStatusId(module.moduleId);
+    try {
+      const updated = await courseService.updateModuleStatus(
+        module.moduleId,
+        nextStatus,
+      );
+      setModules((prev) =>
+        prev.map((item) =>
+          item.moduleId === updated.moduleId ? updated : item,
+        ),
+      );
+      setToast({
+        type: "success",
+        message: `Module "${updated.title}" is now ${updated.status.toLowerCase()}.`,
+      });
+    } catch (err: unknown) {
+      setToast({
+        type: "error",
+        message: getApiErrorMessage(err, "Failed to update module status."),
+      });
+    } finally {
+      setUpdatingModuleStatusId(null);
     }
   };
 
@@ -424,23 +614,22 @@ export function CourseDetailPage({
           />
           <h2 className="text-xl font-bold text-content mt-1">Course Detail</h2>
         </div>
-
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={handleCancel} disabled={saving}>
-            {canManageCourse ? "Cancel" : "Back"}
-          </Button>
-          {canManageCourse && (
-            <Button
-              icon={<Icon.Check className="w-4 h-4" />}
-              onClick={handleSaveChanges}
-              loading={saving}
-              disabled={saving}
-            >
-              Save Changes
-            </Button>
-          )}
-        </div>
       </div>
+
+      {categoryError && (
+        <Alert
+          type="error"
+          title="Could not load categories"
+          message={categoryError}
+        />
+      )}
+      {managerLoadError && (
+        <Alert
+          type="error"
+          title="Could not load course managers"
+          message={managerLoadError}
+        />
+      )}
 
       <Tabs
         tabs={["Course Details & Modules", "Enrolled Students"]}
@@ -457,6 +646,17 @@ export function CourseDetailPage({
                 <Badge variant={isPublished ? "success" : "warning"}>
                   {isPublished ? "Published" : "Draft"}
                 </Badge>
+                {canManageCourse && (
+                  <Button
+                    size="sm"
+                    icon={<Icon.Check className="w-4 h-4" />}
+                    onClick={handleSaveChanges}
+                    loading={saving}
+                    disabled={saving || !hasAnyChanges}
+                  >
+                    Save Changes
+                  </Button>
+                )}
                 {canManageCourse && (
                   <Button
                     variant="ghost"
@@ -531,28 +731,26 @@ export function CourseDetailPage({
                   hint="Slug is auto-generated by the server"
                 />
 
-                <div className="grid grid-cols-2 gap-3">
-                  <Input
-                    label="Price ($)"
-                    type="number"
-                    min={0}
-                    value={price}
-                    disabled={!canManageCourse}
-                    readOnly={!canManageCourse}
-                    onChange={(e) => setPrice(e.target.value)}
-                    hint={canManageCourse ? "0 = Free" : undefined}
-                  />
-                  <div>
-                    <label className="text-sm font-medium text-content-secondary block mb-1.5">
-                      Primary Manager
-                    </label>
-                    <p className="h-9 px-3 flex items-center text-sm font-medium text-content-secondary bg-surface-alt rounded-[10px] border border-line truncate">
-                      {course.managerName || `ID: ${course.managerId}`}
-                    </p>
-                  </div>
-                </div>
+                <Input
+                  label="Price ($)"
+                  type="number"
+                  min={0}
+                  value={price}
+                  disabled={!canManageCourse}
+                  readOnly={!canManageCourse}
+                  onChange={(e) => setPrice(e.target.value)}
+                  hint={canManageCourse ? "0 = Free" : undefined}
+                />
 
-                <CourseManagerList course={course} />
+                <CourseManagerList
+                  course={course}
+                  canEdit={canManageCourse}
+                  managerOptions={managerOptions}
+                  selectedManagerIds={selectedManagerIds}
+                  onSelectedManagerIdsChange={setSelectedManagerIds}
+                  loadingManagers={loadingManagers}
+                  saving={saving}
+                />
               </div>
             </div>
           </div>
@@ -594,18 +792,19 @@ export function CourseDetailPage({
                 <div className="hidden sm:grid grid-cols-12 gap-4 px-6 py-3 bg-surface-alt text-xs font-semibold text-content-soft">
                   <span className="col-span-1">Order</span>
                   <span
-                    className={canCreateModule ? "col-span-4" : "col-span-5"}
+                    className={canCreateModule ? "col-span-3" : "col-span-4"}
                   >
                     Module Name
                   </span>
                   <span
-                    className={canCreateModule ? "col-span-4" : "col-span-5"}
+                    className={canCreateModule ? "col-span-2" : "col-span-4"}
                   >
                     Description
                   </span>
+                  <span className="col-span-2 text-center">Status</span>
                   <span className="col-span-1 text-center">Exams</span>
                   {canCreateModule && (
-                    <span className="col-span-2 text-right">Actions</span>
+                    <span className="col-span-3 text-right">Actions</span>
                   )}
                 </div>
 
@@ -623,8 +822,8 @@ export function CourseDetailPage({
                     <div
                       className={
                         canCreateModule
-                          ? "col-span-4 min-w-0"
-                          : "col-span-5 min-w-0"
+                          ? "col-span-3 min-w-0"
+                          : "col-span-4 min-w-0"
                       }
                     >
                       <p className="text-base font-semibold text-content truncate">
@@ -639,8 +838,8 @@ export function CourseDetailPage({
                     <div
                       className={
                         canCreateModule
-                          ? "col-span-4 min-w-0"
-                          : "col-span-5 min-w-0"
+                          ? "col-span-2 min-w-0"
+                          : "col-span-4 min-w-0"
                       }
                     >
                       <p className="text-sm text-content-soft truncate">
@@ -652,12 +851,29 @@ export function CourseDetailPage({
                       </p>
                     </div>
 
+                    <div className="col-span-2 flex flex-wrap items-center justify-center gap-2">
+                      <Badge
+                        variant={
+                          mod.status === "VISIBLE" ? "success" : "default"
+                        }
+                      >
+                        {mod.status === "VISIBLE" ? "Visible" : "Hidden"}
+                      </Badge>
+                    </div>
+
                     <div className="col-span-1 text-center hidden sm:block">
                       <Badge variant="default">{mod.examCount}</Badge>
                     </div>
 
                     {canCreateModule && (
-                      <div className="col-span-2 flex items-center justify-end gap-1">
+                      <div className="col-span-3 flex items-center justify-end gap-1">
+                        <Switch
+                          size="sm"
+                          checked={mod.status === "VISIBLE"}
+                          onChange={() => void handleModuleStatusChange(mod)}
+                          disabled={updatingModuleStatusId !== null}
+                          label={mod.status === "VISIBLE" ? "Shown" : "Hidden"}
+                        />
                         <Button
                           variant="ghost"
                           size="sm"
@@ -736,6 +952,14 @@ export function CourseDetailPage({
             <div className="p-12 text-center text-content-subtle">
               <div className="inline-block w-6 h-6 border-3 border-primary border-t-transparent rounded-full animate-spin mb-2" />
               <p className="text-sm">Loading enrolled students…</p>
+            </div>
+          ) : studentsError ? (
+            <div className="p-6">
+              <Alert
+                type="error"
+                title="Could not load enrolled students"
+                message={studentsError}
+              />
             </div>
           ) : students.length === 0 ? (
             <div className="p-12 text-center text-content-soft">
@@ -848,24 +1072,29 @@ export function CourseDetailPage({
         </div>
       </Modal>
 
-      {toast && (
-        <ToastNotification
-          variant={toast.type}
-          message={toast.message}
-          onClose={() => setToast(null)}
-        />
-      )}
     </div>
   );
 }
 
 function CourseManagerList({
   course,
-}: {
+  canEdit,
+  managerOptions,
+  selectedManagerIds,
+  onSelectedManagerIdsChange,
+  loadingManagers,
+  saving,
+}: Readonly<{
   course: CourseDetailResponse & { managers?: CourseManagerItem[] };
-}) {
+  canEdit: boolean;
+  managerOptions: ManagerOption[];
+  selectedManagerIds: string[];
+  onSelectedManagerIdsChange: (ids: string[]) => void;
+  loadingManagers: boolean;
+  saving: boolean;
+}>) {
+  const INITIAL_SHOW = 3;
   const [expanded, setExpanded] = useState(false);
-
   const managerList: CourseManagerItem[] =
     course.managers && course.managers.length > 0
       ? course.managers
@@ -877,65 +1106,140 @@ function CourseManagerList({
           },
         ];
 
-  const INITIAL_SHOW = 3;
+  const availableManagers = [
+    ...managerOptions,
+    ...managerList
+      .filter(
+        (manager) =>
+          !managerOptions.some((option) => option.id === manager.userId),
+      )
+      .map((manager) => ({
+        id: manager.userId,
+        name: manager.fullName,
+        email: manager.email,
+      })),
+  ];
+  const selectedManagers = selectedManagerIds
+    .map((id) => availableManagers.find((manager) => String(manager.id) === id))
+    .filter((manager): manager is ManagerOption => Boolean(manager));
   const hasMore = managerList.length > INITIAL_SHOW;
-  const visible = expanded ? managerList : managerList.slice(0, INITIAL_SHOW);
+  const visible = expanded || !hasMore
+    ? managerList
+    : managerList.slice(0, INITIAL_SHOW);
 
   return (
-    <div>
-      <label className="text-sm font-medium text-content-secondary block mb-2">
-        Course Managers
-        <span className="ml-1.5 text-xs font-normal text-content-soft">
-          ({managerList.length})
-        </span>
-      </label>
-      <div className="rounded-[10px] border border-line overflow-hidden">
-        {visible.map((m, idx) => (
-          <div
-            key={m.userId}
-            className={`flex items-center gap-3 px-3 py-2.5 text-sm ${idx > 0 ? "border-t border-line-faint" : ""} bg-surface-alt`}
-          >
-            <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-              <span className="text-xs font-bold text-primary">
-                {m.fullName.charAt(0).toUpperCase()}
-              </span>
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-content truncate">
-                {m.fullName}
-              </p>
-              {m.email && (
-                <p className="text-xs text-content-soft truncate">{m.email}</p>
-              )}
-            </div>
-            {idx === 0 && (
-              <span className="shrink-0 text-[11px] font-semibold text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">
-                Primary
-              </span>
-            )}
-          </div>
-        ))}
-        {hasMore && (
-          <button
-            type="button"
-            onClick={() => setExpanded((e) => !e)}
-            className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-content-soft hover:text-primary hover:bg-primary/5 border-t border-line-faint transition-colors"
-          >
-            {expanded ? (
-              <>
-                <Icon.ChevronDown className="w-3.5 h-3.5 rotate-180" />
-                Show less
-              </>
-            ) : (
-              <>
-                <Icon.ChevronDown className="w-3.5 h-3.5" />
-                Show {managerList.length - INITIAL_SHOW} more manager
-                {managerList.length - INITIAL_SHOW !== 1 ? "s" : ""}
-              </>
-            )}
-          </button>
-        )}
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <label className="text-sm font-medium text-content-secondary">
+          Course Managers
+          <span className="ml-1.5 text-xs font-normal text-content-soft">
+            ({managerList.length})
+          </span>
+        </label>
       </div>
+      {canEdit && (
+        <Dropdown
+          multi
+          search
+          searchPlaceholder="Search course managers..."
+          values={selectedManagerIds}
+          onSelectMulti={(values) =>
+            onSelectedManagerIdsChange(values.map(String))
+          }
+          trigger={
+            <button
+              type="button"
+              disabled={loadingManagers || saving}
+              className="w-full flex items-center justify-between px-3 py-2 rounded-[10px] border border-line bg-surface text-sm text-left hover:border-primary disabled:opacity-60"
+            >
+              <span className="truncate text-content-secondary">
+                {loadingManagers
+                  ? "Loading course managers…"
+                  : selectedManagerIds.length > 0
+                    ? `${selectedManagerIds.length} manager${selectedManagerIds.length === 1 ? "" : "s"} selected`
+                    : "Select course managers…"}
+              </span>
+              <Icon.ChevronDown className="w-4 h-4 text-content-soft shrink-0 ml-2" />
+            </button>
+          }
+          items={availableManagers.map((manager) => ({
+            label: manager.email
+              ? `${manager.name} (${manager.email})`
+              : manager.name,
+            value: String(manager.id),
+          }))}
+        />
+      )}
+      {canEdit && selectedManagers.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {selectedManagers.map((manager) => (
+            <span
+              key={manager.id}
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-medium"
+            >
+              {manager.name}
+              <button
+                type="button"
+                onClick={() =>
+                  onSelectedManagerIdsChange(
+                    selectedManagerIds.filter(
+                      (id) => id !== String(manager.id),
+                    ),
+                  )
+                }
+                className="hover:text-danger transition-colors"
+                aria-label={`Remove ${manager.name}`}
+              >
+                <Icon.X className="w-3 h-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      {!canEdit && (
+        <div className="rounded-[10px] border border-line overflow-hidden">
+          {visible.map((manager, idx) => (
+            <div
+              key={manager.userId}
+              className={`flex items-center gap-3 px-3 py-2.5 text-sm ${idx > 0 ? "border-t border-line-faint" : ""} bg-surface-alt`}
+            >
+              <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                <span className="text-xs font-bold text-primary">
+                  {manager.fullName.charAt(0).toUpperCase()}
+                </span>
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-content truncate">
+                  {manager.fullName}
+                </p>
+                {manager.email && (
+                  <p className="text-xs text-content-soft truncate">{manager.email}</p>
+                )}
+              </div>
+            </div>
+          ))}
+          {hasMore && (
+            <button
+              type="button"
+              onClick={() => setExpanded((value) => !value)}
+              className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-content-soft hover:text-primary hover:bg-primary/5 border-t border-line-faint transition-colors"
+            >
+              {expanded ? (
+                <>
+                  <Icon.ChevronDown className="w-3.5 h-3.5 rotate-180" />
+                  Show less
+                </>
+              ) : (
+                <>
+                  <Icon.ChevronDown className="w-3.5 h-3.5" />
+                  Show {managerList.length - INITIAL_SHOW} more manager
+                  {managerList.length - INITIAL_SHOW !== 1 ? "s" : ""}
+                </>
+              )}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

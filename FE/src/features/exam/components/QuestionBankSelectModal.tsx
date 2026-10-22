@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { Select } from "@/components/ui/Select";
 import { Input } from "@/components/ui/Input";
+import { Alert } from "@/components/ui/Alert";
 import { SearchInput } from "@/components/common/SearchInput";
 import { Icon } from "@/assets/icons";
 import { examService, type BankQuestionItem } from "@/services/exam.service";
@@ -13,6 +14,7 @@ import {
   type CourseSummaryItem,
   type CourseModuleResponse,
 } from "@/services/course.service";
+import { getApiErrorMessage } from "@/utils/apiError";
 
 interface QuestionBankSelectModalProps {
   open: boolean;
@@ -55,19 +57,30 @@ export function QuestionBankSelectModal({
   const [page, setPage] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [totalElements, setTotalElements] = useState(0);
+  const [coursesError, setCoursesError] = useState<string | null>(null);
+  const [modulesError, setModulesError] = useState<string | null>(null);
+  const [questionsError, setQuestionsError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
     courseService.getCourses().then((res) => {
       setCourses(res.content || []);
+      setCoursesError(null);
+    }).catch((err) => {
+      setCourses([]);
+      setCoursesError(getApiErrorMessage(err, "Failed to load courses."));
     });
   }, [open]);
 
   useEffect(() => {
     if (!open) return;
     if (courseId) {
+      setModulesError(null);
       courseService.getCourseModules(courseId).then((mods) => {
         setModules(mods || []);
+      }).catch((err) => {
+        setModules([]);
+        setModulesError(getApiErrorMessage(err, "Failed to load course modules."));
       });
     } else {
       setModules([]);
@@ -78,6 +91,7 @@ export function QuestionBankSelectModal({
   useEffect(() => {
     if (!open) return;
     setFetching(true);
+    setQuestionsError(null);
     const timer = setTimeout(() => {
       examService
         .getQuestions({
@@ -98,8 +112,9 @@ export function QuestionBankSelectModal({
           setTotalPages(res.totalPages || 1);
           setTotalElements(res.totalElements || filtered.length);
         })
-        .catch(() => {
+        .catch((err) => {
           setQuestions([]);
+          setQuestionsError(getApiErrorMessage(err, "Failed to load questions."));
         })
         .finally(() => {
           setFetching(false);
@@ -212,6 +227,9 @@ export function QuestionBankSelectModal({
       }
     >
       <div className="space-y-4">
+        {coursesError && <Alert type="error" title="Could not load courses" message={coursesError} />}
+        {modulesError && <Alert type="error" title="Could not load modules" message={modulesError} />}
+        {questionsError && <Alert type="error" title="Could not load questions" message={questionsError} />}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-2.5">
           <SearchInput
             placeholder="Search question text…"
@@ -297,6 +315,10 @@ export function QuestionBankSelectModal({
           {fetching ? (
             <div className="py-12 text-center text-sm text-content-subtle">
               Loading questions from bank…
+            </div>
+          ) : questionsError ? (
+            <div className="py-12 text-center text-sm text-danger">
+              Questions could not be loaded. Retry by changing a filter.
             </div>
           ) : questions.length === 0 ? (
             <div className="py-12 text-center text-sm text-content-subtle">

@@ -57,6 +57,10 @@ public interface QuestionRepository extends JpaRepository<Question, Long>, JpaSp
             "GROUP BY q.group.groupId")
     List<Object[]> countByGroupIds(@Param("groupIds") Collection<Long> groupIds);
 
+    @Query("SELECT DISTINCT q.questionType FROM Question q " +
+            "WHERE q.group.groupId = :groupId AND q.deletedAt IS NULL")
+    List<String> findDistinctQuestionTypesByGroupId(@Param("groupId") Long groupId);
+
     @Modifying
     @Query("UPDATE Question q SET q.group = null WHERE q.group.groupId = :groupId")
     int detachFromGroup(@Param("groupId") Long groupId);

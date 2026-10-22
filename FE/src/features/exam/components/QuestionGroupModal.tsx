@@ -5,7 +5,8 @@ import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
 import { SearchInput } from '@/components/common/SearchInput';
 import { Icon } from '@/assets/icons';
-import { examService, type QuestionGroupItem } from '@/services/exam.service';
+import { examService, type ExamKind, type QuestionGroupItem } from '@/services/exam.service';
+import { getApiErrorMessage } from '@/utils/apiError';
 
 interface QuestionGroupModalProps {
   open: boolean;
@@ -14,6 +15,7 @@ interface QuestionGroupModalProps {
   existingGroupIds: Set<number>;
   courseId?: number;
   moduleId?: number;
+  questionType: ExamKind;
   loading?: boolean;
 }
 
@@ -24,6 +26,7 @@ export function QuestionGroupModal({
   existingGroupIds,
   courseId,
   moduleId,
+  questionType,
   loading = false,
 }: QuestionGroupModalProps) {
   const [tab, setTab] = useState<'existing' | 'new'>('existing');
@@ -45,18 +48,20 @@ export function QuestionGroupModal({
       .getQuestionGroups({
         courseId,
         moduleId,
+        questionType,
         search: search.trim() || undefined,
       })
       .then((res) => {
         setGroups(res.content || []);
       })
-      .catch(() => {
+      .catch((err) => {
         setGroups([]);
+        setErrorMsg(getApiErrorMessage(err, 'Failed to load question groups.'));
       })
       .finally(() => {
         setFetching(false);
       });
-  }, [open, search, courseId, moduleId]);
+  }, [open, search, courseId, moduleId, questionType]);
 
   useEffect(() => {
     if (open) {
@@ -88,12 +93,13 @@ export function QuestionGroupModal({
       const created = await examService.createQuestionGroup({
         courseId,
         moduleId,
+        questionType,
         title: newTitle.trim(),
         passageText: newPassage.trim(),
       });
       onSelectGroup(created, Number(points) > 0 ? Number(points) : 1);
-    } catch {
-      setErrorMsg('Failed to create question group.');
+    } catch (err) {
+      setErrorMsg(getApiErrorMessage(err, 'Failed to create question group.'));
     } finally {
       setCreating(false);
     }
@@ -151,6 +157,7 @@ export function QuestionGroupModal({
       }
     >
       <div className="space-y-4">
+        {errorMsg && <p className="text-sm text-danger font-medium">{errorMsg}</p>}
         <div className="flex border-b border-line">
           <button
             type="button"
@@ -241,7 +248,6 @@ export function QuestionGroupModal({
           </div>
         ) : (
           <div className="space-y-3">
-            {errorMsg && <p className="text-xs text-danger font-medium">{errorMsg}</p>}
             <Input
               label="Group Title *"
               placeholder="e.g. Reading Passage 1: Distributed Consensus"

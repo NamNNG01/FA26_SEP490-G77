@@ -6,27 +6,21 @@ import { Icon } from '@/assets/icons';
 
 export function ExamResultPage() {
   const score = 87;
-  const passed = score >= 70;
   return (
     <div className="p-8 max-w-3xl mx-auto space-y-6">
       <div className="card p-8 text-center">
-        <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 ${passed ? 'bg-success-light' : 'bg-danger-light'}`}>
-          {passed ? <Icon.Trophy className={`w-10 h-10 text-success`} /> : <Icon.XCircle className="w-10 h-10 text-danger" />}
+        <div className="w-20 h-20 rounded-full bg-primary-light flex items-center justify-center mx-auto mb-4">
+          <Icon.ClipboardList className="w-10 h-10 text-primary" />
         </div>
-        <h2 className="text-2xl font-extrabold text-content">{passed ? 'Congratulations!' : 'Keep Trying!'}</h2>
+        <h2 className="text-2xl font-extrabold text-content">Exam Complete</h2>
         <p className="text-lg text-content-soft mt-1">ML Fundamentals Final Exam</p>
         <div className="mt-6 flex items-center justify-center gap-8">
           <div className="text-center">
-            <p className={`text-[clamp(2.5rem,1.5rem+4vw,3.5rem)] font-black leading-none ${passed ? 'text-success' : 'text-danger'}`}>{score}%</p>
+            <p className="text-[clamp(2.5rem,1.5rem+4vw,3.5rem)] font-black leading-none text-content">{score}%</p>
             <p className="text-sm text-content-subtle mt-1">Your Score</p>
           </div>
-          <div className="w-px h-16 bg-surface-muted" />
-          <div className="text-center">
-            <p className="text-[clamp(2.5rem,1.5rem+4vw,3.5rem)] font-black leading-none text-content-subtle">70%</p>
-            <p className="text-sm text-content-subtle mt-1">Pass Mark</p>
-          </div>
         </div>
-        <Badge variant={passed ? 'success' : 'danger'} className="mt-4 text-base px-4 py-1">{passed ? 'PASSED' : 'FAILED'}</Badge>
+        <Badge variant="info" className="mt-4 text-base px-4 py-1">COMPLETED</Badge>
       </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
@@ -63,8 +57,7 @@ export function ExamResultPage() {
       </div>
       <div className="flex gap-3">
         <Button variant="outline" icon={<Icon.Eye className="w-4 h-4" />} className="flex-1">Review Answers</Button>
-        {passed && <Button icon={<Icon.Award className="w-4 h-4" />} className="flex-1">View Certificate</Button>}
-        {!passed && <Button icon={<Icon.RefreshCw className="w-4 h-4" />} className="flex-1">Retake Exam</Button>}
+        <Button icon={<Icon.Award className="w-4 h-4" />} className="flex-1">View Certificate</Button>
       </div>
     </div>
   );

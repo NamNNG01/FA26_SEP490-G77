@@ -15,6 +15,7 @@ import com.examprep.exceptions.ForbiddenException;
 import com.examprep.exceptions.ResourceConflictException;
 import com.examprep.exceptions.ResourceNotFoundException;
 import com.examprep.repositories.*;
+import com.examprep.util.QuestionTypeUtil;
 import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
@@ -34,6 +35,9 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -56,15 +60,19 @@ public class QuestionGroupServiceImpl implements QuestionGroupService {
     @Override
     @Transactional(readOnly = true)
     public PageResponse<QuestionGroupResponse> getQuestionGroups(Long currentUserId, String currentUserRole,
-                                                                Long courseId, Long moduleId, String search,
-                                                                int page, int size) {
+                                                                Long courseId, Long moduleId, String questionType,
+                                                                String search, int page, int size) {
         boolean admin = isAdmin(currentUserRole);
         if (courseId != null && !admin && courseRepository.countOwnedCourse(courseId, currentUserId) == 0) {
             throw new ForbiddenException("You do not have access to this course.");
         }
 
+        String kind = questionType == null || questionType.isBlank()
+                ? null
+                : QuestionTypeUtil.requireKind(questionType.trim());
+
         Specification<QuestionGroup> specification =
-                buildSpecification(admin ? null : currentUserId, courseId, moduleId, normaliseSearch(search));
+                buildSpecification(admin ? null : currentUserId, courseId, moduleId, kind, normaliseSearch(search));
         Pageable pageable = PageRequest.of(safePage(page), safeSize(size),
                 Sort.by(Sort.Direction.DESC, "groupId"));
 
@@ -78,6 +86,8 @@ public class QuestionGroupServiceImpl implements QuestionGroupService {
     @Transactional
     public QuestionGroupResponse createQuestionGroup(Long currentUserId, String currentUserRole,
                                                      QuestionGroupCreateRequest request) {
+        String questionType = QuestionTypeUtil.requireKind(request.getQuestionType());
+
         Course course = courseRepository.findById(request.getCourseId())
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Course not found with id: " + request.getCourseId()));
@@ -92,6 +102,7 @@ public class QuestionGroupServiceImpl implements QuestionGroupService {
         QuestionGroup group = QuestionGroup.builder()
                 .course(course)
                 .module(module)
+                .questionType(questionType)
                 .title(title)
                 .passageText(passageText)
                 .build();
@@ -115,8 +126,18 @@ public class QuestionGroupServiceImpl implements QuestionGroupService {
                 : normaliseText(request.getPassageText());
         requireContent(title, passageText);
 
+        String questionType = group.getQuestionType();
+        if (request.getQuestionType() != null) {
+            String requestedType = QuestionTypeUtil.requireKind(request.getQuestionType());
+            if (!requestedType.equals(group.getQuestionType())) {
+                assertGroupTypeChangeAllowed(groupId, requestedType);
+                questionType = requestedType;
+            }
+        }
+
         group.setTitle(title);
         group.setPassageText(passageText);
+        group.setQuestionType(questionType);
         QuestionGroup saved = questionGroupRepository.save(group);
 
         log.info("Question group {} updated by user {}", groupId, currentUserId);
@@ -145,7 +166,7 @@ public class QuestionGroupServiceImpl implements QuestionGroupService {
     }
 
     private Specification<QuestionGroup> buildSpecification(Long managerId, Long courseId, Long moduleId,
-                                                            String search) {
+                                                            String questionType, String search) {
         return (root, query, criteriaBuilder) -> {
             List<Predicate> predicates = new ArrayList<>();
 
@@ -167,6 +188,9 @@ public class QuestionGroupServiceImpl implements QuestionGroupService {
             }
             if (moduleId != null) {
                 predicates.add(criteriaBuilder.equal(moduleJoin.get("moduleId"), moduleId));
+            }
+            if (questionType != null) {
+                predicates.add(criteriaBuilder.equal(root.get("questionType"), questionType));
             }
             if (search != null) {
                 String pattern = "%" + escapeLikePattern(search) + "%";
@@ -213,6 +237,7 @@ public class QuestionGroupServiceImpl implements QuestionGroupService {
                 .groupId(group.getGroupId())
                 .courseId(resolveCourseId(group))
                 .moduleId(group.getModule() == null ? null : group.getModule().getModuleId())
+                .questionType(group.getQuestionType())
                 .title(group.getTitle())
                 .passageText(group.getPassageText())
                 .questionCount(questionCount)
@@ -261,6 +286,17 @@ public class QuestionGroupServiceImpl implements QuestionGroupService {
         Long courseId = resolveCourseId(group);
         if (courseId == null || courseRepository.countOwnedCourse(courseId, userId) == 0) {
             throw new ForbiddenException("You do not have access to this question group.");
+        }
+    }
+
+    private void assertGroupTypeChangeAllowed(Long groupId, String newQuestionType) {
+        Set<String> memberTypes = questionRepository.findDistinctQuestionTypesByGroupId(groupId).stream()
+                .map(QuestionTypeUtil::kindOf)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (!memberTypes.isEmpty() && !memberTypes.equals(Set.of(newQuestionType))) {
+            throw new ResourceConflictException(
+                    "Question group contains questions of a different type and cannot change type.");
         }
     }
 

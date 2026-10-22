@@ -164,7 +164,6 @@ function StepVisual({ kind }: { kind: HowItWorksVisual }) {
             72%
           </p>
         </div>
-        <span className="text-xs text-content-soft">Pass mark 70%</span>
       </div>
       <ul className="mt-4 divide-y divide-line-soft border-y border-line-soft">
         {weak.map((w) => (

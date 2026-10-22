@@ -327,9 +327,9 @@ export default function ComponentsPage() {
           <CourseCard title="Python for Data Science" subject="Programming" progress={91} examCount={12} difficulty="Easy" />
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <ExamCard title="ML Fundamentals — Mid Exam" duration={90} questions={45} passMark={70} status="upcoming" />
-          <ExamCard title="Python Basics Final" duration={60} questions={30} passMark={60} status="completed" score={87} />
-          <ExamCard title="Neural Networks Quiz" duration={45} questions={20} passMark={75} status="ongoing" />
+          <ExamCard title="ML Fundamentals — Mid Exam" duration={90} questions={45} status="upcoming" />
+          <ExamCard title="Python Basics Final" duration={60} questions={30} status="completed" score={87} />
+          <ExamCard title="Neural Networks Quiz" duration={45} questions={20} status="ongoing" />
         </div>
       </Section>
 

@@ -5,6 +5,7 @@ import { Radio } from '@/components/ui/Radio';
 import { Select } from '@/components/ui/Select';
 import { Icon } from '@/assets/icons';
 import type { QuestionGroup } from '@/services/questionGroup.service';
+import { GROUP_KIND_LABELS, asGroupKind, type GroupKind } from '../model';
 
 type Mode = 'existing' | 'new';
 
@@ -49,24 +50,49 @@ function GroupFields({ idPrefix, title, passage, onTitle, onPassage, showErrors,
   );
 }
 
+/** "Quiz" for a QUIZ group; null for groups made before kinds existed. */
+export const groupKindLabel = (g: Pick<QuestionGroup, 'questionType'>) => {
+  const kind = asGroupKind(g.questionType);
+  return kind ? GROUP_KIND_LABELS[kind] : null;
+};
+
+/** "[Quiz] Reading passage 1 · 3 questions" for group dropdowns. */
+export const groupOptionLabel = (g: QuestionGroup) => {
+  const kind = groupKindLabel(g);
+  return `${kind ? `[${kind}] ` : ''}${groupLabel(g)} · ${g.questionCount} question${g.questionCount === 1 ? '' : 's'}`;
+};
+
 /**
- * Link the question to a shared passage: pick an existing group of the course,
- * or write a new one. Creating a group happens right away (onCreate); the link
- * itself is stored with the next Save Changes. Editing a group (onUpdate) is
- * saved right away too and changes the passage for every question in it.
+ * Can a question of `kind` (in `moduleId`, '' = none) join `group`? Mirrors
+ * QuestionServiceImpl.updateQuestion: one kind per group (a group without a
+ * kind takes the first one), and a question in a module only joins a group of
+ * that same module.
  */
-export function QuestionGroupPicker({ groups, loading, currentGroupId, onAttach, onCreate, onUpdate, disabled }: {
+export const groupFits = (g: QuestionGroup, kind: GroupKind | null, moduleId: string) =>
+  (!g.questionType || !kind || g.questionType === kind) && (!moduleId || String(g.moduleId ?? '') === moduleId);
+
+/**
+ * Link the question to a shared passage: pick a group of the course (only the
+ * ones this question fits are offered), or write a new one. Picking a group
+ * links it at once — the link is stored with the next Save Changes. Creating
+ * a group (onCreate) and editing one (onUpdate) are saved right away; an edit
+ * changes the passage for every question in the group.
+ */
+export function QuestionGroupPicker({ groups, loading, currentGroupId, kind, moduleId, onSelect, onCreate, onUpdate, disabled }: {
   groups: QuestionGroup[];
   loading?: boolean;
   currentGroupId: number | null;
-  onAttach: (group: QuestionGroup) => void;
+  /** The question's kind — new groups get it, and only groups of it are offered. */
+  kind: GroupKind | null;
+  /** The question's module ('' = none). */
+  moduleId: string;
+  onSelect: (group: QuestionGroup | null) => void;
   onCreate: (title: string, passageText: string) => Promise<void>;
   onUpdate?: (group: QuestionGroup, title: string, passageText: string) => Promise<void>;
   disabled?: boolean;
 }) {
   const [mode, setMode] = useState<Mode>('existing');
-  // Start on the group the question is already in, and follow it when it changes (load, attach, undo).
-  const [selected, setSelected] = useState(currentGroupId != null ? String(currentGroupId) : '');
+  const selected = currentGroupId != null ? String(currentGroupId) : '';
   const [title, setTitle] = useState('');
   const [passage, setPassage] = useState('');
   const [creating, setCreating] = useState(false);
@@ -78,22 +104,26 @@ export function QuestionGroupPicker({ groups, loading, currentGroupId, onAttach,
   const [savingEdit, setSavingEdit] = useState(false);
   const [showEditErrors, setShowEditErrors] = useState(false);
 
-  useEffect(() => {
-    setSelected(currentGroupId != null ? String(currentGroupId) : '');
-  }, [currentGroupId]);
-
   // An open edit belongs to one group — close it when another group is picked.
   useEffect(() => {
     setEditing(false);
   }, [selected]);
 
-  const options = groups.map(g => ({ label: `${groupLabel(g)} · ${g.questionCount} question${g.questionCount === 1 ? '' : 's'}`, value: String(g.groupId) }));
-  // The linked group may be missing from the list (not loaded / beyond the first page) — still show it.
-  if (currentGroupId != null && !groups.some(g => g.groupId === currentGroupId)) {
-    options.unshift({ label: groupLabel({ groupId: currentGroupId, title: null }), value: String(currentGroupId) });
-  }
+  const fitting = groups.filter(g => groupFits(g, kind, moduleId));
+  const options = fitting.map(g => ({ label: groupOptionLabel(g), value: String(g.groupId) }));
   const selectedGroup = groups.find(g => String(g.groupId) === selected);
-  const alreadyLinked = selectedGroup != null && selectedGroup.groupId === currentGroupId;
+  // Keep the linked group selectable even when it isn't offered (not loaded, or the question no longer fits it).
+  if (currentGroupId != null && !options.some(o => o.value === selected)) {
+    options.unshift({ label: selectedGroup ? groupOptionLabel(selectedGroup) : groupLabel({ groupId: currentGroupId, title: null }), value: selected });
+  }
+  const misfit = selectedGroup != null && !groupFits(selectedGroup, kind, moduleId);
+  const kindName = kind ? GROUP_KIND_LABELS[kind].toLowerCase() : null;
+
+  const pick = (value: string) => {
+    if (!value) return onSelect(null);
+    const group = groups.find(g => String(g.groupId) === value);
+    if (group) onSelect(group);
+  };
 
   const create = async () => {
     setShowErrors(true);
@@ -148,12 +178,12 @@ export function QuestionGroupPicker({ groups, loading, currentGroupId, onAttach,
           <div className="flex flex-col sm:flex-row sm:items-end gap-2">
             <Select
               className="flex-1 min-w-0"
-              aria-label="Existing question group"
+              aria-label="Question group"
               value={selected}
-              onChange={setSelected}
-              disabled={disabled || loading || options.length === 0 || savingEdit}
+              onChange={pick}
+              disabled={disabled || loading || savingEdit || editing}
               options={[
-                { label: loading ? 'Loading groups…' : options.length === 0 ? 'No groups in this course yet' : 'Select a group', value: '' },
+                { label: loading ? 'Loading groups…' : 'No group (standalone question)', value: '' },
                 ...options,
               ]}
             />
@@ -168,16 +198,19 @@ export function QuestionGroupPicker({ groups, loading, currentGroupId, onAttach,
                 Edit Group
               </Button>
             )}
-            <Button
-              type="button"
-              variant="secondary"
-              icon={<Icon.Layers className="w-4 h-4" />}
-              onClick={() => selectedGroup && onAttach(selectedGroup)}
-              disabled={disabled || !selectedGroup || alreadyLinked || editing}
-            >
-              {alreadyLinked ? 'Already linked' : 'Attach Group'}
-            </Button>
           </div>
+          {misfit ? (
+            <p className="text-xs text-danger">
+              This {kindName ?? ''} question doesn’t fit this group{selectedGroup?.questionType ? ` (a ${groupKindLabel(selectedGroup)?.toLowerCase()} group)` : ''}
+              {moduleId && String(selectedGroup?.moduleId ?? '') !== moduleId ? ' or its module' : ''}. Pick another group or change the type.
+            </p>
+          ) : (
+            <p className="text-xs text-content-subtle">
+              {!loading && options.length === 0
+                ? `No ${kindName ? `${kindName} ` : ''}groups in this ${moduleId ? 'module' : 'course'} yet — create one.`
+                : `Only ${kindName ? `${kindName} ` : ''}groups${moduleId ? ' of this module' : ''} are listed. The change is kept when you click Save Changes.`}
+            </p>
+          )}
 
           {editing && selectedGroup && (
             <div className="space-y-2 rounded-[10px] border border-line bg-surface p-3">
@@ -214,8 +247,9 @@ export function QuestionGroupPicker({ groups, loading, currentGroupId, onAttach,
             disabled={disabled || creating}
           />
           <div className="flex justify-end">
+            {kindName && <span className="mr-auto self-center text-xs text-content-subtle">Created as a {kindName} group.</span>}
             <Button type="button" variant="secondary" icon={<Icon.Plus className="w-4 h-4" />} onClick={create} loading={creating} disabled={disabled || creating}>
-              Create &amp; Attach Group
+              Create &amp; Link Group
             </Button>
           </div>
         </div>
@@ -244,7 +278,7 @@ export function GroupInfoCard({ group, groupId, loading, pending, onUnlink }: {
       {group ? (
         <>
           <p className="text-sm font-semibold text-content">{groupLabel(group)}</p>
-          <p className="text-xs text-content-subtle">{group.questionCount} question{group.questionCount === 1 ? '' : 's'} share this passage</p>
+          <p className="text-xs text-content-subtle">{groupKindLabel(group) ? `${groupKindLabel(group)} group · ` : ''}{group.questionCount} question{group.questionCount === 1 ? '' : 's'} share this passage</p>
           <div className="max-h-[260px] overflow-y-auto rounded-[8px] bg-surface-alt px-3 py-2 text-sm text-content-secondary whitespace-pre-wrap">
             {group.passageText?.trim() || <span className="text-content-subtle italic">No passage text.</span>}
           </div>
@@ -260,7 +294,7 @@ export function GroupInfoCard({ group, groupId, loading, pending, onUnlink }: {
           <p className="text-xs text-content-subtle">{loading ? 'Loading group…' : "Couldn't load this group's passage."}</p>
         </>
       ) : (
-        <p className="text-sm text-content-soft">This question is standalone. Attach it to a group to share a reading passage with other questions.</p>
+        <p className="text-sm text-content-soft">This question is standalone. Pick a group to share a reading passage with other questions.</p>
       )}
     </div>
   );

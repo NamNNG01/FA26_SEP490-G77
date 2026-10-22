@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Alert } from "@/components/ui/Alert";
+import { useToast } from "@/components/ui/ToastHost";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { Icon } from "@/assets/icons";
 import { useAuth } from "@/auth/authContext";
@@ -12,6 +13,7 @@ import {
   type CategoryResponse,
   type CourseDetailResponse,
 } from "@/services/course.service";
+import { getApiErrorMessage } from "@/utils/apiError";
 
 export function CourseFormPage({
   mode = "create",
@@ -22,8 +24,16 @@ export function CourseFormPage({
   courseId?: string | number;
   onNavigate?: (id: string, params?: Record<string, string>) => void;
 }) {
+  type CourseFormValues = {
+    title: string;
+    categoryId: string;
+    description: string;
+    price: string;
+  };
+
   const navigate = useNavigate();
   const { user } = useAuth();
+  const notification = useToast();
   const isEdit = mode === "edit";
 
   const [title, setTitle] = useState("");
@@ -32,41 +42,50 @@ export function CourseFormPage({
   const [price, setPrice] = useState("0");
   const [managerId, setManagerId] = useState("");
   const [categories, setCategories] = useState<CategoryResponse[]>([]);
+  const [initialValues, setInitialValues] = useState<CourseFormValues | null>(null);
   const [loading, setLoading] = useState(isEdit);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
+  const [categoryError, setCategoryError] = useState<string | null>(null);
 
   useEffect(() => {
     courseService
       .getCategories()
       .then((cats) => {
         setCategories(cats);
+        setCategoryError(null);
         if (!isEdit && cats.length > 0) {
           setCategoryId(String(cats[0].categoryId));
         }
       })
-      .catch(() => setCategories([]));
+      .catch((err) => {
+        setCategories([]);
+        setCategoryError(getApiErrorMessage(err, "Failed to load categories."));
+      });
   }, [isEdit]);
 
   useEffect(() => {
     if (isEdit && courseId) {
+      setInitialValues(null);
       setLoading(true);
       courseService
         .getCourseById(courseId)
         .then((c) => {
-          setTitle(c.title);
-          setCategoryId(String(c.categoryId));
-          setDescription(c.description ?? "");
-          setPrice(String(c.price ?? 0));
+          const values = {
+            title: c.title,
+            categoryId: String(c.categoryId),
+            description: c.description ?? "",
+            price: String(c.price ?? 0),
+          };
+          setTitle(values.title);
+          setCategoryId(values.categoryId);
+          setDescription(values.description);
+          setPrice(values.price);
+          setInitialValues(values);
           setManagerId(String(c.managerId));
         })
         .catch((err) => {
-          setError(
-            err instanceof Error
-              ? err.message
-              : "Failed to load course details.",
-          );
+          setError(getApiErrorMessage(err, "Failed to load course details."));
         })
         .finally(() => setLoading(false));
     } else {
@@ -84,14 +103,13 @@ export function CourseFormPage({
 
   const handleSubmit = async () => {
     if (!title.trim()) {
-      setError("Course title is required.");
+      notification.error("Course title is required.");
       return;
     }
     if (!categoryId) {
-      setError("Please select a category.");
+      notification.error("Please select a category.");
       return;
     }
-    setError(null);
     setSubmitting(true);
 
     try {
@@ -102,7 +120,7 @@ export function CourseFormPage({
           description: description.trim() || undefined,
           price: Number(price) >= 0 ? Number(price) : 0,
         });
-        setSuccess("Course updated successfully.");
+        notification.success("Course updated successfully.");
         setTimeout(() => handleCancel(), 1000);
       } else {
         const created: CourseDetailResponse = await courseService.createCourse({
@@ -112,7 +130,7 @@ export function CourseFormPage({
           price: Number(price) >= 0 ? Number(price) : 0,
           managerId: Number(managerId) || 1,
         });
-        setSuccess("Course created successfully.");
+        notification.success("Course created successfully.");
         setTimeout(() => {
           if (onNavigate) {
             onNavigate("course-detail", { courseId: String(created.courseId) });
@@ -122,11 +140,7 @@ export function CourseFormPage({
         }, 1000);
       }
     } catch (err: unknown) {
-      const msg =
-        err instanceof Error
-          ? err.message
-          : "Operation failed. Please try again.";
-      setError(msg);
+      notification.error(getApiErrorMessage(err, "Operation failed. Please try again."));
     } finally {
       setSubmitting(false);
     }
@@ -136,6 +150,14 @@ export function CourseFormPage({
     label: c.name,
     value: String(c.categoryId),
   }));
+  const hasChanges = !isEdit || Boolean(
+    initialValues && (
+      title.trim() !== initialValues.title.trim() ||
+      categoryId !== initialValues.categoryId ||
+      description.trim() !== initialValues.description.trim() ||
+      Number(price) !== Number(initialValues.price)
+    ),
+  );
 
   if (loading) {
     return (
@@ -171,7 +193,7 @@ export function CourseFormPage({
             icon={<Icon.Check className="w-4 h-4" />}
             onClick={handleSubmit}
             loading={submitting}
-            disabled={submitting}
+            disabled={submitting || (isEdit && (!initialValues || !hasChanges))}
           >
             {isEdit ? "Save Changes" : "Create Course"}
           </Button>
@@ -179,7 +201,9 @@ export function CourseFormPage({
       </div>
 
       {error && <Alert type="error" title="Error" message={error} />}
-      {success && <Alert type="success" title="Success" message={success} />}
+      {categoryError && (
+        <Alert type="error" title="Could not load categories" message={categoryError} />
+      )}
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <div className="xl:col-span-2 card p-6 space-y-4">

@@ -45,6 +45,8 @@ export const ROUTES = {
   managerExamQuizEdit: '/manager/exams/quiz/:id',
   managerExamEssayNew: '/manager/exams/essay/new',
   managerExamEssayEdit: '/manager/exams/essay/:id',
+  managerExamDiagramNew: '/manager/exams/diagram/new',
+  managerExamDiagramEdit: '/manager/exams/diagram/:id',
   managerFlashcards: '/manager/flashcards',
   /** Route pattern — render with flashcardDeckPath(id). */
   managerFlashcardDetail: '/manager/flashcards/:deckId',

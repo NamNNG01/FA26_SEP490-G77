@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { Alert } from '@/components/ui/Alert';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { MultiSelect } from '@/components/ui/MultiSelect';
 import { Spinner } from '@/components/ui/Spinner';
+import { useToast } from '@/components/ui/ToastHost';
 import { Icon } from '@/assets/icons';
 import { AI_CONTEXT_MAX, AI_MATERIAL_EXTENSIONS, IMPORT_MAX_BYTES, questionService, type QuestionAiGenerateRequest, type QuestionAiPreview, type QuestionDifficulty, type QuestionType } from '@/services/question.service';
 import {
@@ -15,16 +16,20 @@ import {
   RUBRIC_TYPES,
   blankIndexes,
   fromAiDraft,
+  isDraftValid,
   newKey,
   optionLabel,
   validateDraft,
+  type EditableQuestionType,
   type QuestionDraft,
 } from '../model';
 import { checkPlantUml, plantUmlSvgUrl } from '../diagram';
 import { QuestionForm } from './QuestionForm';
+import { TypeCountSelect, type TypeCounts } from './TypeCountSelect';
 
 const MIN_COUNT = 1;
 const MAX_COUNT = 10;
+const DEFAULT_COUNT = 5;
 /** The backend drafts at most 50 questions per AI call, and one Save All takes at most 50. */
 const MAX_TOTAL = 50;
 
@@ -37,6 +42,13 @@ const LANGUAGE_OPTIONS: { label: string; value: Language }[] = [
 
 const typeLabel = (t: string) => QUESTION_TYPE_OPTIONS.find(o => o.value === t)?.label ?? t;
 const difficultyLabel = (d: string) => DIFFICULTY_OPTIONS.find(o => o.value === d)?.label ?? d;
+
+/** Why the suggestion's type can't go into the batch's group, or undefined. */
+const kindIssue = (q: QuestionDraft, allowedTypes?: QuestionType[]) =>
+  allowedTypes && !allowedTypes.includes(q.type) ? `${typeLabel(q.type)} questions can’t go into this group — change the type.` : undefined;
+
+/** Ready to be saved as it is. */
+const acceptable = (q: QuestionDraft, allowedTypes?: QuestionType[]) => isDraftValid(q) && !kindIssue(q, allowedTypes);
 
 /** AI generation errors → what the manager can do about them. */
 function aiErrorMessage(err: unknown): string {
@@ -98,29 +110,38 @@ function materialProblem(f: File): string | null {
   return null;
 }
 
+export interface AiGeneratePanelHandle {
+  /** Drops the accepted suggestions once they are saved; returns how many suggestions are left. */
+  removeAccepted: () => number;
+  /** Drops every suggestion (and stops a run in progress). */
+  clear: () => void;
+}
+
 /**
- * "AI Generate" tab: drafts questions with AI-01 from a topic — or with AI-02
- * from a file dropped on the card — for the manager to review. Nothing is
- * saved here — Accept hands a question to the editor, and it is saved with
- * the rest through Save All.
+ * "AI Generate" mode: drafts questions with AI-01 from a topic — or with AI-02
+ * from a file dropped on the card — for the manager to review. Accepted
+ * suggestions are reported through onAcceptedChange; the page saves them.
  */
-export function AiGeneratePanel({ courseId, moduleId, onAccept, onPendingChange, disabled }: {
+export const AiGeneratePanel = forwardRef<AiGeneratePanelHandle, {
   courseId: string;
   moduleId: string;
-  /** Returns how many of the drafts the editor took. */
-  onAccept: (drafts: QuestionDraft[]) => number;
-  /** Suggestions not accepted yet — they're lost if the page is left. */
+  /** The group's kind limits the types (undefined = any type). */
+  allowedTypes?: QuestionType[];
+  /** The suggestions accepted so far, in order — what Save stores. */
+  onAcceptedChange: (drafts: QuestionDraft[]) => void;
+  /** Suggestions not saved yet (accepted or not) — they're lost if the page is left. */
   onPendingChange?: (count: number) => void;
   disabled?: boolean;
-}) {
-  const [questionTypes, setQuestionTypes] = useState<QuestionType[]>(['SINGLE_CHOICE']);
+}>(function AiGeneratePanel({ courseId, moduleId, allowedTypes, onAcceptedChange, onPendingChange, disabled }, ref) {
+  const toast = useToast();
+  const typeOptions = allowedTypes ? AI_QUESTION_TYPE_OPTIONS.filter(o => allowedTypes.includes(o.value)) : AI_QUESTION_TYPE_OPTIONS;
+  const [typeCounts, setTypeCounts] = useState<TypeCounts<QuestionType>>({ SINGLE_CHOICE: String(DEFAULT_COUNT) });
   const [topic, setTopic] = useState('');
   /** File the AI drafts from instead of the topic alone (AI-02). */
   const [material, setMaterial] = useState<File | null>(null);
   const [materialError, setMaterialError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const materialInputRef = useRef<HTMLInputElement>(null);
-  const [count, setCount] = useState('5');
   const [difficulties, setDifficulties] = useState<QuestionDifficulty[]>(['MEDIUM']);
   const [language, setLanguage] = useState<Language>('English');
   const [showErrors, setShowErrors] = useState(false);
@@ -142,15 +163,30 @@ export function AiGeneratePanel({ courseId, moduleId, onAccept, onPendingChange,
 
   useEffect(() => () => { abortRef.current?.abort(); abortRegenerations(); }, []);
 
-  const countNum = Number(count);
-  const countValid = Number.isInteger(countNum) && countNum >= MIN_COUNT && countNum <= MAX_COUNT;
-  const total = countValid ? countNum * questionTypes.length : 0;
+  // A group's kind narrows the types — drop the ones it no longer allows.
+  const allowedKey = allowedTypes?.join(',');
+  useEffect(() => {
+    if (!allowedTypes) return;
+    setTypeCounts(prev => {
+      const kept = Object.fromEntries(Object.entries(prev).filter(([t]) => allowedTypes.includes(t as QuestionType))) as TypeCounts<QuestionType>;
+      if (Object.keys(kept).length) return kept;
+      const first = AI_QUESTION_TYPE_OPTIONS.find(o => allowedTypes.includes(o.value))?.value;
+      return first ? { [first]: String(DEFAULT_COUNT) } : {};
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- allowedKey stands in for allowedTypes (a new array every render)
+  }, [allowedKey]);
+
+  const counts = Object.entries(typeCounts).map(([type, c]) => [type as QuestionType, Number(c)] as const);
+  const countsValid = counts.length > 0 && counts.every(([, n]) => Number.isInteger(n) && n >= MIN_COUNT && n <= MAX_COUNT);
+  const total = countsValid ? counts.reduce((sum, [, n]) => sum + n, 0) : 0;
 
   const topicError = showErrors && !material && !topic.trim() ? 'Enter a topic for the questions.' : undefined;
-  const countError = showErrors && !countValid ? `Enter a number from ${MIN_COUNT} to ${MAX_COUNT}.` : undefined;
-  const typesError = showErrors && !questionTypes.length ? 'Pick at least one question type.' : undefined;
+  const typesError = !showErrors ? undefined
+    : !counts.length ? 'Pick at least one question type.'
+    : !countsValid ? `Enter a number from ${MIN_COUNT} to ${MAX_COUNT} for each type.`
+    : undefined;
   const difficultiesError = showErrors && !difficulties.length ? 'Pick at least one difficulty.' : undefined;
-  const totalError = total > MAX_TOTAL ? `At most ${MAX_TOTAL} questions per run — lower the number or pick fewer types.` : undefined;
+  const totalError = total > MAX_TOTAL ? `At most ${MAX_TOTAL} questions per run — lower the numbers or pick fewer types.` : undefined;
 
   const pickMaterial = (f?: File | null) => {
     if (!f || generating) return;
@@ -176,7 +212,7 @@ export function AiGeneratePanel({ courseId, moduleId, onAccept, onPendingChange,
       const request: QuestionAiGenerateRequest = {
         courseId: Number(courseId),
         ...(moduleId ? { moduleId: Number(moduleId) } : {}),
-        questionTypeCounts: Object.fromEntries(questionTypes.map(type => [type, countNum])),
+        questionTypeCounts: Object.fromEntries(counts),
         difficultyCounts: spread(difficulties, total),
         topic: topic.trim(),
         language,
@@ -204,13 +240,38 @@ export function AiGeneratePanel({ courseId, moduleId, onAccept, onPendingChange,
     setGenerating(false);
   };
 
+  /** Accepts the suggestions that are ready to save (valid, and of an allowed type), up to one save's worth. */
   const accept = (indexes: number[]) => {
     if (!previews) return;
-    const picked = indexes.filter(i => !previews[i].accepted);
-    if (!picked.length) return;
-    const taken = picked.slice(0, onAccept(picked.map(i => previews[i].draft)));
+    const ready = indexes.filter(i => !previews[i].accepted && acceptable(previews[i].draft, allowedTypes));
+    const room = Math.max(0, MAX_TOTAL - previews.filter(p => p.accepted).length);
+    const taken = ready.slice(0, room);
+    if (taken.length < ready.length) toast.warning(`You can save up to ${MAX_TOTAL} questions at a time — save these first.`);
+    if (indexes.length > 1 && ready.length < indexes.filter(i => !previews[i].accepted).length) {
+      toast.info('Suggestions that need edits were left out — fix them, then accept.');
+    }
+    if (!taken.length) return;
     setPreviews(prev => prev && prev.map((p, i) => (taken.includes(i) ? { ...p, accepted: true, editing: false } : p)));
   };
+
+  const unaccept = (i: number) => setPreviews(prev => prev && prev.map((p, pi) => (pi === i ? { ...p, accepted: false } : p)));
+
+  useImperativeHandle(ref, () => ({
+    removeAccepted: () => {
+      const left = (previews ?? []).filter(p => !p.accepted);
+      setPreviews(left.length ? left : null);
+      return left.length;
+    },
+    clear: () => {
+      abortRef.current?.abort();
+      abortRef.current = null;
+      abortRegenerations();
+      setGenerating(false);
+      setPreviews(null);
+      setWarnings([]);
+      setError(null);
+    },
+  }), [previews]);
 
   const patchPreview = (id: string, patch: Partial<Preview>) =>
     setPreviews(prev => prev && prev.map(p => (p.id === id ? { ...p, ...patch } : p)));
@@ -237,8 +298,10 @@ export function AiGeneratePanel({ courseId, moduleId, onAccept, onPendingChange,
   };
 
   const pending = useMemo(() => (previews ?? []).map((p, i) => (p.accepted ? -1 : i)).filter(i => i >= 0), [previews]);
+  const accepted = useMemo(() => (previews ?? []).filter(p => p.accepted).map(p => p.draft), [previews]);
 
-  useEffect(() => { onPendingChange?.(pending.length); }, [pending.length, onPendingChange]);
+  useEffect(() => { onPendingChange?.(previews?.length ?? 0); }, [previews?.length, onPendingChange]);
+  useEffect(() => { onAcceptedChange(accepted); }, [accepted, onAcceptedChange]);
 
   return (
     <div className="space-y-3">
@@ -247,7 +310,7 @@ export function AiGeneratePanel({ courseId, moduleId, onAccept, onPendingChange,
           <span className="w-7 h-7 rounded-[8px] bg-brand-600/10 flex items-center justify-center"><Icon.Zap className="w-4 h-4 text-brand-ink" /></span>
           <div>
             <h3 id="ai-gen-title" className="text-lg font-semibold text-content">Generate with AI</h3>
-            <p className="text-xs text-content-soft">Review each suggestion and accept the ones you want. Nothing is saved until you click Save All.</p>
+            <p className="text-xs text-content-soft">Review each suggestion and accept the ones you want, then save them with “Save Accepted”.</p>
           </div>
         </div>
 
@@ -307,15 +370,16 @@ export function AiGeneratePanel({ courseId, moduleId, onAccept, onPendingChange,
         />
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <MultiSelect label="Question types" value={questionTypes} onChange={setQuestionTypes} options={AI_QUESTION_TYPE_OPTIONS} placeholder="Pick types" error={typesError} disabled={generating} />
-          <Input
-            label={`Questions per type (${MIN_COUNT}–${MAX_COUNT})`}
-            type="number"
+          <TypeCountSelect
+            className="sm:col-span-3"
+            label="Question types & number of each"
+            value={typeCounts}
+            onChange={setTypeCounts}
+            options={typeOptions}
             min={MIN_COUNT}
             max={MAX_COUNT}
-            value={count}
-            onChange={e => setCount(e.target.value)}
-            error={countError}
+            defaultCount={DEFAULT_COUNT}
+            error={typesError}
             disabled={generating}
           />
           <MultiSelect label="Difficulties" value={difficulties} onChange={setDifficulties} options={DIFFICULTY_OPTIONS} placeholder="Pick difficulties" error={difficultiesError} disabled={generating} />
@@ -391,7 +455,8 @@ export function AiGeneratePanel({ courseId, moduleId, onAccept, onPendingChange,
                 key={p.id}
                 index={i}
                 preview={p}
-                onAccept={() => accept([i])}
+                allowedTypes={allowedTypes}
+                onAccept={() => (p.accepted ? unaccept(i) : accept([i]))}
                 onEdit={editing => patchPreview(p.id, { editing })}
                 onChange={draft => patchPreview(p.id, { draft, edited: true })}
                 onRegenerate={() => regenerate(p)}
@@ -403,17 +468,18 @@ export function AiGeneratePanel({ courseId, moduleId, onAccept, onPendingChange,
       )}
     </div>
   );
-}
+});
 
 const iconBtn = 'p-1.5 rounded-[6px] text-content-subtle hover:bg-accent hover:text-content-secondary disabled:opacity-30 disabled:cursor-not-allowed';
 
-function AiPreviewCard({ index, preview, onAccept, onEdit, onChange, onRegenerate, disabled }: {
+function AiPreviewCard({ index, preview, allowedTypes, onAccept, onEdit, onChange, onRegenerate, disabled }: {
   index: number;
   preview: Preview;
   onAccept: () => void;
   onEdit: (editing: boolean) => void;
   onChange: (draft: QuestionDraft) => void;
   onRegenerate: () => void;
+  allowedTypes?: QuestionType[];
   disabled?: boolean;
 }) {
   const { draft: q, accepted, editing, edited, regenerating, regenerateError } = preview;
@@ -434,15 +500,18 @@ function AiPreviewCard({ index, preview, onAccept, onEdit, onChange, onRegenerat
       <Icon.RefreshCw className={`w-4 h-4 ${regenerating ? 'animate-spin' : ''}`} />
     </button>
   );
+  const ready = acceptable(q, allowedTypes);
   const acceptBtn = (
     <Button
       size="sm"
       variant={accepted ? 'ghost' : 'primary'}
       icon={accepted ? <Icon.CheckCircle className="w-3.5 h-3.5" /> : <Icon.Plus className="w-3.5 h-3.5" />}
       onClick={onAccept}
-      disabled={locked}
+      // Accepted ones can be un-accepted until they are saved.
+      disabled={regenerating || disabled || (!accepted && !ready)}
+      title={accepted ? 'Accepted — click to undo' : ready ? 'Accept to save with the others' : 'Fix this suggestion before accepting it'}
     >
-      {accepted ? 'Added' : 'Accept'}
+      {accepted ? 'Accepted' : 'Accept'}
     </Button>
   );
 
@@ -455,6 +524,8 @@ function AiPreviewCard({ index, preview, onAccept, onEdit, onChange, onRegenerat
           heading={`Suggestion ${index + 1}`}
           onChange={onChange}
           showErrors
+          allowedTypes={allowedTypes as EditableQuestionType[] | undefined}
+          kindError={kindIssue(q, allowedTypes)}
           actions={
             <>
               {regenerateBtn}
@@ -468,7 +539,7 @@ function AiPreviewCard({ index, preview, onAccept, onEdit, onChange, onRegenerat
     );
   }
 
-  return <AiPreviewView index={index} preview={preview} actions={
+  return <AiPreviewView index={index} preview={preview} allowedTypes={allowedTypes} actions={
     <div className="flex items-center gap-1 flex-shrink-0">
       {!accepted && (
         <button type="button" onClick={() => onEdit(true)} disabled={locked} className={iconBtn} aria-label={`Edit suggestion ${index + 1}`} title="Edit before accepting">
@@ -482,10 +553,10 @@ function AiPreviewCard({ index, preview, onAccept, onEdit, onChange, onRegenerat
 }
 
 /** Read-only view of one suggestion. */
-function AiPreviewView({ index, preview, actions }: { index: number; preview: Preview; actions: React.ReactNode }) {
+function AiPreviewView({ index, preview, allowedTypes, actions }: { index: number; preview: Preview; allowedTypes?: QuestionType[]; actions: React.ReactNode }) {
   const { draft: q, accepted, edited, duplicate, regenerating, regenerateError } = preview;
   const issues = validateDraft(q);
-  const issue = issues.content ?? issues.answers;
+  const issue = kindIssue(q, allowedTypes) ?? issues.content ?? issues.answers;
   const plantUml = typeof q.metadata.plantUmlSource === 'string' ? q.metadata.plantUmlSource : '';
   /** Q-10 stand-in: does the PlantUML render? undefined = checking, null = unknown. */
   const [renders, setRenders] = useState<boolean | null | undefined>(undefined);

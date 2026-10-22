@@ -82,8 +82,9 @@ class ExamApiIntegrationTest {
         assertEquals(0, new BigDecimal("7").compareTo(result.path("totalPoints").decimalValue()));
         assertEquals(1, result.path("questions").size());
         assertEquals(1, result.path("groups").size());
+        assertTrue(result.path("examKind").isNull() || result.path("examKind").isMissingNode());
         call(manager, get("/api/v1/manager/exams").param("search", "Final").param("examKind", "MIXED"))
-                .andExpect(jsonPath("$.data.totalElements").value(1));
+                .andExpect(status().isBadRequest());
     }
 
     @Test void rejectsDuplicateInactiveAndForeignContentBeforeSaving() throws Exception {

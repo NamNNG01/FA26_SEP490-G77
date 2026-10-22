@@ -13,6 +13,7 @@ export interface EditableModule {
   title: string;
   description?: string | null;
   orderIndex?: number;
+  status?: 'VISIBLE' | 'HIDDEN';
   order?: number;
   questionCount?: number;
   examCount?: number;

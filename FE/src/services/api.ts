@@ -13,7 +13,7 @@ export const api = {
    */
   async get<T>(endpoint: string): Promise<T> {
     const res = await apiClient.get(endpoint);
-    return res.data;
+    return assertApiResponse<T>(res.data);
   },
 
   /**
@@ -21,7 +21,7 @@ export const api = {
    */
   async post<T>(endpoint: string, body?: unknown): Promise<T> {
     const res = await apiClient.post(endpoint, body);
-    return res.data;
+    return assertApiResponse<T>(res.data);
   },
 
   /**
@@ -33,7 +33,21 @@ export const api = {
     data?: unknown;
   }): Promise<T> {
     const res = await apiClient.request(options);
-    return res.data;
+    return assertApiResponse<T>(res.data);
   },
 };
+
+function assertApiResponse<T>(body: T): T {
+  if (body && typeof body === 'object' && 'success' in body) {
+    const response = body as { success?: unknown; message?: unknown };
+    if (response.success === false) {
+      throw new Error(
+        typeof response.message === 'string' && response.message.trim()
+          ? response.message
+          : 'The request failed.',
+      );
+    }
+  }
+  return body;
+}
 
