@@ -10,6 +10,7 @@ import {
 
 export interface AdminCategoryNode {
   categoryId: number;
+  slug?: string;
   code: string;
   name: string;
   parentId: number | null;
@@ -23,22 +24,18 @@ export interface AdminCategoryTreeResponse {
 }
 
 export interface CreateCategoryRequest {
-  code: string;
   name: string;
-  parentId?: number | null;
-  sortOrder?: number;
-  isActive?: boolean;
+  isActive: boolean;
 }
 
 export interface UpdateCategoryRequest {
   name?: string;
-  parentId?: number | null;
-  sortOrder?: number;
   isActive?: boolean;
 }
 
 export interface AdminCategoryItem {
   categoryId: number;
+  slug?: string;
   code: string;
   name: string;
   parentId: number | null;
