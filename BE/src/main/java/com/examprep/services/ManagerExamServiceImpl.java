@@ -11,14 +11,26 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.criteria.*;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.*;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.util.*;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.HashSet;
+import java.math.BigDecimal;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly=true)
@@ -39,37 +51,267 @@ public class ManagerExamServiceImpl implements ManagerExamService {
     private final UserRepository users;
     private final ObjectMapper json;
 
+    private List<ExamResponse> mapExamPage(List<Exam> exams) {
+        if (exams.isEmpty()) {
+            return List.of();
+        }
+
+        List<Long> examIds = exams.stream()
+                .map(Exam::getExamId)
+                .toList();
+
+        // Load toàn bộ dữ liệu của trang bằng batch queries
+        List<ExamQuestion> directLinks =
+                links.findAllByExamIds(examIds);
+
+        List<ExamGroup> groupedLinks =
+                groupLinks.findAllByExamIds(examIds);
+
+        List<ExamConfig> allConfigs =
+                configs.findAllByExamIds(examIds);
+
+        // Gom dữ liệu theo examId
+        Map<Long, List<ExamQuestion>> directByExam =
+                directLinks.stream().collect(
+                        Collectors.groupingBy(
+                                x -> x.getExam().getExamId(),
+                                LinkedHashMap::new,
+                                Collectors.toList()
+                        )
+                );
+
+        Map<Long, List<ExamGroup>> groupsByExam =
+                groupedLinks.stream().collect(
+                        Collectors.groupingBy(
+                                x -> x.getExam().getExamId(),
+                                LinkedHashMap::new,
+                                Collectors.toList()
+                        )
+                );
+
+        Map<Long, List<ExamConfig>> configsByExam =
+                allConfigs.stream().collect(
+                        Collectors.groupingBy(
+                                x -> x.getExam().getExamId(),
+                                LinkedHashMap::new,
+                                Collectors.toList()
+                        )
+                );
+
+        // Lấy ID của toàn bộ group trong trang
+        List<Long> groupIds = groupedLinks.stream()
+                .map(x -> x.getGroup().getGroupId())
+                .distinct()
+                .toList();
+
+        // Chỉ query questions nếu có group
+        List<Question> groupedQuestions = groupIds.isEmpty()
+                ? List.of()
+                : questions.findAllByGroupIds(groupIds);
+
+        Map<Long, List<Question>> questionsByGroup =
+                groupedQuestions.stream().collect(
+                        Collectors.groupingBy(
+                                q -> q.getGroup().getGroupId(),
+                                LinkedHashMap::new,
+                                Collectors.toList()
+                        )
+                );
+
+        // Mapping: không gọi repository trong vòng lặp này
+        List<ExamResponse> items = new ArrayList<>(exams.size());
+
+        for (Exam exam : exams) {
+            Long examId = exam.getExamId();
+
+            List<ExamQuestion> direct = directByExam.getOrDefault(
+                    examId, List.of()
+            );
+
+            List<ExamGroup> grouped = groupsByExam.getOrDefault(
+                    examId, List.of()
+            );
+
+            List<ExamConfig> configured = configsByExam.getOrDefault(
+                    examId, List.of()
+            );
+
+            Map<Long, Question> all = new LinkedHashMap<>();
+
+            // Giữ thứ tự và cách tính unique question như logic cũ:
+            // direct questions trước, sau đó đến questions thuộc groups.
+            for (ExamQuestion link : direct) {
+                Question q = link.getQuestion();
+                all.put(q.getQuestionId(), q);
+            }
+
+            for (ExamGroup groupLink : grouped) {
+                Long groupId = groupLink.getGroup().getGroupId();
+
+                for (Question q : questionsByGroup.getOrDefault(
+                        groupId, List.of())) {
+                    all.put(q.getQuestionId(), q);
+                }
+            }
+
+            items.add(buildResponse(
+                    exam, false, direct, grouped, configured, all
+            ));
+        }
+
+        return items;
+    }
     @Override
-    public PageResponse<ExamResponse> list(UserPrincipal user,String search,Long courseId,Long moduleId,String status,String kind,int page,int size) {
-        if(page<0 || size<1 || size>100 || (long)page*size>Integer.MAX_VALUE) throw bad("Invalid page or size (1-100).");
-        if(courseId!=null) access(user,courseId,false);
-        if(moduleId!=null) access(user,module(moduleId).getCourse().getCourseId(),false);
-        if(status!=null && !Set.of("DRAFT","PUBLISHED","ARCHIVED").contains(status)) throw bad("Invalid exam status.");
-        if(kind!=null && !kind.equals("all") && !KINDS.contains(kind)) throw bad("Invalid examKind.");
-        Specification<Exam> filter=(root,query,cb)-> {
-            Join<Exam,Course> c=root.join("course",JoinType.LEFT);
-            Join<Exam,Module> m=root.join("module",JoinType.LEFT);
-            Join<Module,Course> mc=m.join("course",JoinType.LEFT);
-            List<Predicate> where=new ArrayList<>();
-            if(!admin(user)) {
-                where.add(cb.or(cb.isNull(c),scope(c,query,cb,user.getId())));
-                where.add(cb.or(cb.isNull(m),scope(mc,query,cb,user.getId())));
-                where.add(cb.or(cb.isNotNull(c),cb.isNotNull(m)));
+    public PageResponse<ExamResponse> list(
+            UserPrincipal user,
+            String search,
+            Long courseId,
+            Long moduleId,
+            String status,
+            String kind,
+            int page,
+            int size
+    ) {
+        long start = System.nanoTime();
+
+        // 1. Validate request và kiểm tra quyền
+        if (page < 0 || size < 1 || size > 100
+                || (long) page * size > Integer.MAX_VALUE) {
+            throw bad("Invalid page or size (1-100).");
+        }
+
+        if (courseId != null) {
+            access(user, courseId, false);
+        }
+
+        if (moduleId != null) {
+            access(user, module(moduleId).getCourse().getCourseId(), false);
+        }
+
+        if (status != null
+                && !Set.of("DRAFT", "PUBLISHED", "ARCHIVED").contains(status)) {
+            throw bad("Invalid exam status.");
+        }
+
+        if (kind != null && !kind.equals("all") && !KINDS.contains(kind)) {
+            throw bad("Invalid examKind.");
+        }
+
+        long validated = System.nanoTime();
+
+        // 2. Build Specification: giữ nguyên điều kiện nghiệp vụ
+        Specification<Exam> filter = (root, query, cb) -> {
+            Join<Exam, Course> c = root.join("course", JoinType.LEFT);
+            Join<Exam, Module> m = root.join("module", JoinType.LEFT);
+            Join<Module, Course> mc = m.join("course", JoinType.LEFT);
+
+            List<Predicate> where = new ArrayList<>();
+
+            if (!admin(user)) {
+                where.add(cb.or(
+                        cb.isNull(c),
+                        scope(c, query, cb, user.getId())
+                ));
+
+                where.add(cb.or(
+                        cb.isNull(m),
+                        scope(mc, query, cb, user.getId())
+                ));
+
+                where.add(cb.or(
+                        cb.isNotNull(c),
+                        cb.isNotNull(m)
+                ));
             }
-            if(courseId!=null) where.add(cb.or(cb.equal(c.get("courseId"),courseId),cb.and(cb.isNull(c),cb.equal(mc.get("courseId"),courseId))));
-            if(moduleId!=null) where.add(cb.equal(m.get("moduleId"),moduleId));
-            if(status!=null) where.add(cb.equal(root.get("status"),status));
-            if(search!=null && !search.isBlank()) where.add(cb.like(cb.lower(root.get("title")),pattern(search),'!'));
-            if(kind!=null && !kind.equals("all")) {
-                List<Predicate> present=KINDS.stream().map(k->familyPresent(root,query,cb,k)).toList();
-                for(int i=0;i<4;i++) if(!KINDS.get(i).equals(kind)) where.add(cb.not(present.get(i)));
-                if(!kind.equals("QUIZ")) where.add(present.get(KINDS.indexOf(kind)));
+
+            if (courseId != null) {
+                where.add(cb.or(
+                        cb.equal(c.get("courseId"), courseId),
+                        cb.and(
+                                cb.isNull(c),
+                                cb.equal(mc.get("courseId"), courseId)
+                        )
+                ));
             }
+
+            if (moduleId != null) {
+                where.add(cb.equal(m.get("moduleId"), moduleId));
+            }
+
+            if (status != null) {
+                where.add(cb.equal(root.get("status"), status));
+            }
+
+            if (search != null && !search.isBlank()) {
+                where.add(cb.like(
+                        cb.lower(root.get("title")),
+                        pattern(search),
+                        '!'
+                ));
+            }
+
+            if (kind != null && !kind.equals("all")) {
+                List<Predicate> present = KINDS.stream()
+                        .map(k -> familyPresent(root, query, cb, k))
+                        .toList();
+
+                for (int i = 0; i < 4; i++) {
+                    if (!KINDS.get(i).equals(kind)) {
+                        where.add(cb.not(present.get(i)));
+                    }
+                }
+
+                if (!kind.equals("QUIZ")) {
+                    where.add(present.get(KINDS.indexOf(kind)));
+                }
+            }
+
             return cb.and(where.toArray(Predicate[]::new));
         };
-        Page<Exam> result=exams.findAll(filter,PageRequest.of(page,size,Sort.by(Sort.Direction.DESC,"createdAt","examId")));
-        return PageResponse.of(result,result.getContent().stream().map(e->response(e,false)).toList());
+
+        long built = System.nanoTime();
+
+        // 3. Execute query (có thể bao gồm cả query COUNT)
+        Pageable pageable = PageRequest.of(
+                page,
+                size,
+                Sort.by(
+                        Sort.Order.desc("createdAt"),
+                        Sort.Order.desc("examId")
+                )
+        );
+
+        Page<Exam> result = exams.findAll(filter, pageable);
+
+        long queried = System.nanoTime();
+
+        // 4. Map entity sang response
+        List<ExamResponse> items = mapExamPage(result.getContent());
+
+        long mapped = System.nanoTime();
+
+        // 5. Log thời gian từng giai đoạn
+        log.info(
+                "EXAM_LIST_DEBUG | userId={} | page={} | size={} "
+                        + "| kind={} | resultCount={} | totalElements={} "
+                        + "| validation={}ms | buildSpec={}ms "
+                        + "| repository={}ms | mapping={}ms | total={}ms",
+                user.getId(),
+                page,
+                size,
+                kind,
+                items.size(),
+                result.getTotalElements(),
+                (validated - start) / 1_000_000,
+                (built - validated) / 1_000_000,
+                (queried - built) / 1_000_000,
+                (mapped - queried) / 1_000_000,
+                (mapped - start) / 1_000_000
+        );
+
+        return PageResponse.of(result, items);
     }
+
 
     private Predicate scope(Path<Course> course,CriteriaQuery<?> query,CriteriaBuilder cb,Long userId) {
         Subquery<Long> assigned=query.subquery(Long.class);
@@ -95,29 +337,182 @@ public class ManagerExamServiceImpl implements ManagerExamService {
 
     @Override public ExamResponse detail(UserPrincipal user,Long id) { Exam e=read(id); check(user,e); return response(e,true); }
 
-    @Override @Transactional
-    public ExamResponse create(UserPrincipal user,ExamRequests.Create r) {
-        BigDecimal maxScore=maxScore(r.getMaxScore());
-        Module module=r.getModuleId()==null?null:module(r.getModuleId());
-        Long courseId=r.getCourseId()!=null?r.getCourseId():module==null?null:module.getCourse().getCourseId();
-        if(courseId==null) throw bad("courseId or moduleId is required.");
-        Course course=access(user,courseId,true);
-        if(module!=null && !module.getCourse().getCourseId().equals(courseId)) throw bad("Module must belong to the selected course.");
-        validateMode(r.getGenerationType(),size(r.getQuestionIds())+size(r.getGroupIds()),size(r.getConfigs()));
-        Set<Long> ids=new HashSet<>();
-        for(var item:list(r.getQuestionIds())) { if(!ids.add(item.getQuestionId())) throw conflict("Question is duplicated."); active(user,question(item.getQuestionId())); }
-        Set<Long> groupIds=new HashSet<>();
-        for(var item:list(r.getGroupIds())) { if(!groupIds.add(item.getGroupId())) throw conflict("Group is duplicated."); groupAccess(user,group(item.getGroupId())); }
-        validateConfigs(r.getConfigs(),courseId);
-        Exam e=Exam.builder().course(course).module(module).createdBy(users.getReferenceById(user.getId()))
-                .title(r.getTitle().strip()).description(r.getDescription()).durationMinutes(r.getDurationMinutes()).isPractice(r.getIsPractice())
-                .generationType(r.getGenerationType()).maxScore(maxScore).status("DRAFT").build();
-        exams.save(e);
-        for(var item:list(r.getQuestionIds())) attachQuestion(user,e,item,false);
-        for(var item:list(r.getGroupIds())) attachGroup(user,e,item);
-        saveConfigs(e,r.getConfigs()); exams.flush(); return response(e,true);
-    }
+    @Override
+    @Transactional
+    public ExamResponse create(UserPrincipal user, ExamRequests.Create r) {
+        long start = System.nanoTime();
+        long t;
 
+        BigDecimal maxScore = maxScore(r.getMaxScore());
+        Module module = r.getModuleId() == null
+                ? null : module(r.getModuleId());
+
+        Long courseId = r.getCourseId() != null
+                ? r.getCourseId()
+                : module == null ? null : module.getCourse().getCourseId();
+
+        if (courseId == null) {
+            throw bad("courseId or moduleId is required.");
+        }
+
+        Course course = access(user, courseId, true);
+
+        if (module != null
+                && !module.getCourse().getCourseId().equals(courseId)) {
+            throw bad("Module must belong to the selected course.");
+        }
+
+        validateMode(
+                r.getGenerationType(),
+                size(r.getQuestionIds()) + size(r.getGroupIds()),
+                size(r.getConfigs())
+        );
+
+        List<ExamRequests.QuestionLink> questionItems =
+                list(r.getQuestionIds());
+
+        Set<Long> ids = new HashSet<>();
+
+        for (var item : questionItems) {
+            Long questionId = item.getQuestionId();
+            positive(questionId);
+
+            if (!ids.add(questionId)) {
+                throw conflict("Question is duplicated.");
+            }
+        }
+
+        Map<Long, Question> questionMap = new HashMap<>();
+
+        if (!ids.isEmpty()) {
+            questionMap = questions
+                    .findActiveWithAccessRelationsByQuestionIdIn(ids)
+                    .stream()
+                    .collect(Collectors.toMap(
+                            Question::getQuestionId,
+                            Function.identity()
+                    ));
+
+            if (questionMap.size() != ids.size()) {
+                throw missing("Question");
+            }
+        }
+
+// Giữ nguyên kiểm tra quyền và trạng thái.
+        for (var item : questionItems) {
+            Question q = questionMap.get(item.getQuestionId());
+            active(user, q);
+        }
+
+        Set<Long> groupIds = new HashSet<>();
+        for (var item : list(r.getGroupIds())) {
+            if (!groupIds.add(item.getGroupId())) {
+                throw conflict("Group is duplicated.");
+            }
+            groupAccess(user, group(item.getGroupId()));
+        }
+
+        validateConfigs(r.getConfigs(), courseId);
+        long validated = System.nanoTime();
+
+        Exam e = Exam.builder()
+                .course(course)
+                .module(module)
+                .createdBy(users.getReferenceById(user.getId()))
+                .title(r.getTitle().strip())
+                .description(r.getDescription())
+                .durationMinutes(r.getDurationMinutes())
+                .isPractice(r.getIsPractice())
+                .generationType(r.getGenerationType())
+                .maxScore(maxScore)
+                .status("DRAFT")
+                .build();
+
+        exams.save(e);
+        long savedExam = System.nanoTime();
+
+        Set<Long> existingQuestionIds = new HashSet<>();
+
+        int nextOrder = 0;
+
+        Set<Long> attachedIds = new HashSet<>();
+
+
+        for (var item : questionItems) {
+            Question q = questionMap.get(item.getQuestionId());
+
+            ExamQuestion saved = attachValidatedQuestion(
+                    e,
+                    item,
+                    q,
+                    attachedIds,
+                    nextOrder
+            );
+
+            nextOrder = Math.max(
+                    nextOrder,
+                    saved.getOrderIndex() + 1
+            );
+        }
+
+        for (var item : list(r.getGroupIds())) {
+            attachGroup(user, e, item);
+        }
+        long attached = System.nanoTime();
+
+        saveConfigs(e, r.getConfigs());
+        exams.flush();
+        long flushed = System.nanoTime();
+
+        ExamResponse response = response(e, true);
+        long mapped = System.nanoTime();
+
+        log.info(
+                "EXAM_CREATE_DEBUG | userId={} | questionCount={} | groupCount={} | configCount={} "
+                        + "| validation={}ms | saveExam={}ms | attach={}ms "
+                        + "| saveConfigsFlush={}ms | response={}ms | total={}ms",
+                user.getId(),
+                size(r.getQuestionIds()),
+                size(r.getGroupIds()),
+                size(r.getConfigs()),
+                (validated - start) / 1_000_000,
+                (savedExam - validated) / 1_000_000,
+                (attached - savedExam) / 1_000_000,
+                (flushed - attached) / 1_000_000,
+                (mapped - flushed) / 1_000_000,
+                (mapped - start) / 1_000_000
+        );
+
+        return response;
+    }
+    private ExamQuestion attachValidatedQuestion(
+            Exam e,
+            ExamRequests.QuestionLink r,
+            Question q,
+            Set<Long> attachedIds,
+            int defaultOrder
+    ) {
+        if (!attachedIds.add(q.getQuestionId())) {
+            throw conflict("Question is already in this exam.");
+        }
+
+        int order = r.getOrderIndex() == null
+                ? defaultOrder
+                : r.getOrderIndex();
+
+        BigDecimal wt = r.getWeight() != null
+                ? weight(r.getWeight())
+                : BigDecimal.ONE;
+
+        return links.save(
+                ExamQuestion.builder()
+                        .exam(e)
+                        .question(q)
+                        .weight(wt)
+                        .orderIndex(order)
+                        .build()
+        );
+    }
     @Override @Transactional
     public ExamResponse update(UserPrincipal user,Long id,ExamRequests.Update r) {
         Exam e=write(user,id);
@@ -169,8 +564,36 @@ public class ManagerExamServiceImpl implements ManagerExamService {
         configs.deleteByExamExamId(id); links.deleteByExamExamId(id); groupLinks.deleteByExamExamId(id);
         exams.delete(e); exams.flush();
     }
-    @Override @Transactional public ExamResponse.QuestionLink addQuestion(UserPrincipal user,Long id,ExamRequests.QuestionLink r) {
-        Exam e=write(user,id); editable(e); return questionLink(attachQuestion(user,e,r,false));
+    @Override
+    @Transactional
+    public ExamResponse.QuestionLink addQuestion(
+            UserPrincipal user,
+            Long id,
+            ExamRequests.QuestionLink r
+    ) {
+        Exam e = write(user, id);
+        editable(e);
+
+        Map<Long, Question> currentQuestions = examQuestions(e);
+        Set<Long> existingQuestionIds = new HashSet<>(currentQuestions.keySet());
+
+        Question q = question(r.getQuestionId());
+
+        ExamQuestion saved = attachQuestion(
+                user,
+                e,
+                r,
+                q,
+                existingQuestionIds,
+                next(
+                        links.findByExamExamIdOrderByOrderIndexAscExamQuestionIdAsc(id)
+                                .stream()
+                                .map(ExamQuestion::getOrderIndex)
+                                .toList()
+                )
+        );
+
+        return questionLink(saved);
     }
     @Override @Transactional public ExamResponse.QuestionLink updateQuestionWeight(UserPrincipal user,Long id,Long linkId,ExamRequests.QuestionWeight r) {
         Exam e=write(user,id); editable(e); positive(linkId);
@@ -221,8 +644,22 @@ public class ManagerExamServiceImpl implements ManagerExamService {
         }
         Map<String,Question> bank=new LinkedHashMap<>();
         for(Question q:questions.findImportBank(courseId(e),e.getModule()==null?null:e.getModule().getModuleId())) bank.putIfAbsent(QuestionTextParser.hash(q.getContent()),q);
-        Set<String> attached=new HashSet<>(); for(Question q:examQuestions(e).values()) attached.add(QuestionTextParser.hash(q.getContent()));
-        int imported=0,reused=0,skipped=0; List<Long> ids=new ArrayList<>(); Map<String,QuestionGroup> importGroups=new LinkedHashMap<>();
+        Map<Long, Question> existingQuestions = examQuestions(e);
+
+        Set<String> attached = new HashSet<>();
+        Set<Long> existingQuestionIds = new HashSet<>(existingQuestions.keySet());
+
+        for (Question q : existingQuestions.values()) {
+            attached.add(QuestionTextParser.hash(q.getContent()));
+        }
+
+        int nextOrder = links
+                .findByExamExamIdOrderByOrderIndexAscExamQuestionIdAsc(id)
+                .stream()
+                .map(ExamQuestion::getOrderIndex)
+                .filter(Objects::nonNull)
+                .max(Integer::compareTo)
+                .orElse(-1) + 1;        int imported=0,reused=0,skipped=0; List<Long> ids=new ArrayList<>(); Map<String,QuestionGroup> importGroups=new LinkedHashMap<>();
         for(int idx=0; idx<parsed.size(); idx++) {
             var item=parsed.get(idx);
             BigDecimal wt = weightMap.getOrDefault(idx, BigDecimal.ONE);
@@ -239,18 +676,60 @@ public class ManagerExamServiceImpl implements ManagerExamService {
                 for(int i=0;i<item.options().size();i++) options.save(AnswerOption.builder().question(q).optionText(item.options().get(i)).isCorrect(i==item.correctIndex()).orderIndex(i).build());
                 bank.put(hash,q); imported++;
             } else reused++;
-            attachQuestion(user,e,new ExamRequests.QuestionLink(q.getQuestionId(),wt,null),true); ids.add(q.getQuestionId());
-        }
+            ExamRequests.QuestionLink linkRequest =
+                    new ExamRequests.QuestionLink(q.getQuestionId(), wt, nextOrder);
+
+            ExamQuestion saved = attachQuestion(
+                    user,
+                    e,
+                    linkRequest,
+                    q,
+                    existingQuestionIds,
+                    nextOrder
+            );
+
+            nextOrder = Math.max(nextOrder, saved.getOrderIndex() + 1);
+            ids.add(q.getQuestionId());        }
         links.flush(); return new ExamResponse.Imported(imported,reused,skipped,ids);
     }
 
-    private ExamQuestion attachQuestion(UserPrincipal user,Exam e,ExamRequests.QuestionLink r,boolean imported) {
-        Question q=question(r.getQuestionId()); questionAccess(user,q); if(!imported) active(user,q);
-        if(examQuestions(e).containsKey(q.getQuestionId())) throw conflict("Question is already in this exam.");
-        List<ExamQuestion> existing=links.findByExamExamIdOrderByOrderIndexAscExamQuestionIdAsc(e.getExamId());
-        int order=r.getOrderIndex()==null?next(existing.stream().map(ExamQuestion::getOrderIndex).toList()):r.getOrderIndex();
-        BigDecimal wt = r.getWeight() != null ? weight(r.getWeight()) : BigDecimal.ONE;
-        return links.saveAndFlush(ExamQuestion.builder().exam(e).question(q).weight(wt).orderIndex(order).build());
+    private ExamQuestion attachQuestion(
+            UserPrincipal user,
+            Exam e,
+            ExamRequests.QuestionLink r,
+            Question q,
+            Set<Long> existingQuestionIds,
+            int defaultOrder
+    ) {
+        questionAccess(user, q);
+        activeStatus(q);
+
+        if (!existingQuestionIds.add(q.getQuestionId())) {
+            throw conflict("Question is already in this exam.");
+        }
+
+        int order = r.getOrderIndex() == null
+                ? defaultOrder
+                : r.getOrderIndex();
+
+        BigDecimal wt = r.getWeight() != null
+                ? weight(r.getWeight())
+                : BigDecimal.ONE;
+
+        return links.save(
+                ExamQuestion.builder()
+                        .exam(e)
+                        .question(q)
+                        .weight(wt)
+                        .orderIndex(order)
+                        .build()
+        );
+    }
+
+    private void activeStatus(Question q) {
+        if (!"ACTIVE".equals(q.getStatus())) {
+            throw bad("Only ACTIVE questions can be selected from the bank.");
+        }
     }
     private ExamGroup attachGroup(UserPrincipal user,Exam e,ExamRequests.GroupLink r) {
         QuestionGroup g=group(r.getGroupId()); groupAccess(user,g);
@@ -342,21 +821,103 @@ public class ManagerExamServiceImpl implements ManagerExamService {
             for(Question q:questions.findByGroupGroupIdOrderByQuestionIdAsc(l.getGroup().getGroupId())) result.put(q.getQuestionId(),q);
         return result;
     }
-    private ExamResponse response(Exam e,boolean detail) {
-        List<ExamQuestion> direct=links.findByExamExamIdOrderByOrderIndexAscExamQuestionIdAsc(e.getExamId());
-        List<ExamGroup> grouped=groupLinks.findByExamExamIdOrderByOrderIndexAscExamGroupIdAsc(e.getExamId());
-        List<ExamConfig> configured=configs.findByExamExamIdOrderByConfigIdAsc(e.getExamId());
-        Map<Long,Question> all=examQuestions(e); Set<String> families=new HashSet<>(); all.values().forEach(q->families.add(family(q.getQuestionType())));
-        configured.forEach(c->families.add(family(c.getQuestionType())));
-        String kind=families.size()>1?null:families.stream().findFirst().orElse("QUIZ");
-        int count=all.size()+configured.stream().mapToInt(ExamConfig::getNumberOfQuestions).sum();
-        BigDecimal totalWeight=direct.stream().map(ExamQuestion::getWeight).reduce(BigDecimal.ZERO,BigDecimal::add);
-        Course course=e.getCourse()!=null?e.getCourse():e.getModule()==null?null:e.getModule().getCourse();
-        return new ExamResponse(e.getExamId(),e.getTitle(),e.getDescription(),course==null?null:course.getCourseId(),course==null?null:course.getTitle(),
-                e.getModule()==null?null:e.getModule().getModuleId(),e.getModule()==null?null:e.getModule().getTitle(),kind,e.getDurationMinutes(),e.getMaxScore(),totalWeight,count,
-                e.getStatus(),e.getGenerationType(),e.getIsPractice(),e.getCreatedAt(),
-                detail?configured.stream().map(c->new ExamResponse.Config(c.getConfigId(),c.getQuestionType(),c.getNumberOfQuestions(),c.getModule()==null?null:c.getModule().getModuleId(),c.getDifficulty(),c.getWeightEach())).toList():null,
-                detail?direct.stream().map(this::questionLink).toList():null,detail?grouped.stream().map(this::groupLink).toList():null);
+
+    private ExamResponse response(Exam e, boolean detail) {
+        List<ExamQuestion> direct =
+                links.findByExamExamIdOrderByOrderIndexAscExamQuestionIdAsc(
+                        e.getExamId()
+                );
+
+        List<ExamConfig> configured =
+                configs.findByExamExamIdOrderByConfigIdAsc(
+                        e.getExamId()
+                );
+
+        List<ExamGroup> grouped = detail
+                ? groupLinks.findByExamExamIdOrderByOrderIndexAscExamGroupIdAsc(
+                e.getExamId()
+        )
+                : List.of();
+
+        Map<Long, Question> all = examQuestions(e);
+
+        return buildResponse(e, detail, direct, grouped, configured, all);
+    }
+    private ExamResponse buildResponse(
+            Exam e,
+            boolean detail,
+            List<ExamQuestion> direct,
+            List<ExamGroup> grouped,
+            List<ExamConfig> configured,
+            Map<Long, Question> all
+    ) {
+        Set<String> families = new HashSet<>();
+
+        all.values().forEach(q ->
+                families.add(family(q.getQuestionType()))
+        );
+
+        configured.forEach(c ->
+                families.add(family(c.getQuestionType()))
+        );
+
+        String kind = families.size() > 1
+                ? null
+                : families.stream().findFirst().orElse("QUIZ");
+
+        int count = all.size()
+                + configured.stream()
+                .mapToInt(ExamConfig::getNumberOfQuestions)
+                .sum();
+
+        BigDecimal totalWeight = direct.stream()
+                .map(ExamQuestion::getWeight)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        Course course = e.getCourse() != null
+                ? e.getCourse()
+                : e.getModule() == null
+                ? null
+                : e.getModule().getCourse();
+
+        return new ExamResponse(
+                e.getExamId(),
+                e.getTitle(),
+                e.getDescription(),
+                course == null ? null : course.getCourseId(),
+                course == null ? null : course.getTitle(),
+                e.getModule() == null ? null : e.getModule().getModuleId(),
+                e.getModule() == null ? null : e.getModule().getTitle(),
+                kind,
+                e.getDurationMinutes(),
+                e.getMaxScore(),
+                totalWeight,
+                count,
+                e.getStatus(),
+                e.getGenerationType(),
+                e.getIsPractice(),
+                e.getCreatedAt(),
+                detail
+                        ? configured.stream()
+                        .map(c -> new ExamResponse.Config(
+                                c.getConfigId(),
+                                c.getQuestionType(),
+                                c.getNumberOfQuestions(),
+                                c.getModule() == null
+                                        ? null
+                                        : c.getModule().getModuleId(),
+                                c.getDifficulty(),
+                                c.getWeightEach()
+                        ))
+                        .toList()
+                        : null,
+                detail
+                        ? direct.stream().map(this::questionLink).toList()
+                        : null,
+                detail
+                        ? grouped.stream().map(this::groupLink).toList()
+                        : null
+        );
     }
     private ExamResponse.QuestionLink questionLink(ExamQuestion l) {
         Long rawGroupId=l.getQuestion().getGroup()!=null?l.getQuestion().getGroup().getGroupId():null;

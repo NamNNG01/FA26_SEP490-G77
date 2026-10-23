@@ -6,6 +6,8 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import java.util.Collection;
+import java.util.List;
 
 @Repository
 public interface ExamGroupRepository extends JpaRepository<ExamGroup, Long> {
@@ -20,5 +22,15 @@ public interface ExamGroupRepository extends JpaRepository<ExamGroup, Long> {
     @Modifying
     @Query("DELETE FROM ExamGroup eg WHERE eg.group.groupId = :groupId")
     int deleteByGroupId(@Param("groupId") Long groupId);
+    @Query("""
+    SELECT eg
+    FROM ExamGroup eg
+    JOIN FETCH eg.group g
+    WHERE eg.exam.examId IN :examIds
+    ORDER BY eg.exam.examId, eg.orderIndex, eg.examGroupId
+    """)
+    List<ExamGroup> findAllByExamIds(
+            @Param("examIds") Collection<Long> examIds
+    );
 }
 

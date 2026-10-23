@@ -64,4 +64,31 @@ public interface QuestionRepository extends JpaRepository<Question, Long>, JpaSp
     @Modifying
     @Query("UPDATE Question q SET q.group = null WHERE q.group.groupId = :groupId")
     int detachFromGroup(@Param("groupId") Long groupId);
+    @Query("""
+    SELECT q
+    FROM Question q
+    LEFT JOIN FETCH q.group g
+    WHERE g.groupId IN :groupIds
+    ORDER BY g.groupId, q.questionId
+    """)
+    List<Question> findAllByGroupIds(
+            @Param("groupIds") Collection<Long> groupIds
+    );
+    List<Question> findAllByQuestionIdIn(Collection<Long> ids);
+    @Query("""
+    SELECT DISTINCT q
+    FROM Question q
+    LEFT JOIN FETCH q.course c
+    LEFT JOIN FETCH q.module m
+    LEFT JOIN FETCH m.course
+    LEFT JOIN FETCH q.group g
+    LEFT JOIN FETCH g.course
+    LEFT JOIN FETCH g.module gm
+    LEFT JOIN FETCH gm.course
+    WHERE q.questionId IN :ids
+      AND q.deletedAt IS NULL
+    """)
+    List<Question> findActiveWithAccessRelationsByQuestionIdIn(
+            @Param("ids") Collection<Long> ids
+    );
 }

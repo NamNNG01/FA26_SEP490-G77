@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 
 @Repository
@@ -23,4 +24,18 @@ public interface ExamQuestionRepository extends JpaRepository<ExamQuestion, Long
             "WHERE eq.question.group.groupId = :groupId AND eq.exam.status = :examStatus")
     long countByQuestionGroupIdAndExamStatus(@Param("groupId") Long groupId,
                                              @Param("examStatus") String examStatus);
+
+    @Query("""
+    SELECT DISTINCT eq
+    FROM ExamQuestion eq
+    JOIN FETCH eq.question q
+    LEFT JOIN FETCH q.group
+    WHERE eq.exam.examId IN :examIds
+    ORDER BY eq.exam.examId, eq.orderIndex, eq.examQuestionId
+    """)
+    List<ExamQuestion> findAllByExamIds(
+            @Param("examIds") Collection<Long> examIds
+    );
+
+
 }
