@@ -242,6 +242,69 @@ class ExamApiIntegrationTest {
         submit(payload).andExpect(status().isBadRequest());
     }
 
+    @Test void groupExpansionWithMultipleQuestionsAndDifferentPoints() throws Exception {
+        Exam exam = exam(course, module); exam.setMaxScore(BigDecimal.valueOf(10));
+        QuestionGroup group = QuestionGroup.builder().course(course).module(module).title("Reading group").build(); em.persist(group);
+        List<Map<String, Object>> qPoints = new ArrayList<>();
+        for(int i=0; i<3; i++) {
+            Question q = question(module, "ESSAY", "Group q " + i); q.setGroup(group); em.persist(q);
+            qPoints.add(Map.of("questionId", q.getQuestionId(), "points", BigDecimal.valueOf(i + 1)));
+        }
+        em.flush();
+        String payload = json.writeValueAsString(Map.of("groupId", group.getGroupId(), "questions", qPoints));
+        JsonNode added = data(call(collaborator, post(path(exam)+"/groups").contentType(MediaType.APPLICATION_JSON).content(payload))
+                .andExpect(status().isCreated()));
+        assertEquals(3, added.path("questionCount").asInt());
+    }
+
+    @Test void addGroupValidatesExactGroupQuestions() throws Exception {
+        Exam exam = exam(course, module);
+        QuestionGroup group = QuestionGroup.builder().course(course).module(module).title("Group").build(); em.persist(group);
+        Question q1 = question(module, "ESSAY", "Q1"); q1.setGroup(group); em.persist(q1);
+        em.flush();
+        String payload = json.writeValueAsString(Map.of("groupId", group.getGroupId(), "questions", List.of()));
+        call(collaborator, post(path(exam)+"/groups").contentType(MediaType.APPLICATION_JSON).content(payload))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test void removeGroupDeletesExamQuestionsWithoutTouchingBank() throws Exception {
+        Exam exam = exam(course, module); exam.setMaxScore(BigDecimal.valueOf(5));
+        QuestionGroup group = QuestionGroup.builder().course(course).module(module).title("Group").build(); em.persist(group);
+        Question q1 = question(module, "ESSAY", "Q1"); q1.setGroup(group); em.persist(q1);
+        em.flush();
+        String payload = json.writeValueAsString(Map.of("groupId", group.getGroupId(), "questions", List.of(Map.of("questionId", q1.getQuestionId(), "points", 5))));
+        JsonNode added = data(call(collaborator, post(path(exam)+"/groups").contentType(MediaType.APPLICATION_JSON).content(payload))
+                .andExpect(status().isCreated()));
+        long examGroupId = added.path("examGroupId").asLong();
+        call(manager, delete(path(exam)+"/groups/"+examGroupId)).andExpect(status().isOk());
+        assertNotNull(em.find(Question.class, q1.getQuestionId()));
+    }
+
+    @Test void publishValidatesTotalPointsMatchMaxScore() throws Exception {
+        Exam exam = exam(course, module); exam.setMaxScore(BigDecimal.valueOf(5));
+        attach(exam, question);
+        call(manager, patch(path(exam) + "/publish").contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"PUBLISHED\"}"))
+                .andExpect(status().isConflict());
+        exam.setMaxScore(BigDecimal.ONE);
+        call(manager, patch(path(exam) + "/publish").contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"PUBLISHED\"}"))
+                .andExpect(status().isOk());
+    }
+
+    @Test void publishedExamLocksMaxScoreAndPoints() throws Exception {
+        Exam exam = exam(course, module); exam.setMaxScore(BigDecimal.ONE); attach(exam, question);
+        call(manager, patch(path(exam) + "/publish").contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"PUBLISHED\"}"))
+                .andExpect(status().isOk());
+        call(manager, put(path(exam)).contentType(MediaType.APPLICATION_JSON).content("{\"maxScore\":10}"))
+                .andExpect(status().isConflict());
+    }
+
+    @Test void importWithoutPointsIsRejectedAllOrNothing() throws Exception {
+        Exam exam = exam(course, module); exam.setMaxScore(BigDecimal.valueOf(10));
+        String contents = "1. What is two plus two?\nA. Three\nB. Four\nAnswer: B";
+        MockMultipartFile file = new MockMultipartFile("file", "exam.txt", "text/plain", contents.getBytes(StandardCharsets.UTF_8));
+        call(manager, multipart(path(exam)+"/import").file(file)).andExpect(status().isBadRequest());
+    }
+
     @Test void creatingAndUpdatingWithDeprecatedPassMarkAndMaxAttemptsSucceedsAndIgnoresThem() throws Exception {
         Map<String,Object> payload = create();
         payload.put("passMark", 80);
