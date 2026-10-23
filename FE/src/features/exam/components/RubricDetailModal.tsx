@@ -59,6 +59,7 @@ export function RubricDetailModal({
 
   const totalScore = criteria.reduce((sum, c) => sum + (Number(c.maxScore) || 0), 0);
   const totalWeight = criteria.reduce((sum, c) => sum + (Number(c.weight) || 0), 0);
+  const hasValidTotalWeight = Math.round(totalWeight * 100) / 100 === 100;
 
   const addCriterion = () => {
     setCriteria((prev) => [...prev, { name: '', maxScore: 5, weight: 0, descriptors: '' }]);
@@ -79,6 +80,9 @@ export function RubricDetailModal({
       setInvalidRowIdx(null);
       setErrorMsg('');
     }
+    if (field === 'weight' && errorMsg.includes('weight')) {
+      setErrorMsg('');
+    }
   };
 
   const handleSave = async () => {
@@ -95,6 +99,17 @@ export function RubricDetailModal({
         setErrorMsg(`Criterion #${i + 1} max score must be greater than 0.`);
         return;
       }
+      if (!Number.isFinite(Number(c.weight)) || Number(c.weight) < 0 || Number(c.weight) > 100) {
+        setInvalidRowIdx(i);
+        setErrorMsg(`Criterion #${i + 1} weight must be between 0% and 100%.`);
+        return;
+      }
+    }
+
+    if (!hasValidTotalWeight) {
+      setInvalidRowIdx(null);
+      setErrorMsg('Rubric criterion weights must total exactly 100% before saving.');
+      return;
     }
 
     setSaving(true);
@@ -126,8 +141,8 @@ export function RubricDetailModal({
             <span>
               Live Total Score: <strong className="text-content font-bold">{totalScore} pts</strong>
             </span>
-            <span className={totalWeight !== 100 ? 'text-warning font-medium' : 'text-success font-medium'}>
-              Total Weight: {totalWeight}% {totalWeight !== 100 && '(suggested: 100%)'}
+            <span className={hasValidTotalWeight ? 'text-success font-medium' : 'text-warning font-medium'}>
+              Total Weight: {totalWeight}% {!hasValidTotalWeight && '(must equal 100% to save)'}
             </span>
           </div>
           <div className="flex items-center gap-2">
