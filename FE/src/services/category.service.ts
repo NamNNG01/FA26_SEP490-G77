@@ -6,6 +6,7 @@ export interface AdminCategoryNode {
   slug?: string;
   code: string;
   name: string;
+  description?: string | null;
   sortOrder: number;
   isActive: boolean;
 }
@@ -16,11 +17,13 @@ export interface AdminCategoryTreeResponse {
 
 export interface CreateCategoryRequest {
   name: string;
+  description?: string;
   isActive: boolean;
 }
 
 export interface UpdateCategoryRequest {
   name?: string;
+  description?: string;
   isActive?: boolean;
 }
 
@@ -29,6 +32,7 @@ export interface AdminCategoryItem {
   slug?: string;
   code: string;
   name: string;
+  description?: string | null;
   sortOrder: number;
   isActive: boolean;
 }
