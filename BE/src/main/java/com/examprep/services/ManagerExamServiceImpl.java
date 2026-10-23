@@ -237,15 +237,15 @@ public class ManagerExamServiceImpl implements ManagerExamService {
     }
     private void validateConfigs(List<ExamRequests.Config> values,Long courseId) {
         for(var c:list(values)) {
-            if(!TYPES.contains(c.questionType())) throw bad("Invalid questionType.");
-            validateConfigModule(c.moduleId()==null?null:module(c.moduleId()),courseId);
+            if(!TYPES.contains(c.getQuestionType())) throw bad("Invalid questionType.");
+            validateConfigModule(c.getModuleId()==null?null:module(c.getModuleId()),courseId);
         }
     }
     private void validateConfigModule(Module module,Long courseId) {
         if(module!=null && !module.getCourse().getCourseId().equals(courseId)) throw bad("Config module must belong to the exam course.");
     }
     private void saveConfigs(Exam e,List<ExamRequests.Config> values) {
-        for(var c:list(values)) configs.save(ExamConfig.builder().exam(e).questionType(c.questionType()).numberOfQuestions(c.numberOfQuestions()).module(c.moduleId()==null?null:module(c.moduleId())).difficulty(c.difficulty()).build());
+        for(var c:list(values)) configs.save(ExamConfig.builder().exam(e).questionType(c.getQuestionType()).numberOfQuestions(c.getNumberOfQuestions()).module(c.getModuleId()==null?null:module(c.getModuleId())).difficulty(c.getDifficulty()).build());
     }
     private void validateMode(String mode,int fixed,int random) {
         if(!Set.of("STATIC","RANDOM","MIXED").contains(mode) || (mode.equals("STATIC") && (fixed==0 || random>0)) || (mode.equals("RANDOM") && (random==0 || fixed>0)) || (mode.equals("MIXED") && (fixed==0 || random==0)))

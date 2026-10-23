@@ -1,5 +1,6 @@
 package com.examprep.dto;
 
+import com.examprep.exceptions.BadRequestException;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonSetter;
 import jakarta.validation.Valid;
@@ -21,8 +22,27 @@ public final class ExamRequests {
     public record GroupLink(@NotNull @Positive Long groupId,
             @DecimalMin(value="0", inclusive=false) @Digits(integer=3, fraction=2) BigDecimal points,
             @PositiveOrZero Integer orderIndex) {}
-    public record Config(@NotBlank String questionType, @NotNull @Min(1) @Max(500) Integer numberOfQuestions,
-            @Positive Long moduleId, @Pattern(regexp="EASY|MEDIUM|HARD") String difficulty) {}
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class Config {
+        @NotBlank
+        private String questionType;
+        @NotNull @Min(1) @Max(500)
+        private Integer numberOfQuestions;
+        @Positive
+        private Long moduleId;
+        @Pattern(regexp="EASY|MEDIUM|HARD")
+        private String difficulty;
+
+        @JsonSetter("skillTag")
+        public void setSkillTag(Object skillTag) {
+            throw new BadRequestException("skillTag is not supported in exam config.");
+        }
+    }
 
     @Data
     @NoArgsConstructor

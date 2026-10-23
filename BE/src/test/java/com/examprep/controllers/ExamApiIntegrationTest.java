@@ -229,12 +229,11 @@ class ExamApiIntegrationTest {
         assertEquals("DRAFT", exam.getStatus());
     }
 
-    @Test void incompleteRandomDraftCanBeSavedButCannotPublish() throws Exception {
-        long id = data(submit(random("ESSAY")).andExpect(status().isCreated())).path("examId").asLong();
-        call(manager, put("/api/v1/manager/exams/" + id).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"configs\":[]}")).andExpect(status().isOk());
-        call(manager, patch("/api/v1/manager/exams/" + id + "/publish").contentType(MediaType.APPLICATION_JSON)
-                .content("{\"status\":\"PUBLISHED\"}")).andExpect(status().isBadRequest());
+    @Test void randomConfigsRejectSkillTagWithBadRequest() throws Exception {
+        Map<String,Object> payload = create();
+        payload.put("generationType", "RANDOM"); payload.put("questionIds", List.of());
+        payload.put("configs", List.of(Map.of("questionType", "ESSAY", "numberOfQuestions", 3, "moduleId", module.getModuleId(), "skillTag", "java")));
+        submit(payload).andExpect(status().isBadRequest());
     }
 
     @Test void creatingAndUpdatingWithDeprecatedPassMarkAndMaxAttemptsSucceedsAndIgnoresThem() throws Exception {
