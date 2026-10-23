@@ -100,17 +100,15 @@ export function QuestionBankSelectModal({
           moduleId: moduleId ? Number(moduleId) : undefined,
           difficulty: difficulty !== "all" ? difficulty : undefined,
           questionType: questionType !== "all" ? questionType : undefined,
+          questionTypes: questionType === "all" ? allowedQuestionTypes : undefined,
           status: "ACTIVE",
           page,
           size: 10,
         })
         .then((res) => {
-          const filtered = res.content.filter((q) =>
-            allowedQuestionTypes.includes(q.questionType),
-          );
-          setQuestions(filtered);
+          setQuestions(res.content);
           setTotalPages(res.totalPages || 1);
-          setTotalElements(res.totalElements || filtered.length);
+          setTotalElements(res.totalElements || res.content.length);
         })
         .catch((err) => {
           setQuestions([]);
