@@ -37,8 +37,8 @@ export function ExamAiGenerateTab({
   const [courseId, setCourseId] = useState<string>('');
   const [moduleId, setModuleId] = useState<string>('');
   const [title, setTitle] = useState('');
-  const [questionCount, setQuestionCount] = useState<number>(10);
   const [durationMinutes, setDurationMinutes] = useState<number>(45);
+  const [maxScore, setMaxScore] = useState<number>(100);
   const [language, setLanguage] = useState<'en' | 'vi'>('en');
   const [context, setContext] = useState('');
 
@@ -51,7 +51,7 @@ export function ExamAiGenerateTab({
   const allowedTypes =
     formKind === 'QUIZ'
       ? ['SINGLE_CHOICE', 'MULTIPLE_CHOICE', 'TRUE_FALSE', 'FILL_BLANK', 'MATCHING']
-      : [formKind];
+      : ['ESSAY', 'DIAGRAM'];
 
   const [typeCounts, setTypeCounts] = useState<Record<string, number>>(
     formKind === 'QUIZ'
@@ -62,7 +62,7 @@ export function ExamAiGenerateTab({
           FILL_BLANK: 0,
           MATCHING: 0,
         }
-      : { [formKind]: 10 }
+      : { ESSAY: 10, DIAGRAM: 0 }
   );
 
   const [generating, setGenerating] = useState(false);
@@ -76,7 +76,7 @@ export function ExamAiGenerateTab({
 
   const MSG01 = 'This field is required.';
   const MSG06 = 'AI is generating questions, please wait...';
-  const MSG08 = 'Failed to generate exam with AI. Please try again or reduce question count.';
+  const MSG08 = 'Failed to generate exam with AI. Please try again or reduce the requested question distribution.';
 
   useEffect(() => {
     courseService.getCourses().then((res) => {
@@ -108,9 +108,12 @@ export function ExamAiGenerateTab({
 
   const totalDiff = Number(diffDist.EASY || 0) + Number(diffDist.MEDIUM || 0) + Number(diffDist.HARD || 0);
   const totalTypes = Object.values(typeCounts).reduce((sum, count) => sum + (Number(count) || 0), 0);
-  const isDiffMatch = totalDiff === questionCount;
-  const isTypeMatch = totalTypes === questionCount;
-  const canGenerate = courseId !== '' && moduleId !== '' && questionCount >= 1 && questionCount <= 50 && isDiffMatch && isTypeMatch;
+  const isDiffMatch = totalDiff > 0 && totalDiff <= 50;
+  const isTypeMatch = totalTypes === totalDiff;
+  const questionCount = totalDiff;
+  const canGenerate = courseId !== '' && moduleId !== '' && isDiffMatch && isTypeMatch && maxScore > 0 && maxScore <= 10000 && (String(maxScore).split('.')[1]?.length ?? 0) <= 2;
+  const draftTotalWeight = draft?.questions.reduce((sum, question) => sum + (question.defaultPoints ?? 1), 0) ?? 0;
+  const scoreForWeight = (weight: number) => draftTotalWeight > 0 ? Number(((maxScore * weight) / draftTotalWeight).toFixed(2)) : 0;
 
   const handleGenerate = async () => {
     const errors: Record<string, string> = {};
@@ -196,6 +199,9 @@ export function ExamAiGenerateTab({
   // Mirrors the Q-03 rules the backend applies on save.
   const validateDraftQuestion = (q: AiQuestionDraft): string | null => {
     if (!q.content.trim()) return 'Question content cannot be empty';
+    const weight = q.defaultPoints ?? 1;
+    if (!Number.isFinite(weight) || weight <= 0 || weight > 1000 || (String(weight).split('.')[1]?.length ?? 0) > 2)
+      return 'Weight must be greater than 0, no more than 1,000, and have up to 2 decimal places';
     const options = q.options ?? [];
     const correctCount = options.filter((o) => o.isCorrect).length;
     if (['SINGLE_CHOICE', 'MULTIPLE_CHOICE', 'TRUE_FALSE'].includes(q.questionType) && (options.length < 2 || options.length > 10))
@@ -211,6 +217,10 @@ export function ExamAiGenerateTab({
 
   const handleConfirmSave = async () => {
     if (!draft || draft.questions.length === 0) return;
+    if (!Number.isFinite(maxScore) || maxScore <= 0 || maxScore > 10000 || (String(maxScore).split('.')[1]?.length ?? 0) > 2) {
+      setErrorMsg('Max score must be greater than 0, no more than 10,000, and have up to 2 decimal places.');
+      return;
+    }
     if (!moduleId) {
       setFieldErrors({ moduleId: 'Select a module before saving the exam.' });
       setErrorMsg('Select a module before saving the exam.');
@@ -259,9 +269,10 @@ export function ExamAiGenerateTab({
         generationType: 'STATIC',
         questionIds: finalQuestionIds.map((qid, idx) => ({
           questionId: qid,
-          points: draft.questions[idx]?.defaultPoints ?? 1,
+          weight: draft.questions[idx]?.defaultPoints ?? 1,
           orderIndex: idx,
         })),
+        maxScore,
       });
 
       toast.success('Exam successfully created from AI draft.');
@@ -353,20 +364,6 @@ export function ExamAiGenerateTab({
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-sm font-medium text-content-secondary block mb-1">
-                  Question Count (1-50) *
-                </label>
-                <input
-                  type="number"
-                  min={1}
-                  max={50}
-                  className="w-full px-3 py-1.5 text-sm rounded-[10px] border border-line bg-surface focus:outline-none focus:ring-1 focus:ring-brand-ink"
-                  value={questionCount}
-                  onChange={(e) => setQuestionCount(Math.max(1, Math.min(50, Number(e.target.value) || 1)))}
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium text-content-secondary block mb-1">
                   Duration (min)
                 </label>
                 <input
@@ -376,6 +373,19 @@ export function ExamAiGenerateTab({
                   className="w-full px-3 py-1.5 text-sm rounded-[10px] border border-line bg-surface focus:outline-none focus:ring-1 focus:ring-brand-ink"
                   value={durationMinutes}
                   onChange={(e) => setDurationMinutes(Math.max(1, Math.min(600, Number(e.target.value) || 1)))}
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-content-secondary block mb-1">Max Score *</label>
+                <input
+                  type="number"
+                  min={0.01}
+                  max={10000}
+                  step={0.01}
+                  className="w-full px-3 py-1.5 text-sm rounded-[10px] border border-line bg-surface focus:outline-none focus:ring-1 focus:ring-brand-ink"
+                  value={maxScore}
+                  onChange={(e) => setMaxScore(Number(e.target.value) || 0)}
                 />
               </div>
             </div>
@@ -417,7 +427,7 @@ export function ExamAiGenerateTab({
                   isDiffMatch ? 'text-success' : 'text-danger'
                 }`}
               >
-                Current Total: {totalDiff} / {questionCount}
+                Total questions: {totalDiff}
               </span>
             </div>
             <div className="grid grid-cols-3 gap-3">
@@ -471,7 +481,7 @@ export function ExamAiGenerateTab({
                   isTypeMatch ? 'text-success' : 'text-danger'
                 }`}
               >
-                Current Total: {totalTypes} / {questionCount}
+                Total questions: {totalTypes}
               </span>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -585,7 +595,21 @@ export function ExamAiGenerateTab({
                           {q.questionMetadata.skillTag}
                         </Badge>
                       )}
-                      <span className="text-2xs text-content-subtle">{q.defaultPoints ?? 1} pt</span>
+                      <label className="text-2xs text-content-secondary inline-flex items-center gap-1.5">
+                        Weight
+                        <input
+                          type="number"
+                          min={0}
+                          max={1000}
+                          step={1}
+                          className="w-20 px-2 py-1 rounded border border-line bg-surface text-content"
+                          value={q.defaultPoints ?? 1}
+                          onChange={(e) => updateDraftQuestion(idx, { defaultPoints: Number(e.target.value) || 0 })}
+                        />
+                      </label>
+                      <span className="text-2xs text-brand-ink font-semibold">
+                        Score: {scoreForWeight(q.defaultPoints ?? 1)} pts
+                      </span>
                       <Select
                         className="w-28 text-xs"
                         value={q.difficulty}

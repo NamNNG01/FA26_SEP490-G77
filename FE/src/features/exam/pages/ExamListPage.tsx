@@ -14,7 +14,6 @@ import { getApiErrorMessage } from "@/utils/apiError";
 import {
   examService,
   type ExamListItem,
-  type ExamKind,
   type ExamStatus,
 } from "@/services/exam.service";
 import {
@@ -77,6 +76,7 @@ export function ExamListPage() {
   const [deleting, setDeleting] = useState(false);
 
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
   const [bulkDeleteSummary, setBulkDeleteSummary] = useState<{
     success: number;
     failed: number;
@@ -160,29 +160,16 @@ export function ExamListPage() {
 
     try {
       if (activeTab === "ASSESSMENT") {
-        const kinds: ExamKind[] = ["ESSAY", "DIAGRAM"];
-        const pages = await Promise.all(
-          kinds.map(async (examKind) => {
-            const items: ExamListItem[] = [];
-            let currentPage = 0;
-            let hasMore = true;
-            while (hasMore) {
-              const response = await examService.getExams({
-                ...filters,
-                examKind,
-                page: currentPage,
-                size: 100,
-              });
-              items.push(...(response.content || []));
-              hasMore = !response.last && response.content.length > 0;
-              currentPage += 1;
-            }
-            return items;
-          }),
-        );
-        const unique = new Map<number, ExamListItem>();
-        pages.flat().forEach((exam) => unique.set(exam.examId, exam));
-        const allAssessments = [...unique.values()].sort(
+        const allAssessments: ExamListItem[] = [];
+        let currentPage = 0;
+        let hasMore = true;
+        while (hasMore) {
+          const response = await examService.getExams({ ...filters, page: currentPage, size: 100 });
+          allAssessments.push(...(response.content || []).filter((exam) => exam.examKind !== "QUIZ" && exam.examKind !== "CODE"));
+          hasMore = !response.last && response.content.length > 0;
+          currentPage += 1;
+        }
+        allAssessments.sort(
           (a, b) =>
             b.createdAt.localeCompare(a.createdAt) || b.examId - a.examId,
         );
@@ -239,7 +226,7 @@ export function ExamListPage() {
     updateUrlParams({ tab, page: 0 });
   };
 
-  const handleNewExam = (kind: "QUIZ" | "ESSAY" | "DIAGRAM") => {
+  const handleNewExam = (kind: "QUIZ" | "ESSAY") => {
     navigate(`/manager/exams/${kind.toLowerCase()}/new`);
   };
 
@@ -281,7 +268,7 @@ export function ExamListPage() {
       "Course",
       "Module",
       "Questions",
-      "Total Points",
+      "Max Score",
       "Duration (min)",
       "Status",
       "Generation Type",
@@ -296,7 +283,7 @@ export function ExamListPage() {
       `"${(e.courseName || "").replace(/"/g, '""')}"`,
       `"${(e.moduleName || "").replace(/"/g, '""')}"`,
       e.questionCount,
-      e.totalPoints,
+      e.maxScore ?? e.totalPoints ?? 0,
       e.durationMinutes,
       e.status,
       e.generationType,
@@ -325,9 +312,7 @@ export function ExamListPage() {
   const handleEditExam = (exam: ExamListItem) => {
     if (exam.examKind === "QUIZ") {
       navigate(`/manager/exams/quiz/${exam.examId}`);
-    } else if (exam.examKind === "ESSAY" || exam.examKind === "DIAGRAM") {
-      navigate(`/manager/exams/${exam.examKind.toLowerCase()}/${exam.examId}`);
-    }
+    } else if (exam.examKind !== "CODE") navigate(`/manager/exams/essay/${exam.examId}`);
   };
 
   const handleApplyStatusChange = async () => {
@@ -416,8 +401,10 @@ export function ExamListPage() {
       }
     }
 
+    setBulkDeleteConfirmOpen(false);
     setBulkDeleteSummary({ success, failed, errors });
     setBulkDeleting(false);
+    setSelectedExamIds(new Set());
     fetchExams();
   };
 
@@ -478,7 +465,7 @@ export function ExamListPage() {
               size="sm"
               loading={bulkDeleting}
               icon={<Icon.Trash className="w-4 h-4" />}
-              onClick={handleBulkDelete}
+              onClick={() => setBulkDeleteConfirmOpen(true)}
             >
               Bulk Delete ({selectedExamIds.size})
             </Button>
@@ -508,11 +495,6 @@ export function ExamListPage() {
                 label: "Essay Exam",
                 icon: <Icon.FileText className="w-4 h-4" />,
                 onClick: () => handleNewExam("ESSAY"),
-              },
-              {
-                label: "Diagram Exam",
-                icon: <Icon.Edit className="w-4 h-4" />,
-                onClick: () => handleNewExam("DIAGRAM"),
               },
             ]}
           />
@@ -649,11 +631,6 @@ export function ExamListPage() {
                       icon: <Icon.FileText className="w-4 h-4" />,
                       onClick: () => handleNewExam("ESSAY"),
                     },
-                    {
-                      label: "Diagram Exam",
-                      icon: <Icon.Edit className="w-4 h-4" />,
-                      onClick: () => handleNewExam("DIAGRAM"),
-                    },
                   ]}
                 />
               ) : (
@@ -688,7 +665,7 @@ export function ExamListPage() {
                   <th className="px-3 py-3">Module</th>
                   <th className="px-3 py-3">Kind</th>
                   <th className="px-3 py-3 text-center">Questions</th>
-                  <th className="px-3 py-3 text-center">Points</th>
+                  <th className="px-3 py-3 text-center">Max Score</th>
                   <th className="px-3 py-3 text-center">Duration</th>
                   <th className="px-3 py-3 text-center">Status</th>
                   <th className="px-3 py-3">Created</th>
@@ -698,9 +675,7 @@ export function ExamListPage() {
               <tbody className="divide-y divide-line-faint text-sm">
                 {exams.map((exam) => {
                   const isChecked = selectedExamIds.has(exam.examId);
-                  const isSupportedKind = ["QUIZ", "ESSAY", "DIAGRAM"].includes(
-                    exam.examKind,
-                  );
+                  const isSupportedKind = exam.examKind !== "CODE";
 
                   return (
                     <tr
@@ -741,23 +716,17 @@ export function ExamListPage() {
                       </td>
                       <td className="px-3 py-3">
                         <Badge
-                          variant={
-                            exam.examKind === "QUIZ"
-                              ? "purple"
-                              : exam.examKind === "ESSAY"
-                                ? "default"
-                                : "warning"
-                          }
+                          variant={exam.examKind === "QUIZ" ? "purple" : "default"}
                           className="text-2xs"
                         >
-                          {exam.examKind}
+                          {exam.examKind === "DIAGRAM" || !exam.examKind ? "ESSAY" : exam.examKind}
                         </Badge>
                       </td>
                       <td className="px-3 py-3 text-center text-content-secondary font-medium">
                         {exam.questionCount}
                       </td>
                       <td className="px-3 py-3 text-center text-brand-ink font-semibold">
-                        {exam.totalPoints}
+                        {exam.maxScore ?? exam.totalPoints ?? 0}
                       </td>
                       <td className="px-3 py-3 text-center text-content-secondary">
                         {exam.durationMinutes}m
@@ -1029,6 +998,25 @@ export function ExamListPage() {
             </div>
           )}
         </div>
+      </Modal>
+
+      <Modal
+        open={bulkDeleteConfirmOpen}
+        onClose={() => !bulkDeleting && setBulkDeleteConfirmOpen(false)}
+        title="Confirm Bulk Delete"
+        size="sm"
+        footer={
+          <div className="flex items-center justify-end gap-2 w-full">
+            <Button variant="outline" onClick={() => setBulkDeleteConfirmOpen(false)} disabled={bulkDeleting}>Cancel</Button>
+            <Button variant="danger" onClick={handleBulkDelete} loading={bulkDeleting} disabled={bulkDeleting || selectedExamIds.size === 0}>
+              Delete {selectedExamIds.size} Exam{selectedExamIds.size === 1 ? '' : 's'}
+            </Button>
+          </div>
+        }
+      >
+        <p className="text-sm text-content">
+          Permanently delete the <strong>{selectedExamIds.size} selected exam{selectedExamIds.size === 1 ? '' : 's'}</strong>? This action cannot be undone. Exams with student attempts may fail to delete.
+        </p>
       </Modal>
 
       <Modal

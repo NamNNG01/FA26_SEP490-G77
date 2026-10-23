@@ -11,7 +11,7 @@ import { getApiErrorMessage } from '@/utils/apiError';
 interface QuestionGroupModalProps {
   open: boolean;
   onClose: () => void;
-  onSelectGroup: (group: QuestionGroupItem, points: number) => void;
+  onSelectGroup: (group: QuestionGroupItem) => void;
   existingGroupIds: Set<number>;
   courseId?: number;
   moduleId?: number;
@@ -33,7 +33,6 @@ export function QuestionGroupModal({
   const [groups, setGroups] = useState<QuestionGroupItem[]>([]);
   const [search, setSearch] = useState('');
   const [selectedGroup, setSelectedGroup] = useState<QuestionGroupItem | null>(null);
-  const [points, setPoints] = useState<number>(1);
   const [fetching, setFetching] = useState(false);
 
   const [newTitle, setNewTitle] = useState('');
@@ -48,11 +47,13 @@ export function QuestionGroupModal({
       .getQuestionGroups({
         courseId,
         moduleId,
-        questionType,
+        questionType: questionType === 'ESSAY' ? undefined : questionType,
         search: search.trim() || undefined,
+        size: 100,
       })
       .then((res) => {
-        setGroups(res.content || []);
+        const types = questionType === 'ESSAY' ? ['ESSAY', 'DIAGRAM'] : [questionType];
+        setGroups((res.content || []).filter((group) => types.includes(group.questionType)));
       })
       .catch((err) => {
         setGroups([]);
@@ -67,7 +68,6 @@ export function QuestionGroupModal({
     if (open) {
       setTab('existing');
       setSelectedGroup(null);
-      setPoints(1);
       setNewTitle('');
       setNewPassage('');
       setErrorMsg('');
@@ -97,7 +97,7 @@ export function QuestionGroupModal({
         title: newTitle.trim(),
         passageText: newPassage.trim(),
       });
-      onSelectGroup(created, Number(points) > 0 ? Number(points) : 1);
+      onSelectGroup(created);
     } catch (err) {
       setErrorMsg(getApiErrorMessage(err, 'Failed to create question group.'));
     } finally {
@@ -107,7 +107,7 @@ export function QuestionGroupModal({
 
   const handleConfirmSelect = () => {
     if (!selectedGroup) return;
-    onSelectGroup(selectedGroup, Number(points) > 0 ? Number(points) : 1);
+    onSelectGroup(selectedGroup);
   };
 
   return (
@@ -117,18 +117,7 @@ export function QuestionGroupModal({
       title="Add Reading Passage Group"
       size="lg"
       footer={
-        <div className="flex items-center justify-between w-full">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-content-secondary">Group Points:</span>
-            <input
-              type="number"
-              min={1}
-              max={100}
-              value={points}
-              onChange={(e) => setPoints(Math.max(1, Number(e.target.value) || 1))}
-              className="w-16 px-2.5 py-1 text-sm rounded-[8px] border border-line bg-surface focus:outline-none focus:ring-1 focus:ring-brand-ink"
-            />
-          </div>
+        <div className="flex items-center justify-end w-full">
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={onClose} disabled={loading || creating}>
               Cancel

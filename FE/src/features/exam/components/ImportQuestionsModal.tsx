@@ -21,7 +21,7 @@ export function ImportQuestionsModal({
   const toast = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
-  const [defaultPoints, setDefaultPoints] = useState<number>(1);
+  const [defaultWeight, setDefaultWeight] = useState<number>(1);
   const [uploading, setUploading] = useState(false);
   const [result, setResult] = useState<ImportExamResponse | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
@@ -32,7 +32,7 @@ export function ImportQuestionsModal({
 
   const resetState = () => {
     setFile(null);
-    setDefaultPoints(1);
+    setDefaultWeight(1);
     setUploading(false);
     setResult(null);
     setErrorMsg('');
@@ -72,13 +72,25 @@ export function ImportQuestionsModal({
       return;
     }
 
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('defaultPoints', String(Number(defaultPoints) > 0 ? Number(defaultPoints) : 1));
-
     setUploading(true);
     setErrorMsg('');
     try {
+      const weight = Number(defaultWeight);
+      if (!Number.isFinite(weight) || weight <= 0 || weight > 1000 || (String(weight).split('.')[1]?.length ?? 0) > 2) {
+        setErrorMsg('Weight must be greater than 0, no more than 1,000, and have up to 2 decimal places.');
+        return;
+      }
+
+      const previewData = new FormData();
+      previewData.append('file', file);
+      previewData.append('dryRun', 'true');
+      const preview = await examService.importQuestions(examId, previewData);
+
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('itemsJson', JSON.stringify(
+        Array.from({ length: preview.imported }, (_, index) => ({ index, weight })),
+      ));
       const res = await examService.importQuestions(examId, formData);
       setResult(res);
       toast.success(MSG13);
@@ -177,14 +189,15 @@ export function ImportQuestionsModal({
 
             <div>
               <label className="text-sm font-medium text-content-secondary block mb-1">
-                Default Points for Imported Questions
+                Default Weight for Imported Questions
               </label>
               <input
                 type="number"
-                min={1}
-                max={100}
-                value={defaultPoints}
-                onChange={(e) => setDefaultPoints(Math.max(1, Number(e.target.value) || 1))}
+                min={0}
+                max={1000}
+                step={1}
+                value={defaultWeight}
+                onChange={(e) => setDefaultWeight(Number(e.target.value) || 0)}
                 className="w-24 px-3 py-1.5 text-sm rounded-[8px] border border-line bg-surface focus:outline-none focus:ring-1 focus:ring-brand-ink"
               />
             </div>

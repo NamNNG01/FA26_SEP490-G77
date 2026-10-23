@@ -19,7 +19,7 @@ import { getApiErrorMessage } from "@/utils/apiError";
 interface QuestionBankSelectModalProps {
   open: boolean;
   onClose: () => void;
-  onSelect: (items: { question: BankQuestionItem; points: number }[]) => void;
+  onSelect: (items: { question: BankQuestionItem; weight: number }[]) => void;
   allowedQuestionTypes: string[];
   existingQuestionIds: Set<number>;
   initialCourseId?: number;
@@ -49,7 +49,7 @@ export function QuestionBankSelectModal({
   );
   const [difficulty, setDifficulty] = useState<string>("all");
   const [questionType, setQuestionType] = useState<string>("all");
-  const [defaultPoints, setDefaultPoints] = useState<number>(1);
+  const [defaultWeight, setDefaultWeight] = useState<number>(1);
   const [selectedMap, setSelectedMap] = useState<Map<number, BankQuestionItem>>(
     new Map(),
   );
@@ -169,7 +169,7 @@ export function QuestionBankSelectModal({
   const handleConfirm = () => {
     const list = Array.from(selectedMap.values()).map((q) => ({
       question: q,
-      points: Number(defaultPoints) > 0 ? Number(defaultPoints) : 1,
+      weight: Number(defaultWeight) > 0 ? Number(defaultWeight) : 1,
     }));
     onSelect(list);
   };
@@ -192,15 +192,16 @@ export function QuestionBankSelectModal({
         <div className="flex items-center justify-between w-full">
           <div className="flex items-center gap-2">
             <span className="text-sm text-content-secondary font-medium">
-              Default Points:
+              Default Weight:
             </span>
             <input
               type="number"
-              min={1}
-              max={100}
-              value={defaultPoints}
+              min={0}
+              max={1000}
+              step={1}
+              value={defaultWeight}
               onChange={(e) =>
-                setDefaultPoints(Math.max(1, Number(e.target.value) || 1))
+                setDefaultWeight(Math.max(0.01, Number(e.target.value) || 0.01))
               }
               className="w-16 px-2.5 py-1 text-sm rounded-[8px] border border-line bg-surface focus:outline-none focus:ring-1 focus:ring-brand-ink"
             />

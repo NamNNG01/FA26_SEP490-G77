@@ -16,10 +16,13 @@ export interface ExamListItem {
   courseName: string;
   moduleId?: number;
   moduleName?: string;
-  examKind: ExamKind;
+  examKind: ExamKind | null;
   durationMinutes: number;
   questionCount: number;
-  totalPoints: number;
+  maxScore?: number;
+  totalWeight?: number;
+  /** Legacy response field retained for older mock data. */
+  totalPoints?: number;
   status: ExamStatus;
   generationType: GenerationType;
   isPractice: boolean;
@@ -32,6 +35,7 @@ export interface ExamConfig {
   numberOfQuestions: number;
   moduleId?: number;
   difficulty?: string;
+  weightEach?: number;
 }
 
 export interface ExamQuestion {
@@ -39,7 +43,10 @@ export interface ExamQuestion {
   questionId: number;
   content: string;
   questionType: string;
-  points: number;
+  weight?: number;
+  /** Legacy mock compatibility; the API field is `weight`. */
+  points?: number;
+  groupId?: number | null;
   orderIndex: number;
   hasRubric?: boolean;
 }
@@ -48,7 +55,8 @@ export interface ExamGroup {
   examGroupId: number;
   groupId: number;
   title: string;
-  points: number;
+  /** Legacy mock compatibility; backend group links do not have a group score. */
+  points?: number;
   orderIndex: number;
   passageText?: string;
   questionCount?: number;
@@ -62,10 +70,12 @@ export interface ExamDetail {
   courseName?: string;
   moduleId?: number;
   moduleName?: string;
-  examKind?: ExamKind;
+  examKind?: ExamKind | null;
   durationMinutes?: number;
   questionCount?: number;
   totalPoints?: number;
+  maxScore?: number;
+  totalWeight?: number;
   status?: ExamStatus;
   generationType?: GenerationType;
   isPractice?: boolean;
@@ -84,10 +94,11 @@ export interface CreateExamRequest {
   durationMinutes: number;
   isPractice: boolean;
   generationType: GenerationType;
+  maxScore: number;
   status?: ExamStatus;
-  questionIds?: { questionId: number; points: number; orderIndex: number }[];
+  questionIds?: { questionId: number; weight: number; orderIndex: number }[];
   configs?: ExamConfig[];
-  groupIds?: { groupId: number; points: number; orderIndex: number }[];
+  groupIds?: { groupId: number; questions: { questionId: number; weight: number }[]; orderIndex: number }[];
 }
 
 export interface UpdateExamRequest {
@@ -98,7 +109,20 @@ export interface UpdateExamRequest {
   durationMinutes?: number;
   isPractice?: boolean;
   generationType?: GenerationType;
+  maxScore?: number;
   configs?: ExamConfig[];
+}
+
+export interface ExamQuestionListParams {
+  search?: string;
+  courseId?: number;
+  moduleId?: number;
+  groupId?: number;
+  questionType?: string;
+  difficulty?: Difficulty;
+  status?: string;
+  page?: number;
+  size?: number;
 }
 
 export interface ExamListParams {
@@ -703,7 +727,7 @@ export const examService = {
       examKind: e.examKind || 'QUIZ',
       durationMinutes: e.durationMinutes || 60,
       questionCount: e.questions.length + e.groups.reduce((acc, g) => acc + (g.questionCount || 0), 0),
-      totalPoints: e.questions.reduce((acc, q) => acc + q.points, 0) + e.groups.reduce((acc, g) => acc + g.points, 0),
+      totalPoints: e.questions.reduce((acc, q) => acc + (q.weight ?? q.points ?? 1), 0),
       status: e.status || 'DRAFT',
       generationType: e.generationType || 'STATIC',
       isPractice: !!e.isPractice,
@@ -763,8 +787,17 @@ export const examService = {
     await api.request<ApiResponse<null>>({ method: 'delete', url: `/manager/exams/${id}` });
   },
 
-  async addQuestionToExam(id: number, payload: { questionId: number; points?: number }): Promise<ExamQuestion> {
+  async addQuestionToExam(id: number, payload: { questionId: number; weight?: number }): Promise<ExamQuestion> {
     const res = await api.post<ApiResponse<ExamQuestion>>(`/manager/exams/${id}/questions`, payload);
+    return res.data;
+  },
+
+  async updateQuestionWeight(id: number, examQuestionId: number, weight: number): Promise<ExamQuestion> {
+    const res = await api.request<ApiResponse<ExamQuestion>>({
+      method: 'put',
+      url: `/manager/exams/${id}/questions/${examQuestionId}`,
+      data: { weight },
+    });
     return res.data;
   },
 
@@ -772,7 +805,7 @@ export const examService = {
     await api.request<ApiResponse<null>>({ method: 'delete', url: `/manager/exams/${id}/questions/${examQuestionId}` });
   },
 
-  async addGroupToExam(id: number, payload: { groupId: number; points?: number }): Promise<ExamGroup> {
+  async addGroupToExam(id: number, payload: { groupId: number; questions: { questionId: number; weight: number }[]; orderIndex?: number }): Promise<ExamGroup> {
     const res = await api.post<ApiResponse<ExamGroup>>(`/manager/exams/${id}/groups`, payload);
     return res.data;
   },
@@ -781,11 +814,12 @@ export const examService = {
     await api.request<ApiResponse<null>>({ method: 'delete', url: `/manager/exams/${id}/groups/${examGroupId}` });
   },
 
-  async getQuestions(params?: QuestionListParams): Promise<PageResponse<BankQuestionItem>> {
+  async getQuestions(params?: ExamQuestionListParams): Promise<PageResponse<BankQuestionItem>> {
     const q = new URLSearchParams();
     if (params?.search) q.set('search', params.search);
     if (params?.courseId) q.set('courseId', String(params.courseId));
     if (params?.moduleId) q.set('moduleId', String(params.moduleId));
+    if (params?.groupId) q.set('groupId', String(params.groupId));
     if (params?.questionType) q.set('questionType', params.questionType);
     if (params?.difficulty) q.set('difficulty', params.difficulty);
     if (params?.status) q.set('status', params.status);
@@ -802,7 +836,7 @@ export const examService = {
     return res.data;
   },
 
-  getMockQuestions(params?: QuestionListParams): PageResponse<BankQuestionItem> {
+  getMockQuestions(params?: ExamQuestionListParams): PageResponse<BankQuestionItem> {
     const bank = loadStoredQuestions();
     let filtered = bank.filter((item) => {
       if (params?.search) {
@@ -811,6 +845,7 @@ export const examService = {
       }
       if (params?.courseId && item.courseId !== params.courseId) return false;
       if (params?.moduleId && item.moduleId !== params.moduleId) return false;
+      if (params?.groupId && item.groupId !== params.groupId) return false;
       if (params?.difficulty && item.difficulty !== params.difficulty) return false;
       if (params?.status && item.status !== params.status) return false;
       if (params?.questionType && item.questionType !== params.questionType) return false;
