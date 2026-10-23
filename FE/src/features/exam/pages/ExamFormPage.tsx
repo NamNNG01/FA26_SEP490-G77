@@ -30,10 +30,12 @@ import { QuestionBankSelectModal } from "../components/QuestionBankSelectModal";
 import { QuestionGroupModal } from "../components/QuestionGroupModal";
 import { RubricDetailModal } from "../components/RubricDetailModal";
 import { ImportQuestionsModal } from "../components/ImportQuestionsModal";
+import { ImportPdfModal } from "@/features/question/components/ImportPdfModal";
+import { QuestionForm as QuestionFormBlock } from "@/features/question/components/QuestionForm";
 import { ExamAiGenerateTab } from "../components/ExamAiGenerateTab";
 import { DiagramAnswer } from "@/features/question/components/DiagramAnswer";
 import { QuestionForm } from "@/features/question/components/QuestionForm";
-import { fromDetail, isDraftValid, toUpdateRequest, type EditableQuestionType, type QuestionDraft } from "@/features/question/model";
+import { fromDetail, isDraftValid, toCreateRequest, toUpdateRequest, validateDraft, type EditableQuestionType, type QuestionDraft } from "@/features/question/model";
 import { questionService, type QuestionDetail } from "@/services/question.service";
 import { getApiErrorMessage } from "@/utils/apiError";
 
@@ -84,6 +86,10 @@ export function ExamFormPage({
 
   const [questions, setQuestions] = useState<ExamQuestion[]>([]);
   const [groups, setGroups] = useState<ExamGroup[]>([]);
+  const [importPreviewOpen, setImportPreviewOpen] = useState(false);
+  const [importedQuestionDrafts, setImportedQuestionDrafts] = useState<{ draft: QuestionDraft; weight: number }[]>([]);
+  const [importedQuestionIds, setImportedQuestionIds] = useState<number[] | null>(null);
+  const [importedQuestionsSubmitted, setImportedQuestionsSubmitted] = useState(false);
   const [expandedGroupIds, setExpandedGroupIds] = useState<Set<number>>(() => new Set());
   const [configs, setConfigs] = useState<ExamConfig[]>([]);
 
@@ -176,11 +182,11 @@ export function ExamFormPage({
     }
   };
 
-  const totalQuestionCount = questions.length + configs.reduce((sum, config) => sum + config.numberOfQuestions, 0);
+  const totalQuestionCount = questions.length + importedQuestionDrafts.length + configs.reduce((sum, config) => sum + config.numberOfQuestions, 0);
   const standaloneQuestions = questions.filter((question) => !question.groupId);
   const totalWeight = generationType === "RANDOM"
     ? configs.reduce((sum, config) => sum + config.numberOfQuestions * (config.weightEach ?? 1), 0)
-    : questions.reduce((acc, q) => acc + (q.weight ?? q.points ?? 1), 0);
+    : questions.reduce((acc, q) => acc + (q.weight ?? q.points ?? 1), 0) + importedQuestionDrafts.reduce((sum, item) => sum + item.weight, 0);
   const scoreForWeight = (weight: number) =>
     totalWeight > 0 ? Number(((maxScore * weight) / totalWeight).toFixed(2)) : 0;
   const formatScore = (score: number) => Number(score.toFixed(2)).toString();
@@ -352,7 +358,7 @@ export function ExamFormPage({
     if (questions.some((question) => {
       const weight = question.weight ?? question.points ?? 1;
       return !Number.isFinite(weight) || weight <= 0 || weight > 1000 || (String(weight).split(".")[1]?.length ?? 0) > 2;
-    })) {
+    }) || importedQuestionDrafts.some(({ weight }) => !Number.isFinite(weight) || weight <= 0 || weight > 1000 || (String(weight).split(".")[1]?.length ?? 0) > 2)) {
       errors.questions = "Every question weight must be greater than 0, no more than 1,000, and have up to 2 decimal places.";
     }
 
@@ -361,7 +367,7 @@ export function ExamFormPage({
         errors.configs =
           "Random exam requires at least one question draw configuration rule.";
       }
-      if (questions.length > 0 || groups.length > 0) {
+      if (questions.length > 0 || groups.length > 0 || importedQuestionDrafts.length > 0) {
         errors.configs = "Random exams use draw rules only. Remove attached questions and groups first.";
       }
       if (configs.some((config) => {
@@ -380,15 +386,39 @@ export function ExamFormPage({
 
   const handleSaveExam = async () => {
     if (!validateForm()) return;
+    if (!isEdit && importedQuestionDrafts.some(({ draft }) => !isDraftValid(draft) || draft.importIssue)) {
+      setImportedQuestionsSubmitted(true);
+      setErrorBanner("Review the imported questions and fix any validation errors before creating the exam.");
+      return;
+    }
     setSaving(true);
     setErrorBanner("");
+    let savedImportIds = importedQuestionIds;
 
     try {
       if (!isEdit) {
+        if (importedQuestionDrafts.length > 0 && !savedImportIds) {
+          const savedQuestions = await questionService.createQuestionsBatch(
+            Number(courseId),
+            moduleId ? Number(moduleId) : null,
+            importedQuestionDrafts.map(({ draft }) => ({
+              ...toCreateRequest(draft, Number(courseId), moduleId ? Number(moduleId) : null),
+              status: "ACTIVE",
+            })),
+          );
+          savedImportIds = savedQuestions.map((question) => question.questionId);
+          setImportedQuestionIds(savedImportIds);
+        }
+
         const payloadQuestionIds = questions.filter((q) => !q.groupId).map((q, idx) => ({
           questionId: q.questionId,
           weight: q.weight ?? q.points ?? 1,
           orderIndex: idx,
+        }));
+        const importedQuestionLinks = (savedImportIds ?? []).map((questionId, idx) => ({
+          questionId,
+          weight: importedQuestionDrafts[idx]?.weight ?? 1,
+          orderIndex: payloadQuestionIds.length + idx,
         }));
 
         const payloadGroupIds = groups.map((g, idx) => ({
@@ -409,7 +439,7 @@ export function ExamFormPage({
           maxScore,
           isPractice,
           generationType,
-          questionIds: payloadQuestionIds,
+          questionIds: [...payloadQuestionIds, ...importedQuestionLinks],
           groupIds: payloadGroupIds,
           configs: generationType === "STATIC" ? [] : configs,
         });
@@ -444,6 +474,8 @@ export function ExamFormPage({
       // A new exam can't have attempts; create-time 409s are duplicate questions/groups.
       if (isEdit && errorObj?.response?.status === 409) {
         setArchiveCloneModalOpen(true);
+      } else if (!isEdit && savedImportIds?.length) {
+        setErrorBanner("Questions were saved to the Question Bank, but the exam could not be created. Retry to create the exam without duplicating those questions.");
       } else if (errorObj?.response?.status === 400) {
         setErrorBanner(
           getApiErrorMessage(err, "Validation error while saving exam."),
@@ -577,6 +609,37 @@ export function ExamFormPage({
       }
       loadExamDetail(Number(id));
     }
+  };
+
+  const handleImportedDrafts = (drafts: QuestionDraft[]) => {
+    const supported = drafts.filter((draft) => allowedQuestionTypes.includes(draft.type));
+    const unsupportedCount = drafts.length - supported.length;
+    const remaining = Math.max(0, 50 - importedQuestionDrafts.length);
+    const accepted = supported.slice(0, remaining).map((draft) => ({ draft, weight: 1 }));
+
+    setImportPreviewOpen(false);
+    if (unsupportedCount > 0) {
+      toast.warning(`${unsupportedCount} imported question(s) did not match this exam’s question types and were skipped.`);
+    }
+    if (accepted.length < supported.length) {
+      toast.warning(`Only ${accepted.length} imported question(s) were added. Q-03 supports up to 50 questions per batch.`);
+    }
+    if (accepted.length === 0) return;
+
+    setImportedQuestionDrafts((prev) => [...prev, ...accepted]);
+    setImportedQuestionsSubmitted(false);
+    setIsDirty(true);
+    toast.success(`Added ${accepted.length} question(s) from the import preview. They will be saved with the exam.`);
+  };
+
+  const updateImportedDraft = (key: string, draft: QuestionDraft) => {
+    setImportedQuestionDrafts((prev) => prev.map((item) => item.draft.key === key ? { ...item, draft } : item));
+    setIsDirty(true);
+  };
+
+  const removeImportedDraft = (key: string) => {
+    setImportedQuestionDrafts((prev) => prev.filter((item) => item.draft.key !== key));
+    setIsDirty(true);
   };
 
   const handleRemoveQuestion = async (examQuestionId: number) => {
@@ -979,7 +1042,7 @@ export function ExamFormPage({
                     <Select
                       label="Course *"
                       value={courseId}
-                      disabled={isReadOnly}
+                      disabled={isReadOnly || Boolean(importedQuestionIds)}
                       onChange={(v) => {
                         setCourseId(v);
                         setModuleId("");
@@ -1006,7 +1069,7 @@ export function ExamFormPage({
                     <Select
                       label="Module *"
                       value={moduleId}
-                      disabled={isReadOnly || !courseId}
+                      disabled={isReadOnly || !courseId || Boolean(importedQuestionIds)}
                       onChange={(v) => {
                         setModuleId(v);
                         setIsDirty(true);
@@ -1295,17 +1358,17 @@ export function ExamFormPage({
                         Import Questions
                       </Button>
                     )}
-                    {formKind === "QUIZ" && !isEdit && (
-                      <div title="Save exam first before importing">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          icon={<Icon.Upload className="w-3.5 h-3.5" />}
-                          disabled
-                        >
-                          Import Questions
-                        </Button>
-                      </div>
+                    {!isEdit && generationType === "STATIC" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        icon={<Icon.Upload className="w-3.5 h-3.5" />}
+                        onClick={() => setImportPreviewOpen(true)}
+                        disabled={!courseId || !moduleId || Boolean(importedQuestionIds)}
+                        title={!courseId || !moduleId ? "Select a course and module before importing" : undefined}
+                      >
+                        Import PDF / Word
+                      </Button>
                     )}
 
                     <Button
@@ -1458,6 +1521,65 @@ export function ExamFormPage({
                 </div>
               )}
             </div>
+
+            {importedQuestionDrafts.length > 0 && (
+              <div className="card space-y-4 p-5">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line-soft pb-2.5">
+                  <div>
+                    <h3 className="text-base font-bold text-content">Questions from Import Preview ({importedQuestionDrafts.length})</h3>
+                    <p className="text-xs text-content-subtle">Review and edit these questions before creating the exam. They will be saved to the Question Bank with the exam.</p>
+                  </div>
+                  {importedQuestionIds && (
+                    <Badge variant="info" className="text-2xs">Saved to Question Bank · retry exam creation to continue</Badge>
+                  )}
+                </div>
+                {importedQuestionDrafts.map((item, index) => (
+                  <div key={item.draft.key} className="space-y-2 rounded-[10px] border border-line p-3">
+                    {importedQuestionIds ? (
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium text-content">{item.draft.content}</p>
+                          <Badge variant="default" className="mt-2 text-2xs">{item.draft.type.replace("_", " ")}</Badge>
+                        </div>
+                      </div>
+                    ) : (
+                      <QuestionFormBlock
+                        q={item.draft}
+                        index={index}
+                        onChange={(draft) => updateImportedDraft(item.draft.key, draft)}
+                        showErrors={importedQuestionsSubmitted}
+                        removable
+                        onRemove={() => removeImportedDraft(item.draft.key)}
+                        allowedTypes={allowedQuestionTypes as EditableQuestionType[]}
+                      />
+                    )}
+                    <div className="flex flex-wrap items-center gap-3 border-t border-line-soft pt-2">
+                      <label className="inline-flex items-center gap-2 text-xs font-medium text-content-secondary">
+                        Exam Weight
+                        <input
+                          type="number"
+                          min={0}
+                          max={1000}
+                          step={1}
+                          disabled={Boolean(importedQuestionIds)}
+                          className="w-20 rounded border border-line bg-surface px-2 py-1 text-content disabled:opacity-60"
+                          value={item.weight}
+                          onChange={(e) => {
+                            const weight = Number(e.target.value) || 0;
+                            setImportedQuestionDrafts((prev) => prev.map((current) => current.draft.key === item.draft.key ? { ...current, weight } : current));
+                            setIsDirty(true);
+                          }}
+                        />
+                      </label>
+                      <span className="text-xs font-semibold text-brand-ink">Score: {formatScore(scoreForWeight(item.weight))} pts</span>
+                    </div>
+                    {importedQuestionsSubmitted && Object.keys(validateDraft(item.draft)).length > 0 && (
+                      <p className="text-xs text-danger">Fix the question validation errors above before creating the exam.</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
 
             <div className="card p-5 space-y-4">
               <div className="flex items-center justify-between border-b border-line-soft pb-2.5">
@@ -1774,6 +1896,17 @@ export function ExamFormPage({
           );
         }}
       />
+
+      {!isEdit && (
+        <ImportPdfModal
+          open={importPreviewOpen}
+          onClose={() => setImportPreviewOpen(false)}
+          onImported={handleImportedDrafts}
+          courseId={courseId}
+          moduleId={moduleId}
+          lockLocation
+        />
+      )}
 
       {isEdit && id && (
         <ImportQuestionsModal
