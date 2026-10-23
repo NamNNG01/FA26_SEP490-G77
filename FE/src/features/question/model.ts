@@ -116,11 +116,11 @@ export interface OrderItemDraft {
   text: string;
 }
 
-/** One ESSAY rubric criterion. `maxScore` is kept as typed and sent as a number. */
+/** One ESSAY rubric criterion. Weight is a positive numeric allocation. */
 export interface RubricCriterionDraft {
   key: string;
   name: string;
-  maxScore: string;
+  weight: string;
   /** What earns the points — guidance for graders (and AI grading). */
   descriptors: string;
 }
@@ -150,7 +150,7 @@ export interface QuestionDraft {
   /** DIAGRAM — model answer as draw.io XML, plus an SVG snapshot for previews. */
   diagramXml: string;
   diagramSvg: string;
-  /** ESSAY / DIAGRAM grading rubric; empty = no rubric. Its total maxScore is sent as defaultPoints. */
+  /** ESSAY / DIAGRAM grading rubric; empty = no rubric. */
   rubric: RubricCriterionDraft[];
   rubricNotes: string;
   /** Drafted by AI-03 and accepted into the form. */
@@ -184,7 +184,7 @@ const emptyPairs = (): PairDraft[] => [0, 1].map(() => ({ key: newKey('pair'), l
 
 const emptyOrdering = (): OrderItemDraft[] => [0, 1, 2].map(() => ({ key: newKey('ord'), text: '' }));
 
-export const emptyCriterion = (): RubricCriterionDraft => ({ key: newKey('crit'), name: '', maxScore: '', descriptors: '' });
+export const emptyCriterion = (): RubricCriterionDraft => ({ key: newKey('crit'), name: '', weight: '', descriptors: '' });
 
 export function emptyDraft(): QuestionDraft {
   return {
@@ -341,11 +341,9 @@ export function validateDraft(q: QuestionDraft): QuestionErrors {
   return errors;
 }
 
-export const MAX_RUBRIC_TOTAL = 1000;
-
 /**
- * Checks the ESSAY rubric the way QuestionValidator does and returns its total
- * maxScore — sent as defaultPoints, which the backend requires to match it.
+ * Checks the ESSAY rubric the way QuestionValidator does. Criterion weights
+ * are independent values and do not need to total 100.
  * No criteria means no rubric, which is allowed.
  */
 export function rubricTotal(rubric: RubricCriterionDraft[]): { total: number | null; error?: string } {
@@ -354,11 +352,10 @@ export function rubricTotal(rubric: RubricCriterionDraft[]): { total: number | n
   let total = 0;
   for (const [i, c] of rubric.entries()) {
     if (!c.name.trim()) return bad(`criterion ${i + 1} needs a name.`);
-    const max = Number(c.maxScore);
-    if (c.maxScore.trim() === '' || !Number.isFinite(max) || max <= 0) return bad(`"${c.name.trim()}" needs a max score above 0.`);
-    total += max;
+    const weight = Number(c.weight);
+    if (c.weight.trim() === '' || !Number.isFinite(weight) || weight <= 0) return bad(`"${c.name.trim()}" needs a weight above 0.`);
+    total += weight;
   }
-  if (total > MAX_RUBRIC_TOTAL) return bad(`the total score can be at most ${MAX_RUBRIC_TOTAL}.`);
   return { total };
 }
 
@@ -427,18 +424,17 @@ export function toCreateRequest(q: QuestionDraft, courseId: number, moduleId: nu
  * ESSAY / DIAGRAM rubric plus the matching defaultPoints; nothing for other
  * types or without criteria. Same shape as the exam (E-08) rubric: criteria, totalPoints, notes.
  */
-function toRubric(q: QuestionDraft): Pick<QuestionCreateRequest, 'essayGradingRubric' | 'defaultPoints'> {
+function toRubric(q: QuestionDraft): Pick<QuestionCreateRequest, 'essayGradingRubric'> {
   if (!RUBRIC_TYPES.includes(q.type)) return {};
   const { total } = rubricTotal(q.rubric);
   if (total == null) return {};
   const criteria = q.rubric.map(c => ({
     name: c.name.trim(),
-    maxScore: Number(c.maxScore),
-    weight: Math.round((Number(c.maxScore) / total) * 10000) / 100,
+    weight: Number(c.weight),
     ...(c.descriptors.trim() ? { descriptors: c.descriptors.trim() } : {}),
   }));
   const notes = q.rubricNotes.trim();
-  return { essayGradingRubric: { criteria, totalPoints: total, ...(notes ? { notes } : {}) }, defaultPoints: total };
+  return { essayGradingRubric: { criteria, ...(notes ? { notes } : {}) } };
 }
 
 /** A stored or AI-drafted rubric (object or JSON string) → editor rows. Plain text becomes the notes. */
@@ -453,7 +449,7 @@ function fromRubric(raw: unknown): Pick<QuestionDraft, 'rubric' | 'rubricNotes'>
     return [{
       key: newKey('crit'),
       name: text(c.name),
-      maxScore: c.maxScore != null && c.maxScore !== '' ? String(c.maxScore) : '',
+      weight: c.weight != null && c.weight !== '' ? String(c.weight) : c.maxScore != null && c.maxScore !== '' ? String(c.maxScore) : '',
       descriptors: text(c.descriptors) || text(c.description),
     }];
   });

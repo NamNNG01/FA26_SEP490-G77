@@ -154,7 +154,7 @@ export interface QuestionCreateRequest {
   explanation?: string | null;
   /** The backend accepts only the keys in QUESTION_METADATA_KEYS. */
   questionMetadata?: Record<string, unknown> | null;
-  /** Must equal the rubric's total maxScore for ESSAY / DIAGRAM; the backend defaults it to 1. */
+  /** Optional question score; rubric criterion weights are stored separately. */
   defaultPoints?: number | null;
   essayGradingRubric?: unknown;
 }

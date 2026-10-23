@@ -733,12 +733,12 @@ export function ExamAiGenerateTab({
                   {q.essayGradingRubric && (
                     <div className="p-3 rounded-[8px] border border-line bg-surface-muted/40 text-xs space-y-2">
                       <span className="font-medium text-content-secondary block">
-                        Grading rubric · {q.essayGradingRubric.totalPoints ?? q.defaultPoints} pts
+                        Grading rubric
                       </span>
                       {q.essayGradingRubric.criteria.map((c, cIdx) => (
                         <div key={cIdx}>
                           <p className="font-semibold text-content">
-                            {c.name} — {c.maxScore} pts{c.weight != null ? ` (${c.weight}%)` : ''}
+                            {c.name} — Weight {c.weight ?? c.maxScore ?? '—'}
                           </p>
                           {c.descriptors && <p className="text-content-subtle">{c.descriptors}</p>}
                         </div>

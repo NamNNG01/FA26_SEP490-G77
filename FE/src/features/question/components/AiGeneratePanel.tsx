@@ -594,7 +594,7 @@ function AiPreviewView({ index, preview, allowedTypes, actions }: { index: numbe
             {q.rubric.map(c => (
               <li key={c.key} className="rounded-[8px] bg-surface-alt px-2 py-1">
                 <span className="font-medium">{c.name || 'Unnamed criterion'}</span>
-                <span className="text-content-soft"> · {c.maxScore || '?'} pts</span>
+                <span className="text-content-soft"> · Weight {c.weight || '?'}</span>
                 {c.descriptors && <p className="text-xs text-content-soft">{c.descriptors}</p>}
               </li>
             ))}

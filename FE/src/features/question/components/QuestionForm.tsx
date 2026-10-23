@@ -5,7 +5,6 @@ import { Badge } from '@/components/ui/Badge';
 import { Icon } from '@/assets/icons';
 import {
   DIFFICULTY_OPTIONS,
-  MAX_RUBRIC_TOTAL,
   QUESTION_TYPE_OPTIONS,
   blankIndexes,
   changeType,
@@ -233,7 +232,6 @@ function RubricAnswers({ q, set, error }: { q: QuestionDraft; set: (patch: Parti
     set({ rubric: q.rubric.map((c, ci) => (ci === i ? { ...c, ...patch } : c)) });
   const add = () => set({ rubric: [...q.rubric, emptyCriterion()] });
   const remove = (i: number) => set({ rubric: q.rubric.filter((_, ci) => ci !== i) });
-  const total = q.rubric.reduce((sum, c) => sum + (Number(c.maxScore) > 0 ? Number(c.maxScore) : 0), 0);
 
   return (
     <div>
@@ -255,12 +253,12 @@ function RubricAnswers({ q, set, error }: { q: QuestionDraft; set: (patch: Parti
           <div className="hidden sm:grid grid-cols-[1.75rem_minmax(0,1fr)_6rem_2rem] gap-2 px-0.5 text-xs font-medium text-content-subtle">
             <span />
             <span>Criterion</span>
-            <span>Max score</span>
+            <span>Weight</span>
             <span />
           </div>
           {q.rubric.map((c, i) => {
             const nameMissing = Boolean(error) && !c.name.trim();
-            const scoreBad = Boolean(error) && !(Number(c.maxScore) > 0);
+            const weightBad = Boolean(error) && !(Number(c.weight) > 0);
             return (
               <div key={c.key} className="rounded-[10px] border border-line-soft p-2 space-y-1.5">
                 <div className="grid grid-cols-[1.75rem_minmax(0,1fr)_6rem_2rem] gap-2 items-center">
@@ -278,11 +276,11 @@ function RubricAnswers({ q, set, error }: { q: QuestionDraft; set: (patch: Parti
                     min={0}
                     step="any"
                     inputMode="decimal"
-                    value={c.maxScore}
-                    onChange={e => setCriterion(i, { maxScore: e.target.value })}
-                    aria-label={`Criterion ${i + 1} max score`}
-                    placeholder="Points"
-                    className={inputCls(scoreBad)}
+                    value={c.weight}
+                    onChange={e => setCriterion(i, { weight: e.target.value })}
+                    aria-label={`Criterion ${i + 1} weight`}
+                    placeholder="Weight"
+                    className={inputCls(weightBad)}
                   />
                   <button
                     type="button"
@@ -298,15 +296,13 @@ function RubricAnswers({ q, set, error }: { q: QuestionDraft; set: (patch: Parti
                   value={c.descriptors}
                   onChange={e => setCriterion(i, { descriptors: e.target.value })}
                   aria-label={`Criterion ${i + 1} description`}
-                  placeholder="What earns full marks for this criterion (optional)"
+                  placeholder="What earns full credit for this criterion (optional)"
                   className="w-full sm:ml-9 sm:w-[calc(100%-2.25rem)] h-[52px] px-3 py-1.5 rounded-[10px] border border-line text-sm text-content bg-surface resize-y focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600 transition-all"
                 />
               </div>
             );
           })}
-          <p className={`text-xs font-medium ${total > MAX_RUBRIC_TOTAL ? 'text-danger' : 'text-success'}`}>
-            Total: {Number(total.toFixed(2))} point{total === 1 ? '' : 's'} — used as the question’s score.
-          </p>
+          <p className="text-xs text-content-subtle">Weights are independent values; they do not need to total 100.</p>
         </div>
       )}
       {error && <p className="text-xs text-danger mt-1.5">{error}</p>}
