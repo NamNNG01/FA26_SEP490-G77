@@ -137,14 +137,15 @@ export interface ExamListParams {
 
 export interface RubricCriterion {
   name: string;
-  maxScore: number;
   weight: number;
+  /** Legacy rubric data may still include maxScore. */
+  maxScore?: number;
   descriptors?: string;
 }
 
 export interface RubricData {
   criteria: RubricCriterion[];
-  totalPoints: number;
+  totalPoints?: number;
   notes?: string;
 }
 
@@ -195,7 +196,7 @@ export interface CreateQuestionGroupRequest {
 
 export interface AiRubricCriterion {
   name: string;
-  maxScore: number;
+  maxScore?: number;
   weight?: number;
   descriptors?: string;
 }
@@ -573,9 +574,9 @@ const INITIAL_MOCK_BANK_QUESTIONS: BankQuestionItem[] = [
       totalPoints: 10,
       notes: 'Deduct up to 2 points if exceeds word count by 20%.',
       criteria: [
-        { name: 'Content and Ideas', maxScore: 4, weight: 40, descriptors: 'Thorough discussion of labor automation and privacy dilemmas.' },
-        { name: 'Critical Reasoning & Organization', maxScore: 3, weight: 30, descriptors: 'Logical progression and structured comparative arguments.' },
-        { name: 'Evidence & Solutions', maxScore: 3, weight: 30, descriptors: 'Concrete mitigation strategies proposed with realistic feasibility.' },
+        { name: 'Content and Ideas', weight: 4, descriptors: 'Thorough discussion of labor automation and privacy dilemmas.' },
+        { name: 'Critical Reasoning & Organization', weight: 3, descriptors: 'Logical progression and structured comparative arguments.' },
+        { name: 'Evidence & Solutions', weight: 3, descriptors: 'Concrete mitigation strategies proposed with realistic feasibility.' },
       ],
     },
   },

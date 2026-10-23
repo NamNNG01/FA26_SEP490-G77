@@ -22,7 +22,7 @@ export function RubricDetailModal({
   onSaved,
 }: RubricDetailModalProps) {
   const [criteria, setCriteria] = useState<RubricCriterion[]>([
-    { name: '', maxScore: 5, weight: 50, descriptors: '' },
+    { name: '', weight: 1, descriptors: '' },
   ]);
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
@@ -41,10 +41,13 @@ export function RubricDetailModal({
       .getQuestionById(questionId)
       .then((q) => {
         if (q.essayGradingRubric && q.essayGradingRubric.criteria?.length > 0) {
-          setCriteria(q.essayGradingRubric.criteria);
+          setCriteria(q.essayGradingRubric.criteria.map((criterion) => ({
+            ...criterion,
+            weight: Number(criterion.weight ?? criterion.maxScore ?? 1),
+          })));
           setNotes(q.essayGradingRubric.notes || '');
         } else {
-          setCriteria([{ name: '', maxScore: 5, weight: 100, descriptors: '' }]);
+          setCriteria([{ name: '', weight: 1, descriptors: '' }]);
           setNotes('');
         }
       })
@@ -57,12 +60,10 @@ export function RubricDetailModal({
       });
   }, [open, questionId]);
 
-  const totalScore = criteria.reduce((sum, c) => sum + (Number(c.maxScore) || 0), 0);
   const totalWeight = criteria.reduce((sum, c) => sum + (Number(c.weight) || 0), 0);
-  const hasValidTotalWeight = Math.round(totalWeight * 100) / 100 === 100;
 
   const addCriterion = () => {
-    setCriteria((prev) => [...prev, { name: '', maxScore: 5, weight: 0, descriptors: '' }]);
+    setCriteria((prev) => [...prev, { name: '', weight: 1, descriptors: '' }]);
   };
 
   const removeCriterion = (index: number) => {
@@ -94,30 +95,18 @@ export function RubricDetailModal({
         setErrorMsg(`Criterion #${i + 1} name is required.`);
         return;
       }
-      if (Number(c.maxScore) <= 0) {
+      if (!Number.isFinite(Number(c.weight)) || Number(c.weight) <= 0) {
         setInvalidRowIdx(i);
-        setErrorMsg(`Criterion #${i + 1} max score must be greater than 0.`);
+        setErrorMsg(`Criterion #${i + 1} weight must be greater than 0.`);
         return;
       }
-      if (!Number.isFinite(Number(c.weight)) || Number(c.weight) < 0 || Number(c.weight) > 100) {
-        setInvalidRowIdx(i);
-        setErrorMsg(`Criterion #${i + 1} weight must be between 0% and 100%.`);
-        return;
-      }
-    }
-
-    if (!hasValidTotalWeight) {
-      setInvalidRowIdx(null);
-      setErrorMsg('Rubric criterion weights must total exactly 100% before saving.');
-      return;
     }
 
     setSaving(true);
     setErrorMsg('');
     try {
       await examService.updateRubric(questionId, {
-        criteria,
-        totalPoints: totalScore,
+        criteria: criteria.map(({ name, weight, descriptors }) => ({ name, weight: Number(weight), descriptors })),
         notes: notes.trim() || undefined,
       });
       onSaved(questionId);
@@ -138,11 +127,8 @@ export function RubricDetailModal({
       footer={
         <div className="flex items-center justify-between w-full">
           <div className="flex items-center gap-4 text-sm">
-            <span>
-              Live Total Score: <strong className="text-content font-bold">{totalScore} pts</strong>
-            </span>
-            <span className={hasValidTotalWeight ? 'text-success font-medium' : 'text-warning font-medium'}>
-              Total Weight: {totalWeight}% {!hasValidTotalWeight && '(must equal 100% to save)'}
+            <span className="text-success font-medium">
+              Total Weight: <strong className="text-content font-bold">{Number(totalWeight.toFixed(2))}</strong>
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -207,24 +193,13 @@ export function RubricDetailModal({
                     />
                   </div>
                   <div className="w-24">
-                    <label className="text-xs font-medium text-content-secondary block mb-1">Max Score *</label>
+                    <label className="text-xs font-medium text-content-secondary block mb-1">Weight *</label>
                     <input
                       type="number"
-                      min={1}
-                      max={100}
+                      min={0.01}
+                      step="any"
                       className="w-full px-2.5 py-1.5 text-sm rounded-[8px] border border-line bg-surface focus:outline-none focus:ring-1 focus:ring-brand-ink"
-                      value={c.maxScore}
-                      onChange={(e) => updateCriterion(idx, 'maxScore', Number(e.target.value) || 0)}
-                    />
-                  </div>
-                  <div className="w-24">
-                    <label className="text-xs font-medium text-content-secondary block mb-1">Weight (%)</label>
-                    <input
-                      type="number"
-                      min={0}
-                      max={100}
-                      className="w-full px-2.5 py-1.5 text-sm rounded-[8px] border border-line bg-surface focus:outline-none focus:ring-1 focus:ring-brand-ink"
-                      value={c.weight}
+                      value={c.weight ?? ''}
                       onChange={(e) => updateCriterion(idx, 'weight', Number(e.target.value) || 0)}
                     />
                   </div>
