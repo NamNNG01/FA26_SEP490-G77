@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -73,13 +74,13 @@ public class ManagerExamController {
     }
     @PostMapping(value="/exams/{id}/import",consumes="multipart/form-data")
     public ResponseEntity<ApiResponse<ExamResponse.Imported>> importQuestions(@AuthenticationPrincipal UserPrincipal user,@PathVariable Long id,
-            @RequestParam MultipartFile file,@RequestParam(defaultValue="1") BigDecimal defaultPoints) {
+            @RequestParam MultipartFile file,@RequestParam(required = false) List<BigDecimal> points) {
         // Check access/state before parsing untrusted files.
         ExamResponse exam=service.detail(user,id);
         if (!"DRAFT".equals(exam.status())) throw new com.examprep.exceptions.ResourceConflictException("Unpublish the exam before importing.");
         if (file.getSize()>10*1024*1024) throw new BadRequestException("File must be at most 10MB.");
         try {
-            return ResponseEntity.ok(ApiResponse.success(service.importQuestions(user,id,reader.read(file.getOriginalFilename(),file.getBytes()),defaultPoints),"Questions imported successfully."));
+            return ResponseEntity.ok(ApiResponse.success(service.importQuestions(user,id,reader.read(file.getOriginalFilename(),file.getBytes()),points),"Questions imported successfully."));
         } catch(IOException e) { throw new BadRequestException("Could not read the uploaded file."); }
     }
 }

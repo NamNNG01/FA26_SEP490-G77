@@ -17,10 +17,14 @@ import java.util.List;
 public final class ExamRequests {
     private ExamRequests() {}
     public record QuestionLink(@NotNull @Positive Long questionId,
-            @DecimalMin(value="0", inclusive=false) @Digits(integer=3, fraction=2) BigDecimal points,
+            @NotNull @DecimalMin(value="0", inclusive=false) @DecimalMax("1000") @Digits(integer=4, fraction=2) BigDecimal points,
             @PositiveOrZero Integer orderIndex) {}
+
+    public record GroupQuestionPoint(@NotNull @Positive Long questionId,
+            @NotNull @DecimalMin(value="0", inclusive=false) @DecimalMax("1000") @Digits(integer=4, fraction=2) BigDecimal points) {}
+
     public record GroupLink(@NotNull @Positive Long groupId,
-            @DecimalMin(value="0", inclusive=false) @Digits(integer=3, fraction=2) BigDecimal points,
+            @NotEmpty @Size(max=100) List<@Valid GroupQuestionPoint> questions,
             @PositiveOrZero Integer orderIndex) {}
 
     @Data
@@ -37,6 +41,8 @@ public final class ExamRequests {
         private Long moduleId;
         @Pattern(regexp="EASY|MEDIUM|HARD")
         private String difficulty;
+        @DecimalMin(value="0", inclusive=false) @Digits(integer=5, fraction=2)
+        private BigDecimal pointsEach;
 
         @JsonSetter("skillTag")
         public void setSkillTag(Object skillTag) {
@@ -63,6 +69,8 @@ public final class ExamRequests {
         private Boolean isPractice;
         @NotNull @Pattern(regexp="STATIC|RANDOM|MIXED")
         private String generationType;
+        @NotNull @DecimalMin(value="0", inclusive=false) @DecimalMax("10000") @Digits(integer=5, fraction=2)
+        private BigDecimal maxScore;
         @Size(max=500)
         private List<@Valid QuestionLink> questionIds;
         @Size(max=100)
@@ -99,6 +107,8 @@ public final class ExamRequests {
         private Boolean isPractice;
         @Pattern(regexp="STATIC|RANDOM|MIXED")
         private String generationType;
+        @DecimalMin(value="0", inclusive=false) @DecimalMax("10000") @Digits(integer=5, fraction=2)
+        private BigDecimal maxScore;
         @Size(max=100)
         private List<@Valid Config> configs;
 

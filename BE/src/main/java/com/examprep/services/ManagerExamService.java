@@ -3,6 +3,7 @@ package com.examprep.services;
 import com.examprep.dto.*;
 import com.examprep.security.UserPrincipal;
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Map;
 
 public interface ManagerExamService {
@@ -17,5 +18,5 @@ public interface ManagerExamService {
     ExamResponse.GroupLink addGroup(UserPrincipal user, Long id, ExamRequests.GroupLink request);
     void removeGroup(UserPrincipal user, Long id, Long linkId);
     Map<String,Object> rubric(UserPrincipal user, Long questionId, ExamRequests.Rubric request);
-    ExamResponse.Imported importQuestions(UserPrincipal user, Long id, String text, BigDecimal points);
+    ExamResponse.Imported importQuestions(UserPrincipal user, Long id, String text, List<BigDecimal> points);
 }

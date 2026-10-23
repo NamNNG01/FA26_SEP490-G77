@@ -6,6 +6,7 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.io.Serializable;
+import java.math.BigDecimal;
 import java.time.Instant;
 
 @Entity
@@ -49,6 +50,9 @@ public class Exam implements Serializable {
 
     @Column(name = "generation_type", nullable = false, length = 50)
     private String generationType;
+
+    @Column(name = "max_score", nullable = false, precision = 7, scale = 2)
+    private BigDecimal maxScore;
 
     @Builder.Default
     @Column(name = "status", nullable = false, length = 20)

@@ -31,8 +31,4 @@ public class ExamGroup implements Serializable {
     @Builder.Default
     @Column(name = "order_index", nullable = false)
     private Integer orderIndex = 0;
-
-    @Builder.Default
-    @Column(name = "points", nullable = false, precision = 5, scale = 2)
-    private BigDecimal points = BigDecimal.ONE;
 }

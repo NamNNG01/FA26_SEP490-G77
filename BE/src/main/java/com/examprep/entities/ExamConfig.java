@@ -6,6 +6,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.io.Serializable;
+import java.math.BigDecimal;
 
 @Entity
 @Table(name = "exam_config")
@@ -44,4 +45,7 @@ public class ExamConfig implements Serializable {
 
     @Column(name = "seed")
     private Long seed;
+
+    @Column(name = "points_each", precision = 6, scale = 2)
+    private BigDecimal pointsEach;
 }

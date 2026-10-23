@@ -73,14 +73,15 @@ class ExamApiIntegrationTest {
         em.persist(group);
         Question grouped = question(module, "ESSAY", "Passage question"); grouped.setGroup(group);
         Map<String,Object> payload = create();
+        payload.put("maxScore", 7);
         payload.put("status", "PUBLISHED");
-        payload.put("groupIds", List.of(Map.of("groupId", group.getGroupId(), "points", 5)));
+        payload.put("groupIds", List.of(Map.of("groupId", group.getGroupId(), "questions", List.of(Map.of("questionId", grouped.getQuestionId(), "points", 5)))));
         JsonNode result = data(call(collaborator, post("/api/v1/manager/exams").contentType(MediaType.APPLICATION_JSON)
                 .content(json.writeValueAsString(payload))).andExpect(status().isCreated()));
         assertEquals("DRAFT", result.path("status").asText());
         assertEquals(2, result.path("questionCount").asInt());
         assertEquals(0, new BigDecimal("7").compareTo(result.path("totalPoints").decimalValue()));
-        assertEquals(1, result.path("questions").size());
+        assertEquals(2, result.path("questions").size());
         assertEquals(1, result.path("groups").size());
         assertTrue(result.path("examKind").isNull() || result.path("examKind").isMissingNode());
         call(manager, get("/api/v1/manager/exams").param("search", "Final").param("examKind", "MIXED"))
@@ -89,11 +90,11 @@ class ExamApiIntegrationTest {
 
     @Test void rejectsDuplicateInactiveAndForeignContentBeforeSaving() throws Exception {
         Map<String,Object> payload = create();
-        payload.put("questionIds", List.of(Map.of("questionId", question.getQuestionId()), Map.of("questionId", question.getQuestionId())));
+        payload.put("questionIds", List.of(Map.of("questionId", question.getQuestionId(), "points", 2), Map.of("questionId", question.getQuestionId(), "points", 2)));
         submit(payload).andExpect(status().isConflict());
-        payload.put("questionIds", List.of(Map.of("questionId", foreignQuestion.getQuestionId())));
+        payload.put("questionIds", List.of(Map.of("questionId", foreignQuestion.getQuestionId(), "points", 2)));
         submit(payload).andExpect(status().isForbidden());
-        payload.put("questionIds", List.of(Map.of("questionId", question.getQuestionId())));
+        payload.put("questionIds", List.of(Map.of("questionId", question.getQuestionId(), "points", 2)));
         question.setStatus("INACTIVE"); submit(payload).andExpect(status().isBadRequest());
         question.setStatus("ACTIVE"); payload.remove("courseId"); payload.remove("moduleId");
         submit(payload).andExpect(status().isBadRequest()).andExpect(jsonPath("$.message").value("courseId or moduleId is required."));
@@ -113,13 +114,13 @@ class ExamApiIntegrationTest {
     }
 
     @Test void publishedContentIsLockedUntilUnpublished() throws Exception {
-        Exam exam = exam(course, module); attach(exam, question);
+        Exam exam = exam(course, module); exam.setMaxScore(BigDecimal.ONE); attach(exam, question);
         call(manager, patch(path(exam) + "/publish").contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"PUBLISHED\"}"))
                 .andExpect(status().isOk());
         call(manager, put(path(exam)).contentType(MediaType.APPLICATION_JSON).content("{\"title\":\"Changed\"}"))
                 .andExpect(status().isConflict());
         call(manager, post(path(exam) + "/questions").contentType(MediaType.APPLICATION_JSON)
-                .content("{\"questionId\":" + essay.getQuestionId() + "}")).andExpect(status().isConflict());
+                .content("{\"questionId\":" + essay.getQuestionId() + ",\"points\":2}")).andExpect(status().isConflict());
         call(manager, patch(path(exam) + "/publish").contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"DRAFT\"}"))
                 .andExpect(status().isOk());
         call(manager, put(path(exam)).contentType(MediaType.APPLICATION_JSON).content("{\"title\":\"Changed\"}"))
@@ -127,7 +128,7 @@ class ExamApiIntegrationTest {
     }
 
     @Test void publishingEmptyIsRejectedAndMissingRubricsAreWarnings() throws Exception {
-        Exam exam = exam(course, module);
+        Exam exam = exam(course, module); exam.setMaxScore(BigDecimal.ONE);
         call(manager, patch(path(exam) + "/publish").contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"PUBLISHED\"}"))
                 .andExpect(status().isBadRequest());
         attach(exam, essay);
@@ -161,7 +162,7 @@ class ExamApiIntegrationTest {
         Exam exam = exam(course, module);
         QuestionGroup group = QuestionGroup.builder().course(course).module(module).title("Reading").build(); em.persist(group);
         Question grouped = question(module, "ESSAY", "Reading question"); grouped.setGroup(group);
-        String payload = "{\"groupId\":"+group.getGroupId()+",\"points\":3}";
+        String payload = "{\"groupId\":"+group.getGroupId()+",\"questions\":[{\"questionId\":"+grouped.getQuestionId()+",\"points\":3}]}";
         JsonNode added = data(call(collaborator, post(path(exam)+"/groups").contentType(MediaType.APPLICATION_JSON).content(payload))
                 .andExpect(status().isCreated()));
         call(manager, post(path(exam)+"/groups").contentType(MediaType.APPLICATION_JSON).content(payload)).andExpect(status().isConflict());
@@ -182,14 +183,19 @@ class ExamApiIntegrationTest {
     }
 
     @Test void importReusesSameModuleBankAndSkipsNormalizedDuplicates() throws Exception {
-        Exam exam = exam(course, module);
-        String contents = "1. What is two plus two?\nA. Three\nB. Four\nAnswer: B\n\n2. Explain indexing.\n\n3. Explain indexing.";
+        Exam exam = exam(course, module); exam.setMaxScore(BigDecimal.valueOf(3));
+        String contents = "1. What is two plus two?\nA. Three\nB. Four\nAnswer: B\n\n2. Explain indexing.";
         MockMultipartFile file = new MockMultipartFile("file", "exam.txt", "text/plain", contents.getBytes(StandardCharsets.UTF_8));
-        call(manager, multipart(path(exam)+"/import").file(file)).andExpect(status().isOk())
+        call(manager, multipart(path(exam)+"/import").file(file).param("points", "1").param("points", "1")).andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.reused").value(1)).andExpect(jsonPath("$.data.imported").value(1))
-                .andExpect(jsonPath("$.data.skippedDuplicates").value(1)).andExpect(jsonPath("$.data.questionIds.length()").value(2));
-        call(manager, multipart(path(exam)+"/import").file(file)).andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.imported").value(0)).andExpect(jsonPath("$.data.skippedDuplicates").value(3));
+                .andExpect(jsonPath("$.data.skippedDuplicates").value(0))
+                .andExpect(jsonPath("$.data.questionIds.length()").value(2));
+
+        String contents2 = "1. What is two plus two?\nA. Three\nB. Four\nAnswer: B\n\n2. Explain indexing.\n\n3. Explain indexing.";
+        MockMultipartFile file2 = new MockMultipartFile("file", "exam2.txt", "text/plain", contents2.getBytes(StandardCharsets.UTF_8));
+        call(manager, multipart(path(exam)+"/import").file(file2).param("points", "1").param("points", "1").param("points", "1")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.reused").value(0)).andExpect(jsonPath("$.data.imported").value(0))
+                .andExpect(jsonPath("$.data.skippedDuplicates").value(3));
     }
 
     @Test void importRejectsBadFilesAndPublishedExamsWithoutWriting() throws Exception {
@@ -269,6 +275,7 @@ class ExamApiIntegrationTest {
         Map<String,Object> result = new HashMap<>();
         result.put("title", "Final exam"); result.put("courseId", course.getCourseId()); result.put("moduleId", module.getModuleId());
         result.put("durationMinutes",60); result.put("isPractice",false); result.put("generationType","STATIC");
+        result.put("maxScore", 10);
         result.put("questionIds", List.of(Map.of("questionId",question.getQuestionId(),"points",2,"orderIndex",0)));
         return result;
     }
@@ -281,6 +288,6 @@ class ExamApiIntegrationTest {
     private Course course(User owner, Category category) { Course result=Course.builder().manager(owner).category(category).categoryId(category.getCategoryId()).title("Course").slug(UUID.randomUUID().toString()).isPublished(false).build(); em.persist(result); return result; }
     private Module module(Course parent) { Module result=Module.builder().course(parent).title("Module").orderIndex(1).build(); em.persist(result); return result; }
     private Question question(Module parent, String type, String content) { Question result=Question.builder().module(parent).questionType(type).content(content).build(); em.persist(result); return result; }
-    private Exam exam(Course parent, Module mod) { Exam result=Exam.builder().course(parent).module(mod).createdBy(manager).title("Exam").durationMinutes(60).generationType("STATIC").isPractice(false).build(); em.persist(result); return result; }
+    private Exam exam(Course parent, Module mod) { Exam result=Exam.builder().course(parent).module(mod).createdBy(manager).title("Exam").durationMinutes(60).generationType("STATIC").isPractice(false).maxScore(BigDecimal.TEN).build(); em.persist(result); return result; }
     private ExamQuestion attach(Exam exam, Question question) { ExamQuestion result=ExamQuestion.builder().exam(exam).question(question).points(BigDecimal.ONE).build(); em.persist(result); return result; }
 }
