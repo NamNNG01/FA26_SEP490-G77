@@ -150,6 +150,7 @@ class QuestionValidatorTest {
                 .questionType("DIAGRAM")
                 .content("Draw the architecture")
                 .questionMetadata(Map.of("drawioXml", "<mxfile>diagram content</mxfile>"))
+                .essayGradingRubric(Map.of("criteria", List.of(Map.of("name", "Structure", "weight", 5))))
                 .build();
         List<ValidationError> errors = validator.validate(payload);
         assertTrue(errors.isEmpty(), "Expected no validation errors for diagram, got: " + errors);

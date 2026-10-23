@@ -232,31 +232,32 @@ class ExamAiApiIntegrationTest {
     @Test void diagramDraftCarriesDrawioXmlAndRubric() throws Exception {
         Map<String, Object> rubric = Map.of("criteria", List.of(Map.of("name", "Classes", "weight", 2, "descriptors", "Full: ..."),
                 Map.of("name", "Relations", "weight", 2, "descriptors", "Full: ...")), "notes", "Order has many lines");
-        String plantUml = "@startuml\nclass Order\nclass Line\nOrder \"1\" *-- \"many\" Line\n@enduml";
+        Map<String, Object> graph = Map.of(
+                "diagramType", "CLASS",
+                "nodes", List.of(Map.of("id", "n1", "label", "Order", "kind", "CLASS"), Map.of("id", "n2", "label", "Line", "kind", "CLASS")),
+                "edges", List.of(Map.of("id", "e1", "from", "n1", "to", "n2", "label", "contains", "kind", "COMPOSITION"))
+        );
         List<Map<String, Object>> questions = List.of(
                 Map.of("content", "Draw the class diagram of an order", "questionType", "DIAGRAM", "difficulty", "EASY",
-                        "plantUmlSource", plantUml, "essayGradingRubric", rubric),
-                Map.of("content", "Diagram without PlantUML", "questionType", "DIAGRAM", "difficulty", "EASY",
+                        "graph", graph, "essayGradingRubric", rubric),
+                Map.of("content", "Diagram without graph", "questionType", "DIAGRAM", "difficulty", "EASY",
                         "essayGradingRubric", rubric),
                 Map.of("content", "Diagram without rubric", "questionType", "DIAGRAM", "difficulty", "EASY",
-                        "plantUmlSource", plantUml));
+                        "graph", graph));
         providerContent = json.writeValueAsString(Map.of("questions", questions));
         String request = json.writeValueAsString(Map.of("courseId", course.getCourseId(), "questionCount", 3,
                 "difficultyDistribution", Map.of("EASY", 3, "MEDIUM", 0, "HARD", 0),
                 "questionTypes", List.of(Map.of("questionType", "DIAGRAM", "count", 3))));
         generate(manager, request).andExpect(status().isOk()).andExpect(jsonPath("$.data.questionCount").value(1))
-                .andExpect(jsonPath("$.data.questions[0].plantUmlSource").value(plantUml))
+                .andExpect(jsonPath("$.data.questions[0].graph.diagramType").value("CLASS"))
                 .andExpect(jsonPath("$.data.questions[0].questionMetadata.drawioXml").value(org.hamcrest.Matchers.allOf(
-                        org.hamcrest.Matchers.startsWith("<mxfile>"), org.hamcrest.Matchers.containsString("plantUmlData=\""),
-                        org.hamcrest.Matchers.containsString("@startuml\\nclass Order"), org.hamcrest.Matchers.containsString("\\&quot;1\\&quot;"))))
+                        org.hamcrest.Matchers.startsWith("<mxfile>"), org.hamcrest.Matchers.containsString("n-n1"),
+                        org.hamcrest.Matchers.containsString("Order"), org.hamcrest.Matchers.containsString("e-e1"))))
                 .andExpect(jsonPath("$.data.questions[0].essayGradingRubric.criteria[0].weight").value(2.0))
                 .andExpect(jsonPath("$.data.warnings[*]").value(org.hamcrest.Matchers.hasItems(
-                        org.hamcrest.Matchers.containsString("PlantUML"), org.hamcrest.Matchers.containsString("diagram requires an essayGradingRubric"))));
-        assertTrue(receivedRequest.contains("plantUmlSource"));
-        // Requests with ESSAY/DIAGRAM force the rubric; choice-only ones (body()) don't.
-        assertTrue(requiredQuestionFields().contains("essayGradingRubric"));
-        generate(manager, body()).andExpect(status().isOk());
-        assertFalse(requiredQuestionFields().contains("essayGradingRubric"));
+                        org.hamcrest.Matchers.containsString("graph"), org.hamcrest.Matchers.containsString("diagram requires an essayGradingRubric"))));
+        assertTrue(receivedRequest.contains("graph"));
+        assertFalse(receivedRequest.contains("plantUmlSource"));
     }
 
     private String requiredQuestionFields() throws Exception {
