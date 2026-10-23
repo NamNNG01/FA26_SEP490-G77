@@ -1732,7 +1732,7 @@ export function ExamFormPage({
         title="Edit Question"
         size="2xl"
         footer={
-          <div className="flex items-center justify-end gap-2 w-full">
+          <div className="flex w-full flex-wrap items-center justify-end gap-2">
             <Button variant="outline" onClick={() => setQuestionEditTarget(null)} disabled={questionEditSaving}>
               Cancel
             </Button>
@@ -1828,9 +1828,9 @@ export function ExamFormPage({
         open={archiveCloneModalOpen}
         onClose={() => setArchiveCloneModalOpen(false)}
         title="Exam Already Has Student Attempts (409)"
-        size="md"
+        size="lg"
         footer={
-          <div className="flex items-center justify-end gap-2 w-full">
+          <div className="flex w-full flex-wrap items-center justify-end gap-2">
             <Button
               variant="outline"
               onClick={() => setArchiveCloneModalOpen(false)}
