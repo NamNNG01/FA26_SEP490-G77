@@ -33,6 +33,6 @@ public class ExamQuestion implements Serializable {
     private Integer orderIndex = 0;
 
     @Builder.Default
-    @Column(name = "points", nullable = false, precision = 5, scale = 2)
-    private BigDecimal points = BigDecimal.ONE;
+    @Column(name = "weight", nullable = false, precision = 5, scale = 2)
+    private BigDecimal weight = BigDecimal.ONE;
 }

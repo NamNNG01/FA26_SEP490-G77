@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -96,18 +97,17 @@ public class ManagerExamServiceImpl implements ManagerExamService {
 
     @Override @Transactional
     public ExamResponse create(UserPrincipal user,ExamRequests.Create r) {
-        BigDecimal maxScore=points(r.getMaxScore());
+        BigDecimal maxScore=maxScore(r.getMaxScore());
         Module module=r.getModuleId()==null?null:module(r.getModuleId());
         Long courseId=r.getCourseId()!=null?r.getCourseId():module==null?null:module.getCourse().getCourseId();
         if(courseId==null) throw bad("courseId or moduleId is required.");
         Course course=access(user,courseId,true);
         if(module!=null && !module.getCourse().getCourseId().equals(courseId)) throw bad("Module must belong to the selected course.");
         validateMode(r.getGenerationType(),size(r.getQuestionIds())+size(r.getGroupIds()),size(r.getConfigs()));
-        // Validate every referenced object before saving an identity-backed exam.
         Set<Long> ids=new HashSet<>();
-        for(var item:list(r.getQuestionIds())) { if(!ids.add(item.questionId())) throw conflict("Question is duplicated."); active(user,question(item.questionId())); }
+        for(var item:list(r.getQuestionIds())) { if(!ids.add(item.getQuestionId())) throw conflict("Question is duplicated."); active(user,question(item.getQuestionId())); }
         Set<Long> groupIds=new HashSet<>();
-        for(var item:list(r.getGroupIds())) { if(!groupIds.add(item.groupId())) throw conflict("Group is duplicated."); groupAccess(user,group(item.groupId())); }
+        for(var item:list(r.getGroupIds())) { if(!groupIds.add(item.getGroupId())) throw conflict("Group is duplicated."); groupAccess(user,group(item.getGroupId())); }
         validateConfigs(r.getConfigs(),courseId);
         Exam e=Exam.builder().course(course).module(module).createdBy(users.getReferenceById(user.getId()))
                 .title(r.getTitle().strip()).description(r.getDescription()).durationMinutes(r.getDurationMinutes()).isPractice(r.getIsPractice())
@@ -134,7 +134,7 @@ public class ManagerExamServiceImpl implements ManagerExamService {
         if(r.getDescription()!=null) e.setDescription(r.getDescription());
         if(r.getDurationMinutes()!=null) e.setDurationMinutes(r.getDurationMinutes());
         if(r.getIsPractice()!=null) e.setIsPractice(r.getIsPractice());
-        if(r.getMaxScore()!=null) e.setMaxScore(points(r.getMaxScore()));
+        if(r.getMaxScore()!=null) e.setMaxScore(maxScore(r.getMaxScore()));
         if(r.getGenerationType()!=null) e.setGenerationType(r.getGenerationType());
         if(r.getConfigs()!=null) { validateConfigs(r.getConfigs(),courseId); configs.deleteByExamExamId(id); configs.flush(); saveConfigs(e,r.getConfigs()); }
         if(r.getGenerationType()!=null) validateMode(e.getGenerationType(),links.findByExamExamIdOrderByOrderIndexAscExamQuestionIdAsc(id).size()+groupLinks.findByExamExamIdOrderByOrderIndexAscExamGroupIdAsc(id).size(),configs.findByExamExamIdOrderByConfigIdAsc(id).size());
@@ -151,23 +151,10 @@ public class ManagerExamServiceImpl implements ManagerExamService {
             for(ExamConfig config:configured) validateConfigModule(config.getModule(),courseId(e));
             if(state.questionCount()==0) throw bad("Add at least one question before publishing.");
 
-            BigDecimal fixedTotal = links.findByExamExamIdOrderByOrderIndexAscExamQuestionIdAsc(id).stream()
-                    .map(ExamQuestion::getPoints).reduce(BigDecimal.ZERO, BigDecimal::add);
-            if("STATIC".equals(e.getGenerationType())) {
-                if(e.getMaxScore().compareTo(fixedTotal) != 0) {
-                    throw new ResourceConflictException("Total points of exam questions (" + fixedTotal + ") must equal maxScore (" + e.getMaxScore() + ").");
-                }
-            } else {
-                BigDecimal randomPointsNeeded = BigDecimal.ZERO;
-                for(ExamConfig c : configured) {
-                    if(c.getPointsEach() != null) {
-                        randomPointsNeeded = randomPointsNeeded.add(c.getPointsEach().multiply(BigDecimal.valueOf(c.getNumberOfQuestions())));
-                    }
-                }
-                BigDecimal totalExpected = fixedTotal.add(randomPointsNeeded);
-                if(totalExpected.compareTo(e.getMaxScore()) > 0) {
-                    throw new ResourceConflictException("Fixed questions and specified pointsEach exceed maxScore.");
-                }
+            for(ExamQuestion l : links.findByExamExamIdOrderByOrderIndexAscExamQuestionIdAsc(id)) {
+                if(l.getWeight().compareTo(BigDecimal.ZERO) <= 0) throw conflict("Question weight must be positive.");
+                if(!"ACTIVE".equals(l.getQuestion().getStatus()) || !"APPROVED".equals(l.getQuestion().getApprovalStatus()) || l.getQuestion().getDeletedAt() != null)
+                    throw conflict("All questions in a published exam must be active and approved.");
             }
         }
         e.setStatus(r.status()); exams.flush();
@@ -184,6 +171,13 @@ public class ManagerExamServiceImpl implements ManagerExamService {
     }
     @Override @Transactional public ExamResponse.QuestionLink addQuestion(UserPrincipal user,Long id,ExamRequests.QuestionLink r) {
         Exam e=write(user,id); editable(e); return questionLink(attachQuestion(user,e,r,false));
+    }
+    @Override @Transactional public ExamResponse.QuestionLink updateQuestionWeight(UserPrincipal user,Long id,Long linkId,ExamRequests.QuestionWeight r) {
+        Exam e=write(user,id); editable(e); positive(linkId);
+        ExamQuestion link=links.findById(linkId).filter(l->l.getExam().getExamId().equals(id)).orElseThrow(()->missing("Exam question link"));
+        link.setWeight(weight(r.getWeight()));
+        links.saveAndFlush(link);
+        return questionLink(link);
     }
     @Override @Transactional public void removeQuestion(UserPrincipal user,Long id,Long linkId) {
         Exam e=write(user,id); editable(e); positive(linkId);
@@ -205,22 +199,25 @@ public class ManagerExamServiceImpl implements ManagerExamService {
     @Override @Transactional public Map<String,Object> rubric(UserPrincipal user,Long id,ExamRequests.Rubric r) {
         Question q=question(id); questionAccess(user,q);
         if(!Set.of("ESSAY","DIAGRAM","CODE").contains(q.getQuestionType())) throw bad("This question type does not use a rubric.");
-        BigDecimal total=r.criteria().stream().map(ExamRequests.Criterion::maxScore).reduce(BigDecimal.ZERO,BigDecimal::add);
-        if(r.totalPoints()!=null && r.totalPoints().compareTo(total)!=0) throw bad("totalPoints must equal the sum of criterion maxScore values.");
-        ExamRequests.Rubric normalized=new ExamRequests.Rubric(r.criteria(),total,r.notes());
+        ExamRequests.Rubric normalized=new ExamRequests.Rubric(r.criteria(),r.notes());
         try { q.setEssayGradingRubric(json.writeValueAsString(normalized)); questions.flush(); }
         catch(JsonProcessingException ex) { throw bad("Could not encode rubric."); }
         return Map.of("questionId",id,"content",q.getContent(),"questionType",q.getQuestionType(),"essayGradingRubric",normalized);
     }
 
     @Override @Transactional
-    public ExamResponse.Imported importQuestions(UserPrincipal user,Long id,String text,List<BigDecimal> pointsList) {
+    public ExamResponse.Imported importQuestions(UserPrincipal user,Long id,String text,boolean dryRun,List<ExamRequests.ImportItem> items) {
         Exam e=write(user,id); editable(e);
         List<QuestionTextParser.Parsed> parsed=QuestionTextParser.parse(text);
-        if(pointsList==null || pointsList.size()!=parsed.size()) throw bad("Points are required for every imported question and must match the count of parsed questions.");
-        List<BigDecimal> validatedPoints = new ArrayList<>();
-        for(BigDecimal p : pointsList) {
-            validatedPoints.add(points(p));
+        if(dryRun) {
+            return new ExamResponse.Imported(parsed.size(),0,0,List.of());
+        }
+        Map<Integer,BigDecimal> weightMap=new HashMap<>();
+        if(items!=null) {
+            for(var item:items) {
+                if(item.getIndex()<0 || item.getIndex()>=parsed.size()) throw bad("Import item index out of range.");
+                weightMap.put(item.getIndex(),weight(item.getWeight()));
+            }
         }
         Map<String,Question> bank=new LinkedHashMap<>();
         for(Question q:questions.findImportBank(courseId(e),e.getModule()==null?null:e.getModule().getModuleId())) bank.putIfAbsent(QuestionTextParser.hash(q.getContent()),q);
@@ -228,7 +225,7 @@ public class ManagerExamServiceImpl implements ManagerExamService {
         int imported=0,reused=0,skipped=0; List<Long> ids=new ArrayList<>(); Map<String,QuestionGroup> importGroups=new LinkedHashMap<>();
         for(int idx=0; idx<parsed.size(); idx++) {
             var item=parsed.get(idx);
-            BigDecimal pt = validatedPoints.get(idx);
+            BigDecimal wt = weightMap.getOrDefault(idx, BigDecimal.ONE);
             String hash=QuestionTextParser.hash(item.content());
             if(!attached.add(hash)) { skipped++; continue; }
             Question q=bank.get(hash);
@@ -242,43 +239,48 @@ public class ManagerExamServiceImpl implements ManagerExamService {
                 for(int i=0;i<item.options().size();i++) options.save(AnswerOption.builder().question(q).optionText(item.options().get(i)).isCorrect(i==item.correctIndex()).orderIndex(i).build());
                 bank.put(hash,q); imported++;
             } else reused++;
-            attachQuestion(user,e,new ExamRequests.QuestionLink(q.getQuestionId(),pt,null),true); ids.add(q.getQuestionId());
+            attachQuestion(user,e,new ExamRequests.QuestionLink(q.getQuestionId(),wt,null),true); ids.add(q.getQuestionId());
         }
         links.flush(); return new ExamResponse.Imported(imported,reused,skipped,ids);
     }
 
     private ExamQuestion attachQuestion(UserPrincipal user,Exam e,ExamRequests.QuestionLink r,boolean imported) {
-        Question q=question(r.questionId()); questionAccess(user,q); if(!imported) active(user,q);
+        Question q=question(r.getQuestionId()); questionAccess(user,q); if(!imported) active(user,q);
         if(examQuestions(e).containsKey(q.getQuestionId())) throw conflict("Question is already in this exam.");
         List<ExamQuestion> existing=links.findByExamExamIdOrderByOrderIndexAscExamQuestionIdAsc(e.getExamId());
-        int order=r.orderIndex()==null?next(existing.stream().map(ExamQuestion::getOrderIndex).toList()):r.orderIndex();
-        return links.saveAndFlush(ExamQuestion.builder().exam(e).question(q).points(points(r.points())).orderIndex(order).build());
+        int order=r.getOrderIndex()==null?next(existing.stream().map(ExamQuestion::getOrderIndex).toList()):r.getOrderIndex();
+        BigDecimal wt = r.getWeight() != null ? weight(r.getWeight()) : BigDecimal.ONE;
+        return links.saveAndFlush(ExamQuestion.builder().exam(e).question(q).weight(wt).orderIndex(order).build());
     }
     private ExamGroup attachGroup(UserPrincipal user,Exam e,ExamRequests.GroupLink r) {
-        QuestionGroup g=group(r.groupId()); groupAccess(user,g);
+        QuestionGroup g=group(r.getGroupId()); groupAccess(user,g);
         List<ExamGroup> existing=groupLinks.findByExamExamIdOrderByOrderIndexAscExamGroupIdAsc(e.getExamId());
-        if(existing.stream().anyMatch(l->l.getGroup().getGroupId().equals(r.groupId()))) throw conflict("Group is already in this exam.");
-        List<Question> groupQuestions=questions.findByGroupGroupIdOrderByQuestionIdAsc(r.groupId());
-        List<ExamRequests.GroupQuestionPoint> reqPoints=list(r.questions());
-        if(groupQuestions.size()!=reqPoints.size()) throw bad("Group questions and provided points count do not match.");
-        Map<Long,BigDecimal> pointMap=new HashMap<>();
+        if(existing.stream().anyMatch(l->l.getGroup().getGroupId().equals(r.getGroupId()))) throw conflict("Group is already in this exam.");
+        List<Question> groupQuestions=questions.findByGroupGroupIdOrderByQuestionIdAsc(r.getGroupId());
+        List<ExamRequests.GroupQuestionPoint> reqPoints=list(r.getQuestions());
+        if(groupQuestions.size()!=reqPoints.size()) throw bad("Group questions and provided weight count do not match.");
+        Map<Long,BigDecimal> weightMap=new HashMap<>();
+        Set<Long> expectedIds = groupQuestions.stream().map(Question::getQuestionId).collect(Collectors.toSet());
         for(var qp:reqPoints) {
-            positive(qp.questionId());
-            pointMap.put(qp.questionId(),points(qp.points()));
+            positive(qp.getQuestionId());
+            if(!expectedIds.contains(qp.getQuestionId())) throw bad("Question does not belong to this group.");
+            if(weightMap.containsKey(qp.getQuestionId())) throw bad("Duplicate question in request.");
+            weightMap.put(qp.getQuestionId(),weight(qp.getWeight()));
         }
         for(Question q:groupQuestions) {
             active(user,q);
-            if(!pointMap.containsKey(q.getQuestionId())) throw bad("Missing points for group question "+q.getQuestionId());
+            if(!weightMap.containsKey(q.getQuestionId())) throw bad("Missing weight for group question "+q.getQuestionId());
         }
         Map<Long,Question> used=examQuestions(e);
         for(Question q:groupQuestions) {
             if(used.containsKey(q.getQuestionId())) throw conflict("A group question is already attached to this exam.");
         }
         List<ExamQuestion> existingLinks=links.findByExamExamIdOrderByOrderIndexAscExamQuestionIdAsc(e.getExamId());
-        int groupOrder=r.orderIndex()==null?next(existing.stream().map(ExamGroup::getOrderIndex).toList()):r.orderIndex();
+        int groupOrder=r.getOrderIndex()==null?next(existing.stream().map(ExamGroup::getOrderIndex).toList()):r.getOrderIndex();
         int qOrder=next(existingLinks.stream().map(ExamQuestion::getOrderIndex).toList());
         for(Question q:groupQuestions) {
-            links.save(ExamQuestion.builder().exam(e).question(q).points(pointMap.get(q.getQuestionId())).orderIndex(qOrder++).build());
+            BigDecimal wt = weightMap.getOrDefault(q.getQuestionId(), BigDecimal.ONE);
+            links.save(ExamQuestion.builder().exam(e).question(q).weight(wt).orderIndex(qOrder++).build());
         }
         return groupLinks.saveAndFlush(ExamGroup.builder().exam(e).group(g).orderIndex(groupOrder).build());
     }
@@ -286,14 +288,14 @@ public class ManagerExamServiceImpl implements ManagerExamService {
         for(var c:list(values)) {
             if(!TYPES.contains(c.getQuestionType())) throw bad("Invalid questionType.");
             validateConfigModule(c.getModuleId()==null?null:module(c.getModuleId()),courseId);
-            if(c.getPointsEach()!=null) points(c.getPointsEach());
+            if(c.getWeightEach()!=null) weight(c.getWeightEach());
         }
     }
     private void validateConfigModule(Module module,Long courseId) {
         if(module!=null && !module.getCourse().getCourseId().equals(courseId)) throw bad("Config module must belong to the exam course.");
     }
     private void saveConfigs(Exam e,List<ExamRequests.Config> values) {
-        for(var c:list(values)) configs.save(ExamConfig.builder().exam(e).questionType(c.getQuestionType()).numberOfQuestions(c.getNumberOfQuestions()).module(c.getModuleId()==null?null:module(c.getModuleId())).difficulty(c.getDifficulty()).pointsEach(c.getPointsEach()).build());
+        for(var c:list(values)) configs.save(ExamConfig.builder().exam(e).questionType(c.getQuestionType()).numberOfQuestions(c.getNumberOfQuestions()).module(c.getModuleId()==null?null:module(c.getModuleId())).difficulty(c.getDifficulty()).weightEach(c.getWeightEach()).build());
     }
     private void validateMode(String mode,int fixed,int random) {
         if(!Set.of("STATIC","RANDOM","MIXED").contains(mode) || (mode.equals("STATIC") && (fixed==0 || random>0)) || (mode.equals("RANDOM") && (random==0 || fixed>0)) || (mode.equals("MIXED") && (fixed==0 || random==0)))
@@ -348,12 +350,12 @@ public class ManagerExamServiceImpl implements ManagerExamService {
         configured.forEach(c->families.add(family(c.getQuestionType())));
         String kind=families.size()>1?null:families.stream().findFirst().orElse("QUIZ");
         int count=all.size()+configured.stream().mapToInt(ExamConfig::getNumberOfQuestions).sum();
-        BigDecimal total=direct.stream().map(ExamQuestion::getPoints).reduce(BigDecimal.ZERO,BigDecimal::add);
+        BigDecimal totalWeight=direct.stream().map(ExamQuestion::getWeight).reduce(BigDecimal.ZERO,BigDecimal::add);
         Course course=e.getCourse()!=null?e.getCourse():e.getModule()==null?null:e.getModule().getCourse();
         return new ExamResponse(e.getExamId(),e.getTitle(),e.getDescription(),course==null?null:course.getCourseId(),course==null?null:course.getTitle(),
-                e.getModule()==null?null:e.getModule().getModuleId(),e.getModule()==null?null:e.getModule().getTitle(),kind,e.getDurationMinutes(),e.getMaxScore(),total,count,
+                e.getModule()==null?null:e.getModule().getModuleId(),e.getModule()==null?null:e.getModule().getTitle(),kind,e.getDurationMinutes(),e.getMaxScore(),totalWeight,count,
                 e.getStatus(),e.getGenerationType(),e.getIsPractice(),e.getCreatedAt(),
-                detail?configured.stream().map(c->new ExamResponse.Config(c.getConfigId(),c.getQuestionType(),c.getNumberOfQuestions(),c.getModule()==null?null:c.getModule().getModuleId(),c.getDifficulty(),c.getPointsEach())).toList():null,
+                detail?configured.stream().map(c->new ExamResponse.Config(c.getConfigId(),c.getQuestionType(),c.getNumberOfQuestions(),c.getModule()==null?null:c.getModule().getModuleId(),c.getDifficulty(),c.getWeightEach())).toList():null,
                 detail?direct.stream().map(this::questionLink).toList():null,detail?grouped.stream().map(this::groupLink).toList():null);
     }
     private ExamResponse.QuestionLink questionLink(ExamQuestion l) {
@@ -364,11 +366,12 @@ public class ManagerExamServiceImpl implements ManagerExamService {
                     .anyMatch(g->g.getGroup().getGroupId().equals(rawGroupId));
             if(linked) groupId=rawGroupId;
         }
-        return new ExamResponse.QuestionLink(l.getExamQuestionId(),l.getExam().getExamId(),l.getQuestion().getQuestionId(),l.getQuestion().getContent(),l.getQuestion().getQuestionType(),l.getPoints(),l.getOrderIndex(),l.getQuestion().getEssayGradingRubric()!=null,groupId);
+        return new ExamResponse.QuestionLink(l.getExamQuestionId(),l.getExam().getExamId(),l.getQuestion().getQuestionId(),l.getQuestion().getContent(),l.getQuestion().getQuestionType(),l.getWeight(),l.getOrderIndex(),l.getQuestion().getEssayGradingRubric()!=null,groupId);
     }
     private ExamResponse.GroupLink groupLink(ExamGroup l) { return new ExamResponse.GroupLink(l.getExamGroupId(),l.getExam().getExamId(),l.getGroup().getGroupId(),l.getGroup().getTitle(),
             l.getGroup().getPassageText(),questions.findByGroupGroupIdOrderByQuestionIdAsc(l.getGroup().getGroupId()).size()); }
-    private BigDecimal points(BigDecimal p) { if(p==null || p.signum()<=0 || p.compareTo(new BigDecimal("10000"))>0 || p.scale()>2) throw bad("Points must be positive, at most 10000 and have at most two decimal places."); return p; }
+    private BigDecimal weight(BigDecimal w) { if(w==null)return BigDecimal.ONE; if(w.signum()<=0 || w.compareTo(new BigDecimal("1000"))>0 || w.scale()>2) throw bad("Weight must be positive, at most 1000 and have at most two decimal places."); return w; }
+    private BigDecimal maxScore(BigDecimal m) { if(m==null || m.signum()<=0 || m.compareTo(new BigDecimal("10000"))>0 || m.scale()>2) throw bad("Max score must be positive, at most 10000 and have at most two decimal places."); return m; }
     private int next(List<Integer> values) { int max=values.stream().mapToInt(Integer::intValue).max().orElse(-1); if(max==Integer.MAX_VALUE)throw conflict("Question order limit reached."); return max+1; }
     private String family(String type) { String kind=QuestionTypeUtil.kindOf(type); return kind==null?"QUIZ":kind; }
     private String pattern(String s) { return "%"+s.strip().toLowerCase(Locale.ROOT).replace("!","!!").replace("%","!%").replace("_","!_")+"%"; }

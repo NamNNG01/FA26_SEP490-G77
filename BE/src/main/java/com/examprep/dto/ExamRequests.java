@@ -16,16 +16,92 @@ import java.util.List;
 @Slf4j
 public final class ExamRequests {
     private ExamRequests() {}
-    public record QuestionLink(@NotNull @Positive Long questionId,
-            @NotNull @DecimalMin(value="0", inclusive=false) @DecimalMax("1000") @Digits(integer=4, fraction=2) BigDecimal points,
-            @PositiveOrZero Integer orderIndex) {}
 
-    public record GroupQuestionPoint(@NotNull @Positive Long questionId,
-            @NotNull @DecimalMin(value="0", inclusive=false) @DecimalMax("1000") @Digits(integer=4, fraction=2) BigDecimal points) {}
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class QuestionLink {
+        @NotNull @Positive
+        private Long questionId;
+        @DecimalMin(value="0", inclusive=false) @DecimalMax("1000") @Digits(integer=4, fraction=2)
+        private BigDecimal weight;
+        @PositiveOrZero
+        private Integer orderIndex;
 
-    public record GroupLink(@NotNull @Positive Long groupId,
-            @NotEmpty @Size(max=100) List<@Valid GroupQuestionPoint> questions,
-            @PositiveOrZero Integer orderIndex) {}
+        @JsonSetter("points")
+        public void setPoints(BigDecimal points) {
+            this.weight = points;
+        }
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class QuestionWeight {
+        @NotNull @DecimalMin(value="0", inclusive=false) @DecimalMax("1000") @Digits(integer=4, fraction=2)
+        private BigDecimal weight;
+
+        @JsonSetter("points")
+        public void setPoints(BigDecimal points) {
+            this.weight = points;
+        }
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class GroupQuestionPoint {
+        @NotNull @Positive
+        private Long questionId;
+        @DecimalMin(value="0", inclusive=false) @DecimalMax("1000") @Digits(integer=4, fraction=2)
+        private BigDecimal weight;
+
+        @JsonSetter("points")
+        public void setPoints(BigDecimal points) {
+            this.weight = points;
+        }
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class GroupLink {
+        @NotNull @Positive
+        private Long groupId;
+        @Size(max=100)
+        private List<@Valid GroupQuestionPoint> questions;
+        @PositiveOrZero
+        private Integer orderIndex;
+
+        @JsonSetter("points")
+        public void setPoints(Object points) {
+            log.warn("Deprecated group points received and ignored.");
+        }
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class ImportItem {
+        private int index;
+        @NotNull @DecimalMin(value="0", inclusive=false) @DecimalMax("1000")
+        private BigDecimal weight;
+
+        @JsonSetter("points")
+        public void setPoints(BigDecimal points) {
+            this.weight = points;
+        }
+    }
 
     @Data
     @NoArgsConstructor
@@ -42,11 +118,16 @@ public final class ExamRequests {
         @Pattern(regexp="EASY|MEDIUM|HARD")
         private String difficulty;
         @DecimalMin(value="0", inclusive=false) @Digits(integer=5, fraction=2)
-        private BigDecimal pointsEach;
+        private BigDecimal weightEach;
 
         @JsonSetter("skillTag")
         public void setSkillTag(Object skillTag) {
             throw new BadRequestException("skillTag is not supported in exam config.");
+        }
+
+        @JsonSetter("pointsEach")
+        public void setPointsEach(BigDecimal pointsEach) {
+            this.weightEach = pointsEach;
         }
     }
 
@@ -125,8 +206,6 @@ public final class ExamRequests {
 
     public record Publish(@NotNull @Pattern(regexp="DRAFT|PUBLISHED|ARCHIVED") String status) {}
     public record Criterion(@NotBlank @Size(max=255) String name,
-            @NotNull @DecimalMin(value="0",inclusive=false) BigDecimal maxScore,
-            @NotNull @DecimalMin("0") @DecimalMax("100") BigDecimal weight, String descriptors) {}
-    public record Rubric(@NotEmpty @Size(max=100) List<@Valid Criterion> criteria,
-            @DecimalMin(value="0",inclusive=false) BigDecimal totalPoints, String notes) {}
+            @NotNull @DecimalMin(value="0",inclusive=false) BigDecimal weight, String descriptors) {}
+    public record Rubric(@NotEmpty @Size(max=100) List<@Valid Criterion> criteria, String notes) {}
 }

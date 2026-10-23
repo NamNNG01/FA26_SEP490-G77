@@ -46,6 +46,6 @@ public class ExamConfig implements Serializable {
     @Column(name = "seed")
     private Long seed;
 
-    @Column(name = "points_each", precision = 6, scale = 2)
-    private BigDecimal pointsEach;
+    @Column(name = "weight_each", precision = 6, scale = 2)
+    private BigDecimal weightEach;
 }

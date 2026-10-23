@@ -5,6 +5,8 @@ import com.examprep.exceptions.BadRequestException;
 import com.examprep.security.UserPrincipal;
 import com.examprep.services.ManagerExamService;
 import com.examprep.services.MaterialTextReader;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -23,6 +25,7 @@ import java.util.Map;
 public class ManagerExamController {
     private final ManagerExamService service;
     private final MaterialTextReader reader;
+    private final ObjectMapper objectMapper;
 
     @GetMapping("/exams")
     public ResponseEntity<ApiResponse<PageResponse<ExamResponse>>> list(@AuthenticationPrincipal UserPrincipal user,
@@ -56,6 +59,10 @@ public class ManagerExamController {
     public ResponseEntity<ApiResponse<ExamResponse.QuestionLink>> addQuestion(@AuthenticationPrincipal UserPrincipal user,@PathVariable Long id,@Valid @RequestBody ExamRequests.QuestionLink request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(service.addQuestion(user,id,request),ResponseCode.CREATED.getMessage()));
     }
+    @PutMapping("/exams/{id}/questions/{linkId}")
+    public ResponseEntity<ApiResponse<ExamResponse.QuestionLink>> updateQuestionWeight(@AuthenticationPrincipal UserPrincipal user,@PathVariable Long id,@PathVariable Long linkId,@Valid @RequestBody ExamRequests.QuestionWeight request) {
+        return ResponseEntity.ok(ApiResponse.success(service.updateQuestionWeight(user,id,linkId,request)));
+    }
     @DeleteMapping("/exams/{id}/questions/{linkId}")
     public ResponseEntity<ApiResponse<Void>> removeQuestion(@AuthenticationPrincipal UserPrincipal user,@PathVariable Long id,@PathVariable Long linkId) {
         service.removeQuestion(user,id,linkId); return ResponseEntity.ok(ApiResponse.success(null,"Question removed from exam."));
@@ -74,13 +81,19 @@ public class ManagerExamController {
     }
     @PostMapping(value="/exams/{id}/import",consumes="multipart/form-data")
     public ResponseEntity<ApiResponse<ExamResponse.Imported>> importQuestions(@AuthenticationPrincipal UserPrincipal user,@PathVariable Long id,
-            @RequestParam MultipartFile file,@RequestParam(required = false) List<BigDecimal> points) {
-        // Check access/state before parsing untrusted files.
+            @RequestParam MultipartFile file,@RequestParam(required=false,defaultValue="false") boolean dryRun,
+            @RequestParam(required=false) String itemsJson) {
         ExamResponse exam=service.detail(user,id);
         if (!"DRAFT".equals(exam.status())) throw new com.examprep.exceptions.ResourceConflictException("Unpublish the exam before importing.");
         if (file.getSize()>10*1024*1024) throw new BadRequestException("File must be at most 10MB.");
+        List<ExamRequests.ImportItem> items=null;
+        if(itemsJson!=null && !itemsJson.isBlank()) {
+            try {
+                items=objectMapper.readValue(itemsJson,new TypeReference<List<ExamRequests.ImportItem>>(){});
+            } catch(Exception e) { throw new BadRequestException("Invalid items JSON."); }
+        }
         try {
-            return ResponseEntity.ok(ApiResponse.success(service.importQuestions(user,id,reader.read(file.getOriginalFilename(),file.getBytes()),points),"Questions imported successfully."));
+            return ResponseEntity.ok(ApiResponse.success(service.importQuestions(user,id,reader.read(file.getOriginalFilename(),file.getBytes()),dryRun,items),"Questions imported successfully."));
         } catch(IOException e) { throw new BadRequestException("Could not read the uploaded file."); }
     }
 }

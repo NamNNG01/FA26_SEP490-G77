@@ -14,9 +14,10 @@ public interface ManagerExamService {
     ExamResponse.Published publish(UserPrincipal user, Long id, ExamRequests.Publish request);
     void delete(UserPrincipal user, Long id);
     ExamResponse.QuestionLink addQuestion(UserPrincipal user, Long id, ExamRequests.QuestionLink request);
+    ExamResponse.QuestionLink updateQuestionWeight(UserPrincipal user, Long id, Long linkId, ExamRequests.QuestionWeight request);
     void removeQuestion(UserPrincipal user, Long id, Long linkId);
     ExamResponse.GroupLink addGroup(UserPrincipal user, Long id, ExamRequests.GroupLink request);
     void removeGroup(UserPrincipal user, Long id, Long linkId);
     Map<String,Object> rubric(UserPrincipal user, Long questionId, ExamRequests.Rubric request);
-    ExamResponse.Imported importQuestions(UserPrincipal user, Long id, String text, List<BigDecimal> points);
+    ExamResponse.Imported importQuestions(UserPrincipal user, Long id, String text, boolean dryRun, List<ExamRequests.ImportItem> items);
 }
