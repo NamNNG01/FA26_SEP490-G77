@@ -58,7 +58,7 @@ const MODES: { value: GroupMode; label: string; hint: string }[] = [
  * the questions' types are limited to that kind. The passage stays visible
  * above the questions while they are written.
  */
-export function GroupContextCard({ value, onChange, groups, loadingGroups, courseSelected, moduleId, questionKinds = [], showErrors, disabled }: {
+export function GroupContextCard({ value, onChange, groups, loadingGroups, courseSelected, moduleId, questionKinds = [], showErrors, kindInvalid, disabled }: {
   value: GroupContextValue;
   onChange: (v: GroupContextValue) => void;
   groups: QuestionGroup[];
@@ -68,10 +68,13 @@ export function GroupContextCard({ value, onChange, groups, loadingGroups, cours
   moduleId: string;
   /**
    * Kinds of the questions already written. One kind → only groups of it are
-   * offered and a new group takes it; several → no group fits until they agree.
+   * offered; several → no existing group fits until they agree. A new group's
+   * type stays free — a mismatch is reported when saving.
    */
   questionKinds?: GroupKind[];
   showErrors?: boolean;
+  /** Some questions don't fit the new group's type — its Group type dropdown turns red. */
+  kindInvalid?: boolean;
   disabled?: boolean;
 }) {
   const [collapsed, setCollapsed] = useState(false);
@@ -187,18 +190,15 @@ export function GroupContextCard({ value, onChange, groups, loadingGroups, cours
               label="Group type *"
               value={value.newKind}
               onChange={v => set({ newKind: v as GroupKind })}
-              // Set by the questions already written — changing it would put them in the wrong group.
-              disabled={disabled || questionKinds.length > 0}
+              invalid={kindInvalid}
+              // Free to change even with questions written — ones of another kind are reported on save.
+              disabled={disabled}
               options={GROUP_KIND_OPTIONS.map(o => ({ label: o.label, value: o.value }))}
             />
           </div>
-          {mixedNote || (
-            <p className="text-xs text-content-subtle -mt-1">
-              {writtenKind
-                ? `Set to ${GROUP_KIND_LABELS[writtenKind]} by the questions you’ve written. To use another type, remove them or change their types first.`
-                : `${GROUP_KIND_OPTIONS.find(o => o.value === value.newKind)?.hint}. A group can't mix question types of different kinds.`}
-            </p>
-          )}
+          <p className="text-xs text-content-subtle -mt-1">
+            {`${GROUP_KIND_OPTIONS.find(o => o.value === value.newKind)?.hint}. A group can't mix question types of different kinds.`}
+          </p>
           {(!collapsed || errors.passage) && (
             <div>
               <label htmlFor="group-context-passage" className="block text-sm font-medium text-content-secondary mb-1">Shared passage *</label>
