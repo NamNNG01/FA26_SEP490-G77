@@ -11,12 +11,14 @@ const GAP = 4;
  * on outside click, Escape, Tab, scroll or resize. ↑/↓/Home/End move,
  * Enter/Space pick, typing a letter jumps to the next matching option.
  */
-export function Select({ label, options, value, onChange, className = '', triggerClassName, disabled, error, id: idProp, 'aria-label': ariaLabel }: {
+export function Select({ label, options, value, onChange, className = '', triggerClassName, disabled, error, invalid, id: idProp, 'aria-label': ariaLabel }: {
   label?: string; options: { label: string; value: string }[]; value?: string;
   onChange?: (v: string) => void; className?: string; disabled?: boolean;
   /** Replaces the trigger's size/typography classes (e.g. a compact pill); the colours and menu stay the same. */
   triggerClassName?: string;
   error?: string;
+  /** Red border without a message — the error is reported elsewhere (e.g. a toast). */
+  invalid?: boolean;
   id?: string;
   /** Accessible name for filter-style selects that render no visible label. */
   'aria-label'?: string;
@@ -117,12 +119,12 @@ export function Select({ label, options, value, onChange, className = '', trigge
         aria-expanded={open}
         aria-controls={open ? `${id}-list` : undefined}
         aria-activedescendant={open && options[active] ? `${id}-opt-${active}` : undefined}
-        aria-invalid={error ? true : undefined}
+        aria-invalid={error || invalid ? true : undefined}
         onClick={() => setOpen(o => !o)}
         onKeyDown={onKeyDown}
         title={selected?.label}
         className={`relative ${sizeCls} border bg-surface text-left truncate focus:outline-none focus:ring-2 transition-all ${
-          error ? 'border-danger-solid focus:ring-danger-solid/20' : 'border-line focus:ring-brand-600/20 focus:border-brand-600'
+          error || invalid ? 'border-danger-solid focus:ring-danger-solid/20' : 'border-line focus:ring-brand-600/20 focus:border-brand-600'
         } ${disabled ? 'cursor-not-allowed bg-surface-alt text-content-subtle' : `cursor-pointer ${selected ? 'text-content' : 'text-content-subtle'}`}`}
       >
         {selected?.label ?? options[0]?.label ?? ''}

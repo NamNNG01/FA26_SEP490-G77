@@ -19,23 +19,38 @@ import { Icon } from '@/assets/icons';
  *   const toast = useToast();
  *   toast.success('Saved');
  *   toast.error('Something went wrong');
+ *   toast.info('Draft restored', { action: { label: 'Discard', onClick }, duration: 10000 });
  *
- * Toasts auto-dismiss after ~4s.
+ * Toasts auto-dismiss after ~4s (pass `duration`, or null to keep one until
+ * it is closed). Hovering a toast pauses its timer.
  */
 
 type ToastKind = 'success' | 'error' | 'info' | 'warning';
 
-interface ToastItem {
+export interface ToastOptions {
+  /** Bold first line; the message goes under it. */
+  title?: string;
+  /** Extra lines shown as a bullet list (e.g. a backend's field errors). */
+  details?: string[];
+  /** One button inside the toast; clicking it also closes the toast. */
+  action?: { label: string; onClick: () => void };
+  /** Milliseconds before it closes by itself; null = stays until closed. */
+  duration?: number | null;
+}
+
+interface ToastItem extends ToastOptions {
   id: number;
   kind: ToastKind;
   message: string;
 }
 
 interface ToastContextValue {
-  show: (kind: ToastKind, message: string) => void;
+  show: (kind: ToastKind, message: string, options?: ToastOptions) => void;
 }
 
 const ToastContext = createContext<ToastContextValue | null>(null);
+
+const DEFAULT_DURATION = 4000;
 
 const KIND_STYLES: Record<ToastKind, { icon: ReactNode; classes: string }> = {
   success: {
@@ -60,9 +75,9 @@ export function ToastHost({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<ToastItem[]>([]);
   const idRef = useRef(0);
 
-  const show = useCallback((kind: ToastKind, message: string) => {
+  const show = useCallback((kind: ToastKind, message: string, options?: ToastOptions) => {
     const id = ++idRef.current;
-    setItems((prev) => [...prev, { id, kind, message }]);
+    setItems((prev) => [...prev, { id, kind, message, ...options }]);
   }, []);
 
   const remove = useCallback((id: number) => {
@@ -72,7 +87,7 @@ export function ToastHost({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={{ show }}>
       {children}
-      <div className="fixed top-4 right-4 z-[100] flex flex-col gap-2 items-end">
+      <div className="fixed top-4 right-4 left-4 sm:left-auto z-[100] flex flex-col gap-2 items-end">
         {items.map((t) => (
           <ToastCard key={t.id} toast={t} onDone={remove} />
         ))}
@@ -88,19 +103,42 @@ function ToastCard({
   toast: ToastItem;
   onDone: (id: number) => void;
 }) {
+  const [paused, setPaused] = useState(false);
+  const duration = toast.duration === undefined ? DEFAULT_DURATION : toast.duration;
+
   useEffect(() => {
-    const timer = setTimeout(() => onDone(toast.id), 4000);
+    if (duration == null || paused) return;
+    const timer = setTimeout(() => onDone(toast.id), duration);
     return () => clearTimeout(timer);
-  }, [toast.id, onDone]);
+  }, [toast.id, onDone, duration, paused]);
 
   const style = KIND_STYLES[toast.kind];
   return (
     <div
-      role="status"
-      className={`flex items-start gap-2.5 px-4 py-3 rounded-[10px] border shadow-lg max-w-sm ${style.classes}`}
+      role={toast.kind === 'error' ? 'alert' : 'status'}
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      className={`flex items-start gap-2.5 px-4 py-3 rounded-[10px] border shadow-lg w-full sm:w-auto max-w-sm ${style.classes}`}
     >
       <span className="flex-shrink-0 mt-0.5">{style.icon}</span>
-      <p className="text-sm flex-1 text-foreground">{toast.message}</p>
+      <div className="flex-1 min-w-0 text-sm text-foreground">
+        {toast.title && <p className="font-semibold">{toast.title}</p>}
+        <p>{toast.message}</p>
+        {toast.details && toast.details.length > 0 && (
+          <ul className="mt-1 list-disc pl-4 space-y-0.5 max-h-40 overflow-y-auto">
+            {toast.details.map((d, i) => <li key={i}>{d}</li>)}
+          </ul>
+        )}
+        {toast.action && (
+          <button
+            type="button"
+            onClick={() => { toast.action!.onClick(); onDone(toast.id); }}
+            className="mt-2 text-sm font-semibold underline underline-offset-2 hover:opacity-80 cursor-pointer"
+          >
+            {toast.action.label}
+          </button>
+        )}
+      </div>
       <button
         onClick={() => onDone(toast.id)}
         className="text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
@@ -118,9 +156,9 @@ export function useToast() {
   const { show } = ctx;
   return {
     show,
-    success: (m: string) => show('success', m),
-    error: (m: string) => show('error', m),
-    info: (m: string) => show('info', m),
-    warning: (m: string) => show('warning', m),
+    success: (m: string, o?: ToastOptions) => show('success', m, o),
+    error: (m: string, o?: ToastOptions) => show('error', m, o),
+    info: (m: string, o?: ToastOptions) => show('info', m, o),
+    warning: (m: string, o?: ToastOptions) => show('warning', m, o),
   };
 }

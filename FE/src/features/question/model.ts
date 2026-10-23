@@ -334,12 +334,16 @@ export function validateDraft(q: QuestionDraft): QuestionErrors {
     }
     case 'ESSAY': {
       const { error } = rubricTotal(q.rubric);
-      if (error) errors.answers = error;
+      if (q.rubric.length === 0) errors.answers = ESSAY_RUBRIC_REQUIRED;
+      else if (error) errors.answers = error;
       break;
     }
   }
   return errors;
 }
+
+/** An essay can't be created without at least one rubric criterion. */
+export const ESSAY_RUBRIC_REQUIRED = 'Grading rubric: an essay needs at least one criterion.';
 
 /**
  * Checks the ESSAY rubric the way QuestionValidator does. Criterion weights

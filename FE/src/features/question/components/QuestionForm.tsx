@@ -71,7 +71,7 @@ export function QuestionForm({
   actions?: React.ReactNode;
   /** Types the Type dropdown offers (a group holds one kind); all when omitted. */
   allowedTypes?: EditableQuestionType[];
-  /** The question's type doesn't fit its group's kind — always shown, like an import error. */
+  /** The question's type doesn't fit its group's kind — the Type dropdown turns red (the page explains it in a toast). */
   kindError?: string;
   /** The backend found this question's content already in the course — it can't be saved until changed. */
   duplicateError?: string;
@@ -288,6 +288,7 @@ export function QuestionForm({
           value={q.type}
           onChange={(v) => onChange(changeType(q, v as EditableQuestionType))}
           options={typeOptions}
+          invalid={Boolean(kindError)}
         />
       </div>
 
@@ -394,9 +395,9 @@ function RubricAnswers({
       {q.rubric.length === 0 ? (
         <p className="flex items-start gap-2 rounded-[10px] bg-surface-alt px-3 py-2.5 text-sm text-content-soft">
           <Icon.Info className="w-4 h-4 mt-0.5 flex-shrink-0" />
-          No rubric — the {q.type === "DIAGRAM" ? "diagram" : "essay"} is worth
-          1 point and graded without criteria. Add criteria to define how it is
-          scored.
+          {q.type === "ESSAY"
+            ? "An essay must have a grading rubric. Add at least one criterion to define how it is scored."
+            : "No rubric — the diagram is worth 1 point and graded without criteria. Add criteria to define how it is scored."}
         </p>
       ) : (
         <div className="space-y-2">
@@ -412,19 +413,20 @@ function RubricAnswers({
             return (
               <div
                 key={c.key}
-                className="rounded-[10px] border border-line-soft p-2 space-y-1.5"
+                className="rounded-[10px] border border-line-soft p-2"
               >
-                <div className="grid grid-cols-[1.75rem_minmax(0,1fr)_6rem_2rem] gap-2 items-center">
-                  <span className="w-7 h-7 bg-surface-muted rounded-[6px] flex items-center justify-center text-xs font-bold text-content-soft">
+                <div className="grid grid-cols-[1.75rem_minmax(0,1fr)_6rem_2rem] gap-2 items-start">
+                  <span className="mt-1.5 w-7 h-7 bg-surface-muted rounded-[6px] flex items-center justify-center text-xs font-bold text-content-soft">
                     {i + 1}
                   </span>
-                  <input
+                  <textarea
                     value={c.name}
                     onChange={(e) => setCriterion(i, { name: e.target.value })}
                     aria-label={`Criterion ${i + 1} name`}
                     placeholder="e.g. Argument & structure"
                     maxLength={200}
-                    className={inputCls(nameMissing)}
+                    rows={2}
+                    className={`${inputCls(nameMissing)} !h-auto py-2 leading-snug resize-none`}
                   />
                   <input
                     type="number"
@@ -444,35 +446,17 @@ function RubricAnswers({
                     onClick={() => remove(i)}
                     aria-label={`Delete criterion ${i + 1}`}
                     title="Delete criterion"
-                    className="p-1 justify-self-center text-content-subtle hover:text-danger"
+                    className="mt-2 p-1 justify-self-center text-content-subtle hover:text-danger"
                   >
                     <Icon.Trash className="w-4 h-4" />
                   </button>
                 </div>
-                <textarea
-                  value={c.descriptors}
-                  onChange={(e) =>
-                    setCriterion(i, { descriptors: e.target.value })
-                  }
-                  aria-label={`Criterion ${i + 1} description`}
-                  placeholder="What earns full credit for this criterion (optional)"
-                  className="w-full sm:ml-9 sm:w-[calc(100%-2.25rem)] h-[52px] px-3 py-1.5 rounded-[10px] border border-line text-sm text-content bg-surface resize-y focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600 transition-all"
-                />
               </div>
             );
           })}
         </div>
       )}
       {error && <p className="text-xs text-danger mt-1.5">{error}</p>}
-      {(q.rubric.length > 0 || q.rubricNotes) && (
-        <textarea
-          value={q.rubricNotes}
-          onChange={(e) => set({ rubricNotes: e.target.value })}
-          aria-label="Rubric notes"
-          placeholder="Notes for graders (optional)"
-          className="mt-2 w-full h-[52px] px-3 py-1.5 rounded-[10px] border border-line text-sm text-content bg-surface resize-y focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600 transition-all"
-        />
-      )}
     </div>
   );
 }
