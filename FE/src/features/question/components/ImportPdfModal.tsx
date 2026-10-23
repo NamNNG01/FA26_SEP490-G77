@@ -39,7 +39,7 @@ function previewErrorMessage(err: unknown): string {
  * come in blank, flagged with their errors. Nothing is saved here — the
  * questions are saved with the rest of the form (Q-03).
  */
-export function ImportPdfModal({ open, onClose, onImported, courseId: pageCourseId, moduleId: pageModuleId }: {
+export function ImportPdfModal({ open, onClose, onImported, courseId: pageCourseId, moduleId: pageModuleId, lockLocation = false }: {
   open: boolean;
   onClose: () => void;
   /** Also hands back the course / module picked here — the page switches to them. */
@@ -47,6 +47,8 @@ export function ImportPdfModal({ open, onClose, onImported, courseId: pageCourse
   /** The page's current location — the modal's pickers start from it. */
   courseId: string;
   moduleId: string;
+  /** Keep imported questions in the location already selected by the parent form. */
+  lockLocation?: boolean;
 }) {
   const [courseId, setCourseId] = useState(pageCourseId);
   const [moduleId, setModuleId] = useState(pageModuleId);
@@ -87,7 +89,7 @@ export function ImportPdfModal({ open, onClose, onImported, courseId: pageCourse
   };
 
   const handleImport = async () => {
-    if (!file || !courseId || !moduleId || uploading) return;
+    if (!file || !courseId || (!lockLocation && !moduleId) || uploading) return;
     const controller = new AbortController();
     abortRef.current = controller;
     setUploading(true);
@@ -132,7 +134,7 @@ export function ImportPdfModal({ open, onClose, onImported, courseId: pageCourse
   const footer = (
     <>
       <Button variant="outline" onClick={close}>Cancel</Button>
-      <Button onClick={handleImport} loading={uploading} disabled={!file || !courseId || !moduleId} icon={<Icon.Upload className="w-4 h-4" />}>
+      <Button onClick={handleImport} loading={uploading} disabled={!file || !courseId || (!lockLocation && !moduleId)} icon={<Icon.Upload className="w-4 h-4" />}>
         {uploading ? 'Reading file…' : 'Import'}
       </Button>
     </>
@@ -141,15 +143,21 @@ export function ImportPdfModal({ open, onClose, onImported, courseId: pageCourse
   return (
     <Modal open={open} onClose={close} title="Import Questions from PDF or Word" size="md" footer={footer}>
       <div className="space-y-4">
-        <QuestionLocationCard
-          hideHeading
-          courseId={courseId}
-          moduleId={moduleId}
-          onChange={(c, m) => { setCourseId(c); setModuleId(m); setError(null); }}
-          courseLocked={uploading}
-          moduleRequired
-        />
-        <p className="-mt-2 text-xs text-content-subtle">The imported questions go into this course and module.</p>
+        {lockLocation ? (
+          <p className="text-xs text-content-subtle">Imported questions will use the exam’s selected course and module.</p>
+        ) : (
+          <>
+            <QuestionLocationCard
+              hideHeading
+              courseId={courseId}
+              moduleId={moduleId}
+              onChange={(c, m) => { setCourseId(c); setModuleId(m); setError(null); }}
+              courseLocked={uploading}
+              moduleRequired
+            />
+            <p className="-mt-2 text-xs text-content-subtle">The imported questions go into this course and module.</p>
+          </>
+        )}
 
         <div className="flex flex-wrap items-center gap-2 rounded-[10px] border border-line px-3 py-2.5">
           <Icon.FileText className="w-4 h-4 text-brand-ink flex-shrink-0" />

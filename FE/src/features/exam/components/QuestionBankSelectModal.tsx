@@ -19,7 +19,7 @@ import { getApiErrorMessage } from "@/utils/apiError";
 interface QuestionBankSelectModalProps {
   open: boolean;
   onClose: () => void;
-  onSelect: (items: { question: BankQuestionItem; points: number }[]) => void;
+  onSelect: (items: { question: BankQuestionItem; weight: number }[]) => void;
   allowedQuestionTypes: string[];
   existingQuestionIds: Set<number>;
   initialCourseId?: number;
@@ -49,7 +49,7 @@ export function QuestionBankSelectModal({
   );
   const [difficulty, setDifficulty] = useState<string>("all");
   const [questionType, setQuestionType] = useState<string>("all");
-  const [defaultPoints, setDefaultPoints] = useState<number>(1);
+  const [defaultWeight, setDefaultWeight] = useState<number>(1);
   const [selectedMap, setSelectedMap] = useState<Map<number, BankQuestionItem>>(
     new Map(),
   );
@@ -169,7 +169,7 @@ export function QuestionBankSelectModal({
   const handleConfirm = () => {
     const list = Array.from(selectedMap.values()).map((q) => ({
       question: q,
-      points: Number(defaultPoints) > 0 ? Number(defaultPoints) : 1,
+      weight: Number(defaultWeight) > 0 ? Number(defaultWeight) : 1,
     }));
     onSelect(list);
   };
@@ -189,18 +189,19 @@ export function QuestionBankSelectModal({
       title="Select Questions from Question Bank"
       size="xl"
       footer={
-        <div className="flex items-center justify-between w-full">
-          <div className="flex items-center gap-2">
+        <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
             <span className="text-sm text-content-secondary font-medium">
-              Default Points:
+              Default Weight:
             </span>
             <input
               type="number"
-              min={1}
-              max={100}
-              value={defaultPoints}
+              min={0}
+              max={1000}
+              step={1}
+              value={defaultWeight}
               onChange={(e) =>
-                setDefaultPoints(Math.max(1, Number(e.target.value) || 1))
+                setDefaultWeight(Math.max(0.01, Number(e.target.value) || 0.01))
               }
               className="w-16 px-2.5 py-1 text-sm rounded-[8px] border border-line bg-surface focus:outline-none focus:ring-1 focus:ring-brand-ink"
             />
@@ -210,7 +211,7 @@ export function QuestionBankSelectModal({
               questions
             </span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             <Button variant="outline" onClick={onClose} disabled={loading}>
               Cancel
             </Button>
@@ -230,16 +231,19 @@ export function QuestionBankSelectModal({
         {coursesError && <Alert type="error" title="Could not load courses" message={coursesError} />}
         {modulesError && <Alert type="error" title="Could not load modules" message={modulesError} />}
         {questionsError && <Alert type="error" title="Could not load questions" message={questionsError} />}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-2.5">
-          <SearchInput
-            placeholder="Search question text…"
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(0);
-            }}
-          />
+        <div className="grid min-w-0 grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="min-w-0 sm:col-span-2 lg:col-span-2">
+            <SearchInput
+              placeholder="Search question text…"
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(0);
+              }}
+            />
+          </div>
           <Select
+            className="min-w-0"
             value={courseId}
             onChange={(v) => {
               setCourseId(v);
@@ -255,6 +259,7 @@ export function QuestionBankSelectModal({
             ]}
           />
           <Select
+            className="min-w-0"
             value={moduleId}
             onChange={(v) => {
               setModuleId(v);
@@ -269,31 +274,29 @@ export function QuestionBankSelectModal({
               })),
             ]}
           />
-          <div className="flex gap-2">
-            <Select
-              className="flex-1"
-              value={difficulty}
-              onChange={(v) => {
-                setDifficulty(v);
-                setPage(0);
-              }}
-              options={[
-                { label: "All Diff", value: "all" },
-                { label: "Easy", value: "EASY" },
-                { label: "Medium", value: "MEDIUM" },
-                { label: "Hard", value: "HARD" },
-              ]}
-            />
-            <Select
-              className="flex-1"
-              value={questionType}
-              onChange={(v) => {
-                setQuestionType(v);
-                setPage(0);
-              }}
-              options={typeOptions}
-            />
-          </div>
+          <Select
+            className="min-w-0 lg:col-span-2"
+            value={difficulty}
+            onChange={(v) => {
+              setDifficulty(v);
+              setPage(0);
+            }}
+            options={[
+              { label: "All Difficulties", value: "all" },
+              { label: "Easy", value: "EASY" },
+              { label: "Medium", value: "MEDIUM" },
+              { label: "Hard", value: "HARD" },
+            ]}
+          />
+          <Select
+            className="min-w-0 lg:col-span-2"
+            value={questionType}
+            onChange={(v) => {
+              setQuestionType(v);
+              setPage(0);
+            }}
+            options={typeOptions}
+          />
         </div>
 
         <div className="flex justify-end">

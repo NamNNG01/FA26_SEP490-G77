@@ -53,15 +53,15 @@ export function Modal({ open, isOpen, onClose, title, children, footer, size = '
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" onClick={onClose} />
-      <div ref={panelRef} role="dialog" aria-modal="true" className={`relative bg-surface rounded-[14px] shadow-xl w-full ${widths[size]} flex flex-col max-h-[90vh]`}>
+      <div ref={panelRef} role="dialog" aria-modal="true" className={`relative min-w-0 bg-surface rounded-[14px] shadow-xl w-full ${widths[size]} flex flex-col max-h-[90vh]`}>
         {title && (
-          <div className="flex items-center justify-between px-6 py-4 border-b border-line-soft">
-            <h3 className="text-lg font-semibold text-content">{title}</h3>
+          <div className="flex items-center justify-between gap-4 px-6 py-4 border-b border-line-soft">
+            <h3 className="min-w-0 text-lg font-semibold text-content">{title}</h3>
             <button onClick={onClose} className="text-content-subtle hover:text-content-secondary transition-colors"><Icon.X className="w-5 h-5" /></button>
           </div>
         )}
-        <div className="px-6 py-4 overflow-y-auto flex-1 min-h-0">{children}</div>
-        {footer && <div className="px-6 py-4 border-t border-line-soft flex justify-end gap-2">{footer}</div>}
+        <div className="min-w-0 px-6 py-4 overflow-y-auto flex-1 min-h-0">{children}</div>
+        {footer && <div className="min-w-0 px-4 sm:px-6 py-4 border-t border-line-soft flex flex-wrap items-center justify-end gap-2">{footer}</div>}
       </div>
     </div>
   );
