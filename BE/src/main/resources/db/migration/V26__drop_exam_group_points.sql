@@ -1,0 +1,1 @@
+ALTER TABLE exam_groups DROP COLUMN IF EXISTS points;
