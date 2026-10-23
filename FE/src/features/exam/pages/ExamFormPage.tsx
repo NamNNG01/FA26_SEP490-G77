@@ -84,6 +84,7 @@ export function ExamFormPage({
 
   const [questions, setQuestions] = useState<ExamQuestion[]>([]);
   const [groups, setGroups] = useState<ExamGroup[]>([]);
+  const [expandedGroupIds, setExpandedGroupIds] = useState<Set<number>>(() => new Set());
   const [configs, setConfigs] = useState<ExamConfig[]>([]);
 
   const [bankModalOpen, setBankModalOpen] = useState(false);
@@ -176,6 +177,7 @@ export function ExamFormPage({
   };
 
   const totalQuestionCount = questions.length + configs.reduce((sum, config) => sum + config.numberOfQuestions, 0);
+  const standaloneQuestions = questions.filter((question) => !question.groupId);
   const totalWeight = generationType === "RANDOM"
     ? configs.reduce((sum, config) => sum + config.numberOfQuestions * (config.weightEach ?? 1), 0)
     : questions.reduce((acc, q) => acc + (q.weight ?? q.points ?? 1), 0);
@@ -1271,7 +1273,7 @@ export function ExamFormPage({
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line-soft pb-2.5">
                 <div>
                   <h3 className="text-base font-bold text-content">
-                    Attached Questions ({questions.length})
+                    Attached Questions ({standaloneQuestions.length})
                   </h3>
                   <p className="text-xs text-content-subtle">
                     {formKind === "QUIZ"
@@ -1324,14 +1326,14 @@ export function ExamFormPage({
                 </div>
               )}
 
-              {questions.length === 0 ? (
+              {standaloneQuestions.length === 0 ? (
                 <div className="py-12 text-center text-sm text-content-subtle border-2 border-dashed border-line-soft rounded-[10px]">
-                  No questions attached yet. Click "Select Questions from Bank"
-                  to attach questions.
+                  No standalone questions attached. Add questions here or attach
+                  a reading passage group below.
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {questions
+                  {standaloneQuestions
                     .sort((a, b) => a.orderIndex - b.orderIndex)
                     .map((q, idx) => (
                       <div
@@ -1485,49 +1487,141 @@ export function ExamFormPage({
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {groups.map((g, idx) => (
-                    <div
-                      key={g.examGroupId || idx}
-                      className="p-3.5 rounded-[10px] border border-line bg-surface space-y-2"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Badge variant="purple" className="text-2xs">
-                            Group #{idx + 1}
-                          </Badge>
-                          <h4 className="text-sm font-semibold text-content">
-                            {g.title}
-                          </h4>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-content-secondary font-medium">
-                            {g.questionCount ?? questions.filter((q) => q.groupId === g.groupId).length} questions
-                          </span>
+                  {groups.map((g, idx) => {
+                    const groupQuestions = questions
+                      .filter((question) => question.groupId === g.groupId)
+                      .sort((a, b) => a.orderIndex - b.orderIndex);
+                    const isExpanded = expandedGroupIds.has(g.examGroupId);
+
+                    return (
+                      <div
+                        key={g.examGroupId || idx}
+                        className="rounded-[10px] border border-line bg-surface overflow-hidden"
+                      >
+                        <div className="flex items-center justify-between gap-3 p-3.5">
+                          <button
+                            type="button"
+                            aria-expanded={isExpanded}
+                            onClick={() => setExpandedGroupIds((current) => {
+                              const next = new Set(current);
+                              if (next.has(g.examGroupId)) next.delete(g.examGroupId);
+                              else next.add(g.examGroupId);
+                              return next;
+                            })}
+                            className="flex min-w-0 flex-1 items-center gap-2 text-left cursor-pointer"
+                          >
+                            <Icon.ChevronDown className={`w-4 h-4 flex-shrink-0 text-content-subtle transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                            <Badge variant="purple" className="text-2xs">
+                              Group #{idx + 1}
+                            </Badge>
+                            <span className="truncate text-sm font-semibold text-content">
+                              {g.title}
+                            </span>
+                            <span className="flex-shrink-0 text-xs text-content-secondary font-medium">
+                              {groupQuestions.length || g.questionCount || 0} questions
+                            </span>
+                          </button>
                           {!isReadOnly && (
                             <button
                               type="button"
-                              onClick={() =>
-                                setRemoveConfirmTarget({
-                                  type: "group",
-                                  examGroupId: g.examGroupId,
-                                  title: g.title,
-                                })
-                              }
+                              onClick={() => setRemoveConfirmTarget({
+                                type: "group",
+                                examGroupId: g.examGroupId,
+                                title: g.title,
+                              })}
                               className="text-content-subtle hover:text-danger p-1 rounded hover:bg-danger-light cursor-pointer"
                               title="Remove group"
+                              aria-label={`Remove ${g.title}`}
                             >
                               <Icon.Trash className="w-4 h-4" />
                             </button>
                           )}
                         </div>
+
+                        {isExpanded && (
+                          <div className="space-y-3 border-t border-line-soft bg-surface-muted/20 p-3.5">
+                            {g.passageText && (
+                              <div className="rounded-[8px] border border-line-soft bg-surface p-3 text-xs text-content-secondary leading-relaxed whitespace-pre-wrap">
+                                {g.passageText}
+                              </div>
+                            )}
+                            {groupQuestions.length === 0 ? (
+                              <p className="py-3 text-center text-xs text-content-subtle">
+                                No questions are attached from this group.
+                              </p>
+                            ) : (
+                              <div className="space-y-2">
+                                {groupQuestions.map((q, questionIndex) => (
+                                  <div
+                                    key={q.examQuestionId || q.questionId}
+                                    className={`rounded-[8px] border bg-surface p-3 ${isAssessment && isEssayQuestion(q) && q.hasRubric === false ? "border-warning-line" : "border-line-soft"}`}
+                                  >
+                                    <div className="flex items-start justify-between gap-3">
+                                      <div className="min-w-0 flex-1">
+                                        <div className="flex items-start gap-2">
+                                          <span className="mt-0.5 text-xs font-bold text-brand-ink">#{questionIndex + 1}</span>
+                                          <p className="text-sm font-medium leading-snug text-content">{q.content}</p>
+                                        </div>
+                                        <div className="ml-6 mt-2 flex flex-wrap items-center gap-2">
+                                          <Badge variant="default" className="text-2xs font-semibold">
+                                            {q.questionType.replace("_", " ")}
+                                          </Badge>
+                                          <label className="inline-flex items-center gap-1.5 text-xs text-content-secondary font-medium">
+                                            Weight
+                                            <input
+                                              type="number"
+                                              min={0}
+                                              max={1000}
+                                              step={1}
+                                              disabled={isReadOnly}
+                                              className="w-20 rounded border border-line bg-surface px-2 py-1 text-content disabled:opacity-60"
+                                              value={q.weight ?? q.points ?? 1}
+                                              onChange={(e) => {
+                                                const weight = Number(e.target.value) || 0;
+                                                setQuestions((prev) => prev.map((item) => item.examQuestionId === q.examQuestionId ? { ...item, weight, points: undefined } : item));
+                                                setIsDirty(true);
+                                              }}
+                                              onBlur={(e) => handleQuestionWeightBlur(q, Number(e.currentTarget.value) || 0)}
+                                            />
+                                          </label>
+                                          <span className="text-xs font-semibold text-brand-ink">
+                                            Score: {formatScore(scoreForWeight(q.weight ?? q.points ?? 1))} pts
+                                          </span>
+                                          {isAssessment && isEssayQuestion(q) && (
+                                            <button
+                                              type="button"
+                                              onClick={() => setRubricModalQuestion({ id: q.questionId, content: q.content })}
+                                              className="text-xs font-semibold text-brand-ink hover:underline cursor-pointer"
+                                            >
+                                              {q.hasRubric ? "Edit Rubric" : "Add Rubric"}
+                                            </button>
+                                          )}
+                                        </div>
+                                      </div>
+                                      {!isReadOnly && (
+                                        <button
+                                          type="button"
+                                          onClick={() => setQuestionEditTarget(q)}
+                                          className="rounded p-1 text-content-subtle hover:bg-surface-hover hover:text-brand-ink cursor-pointer"
+                                          title="Edit Question"
+                                          aria-label={`Edit question ${questionIndex + 1} in ${g.title}`}
+                                        >
+                                          <Icon.Edit className="h-4 w-4" />
+                                        </button>
+                                      )}
+                                    </div>
+                                    {q.questionType === "DIAGRAM" && (
+                                      <ExamDiagramAnswer questionId={q.questionId} readOnly={isReadOnly} />
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
-                      {g.passageText && (
-                        <p className="text-xs text-content-subtle line-clamp-2 leading-relaxed">
-                          {g.passageText}
-                        </p>
-                      )}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
