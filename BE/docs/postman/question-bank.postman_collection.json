@@ -1,35 +1,13 @@
 {
   "info": {
-    "_postman_id": "exam-prep-question-bank-comprehensive-collection",
-    "name": "ExamPrep Question Bank Comprehensive Collection",
+    "_postman_id": "exam-prep-comprehensive-collection-v3",
+    "name": "ExamPrep Comprehensive Collection (Questions & Exams)",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
     {
       "name": "00 Auth",
       "item": [
-        {
-          "name": "Login Admin",
-          "event": [
-            {
-              "script": {
-                "exec": [
-                  "var jsonData = pm.response.json();",
-                  "if (jsonData.data && jsonData.data.accessToken) {",
-                  "    pm.environment.set(\"adminToken\", jsonData.data.accessToken);",
-                  "}"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
-            "body": {"mode": "raw", "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}"},
-            "url": {"raw": "{{baseUrl}}/api/v1/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "login"]}
-          }
-        },
         {
           "name": "Login Manager A",
           "event": [
@@ -51,130 +29,34 @@
             "body": {"mode": "raw", "raw": "{\n  \"email\": \"{{managerAEmail}}\",\n  \"password\": \"{{managerAPassword}}\"\n}"},
             "url": {"raw": "{{baseUrl}}/api/v1/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "login"]}
           }
-        },
-        {
-          "name": "Login Student Enrolled",
-          "event": [
-            {
-              "script": {
-                "exec": [
-                  "var jsonData = pm.response.json();",
-                  "if (jsonData.data && jsonData.data.accessToken) {",
-                  "    pm.environment.set(\"studentToken\", jsonData.data.accessToken);",
-                  "}"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
-            "body": {"mode": "raw", "raw": "{\n  \"email\": \"{{studentEmail}}\",\n  \"password\": \"{{studentPassword}}\"\n}"},
-            "url": {"raw": "{{baseUrl}}/api/v1/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "login"]}
-          }
         }
       ]
     },
     {
-      "name": "01 Question List (Q-01)",
+      "name": "01 Question Management",
       "item": [
         {
-          "name": "List Questions by Course",
+          "name": "List Questions",
           "request": {
             "method": "GET",
             "header": [{"key": "Authorization", "value": "Bearer {{managerAToken}}"}],
-            "url": {"raw": "{{baseUrl}}/api/v1/manager/questions?courseId={{courseId}}&page=0&size=20", "host": ["{{baseUrl}}"], "path": ["api", "v1", "manager", "questions"], "query": [{"key": "courseId", "value": "{{courseId}}"}, {"key": "page", "value": "0"}, {"key": "size", "value": "20"}]}
+            "url": {"raw": "{{baseUrl}}/api/v1/manager/questions?courseId={{courseId}}", "host": ["{{baseUrl}}"], "path": ["api", "v1", "manager", "questions"], "query": [{"key": "courseId", "value": "{{courseId}}"}]}
           }
         },
         {
-          "name": "List Questions Filter by Type (DIAGRAM)",
-          "request": {
-            "method": "GET",
-            "header": [{"key": "Authorization", "value": "Bearer {{managerAToken}}"}],
-            "url": {"raw": "{{baseUrl}}/api/v1/manager/questions?courseId={{courseId}}&questionType=DIAGRAM", "host": ["{{baseUrl}}"], "path": ["api", "v1", "manager", "questions"], "query": [{"key": "courseId", "value": "{{courseId}}"}, {"key": "questionType", "value": "DIAGRAM"}]}
-          }
-        },
-        {
-          "name": "List Questions Filter by Type (ORDERING)",
-          "request": {
-            "method": "GET",
-            "header": [{"key": "Authorization", "value": "Bearer {{managerAToken}}"}],
-            "url": {"raw": "{{baseUrl}}/api/v1/manager/questions?courseId={{courseId}}&questionType=ORDERING", "host": ["{{baseUrl}}"], "path": ["api", "v1", "manager", "questions"], "query": [{"key": "courseId", "value": "{{courseId}}"}, {"key": "questionType", "value": "ORDERING"}]}
-          }
-        }
-      ]
-    },
-    {
-      "name": "02 Create Questions (Q-02)",
-      "item": [
-        {
-          "name": "Create SINGLE_CHOICE Question",
+          "name": "Create Single Choice Question",
           "request": {
             "method": "POST",
             "header": [{"key": "Authorization", "value": "Bearer {{managerAToken}}"}, {"key": "Content-Type", "value": "application/json"}],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"courseId\": {{courseId}},\n  \"moduleId\": {{moduleId}},\n  \"questionType\": \"SINGLE_CHOICE\",\n  \"difficulty\": \"EASY\",\n  \"content\": \"What is 2 + 2?\",\n  \"defaultPoints\": 1,\n  \"options\": [\n    {\"optionText\": \"3\", \"isCorrect\": false},\n    {\"optionText\": \"4\", \"isCorrect\": true}\n  ]\n}"
+              "raw": "{\n  \"courseId\": {{courseId}},\n  \"moduleId\": {{moduleId}},\n  \"questionType\": \"SINGLE_CHOICE\",\n  \"difficulty\": \"EASY\",\n  \"content\": \"What is 2 + 2?\",\n  \"options\": [\n    {\"optionText\": \"3\", \"isCorrect\": false},\n    {\"optionText\": \"4\", \"isCorrect\": true}\n  ]\n}"
             },
             "url": {"raw": "{{baseUrl}}/api/v1/manager/questions", "host": ["{{baseUrl}}"], "path": ["api", "v1", "manager", "questions"]}
           }
         },
         {
-          "name": "Create DIAGRAM Question (Happy Path)",
-          "request": {
-            "method": "POST",
-            "header": [{"key": "Authorization", "value": "Bearer {{managerAToken}}"}, {"key": "Content-Type", "value": "application/json"}],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"courseId\": {{courseId}},\n  \"moduleId\": {{moduleId}},\n  \"questionType\": \"DIAGRAM\",\n  \"difficulty\": \"HARD\",\n  \"content\": \"Draw sequence diagram for login flow\",\n  \"defaultPoints\": 3,\n  \"questionMetadata\": {\n    \"drawioXml\": \"<mxfile><diagram>content</diagram></mxfile>\",\n    \"skillTag\": \"uml\"\n  }\n}"
-            },
-            "url": {"raw": "{{baseUrl}}/api/v1/manager/questions", "host": ["{{baseUrl}}"], "path": ["api", "v1", "manager", "questions"]}
-          }
-        },
-        {
-          "name": "Create ORDERING Question (Happy Path)",
-          "request": {
-            "method": "POST",
-            "header": [{"key": "Authorization", "value": "Bearer {{managerAToken}}"}, {"key": "Content-Type", "value": "application/json"}],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"courseId\": {{courseId}},\n  \"moduleId\": {{moduleId}},\n  \"questionType\": \"ORDERING\",\n  \"difficulty\": \"MEDIUM\",\n  \"content\": \"Order the steps of execution\",\n  \"defaultPoints\": 2,\n  \"options\": [\n    {\"key\": \"k1\", \"optionText\": \"Step 1\", \"orderIndex\": 0},\n    {\"key\": \"k2\", \"optionText\": \"Step 2\", \"orderIndex\": 1}\n  ],\n  \"correctOrder\": [\"k2\", \"k1\"]\n}"
-            },
-            "url": {"raw": "{{baseUrl}}/api/v1/manager/questions", "host": ["{{baseUrl}}"], "path": ["api", "v1", "manager", "questions"]}
-          }
-        },
-        {
-          "name": "Create DIAGRAM Question (Invalid XML -> 400)",
-          "request": {
-            "method": "POST",
-            "header": [{"key": "Authorization", "value": "Bearer {{managerAToken}}"}, {"key": "Content-Type", "value": "application/json"}],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"courseId\": {{courseId}},\n  \"questionType\": \"DIAGRAM\",\n  \"difficulty\": \"HARD\",\n  \"content\": \"Invalid XML diagram\",\n  \"defaultPoints\": 3,\n  \"questionMetadata\": {\n    \"drawioXml\": \"<html>Invalid start</html>\"\n  }\n}"
-            },
-            "url": {"raw": "{{baseUrl}}/api/v1/manager/questions", "host": ["{{baseUrl}}"], "path": ["api", "v1", "manager", "questions"]}
-          }
-        },
-        {
-          "name": "Create ORDERING Question (isCorrect present -> 400)",
-          "request": {
-            "method": "POST",
-            "header": [{"key": "Authorization", "value": "Bearer {{managerAToken}}"}, {"key": "Content-Type", "value": "application/json"}],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"courseId\": {{courseId}},\n  \"questionType\": \"ORDERING\",\n  \"difficulty\": \"MEDIUM\",\n  \"content\": \"Invalid ordering with isCorrect\",\n  \"defaultPoints\": 2,\n  \"options\": [\n    {\"key\": \"k1\", \"optionText\": \"Step 1\", \"isCorrect\": false, \"orderIndex\": 0},\n    {\"key\": \"k2\", \"optionText\": \"Step 2\", \"isCorrect\": false, \"orderIndex\": 1}\n  ],\n  \"correctOrder\": [\"k1\", \"k2\"]\n}"
-            },
-            "url": {"raw": "{{baseUrl}}/api/v1/manager/questions", "host": ["{{baseUrl}}"], "path": ["api", "v1", "manager", "questions"]}
-          }
-        }
-      ]
-    },
-    {
-      "name": "03 Detail, Update & Delete (Q-04 to Q-08)",
-      "item": [
-        {
-          "name": "Get Question Detail (Q-04)",
+          "name": "Get Question Detail",
           "request": {
             "method": "GET",
             "header": [{"key": "Authorization", "value": "Bearer {{managerAToken}}"}],
@@ -182,7 +64,7 @@
           }
         },
         {
-          "name": "Update Question (Q-05)",
+          "name": "Update Question",
           "request": {
             "method": "PUT",
             "header": [{"key": "Authorization", "value": "Bearer {{managerAToken}}"}, {"key": "Content-Type", "value": "application/json"}],
@@ -191,28 +73,61 @@
           }
         },
         {
-          "name": "Duplicate Question (Q-07)",
-          "request": {
-            "method": "POST",
-            "header": [{"key": "Authorization", "value": "Bearer {{managerAToken}}"}],
-            "url": {"raw": "{{baseUrl}}/api/v1/manager/questions/{{questionId}}/duplicate", "host": ["{{baseUrl}}"], "path": ["api", "v1", "manager", "questions", "{{questionId}}", "duplicate"]}
-          }
-        },
-        {
-          "name": "Change Status (Q-08)",
-          "request": {
-            "method": "PATCH",
-            "header": [{"key": "Authorization", "value": "Bearer {{managerAToken}}"}, {"key": "Content-Type", "value": "application/json"}],
-            "body": {"mode": "raw", "raw": "{\n  \"status\": \"INACTIVE\"\n}"},
-            "url": {"raw": "{{baseUrl}}/api/v1/manager/questions/{{questionId}}/status", "host": ["{{baseUrl}}"], "path": ["api", "v1", "manager", "questions", "{{questionId}}", "status"]}
-          }
-        },
-        {
-          "name": "Delete Question (Q-06)",
+          "name": "Delete Question",
           "request": {
             "method": "DELETE",
             "header": [{"key": "Authorization", "value": "Bearer {{managerAToken}}"}],
             "url": {"raw": "{{baseUrl}}/api/v1/manager/questions/{{questionId}}", "host": ["{{baseUrl}}"], "path": ["api", "v1", "manager", "questions", "{{questionId}}"]}
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 Exam Management",
+      "item": [
+        {
+          "name": "List Exams",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{managerAToken}}"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/manager/exams?courseId={{courseId}}", "host": ["{{baseUrl}}"], "path": ["api", "v1", "manager", "exams"], "query": [{"key": "courseId", "value": "{{courseId}}"}]}
+          }
+        },
+        {
+          "name": "Create Exam (with maxScore)",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Authorization", "value": "Bearer {{managerAToken}}"}, {"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Final Exam\",\n  \"courseId\": {{courseId}},\n  \"moduleId\": {{moduleId}},\n  \"durationMinutes\": 60,\n  \"isPractice\": false,\n  \"generationType\": \"STATIC\",\n  \"maxScore\": 10,\n  \"questionIds\": [\n    {\"questionId\": {{questionId}}, \"points\": 10, \"orderIndex\": 0}\n  ]\n}"
+            },
+            "url": {"raw": "{{baseUrl}}/api/v1/manager/exams", "host": ["{{baseUrl}}"], "path": ["api", "v1", "manager", "exams"]}
+          }
+        },
+        {
+          "name": "Get Exam Detail",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{managerAToken}}"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/manager/exams/{{examId}}", "host": ["{{baseUrl}}"], "path": ["api", "v1", "manager", "exams", "{{examId}}"]}
+          }
+        },
+        {
+          "name": "Publish Exam",
+          "request": {
+            "method": "PATCH",
+            "header": [{"key": "Authorization", "value": "Bearer {{managerAToken}}"}, {"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"status\": \"PUBLISHED\"\n}"},
+            "url": {"raw": "{{baseUrl}}/api/v1/manager/exams/{{examId}}/publish", "host": ["{{baseUrl}}"], "path": ["api", "v1", "manager", "exams", "{{examId}}", "publish"]}
+          }
+        },
+        {
+          "name": "Delete Exam",
+          "request": {
+            "method": "DELETE",
+            "header": [{"key": "Authorization", "value": "Bearer {{managerAToken}}"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/manager/exams/{{examId}}", "host": ["{{baseUrl}}"], "path": ["api", "v1", "manager", "exams", "{{examId}}"]}
           }
         }
       ]
