@@ -449,6 +449,10 @@ public class QuestionValidator {
 
     private void validateEssayRubric(Object rubric, String path, List<ValidationError> errors) {
         if (rubric == null) {
+            errors.add(new ValidationError(
+                    path,
+                    "Essay grading rubric is required"
+            ));
             return;
         }
         try {

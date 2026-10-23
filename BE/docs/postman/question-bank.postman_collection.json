@@ -1,6 +1,6 @@
 {
   "info": {
-    "_postman_id": "exam-prep-comprehensive-collection-v3",
+    "_postman_id": "exam-prep-comprehensive-collection-v4",
     "name": "ExamPrep Comprehensive Collection (Questions & Exams)",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
@@ -44,13 +44,97 @@
           }
         },
         {
-          "name": "Create Single Choice Question",
+          "name": "Create SINGLE_CHOICE Question",
           "request": {
             "method": "POST",
             "header": [{"key": "Authorization", "value": "Bearer {{managerAToken}}"}, {"key": "Content-Type", "value": "application/json"}],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"courseId\": {{courseId}},\n  \"moduleId\": {{moduleId}},\n  \"questionType\": \"SINGLE_CHOICE\",\n  \"difficulty\": \"EASY\",\n  \"content\": \"What is 2 + 2?\",\n  \"options\": [\n    {\"optionText\": \"3\", \"isCorrect\": false},\n    {\"optionText\": \"4\", \"isCorrect\": true}\n  ]\n}"
+            },
+            "url": {"raw": "{{baseUrl}}/api/v1/manager/questions", "host": ["{{baseUrl}}"], "path": ["api", "v1", "manager", "questions"]}
+          }
+        },
+        {
+          "name": "Create MULTIPLE_CHOICE Question",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Authorization", "value": "Bearer {{managerAToken}}"}, {"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"courseId\": {{courseId}},\n  \"moduleId\": {{moduleId}},\n  \"questionType\": \"MULTIPLE_CHOICE\",\n  \"difficulty\": \"MEDIUM\",\n  \"content\": \"Select even numbers\",\n  \"options\": [\n    {\"optionText\": \"2\", \"isCorrect\": true},\n    {\"optionText\": \"4\", \"isCorrect\": true},\n    {\"optionText\": \"3\", \"isCorrect\": false}\n  ]\n}"
+            },
+            "url": {"raw": "{{baseUrl}}/api/v1/manager/questions", "host": ["{{baseUrl}}"], "path": ["api", "v1", "manager", "questions"]}
+          }
+        },
+        {
+          "name": "Create TRUE_FALSE Question",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Authorization", "value": "Bearer {{managerAToken}}"}, {"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"courseId\": {{courseId}},\n  \"moduleId\": {{moduleId}},\n  \"questionType\": \"TRUE_FALSE\",\n  \"difficulty\": \"EASY\",\n  \"content\": \"Java is object oriented.\",\n  \"options\": [\n    {\"optionText\": \"True\", \"isCorrect\": true},\n    {\"optionText\": \"False\", \"isCorrect\": false}\n  ]\n}"
+            },
+            "url": {"raw": "{{baseUrl}}/api/v1/manager/questions", "host": ["{{baseUrl}}"], "path": ["api", "v1", "manager", "questions"]}
+          }
+        },
+        {
+          "name": "Create MATCHING Question",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Authorization", "value": "Bearer {{managerAToken}}"}, {"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"courseId\": {{courseId}},\n  \"moduleId\": {{moduleId}},\n  \"questionType\": \"MATCHING\",\n  \"difficulty\": \"MEDIUM\",\n  \"content\": \"Match terms\",\n  \"answerKey\": {\n    \"pairs\": [\n      {\"left\": \"HTML\", \"right\": \"Markup\"},\n      {\"left\": \"Java\", \"right\": \"Language\"}\n    ]\n  }\n}"
+            },
+            "url": {"raw": "{{baseUrl}}/api/v1/manager/questions", "host": ["{{baseUrl}}"], "path": ["api", "v1", "manager", "questions"]}
+          }
+        },
+        {
+          "name": "Create FILL_BLANK Question",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Authorization", "value": "Bearer {{managerAToken}}"}, {"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"courseId\": {{courseId}},\n  \"moduleId\": {{moduleId}},\n  \"questionType\": \"FILL_BLANK\",\n  \"difficulty\": \"MEDIUM\",\n  \"content\": \"Capital of France is {{1}}.\",\n  \"answerKey\": {\n    \"blanks\": [\n      {\"index\": 1, \"accepted\": [\"Paris\", \"paris\"], \"caseSensitive\": false}\n    ]\n  }\n}"
+            },
+            "url": {"raw": "{{baseUrl}}/api/v1/manager/questions", "host": ["{{baseUrl}}"], "path": ["api", "v1", "manager", "questions"]}
+          }
+        },
+        {
+          "name": "Create ESSAY Question",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Authorization", "value": "Bearer {{managerAToken}}"}, {"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"courseId\": {{courseId}},\n  \"moduleId\": {{moduleId}},\n  \"questionType\": \"ESSAY\",\n  \"difficulty\": \"HARD\",\n  \"content\": \"Explain normalization in databases.\",\n  \"essayGradingRubric\": {\n    \"criteria\": [\n      {\"name\": \"Clarity\", \"weight\": 3},\n      {\"name\": \"Completeness\", \"weight\": 2}\n    ],\n    \"notes\": \"Evaluate depth\"\n  }\n}"
+            },
+            "url": {"raw": "{{baseUrl}}/api/v1/manager/questions", "host": ["{{baseUrl}}"], "path": ["api", "v1", "manager", "questions"]}
+          }
+        },
+        {
+          "name": "Create DIAGRAM Question",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Authorization", "value": "Bearer {{managerAToken}}"}, {"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"courseId\": {{courseId}},\n  \"moduleId\": {{moduleId}},\n  \"questionType\": \"DIAGRAM\",\n  \"difficulty\": \"HARD\",\n  \"content\": \"Draw architecture diagram\",\n  \"questionMetadata\": {\n    \"drawioXml\": \"<mxfile><diagram>content</diagram></mxfile>\"\n  },\n  \"essayGradingRubric\": {\n    \"criteria\": [\n      {\"name\": \"Structure\", \"weight\": 5}\n    ]\n  }\n}"
+            },
+            "url": {"raw": "{{baseUrl}}/api/v1/manager/questions", "host": ["{{baseUrl}}"], "path": ["api", "v1", "manager", "questions"]}
+          }
+        },
+        {
+          "name": "Create ORDERING Question",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Authorization", "value": "Bearer {{managerAToken}}"}, {"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"courseId\": {{courseId}},\n  \"moduleId\": {{moduleId}},\n  \"questionType\": \"ORDERING\",\n  \"difficulty\": \"MEDIUM\",\n  \"content\": \"Order steps\",\n  \"options\": [\n    {\"key\": \"k1\", \"optionText\": \"Step 1\", \"orderIndex\": 0},\n    {\"key\": \"k2\", \"optionText\": \"Step 2\", \"orderIndex\": 1}\n  ],\n  \"correctOrder\": [\"k2\", \"k1\"]\n}"
             },
             "url": {"raw": "{{baseUrl}}/api/v1/manager/questions", "host": ["{{baseUrl}}"], "path": ["api", "v1", "manager", "questions"]}
           }
@@ -94,13 +178,13 @@
           }
         },
         {
-          "name": "Create Exam (with maxScore)",
+          "name": "Create Exam (with maxScore & weight)",
           "request": {
             "method": "POST",
             "header": [{"key": "Authorization", "value": "Bearer {{managerAToken}}"}, {"key": "Content-Type", "value": "application/json"}],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"title\": \"Final Exam\",\n  \"courseId\": {{courseId}},\n  \"moduleId\": {{moduleId}},\n  \"durationMinutes\": 60,\n  \"isPractice\": false,\n  \"generationType\": \"STATIC\",\n  \"maxScore\": 10,\n  \"questionIds\": [\n    {\"questionId\": {{questionId}}, \"points\": 10, \"orderIndex\": 0}\n  ]\n}"
+              "raw": "{\n  \"title\": \"Final Exam\",\n  \"courseId\": {{courseId}},\n  \"moduleId\": {{moduleId}},\n  \"durationMinutes\": 60,\n  \"isPractice\": false,\n  \"generationType\": \"STATIC\",\n  \"maxScore\": 10,\n  \"questionIds\": [\n    {\"questionId\": {{questionId}}, \"weight\": 10, \"orderIndex\": 0}\n  ]\n}"
             },
             "url": {"raw": "{{baseUrl}}/api/v1/manager/exams", "host": ["{{baseUrl}}"], "path": ["api", "v1", "manager", "exams"]}
           }
