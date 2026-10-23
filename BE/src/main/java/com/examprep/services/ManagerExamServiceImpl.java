@@ -96,49 +96,47 @@ public class ManagerExamServiceImpl implements ManagerExamService {
 
     @Override @Transactional
     public ExamResponse create(UserPrincipal user,ExamRequests.Create r) {
-        Module module=r.moduleId()==null?null:module(r.moduleId());
-        Long courseId=r.courseId()!=null?r.courseId():module==null?null:module.getCourse().getCourseId();
+        Module module=r.getModuleId()==null?null:module(r.getModuleId());
+        Long courseId=r.getCourseId()!=null?r.getCourseId():module==null?null:module.getCourse().getCourseId();
         if(courseId==null) throw bad("courseId or moduleId is required.");
         Course course=access(user,courseId,true);
         if(module!=null && !module.getCourse().getCourseId().equals(courseId)) throw bad("Module must belong to the selected course.");
-        validateMode(r.generationType(),size(r.questionIds())+size(r.groupIds()),size(r.configs()));
+        validateMode(r.getGenerationType(),size(r.getQuestionIds())+size(r.getGroupIds()),size(r.getConfigs()));
         // Validate every referenced object before saving an identity-backed exam.
         Set<Long> ids=new HashSet<>();
-        for(var item:list(r.questionIds())) { if(!ids.add(item.questionId())) throw conflict("Question is duplicated."); active(user,question(item.questionId())); }
+        for(var item:list(r.getQuestionIds())) { if(!ids.add(item.questionId())) throw conflict("Question is duplicated."); active(user,question(item.questionId())); }
         Set<Long> groupIds=new HashSet<>();
-        for(var item:list(r.groupIds())) { if(!groupIds.add(item.groupId())) throw conflict("Group is duplicated."); groupAccess(user,group(item.groupId())); }
-        validateConfigs(r.configs(),courseId);
+        for(var item:list(r.getGroupIds())) { if(!groupIds.add(item.groupId())) throw conflict("Group is duplicated."); groupAccess(user,group(item.groupId())); }
+        validateConfigs(r.getConfigs(),courseId);
         Exam e=Exam.builder().course(course).module(module).createdBy(users.getReferenceById(user.getId()))
-                .title(r.title().strip()).description(r.description()).durationMinutes(r.durationMinutes()).isPractice(r.isPractice())
-                .generationType(r.generationType()).passMark(r.passMark()==null?50:r.passMark()).maxAttempts(r.maxAttempts()==null?1:r.maxAttempts()).status("DRAFT").build();
+                .title(r.getTitle().strip()).description(r.getDescription()).durationMinutes(r.getDurationMinutes()).isPractice(r.getIsPractice())
+                .generationType(r.getGenerationType()).status("DRAFT").build();
         exams.save(e);
-        for(var item:list(r.questionIds())) attachQuestion(user,e,item,false);
-        for(var item:list(r.groupIds())) attachGroup(user,e,item);
-        saveConfigs(e,r.configs()); exams.flush(); return response(e,true);
+        for(var item:list(r.getQuestionIds())) attachQuestion(user,e,item,false);
+        for(var item:list(r.getGroupIds())) attachGroup(user,e,item);
+        saveConfigs(e,r.getConfigs()); exams.flush(); return response(e,true);
     }
 
     @Override @Transactional
     public ExamResponse update(UserPrincipal user,Long id,ExamRequests.Update r) {
         Exam e=write(user,id);
-        boolean structural=r.title()!=null || r.courseId()!=null || r.moduleId()!=null || r.durationMinutes()!=null || r.isPractice()!=null
-                || r.generationType()!=null || r.passMark()!=null || r.maxAttempts()!=null || r.configs()!=null;
+        boolean structural=r.getTitle()!=null || r.getCourseId()!=null || r.getModuleId()!=null || r.getDurationMinutes()!=null || r.getIsPractice()!=null
+                || r.getGenerationType()!=null || r.getConfigs()!=null;
         if(structural) editable(e);
-        Long courseId=r.courseId()==null?courseId(e):r.courseId();
-        Module module=r.moduleId()==null?e.getModule():module(r.moduleId());
+        Long courseId=r.getCourseId()==null?courseId(e):r.getCourseId();
+        Module module=r.getModuleId()==null?e.getModule():module(r.getModuleId());
         if(module!=null && !module.getCourse().getCourseId().equals(courseId)) throw bad("Module must belong to the selected course.");
-        if(r.courseId()!=null && r.configs()==null)
+        if(r.getCourseId()!=null && r.getConfigs()==null)
             for(ExamConfig config:configs.findByExamExamIdOrderByConfigIdAsc(id)) validateConfigModule(config.getModule(),courseId);
-        if(r.courseId()!=null || r.moduleId()!=null) { e.setCourse(access(user,courseId,true)); e.setModule(module); }
-        if(r.title()!=null) e.setTitle(r.title().strip());
-        if(r.description()!=null) e.setDescription(r.description());
-        if(r.durationMinutes()!=null) e.setDurationMinutes(r.durationMinutes());
-        if(r.isPractice()!=null) e.setIsPractice(r.isPractice());
-        if(r.passMark()!=null) e.setPassMark(r.passMark());
-        if(r.maxAttempts()!=null) e.setMaxAttempts(r.maxAttempts());
-        if(r.generationType()!=null) e.setGenerationType(r.generationType());
-        if(r.configs()!=null) { validateConfigs(r.configs(),courseId); configs.deleteByExamExamId(id); configs.flush(); saveConfigs(e,r.configs()); }
+        if(r.getCourseId()!=null || r.getModuleId()!=null) { e.setCourse(access(user,courseId,true)); e.setModule(module); }
+        if(r.getTitle()!=null) e.setTitle(r.getTitle().strip());
+        if(r.getDescription()!=null) e.setDescription(r.getDescription());
+        if(r.getDurationMinutes()!=null) e.setDurationMinutes(r.getDurationMinutes());
+        if(r.getIsPractice()!=null) e.setIsPractice(r.getIsPractice());
+        if(r.getGenerationType()!=null) e.setGenerationType(r.getGenerationType());
+        if(r.getConfigs()!=null) { validateConfigs(r.getConfigs(),courseId); configs.deleteByExamExamId(id); configs.flush(); saveConfigs(e,r.getConfigs()); }
         // Removing the last attachment is allowed while editing a draft; publish validates completeness.
-        if(r.generationType()!=null) validateMode(e.getGenerationType(),links.findByExamExamIdOrderByOrderIndexAscExamQuestionIdAsc(id).size()+groupLinks.findByExamExamIdOrderByOrderIndexAscExamGroupIdAsc(id).size(),configs.findByExamExamIdOrderByConfigIdAsc(id).size());
+        if(r.getGenerationType()!=null) validateMode(e.getGenerationType(),links.findByExamExamIdOrderByOrderIndexAscExamQuestionIdAsc(id).size()+groupLinks.findByExamExamIdOrderByOrderIndexAscExamGroupIdAsc(id).size(),configs.findByExamExamIdOrderByConfigIdAsc(id).size());
         exams.flush(); return response(e,true);
     }
 
@@ -307,7 +305,7 @@ public class ManagerExamServiceImpl implements ManagerExamService {
                 .add(BigDecimal.valueOf(configured.stream().mapToInt(ExamConfig::getNumberOfQuestions).sum()));
         Course course=e.getCourse()!=null?e.getCourse():e.getModule()==null?null:e.getModule().getCourse();
         return new ExamResponse(e.getExamId(),e.getTitle(),e.getDescription(),course==null?null:course.getCourseId(),course==null?null:course.getTitle(),
-                e.getModule()==null?null:e.getModule().getModuleId(),e.getModule()==null?null:e.getModule().getTitle(),kind,e.getDurationMinutes(),e.getPassMark(),e.getMaxAttempts(),count,total,
+                e.getModule()==null?null:e.getModule().getModuleId(),e.getModule()==null?null:e.getModule().getTitle(),kind,e.getDurationMinutes(),count,total,
                 e.getStatus(),e.getGenerationType(),e.getIsPractice(),e.getCreatedAt(),
                 detail?configured.stream().map(c->new ExamResponse.Config(c.getConfigId(),c.getQuestionType(),c.getNumberOfQuestions(),c.getModule()==null?null:c.getModule().getModuleId(),c.getDifficulty())).toList():null,
                 detail?direct.stream().map(this::questionLink).toList():null,detail?grouped.stream().map(this::groupLink).toList():null);

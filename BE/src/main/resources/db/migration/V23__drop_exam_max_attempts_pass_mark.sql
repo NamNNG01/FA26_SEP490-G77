@@ -1,0 +1,2 @@
+ALTER TABLE exams DROP COLUMN IF EXISTS max_attempts;
+ALTER TABLE exams DROP COLUMN IF EXISTS pass_mark;

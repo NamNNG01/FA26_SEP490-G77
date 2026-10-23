@@ -57,13 +57,6 @@ public class Exam implements Serializable {
     @Column(name = "published_at")
     private Instant publishedAt;
 
-    @Builder.Default
-    @Column(name = "pass_mark", nullable = false)
-    private Integer passMark = 50;
-
-    @Builder.Default
-    @Column(name = "max_attempts", nullable = false)
-    private Integer maxAttempts = 1;
 
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)

@@ -237,6 +237,23 @@ class ExamApiIntegrationTest {
                 .content("{\"status\":\"PUBLISHED\"}")).andExpect(status().isBadRequest());
     }
 
+    @Test void creatingAndUpdatingWithDeprecatedPassMarkAndMaxAttemptsSucceedsAndIgnoresThem() throws Exception {
+        Map<String,Object> payload = create();
+        payload.put("passMark", 80);
+        payload.put("maxAttempts", 3);
+        JsonNode created = data(submit(payload).andExpect(status().isCreated()));
+        assertFalse(created.has("passMark"));
+        assertFalse(created.has("maxAttempts"));
+
+        long id = created.path("examId").asLong();
+        call(manager, put("/api/v1/manager/exams/" + id).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"passMark\":70,\"maxAttempts\":2,\"title\":\"Updated Title\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.title").value("Updated Title"))
+                .andExpect(jsonPath("$.data.passMark").doesNotExist())
+                .andExpect(jsonPath("$.data.maxAttempts").doesNotExist());
+    }
+
     private Map<String,Object> random(String type) {
         Map<String,Object> payload = create();
         payload.remove("moduleId");
