@@ -141,7 +141,6 @@ export const menuByRole: Record<string, MenuItem[]> = {
     { id: 'student-dashboard', title: 'Dashboard', icon: <Icon.Home className="w-4 h-4" />, path: ROUTES.studentDashboard },
     { id: 'student-courses', title: 'My Courses', icon: <Icon.Book className="w-4 h-4" />, path: ROUTES.studentCourses },
     { id: 'student-exams', title: 'My Exams', icon: <Icon.ClipboardList className="w-4 h-4" />, path: ROUTES.studentExams },
-    { id: 'student-public-exam', title: 'Public Exam', icon: <Icon.Zap className="w-4 h-4" />, path: ROUTES.studentPublicExam },
   ],
   COURSE_MANAGER: [
     { id: 'manager-dashboard', title: 'Dashboard', icon: <Icon.Home className="w-4 h-4" />, path: ROUTES.managerDashboard },
@@ -149,7 +148,6 @@ export const menuByRole: Record<string, MenuItem[]> = {
     { id: 'manager-questions', title: 'Question Bank', icon: <Icon.Database className="w-4 h-4" />, path: ROUTES.managerQuestions },
     { id: 'manager-exams', title: 'Exams', icon: <Icon.ClipboardList className="w-4 h-4" />, path: ROUTES.managerExams },
     { id: 'manager-flashcards', title: 'Flashcards', icon: <Icon.Layers className="w-4 h-4" />, path: ROUTES.managerFlashcards },
-    { id: 'manager-practice-exams', title: 'Public Exam', icon: <Icon.Zap className="w-4 h-4" />, path: ROUTES.managerPracticeExams },
   ],
   ADMIN: [
     { id: 'admin-dashboard', title: 'Dashboard', icon: <Icon.Home className="w-4 h-4" />, path: ROUTES.adminDashboard },

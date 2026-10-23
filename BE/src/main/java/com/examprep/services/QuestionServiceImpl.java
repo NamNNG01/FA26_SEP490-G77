@@ -66,7 +66,7 @@ public class QuestionServiceImpl implements QuestionService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<QuestionListItemDto> getQuestions(Long courseId, List<Long> courseIds, Long moduleId, Long groupId, String groupType, String questionType,
+    public Page<QuestionListItemDto> getQuestions(Long courseId, List<Long> courseIds, Long moduleId, Long groupId, String groupType, String questionType, List<String> questionTypes,
                                                   String difficulty, String status, String approvalStatus, String creatorRole,
                                                   String source, Long createdBy, String search,
                                                   Pageable pageable, User currentUser) {
@@ -109,6 +109,17 @@ public class QuestionServiceImpl implements QuestionService {
             }
             if (questionType != null) {
                 predicate = cb.and(predicate, cb.equal(root.get("questionType"), questionType));
+            }
+            if (questionTypes != null && !questionTypes.isEmpty()) {
+                List<String> normalizedTypes = questionTypes.stream()
+                        .filter(Objects::nonNull)
+                        .map(type -> type.trim().toUpperCase(Locale.ROOT))
+                        .filter(type -> !type.isEmpty())
+                        .distinct()
+                        .toList();
+                if (!normalizedTypes.isEmpty()) {
+                    predicate = cb.and(predicate, root.get("questionType").in(normalizedTypes));
+                }
             }
             if (difficulty != null) {
                 predicate = cb.and(predicate, cb.equal(root.get("difficulty"), difficulty));
