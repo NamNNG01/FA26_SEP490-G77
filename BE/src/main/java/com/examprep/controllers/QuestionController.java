@@ -3,6 +3,7 @@ package com.examprep.controllers;
 import com.examprep.dto.ApiResponse;
 import com.examprep.dto.question.*;
 import com.examprep.entities.User;
+import com.examprep.exceptions.BadRequestException;
 import com.examprep.exceptions.ResourceNotFoundException;
 import com.examprep.repositories.UserRepository;
 import com.examprep.security.UserPrincipal;
@@ -64,11 +65,14 @@ public class QuestionController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @AuthenticationPrincipal UserPrincipal currentUser) {
+        if (skillTag != null) {
+            throw new BadRequestException("skillTag is not supported");
+        }
         User user = resolveUser(currentUser);
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "updatedAt"));
         Page<QuestionListItemDto> result = questionService.getQuestions(
                 courseId, courseIds, moduleId, groupId, groupType, questionType, difficulty, status, approvalStatus,
-                creatorRole, source, createdBy, skillTag, search, pageable, user);
+                creatorRole, source, createdBy, search, pageable, user);
         return ResponseEntity.ok(ApiResponse.success(result, "Questions retrieved successfully"));
     }
 

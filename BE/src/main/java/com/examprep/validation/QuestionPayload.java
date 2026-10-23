@@ -11,7 +11,6 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -25,7 +24,6 @@ public class QuestionPayload {
     private String difficulty;
     private String status;
     private String content;
-    private BigDecimal defaultPoints;
     private Object questionMetadata;
     private Object answerKey;
     private Object essayGradingRubric;
@@ -39,7 +37,6 @@ public class QuestionPayload {
                 .difficulty(req.getDifficulty())
                 .status(req.getStatus())
                 .content(req.getContent())
-                .defaultPoints(req.getDefaultPoints())
                 .questionMetadata(req.getQuestionMetadata())
                 .answerKey(req.getAnswerKey())
                 .essayGradingRubric(req.getEssayGradingRubric())
@@ -55,7 +52,6 @@ public class QuestionPayload {
                 .difficulty(req.getDifficulty())
                 .status(req.getStatus())
                 .content(req.getContent())
-                .defaultPoints(req.getDefaultPoints())
                 .questionMetadata(req.getQuestionMetadata())
                 .answerKey(req.getAnswerKey())
                 .essayGradingRubric(req.getEssayGradingRubric())
@@ -107,7 +103,6 @@ public class QuestionPayload {
                 .difficulty(q.getDifficulty())
                 .status(q.getStatus())
                 .content(q.getContent())
-                .defaultPoints(q.getDefaultPoints())
                 .questionMetadata(metaObj)
                 .answerKey(akObj)
                 .essayGradingRubric(rubricObj)

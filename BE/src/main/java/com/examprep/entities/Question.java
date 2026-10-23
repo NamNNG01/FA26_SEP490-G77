@@ -60,9 +60,6 @@ public class Question implements Serializable {
     @Column(name = "answer_key", columnDefinition = "jsonb")
     private String answerKey;
 
-    @Builder.Default
-    @Column(name = "default_points", nullable = false, precision = 5, scale = 2)
-    private BigDecimal defaultPoints = BigDecimal.ONE;
 
     @Builder.Default
     @Column(name = "source", nullable = false, length = 10)

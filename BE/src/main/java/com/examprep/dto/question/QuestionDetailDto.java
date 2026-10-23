@@ -23,7 +23,6 @@ public class QuestionDetailDto {
     private String content;
     private Object questionMetadata;
     private Object answerKey;
-    private BigDecimal defaultPoints;
     private String source;
     private String creatorRole;
     private Long createdBy;

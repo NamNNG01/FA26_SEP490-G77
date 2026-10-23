@@ -46,7 +46,6 @@ class QuestionValidatorTest {
                 .difficulty("EASY")
                 .status("ACTIVE")
                 .content("What is 2+2?")
-                .defaultPoints(BigDecimal.ONE)
                 .options(List.of(
                         AnswerOptionDto.builder().optionText("3").isCorrect(false).orderIndex(0).build(),
                         AnswerOptionDto.builder().optionText("4").isCorrect(true).orderIndex(1).build()
@@ -63,7 +62,6 @@ class QuestionValidatorTest {
                 .difficulty("INVALID")
                 .status("BAD")
                 .content("")
-                .defaultPoints(BigDecimal.valueOf(-1))
                 .options(List.of(
                         AnswerOptionDto.builder().optionText("  ").isCorrect(false).orderIndex(0).build(),
                         AnswerOptionDto.builder().optionText("  ").isCorrect(false).orderIndex(0).build()
@@ -74,7 +72,6 @@ class QuestionValidatorTest {
         assertTrue(errors.stream().anyMatch(e -> e.getPath().equals("content")));
         assertTrue(errors.stream().anyMatch(e -> e.getPath().equals("difficulty")));
         assertTrue(errors.stream().anyMatch(e -> e.getPath().equals("status")));
-        assertTrue(errors.stream().anyMatch(e -> e.getPath().equals("defaultPoints")));
         assertTrue(errors.stream().anyMatch(e -> e.getPath().equals("options[0].optionText")));
         assertTrue(errors.stream().anyMatch(e -> e.getPath().equals("options")));
     }
@@ -138,14 +135,13 @@ class QuestionValidatorTest {
         QuestionPayload payload = QuestionPayload.builder()
                 .questionType("ESSAY")
                 .content("Write an essay")
-                .defaultPoints(BigDecimal.valueOf(5))
                 .essayGradingRubric(Map.of("criteria", List.of(
-                        Map.of("name", "Grammar", "maxScore", 2)
+                        Map.of("name", "Grammar", "weight", 0)
                 )))
                 .build();
         List<ValidationError> errors = validator.validate(payload);
         assertFalse(errors.isEmpty());
-        assertTrue(errors.stream().anyMatch(e -> e.getMessage().contains("must equal defaultPoints")));
+        assertTrue(errors.stream().anyMatch(e -> e.getMessage().contains("weight must be greater than 0")));
     }
 
     @Test
@@ -153,7 +149,7 @@ class QuestionValidatorTest {
         QuestionPayload payload = QuestionPayload.builder()
                 .questionType("DIAGRAM")
                 .content("Draw the architecture")
-                .questionMetadata(Map.of("drawioXml", "<mxfile>diagram content</mxfile>", "skillTag", "architecture"))
+                .questionMetadata(Map.of("drawioXml", "<mxfile>diagram content</mxfile>"))
                 .build();
         List<ValidationError> errors = validator.validate(payload);
         assertTrue(errors.isEmpty(), "Expected no validation errors for diagram, got: " + errors);
@@ -197,15 +193,13 @@ class QuestionValidatorTest {
     }
 
     @Test
-    void testDiagramRubricMustAddUpToDefaultPoints() {
+    void testSkillTagRejectedInMetadata() {
         QuestionPayload payload = QuestionPayload.builder()
                 .questionType("DIAGRAM")
-                .content("Draw the class diagram")
-                .defaultPoints(BigDecimal.valueOf(4))
-                .questionMetadata(Map.of("drawioXml", "<mxfile>diagram content</mxfile>"))
-                .essayGradingRubric(Map.of("criteria", List.of(Map.of("name", "Classes", "maxScore", 3))))
+                .content("Draw")
+                .questionMetadata(Map.of("drawioXml", "<mxfile>content</mxfile>", "skillTag", "foo"))
                 .build();
-        assertTrue(validator.validate(payload).stream().anyMatch(e -> e.getMessage().contains("must equal defaultPoints")));
+        assertTrue(validator.validate(payload).stream().anyMatch(e -> e.getPath().equals("questionMetadata.skillTag")));
     }
 
     @Test

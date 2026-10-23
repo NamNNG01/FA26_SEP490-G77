@@ -68,7 +68,7 @@ public class QuestionServiceImpl implements QuestionService {
     @Transactional(readOnly = true)
     public Page<QuestionListItemDto> getQuestions(Long courseId, List<Long> courseIds, Long moduleId, Long groupId, String groupType, String questionType,
                                                   String difficulty, String status, String approvalStatus, String creatorRole,
-                                                  String source, Long createdBy, String skillTag, String search,
+                                                  String source, Long createdBy, String search,
                                                   Pageable pageable, User currentUser) {
         // courseIds (repeated param) narrows the list to several courses, e.g. every course a manager is assigned to.
         List<Long> scopeCourseIds = courseIds == null ? List.of()
@@ -127,9 +127,6 @@ public class QuestionServiceImpl implements QuestionService {
             }
             if (createdBy != null) {
                 predicate = cb.and(predicate, cb.equal(root.get("createdBy").get("userId"), createdBy));
-            }
-            if (skillTag != null) {
-                predicate = cb.and(predicate, cb.like(cb.function("jsonb_extract_path_text", String.class, root.get("questionMetadata"), cb.literal("skillTag")), "%" + skillTag + "%"));
             }
             if (search != null && !search.trim().isEmpty()) {
                 predicate = cb.and(predicate, cb.like(cb.lower(root.get("content")), "%" + search.trim().toLowerCase() + "%"));
@@ -344,9 +341,6 @@ public class QuestionServiceImpl implements QuestionService {
                 .content(req.getContent())
                 .questionMetadata(metadataJson)
                 .answerKey(answerKeyJson)
-                .defaultPoints(req.getDefaultPoints() != null
-                        ? req.getDefaultPoints()
-                        : BigDecimal.ONE)
                 .source(source != null ? source : "MANUAL")
                 .creatorRole(creatorRole != null ? creatorRole : "MANAGER")
                 .approvalStatus(approvalStatus != null
@@ -630,7 +624,6 @@ public class QuestionServiceImpl implements QuestionService {
         Object metadataToValidate = req.getQuestionMetadata() != null ? req.getQuestionMetadata() : parseJson(q.getQuestionMetadata());
         Object answerKeyToValidate = req.getAnswerKey() != null ? req.getAnswerKey() : parseJson(q.getAnswerKey());
         Object rubricToValidate = req.getEssayGradingRubric() != null ? req.getEssayGradingRubric() : parseJson(q.getEssayGradingRubric());
-        BigDecimal pointsToValidate = req.getDefaultPoints() != null ? req.getDefaultPoints() : q.getDefaultPoints();
         String contentToValidate = req.getContent() != null ? req.getContent() : q.getContent();
         String difficultyToValidate = req.getDifficulty() != null ? req.getDifficulty() : q.getDifficulty();
         String statusToValidate = req.getStatus() != null ? req.getStatus() : q.getStatus();
@@ -640,7 +633,6 @@ public class QuestionServiceImpl implements QuestionService {
                 .difficulty(difficultyToValidate)
                 .status(statusToValidate)
                 .content(contentToValidate)
-                .defaultPoints(pointsToValidate)
                 .questionMetadata(metadataToValidate)
                 .answerKey(answerKeyToValidate)
                 .essayGradingRubric(rubricToValidate)
@@ -659,16 +651,16 @@ public class QuestionServiceImpl implements QuestionService {
         if (req.getExplanation() != null) {
             q.setAiExplanation(req.getExplanation());
         }
-        if (req.getDefaultPoints() != null) {
-            if (req.getDefaultPoints().compareTo(q.getDefaultPoints()) != 0) {
-                q.setDefaultPoints(req.getDefaultPoints());
-                scoreAffectingChanged = true;
-            }
-        }
 
         if (req.getQuestionMetadata() != null) {
             validateMetadataKeys(req.getQuestionMetadata());
-            q.setQuestionMetadata(serializeJson(req.getQuestionMetadata(), "questionMetadata"));
+            String metaJson = serializeJson(req.getQuestionMetadata(), "questionMetadata");
+            if (!metaJson.equals(q.getQuestionMetadata())) {
+                if ("DIAGRAM".equals(typeToValidate) && diagramXmlChanged(q.getQuestionMetadata(), metaJson)) {
+                    scoreAffectingChanged = true;
+                }
+                q.setQuestionMetadata(metaJson);
+            }
         }
 
         if (req.getAnswerKey() != null) {
@@ -682,8 +674,10 @@ public class QuestionServiceImpl implements QuestionService {
         if (req.getEssayGradingRubric() != null) {
             String rubricJson = serializeJson(req.getEssayGradingRubric(), "essayGradingRubric");
             if (!rubricJson.equals(q.getEssayGradingRubric())) {
+                if (rubricWeightsChanged(q.getEssayGradingRubric(), rubricJson)) {
+                    scoreAffectingChanged = true;
+                }
                 q.setEssayGradingRubric(rubricJson);
-                scoreAffectingChanged = true;
             }
         }
 
@@ -881,7 +875,6 @@ public class QuestionServiceImpl implements QuestionService {
                 .content(original.getContent())
                 .questionMetadata(original.getQuestionMetadata())
                 .answerKey(original.getAnswerKey())
-                .defaultPoints(original.getDefaultPoints())
                 .source("MANUAL")
                 .creatorRole("MANAGER")
                 .approvalStatus("APPROVED")
@@ -991,7 +984,6 @@ public class QuestionServiceImpl implements QuestionService {
                 .content(q.getContent())
                 .questionMetadata(metadataObj)
                 .answerKey(answerKeyObj)
-                .defaultPoints(q.getDefaultPoints())
                 .source(q.getSource())
                 .creatorRole(q.getCreatorRole())
                 .createdBy(q.getCreatedBy() != null ? q.getCreatedBy().getUserId() : null)
@@ -1068,28 +1060,51 @@ public class QuestionServiceImpl implements QuestionService {
             }
 
             for (String key : map.keySet()) {
-                if (!key.equals("skillTag")
-                        && !key.equals("diagramType")
+                if (key.equals("skillTag")) {
+                    throw new BadRequestException("skillTag is not supported in question metadata");
+                }
+                if (!key.equals("diagramType")
                         && !key.equals("plantUmlSource")
                         && !key.equals("drawioXml")) {
                     throw new BadRequestException("Unknown metadata key: " + key);
-                }
-
-                if (key.equals("skillTag")) {
-                    Object val = map.get(key);
-
-                    if (val != null && (val.toString().length() > 100
-                            || val.toString().trim().isEmpty())) {
-                        throw new BadRequestException(
-                                "skillTag must be a non-empty string up to 100 characters"
-                        );
-                    }
                 }
             }
         } catch (BadRequestException e) {
             throw e;
         } catch (Exception e) {
             throw new BadRequestException("Invalid question metadata format");
+        }
+    }
+
+    private boolean rubricWeightsChanged(String oldRubricJson, String newRubricJson) {
+        try {
+            Map<String, Object> oldMap = oldRubricJson != null ? objectMapper.readValue(oldRubricJson, new TypeReference<Map<String, Object>>() {}) : new HashMap<>();
+            Map<String, Object> newMap = newRubricJson != null ? objectMapper.readValue(newRubricJson, new TypeReference<Map<String, Object>>() {}) : new HashMap<>();
+            List<?> oldCrit = (List<?>) oldMap.get("criteria");
+            List<?> newCrit = (List<?>) newMap.get("criteria");
+            if (oldCrit == null || newCrit == null || oldCrit.size() != newCrit.size()) return true;
+            for (int i = 0; i < oldCrit.size(); i++) {
+                Map<String, Object> oMap = (Map<String, Object>) oldCrit.get(i);
+                Map<String, Object> nMap = (Map<String, Object>) newCrit.get(i);
+                BigDecimal ow = new BigDecimal(oMap.getOrDefault("weight", oMap.getOrDefault("maxScore", "0")).toString());
+                BigDecimal nw = new BigDecimal(nMap.getOrDefault("weight", nMap.getOrDefault("maxScore", "0")).toString());
+                if (ow.compareTo(nw) != 0) return true;
+            }
+            return false;
+        } catch (Exception e) {
+            return true;
+        }
+    }
+
+    private boolean diagramXmlChanged(String oldMetaJson, String newMetaJson) {
+        try {
+            Map<String, Object> oldMap = oldMetaJson != null ? objectMapper.readValue(oldMetaJson, new TypeReference<Map<String, Object>>() {}) : new HashMap<>();
+            Map<String, Object> newMap = newMetaJson != null ? objectMapper.readValue(newMetaJson, new TypeReference<Map<String, Object>>() {}) : new HashMap<>();
+            String oldXml = (String) oldMap.get("drawioXml");
+            String newXml = (String) newMap.get("drawioXml");
+            return !Objects.equals(oldXml, newXml);
+        } catch (Exception e) {
+            return true;
         }
     }
 

@@ -5,7 +5,6 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.math.BigDecimal;
 import java.util.List;
 
 @Data
@@ -20,7 +19,6 @@ public class QuestionUpdateRequest {
     private String status;
     private String content;
     private String explanation;
-    private BigDecimal defaultPoints;
     private Object questionMetadata;
     private Object answerKey;
     private Object essayGradingRubric;

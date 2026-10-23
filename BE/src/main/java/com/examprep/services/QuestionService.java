@@ -11,7 +11,7 @@ import java.util.List;
 public interface QuestionService {
     Page<QuestionListItemDto> getQuestions(Long courseId, List<Long> courseIds, Long moduleId, Long groupId, String groupType, String questionType,
                                           String difficulty, String status, String approvalStatus, String creatorRole,
-                                          String source, Long createdBy, String skillTag, String search,
+                                          String source, Long createdBy, String search,
                                           Pageable pageable, User currentUser);
 
     QuestionDetailDto createQuestion(QuestionCreateRequest request, User currentUser);

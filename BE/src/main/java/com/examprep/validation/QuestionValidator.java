@@ -14,7 +14,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 @Component
 @RequiredArgsConstructor
@@ -29,8 +28,6 @@ public class QuestionValidator {
 
     public String sanitize(String input) {
         if (input == null) return null;
-        // OWASP breaks "{{" with an HTML comment (Angular template guard); that also breaks FILL_BLANK {{n}} placeholders.
-        // The FE is React, which never evaluates {{ }}, so the guard is undone.
         return SANITIZER.sanitize(input).replace("{<!-- -->{", "{{");
     }
 
@@ -71,7 +68,7 @@ public class QuestionValidator {
         String type = payload.getQuestionType();
         if (type == null || type.trim().isEmpty()) {
             errors.add(new ValidationError(prefix + "questionType", "Question type is required"));
-            return errors; // Cannot validate further without type
+            return errors;
         }
         if (type.equals("CODE") || !type.matches("SINGLE_CHOICE|MULTIPLE_CHOICE|TRUE_FALSE|MATCHING|FILL_BLANK|ESSAY|DIAGRAM|ORDERING")) {
             errors.add(new ValidationError(prefix + "questionType", "Question type not supported yet"));
@@ -96,13 +93,6 @@ public class QuestionValidator {
             errors.add(new ValidationError(prefix + "status", "Status must be ACTIVE, INACTIVE, or DRAFT"));
         }
 
-        BigDecimal points = payload.getDefaultPoints();
-        if (points != null) {
-            if (points.compareTo(BigDecimal.ZERO) <= 0 || points.compareTo(new BigDecimal("1000")) > 0) {
-                errors.add(new ValidationError(prefix + "defaultPoints", "Default points must be greater than 0 and up to 1000"));
-            }
-        }
-
         // 3. Question Metadata validation
         boolean isDiagram = "DIAGRAM".equals(type);
         if (payload.getQuestionMetadata() != null) {
@@ -114,20 +104,14 @@ public class QuestionValidator {
                     metaMap = objectMapper.convertValue(payload.getQuestionMetadata(), Map.class);
                 }
                 for (String key : metaMap.keySet()) {
-                    if (isDiagram) {
-                        if (!key.equals("skillTag") && !key.equals("drawioXml")) {
+                    if (key.equals("skillTag")) {
+                        errors.add(new ValidationError(prefix + "questionMetadata.skillTag", "skillTag is not supported in question metadata"));
+                    } else if (isDiagram) {
+                        if (!key.equals("drawioXml")) {
                             errors.add(new ValidationError(prefix + "questionMetadata", "Unknown metadata key: " + key));
                         }
                     } else {
-                        if (!key.equals("skillTag")) {
-                            errors.add(new ValidationError(prefix + "questionMetadata", "Unknown metadata key: " + key));
-                        }
-                    }
-                    if (key.equals("skillTag")) {
-                        Object val = metaMap.get(key);
-                        if (val != null && (val.toString().length() > 100 || val.toString().trim().isEmpty())) {
-                            errors.add(new ValidationError(prefix + "questionMetadata", "skillTag must be a non-empty string up to 100 characters"));
-                        }
+                        errors.add(new ValidationError(prefix + "questionMetadata", "Unknown metadata key: " + key));
                     }
                 }
 
@@ -198,7 +182,6 @@ public class QuestionValidator {
                     }
                 }
 
-                // Correctness checks per type
                 if (type.equals("SINGLE_CHOICE")) {
                     long correctCount = opts.stream().filter(o -> o != null && Boolean.TRUE.equals(o.getIsCorrect())).count();
                     if (correctCount != 1) {
@@ -319,14 +302,13 @@ public class QuestionValidator {
                 if (payload.getAnswerKey() != null) {
                     errors.add(new ValidationError(prefix + "answerKey", "Answer key is not allowed for question type DIAGRAM"));
                 }
-                // E-11: DIAGRAM is graded by rubric like ESSAY.
-                validateEssayRubric(payload.getEssayGradingRubric(), payload.getDefaultPoints(), prefix + "essayGradingRubric", errors);
+                validateEssayRubric(payload.getEssayGradingRubric(), prefix + "essayGradingRubric", errors);
             } else if (type.equals("MATCHING")) {
                 validateMatchingAnswerKey(payload.getAnswerKey(), prefix + "answerKey", errors);
             } else if (type.equals("FILL_BLANK")) {
                 validateFillBlank(content, payload.getAnswerKey(), prefix, errors);
             } else if (type.equals("ESSAY")) {
-                validateEssayRubric(payload.getEssayGradingRubric(), payload.getDefaultPoints(), prefix + "essayGradingRubric", errors);
+                validateEssayRubric(payload.getEssayGradingRubric(), prefix + "essayGradingRubric", errors);
             }
         }
 
@@ -465,9 +447,8 @@ public class QuestionValidator {
         }
     }
 
-    private void validateEssayRubric(Object rubric, BigDecimal defaultPoints, String path, List<ValidationError> errors) {
+    private void validateEssayRubric(Object rubric, String path, List<ValidationError> errors) {
         if (rubric == null) {
-            // Missing rubric is allowed per spec (warning on publish)
             return;
         }
         try {
@@ -483,7 +464,7 @@ public class QuestionValidator {
                 return;
             }
             List<?> criteria = (List<?>) criteriaObj;
-            BigDecimal totalScore = BigDecimal.ZERO;
+            Set<String> seenNames = new HashSet<>();
 
             for (int i = 0; i < criteria.size(); i++) {
                 Object c = criteria.get(i);
@@ -495,27 +476,27 @@ public class QuestionValidator {
                 String name = sanitize(critMap.get("name") != null ? critMap.get("name").toString() : null);
                 if (name == null || name.trim().isEmpty()) {
                     errors.add(new ValidationError(path + ".criteria[" + i + "].name", "Criteria name is required"));
-                }
-                Object maxScoreObj = critMap.get("maxScore");
-                if (maxScoreObj == null) {
-                    errors.add(new ValidationError(path + ".criteria[" + i + "].maxScore", "Criteria maxScore is required"));
                 } else {
-                    try {
-                        BigDecimal maxScore = new BigDecimal(maxScoreObj.toString());
-                        if (maxScore.compareTo(BigDecimal.ZERO) <= 0) {
-                            errors.add(new ValidationError(path + ".criteria[" + i + "].maxScore", "Criteria maxScore must be greater than 0"));
-                        } else {
-                            totalScore = totalScore.add(maxScore);
-                        }
-                    } catch (Exception e) {
-                        errors.add(new ValidationError(path + ".criteria[" + i + "].maxScore", "Invalid maxScore format"));
+                    if (!seenNames.add(name.trim().toLowerCase())) {
+                        errors.add(new ValidationError(path + ".criteria[" + i + "].name", "Criteria name must be unique"));
                     }
                 }
-            }
-
-            BigDecimal expectedPoints = defaultPoints != null ? defaultPoints : BigDecimal.ONE;
-            if (totalScore.compareTo(expectedPoints) != 0) {
-                errors.add(new ValidationError(path, "Total criteria maxScore (" + totalScore + ") must equal defaultPoints (" + expectedPoints + ")"));
+                Object weightObj = critMap.get("weight");
+                if (weightObj == null) {
+                    weightObj = critMap.get("maxScore");
+                }
+                if (weightObj == null) {
+                    errors.add(new ValidationError(path + ".criteria[" + i + "].weight", "Criteria weight is required"));
+                } else {
+                    try {
+                        BigDecimal weight = new BigDecimal(weightObj.toString());
+                        if (weight.compareTo(BigDecimal.ZERO) <= 0) {
+                            errors.add(new ValidationError(path + ".criteria[" + i + "].weight", "Criteria weight must be greater than 0"));
+                        }
+                    } catch (Exception e) {
+                        errors.add(new ValidationError(path + ".criteria[" + i + "].weight", "Invalid weight format"));
+                    }
+                }
             }
         } catch (Exception e) {
             errors.add(new ValidationError(path, "Invalid rubric format"));

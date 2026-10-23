@@ -117,11 +117,7 @@ public class TemplateQuestionMapper {
                 parsingContent = false;
                 parsingRubric = false;
                 parsingSample = false;
-                try {
-                    points = new BigDecimal(line.substring(7).trim());
-                } catch (Exception e) {
-                    errors.add(new ImportErrorDto("defaultPoints", "Invalid points format", startLine));
-                }
+                errors.add(new ImportErrorDto("general", "POINTS line is no longer supported", startLine));
                 continue;
             }
             if (line.startsWith("EXPLANATION:")) {
@@ -193,7 +189,6 @@ public class TemplateQuestionMapper {
         req.setDifficulty(difficulty != null ? difficulty : "MEDIUM");
         req.setStatus("ACTIVE");
         req.setContent(finalContent);
-        req.setDefaultPoints(points);
         req.setExplanation(explanation);
 
         try {
@@ -331,7 +326,7 @@ case "MULTIPLE_CHOICE":
                             BigDecimal score = new BigDecimal(rm.group(2).trim());
                             String desc = rm.group(4).trim();
                             totalRubricScore = totalRubricScore.add(score);
-                            criteriaList.add(Map.of("name", name, "maxScore", score, "description", desc));
+                            criteriaList.add(Map.of("name", name, "weight", score, "description", desc));
                         }
                     }
                     req.setEssayGradingRubric(Map.of("criteria", criteriaList));

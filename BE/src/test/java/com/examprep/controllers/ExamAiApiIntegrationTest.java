@@ -132,9 +132,7 @@ class ExamAiApiIntegrationTest {
         long before = countQuestions();
         generate(manager, body()).andExpect(status().isOk()).andExpect(jsonPath("$.data.title").value("Draft"))
                 .andExpect(jsonPath("$.data.questionCount").value(1))
-                .andExpect(jsonPath("$.data.questions[0].options[0].isCorrect").value(true))
-                .andExpect(jsonPath("$.data.questions[0].questionMetadata.skillTag").value("addition"))
-                .andExpect(jsonPath("$.data.questions[0].defaultPoints").value(1));
+                .andExpect(jsonPath("$.data.questions[0].options[0].isCorrect").value(true));
         assertEquals(before, countQuestions());
         assertEquals(0L, em.createQuery("select count(e) from Exam e where e.course = :course", Long.class)
                 .setParameter("course", course).getSingleResult());
@@ -185,22 +183,20 @@ class ExamAiApiIntegrationTest {
     }
 
     @Test void returnsSaveReadyAnswerKeysAndNormalizedEssayRubric() throws Exception {
-        Map<String, Object> tag = Map.of("skillTag", "arithmetic");
         List<Map<String, Object>> questions = List.of(choice("SINGLE_CHOICE", "EASY"),
-                Map.of("content", "Pick the even numbers", "questionType", "MULTIPLE_CHOICE", "difficulty", "EASY", "questionMetadata", tag, "options", List.of(
+                Map.of("content", "Pick the even numbers", "questionType", "MULTIPLE_CHOICE", "difficulty", "EASY", "options", List.of(
                         Map.of("optionText", "2", "isCorrect", true), Map.of("optionText", "4", "isCorrect", true),
                         Map.of("optionText", "3", "isCorrect", false))),
-                Map.of("content", "2 is even", "questionType", "TRUE_FALSE", "difficulty", "EASY", "questionMetadata", tag, "options", List.of(
+                Map.of("content", "2 is even", "questionType", "TRUE_FALSE", "difficulty", "EASY", "options", List.of(
                         Map.of("optionText", "True", "isCorrect", true), Map.of("optionText", "False", "isCorrect", false))),
-                Map.of("content", "2 + {{1}} = 5", "questionType", "FILL_BLANK", "difficulty", "EASY", "questionMetadata", tag,
+                Map.of("content", "2 + {{1}} = 5", "questionType", "FILL_BLANK", "difficulty", "EASY",
                         "answerKey", Map.of("blanks", List.of(Map.of("index", 1, "accepted", List.of("3"), "caseSensitive", false)))),
-                Map.of("content", "Match the sums", "questionType", "MATCHING", "difficulty", "EASY", "questionMetadata", tag,
+                Map.of("content", "Match the sums", "questionType", "MATCHING", "difficulty", "EASY",
                         "answerKey", Map.of("pairs", List.of(Map.of("left", "1+1", "right", "2"), Map.of("left", "1+2", "right", "3")))),
                 Map.of("content", "Explain why 0.1 + 0.2 is not exactly 0.3 in floating point.", "questionType", "ESSAY", "difficulty", "EASY",
-                        "defaultPoints", 4, "questionMetadata", tag, "explanation", "Binary fractions",
-                        "essayGradingRubric", Map.of("criteria", List.of(Map.of("name", "Accuracy", "maxScore", 3, "descriptors", "Full: ..."),
-                                // Shape Gemini really returned: descriptors as an object, notes as an array.
-                                Map.of("name", "Clarity", "maxScore", 1, "descriptors", Map.of("full", "clear steps"))),
+                        "explanation", "Binary fractions",
+                        "essayGradingRubric", Map.of("criteria", List.of(Map.of("name", "Accuracy", "weight", 3, "descriptors", "Full: ..."),
+                                Map.of("name", "Clarity", "weight", 1, "descriptors", Map.of("full", "clear steps"))),
                                 "notes", List.of("Mention binary representation", "Rounding error"))));
         providerContent = json.writeValueAsString(Map.of("questions", questions));
         String request = json.writeValueAsString(Map.of("courseId", course.getCourseId(), "questionCount", 6,
@@ -211,8 +207,7 @@ class ExamAiApiIntegrationTest {
                 .andExpect(jsonPath("$.data.questions[1].options[2].orderIndex").value(2))
                 .andExpect(jsonPath("$.data.questions[3].answerKey.blanks[0].accepted[0]").value("3"))
                 .andExpect(jsonPath("$.data.questions[4].answerKey.pairs[1].right").value("3"))
-                .andExpect(jsonPath("$.data.questions[5].essayGradingRubric.totalPoints").value(4))
-                .andExpect(jsonPath("$.data.questions[5].essayGradingRubric.criteria[0].weight").value(75.0))
+                .andExpect(jsonPath("$.data.questions[5].essayGradingRubric.criteria[0].weight").value(3.0))
                 .andExpect(jsonPath("$.data.questions[5].essayGradingRubric.criteria[1].descriptors").value("full: clear steps"))
                 .andExpect(jsonPath("$.data.questions[5].essayGradingRubric.notes").value("Mention binary representation\nRounding error"));
         assertEquals(1, calls);
@@ -235,17 +230,16 @@ class ExamAiApiIntegrationTest {
     }
 
     @Test void diagramDraftCarriesDrawioXmlAndRubric() throws Exception {
-        Map<String, Object> rubric = Map.of("criteria", List.of(Map.of("name", "Classes", "maxScore", 2, "descriptors", "Full: ..."),
-                Map.of("name", "Relations", "maxScore", 2, "descriptors", "Full: ...")), "notes", "Order has many lines");
+        Map<String, Object> rubric = Map.of("criteria", List.of(Map.of("name", "Classes", "weight", 2, "descriptors", "Full: ..."),
+                Map.of("name", "Relations", "weight", 2, "descriptors", "Full: ...")), "notes", "Order has many lines");
         String plantUml = "@startuml\nclass Order\nclass Line\nOrder \"1\" *-- \"many\" Line\n@enduml";
-        Map<String, Object> tag = Map.of("skillTag", "class diagram");
         List<Map<String, Object>> questions = List.of(
                 Map.of("content", "Draw the class diagram of an order", "questionType", "DIAGRAM", "difficulty", "EASY",
-                        "defaultPoints", 4, "questionMetadata", tag, "plantUmlSource", plantUml, "essayGradingRubric", rubric),
+                        "plantUmlSource", plantUml, "essayGradingRubric", rubric),
                 Map.of("content", "Diagram without PlantUML", "questionType", "DIAGRAM", "difficulty", "EASY",
-                        "defaultPoints", 4, "questionMetadata", tag, "essayGradingRubric", rubric),
+                        "essayGradingRubric", rubric),
                 Map.of("content", "Diagram without rubric", "questionType", "DIAGRAM", "difficulty", "EASY",
-                        "defaultPoints", 4, "questionMetadata", tag, "plantUmlSource", plantUml));
+                        "plantUmlSource", plantUml));
         providerContent = json.writeValueAsString(Map.of("questions", questions));
         String request = json.writeValueAsString(Map.of("courseId", course.getCourseId(), "questionCount", 3,
                 "difficultyDistribution", Map.of("EASY", 3, "MEDIUM", 0, "HARD", 0),
@@ -255,7 +249,7 @@ class ExamAiApiIntegrationTest {
                 .andExpect(jsonPath("$.data.questions[0].questionMetadata.drawioXml").value(org.hamcrest.Matchers.allOf(
                         org.hamcrest.Matchers.startsWith("<mxfile>"), org.hamcrest.Matchers.containsString("plantUmlData=\""),
                         org.hamcrest.Matchers.containsString("@startuml\\nclass Order"), org.hamcrest.Matchers.containsString("\\&quot;1\\&quot;"))))
-                .andExpect(jsonPath("$.data.questions[0].essayGradingRubric.criteria[0].weight").value(50.0))
+                .andExpect(jsonPath("$.data.questions[0].essayGradingRubric.criteria[0].weight").value(2.0))
                 .andExpect(jsonPath("$.data.warnings[*]").value(org.hamcrest.Matchers.hasItems(
                         org.hamcrest.Matchers.containsString("PlantUML"), org.hamcrest.Matchers.containsString("diagram requires an essayGradingRubric"))));
         assertTrue(receivedRequest.contains("plantUmlSource"));
@@ -271,19 +265,19 @@ class ExamAiApiIntegrationTest {
     }
 
     @Test void retriesOnceForRejectedQuestionsAndReportsWhy() throws Exception {
-        providerContent = json.writeValueAsString(Map.of("questions", List.of(Map.of("content", "No tag", "questionType", "SINGLE_CHOICE",
-                "difficulty", "EASY", "options", List.of(Map.of("optionText", "a", "isCorrect", true), Map.of("optionText", "b", "isCorrect", false))))));
+        providerContent = json.writeValueAsString(Map.of("questions", List.of(Map.of("content", "Valid content", "questionType", "INVALID",
+                "difficulty", "EASY"))));
         retryContent = json.writeValueAsString(Map.of("questions", List.of(choice("SINGLE_CHOICE", "EASY"))));
         generate(manager, body()).andExpect(status().isOk()).andExpect(jsonPath("$.data.questionCount").value(1));
         assertEquals(2, calls);
-        assertTrue(receivedRequest.contains("previousProblems") && receivedRequest.contains("skillTag is required"));
+        assertTrue(receivedRequest.contains("previousProblems") && receivedRequest.contains("questionType"));
     }
 
     @Test void acceptsFrontendMultiChoiceAlias() throws Exception {
         providerContent = json.writeValueAsString(Map.of("questions", List.of(Map.of("content", "Pick the even numbers",
                 "questionType", "MULTIPLE_CHOICE", "difficulty", "EASY", "options", List.of(
                         Map.of("optionText", "2", "isCorrect", true), Map.of("optionText", "4", "isCorrect", true),
-                        Map.of("optionText", "3", "isCorrect", false)), "questionMetadata", Map.of("skillTag", "parity")))));
+                        Map.of("optionText", "3", "isCorrect", false))))));
         generate(manager, body().replace("SINGLE_CHOICE", "MULTI_CHOICE")).andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.questions[0].questionType").value("MULTIPLE_CHOICE"));
     }
@@ -303,17 +297,16 @@ class ExamAiApiIntegrationTest {
     }
 
     @Test void rejectsDraftsTheQuestionBankWouldRefuse() throws Exception {
-        Map<String, Object> tag = Map.of("skillTag", "arithmetic");
         List<Map<String, Object>> invalid = List.of(
-                Map.of("content", "One correct only", "questionType", "MULTIPLE_CHOICE", "difficulty", "EASY", "questionMetadata", tag, "options", List.of(
+                Map.of("content", "One correct only", "questionType", "MULTIPLE_CHOICE", "difficulty", "EASY", "options", List.of(
                         Map.of("optionText", "a", "isCorrect", true), Map.of("optionText", "b", "isCorrect", false))),
-                Map.of("content", "Match with options", "questionType", "MATCHING", "difficulty", "EASY", "questionMetadata", tag, "options", List.of(
+                Map.of("content", "Match with options", "questionType", "MATCHING", "difficulty", "EASY", "options", List.of(
                         Map.of("optionText", "a"), Map.of("optionText", "b"))),
-                Map.of("content", "No placeholder", "questionType", "FILL_BLANK", "difficulty", "EASY", "questionMetadata", tag,
+                Map.of("content", "No placeholder", "questionType", "FILL_BLANK", "difficulty", "EASY",
                         "answerKey", Map.of("blanks", List.of(Map.of("index", 1, "accepted", List.of("x"))))),
-                Map.of("content", "Essay without rubric", "questionType", "ESSAY", "difficulty", "EASY", "questionMetadata", tag),
-                Map.of("content", "Rubric does not add up", "questionType", "ESSAY", "difficulty", "MEDIUM", "defaultPoints", 5, "questionMetadata", tag,
-                        "essayGradingRubric", Map.of("criteria", List.of(Map.of("name", "Accuracy", "maxScore", 2)))));
+                Map.of("content", "Essay without rubric", "questionType", "ESSAY", "difficulty", "EASY"),
+                Map.of("content", "Rubric invalid weight", "questionType", "ESSAY", "difficulty", "MEDIUM",
+                        "essayGradingRubric", Map.of("criteria", List.of(Map.of("name", "Accuracy", "weight", 0)))));
         providerContent = json.writeValueAsString(Map.of("questions", invalid));
         String request = json.writeValueAsString(Map.of("courseId", course.getCourseId(), "questionCount", 5,
                 "difficultyDistribution", Map.of("EASY", 4, "MEDIUM", 1, "HARD", 0),
@@ -370,7 +363,7 @@ class ExamAiApiIntegrationTest {
     private long countQuestions() { return em.createQuery("select count(q) from Question q", Long.class).getSingleResult(); }
     private Map<String, Object> choice(String type, String difficulty) { return choice(type, difficulty, "What is 2 + 2?"); }
     private Map<String, Object> choice(String type, String difficulty, String content) {
-        return Map.of("content", content, "questionType", type, "difficulty", difficulty, "questionMetadata", Map.of("skillTag", "addition"),
+        return Map.of("content", content, "questionType", type, "difficulty", difficulty,
                 "options", List.of(Map.of("optionText", "4", "isCorrect", true, "orderIndex", 0), Map.of("optionText", "3", "isCorrect", false, "orderIndex", 1)));
     }
     private User account(String role) {

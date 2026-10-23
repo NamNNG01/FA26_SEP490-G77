@@ -192,7 +192,6 @@ class QuestionGroupTypeEnforcementIntegrationTest {
                 .groupId(group == null ? null : group.getGroupId())
                 .questionType("SINGLE_CHOICE")
                 .difficulty("MEDIUM")
-                .defaultPoints(BigDecimal.ONE)
                 .content(content)
                 .options(List.of(
                         AnswerOptionDto.builder().optionText("Option A").isCorrect(true).orderIndex(0).build(),
@@ -207,7 +206,6 @@ class QuestionGroupTypeEnforcementIntegrationTest {
                 .groupId(group == null ? null : group.getGroupId())
                 .questionType("ESSAY")
                 .difficulty("MEDIUM")
-                .defaultPoints(BigDecimal.ONE)
                 .content(content)
                 .build();
     }

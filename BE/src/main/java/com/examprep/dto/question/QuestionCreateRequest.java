@@ -7,7 +7,6 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.math.BigDecimal;
 import java.util.List;
 
 @Data
@@ -32,7 +31,6 @@ public class QuestionCreateRequest {
     private String content;
 
     private String explanation; // maps to ai_explanation
-    private BigDecimal defaultPoints;
     private Object questionMetadata;
     private Object answerKey;
     private Object essayGradingRubric;

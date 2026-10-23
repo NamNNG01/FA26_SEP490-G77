@@ -259,13 +259,11 @@ public class ExamAiServiceImpl implements ExamAiService {
         String type = row.path("questionType").asText();
         String level = row.path("difficulty").asText();
         String content = row.path("content").asText();
-        String skillTag = row.path("questionMetadata").path("skillTag").asText().strip();
         String plantUml = type.equals("DIAGRAM") ? row.path("plantUmlSource").asText().strip() : null;
         BigDecimal points = row.path("defaultPoints").isNumber() ? row.get("defaultPoints").decimalValue() : BigDecimal.ONE;
         String error = null;
         if (!row.isObject() || content.isBlank()) error = "missing question content";
         else if (types.getOrDefault(type, 0) < 1 || difficulty.getOrDefault(level, 0) < 1) error = "outside the requested distribution";
-        else if (skillTag.isEmpty() || skillTag.length() > 100) error = "questionMetadata.skillTag is required (max 100 characters)";
         else if (RUBRIC_TYPES.contains(type) && !row.path("essayGradingRubric").isObject())
             error = type.toLowerCase(Locale.ROOT) + " requires an essayGradingRubric";
         else if (type.equals("DIAGRAM") && !plantUml.startsWith("@start")) error = "diagram requires a PlantUML plantUmlSource";
@@ -273,7 +271,7 @@ public class ExamAiServiceImpl implements ExamAiService {
         for (JsonNode option : row.path("options")) choices.add(new Option(option.path("optionText").asText(),
                 option.path("isCorrect").isBoolean() ? option.get("isCorrect").booleanValue() : null,
                 option.path("orderIndex").canConvertToInt() ? option.get("orderIndex").intValue() : choices.size()));
-        ObjectNode metadata = json.createObjectNode().put("skillTag", skillTag);
+        ObjectNode metadata = json.createObjectNode();
         // Q-03 stores a DIAGRAM model answer as draw.io XML only.
         if (plantUml != null && !plantUml.isEmpty()) metadata.put("drawioXml", drawioXml(plantUml));
         // The schema lets answerKey come back as {} on choice questions, where Q-03 forbids any answerKey.
@@ -283,7 +281,7 @@ public class ExamAiServiceImpl implements ExamAiService {
         if (error == null) {
             // Same rules as Q-03, so every accepted draft can be saved without edits.
             List<ValidationError> errors = questionValidator.validate(QuestionPayload.builder().questionType(type)
-                    .difficulty(level).content(content).defaultPoints(points)
+                    .difficulty(level).content(content)
                     .questionMetadata(json.convertValue(metadata, Object.class))
                     .answerKey(answerKey == null ? null : json.convertValue(answerKey, Object.class))
                     .essayGradingRubric(rubric == null ? null : json.convertValue(rubric, Object.class))
@@ -295,7 +293,7 @@ public class ExamAiServiceImpl implements ExamAiService {
         if (error == null && !seen.add(key(content))) error = "duplicates an existing or generated question";
         if (error != null) { warnings.add("Skipped question: " + error + "."); return; }
         if (rubric != null) normalizeRubric((ObjectNode) rubric, points);
-        accepted.add(new DraftQuestion(content, type, level, points, choices.isEmpty() ? null : choices, answerKey,
+        accepted.add(new DraftQuestion(content, type, level, choices.isEmpty() ? null : choices, answerKey,
                 row.hasNonNull("explanation") ? row.get("explanation").asText() : null, metadata, rubric, plantUml));
         types.compute(type, (k, v) -> v - 1);
         difficulty.compute(level, (k, v) -> v - 1);
@@ -304,12 +302,16 @@ public class ExamAiServiceImpl implements ExamAiService {
     // Matches the E-08 rubric shape: totalPoints and per-criterion weight (%) are derived, never trusted from the model,
     // and descriptors/notes are strings there, while Gemini often answers {full, partial, zero} objects or arrays.
     private static void normalizeRubric(ObjectNode rubric, BigDecimal points) {
-        rubric.put("totalPoints", points);
+        if (rubric.has("totalPoints")) rubric.remove("totalPoints");
         if (rubric.has("notes")) rubric.put("notes", flatten(rubric.get("notes")));
         for (JsonNode node : rubric.path("criteria")) {
             ObjectNode criterion = (ObjectNode) node;
-            criterion.put("weight", new BigDecimal(criterion.path("maxScore").asText()).multiply(BigDecimal.valueOf(100))
-                    .divide(points, 2, RoundingMode.HALF_UP));
+            if (criterion.has("maxScore")) {
+                criterion.put("weight", new BigDecimal(criterion.path("maxScore").asText()));
+                criterion.remove("maxScore");
+            } else if (!criterion.has("weight")) {
+                criterion.put("weight", 1.0);
+            }
             if (criterion.has("descriptors")) criterion.put("descriptors", flatten(criterion.get("descriptors")));
         }
     }

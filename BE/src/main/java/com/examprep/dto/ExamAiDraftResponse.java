@@ -11,7 +11,7 @@ public record ExamAiDraftResponse(String fileName, String title, String descript
     // Same shape Q-03 (POST /questions/batch) accepts, so a draft can be saved as-is. plantUmlSource (DIAGRAM only)
     // is the source behind questionMetadata.drawioXml, for previews; Q-03 ignores it.
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    public record DraftQuestion(String content, String questionType, String difficulty, BigDecimal defaultPoints,
+    public record DraftQuestion(String content, String questionType, String difficulty,
             List<Option> options, JsonNode answerKey, String explanation, JsonNode questionMetadata,
             JsonNode essayGradingRubric, String plantUmlSource) { }
     @JsonInclude(JsonInclude.Include.NON_NULL)
