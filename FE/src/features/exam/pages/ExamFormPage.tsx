@@ -245,6 +245,8 @@ export function ExamFormPage({
       ? Number(((maxScore * weight) / totalWeight).toFixed(2))
       : 0;
   const formatScore = (score: number) => Number(score.toFixed(2)).toString();
+  const withoutRubricWarnings = (warnings: string[]) =>
+    warnings.filter((warning) => !/\b(?:no|missing) rubrics?\b/i.test(warning));
 
   useEffect(() => {
     courseService
@@ -299,7 +301,7 @@ export function ExamFormPage({
       setStatus(data.status || "DRAFT");
       setConfigs(data.generationType === "MIXED" ? [] : data.configs || []);
       setGroups(data.groups || []);
-      setWarningsList(data.warnings || []);
+      setWarningsList(withoutRubricWarnings(data.warnings || []));
 
       const loadedQuestions = [...(data.questions || [])];
       setQuestions(loadedQuestions);
@@ -382,8 +384,9 @@ export function ExamFormPage({
     try {
       const res = await examService.patchPublishExam(Number(id), targetStatus);
       setStatus(res.status);
-      if (res.warnings && res.warnings.length > 0) {
-        setWarningsList(res.warnings);
+      const publishWarnings = withoutRubricWarnings(res.warnings || []);
+      if (publishWarnings.length > 0) {
+        setWarningsList(publishWarnings);
         toast.warning(`Status updated to ${targetStatus} with warnings.`);
       } else {
         setWarningsList([]);
@@ -1518,7 +1521,7 @@ export function ExamFormPage({
                   <p className="text-xs text-content-subtle">
                     {formKind === "QUIZ"
                       ? "Objective questions linked directly to this exam."
-                      : "Essay and diagram questions can be combined in this exam, with optional grading rubrics."}
+                      : "Essay and diagram questions can be combined in this exam. Each question includes its required grading rubric."}
                   </p>
                   {fieldErrors.questions && (
                     <p className="mt-1 text-xs text-danger">
@@ -1588,13 +1591,7 @@ export function ExamFormPage({
                     .map((q, idx) => (
                       <div
                         key={q.examQuestionId || idx}
-                        className={`p-3.5 rounded-[10px] border transition-colors ${
-                          isAssessment &&
-                          isEssayQuestion(q) &&
-                          q.hasRubric === false
-                            ? "border-warning-line bg-warning-light/20"
-                            : "border-line bg-surface"
-                        }`}
+                        className="p-3.5 rounded-[10px] border border-line bg-surface transition-colors"
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex items-start gap-2.5 flex-1 min-w-0">
@@ -1656,37 +1653,18 @@ export function ExamFormPage({
                                 </span>
 
                                 {isAssessment && isEssayQuestion(q) && (
-                                  <>
-                                    {q.hasRubric ? (
-                                      <Badge
-                                        variant="success"
-                                        className="text-2xs"
-                                      >
-                                        Has Rubric
-                                      </Badge>
-                                    ) : (
-                                      <Badge
-                                        variant="warning"
-                                        className="text-2xs"
-                                      >
-                                        Missing Rubric
-                                      </Badge>
-                                    )}
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        setRubricModalQuestion({
-                                          id: q.questionId,
-                                          content: q.content,
-                                        })
-                                      }
-                                      className="text-xs font-semibold text-brand-ink hover:underline cursor-pointer"
-                                    >
-                                      {q.hasRubric
-                                        ? "Edit Rubric"
-                                        : "Add Rubric"}
-                                    </button>
-                                  </>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setRubricModalQuestion({
+                                        id: q.questionId,
+                                        content: q.content,
+                                      })
+                                    }
+                                    className="text-xs font-semibold text-brand-ink hover:underline cursor-pointer"
+                                  >
+                                    Edit Rubric
+                                  </button>
                                 )}
                               </div>
                             </div>
@@ -1928,7 +1906,7 @@ export function ExamFormPage({
                                 {groupQuestions.map((q, questionIndex) => (
                                   <div
                                     key={q.examQuestionId || q.questionId}
-                                    className={`rounded-[8px] border bg-surface p-3 ${isAssessment && isEssayQuestion(q) && q.hasRubric === false ? "border-warning-line" : "border-line-soft"}`}
+                                    className="rounded-[8px] border border-line-soft bg-surface p-3"
                                   >
                                     <div className="flex items-start justify-between gap-3">
                                       <div className="min-w-0 flex-1">
@@ -2005,9 +1983,7 @@ export function ExamFormPage({
                                                 }
                                                 className="text-xs font-semibold text-brand-ink hover:underline cursor-pointer"
                                               >
-                                                {q.hasRubric
-                                                  ? "Edit Rubric"
-                                                  : "Add Rubric"}
+                                                Edit Rubric
                                               </button>
                                             )}
                                         </div>

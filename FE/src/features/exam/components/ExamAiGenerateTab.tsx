@@ -119,6 +119,7 @@ export function ExamAiGenerateTab({
     const errors: Record<string, string> = {};
     if (!courseId) errors.courseId = MSG01;
     if (!moduleId) errors.moduleId = 'Select a module.';
+    if (!context.trim()) errors.context = MSG01;
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
       return;
@@ -404,18 +405,26 @@ export function ExamAiGenerateTab({
 
           <div>
             <label className="text-sm font-medium text-content-secondary block mb-1">
-              Instructions for AI (optional)
+              Instructions for AI <span className="text-danger">*</span>
             </label>
             <textarea
               rows={3}
               maxLength={2000}
-              className="w-full px-3 py-1.5 text-sm rounded-[10px] border border-line bg-surface focus:outline-none focus:ring-1 focus:ring-brand-ink"
+              required
+              aria-invalid={Boolean(fieldErrors.context)}
+              className={`w-full px-3 py-1.5 text-sm rounded-[10px] border bg-surface focus:outline-none focus:ring-1 focus:ring-brand-ink ${fieldErrors.context ? 'border-danger-line' : 'border-line'}`}
               placeholder="e.g. Focus on recursion and Big-O, for second-year students, use real-world scenarios."
               value={context}
-              onChange={(e) => setContext(e.target.value)}
+              onChange={(e) => {
+                setContext(e.target.value);
+                if (e.target.value.trim()) {
+                  setFieldErrors((prev) => ({ ...prev, context: '' }));
+                }
+              }}
             />
+            {fieldErrors.context && <p className="text-2xs text-danger mt-1">{fieldErrors.context}</p>}
             <p className="text-2xs text-content-subtle mt-1">
-              Course and module descriptions plus existing bank questions are added automatically. {context.length}/2000
+              Describe the topics, audience, or constraints for the generated exam. {context.length}/2000
             </p>
           </div>
 
