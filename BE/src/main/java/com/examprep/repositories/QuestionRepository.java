@@ -12,6 +12,7 @@ import org.springframework.stereotype.Repository;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 @Repository
 public interface QuestionRepository extends JpaRepository<Question, Long>, JpaSpecificationExecutor<Question> {
@@ -116,6 +117,18 @@ public interface QuestionRepository extends JpaRepository<Question, Long>, JpaSp
             @Param("contentHash") String contentHash,
             @Param("excludeQuestionId") Long excludeQuestionId,
             Pageable pageable
+    );
+
+    @Query("""
+    SELECT q.contentHash
+    FROM Question q
+    WHERE q.course.courseId = :courseId
+      AND q.contentHash IN :contentHashes
+      AND q.deletedAt IS NULL
+    """)
+    Set<String> findExistingContentHashes(
+            @Param("courseId") Long courseId,
+            @Param("contentHashes") Collection<String> contentHashes
     );
 
 }
