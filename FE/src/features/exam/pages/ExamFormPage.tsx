@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Badge } from "@/components/ui/Badge";
-import { Switch } from "@/components/ui/Switch";
 import { Modal } from "@/components/ui/Modal";
 import { Icon } from "@/assets/icons";
 import { useToast } from "@/components/ui/ToastHost";
@@ -1149,25 +1148,6 @@ export function ExamFormPage({
                   />
                 </div>
 
-                <div className="flex items-center justify-between pt-2 px-1 border-t border-line-soft">
-                  <div>
-                    <span className="text-sm font-medium text-content-secondary block">
-                      Practice Exam Mode
-                    </span>
-                    <span className="text-2xs text-content-subtle">
-                      Practice exams permit instant feedback and ungraded
-                      attempts for learners.
-                    </span>
-                  </div>
-                  <Switch
-                    checked={isPractice}
-                    onChange={(v) => {
-                      setIsPractice(v);
-                      setIsDirty(true);
-                    }}
-                    disabled={isReadOnly}
-                  />
-                </div>
               </div>
             </div>
 
@@ -1887,6 +1867,11 @@ export function ExamFormPage({
         open={rubricModalQuestion !== null}
         questionId={rubricModalQuestion?.id || null}
         questionContent={rubricModalQuestion?.content}
+        questionPoints={scoreForWeight(
+          questions.find((q) => q.questionId === rubricModalQuestion?.id)?.weight
+            ?? questions.find((q) => q.questionId === rubricModalQuestion?.id)?.points
+            ?? 1,
+        )}
         onClose={() => setRubricModalQuestion(null)}
         onSaved={(qid) => {
           setQuestions((prev) =>

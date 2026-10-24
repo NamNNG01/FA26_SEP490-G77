@@ -98,6 +98,7 @@ export function QuestionBankSelectModal({
           search: search.trim() || undefined,
           courseId: courseId ? Number(courseId) : undefined,
           moduleId: moduleId ? Number(moduleId) : undefined,
+          groupType: "NONE",
           difficulty: difficulty !== "all" ? difficulty : undefined,
           questionType: questionType !== "all" ? questionType : undefined,
           questionTypes: questionType === "all" ? allowedQuestionTypes : undefined,

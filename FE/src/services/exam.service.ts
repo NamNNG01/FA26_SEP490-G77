@@ -118,6 +118,7 @@ export interface ExamQuestionListParams {
   courseId?: number;
   moduleId?: number;
   groupId?: number;
+  groupType?: string;
   questionType?: string;
   questionTypes?: string[];
   difficulty?: Difficulty;
@@ -822,6 +823,7 @@ export const examService = {
     if (params?.courseId) q.set('courseId', String(params.courseId));
     if (params?.moduleId) q.set('moduleId', String(params.moduleId));
     if (params?.groupId) q.set('groupId', String(params.groupId));
+    if (params?.groupType) q.set('groupType', params.groupType);
     if (params?.questionType) q.set('questionType', params.questionType);
     params?.questionTypes?.forEach((type) => q.append('questionTypes', type));
     if (params?.difficulty) q.set('difficulty', params.difficulty);
@@ -849,6 +851,7 @@ export const examService = {
       if (params?.courseId && item.courseId !== params.courseId) return false;
       if (params?.moduleId && item.moduleId !== params.moduleId) return false;
       if (params?.groupId && item.groupId !== params.groupId) return false;
+      if (params?.groupType === 'NONE' && item.groupId != null) return false;
       if (params?.questionTypes?.length && !params.questionTypes.includes(item.questionType)) return false;
       if (params?.difficulty && item.difficulty !== params.difficulty) return false;
       if (params?.status && item.status !== params.status) return false;

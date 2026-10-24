@@ -1,15 +1,16 @@
-import React, { useEffect, useState } from 'react';
-import { Modal } from '@/components/ui/Modal';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { Icon } from '@/assets/icons';
-import { examService, type RubricCriterion } from '@/services/exam.service';
-import { getApiErrorMessage } from '@/utils/apiError';
+import React, { useEffect, useState } from "react";
+import { Modal } from "@/components/ui/Modal";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { Icon } from "@/assets/icons";
+import { examService, type RubricCriterion } from "@/services/exam.service";
+import { getApiErrorMessage } from "@/utils/apiError";
 
 interface RubricDetailModalProps {
   open: boolean;
   questionId: number | null;
   questionContent?: string;
+  questionPoints: number;
   onClose: () => void;
   onSaved: (questionId: number) => void;
 }
@@ -18,52 +19,62 @@ export function RubricDetailModal({
   open,
   questionId,
   questionContent,
+  questionPoints,
   onClose,
   onSaved,
 }: RubricDetailModalProps) {
   const [criteria, setCriteria] = useState<RubricCriterion[]>([
-    { name: '', weight: 1, descriptors: '' },
+    { name: "", weight: 1, descriptors: "" },
   ]);
-  const [notes, setNotes] = useState('');
+  const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [errorMsg, setErrorMsg] = useState('');
+  const [errorMsg, setErrorMsg] = useState("");
   const [loadFailed, setLoadFailed] = useState(false);
   const [invalidRowIdx, setInvalidRowIdx] = useState<number | null>(null);
 
   useEffect(() => {
     if (!open || !questionId) return;
     setLoading(true);
-    setErrorMsg('');
+    setErrorMsg("");
     setLoadFailed(false);
     setInvalidRowIdx(null);
     examService
       .getQuestionById(questionId)
       .then((q) => {
         if (q.essayGradingRubric && q.essayGradingRubric.criteria?.length > 0) {
-          setCriteria(q.essayGradingRubric.criteria.map((criterion) => ({
-            ...criterion,
-            weight: Number(criterion.weight ?? criterion.maxScore ?? 1),
-          })));
-          setNotes(q.essayGradingRubric.notes || '');
+          setCriteria(
+            q.essayGradingRubric.criteria.map((criterion) => ({
+              ...criterion,
+              weight: Number(criterion.weight ?? criterion.maxScore ?? 1),
+            })),
+          );
+          setNotes(q.essayGradingRubric.notes || "");
         } else {
-          setCriteria([{ name: '', weight: 1, descriptors: '' }]);
-          setNotes('');
+          setCriteria([{ name: "", weight: 1, descriptors: "" }]);
+          setNotes("");
         }
       })
       .catch((err) => {
         setLoadFailed(true);
-        setErrorMsg(getApiErrorMessage(err, 'Failed to load grading rubric.'));
+        setErrorMsg(getApiErrorMessage(err, "Failed to load grading rubric."));
       })
       .finally(() => {
         setLoading(false);
       });
   }, [open, questionId]);
 
-  const totalWeight = criteria.reduce((sum, c) => sum + (Number(c.weight) || 0), 0);
+  const totalWeight = criteria.reduce(
+    (sum, c) => sum + (Number(c.weight) || 0),
+    0,
+  );
+  const pointsForWeight = (weight: number) =>
+    totalWeight > 0
+      ? Number(((questionPoints * weight) / totalWeight).toFixed(2))
+      : 0;
 
   const addCriterion = () => {
-    setCriteria((prev) => [...prev, { name: '', weight: 1, descriptors: '' }]);
+    setCriteria((prev) => [...prev, { name: "", weight: 1, descriptors: "" }]);
   };
 
   const removeCriterion = (index: number) => {
@@ -71,7 +82,11 @@ export function RubricDetailModal({
     setCriteria((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const updateCriterion = (index: number, field: keyof RubricCriterion, val: string | number) => {
+  const updateCriterion = (
+    index: number,
+    field: keyof RubricCriterion,
+    val: string | number,
+  ) => {
     setCriteria((prev) => {
       const next = [...prev];
       next[index] = { ...next[index], [field]: val };
@@ -79,10 +94,10 @@ export function RubricDetailModal({
     });
     if (invalidRowIdx === index) {
       setInvalidRowIdx(null);
-      setErrorMsg('');
+      setErrorMsg("");
     }
-    if (field === 'weight' && errorMsg.includes('weight')) {
-      setErrorMsg('');
+    if (field === "weight" && errorMsg.includes("weight")) {
+      setErrorMsg("");
     }
   };
 
@@ -103,16 +118,20 @@ export function RubricDetailModal({
     }
 
     setSaving(true);
-    setErrorMsg('');
+    setErrorMsg("");
     try {
       await examService.updateRubric(questionId, {
-        criteria: criteria.map(({ name, weight, descriptors }) => ({ name, weight: Number(weight), descriptors })),
+        criteria: criteria.map(({ name, weight, descriptors }) => ({
+          name,
+          weight: Number(weight),
+          descriptors,
+        })),
         notes: notes.trim() || undefined,
       });
       onSaved(questionId);
       onClose();
     } catch (err: unknown) {
-      setErrorMsg(getApiErrorMessage(err, 'Failed to save grading rubric.'));
+      setErrorMsg(getApiErrorMessage(err, "Failed to save grading rubric."));
     } finally {
       setSaving(false);
     }
@@ -125,19 +144,16 @@ export function RubricDetailModal({
       title="Essay Grading Rubric Detail"
       size="xl"
       footer={
-        <div className="flex items-center justify-between w-full">
-          <div className="flex items-center gap-4 text-sm">
-            <span className="text-success font-medium">
-              Total Weight: <strong className="text-content font-bold">{Number(totalWeight.toFixed(2))}</strong>
-            </span>
-          </div>
+        <div className="flex items-center justify-end w-full">
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={onClose} disabled={saving}>
               Cancel
             </Button>
             <Button
               onClick={handleSave}
-              disabled={criteria.length === 0 || saving || loading || loadFailed}
+              disabled={
+                criteria.length === 0 || saving || loading || loadFailed
+              }
               loading={saving}
               icon={<Icon.Check className="w-4 h-4" />}
             >
@@ -153,12 +169,15 @@ export function RubricDetailModal({
             <span className="text-2xs uppercase tracking-wider text-content-subtle font-semibold block mb-1">
               Question Prompt
             </span>
-            <p className="text-sm text-content font-medium leading-relaxed">{questionContent}</p>
+            <p className="text-sm text-content font-medium leading-relaxed">
+              {questionContent}
+            </p>
           </div>
         )}
 
         <div className="text-xs text-content-subtle bg-info-light/40 border border-info-line/50 p-2.5 rounded-[8px]">
-          Note: Rubric belongs to the question entity in Question Bank. Editing it affects all exams referencing this question.
+          Note: Rubric belongs to the question entity in Question Bank. Editing
+          it affects all exams referencing this question.
         </div>
 
         {errorMsg && (
@@ -169,8 +188,15 @@ export function RubricDetailModal({
 
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <h4 className="text-sm font-semibold text-content">Evaluation Criteria</h4>
-            <Button variant="secondary" size="sm" icon={<Icon.Plus className="w-3.5 h-3.5" />} onClick={addCriterion}>
+            <h4 className="text-sm font-semibold text-content">
+              Evaluation Criteria
+            </h4>
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<Icon.Plus className="w-3.5 h-3.5" />}
+              onClick={addCriterion}
+            >
               Add Criterion
             </Button>
           </div>
@@ -180,7 +206,9 @@ export function RubricDetailModal({
               <div
                 key={idx}
                 className={`p-3.5 rounded-[10px] border space-y-2.5 transition-colors ${
-                  invalidRowIdx === idx ? 'border-danger bg-danger-light/10' : 'border-line bg-surface'
+                  invalidRowIdx === idx
+                    ? "border-danger bg-danger-light/10"
+                    : "border-line bg-surface"
                 }`}
               >
                 <div className="flex items-center justify-between gap-3">
@@ -189,19 +217,40 @@ export function RubricDetailModal({
                       label={`Criterion #${idx + 1} Name *`}
                       placeholder="e.g. Content Relevance & Argumentation"
                       value={c.name}
-                      onChange={(e) => updateCriterion(idx, 'name', e.target.value)}
+                      onChange={(e) =>
+                        updateCriterion(idx, "name", e.target.value)
+                      }
                     />
                   </div>
                   <div className="w-24">
-                    <label className="text-xs font-medium text-content-secondary block mb-1">Weight *</label>
+                    <label className="text-xs font-medium text-content-secondary block mb-1">
+                      Weight *
+                    </label>
                     <input
                       type="number"
                       min={0.01}
                       step="any"
                       className="w-full px-2.5 py-1.5 text-sm rounded-[8px] border border-line bg-surface focus:outline-none focus:ring-1 focus:ring-brand-ink"
-                      value={c.weight ?? ''}
-                      onChange={(e) => updateCriterion(idx, 'weight', Number(e.target.value) || 0)}
+                      value={c.weight ?? ""}
+                      onChange={(e) =>
+                        updateCriterion(
+                          idx,
+                          "weight",
+                          Number(e.target.value) || 0,
+                        )
+                      }
                     />
+                  </div>
+                  <div className="w-24 text-right">
+                    <span className="text-xs text-content-subtle block">
+                      Points
+                    </span>
+                    <span className="text-sm font-semibold text-brand-ink">
+                      {Number.isFinite(Number(c.weight))
+                        ? pointsForWeight(Number(c.weight))
+                        : 0}{" "}
+                      pts
+                    </span>
                   </div>
                   <div className="pt-5">
                     <button
@@ -224,8 +273,10 @@ export function RubricDetailModal({
                     rows={2}
                     className="w-full px-3 py-1.5 text-xs rounded-[8px] border border-line bg-surface focus:outline-none focus:ring-1 focus:ring-brand-ink"
                     placeholder="Describe expectations for full, partial, and minimal credit..."
-                    value={c.descriptors || ''}
-                    onChange={(e) => updateCriterion(idx, 'descriptors', e.target.value)}
+                    value={c.descriptors || ""}
+                    onChange={(e) =>
+                      updateCriterion(idx, "descriptors", e.target.value)
+                    }
                   />
                 </div>
               </div>
@@ -249,4 +300,3 @@ export function RubricDetailModal({
     </Modal>
   );
 }
-
