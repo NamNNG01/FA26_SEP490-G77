@@ -52,19 +52,15 @@ public class QuestionImportServiceImpl implements QuestionImportService {
                 throw new ForbiddenException("You do not have access to this course");
             }
         }
-
-        // Rate limit check: 10 requests / minute per user
         checkRateLimit(user.getUserId());
 
         if (file == null || file.isEmpty()) {
             throw new BadRequestException("File is required");
         }
-
         byte[] bytes = file.getBytes();
         String fileType;
         List<String> lines;
 
-        // Determine type by magic bytes
         if (bytes.length >= 5 && new String(bytes, 0, 5, StandardCharsets.US_ASCII).equals("%PDF-")) {
             fileType = "PDF";
             lines = executeWithTimeout(() -> pdfTextExtractor.extractText(file), 20);

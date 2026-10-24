@@ -14,7 +14,6 @@ public interface QuestionService {
                                           String source, Long createdBy, String search,
                                           Pageable pageable, User currentUser);
 
-    QuestionDetailDto createQuestion(QuestionCreateRequest request, User currentUser);
 
     List<QuestionDetailDto> createQuestionsBatch(Long courseId, Long moduleId, List<QuestionCreateRequest> requests, User currentUser);
 
