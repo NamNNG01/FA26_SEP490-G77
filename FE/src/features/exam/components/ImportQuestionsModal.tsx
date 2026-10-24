@@ -97,11 +97,11 @@ export function ImportQuestionsModal({
     } catch (err: unknown) {
       const errorObj = err as { response?: { status?: number; data?: { message?: string } } };
       if (errorObj?.response?.status === 409) {
-        setErrorMsg('The exam is currently published. Please unpublish the exam first before importing questions.');
+        toast.error('The exam is currently published. Please unpublish the exam first before importing questions.', { title: 'Could not import questions', duration: null });
       } else if (errorObj?.response?.status === 400) {
-        setErrorMsg(errorObj.response.data?.message || MSG12);
+        toast.error(errorObj.response.data?.message || MSG12, { title: 'Could not import questions', duration: null });
       } else {
-        setErrorMsg(errorObj?.response?.data?.message || 'Failed to import questions.');
+        toast.error(errorObj?.response?.data?.message || 'Failed to import questions.', { title: 'Could not import questions', duration: null });
       }
     } finally {
       setUploading(false);

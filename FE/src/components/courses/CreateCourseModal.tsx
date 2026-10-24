@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Dropdown } from '@/components/ui/Dropdown';
 import { Alert } from '@/components/ui/Alert';
+import { useToast } from '@/components/ui/ToastHost';
 import { Icon } from '@/assets/icons';
 import { api } from '@/services/api';
 import { getApiErrorMessage } from '@/utils/apiError';
@@ -28,6 +29,7 @@ export function CreateCourseModal({
   onClose: () => void;
   onCreated: (course: CourseDetailResponse) => void;
 }) {
+  const toast = useToast();
   const [title, setTitle] = useState('');
   const [categoryId, setCategoryId] = useState<string>('');
   const [description, setDescription] = useState('');
@@ -73,9 +75,9 @@ export function CreateCourseModal({
       })
       .catch((err) => {
         setCategories([]);
-        setCategoryLoadError(
-          getApiErrorMessage(err, 'Failed to load categories.'),
-        );
+        const message = getApiErrorMessage(err, 'Failed to load categories.');
+        setCategoryLoadError(message);
+        toast.error(message, { title: 'Could not load categories', duration: null });
       })
       .finally(() => {
         setLoadingCategories(false);
@@ -111,9 +113,9 @@ export function CreateCourseModal({
       })
       .catch((err) => {
         setManagers([]);
-        setManagerLoadError(
-          getApiErrorMessage(err, 'Failed to load course managers.'),
-        );
+        const message = getApiErrorMessage(err, 'Failed to load course managers.');
+        setManagerLoadError(message);
+        toast.error(message, { title: 'Could not load course managers', duration: null });
       })
       .finally(() => setLoadingManagers(false));
   }, [open]);
@@ -153,9 +155,9 @@ export function CreateCourseModal({
       onCreated(created);
       onClose();
     } catch (err: unknown) {
-      setSubmitError(
-        getApiErrorMessage(err, 'Failed to create course. Please try again.'),
-      );
+      const message = getApiErrorMessage(err, 'Failed to create course. Please try again.');
+      setSubmitError(message);
+      toast.error(message, { title: 'Course creation failed', duration: null });
     } finally {
       setSubmitting(false);
     }
@@ -348,7 +350,7 @@ export function CreateCourseModal({
           />
         </div>
 
-        {submitError && <Alert type="error" title="Creation failed" message={submitError} />}
+        {submitError && <p className="text-xs text-content-subtle">Creation failed. See the notification for details.</p>}
       </div>
     </Modal>
   );

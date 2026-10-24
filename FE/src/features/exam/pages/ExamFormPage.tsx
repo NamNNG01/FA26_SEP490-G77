@@ -81,10 +81,6 @@ export function ExamFormPage({
   const [saving, setSaving] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const [errorBanner, setErrorBanner] = useState<string>("");
-  const [courseLoadError, setCourseLoadError] = useState("");
-  const [moduleLoadError, setModuleLoadError] = useState("");
-  const [warningsList, setWarningsList] = useState<string[]>([]);
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -247,18 +243,20 @@ export function ExamFormPage({
   const formatScore = (score: number) => Number(score.toFixed(2)).toString();
   const withoutRubricWarnings = (warnings: string[]) =>
     warnings.filter((warning) => !/\b(?:no|missing) rubrics?\b/i.test(warning));
+  const reportExamError = (message: string, title = "Exam update failed") =>
+    toast.error(message, { title, duration: null });
 
   useEffect(() => {
     courseService
       .getCourses()
       .then((res) => {
         setCourses(res.content || []);
-        setCourseLoadError("");
       })
       .catch((err) => {
-        setCourseLoadError(getApiErrorMessage(err, "Failed to load courses."));
+        const message = getApiErrorMessage(err, "Failed to load courses.");
+        toast.error(message, { title: "Could not load courses", duration: null });
       });
-  }, []);
+  }, [toast]);
 
   useEffect(() => {
     if (courseId) {
@@ -266,24 +264,20 @@ export function ExamFormPage({
         .getCourseModules(courseId)
         .then((mods) => {
           setModules(mods || []);
-          setModuleLoadError("");
         })
         .catch((err) => {
           setModules([]);
-          setModuleLoadError(
-            getApiErrorMessage(err, "Failed to load course modules."),
-          );
+          const message = getApiErrorMessage(err, "Failed to load course modules.");
+          toast.error(message, { title: "Could not load course modules", duration: null });
         });
     } else {
       setModules([]);
-      setModuleLoadError("");
       setModuleId("");
     }
-  }, [courseId]);
+  }, [courseId, toast]);
 
   const loadExamDetail = async (examIdNum: number) => {
     setLoading(true);
-    setErrorBanner("");
     try {
       const data = await examService.getExamById(examIdNum);
       setTitle(data.title || "");
@@ -301,7 +295,10 @@ export function ExamFormPage({
       setStatus(data.status || "DRAFT");
       setConfigs(data.generationType === "MIXED" ? [] : data.configs || []);
       setGroups(data.groups || []);
-      setWarningsList(withoutRubricWarnings(data.warnings || []));
+      const detailWarnings = withoutRubricWarnings(data.warnings || []);
+      if (detailWarnings.length > 0) {
+        toast.warning(detailWarnings.join(" "), { title: "Exam warnings", duration: null });
+      }
 
       const loadedQuestions = [...(data.questions || [])];
       setQuestions(loadedQuestions);
@@ -345,11 +342,12 @@ export function ExamFormPage({
         toast.error("Exam not found. Returning to exam list.");
         navigate(ROUTES.managerExams);
       } else {
-        setErrorBanner(
+        reportExamError(
           getApiErrorMessage(
             err,
             "Failed to load exam details. Please try again.",
           ),
+          "Could not load exam details",
         );
       }
     } finally {
@@ -380,16 +378,13 @@ export function ExamFormPage({
     }
 
     setSaving(true);
-    setErrorBanner("");
     try {
       const res = await examService.patchPublishExam(Number(id), targetStatus);
       setStatus(res.status);
       const publishWarnings = withoutRubricWarnings(res.warnings || []);
       if (publishWarnings.length > 0) {
-        setWarningsList(publishWarnings);
-        toast.warning(`Status updated to ${targetStatus} with warnings.`);
+        toast.warning(publishWarnings.join(" "), { title: `Status updated to ${targetStatus}` });
       } else {
-        setWarningsList([]);
         toast.success(`Exam status successfully updated to ${targetStatus}.`);
       }
       loadExamDetail(Number(id));
@@ -506,13 +501,13 @@ export function ExamFormPage({
       )
     ) {
       setImportedQuestionsSubmitted(true);
-      setErrorBanner(
+      reportExamError(
         "Review the imported questions and fix any validation errors before creating the exam.",
+        "Review imported questions",
       );
       return;
     }
     setSaving(true);
-    setErrorBanner("");
     let savedImportIds = importedQuestionIds;
 
     try {
@@ -607,15 +602,17 @@ export function ExamFormPage({
       if (isEdit && errorObj?.response?.status === 409) {
         setArchiveCloneModalOpen(true);
       } else if (!isEdit && savedImportIds?.length) {
-        setErrorBanner(
+        reportExamError(
           "Questions were saved to the Question Bank, but the exam could not be created. Retry to create the exam without duplicating those questions.",
+          "Questions saved, exam not created",
         );
       } else if (errorObj?.response?.status === 400) {
-        setErrorBanner(
+        reportExamError(
           getApiErrorMessage(err, "Validation error while saving exam."),
+          "Could not save exam",
         );
       } else {
-        setErrorBanner(getApiErrorMessage(err, "Failed to save exam."));
+        reportExamError(getApiErrorMessage(err, "Failed to save exam."));
       }
     } finally {
       setSaving(false);
@@ -1101,34 +1098,6 @@ export function ExamFormPage({
           <span className="text-sm font-medium text-content-secondary">
             This exam is archived and read-only.
           </span>
-        </div>
-      )}
-
-      {warningsList.length > 0 && (
-        <div className="p-4 bg-warning-light/40 border border-warning-line rounded-[12px] space-y-1 text-xs text-warning-strong">
-          <p className="font-semibold">Publish Warnings:</p>
-          {warningsList.map((w, idx) => (
-            <p key={idx}>• {w}</p>
-          ))}
-        </div>
-      )}
-
-      {errorBanner && (
-        <div className="p-4 bg-danger-light border border-danger-line rounded-[12px] text-xs text-danger font-medium flex items-center justify-between">
-          <span>{errorBanner}</span>
-          <button onClick={() => setErrorBanner("")} className="cursor-pointer">
-            <Icon.X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
-      {courseLoadError && (
-        <div className="mb-4 rounded-lg border border-danger-line bg-danger-light p-3 text-sm text-danger">
-          {courseLoadError}
-        </div>
-      )}
-      {moduleLoadError && (
-        <div className="mb-4 rounded-lg border border-danger-line bg-danger-light p-3 text-sm text-danger">
-          {moduleLoadError}
         </div>
       )}
 

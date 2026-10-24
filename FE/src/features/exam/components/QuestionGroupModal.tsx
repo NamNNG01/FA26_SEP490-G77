@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
 import { SearchInput } from '@/components/common/SearchInput';
 import { Icon } from '@/assets/icons';
+import { useToast } from '@/components/ui/ToastHost';
 import { examService, type ExamKind, type QuestionGroupItem } from '@/services/exam.service';
 import { getApiErrorMessage } from '@/utils/apiError';
 
@@ -29,6 +30,7 @@ export function QuestionGroupModal({
   questionType,
   loading = false,
 }: QuestionGroupModalProps) {
+  const toast = useToast();
   const [tab, setTab] = useState<'existing' | 'new'>('existing');
   const [groups, setGroups] = useState<QuestionGroupItem[]>([]);
   const [search, setSearch] = useState('');
@@ -57,12 +59,12 @@ export function QuestionGroupModal({
       })
       .catch((err) => {
         setGroups([]);
-        setErrorMsg(getApiErrorMessage(err, 'Failed to load question groups.'));
+        toast.error(getApiErrorMessage(err, 'Failed to load question groups.'), { title: 'Could not load question groups', duration: null });
       })
       .finally(() => {
         setFetching(false);
       });
-  }, [open, search, courseId, moduleId, questionType]);
+  }, [open, search, courseId, moduleId, questionType, toast]);
 
   useEffect(() => {
     if (open) {
@@ -99,7 +101,7 @@ export function QuestionGroupModal({
       });
       onSelectGroup(created);
     } catch (err) {
-      setErrorMsg(getApiErrorMessage(err, 'Failed to create question group.'));
+      toast.error(getApiErrorMessage(err, 'Failed to create question group.'), { title: 'Could not create question group', duration: null });
     } finally {
       setCreating(false);
     }

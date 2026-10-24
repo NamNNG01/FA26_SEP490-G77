@@ -6,7 +6,6 @@ import { Select } from "@/components/ui/Select";
 import { Dropdown } from "@/components/ui/Dropdown";
 import { Modal } from "@/components/ui/Modal";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { Alert } from "@/components/ui/Alert";
 import { SearchInput } from "@/components/common/SearchInput";
 import { Icon } from "@/assets/icons";
 import { useToast } from "@/components/ui/ToastHost";
@@ -56,8 +55,6 @@ export function ExamListPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [coursesError, setCoursesError] = useState<string | null>(null);
-  const [modulesError, setModulesError] = useState<string | null>(null);
 
   const [selectedExamIds, setSelectedExamIds] = useState<Set<number>>(
     new Set(),
@@ -90,13 +87,15 @@ export function ExamListPage() {
       .getCourses()
       .then((res) => {
         setCourses(res.content || []);
-        setCoursesError(null);
       })
       .catch((err) => {
         setCourses([]);
-        setCoursesError(getApiErrorMessage(err, "Failed to load courses."));
+        toast.error(getApiErrorMessage(err, "Failed to load courses."), {
+          title: "Could not load courses",
+          duration: null,
+        });
       });
-  }, []);
+  }, [toast]);
 
   useEffect(() => {
     if (selectedCourse) {
@@ -104,20 +103,19 @@ export function ExamListPage() {
         .getCourseModules(selectedCourse)
         .then((mods) => {
           setModules(mods || []);
-          setModulesError(null);
         })
         .catch((err) => {
           setModules([]);
-          setModulesError(
-            getApiErrorMessage(err, "Failed to load course modules."),
-          );
+          toast.error(getApiErrorMessage(err, "Failed to load course modules."), {
+            title: "Could not load course modules",
+            duration: null,
+          });
         });
     } else {
       setModules([]);
-      setModulesError(null);
       setSelectedModule("");
     }
-  }, [selectedCourse]);
+  }, [selectedCourse, toast]);
 
   const updateUrlParams = (
     updates: Record<string, string | number | undefined>,
@@ -196,9 +194,13 @@ export function ExamListPage() {
       if (errorObj?.name === "CanceledError" || errorObj?.name === "AbortError")
         return;
       if (errorObj?.response?.status === 403) {
-        setError("You do not have permission to view exams for this course.");
+        const message = "You do not have permission to view exams for this course.";
+        setError(message);
+        toast.error(message, { title: "Could not load exams", duration: null });
       } else {
-        setError(getApiErrorMessage(err, "Failed to load exams."));
+        const message = getApiErrorMessage(err, "Failed to load exams.");
+        setError(message);
+        toast.error(message, { title: "Could not load exams", duration: null });
       }
     } finally {
       setLoading(false);
@@ -435,20 +437,6 @@ export function ExamListPage() {
 
   return (
     <div className="p-8 space-y-5">
-      {coursesError && (
-        <Alert
-          type="error"
-          title="Could not load courses"
-          message={coursesError}
-        />
-      )}
-      {modulesError && (
-        <Alert
-          type="error"
-          title="Could not load course modules"
-          message={modulesError}
-        />
-      )}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold text-content">Exams</h2>
@@ -595,7 +583,7 @@ export function ExamListPage() {
 
         {error ? (
           <div className="p-12 text-center space-y-3">
-            <p className="text-sm text-danger font-medium">{error}</p>
+            <p className="text-sm text-danger font-medium">Exam list could not be loaded. See the notification for details.</p>
             <Button size="sm" variant="outline" onClick={fetchExams}>
               Thử lại
             </Button>

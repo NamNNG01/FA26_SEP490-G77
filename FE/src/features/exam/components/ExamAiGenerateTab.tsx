@@ -70,9 +70,6 @@ export function ExamAiGenerateTab({
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [draft, setDraft] = useState<AiExamDraftResponse | null>(null);
-  const [errorMsg, setErrorMsg] = useState('');
-  const [courseLoadError, setCourseLoadError] = useState('');
-  const [moduleLoadError, setModuleLoadError] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [savedQuestionIds, setSavedQuestionIds] = useState<number[]>([]);
   const [rubricEditor, setRubricEditor] = useState<{
@@ -87,30 +84,27 @@ export function ExamAiGenerateTab({
   useEffect(() => {
     courseService.getCourses().then((res) => {
       setCourses(res.content || []);
-      setCourseLoadError('');
       if (res.content?.length > 0 && !courseId) {
         setCourseId(String(res.content[0].courseId));
       }
     }).catch((err) => {
-      setCourseLoadError(getApiErrorMessage(err, 'Failed to load courses.'));
+      toast.error(getApiErrorMessage(err, 'Failed to load courses.'), { title: 'Could not load courses', duration: null });
     });
-  }, []);
+  }, [toast]);
 
   useEffect(() => {
     if (courseId) {
       courseService.getCourseModules(courseId).then((mods) => {
         setModules(mods || []);
-        setModuleLoadError('');
       }).catch((err) => {
         setModules([]);
-        setModuleLoadError(getApiErrorMessage(err, 'Failed to load course modules.'));
+        toast.error(getApiErrorMessage(err, 'Failed to load course modules.'), { title: 'Could not load course modules', duration: null });
       });
     } else {
       setModules([]);
       setModuleId('');
-      setModuleLoadError('');
     }
-  }, [courseId]);
+  }, [courseId, toast]);
 
   const totalDiff = Number(diffDist.EASY || 0) + Number(diffDist.MEDIUM || 0) + Number(diffDist.HARD || 0);
   const totalTypes = Object.values(typeCounts).reduce((sum, count) => sum + (Number(count) || 0), 0);
@@ -131,7 +125,6 @@ export function ExamAiGenerateTab({
       return;
     }
     setFieldErrors({});
-    setErrorMsg('');
     setGenerating(true);
 
     const abortCtrl = new AbortController();
@@ -158,6 +151,9 @@ export function ExamAiGenerateTab({
       );
       setDraft(result);
       setSavedQuestionIds([]);
+      if (result.warnings?.length) {
+        toast.warning(result.warnings.join(' '), { title: 'AI draft warnings', duration: null });
+      }
     } catch (err: unknown) {
       const errorObj = err as {
         name?: string;
@@ -167,15 +163,15 @@ export function ExamAiGenerateTab({
         return;
       }
       if (errorObj?.response?.status === 429) {
-        setErrorMsg('Daily AI generation quota exceeded for your course. Please try again tomorrow.');
+        toast.error('Daily AI generation quota exceeded for your course. Please try again tomorrow.', { title: 'AI generation limit reached', duration: null });
       } else if (errorObj?.response?.status === 502) {
-        setErrorMsg(MSG08);
+        toast.error(MSG08, { title: 'AI generation failed', duration: null, action: { label: 'Retry', onClick: () => { void handleGenerate(); } } });
       } else if (errorObj?.response?.status === 504) {
-        setErrorMsg('AI request timed out after 90 seconds. ' + MSG08);
+        toast.error('AI request timed out after 90 seconds. ' + MSG08, { title: 'AI generation timed out', duration: null, action: { label: 'Retry', onClick: () => { void handleGenerate(); } } });
       } else if (errorObj?.response?.status === 400) {
-        setErrorMsg(errorObj.response.data?.message || 'Invalid parameters for AI generation.');
+        toast.error(errorObj.response.data?.message || 'Invalid parameters for AI generation.', { title: 'Could not generate exam', duration: null });
       } else {
-        setErrorMsg(getApiErrorMessage(err, MSG08));
+        toast.error(getApiErrorMessage(err, MSG08), { title: 'AI generation failed', duration: null, action: { label: 'Retry', onClick: () => { void handleGenerate(); } } });
       }
     } finally {
       setGenerating(false);
@@ -258,25 +254,24 @@ export function ExamAiGenerateTab({
   const handleConfirmSave = async () => {
     if (!draft || draft.questions.length === 0) return;
     if (!Number.isFinite(maxScore) || maxScore <= 0 || maxScore > 10000 || (String(maxScore).split('.')[1]?.length ?? 0) > 2) {
-      setErrorMsg('Max score must be greater than 0, no more than 10,000, and have up to 2 decimal places.');
+      toast.error('Max score must be greater than 0, no more than 10,000, and have up to 2 decimal places.', { title: 'Invalid max score' });
       return;
     }
     if (!moduleId) {
       setFieldErrors({ moduleId: 'Select a module before saving the exam.' });
-      setErrorMsg('Select a module before saving the exam.');
+      toast.error('Select a module before saving the exam.', { title: 'Module required' });
       return;
     }
 
     for (let i = 0; i < draft.questions.length; i++) {
       const err = validateDraftQuestion(draft.questions[i]);
       if (err) {
-        setErrorMsg(`Question #${i + 1} validation failed: ${err}`);
+        toast.error(`Question #${i + 1} validation failed: ${err}`, { title: 'Review generated questions' });
         return;
       }
     }
 
     setSaving(true);
-    setErrorMsg('');
 
     let finalQuestionIds = [...savedQuestionIds];
 
@@ -320,11 +315,12 @@ export function ExamAiGenerateTab({
     } catch (err: unknown) {
       const errorObj = err as { response?: { status?: number; data?: { message?: string } } };
       if (finalQuestionIds.length > 0) {
-        setErrorMsg(
-          'Questions have already been saved to the Question Bank. Saving the exam failed. You can click Confirm & Save again to retry creating the exam without duplicating questions.'
+        toast.error(
+          'Questions have already been saved to the Question Bank. Saving the exam failed. You can click Confirm & Save again to retry creating the exam without duplicating questions.',
+          { title: 'Questions saved, exam not created', duration: null },
         );
       } else {
-        setErrorMsg(getApiErrorMessage(err, 'Failed to save generated questions or create exam.'));
+        toast.error(getApiErrorMessage(err, 'Failed to save generated questions or create exam.'), { title: 'Could not create exam', duration: null });
       }
     } finally {
       setSaving(false);
@@ -333,8 +329,6 @@ export function ExamAiGenerateTab({
 
   return (
     <div className="space-y-6">
-      {courseLoadError && <div className="p-3 text-sm text-danger bg-danger-light border border-danger-line rounded-[8px]">{courseLoadError}</div>}
-      {moduleLoadError && <div className="p-3 text-sm text-danger bg-danger-light border border-danger-line rounded-[8px]">{moduleLoadError}</div>}
       {!draft ? (
         <div className="card p-6 space-y-5 max-w-4xl">
           <div className="border-b border-line-soft pb-3">
@@ -347,14 +341,6 @@ export function ExamAiGenerateTab({
             </p>
           </div>
 
-          {errorMsg && (
-            <div className="p-3 text-xs text-danger bg-danger-light border border-danger-line rounded-[8px] flex items-center justify-between">
-              <span>{errorMsg}</span>
-              <Button size="sm" variant="outline" onClick={handleGenerate}>
-                Retry
-              </Button>
-            </div>
-          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -604,20 +590,6 @@ export function ExamAiGenerateTab({
               </Button>
             </div>
           </div>
-
-          {draft.warnings && draft.warnings.length > 0 && (
-            <div className="p-3 bg-warning-light/40 border border-warning-line rounded-[10px] text-xs text-warning-strong space-y-1">
-              {draft.warnings.map((w, idx) => (
-                <p key={idx}>⚠️ {w}</p>
-              ))}
-            </div>
-          )}
-
-          {errorMsg && (
-            <div className="p-3 text-xs text-danger bg-danger-light border border-danger-line rounded-[8px]">
-              {errorMsg}
-            </div>
-          )}
 
           <div className="space-y-4">
             {draft.questions.map((q, idx) => {

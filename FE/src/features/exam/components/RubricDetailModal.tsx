@@ -3,6 +3,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Icon } from "@/assets/icons";
+import { useToast } from "@/components/ui/ToastHost";
 import { examService, type RubricCriterion } from "@/services/exam.service";
 import { getApiErrorMessage } from "@/utils/apiError";
 
@@ -23,6 +24,7 @@ export function RubricDetailModal({
   onClose,
   onSaved,
 }: RubricDetailModalProps) {
+  const toast = useToast();
   const [criteria, setCriteria] = useState<RubricCriterion[]>([
     { name: "", weight: 1, descriptors: "" },
   ]);
@@ -57,12 +59,15 @@ export function RubricDetailModal({
       })
       .catch((err) => {
         setLoadFailed(true);
-        setErrorMsg(getApiErrorMessage(err, "Failed to load grading rubric."));
+        toast.error(getApiErrorMessage(err, "Failed to load grading rubric."), {
+          title: "Could not load grading rubric",
+          duration: null,
+        });
       })
       .finally(() => {
         setLoading(false);
       });
-  }, [open, questionId]);
+  }, [open, questionId, toast]);
 
   const totalWeight = criteria.reduce(
     (sum, c) => sum + (Number(c.weight) || 0),
@@ -131,7 +136,10 @@ export function RubricDetailModal({
       onSaved(questionId);
       onClose();
     } catch (err: unknown) {
-      setErrorMsg(getApiErrorMessage(err, "Failed to save grading rubric."));
+      toast.error(getApiErrorMessage(err, "Failed to save grading rubric."), {
+        title: "Could not save grading rubric",
+        duration: null,
+      });
     } finally {
       setSaving(false);
     }

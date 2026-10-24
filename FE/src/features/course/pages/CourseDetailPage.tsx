@@ -142,8 +142,6 @@ export function CourseDetailPage({
   const hasAnyChanges = hasCourseChanges || hasManagerChanges;
 
   const [categories, setCategories] = useState<CategoryResponse[]>([]);
-  const [categoryError, setCategoryError] = useState<string | null>(null);
-  const [managerLoadError, setManagerLoadError] = useState<string | null>(null);
 
   const [modules, setModules] = useState<CourseModuleResponse[]>([]);
   const [isAddModuleOpen, setIsAddModuleOpen] = useState(false);
@@ -177,18 +175,19 @@ export function CourseDetailPage({
       .getCategories()
       .then((items) => {
         setCategories(items);
-        setCategoryError(null);
       })
       .catch((err) => {
         setCategories([]);
-        setCategoryError(getApiErrorMessage(err, "Failed to load categories."));
+        notification.error(getApiErrorMessage(err, "Failed to load categories."), {
+          title: "Could not load categories",
+          duration: null,
+        });
       });
-  }, []);
+  }, [notification]);
 
   useEffect(() => {
     if (!isAdmin) return;
     setLoadingManagers(true);
-    setManagerLoadError(null);
     api
       .get<{
         data?:
@@ -233,12 +232,13 @@ export function CourseDetailPage({
       })
       .catch((err) => {
         setManagerOptions([]);
-        setManagerLoadError(
-          getApiErrorMessage(err, "Failed to load course managers."),
-        );
+        notification.error(getApiErrorMessage(err, "Failed to load course managers."), {
+          title: "Could not load course managers",
+          duration: null,
+        });
       })
       .finally(() => setLoadingManagers(false));
-  }, [isAdmin]);
+  }, [isAdmin, notification]);
 
   const loadCourseData = useCallback(async () => {
     setLoading(true);
@@ -262,6 +262,7 @@ export function CourseDetailPage({
       const msg =
         err instanceof Error ? err.message : "Failed to load course details.";
       setError(msg);
+      notification.error(msg, { title: "Course details could not be loaded", duration: null });
     } finally {
       setLoading(false);
     }
@@ -290,10 +291,14 @@ export function CourseDetailPage({
       setStudentsError(
         getApiErrorMessage(err, "Failed to load enrolled students."),
       );
+      notification.error(getApiErrorMessage(err, "Failed to load enrolled students."), {
+        title: "Could not load enrolled students",
+        duration: null,
+      });
     } finally {
       setLoadingStudents(false);
     }
-  }, [courseId, studentSearch, studentStatus, studentPage, studentPageSize]);
+  }, [courseId, studentSearch, studentStatus, studentPage, studentPageSize, notification]);
 
   useEffect(() => {
     if (tab === "Enrolled Students") {
@@ -498,6 +503,7 @@ export function CourseDetailPage({
     try {
       await courseService.deleteCourse(course.courseId);
       setIsDeleteCourseOpen(false);
+      notification.success(`Course “${course.title}” deleted successfully.`);
       if (onNavigate) {
         onNavigate("course-list");
       } else {
@@ -530,11 +536,7 @@ export function CourseDetailPage({
             { label: "Course Detail" },
           ]}
         />
-        <Alert
-          type="error"
-          title="Course Not Found"
-          message={error || "Unable to retrieve course details."}
-        />
+        <p className="text-sm text-content-subtle">Course details could not be loaded. See the notification for details.</p>
         <Button variant="outline" onClick={handleCancel}>
           Back to Courses
         </Button>
@@ -615,21 +617,6 @@ export function CourseDetailPage({
           <h2 className="text-xl font-bold text-content mt-1">Course Detail</h2>
         </div>
       </div>
-
-      {categoryError && (
-        <Alert
-          type="error"
-          title="Could not load categories"
-          message={categoryError}
-        />
-      )}
-      {managerLoadError && (
-        <Alert
-          type="error"
-          title="Could not load course managers"
-          message={managerLoadError}
-        />
-      )}
 
       <Tabs
         tabs={["Course Details & Modules", "Enrolled Students"]}
@@ -954,12 +941,9 @@ export function CourseDetailPage({
               <p className="text-sm">Loading enrolled students…</p>
             </div>
           ) : studentsError ? (
-            <div className="p-6">
-              <Alert
-                type="error"
-                title="Could not load enrolled students"
-                message={studentsError}
-              />
+            <div className="p-6 text-center text-sm text-content-subtle">
+              Student data could not be loaded. See the notification for details.
+              <Button variant="outline" size="sm" className="mx-auto mt-3" onClick={loadStudents}>Retry</Button>
             </div>
           ) : students.length === 0 ? (
             <div className="p-12 text-center text-content-soft">
