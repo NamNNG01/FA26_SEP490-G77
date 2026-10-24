@@ -555,6 +555,14 @@ public class ManagerExamServiceImpl implements ManagerExamService {
                     +groupLinks.findByExamExamIdOrderByOrderIndexAscExamGroupIdAsc(id).size(),configured.size());
             for(ExamConfig config:configured) validateConfigModule(config.getModule(),courseId(e));
             if(state.questionCount()==0) throw bad("Add at least one question before publishing.");
+            // ponytail: each rule is checked alone; two rules drawing from the same pool can still overlap. Sum per pool if that matters.
+            for(int i=0;i<configured.size();i++) {
+                ExamConfig c=configured.get(i);
+                long available=questions.countDrawable(courseId(e),c.getModule()==null?null:c.getModule().getModuleId(),c.getQuestionType(),c.getDifficulty());
+                if(available<c.getNumberOfQuestions())
+                    throw bad("Random rule "+(i+1)+" draws "+c.getNumberOfQuestions()+" "+c.getQuestionType()+(c.getDifficulty()==null?"":" "+c.getDifficulty())
+                            +" question(s) but the bank has only "+available+" active, approved one(s).");
+            }
 
             for(ExamQuestion l : direct) {
                 if(l.getWeight().compareTo(BigDecimal.ZERO) <= 0) throw conflict("Question weight must be positive.");

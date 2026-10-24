@@ -114,6 +114,23 @@ class ExamApiIntegrationTest {
         payload = create(); payload.put("moduleId", foreignModule.getModuleId()); submit(payload).andExpect(status().isBadRequest());
     }
 
+    @Test void randomExamPublishesOnlyWhenTheBankCanFillEveryRule() throws Exception {
+        Map<String,Object> payload = random("SINGLE_CHOICE");
+        payload.put("configs", List.of(Map.of("questionType", "SINGLE_CHOICE", "numberOfQuestions", 2, "moduleId", module.getModuleId())));
+        long id = data(submit(payload).andExpect(status().isCreated())).path("examId").asLong();
+        String publish = "/api/v1/manager/exams/" + id + "/publish";
+        // Bank has one active SINGLE_CHOICE in the module; the rule draws two.
+        call(manager, patch(publish).contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"PUBLISHED\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.startsWith("Random rule 1 draws 2 SINGLE_CHOICE")));
+        Question draft = question(module, "SINGLE_CHOICE", "Draft question"); draft.setStatus("DRAFT");
+        call(manager, patch(publish).contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"PUBLISHED\"}"))
+                .andExpect(status().isBadRequest());
+        question(module, "SINGLE_CHOICE", "Second active question");
+        call(manager, patch(publish).contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"PUBLISHED\"}"))
+                .andExpect(status().isOk());
+    }
+
     @Test void publishedContentIsLockedUntilUnpublished() throws Exception {
         Exam exam = exam(course, module); exam.setMaxScore(BigDecimal.ONE); attach(exam, question);
         call(manager, patch(path(exam) + "/publish").contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"PUBLISHED\"}"))

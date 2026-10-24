@@ -132,6 +132,27 @@ public interface QuestionRepository extends JpaRepository<Question, Long>, JpaSp
             @Param("contentHashes") Collection<String> contentHashes
     );
 
+    // Questions a RANDOM/MIXED exam rule could draw: publishable (active, approved) and matching the rule.
+    @Query("""
+    SELECT COUNT(q)
+    FROM Question q
+    LEFT JOIN q.course c
+    LEFT JOIN q.module m
+    WHERE q.deletedAt IS NULL
+      AND q.status = 'ACTIVE'
+      AND q.approvalStatus = 'APPROVED'
+      AND q.questionType = :questionType
+      AND (c.courseId = :courseId OR m.course.courseId = :courseId)
+      AND (:moduleId IS NULL OR m.moduleId = :moduleId)
+      AND (:difficulty IS NULL OR q.difficulty = :difficulty)
+    """)
+    long countDrawable(
+            @Param("courseId") Long courseId,
+            @Param("moduleId") Long moduleId,
+            @Param("questionType") String questionType,
+            @Param("difficulty") String difficulty
+    );
+
     @Query("""
     SELECT q.contentHash
     FROM Question q
