@@ -3,12 +3,14 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Badge } from '@/components/ui/Badge';
+import { Modal } from '@/components/ui/Modal';
 import { Icon } from '@/assets/icons';
 import { useToast } from '@/components/ui/ToastHost';
 import {
   examService,
   type AiExamDraftResponse,
   type AiQuestionDraft,
+  type AiRubricCriterion,
   type Difficulty,
   type ExamDetail,
 } from '@/services/exam.service';
@@ -73,6 +75,10 @@ export function ExamAiGenerateTab({
   const [moduleLoadError, setModuleLoadError] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [savedQuestionIds, setSavedQuestionIds] = useState<number[]>([]);
+  const [rubricEditor, setRubricEditor] = useState<{
+    questionIndex: number;
+    rubric: NonNullable<AiQuestionDraft['essayGradingRubric']>;
+  } | null>(null);
 
   const MSG01 = 'This field is required.';
   const MSG06 = 'AI is generating questions, please wait...';
@@ -189,6 +195,39 @@ export function ExamAiGenerateTab({
     const questions = [...draft.questions];
     questions[index] = { ...questions[index], ...updated };
     setDraft({ ...draft, questions });
+  };
+
+  const openRubricEditor = (questionIndex: number, question: AiQuestionDraft) => {
+    const rubric = question.essayGradingRubric;
+    setRubricEditor({
+      questionIndex,
+      rubric: {
+        criteria: rubric?.criteria.map((criterion) => ({
+          ...criterion,
+          weight: criterion.weight ?? criterion.maxScore ?? 1,
+        })) ?? [{ name: '', weight: 1, descriptors: '' }],
+        totalPoints: rubric?.totalPoints,
+        notes: rubric?.notes ?? '',
+      },
+    });
+  };
+
+  const updateRubricCriterion = (index: number, update: Partial<AiRubricCriterion>) => {
+    setRubricEditor((current) => current ? {
+      ...current,
+      rubric: {
+        ...current.rubric,
+        criteria: current.rubric.criteria.map((criterion, criterionIndex) =>
+          criterionIndex === index ? { ...criterion, ...update } : criterion,
+        ),
+      },
+    } : current);
+  };
+
+  const saveRubricEditor = () => {
+    if (!rubricEditor) return;
+    updateDraftQuestion(rubricEditor.questionIndex, { essayGradingRubric: rubricEditor.rubric });
+    setRubricEditor(null);
   };
 
   const removeDraftQuestion = (index: number) => {
@@ -739,12 +778,15 @@ export function ExamAiGenerateTab({
                     </div>
                   )}
 
-                  {q.essayGradingRubric && (
+                  {['ESSAY', 'DIAGRAM'].includes(q.questionType) && (
                     <div className="p-3 rounded-[8px] border border-line bg-surface-muted/40 text-xs space-y-2">
-                      <span className="font-medium text-content-secondary block">
-                        Grading rubric
-                      </span>
-                      {q.essayGradingRubric.criteria.map((c, cIdx) => (
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-medium text-content-secondary">Grading rubric</span>
+                        <Button size="sm" variant="outline" onClick={() => openRubricEditor(idx, q)}>
+                          Edit Rubric
+                        </Button>
+                      </div>
+                      {q.essayGradingRubric?.criteria.map((c, cIdx) => (
                         <div key={cIdx}>
                           <p className="font-semibold text-content">
                             {c.name} — Weight {c.weight ?? c.maxScore ?? '—'}
@@ -752,12 +794,13 @@ export function ExamAiGenerateTab({
                           {c.descriptors && <p className="text-content-subtle">{c.descriptors}</p>}
                         </div>
                       ))}
-                      {q.essayGradingRubric.notes && (
+                      {q.essayGradingRubric?.notes && (
                         <p className="text-content-subtle">
                           <span className="font-medium">Model answer: </span>
                           {q.essayGradingRubric.notes}
                         </p>
                       )}
+                      {!q.essayGradingRubric && <p className="text-content-subtle">No rubric is attached to this draft yet.</p>}
                     </div>
                   )}
 
@@ -783,6 +826,106 @@ export function ExamAiGenerateTab({
           </div>
         </div>
       )}
+
+      <Modal
+        open={rubricEditor !== null}
+        onClose={() => setRubricEditor(null)}
+        title="Edit Grading Rubric"
+        size="lg"
+        footer={(
+          <div className="flex w-full justify-end gap-2">
+            <Button variant="outline" onClick={() => setRubricEditor(null)}>Cancel</Button>
+            <Button onClick={saveRubricEditor}>Save Rubric to Draft</Button>
+          </div>
+        )}
+      >
+        {rubricEditor && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-semibold text-content">Evaluation Criteria</p>
+              <Button
+                size="sm"
+                variant="secondary"
+                icon={<Icon.Plus className="w-3.5 h-3.5" />}
+                onClick={() => setRubricEditor((current) => current ? ({
+                  ...current,
+                  rubric: {
+                    ...current.rubric,
+                    criteria: [...current.rubric.criteria, { name: '', weight: 1, descriptors: '' }],
+                  },
+                }) : current)}
+              >
+                Add Criterion
+              </Button>
+            </div>
+            <div className="max-h-[55vh] space-y-3 overflow-y-auto pr-1">
+              {rubricEditor.rubric.criteria.map((criterion, criterionIndex) => (
+                <div key={criterionIndex} className="space-y-2 rounded-[8px] border border-line p-3">
+                  <div className="flex items-end gap-2">
+                    <label className="min-w-0 flex-1 text-xs font-medium text-content-secondary">
+                      Criterion
+                      <input
+                        className="mt-1 w-full rounded-[8px] border border-line bg-surface px-2.5 py-1.5 text-sm"
+                        value={criterion.name}
+                        onChange={(event) => updateRubricCriterion(criterionIndex, { name: event.target.value })}
+                        placeholder="e.g. Understanding of the topic"
+                      />
+                    </label>
+                    <label className="w-24 text-xs font-medium text-content-secondary">
+                      Weight
+                      <input
+                        type="number"
+                        min={0.01}
+                        step="any"
+                        className="mt-1 w-full rounded-[8px] border border-line bg-surface px-2.5 py-1.5 text-sm"
+                        value={criterion.weight ?? criterion.maxScore ?? 1}
+                        onChange={(event) => updateRubricCriterion(criterionIndex, { weight: Number(event.target.value) || 0 })}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      disabled={rubricEditor.rubric.criteria.length <= 1}
+                      onClick={() => setRubricEditor((current) => current ? ({
+                        ...current,
+                        rubric: {
+                          ...current.rubric,
+                          criteria: current.rubric.criteria.filter((_, index) => index !== criterionIndex),
+                        },
+                      }) : current)}
+                      className="mb-1 rounded p-2 text-content-subtle hover:bg-danger-light hover:text-danger disabled:pointer-events-none disabled:opacity-30"
+                      aria-label={`Remove criterion ${criterionIndex + 1}`}
+                    >
+                      <Icon.Trash className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <label className="block text-xs font-medium text-content-secondary">
+                    Performance Descriptors
+                    <textarea
+                      rows={2}
+                      className="mt-1 w-full rounded-[8px] border border-line bg-surface px-2.5 py-1.5 text-sm"
+                      value={criterion.descriptors ?? ''}
+                      onChange={(event) => updateRubricCriterion(criterionIndex, { descriptors: event.target.value })}
+                      placeholder="Describe expectations for this criterion."
+                    />
+                  </label>
+                </div>
+              ))}
+            </div>
+            <label className="block text-xs font-medium text-content-secondary">
+              General Notes / Model Answer
+              <textarea
+                rows={3}
+                className="mt-1 w-full rounded-[8px] border border-line bg-surface px-2.5 py-1.5 text-sm"
+                value={rubricEditor.rubric.notes ?? ''}
+                onChange={(event) => setRubricEditor((current) => current ? ({
+                  ...current,
+                  rubric: { ...current.rubric, notes: event.target.value },
+                }) : current)}
+              />
+            </label>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }
