@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
 import { Pagination } from "@/components/ui/Pagination";
 import { Alert } from "@/components/ui/Alert";
+import { useToast } from "@/components/ui/ToastHost";
 import { CourseCard } from "@/components/common/CourseCard";
 import { SearchInput } from "@/components/common/SearchInput";
 import { Icon } from "@/assets/icons";
@@ -84,6 +85,7 @@ export function CourseListPage({
   readonly?: boolean;
 }) {
   const navigate = useNavigate();
+  const toast = useToast();
   const { user } = useAuth();
   // Only administrators create courses; Course Managers manage their content.
   const canCreate = user?.role === Role.ADMIN;
@@ -100,8 +102,6 @@ export function CourseListPage({
   const [error, setError] = useState<string | null>(null);
 
   const [categories, setCategories] = useState<CategoryResponse[]>([]);
-  const [categoryError, setCategoryError] = useState<string | null>(null);
-  const [dashboardError, setDashboardError] = useState<string | null>(null);
 
   const [summaryStats, setSummaryStats] = useState({
     total: 0,
@@ -116,11 +116,11 @@ export function CourseListPage({
       .getCategories()
       .then((res) => {
         setCategories(res);
-        setCategoryError(null);
       })
       .catch((err) => {
         setCategories([]);
-        setCategoryError(getApiErrorMessage(err, "Failed to load categories."));
+        const message = getApiErrorMessage(err, "Failed to load categories.");
+        toast.error(message, { title: "Could not load categories", duration: null });
       });
   }, []);
 
@@ -128,7 +128,6 @@ export function CourseListPage({
     dashboardService
       .getManagerDashboard()
       .then((data) => {
-        setDashboardError(null);
         setSummaryStats({
           total: data.summary.totalCourses,
           published: data.summary.publishedCourses,
@@ -136,9 +135,8 @@ export function CourseListPage({
         });
       })
       .catch((err) => {
-        setDashboardError(
-          getApiErrorMessage(err, "Failed to load course summary."),
-        );
+        const message = getApiErrorMessage(err, "Failed to load course summary.");
+        toast.error(message, { title: "Could not load course summary", duration: null });
       });
   }, []);
 
@@ -185,12 +183,13 @@ export function CourseListPage({
         "Failed to load courses. Please try again.",
       );
       setError(msg);
+      toast.error(msg, { title: "Could not load courses", duration: null });
       setCourses([]);
       setTotalElements(0);
     } finally {
       setLoading(false);
     }
-  }, [search, selectedCategory, selectedStatus, page, pageSize]);
+  }, [search, selectedCategory, selectedStatus, page, pageSize, toast]);
 
   useEffect(() => {
     fetchCourses();
@@ -222,6 +221,7 @@ export function CourseListPage({
   const handleCourseCreated = (newCourse: CourseDetailResponse) => {
     setIsCreateOpen(false);
     fetchCourses();
+    toast.success(`Course “${newCourse.title}” created successfully.`);
     if (onNavigate) {
       onNavigate("course-detail", { courseId: String(newCourse.courseId) });
     } else {
@@ -279,13 +279,6 @@ export function CourseListPage({
         )}
       </div>
 
-      {categoryError && (
-        <Alert type="error" title="Could not load categories" message={categoryError} />
-      )}
-      {dashboardError && (
-        <Alert type="error" title="Could not load course summary" message={dashboardError} />
-      )}
-
       {readonly && (
         <Alert
           type="info"
@@ -340,10 +333,6 @@ export function CourseListPage({
           className="w-full sm:w-36"
         />
       </div>
-
-      {error && (
-        <Alert type="error" title="Could not load courses" message={error} />
-      )}
 
       {loading && (
         <div className="py-16 text-center text-[#9CA3AF]">

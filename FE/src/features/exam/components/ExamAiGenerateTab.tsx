@@ -3,12 +3,14 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Badge } from '@/components/ui/Badge';
+import { Modal } from '@/components/ui/Modal';
 import { Icon } from '@/assets/icons';
 import { useToast } from '@/components/ui/ToastHost';
 import {
   examService,
   type AiExamDraftResponse,
   type AiQuestionDraft,
+  type AiRubricCriterion,
   type Difficulty,
   type ExamDetail,
 } from '@/services/exam.service';
@@ -68,11 +70,12 @@ export function ExamAiGenerateTab({
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [draft, setDraft] = useState<AiExamDraftResponse | null>(null);
-  const [errorMsg, setErrorMsg] = useState('');
-  const [courseLoadError, setCourseLoadError] = useState('');
-  const [moduleLoadError, setModuleLoadError] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [savedQuestionIds, setSavedQuestionIds] = useState<number[]>([]);
+  const [rubricEditor, setRubricEditor] = useState<{
+    questionIndex: number;
+    rubric: NonNullable<AiQuestionDraft['essayGradingRubric']>;
+  } | null>(null);
 
   const MSG01 = 'This field is required.';
   const MSG06 = 'AI is generating questions, please wait...';
@@ -81,30 +84,27 @@ export function ExamAiGenerateTab({
   useEffect(() => {
     courseService.getCourses().then((res) => {
       setCourses(res.content || []);
-      setCourseLoadError('');
       if (res.content?.length > 0 && !courseId) {
         setCourseId(String(res.content[0].courseId));
       }
     }).catch((err) => {
-      setCourseLoadError(getApiErrorMessage(err, 'Failed to load courses.'));
+      toast.error(getApiErrorMessage(err, 'Failed to load courses.'), { title: 'Could not load courses', duration: null });
     });
-  }, []);
+  }, [toast]);
 
   useEffect(() => {
     if (courseId) {
       courseService.getCourseModules(courseId).then((mods) => {
         setModules(mods || []);
-        setModuleLoadError('');
       }).catch((err) => {
         setModules([]);
-        setModuleLoadError(getApiErrorMessage(err, 'Failed to load course modules.'));
+        toast.error(getApiErrorMessage(err, 'Failed to load course modules.'), { title: 'Could not load course modules', duration: null });
       });
     } else {
       setModules([]);
       setModuleId('');
-      setModuleLoadError('');
     }
-  }, [courseId]);
+  }, [courseId, toast]);
 
   const totalDiff = Number(diffDist.EASY || 0) + Number(diffDist.MEDIUM || 0) + Number(diffDist.HARD || 0);
   const totalTypes = Object.values(typeCounts).reduce((sum, count) => sum + (Number(count) || 0), 0);
@@ -119,12 +119,12 @@ export function ExamAiGenerateTab({
     const errors: Record<string, string> = {};
     if (!courseId) errors.courseId = MSG01;
     if (!moduleId) errors.moduleId = 'Select a module.';
+    if (!context.trim()) errors.context = MSG01;
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
       return;
     }
     setFieldErrors({});
-    setErrorMsg('');
     setGenerating(true);
 
     const abortCtrl = new AbortController();
@@ -151,6 +151,9 @@ export function ExamAiGenerateTab({
       );
       setDraft(result);
       setSavedQuestionIds([]);
+      if (result.warnings?.length) {
+        toast.warning(result.warnings.join(' '), { title: 'AI draft warnings', duration: null });
+      }
     } catch (err: unknown) {
       const errorObj = err as {
         name?: string;
@@ -160,15 +163,15 @@ export function ExamAiGenerateTab({
         return;
       }
       if (errorObj?.response?.status === 429) {
-        setErrorMsg('Daily AI generation quota exceeded for your course. Please try again tomorrow.');
+        toast.error('Daily AI generation quota exceeded for your course. Please try again tomorrow.', { title: 'AI generation limit reached', duration: null });
       } else if (errorObj?.response?.status === 502) {
-        setErrorMsg(MSG08);
+        toast.error(MSG08, { title: 'AI generation failed', duration: null, action: { label: 'Retry', onClick: () => { void handleGenerate(); } } });
       } else if (errorObj?.response?.status === 504) {
-        setErrorMsg('AI request timed out after 90 seconds. ' + MSG08);
+        toast.error('AI request timed out after 90 seconds. ' + MSG08, { title: 'AI generation timed out', duration: null, action: { label: 'Retry', onClick: () => { void handleGenerate(); } } });
       } else if (errorObj?.response?.status === 400) {
-        setErrorMsg(errorObj.response.data?.message || 'Invalid parameters for AI generation.');
+        toast.error(errorObj.response.data?.message || 'Invalid parameters for AI generation.', { title: 'Could not generate exam', duration: null });
       } else {
-        setErrorMsg(getApiErrorMessage(err, MSG08));
+        toast.error(getApiErrorMessage(err, MSG08), { title: 'AI generation failed', duration: null, action: { label: 'Retry', onClick: () => { void handleGenerate(); } } });
       }
     } finally {
       setGenerating(false);
@@ -188,6 +191,39 @@ export function ExamAiGenerateTab({
     const questions = [...draft.questions];
     questions[index] = { ...questions[index], ...updated };
     setDraft({ ...draft, questions });
+  };
+
+  const openRubricEditor = (questionIndex: number, question: AiQuestionDraft) => {
+    const rubric = question.essayGradingRubric;
+    setRubricEditor({
+      questionIndex,
+      rubric: {
+        criteria: rubric?.criteria.map((criterion) => ({
+          ...criterion,
+          weight: criterion.weight ?? criterion.maxScore ?? 1,
+        })) ?? [{ name: '', weight: 1, descriptors: '' }],
+        totalPoints: rubric?.totalPoints,
+        notes: rubric?.notes ?? '',
+      },
+    });
+  };
+
+  const updateRubricCriterion = (index: number, update: Partial<AiRubricCriterion>) => {
+    setRubricEditor((current) => current ? {
+      ...current,
+      rubric: {
+        ...current.rubric,
+        criteria: current.rubric.criteria.map((criterion, criterionIndex) =>
+          criterionIndex === index ? { ...criterion, ...update } : criterion,
+        ),
+      },
+    } : current);
+  };
+
+  const saveRubricEditor = () => {
+    if (!rubricEditor) return;
+    updateDraftQuestion(rubricEditor.questionIndex, { essayGradingRubric: rubricEditor.rubric });
+    setRubricEditor(null);
   };
 
   const removeDraftQuestion = (index: number) => {
@@ -218,25 +254,24 @@ export function ExamAiGenerateTab({
   const handleConfirmSave = async () => {
     if (!draft || draft.questions.length === 0) return;
     if (!Number.isFinite(maxScore) || maxScore <= 0 || maxScore > 10000 || (String(maxScore).split('.')[1]?.length ?? 0) > 2) {
-      setErrorMsg('Max score must be greater than 0, no more than 10,000, and have up to 2 decimal places.');
+      toast.error('Max score must be greater than 0, no more than 10,000, and have up to 2 decimal places.', { title: 'Invalid max score' });
       return;
     }
     if (!moduleId) {
       setFieldErrors({ moduleId: 'Select a module before saving the exam.' });
-      setErrorMsg('Select a module before saving the exam.');
+      toast.error('Select a module before saving the exam.', { title: 'Module required' });
       return;
     }
 
     for (let i = 0; i < draft.questions.length; i++) {
       const err = validateDraftQuestion(draft.questions[i]);
       if (err) {
-        setErrorMsg(`Question #${i + 1} validation failed: ${err}`);
+        toast.error(`Question #${i + 1} validation failed: ${err}`, { title: 'Review generated questions' });
         return;
       }
     }
 
     setSaving(true);
-    setErrorMsg('');
 
     let finalQuestionIds = [...savedQuestionIds];
 
@@ -280,11 +315,12 @@ export function ExamAiGenerateTab({
     } catch (err: unknown) {
       const errorObj = err as { response?: { status?: number; data?: { message?: string } } };
       if (finalQuestionIds.length > 0) {
-        setErrorMsg(
-          'Questions have already been saved to the Question Bank. Saving the exam failed. You can click Confirm & Save again to retry creating the exam without duplicating questions.'
+        toast.error(
+          'Questions have already been saved to the Question Bank. Saving the exam failed. You can click Confirm & Save again to retry creating the exam without duplicating questions.',
+          { title: 'Questions saved, exam not created', duration: null },
         );
       } else {
-        setErrorMsg(getApiErrorMessage(err, 'Failed to save generated questions or create exam.'));
+        toast.error(getApiErrorMessage(err, 'Failed to save generated questions or create exam.'), { title: 'Could not create exam', duration: null });
       }
     } finally {
       setSaving(false);
@@ -293,8 +329,6 @@ export function ExamAiGenerateTab({
 
   return (
     <div className="space-y-6">
-      {courseLoadError && <div className="p-3 text-sm text-danger bg-danger-light border border-danger-line rounded-[8px]">{courseLoadError}</div>}
-      {moduleLoadError && <div className="p-3 text-sm text-danger bg-danger-light border border-danger-line rounded-[8px]">{moduleLoadError}</div>}
       {!draft ? (
         <div className="card p-6 space-y-5 max-w-4xl">
           <div className="border-b border-line-soft pb-3">
@@ -307,14 +341,6 @@ export function ExamAiGenerateTab({
             </p>
           </div>
 
-          {errorMsg && (
-            <div className="p-3 text-xs text-danger bg-danger-light border border-danger-line rounded-[8px] flex items-center justify-between">
-              <span>{errorMsg}</span>
-              <Button size="sm" variant="outline" onClick={handleGenerate}>
-                Retry
-              </Button>
-            </div>
-          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -404,18 +430,26 @@ export function ExamAiGenerateTab({
 
           <div>
             <label className="text-sm font-medium text-content-secondary block mb-1">
-              Instructions for AI (optional)
+              Instructions for AI <span className="text-danger">*</span>
             </label>
             <textarea
               rows={3}
               maxLength={2000}
-              className="w-full px-3 py-1.5 text-sm rounded-[10px] border border-line bg-surface focus:outline-none focus:ring-1 focus:ring-brand-ink"
+              required
+              aria-invalid={Boolean(fieldErrors.context)}
+              className={`w-full px-3 py-1.5 text-sm rounded-[10px] border bg-surface focus:outline-none focus:ring-1 focus:ring-brand-ink ${fieldErrors.context ? 'border-danger-line' : 'border-line'}`}
               placeholder="e.g. Focus on recursion and Big-O, for second-year students, use real-world scenarios."
               value={context}
-              onChange={(e) => setContext(e.target.value)}
+              onChange={(e) => {
+                setContext(e.target.value);
+                if (e.target.value.trim()) {
+                  setFieldErrors((prev) => ({ ...prev, context: '' }));
+                }
+              }}
             />
+            {fieldErrors.context && <p className="text-2xs text-danger mt-1">{fieldErrors.context}</p>}
             <p className="text-2xs text-content-subtle mt-1">
-              Course and module descriptions plus existing bank questions are added automatically. {context.length}/2000
+              Describe the topics, audience, or constraints for the generated exam. {context.length}/2000
             </p>
           </div>
 
@@ -556,20 +590,6 @@ export function ExamAiGenerateTab({
               </Button>
             </div>
           </div>
-
-          {draft.warnings && draft.warnings.length > 0 && (
-            <div className="p-3 bg-warning-light/40 border border-warning-line rounded-[10px] text-xs text-warning-strong space-y-1">
-              {draft.warnings.map((w, idx) => (
-                <p key={idx}>⚠️ {w}</p>
-              ))}
-            </div>
-          )}
-
-          {errorMsg && (
-            <div className="p-3 text-xs text-danger bg-danger-light border border-danger-line rounded-[8px]">
-              {errorMsg}
-            </div>
-          )}
 
           <div className="space-y-4">
             {draft.questions.map((q, idx) => {
@@ -730,12 +750,15 @@ export function ExamAiGenerateTab({
                     </div>
                   )}
 
-                  {q.essayGradingRubric && (
+                  {['ESSAY', 'DIAGRAM'].includes(q.questionType) && (
                     <div className="p-3 rounded-[8px] border border-line bg-surface-muted/40 text-xs space-y-2">
-                      <span className="font-medium text-content-secondary block">
-                        Grading rubric
-                      </span>
-                      {q.essayGradingRubric.criteria.map((c, cIdx) => (
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-medium text-content-secondary">Grading rubric</span>
+                        <Button size="sm" variant="outline" onClick={() => openRubricEditor(idx, q)}>
+                          Edit Rubric
+                        </Button>
+                      </div>
+                      {q.essayGradingRubric?.criteria.map((c, cIdx) => (
                         <div key={cIdx}>
                           <p className="font-semibold text-content">
                             {c.name} — Weight {c.weight ?? c.maxScore ?? '—'}
@@ -743,12 +766,13 @@ export function ExamAiGenerateTab({
                           {c.descriptors && <p className="text-content-subtle">{c.descriptors}</p>}
                         </div>
                       ))}
-                      {q.essayGradingRubric.notes && (
+                      {q.essayGradingRubric?.notes && (
                         <p className="text-content-subtle">
                           <span className="font-medium">Model answer: </span>
                           {q.essayGradingRubric.notes}
                         </p>
                       )}
+                      {!q.essayGradingRubric && <p className="text-content-subtle">No rubric is attached to this draft yet.</p>}
                     </div>
                   )}
 
@@ -774,6 +798,106 @@ export function ExamAiGenerateTab({
           </div>
         </div>
       )}
+
+      <Modal
+        open={rubricEditor !== null}
+        onClose={() => setRubricEditor(null)}
+        title="Edit Grading Rubric"
+        size="lg"
+        footer={(
+          <div className="flex w-full justify-end gap-2">
+            <Button variant="outline" onClick={() => setRubricEditor(null)}>Cancel</Button>
+            <Button onClick={saveRubricEditor}>Save Rubric to Draft</Button>
+          </div>
+        )}
+      >
+        {rubricEditor && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-semibold text-content">Evaluation Criteria</p>
+              <Button
+                size="sm"
+                variant="secondary"
+                icon={<Icon.Plus className="w-3.5 h-3.5" />}
+                onClick={() => setRubricEditor((current) => current ? ({
+                  ...current,
+                  rubric: {
+                    ...current.rubric,
+                    criteria: [...current.rubric.criteria, { name: '', weight: 1, descriptors: '' }],
+                  },
+                }) : current)}
+              >
+                Add Criterion
+              </Button>
+            </div>
+            <div className="max-h-[55vh] space-y-3 overflow-y-auto pr-1">
+              {rubricEditor.rubric.criteria.map((criterion, criterionIndex) => (
+                <div key={criterionIndex} className="space-y-2 rounded-[8px] border border-line p-3">
+                  <div className="flex items-end gap-2">
+                    <label className="min-w-0 flex-1 text-xs font-medium text-content-secondary">
+                      Criterion
+                      <input
+                        className="mt-1 w-full rounded-[8px] border border-line bg-surface px-2.5 py-1.5 text-sm"
+                        value={criterion.name}
+                        onChange={(event) => updateRubricCriterion(criterionIndex, { name: event.target.value })}
+                        placeholder="e.g. Understanding of the topic"
+                      />
+                    </label>
+                    <label className="w-24 text-xs font-medium text-content-secondary">
+                      Weight
+                      <input
+                        type="number"
+                        min={0.01}
+                        step="any"
+                        className="mt-1 w-full rounded-[8px] border border-line bg-surface px-2.5 py-1.5 text-sm"
+                        value={criterion.weight ?? criterion.maxScore ?? 1}
+                        onChange={(event) => updateRubricCriterion(criterionIndex, { weight: Number(event.target.value) || 0 })}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      disabled={rubricEditor.rubric.criteria.length <= 1}
+                      onClick={() => setRubricEditor((current) => current ? ({
+                        ...current,
+                        rubric: {
+                          ...current.rubric,
+                          criteria: current.rubric.criteria.filter((_, index) => index !== criterionIndex),
+                        },
+                      }) : current)}
+                      className="mb-1 rounded p-2 text-content-subtle hover:bg-danger-light hover:text-danger disabled:pointer-events-none disabled:opacity-30"
+                      aria-label={`Remove criterion ${criterionIndex + 1}`}
+                    >
+                      <Icon.Trash className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <label className="block text-xs font-medium text-content-secondary">
+                    Performance Descriptors
+                    <textarea
+                      rows={2}
+                      className="mt-1 w-full rounded-[8px] border border-line bg-surface px-2.5 py-1.5 text-sm"
+                      value={criterion.descriptors ?? ''}
+                      onChange={(event) => updateRubricCriterion(criterionIndex, { descriptors: event.target.value })}
+                      placeholder="Describe expectations for this criterion."
+                    />
+                  </label>
+                </div>
+              ))}
+            </div>
+            <label className="block text-xs font-medium text-content-secondary">
+              General Notes / Model Answer
+              <textarea
+                rows={3}
+                className="mt-1 w-full rounded-[8px] border border-line bg-surface px-2.5 py-1.5 text-sm"
+                value={rubricEditor.rubric.notes ?? ''}
+                onChange={(event) => setRubricEditor((current) => current ? ({
+                  ...current,
+                  rubric: { ...current.rubric, notes: event.target.value },
+                }) : current)}
+              />
+            </label>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

@@ -45,24 +45,24 @@ export function CourseFormPage({
   const [initialValues, setInitialValues] = useState<CourseFormValues | null>(null);
   const [loading, setLoading] = useState(isEdit);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [categoryError, setCategoryError] = useState<string | null>(null);
 
   useEffect(() => {
     courseService
       .getCategories()
       .then((cats) => {
         setCategories(cats);
-        setCategoryError(null);
         if (!isEdit && cats.length > 0) {
           setCategoryId(String(cats[0].categoryId));
         }
       })
       .catch((err) => {
         setCategories([]);
-        setCategoryError(getApiErrorMessage(err, "Failed to load categories."));
+        notification.error(getApiErrorMessage(err, "Failed to load categories."), {
+          title: "Could not load categories",
+          duration: null,
+        });
       });
-  }, [isEdit]);
+  }, [isEdit, notification]);
 
   useEffect(() => {
     if (isEdit && courseId) {
@@ -85,13 +85,16 @@ export function CourseFormPage({
           setManagerId(String(c.managerId));
         })
         .catch((err) => {
-          setError(getApiErrorMessage(err, "Failed to load course details."));
+          notification.error(getApiErrorMessage(err, "Failed to load course details."), {
+            title: "Could not load course details",
+            duration: null,
+          });
         })
         .finally(() => setLoading(false));
     } else {
       setManagerId(user?.userId ? String(user.userId) : "1");
     }
-  }, [isEdit, courseId, user?.userId]);
+  }, [isEdit, courseId, user?.userId, notification]);
 
   const handleCancel = () => {
     if (onNavigate) {
@@ -199,11 +202,6 @@ export function CourseFormPage({
           </Button>
         </div>
       </div>
-
-      {error && <Alert type="error" title="Error" message={error} />}
-      {categoryError && (
-        <Alert type="error" title="Could not load categories" message={categoryError} />
-      )}
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <div className="xl:col-span-2 card p-6 space-y-4">

@@ -3,6 +3,7 @@ import React, {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -154,11 +155,11 @@ export function useToast() {
   const ctx = useContext(ToastContext);
   if (!ctx) throw new Error('useToast must be used within a ToastHost');
   const { show } = ctx;
-  return {
+  return useMemo(() => ({
     show,
     success: (m: string, o?: ToastOptions) => show('success', m, o),
     error: (m: string, o?: ToastOptions) => show('error', m, o),
     info: (m: string, o?: ToastOptions) => show('info', m, o),
     warning: (m: string, o?: ToastOptions) => show('warning', m, o),
-  };
+  }), [show]);
 }
