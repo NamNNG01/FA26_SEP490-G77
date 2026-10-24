@@ -120,7 +120,10 @@ export function CourseListPage({
       .catch((err) => {
         setCategories([]);
         const message = getApiErrorMessage(err, "Failed to load categories.");
-        toast.error(message, { title: "Could not load categories", duration: null });
+        toast.error(message, {
+          title: "Could not load categories",
+          duration: null,
+        });
       });
   }, []);
 
@@ -135,8 +138,14 @@ export function CourseListPage({
         });
       })
       .catch((err) => {
-        const message = getApiErrorMessage(err, "Failed to load course summary.");
-        toast.error(message, { title: "Could not load course summary", duration: null });
+        const message = getApiErrorMessage(
+          err,
+          "Failed to load course summary.",
+        );
+        toast.error(message, {
+          title: "Could not load course summary",
+          duration: null,
+        });
       });
   }, []);
 
