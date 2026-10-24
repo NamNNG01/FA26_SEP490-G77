@@ -303,7 +303,7 @@ export const AiGeneratePanel = forwardRef<AiGeneratePanelHandle, {
             disabled={generating}
             aria-invalid={contextError ? true : undefined}
             aria-describedby={contextError ? 'ai-gen-context-error' : undefined}
-            className={`w-full h-[120px] px-3 py-2 rounded-[10px] border text-base text-content placeholder:text-gray-400 bg-surface resize-y focus:outline-none focus:ring-2 transition-all disabled:opacity-60 ${
+            className={`w-full h-[120px] px-3 py-2 rounded-[10px] border text-base text-content placeholder:text-content-subtle bg-surface resize-y focus:outline-none focus:ring-2 transition-all disabled:opacity-60 ${
               contextError ? 'border-danger-solid focus:ring-danger-solid/20 focus:border-danger-solid' : 'border-line focus:ring-brand-600/20 focus:border-brand-600'
             }`}
           />

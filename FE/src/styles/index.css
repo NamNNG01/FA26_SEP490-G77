@@ -127,8 +127,8 @@
   --surface: #ffffff;
   --surface-alt: #F9FAFB;
   --content: #111827;
-  --content-muted: #4B5563;
-  --content-subtle: #9CA3AF;
+  --content-muted: #374151;
+  --content-subtle: #303030;
   --line: #E5E7EB;
   --accent: #F3F4F6;
   --accent-foreground: #111827;
@@ -153,7 +153,7 @@
   --fill-strong: #D1D5DB;
   --fill-inverse: #111827;
   --content-secondary: #374151;
-  --content-soft: #6B7280;
+  --content-soft: #4B5563;
   --content-faint: #D1D5DB;
   --content-ghost: #F3F4F6;
   --line-soft: #F3F4F6;

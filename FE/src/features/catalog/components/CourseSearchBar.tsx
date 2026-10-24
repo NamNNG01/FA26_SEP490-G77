@@ -152,7 +152,7 @@ export function CourseSearchBar({
           }}
           onFocus={() => setOpen(true)}
           onKeyDown={handleKeyDown}
-          className="h-full w-full min-w-0 bg-transparent text-base text-content outline-none placeholder:text-gray-400 [&::-webkit-search-cancel-button]:hidden"
+          className="h-full w-full min-w-0 bg-transparent text-base text-content outline-none placeholder:text-content-subtle [&::-webkit-search-cancel-button]:hidden"
         />
         {trimmed && (
           <button
