@@ -81,8 +81,12 @@ public class DiagramGraphValidator {
             }
 
             String kind = node.kind();
-            if (dt != null && (kind == null || !DiagramKinds.isValidNodeKind(dt, kind))) {
-                errors.add(new ValidationError(nodePath + "kind", "Invalid node kind for " + dt + ": " + kind));
+
+            if (kind == null || kind.isBlank() || kind.length() > 50) {
+                errors.add(new ValidationError(
+                        nodePath + "kind",
+                        "Node kind is required and must not exceed 50 characters"
+                ));
             }
 
             List<String> attrs = node.attributes();
@@ -130,8 +134,12 @@ public class DiagramGraphValidator {
             }
 
             String kind = edge.kind();
-            if (dt != null && (kind == null || !DiagramKinds.isValidEdgeKind(dt, kind))) {
-                errors.add(new ValidationError(edgePath + "kind", "Invalid edge kind for " + dt + ": " + kind));
+
+            if (kind == null || kind.isBlank() || kind.length() > 50) {
+                errors.add(new ValidationError(
+                        edgePath + "kind",
+                        "Edge kind is required and must not exceed 50 characters"
+                ));
             }
 
             String label = edge.label();

@@ -66,50 +66,152 @@ public class QuestionServiceImpl implements QuestionService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<QuestionListItemDto> getQuestions(Long courseId, List<Long> courseIds, Long moduleId, Long groupId, String groupType, String questionType, List<String> questionTypes,
-                                                  String difficulty, String status, String approvalStatus, String creatorRole,
-                                                  String source, Long createdBy, String search,
-                                                  Pageable pageable, User currentUser) {
-        // courseIds (repeated param) narrows the list to several courses, e.g. every course a manager is assigned to.
-        List<Long> scopeCourseIds = courseIds == null ? List.of()
-                : courseIds.stream().filter(Objects::nonNull).distinct().toList();
+
+    public Page<QuestionListItemDto> getQuestions(
+            Long courseId,
+            List<Long> courseIds,
+            Long moduleId,
+            Long groupId,
+            String groupType,
+            String questionType,
+            List<String> questionTypes,
+            String difficulty,
+            String status,
+            String approvalStatus,
+            String creatorRole,
+            String source,
+            Long createdBy,
+            String search,
+            Pageable pageable,
+            User currentUser) {
+
+        long totalStart = System.nanoTime();
+
+        // 1. Normalize course IDs
+        long scopeStart = System.nanoTime();
+
+        List<Long> scopeCourseIds = courseIds == null
+                ? List.of()
+                : courseIds.stream()
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+
+        log.info(
+                "QUESTION_LIST_DEBUG | step=prepareScope | elapsedMs={}",
+                elapsedMs(scopeStart)
+        );
+
+        // 2. Permission check
+        long permissionStart = System.nanoTime();
+
         if (!User.ROLE_ADMIN.equals(currentUser.getRoleName())) {
             List<Long> requested = new ArrayList<>(scopeCourseIds);
-            if (courseId != null) requested.add(courseId);
-            for (Long id : requested) {
-                if (!courseManagerRepository.existsByCourse_CourseIdAndUser_UserId(id, currentUser.getUserId())) {
-                    throw new ForbiddenException("You do not have access to this course");
+
+            if (courseId != null) {
+                requested.add(courseId);
+            }
+
+            for (Long id : requested.stream().distinct().toList()) {
+                if (!courseManagerRepository
+                        .existsByCourse_CourseIdAndUser_UserId(
+                                id,
+                                currentUser.getUserId())) {
+
+                    log.warn(
+                            "QUESTION_LIST_DEBUG | step=permissionCheck "
+                                    + "| result=DENIED | courseId={} "
+                                    + "| elapsedMs={}",
+                            id,
+                            elapsedMs(permissionStart)
+                    );
+
+                    throw new ForbiddenException(
+                            "You do not have access to this course"
+                    );
                 }
             }
         }
 
+        log.info(
+                "QUESTION_LIST_DEBUG | step=permissionCheck | elapsedMs={}",
+                elapsedMs(permissionStart)
+        );
+
+        // 3. Build Specification
+        long specStart = System.nanoTime();
+
         Specification<Question> spec = (root, query, cb) -> {
             var predicate = cb.isNull(root.get("deletedAt"));
+
             if (courseId != null) {
-                predicate = cb.and(predicate, cb.equal(root.get("course").get("courseId"), courseId));
+                predicate = cb.and(
+                        predicate,
+                        cb.equal(
+                                root.get("course").get("courseId"),
+                                courseId
+                        )
+                );
             }
+
             if (!scopeCourseIds.isEmpty()) {
-                predicate = cb.and(predicate, root.get("course").get("courseId").in(scopeCourseIds));
+                predicate = cb.and(
+                        predicate,
+                        root.get("course")
+                                .get("courseId")
+                                .in(scopeCourseIds)
+                );
             }
+
             if (moduleId != null) {
-                predicate = cb.and(predicate, cb.equal(root.get("module").get("moduleId"), moduleId));
+                predicate = cb.and(
+                        predicate,
+                        cb.equal(
+                                root.get("module").get("moduleId"),
+                                moduleId
+                        )
+                );
             }
+
             if (groupId != null) {
-                predicate = cb.and(predicate, cb.equal(root.get("group").get("groupId"), groupId));
+                predicate = cb.and(
+                        predicate,
+                        cb.equal(
+                                root.get("group").get("groupId"),
+                                groupId
+                        )
+                );
             }
-            // NONE = standalone questions; a kind = questions in a group of that kind.
+
+            // NONE = standalone questions.
+            // Other values filter by the group's question type.
             if (groupType != null && !groupType.isBlank()) {
                 if ("NONE".equalsIgnoreCase(groupType)) {
-                    predicate = cb.and(predicate, cb.isNull(root.get("group")));
+                    predicate = cb.and(
+                            predicate,
+                            cb.isNull(root.get("group"))
+                    );
                 } else {
-                    String kind = QuestionTypeUtil.requireKind(groupType.trim().toUpperCase());
+                    String kind = QuestionTypeUtil.requireKind(
+                            groupType.trim().toUpperCase(Locale.ROOT)
+                    );
+
                     var group = root.join("group");
-                    predicate = cb.and(predicate, cb.equal(group.get("questionType"), kind));
+
+                    predicate = cb.and(
+                            predicate,
+                            cb.equal(group.get("questionType"), kind)
+                    );
                 }
             }
+
             if (questionType != null) {
-                predicate = cb.and(predicate, cb.equal(root.get("questionType"), questionType));
+                predicate = cb.and(
+                        predicate,
+                        cb.equal(root.get("questionType"), questionType)
+                );
             }
+
             if (questionTypes != null && !questionTypes.isEmpty()) {
                 List<String> normalizedTypes = questionTypes.stream()
                         .filter(Objects::nonNull)
@@ -117,56 +219,194 @@ public class QuestionServiceImpl implements QuestionService {
                         .filter(type -> !type.isEmpty())
                         .distinct()
                         .toList();
+
                 if (!normalizedTypes.isEmpty()) {
-                    predicate = cb.and(predicate, root.get("questionType").in(normalizedTypes));
+                    predicate = cb.and(
+                            predicate,
+                            root.get("questionType").in(normalizedTypes)
+                    );
                 }
             }
+
             if (difficulty != null) {
-                predicate = cb.and(predicate, cb.equal(root.get("difficulty"), difficulty));
+                predicate = cb.and(
+                        predicate,
+                        cb.equal(root.get("difficulty"), difficulty)
+                );
             }
+
             if (status != null) {
-                predicate = cb.and(predicate, cb.equal(root.get("status"), status));
+                predicate = cb.and(
+                        predicate,
+                        cb.equal(root.get("status"), status)
+                );
             }
+
             if (approvalStatus != null) {
-                predicate = cb.and(predicate, cb.equal(root.get("approvalStatus"), approvalStatus));
+                predicate = cb.and(
+                        predicate,
+                        cb.equal(root.get("approvalStatus"), approvalStatus)
+                );
             }
+
             if (creatorRole != null) {
-                predicate = cb.and(predicate, cb.equal(root.get("creatorRole"), creatorRole));
+                predicate = cb.and(
+                        predicate,
+                        cb.equal(root.get("creatorRole"), creatorRole)
+                );
             }
+
             if (source != null) {
-                predicate = cb.and(predicate, cb.equal(root.get("source"), source));
+                predicate = cb.and(
+                        predicate,
+                        cb.equal(root.get("source"), source)
+                );
             }
+
             if (createdBy != null) {
-                predicate = cb.and(predicate, cb.equal(root.get("createdBy").get("userId"), createdBy));
+                predicate = cb.and(
+                        predicate,
+                        cb.equal(
+                                root.get("createdBy").get("userId"),
+                                createdBy
+                        )
+                );
             }
+
             if (search != null && !search.trim().isEmpty()) {
-                predicate = cb.and(predicate, cb.like(cb.lower(root.get("content")), "%" + search.trim().toLowerCase() + "%"));
+                String keyword = "%"
+                        + search.trim().toLowerCase(Locale.ROOT)
+                        + "%";
+
+                predicate = cb.and(
+                        predicate,
+                        cb.like(
+                                cb.lower(root.get("content")),
+                                keyword
+                        )
+                );
             }
+
             return predicate;
         };
 
+        log.info(
+                "QUESTION_LIST_DEBUG | step=buildSpecification | elapsedMs={}",
+                elapsedMs(specStart)
+        );
+
+        // 4. Query database (page data + possibly COUNT query)
+        long queryStart = System.nanoTime();
+
         Page<Question> page = questionRepository.findAll(spec, pageable);
-        return page.map(q -> QuestionListItemDto.builder()
-                .questionId(q.getQuestionId())
-                .content(q.getContent())
-                .courseId(q.getCourse() != null ? q.getCourse().getCourseId() : null)
-                .courseName(q.getCourse() != null ? q.getCourse().getTitle() : null)
-                .moduleId(q.getModule() != null ? q.getModule().getModuleId() : null)
-                .moduleName(q.getModule() != null ? q.getModule().getTitle() : null)
-                .groupId(q.getGroup() != null ? q.getGroup().getGroupId() : null)
-                .questionType(q.getQuestionType())
-                .difficulty(q.getDifficulty())
-                .status(q.getStatus())
-                .approvalStatus(q.getApprovalStatus())
-                .creatorRole(q.getCreatorRole())
-                .source(q.getSource())
-                .createdBy(q.getCreatedBy() != null ? q.getCreatedBy().getUserId() : null)
-                .scoringVersion(q.getScoringVersion())
-                .lockVersion(q.getLockVersion())
-                .optionCount(questionRepository.countOptionsByQuestionId(q.getQuestionId()))
-                .updatedAt(q.getUpdatedAt())
-                .build());
+
+        log.info(
+                "QUESTION_LIST_DEBUG | step=findAll "
+                        + "| elapsedMs={} | pageSize={} "
+                        + "| pageNumber={} | totalElements={} "
+                        + "| totalPages={}",
+                elapsedMs(queryStart),
+                page.getNumberOfElements(),
+                page.getNumber(),
+                page.getTotalElements(),
+                page.getTotalPages()
+        );
+
+        // 5. Map entities to DTO and measure each question
+        long mappingStart = System.nanoTime();
+
+        Page<QuestionListItemDto> result = page.map(q -> {
+            long itemStart = System.nanoTime();
+
+            Long qId = q.getQuestionId();
+
+            Long mappedCourseId = q.getCourse() != null
+                    ? q.getCourse().getCourseId()
+                    : null;
+
+            String courseName = q.getCourse() != null
+                    ? q.getCourse().getTitle()
+                    : null;
+
+            Long mappedModuleId = q.getModule() != null
+                    ? q.getModule().getModuleId()
+                    : null;
+
+            String moduleName = q.getModule() != null
+                    ? q.getModule().getTitle()
+                    : null;
+
+            Long mappedGroupId = q.getGroup() != null
+                    ? q.getGroup().getGroupId()
+                    : null;
+
+            Long mappedCreatedBy = q.getCreatedBy() != null
+                    ? q.getCreatedBy().getUserId()
+                    : null;
+
+            // Potential N+1 query: one count query per question.
+            long optionCountStart = System.nanoTime();
+
+            long optionCount =
+                    questionRepository.countOptionsByQuestionId(qId);
+
+            long optionCountElapsed = elapsedMs(optionCountStart);
+
+            QuestionListItemDto dto = QuestionListItemDto.builder()
+                    .questionId(qId)
+                    .content(q.getContent())
+                    .courseId(mappedCourseId)
+                    .courseName(courseName)
+                    .moduleId(mappedModuleId)
+                    .moduleName(moduleName)
+                    .groupId(mappedGroupId)
+                    .questionType(q.getQuestionType())
+                    .difficulty(q.getDifficulty())
+                    .status(q.getStatus())
+                    .approvalStatus(q.getApprovalStatus())
+                    .creatorRole(q.getCreatorRole())
+                    .source(q.getSource())
+                    .createdBy(mappedCreatedBy)
+                    .scoringVersion(q.getScoringVersion())
+                    .lockVersion(q.getLockVersion())
+                    .optionCount(Math.toIntExact(optionCount))
+                    .updatedAt(q.getUpdatedAt())
+                    .build();
+
+            log.debug(
+                    "QUESTION_LIST_DEBUG | step=mapQuestion "
+                            + "| questionId={} | optionCountMs={} "
+                            + "| totalItemMs={}",
+                    qId,
+                    optionCountElapsed,
+                    elapsedMs(itemStart)
+            );
+
+            return dto;
+        });
+
+        log.info(
+                "QUESTION_LIST_DEBUG | step=mapping | elapsedMs={}",
+                elapsedMs(mappingStart)
+        );
+
+        log.info(
+                "QUESTION_LIST_DEBUG | step=TOTAL | elapsedMs={} "
+                        + "| pageSize={} | pageNumber={} "
+                        + "| totalElements={}",
+                elapsedMs(totalStart),
+                result.getNumberOfElements(),
+                result.getNumber(),
+                result.getTotalElements()
+        );
+
+        return result;
     }
+
+    private long elapsedMs(long startNanos) {
+        return (System.nanoTime() - startNanos) / 1_000_000;
+    }
+
 
     @Override
     @Transactional

@@ -245,15 +245,28 @@ public class ExamAiServiceImpl implements ExamAiService {
 
     private void add(JsonNode row, List<DraftQuestion> accepted, List<String> warnings, Set<String> seen,
             Map<String, Integer> types, Map<String, Integer> difficulty) {
+
         String type = row.path("questionType").asText();
         String level = row.path("difficulty").asText();
         String content = row.path("content").asText();
+        log.info(
+                "AI_QUESTION_CANDIDATE | type={} | difficulty={} | content={}",
+                type,
+                level,
+                content
+        );
         JsonNode graphNode = row.get("graph");
         DiagramGraph graph = null;
         BigDecimal points = row.path("defaultPoints").isNumber() ? row.get("defaultPoints").decimalValue() : BigDecimal.ONE;
         String error = null;
         if (!row.isObject() || content.isBlank()) error = "missing question content";
-        else if (types.getOrDefault(type, 0) < 1 || difficulty.getOrDefault(level, 0) < 1) error = "outside the requested distribution";
+        else if (types.getOrDefault(type, 0) < 1) {
+            error = "questionType=" + type
+                    + " has no remaining quota; remainingTypes=" + types;
+        } else if (difficulty.getOrDefault(level, 0) < 1) {
+            error = "difficulty=" + level
+                    + " has no remaining quota; remainingDifficulty=" + difficulty;
+        }
         else if (RUBRIC_TYPES.contains(type) && !row.path("essayGradingRubric").isObject())
             error = type.toLowerCase(Locale.ROOT) + " requires an essayGradingRubric";
         else if ("DIAGRAM".equals(type)) {
@@ -263,6 +276,13 @@ public class ExamAiServiceImpl implements ExamAiService {
                 try {
                     graph = json.treeToValue(graphNode, DiagramGraph.class);
                     List<ValidationError> graphErrors = DiagramGraphValidator.validate(graph, "graph.");
+                    log.info(
+                            "AI_QUESTION_GRAPH | questionType={} | diagramType={} | graphPresent={}",
+                            type,
+                            graphNode == null ? null
+                                    : graphNode.path("diagramType").asText(),
+                            graphNode != null && graphNode.isObject()
+                    );
                     if (!graphErrors.isEmpty()) {
                         error = graphErrors.get(0).getPath() + ": " + graphErrors.get(0).getMessage();
                     }

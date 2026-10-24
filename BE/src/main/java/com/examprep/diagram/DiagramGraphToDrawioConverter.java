@@ -89,28 +89,106 @@ public class DiagramGraphToDrawioConverter {
     }
 
     private static String getNodeStyle(String kind) {
-        if (kind == null) return "rounded=1;whiteSpace=wrap;html=1;";
-        return switch (kind.toUpperCase()) {
-            case "ACTOR" -> "shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;";
-            case "USE_CASE" -> "ellipse;whiteSpace=wrap;html=1;";
-            case "PROCESS", "ACTION", "STATE", "COMPONENT", "ENTITY" -> "rounded=1;whiteSpace=wrap;html=1;";
-            case "DECISION", "CHOICE" -> "rhombus;whiteSpace=wrap;html=1;";
-            case "FINAL", "INITIAL" -> "ellipse;whiteSpace=wrap;html=1;";
-            case "INTERFACE" -> "shape=umlInterface;whiteSpace=wrap;html=1;";
-            default -> "rounded=1;whiteSpace=wrap;html=1;";
+        if (kind == null || kind.isBlank()) {
+            return "rounded=1;whiteSpace=wrap;html=1;";
+        }
+
+        return switch (kind.trim().toUpperCase(java.util.Locale.ROOT)) {
+            // UML actors and use cases
+            case "ACTOR" ->
+                    "shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;";
+            case "USE_CASE" ->
+                    "ellipse;whiteSpace=wrap;html=1;";
+            case "SYSTEM" ->
+                    "rounded=0;whiteSpace=wrap;html=1;dashed=1;";
+            case "PACKAGE" ->
+                    "shape=folder;tabWidth=40;tabHeight=14;html=1;";
+
+            // Class and object diagrams
+            case "CLASS", "ABSTRACT_CLASS", "ENTITY", "ENUM", "RECORD",
+                 "OBJECT", "ANNOTATION", "PARTICIPANT", "LIFELINE",
+                 "BOUNDARY", "CONTROL" ->
+                    "swimlane;fontStyle=1;align=center;verticalAlign=top;"
+                            + "horizontal=1;startSize=26;html=1;";
+
+            case "INTERFACE" ->
+                    "shape=umlInterface;whiteSpace=wrap;html=1;";
+
+            // Activity and state diagrams
+            case "DECISION", "CHOICE", "MERGE" ->
+                    "rhombus;whiteSpace=wrap;html=1;";
+            case "INITIAL" ->
+                    "ellipse;aspect=fixed;fillColor=#000000;strokeColor=#000000;html=1;";
+            case "FINAL" ->
+                    "ellipse;shape=doubleEllipse;aspect=fixed;html=1;";
+            case "FORK", "JOIN" ->
+                    "rounded=0;fillColor=#000000;strokeColor=#000000;html=1;";
+            case "STATE", "ACTION", "PROCESS", "ACTIVITY" ->
+                    "rounded=1;whiteSpace=wrap;html=1;";
+
+            // Infrastructure and components
+            case "DATABASE" ->
+                    "shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;";
+            case "COMPONENT" ->
+                    "shape=component;whiteSpace=wrap;html=1;";
+            case "NODE" ->
+                    "shape=mxgraph.cisco19.misc.workstation;whiteSpace=wrap;html=1;";
+            case "ARTIFACT" ->
+                    "shape=note;whiteSpace=wrap;html=1;";
+            case "PORT" ->
+                    "rounded=0;whiteSpace=wrap;html=1;";
+
+            // Safe fallback for new AI-generated kinds
+            default ->
+                    "rounded=1;whiteSpace=wrap;html=1;";
         };
     }
 
     private static String getEdgeStyle(String kind) {
-        if (kind == null) return "edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;html=1;";
-        return switch (kind.toUpperCase()) {
-            case "INHERITANCE", "GENERALIZATION" -> "edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=0;endSize=12;";
-            case "ASSOCIATION", "RELATION", "TRANSITION", "SYNCHRONOUS_CALL" -> "edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;html=1;";
-            case "ASYNCHRONOUS_CALL" -> "edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=open;html=1;";
-            case "AGGREGATION" -> "edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=0;endSize=12;startArrow=diamond;startFill=0;startSize=12;";
-            case "COMPOSITION" -> "edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=0;endSize=12;startArrow=diamond;startFill=1;startSize=12;";
-            case "DEPENDENCY", "REALIZATION", "INCLUDE", "EXTEND" -> "edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=open;endSize=12;dashed=1;html=1;";
-            default -> "edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;html=1;";
+        if (kind == null || kind.isBlank()) {
+            return "edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;";
+        }
+
+        return switch (kind.trim().toUpperCase(java.util.Locale.ROOT)) {
+            case "INHERITANCE", "GENERALIZATION" ->
+                    "edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;"
+                            + "endArrow=block;endFill=0;endSize=12;";
+
+            case "AGGREGATION" ->
+                    "edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;"
+                            + "startArrow=diamond;startFill=0;startSize=12;endArrow=none;";
+
+            case "COMPOSITION" ->
+                    "edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;"
+                            + "startArrow=diamond;startFill=1;startSize=12;endArrow=none;";
+
+            case "DEPENDENCY", "REALIZATION", "INCLUDE", "EXTEND",
+                 "IMPLEMENTS", "USES", "USAGE" ->
+                    "edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;"
+                            + "endArrow=open;endSize=12;dashed=1;";
+
+            case "MESSAGE", "SYNCHRONOUS_CALL", "RETURN", "REPLY" ->
+                    "edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;";
+
+            case "ASYNCHRONOUS_CALL", "SELF_MESSAGE", "FOUND_MESSAGE", "LOST_MESSAGE" ->
+                    "edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=open;";
+
+            case "CREATE" ->
+                    "edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;dashed=1;";
+
+            case "DESTROY" ->
+                    "edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=ERone;";
+
+            case "ASSOCIATION", "RELATION", "TRANSITION", "CONTROL_FLOW",
+                 "OBJECT_FLOW", "ONE_TO_ONE", "ONE_TO_MANY", "MANY_TO_MANY" ->
+                    "edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;";
+
+            case "DELEGATION", "ASSEMBLY", "CONNECTOR", "INTERRUPT_FLOW" ->
+                    "edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;";
+
+            default ->
+                // Kind mới vẫn được giữ lại và render bằng connector mặc định
+                    "edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;";
         };
     }
 
