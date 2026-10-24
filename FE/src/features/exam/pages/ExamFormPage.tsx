@@ -1073,7 +1073,7 @@ export function ExamFormPage({
           <div className="flex items-center gap-2.5">
             <Icon.Info className="w-5 h-5 text-brand-ink flex-shrink-0" />
             <span className="text-sm font-medium text-foreground">
-              Đề đã xuất bản, gỡ xuất bản để chỉnh sửa.
+              This exam has been published. Unpublish it before editing.
             </span>
           </div>
           <Button

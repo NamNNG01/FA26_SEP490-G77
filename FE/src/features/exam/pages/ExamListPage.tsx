@@ -585,7 +585,7 @@ export function ExamListPage() {
           <div className="p-12 text-center space-y-3">
             <p className="text-sm text-danger font-medium">Exam list could not be loaded. See the notification for details.</p>
             <Button size="sm" variant="outline" onClick={fetchExams}>
-              Thử lại
+              Retry
             </Button>
           </div>
         ) : loading ? (
