@@ -290,7 +290,10 @@ public class ExamAiServiceImpl implements ExamAiService {
             if (!errors.isEmpty()) error = errors.get(0).getPath() + ": " + errors.get(0).getMessage();
         }
         if (error == null && !seen.add(key(content))) error = "duplicates an existing or generated question";
-        if (error != null) { warnings.add("Skipped question: " + error + "."); return; }
+        if (error != null) {
+            log.debug("AI_QUESTION_SKIPPED | type={} | reason={}", type, error);
+            return;
+        }
         if (rubric != null) normalizeRubric((ObjectNode) rubric, points);
         accepted.add(new DraftQuestion(content, type, level, choices.isEmpty() ? null : choices, answerKey,
                 row.hasNonNull("explanation") ? row.get("explanation").asText() : null, metadata, rubric,
