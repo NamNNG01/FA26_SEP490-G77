@@ -222,6 +222,8 @@ export interface AiQuestionDraft {
   essayGradingRubric?: { criteria: AiRubricCriterion[]; totalPoints?: number; notes?: string };
   /** DIAGRAM only: PlantUML behind questionMetadata.drawioXml, for previews. Q-03 doesn't take it. */
   plantUmlSource?: string;
+  /** Local preview returned by draw.io while an AI draft is being edited. */
+  diagramSvg?: string;
 }
 
 export interface AiGenerateRequest {
