@@ -26,6 +26,7 @@ import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
@@ -67,6 +68,7 @@ public class QuestionServiceImpl implements QuestionService {
     @Override
     @Transactional(readOnly = true)
 
+
     public Page<QuestionListItemDto> getQuestions(
             Long courseId,
             List<Long> courseIds,
@@ -97,10 +99,8 @@ public class QuestionServiceImpl implements QuestionService {
                 .distinct()
                 .toList();
 
-        log.info(
-                "QUESTION_LIST_DEBUG | step=prepareScope | elapsedMs={}",
-                elapsedMs(scopeStart)
-        );
+        log.info("QUESTION_LIST_DEBUG | prepareScope={}ms",
+                elapsedMs(scopeStart));
 
         // 2. Permission check
         long permissionStart = System.nanoTime();
@@ -115,28 +115,21 @@ public class QuestionServiceImpl implements QuestionService {
             for (Long id : requested.stream().distinct().toList()) {
                 if (!courseManagerRepository
                         .existsByCourse_CourseIdAndUser_UserId(
-                                id,
-                                currentUser.getUserId())) {
+                                id, currentUser.getUserId())) {
 
                     log.warn(
-                            "QUESTION_LIST_DEBUG | step=permissionCheck "
-                                    + "| result=DENIED | courseId={} "
-                                    + "| elapsedMs={}",
-                            id,
-                            elapsedMs(permissionStart)
-                    );
+                            "QUESTION_LIST_DEBUG | permissionDenied "
+                                    + "| courseId={} | elapsedMs={}",
+                            id, elapsedMs(permissionStart));
 
                     throw new ForbiddenException(
-                            "You do not have access to this course"
-                    );
+                            "You do not have access to this course");
                 }
             }
         }
 
-        log.info(
-                "QUESTION_LIST_DEBUG | step=permissionCheck | elapsedMs={}",
-                elapsedMs(permissionStart)
-        );
+        log.info("QUESTION_LIST_DEBUG | permissionCheck={}ms",
+                elapsedMs(permissionStart));
 
         // 3. Build Specification
         long specStart = System.nanoTime();
@@ -145,71 +138,41 @@ public class QuestionServiceImpl implements QuestionService {
             var predicate = cb.isNull(root.get("deletedAt"));
 
             if (courseId != null) {
-                predicate = cb.and(
-                        predicate,
-                        cb.equal(
-                                root.get("course").get("courseId"),
-                                courseId
-                        )
-                );
+                predicate = cb.and(predicate,
+                        cb.equal(root.get("course").get("courseId"), courseId));
             }
 
             if (!scopeCourseIds.isEmpty()) {
-                predicate = cb.and(
-                        predicate,
-                        root.get("course")
-                                .get("courseId")
-                                .in(scopeCourseIds)
-                );
+                predicate = cb.and(predicate,
+                        root.get("course").get("courseId").in(scopeCourseIds));
             }
 
             if (moduleId != null) {
-                predicate = cb.and(
-                        predicate,
-                        cb.equal(
-                                root.get("module").get("moduleId"),
-                                moduleId
-                        )
-                );
+                predicate = cb.and(predicate,
+                        cb.equal(root.get("module").get("moduleId"), moduleId));
             }
 
             if (groupId != null) {
-                predicate = cb.and(
-                        predicate,
-                        cb.equal(
-                                root.get("group").get("groupId"),
-                                groupId
-                        )
-                );
+                predicate = cb.and(predicate,
+                        cb.equal(root.get("group").get("groupId"), groupId));
             }
 
-            // NONE = standalone questions.
-            // Other values filter by the group's question type.
             if (groupType != null && !groupType.isBlank()) {
                 if ("NONE".equalsIgnoreCase(groupType)) {
-                    predicate = cb.and(
-                            predicate,
-                            cb.isNull(root.get("group"))
-                    );
+                    predicate = cb.and(predicate, cb.isNull(root.get("group")));
                 } else {
                     String kind = QuestionTypeUtil.requireKind(
-                            groupType.trim().toUpperCase(Locale.ROOT)
-                    );
+                            groupType.trim().toUpperCase(Locale.ROOT));
 
                     var group = root.join("group");
-
-                    predicate = cb.and(
-                            predicate,
-                            cb.equal(group.get("questionType"), kind)
-                    );
+                    predicate = cb.and(predicate,
+                            cb.equal(group.get("questionType"), kind));
                 }
             }
 
             if (questionType != null) {
-                predicate = cb.and(
-                        predicate,
-                        cb.equal(root.get("questionType"), questionType)
-                );
+                predicate = cb.and(predicate,
+                        cb.equal(root.get("questionType"), questionType));
             }
 
             if (questionTypes != null && !questionTypes.isEmpty()) {
@@ -221,56 +184,39 @@ public class QuestionServiceImpl implements QuestionService {
                         .toList();
 
                 if (!normalizedTypes.isEmpty()) {
-                    predicate = cb.and(
-                            predicate,
-                            root.get("questionType").in(normalizedTypes)
-                    );
+                    predicate = cb.and(predicate,
+                            root.get("questionType").in(normalizedTypes));
                 }
             }
 
             if (difficulty != null) {
-                predicate = cb.and(
-                        predicate,
-                        cb.equal(root.get("difficulty"), difficulty)
-                );
+                predicate = cb.and(predicate,
+                        cb.equal(root.get("difficulty"), difficulty));
             }
 
             if (status != null) {
-                predicate = cb.and(
-                        predicate,
-                        cb.equal(root.get("status"), status)
-                );
+                predicate = cb.and(predicate,
+                        cb.equal(root.get("status"), status));
             }
 
             if (approvalStatus != null) {
-                predicate = cb.and(
-                        predicate,
-                        cb.equal(root.get("approvalStatus"), approvalStatus)
-                );
+                predicate = cb.and(predicate,
+                        cb.equal(root.get("approvalStatus"), approvalStatus));
             }
 
             if (creatorRole != null) {
-                predicate = cb.and(
-                        predicate,
-                        cb.equal(root.get("creatorRole"), creatorRole)
-                );
+                predicate = cb.and(predicate,
+                        cb.equal(root.get("creatorRole"), creatorRole));
             }
 
             if (source != null) {
-                predicate = cb.and(
-                        predicate,
-                        cb.equal(root.get("source"), source)
-                );
+                predicate = cb.and(predicate,
+                        cb.equal(root.get("source"), source));
             }
 
             if (createdBy != null) {
-                predicate = cb.and(
-                        predicate,
-                        cb.equal(
-                                root.get("createdBy").get("userId"),
-                                createdBy
-                        )
-                );
+                predicate = cb.and(predicate,
+                        cb.equal(root.get("createdBy").get("userId"), createdBy));
             }
 
             if (search != null && !search.trim().isEmpty()) {
@@ -278,130 +224,108 @@ public class QuestionServiceImpl implements QuestionService {
                         + search.trim().toLowerCase(Locale.ROOT)
                         + "%";
 
-                predicate = cb.and(
-                        predicate,
-                        cb.like(
-                                cb.lower(root.get("content")),
-                                keyword
-                        )
-                );
+                predicate = cb.and(predicate,
+                        cb.like(cb.lower(root.get("content")), keyword));
             }
 
             return predicate;
         };
 
-        log.info(
-                "QUESTION_LIST_DEBUG | step=buildSpecification | elapsedMs={}",
-                elapsedMs(specStart)
-        );
+        log.info("QUESTION_LIST_DEBUG | buildSpecification={}ms",
+                elapsedMs(specStart));
 
-        // 4. Query database (page data + possibly COUNT query)
+        // 4. Fetch current page
         long queryStart = System.nanoTime();
 
         Page<Question> page = questionRepository.findAll(spec, pageable);
 
         log.info(
-                "QUESTION_LIST_DEBUG | step=findAll "
-                        + "| elapsedMs={} | pageSize={} "
-                        + "| pageNumber={} | totalElements={} "
-                        + "| totalPages={}",
+                "QUESTION_LIST_DEBUG | findAll={}ms | pageSize={} "
+                        + "| pageNumber={} | totalElements={} | totalPages={}",
                 elapsedMs(queryStart),
                 page.getNumberOfElements(),
                 page.getNumber(),
                 page.getTotalElements(),
-                page.getTotalPages()
-        );
+                page.getTotalPages());
 
-        // 5. Map entities to DTO and measure each question
+        // 5. Batch count options: one query for all questions in this page
+        long optionBatchStart = System.nanoTime();
+
+        List<Long> questionIds = page.getContent().stream()
+                .map(Question::getQuestionId)
+                .toList();
+
+        Map<Long, Long> optionCountMap = new HashMap<>();
+
+        if (!questionIds.isEmpty()) {
+            List<Object[]> rows =
+                    questionRepository.countOptionsByQuestionIds(questionIds);
+
+            for (Object[] row : rows) {
+                Long id = ((Number) row[0]).longValue();
+                Long count = ((Number) row[1]).longValue();
+
+                optionCountMap.put(id, count);
+            }
+        }
+
+        log.info(
+                "QUESTION_LIST_DEBUG | batchOptionCount={}ms "
+                        + "| questionCount={} | groupedRows={}",
+                elapsedMs(optionBatchStart),
+                questionIds.size(),
+                optionCountMap.size());
+
+        // 6. Map DTO; no per-question option count queries
         long mappingStart = System.nanoTime();
 
-        Page<QuestionListItemDto> result = page.map(q -> {
-            long itemStart = System.nanoTime();
-
-            Long qId = q.getQuestionId();
-
-            Long mappedCourseId = q.getCourse() != null
-                    ? q.getCourse().getCourseId()
-                    : null;
-
-            String courseName = q.getCourse() != null
-                    ? q.getCourse().getTitle()
-                    : null;
-
-            Long mappedModuleId = q.getModule() != null
-                    ? q.getModule().getModuleId()
-                    : null;
-
-            String moduleName = q.getModule() != null
-                    ? q.getModule().getTitle()
-                    : null;
-
-            Long mappedGroupId = q.getGroup() != null
-                    ? q.getGroup().getGroupId()
-                    : null;
-
-            Long mappedCreatedBy = q.getCreatedBy() != null
-                    ? q.getCreatedBy().getUserId()
-                    : null;
-
-            // Potential N+1 query: one count query per question.
-            long optionCountStart = System.nanoTime();
-
-            long optionCount =
-                    questionRepository.countOptionsByQuestionId(qId);
-
-            long optionCountElapsed = elapsedMs(optionCountStart);
-
-            QuestionListItemDto dto = QuestionListItemDto.builder()
-                    .questionId(qId)
-                    .content(q.getContent())
-                    .courseId(mappedCourseId)
-                    .courseName(courseName)
-                    .moduleId(mappedModuleId)
-                    .moduleName(moduleName)
-                    .groupId(mappedGroupId)
-                    .questionType(q.getQuestionType())
-                    .difficulty(q.getDifficulty())
-                    .status(q.getStatus())
-                    .approvalStatus(q.getApprovalStatus())
-                    .creatorRole(q.getCreatorRole())
-                    .source(q.getSource())
-                    .createdBy(mappedCreatedBy)
-                    .scoringVersion(q.getScoringVersion())
-                    .lockVersion(q.getLockVersion())
-                    .optionCount(Math.toIntExact(optionCount))
-                    .updatedAt(q.getUpdatedAt())
-                    .build();
-
-            log.debug(
-                    "QUESTION_LIST_DEBUG | step=mapQuestion "
-                            + "| questionId={} | optionCountMs={} "
-                            + "| totalItemMs={}",
-                    qId,
-                    optionCountElapsed,
-                    elapsedMs(itemStart)
-            );
-
-            return dto;
-        });
-
-        log.info(
-                "QUESTION_LIST_DEBUG | step=mapping | elapsedMs={}",
-                elapsedMs(mappingStart)
+        Page<QuestionListItemDto> result = page.map(q ->
+                QuestionListItemDto.builder()
+                        .questionId(q.getQuestionId())
+                        .content(q.getContent())
+                        .courseId(q.getCourse() != null
+                                ? q.getCourse().getCourseId() : null)
+                        .courseName(q.getCourse() != null
+                                ? q.getCourse().getTitle() : null)
+                        .moduleId(q.getModule() != null
+                                ? q.getModule().getModuleId() : null)
+                        .moduleName(q.getModule() != null
+                                ? q.getModule().getTitle() : null)
+                        .groupId(q.getGroup() != null
+                                ? q.getGroup().getGroupId() : null)
+                        .questionType(q.getQuestionType())
+                        .difficulty(q.getDifficulty())
+                        .status(q.getStatus())
+                        .approvalStatus(q.getApprovalStatus())
+                        .creatorRole(q.getCreatorRole())
+                        .source(q.getSource())
+                        .createdBy(q.getCreatedBy() != null
+                                ? q.getCreatedBy().getUserId() : null)
+                        .scoringVersion(q.getScoringVersion())
+                        .lockVersion(q.getLockVersion())
+                        .optionCount(Math.toIntExact(
+                                optionCountMap.getOrDefault(
+                                        q.getQuestionId(), 0L)))
+                        .updatedAt(q.getUpdatedAt())
+                        .build()
         );
 
+        log.info("QUESTION_LIST_DEBUG | mapping={}ms",
+                elapsedMs(mappingStart));
+
         log.info(
-                "QUESTION_LIST_DEBUG | step=TOTAL | elapsedMs={} "
-                        + "| pageSize={} | pageNumber={} "
-                        + "| totalElements={}",
+                "QUESTION_LIST_DEBUG | TOTAL={}ms | pageSize={} "
+                        + "| pageNumber={} | totalElements={}",
                 elapsedMs(totalStart),
                 result.getNumberOfElements(),
                 result.getNumber(),
-                result.getTotalElements()
-        );
+                result.getTotalElements());
 
         return result;
     }
+
+
+
 
     private long elapsedMs(long startNanos) {
         return (System.nanoTime() - startNanos) / 1_000_000;
@@ -564,11 +488,19 @@ public class QuestionServiceImpl implements QuestionService {
         }
 
 
+        long start = System.nanoTime();
+
         checkContentHashConflict(
                 course.getCourseId(),
                 finalContentHash,
                 null,
                 questionNumber
+        );
+
+        log.info(
+                "QUESTION_CREATE_DEBUG | index={} | duplicateCheckMs={}",
+                questionNumber,
+                elapsedMs(start)
         );
 
         String status = req.getStatus() != null
@@ -605,7 +537,15 @@ public class QuestionServiceImpl implements QuestionService {
                 .lockVersion(0L)
                 .build();
 
+        long saveQuestionStart = System.nanoTime();
+
         question = questionRepository.save(question);
+
+        log.info(
+                "QUESTION_CREATE_DEBUG | index={} | saveQuestionMs={}",
+                questionNumber,
+                elapsedMs(saveQuestionStart)
+        );
 
 
         List<AnswerOption> optionsToSave = new ArrayList<>();
@@ -636,8 +576,17 @@ public class QuestionServiceImpl implements QuestionService {
             }
         }
 
+        long saveOptionsStart = System.nanoTime();
+
         List<AnswerOption> savedOptions =
                 answerOptionRepository.saveAll(optionsToSave);
+
+        log.info(
+                "QUESTION_CREATE_DEBUG | index={} | optionCount={} | saveOptionsMs={}",
+                questionNumber,
+                optionsToSave.size(),
+                elapsedMs(saveOptionsStart)
+        );
 
 
         if (isOrdering) {
@@ -733,14 +682,17 @@ public class QuestionServiceImpl implements QuestionService {
 
         List<QuestionDetailDto> results = new ArrayList<>();
         List<String> duplicateErrors = new ArrayList<>();
+        long batchStart = System.nanoTime();
+
+
 
         for (int i = 0; i < requests.size(); i++) {
-            QuestionCreateRequest req = requests.get(i);
+            long questionStart = System.nanoTime();
 
             try {
                 results.add(
                         createQuestionInternal(
-                                req,
+                                requests.get(i),
                                 currentUser,
                                 "MANUAL",
                                 "MANAGER",
@@ -748,10 +700,28 @@ public class QuestionServiceImpl implements QuestionService {
                                 i + 1
                         )
                 );
+
+                log.info(
+                        "QUESTION_BATCH_DEBUG | index={} | elapsedMs={}",
+                        i + 1,
+                        elapsedMs(questionStart)
+                );
             } catch (ResourceConflictException e) {
                 duplicateErrors.add(String.valueOf(i + 1));
+
+                log.info(
+                        "QUESTION_BATCH_DEBUG | index={} | duplicate | elapsedMs={}",
+                        i + 1,
+                        elapsedMs(questionStart)
+                );
             }
         }
+
+        log.info(
+                "QUESTION_BATCH_DEBUG | totalMs={} | count={}",
+                elapsedMs(batchStart),
+                requests.size()
+        );
 
         if (!duplicateErrors.isEmpty()) {
             throw new ResourceConflictException(
@@ -1359,21 +1329,30 @@ public class QuestionServiceImpl implements QuestionService {
         }
     }
 
-    private void checkContentHashConflict(Long courseId, String contentHash, Long excludeQuestionId,        int questionNumber
+    private void checkContentHashConflict(
+            Long courseId,
+            String contentHash,
+            Long excludeQuestionId,
+            int questionNumber
     ) {
-        if (courseId == null || contentHash == null) return;
-        List<Question> existing = questionRepository.findAll().stream()
-                .filter(q -> q.getCourse() != null && q.getCourse().getCourseId().equals(courseId))
-                .filter(q -> q.getDeletedAt() == null)
-                .filter(q -> contentHash.equals(q.getContentHash()))
-                .filter(q -> excludeQuestionId == null || !q.getQuestionId().equals(excludeQuestionId))
-                .toList();
-        if (!existing.isEmpty()) {
+        if (courseId == null || contentHash == null) {
+            return;
+        }
+
+        List<Long> duplicateIds = questionRepository.findDuplicateQuestionIds(
+                courseId,
+                contentHash,
+                excludeQuestionId,
+                PageRequest.of(0, 1)
+        );
+
+        if (!duplicateIds.isEmpty()) {
             throw new ResourceConflictException(
                     "Question at index " + questionNumber
                             + " is duplicated with existing question ID: "
-                            + existing.get(0).getQuestionId()
-            );        }
+                            + duplicateIds.get(0)
+            );
+        }
     }
 
 

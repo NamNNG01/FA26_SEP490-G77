@@ -2,6 +2,7 @@ package com.examprep.repositories;
 
 import com.examprep.entities.Question;
 import com.examprep.dto.IdCount;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Modifying;
@@ -91,4 +92,30 @@ public interface QuestionRepository extends JpaRepository<Question, Long>, JpaSp
     List<Question> findActiveWithAccessRelationsByQuestionIdIn(
             @Param("ids") Collection<Long> ids
     );
+
+    @Query("""
+    SELECT o.question.questionId, COUNT(o)
+    FROM AnswerOption o
+    WHERE o.question.questionId IN :questionIds
+    GROUP BY o.question.questionId
+    """)
+    List<Object[]> countOptionsByQuestionIds(
+            @Param("questionIds") Collection<Long> questionIds
+    );
+    @Query("""
+    SELECT q.questionId
+    FROM Question q
+    WHERE q.course.courseId = :courseId
+      AND q.contentHash = :contentHash
+      AND q.deletedAt IS NULL
+      AND (:excludeQuestionId IS NULL OR q.questionId <> :excludeQuestionId)
+    ORDER BY q.questionId
+    """)
+    List<Long> findDuplicateQuestionIds(
+            @Param("courseId") Long courseId,
+            @Param("contentHash") String contentHash,
+            @Param("excludeQuestionId") Long excludeQuestionId,
+            Pageable pageable
+    );
+
 }
