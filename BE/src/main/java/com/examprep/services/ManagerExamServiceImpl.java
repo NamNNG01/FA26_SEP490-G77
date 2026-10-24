@@ -376,7 +376,7 @@ public class ManagerExamServiceImpl implements ManagerExamService {
 
         validateMode(
                 r.getGenerationType(),
-                size(r.getQuestionIds()) + size(r.getGroupIds()),
+                size(r.getQuestionIds()) + size(r.getGroupIds()) + size(r.getImportedQuestions()),
                 size(r.getConfigs())
         );
 
@@ -425,6 +425,9 @@ public class ManagerExamServiceImpl implements ManagerExamService {
         }
 
         validateConfigs(r.getConfigs(), courseId);
+        if (!list(r.getImportedQuestions()).isEmpty() && module == null) {
+            throw bad("Select a module for this exam before importing questions.");
+        }
         long validated = System.nanoTime();
 
         Exam e = Exam.builder()
@@ -462,6 +465,14 @@ public class ManagerExamServiceImpl implements ManagerExamService {
                     nextOrder,
                     saved.getOrderIndex() + 1
             );
+        }
+
+        // Questions imported on the create screen: saved and attached in this same transaction (no orphans if E-02 fails).
+        if (!list(r.getImportedQuestions()).isEmpty()) {
+            attachImported(user, e,
+                    r.getImportedQuestions().stream().map(ExamRequests.ImportedQuestion::getQuestion).toList(),
+                    r.getImportedQuestions().stream().map(i -> weight(i.getWeight())).toList(),
+                    attachedIds, nextOrder);
         }
 
         for (var item : list(r.getGroupIds())) {
@@ -650,24 +661,33 @@ public class ManagerExamServiceImpl implements ManagerExamService {
         if(e.getModule()==null) throw bad("Select a module for this exam before importing questions.");
         List<QuestionCreateRequest> parsed=importBlocks(file);
         if(dryRun) return new ExamResponse.Imported(parsed.size(),0,0,List.of());
-        Map<Integer,BigDecimal> weightMap=new HashMap<>();
+        List<BigDecimal> weights=new ArrayList<>(Collections.nCopies(parsed.size(),BigDecimal.ONE));
         for(var item:list(items)) {
             if(item.getIndex()<0 || item.getIndex()>=parsed.size()) throw bad("Import item index out of range.");
-            weightMap.put(item.getIndex(),weight(item.getWeight()));
+            weights.set(item.getIndex(),weight(item.getWeight()));
         }
+        int nextOrder=next(links.findByExamExamIdOrderByOrderIndexAscExamQuestionIdAsc(id).stream().map(ExamQuestion::getOrderIndex).toList());
+        ExamResponse.Imported result=attachImported(user,e,parsed,weights,new HashSet<>(examQuestions(e).keySet()),nextOrder);
+        links.flush();
+        return result;
+    }
+
+    // Shared by E-13 and E-02 importedQuestions, so both Import buttons behave the same: reuse a bank question with
+    // Q-03's content hash (course-wide, like Q-03's duplicate check, so creating the rest never hits its 409), skip
+    // duplicates within the list or already in the exam, create the rest through Q-03, then attach in list order.
+    // Callers must reject module-less exams first (Q-03 needs a module).
+    private ExamResponse.Imported attachImported(UserPrincipal user,Exam e,List<QuestionCreateRequest> requests,List<BigDecimal> weights,Set<Long> inExam,int nextOrder) {
         Long courseId=courseId(e), moduleId=e.getModule().getModuleId();
-        // Same content hash and course-wide scope as Q-03's duplicate check, so creating the rest never hits its 409.
-        List<String> hashes=parsed.stream().map(questionService::contentHash).toList();
+        List<String> hashes=requests.stream().map(questionService::contentHash).toList();
         Map<String,Question> bank=new HashMap<>();
         for(Question q:questions.findActiveByCourseAndContentHashes(courseId,new HashSet<>(hashes))) bank.putIfAbsent(q.getContentHash(),q);
-        Set<Long> existingQuestionIds=new HashSet<>(examQuestions(e).keySet());
 
         Set<String> seen=new HashSet<>(); Map<Integer,Long> picked=new LinkedHashMap<>(); List<QuestionCreateRequest> toCreate=new ArrayList<>();
         int reused=0,skipped=0;
-        for(int idx=0;idx<parsed.size();idx++) {
+        for(int idx=0;idx<requests.size();idx++) {
             Question existing=bank.get(hashes.get(idx));
-            if(!seen.add(hashes.get(idx)) || (existing!=null && existingQuestionIds.contains(existing.getQuestionId()))) { skipped++; continue; }
-            if(existing!=null) reused++; else toCreate.add(parsed.get(idx));
+            if(!seen.add(hashes.get(idx)) || (existing!=null && inExam.contains(existing.getQuestionId()))) { skipped++; continue; }
+            if(existing!=null) reused++; else toCreate.add(requests.get(idx));
             picked.put(idx,existing==null?null:existing.getQuestionId());
         }
 
@@ -678,17 +698,15 @@ public class ManagerExamServiceImpl implements ManagerExamService {
                     .forEach(q->created.add(q.getQuestionId()));
 
         Iterator<Long> newIds=created.iterator();
-        int nextOrder=next(links.findByExamExamIdOrderByOrderIndexAscExamQuestionIdAsc(id).stream().map(ExamQuestion::getOrderIndex).toList());
         List<Long> ids=new ArrayList<>();
         for(var entry:picked.entrySet()) {
             Long questionId=entry.getValue()!=null?entry.getValue():newIds.next();
-            // Access was settled by write() (the exam's course) and Q-03; reused questions come from that same course.
-            ExamQuestion saved=attachValidatedQuestion(e,new ExamRequests.QuestionLink(questionId,weightMap.getOrDefault(entry.getKey(),BigDecimal.ONE),nextOrder),
-                    questions.getReferenceById(questionId),existingQuestionIds,nextOrder);
+            // Access was settled by write()/create (the exam's course) and Q-03; reused questions come from that same course.
+            ExamQuestion saved=attachValidatedQuestion(e,new ExamRequests.QuestionLink(questionId,weights.get(entry.getKey()),nextOrder),
+                    questions.getReferenceById(questionId),inExam,nextOrder);
             nextOrder=saved.getOrderIndex()+1;
             ids.add(questionId);
         }
-        links.flush();
         return new ExamResponse.Imported(toCreate.size(),reused,skipped,ids);
     }
 

@@ -140,6 +140,31 @@ class ExamApiIntegrationTest {
                 .andExpect(status().isOk());
     }
 
+    @Test void createSavesImportedQuestionsInTheSameRequestAndReusesExistingOnes() throws Exception {
+        Map<String,Object> trueFalse = Map.of("questionType", "TRUE_FALSE", "content", "Indexes speed up reads.",
+                "options", List.of(Map.of("optionText", "True", "isCorrect", true), Map.of("optionText", "False", "isCorrect", false)));
+        Map<String,Object> payload = create();
+        // The second entry repeats the first, so it is skipped rather than failing Q-03's duplicate check.
+        payload.put("importedQuestions", List.of(Map.of("question", trueFalse, "weight", 2), Map.of("question", trueFalse)));
+        JsonNode first = data(call(collaborator, post("/api/v1/manager/exams").contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(payload))).andExpect(status().isCreated()));
+        assertEquals(2, first.path("questions").size());
+        JsonNode imported = first.path("questions").get(1);
+        assertEquals("TRUE_FALSE", imported.path("questionType").asText());
+        assertEquals(0, new BigDecimal("2").compareTo(imported.path("weight").decimalValue()));
+
+        // Importing the same question again (Q-03 alone would answer 409) reuses the bank question.
+        JsonNode second = data(call(collaborator, post("/api/v1/manager/exams").contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(payload))).andExpect(status().isCreated()));
+        assertEquals(imported.path("questionId").asLong(), second.path("questions").get(1).path("questionId").asLong());
+
+        long questionCount = em.createQuery("select count(q) from Question q", Long.class).getSingleResult();
+        payload.remove("moduleId");
+        call(collaborator, post("/api/v1/manager/exams").contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(payload)))
+                .andExpect(status().isBadRequest());
+        assertEquals(questionCount, em.createQuery("select count(q) from Question q", Long.class).getSingleResult());
+    }
+
     @Test void publishedContentIsLockedUntilUnpublished() throws Exception {
         Exam exam = exam(course, module); exam.setMaxScore(BigDecimal.ONE); attach(exam, question);
         call(manager, patch(path(exam) + "/publish").contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"PUBLISHED\"}"))
