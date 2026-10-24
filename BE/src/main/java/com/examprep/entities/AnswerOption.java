@@ -15,7 +15,8 @@ import java.io.Serializable;
 public class AnswerOption implements Serializable {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "option_seq")
+    @SequenceGenerator(name = "option_seq", sequenceName = "answer_options_option_id_seq", allocationSize = 50)
     @Column(name = "option_id")
     private Long optionId;
 
