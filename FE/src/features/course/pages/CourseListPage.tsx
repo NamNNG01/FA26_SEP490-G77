@@ -128,8 +128,12 @@ export function CourseListPage({
   }, []);
 
   useEffect(() => {
-    dashboardService
-      .getManagerDashboard()
+    const dashboardRequest =
+      user?.role === Role.ADMIN
+        ? dashboardService.getAdminDashboard()
+        : dashboardService.getManagerDashboard();
+
+    dashboardRequest
       .then((data) => {
         setSummaryStats({
           total: data.summary.totalCourses,
@@ -147,7 +151,7 @@ export function CourseListPage({
           duration: null,
         });
       });
-  }, []);
+  }, [user?.role]);
 
   const fetchCourses = useCallback(async () => {
     setLoading(true);

@@ -76,6 +76,8 @@ export interface AdminSummary {
   totalManagers: number;
   totalCourses: number;
   totalExams: number;
+  publishedCourses: number;
+  draftCourses: number;
 }
 
 export interface AdminRecentUser {
