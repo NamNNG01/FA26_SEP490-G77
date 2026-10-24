@@ -179,17 +179,6 @@ export function CourseListPage({
 
       setCourses(data.content);
       setTotalElements(data.totalElements);
-
-      setSummaryStats((prev) => {
-        if (prev.total > 0) return prev;
-        const pub = data.content.filter((c) => c.isPublished).length;
-        const dft = data.content.filter((c) => !c.isPublished).length;
-        return {
-          total: data.totalElements,
-          published: pub,
-          drafts: dft,
-        };
-      });
     } catch (err: unknown) {
       const msg = getApiErrorMessage(
         err,
