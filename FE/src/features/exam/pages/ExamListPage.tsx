@@ -585,7 +585,7 @@ export function ExamListPage() {
           <div className="p-12 text-center space-y-3">
             <p className="text-sm text-danger font-medium">Exam list could not be loaded. See the notification for details.</p>
             <Button size="sm" variant="outline" onClick={fetchExams}>
-              Thử lại
+              Retry
             </Button>
           </div>
         ) : loading ? (
@@ -607,20 +607,12 @@ export function ExamListPage() {
             </p>
             <div className="pt-2 flex justify-center">
               {activeTab === "ASSESSMENT" ? (
-                <Dropdown
-                  trigger={
-                    <Button icon={<Icon.Plus className="w-4 h-4" />}>
-                      New Assessment
-                    </Button>
-                  }
-                  items={[
-                    {
-                      label: "Essay Exam",
-                      icon: <Icon.FileText className="w-4 h-4" />,
-                      onClick: () => handleNewExam("ESSAY"),
-                    },
-                  ]}
-                />
+                <Button
+                  onClick={() => handleNewExam("ESSAY")}
+                  icon={<Icon.Plus className="w-4 h-4" />}
+                >
+                  New Assessment
+                </Button>
               ) : (
                 <Button
                   onClick={() => handleNewExam("QUIZ")}
