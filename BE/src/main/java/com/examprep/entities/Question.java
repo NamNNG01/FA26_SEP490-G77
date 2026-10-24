@@ -23,7 +23,8 @@ import java.time.Instant;
 public class Question implements Serializable {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "question_seq")
+    @SequenceGenerator(name = "question_seq", sequenceName = "questions_question_id_seq", allocationSize = 50)
     @Column(name = "question_id")
     private Long questionId;
 

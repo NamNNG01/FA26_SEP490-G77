@@ -154,15 +154,11 @@ public class QuestionServiceImpl implements QuestionService {
     public QuestionDetailDto createQuestion(QuestionCreateRequest req, User currentUser) {
         return createQuestionInternal(req, currentUser, "MANUAL", "MANAGER", "APPROVED",1);
     }
+    public QuestionDetailDto createQuestionInternal(QuestionCreateRequest req, User currentUser, String source, String creatorRole, String approvalStatus, int questionNumber) {
+        return createQuestionInternal(req, currentUser, source, creatorRole, approvalStatus, questionNumber, false);
+    }
 
-    public QuestionDetailDto createQuestionInternal(
-            QuestionCreateRequest req,
-            User currentUser,
-            String source,
-            String creatorRole,
-            String approvalStatus,
-            int questionNumber
-    ) {
+    private QuestionDetailDto createQuestionInternal(QuestionCreateRequest req, User currentUser, String source, String creatorRole, String approvalStatus, int questionNumber, boolean skipDuplicateCheck) {
         if (req.getCourseId() == null) {
             throw new BadRequestException("Course ID is required");
         }
@@ -305,20 +301,11 @@ public class QuestionServiceImpl implements QuestionService {
         }
 
 
-        long start = System.nanoTime();
-
-        checkContentHashConflict(
-                course.getCourseId(),
-                finalContentHash,
-                null,
-                questionNumber
-        );
-
-        log.info(
-                "QUESTION_CREATE_DEBUG | index={} | duplicateCheckMs={}",
-                questionNumber,
-                elapsedMs(start)
-        );
+        if (!skipDuplicateCheck) {
+            long start = System.nanoTime();
+            checkContentHashConflict(course.getCourseId(), finalContentHash, null, questionNumber);
+            log.info("QUESTION_CREATE_DEBUG | index={} | duplicateCheckMs={}", questionNumber, elapsedMs(start));
+        }
 
         String status = req.getStatus() != null
                 ? req.getStatus()
@@ -461,95 +448,237 @@ public class QuestionServiceImpl implements QuestionService {
     }
 
 
+
     @Override
     @Transactional
-    public List<QuestionDetailDto> createQuestionsBatch(
-            Long courseId,
-            Long moduleId,
-            List<QuestionCreateRequest> requests,
-            User currentUser
-    ) {
-        if (requests == null || requests.isEmpty() || requests.size() > 50) {
-            throw new BadRequestException("Batch size must be between 1 and 50");
-        }
+    public List<QuestionDetailDto> createQuestionsBatch(Long courseId, Long moduleId, List<QuestionCreateRequest> requests, User currentUser) {
+        if (requests == null || requests.isEmpty() || requests.size() > 50) throw new BadRequestException("Batch size must be between 1 and 50");
+        if (courseId == null || moduleId == null) throw new BadRequestException("Course ID and Module ID are required");
 
-        if (moduleId == null) {
-            throw new BadRequestException("Module ID is required");
-        }
-
-        List<ValidationError> allErrors = new ArrayList<>();
-
+        List<ValidationError> errors = new ArrayList<>();
         for (int i = 0; i < requests.size(); i++) {
             QuestionCreateRequest req = requests.get(i);
-
             req.setCourseId(courseId);
             req.setModuleId(moduleId);
-
-            QuestionPayload payload = QuestionPayload.from(req);
-
-            List<ValidationError> errs =
-                    questionValidator.validate(payload, "questions[" + i + "].");
-
-            allErrors.addAll(errs);
+            errors.addAll(questionValidator.validate(QuestionPayload.from(req), "questions[" + i + "]."));
         }
+        if (!errors.isEmpty()) throw new QuestionValidationException(errors);
 
-        if (!allErrors.isEmpty()) {
-            throw new QuestionValidationException(allErrors);
-        }
+        Course course = courseRepository.findById(courseId)
+                .orElseThrow(() -> new ResourceNotFoundException("Course not found"));
 
-        List<QuestionDetailDto> results = new ArrayList<>();
-        List<String> duplicateErrors = new ArrayList<>();
-        long batchStart = System.nanoTime();
-
-
-
-        for (int i = 0; i < requests.size(); i++) {
-            long questionStart = System.nanoTime();
-
-            try {
-                results.add(
-                        createQuestionInternal(
-                                requests.get(i),
-                                currentUser,
-                                "MANUAL",
-                                "MANAGER",
-                                "APPROVED",
-                                i + 1
-                        )
-                );
-
-                log.info(
-                        "QUESTION_BATCH_DEBUG | index={} | elapsedMs={}",
-                        i + 1,
-                        elapsedMs(questionStart)
-                );
-            } catch (ResourceConflictException e) {
-                duplicateErrors.add(String.valueOf(i + 1));
-
-                log.info(
-                        "QUESTION_BATCH_DEBUG | index={} | duplicate | elapsedMs={}",
-                        i + 1,
-                        elapsedMs(questionStart)
-                );
+        if (!User.ROLE_ADMIN.equals(currentUser.getRoleName())) {
+            boolean isManager = courseManagerRepository.existsByCourse_CourseIdAndUser_UserId(
+                    course.getCourseId(), currentUser.getUserId());
+            if (!isManager) {
+                throw new ForbiddenException("You are not a manager of this course");
             }
         }
 
-        log.info(
-                "QUESTION_BATCH_DEBUG | totalMs={} | count={}",
-                elapsedMs(batchStart),
-                requests.size()
-        );
+        com.examprep.entities.Module module = moduleRepository.findById(moduleId)
+                .orElseThrow(() -> new ResourceNotFoundException("Module not found"));
 
-        if (!duplicateErrors.isEmpty()) {
-            throw new ResourceConflictException(
-                    "Duplicate questions at index: "
-                            + String.join(", ", duplicateErrors)
-            );
+        if (!module.getCourse().getCourseId().equals(course.getCourseId())) {
+            throw new BadRequestException("Module does not belong to the specified course");
+        }
+
+        List<String> hashes = new ArrayList<>(requests.size());
+        Set<String> seenHashes = new HashSet<>();
+        List<String> duplicateIndexes = new ArrayList<>();
+
+        for (int i = 0; i < requests.size(); i++) {
+            QuestionCreateRequest req = requests.get(i);
+            validateMetadataKeys(req.getQuestionMetadata());
+
+            if (req.getGroupId() != null) {
+                QuestionGroup group = questionGroupRepository.findById(req.getGroupId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Question group not found"));
+                if (group.getCourse() == null || !group.getCourse().getCourseId().equals(course.getCourseId())) {
+                    throw new BadRequestException("Question group does not belong to the specified course");
+                }
+                if (group.getModule() != null && !group.getModule().getModuleId().equals(moduleId)) {
+                    throw new BadRequestException("Question group does not belong to the specified module");
+                }
+                assertQuestionFitsGroup(group, req.getQuestionType());
+            }
+
+            List<String> optionTexts = req.getOptions() == null ? null : req.getOptions().stream().map(AnswerOptionDto::getOptionText).collect(Collectors.toList());
+            String answerKeyJson = serializeJson(req.getAnswerKey(), "answerKey");
+            String hash;
+
+            if ("ORDERING".equals(req.getQuestionType())) {
+                List<Object> correctOrder = req.getCorrectOrder();
+                if (correctOrder == null && req.getAnswerKey() instanceof Map<?, ?> map && map.get("correctOrder") instanceof List<?> list) correctOrder = new ArrayList<>(list);
+
+                Map<String, String> keyToText = new HashMap<>();
+                if (req.getOptions() != null) {
+                    for (int j = 0; j < req.getOptions().size(); j++) {
+                        AnswerOptionDto option = req.getOptions().get(j);
+                        keyToText.put(option.getKey() != null ? option.getKey() : String.valueOf(j), option.getOptionText());
+                    }
+                }
+
+                List<String> orderedTexts = new ArrayList<>();
+                if (correctOrder != null) {
+                    for (Object item : correctOrder) {
+                        String key = item == null ? "" : item.toString();
+                        String text = keyToText.get(key);
+                        if (text == null) throw new BadRequestException("Invalid key in correct order: " + key);
+                        orderedTexts.add(text);
+                    }
+                }
+                hash = ContentHashUtil.computeOrderingHash(req.getContent(), orderedTexts);
+            } else {
+                hash = ContentHashUtil.computeHash(req.getContent(), optionTexts, answerKeyJson);
+            }
+
+            hashes.add(hash);
+            if (!seenHashes.add(hash)) duplicateIndexes.add(String.valueOf(i + 1));
+        }
+
+        if (!duplicateIndexes.isEmpty()) throw new ResourceConflictException("Duplicate questions in request at index: " + String.join(", ", duplicateIndexes));
+
+        Set<String> existingHashes = questionRepository.findExistingContentHashes(courseId, new HashSet<>(hashes));
+        if (!existingHashes.isEmpty()) {
+            List<String> existingIndexes = new ArrayList<>();
+            for (int i = 0; i < hashes.size(); i++) {
+                if (existingHashes.contains(hashes.get(i))) existingIndexes.add(String.valueOf(i + 1));
+            }
+            throw new ResourceConflictException("Questions already exist in course at index: " + String.join(", ", existingIndexes));
+        }
+
+        List<Question> questionsToSave = new ArrayList<>(requests.size());
+        List<List<AnswerOptionDto>> reqOptionsList = new ArrayList<>(requests.size());
+        List<Boolean> isOrderingList = new ArrayList<>(requests.size());
+        List<List<Object>> correctOrderList = new ArrayList<>(requests.size());
+
+        for (int i = 0; i < requests.size(); i++) {
+            QuestionCreateRequest req = requests.get(i);
+            String source = "MANUAL";
+            String creatorRole = "MANAGER";
+            String approvalStatus = "APPROVED";
+            String status = req.getStatus() != null ? req.getStatus() : "ACTIVE";
+
+            QuestionGroup group = null;
+            if (req.getGroupId() != null) {
+                group = questionGroupRepository.findById(req.getGroupId()).orElse(null);
+            }
+
+            String metadataJson = serializeJson(req.getQuestionMetadata(), "questionMetadata");
+            String answerKeyJson = serializeJson(req.getAnswerKey(), "answerKey");
+            String rubricJson = serializeJson(req.getEssayGradingRubric(), "essayGradingRubric");
+
+            boolean isOrdering = "ORDERING".equals(req.getQuestionType());
+            List<Object> correctOrder = null;
+            if (isOrdering) {
+                correctOrder = req.getCorrectOrder();
+                if (correctOrder == null && req.getAnswerKey() instanceof Map<?, ?> map && map.get("correctOrder") instanceof List<?> list) {
+                    correctOrder = new ArrayList<>(list);
+                }
+            }
+
+            Question question = Question.builder()
+                    .course(course)
+                    .module(module)
+                    .group(group)
+                    .createdBy(currentUser)
+                    .questionType(req.getQuestionType())
+                    .difficulty(req.getDifficulty() != null ? req.getDifficulty() : "MEDIUM")
+                    .content(req.getContent())
+                    .questionMetadata(metadataJson)
+                    .answerKey(answerKeyJson)
+                    .source(source)
+                    .creatorRole(creatorRole)
+                    .approvalStatus(approvalStatus)
+                    .status(status)
+                    .aiExplanation(req.getExplanation())
+                    .essayGradingRubric(rubricJson)
+                    .contentHash(hashes.get(i))
+                    .scoringVersion(1)
+                    .lockVersion(0L)
+                    .build();
+
+            questionsToSave.add(question);
+            reqOptionsList.add(req.getOptions());
+            isOrderingList.add(isOrdering);
+            correctOrderList.add(correctOrder);
+        }
+
+        List<Question> savedQuestions = questionRepository.saveAll(questionsToSave);
+
+        List<AnswerOption> allOptionsToSave = new ArrayList<>();
+        Map<Question, List<AnswerOption>> questionToSavedOptions = new HashMap<>();
+
+        for (int i = 0; i < savedQuestions.size(); i++) {
+            Question q = savedQuestions.get(i);
+            List<AnswerOptionDto> optDtos = reqOptionsList.get(i);
+            boolean isOrdering = isOrderingList.get(i);
+            List<AnswerOption> qOptions = new ArrayList<>();
+
+            if (optDtos != null) {
+                for (int j = 0; j < optDtos.size(); j++) {
+                    AnswerOptionDto optDto = optDtos.get(j);
+                    AnswerOption opt = AnswerOption.builder()
+                            .question(q)
+                            .optionText(optDto.getOptionText())
+                            .isCorrect(isOrdering ? false : (optDto.getIsCorrect() != null ? optDto.getIsCorrect() : false))
+                            .explanation(optDto.getExplanation())
+                            .orderIndex(optDto.getOrderIndex() != null ? optDto.getOrderIndex() : j)
+                            .build();
+                    qOptions.add(opt);
+                    allOptionsToSave.add(opt);
+                }
+            }
+            questionToSavedOptions.put(q, qOptions);
+        }
+
+        List<AnswerOption> savedOptionsAll = answerOptionRepository.saveAll(allOptionsToSave);
+
+        List<QuestionDetailDto> results = new ArrayList<>(savedQuestions.size());
+        for (int i = 0; i < savedQuestions.size(); i++) {
+            Question q = savedQuestions.get(i);
+            boolean isOrdering = isOrderingList.get(i);
+            List<Object> correctOrder = correctOrderList.get(i);
+            List<AnswerOptionDto> optDtos = reqOptionsList.get(i);
+            List<AnswerOption> qOptions = questionToSavedOptions.get(q);
+
+            if (isOrdering && optDtos != null) {
+                Map<String, Long> keyToIdMap = new HashMap<>();
+                for (int j = 0; j < optDtos.size(); j++) {
+                    AnswerOptionDto dto = optDtos.get(j);
+                    String key = dto.getKey() != null ? dto.getKey() : String.valueOf(j);
+                    Long optionId = qOptions.get(j).getOptionId();
+                    keyToIdMap.put(key, optionId);
+                    keyToIdMap.put(String.valueOf(optionId), optionId);
+                }
+
+                List<Long> orderedOptionIds = new ArrayList<>();
+                if (correctOrder != null) {
+                    for (Object item : correctOrder) {
+                        String itemStr = item != null ? item.toString() : "";
+                        Long optionId = keyToIdMap.get(itemStr);
+                        if (optionId == null) {
+                            try {
+                                optionId = Long.parseLong(itemStr);
+                            } catch (NumberFormatException ignored) {}
+                        }
+                        if (optionId == null) {
+                            throw new BadRequestException("Invalid option in correct order: " + itemStr);
+                        }
+                        orderedOptionIds.add(optionId);
+                    }
+                }
+
+                String finalAnswerKeyJson = serializeJson(Map.of("correctOrder", orderedOptionIds), "answerKey");
+                q.setAnswerKey(finalAnswerKeyJson);
+                q = questionRepository.save(q);
+            }
+
+            results.add(mapToDetailDto(q, qOptions));
         }
 
         return results;
     }
-
     @Override
     @Transactional(readOnly = true)
     public QuestionDetailDto getQuestionById(Long id, User currentUser) {
