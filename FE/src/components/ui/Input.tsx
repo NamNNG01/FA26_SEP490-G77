@@ -30,7 +30,7 @@ export function Input({
           id={inputId}
           aria-invalid={error ? true : undefined}
           aria-describedby={hasMessage ? messageId : undefined}
-          className={`w-full h-9 rounded-[10px] border text-base text-content placeholder:text-gray-400 bg-surface transition-all
+          className={`w-full h-9 rounded-[10px] border text-base text-content placeholder:text-content-subtle bg-surface transition-all
             focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600
             ${error ? 'border-danger-solid' : 'border-line'}
             ${icon ? 'pl-9' : 'pl-3'} ${suffix ? 'pr-10' : 'pr-3'}`}
