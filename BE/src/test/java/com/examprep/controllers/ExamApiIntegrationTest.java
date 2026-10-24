@@ -165,6 +165,23 @@ class ExamApiIntegrationTest {
         assertEquals(questionCount, em.createQuery("select count(q) from Question q", Long.class).getSingleResult());
     }
 
+    @Test void sameTypeRandomRulesMustNotDrawFromTheSameQuestions() throws Exception {
+        question.setDifficulty("EASY");
+        question(module, "SINGLE_CHOICE", "Hard question").setDifficulty("HARD");
+        Map<String,Object> payload = random("SINGLE_CHOICE");
+        // Each rule alone finds a question, but "any difficulty" and "all modules" can both pick the HARD one.
+        payload.put("configs", List.of(
+                Map.of("questionType", "SINGLE_CHOICE", "numberOfQuestions", 1, "moduleId", module.getModuleId()),
+                Map.of("questionType", "SINGLE_CHOICE", "numberOfQuestions", 1, "difficulty", "HARD")));
+        submit(payload).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.startsWith("Random rules 1 and 2 both draw SINGLE_CHOICE")));
+        payload.put("configs", List.of(
+                Map.of("questionType", "SINGLE_CHOICE", "numberOfQuestions", 1, "moduleId", module.getModuleId(), "difficulty", "EASY"),
+                Map.of("questionType", "SINGLE_CHOICE", "numberOfQuestions", 1, "moduleId", module.getModuleId(), "difficulty", "HARD"),
+                Map.of("questionType", "ESSAY", "numberOfQuestions", 1, "moduleId", module.getModuleId())));
+        submit(payload).andExpect(status().isCreated());
+    }
+
     @Test void publishedContentIsLockedUntilUnpublished() throws Exception {
         Exam exam = exam(course, module); exam.setMaxScore(BigDecimal.ONE); attach(exam, question);
         call(manager, patch(path(exam) + "/publish").contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"PUBLISHED\"}"))

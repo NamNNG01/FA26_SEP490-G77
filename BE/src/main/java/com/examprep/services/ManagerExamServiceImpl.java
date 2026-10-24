@@ -567,10 +567,7 @@ public class ManagerExamServiceImpl implements ManagerExamService {
             for(ExamConfig config:configured) validateConfigModule(config.getModule(),courseId(e));
             if(state.questionCount()==0) throw bad("Add at least one question before publishing.");
             // Re-checked here because the bank may have changed since the rules were saved.
-            for(int i=0;i<configured.size();i++) {
-                ExamConfig c=configured.get(i);
-                checkDrawable(courseId(e),i+1,c.getQuestionType(),c.getModule()==null?null:c.getModule().getModuleId(),c.getDifficulty(),c.getNumberOfQuestions());
-            }
+            checkRules(courseId(e),configured.stream().map(c->new Rule(c.getQuestionType(),c.getModule()==null?null:c.getModule().getModuleId(),c.getDifficulty(),c.getNumberOfQuestions())).toList());
 
             for(ExamQuestion l : direct) {
                 if(l.getWeight().compareTo(BigDecimal.ZERO) <= 0) throw conflict("Question weight must be positive.");
@@ -773,16 +770,30 @@ public class ManagerExamServiceImpl implements ManagerExamService {
             if(!TYPES.contains(c.getQuestionType())) throw bad("Invalid questionType.");
             validateConfigModule(c.getModuleId()==null?null:module(c.getModuleId()),courseId);
             if(c.getWeightEach()!=null) weight(c.getWeightEach());
-            checkDrawable(courseId,i+1,c.getQuestionType(),c.getModuleId(),c.getDifficulty(),c.getNumberOfQuestions());
         }
+        checkRules(courseId,rules.stream().map(c->new Rule(c.getQuestionType(),c.getModuleId(),c.getDifficulty(),c.getNumberOfQuestions())).toList());
     }
-    // A random rule must be fillable from the bank's active, approved questions (type, module, difficulty; null = any).
-    // ponytail: each rule is checked alone; two rules drawing from the same pool can still overlap. Sum per pool if that matters.
-    private void checkDrawable(Long courseId,int rule,String type,Long moduleId,String difficulty,int count) {
-        long available=questions.countDrawable(courseId,moduleId,type,difficulty);
-        if(available<count)
-            throw bad("Random rule "+rule+" needs "+count+" "+type+(difficulty==null?"":" "+difficulty)
-                    +" question(s) but the question bank has only "+available+" active, approved one(s).");
+    private record Rule(String type,Long moduleId,String difficulty,int count) {}
+    // Every random rule must be fillable from the bank's active, approved questions (type, module, difficulty; null = any).
+    // Same-type rules must draw from disjoint questions: overlapping ones ("all modules"/"any difficulty" overlaps every
+    // module/difficulty) would compete for the same questions, so a per-rule count could pass while the draw can't fill both.
+    // With overlaps rejected, checking each rule alone is exact.
+    private void checkRules(Long courseId,List<Rule> rules) {
+        for(int i=0;i<rules.size();i++) {
+            Rule a=rules.get(i);
+            for(int j=0;j<i;j++) {
+                Rule b=rules.get(j);
+                if(a.type().equals(b.type())
+                        && (a.moduleId()==null || b.moduleId()==null || a.moduleId().equals(b.moduleId()))
+                        && (a.difficulty()==null || b.difficulty()==null || a.difficulty().equals(b.difficulty())))
+                    throw bad("Random rules "+(j+1)+" and "+(i+1)+" both draw "+a.type()+" from the same questions. "
+                            +"Merge them into one rule, or give them different modules or difficulties.");
+            }
+            long available=questions.countDrawable(courseId,a.moduleId(),a.type(),a.difficulty());
+            if(available<a.count())
+                throw bad("Random rule "+(i+1)+" needs "+a.count()+" "+a.type()+(a.difficulty()==null?"":" "+a.difficulty())
+                        +" question(s) but the question bank has only "+available+" active, approved one(s).");
+        }
     }
     private void validateConfigModule(Module module,Long courseId) {
         if(module!=null && !module.getCourse().getCourseId().equals(courseId)) throw bad("Config module must belong to the exam course.");
