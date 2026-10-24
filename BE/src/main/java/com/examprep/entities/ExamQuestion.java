@@ -16,7 +16,8 @@ import java.math.BigDecimal;
 public class ExamQuestion implements Serializable {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "exam_question_seq")
+    @SequenceGenerator(name = "exam_question_seq", sequenceName = "exam_questions_exam_question_id_seq", allocationSize = 50)
     @Column(name = "exam_question_id")
     private Long examQuestionId;
 

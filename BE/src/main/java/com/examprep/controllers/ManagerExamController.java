@@ -83,8 +83,6 @@ public class ManagerExamController {
     public ResponseEntity<ApiResponse<ExamResponse.Imported>> importQuestions(@AuthenticationPrincipal UserPrincipal user,@PathVariable Long id,
             @RequestParam MultipartFile file,@RequestParam(required=false,defaultValue="false") boolean dryRun,
             @RequestParam(required=false) String itemsJson) {
-        ExamResponse exam=service.detail(user,id);
-        if (!"DRAFT".equals(exam.status())) throw new com.examprep.exceptions.ResourceConflictException("Unpublish the exam before importing.");
         if (file.getSize()>10*1024*1024) throw new BadRequestException("File must be at most 10MB.");
         List<ExamRequests.ImportItem> items=null;
         if(itemsJson!=null && !itemsJson.isBlank()) {

@@ -518,7 +518,7 @@ public class ManagerCourseApiIntegrationTest {
 
     private Exam exam(Course parent, Module module) {
         Exam value = Exam.builder().course(parent).module(module).createdBy(manager).title("Exam")
-                .durationMinutes(60).isPractice(false).generationType("FIXED").build();
+                .durationMinutes(60).isPractice(false).generationType("FIXED").maxScore(BigDecimal.TEN).build();
         em.persist(value);
         return value;
     }

@@ -51,7 +51,7 @@ public class ManagerExamServiceImpl implements ManagerExamService {
     private final UserRepository users;
     private final ObjectMapper json;
 
-    private List<ExamResponse> mapExamPage(List<Exam> exams) {
+    private List<ExamResponse> mapExamPage(List<Exam> exams, boolean detail) {
         if (exams.isEmpty()) {
             return List.of();
         }
@@ -155,7 +155,7 @@ public class ManagerExamServiceImpl implements ManagerExamService {
             }
 
             items.add(buildResponse(
-                    exam, false, direct, grouped, configured, all
+                    exam, detail, direct, grouped, configured, all, questionsByGroup
             ));
         }
 
@@ -286,12 +286,12 @@ public class ManagerExamServiceImpl implements ManagerExamService {
         long queried = System.nanoTime();
 
         // 4. Map entity sang response
-        List<ExamResponse> items = mapExamPage(result.getContent());
+        List<ExamResponse> items = mapExamPage(result.getContent(), false);
 
         long mapped = System.nanoTime();
 
         // 5. Log thời gian từng giai đoạn
-        log.info(
+        log.debug(
                 "EXAM_LIST_DEBUG | userId={} | page={} | size={} "
                         + "| kind={} | resultCount={} | totalElements={} "
                         + "| validation={}ms | buildSpec={}ms "
@@ -356,6 +356,7 @@ public class ManagerExamServiceImpl implements ManagerExamService {
         }
 
         Course course = access(user, courseId, true);
+        Set<Long> checked = new HashSet<>(List.of(courseId));
 
         if (module != null
                 && !module.getCourse().getCourseId().equals(courseId)) {
@@ -401,7 +402,7 @@ public class ManagerExamServiceImpl implements ManagerExamService {
 // Giữ nguyên kiểm tra quyền và trạng thái.
         for (var item : questionItems) {
             Question q = questionMap.get(item.getQuestionId());
-            active(user, q);
+            active(user, q, checked);
         }
 
         Set<Long> groupIds = new HashSet<>();
@@ -409,7 +410,7 @@ public class ManagerExamServiceImpl implements ManagerExamService {
             if (!groupIds.add(item.getGroupId())) {
                 throw conflict("Group is duplicated.");
             }
-            groupAccess(user, group(item.getGroupId()));
+            groupAccess(user, group(item.getGroupId()), checked);
         }
 
         validateConfigs(r.getConfigs(), courseId);
@@ -431,12 +432,9 @@ public class ManagerExamServiceImpl implements ManagerExamService {
         exams.save(e);
         long savedExam = System.nanoTime();
 
-        Set<Long> existingQuestionIds = new HashSet<>();
-
         int nextOrder = 0;
 
         Set<Long> attachedIds = new HashSet<>();
-
 
         for (var item : questionItems) {
             Question q = questionMap.get(item.getQuestionId());
@@ -456,7 +454,7 @@ public class ManagerExamServiceImpl implements ManagerExamService {
         }
 
         for (var item : list(r.getGroupIds())) {
-            attachGroup(user, e, item);
+            attachGroup(user, e, item, checked);
         }
         long attached = System.nanoTime();
 
@@ -467,7 +465,7 @@ public class ManagerExamServiceImpl implements ManagerExamService {
         ExamResponse response = response(e, true);
         long mapped = System.nanoTime();
 
-        log.info(
+        log.debug(
                 "EXAM_CREATE_DEBUG | userId={} | questionCount={} | groupCount={} | configCount={} "
                         + "| validation={}ms | saveExam={}ms | attach={}ms "
                         + "| saveConfigsFlush={}ms | response={}ms | total={}ms",
@@ -538,15 +536,16 @@ public class ManagerExamServiceImpl implements ManagerExamService {
 
     @Override @Transactional
     public ExamResponse.Published publish(UserPrincipal user,Long id,ExamRequests.Publish r) {
-        Exam e=write(user,id); ExamResponse state=response(e,true);
+        Exam e=write(user,id); ExamResponse state=response(e,false);
         if(r.status().equals("PUBLISHED")) {
             List<ExamConfig> configured=configs.findByExamExamIdOrderByConfigIdAsc(id);
-            validateMode(e.getGenerationType(),links.findByExamExamIdOrderByOrderIndexAscExamQuestionIdAsc(id).size()
+            List<ExamQuestion> direct=links.findAllByExamIds(List.of(id));
+            validateMode(e.getGenerationType(),direct.size()
                     +groupLinks.findByExamExamIdOrderByOrderIndexAscExamGroupIdAsc(id).size(),configured.size());
             for(ExamConfig config:configured) validateConfigModule(config.getModule(),courseId(e));
             if(state.questionCount()==0) throw bad("Add at least one question before publishing.");
 
-            for(ExamQuestion l : links.findByExamExamIdOrderByOrderIndexAscExamQuestionIdAsc(id)) {
+            for(ExamQuestion l : direct) {
                 if(l.getWeight().compareTo(BigDecimal.ZERO) <= 0) throw conflict("Question weight must be positive.");
                 if(!"ACTIVE".equals(l.getQuestion().getStatus()) || !"APPROVED".equals(l.getQuestion().getApprovalStatus()) || l.getQuestion().getDeletedAt() != null)
                     throw conflict("All questions in a published exam must be active and approved.");
@@ -574,13 +573,12 @@ public class ManagerExamServiceImpl implements ManagerExamService {
         Exam e = write(user, id);
         editable(e);
 
-        Map<Long, Question> currentQuestions = examQuestions(e);
-        Set<Long> existingQuestionIds = new HashSet<>(currentQuestions.keySet());
+        Set<Long> existingQuestionIds = new HashSet<>(examQuestions(e).keySet());
 
         Question q = question(r.getQuestionId());
+        active(user, q);
 
-        ExamQuestion saved = attachQuestion(
-                user,
+        ExamQuestion saved = attachValidatedQuestion(
                 e,
                 r,
                 q,
@@ -608,7 +606,7 @@ public class ManagerExamServiceImpl implements ManagerExamService {
         links.delete(link); links.flush();
     }
     @Override @Transactional public ExamResponse.GroupLink addGroup(UserPrincipal user,Long id,ExamRequests.GroupLink r) {
-        Exam e=write(user,id); editable(e); return groupLink(attachGroup(user,e,r));
+        Exam e=write(user,id); editable(e); return groupLink(attachGroup(user,e,r,new HashSet<>()));
     }
     @Override @Transactional public void removeGroup(UserPrincipal user,Long id,Long linkId) {
         Exam e=write(user,id); editable(e); positive(linkId);
@@ -630,7 +628,9 @@ public class ManagerExamServiceImpl implements ManagerExamService {
 
     @Override @Transactional
     public ExamResponse.Imported importQuestions(UserPrincipal user,Long id,String text,boolean dryRun,List<ExamRequests.ImportItem> items) {
-        Exam e=write(user,id); editable(e);
+        Exam e=write(user,id);
+        if(!"DRAFT".equals(e.getStatus())) throw conflict("Unpublish the exam before importing.");
+        editable(e);
         List<QuestionTextParser.Parsed> parsed=QuestionTextParser.parse(text);
         if(dryRun) {
             return new ExamResponse.Imported(parsed.size(),0,0,List.of());
@@ -679,8 +679,9 @@ public class ManagerExamServiceImpl implements ManagerExamService {
             ExamRequests.QuestionLink linkRequest =
                     new ExamRequests.QuestionLink(q.getQuestionId(), wt, nextOrder);
 
-            ExamQuestion saved = attachQuestion(
-                    user,
+            // No access/ACTIVE check here: new questions are DRAFT by design (SRS 5.6) and reused ones
+            // come from findImportBank, already scoped to the exam's course that write() authorized.
+            ExamQuestion saved = attachValidatedQuestion(
                     e,
                     linkRequest,
                     q,
@@ -693,46 +694,8 @@ public class ManagerExamServiceImpl implements ManagerExamService {
         links.flush(); return new ExamResponse.Imported(imported,reused,skipped,ids);
     }
 
-    private ExamQuestion attachQuestion(
-            UserPrincipal user,
-            Exam e,
-            ExamRequests.QuestionLink r,
-            Question q,
-            Set<Long> existingQuestionIds,
-            int defaultOrder
-    ) {
-        questionAccess(user, q);
-        activeStatus(q);
-
-        if (!existingQuestionIds.add(q.getQuestionId())) {
-            throw conflict("Question is already in this exam.");
-        }
-
-        int order = r.getOrderIndex() == null
-                ? defaultOrder
-                : r.getOrderIndex();
-
-        BigDecimal wt = r.getWeight() != null
-                ? weight(r.getWeight())
-                : BigDecimal.ONE;
-
-        return links.save(
-                ExamQuestion.builder()
-                        .exam(e)
-                        .question(q)
-                        .weight(wt)
-                        .orderIndex(order)
-                        .build()
-        );
-    }
-
-    private void activeStatus(Question q) {
-        if (!"ACTIVE".equals(q.getStatus())) {
-            throw bad("Only ACTIVE questions can be selected from the bank.");
-        }
-    }
-    private ExamGroup attachGroup(UserPrincipal user,Exam e,ExamRequests.GroupLink r) {
-        QuestionGroup g=group(r.getGroupId()); groupAccess(user,g);
+    private ExamGroup attachGroup(UserPrincipal user,Exam e,ExamRequests.GroupLink r,Set<Long> checked) {
+        QuestionGroup g=group(r.getGroupId()); groupAccess(user,g,checked);
         List<ExamGroup> existing=groupLinks.findByExamExamIdOrderByOrderIndexAscExamGroupIdAsc(e.getExamId());
         if(existing.stream().anyMatch(l->l.getGroup().getGroupId().equals(r.getGroupId()))) throw conflict("Group is already in this exam.");
         List<Question> groupQuestions=questions.findByGroupGroupIdOrderByQuestionIdAsc(r.getGroupId());
@@ -747,7 +710,7 @@ public class ManagerExamServiceImpl implements ManagerExamService {
             weightMap.put(qp.getQuestionId(),weight(qp.getWeight()));
         }
         for(Question q:groupQuestions) {
-            active(user,q);
+            active(user,q,checked);
             if(!weightMap.containsKey(q.getQuestionId())) throw bad("Missing weight for group question "+q.getQuestionId());
         }
         Map<Long,Question> used=examQuestions(e);
@@ -802,46 +765,34 @@ public class ManagerExamServiceImpl implements ManagerExamService {
     private Module module(Long id) { positive(id); return modules.findById(id).orElseThrow(()->missing("Module")); }
     private Question question(Long id) { positive(id); return questions.findActiveById(id).orElseThrow(()->missing("Question")); }
     private QuestionGroup group(Long id) { positive(id); return groups.findById(id).orElseThrow(()->missing("Question group")); }
-    private void groupAccess(UserPrincipal user,QuestionGroup g) {
-        if(g.getCourse()!=null) access(user,g.getCourse().getCourseId(),false);
-        if(g.getModule()!=null) access(user,g.getModule().getCourse().getCourseId(),false);
+    // checked = course ids already authorized in this request, so a 40-question exam costs one access query per course, not per question.
+    private void courseAccess(UserPrincipal user,Long courseId,Set<Long> checked) { if(checked.add(courseId)) access(user,courseId,false); }
+    private void groupAccess(UserPrincipal user,QuestionGroup g) { groupAccess(user,g,new HashSet<>()); }
+    private void groupAccess(UserPrincipal user,QuestionGroup g,Set<Long> checked) {
+        if(g.getCourse()!=null) courseAccess(user,g.getCourse().getCourseId(),checked);
+        if(g.getModule()!=null) courseAccess(user,g.getModule().getCourse().getCourseId(),checked);
         if(g.getCourse()==null && g.getModule()==null && !admin(user)) throw new ForbiddenException("Group has no managed course.");
     }
-    private void questionAccess(UserPrincipal user,Question q) {
-        if(q.getCourse()!=null) access(user,q.getCourse().getCourseId(),false);
-        if(q.getModule()!=null) access(user,q.getModule().getCourse().getCourseId(),false);
-        if(q.getGroup()!=null) groupAccess(user,q.getGroup());
+    private void questionAccess(UserPrincipal user,Question q,Set<Long> checked) {
+        if(q.getCourse()!=null) courseAccess(user,q.getCourse().getCourseId(),checked);
+        if(q.getModule()!=null) courseAccess(user,q.getModule().getCourse().getCourseId(),checked);
+        if(q.getGroup()!=null) groupAccess(user,q.getGroup(),checked);
         if(q.getCourse()==null && q.getModule()==null && q.getGroup()==null && !admin(user)) throw new ForbiddenException("Question has no managed course.");
     }
-    private void active(UserPrincipal user,Question q) { questionAccess(user,q); if(!"ACTIVE".equals(q.getStatus())) throw bad("Only ACTIVE questions can be selected from the bank."); }
+    private void questionAccess(UserPrincipal user,Question q) { questionAccess(user,q,new HashSet<>()); }
+    private void active(UserPrincipal user,Question q) { active(user,q,new HashSet<>()); }
+    private void active(UserPrincipal user,Question q,Set<Long> checked) { questionAccess(user,q,checked); if(!"ACTIVE".equals(q.getStatus())) throw bad("Only ACTIVE questions can be selected from the bank."); }
     private Map<Long,Question> examQuestions(Exam e) {
+        List<Long> examIds=List.of(e.getExamId());
         Map<Long,Question> result=new LinkedHashMap<>();
-        for(ExamQuestion l:links.findByExamExamIdOrderByOrderIndexAscExamQuestionIdAsc(e.getExamId())) result.put(l.getQuestion().getQuestionId(),l.getQuestion());
-        for(ExamGroup l:groupLinks.findByExamExamIdOrderByOrderIndexAscExamGroupIdAsc(e.getExamId()))
-            for(Question q:questions.findByGroupGroupIdOrderByQuestionIdAsc(l.getGroup().getGroupId())) result.put(q.getQuestionId(),q);
+        for(ExamQuestion l:links.findAllByExamIds(examIds)) result.put(l.getQuestion().getQuestionId(),l.getQuestion());
+        List<Long> groupIds=groupLinks.findAllByExamIds(examIds).stream().map(l->l.getGroup().getGroupId()).toList();
+        if(!groupIds.isEmpty()) for(Question q:questions.findAllByGroupIds(groupIds)) result.put(q.getQuestionId(),q);
         return result;
     }
 
     private ExamResponse response(Exam e, boolean detail) {
-        List<ExamQuestion> direct =
-                links.findByExamExamIdOrderByOrderIndexAscExamQuestionIdAsc(
-                        e.getExamId()
-                );
-
-        List<ExamConfig> configured =
-                configs.findByExamExamIdOrderByConfigIdAsc(
-                        e.getExamId()
-                );
-
-        List<ExamGroup> grouped = detail
-                ? groupLinks.findByExamExamIdOrderByOrderIndexAscExamGroupIdAsc(
-                e.getExamId()
-        )
-                : List.of();
-
-        Map<Long, Question> all = examQuestions(e);
-
-        return buildResponse(e, detail, direct, grouped, configured, all);
+        return mapExamPage(List.of(e), detail).get(0);
     }
     private ExamResponse buildResponse(
             Exam e,
@@ -849,8 +800,10 @@ public class ManagerExamServiceImpl implements ManagerExamService {
             List<ExamQuestion> direct,
             List<ExamGroup> grouped,
             List<ExamConfig> configured,
-            Map<Long, Question> all
+            Map<Long, Question> all,
+            Map<Long, List<Question>> questionsByGroup
     ) {
+        Set<Long> linkedGroups = linkedGroupIds(grouped);
         Set<String> families = new HashSet<>();
 
         all.values().forEach(q ->
@@ -912,25 +865,25 @@ public class ManagerExamServiceImpl implements ManagerExamService {
                         .toList()
                         : null,
                 detail
-                        ? direct.stream().map(this::questionLink).toList()
+                        ? direct.stream().map(l -> questionLink(l, linkedGroups)).toList()
                         : null,
                 detail
-                        ? grouped.stream().map(this::groupLink).toList()
+                        ? grouped.stream().map(l -> groupLink(l, questionsByGroup.getOrDefault(l.getGroup().getGroupId(), List.of()).size())).toList()
                         : null
         );
     }
+    private Set<Long> linkedGroupIds(List<ExamGroup> grouped) { return grouped.stream().map(g->g.getGroup().getGroupId()).collect(Collectors.toSet()); }
     private ExamResponse.QuestionLink questionLink(ExamQuestion l) {
+        return questionLink(l,linkedGroupIds(groupLinks.findByExamExamIdOrderByOrderIndexAscExamGroupIdAsc(l.getExam().getExamId())));
+    }
+    private ExamResponse.QuestionLink questionLink(ExamQuestion l,Set<Long> linkedGroupIds) {
         Long rawGroupId=l.getQuestion().getGroup()!=null?l.getQuestion().getGroup().getGroupId():null;
-        Long groupId=null;
-        if(rawGroupId!=null) {
-            boolean linked=groupLinks.findByExamExamIdOrderByOrderIndexAscExamGroupIdAsc(l.getExam().getExamId()).stream()
-                    .anyMatch(g->g.getGroup().getGroupId().equals(rawGroupId));
-            if(linked) groupId=rawGroupId;
-        }
+        Long groupId=rawGroupId!=null && linkedGroupIds.contains(rawGroupId)?rawGroupId:null;
         return new ExamResponse.QuestionLink(l.getExamQuestionId(),l.getExam().getExamId(),l.getQuestion().getQuestionId(),l.getQuestion().getContent(),l.getQuestion().getQuestionType(),l.getWeight(),l.getOrderIndex(),l.getQuestion().getEssayGradingRubric()!=null,groupId);
     }
-    private ExamResponse.GroupLink groupLink(ExamGroup l) { return new ExamResponse.GroupLink(l.getExamGroupId(),l.getExam().getExamId(),l.getGroup().getGroupId(),l.getGroup().getTitle(),
-            l.getGroup().getPassageText(),questions.findByGroupGroupIdOrderByQuestionIdAsc(l.getGroup().getGroupId()).size()); }
+    private ExamResponse.GroupLink groupLink(ExamGroup l) { return groupLink(l,questions.findByGroupGroupIdOrderByQuestionIdAsc(l.getGroup().getGroupId()).size()); }
+    private ExamResponse.GroupLink groupLink(ExamGroup l,int questionCount) { return new ExamResponse.GroupLink(l.getExamGroupId(),l.getExam().getExamId(),l.getGroup().getGroupId(),l.getGroup().getTitle(),
+            l.getGroup().getPassageText(),questionCount); }
     private BigDecimal weight(BigDecimal w) { if(w==null)return BigDecimal.ONE; if(w.signum()<=0 || w.compareTo(new BigDecimal("1000"))>0 || w.scale()>2) throw bad("Weight must be positive, at most 1000 and have at most two decimal places."); return w; }
     private BigDecimal maxScore(BigDecimal m) { if(m==null || m.signum()<=0 || m.compareTo(new BigDecimal("10000"))>0 || m.scale()>2) throw bad("Max score must be positive, at most 10000 and have at most two decimal places."); return m; }
     private int next(List<Integer> values) { int max=values.stream().mapToInt(Integer::intValue).max().orElse(-1); if(max==Integer.MAX_VALUE)throw conflict("Question order limit reached."); return max+1; }

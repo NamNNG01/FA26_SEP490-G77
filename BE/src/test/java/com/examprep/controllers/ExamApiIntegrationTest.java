@@ -6,6 +6,8 @@ import com.examprep.security.UserPrincipal;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityManager;
+import org.hibernate.SessionFactory;
+import org.hibernate.stat.Statistics;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -318,6 +320,30 @@ class ExamApiIntegrationTest {
         payload.put("questionIds", List.of());
         payload.put("configs", List.of(Map.of("questionType", type, "numberOfQuestions", 1, "moduleId", module.getModuleId())));
         return payload;
+    }
+
+    @Test void createAndDetailStatementCountDoesNotGrowWithQuestionCount() throws Exception {
+        long[] small = statements(5), large = statements(40);
+        // +1 allows one extra pooled-sequence fetch for exam_questions ids.
+        assertTrue(large[0] - small[0] <= 1, "create: " + small[0] + " vs " + large[0]);
+        assertEquals(small[1], large[1], "detail");
+    }
+
+    private long[] statements(int count) throws Exception {
+        List<Map<String,Object>> ids = new ArrayList<>();
+        for (int i = 0; i < count; i++) ids.add(Map.of("questionId", question(module, "SINGLE_CHOICE", "Bulk " + count + "-" + i).getQuestionId(), "weight", 1));
+        Map<String,Object> payload = create(); payload.put("questionIds", ids);
+        em.flush(); em.clear();
+        Statistics stats = em.getEntityManagerFactory().unwrap(SessionFactory.class).getStatistics();
+        stats.setStatisticsEnabled(true); stats.clear();
+        // collaborator = assigned (non-owner) manager, the path that runs a course_managers check per course.
+        long examId = data(call(collaborator, post("/api/v1/manager/exams").contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(payload))).andExpect(status().isCreated())).path("examId").asLong();
+        long create = stats.getPrepareStatementCount();
+        em.clear(); stats.clear();
+        call(collaborator, get("/api/v1/manager/exams/" + examId)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.questions.length()").value(count));
+        return new long[]{create, stats.getPrepareStatementCount()};
     }
 
     private ResultActions submit(Map<String,Object> payload) throws Exception {
