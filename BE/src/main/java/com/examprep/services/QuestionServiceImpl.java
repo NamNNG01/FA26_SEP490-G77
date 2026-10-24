@@ -69,269 +69,86 @@ public class QuestionServiceImpl implements QuestionService {
     @Transactional(readOnly = true)
 
 
-    public Page<QuestionListItemDto> getQuestions(
-            Long courseId,
-            List<Long> courseIds,
-            Long moduleId,
-            Long groupId,
-            String groupType,
-            String questionType,
-            List<String> questionTypes,
-            String difficulty,
-            String status,
-            String approvalStatus,
-            String creatorRole,
-            String source,
-            Long createdBy,
-            String search,
-            Pageable pageable,
-            User currentUser) {
-
-        long totalStart = System.nanoTime();
-
-        // 1. Normalize course IDs
-        long scopeStart = System.nanoTime();
-
-        List<Long> scopeCourseIds = courseIds == null
-                ? List.of()
-                : courseIds.stream()
-                .filter(Objects::nonNull)
-                .distinct()
-                .toList();
-
-        log.info("QUESTION_LIST_DEBUG | prepareScope={}ms",
-                elapsedMs(scopeStart));
-
-        // 2. Permission check
-        long permissionStart = System.nanoTime();
+    public Page<QuestionListItemDto> getQuestions(Long courseId, List<Long> courseIds, Long moduleId, Long groupId, String groupType, String questionType, List<String> questionTypes, String difficulty, String status, String approvalStatus, String creatorRole, String source, Long createdBy, String search, Pageable pageable, User currentUser) {
+        List<Long> scopeCourseIds = courseIds == null ? List.of() : courseIds.stream().filter(Objects::nonNull).distinct().toList();
 
         if (!User.ROLE_ADMIN.equals(currentUser.getRoleName())) {
             List<Long> requested = new ArrayList<>(scopeCourseIds);
-
-            if (courseId != null) {
-                requested.add(courseId);
-            }
-
+            if (courseId != null) requested.add(courseId);
             for (Long id : requested.stream().distinct().toList()) {
-                if (!courseManagerRepository
-                        .existsByCourse_CourseIdAndUser_UserId(
-                                id, currentUser.getUserId())) {
-
-                    log.warn(
-                            "QUESTION_LIST_DEBUG | permissionDenied "
-                                    + "| courseId={} | elapsedMs={}",
-                            id, elapsedMs(permissionStart));
-
-                    throw new ForbiddenException(
-                            "You do not have access to this course");
+                if (!courseManagerRepository.existsByCourse_CourseIdAndUser_UserId(id, currentUser.getUserId())) {
+                    throw new ForbiddenException("You do not have access to this course");
                 }
             }
         }
 
-        log.info("QUESTION_LIST_DEBUG | permissionCheck={}ms",
-                elapsedMs(permissionStart));
-
-        // 3. Build Specification
-        long specStart = System.nanoTime();
-
         Specification<Question> spec = (root, query, cb) -> {
             var predicate = cb.isNull(root.get("deletedAt"));
-
-            if (courseId != null) {
-                predicate = cb.and(predicate,
-                        cb.equal(root.get("course").get("courseId"), courseId));
-            }
-
-            if (!scopeCourseIds.isEmpty()) {
-                predicate = cb.and(predicate,
-                        root.get("course").get("courseId").in(scopeCourseIds));
-            }
-
-            if (moduleId != null) {
-                predicate = cb.and(predicate,
-                        cb.equal(root.get("module").get("moduleId"), moduleId));
-            }
-
-            if (groupId != null) {
-                predicate = cb.and(predicate,
-                        cb.equal(root.get("group").get("groupId"), groupId));
-            }
+            if (courseId != null) predicate = cb.and(predicate, cb.equal(root.get("course").get("courseId"), courseId));
+            if (!scopeCourseIds.isEmpty()) predicate = cb.and(predicate, root.get("course").get("courseId").in(scopeCourseIds));
+            if (moduleId != null) predicate = cb.and(predicate, cb.equal(root.get("module").get("moduleId"), moduleId));
+            if (groupId != null) predicate = cb.and(predicate, cb.equal(root.get("group").get("groupId"), groupId));
 
             if (groupType != null && !groupType.isBlank()) {
                 if ("NONE".equalsIgnoreCase(groupType)) {
                     predicate = cb.and(predicate, cb.isNull(root.get("group")));
                 } else {
-                    String kind = QuestionTypeUtil.requireKind(
-                            groupType.trim().toUpperCase(Locale.ROOT));
-
+                    String kind = QuestionTypeUtil.requireKind(groupType.trim().toUpperCase(Locale.ROOT));
                     var group = root.join("group");
-                    predicate = cb.and(predicate,
-                            cb.equal(group.get("questionType"), kind));
+                    predicate = cb.and(predicate, cb.equal(group.get("questionType"), kind));
                 }
             }
 
-            if (questionType != null) {
-                predicate = cb.and(predicate,
-                        cb.equal(root.get("questionType"), questionType));
-            }
+            if (questionType != null) predicate = cb.and(predicate, cb.equal(root.get("questionType"), questionType));
 
             if (questionTypes != null && !questionTypes.isEmpty()) {
-                List<String> normalizedTypes = questionTypes.stream()
-                        .filter(Objects::nonNull)
-                        .map(type -> type.trim().toUpperCase(Locale.ROOT))
-                        .filter(type -> !type.isEmpty())
-                        .distinct()
-                        .toList();
-
-                if (!normalizedTypes.isEmpty()) {
-                    predicate = cb.and(predicate,
-                            root.get("questionType").in(normalizedTypes));
-                }
+                List<String> normalizedTypes = questionTypes.stream().filter(Objects::nonNull).map(type -> type.trim().toUpperCase(Locale.ROOT)).filter(type -> !type.isEmpty()).distinct().toList();
+                if (!normalizedTypes.isEmpty()) predicate = cb.and(predicate, root.get("questionType").in(normalizedTypes));
             }
 
-            if (difficulty != null) {
-                predicate = cb.and(predicate,
-                        cb.equal(root.get("difficulty"), difficulty));
-            }
-
-            if (status != null) {
-                predicate = cb.and(predicate,
-                        cb.equal(root.get("status"), status));
-            }
-
-            if (approvalStatus != null) {
-                predicate = cb.and(predicate,
-                        cb.equal(root.get("approvalStatus"), approvalStatus));
-            }
-
-            if (creatorRole != null) {
-                predicate = cb.and(predicate,
-                        cb.equal(root.get("creatorRole"), creatorRole));
-            }
-
-            if (source != null) {
-                predicate = cb.and(predicate,
-                        cb.equal(root.get("source"), source));
-            }
-
-            if (createdBy != null) {
-                predicate = cb.and(predicate,
-                        cb.equal(root.get("createdBy").get("userId"), createdBy));
-            }
+            if (difficulty != null) predicate = cb.and(predicate, cb.equal(root.get("difficulty"), difficulty));
+            if (status != null) predicate = cb.and(predicate, cb.equal(root.get("status"), status));
+            if (approvalStatus != null) predicate = cb.and(predicate, cb.equal(root.get("approvalStatus"), approvalStatus));
+            if (creatorRole != null) predicate = cb.and(predicate, cb.equal(root.get("creatorRole"), creatorRole));
+            if (source != null) predicate = cb.and(predicate, cb.equal(root.get("source"), source));
+            if (createdBy != null) predicate = cb.and(predicate, cb.equal(root.get("createdBy").get("userId"), createdBy));
 
             if (search != null && !search.trim().isEmpty()) {
-                String keyword = "%"
-                        + search.trim().toLowerCase(Locale.ROOT)
-                        + "%";
-
-                predicate = cb.and(predicate,
-                        cb.like(cb.lower(root.get("content")), keyword));
+                String keyword = "%" + search.trim().toLowerCase(Locale.ROOT) + "%";
+                predicate = cb.and(predicate, cb.like(cb.lower(root.get("content")), keyword));
             }
 
             return predicate;
         };
 
-        log.info("QUESTION_LIST_DEBUG | buildSpecification={}ms",
-                elapsedMs(specStart));
-
-        // 4. Fetch current page
-        long queryStart = System.nanoTime();
-
         Page<Question> page = questionRepository.findAll(spec, pageable);
-
-        log.info(
-                "QUESTION_LIST_DEBUG | findAll={}ms | pageSize={} "
-                        + "| pageNumber={} | totalElements={} | totalPages={}",
-                elapsedMs(queryStart),
-                page.getNumberOfElements(),
-                page.getNumber(),
-                page.getTotalElements(),
-                page.getTotalPages());
-
-        // 5. Batch count options: one query for all questions in this page
-        long optionBatchStart = System.nanoTime();
-
-        List<Long> questionIds = page.getContent().stream()
-                .map(Question::getQuestionId)
-                .toList();
-
+        List<Long> questionIds = page.getContent().stream().map(Question::getQuestionId).toList();
         Map<Long, Long> optionCountMap = new HashMap<>();
 
         if (!questionIds.isEmpty()) {
-            List<Object[]> rows =
-                    questionRepository.countOptionsByQuestionIds(questionIds);
-
-            for (Object[] row : rows) {
-                Long id = ((Number) row[0]).longValue();
-                Long count = ((Number) row[1]).longValue();
-
-                optionCountMap.put(id, count);
-            }
+            List<Object[]> rows = questionRepository.countOptionsByQuestionIds(questionIds);
+            for (Object[] row : rows) optionCountMap.put(((Number) row[0]).longValue(), ((Number) row[1]).longValue());
         }
 
-        log.info(
-                "QUESTION_LIST_DEBUG | batchOptionCount={}ms "
-                        + "| questionCount={} | groupedRows={}",
-                elapsedMs(optionBatchStart),
-                questionIds.size(),
-                optionCountMap.size());
-
-        // 6. Map DTO; no per-question option count queries
-        long mappingStart = System.nanoTime();
-
-        Page<QuestionListItemDto> result = page.map(q ->
-                QuestionListItemDto.builder()
-                        .questionId(q.getQuestionId())
-                        .content(q.getContent())
-                        .courseId(q.getCourse() != null
-                                ? q.getCourse().getCourseId() : null)
-                        .courseName(q.getCourse() != null
-                                ? q.getCourse().getTitle() : null)
-                        .moduleId(q.getModule() != null
-                                ? q.getModule().getModuleId() : null)
-                        .moduleName(q.getModule() != null
-                                ? q.getModule().getTitle() : null)
-                        .groupId(q.getGroup() != null
-                                ? q.getGroup().getGroupId() : null)
-                        .questionType(q.getQuestionType())
-                        .difficulty(q.getDifficulty())
-                        .status(q.getStatus())
-                        .approvalStatus(q.getApprovalStatus())
-                        .creatorRole(q.getCreatorRole())
-                        .source(q.getSource())
-                        .createdBy(q.getCreatedBy() != null
-                                ? q.getCreatedBy().getUserId() : null)
-                        .scoringVersion(q.getScoringVersion())
-                        .lockVersion(q.getLockVersion())
-                        .optionCount(Math.toIntExact(
-                                optionCountMap.getOrDefault(
-                                        q.getQuestionId(), 0L)))
-                        .updatedAt(q.getUpdatedAt())
-                        .build()
-        );
-
-        log.info("QUESTION_LIST_DEBUG | mapping={}ms",
-                elapsedMs(mappingStart));
-
-        log.info(
-                "QUESTION_LIST_DEBUG | TOTAL={}ms | pageSize={} "
-                        + "| pageNumber={} | totalElements={}",
-                elapsedMs(totalStart),
-                result.getNumberOfElements(),
-                result.getNumber(),
-                result.getTotalElements());
-
-        return result;
+        return page.map(q -> QuestionListItemDto.builder()
+                .questionId(q.getQuestionId()).content(q.getContent())
+                .courseId(q.getCourse() != null ? q.getCourse().getCourseId() : null)
+                .courseName(q.getCourse() != null ? q.getCourse().getTitle() : null)
+                .moduleId(q.getModule() != null ? q.getModule().getModuleId() : null)
+                .moduleName(q.getModule() != null ? q.getModule().getTitle() : null)
+                .groupId(q.getGroup() != null ? q.getGroup().getGroupId() : null)
+                .questionType(q.getQuestionType()).difficulty(q.getDifficulty())
+                .status(q.getStatus()).approvalStatus(q.getApprovalStatus())
+                .creatorRole(q.getCreatorRole()).source(q.getSource())
+                .createdBy(q.getCreatedBy() != null ? q.getCreatedBy().getUserId() : null)
+                .scoringVersion(q.getScoringVersion()).lockVersion(q.getLockVersion())
+                .optionCount(Math.toIntExact(optionCountMap.getOrDefault(q.getQuestionId(), 0L)))
+                .updatedAt(q.getUpdatedAt()).build());
     }
-
-
-
 
     private long elapsedMs(long startNanos) {
         return (System.nanoTime() - startNanos) / 1_000_000;
     }
-
-
     @Override
     @Transactional
     public QuestionDetailDto createQuestion(QuestionCreateRequest req, User currentUser) {
