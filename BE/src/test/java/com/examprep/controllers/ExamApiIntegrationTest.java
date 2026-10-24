@@ -181,26 +181,52 @@ class ExamApiIntegrationTest {
                 .andExpect(status().isForbidden());
     }
 
-    @Test void importReusesSameModuleBankAndSkipsNormalizedDuplicates() throws Exception {
-        Exam exam = exam(course, module); exam.setMaxScore(BigDecimal.valueOf(3));
-        String contents = "1. What is two plus two?\nA. Three\nB. Four\nAnswer: B\n\n2. Explain indexing.";
-        MockMultipartFile file = new MockMultipartFile("file", "exam.txt", "text/plain", contents.getBytes(StandardCharsets.UTF_8));
-        call(manager, multipart(path(exam)+"/import").file(file)).andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.reused").value(1))
-                .andExpect(jsonPath("$.data.imported").value(1))
-                .andExpect(jsonPath("$.data.skippedDuplicates").value(0))
+    @Test void importUsesQ09TemplateAndCreatesReusesOrSkipsByContentHash() throws Exception {
+        Exam first = exam(course, module), second = exam(course, module);
+        // Block 3 repeats block 1, so it is skipped inside the same file.
+        String contents = TEMPLATE + "\n[TYPE: SINGLE_CHOICE]\nQ3. What is two plus two?\nA. Three\nB. Four\nANSWER: B";
+        importFile(first, contents).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.imported").value(2))
+                .andExpect(jsonPath("$.data.reused").value(0))
+                .andExpect(jsonPath("$.data.skippedDuplicates").value(1))
                 .andExpect(jsonPath("$.data.questionIds.length()").value(2));
+        // Created through Q-03: ACTIVE, so the exam can be published without a manual review step.
+        assertEquals(List.of("ACTIVE", "ACTIVE"), em.createQuery("select q.status from ExamQuestion l join l.question q where l.exam = :e", String.class)
+                .setParameter("e", first).getResultList());
+        importFile(second, contents).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.imported").value(0))
+                .andExpect(jsonPath("$.data.reused").value(2))
+                .andExpect(jsonPath("$.data.skippedDuplicates").value(1));
+        importFile(first, contents).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.skippedDuplicates").value(3))
+                .andExpect(jsonPath("$.data.questionIds.length()").value(0));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"docx", "pdf"})
+    void importAcceptsTheDownloadableQ09Template(String format) throws Exception {
+        byte[] template = new org.springframework.core.io.ClassPathResource("templates/import/apepp-question-template-v2." + format).getContentAsByteArray();
+        call(collaborator, multipart(path(exam(course, module))+"/import")
+                .file(new MockMultipartFile("file", "template." + format, "application/octet-stream", template)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.questionIds.length()").value(org.hamcrest.Matchers.greaterThan(0)));
     }
 
     @Test void importRejectsBadFilesAndPublishedExamsWithoutWriting() throws Exception {
         Exam exam = exam(course, module);
-        call(manager, multipart(path(exam)+"/import").file(new MockMultipartFile("file", "bad.exe", "text/plain", "text".getBytes())))
+        call(collaborator, multipart(path(exam)+"/import").file(new MockMultipartFile("file", "bad.exe", "text/plain", "text".getBytes())))
                 .andExpect(status().isBadRequest());
-        call(manager, multipart(path(exam)+"/import").file(new MockMultipartFile("file", "bad.pdf", "application/pdf", "fake pdf".getBytes())))
+        call(collaborator, multipart(path(exam)+"/import").file(new MockMultipartFile("file", "bad.pdf", "application/pdf", "fake pdf".getBytes())))
                 .andExpect(status().isBadRequest());
+        // Old numbered format is no longer accepted: both Import buttons take the Q-09 template.
+        importFile(exam, "1. A question").andExpect(status().isBadRequest());
+        importFile(exam, "[TYPE: SINGLE_CHOICE]\nQ1. Missing its answer\nA. One\nB. Two").andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.startsWith("Question 1 (line 1)")));
+        Exam noModule = exam(course, null);
+        importFile(noModule, TEMPLATE).andExpect(status().isBadRequest());
+        assertEquals(0L, em.createQuery("select count(l) from ExamQuestion l", Long.class).getSingleResult());
         attach(exam, question); exam.setStatus("PUBLISHED");
-        call(manager, multipart(path(exam)+"/import").file(new MockMultipartFile("file", "ok.txt", "text/plain", "1. A question".getBytes())))
-                .andExpect(status().isConflict());
+        importFile(exam, TEMPLATE).andExpect(status().isConflict());
     }
 
     @ParameterizedTest
@@ -290,10 +316,12 @@ class ExamApiIntegrationTest {
     }
 
     @Test void importWithoutPointsDefaultsWeightToOne() throws Exception {
-        Exam exam = exam(course, module); exam.setMaxScore(BigDecimal.valueOf(10));
-        String contents = "1. What is two plus two?\nA. Three\nB. Four\nAnswer: B";
-        MockMultipartFile file = new MockMultipartFile("file", "exam.txt", "text/plain", contents.getBytes(StandardCharsets.UTF_8));
-        call(manager, multipart(path(exam)+"/import").file(file)).andExpect(status().isOk());
+        Exam exam = exam(course, module);
+        importFile(exam, TEMPLATE).andExpect(status().isOk());
+        List<BigDecimal> weights = em.createQuery("select l.weight from ExamQuestion l where l.exam = :e", BigDecimal.class)
+                .setParameter("e", exam).getResultList();
+        assertEquals(2, weights.size());
+        weights.forEach(w -> assertEquals(0, BigDecimal.ONE.compareTo(w)));
     }
 
     @Test void creatingAndUpdatingWithDeprecatedPassMarkAndMaxAttemptsSucceedsAndIgnoresThem() throws Exception {
@@ -344,6 +372,15 @@ class ExamApiIntegrationTest {
         call(collaborator, get("/api/v1/manager/exams/" + examId)).andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.questions.length()").value(count));
         return new long[]{create, stats.getPrepareStatementCount()};
+    }
+
+    private static final String TEMPLATE = "[TYPE: SINGLE_CHOICE]\nQ1. What is two plus two?\nA. Three\nB. Four\nANSWER: B\n"
+            + "[TYPE: TRUE_FALSE]\nQ2. Indexes speed up reads.\nANSWER: true";
+
+    // collaborator is in course_managers, which Q-03 (used to save new questions) requires.
+    private ResultActions importFile(Exam exam, String contents) throws Exception {
+        return call(collaborator, multipart(path(exam)+"/import")
+                .file(new MockMultipartFile("file", "exam.txt", "text/plain", contents.getBytes(StandardCharsets.UTF_8))));
     }
 
     private ResultActions submit(Map<String,Object> payload) throws Exception {

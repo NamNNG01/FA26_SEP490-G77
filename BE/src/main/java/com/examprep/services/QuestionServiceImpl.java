@@ -502,35 +502,7 @@ public class QuestionServiceImpl implements QuestionService {
                 assertQuestionFitsGroup(group, req.getQuestionType());
             }
 
-            List<String> optionTexts = req.getOptions() == null ? null : req.getOptions().stream().map(AnswerOptionDto::getOptionText).collect(Collectors.toList());
-            String answerKeyJson = serializeJson(req.getAnswerKey(), "answerKey");
-            String hash;
-
-            if ("ORDERING".equals(req.getQuestionType())) {
-                List<Object> correctOrder = req.getCorrectOrder();
-                if (correctOrder == null && req.getAnswerKey() instanceof Map<?, ?> map && map.get("correctOrder") instanceof List<?> list) correctOrder = new ArrayList<>(list);
-
-                Map<String, String> keyToText = new HashMap<>();
-                if (req.getOptions() != null) {
-                    for (int j = 0; j < req.getOptions().size(); j++) {
-                        AnswerOptionDto option = req.getOptions().get(j);
-                        keyToText.put(option.getKey() != null ? option.getKey() : String.valueOf(j), option.getOptionText());
-                    }
-                }
-
-                List<String> orderedTexts = new ArrayList<>();
-                if (correctOrder != null) {
-                    for (Object item : correctOrder) {
-                        String key = item == null ? "" : item.toString();
-                        String text = keyToText.get(key);
-                        if (text == null) throw new BadRequestException("Invalid key in correct order: " + key);
-                        orderedTexts.add(text);
-                    }
-                }
-                hash = ContentHashUtil.computeOrderingHash(req.getContent(), orderedTexts);
-            } else {
-                hash = ContentHashUtil.computeHash(req.getContent(), optionTexts, answerKeyJson);
-            }
+            String hash = contentHash(req);
 
             hashes.add(hash);
             if (!seenHashes.add(hash)) duplicateIndexes.add(String.valueOf(i + 1));
@@ -1172,6 +1144,38 @@ public class QuestionServiceImpl implements QuestionService {
             return objectMapper.readValue(jsonStr, Object.class);
         } catch (Exception e) {
             return null;
+        }
+    }
+
+    /** Same hash Q-03 stores in questions.content_hash and uses for duplicate checks. */
+    @Override
+    public String contentHash(QuestionCreateRequest req) {
+        List<String> optionTexts = req.getOptions() == null ? null : req.getOptions().stream().map(AnswerOptionDto::getOptionText).collect(Collectors.toList());
+        String answerKeyJson = serializeJson(req.getAnswerKey(), "answerKey");
+        if ("ORDERING".equals(req.getQuestionType())) {
+            List<Object> correctOrder = req.getCorrectOrder();
+            if (correctOrder == null && req.getAnswerKey() instanceof Map<?, ?> map && map.get("correctOrder") instanceof List<?> list) correctOrder = new ArrayList<>(list);
+
+            Map<String, String> keyToText = new HashMap<>();
+            if (req.getOptions() != null) {
+                for (int j = 0; j < req.getOptions().size(); j++) {
+                    AnswerOptionDto option = req.getOptions().get(j);
+                    keyToText.put(option.getKey() != null ? option.getKey() : String.valueOf(j), option.getOptionText());
+                }
+            }
+
+            List<String> orderedTexts = new ArrayList<>();
+            if (correctOrder != null) {
+                for (Object item : correctOrder) {
+                    String key = item == null ? "" : item.toString();
+                    String text = keyToText.get(key);
+                    if (text == null) throw new BadRequestException("Invalid key in correct order: " + key);
+                    orderedTexts.add(text);
+                }
+            }
+            return ContentHashUtil.computeOrderingHash(req.getContent(), orderedTexts);
+        } else {
+            return ContentHashUtil.computeHash(req.getContent(), optionTexts, answerKeyJson);
         }
     }
 

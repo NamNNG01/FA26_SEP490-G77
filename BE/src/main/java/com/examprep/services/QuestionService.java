@@ -18,6 +18,8 @@ public interface QuestionService {
 
     List<QuestionDetailDto> createQuestionsBatch(Long courseId, Long moduleId, List<QuestionCreateRequest> requests, User currentUser);
 
+    String contentHash(QuestionCreateRequest request);
+
     QuestionDetailDto getQuestionById(Long id, User currentUser);
 
     QuestionDetailDto updateQuestion(Long id, QuestionUpdateRequest request, User currentUser);

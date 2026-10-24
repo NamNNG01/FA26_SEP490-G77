@@ -4,7 +4,6 @@ import com.examprep.dto.*;
 import com.examprep.exceptions.BadRequestException;
 import com.examprep.security.UserPrincipal;
 import com.examprep.services.ManagerExamService;
-import com.examprep.services.MaterialTextReader;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.validation.Valid;
@@ -14,7 +13,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
-import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
@@ -24,7 +22,6 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class ManagerExamController {
     private final ManagerExamService service;
-    private final MaterialTextReader reader;
     private final ObjectMapper objectMapper;
 
     @GetMapping("/exams")
@@ -90,8 +87,6 @@ public class ManagerExamController {
                 items=objectMapper.readValue(itemsJson,new TypeReference<List<ExamRequests.ImportItem>>(){});
             } catch(Exception e) { throw new BadRequestException("Invalid items JSON."); }
         }
-        try {
-            return ResponseEntity.ok(ApiResponse.success(service.importQuestions(user,id,reader.read(file.getOriginalFilename(),file.getBytes()),dryRun,items),"Questions imported successfully."));
-        } catch(IOException e) { throw new BadRequestException("Could not read the uploaded file."); }
+        return ResponseEntity.ok(ApiResponse.success(service.importQuestions(user,id,file,dryRun,items),"Questions imported successfully."));
     }
 }

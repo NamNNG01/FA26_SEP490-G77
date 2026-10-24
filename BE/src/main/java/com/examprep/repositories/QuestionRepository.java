@@ -120,6 +120,19 @@ public interface QuestionRepository extends JpaRepository<Question, Long>, JpaSp
     );
 
     @Query("""
+    SELECT q
+    FROM Question q
+    WHERE q.course.courseId = :courseId
+      AND q.contentHash IN :contentHashes
+      AND q.deletedAt IS NULL
+    ORDER BY q.questionId
+    """)
+    List<Question> findActiveByCourseAndContentHashes(
+            @Param("courseId") Long courseId,
+            @Param("contentHashes") Collection<String> contentHashes
+    );
+
+    @Query("""
     SELECT q.contentHash
     FROM Question q
     WHERE q.course.courseId = :courseId

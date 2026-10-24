@@ -6,7 +6,14 @@ import com.examprep.entities.Module;
 import com.examprep.exceptions.*;
 import com.examprep.repositories.*;
 import com.examprep.security.UserPrincipal;
+import com.examprep.dto.question.ImportBlockResult;
+import com.examprep.dto.question.QuestionCreateRequest;
 import com.examprep.util.QuestionTypeUtil;
+import com.examprep.util.importer.DocxTextExtractor;
+import com.examprep.util.importer.PdfTextExtractor;
+import com.examprep.util.importer.TemplateBlockParser;
+import com.examprep.util.importer.TemplateQuestionMapper;
+import org.springframework.web.multipart.MultipartFile;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.criteria.*;
@@ -44,12 +51,16 @@ public class ManagerExamServiceImpl implements ManagerExamService {
     private final ExamAttemptRepository attempts;
     private final QuestionRepository questions;
     private final QuestionGroupRepository groups;
-    private final AnswerOptionRepository options;
     private final CourseRepository courses;
     private final CourseManagerRepository assignments;
     private final ModuleRepository modules;
     private final UserRepository users;
     private final ObjectMapper json;
+    private final QuestionService questionService;
+    private final PdfTextExtractor pdfText;
+    private final DocxTextExtractor docxText;
+    private final TemplateBlockParser blockParser;
+    private final TemplateQuestionMapper blockMapper;
 
     private List<ExamResponse> mapExamPage(List<Exam> exams, boolean detail) {
         if (exams.isEmpty()) {
@@ -627,71 +638,77 @@ public class ManagerExamServiceImpl implements ManagerExamService {
     }
 
     @Override @Transactional
-    public ExamResponse.Imported importQuestions(UserPrincipal user,Long id,String text,boolean dryRun,List<ExamRequests.ImportItem> items) {
+    public ExamResponse.Imported importQuestions(UserPrincipal user,Long id,MultipartFile file,boolean dryRun,List<ExamRequests.ImportItem> items) {
         Exam e=write(user,id);
         if(!"DRAFT".equals(e.getStatus())) throw conflict("Unpublish the exam before importing.");
         editable(e);
-        List<QuestionTextParser.Parsed> parsed=QuestionTextParser.parse(text);
-        if(dryRun) {
-            return new ExamResponse.Imported(parsed.size(),0,0,List.of());
-        }
+        if(e.getModule()==null) throw bad("Select a module for this exam before importing questions.");
+        List<QuestionCreateRequest> parsed=importBlocks(file);
+        if(dryRun) return new ExamResponse.Imported(parsed.size(),0,0,List.of());
         Map<Integer,BigDecimal> weightMap=new HashMap<>();
-        if(items!=null) {
-            for(var item:items) {
-                if(item.getIndex()<0 || item.getIndex()>=parsed.size()) throw bad("Import item index out of range.");
-                weightMap.put(item.getIndex(),weight(item.getWeight()));
-            }
+        for(var item:list(items)) {
+            if(item.getIndex()<0 || item.getIndex()>=parsed.size()) throw bad("Import item index out of range.");
+            weightMap.put(item.getIndex(),weight(item.getWeight()));
         }
-        Map<String,Question> bank=new LinkedHashMap<>();
-        for(Question q:questions.findImportBank(courseId(e),e.getModule()==null?null:e.getModule().getModuleId())) bank.putIfAbsent(QuestionTextParser.hash(q.getContent()),q);
-        Map<Long, Question> existingQuestions = examQuestions(e);
+        Long courseId=courseId(e), moduleId=e.getModule().getModuleId();
+        // Same content hash and course-wide scope as Q-03's duplicate check, so creating the rest never hits its 409.
+        List<String> hashes=parsed.stream().map(questionService::contentHash).toList();
+        Map<String,Question> bank=new HashMap<>();
+        for(Question q:questions.findActiveByCourseAndContentHashes(courseId,new HashSet<>(hashes))) bank.putIfAbsent(q.getContentHash(),q);
+        Set<Long> existingQuestionIds=new HashSet<>(examQuestions(e).keySet());
 
-        Set<String> attached = new HashSet<>();
-        Set<Long> existingQuestionIds = new HashSet<>(existingQuestions.keySet());
-
-        for (Question q : existingQuestions.values()) {
-            attached.add(QuestionTextParser.hash(q.getContent()));
+        Set<String> seen=new HashSet<>(); Map<Integer,Long> picked=new LinkedHashMap<>(); List<QuestionCreateRequest> toCreate=new ArrayList<>();
+        int reused=0,skipped=0;
+        for(int idx=0;idx<parsed.size();idx++) {
+            Question existing=bank.get(hashes.get(idx));
+            if(!seen.add(hashes.get(idx)) || (existing!=null && existingQuestionIds.contains(existing.getQuestionId()))) { skipped++; continue; }
+            if(existing!=null) reused++; else toCreate.add(parsed.get(idx));
+            picked.put(idx,existing==null?null:existing.getQuestionId());
         }
 
-        int nextOrder = links
-                .findByExamExamIdOrderByOrderIndexAscExamQuestionIdAsc(id)
-                .stream()
-                .map(ExamQuestion::getOrderIndex)
-                .filter(Objects::nonNull)
-                .max(Integer::compareTo)
-                .orElse(-1) + 1;        int imported=0,reused=0,skipped=0; List<Long> ids=new ArrayList<>(); Map<String,QuestionGroup> importGroups=new LinkedHashMap<>();
-        for(int idx=0; idx<parsed.size(); idx++) {
-            var item=parsed.get(idx);
-            BigDecimal wt = weightMap.getOrDefault(idx, BigDecimal.ONE);
-            String hash=QuestionTextParser.hash(item.content());
-            if(!attached.add(hash)) { skipped++; continue; }
-            Question q=bank.get(hash);
-            if(q==null) {
-                QuestionGroup importGroup=null;
-                if(e.getModule()==null) {
-                    String kind=QuestionTypeUtil.kindOf(item.type());
-                    importGroup=importGroups.computeIfAbsent(kind,k->groups.save(QuestionGroup.builder().course(e.getCourse()).questionType(k).title(e.getTitle()+" import ("+k+")").build()));
-                }
-                q=questions.save(Question.builder().course(e.getCourse()!=null?e.getCourse():e.getModule().getCourse()).module(e.getModule()).group(importGroup).content(item.content()).questionType(item.type()).status("DRAFT").build());
-                for(int i=0;i<item.options().size();i++) options.save(AnswerOption.builder().question(q).optionText(item.options().get(i)).isCorrect(i==item.correctIndex()).orderIndex(i).build());
-                bank.put(hash,q); imported++;
-            } else reused++;
-            ExamRequests.QuestionLink linkRequest =
-                    new ExamRequests.QuestionLink(q.getQuestionId(), wt, nextOrder);
+        User creator=users.findById(user.getId()).orElseThrow(()->missing("User"));
+        List<Long> created=new ArrayList<>();
+        for(int from=0;from<toCreate.size();from+=50)
+            questionService.createQuestionsBatch(courseId,moduleId,toCreate.subList(from,Math.min(from+50,toCreate.size())),creator)
+                    .forEach(q->created.add(q.getQuestionId()));
 
-            // No access/ACTIVE check here: new questions are DRAFT by design (SRS 5.6) and reused ones
-            // come from findImportBank, already scoped to the exam's course that write() authorized.
-            ExamQuestion saved = attachValidatedQuestion(
-                    e,
-                    linkRequest,
-                    q,
-                    existingQuestionIds,
-                    nextOrder
-            );
+        Iterator<Long> newIds=created.iterator();
+        int nextOrder=next(links.findByExamExamIdOrderByOrderIndexAscExamQuestionIdAsc(id).stream().map(ExamQuestion::getOrderIndex).toList());
+        List<Long> ids=new ArrayList<>();
+        for(var entry:picked.entrySet()) {
+            Long questionId=entry.getValue()!=null?entry.getValue():newIds.next();
+            // Access was settled by write() (the exam's course) and Q-03; reused questions come from that same course.
+            ExamQuestion saved=attachValidatedQuestion(e,new ExamRequests.QuestionLink(questionId,weightMap.getOrDefault(entry.getKey(),BigDecimal.ONE),nextOrder),
+                    questions.getReferenceById(questionId),existingQuestionIds,nextOrder);
+            nextOrder=saved.getOrderIndex()+1;
+            ids.add(questionId);
+        }
+        links.flush();
+        return new ExamResponse.Imported(toCreate.size(),reused,skipped,ids);
+    }
 
-            nextOrder = Math.max(nextOrder, saved.getOrderIndex() + 1);
-            ids.add(q.getQuestionId());        }
-        links.flush(); return new ExamResponse.Imported(imported,reused,skipped,ids);
+    // E-13 reads files exactly like Q-09 (template v2: [TYPE: ...] then Q1. ...), so both Import buttons accept the same file.
+    private List<QuestionCreateRequest> importBlocks(MultipartFile file) {
+        String name=file.getOriginalFilename()==null?"":file.getOriginalFilename().toLowerCase(Locale.ROOT);
+        List<String> lines;
+        try {
+            if(name.endsWith(".pdf")) lines=pdfText.extractText(file);
+            else if(name.endsWith(".docx")) lines=docxText.extractText(file);
+            else if(name.endsWith(".txt")) lines=new String(file.getBytes(),java.nio.charset.StandardCharsets.UTF_8).lines().map(String::strip).toList();
+            else throw bad("Supported files: pdf, docx and txt.");
+        } catch(BadRequestException ex) { throw ex; }
+        catch(Exception ex) { throw bad("Could not read the uploaded file."); }
+        List<TemplateBlockParser.RawBlock> blocks=blockParser.parseBlocks(lines);
+        if(blocks.isEmpty() || blocks.size()>500) throw bad("Import needs 1-500 questions in the import template format ([TYPE: ...] followed by Q1. ...).");
+        List<QuestionCreateRequest> result=new ArrayList<>(); List<String> errors=new ArrayList<>();
+        for(int i=0;i<blocks.size();i++) {
+            ImportBlockResult block=blockMapper.mapAndValidateBlock(blocks.get(i),i+1,"MEDIUM");
+            int number=i+1;
+            if(block.getErrors()==null || block.getErrors().isEmpty()) result.add(block.getQuestionData());
+            else block.getErrors().forEach(err->errors.add("Question "+number+" (line "+err.getLine()+"): "+err.getMessage()));
+        }
+        if(!errors.isEmpty()) throw bad(String.join("; ",errors.subList(0,Math.min(5,errors.size())))+(errors.size()>5?" (+"+(errors.size()-5)+" more)":""));
+        return result;
     }
 
     private ExamGroup attachGroup(UserPrincipal user,Exam e,ExamRequests.GroupLink r,Set<Long> checked) {
