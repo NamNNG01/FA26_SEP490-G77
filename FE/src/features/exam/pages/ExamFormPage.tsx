@@ -1427,7 +1427,12 @@ export function ExamFormPage({
                             value={c.difficulty || "ANY"}
                             disabled={isReadOnly}
                             onChange={(v) =>
-                              handleConfigChange(idx, "difficulty", v)
+                              // "ANY" is UI-only; the API means "any difficulty" by omitting the field.
+                              handleConfigChange(
+                                idx,
+                                "difficulty",
+                                v === "ANY" ? undefined : v,
+                              )
                             }
                             options={[
                               { label: "Any Difficulty", value: "ANY" },
