@@ -103,6 +103,7 @@ class ExamApiIntegrationTest {
     }
 
     @Test void randomConfigsAreScopedAndRequireValidModes() throws Exception {
+        question(module, "ESSAY", "Second essay"); question(module, "ESSAY", "Third essay");
         Map<String,Object> payload = create();
         payload.put("generationType", "RANDOM"); payload.put("questionIds", List.of());
         payload.put("configs", List.of(Map.of("questionType", "ESSAY", "numberOfQuestions", 3, "moduleId", module.getModuleId())));
@@ -114,19 +115,27 @@ class ExamApiIntegrationTest {
         payload = create(); payload.put("moduleId", foreignModule.getModuleId()); submit(payload).andExpect(status().isBadRequest());
     }
 
-    @Test void randomExamPublishesOnlyWhenTheBankCanFillEveryRule() throws Exception {
+    @Test void randomRulesMustBeFillableFromTheBankOnSaveAndPublish() throws Exception {
         Map<String,Object> payload = random("SINGLE_CHOICE");
         payload.put("configs", List.of(Map.of("questionType", "SINGLE_CHOICE", "numberOfQuestions", 2, "moduleId", module.getModuleId())));
+        // Bank has one active SINGLE_CHOICE in the module; a DRAFT one does not count. The rule draws two.
+        question(module, "SINGLE_CHOICE", "Draft question").setStatus("DRAFT");
+        submit(payload).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Random rule 1 needs 2 SINGLE_CHOICE question(s) but the question bank has only 1 active, approved one(s)."));
+        Question second = question(module, "SINGLE_CHOICE", "Second active question");
         long id = data(submit(payload).andExpect(status().isCreated())).path("examId").asLong();
+
+        // E-04 checks replaced rules the same way.
+        call(manager, put("/api/v1/manager/exams/" + id).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("configs",
+                List.of(Map.of("questionType", "SINGLE_CHOICE", "numberOfQuestions", 2, "moduleId", module.getModuleId(), "difficulty", "HARD"))))))
+                .andExpect(status().isBadRequest());
+
+        // Publish re-checks, because the bank can change after the rules were saved.
         String publish = "/api/v1/manager/exams/" + id + "/publish";
-        // Bank has one active SINGLE_CHOICE in the module; the rule draws two.
-        call(manager, patch(publish).contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"PUBLISHED\"}"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.startsWith("Random rule 1 draws 2 SINGLE_CHOICE")));
-        Question draft = question(module, "SINGLE_CHOICE", "Draft question"); draft.setStatus("DRAFT");
+        second.setStatus("INACTIVE");
         call(manager, patch(publish).contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"PUBLISHED\"}"))
                 .andExpect(status().isBadRequest());
-        question(module, "SINGLE_CHOICE", "Second active question");
+        second.setStatus("ACTIVE");
         call(manager, patch(publish).contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"PUBLISHED\"}"))
                 .andExpect(status().isOk());
     }
@@ -249,6 +258,7 @@ class ExamApiIntegrationTest {
     @ParameterizedTest
     @ValueSource(strings = {"MULTIPLE_CHOICE", "FILL_BLANK"})
     void randomConfigsAcceptCanonicalQuestionTypes(String type) throws Exception {
+        question(module, type, "Bank question for " + type);
         Map<String,Object> payload = random(type);
         submit(payload).andExpect(status().isCreated())
                 .andExpect(jsonPath("$.data.configs[0].questionType").value(type));

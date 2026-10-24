@@ -555,13 +555,10 @@ public class ManagerExamServiceImpl implements ManagerExamService {
                     +groupLinks.findByExamExamIdOrderByOrderIndexAscExamGroupIdAsc(id).size(),configured.size());
             for(ExamConfig config:configured) validateConfigModule(config.getModule(),courseId(e));
             if(state.questionCount()==0) throw bad("Add at least one question before publishing.");
-            // ponytail: each rule is checked alone; two rules drawing from the same pool can still overlap. Sum per pool if that matters.
+            // Re-checked here because the bank may have changed since the rules were saved.
             for(int i=0;i<configured.size();i++) {
                 ExamConfig c=configured.get(i);
-                long available=questions.countDrawable(courseId(e),c.getModule()==null?null:c.getModule().getModuleId(),c.getQuestionType(),c.getDifficulty());
-                if(available<c.getNumberOfQuestions())
-                    throw bad("Random rule "+(i+1)+" draws "+c.getNumberOfQuestions()+" "+c.getQuestionType()+(c.getDifficulty()==null?"":" "+c.getDifficulty())
-                            +" question(s) but the bank has only "+available+" active, approved one(s).");
+                checkDrawable(courseId(e),i+1,c.getQuestionType(),c.getModule()==null?null:c.getModule().getModuleId(),c.getDifficulty(),c.getNumberOfQuestions());
             }
 
             for(ExamQuestion l : direct) {
@@ -752,11 +749,22 @@ public class ManagerExamServiceImpl implements ManagerExamService {
         return groupLinks.saveAndFlush(ExamGroup.builder().exam(e).group(g).orderIndex(groupOrder).build());
     }
     private void validateConfigs(List<ExamRequests.Config> values,Long courseId) {
-        for(var c:list(values)) {
+        List<ExamRequests.Config> rules=list(values);
+        for(int i=0;i<rules.size();i++) {
+            var c=rules.get(i);
             if(!TYPES.contains(c.getQuestionType())) throw bad("Invalid questionType.");
             validateConfigModule(c.getModuleId()==null?null:module(c.getModuleId()),courseId);
             if(c.getWeightEach()!=null) weight(c.getWeightEach());
+            checkDrawable(courseId,i+1,c.getQuestionType(),c.getModuleId(),c.getDifficulty(),c.getNumberOfQuestions());
         }
+    }
+    // A random rule must be fillable from the bank's active, approved questions (type, module, difficulty; null = any).
+    // ponytail: each rule is checked alone; two rules drawing from the same pool can still overlap. Sum per pool if that matters.
+    private void checkDrawable(Long courseId,int rule,String type,Long moduleId,String difficulty,int count) {
+        long available=questions.countDrawable(courseId,moduleId,type,difficulty);
+        if(available<count)
+            throw bad("Random rule "+rule+" needs "+count+" "+type+(difficulty==null?"":" "+difficulty)
+                    +" question(s) but the question bank has only "+available+" active, approved one(s).");
     }
     private void validateConfigModule(Module module,Long courseId) {
         if(module!=null && !module.getCourse().getCourseId().equals(courseId)) throw bad("Config module must belong to the exam course.");
