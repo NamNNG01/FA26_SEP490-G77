@@ -67,9 +67,6 @@ public class QuestionController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @AuthenticationPrincipal UserPrincipal currentUser) {
-        if (skillTag != null) {
-            throw new BadRequestException("skillTag is not supported");
-        }
         User user = resolveUser(currentUser);
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "updatedAt"));
         Page<QuestionListItemDto> result = questionService.getQuestions(
@@ -78,16 +75,6 @@ public class QuestionController {
         return ResponseEntity.ok(ApiResponse.success(result, "Questions retrieved successfully"));
     }
 
-    @PostMapping
-    @Operation(summary = "Q-02: Create single question")
-    public ResponseEntity<ApiResponse<QuestionDetailDto>> createQuestion(
-            @Valid @RequestBody QuestionCreateRequest request,
-            @AuthenticationPrincipal UserPrincipal currentUser) {
-        User user = resolveUser(currentUser);
-        QuestionDetailDto created = questionService.createQuestion(request, user);
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success(created, "Question created successfully"));
-    }
 
     @PostMapping("/batch")
     @Operation(summary = "Q-03: Batch create questions (1..50)")
