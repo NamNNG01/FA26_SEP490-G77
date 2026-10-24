@@ -27,5 +27,7 @@ public class AdminDashboardResponse {
         private long totalManagers;
         private long totalCourses;
         private long totalExams;
+        private long publishedCourses;
+        private long draftCourses;
     }
 }

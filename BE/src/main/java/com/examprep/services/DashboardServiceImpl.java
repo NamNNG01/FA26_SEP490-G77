@@ -96,10 +96,15 @@ public class DashboardServiceImpl implements DashboardService {
         long totalUsers = userRepository.count();
         long totalStudents = userRepository.countByRoleName(User.ROLE_STUDENT);
         long totalManagers = userRepository.countByRoleName(User.ROLE_COURSE_MANAGER);
+
         long totalCourses = courseRepository.count();
+        long publishedCourses = courseRepository.countByIsPublishedTrue();
+        long draftCourses = courseRepository.countByIsPublishedFalse();
+
         long totalExams = examRepository.count();
 
-        List<RecentUser> recentUsers = userRepository.findRecentUsers(PageRequest.of(0, RECENT_LIMIT));
+        List<RecentUser> recentUsers =
+                userRepository.findRecentUsers(PageRequest.of(0, RECENT_LIMIT));
 
         return AdminDashboardResponse.builder()
                 .summary(AdminDashboardResponse.Summary.builder()
@@ -107,6 +112,8 @@ public class DashboardServiceImpl implements DashboardService {
                         .totalStudents(totalStudents)
                         .totalManagers(totalManagers)
                         .totalCourses(totalCourses)
+                        .publishedCourses(publishedCourses)
+                        .draftCourses(draftCourses)
                         .totalExams(totalExams)
                         .build())
                 .recentUsers(recentUsers)

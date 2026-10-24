@@ -320,7 +320,6 @@ public class QuestionServiceImpl implements QuestionService {
                     String key = dto.getKey() != null ? dto.getKey() : String.valueOf(j);
                     Long optionId = qOptions.get(j).getOptionId();
                     keyToIdMap.put(key, optionId);
-                    keyToIdMap.put(String.valueOf(optionId), optionId);
                 }
 
                 List<Long> orderedOptionIds = new ArrayList<>();
