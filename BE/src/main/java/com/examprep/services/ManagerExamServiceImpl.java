@@ -376,7 +376,7 @@ public class ManagerExamServiceImpl implements ManagerExamService {
 
         validateMode(
                 r.getGenerationType(),
-                size(r.getQuestionIds()) + size(r.getGroupIds()),
+                size(r.getQuestionIds()) + size(r.getGroupIds()) + size(r.getImportedQuestions()),
                 size(r.getConfigs())
         );
 
@@ -425,6 +425,9 @@ public class ManagerExamServiceImpl implements ManagerExamService {
         }
 
         validateConfigs(r.getConfigs(), courseId);
+        if (!list(r.getImportedQuestions()).isEmpty() && module == null) {
+            throw bad("Select a module for this exam before importing questions.");
+        }
         long validated = System.nanoTime();
 
         Exam e = Exam.builder()
@@ -462,6 +465,14 @@ public class ManagerExamServiceImpl implements ManagerExamService {
                     nextOrder,
                     saved.getOrderIndex() + 1
             );
+        }
+
+        // Questions imported on the create screen: saved and attached in this same transaction (no orphans if E-02 fails).
+        if (!list(r.getImportedQuestions()).isEmpty()) {
+            attachImported(user, e,
+                    r.getImportedQuestions().stream().map(ExamRequests.ImportedQuestion::getQuestion).toList(),
+                    r.getImportedQuestions().stream().map(i -> weight(i.getWeight())).toList(),
+                    attachedIds, nextOrder);
         }
 
         for (var item : list(r.getGroupIds())) {
@@ -555,14 +566,8 @@ public class ManagerExamServiceImpl implements ManagerExamService {
                     +groupLinks.findByExamExamIdOrderByOrderIndexAscExamGroupIdAsc(id).size(),configured.size());
             for(ExamConfig config:configured) validateConfigModule(config.getModule(),courseId(e));
             if(state.questionCount()==0) throw bad("Add at least one question before publishing.");
-            // ponytail: each rule is checked alone; two rules drawing from the same pool can still overlap. Sum per pool if that matters.
-            for(int i=0;i<configured.size();i++) {
-                ExamConfig c=configured.get(i);
-                long available=questions.countDrawable(courseId(e),c.getModule()==null?null:c.getModule().getModuleId(),c.getQuestionType(),c.getDifficulty());
-                if(available<c.getNumberOfQuestions())
-                    throw bad("Random rule "+(i+1)+" draws "+c.getNumberOfQuestions()+" "+c.getQuestionType()+(c.getDifficulty()==null?"":" "+c.getDifficulty())
-                            +" question(s) but the bank has only "+available+" active, approved one(s).");
-            }
+            // Re-checked here because the bank may have changed since the rules were saved.
+            checkRules(courseId(e),configured.stream().map(c->new Rule(c.getQuestionType(),c.getModule()==null?null:c.getModule().getModuleId(),c.getDifficulty(),c.getNumberOfQuestions())).toList());
 
             for(ExamQuestion l : direct) {
                 if(l.getWeight().compareTo(BigDecimal.ZERO) <= 0) throw conflict("Question weight must be positive.");
@@ -653,24 +658,33 @@ public class ManagerExamServiceImpl implements ManagerExamService {
         if(e.getModule()==null) throw bad("Select a module for this exam before importing questions.");
         List<QuestionCreateRequest> parsed=importBlocks(file);
         if(dryRun) return new ExamResponse.Imported(parsed.size(),0,0,List.of());
-        Map<Integer,BigDecimal> weightMap=new HashMap<>();
+        List<BigDecimal> weights=new ArrayList<>(Collections.nCopies(parsed.size(),BigDecimal.ONE));
         for(var item:list(items)) {
             if(item.getIndex()<0 || item.getIndex()>=parsed.size()) throw bad("Import item index out of range.");
-            weightMap.put(item.getIndex(),weight(item.getWeight()));
+            weights.set(item.getIndex(),weight(item.getWeight()));
         }
+        int nextOrder=next(links.findByExamExamIdOrderByOrderIndexAscExamQuestionIdAsc(id).stream().map(ExamQuestion::getOrderIndex).toList());
+        ExamResponse.Imported result=attachImported(user,e,parsed,weights,new HashSet<>(examQuestions(e).keySet()),nextOrder);
+        links.flush();
+        return result;
+    }
+
+    // Shared by E-13 and E-02 importedQuestions, so both Import buttons behave the same: reuse a bank question with
+    // Q-03's content hash (course-wide, like Q-03's duplicate check, so creating the rest never hits its 409), skip
+    // duplicates within the list or already in the exam, create the rest through Q-03, then attach in list order.
+    // Callers must reject module-less exams first (Q-03 needs a module).
+    private ExamResponse.Imported attachImported(UserPrincipal user,Exam e,List<QuestionCreateRequest> requests,List<BigDecimal> weights,Set<Long> inExam,int nextOrder) {
         Long courseId=courseId(e), moduleId=e.getModule().getModuleId();
-        // Same content hash and course-wide scope as Q-03's duplicate check, so creating the rest never hits its 409.
-        List<String> hashes=parsed.stream().map(questionService::contentHash).toList();
+        List<String> hashes=requests.stream().map(questionService::contentHash).toList();
         Map<String,Question> bank=new HashMap<>();
         for(Question q:questions.findActiveByCourseAndContentHashes(courseId,new HashSet<>(hashes))) bank.putIfAbsent(q.getContentHash(),q);
-        Set<Long> existingQuestionIds=new HashSet<>(examQuestions(e).keySet());
 
         Set<String> seen=new HashSet<>(); Map<Integer,Long> picked=new LinkedHashMap<>(); List<QuestionCreateRequest> toCreate=new ArrayList<>();
         int reused=0,skipped=0;
-        for(int idx=0;idx<parsed.size();idx++) {
+        for(int idx=0;idx<requests.size();idx++) {
             Question existing=bank.get(hashes.get(idx));
-            if(!seen.add(hashes.get(idx)) || (existing!=null && existingQuestionIds.contains(existing.getQuestionId()))) { skipped++; continue; }
-            if(existing!=null) reused++; else toCreate.add(parsed.get(idx));
+            if(!seen.add(hashes.get(idx)) || (existing!=null && inExam.contains(existing.getQuestionId()))) { skipped++; continue; }
+            if(existing!=null) reused++; else toCreate.add(requests.get(idx));
             picked.put(idx,existing==null?null:existing.getQuestionId());
         }
 
@@ -681,17 +695,15 @@ public class ManagerExamServiceImpl implements ManagerExamService {
                     .forEach(q->created.add(q.getQuestionId()));
 
         Iterator<Long> newIds=created.iterator();
-        int nextOrder=next(links.findByExamExamIdOrderByOrderIndexAscExamQuestionIdAsc(id).stream().map(ExamQuestion::getOrderIndex).toList());
         List<Long> ids=new ArrayList<>();
         for(var entry:picked.entrySet()) {
             Long questionId=entry.getValue()!=null?entry.getValue():newIds.next();
-            // Access was settled by write() (the exam's course) and Q-03; reused questions come from that same course.
-            ExamQuestion saved=attachValidatedQuestion(e,new ExamRequests.QuestionLink(questionId,weightMap.getOrDefault(entry.getKey(),BigDecimal.ONE),nextOrder),
-                    questions.getReferenceById(questionId),existingQuestionIds,nextOrder);
+            // Access was settled by write()/create (the exam's course) and Q-03; reused questions come from that same course.
+            ExamQuestion saved=attachValidatedQuestion(e,new ExamRequests.QuestionLink(questionId,weights.get(entry.getKey()),nextOrder),
+                    questions.getReferenceById(questionId),inExam,nextOrder);
             nextOrder=saved.getOrderIndex()+1;
             ids.add(questionId);
         }
-        links.flush();
         return new ExamResponse.Imported(toCreate.size(),reused,skipped,ids);
     }
 
@@ -752,10 +764,35 @@ public class ManagerExamServiceImpl implements ManagerExamService {
         return groupLinks.saveAndFlush(ExamGroup.builder().exam(e).group(g).orderIndex(groupOrder).build());
     }
     private void validateConfigs(List<ExamRequests.Config> values,Long courseId) {
-        for(var c:list(values)) {
+        List<ExamRequests.Config> rules=list(values);
+        for(int i=0;i<rules.size();i++) {
+            var c=rules.get(i);
             if(!TYPES.contains(c.getQuestionType())) throw bad("Invalid questionType.");
             validateConfigModule(c.getModuleId()==null?null:module(c.getModuleId()),courseId);
             if(c.getWeightEach()!=null) weight(c.getWeightEach());
+        }
+        checkRules(courseId,rules.stream().map(c->new Rule(c.getQuestionType(),c.getModuleId(),c.getDifficulty(),c.getNumberOfQuestions())).toList());
+    }
+    private record Rule(String type,Long moduleId,String difficulty,int count) {}
+    // Every random rule must be fillable from the bank's active, approved questions (type, module, difficulty; null = any).
+    // Same-type rules must draw from disjoint questions: overlapping ones ("all modules"/"any difficulty" overlaps every
+    // module/difficulty) would compete for the same questions, so a per-rule count could pass while the draw can't fill both.
+    // With overlaps rejected, checking each rule alone is exact.
+    private void checkRules(Long courseId,List<Rule> rules) {
+        for(int i=0;i<rules.size();i++) {
+            Rule a=rules.get(i);
+            for(int j=0;j<i;j++) {
+                Rule b=rules.get(j);
+                if(a.type().equals(b.type())
+                        && (a.moduleId()==null || b.moduleId()==null || a.moduleId().equals(b.moduleId()))
+                        && (a.difficulty()==null || b.difficulty()==null || a.difficulty().equals(b.difficulty())))
+                    throw bad("Random rules "+(j+1)+" and "+(i+1)+" both draw "+a.type()+" from the same questions. "
+                            +"Merge them into one rule, or give them different modules or difficulties.");
+            }
+            long available=questions.countDrawable(courseId,a.moduleId(),a.type(),a.difficulty());
+            if(available<a.count())
+                throw bad("Random rule "+(i+1)+" needs "+a.count()+" "+a.type()+(a.difficulty()==null?"":" "+a.difficulty())
+                        +" question(s) but the question bank has only "+available+" active, approved one(s).");
         }
     }
     private void validateConfigModule(Module module,Long courseId) {

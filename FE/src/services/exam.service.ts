@@ -2,6 +2,7 @@ import { api } from './api';
 import { apiClient } from './axios';
 import type { ApiResponse } from '@/auth/authContext';
 import type { PageResponse } from './course.service';
+import type { QuestionCreateRequest } from './question.service';
 
 export type ExamStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
 export type ExamKind = 'QUIZ' | 'ESSAY' | 'CODE' | 'DIAGRAM' | 'MIXED';
@@ -97,6 +98,8 @@ export interface CreateExamRequest {
   maxScore: number;
   status?: ExamStatus;
   questionIds?: { questionId: number; weight: number; orderIndex: number }[];
+  /** Import-preview drafts (Q-03 payload shape); the server creates or reuses them and attaches them with the exam. */
+  importedQuestions?: { question: QuestionCreateRequest; weight: number }[];
   configs?: ExamConfig[];
   groupIds?: { groupId: number; questions: { questionId: number; weight: number }[]; orderIndex: number }[];
 }

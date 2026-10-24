@@ -92,6 +92,19 @@ public final class ExamRequests {
     @AllArgsConstructor
     @Builder
     @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class ImportedQuestion {
+        // Validated by Q-03's QuestionValidator when saved, same as POST /questions/batch.
+        @NotNull
+        private com.examprep.dto.question.QuestionCreateRequest question;
+        @DecimalMin(value="0", inclusive=false) @DecimalMax("1000") @Digits(integer=4, fraction=2)
+        private BigDecimal weight;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public static class ImportItem {
         private int index;
         @NotNull @DecimalMin(value="0", inclusive=false) @DecimalMax("1000")
@@ -158,6 +171,9 @@ public final class ExamRequests {
         private List<@Valid Config> configs;
         @Size(max=100)
         private List<@Valid GroupLink> groupIds;
+        /** Questions from the create-screen import preview; created (or reused) and attached with the exam. */
+        @Size(max=500)
+        private List<@Valid ImportedQuestion> importedQuestions;
 
         @JsonSetter("passMark")
         public void setPassMark(Object passMark) {
