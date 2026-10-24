@@ -451,6 +451,25 @@ function RubricAnswers({
                     <Icon.Trash className="w-4 h-4" />
                   </button>
                 </div>
+                <div className="mt-2 ml-9">
+                  <label
+                    htmlFor={`${c.key}-descriptors`}
+                    className="mb-1 block text-xs font-medium text-content-secondary"
+                  >
+                    Descriptors
+                  </label>
+                  <textarea
+                    id={`${c.key}-descriptors`}
+                    value={c.descriptors}
+                    onChange={(e) =>
+                      setCriterion(i, { descriptors: e.target.value })
+                    }
+                    aria-label={`Criterion ${i + 1} descriptors`}
+                    placeholder="Describe full, partial, and zero-credit performance for this criterion."
+                    rows={3}
+                    className={`${inputCls(false)} !h-auto py-2 text-sm resize-y`}
+                  />
+                </div>
               </div>
             );
           })}

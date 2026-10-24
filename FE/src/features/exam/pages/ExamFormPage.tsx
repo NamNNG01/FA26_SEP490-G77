@@ -553,7 +553,13 @@ export function ExamFormPage({
           questionIds: payloadQuestionIds,
           importedQuestions,
           groupIds: payloadGroupIds,
-          configs: generationType === "STATIC" ? [] : configs,
+          configs:
+            generationType === "RANDOM"
+              ? configs.map((config) => ({
+                  ...config,
+                  moduleId: Number(moduleId),
+                }))
+              : [],
         });
 
         toast.success("Exam successfully created.");
@@ -572,7 +578,13 @@ export function ExamFormPage({
           isPractice,
           generationType,
           maxScore,
-          configs: generationType === "STATIC" ? [] : configs,
+          configs:
+            generationType === "RANDOM"
+              ? configs.map((config) => ({
+                  ...config,
+                  moduleId: Number(moduleId),
+                }))
+              : [],
         });
 
         toast.success("Exam configuration updated successfully.");
@@ -630,7 +642,10 @@ export function ExamFormPage({
             })),
           orderIndex: idx,
         })),
-        configs,
+        configs: configs.map((config) => ({
+          ...config,
+          moduleId: Number(moduleId),
+        })),
       });
 
       toast.success("Previous exam archived and new editable copy created.");
@@ -1280,6 +1295,18 @@ export function ExamFormPage({
                     disabled={isReadOnly}
                     onChange={(v) => {
                       setGenerationType(v as GenerationType);
+                      if (v === "RANDOM" && !isEdit) {
+                        setQuestions([]);
+                        setGroups([]);
+                        setImportedQuestionDrafts([]);
+                        setImportedQuestionsSubmitted(false);
+                        setBankModalOpen(false);
+                        setGroupModalOpen(false);
+                        setImportPreviewOpen(false);
+                        setImportModalOpen(false);
+                      } else if (v === "STATIC" && !isEdit) {
+                        setConfigs([]);
+                      }
                       setIsDirty(true);
                     }}
                     options={[
@@ -1331,9 +1358,9 @@ export function ExamFormPage({
                     {configs.map((c, idx) => (
                       <div
                         key={idx}
-                        className="p-3 rounded-[10px] border border-line bg-surface-muted/40 flex flex-wrap items-center gap-3"
+                        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.6fr)_minmax(96px,0.9fr)_minmax(140px,1.15fr)_minmax(160px,1.25fr)_auto] items-start gap-3 p-3 rounded-[10px] border border-line bg-surface-muted/40"
                       >
-                        <div className="w-40">
+                        <div className="min-w-0">
                           <label className="text-2xs text-content-subtle block mb-1">
                             Type
                           </label>
@@ -1350,7 +1377,7 @@ export function ExamFormPage({
                           />
                         </div>
 
-                        <div className="w-24">
+                        <div className="min-w-0">
                           <label className="text-2xs text-content-subtle block mb-1">
                             Count
                           </label>
@@ -1371,7 +1398,7 @@ export function ExamFormPage({
                           />
                         </div>
 
-                        <div className="w-28">
+                        <div className="min-w-0">
                           <label className="text-2xs text-content-subtle block mb-1">
                             Weight Each
                           </label>
@@ -1397,7 +1424,7 @@ export function ExamFormPage({
                           </span>
                         </div>
 
-                        <div className="w-32">
+                        <div className="min-w-0">
                           <label className="text-2xs text-content-subtle block mb-1">
                             Difficulty
                           </label>
@@ -1421,32 +1448,8 @@ export function ExamFormPage({
                           />
                         </div>
 
-                        <div className="flex-1 min-w-[140px]">
-                          <label className="text-2xs text-content-subtle block mb-1">
-                            Module
-                          </label>
-                          <Select
-                            value={c.moduleId ? String(c.moduleId) : ""}
-                            disabled={isReadOnly || !courseId}
-                            onChange={(v) =>
-                              handleConfigChange(
-                                idx,
-                                "moduleId",
-                                v ? Number(v) : undefined,
-                              )
-                            }
-                            options={[
-                              { label: "All Modules", value: "" },
-                              ...modules.map((m) => ({
-                                label: m.title,
-                                value: String(m.moduleId),
-                              })),
-                            ]}
-                          />
-                        </div>
-
                         {!isReadOnly && (
-                          <div className="pt-4">
+                          <div className="self-center">
                             <button
                               type="button"
                               onClick={() => handleRemoveConfigRow(idx)}
@@ -1464,7 +1467,9 @@ export function ExamFormPage({
               </div>
             )}
 
-            <div className="card p-5 space-y-4">
+            <div
+              className={`card p-5 space-y-4 ${generationType === "RANDOM" ? "hidden" : ""}`}
+            >
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line-soft pb-2.5">
                 <div>
                   <h3 className="text-base font-bold text-content">
@@ -1663,7 +1668,7 @@ export function ExamFormPage({
               )}
             </div>
 
-            {importedQuestionDrafts.length > 0 && (
+            {generationType !== "RANDOM" && importedQuestionDrafts.length > 0 && (
               <div className="card space-y-4 p-5">
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line-soft pb-2.5">
                   <div>
@@ -1734,7 +1739,9 @@ export function ExamFormPage({
               </div>
             )}
 
-            <div className="card p-5 space-y-4">
+            <div
+              className={`card p-5 space-y-4 ${generationType === "RANDOM" ? "hidden" : ""}`}
+            >
               <div className="flex items-center justify-between border-b border-line-soft pb-2.5">
                 <div>
                   <h3 className="text-base font-bold text-content">

@@ -133,7 +133,7 @@ export function SearchableSelect({ label, options, value, onChange, placeholder 
               aria-expanded
               aria-controls={`${id}-list`}
               aria-activedescendant={filtered[active] ? `${id}-opt-${active}` : undefined}
-              className="w-full h-8 pl-8 pr-2 rounded-[8px] border border-line bg-surface text-sm text-content placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600"
+              className="w-full h-8 pl-8 pr-2 rounded-[8px] border border-line bg-surface text-sm text-content placeholder:text-content-subtle focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600"
             />
           </div>
           <ul ref={listRef} id={`${id}-list`} role="listbox" className="max-h-64 overflow-y-auto py-1">
