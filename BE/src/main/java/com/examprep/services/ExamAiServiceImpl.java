@@ -111,25 +111,17 @@ public class ExamAiServiceImpl implements ExamAiService {
     private ExamAiDraftResponse draft(UserPrincipal user, ExamAiRequest request, String material, String fileName) {
         validate(request);
         Course course = courses.findById(request.courseId()).orElseThrow(() -> new ResourceNotFoundException("Course not found."));
-        if (!User.ROLE_ADMIN.equals(user.getRole()) && !Objects.equals(course.getManager().getUserId(), user.getId())
-                && !managers.existsByCourseCourseIdAndUserUserId(request.courseId(), user.getId()))
-            throw new BaseException(ResponseCode.FORBIDDEN);
-        Module module = request.moduleId() == null ? null : modules.findById(request.moduleId())
-                .orElseThrow(() -> new ResourceNotFoundException("Module not found."));
-        if (module != null && !Objects.equals(module.getCourse().getCourseId(), request.courseId()))
-            throw invalid("Module must belong to the requested course.");
-
+        if (!User.ROLE_ADMIN.equals(user.getRole()) && !Objects.equals(course.getManager().getUserId(), user.getId()) && !managers.existsByCourseCourseIdAndUserUserId(request.courseId(), user.getId())) throw new BaseException(ResponseCode.FORBIDDEN);
+        Module module = request.moduleId() == null ? null : modules.findById(request.moduleId()).orElseThrow(() -> new ResourceNotFoundException("Module not found."));
+        if (module != null && !Objects.equals(module.getCourse().getCourseId(), request.courseId())) throw invalid("Module must belong to the requested course.");
         Map<String, Integer> remainingDifficulty = new LinkedHashMap<>();
         DIFFICULTIES.forEach(d -> remainingDifficulty.put(d, request.difficultyDistribution().getOrDefault(d, 0)));
         Map<String, Integer> remainingTypes = new LinkedHashMap<>();
         request.questionTypes().forEach(t -> remainingTypes.put(t.questionType(), t.count()));
-        List<String> bank = questions.findAiBank(request.courseId(), request.moduleId()).stream().map(Question::getContent).toList();
         Set<String> seen = new HashSet<>();
-        bank.forEach(text -> seen.add(key(text)));
         List<DraftQuestion> accepted = new ArrayList<>();
         List<String> warnings = new ArrayList<>();
-        Map<String, Object> context = context(request, course, module, material, bank);
-
+        Map<String, Object> context = context(request, material);
         takeQuota(user.getId(), request.courseId());
         long timeout = material == null ? timeoutMillis : materialTimeoutMillis;
         JsonNode generated = callAi(context, remainingTypes, remainingDifficulty, timeout);
@@ -138,21 +130,16 @@ public class ExamAiServiceImpl implements ExamAiService {
             context.put("alreadyWritten", accepted.stream().map(DraftQuestion::content).toList());
             context.put("previousProblems", List.copyOf(warnings));
             try {
-                collect(callAi(context, remainingTypes, remainingDifficulty, timeout), accepted, warnings, seen,
-                        remainingTypes, remainingDifficulty);
+                collect(callAi(context, remainingTypes, remainingDifficulty, timeout), accepted, warnings, seen, remainingTypes, remainingDifficulty);
             } catch (BaseException ex) {
                 warnings.add("Retry for the missing questions failed: " + ex.getMessage());
             }
         }
-        if (accepted.size() < request.questionCount())
-            warnings.add("Only " + accepted.size() + "/" + request.questionCount() + " valid questions could be generated.");
+        if (accepted.size() < request.questionCount()) warnings.add("Only " + accepted.size() + "/" + request.questionCount() + " valid questions could be generated.");
         String fallbackTitle = fileName == null ? "AI Generated Quiz - " + course.getTitle() : "AI Quiz from " + fileName;
-        String title = text(generated.get("title")) ? generated.get("title").asText()
-                : request.title() == null || request.title().isBlank() ? fallbackTitle : request.title();
-        String description = text(generated.get("description")) ? generated.get("description").asText()
-                : "AI draft. Review the questions before saving.";
-        return new ExamAiDraftResponse(fileName, title, description, request.durationMinutes(), accepted.size(), accepted,
-                material == null ? null : List.of(material.substring(0, Math.min(material.length(), 1000))), warnings);
+        String title = text(generated.get("title")) ? generated.get("title").asText() : request.title() == null || request.title().isBlank() ? fallbackTitle : request.title();
+        String description = text(generated.get("description")) ? generated.get("description").asText() : "AI draft. Review the questions before saving.";
+        return new ExamAiDraftResponse(fileName, title, description, request.durationMinutes(), accepted.size(), accepted, material == null ? null : List.of(material.substring(0, Math.min(material.length(), 1000))), warnings);
     }
 
     private void validate(ExamAiRequest request) {
@@ -174,27 +161,16 @@ public class ExamAiServiceImpl implements ExamAiService {
             throw invalid("difficultyDistribution and questionTypes totals must equal questionCount.");
     }
 
-    private Map<String, Object> context(ExamAiRequest request, Course course, Module module, String material, List<String> bank) {
+    private Map<String, Object> context(ExamAiRequest request, String material) {
         Map<String, Object> context = new LinkedHashMap<>();
         context.put("language", "vi".equals(request.language()) ? "Vietnamese" : "English");
-        if (course.getCategory() != null) context.put("subject", course.getCategory().getName());
-        context.put("course", course.getTitle());
-        if (course.getDescription() != null && !course.getDescription().isBlank())
-            context.put("courseDescription", clip(course.getDescription(), 2000));
-        if (module != null) context.put("module", describe(module));
-        else context.put("modules", modules.findByCourseCourseIdOrderByOrderIndexAscModuleIdAsc(course.getCourseId())
-                .stream().map(this::describe).toList());
-        if (request.title() != null && !request.title().isBlank()) context.put("examTitle", request.title());
+        if (request.title() != null && !request.title().isBlank()) context.put("examTitle", request.title().strip());
         if (request.context() != null && !request.context().isBlank()) context.put("teacherInstructions", request.context().strip());
-        if (!bank.isEmpty()) context.put("existingQuestions", bank.stream().limit(40).map(text -> clip(text, 200)).toList());
-        if (material != null) context.put("material", material);
+        if (material != null && !material.isBlank()) context.put("material", material);
         return context;
     }
 
-    private String describe(Module module) {
-        return module.getDescription() == null || module.getDescription().isBlank() ? module.getTitle()
-                : module.getTitle() + ": " + clip(module.getDescription(), 500);
-    }
+
 
     private JsonNode callAi(Map<String, Object> context, Map<String, Integer> types, Map<String, Integer> difficulty, long timeout) {
         Map<String, Object> prompt = new LinkedHashMap<>(context);
