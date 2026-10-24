@@ -357,6 +357,9 @@ export function AnswerSection({
 }
 
 const MAX_CRITERIA = 20;
+/** Name · weight on one line; descriptors spans its own line below. */
+const CRITERION_GRID = "grid-cols-[minmax(0,1fr)_5.5rem]";
+const CRITERION_LABEL = "block mb-1 text-xs font-medium text-content-subtle";
 
 function RubricAnswers({
   q,
@@ -401,74 +404,57 @@ function RubricAnswers({
         </p>
       ) : (
         <div className="space-y-2">
-          <div className="hidden sm:grid grid-cols-[1.75rem_minmax(0,1fr)_6rem_2rem] gap-2 px-0.5 text-xs font-medium text-content-subtle">
-            <span />
-            <span>Criterion</span>
-            <span>Weight</span>
-            <span />
-          </div>
           {q.rubric.map((c, i) => {
             const nameMissing = Boolean(error) && !c.name.trim();
             const weightBad = Boolean(error) && !(Number(c.weight) > 0);
             return (
-              <div
-                key={c.key}
-                className="rounded-[10px] border border-line-soft p-2"
-              >
-                <div className="grid grid-cols-[1.75rem_minmax(0,1fr)_6rem_2rem] gap-2 items-start">
-                  <span className="mt-1.5 w-7 h-7 bg-surface-muted rounded-[6px] flex items-center justify-center text-xs font-bold text-content-soft">
-                    {i + 1}
-                  </span>
-                  <textarea
-                    value={c.name}
-                    onChange={(e) => setCriterion(i, { name: e.target.value })}
-                    aria-label={`Criterion ${i + 1} name`}
-                    placeholder="e.g. Argument & structure"
-                    maxLength={200}
-                    rows={2}
-                    className={`${inputCls(nameMissing)} !h-auto py-2 leading-snug resize-none`}
-                  />
-                  <input
-                    type="number"
-                    min={0}
-                    step="any"
-                    inputMode="decimal"
-                    value={c.weight}
-                    onChange={(e) =>
-                      setCriterion(i, { weight: e.target.value })
-                    }
-                    aria-label={`Criterion ${i + 1} weight`}
-                    placeholder="Weight"
-                    className={inputCls(weightBad)}
-                  />
+              <div key={c.key} className="rounded-[10px] border border-line-soft overflow-hidden">
+                <div className="flex items-center justify-between gap-2 bg-surface-muted px-3 py-1.5 border-b border-line-soft">
+                  <span className="text-xs font-bold text-content-soft">Criterion {i + 1}</span>
                   <button
                     type="button"
                     onClick={() => remove(i)}
                     aria-label={`Delete criterion ${i + 1}`}
                     title="Delete criterion"
-                    className="mt-2 p-1 justify-self-center text-content-subtle hover:text-danger"
+                    className="p-1 text-content-subtle hover:text-danger"
                   >
                     <Icon.Trash className="w-4 h-4" />
                   </button>
                 </div>
-                <div className="mt-2 ml-9">
-                  <label
-                    htmlFor={`${c.key}-descriptors`}
-                    className="mb-1 block text-xs font-medium text-content-secondary"
-                  >
-                    Descriptors
+                <div className={`grid ${CRITERION_GRID} gap-x-2 gap-y-2.5 p-2.5`}>
+                  <label className="block min-w-0">
+                    <span className={CRITERION_LABEL}>Name</span>
+                    <input
+                      value={c.name}
+                      onChange={(e) => setCriterion(i, { name: e.target.value })}
+                      placeholder="e.g. Diagram readability"
+                      maxLength={200}
+                      className={inputCls(nameMissing)}
+                    />
                   </label>
-                  <textarea
-                    id={`${c.key}-descriptors`}
-                    value={c.descriptors}
-                    onChange={(e) =>
-                      setCriterion(i, { descriptors: e.target.value })
-                    }
-                    aria-label={`Criterion ${i + 1} descriptors`}
-                    placeholder="Describe full, partial, and zero-credit performance for this criterion."
-                    rows={3}
-                    className={`${inputCls(false)} !h-auto py-2 text-sm resize-y`}
-                  />
+                  <label className="block min-w-0">
+                    <span className={CRITERION_LABEL}>Weight</span>
+                    <input
+                      type="number"
+                      min={0}
+                      step="any"
+                      inputMode="decimal"
+                      value={c.weight}
+                      onChange={(e) => setCriterion(i, { weight: e.target.value })}
+                      placeholder="e.g. 0.1"
+                      className={inputCls(weightBad)}
+                    />
+                  </label>
+                  <label className="block min-w-0 col-span-2">
+                    <span className={CRITERION_LABEL}>Descriptors</span>
+                    <textarea
+                      value={c.descriptors}
+                      onChange={(e) => setCriterion(i, { descriptors: e.target.value })}
+                      placeholder="Full credit: … Partial credit: … Zero credit: …"
+                      rows={3}
+                      className={`${inputCls(false)} !h-auto py-2 leading-snug resize-y`}
+                    />
+                  </label>
                 </div>
               </div>
             );
