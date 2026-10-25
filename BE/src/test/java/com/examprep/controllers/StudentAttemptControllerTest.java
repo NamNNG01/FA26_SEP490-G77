@@ -852,6 +852,28 @@ class StudentAttemptControllerTest {
     }
 
     // =================================================================================
+    // documentation
+    // =================================================================================
+
+    @Test
+    void allSixAttemptApisAreDocumented() throws Exception {
+        JsonNode paths = json.readTree(mvc.perform(get("/v3/api-docs")).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString()).path("paths");
+
+        JsonNode examAttempts = paths.path("/api/v1/student/exams/{examId}/attempts");
+        assertTrue(examAttempts.has("post"), "SA-01 is missing from the OpenAPI document");
+        assertTrue(examAttempts.has("get"), "SA-06 is missing from the OpenAPI document");
+        assertTrue(paths.path("/api/v1/student/attempts/{attemptId}").has("get"),
+                "SA-02 is missing from the OpenAPI document");
+        assertTrue(paths.path("/api/v1/student/attempts/{attemptId}/answers").has("put"),
+                "SA-03 is missing from the OpenAPI document");
+        assertTrue(paths.path("/api/v1/student/attempts/{attemptId}/submit").has("post"),
+                "SA-04 is missing from the OpenAPI document");
+        assertTrue(paths.path("/api/v1/student/attempts/{attemptId}/result").has("get"),
+                "SA-05 is missing from the OpenAPI document");
+    }
+
+    // =================================================================================
     // helpers
     // =================================================================================
 
