@@ -100,4 +100,16 @@ public class StudentAttemptController {
         return ResponseEntity.ok(
                 ApiResponse.success(attempts.result(currentUser.getId(), attemptId)));
     }
+
+    @GetMapping("/exams/{examId}/attempts")
+    @Operation(summary = "SA-06: Attempt history of one exam",
+            description = "Every attempt of the student on this exam, newest first, without any answer.")
+    public ResponseEntity<ApiResponse<PageResponse<AttemptResponses.HistoryItem>>> history(
+            @AuthenticationPrincipal UserPrincipal currentUser,
+            @PathVariable Long examId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(
+                ApiResponse.success(attempts.history(currentUser.getId(), examId, page, size)));
+    }
 }

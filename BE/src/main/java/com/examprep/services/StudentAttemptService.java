@@ -24,4 +24,7 @@ public interface StudentAttemptService {
 
     /** SA-05: the graded result of one attempt. */
     AttemptResponses.Result result(Long userId, Long attemptId);
+
+    /** SA-06: every attempt of one exam, newest first, paged inside the database. */
+    PageResponse<AttemptResponses.HistoryItem> history(Long userId, Long examId, int page, int size);
 }

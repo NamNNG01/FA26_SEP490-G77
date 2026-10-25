@@ -330,6 +330,60 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
     }
 
     // ---------------------------------------------------------------------------------
+    // SA-06
+    // ---------------------------------------------------------------------------------
+
+    /**
+     * History of one exam (spec 5.2). The page comes from one database query and the weights are
+     * aggregated with grouped queries, so a page never costs one query per row (spec 0.3 rule 9).
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<AttemptResponses.HistoryItem> history(Long userId, Long examId, int page, int size) {
+        if (page < 0 || size < 1 || size > MAX_PAGE_SIZE) {
+            throw new BadRequestException(ResponseCode.VALIDATION_ERROR,
+                    "page must be 0 or greater and size must be between 1 and 100");
+        }
+        Exam exam = exams.findById(examId)
+                .orElseThrow(() -> new ResourceNotFoundException("Exam not found"));
+        requireEnrollment(exam, userId);
+
+        Page<ExamAttempt> result = attempts
+                .findByUserUserIdAndExamExamIdOrderByStartTimeDescAttemptIdDesc(
+                        userId, examId, PageRequest.of(page, size));
+
+        List<Long> ids = result.getContent().stream().map(ExamAttempt::getAttemptId).toList();
+        // An empty page must not run the grouped queries: an empty IN () list is not portable.
+        Map<Long, BigDecimal> totalWeights = ids.isEmpty()
+                ? Map.of() : weightSums(answers.sumWeightsByAttemptIds(ids));
+        Map<Long, BigDecimal> pendingWeights = ids.isEmpty()
+                ? Map.of() : weightSums(answers.sumPendingWeightsByAttemptIds(ids));
+
+        List<AttemptResponses.HistoryItem> content = new ArrayList<>();
+        for (ExamAttempt attempt : result.getContent()) {
+            Snapshots.ExamSnapshot snapshot =
+                    paperFactory.read(attempt.getExamSnapshot(), Snapshots.ExamSnapshot.class);
+            BigDecimal maxScore = snapshot != null && snapshot.maxScore() != null
+                    ? snapshot.maxScore()
+                    : attempt.getExam().getMaxScore() != null ? attempt.getExam().getMaxScore() : BigDecimal.ZERO;
+            Long attemptId = attempt.getAttemptId();
+            content.add(new AttemptResponses.HistoryItem(
+                    attemptId,
+                    attempt.getStatus(),
+                    AttemptScoring.output(attempt.getTotalScore()),
+                    AttemptScoring.output(AttemptScoring.pendingPoints(
+                            pendingWeights.getOrDefault(attemptId, BigDecimal.ZERO),
+                            totalWeights.getOrDefault(attemptId, BigDecimal.ZERO),
+                            maxScore)),
+                    AttemptScoring.output(maxScore),
+                    attempt.getStartTime(),
+                    attempt.getSubmittedAt(),
+                    attempt.getAutoSubmitted()));
+        }
+        return PageResponse.of(result, content);
+    }
+
+    // ---------------------------------------------------------------------------------
     // shared helpers
     // ---------------------------------------------------------------------------------
 
