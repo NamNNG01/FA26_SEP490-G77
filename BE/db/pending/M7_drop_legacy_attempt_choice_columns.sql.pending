@@ -1,0 +1,4 @@
+-- M7_drop_legacy_attempt_choice_columns.sql.pending
+DROP TABLE IF EXISTS attempt_answer_options;
+ALTER TABLE attempt_answers DROP COLUMN IF EXISTS selected_option_id;
+ALTER TABLE attempt_answers DROP COLUMN IF EXISTS essay_answer;
