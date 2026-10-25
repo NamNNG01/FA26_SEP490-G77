@@ -68,6 +68,7 @@ public class EntitySchemaSyncIT extends AbstractPostgresIT {
                 com.examprep.entities.AnswerRegradeLog.class,
                 com.examprep.entities.AttemptAnswer.class,
                 com.examprep.entities.AttemptAnswerOption.class,
+                com.examprep.entities.AttemptStartKey.class,
                 com.examprep.entities.Category.class,
                 com.examprep.entities.CategoryAuditEvent.class,
                 com.examprep.entities.Contest.class,
