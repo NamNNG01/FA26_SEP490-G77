@@ -247,6 +247,15 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
     }
 
     // ---------------------------------------------------------------------------------
+    // SA-04
+    // ---------------------------------------------------------------------------------
+
+    @Override
+    public AttemptResponses.Submitted submit(Long userId, Long attemptId, AttemptRequests.Submit body) {
+        return writer.submit(userId, attemptId, body);
+    }
+
+    // ---------------------------------------------------------------------------------
     // shared helpers
     // ---------------------------------------------------------------------------------
 

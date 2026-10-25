@@ -18,4 +18,7 @@ public interface StudentAttemptService {
 
     /** SA-03: batch draft save with per-entry outcome. */
     AttemptResponses.DraftSaved saveDrafts(Long userId, Long attemptId, AttemptRequests.DraftSave body);
+
+    /** SA-04: applies the last drafts, grades and closes the attempt. */
+    AttemptResponses.Submitted submit(Long userId, Long attemptId, AttemptRequests.Submit body);
 }

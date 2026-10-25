@@ -78,4 +78,16 @@ public class StudentAttemptController {
         return ResponseEntity.ok(
                 ApiResponse.success(attempts.saveDrafts(currentUser.getId(), attemptId, body), "Draft saved"));
     }
+
+    @PostMapping("/attempts/{attemptId}/submit")
+    @Operation(summary = "SA-04: Submit the attempt",
+            description = "Applies the last drafts, grades every quiz answer, leaves rubric answers for the AI "
+                    + "worker and closes the attempt. Calling it again just returns the current result.")
+    public ResponseEntity<ApiResponse<AttemptResponses.Submitted>> submit(
+            @AuthenticationPrincipal UserPrincipal currentUser,
+            @PathVariable Long attemptId,
+            @Valid @RequestBody(required = false) AttemptRequests.Submit body) {
+        return ResponseEntity.ok(
+                ApiResponse.success(attempts.submit(currentUser.getId(), attemptId, body), "Submitted"));
+    }
 }
