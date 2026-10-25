@@ -153,6 +153,31 @@ public interface QuestionRepository extends JpaRepository<Question, Long>, JpaSp
             @Param("difficulty") String difficulty
     );
 
+    /**
+     * SA-01 draws RANDOM/MIXED papers from exactly the same pool {@link #countDrawable} validates
+     * at publish time: publishable questions matching the exam rule, ordered so the draw is stable.
+     */
+    @Query("""
+    SELECT q.questionId
+    FROM Question q
+    LEFT JOIN q.course c
+    LEFT JOIN q.module m
+    WHERE q.deletedAt IS NULL
+      AND q.status = 'ACTIVE'
+      AND q.approvalStatus = 'APPROVED'
+      AND q.questionType = :questionType
+      AND (c.courseId = :courseId OR m.course.courseId = :courseId)
+      AND (:moduleId IS NULL OR m.moduleId = :moduleId)
+      AND (:difficulty IS NULL OR q.difficulty = :difficulty)
+    ORDER BY q.questionId
+    """)
+    List<Long> findDrawableIds(
+            @Param("courseId") Long courseId,
+            @Param("moduleId") Long moduleId,
+            @Param("questionType") String questionType,
+            @Param("difficulty") String difficulty
+    );
+
     @Query("""
     SELECT q.contentHash
     FROM Question q
