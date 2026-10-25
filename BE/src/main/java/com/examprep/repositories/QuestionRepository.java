@@ -165,4 +165,13 @@ public interface QuestionRepository extends JpaRepository<Question, Long>, JpaSp
             @Param("contentHashes") Collection<String> contentHashes
     );
 
+    // SE-01 cache write: never overwrites a manager explanation or a current AI one, and only for the version explained.
+    @Modifying
+    @Query("""
+            UPDATE Question q SET q.aiExplanation = :text, q.aiExplanationSource = 'AI', q.aiExplanationVersion = :version
+            WHERE q.questionId = :id AND q.scoringVersion = :version
+              AND (q.aiExplanation IS NULL OR q.aiExplanation = ''
+                   OR (q.aiExplanationSource = 'AI' AND (q.aiExplanationVersion IS NULL OR q.aiExplanationVersion <> :version)))""")
+    int cacheAiExplanation(@Param("id") Long id, @Param("version") Integer version, @Param("text") String text);
+
 }
