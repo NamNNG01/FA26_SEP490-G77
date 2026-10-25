@@ -66,4 +66,16 @@ public class StudentAttemptController {
         return ResponseEntity.ok(
                 ApiResponse.success(attempts.get(currentUser.getId(), attemptId)));
     }
+
+    @PutMapping("/attempts/{attemptId}/answers")
+    @Operation(summary = "SA-03: Save drafts in batch",
+            description = "Up to 50 answers per call, each with its own rising seq. Stale sequences are ignored, "
+                    + "unknown questions and malformed payloads are reported per entry.")
+    public ResponseEntity<ApiResponse<AttemptResponses.DraftSaved>> saveDrafts(
+            @AuthenticationPrincipal UserPrincipal currentUser,
+            @PathVariable Long attemptId,
+            @Valid @RequestBody AttemptRequests.DraftSave body) {
+        return ResponseEntity.ok(
+                ApiResponse.success(attempts.saveDrafts(currentUser.getId(), attemptId, body), "Draft saved"));
+    }
 }

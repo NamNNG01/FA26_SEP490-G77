@@ -15,4 +15,7 @@ public interface StudentAttemptService {
 
     /** SA-02: the frozen paper plus the drafts already stored. */
     AttemptResponses.Session get(Long userId, Long attemptId);
+
+    /** SA-03: batch draft save with per-entry outcome. */
+    AttemptResponses.DraftSaved saveDrafts(Long userId, Long attemptId, AttemptRequests.DraftSave body);
 }

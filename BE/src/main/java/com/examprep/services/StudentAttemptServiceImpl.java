@@ -228,6 +228,25 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
     }
 
     // ---------------------------------------------------------------------------------
+    // SA-03
+    // ---------------------------------------------------------------------------------
+
+    /**
+     * Saves a batch of drafts (spec 6.3). The transactional work happens in {@link AttemptWriter};
+     * when the deadline had already passed the writer closes the attempt and reports it, and the
+     * caller answers {@code 410 ATTEMPT_EXPIRED} here — throwing from inside that transaction
+     * would roll the closing back.
+     */
+    @Override
+    public AttemptResponses.DraftSaved saveDrafts(Long userId, Long attemptId, AttemptRequests.DraftSave body) {
+        Optional<AttemptResponses.DraftSaved> outcome = writer.saveDrafts(userId, attemptId, body);
+        if (outcome.isEmpty()) {
+            throw new BaseException(ResponseCode.ATTEMPT_EXPIRED, "The attempt deadline has passed");
+        }
+        return outcome.get();
+    }
+
+    // ---------------------------------------------------------------------------------
     // shared helpers
     // ---------------------------------------------------------------------------------
 
