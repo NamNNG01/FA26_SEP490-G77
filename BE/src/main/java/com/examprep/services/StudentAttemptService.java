@@ -21,4 +21,7 @@ public interface StudentAttemptService {
 
     /** SA-04: applies the last drafts, grades and closes the attempt. */
     AttemptResponses.Submitted submit(Long userId, Long attemptId, AttemptRequests.Submit body);
+
+    /** SA-05: the graded result of one attempt. */
+    AttemptResponses.Result result(Long userId, Long attemptId);
 }

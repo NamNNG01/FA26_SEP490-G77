@@ -90,4 +90,14 @@ public class StudentAttemptController {
         return ResponseEntity.ok(
                 ApiResponse.success(attempts.submit(currentUser.getId(), attemptId, body), "Submitted"));
     }
+
+    @GetMapping("/attempts/{attemptId}/result")
+    @Operation(summary = "SA-05: Result of one attempt",
+            description = "Points, correctness and AI feedback per question. Available once the attempt is submitted.")
+    public ResponseEntity<ApiResponse<AttemptResponses.Result>> result(
+            @AuthenticationPrincipal UserPrincipal currentUser,
+            @PathVariable Long attemptId) {
+        return ResponseEntity.ok(
+                ApiResponse.success(attempts.result(currentUser.getId(), attemptId)));
+    }
 }

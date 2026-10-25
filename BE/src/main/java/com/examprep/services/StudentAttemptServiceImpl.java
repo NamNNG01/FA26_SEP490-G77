@@ -256,6 +256,80 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
     }
 
     // ---------------------------------------------------------------------------------
+    // SA-05
+    // ---------------------------------------------------------------------------------
+
+    /**
+     * The graded result (spec 6.5). Correct answers only appear here, and only as the text of a
+     * choice question's options; the original rubric, the sample diagram and the raw answer key
+     * never leave the server (spec 0.3 rules 4-5).
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public AttemptResponses.Result result(Long userId, Long attemptId) {
+        ExamAttempt attempt = ownedAttempt(userId, attemptId);
+        if (STATUS_IN_PROGRESS.equals(attempt.getStatus())) {
+            throw new BaseException(ResponseCode.ATTEMPT_NOT_SUBMITTED,
+                    "Attempt has not been submitted yet",
+                    new AttemptResponses.NotSubmitted(STATUS_IN_PROGRESS));
+        }
+
+        List<AttemptAnswer> rows = answers.findByAttemptIdOrdered(attemptId);
+        Map<Long, Question> live = liveQuestions(rows);
+
+        Snapshots.ExamSnapshot exam = paperFactory.read(attempt.getExamSnapshot(), Snapshots.ExamSnapshot.class);
+        BigDecimal maxScore = exam != null && exam.maxScore() != null
+                ? exam.maxScore() : attempt.getExam().getMaxScore();
+        String title = exam != null && exam.title() != null ? exam.title() : attempt.getExam().getTitle();
+
+        BigDecimal totalWeight = AttemptScoring.totalWeight(weights(rows));
+        BigDecimal pendingWeight = BigDecimal.ZERO;
+        for (AttemptAnswer row : rows) {
+            if (row.getScoreEarned() == null && row.getWeightSnapshot() != null && row.getWeightSnapshot().signum() > 0) {
+                pendingWeight = pendingWeight.add(row.getWeightSnapshot());
+            }
+        }
+
+        List<AttemptResponses.ResultQuestion> questions = new ArrayList<>();
+        int position = 1;
+        for (AttemptAnswer row : rows) {
+            Snapshots.DisplayQuestion display = display(row, live, position++);
+            Snapshots.KeySnapshot key = paperFactory.read(row.getKeySnapshot(), Snapshots.KeySnapshot.class);
+            // Criteria split the unrounded P_q so their internal precision stays at four digits.
+            BigDecimal rawMaxPoints = AttemptScoring.questionMaxPoints(
+                    row.getWeightSnapshot(), totalWeight, maxScore);
+            boolean rubricType = AttemptGrader.isRubricType(display.questionType());
+            questions.add(new AttemptResponses.ResultQuestion(
+                    display.questionId(),
+                    display.orderIndex(),
+                    display.questionType(),
+                    display.content(),
+                    reviewOptions(display, key),
+                    paperFactory.readResponse(row.getResponse()),
+                    row.getIsCorrect(),
+                    AttemptScoring.output(rawMaxPoints),
+                    AttemptScoring.output(row.getScoreEarned()),
+                    AttemptScoring.output(row.getWeightSnapshot()),
+                    row.getGradingStatus(),
+                    row.getGradingError(),
+                    rubricType ? criteria(row, key, rawMaxPoints) : null,
+                    GRADING_AI_GRADED.equals(row.getGradingStatus()) ? overallFeedback(row) : null,
+                    explanation(live.get(display.questionId()))));
+        }
+
+        return new AttemptResponses.Result(
+                attempt.getAttemptId(),
+                title,
+                attempt.getStatus(),
+                AttemptScoring.output(attempt.getTotalScore()),
+                AttemptScoring.output(AttemptScoring.pendingPoints(pendingWeight, totalWeight, maxScore)),
+                AttemptScoring.output(maxScore),
+                attempt.getSubmittedAt(),
+                attempt.getAutoSubmitted(),
+                questions);
+    }
+
+    // ---------------------------------------------------------------------------------
     // shared helpers
     // ---------------------------------------------------------------------------------
 
