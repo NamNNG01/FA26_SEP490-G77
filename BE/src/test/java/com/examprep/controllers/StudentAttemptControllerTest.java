@@ -381,6 +381,124 @@ class StudentAttemptControllerTest {
     }
 
     // =================================================================================
+    // SA-03
+    // =================================================================================
+
+    @Test
+    void aBatchStoresValidEntriesAndReportsTheRestPerEntry() throws Exception {
+        long attemptId = data(call(student, post(startUrl(mainExam))).andExpect(status().isCreated()))
+                .path("attemptId").asLong();
+
+        List<Map<String, Object>> drafts = List.of(
+                draft(single.getQuestionId(), 1, selected(singleRight.getOptionId())),
+                draft(999_999L, 1, selected(1L)),
+                draft(multiple.getQuestionId(), 1, Map.of("selectedOptionIds", List.of(
+                        multipleA.getOptionId(), multipleA.getOptionId()))));
+
+        JsonNode data = data(call(student, put(answersUrl(attemptId))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("answers", drafts))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Draft saved")));
+
+        assertEquals(1, data.path("saved").size());
+        assertEquals(single.getQuestionId(), data.path("saved").get(0).path("questionId").asLong());
+        assertEquals(2, data.path("rejected").size());
+        assertEquals("NOT_IN_ATTEMPT", data.path("rejected").get(0).path("reason").asText());
+        assertEquals("INVALID_RESPONSE", data.path("rejected").get(1).path("reason").asText());
+        assertNotNull(data.path("deadlineAt").textValue());
+
+        AttemptAnswer saved = answer(attemptId, single.getQuestionId());
+        assertEquals(1, saved.getDraftSeq().intValue());
+        assertTrue(saved.getResponse().contains(String.valueOf(singleRight.getOptionId())));
+        assertNull(answer(attemptId, multiple.getQuestionId()).getResponse());
+    }
+
+    @Test
+    void anOlderSequenceNeverOverwritesANewerDraft() throws Exception {
+        long attemptId = data(call(student, post(startUrl(mainExam))).andExpect(status().isCreated()))
+                .path("attemptId").asLong();
+        save(attemptId, draft(single.getQuestionId(), 5, selected(singleRight.getOptionId())))
+                .andExpect(status().isOk());
+
+        JsonNode data = data(save(attemptId,
+                draft(single.getQuestionId(), 3, selected(singleWrong.getOptionId())))
+                .andExpect(status().isOk()));
+        assertEquals(5, data.path("saved").get(0).path("draftSeq").asInt());
+
+        AttemptAnswer stored = answer(attemptId, single.getQuestionId());
+        assertEquals(5, stored.getDraftSeq().intValue());
+        assertTrue(stored.getResponse().contains(String.valueOf(singleRight.getOptionId())));
+        assertFalse(stored.getResponse().contains(String.valueOf(singleWrong.getOptionId())));
+    }
+
+    @Test
+    void theVeryFirstDraftMayStartAtSequenceZero() throws Exception {
+        long attemptId = data(call(student, post(startUrl(mainExam))).andExpect(status().isCreated()))
+                .path("attemptId").asLong();
+        save(attemptId, draft(single.getQuestionId(), 0, selected(singleRight.getOptionId())))
+                .andExpect(status().isOk());
+        assertEquals(0, answer(attemptId, single.getQuestionId()).getDraftSeq().intValue());
+        assertNotNull(answer(attemptId, single.getQuestionId()).getResponse());
+    }
+
+    @Test
+    void draftValidationRejectsTooManyEntriesAndMissingSequence() throws Exception {
+        long attemptId = data(call(student, post(startUrl(mainExam))).andExpect(status().isCreated()))
+                .path("attemptId").asLong();
+
+        List<Map<String, Object>> tooMany = new ArrayList<>();
+        for (int i = 0; i < 51; i++) {
+            tooMany.add(draft(single.getQuestionId(), i + 1, selected(singleRight.getOptionId())));
+        }
+        call(student, put(answersUrl(attemptId)).contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("answers", tooMany))))
+                .andExpect(status().isBadRequest());
+
+        call(student, put(answersUrl(attemptId)).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"answers\":[{\"questionId\":" + single.getQuestionId()
+                        + ",\"response\":{\"selectedOptionIds\":[" + singleRight.getOptionId() + "]}}]}"))
+                .andExpect(status().isBadRequest());
+
+        call(student, put(answersUrl(attemptId)).contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void savingAfterSubmitIsAConflict() throws Exception {
+        long attemptId = data(call(student, post(startUrl(mainExam))).andExpect(status().isCreated()))
+                .path("attemptId").asLong();
+        call(student, post(submitUrl(attemptId))).andExpect(status().isOk());
+
+        save(attemptId, draft(single.getQuestionId(), 2, selected(singleRight.getOptionId())))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("Attempt has already been submitted"));
+    }
+
+    @Test
+    void savingPastTheGracePeriodReturns410AfterAutoSubmitting() throws Exception {
+        long attemptId = data(call(student, post(startUrl(mainExam))).andExpect(status().isCreated()))
+                .path("attemptId").asLong();
+        attempt(attemptId).setDeadlineAt(Instant.now().minusSeconds(30));
+
+        save(attemptId, draft(single.getQuestionId(), 1, selected(singleRight.getOptionId())))
+                .andExpect(status().isGone())
+                .andExpect(jsonPath("$.message").value("The attempt deadline has passed"));
+        assertEquals("COMPLETED", attempt(attemptId).getStatus());
+    }
+
+    @Test
+    void savingRightAfterTheDeadlineStillWorksInsideTheGracePeriod() throws Exception {
+        long attemptId = data(call(student, post(startUrl(mainExam))).andExpect(status().isCreated()))
+                .path("attemptId").asLong();
+        attempt(attemptId).setDeadlineAt(Instant.now().minusSeconds(1));
+
+        save(attemptId, draft(single.getQuestionId(), 1, selected(singleRight.getOptionId())))
+                .andExpect(status().isOk());
+        assertEquals("IN_PROGRESS", attempt(attemptId).getStatus());
+    }
+
+    // =================================================================================
     // helpers
     // =================================================================================
 
