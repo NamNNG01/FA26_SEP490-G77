@@ -1,0 +1,526 @@
+package com.examprep.controllers;
+
+import com.examprep.entities.AnswerOption;
+import com.examprep.entities.AttemptAnswer;
+import com.examprep.entities.AttemptStartKey;
+import com.examprep.entities.Category;
+import com.examprep.entities.Course;
+import com.examprep.entities.Enrollment;
+import com.examprep.entities.Exam;
+import com.examprep.entities.ExamAttempt;
+import com.examprep.entities.ExamConfig;
+import com.examprep.entities.ExamQuestion;
+import com.examprep.entities.Module;
+import com.examprep.entities.Question;
+import com.examprep.entities.User;
+import com.examprep.security.UserPrincipal;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.persistence.EntityManager;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+/**
+ * End-to-end contract tests of the six student attempt APIs (spec 6.1-6.5, 5.2).
+ *
+ * <p>The paper used by most tests has three questions with weights 1 / 2 / 2 and maxScore 10, so
+ * P_q is 2.00 / 4.00 / 4.00 exactly as in the worked example of spec section 1.</p>
+ */
+@SpringBootTest
+@AutoConfigureMockMvc
+@ActiveProfiles("test")
+@Transactional
+class StudentAttemptControllerTest {
+
+    private static final BigDecimal MAX_SCORE = BigDecimal.TEN;
+    private static final int DURATION_MINUTES = 45;
+
+    @Autowired MockMvc mvc;
+    @Autowired ObjectMapper json;
+    @Autowired EntityManager em;
+
+    User manager;
+    User student;
+    User otherStudent;
+    Course course;
+    Module module;
+    Question single;
+    AnswerOption singleWrong;
+    AnswerOption singleRight;
+    Question multiple;
+    AnswerOption multipleA;
+    AnswerOption multipleB;
+    AnswerOption multipleC;
+    Question essay;
+    Exam mainExam;
+
+    @BeforeEach
+    void fixtures() {
+        manager = account("COURSE_MANAGER");
+        student = account("STUDENT");
+        otherStudent = account("STUDENT");
+
+        Category category = Category.builder().name("Attempt category").slug(UUID.randomUUID().toString()).build();
+        em.persist(category);
+        course = Course.builder().manager(manager).category(category).categoryId(category.getCategoryId())
+                .title("Java course").slug(UUID.randomUUID().toString()).isPublished(true).build();
+        em.persist(course);
+        module = Module.builder().course(course).title("Module 1").orderIndex(1).build();
+        em.persist(module);
+        enroll(student, course);
+        enroll(otherStudent, course);
+
+        single = question("SINGLE_CHOICE", "Which language runs on the JVM?");
+        singleWrong = option(single, "Python", false, 0);
+        singleRight = option(single, "Java", true, 1);
+        multiple = question("MULTIPLE_CHOICE", "Which of these run on the JVM?");
+        multipleA = option(multiple, "Kotlin", true, 0);
+        multipleB = option(multiple, "Scala", true, 1);
+        multipleC = option(multiple, "Rust", false, 2);
+        essay = question("ESSAY", "Explain garbage collection.");
+        essay.setEssayGradingRubric("{\"criteria\":[{\"name\":\"Memory management\",\"weight\":60},"
+                + "{\"name\":\"Trade-off\",\"weight\":40}]}");
+
+        mainExam = exam("Midterm", "STATIC");
+        attach(mainExam, single, "1");
+        attach(mainExam, multiple, "2");
+        attach(mainExam, essay, "2");
+        em.flush();
+    }
+
+    // =================================================================================
+    // SA-01
+    // =================================================================================
+
+    @Test
+    void startsAnAttemptAndFreezesTheWholePaper() throws Exception {
+        MvcResult result = call(student, post(startUrl(mainExam)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("Attempt started"))
+                .andExpect(jsonPath("$.data.status").value("IN_PROGRESS"))
+                .andExpect(jsonPath("$.data.answers").doesNotExist())
+                .andExpect(jsonPath("$.data.questions.length()").value(3))
+                .andReturn();
+
+        JsonNode data = data(result);
+        assertNotNull(data.path("attemptId").asLong());
+        assertEquals(mainExam.getExamId(), data.path("examId").asLong());
+        assertEquals("Midterm", data.path("title").asText());
+        assertEquals(0, MAX_SCORE.compareTo(data.path("maxScore").decimalValue()));
+        Instant start = Instant.parse(data.path("startTime").asText());
+        Instant deadline = Instant.parse(data.path("deadlineAt").asText());
+        assertEquals(DURATION_MINUTES * 60, deadline.getEpochSecond() - start.getEpochSecond());
+        assertNotNull(data.path("serverTime").textValue());
+
+        // Questions are shuffled, but every question appears once with a 1-based position.
+        Set<Long> expected = Set.of(single.getQuestionId(), multiple.getQuestionId(), essay.getQuestionId());
+        Set<Long> actual = new HashSet<>();
+        Set<Integer> positions = new HashSet<>();
+        for (JsonNode question : data.path("questions")) {
+            actual.add(question.path("questionId").asLong());
+            positions.add(question.path("orderIndex").asInt());
+        }
+        assertEquals(expected, actual);
+        assertEquals(Set.of(1, 2, 3), positions);
+
+        JsonNode first = question(data, single.getQuestionId());
+        assertEquals("SINGLE_CHOICE", first.path("questionType").asText());
+        assertEquals(2, first.path("options").size());
+        assertEquals(0, BigDecimal.valueOf(2).compareTo(first.path("maxPoints").decimalValue()));
+        for (JsonNode option : first.path("options")) {
+            assertTrue(option.has("optionId"));
+            assertTrue(option.has("optionText"));
+            assertFalse(option.has("isCorrectAnswer"), "the correct option must never leak before submit");
+        }
+
+        JsonNode runtimeEssay = question(data, essay.getQuestionId());
+        assertEquals(0, BigDecimal.valueOf(4).compareTo(runtimeEssay.path("maxPoints").decimalValue()));
+        assertEquals(10_000, runtimeEssay.path("answerSpace").path("maxLength").asInt());
+
+        JsonNode multipleJson = question(data, multiple.getQuestionId());
+        assertEquals(0, BigDecimal.valueOf(4).compareTo(multipleJson.path("maxPoints").decimalValue()));
+
+        // The paper is frozen in the database, one row per question, with both snapshots.
+        ExamAttempt attempt = attempt(data.path("attemptId").asLong());
+        assertEquals("IN_PROGRESS", attempt.getStatus());
+        assertNotNull(attempt.getExamSnapshot());
+        assertTrue(attempt.getExamSnapshot().contains("shuffleSeed"));
+        List<AttemptAnswer> rows = answers(attempt.getAttemptId());
+        assertEquals(3, rows.size());
+        for (AttemptAnswer row : rows) {
+            assertNotNull(row.getDisplaySnapshot());
+            assertNotNull(row.getKeySnapshot());
+            assertTrue(row.getWeightSnapshot().signum() > 0);
+            assertEquals("AUTO", row.getGradingStatus());
+            assertEquals(-1, row.getDraftSeq().intValue(), "a new row has no draft yet");
+        }
+
+        assertNoAnswerLeak(body(result).toString());
+    }
+
+    @Test
+    void startRequiresAStudentToken() throws Exception {
+        mvc.perform(post(startUrl(mainExam))).andExpect(status().isUnauthorized());
+        call(manager, post(startUrl(mainExam))).andExpect(status().isForbidden());
+    }
+
+    @Test
+    void startChecksEnrollmentAndExistenceBeforeCreatingAnything() throws Exception {
+        User outsider = account("STUDENT");
+        call(outsider, post(startUrl(mainExam))).andExpect(status().isForbidden());
+        call(student, post("/api/v1/student/exams/999999/attempts")).andExpect(status().isNotFound());
+        assertEquals(0, attempts().size());
+    }
+
+    @Test
+    void startRefusesUnpublishedExams() throws Exception {
+        mainExam.setStatus("DRAFT");
+        call(student, post(startUrl(mainExam))).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("Exam is not published"));
+        assertEquals(0, attempts().size());
+    }
+
+    @Test
+    void aSecondStartReturnsTheActiveAttemptIdAndDeadline() throws Exception {
+        long attemptId = data(call(student, post(startUrl(mainExam))).andExpect(status().isCreated()))
+                .path("attemptId").asLong();
+
+        call(student, post(startUrl(mainExam)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("An attempt is already in progress for this exam"))
+                .andExpect(jsonPath("$.data.activeAttemptId").value(attemptId))
+                .andExpect(jsonPath("$.data.deadlineAt").exists());
+        assertEquals(1, attempts().size());
+    }
+
+    @Test
+    void anIdempotencyKeyReplaysTheOriginalAttempt() throws Exception {
+        String key = UUID.randomUUID().toString();
+        MvcResult first = call(student, post(startUrl(mainExam)).header("Idempotency-Key", key))
+                .andExpect(status().isCreated()).andReturn();
+        MvcResult replay = call(student, post(startUrl(mainExam)).header("Idempotency-Key", key))
+                .andExpect(status().isCreated()).andReturn();
+
+        assertEquals(data(first).path("attemptId").asLong(), data(replay).path("attemptId").asLong());
+        assertEquals(1, attempts().size());
+        assertEquals(1, count(AttemptStartKey.class));
+        AttemptStartKey stored = em.createQuery("select k from AttemptStartKey k", AttemptStartKey.class)
+                .getSingleResult();
+        assertTrue(stored.getExpiresAt().isAfter(stored.getCreatedAt()));
+    }
+
+    @Test
+    void anIdempotencyKeyIsBoundToOneExam() throws Exception {
+        String key = UUID.randomUUID().toString();
+        call(student, post(startUrl(mainExam)).header("Idempotency-Key", key)).andExpect(status().isCreated());
+        Exam second = exam("Second", "STATIC");
+        attach(second, question("ESSAY", "Another essay"), "1");
+        em.flush();
+
+        call(student, post(startUrl(second)).header("Idempotency-Key", key)).andExpect(status().isConflict());
+        assertEquals(1, attempts().size());
+    }
+
+    @Test
+    void startRejectsAnExamWithoutQuestions() throws Exception {
+        Exam empty = exam("Empty", "STATIC");
+        call(student, post(startUrl(empty))).andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.message").value("Exam has no questions"));
+        assertEquals(0, attempts().size());
+    }
+
+    @Test
+    void startListsEveryInvalidQuestion() throws Exception {
+        Question inactive = question("TRUE_FALSE", "The sky is green.");
+        option(inactive, "True", false, 0);
+        option(inactive, "False", true, 1);
+        attach(mainExam, inactive, "1");
+        em.flush();
+        inactive.setStatus("INACTIVE");
+
+        call(student, post(startUrl(mainExam)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("Some questions of this exam are no longer valid"))
+                .andExpect(jsonPath("$.data.invalidQuestionIds[0]").value(inactive.getQuestionId()));
+        assertEquals(0, attempts().size());
+    }
+
+    @Test
+    void startDrawsTheConfiguredNumberOfQuestionsForARandomExam() throws Exception {
+        Question extraEssay = question("ESSAY", "Second essay in the bank");
+        em.flush();
+        Exam random = exam("Random", "RANDOM");
+        em.persist(ExamConfig.builder().exam(random).questionType("ESSAY").numberOfQuestions(2)
+                .module(module).weightEach(BigDecimal.valueOf(2)).build());
+        em.flush();
+
+        JsonNode data = data(call(student, post(startUrl(random))).andExpect(status().isCreated()));
+        assertEquals(2, data.path("questions").size());
+        Set<Long> drawn = new HashSet<>();
+        for (JsonNode question : data.path("questions")) {
+            drawn.add(question.path("questionId").asLong());
+        }
+        assertEquals(Set.of(essay.getQuestionId(), extraEssay.getQuestionId()), drawn);
+        // weight_each = 2 for both drawn questions, maxScore 10 → 5.00 each.
+        for (JsonNode question : data.path("questions")) {
+            assertEquals(0, BigDecimal.valueOf(5).compareTo(question.path("maxPoints").decimalValue()));
+        }
+    }
+
+    @Test
+    void startReportsAnUnfillableRandomRuleAsInvalidQuestions() throws Exception {
+        Exam random = exam("Random too big", "RANDOM");
+        em.persist(ExamConfig.builder().exam(random).questionType("ESSAY").numberOfQuestions(5)
+                .module(module).weightEach(BigDecimal.ONE).build());
+        em.flush();
+
+        call(student, post(startUrl(random)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("Some questions of this exam are no longer valid"))
+                .andExpect(jsonPath("$.data.invalidQuestionIds").isEmpty());
+        assertEquals(0, attempts().size());
+    }
+
+    @Test
+    void anExpiredActiveAttemptIsClosedBeforeANewOneStarts() throws Exception {
+        long first = data(call(student, post(startUrl(mainExam))).andExpect(status().isCreated()))
+                .path("attemptId").asLong();
+        attempt(first).setDeadlineAt(Instant.now().minusSeconds(30));
+
+        JsonNode fresh = data(call(student, post(startUrl(mainExam))).andExpect(status().isCreated()));
+        assertTrue(fresh.path("attemptId").asLong() != first);
+        assertEquals("COMPLETED", attempt(first).getStatus());
+        assertNotNull(attempt(first).getSubmittedAt());
+        assertEquals(2, attempts().size());
+    }
+
+    // =================================================================================
+    // helpers
+    // =================================================================================
+
+    private long submittedAttempt(boolean essayAnswered) throws Exception {
+        long attemptId = data(call(student, post(startUrl(mainExam))).andExpect(status().isCreated()))
+                .path("attemptId").asLong();
+        List<Map<String, Object>> drafts = new ArrayList<>();
+        drafts.add(draft(single.getQuestionId(), 1, selected(singleRight.getOptionId())));
+        drafts.add(draft(multiple.getQuestionId(), 1,
+                selected(multipleA.getOptionId(), multipleB.getOptionId())));
+        if (essayAnswered) {
+            drafts.add(draft(essay.getQuestionId(), 1, Map.of("text", "Generations, not objects.")));
+        }
+        call(student, post(submitUrl(attemptId)).contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("answers", drafts)))).andExpect(status().isOk());
+        return attemptId;
+    }
+
+    private ResultActions call(User actor, MockHttpServletRequestBuilder request) throws Exception {
+        em.flush();
+        return mvc.perform(request.with(user(UserPrincipal.create(actor))));
+    }
+
+    private ResultActions save(long attemptId, Map<String, Object> draft) throws Exception {
+        return call(student, put(answersUrl(attemptId)).contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("answers", List.of(draft)))));
+    }
+
+    private JsonNode body(MvcResult result) throws Exception {
+        return json.readTree(result.getResponse().getContentAsString());
+    }
+
+    private JsonNode body(ResultActions actions) throws Exception {
+        return body(actions.andReturn());
+    }
+
+    private JsonNode data(MvcResult result) throws Exception {
+        return body(result).path("data");
+    }
+
+    private JsonNode data(ResultActions actions) throws Exception {
+        return data(actions.andReturn());
+    }
+
+    private JsonNode question(JsonNode sessionOrResult, Long questionId) {
+        for (JsonNode question : sessionOrResult.path("questions")) {
+            if (question.path("questionId").asLong() == questionId) {
+                return question;
+            }
+        }
+        throw new AssertionError("question " + questionId + " is not part of the response");
+    }
+
+    private JsonNode answerOf(JsonNode session, Long questionId) {
+        for (JsonNode answer : session.path("answers")) {
+            if (answer.path("questionId").asLong() == questionId) {
+                return answer;
+            }
+        }
+        throw new AssertionError("question " + questionId + " has no answer entry");
+    }
+
+    private Set<Long> questionIds(JsonNode session) {
+        Set<Long> ids = new HashSet<>();
+        for (JsonNode question : session.path("questions")) {
+            ids.add(question.path("questionId").asLong());
+        }
+        return ids;
+    }
+
+    private List<Integer> orderIndexes(JsonNode session) {
+        List<Integer> positions = new ArrayList<>();
+        for (JsonNode question : session.path("questions")) {
+            positions.add(question.path("orderIndex").asInt());
+        }
+        return positions;
+    }
+
+    private Map<String, Object> draft(Long questionId, int seq, Map<String, Object> response) {
+        Map<String, Object> draft = new LinkedHashMap<>();
+        draft.put("questionId", questionId);
+        draft.put("seq", seq);
+        draft.put("response", response);
+        return draft;
+    }
+
+    private Map<String, Object> selected(Long... optionIds) {
+        return Map.of("selectedOptionIds", List.of(optionIds));
+    }
+
+    private void assertNoAnswerLeak(String rawJson) {
+        for (String forbidden : List.of("keySnapshot", "correctOptionIds", "correctOrder",
+                "isCorrectAnswer", "rubric", "accepted", "isCorrect")) {
+            assertFalse(rawJson.contains(forbidden), "the response leaks " + forbidden);
+        }
+    }
+
+    private String startUrl(Exam exam) {
+        return "/api/v1/student/exams/" + exam.getExamId() + "/attempts";
+    }
+
+    private String attemptUrl(long attemptId) {
+        return "/api/v1/student/attempts/" + attemptId;
+    }
+
+    private String answersUrl(long attemptId) {
+        return attemptUrl(attemptId) + "/answers";
+    }
+
+    private String submitUrl(long attemptId) {
+        return attemptUrl(attemptId) + "/submit";
+    }
+
+    private String resultUrl(long attemptId) {
+        return attemptUrl(attemptId) + "/result";
+    }
+
+    private String historyUrl(Exam exam) {
+        return "/api/v1/student/exams/" + exam.getExamId() + "/attempts";
+    }
+
+    private User account(String role) {
+        User user = User.builder().email(UUID.randomUUID() + "@example.com").fullName(role)
+                .passwordHash("test").roleName(role).build();
+        em.persist(user);
+        return user;
+    }
+
+    private void enroll(User user, Course course) {
+        em.persist(Enrollment.builder().course(course).user(user).enrolledAt(Instant.now())
+                .status(Enrollment.STATUS_ACTIVE).build());
+    }
+
+    private Question question(String type, String content) {
+        Question question = Question.builder().module(module).questionType(type).content(content)
+                .status("ACTIVE").approvalStatus("APPROVED").build();
+        em.persist(question);
+        return question;
+    }
+
+    private AnswerOption option(Question question, String text, boolean correct, int order) {
+        AnswerOption option = AnswerOption.builder().question(question).optionText(text)
+                .isCorrect(correct).orderIndex(order).build();
+        em.persist(option);
+        return option;
+    }
+
+    private Exam exam(String title, String generationType) {
+        return exam(title, generationType, MAX_SCORE);
+    }
+
+    private Exam exam(String title, String generationType, BigDecimal maxScore) {
+        Exam exam = Exam.builder().course(course).module(module).createdBy(manager).title(title)
+                .durationMinutes(DURATION_MINUTES).generationType(generationType).isPractice(false)
+                .maxScore(maxScore).status("PUBLISHED").publishedAt(Instant.now()).build();
+        em.persist(exam);
+        return exam;
+    }
+
+    private ExamQuestion attach(Exam exam, Question question, String weight) {
+        long order = em.createQuery("select count(eq) from ExamQuestion eq where eq.exam = :exam", Long.class)
+                .setParameter("exam", exam).getSingleResult();
+        ExamQuestion link = ExamQuestion.builder().exam(exam).question(question)
+                .weight(new BigDecimal(weight)).orderIndex((int) order).build();
+        em.persist(link);
+        return link;
+    }
+
+    private List<ExamAttempt> attempts() {
+        return em.createQuery("select a from ExamAttempt a", ExamAttempt.class).getResultList();
+    }
+
+    private ExamAttempt attempt(long attemptId) {
+        ExamAttempt attempt = em.find(ExamAttempt.class, attemptId);
+        assertNotNull(attempt, "attempt " + attemptId + " was not created");
+        return attempt;
+    }
+
+    private List<AttemptAnswer> answers(long attemptId) {
+        return em.createQuery("select aa from AttemptAnswer aa where aa.attempt.attemptId = :id "
+                + "order by aa.attemptAnswerId", AttemptAnswer.class)
+                .setParameter("id", attemptId).getResultList();
+    }
+
+    private AttemptAnswer answer(long attemptId, Long questionId) {
+        return em.createQuery("select aa from AttemptAnswer aa where aa.attempt.attemptId = :id "
+                        + "and aa.question.questionId = :questionId", AttemptAnswer.class)
+                .setParameter("id", attemptId).setParameter("questionId", questionId)
+                .getSingleResult();
+    }
+
+    private long count(Class<?> entity) {
+        return em.createQuery("select count(e) from " + entity.getSimpleName() + " e", Long.class)
+                .getSingleResult();
+    }
+}
