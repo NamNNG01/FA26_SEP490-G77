@@ -24,6 +24,7 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -575,8 +576,14 @@ public class ManagerExamServiceImpl implements ManagerExamService {
                     throw conflict("All questions in a published exam must be active and approved.");
             }
         }
-        e.setStatus(r.status()); exams.flush();
-        List<String> warnings=new ArrayList<>();
+        if ("PUBLISHED".equals(r.status())) {
+            e.setPublishedAt(Instant.now());
+        } else {
+            e.setPublishedAt(null);
+        }
+
+        e.setStatus(r.status());
+        exams.flush();        List<String> warnings=new ArrayList<>();
         if(r.status().equals("PUBLISHED")) for(Question question:examQuestions(e).values())
             if(Set.of("ESSAY","DIAGRAM").contains(question.getQuestionType()) && (question.getEssayGradingRubric()==null || question.getEssayGradingRubric().isBlank()))
                 warnings.add("Question "+question.getQuestionId()+" has no rubric.");
