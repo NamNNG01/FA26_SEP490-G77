@@ -1,9 +1,6 @@
 package com.examprep.services;
 
 import com.examprep.ai.AiClient;
-import com.examprep.ai.AiRequest;
-import com.examprep.ai.AiResponse;
-import com.examprep.dto.ResponseCode;
 import com.examprep.dto.question.*;
 import com.examprep.entities.*;
 import com.examprep.exceptions.BadRequestException;
@@ -11,34 +8,23 @@ import com.examprep.exceptions.ForbiddenException;
 import com.examprep.exceptions.QuestionValidationException;
 import com.examprep.exceptions.ResourceConflictException;
 import com.examprep.exceptions.ResourceNotFoundException;
-import com.examprep.exceptions.UnauthorizedException;
 import com.examprep.repositories.*;
 import com.examprep.security.QuestionAccessPolicy;
-import com.examprep.validation.QuestionPayload;
-import com.examprep.validation.QuestionValidator;
-import com.examprep.validation.ValidationError;
+import com.examprep.util.validation.QuestionPayload;
+import com.examprep.util.validation.QuestionValidator;
+import com.examprep.util.validation.ValidationError;
 import com.examprep.util.ContentHashUtil;
 import com.examprep.util.QuestionTypeUtil;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
-import org.apache.poi.ss.usermodel.*;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.FileCopyUtils;
-import org.springframework.web.multipart.MultipartFile;
 
-import java.io.ByteArrayOutputStream;
-import java.io.InputStream;
 import java.math.BigDecimal;
-import java.nio.charset.StandardCharsets;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -122,13 +108,8 @@ public class QuestionServiceImpl implements QuestionService {
         };
 
         Page<Question> page = questionRepository.findAll(spec, pageable);
-        List<Long> questionIds = page.getContent().stream().map(Question::getQuestionId).toList();
-        Map<Long, Long> optionCountMap = new HashMap<>();
 
-        if (!questionIds.isEmpty()) {
-            List<Object[]> rows = questionRepository.countOptionsByQuestionIds(questionIds);
-            for (Object[] row : rows) optionCountMap.put(((Number) row[0]).longValue(), ((Number) row[1]).longValue());
-        }
+
 
         return page.map(q -> QuestionListItemDto.builder()
                 .questionId(q.getQuestionId()).content(q.getContent())
@@ -142,7 +123,6 @@ public class QuestionServiceImpl implements QuestionService {
                 .creatorRole(q.getCreatorRole()).source(q.getSource())
                 .createdBy(q.getCreatedBy() != null ? q.getCreatedBy().getUserId() : null)
                 .scoringVersion(q.getScoringVersion()).lockVersion(q.getLockVersion())
-                .optionCount(Math.toIntExact(optionCountMap.getOrDefault(q.getQuestionId(), 0L)))
                 .updatedAt(q.getUpdatedAt()).build());
     }
 

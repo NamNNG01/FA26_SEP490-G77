@@ -1,7 +1,7 @@
 package com.examprep.exceptions;
 
 import com.examprep.dto.ResponseCode;
-import com.examprep.validation.ValidationError;
+import com.examprep.util.validation.ValidationError;
 import lombok.Getter;
 
 import java.util.List;

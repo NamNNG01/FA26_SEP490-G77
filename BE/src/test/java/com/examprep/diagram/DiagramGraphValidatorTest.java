@@ -1,6 +1,10 @@
 package com.examprep.diagram;
 
-import com.examprep.validation.ValidationError;
+import com.examprep.util.diagram.DiagramGraph;
+import com.examprep.util.diagram.DiagramGraphValidator;
+import com.examprep.util.diagram.GraphEdge;
+import com.examprep.util.diagram.GraphNode;
+import com.examprep.util.validation.ValidationError;
 import org.junit.jupiter.api.Test;
 import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;

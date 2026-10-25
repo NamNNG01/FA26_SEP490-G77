@@ -1,4 +1,4 @@
-package com.examprep.diagram;
+package com.examprep.util.diagram;
 
 public record GraphEdge(
     String id,

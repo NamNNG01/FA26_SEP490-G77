@@ -1,11 +1,13 @@
 package com.examprep.validation;
 
 import com.examprep.dto.question.AnswerOptionDto;
+import com.examprep.util.validation.QuestionPayload;
+import com.examprep.util.validation.QuestionValidator;
+import com.examprep.util.validation.ValidationError;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 

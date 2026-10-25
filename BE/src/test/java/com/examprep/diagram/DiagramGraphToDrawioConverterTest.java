@@ -1,5 +1,9 @@
 package com.examprep.diagram;
 
+import com.examprep.util.diagram.DiagramGraph;
+import com.examprep.util.diagram.DiagramGraphToDrawioConverter;
+import com.examprep.util.diagram.GraphEdge;
+import com.examprep.util.diagram.GraphNode;
 import org.junit.jupiter.api.Test;
 import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;

@@ -4,9 +4,9 @@ import com.examprep.dto.question.AnswerOptionDto;
 import com.examprep.dto.question.ImportBlockResult;
 import com.examprep.dto.question.ImportErrorDto;
 import com.examprep.dto.question.QuestionCreateRequest;
-import com.examprep.validation.QuestionPayload;
-import com.examprep.validation.QuestionValidator;
-import com.examprep.validation.ValidationError;
+import com.examprep.util.validation.QuestionPayload;
+import com.examprep.util.validation.QuestionValidator;
+import com.examprep.util.validation.ValidationError;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 

@@ -1,7 +1,6 @@
 
-package com.examprep.diagram;
+package com.examprep.util.diagram;
 
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 

@@ -17,6 +17,11 @@ public interface QuestionService {
 
     List<QuestionDetailDto> createQuestionsBatch(Long courseId, Long moduleId, List<QuestionCreateRequest> requests, User currentUser);
 
+    default QuestionDetailDto createQuestion(QuestionCreateRequest request, User currentUser) {
+        List<QuestionDetailDto> created = createQuestionsBatch(request.getCourseId(), request.getModuleId(), List.of(request), currentUser);
+        return created.isEmpty() ? null : created.get(0);
+    }
+
     String contentHash(QuestionCreateRequest request);
 
     QuestionDetailDto getQuestionById(Long id, User currentUser);

@@ -1,6 +1,6 @@
-package com.examprep.diagram;
+package com.examprep.util.diagram;
 
-import com.examprep.validation.ValidationError;
+import com.examprep.util.validation.ValidationError;
 import org.owasp.html.HtmlPolicyBuilder;
 import org.owasp.html.PolicyFactory;
 

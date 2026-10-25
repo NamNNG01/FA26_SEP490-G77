@@ -1,4 +1,4 @@
-package com.examprep.validation;
+package com.examprep.util.validation;
 
 import com.examprep.dto.question.AnswerOptionDto;
 import com.examprep.dto.question.QuestionCreateRequest;
