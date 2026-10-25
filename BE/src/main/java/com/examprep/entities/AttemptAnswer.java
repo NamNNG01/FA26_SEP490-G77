@@ -83,6 +83,12 @@ public class AttemptAnswer implements Serializable {
     @Column(name = "graded_at")
     private Instant gradedAt;
 
+    @Column(name = "grading_locked_at")
+    private Instant gradingLockedAt;
+
+    @Column(name = "grading_error", length = 30)
+    private String gradingError;
+
     @Column(name = "is_correct")
     private Boolean isCorrect;
 

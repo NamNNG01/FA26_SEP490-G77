@@ -27,7 +27,7 @@ public class GlobalExceptionHandler {
         log.warn("Business Exception: [{}] {}", ex.getResponseCode().getCode(), ex.getMessage());
         ResponseCode code = ex.getResponseCode();
         return ResponseEntity.status(code.getHttpStatus())
-                .body(ApiResponse.error(code, ex.getMessage()));
+                .body(ApiResponse.builder().success(false).message(ex.getMessage()).data(ex.getData()).build());
     }
 
     @ExceptionHandler(QuestionValidationException.class)
