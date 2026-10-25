@@ -45,9 +45,8 @@ class StudentExamControllerTest {
     @Test
     void getExamDetail_Success() throws Exception {
         ExamDetailDto detail = new ExamDetailDto(
-                5L, 1L, "Midterm Exam", "Desc", 60, false, "FIXED",
-                BigDecimal.TEN, "PUBLISHED",
-                new ExamQuestionsByTypeSummary(List.of(new QuestionTypeCountDto("SINGLE_CHOICE", 10, BigDecimal.ONE)), 10),
+                5L, 1L, "Course 1", "Midterm Exam", "Desc", 60,
+                BigDecimal.TEN, 10, Instant.now(),
                 new ExamMyStatsDto(1L, BigDecimal.valueOf(8), "GRADED"),
                 new ExamActionsDto(true, false, null)
         );
