@@ -673,6 +673,119 @@ class StudentAttemptControllerTest {
     }
 
     // =================================================================================
+    // SA-05
+    // =================================================================================
+
+    @Test
+    void resultIsAConflictWhileTheAttemptIsStillRunning() throws Exception {
+        long attemptId = data(call(student, post(startUrl(mainExam))).andExpect(status().isCreated()))
+                .path("attemptId").asLong();
+        call(student, get(resultUrl(attemptId)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("Attempt has not been submitted yet"))
+                .andExpect(jsonPath("$.data.status").value("IN_PROGRESS"));
+    }
+
+    @Test
+    void resultShowsPointsCorrectnessAndTheCachedExplanation() throws Exception {
+        long attemptId = submittedAttempt(true);
+        single.setAiExplanation("Java is compiled to bytecode.");
+        single.setAiExplanationSource("MANAGER");
+        em.flush();
+
+        JsonNode data = data(call(student, get(resultUrl(attemptId))).andExpect(status().isOk()));
+        assertEquals(attemptId, data.path("attemptId").asLong());
+        assertEquals("Midterm", data.path("examTitle").asText());
+        assertEquals("SUBMITTED", data.path("status").asText());
+        assertEquals(0, new BigDecimal("6.00").compareTo(data.path("totalScore").decimalValue()));
+        assertEquals(0, new BigDecimal("4.00").compareTo(data.path("pendingPoints").decimalValue()));
+        assertEquals(3, data.path("questions").size());
+
+        JsonNode singleResult = question(data, single.getQuestionId());
+        assertEquals(0, BigDecimal.valueOf(2).compareTo(singleResult.path("maxPoints").decimalValue()));
+        assertEquals(0, BigDecimal.valueOf(2).compareTo(singleResult.path("scoreEarned").decimalValue()));
+        assertEquals(0, BigDecimal.ONE.compareTo(singleResult.path("weight").decimalValue()));
+        assertEquals("AUTO", singleResult.path("gradingStatus").asText());
+        assertTrue(singleResult.path("isCorrect").asBoolean());
+        assertEquals("Java is compiled to bytecode.", singleResult.path("explanation").path("text").asText());
+        assertEquals("MANAGER", singleResult.path("explanation").path("source").asText());
+        boolean markedCorrect = false;
+        for (JsonNode option : singleResult.path("options")) {
+            if (option.path("optionId").asLong() == singleRight.getOptionId()) {
+                markedCorrect = option.path("isCorrectAnswer").asBoolean();
+            } else {
+                assertFalse(option.path("isCorrectAnswer").asBoolean());
+            }
+        }
+        assertTrue(markedCorrect);
+
+        JsonNode essayResult = question(data, essay.getQuestionId());
+        assertEquals("PENDING_AI", essayResult.path("gradingStatus").asText());
+        assertTrue(essayResult.path("scoreEarned").isNull() || essayResult.path("scoreEarned").isMissingNode());
+        assertEquals(0, essayResult.path("criteria").size());
+
+        String raw = body(call(student, get(resultUrl(attemptId)))).toString();
+        assertFalse(raw.contains("keySnapshot"));
+        assertFalse(raw.contains("correctOptionIds"));
+        assertFalse(raw.contains("rubric"));
+        assertFalse(raw.contains("accepted"));
+    }
+
+    @Test
+    void resultReturnsRubricPointsOnceTheAiGradedTheEssay() throws Exception {
+        long attemptId = submittedAttempt(true);
+        AttemptAnswer essayAnswer = answer(attemptId, essay.getQuestionId());
+        essayAnswer.setGradingStatus("AI_GRADED");
+        essayAnswer.setScoreEarned(new BigDecimal("3.20"));
+        essayAnswer.setGradedAt(Instant.now());
+        essayAnswer.setAiCriteriaScores("{\"criteria\":["
+                + "{\"criterionId\":\"c1\",\"points\":2.00,\"feedback\":\"Solid\"},"
+                + "{\"criterionId\":\"c2\",\"points\":1.20,\"feedback\":\"Good trade-off\"}]}");
+        essayAnswer.setAiFeedbackJson("{\"overallFeedback\":\"Clear and correct\"}");
+        em.flush();
+
+        JsonNode essayResult = question(data(call(student, get(resultUrl(attemptId)))
+                .andExpect(status().isOk())), essay.getQuestionId());
+        assertEquals("AI_GRADED", essayResult.path("gradingStatus").asText());
+        assertEquals(0, new BigDecimal("3.20").compareTo(essayResult.path("scoreEarned").decimalValue()));
+        assertEquals("Clear and correct", essayResult.path("overallFeedback").asText());
+        assertEquals(2, essayResult.path("criteria").size());
+        JsonNode first = essayResult.path("criteria").get(0);
+        assertEquals("c1", first.path("criterionId").asText());
+        assertEquals("Memory management", first.path("name").asText());
+        assertEquals(0, new BigDecimal("2.40").compareTo(first.path("maxPoints").decimalValue()));
+        assertEquals(0, new BigDecimal("2.00").compareTo(first.path("points").decimalValue()));
+        assertEquals("Solid", first.path("feedback").asText());
+        JsonNode second = essayResult.path("criteria").get(1);
+        assertEquals(0, new BigDecimal("1.60").compareTo(second.path("maxPoints").decimalValue()));
+        assertEquals(0, new BigDecimal("1.20").compareTo(second.path("points").decimalValue()));
+    }
+
+    @Test
+    void aFailedGradingKeepsItsErrorAndPendingPoints() throws Exception {
+        long attemptId = submittedAttempt(true);
+        AttemptAnswer essayAnswer = answer(attemptId, essay.getQuestionId());
+        essayAnswer.setGradingStatus("FAILED");
+        essayAnswer.setGradingError("AI_TIMEOUT");
+        em.flush();
+
+        JsonNode data = data(call(student, get(resultUrl(attemptId))).andExpect(status().isOk()));
+        assertEquals(0, new BigDecimal("4.00").compareTo(data.path("pendingPoints").decimalValue()));
+        JsonNode essayResult = question(data, essay.getQuestionId());
+        assertEquals("FAILED", essayResult.path("gradingStatus").asText());
+        assertEquals("AI_TIMEOUT", essayResult.path("gradingError").asText());
+        assertEquals(0, essayResult.path("criteria").size());
+        assertTrue(essayResult.path("overallFeedback").isNull()
+                || essayResult.path("overallFeedback").isMissingNode());
+    }
+
+    @Test
+    void resultIsForbiddenForAnotherStudent() throws Exception {
+        long attemptId = submittedAttempt(false);
+        call(otherStudent, get(resultUrl(attemptId))).andExpect(status().isForbidden());
+    }
+
+    // =================================================================================
     // helpers
     // =================================================================================
 
