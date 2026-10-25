@@ -5,6 +5,7 @@ import com.examprep.entities.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -17,6 +18,14 @@ import java.util.Optional;
 public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByEmail(String email);
     boolean existsByEmail(String email);
+
+    /**
+     * Row lock on the student, taken by SA-01 so two "start attempt" requests from the same
+     * student are serialized before the single-active-attempt check runs.
+     */
+    @Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT u FROM User u WHERE u.userId = :id")
+    Optional<User> findForUpdate(@Param("id") Long id);
 
     // UM-03: e-mail uniqueness check that excludes the user being edited.
     boolean existsByEmailAndUserIdNot(String email, Long userId);
