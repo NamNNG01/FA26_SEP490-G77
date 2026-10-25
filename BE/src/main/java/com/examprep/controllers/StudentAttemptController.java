@@ -55,4 +55,15 @@ public class StudentAttemptController {
         return ResponseEntity.created(location)
                 .body(ApiResponse.success(body, "Attempt started"));
     }
+
+    @GetMapping("/attempts/{attemptId}")
+    @Operation(summary = "SA-02: Reload an attempt",
+            description = "The frozen paper plus the drafts already stored, so the student can resume exactly "
+                    + "where they left off.")
+    public ResponseEntity<ApiResponse<AttemptResponses.Session>> get(
+            @AuthenticationPrincipal UserPrincipal currentUser,
+            @PathVariable Long attemptId) {
+        return ResponseEntity.ok(
+                ApiResponse.success(attempts.get(currentUser.getId(), attemptId)));
+    }
 }

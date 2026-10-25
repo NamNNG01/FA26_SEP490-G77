@@ -12,4 +12,7 @@ public interface StudentAttemptService {
 
     /** SA-01: creates (or replays) the attempt and returns the frozen paper. */
     AttemptResponses.Session start(Long userId, Long examId, String idempotencyKey);
+
+    /** SA-02: the frozen paper plus the drafts already stored. */
+    AttemptResponses.Session get(Long userId, Long attemptId);
 }

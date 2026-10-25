@@ -207,6 +207,27 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
     }
 
     // ---------------------------------------------------------------------------------
+    // SA-02
+    // ---------------------------------------------------------------------------------
+
+    /**
+     * Reloads the attempt (spec 6.2). A still-running attempt whose deadline has passed is closed
+     * first, in this same transaction, so the student sees the real status instead of an attempt
+     * that can never be saved to again. Closing happens before the response is built, so the
+     * entity the view reads already carries the final score and status.
+     */
+    @Override
+    @Transactional
+    public AttemptResponses.Session get(Long userId, Long attemptId) {
+        ExamAttempt attempt = ownedAttempt(userId, attemptId);
+        List<AttemptAnswer> rows = answers.findByAttemptIdOrdered(attemptId);
+        if (STATUS_IN_PROGRESS.equals(attempt.getStatus()) && autoSubmitter.isExpired(attempt, Instant.now())) {
+            autoSubmitter.gradeAndClose(attempt, rows, Instant.now());
+        }
+        return sessionView(attempt, rows, true);
+    }
+
+    // ---------------------------------------------------------------------------------
     // shared helpers
     // ---------------------------------------------------------------------------------
 
