@@ -2,6 +2,8 @@ package com.examprep.repositories;
 
 import com.examprep.entities.Flashcard;
 import com.examprep.dto.IdCount;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -28,5 +30,13 @@ public interface FlashcardRepository extends JpaRepository<Flashcard, Long> {
     @Modifying
     @Query("DELETE FROM Flashcard f WHERE f.deck.deckId = :deckId")
     void deleteByDeck(@Param("deckId") Long deckId);
+
+    @Query("SELECT new com.examprep.dto.student.CardDto(" +
+            "f.cardId, f.frontText, f.backText, " +
+            "COALESCE(p.status, 'NEW'), " +
+            "COALESCE(p.isStarred, false)) " +
+            "FROM Flashcard f LEFT JOIN UserCardProgress p ON p.card = f AND p.user.userId = :userId " +
+            "WHERE f.deck.deckId = :deckId")
+    Page<com.examprep.dto.student.CardDto> findDeckCardsWithProgress(@Param("deckId") Long deckId, @Param("userId") Long userId, Pageable pageable);
 }
 

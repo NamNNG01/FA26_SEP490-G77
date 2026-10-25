@@ -37,4 +37,21 @@ public interface ExamRepository extends JpaRepository<Exam, Long>, JpaSpecificat
             Specification<Exam> spec,
             Pageable pageable
     );
+
+    @Query("SELECT new com.examprep.dto.student.CourseExamDto(" +
+            "ex.examId, ex.title, ex.description, ex.durationMinutes, ex.maxScore, ex.status, ex.publishedAt, " +
+            "new com.examprep.dto.student.ExamMyStatsDto(" +
+            "  (SELECT COUNT(att) FROM ExamAttempt att WHERE att.exam = ex AND att.user.userId = :userId), " +
+            "  (SELECT MAX(att.totalScore) FROM ExamAttempt att WHERE att.exam = ex AND att.user.userId = :userId), " +
+            "  (SELECT att.status FROM ExamAttempt att WHERE att.exam = ex AND att.user.userId = :userId ORDER BY att.startTime DESC LIMIT 1)" +
+            ")) " +
+            "FROM Exam ex " +
+            "WHERE ex.course.courseId = :courseId AND ex.status = 'PUBLISHED'")
+    Page<com.examprep.dto.student.CourseExamDto> findCourseExamsWithStats(@Param("courseId") Long courseId, @Param("userId") Long userId, Pageable pageable);
+
+    @Query("SELECT new com.examprep.dto.student.QuestionTypeCountDto(q.questionType, CAST(COUNT(eq) AS int), eq.weight) " +
+           "FROM ExamQuestion eq JOIN eq.question q " +
+           "WHERE eq.exam.examId = :examId AND q.status = 'ACTIVE' AND q.approvalStatus = 'APPROVED' AND q.deletedAt IS NULL " +
+           "GROUP BY q.questionType, eq.weight")
+    List<com.examprep.dto.student.QuestionTypeCountDto> getExamQuestionTypeSummaries(@Param("examId") Long examId);
 }

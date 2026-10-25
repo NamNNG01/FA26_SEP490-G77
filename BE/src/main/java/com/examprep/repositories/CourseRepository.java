@@ -1,6 +1,7 @@
 package com.examprep.repositories;
 
 import com.examprep.dto.ManagerCourseInfo;
+import com.examprep.dto.student.CourseCardDto;
 import com.examprep.entities.Course;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
@@ -55,4 +56,17 @@ public interface CourseRepository extends JpaRepository<Course, Long> {
     long countByIsPublishedTrue();
 
     long countByIsPublishedFalse();
+
+    @Query("SELECT new com.examprep.dto.student.CourseCardDto(" +
+            "c.courseId, c.title, c.slug, c.thumbnailUrl, c.price, " +
+            "new com.examprep.dto.student.CategoryRefDto(cat.categoryId, cat.name), " +
+            "new com.examprep.dto.student.ManagerRefDto(m.userId, m.fullName), " +
+            "(SELECT COUNT(ex) FROM Exam ex WHERE ex.course = c AND ex.status = 'PUBLISHED'), " +
+            "(SELECT COUNT(d) FROM Deck d WHERE d.course = c), " +
+            "CASE WHEN :userId IS NOT NULL AND EXISTS (SELECT 1 FROM Enrollment en WHERE en.course = c AND en.user.userId = :userId AND en.status = 'ACTIVE') THEN true ELSE false END) " +
+            "FROM Course c JOIN c.category cat JOIN c.manager m " +
+            "WHERE c.isPublished = true " +
+            "AND (:categoryId IS NULL OR c.categoryId = :categoryId) " +
+            "AND (:search IS NULL OR LOWER(c.title) LIKE :search ESCAPE '!')")
+    Page<CourseCardDto> findPublishedCourses(@Param("categoryId") Long categoryId, @Param("search") String search, @Param("userId") Long userId, Pageable pageable);
 }
