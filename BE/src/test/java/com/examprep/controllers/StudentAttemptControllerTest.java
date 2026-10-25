@@ -786,6 +786,72 @@ class StudentAttemptControllerTest {
     }
 
     // =================================================================================
+    // SA-06
+    // =================================================================================
+
+    @Test
+    void historyIsNewestFirstAndPagedInsideTheDatabase() throws Exception {
+        long firstAttempt = submittedAttempt(false);
+        long secondAttempt = submittedAttempt(true);
+
+        JsonNode data = data(call(student, get(historyUrl(mainExam)).param("page", "0").param("size", "1"))
+                .andExpect(status().isOk()));
+        assertEquals(1, data.path("content").size());
+        assertEquals(secondAttempt, data.path("content").get(0).path("attemptId").asLong());
+        assertEquals(2, data.path("totalElements").asInt());
+        assertEquals(2, data.path("totalPages").asInt());
+        assertTrue(data.path("first").asBoolean());
+        assertFalse(data.path("last").asBoolean());
+
+        JsonNode secondPage = data(call(student, get(historyUrl(mainExam)).param("page", "1").param("size", "1"))
+                .andExpect(status().isOk()));
+        assertEquals(firstAttempt, secondPage.path("content").get(0).path("attemptId").asLong());
+        assertTrue(secondPage.path("last").asBoolean());
+    }
+
+    @Test
+    void historyCarriesScoresAndPendingPointsButNoAnswers() throws Exception {
+        long attemptId = submittedAttempt(true);
+        JsonNode data = data(call(student, get(historyUrl(mainExam))).andExpect(status().isOk()));
+        assertEquals(1, data.path("content").size());
+        JsonNode item = data.path("content").get(0);
+        assertEquals(attemptId, item.path("attemptId").asLong());
+        assertEquals("SUBMITTED", item.path("status").asText());
+        assertEquals(0, new BigDecimal("6.00").compareTo(item.path("totalScore").decimalValue()));
+        assertEquals(0, new BigDecimal("4.00").compareTo(item.path("pendingPoints").decimalValue()));
+        assertEquals(0, new BigDecimal("10.00").compareTo(item.path("maxScore").decimalValue()));
+        assertNotNull(item.path("startTime").textValue());
+        assertNotNull(item.path("submittedAt").textValue());
+        assertFalse(item.path("autoSubmitted").asBoolean());
+        assertFalse(item.has("questions"));
+        assertFalse(item.has("answers"));
+        assertFalse(item.has("response"));
+    }
+
+    @Test
+    void historyRequiresEnrollmentAndAnExistingExam() throws Exception {
+        User outsider = account("STUDENT");
+        call(outsider, get(historyUrl(mainExam))).andExpect(status().isForbidden());
+        call(student, get("/api/v1/student/exams/999999/attempts")).andExpect(status().isNotFound());
+    }
+
+    @Test
+    void historyValidatesPagingParameters() throws Exception {
+        call(student, get(historyUrl(mainExam)).param("page", "-1")).andExpect(status().isBadRequest());
+        call(student, get(historyUrl(mainExam)).param("size", "0")).andExpect(status().isBadRequest());
+        call(student, get(historyUrl(mainExam)).param("size", "101")).andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void anEmptyHistoryPageStillReturnsAnEnvelope() throws Exception {
+        JsonNode data = data(call(student, get(historyUrl(mainExam))).andExpect(status().isOk()));
+        assertEquals(0, data.path("content").size());
+        assertEquals(0, data.path("totalElements").asInt());
+        assertTrue(data.path("first").asBoolean());
+        assertTrue(data.path("last").asBoolean());
+    }
+
+    // =================================================================================
     // helpers
     // =================================================================================
 
