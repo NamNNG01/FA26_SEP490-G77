@@ -94,6 +94,19 @@ public class Question implements Serializable {
     @Column(name = "ai_explanation")
     private String aiExplanation;
 
+    @Column(name = "ai_explanation_source", length = 10)
+    private String aiExplanationSource;
+
+    @Column(name = "ai_explanation_version")
+    private Integer aiExplanationVersion;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "replaced_by")
+    private Question replacedBy;
+
+    @Column(name = "archived_at")
+    private Instant archivedAt;
+
     @Builder.Default
     @Column(name = "status", nullable = false, length = 20)
     private String status = "ACTIVE";

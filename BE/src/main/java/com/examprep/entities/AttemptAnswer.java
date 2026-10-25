@@ -31,16 +31,34 @@ public class AttemptAnswer implements Serializable {
     @JoinColumn(name = "question_id", nullable = false)
     private Question question;
 
+    @Deprecated
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "selected_option_id")
     private AnswerOption selectedOption;
 
+    @Deprecated
     @Column(name = "essay_answer")
     private String essayAnswer;
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "response", columnDefinition = "jsonb")
     private String response;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "display_snapshot", columnDefinition = "jsonb")
+    private String displaySnapshot;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "key_snapshot", columnDefinition = "jsonb")
+    private String keySnapshot;
+
+    @Builder.Default
+    @Column(name = "draft_seq", nullable = false)
+    private Integer draftSeq = 0;
+
+    @Builder.Default
+    @Column(name = "weight_snapshot", nullable = false, precision = 10, scale = 2)
+    private BigDecimal weightSnapshot = BigDecimal.ONE;
 
     @Builder.Default
     @Column(name = "question_version")

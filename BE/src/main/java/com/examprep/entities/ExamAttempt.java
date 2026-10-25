@@ -2,6 +2,8 @@ package com.examprep.entities;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.io.Serializable;
 import java.math.BigDecimal;
@@ -34,6 +36,20 @@ public class ExamAttempt implements Serializable {
 
     @Column(name = "submit_time")
     private Instant submitTime;
+
+    @Column(name = "deadline_at", nullable = false)
+    private Instant deadlineAt;
+
+    @Column(name = "submitted_at")
+    private Instant submittedAt;
+
+    @Builder.Default
+    @Column(name = "auto_submitted", nullable = false)
+    private Boolean autoSubmitted = false;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "exam_snapshot", columnDefinition = "jsonb")
+    private String examSnapshot;
 
     @Column(name = "total_score", precision = 5, scale = 2)
     private BigDecimal totalScore;

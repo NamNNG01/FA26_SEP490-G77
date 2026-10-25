@@ -68,6 +68,20 @@ public class AiUsageLog implements Serializable {
     @Column(name = "attempt_answer_id")
     private Long attemptAnswerId;
 
+    @Column(name = "billing_source", length = 10)
+    private String billingSource;
+
+    @Builder.Default
+    @Column(name = "reserved_tokens", nullable = false)
+    private Integer reservedTokens = 0;
+
+    @Column(name = "question_count")
+    private Integer questionCount;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "attempt_id")
+    private ExamAttempt attempt;
+
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
