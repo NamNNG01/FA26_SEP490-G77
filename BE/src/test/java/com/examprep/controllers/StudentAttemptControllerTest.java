@@ -499,6 +499,180 @@ class StudentAttemptControllerTest {
     }
 
     // =================================================================================
+    // SA-04
+    // =================================================================================
+
+    @Test
+    void submitGradesQuizAnswersAndLeavesTheRubricForTheWorker() throws Exception {
+        long attemptId = data(call(student, post(startUrl(mainExam))).andExpect(status().isCreated()))
+                .path("attemptId").asLong();
+        call(student, post(submitUrl(attemptId)).contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("answers", List.of(
+                        draft(single.getQuestionId(), 1, selected(singleRight.getOptionId())),
+                        draft(multiple.getQuestionId(), 1,
+                                selected(multipleA.getOptionId(), multipleB.getOptionId())),
+                        draft(essay.getQuestionId(), 1, Map.of("text", "Generations, not objects.")))))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Submitted"))
+                .andExpect(jsonPath("$.data.status").value("SUBMITTED"))
+                .andExpect(jsonPath("$.data.totalScore").value(6.00))
+                .andExpect(jsonPath("$.data.pendingPoints").value(4.00))
+                .andExpect(jsonPath("$.data.maxScore").value(10))
+                .andExpect(jsonPath("$.data.autoSubmitted").value(false));
+
+        ExamAttempt attempt = attempt(attemptId);
+        assertEquals("SUBMITTED", attempt.getStatus());
+        assertNotNull(attempt.getSubmittedAt());
+        assertEquals(0, new BigDecimal("6.00").compareTo(attempt.getTotalScore()));
+        assertEquals("AUTO", answer(attemptId, single.getQuestionId()).getGradingStatus());
+        assertEquals("PENDING_AI", answer(attemptId, essay.getQuestionId()).getGradingStatus());
+        assertNull(answer(attemptId, essay.getQuestionId()).getScoreEarned());
+        assertNotNull(answer(attemptId, essay.getQuestionId()).getResponse());
+    }
+
+    @Test
+    void aWrongAnswerScoresZeroAndABlankRubricQuestionDoesNotWaitForTheAi() throws Exception {
+        long attemptId = data(call(student, post(startUrl(mainExam))).andExpect(status().isCreated()))
+                .path("attemptId").asLong();
+        call(student, post(submitUrl(attemptId)).contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("answers", List.of(
+                        draft(single.getQuestionId(), 1, selected(singleWrong.getOptionId())),
+                        draft(multiple.getQuestionId(), 1, selected(multipleA.getOptionId())))))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("COMPLETED"))
+                .andExpect(jsonPath("$.data.totalScore").value(0.00))
+                .andExpect(jsonPath("$.data.pendingPoints").value(0.00));
+
+        assertEquals(0, answer(attemptId, single.getQuestionId()).getScoreEarned().signum());
+        assertFalse(answer(attemptId, single.getQuestionId()).getIsCorrect());
+        assertEquals("AUTO", answer(attemptId, essay.getQuestionId()).getGradingStatus());
+        assertEquals(0, answer(attemptId, essay.getQuestionId()).getScoreEarned().signum());
+    }
+
+    @Test
+    void gradesFillBlankMatchingAndOrderingAllOrNothing() throws Exception {
+        Question fill = question("FILL_BLANK", "Java classes {{1}} and interfaces {{2}}.");
+        fill.setAnswerKey("{\"blanks\":[{\"index\":1,\"accepted\":[\"extends\"],\"caseSensitive\":false},"
+                + "{\"index\":2,\"accepted\":[\"implements\"],\"caseSensitive\":false}]}");
+        Question matching = question("MATCHING", "Match each language to its role.");
+        matching.setAnswerKey("{\"pairs\":[{\"left\":\"HTML\",\"right\":\"Markup\"},"
+                + "{\"left\":\"CSS\",\"right\":\"Styles\"}]}");
+        Question ordering = question("ORDERING", "Order the JVM phases.");
+        AnswerOption compile = option(ordering, "Compile", false, 0);
+        AnswerOption run = option(ordering, "Run", false, 1);
+        AnswerOption load = option(ordering, "Load", false, 2);
+        ordering.setAnswerKey("{\"correctOrder\":[" + load.getOptionId() + ","
+                + compile.getOptionId() + "," + run.getOptionId() + "]}");
+
+        Exam knowledge = exam("Knowledge", "STATIC", BigDecimal.valueOf(9));
+        attach(knowledge, fill, "1");
+        attach(knowledge, matching, "1");
+        attach(knowledge, ordering, "1");
+        em.flush();
+
+        JsonNode session = data(call(student, post(startUrl(knowledge))).andExpect(status().isCreated()));
+        long attemptId = session.path("attemptId").asLong();
+        assertEquals(2, question(session, matching.getQuestionId()).path("matching").path("lefts").size());
+        assertEquals(2, question(session, matching.getQuestionId()).path("matching").path("rights").size());
+        assertEquals(3, question(session, ordering.getQuestionId()).path("options").size());
+
+        call(student, post(submitUrl(attemptId)).contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("answers", List.of(
+                        draft(fill.getQuestionId(), 1, Map.of("blanks", Map.of("1", "extends", "2", "Implements"))),
+                        draft(matching.getQuestionId(), 1, Map.of("matches", List.of(
+                                Map.of("left", "HTML", "right", "Markup"),
+                                Map.of("left", "CSS", "right", "Styles")))),
+                        draft(ordering.getQuestionId(), 1, Map.of("orderedOptionIds", List.of(
+                                load.getOptionId(), compile.getOptionId(), run.getOptionId()))))))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("COMPLETED"))
+                .andExpect(jsonPath("$.data.totalScore").value(9.00))
+                .andExpect(jsonPath("$.data.pendingPoints").value(0.00));
+
+        assertTrue(answer(attemptId, fill.getQuestionId()).getIsCorrect());
+        assertTrue(answer(attemptId, matching.getQuestionId()).getIsCorrect());
+        assertTrue(answer(attemptId, ordering.getQuestionId()).getIsCorrect());
+        assertEquals(0, new BigDecimal("3.00").compareTo(answer(attemptId, fill.getQuestionId()).getScoreEarned()));
+    }
+
+    @Test
+    void aPartiallyCorrectFillBlankScoresZero() throws Exception {
+        Question fill = question("FILL_BLANK", "Java classes {{1}} and interfaces {{2}}.");
+        fill.setAnswerKey("{\"blanks\":[{\"index\":1,\"accepted\":[\"extends\"],\"caseSensitive\":false},"
+                + "{\"index\":2,\"accepted\":[\"implements\"],\"caseSensitive\":false}]}");
+        Exam knowledge = exam("Fill", "STATIC", BigDecimal.TEN);
+        attach(knowledge, fill, "1");
+        em.flush();
+
+        long attemptId = data(call(student, post(startUrl(knowledge))).andExpect(status().isCreated()))
+                .path("attemptId").asLong();
+        call(student, post(submitUrl(attemptId)).contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("answers", List.of(
+                        draft(fill.getQuestionId(), 1, Map.of("blanks", Map.of("1", "extends"))))))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("COMPLETED"))
+                .andExpect(jsonPath("$.data.totalScore").value(0.00));
+        assertFalse(answer(attemptId, fill.getQuestionId()).getIsCorrect());
+    }
+
+    @Test
+    void aPartialMultipleChoiceAnswerScoresZero() throws Exception {
+        long attemptId = data(call(student, post(startUrl(mainExam))).andExpect(status().isCreated()))
+                .path("attemptId").asLong();
+        call(student, post(submitUrl(attemptId)).contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("answers", List.of(
+                        draft(multiple.getQuestionId(), 1, selected(multipleA.getOptionId())))))))
+                .andExpect(status().isOk());
+        assertFalse(answer(attemptId, multiple.getQuestionId()).getIsCorrect());
+        assertEquals(0, answer(attemptId, multiple.getQuestionId()).getScoreEarned().signum());
+    }
+
+    @Test
+    void submittingTwiceReturnsTheSameResultWithoutGradingAgain() throws Exception {
+        long attemptId = data(call(student, post(startUrl(mainExam))).andExpect(status().isCreated()))
+                .path("attemptId").asLong();
+        JsonNode first = data(call(student, post(submitUrl(attemptId))).andExpect(status().isOk()));
+        JsonNode second = data(call(student, post(submitUrl(attemptId))).andExpect(status().isOk()));
+
+        assertEquals(first.path("totalScore").decimalValue(), second.path("totalScore").decimalValue());
+        assertEquals(first.path("status").asText(), second.path("status").asText());
+        assertEquals(first.path("submittedAt").asText(), second.path("submittedAt").asText());
+    }
+
+    @Test
+    void aLateSubmitIsMarkedAutoSubmitted() throws Exception {
+        long attemptId = data(call(student, post(startUrl(mainExam))).andExpect(status().isCreated()))
+                .path("attemptId").asLong();
+        attempt(attemptId).setDeadlineAt(Instant.now().minusSeconds(30));
+
+        call(student, post(submitUrl(attemptId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.autoSubmitted").value(true));
+        assertTrue(attempt(attemptId).getAutoSubmitted());
+    }
+
+    @Test
+    void submitIgnoresQuestionsThatAreNotPartOfTheAttempt() throws Exception {
+        long attemptId = data(call(student, post(startUrl(mainExam))).andExpect(status().isCreated()))
+                .path("attemptId").asLong();
+        call(student, post(submitUrl(attemptId)).contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("answers", List.of(
+                        draft(single.getQuestionId(), 1, selected(singleRight.getOptionId())),
+                        draft(999_999L, 1, selected(1L)))))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalScore").value(2.00));
+        assertEquals(3, answers(attemptId).size());
+    }
+
+    @Test
+    void submitIsForbiddenForAnotherStudent() throws Exception {
+        long attemptId = data(call(student, post(startUrl(mainExam))).andExpect(status().isCreated()))
+                .path("attemptId").asLong();
+        call(otherStudent, post(submitUrl(attemptId))).andExpect(status().isForbidden());
+        call(student, post("/api/v1/student/attempts/999999/submit")).andExpect(status().isNotFound());
+    }
+
+    // =================================================================================
     // helpers
     // =================================================================================
 
