@@ -12,10 +12,27 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
     boolean existsByCourse_CourseIdAndUser_UserId(Long courseId, Long userId);
+
+    boolean existsByCourse_CourseIdAndUser_UserIdAndStatus(Long courseId, Long userId, String status);
+
+    Optional<Enrollment> findByUser_UserIdAndCourse_CourseId(Long userId, Long courseId);
+
+    @Query("SELECT new com.examprep.dto.student.MyCourseDto(" +
+            "c.courseId, c.title, c.slug, c.thumbnailUrl, c.price, " +
+            "new com.examprep.dto.student.CategoryRefDto(cat.categoryId, cat.name), " +
+            "new com.examprep.dto.student.ManagerRefDto(m.userId, m.fullName), " +
+            "en.enrolledAt, en.status, en.progress, " +
+            "(SELECT COUNT(ex) FROM Exam ex WHERE ex.course = c AND ex.status = 'PUBLISHED'), " +
+            "(SELECT COUNT(d) FROM Deck d WHERE d.course = c), " +
+            "null) " +
+            "FROM Enrollment en JOIN en.course c JOIN c.category cat JOIN c.manager m " +
+            "WHERE en.user.userId = :userId AND (:status IS NULL OR en.status = :status)")
+    Page<com.examprep.dto.student.MyCourseDto> findMyCourses(@Param("userId") Long userId, @Param("status") String status, Pageable pageable);
 
     @Query("SELECT COUNT(e) FROM Enrollment e WHERE e.user.userId = :userId")
     long countByUserId(@Param("userId") Long userId);

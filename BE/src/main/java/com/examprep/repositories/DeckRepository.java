@@ -10,6 +10,7 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -41,5 +42,13 @@ public interface DeckRepository extends JpaRepository<Deck, Long> {
             "AND LOWER(d.title) = LOWER(:title) AND d.deckId <> :excludeId")
     long countByOwnerWithoutCourseAndTitle(@Param("userId") Long userId, @Param("title") String title,
                                            @Param("excludeId") Long excludeId);
+
+    @Query("SELECT new com.examprep.dto.student.DeckDto(" +
+            "d.deckId, d.title, d.description, d.isPublic, " +
+            "(SELECT COUNT(f) FROM Flashcard f WHERE f.deck = d), " +
+            "(SELECT COUNT(p) FROM UserCardProgress p JOIN p.card f WHERE f.deck = d AND p.user.userId = :userId AND p.status = 'LEARNED'), " +
+            "(SELECT COUNT(p) FROM UserCardProgress p JOIN p.card f WHERE f.deck = d AND p.user.userId = :userId AND p.isStarred = true)) " +
+            "FROM Deck d WHERE d.course.courseId = :courseId")
+    List<com.examprep.dto.student.DeckDto> findCourseDecksWithStats(@Param("courseId") Long courseId, @Param("userId") Long userId);
 }
 

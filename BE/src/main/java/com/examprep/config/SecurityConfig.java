@@ -65,7 +65,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET,
                                 "/api/v1/categories",
                                 "/api/v1/courses",
-                                "/api/v1/courses/*"
+                                "/api/v1/courses/*",
+                                "/api/v1/student/courses",
+                                "/api/v1/student/courses/*"
                         ).permitAll()
                         // Role-restricted Endpoints
                         .requestMatchers("/api/v1/admin/**").hasRole(User.ROLE_ADMIN)
