@@ -67,15 +67,18 @@ public class StudentExamServiceImpl implements StudentExamService {
 
         return new ExamDetailDto(
                 exam.getExamId(),
-                exam.getCourse() != null ? exam.getCourse().getCourseId() : null,
+                exam.getCourse() != null
+                        ? exam.getCourse().getCourseId()
+                        : null,
+                exam.getCourse() != null
+                        ? exam.getCourse().getTitle()
+                        : null,
                 exam.getTitle(),
                 exam.getDescription(),
                 exam.getDurationMinutes(),
-                exam.getIsPractice(),
-                exam.getGenerationType(),
                 exam.getMaxScore(),
-                exam.getStatus(),
-                questionsSummary,
+                totalCount,
+                exam.getPublishedAt(),
                 myStats,
                 actions
         );

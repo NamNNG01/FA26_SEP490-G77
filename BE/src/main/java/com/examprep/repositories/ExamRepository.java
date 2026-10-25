@@ -1,5 +1,6 @@
 package com.examprep.repositories;
 
+import com.examprep.dto.student.CourseExamDto;
 import com.examprep.entities.Exam;
 import com.examprep.dto.IdCount;
 import org.springframework.data.domain.Page;
@@ -38,16 +39,39 @@ public interface ExamRepository extends JpaRepository<Exam, Long>, JpaSpecificat
             Pageable pageable
     );
 
-    @Query("SELECT new com.examprep.dto.student.CourseExamDto(" +
-            "ex.examId, ex.title, ex.description, ex.durationMinutes, ex.maxScore, ex.status, ex.publishedAt, " +
-            "new com.examprep.dto.student.ExamMyStatsDto(" +
-            "  (SELECT COUNT(att) FROM ExamAttempt att WHERE att.exam = ex AND att.user.userId = :userId), " +
-            "  (SELECT MAX(att.totalScore) FROM ExamAttempt att WHERE att.exam = ex AND att.user.userId = :userId), " +
-            "  (SELECT att.status FROM ExamAttempt att WHERE att.exam = ex AND att.user.userId = :userId ORDER BY att.startTime DESC LIMIT 1)" +
-            ")) " +
-            "FROM Exam ex " +
-            "WHERE ex.course.courseId = :courseId AND ex.status = 'PUBLISHED'")
-    Page<com.examprep.dto.student.CourseExamDto> findCourseExamsWithStats(@Param("courseId") Long courseId, @Param("userId") Long userId, Pageable pageable);
+    @Query(
+            value = """
+        SELECT new com.examprep.dto.student.CourseExamDto(
+            ex.examId, ex.title, ex.durationMinutes, ex.maxScore,
+            (SELECT COUNT(eq) FROM ExamQuestion eq WHERE eq.exam = ex),
+            (SELECT COUNT(att) FROM ExamAttempt att WHERE att.exam = ex AND att.user.userId = :userId),
+            (SELECT MAX(att.totalScore) FROM ExamAttempt att WHERE att.exam = ex AND att.user.userId = :userId),
+            (SELECT latest.status FROM ExamAttempt latest
+             WHERE latest.exam = ex AND latest.user.userId = :userId
+               AND NOT EXISTS (
+                   SELECT newer.attemptId FROM ExamAttempt newer
+                   WHERE newer.exam = ex AND newer.user.userId = :userId
+                     AND (newer.startTime > latest.startTime
+                       OR (newer.startTime = latest.startTime AND newer.attemptId > latest.attemptId))
+               )),
+            CASE WHEN (SELECT COUNT(active) FROM ExamAttempt active
+                       WHERE active.exam = ex AND active.user.userId = :userId
+                         AND active.status = 'IN_PROGRESS') > 0
+                 THEN true ELSE false END
+        )
+        FROM Exam ex
+        WHERE ex.course.courseId = :courseId AND ex.status = 'PUBLISHED'
+        """,
+            countQuery = """
+        SELECT COUNT(ex) FROM Exam ex
+        WHERE ex.course.courseId = :courseId AND ex.status = 'PUBLISHED'
+        """
+    )
+    Page<CourseExamDto> findCourseExamsWithStats(
+            @Param("courseId") Long courseId,
+            @Param("userId") Long userId,
+            Pageable pageable
+    );
 
     @Query("SELECT new com.examprep.dto.student.QuestionTypeCountDto(q.questionType, CAST(COUNT(eq) AS int), eq.weight) " +
            "FROM ExamQuestion eq JOIN eq.question q " +
