@@ -328,6 +328,59 @@ class StudentAttemptControllerTest {
     }
 
     // =================================================================================
+    // SA-02
+    // =================================================================================
+
+    @Test
+    void reloadReturnsTheSamePaperPlusTheStoredDrafts() throws Exception {
+        JsonNode started = data(call(student, post(startUrl(mainExam))).andExpect(status().isCreated()));
+        long attemptId = started.path("attemptId").asLong();
+        save(attemptId, draft(single.getQuestionId(), 1, selected(singleRight.getOptionId())))
+                .andExpect(status().isOk());
+
+        JsonNode reloaded = data(call(student, get(attemptUrl(attemptId))).andExpect(status().isOk()));
+        assertEquals(attemptId, reloaded.path("attemptId").asLong());
+        assertEquals(questionIds(started), questionIds(reloaded));
+        assertEquals(orderIndexes(started), orderIndexes(reloaded));
+
+        JsonNode answer = answerOf(reloaded, single.getQuestionId());
+        assertEquals(1, answer.path("draftSeq").asInt());
+        assertEquals(singleRight.getOptionId(),
+                answer.path("response").path("selectedOptionIds").get(0).asLong());
+
+        JsonNode untouched = answerOf(reloaded, essay.getQuestionId());
+        assertEquals(-1, untouched.path("draftSeq").asInt());
+        assertTrue(untouched.path("response").isNull() || untouched.path("response").isMissingNode());
+    }
+
+    @Test
+    void reloadIsForbiddenForAnotherStudentAnd404ForAnUnknownAttempt() throws Exception {
+        long attemptId = data(call(student, post(startUrl(mainExam))).andExpect(status().isCreated()))
+                .path("attemptId").asLong();
+        call(otherStudent, get(attemptUrl(attemptId))).andExpect(status().isForbidden());
+        call(student, get("/api/v1/student/attempts/999999")).andExpect(status().isNotFound());
+    }
+
+    @Test
+    void reloadingAfterTheDeadlineReturnsTheAutoSubmittedAttempt() throws Exception {
+        long attemptId = data(call(student, post(startUrl(mainExam))).andExpect(status().isCreated()))
+                .path("attemptId").asLong();
+        save(attemptId, draft(single.getQuestionId(), 1, selected(singleRight.getOptionId())))
+                .andExpect(status().isOk());
+        attempt(attemptId).setDeadlineAt(Instant.now().minusSeconds(30));
+
+        JsonNode reloaded = data(call(student, get(attemptUrl(attemptId))).andExpect(status().isOk()));
+        assertEquals("COMPLETED", reloaded.path("status").asText());
+        assertNotNull(attempt(attemptId).getSubmittedAt(), "the server closed the attempt");
+        assertTrue(reloaded.has("questions"));
+        assertEquals(3, reloaded.path("answers").size(),
+                "a submitted attempt still exposes what was answered, without the key");
+        assertEquals(1, answerOf(reloaded, single.getQuestionId()).path("draftSeq").asInt());
+
+        assertNoAnswerLeak(body(call(student, get(attemptUrl(attemptId))).andExpect(status().isOk())).toString());
+    }
+
+    // =================================================================================
     // helpers
     // =================================================================================
 
