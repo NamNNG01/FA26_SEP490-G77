@@ -55,7 +55,7 @@ export function StudentTakeExamPage() {
   const [remaining, setRemaining] = useState<number | null>(null);
 
   const [confirm, setConfirm] = useState<'submit' | 'cancel' | null>(null);
-  const [busy, setBusy] = useState<'submit' | 'cancel' | null>(null);
+  const [busy, setBusy] = useState<'submit' | 'cancel' | 'delete' | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
   // Draft bookkeeping lives in refs: the autosave timer must see the latest values.
@@ -207,6 +207,22 @@ export function StudentTakeExamPage() {
       navigate(studentExamPath(session.examId), { replace: true });
     } catch (err) {
       setActionError(getApiErrorMessage(err, 'Failed to save your answers. Please try again.'));
+      setBusy(null);
+    }
+  };
+
+  const deleteAttempt = async () => {
+    if (!session) return;
+    setBusy('delete');
+    setActionError(null);
+    // Stop autosave and the leave prompt first: the drafts are being thrown away.
+    finishedRef.current = true;
+    try {
+      await studentAttemptService.deleteAttempt(session.attemptId);
+      navigate(studentExamPath(session.examId), { replace: true });
+    } catch (err) {
+      finishedRef.current = false;
+      setActionError(getApiErrorMessage(err, 'Failed to delete this attempt. Please try again.'));
       setBusy(null);
     }
   };
@@ -456,8 +472,14 @@ export function StudentTakeExamPage() {
         size="sm"
         footer={
           <>
-            <Button variant="outline" disabled={busy != null} onClick={() => setConfirm(null)}>
-              Keep working
+            <Button
+              variant="danger"
+              loading={busy === 'delete'}
+              disabled={busy != null}
+              icon={<Icon.Trash className="w-4 h-4" />}
+              onClick={deleteAttempt}
+            >
+              Delete attempt
             </Button>
             <Button loading={busy === 'cancel'} disabled={busy != null} onClick={saveAndExit}>
               Save & exit
@@ -470,6 +492,10 @@ export function StudentTakeExamPage() {
         </p>
         <p className="mt-3 text-sm text-warning">
           The timer keeps running while you are away — the attempt is submitted automatically when time is up.
+        </p>
+        <p className="mt-3 text-sm text-danger">
+          Delete attempt throws away all {answeredSet.size} answer{answeredSet.size === 1 ? '' : 's'} of this attempt — it will
+          not count in your history. This cannot be undone.
         </p>
         {actionError && <p className="mt-3 text-sm text-danger">{actionError}</p>}
       </Modal>

@@ -226,4 +226,14 @@ export const studentCourseService = {
     const res = await api.get<ApiResponse<PageResponse<MyExam>>>(`/student/my-exams${query({ ...params })}`);
     return res.data;
   },
+
+  /** ME-01, every page — it has no filter params, so My Exams filters client-side. */
+  async getAllMyExams(): Promise<MyExam[]> {
+    const exams: MyExam[] = [];
+    for (let page = 0; ; page++) {
+      const res = await studentCourseService.getMyExams({ page, size: 100 });
+      exams.push(...res.content);
+      if (res.last || res.content.length === 0) return exams;
+    }
+  },
 };
