@@ -48,6 +48,7 @@ public interface ExamAttemptRepository extends JpaRepository<ExamAttempt, Long> 
     @Query("SELECT att FROM ExamAttempt att WHERE att.exam.examId = :examId AND att.user.userId = :userId AND att.status = :status")
     Optional<ExamAttempt> findActiveAttempt(@Param("examId") Long examId, @Param("userId") Long userId, @Param("status") String status);
 
+<<<<<<< HEAD
     List<ExamAttempt> findByExam_ExamIdAndUser_UserId(
             Long examId,
             Long userId
@@ -55,4 +56,9 @@ public interface ExamAttemptRepository extends JpaRepository<ExamAttempt, Long> 
     Page<ExamAttempt> findByExam_ExamIdAndUser_UserId(
             Long examId, Long userId, Pageable pageable
     );
+=======
+    /** SA-06: history of one exam for one student, newest attempt first, paged inside the database. */
+    Page<ExamAttempt> findByUserUserIdAndExamExamIdOrderByStartTimeDescAttemptIdDesc(
+            Long userId, Long examId, Pageable pageable);
+>>>>>>> 8d86a3b498f8b4900dd10983f10e1f181dd68485
 }
