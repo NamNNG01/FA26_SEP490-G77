@@ -47,4 +47,12 @@ public interface ExamAttemptRepository extends JpaRepository<ExamAttempt, Long> 
 
     @Query("SELECT att FROM ExamAttempt att WHERE att.exam.examId = :examId AND att.user.userId = :userId AND att.status = :status")
     Optional<ExamAttempt> findActiveAttempt(@Param("examId") Long examId, @Param("userId") Long userId, @Param("status") String status);
+
+    List<ExamAttempt> findByExam_ExamIdAndUser_UserId(
+            Long examId,
+            Long userId
+    );
+    Page<ExamAttempt> findByExam_ExamIdAndUser_UserId(
+            Long examId, Long userId, Pageable pageable
+    );
 }

@@ -15,7 +15,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 @Service
@@ -31,48 +33,82 @@ public class StudentExamServiceImpl implements StudentExamService {
     public ExamDetailDto getExamDetail(Long examId, Long userId) {
         Exam exam = examRepository.findById(examId)
                 .orElseThrow(() -> new ResourceNotFoundException("Exam not found"));
+
         if (!"PUBLISHED".equals(exam.getStatus())) {
             throw new ResourceNotFoundException("Exam not found");
         }
+
         if (exam.getCourse() != null) {
             validateActiveEnrollment(exam.getCourse().getCourseId(), userId);
         }
 
-        List<QuestionTypeCountDto> typeSummaries = examRepository.getExamQuestionTypeSummaries(examId);
-        int totalCount = typeSummaries.stream().mapToInt(QuestionTypeCountDto::count).sum();
-        ExamQuestionsByTypeSummary questionsSummary = new ExamQuestionsByTypeSummary(typeSummaries, totalCount);
+        List<QuestionTypeCountDto> typeSummaries =
+                examRepository.getExamQuestionTypeSummaries(examId);
 
-        List<ExamAttempt> attempts = examAttemptRepository.findAll().stream()
-                .filter(a -> a.getExam().getExamId().equals(examId) && a.getUser().getUserId().equals(userId))
-                .toList();
+        int totalCount = typeSummaries.stream()
+                .mapToInt(QuestionTypeCountDto::count)
+                .sum();
+
+        List<ExamAttempt> attempts =
+                examAttemptRepository.findByExam_ExamIdAndUser_UserId(examId, userId);
 
         long attemptCount = attempts.size();
-        BigDecimal bestScore = attempts.stream()
+
+        List<ExamAttempt> submittedAttempts = attempts.stream()
+                .filter(a -> "SUBMITTED".equals(a.getStatus()))
+                .toList();
+
+        BigDecimal bestScore = submittedAttempts.stream()
                 .map(ExamAttempt::getTotalScore)
-                .filter(s -> s != null)
+                .filter(Objects::nonNull)
                 .max(BigDecimal::compareTo)
                 .orElse(null);
-        String latestStatus = attempts.stream()
-                .max((a1, a2) -> a1.getStartTime().compareTo(a2.getStartTime()))
-                .map(ExamAttempt::getStatus)
+
+        ExamAttempt lastSubmittedAttempt = submittedAttempts.stream()
+                .filter(a -> a.getSubmittedAt() != null)
+                .max(Comparator.comparing(ExamAttempt::getSubmittedAt))
                 .orElse(null);
 
-        ExamMyStatsDto myStats = new ExamMyStatsDto(attemptCount, bestScore, latestStatus);
+        ExamMyStatsDto myStats = new ExamMyStatsDto(
+                attemptCount,
+                bestScore,
+                lastSubmittedAttempt != null
+                        ? lastSubmittedAttempt.getSubmittedAt()
+                        : null,
+                lastSubmittedAttempt != null
+                        ? lastSubmittedAttempt.getAttemptId()
+                        : null
+        );
 
-        Optional<ExamAttempt> activeAttempt = examAttemptRepository.findActiveAttempt(examId, userId, "IN_PROGRESS");
-        boolean canStart = attemptCount == 0 || activeAttempt.isPresent();
-        boolean canResume = activeAttempt.isPresent();
-        Long activeAttemptId = activeAttempt.map(ExamAttempt::getAttemptId).orElse(null);
-        ExamActionsDto actions = new ExamActionsDto(canStart, canResume, activeAttemptId);
+        Optional<ExamAttempt> activeAttempt =
+                examAttemptRepository.findActiveAttempt(examId, userId, "IN_PROGRESS");
+
+        Long activeAttemptId = activeAttempt
+                .map(ExamAttempt::getAttemptId)
+                .orElse(null);
+
+        boolean canViewHistory = attemptCount > 0;
+
+        boolean canStart = totalCount > 0 && activeAttempt.isEmpty();
+
+        String reason = null;
+        if (totalCount == 0) {
+            reason = "EXAM_HAS_NO_QUESTIONS";
+        } else if (activeAttempt.isPresent()) {
+            reason = "ACTIVE_ATTEMPT_EXISTS";
+        }
+
+        ExamActionsDto actions = new ExamActionsDto(
+                canStart,
+                activeAttemptId,
+                canViewHistory,
+                reason
+        );
 
         return new ExamDetailDto(
                 exam.getExamId(),
-                exam.getCourse() != null
-                        ? exam.getCourse().getCourseId()
-                        : null,
-                exam.getCourse() != null
-                        ? exam.getCourse().getTitle()
-                        : null,
+                exam.getCourse() != null ? exam.getCourse().getCourseId() : null,
+                exam.getCourse() != null ? exam.getCourse().getTitle() : null,
                 exam.getTitle(),
                 exam.getDescription(),
                 exam.getDurationMinutes(),
@@ -129,5 +165,42 @@ public class StudentExamServiceImpl implements StudentExamService {
         if (!active) {
             throw new ForbiddenException("Student is not actively enrolled in this course");
         }
+    }
+
+    @Override
+    public Page<ExamAttemptHistoryDto> getExamAttempts(
+            Long examId, int page, int size, Long userId) {
+
+        if (page < 0) {
+            throw new BadRequestException("Page index must not be less than zero");
+        }
+        if (size <= 0 || size > 100) {
+            throw new BadRequestException("Page size must be between 1 and 100");
+        }
+
+        Exam exam = examRepository.findById(examId)
+                .orElseThrow(() -> new ResourceNotFoundException("Exam not found"));
+
+        if (!"PUBLISHED".equals(exam.getStatus())) {
+            throw new ResourceNotFoundException("Exam not found");
+        }
+        if (exam.getCourse() != null) {
+            validateActiveEnrollment(exam.getCourse().getCourseId(), userId);
+        }
+
+        Pageable pageable = PageRequest.of(
+                page, size, Sort.by(Sort.Direction.DESC, "startTime"));
+
+        return examAttemptRepository
+                .findByExam_ExamIdAndUser_UserId(examId, userId, pageable)
+                .map(a -> new ExamAttemptHistoryDto(
+                        a.getAttemptId(),
+                        a.getStatus(),
+                        a.getTotalScore(),
+                        a.getExam().getMaxScore(),
+                        a.getStartTime(),
+                        a.getSubmittedAt(),
+                        a.getAutoSubmitted()
+                ));
     }
 }
