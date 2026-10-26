@@ -131,8 +131,14 @@ public class StudentExamServiceImpl implements StudentExamService {
             validateActiveEnrollment(exam.getCourse().getCourseId(), userId);
         }
 
-        ExamAttempt active = examAttemptRepository.findActiveAttempt(examId, userId, "IN_PROGRESS")
-                .orElseThrow(() -> new ResourceNotFoundException("No active attempt found"));
+        Optional<ExamAttempt> activeAttempt =
+                examAttemptRepository.findActiveAttempt(examId, userId, "IN_PROGRESS");
+
+        if (activeAttempt.isEmpty()) {
+            return null;
+        }
+
+        ExamAttempt active = activeAttempt.get();
 
         return new ActiveAttemptDto(
                 active.getAttemptId(),

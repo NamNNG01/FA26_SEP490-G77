@@ -23,8 +23,17 @@ import { PlaceholderPage } from '@/features/public';
 import { RegisterPage } from '@/features/auth/pages/RegisterPage';
 import { ForgotPasswordPage, ResetPasswordPage } from '@/features/auth/pages/AuthPages';
 import { ProfilePage } from '@/features/profile';
-import { StudentDashboard } from '@/features/student';
-import { TakeExamPage, ExamResultPage, ExamListPage, ExamFormPage } from '@/features/exam';
+import {
+  MyCoursesPage,
+  StudentCourseDetailPage,
+  MyExamsPage,
+  StudentFlashcardsPage,
+  StudentDeckStudyPage,
+  StudentExamDetailPage,
+  StudentTakeExamPage,
+  StudentExamResultPage,
+} from '@/features/student';
+import { ExamListPage, ExamFormPage } from '@/features/exam';
 import { PublicExamsPage, PublicExamDetailPage } from '@/features/public-exam';
 import { CMDashboard } from '@/features/content-manager';
 import { QuestionBankPage, QuestionDetailPage, QuestionFormPage } from '@/features/question';
@@ -218,24 +227,32 @@ function AppRoutes() {
     <Routes>
       {publicRoutes(<SignedInHome isEntry={location.key === entryKey} />)}
 
+      <Route element={<PublicLayout />}>
+        <Route element={<RequireRole roles={ROLE_STUDENT} />}>
+          <Route path={ROUTES.studentDashboard} element={<Navigate to={ROUTES.studentCourses} replace />} />
+          <Route path={ROUTES.studentCourses} element={<MyCoursesPage />} />
+          <Route path={ROUTES.studentCourseDetail} element={<StudentCourseDetailPage />} />
+          <Route path={ROUTES.studentExams} element={<MyExamsPage />} />
+          <Route path={ROUTES.studentMyExams} element={<MyExamsPage />} />
+          <Route path={ROUTES.studentFlashcards} element={<StudentFlashcardsPage />} />
+          <Route path={ROUTES.studentFlashcardDeck} element={<StudentDeckStudyPage />} />
+          <Route path={ROUTES.studentPublicExam} element={<PublicExamsPage />} />
+          <Route path={ROUTES.studentPublicExamDetail} element={<PublicExamDetailPage />} />
+          <Route path={ROUTES.studentExamDetail} element={<StudentExamDetailPage />} />
+          <Route path={ROUTES.studentExamResult} element={<StudentExamResultPage />} />
+        </Route>
+      </Route>
+
+      <Route element={<RequireRole roles={ROLE_STUDENT} />}>
+        <Route path={ROUTES.studentExam} element={<StudentTakeExamPage />} />
+      </Route>
+
       <Route element={<DashboardLayout />}>
         {/* Already signed in — respect ?redirect= before falling back. */}
         <Route path={ROUTES.login} element={<LoggedInLoginRedirect />} />
         <Route path={ROUTES.register} element={<Navigate to={landing} replace />} />
         <Route path={ROUTES.forgotPassword} element={<ForgotPasswordPage />} />
         <Route path={ROUTES.resetPassword} element={<ResetPasswordPage />} />
-
-        {/* STUDENT — learners see their own dashboard, courses, exams and
-            practice attempts. No editing surfaces. */}
-        <Route element={<RequireRole roles={ROLE_STUDENT} />}>
-          <Route path={ROUTES.studentDashboard} element={<StudentDashboard />} />
-          <Route path={ROUTES.studentCourses} element={<CourseListPage readonly />} />
-          <Route path={ROUTES.studentExams} element={<ExamListPage />} />
-          <Route path={ROUTES.studentPublicExam} element={<PublicExamsPage />} />
-          <Route path={ROUTES.studentPublicExamDetail} element={<PublicExamDetailPage />} />
-          <Route path={ROUTES.studentExam} element={<TakeExamPage />} />
-          <Route path={ROUTES.studentExamResult} element={<ExamResultPage />} />
-        </Route>
 
         {/* COURSE_MANAGER — authors content. Includes ADMIN, since
             administrators have full system access. */}

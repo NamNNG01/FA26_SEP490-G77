@@ -7,6 +7,7 @@ import com.examprep.exceptions.BadRequestException;
 import com.examprep.exceptions.ForbiddenException;
 import com.examprep.exceptions.ResourceNotFoundException;
 import com.examprep.repositories.*;
+import com.examprep.util.QuestionTypeUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -15,8 +16,12 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -91,7 +96,25 @@ public class StudentCourseServiceImpl implements StudentCourseService {
     public Page<CourseExamDto> listCourseExams(Long courseId, String sort, int page, int size, Long userId) {
         validateActiveEnrollment(courseId, userId);
         Pageable pageable = createPageable(page, size, sort, "publishedAt");
-        return examRepository.findCourseExamsWithStats(courseId, userId, pageable);
+        Page<CourseExamDto> exams = examRepository.findCourseExamsWithStats(courseId, userId, pageable);
+        if (exams.isEmpty()) {
+            return exams;
+        }
+        List<Long> ids = exams.getContent().stream().map(CourseExamDto::examId).toList();
+        Map<Long, Set<String>> kinds = new HashMap<>();
+        for (List<Object[]> rows : List.of(examRepository.findQuestionTypesByExamIds(ids),
+                examRepository.findConfigTypesByExamIds(ids))) {
+            for (Object[] row : rows) {
+                String kind = QuestionTypeUtil.kindOf((String) row[1]);
+                if (kind != null) {
+                    kinds.computeIfAbsent((Long) row[0], k -> new HashSet<>()).add(kind);
+                }
+            }
+        }
+        return exams.map(e -> {
+            Set<String> found = kinds.getOrDefault(e.examId(), Set.of());
+            return e.withExamKind(found.isEmpty() ? null : found.size() > 1 ? "MIXED" : found.iterator().next());
+        });
     }
 
     @Override

@@ -1,7 +1,9 @@
 import React from 'react';
 import { Link, Outlet, useLocation } from 'react-router';
-import { useAuth } from '@/auth/authContext';
-import { getMenuForRole, ROUTES } from '@/app/routes';
+import { useAuth, landingPathForRole } from '@/auth/authContext';
+import { getMenuForRole } from '@/app/routes';
+import { Role } from '@/utils/permissions';
+import { CourseSearchBar } from '@/features/catalog';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { UserDropdown } from '@/components/layout/UserDropdown';
 import { Icon } from '@/assets/icons';
@@ -13,7 +15,7 @@ import { Icon } from '@/assets/icons';
  * while <Outlet /> swaps the page content, so sidebar state (collapse) and
  * scroll position survive navigation.
  *
- * Header layout: [Logo] ...... [notifications bell] [UserDropdown].
+ * Header layout: [Logo → role dashboard] [course search — STUDENT only] ...... [UserDropdown].
  * The user menu (Profile / Theme / Logout) lives in UserDropdown; there is
  * no standalone Logout button anymore.
  */
@@ -37,14 +39,21 @@ export function DashboardLayout() {
       {/* Header */}
       <header className="h-14 bg-surface border-b border-line-soft flex items-center px-[clamp(0.75rem,1.5vw,1.25rem)] gap-3 flex-shrink-0 z-40">
         <div className="flex items-center w-[clamp(11rem,22vw,14rem)] max-w-[30%] flex-shrink-0">
-          {/* In-app link, so "/" shows the landing page instead of the
-              open-the-site redirect to the dashboard (see SignedInHome). */}
-          <Link to={ROUTES.landing} aria-label="PrepExam home" className="flex items-center gap-2.5">
+          {/* The logo takes the signed-in user to their role's dashboard. */}
+          <Link to={landingPathForRole(user?.role)} aria-label="Go to your dashboard" className="flex items-center gap-2.5">
             <Icon.Logo className="w-7 h-7 flex-shrink-0 text-brand-ink" aria-hidden="true" />
             <span className="text-lg font-bold text-content">PrepExam</span>
           </Link>
         </div>
-        <div className="flex-1" />
+        {/* Students get the same course search as the public header; it
+            falls through to the full catalog (/courses?q=…). */}
+        {user?.role === Role.STUDENT ? (
+          <div className="flex-1 min-w-0">
+            <CourseSearchBar className="max-w-[min(520px,100%)]" />
+          </div>
+        ) : (
+          <div className="flex-1" />
+        )}
         <div className="flex items-center gap-2 ml-1 pl-3 border-l border-line-soft">
           <UserDropdown />
         </div>
