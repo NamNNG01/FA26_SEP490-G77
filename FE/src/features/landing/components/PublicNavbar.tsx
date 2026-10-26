@@ -59,10 +59,11 @@ export function PublicNavbar() {
       <Container className="!px-[clamp(16px,4vw,40px)]">
         <div className="flex h-16 min-w-0 items-center gap-3 lg:gap-5">
           {/* Logo */}
+          {/* Signed in → the role's own dashboard; guests → the landing page. */}
           <button
             type="button"
-            onClick={() => goTo(ROUTES.landing)}
-            aria-label="PrepExam home"
+            onClick={() => goTo(isAuthenticated ? dashboardPath : ROUTES.landing)}
+            aria-label={isAuthenticated ? 'Go to your dashboard' : 'PrepExam home'}
             className="flex flex-shrink-0 cursor-pointer items-center gap-2.5"
           >
             <Icon.Logo className="h-8 w-8 flex-shrink-0 text-brand-ink" aria-hidden="true" />

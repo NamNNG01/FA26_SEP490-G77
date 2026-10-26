@@ -4,7 +4,11 @@ import { Container } from '../components/Container';
 import { CTAButton } from '../components/CTAButton';
 import { SampleQuestionCard } from '../components/SampleQuestionCard';
 import { useRequireAuth } from '@/hooks/useRequireAuth';
-import { heroContent, catalogStats } from '../data/landingData';
+import { useCatalogOverview } from '@/features/catalog';
+import { heroContent } from '../data/landingData';
+
+/** Category names shown in the eyebrow before it gets too long. */
+const EYEBROW_MAX_CATEGORIES = 5;
 
 /**
  * HeroSection
@@ -17,10 +21,10 @@ import { heroContent, catalogStats } from '../data/landingData';
  * CTAs:
  *  - "Browse courses" → /courses, open to guests.
  *  - "Start practising free" → requires an account; guests are sent to
- *    /login?redirect=/student/dashboard and continue after signing in.
+ *    /login?redirect=/student/courses and continue after signing in.
  *
- * Below the CTAs, catalog-derived figures (questions, mocks, providers)
- * replace generic trust badges.
+ * Below the CTAs, live catalog figures (courses, mock exams, categories —
+ * useCatalogOverview) replace generic trust badges.
  *
  * No scroll-reveal here: the hero is above the fold, so it renders at once.
  *
@@ -29,6 +33,20 @@ import { heroContent, catalogStats } from '../data/landingData';
  */
 export function HeroSection() {
   const requireAuth = useRequireAuth();
+  const overview = useCatalogOverview();
+
+  const eyebrow =
+    overview && overview.categoryNames.length > 0
+      ? overview.categoryNames.slice(0, EYEBROW_MAX_CATEGORIES).join(' · ')
+      : heroContent.eyebrowFallback;
+
+  // "—" until the catalog answers, so the hero never shows a made-up number.
+  const show = (n: number | undefined) => (n == null ? '—' : n.toLocaleString('en-US'));
+  const catalogStats = [
+    { value: show(overview?.courseCount), label: 'courses' },
+    { value: show(overview?.examCount), label: 'timed mock exams' },
+    { value: show(overview?.categoryNames.length), label: 'categories' },
+  ];
 
   return (
     <section className="relative overflow-hidden border-b border-line-soft">
@@ -44,7 +62,7 @@ export function HeroSection() {
             <div className="min-w-0 text-center min-[900px]:text-left">
               <div>
                 <p className="text-xs font-semibold tracking-[0.08em] text-brand-ink uppercase">
-                  {heroContent.eyebrow}
+                  {eyebrow}
                 </p>
               </div>
 
@@ -70,7 +88,7 @@ export function HeroSection() {
                   />
                   <CTAButton
                     label={heroContent.secondaryCtaLabel}
-                    onClick={() => requireAuth(ROUTES.studentDashboard)}
+                    onClick={() => requireAuth(ROUTES.studentCourses)}
                     variant="secondary"
                     className="w-full sm:w-auto"
                   />

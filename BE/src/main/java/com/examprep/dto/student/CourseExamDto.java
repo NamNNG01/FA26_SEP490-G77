@@ -11,5 +11,18 @@ public record CourseExamDto(
         Long myAttemptCount,
         BigDecimal myBestScore,
         String myLastStatus,
-        Boolean hasActiveAttempt
-) {}
+        Boolean hasActiveAttempt,
+        /** null when the exam is not filed under a module. */
+        Long moduleId,
+        /**
+         * QUIZ / ESSAY / CODE / DIAGRAM from the question types (fixed and random-config), as the
+         * manager side derives it; MIXED when they span several kinds; null when the exam has none.
+         * Filled by the service after the page query.
+         */
+        String examKind
+) {
+    public CourseExamDto withExamKind(String kind) {
+        return new CourseExamDto(examId, title, durationMinutes, maxScore, questionCount, myAttemptCount,
+                myBestScore, myLastStatus, hasActiveAttempt, moduleId, kind);
+    }
+}

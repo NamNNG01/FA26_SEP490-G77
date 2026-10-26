@@ -1,1 +1,8 @@
-export { StudentDashboard } from './pages/StudentDashboard';
+export { MyCoursesPage } from './pages/MyCoursesPage';
+export { StudentCourseDetailPage } from './pages/StudentCourseDetailPage';
+export { MyExamsPage } from './pages/MyExamsPage';
+export { StudentFlashcardsPage } from './pages/StudentFlashcardsPage';
+export { StudentDeckStudyPage } from './pages/StudentDeckStudyPage';
+export { StudentExamDetailPage } from './pages/StudentExamDetailPage';
+export { StudentTakeExamPage } from './pages/StudentTakeExamPage';
+export { StudentExamResultPage } from './pages/StudentExamResultPage';

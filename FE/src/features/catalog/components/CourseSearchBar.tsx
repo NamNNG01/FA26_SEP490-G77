@@ -1,10 +1,10 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { Icon } from '@/assets/icons';
-import { ROUTES, coursePath } from '@/app/routes';
+import { coursePath, courseSearchPath } from '@/app/routes';
 import { useCourseSearch } from '../hooks/useCourseSearch';
-import { ProviderLogo } from './ProviderLogo';
-import type { PublicCourse } from '../types';
+import { CourseLogo } from './CourseLogo';
+import type { StudentCourseCard } from '@/services/studentCourse.service';
 
 /** Max rows rendered inline — the rest are reachable via "View all courses". */
 const MAX_VISIBLE_RESULTS = 6;
@@ -12,8 +12,8 @@ const MAX_VISIBLE_RESULTS = 6;
 /**
  * CourseSearchBar
  *
- * The public header's course finder. Searches COURSES ONLY — name, provider
- * and description (see searchCourses). Questions, exams, users, modules,
+ * The public header's course finder. Searches COURSES ONLY — by title via CL-01
+ * (see useCourseSearch). Questions, exams, users, modules,
  * lessons and the question bank are intentionally out of scope.
  *
  * Behaves as an ARIA combobox: full keyboard support (↑ ↓ Home End Enter Esc),
@@ -40,13 +40,13 @@ export function CourseSearchBar({
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const { query, setQuery, results, isEmptyResult } = useCourseSearch();
+  const { query, setQuery, results, total, loading, error, isEmptyResult } = useCourseSearch('', { size: MAX_VISIBLE_RESULTS });
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
 
   const trimmed = query.trim();
   const expanded = open && trimmed.length > 0;
-  const visibleResults = results.slice(0, MAX_VISIBLE_RESULTS);
+  const visibleResults = results;
 
   // Dismiss the dropdown on any outside interaction.
   useEffect(() => {
@@ -67,18 +67,18 @@ export function CourseSearchBar({
     setActiveIndex(-1);
   }, [location.pathname, location.search]);
 
-  function goToCourse(course: PublicCourse) {
+  function goToCourse(course: StudentCourseCard) {
     setOpen(false);
     setActiveIndex(-1);
     onNavigate?.();
-    navigate(coursePath(course.slug));
+    navigate(coursePath(course.courseId));
   }
 
   function goToAllResults() {
     setOpen(false);
     setActiveIndex(-1);
     onNavigate?.();
-    navigate(trimmed ? `${ROUTES.courses}?q=${encodeURIComponent(trimmed)}` : ROUTES.courses);
+    navigate(courseSearchPath(trimmed));
   }
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
@@ -175,7 +175,7 @@ export function CourseSearchBar({
         <div className="absolute top-[calc(100%+8px)] right-0 left-0 z-50 overflow-hidden rounded-[14px] border border-line bg-surface shadow-xl shadow-gray-900/10">
           <ul id={listboxId} role="listbox" aria-label="Course search results" className="max-h-[min(60vh,420px)] overflow-y-auto p-1.5">
             {visibleResults.map((course, index) => (
-              <li key={course.slug} role="option" aria-selected={index === activeIndex} id={`${listboxId}-${index}`}>
+              <li key={course.courseId} role="option" aria-selected={index === activeIndex} id={`${listboxId}-${index}`}>
                 <button
                   type="button"
                   // Keep the listbox open on hover so pointer users can move
@@ -186,17 +186,17 @@ export function CourseSearchBar({
                     index === activeIndex ? 'bg-primary-light' : 'hover:bg-surface-hover'
                   }`}
                 >
-                  <ProviderLogo providerId={course.providerId} provider={course.provider} size={34} />
+                  <CourseLogo title={course.title} thumbnailUrl={course.thumbnailUrl} size={34} />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-base font-semibold text-content">
-                      {course.name}
+                      {course.title}
                     </span>
                     <span className="mt-0.5 block truncate text-xs text-content-subtle">
-                      {course.provider}
+                      {course.category?.name ?? 'Uncategorized'}
                       <span className="mx-1.5 text-content-faint">·</span>
-                      {course.questionCount.toLocaleString()} Questions
+                      {course.publishedExamCount} Exams
                       <span className="mx-1.5 text-content-faint">·</span>
-                      {course.examCount} Exams
+                      {course.deckCount} Decks
                     </span>
                   </span>
                   <Icon.ChevronRight className="h-4 w-4 flex-shrink-0 text-content-faint" />
@@ -204,10 +204,16 @@ export function CourseSearchBar({
               </li>
             ))}
 
+            {loading && visibleResults.length === 0 && (
+              <li className="px-3 py-6 text-center text-sm text-content-subtle">Searching…</li>
+            )}
+
+            {error && !loading && <li className="px-3 py-6 text-center text-sm text-content-soft">{error}</li>}
+
             {isEmptyResult && (
               <li className="px-3 py-6 text-center">
                 <p className="text-sm font-medium text-content-secondary">No courses match “{trimmed}”</p>
-                <p className="mt-1 text-xs text-content-subtle">Try a provider like AWS, Microsoft or CompTIA.</p>
+                <p className="mt-1 text-xs text-content-subtle">Try a shorter or different keyword.</p>
               </li>
             )}
           </ul>
@@ -219,8 +225,8 @@ export function CourseSearchBar({
               className="flex w-full items-center justify-between gap-2 rounded-[10px] px-2.5 py-2 text-sm font-semibold text-brand-ink transition-colors hover:bg-primary-hover-tint cursor-pointer"
             >
               <span>
-                {results.length > 0
-                  ? `View all ${results.length} ${results.length === 1 ? 'course' : 'courses'}`
+                {total > 0
+                  ? `View all ${total} ${total === 1 ? 'course' : 'courses'}`
                   : 'Browse all courses'}
               </span>
               <Icon.ChevronRight className="h-4 w-4" />
