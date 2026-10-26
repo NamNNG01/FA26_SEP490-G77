@@ -14,7 +14,7 @@ import { useDashboard } from '@/hooks/useDashboard';
 import type { StudentRecentAttempt, StudentSummary } from '@/services/dashboard.service';
 import { getApiErrorMessage } from '@/utils/apiError';
 import { studentCourseService, type EnrollmentStatus, type MyCourse } from '@/services/studentCourse.service';
-import { CardGridSkeleton, CourseThumb, LoadError, PageTitle, formatDate } from '../components/studentUi';
+import { CardGridSkeleton, CourseThumb, LoadError, PageTitle, STUDENT_PAGE_CLASS, formatDate } from '../components/studentUi';
 
 const PAGE_SIZE = 12;
 const RECENT_ATTEMPTS = 3;
@@ -86,7 +86,7 @@ export function MyCoursesPage() {
   };
 
   return (
-    <div className="space-y-[clamp(1.25rem,2.5vw,1.75rem)]">
+    <div className={`${STUDENT_PAGE_CLASS} space-y-[clamp(1.25rem,2.5vw,1.75rem)]`}>
       <PageTitle
         title="My Courses"
         subtitle="Your enrolled courses and latest results."

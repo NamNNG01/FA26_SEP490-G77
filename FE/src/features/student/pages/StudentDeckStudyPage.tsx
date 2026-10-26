@@ -10,7 +10,7 @@ import { Icon } from '@/assets/icons';
 import { ROUTES, studentCoursePath } from '@/app/routes';
 import { getApiErrorMessage } from '@/utils/apiError';
 import { studentCourseService, type StudentCard } from '@/services/studentCourse.service';
-import { LoadError } from '../components/studentUi';
+import { LoadError, STUDENT_PAGE_CLASS } from '../components/studentUi';
 import type { DeckStudyState } from '../components/DeckCard';
 
 const VIEW_STUDY = 'Study';
@@ -110,7 +110,7 @@ export function StudentDeckStudyPage() {
   const card = cards[index];
 
   return (
-    <div className="space-y-[clamp(1.25rem,2.5vw,1.75rem)]">
+    <div className={`${STUDENT_PAGE_CLASS} space-y-[clamp(1.25rem,2.5vw,1.75rem)]`}>
       <Breadcrumb items={crumbs} />
 
       <div className="flex flex-wrap items-center justify-between gap-3">

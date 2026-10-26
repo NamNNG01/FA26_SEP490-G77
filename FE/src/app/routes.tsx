@@ -28,6 +28,7 @@ export const ROUTES = {
   /** Route pattern — render with studentCoursePath(id). */
   studentCourseDetail: '/student/courses/:courseId',
   studentExams: '/student/exams',
+  studentMyExams: '/student/my-exams',
   /** Route pattern — render with studentExamPath(id). */
   studentExamDetail: '/student/exams/:examId',
   studentFlashcards: '/student/flashcards',

@@ -1,290 +1,81 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
-import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
-import { Alert } from '@/components/ui/Alert';
-import { Breadcrumb } from '@/components/ui/Breadcrumb';
-import { Skeleton } from '@/components/ui/Skeleton';
-import { EmptyState } from '@/components/ui/Card';
 import { Icon } from '@/assets/icons';
-import {
-  ROUTES,
-  studentCoursePath,
-  studentResumeAttemptPath,
-  studentTakeExamPath,
-} from '@/app/routes';
-import { getApiErrorMessage } from '@/utils/apiError';
-import {
-  RUBRIC_TYPES,
-  studentAttemptService,
-  type ExamQuestionPreview,
-  type StudentExamDetail,
-} from '@/services/studentAttempt.service';
-import { ListSkeleton, LoadError, formatDate, formatScore } from '../components/studentUi';
-import { QUESTION_TYPE_LABEL, QuestionText, optionLetter } from '../components/QuestionAnswerInput';
+import { Container } from '@/features/landing/components/Container';
+import { studentLearningService, type StudentActiveAttempt, type StudentExamDetail } from '@/services/studentLearning.service';
 
-/**
- * Student exam detail — read-only, two columns:
- *  - left: the exam's questions and their options, never the answers
- *    (proposed EX-03 — MOCK data until the BE adds it);
- *  - right, sticky 10px from the top: info, my stats and actions (EX-01)
- *    and the Start / Continue button.
- * Starting goes to the full-screen take screen; an attempt left with
- * "Cancel" is resumed from here. Past attempts are reviewed from My Exams.
- */
 export function StudentExamDetailPage() {
-  const { examId = '' } = useParams<{ examId: string }>();
+  const { examId: examParam } = useParams<{ examId: string }>();
+  const examId = Number(examParam);
   const navigate = useNavigate();
-
   const [exam, setExam] = useState<StudentExamDetail | null>(null);
+  const [activeAttempt, setActiveAttempt] = useState<StudentActiveAttempt | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [reload, setReload] = useState(0);
+  const [error, setError] = useState('');
+  const [refresh, setRefresh] = useState(0);
 
   useEffect(() => {
-    let cancelled = false;
+    if (!Number.isFinite(examId) || examId <= 0) return;
+    let active = true;
     setLoading(true);
-    setError(null);
-    studentAttemptService
-      .getExamDetail(examId)
-      .then(res => {
-        if (!cancelled) setExam(res);
-      })
-      .catch(err => {
-        if (!cancelled) setError(getApiErrorMessage(err, 'Failed to load the exam.'));
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [examId, reload]);
+    setError('');
+    Promise.all([studentLearningService.getExam(examId), studentLearningService.getActiveAttempt(examId)]).then(([examData, attemptData]) => {
+      if (active) {
+        setExam(examData);
+        setActiveAttempt(attemptData);
+      }
+    }).catch((reason: unknown) => {
+      if (active) setError(reason instanceof Error ? reason.message : 'We couldn’t load this exam.');
+    }).finally(() => {
+      if (active) setLoading(false);
+    });
+    return () => { active = false; };
+  }, [examId, refresh]);
 
-  const breadcrumb = (
-    <Breadcrumb
-      items={[
-        { label: 'My Courses', onClick: () => navigate(ROUTES.studentCourses) },
-        ...(exam ? [{ label: exam.courseTitle, onClick: () => navigate(studentCoursePath(exam.courseId)) }] : []),
-        { label: exam?.title ?? 'Exam' },
-      ]}
-    />
-  );
+  if (!Number.isFinite(examId) || examId <= 0) return <ExamState title="Exam not found" message="This exam link doesn’t look right." onBack={() => navigate('/student/courses')} />;
+  if (loading) return <Container className="py-12"><div className="mx-auto max-w-4xl animate-pulse space-y-5"><div className="skeleton h-52 rounded-3xl" /><div className="skeleton h-9 w-2/3 rounded" /><div className="skeleton h-32 rounded-2xl" /></div></Container>;
+  if (error || !exam) return <Container className="py-14"><ExamState title="Exam didn’t load" message={error || 'This exam may no longer be available.'} onBack={() => navigate('/student/courses')} onRetry={() => setRefresh((value) => value + 1)} /></Container>;
 
-  if (loading) {
-    return (
-      <div className="space-y-6">
-        {breadcrumb}
-        <div className="card p-5 space-y-3">
-          <Skeleton className="h-6 w-1/2" />
-          <Skeleton className="h-4 w-1/3" />
-          <Skeleton className="h-12 w-full" />
-        </div>
-        <ListSkeleton rows={3} />
-      </div>
-    );
+  const activeAttemptId = activeAttempt?.attemptId ?? exam.actions.activeAttemptId;
+  const continueAttempt = activeAttemptId !== null && activeAttemptId !== undefined;
+  const canStart = exam.actions.canStart && !continueAttempt;
+  const lastSubmitted = exam.myStats.lastSubmittedAt ? new Date(exam.myStats.lastSubmittedAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : null;
+
+  function enterExam() {
+    const query = new URLSearchParams({ examId: String(examId) });
+    if (continueAttempt) query.set('attemptId', String(activeAttemptId));
+    navigate(`${'/student/exam'}?${query.toString()}`);
   }
 
-  if (error || !exam) {
-    return (
-      <div className="space-y-6">
-        {breadcrumb}
-        <LoadError message={error ?? 'Exam not found.'} onRetry={() => setReload(r => r + 1)} />
-      </div>
-    );
-  }
-
-  const activeAttemptId = exam.actions?.activeAttemptId ?? null;
-  const canStart = Boolean(exam.actions?.canStart);
-  const stats = exam.myStats;
-
-  return (
-    <div className="space-y-[clamp(1.25rem,2.5vw,1.75rem)]">
-      {breadcrumb}
-
-      <div className="grid lg:grid-cols-[minmax(0,1fr)_340px] gap-[clamp(1rem,2vw,1.5rem)] items-start">
-        {/* Right column: info + start. Sticky 10px from the top of the scroll area. */}
-        <aside className="lg:order-2 lg:sticky lg:top-[10px] lg:max-h-[calc(100dvh-20px)] lg:overflow-y-auto space-y-4">
-          <div className="card p-5 space-y-4">
-            <div className="flex items-start gap-3">
-              <div className="w-11 h-11 rounded-[12px] bg-primary-light flex items-center justify-center flex-shrink-0">
-                <Icon.ClipboardList className="w-5 h-5 text-primary" />
-              </div>
-              <div className="min-w-0">
-                <h1 className="text-lg font-bold text-content break-words leading-snug">{exam.title}</h1>
-                <p className="text-sm text-content-subtle mt-0.5 break-words">{exam.courseTitle}</p>
-              </div>
-            </div>
-
-            {exam.description && <p className="text-sm text-content-soft whitespace-pre-line">{exam.description}</p>}
-
-            <dl className="grid grid-cols-2 gap-2">
-              {[
-                { label: 'Questions', value: String(exam.questionCount) },
-                { label: 'Duration', value: exam.durationMinutes != null ? `${exam.durationMinutes} min` : 'No limit' },
-                { label: 'Max score', value: exam.maxScore != null ? String(Number(exam.maxScore)) : '—' },
-                { label: 'My attempts', value: String(stats?.attemptCount ?? 0) },
-                { label: 'Best score', value: formatScore(stats?.bestScore, exam.maxScore) },
-                { label: 'Last submitted', value: formatDate(stats?.lastSubmittedAt) },
-              ].map(s => (
-                <div key={s.label} className="flex flex-col-reverse rounded-[10px] border border-line px-3 py-2">
-                  <dt className="text-xs text-content-subtle">{s.label}</dt>
-                  <dd className="text-sm font-semibold text-content">{s.value}</dd>
-                </div>
-              ))}
-            </dl>
-
-            {activeAttemptId ? (
-              <Alert
-                type="info"
-                title="You have an attempt in progress"
-                message="Your answers were saved. The timer keeps running while you are away — the attempt is submitted automatically when time is up."
-              />
-            ) : (
-              !canStart &&
-              exam.actions?.reason && <Alert type="warning" title="You can't start this exam" message={exam.actions.reason} />
-            )}
-
-            {activeAttemptId ? (
-              <Button
-                className="w-full"
-                icon={<Icon.Clock className="w-4 h-4" />}
-                onClick={() => navigate(studentResumeAttemptPath(activeAttemptId))}
-              >
-                Continue attempt
-              </Button>
-            ) : (
-              <Button
-                className="w-full"
-                icon={<Icon.Zap className="w-4 h-4" />}
-                disabled={!canStart}
-                onClick={() => navigate(studentTakeExamPath(exam.examId))}
-              >
-                {stats && stats.attemptCount > 0 ? 'Start new attempt' : 'Start exam'}
-              </Button>
-            )}
+  return <>
+    <section className="border-b border-line-soft bg-gradient-to-br from-primary-light via-surface-alt to-surface-alt">
+      <Container className="py-8 sm:py-11">
+        <button type="button" onClick={() => navigate(`/student/courses/${exam.courseId}?tab=exams`)} className="inline-flex items-center gap-2 text-sm font-medium text-content-soft hover:text-brand-ink"><Icon.ChevronLeft className="h-4 w-4" />{exam.courseTitle}</button>
+        <div className="mt-6 grid gap-7 lg:grid-cols-[1fr_20rem] lg:items-center">
+          <div><p className="text-sm font-semibold text-brand-ink">Practice exam</p><h1 className="mt-2 max-w-3xl text-3xl font-bold tracking-tight text-content sm:text-4xl">{exam.title}</h1><p className="mt-3 max-w-2xl text-base leading-relaxed text-content-soft">{exam.description || 'Take a focused practice session and see how you’re progressing.'}</p></div>
+          <div className="rounded-2xl border border-line-soft bg-surface p-5 shadow-sm">
+            {continueAttempt ? <><span className="inline-flex items-center gap-2 rounded-full bg-warning-light px-3 py-1.5 text-xs font-semibold text-warning-strong"><span className="h-2 w-2 rounded-full bg-warning" />Exam in progress</span><h2 className="mt-3 text-lg font-semibold text-content">Welcome back</h2><p className="mt-1 text-sm leading-relaxed text-content-soft">Your answers are saved. Continue where you left off.</p>{activeAttempt?.deadlineAt && <p className="mt-3 text-xs text-content-subtle">Time ends {new Date(activeAttempt.deadlineAt).toLocaleString()}</p>}<button type="button" onClick={enterExam} className="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 text-sm font-semibold text-white hover:bg-brand-700">Continue exam<Icon.ChevronRight className="h-4 w-4" /></button></> : canStart ? <><p className="text-sm font-medium text-content-subtle">Ready when you are</p><h2 className="mt-1 text-xl font-bold text-content">You’ve got this</h2><p className="mt-2 text-sm leading-relaxed text-content-soft">Find a quiet moment and give this exam your full attention.</p><button type="button" onClick={enterExam} className="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 text-sm font-semibold text-white hover:bg-brand-700">Start exam<Icon.ChevronRight className="h-4 w-4" /></button></> : <><span className="inline-flex items-center gap-2 rounded-full bg-warning-light px-3 py-1.5 text-xs font-semibold text-warning-strong"><Icon.Info className="h-4 w-4" />Not ready yet</span><h2 className="mt-3 text-lg font-semibold text-content">This exam can’t be started</h2><p className="mt-1 text-sm leading-relaxed text-content-soft">{exam.actions.reason || 'The exam is still being prepared. Please check back later.'}</p></>}
+            {exam.actions.canViewHistory && <button type="button" onClick={() => navigate('/student/my-exams')} className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-line px-4 text-sm font-semibold text-content-secondary hover:bg-surface-hover"><Icon.Clock className="h-4 w-4" />See your exam history</button>}
           </div>
-
-        </aside>
-
-        {/* Left column: the questions, read-only — no answer, no key. */}
-        <section className="lg:order-1 min-w-0">
-          <QuestionPreviewList examId={exam.examId} questionCount={exam.questionCount} />
-        </section>
+        </div>
+      </Container>
+    </section>
+    <Container className="py-8 sm:py-10">
+      <div className="mx-auto grid max-w-4xl gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <ExamFact icon={<Icon.ClipboardList className="h-5 w-5" />} value={String(exam.questionCount)} label="Questions" />
+        <ExamFact icon={<Icon.Clock className="h-5 w-5" />} value={`${exam.durationMinutes} min`} label="Time limit" />
+        <ExamFact icon={<Icon.Trophy className="h-5 w-5" />} value={String(exam.maxScore)} label="Maximum score" />
+        <ExamFact icon={<Icon.RefreshCw className="h-5 w-5" />} value={String(exam.myStats.attemptCount)} label="Your attempts" />
       </div>
-    </div>
-  );
+      {exam.myStats.attemptCount > 0 && <div className="mx-auto mt-5 max-w-4xl rounded-2xl border border-line-soft bg-surface p-5 shadow-sm"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-sm font-semibold text-content">Your progress so far</p><p className="mt-1 text-sm text-content-soft">{lastSubmitted ? `Last completed ${lastSubmitted}` : 'You’ve already practiced this exam.'}</p></div><div className="text-right"><p className="text-xs text-content-subtle">Best score</p><p className="mt-1 text-2xl font-bold text-brand-ink">{exam.myStats.bestScore ?? '—'}<span className="ml-1 text-sm font-medium text-content-subtle">/ {exam.maxScore}</span></p></div></div></div>}
+    </Container>
+  </>;
 }
 
-function QuestionPreviewList({ examId, questionCount }: { examId: number; questionCount: number }) {
-  const [questions, setQuestions] = useState<ExamQuestionPreview[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [reload, setReload] = useState(0);
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    studentAttemptService
-      .getExamQuestions(examId, questionCount)
-      .then(res => {
-        if (!cancelled) setQuestions([...res].sort((a, b) => a.orderIndex - b.orderIndex));
-      })
-      .catch(err => {
-        if (!cancelled) setError(getApiErrorMessage(err, 'Failed to load the questions.'));
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [examId, questionCount, reload]);
-
-  return (
-    <div className="space-y-3" aria-label="Questions">
-      <div className="flex items-baseline justify-between gap-3">
-        <h2 className="text-base font-semibold text-content">Questions</h2>
-        {!loading && !error && <span className="text-sm text-content-subtle">{questions.length} questions</span>}
-      </div>
-      {loading ? (
-        <ListSkeleton rows={4} />
-      ) : error ? (
-        <LoadError message={error} onRetry={() => setReload(r => r + 1)} />
-      ) : questions.length === 0 ? (
-        <div className="card">
-          <EmptyState icon={<Icon.HelpCircle className="w-7 h-7" />} title="No questions" message="This exam has no question yet." />
-        </div>
-      ) : (
-        <ol className="space-y-3">
-          {questions.map((q, i) => (
-            <li key={q.questionId}>
-              <QuestionPreviewCard question={q} index={i} />
-            </li>
-          ))}
-        </ol>
-      )}
-    </div>
-  );
+function ExamFact({ icon, value, label }: { icon: React.ReactNode; value: string; label: string }) {
+  return <div className="rounded-2xl border border-line-soft bg-surface p-5 shadow-sm"><span className="text-brand-ink">{icon}</span><p className="mt-3 text-xl font-bold text-content">{value}</p><p className="mt-1 text-xs text-content-subtle">{label}</p></div>;
 }
 
-function QuestionPreviewCard({ question: q, index }: { question: ExamQuestionPreview; index: number }) {
-  const multi = q.questionType === 'MULTIPLE_CHOICE';
-  return (
-    <article className="card p-[clamp(0.875rem,2vw,1.25rem)] space-y-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="w-7 h-7 rounded-full bg-surface-muted text-xs font-semibold text-content-secondary flex items-center justify-center flex-shrink-0">
-          {index + 1}
-        </span>
-        <Badge variant="info" size="sm">
-          {QUESTION_TYPE_LABEL[q.questionType] ?? q.questionType}
-        </Badge>
-        {q.maxPoints != null && <span className="ml-auto text-xs text-content-subtle">{Number(q.maxPoints)} pts</span>}
-      </div>
-
-      <QuestionText content={q.content} className="text-base text-content leading-relaxed" />
-
-      {q.options && q.options.length > 0 && (
-        <ul className="space-y-1.5">
-          {q.options.map((opt, i) => (
-            <li key={opt.optionId} className="flex items-start gap-2.5 rounded-[8px] border border-line px-3 py-2">
-              <span
-                className={`w-6 h-6 flex items-center justify-center text-xs font-semibold flex-shrink-0 bg-surface-muted text-content-secondary ${
-                  multi ? 'rounded-[5px]' : 'rounded-full'
-                }`}
-              >
-                {q.questionType === 'ORDERING' ? '•' : optionLetter(i)}
-              </span>
-              <span className="text-sm text-content-secondary break-words">{opt.optionText}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {q.matching && (
-        <div className="grid sm:grid-cols-2 gap-3">
-          {[
-            { title: 'Items', values: q.matching.lefts },
-            { title: 'Match with', values: q.matching.rights },
-          ].map(col => (
-            <div key={col.title}>
-              <p className="text-xs font-semibold text-content-subtle uppercase tracking-wide mb-1.5">{col.title}</p>
-              <ul className="space-y-1.5">
-                {col.values.map(v => (
-                  <li key={v} className="rounded-[8px] border border-line px-3 py-2 text-sm text-content-secondary break-words">
-                    {v}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {RUBRIC_TYPES.has(q.questionType) && (
-        <p className="text-xs text-content-subtle">Written answer — graded against a rubric after you submit.</p>
-      )}
-    </article>
-  );
+function ExamState({ title, message, onBack, onRetry }: { title: string; message: string; onBack?: () => void; onRetry?: () => void }) {
+  return <div className="mx-auto max-w-lg rounded-2xl border border-line-soft bg-surface px-6 py-12 text-center shadow-sm"><span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary-light text-brand-ink"><Icon.ClipboardList className="h-7 w-7" /></span><h2 className="mt-4 text-xl font-semibold text-content">{title}</h2><p className="mt-2 text-sm leading-relaxed text-content-soft">{message}</p><div className="mt-5 flex justify-center gap-2">{onBack && <button type="button" onClick={onBack} className="rounded-xl border border-line px-4 py-2.5 text-sm font-semibold text-content-secondary hover:bg-surface-hover">Back to courses</button>}{onRetry && <button type="button" onClick={onRetry} className="rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700">Try again</button>}</div></div>;
 }

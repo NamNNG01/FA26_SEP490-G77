@@ -17,7 +17,7 @@ import {
   type AttemptResult,
   type ResultQuestion,
 } from '@/services/studentAttempt.service';
-import { LoadError, formatDateTime } from '../components/studentUi';
+import { LoadError, STUDENT_PAGE_CLASS, formatDateTime } from '../components/studentUi';
 import { QUESTION_TYPE_LABEL, QuestionText, isAnswered, optionLetter } from '../components/QuestionAnswerInput';
 
 /** While the AI grades, the result is re-read this often. */
@@ -209,7 +209,7 @@ export function StudentExamResultPage() {
 
   if (loading) {
     return (
-      <div className="space-y-6">
+      <div className={`${STUDENT_PAGE_CLASS} space-y-6`}>
         {breadcrumb}
         <div className="grid lg:grid-cols-[minmax(0,1fr)_320px] gap-6">
           <div className="space-y-3">
@@ -225,7 +225,7 @@ export function StudentExamResultPage() {
 
   if (error || !result) {
     return (
-      <div className="space-y-6">
+      <div className={`${STUDENT_PAGE_CLASS} space-y-6`}>
         {breadcrumb}
         <LoadError message={error ?? 'Result not found.'} onRetry={() => setReload(r => r + 1)} />
       </div>
@@ -234,7 +234,7 @@ export function StudentExamResultPage() {
 
   if ((waiting || running) && !skipWait) {
     return (
-      <div className="space-y-6">
+      <div className={`${STUDENT_PAGE_CLASS} space-y-6`}>
         {breadcrumb}
         <GradingScreen
           result={result}
@@ -268,7 +268,7 @@ export function StudentExamResultPage() {
   ];
 
   return (
-    <div className="space-y-[clamp(1.25rem,2.5vw,1.75rem)]">
+    <div className={`${STUDENT_PAGE_CLASS} space-y-[clamp(1.25rem,2.5vw,1.75rem)]`}>
       {breadcrumb}
 
       <div className="grid lg:grid-cols-[minmax(0,1fr)_320px] gap-[clamp(1rem,2vw,1.5rem)] items-start">

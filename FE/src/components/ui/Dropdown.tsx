@@ -10,6 +10,7 @@ export interface DropdownItem {
   value?: string | number;
   icon?: React.ReactNode;
   danger?: boolean;
+  disabled?: boolean;
   selected?: boolean;
   onClick?: () => void;
   divider?: boolean;
@@ -162,6 +163,7 @@ export function Dropdown(props: DropdownProps) {
   };
 
   const handleItemSelect = (item: DropdownItem) => {
+    if (item.disabled) return;
     if (isMulti) {
       const itemValue = item.value;
       if (itemValue === undefined) return;
@@ -274,16 +276,21 @@ export function Dropdown(props: DropdownProps) {
                       key={i}
                       type="button"
                       role="menuitem"
+                      disabled={item.disabled}
                       onClick={(e) => {
                         e.stopPropagation();
                         handleItemSelect(item);
                       }}
-                      className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left hover:bg-surface-hover transition-colors ${
-                        selected
-                          ? "bg-primary/10 text-primary font-medium"
-                          : item.danger
-                            ? "text-danger"
-                            : "text-content-secondary"
+                      className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left transition-colors ${
+                        item.disabled
+                          ? "cursor-not-allowed text-content-faint opacity-50"
+                          : `hover:bg-surface-hover ${
+                              selected
+                                ? "bg-primary/10 text-primary font-medium"
+                                : item.danger
+                                  ? "text-danger"
+                                  : "text-content-secondary"
+                            }`
                       }`}
                     >
                       {isMulti && (

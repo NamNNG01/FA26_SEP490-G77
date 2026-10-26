@@ -46,6 +46,9 @@ export interface StudentCourseCard {
   isEnrolled: boolean | null;
 }
 
+export type StudentCourseItem = StudentCourseCard;
+export type StudentCoursePage = PageResponse<StudentCourseCard>;
+
 /** CL-02 CourseDetailDto */
 export interface StudentCourseDetail {
   courseId: number;
@@ -58,6 +61,9 @@ export interface StudentCourseDetail {
   manager: ManagerRef | null;
   modules: { moduleId: number; title: string; orderIndex: number }[];
   stats: { publishedExamCount: number; deckCount: number };
+  isEnrolled?: boolean;
+  publishedExamCount?: number;
+  deckCount?: number;
   /** null for guests. */
   enrollment: { isEnrolled: boolean; status: EnrollmentStatus | null; progress: number | null } | null;
 }
@@ -93,10 +99,10 @@ export interface CourseExam {
   /** Module the exam is filed under; null = not in any module. */
   moduleId: number | null;
   /** From the question types; MIXED when several kinds, null/absent when the exam has none. */
-  examKind?: ExamKind | null;
+  examKind?: StudentExamKind | null;
 }
 
-export type ExamKind = 'QUIZ' | 'ESSAY' | 'CODE' | 'DIAGRAM' | 'MIXED';
+export type StudentExamKind = 'QUIZ' | 'ESSAY' | 'CODE' | 'DIAGRAM' | 'MIXED';
 
 /** MC-03 DeckDto */
 export interface StudentDeck {
@@ -160,6 +166,10 @@ export const studentCourseService = {
   async getCourseDetail(courseId: number | string): Promise<StudentCourseDetail> {
     const res = await api.get<ApiResponse<StudentCourseDetail>>(`/student/courses/${courseId}`);
     return res.data;
+  },
+
+  async getCourse(courseId: number | string): Promise<StudentCourseDetail> {
+    return studentCourseService.getCourseDetail(courseId);
   },
 
   /** MC-01 — omit `status` for every enrollment. */

@@ -227,7 +227,22 @@ function AppRoutes() {
     <Routes>
       {publicRoutes(<SignedInHome isEntry={location.key === entryKey} />)}
 
-      {/* Taking an exam is full-screen: no sidebar / app header. */}
+      <Route element={<PublicLayout />}>
+        <Route element={<RequireRole roles={ROLE_STUDENT} />}>
+          <Route path={ROUTES.studentDashboard} element={<Navigate to={ROUTES.studentCourses} replace />} />
+          <Route path={ROUTES.studentCourses} element={<MyCoursesPage />} />
+          <Route path={ROUTES.studentCourseDetail} element={<StudentCourseDetailPage />} />
+          <Route path={ROUTES.studentExams} element={<MyExamsPage />} />
+          <Route path={ROUTES.studentMyExams} element={<MyExamsPage />} />
+          <Route path={ROUTES.studentFlashcards} element={<StudentFlashcardsPage />} />
+          <Route path={ROUTES.studentFlashcardDeck} element={<StudentDeckStudyPage />} />
+          <Route path={ROUTES.studentPublicExam} element={<PublicExamsPage />} />
+          <Route path={ROUTES.studentPublicExamDetail} element={<PublicExamDetailPage />} />
+          <Route path={ROUTES.studentExamDetail} element={<StudentExamDetailPage />} />
+          <Route path={ROUTES.studentExamResult} element={<StudentExamResultPage />} />
+        </Route>
+      </Route>
+
       <Route element={<RequireRole roles={ROLE_STUDENT} />}>
         <Route path={ROUTES.studentExam} element={<StudentTakeExamPage />} />
       </Route>
@@ -238,22 +253,6 @@ function AppRoutes() {
         <Route path={ROUTES.register} element={<Navigate to={landing} replace />} />
         <Route path={ROUTES.forgotPassword} element={<ForgotPasswordPage />} />
         <Route path={ROUTES.resetPassword} element={<ResetPasswordPage />} />
-
-        {/* STUDENT — learners see their own dashboard, courses, exams and
-            practice attempts. No editing surfaces. */}
-        <Route element={<RequireRole roles={ROLE_STUDENT} />}>
-          {/* The dashboard was merged into My Courses — keep old links working. */}
-          <Route path={ROUTES.studentDashboard} element={<Navigate to={ROUTES.studentCourses} replace />} />
-          <Route path={ROUTES.studentCourses} element={<MyCoursesPage />} />
-          <Route path={ROUTES.studentCourseDetail} element={<StudentCourseDetailPage />} />
-          <Route path={ROUTES.studentExams} element={<MyExamsPage />} />
-          <Route path={ROUTES.studentFlashcards} element={<StudentFlashcardsPage />} />
-          <Route path={ROUTES.studentFlashcardDeck} element={<StudentDeckStudyPage />} />
-          <Route path={ROUTES.studentPublicExam} element={<PublicExamsPage />} />
-          <Route path={ROUTES.studentPublicExamDetail} element={<PublicExamDetailPage />} />
-          <Route path={ROUTES.studentExamDetail} element={<StudentExamDetailPage />} />
-          <Route path={ROUTES.studentExamResult} element={<StudentExamResultPage />} />
-        </Route>
 
         {/* COURSE_MANAGER — authors content. Includes ADMIN, since
             administrators have full system access. */}

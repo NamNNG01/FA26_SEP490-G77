@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
-import { useLocation, useNavigate } from 'react-router';
-import { Icon } from '@/assets/icons';
-import { ROUTES } from '@/app/routes';
-import { useAuth, landingPathForRole } from '@/auth/authContext';
-import { CourseSearchBar } from '@/features/catalog';
-import { Container } from './Container';
+import React, { useState } from "react";
+import { useLocation, useNavigate } from "react-router";
+import { Icon } from "@/assets/icons";
+import { ROUTES } from "@/app/routes";
+import { useAuth, landingPathForRole } from "@/auth/authContext";
+import { Role } from "@/utils/permissions";
+import { CourseSearchBar } from "@/features/catalog";
+import { Container } from "./Container";
 
 /**
  * PublicNavbar
@@ -25,15 +26,24 @@ import { Container } from './Container';
 export function PublicNavbar() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user, logout } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
 
-  const dashboardPath = landingPathForRole(user?.role);
+  const isStudent = user?.role === Role.STUDENT;
+  const dashboardPath = isStudent
+    ? ROUTES.studentCourses
+    : landingPathForRole(user?.role);
 
-  const navLinks = [
-    { label: 'Home', to: ROUTES.landing },
-    { label: 'Courses', to: ROUTES.courses },
-    { label: 'Pricing', to: ROUTES.pricing },
+  const navLinks: { label: string; to: string }[] = [
+    { label: "Home", to: ROUTES.landing },
+    { label: "Courses", to: ROUTES.courses },
+    ...(isStudent
+      ? [{ label: "Exam history", to: ROUTES.studentMyExams }]
+      : []),
+    isStudent
+      ? { label: "Flashcards", to: ROUTES.studentFlashcards }
+      : { label: "Pricing", to: ROUTES.pricing },
   ];
 
   function goTo(path: string) {
@@ -41,9 +51,17 @@ export function PublicNavbar() {
     navigate(path);
   }
 
+  async function handleLogout() {
+    setLoggingOut(true);
+    await logout();
+    setMenuOpen(false);
+  }
+
   function isActive(path: string) {
     if (path === ROUTES.landing) return location.pathname === ROUTES.landing;
-    return location.pathname === path || location.pathname.startsWith(`${path}/`);
+    return (
+      location.pathname === path || location.pathname.startsWith(`${path}/`)
+    );
   }
 
   return (
@@ -54,11 +72,18 @@ export function PublicNavbar() {
           {/* Signed in → the role's own dashboard; guests → the landing page. */}
           <button
             type="button"
-            onClick={() => goTo(isAuthenticated ? dashboardPath : ROUTES.landing)}
-            aria-label={isAuthenticated ? 'Go to your dashboard' : 'PrepExam home'}
+            onClick={() =>
+              goTo(isAuthenticated ? dashboardPath : ROUTES.landing)
+            }
+            aria-label={
+              isAuthenticated ? "Go to your dashboard" : "PrepExam home"
+            }
             className="flex flex-shrink-0 cursor-pointer items-center gap-2.5"
           >
-            <Icon.Logo className="h-8 w-8 flex-shrink-0 text-brand-ink" aria-hidden="true" />
+            <Icon.Logo
+              className="h-8 w-8 flex-shrink-0 text-brand-ink"
+              aria-hidden="true"
+            />
             <span className="text-lg font-bold text-content">PrepExam</span>
           </button>
 
@@ -72,11 +97,11 @@ export function PublicNavbar() {
                 key={link.to}
                 type="button"
                 onClick={() => goTo(link.to)}
-                aria-current={isActive(link.to) ? 'page' : undefined}
+                aria-current={isActive(link.to) ? "page" : undefined}
                 className={`rounded-[10px] px-3 py-2 text-base font-medium transition-colors cursor-pointer ${
                   isActive(link.to)
-                    ? 'bg-primary-light text-brand-ink'
-                    : 'text-content-muted hover:bg-accent hover:text-content'
+                    ? "bg-primary-light text-brand-ink"
+                    : "text-content-muted hover:bg-accent hover:text-content"
                 }`}
               >
                 {link.label}
@@ -87,14 +112,36 @@ export function PublicNavbar() {
           {/* Desktop auth actions */}
           <div className="hidden flex-shrink-0 items-center gap-2 lg:flex">
             {isAuthenticated ? (
-              <button
-                type="button"
-                onClick={() => goTo(dashboardPath)}
-                className="inline-flex h-9 items-center gap-1.5 rounded-[10px] bg-brand-600 px-4 text-base font-semibold text-white shadow-sm transition-colors hover:bg-brand-700 cursor-pointer"
-              >
-                Dashboard
-                <Icon.ChevronRight className="h-4 w-4" />
-              </button>
+              isStudent ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => goTo(dashboardPath)}
+                    className="inline-flex h-9 items-center gap-1.5 rounded-[10px] bg-brand-600 px-4 text-base font-semibold text-white shadow-sm transition-colors hover:bg-brand-700 cursor-pointer"
+                  >
+                    My learning
+                    <Icon.ChevronRight className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    disabled={loggingOut}
+                    className="inline-flex h-9 items-center gap-2 rounded-[10px] px-3 text-sm font-semibold text-content-muted transition-colors hover:bg-accent hover:text-content disabled:opacity-60 cursor-pointer"
+                  >
+                    <Icon.LogOut className="h-4 w-4" />
+                    {loggingOut ? "Signing out…" : "Log out"}
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => goTo(dashboardPath)}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-[10px] bg-brand-600 px-4 text-base font-semibold text-white shadow-sm transition-colors hover:bg-brand-700 cursor-pointer"
+                >
+                  Dashboard
+                  <Icon.ChevronRight className="h-4 w-4" />
+                </button>
+              )
             ) : (
               <>
                 <button
@@ -118,12 +165,16 @@ export function PublicNavbar() {
           {/* Mobile hamburger */}
           <button
             type="button"
-            aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+            aria-label={menuOpen ? "Close menu" : "Open menu"}
             aria-expanded={menuOpen}
             onClick={() => setMenuOpen((o) => !o)}
             className="ml-auto inline-flex h-10 w-10 items-center justify-center rounded-[10px] text-content-secondary transition-colors hover:bg-accent lg:hidden cursor-pointer"
           >
-            {menuOpen ? <Icon.X className="h-5 w-5" /> : <Icon.List className="h-5 w-5" />}
+            {menuOpen ? (
+              <Icon.X className="h-5 w-5" />
+            ) : (
+              <Icon.List className="h-5 w-5" />
+            )}
           </button>
         </div>
       </Container>
@@ -143,8 +194,8 @@ export function PublicNavbar() {
                     onClick={() => goTo(link.to)}
                     className={`rounded-[10px] px-3 py-2.5 text-left text-base font-medium transition-colors cursor-pointer ${
                       isActive(link.to)
-                        ? 'bg-primary-light text-brand-ink'
-                        : 'text-content-muted hover:bg-accent'
+                        ? "bg-primary-light text-brand-ink"
+                        : "text-content-muted hover:bg-accent"
                     }`}
                   >
                     {link.label}
@@ -153,13 +204,34 @@ export function PublicNavbar() {
               </nav>
 
               {isAuthenticated ? (
-                <button
-                  type="button"
-                  onClick={() => goTo(dashboardPath)}
-                  className="mt-3 inline-flex h-10 w-full items-center justify-center rounded-[10px] bg-brand-600 text-base font-semibold text-white shadow-sm transition-colors hover:bg-brand-700 cursor-pointer"
-                >
-                  Dashboard
-                </button>
+                isStudent ? (
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => goTo(dashboardPath)}
+                      className="inline-flex h-10 items-center justify-center rounded-[10px] bg-brand-600 text-base font-semibold text-white shadow-sm transition-colors hover:bg-brand-700 cursor-pointer"
+                    >
+                      My learning
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleLogout}
+                      disabled={loggingOut}
+                      className="inline-flex h-10 items-center justify-center gap-2 rounded-[10px] border border-line text-sm font-semibold text-content-secondary transition-colors hover:bg-surface-hover disabled:opacity-60 cursor-pointer"
+                    >
+                      <Icon.LogOut className="h-4 w-4" />
+                      {loggingOut ? "Signing out…" : "Log out"}
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => goTo(dashboardPath)}
+                    className="mt-3 inline-flex h-10 w-full items-center justify-center rounded-[10px] bg-brand-600 text-base font-semibold text-white shadow-sm transition-colors hover:bg-brand-700 cursor-pointer"
+                  >
+                    Dashboard
+                  </button>
+                )
               ) : (
                 <div className="mt-3 grid grid-cols-2 gap-2">
                   <button

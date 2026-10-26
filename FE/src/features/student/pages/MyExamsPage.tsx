@@ -7,7 +7,7 @@ import { Icon } from '@/assets/icons';
 import { ROUTES, studentCoursePath, studentExamAttemptsPath, studentTakeExamPath } from '@/app/routes';
 import { getApiErrorMessage } from '@/utils/apiError';
 import { studentCourseService, type MyExam } from '@/services/studentCourse.service';
-import { ListSkeleton, LoadError, PageTitle, formatScore } from '../components/studentUi';
+import { ListSkeleton, LoadError, PageTitle, STUDENT_PAGE_CLASS, formatScore } from '../components/studentUi';
 
 const PAGE_SIZE = 10;
 
@@ -47,7 +47,7 @@ export function MyExamsPage() {
   }, [page, reload]);
 
   return (
-    <div className="space-y-[clamp(1.25rem,2.5vw,1.75rem)]">
+    <div className={`${STUDENT_PAGE_CLASS} space-y-[clamp(1.25rem,2.5vw,1.75rem)]`}>
       <PageTitle title="My Exams" subtitle="Exams you have taken and your best score on each." />
 
       {loading ? (

@@ -8,14 +8,14 @@ import { EmptyState } from '@/components/ui/Card';
 import { Icon } from '@/assets/icons';
 import { ROUTES, studentDeckPath, studentExamPath } from '@/app/routes';
 import { getApiErrorMessage } from '@/utils/apiError';
+import type { ExamKind } from '@/services/exam.service';
 import {
   studentCourseService,
   type CourseExam,
-  type ExamKind,
   type StudentCourseDetail,
   type StudentDeck,
 } from '@/services/studentCourse.service';
-import { CourseThumb, ListSkeleton, LoadError, formatScore } from '../components/studentUi';
+import { CourseThumb, ListSkeleton, LoadError, STUDENT_PAGE_CLASS, formatScore } from '../components/studentUi';
 import type { DeckStudyState } from '../components/DeckCard';
 
 /**
@@ -63,7 +63,7 @@ export function StudentCourseDetailPage() {
 
   if (loading) {
     return (
-      <div className="space-y-6">
+      <div className={`${STUDENT_PAGE_CLASS} space-y-6`}>
         {breadcrumb}
         <div className="card p-5 flex flex-col sm:flex-row gap-5">
           <Skeleton className="w-full sm:w-64 aspect-video" />
@@ -79,7 +79,7 @@ export function StudentCourseDetailPage() {
 
   if (error || !course) {
     return (
-      <div className="space-y-6">
+      <div className={`${STUDENT_PAGE_CLASS} space-y-6`}>
         {breadcrumb}
         <LoadError message={error ?? 'Course not found.'} onRetry={() => setReload(r => r + 1)} />
       </div>
@@ -90,7 +90,7 @@ export function StudentCourseDetailPage() {
   const isActive = Boolean(enrollment?.isEnrolled && enrollment.status === 'ACTIVE');
 
   return (
-    <div className="space-y-[clamp(1.25rem,2.5vw,1.75rem)]">
+    <div className={`${STUDENT_PAGE_CLASS} space-y-[clamp(1.25rem,2.5vw,1.75rem)]`}>
       {breadcrumb}
 
       <div className="card p-[clamp(1rem,2vw,1.25rem)] flex flex-col sm:flex-row gap-5">
