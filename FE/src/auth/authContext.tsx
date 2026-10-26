@@ -95,7 +95,8 @@ export function landingPathForRole(roleCode: string | undefined | null): string 
       return '/manager/dashboard';
     case 'STUDENT':
     default:
-      return '/student/dashboard';
+      // My Courses is the student home (the old dashboard was merged into it).
+      return '/student/courses';
   }
 }
 

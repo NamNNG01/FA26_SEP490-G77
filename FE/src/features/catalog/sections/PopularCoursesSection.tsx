@@ -4,35 +4,36 @@ import { Icon } from '@/assets/icons';
 import { Container } from '@/features/landing/components/Container';
 import { Reveal } from '@/components/common/Reveal';
 import { ROUTES } from '@/app/routes';
-import { PUBLIC_COURSES } from '../data/publicCourses';
-import { CourseCatalogCard } from '../components/CourseCatalogCard';
-import { CourseFilterChips } from '../components/CourseFilterChips';
-import type { CourseProviderId } from '../types';
+import { CourseCatalogCard, CourseCatalogCardSkeleton } from '../components/CourseCatalogCard';
+import { CourseFilterChips, type CategoryFilter } from '../components/CourseFilterChips';
+import { useCatalogCourses, usePublicCategories } from '../hooks/usePublicCatalog';
 
 /**
  * PopularCoursesSection
  *
- * The course-discovery block — used on the landing page (top 6 courses, with a
- * "View all courses" link) and on /courses (every course, no limit).
- *
- * Provider chips filter the grid only. There are no difficulty/rating/date
- * facets yet.
+ * The course-discovery block on the landing page — the newest published
+ * courses (CL-01) with category chips and a "View all courses" link to /courses.
  */
 export function PopularCoursesSection({
-  limit,
+  limit = 6,
   showChips = true,
   showViewAll = true,
 }: {
-  /** Cap the grid to the first N matches (landing page shows 6). */
+  /** How many courses the grid shows (landing page shows 6). */
   limit?: number;
   showChips?: boolean;
   showViewAll?: boolean;
 }) {
   const navigate = useNavigate();
-  const [category, setCategory] = useState<CourseProviderId | 'all'>('all');
+  const [category, setCategory] = useState<CategoryFilter>('all');
+  const { categories } = usePublicCategories();
+  const { data, loading, error, reload } = useCatalogCourses({
+    categoryId: category === 'all' ? undefined : category,
+    sort: 'newest',
+    size: limit,
+  });
 
-  const matches = PUBLIC_COURSES.filter((course) => category === 'all' || course.providerId === category);
-  const visible = limit ? matches.slice(0, limit) : matches;
+  const courses = data?.content ?? [];
 
   return (
     <section id="courses" className="scroll-mt-16 bg-surface">
@@ -62,21 +63,38 @@ export function PopularCoursesSection({
 
         {showChips && (
           <Reveal delay={60} className="mt-[clamp(1.5rem,3vw,2rem)]">
-            <CourseFilterChips value={category} onChange={setCategory} />
+            <CourseFilterChips categories={categories} value={category} onChange={setCategory} />
           </Reveal>
         )}
 
-        {visible.length > 0 ? (
+        {loading ? (
           <div className="mt-[clamp(1.5rem,3vw,2rem)] grid grid-cols-1 gap-[clamp(1rem,2vw,1.25rem)] sm:grid-cols-2 lg:grid-cols-3">
-            {visible.map((course, index) => (
-              <Reveal key={course.slug} delay={index * 60}>
+            {Array.from({ length: Math.min(limit, 6) }, (_, i) => (
+              <CourseCatalogCardSkeleton key={i} />
+            ))}
+          </div>
+        ) : error ? (
+          <div className="mt-[clamp(1.5rem,3vw,2rem)] rounded-[14px] border border-dashed border-line px-5 py-10 text-center">
+            <p className="text-base text-content-soft">{error}</p>
+            <button
+              type="button"
+              onClick={reload}
+              className="mt-3 inline-flex h-9 items-center gap-1.5 rounded-[10px] border border-line px-3.5 text-sm font-semibold text-content-secondary hover:border-brand-line hover:text-brand-ink cursor-pointer"
+            >
+              <Icon.RefreshCw className="h-4 w-4" /> Retry
+            </button>
+          </div>
+        ) : courses.length > 0 ? (
+          <div className="mt-[clamp(1.5rem,3vw,2rem)] grid grid-cols-1 gap-[clamp(1rem,2vw,1.25rem)] sm:grid-cols-2 lg:grid-cols-3">
+            {courses.map((course, index) => (
+              <Reveal key={course.courseId} delay={index * 60}>
                 <CourseCatalogCard course={course} />
               </Reveal>
             ))}
           </div>
         ) : (
           <p className="mt-[clamp(1.5rem,3vw,2rem)] rounded-[14px] border border-dashed border-line px-5 py-10 text-center text-base text-content-soft">
-            No courses in this category yet.
+            {category === 'all' ? 'No courses published yet.' : 'No courses in this category yet.'}
           </p>
         )}
       </Container>

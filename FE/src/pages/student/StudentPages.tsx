@@ -1,2 +1,1 @@
-export { StudentDashboard } from '@/features/student';
-export { TakeExamPage, ExamResultPage } from '@/features/exam';
+export { MyCoursesPage, StudentTakeExamPage, StudentExamResultPage } from '@/features/student';
