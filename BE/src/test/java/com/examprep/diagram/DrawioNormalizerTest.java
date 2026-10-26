@@ -26,8 +26,26 @@ class DrawioNormalizerTest {
         assertEquals(4, result.elements()); // 3 shapes + 1 connection; the edge label is part of the connection
         String text = result.text();
         assertTrue(text.contains("- Customer (actor) [umlActor] inside Shop"), text);
-        assertTrue(text.contains("- Customer (actor) -> Order : places (endArrow=block, endFill=0)"), text);
+        assertTrue(text.contains("1. Customer (actor) -> Order : places (endArrow=block, endFill=0)"), text);
         assertFalse(text.contains("#fff") || text.contains("geometry") || text.contains("strokeColor"), text);
+    }
+
+    @Test void sequenceMessagesAreListedTopToBottomNotInFileOrder() {
+        // Messages saved out of order; "login" sits on an activation bar whose y is relative to its lifeline.
+        String sequence = """
+                <mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>
+                <mxCell id="u" value="User" style="shape=umlLifeline;" vertex="1" parent="1"><mxGeometry x="0" y="40" width="100" height="400" as="geometry"/></mxCell>
+                <mxCell id="s" value="Server" style="shape=umlLifeline;" vertex="1" parent="1"><mxGeometry x="200" y="40" width="100" height="400" as="geometry"/></mxCell>
+                <mxCell id="bar" style="html=1;" vertex="1" parent="u"><mxGeometry x="45" y="20" width="10" height="20" as="geometry"/></mxCell>
+                <mxCell id="m3" value="token" edge="1" parent="1" source="s" target="u"><mxGeometry relative="1" as="geometry"><mxPoint x="250" y="300" as="sourcePoint"/></mxGeometry></mxCell>
+                <mxCell id="m2" value="check" edge="1" parent="1" source="s" target="s"><mxGeometry relative="1" as="geometry"><mxPoint x="250" y="200" as="sourcePoint"/></mxGeometry></mxCell>
+                <mxCell id="m1" value="login" edge="1" parent="1" source="bar" target="s"><mxGeometry relative="1" as="geometry"/></mxCell>
+                </root></mxGraphModel>""";
+        String text = DrawioNormalizer.normalize(sequence).text();
+        int login = text.indexOf("1. #bar -> Server : login");
+        int check = text.indexOf("2. Server -> Server : check");
+        int token = text.indexOf("3. Server -> User : token");
+        assertTrue(login > 0 && check > login && token > check, text);
     }
 
     @Test void readsCompressedDiagrams() throws Exception {

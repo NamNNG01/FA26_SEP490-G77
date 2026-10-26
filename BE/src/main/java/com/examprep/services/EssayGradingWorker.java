@@ -50,6 +50,8 @@ public class EssayGradingWorker {
     public static final int MAX_DIAGRAM_BYTES = 500 * 1024;
     public static final int MAX_DIAGRAM_ELEMENTS = 150;
     private static final int MAX_FEEDBACK_CHARS = 1000;
+    // Bump when SYSTEM_PROMPT, the prompt layout or the score checks change.
+    private static final String PROMPT_VERSION = "grading-v1";
     private static final String SYSTEM_PROMPT = """
             You are a fair, careful university examiner grading one student answer against an analytic rubric.
             For every criterion give points from 0 to its maxPoints (at most 2 decimals) and 1-3 sentences of feedback
@@ -253,7 +255,8 @@ public class EssayGradingWorker {
         AiResponse response = null;
         try {
             response = AiCalls.complete(aiClient, AiRequest.builder().systemPrompt(SYSTEM_PROMPT).prompt(prepared.prompt())
-                    .maxTokens(4096).responseSchema(SCHEMA).build(), timeoutMillis);
+                    // Headroom for thinking models, whose reasoning counts against maxOutputTokens.
+                    .maxTokens(8192).responseSchema(SCHEMA).build(), timeoutMillis);
             return validate(prepared, response, System.currentTimeMillis() - started);
         } catch (AiCalls.Failure ex) {
             log.warn("Essay grading AI call failed: {}", ex.reason());
@@ -315,6 +318,9 @@ public class EssayGradingWorker {
             ObjectNode feedback = json.createObjectNode();
             if (outcome.overallFeedback() == null) feedback.putNull("overallFeedback");
             else feedback.put("overallFeedback", outcome.overallFeedback());
+            // Which model and prompt produced this grade, for when a student disputes it. Not shown to students.
+            feedback.put("model", outcome.response().getModel());
+            feedback.put("promptVersion", PROMPT_VERSION);
             answer.setAiCriteriaScores(outcome.criteria().toString());
             answer.setAiFeedbackJson(feedback.toString());
             answer.setScoreEarned(outcome.score());

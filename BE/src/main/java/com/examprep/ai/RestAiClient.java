@@ -4,9 +4,12 @@ package com.examprep.ai;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatusCode;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
+import java.net.http.HttpClient;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
@@ -27,7 +30,11 @@ public class RestAiClient implements AiClient {
             @Value("${app.ai.api-key:}")
             String apiKey,
             @Value("${app.ai.model:gemini-2.5-flash}")
-            String defaultModel) {
+            String defaultModel,
+            // Must exceed the longest caller timeout (AI-02 material: 120 s); it only frees the thread of a call
+            // the caller already gave up on, since CompletableFuture timeouts do not abort the HTTP request.
+            @Value("${app.ai.read-timeout-ms:150000}")
+            long readTimeoutMillis) {
 
         if (apiKey == null || apiKey.isBlank()) {
             throw new IllegalStateException(
@@ -37,7 +44,12 @@ public class RestAiClient implements AiClient {
 
         this.defaultModel = defaultModel;
 
+        JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(
+                HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build());
+        requestFactory.setReadTimeout(Duration.ofMillis(readTimeoutMillis));
+
         this.restClient = RestClient.builder()
+                .requestFactory(requestFactory)
                 .baseUrl(baseUrl)
                 .defaultHeader("x-goog-api-key", apiKey)
                 .defaultHeader("Content-Type", "application/json")
@@ -160,6 +172,8 @@ public class RestAiClient implements AiClient {
             if (usage != null) {
                 Object promptTokens = usage.get("promptTokenCount");
                 Object candidateTokens = usage.get("candidatesTokenCount");
+                // Thinking models bill their reasoning as output but report it separately.
+                Object thoughtTokens = usage.get("thoughtsTokenCount");
 
                 if (promptTokens instanceof Number) {
                     inputTokens = ((Number) promptTokens).intValue();
@@ -167,6 +181,10 @@ public class RestAiClient implements AiClient {
 
                 if (candidateTokens instanceof Number) {
                     outputTokens = ((Number) candidateTokens).intValue();
+                }
+
+                if (thoughtTokens instanceof Number) {
+                    outputTokens += ((Number) thoughtTokens).intValue();
                 }
             }
 

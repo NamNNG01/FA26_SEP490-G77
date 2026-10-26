@@ -68,7 +68,7 @@ public class StudentAiApiIntegrationTest {
                 String reply = Objects.requireNonNullElse(REPLIES.poll(), "{}");
                 byte[] bytes = JSON.writeValueAsBytes(Map.of(
                         "candidates", List.of(Map.of("content", Map.of("parts", List.of(Map.of("text", reply))))),
-                        "usageMetadata", Map.of("promptTokenCount", 120, "candidatesTokenCount", 80)));
+                        "usageMetadata", Map.of("promptTokenCount", 120, "candidatesTokenCount", 80, "thoughtsTokenCount", 30)));
                 exchange.getResponseHeaders().set("Content-Type", "application/json");
                 exchange.sendResponseHeaders(providerStatus, bytes.length);
                 exchange.getResponseBody().write(bytes);
@@ -163,7 +163,7 @@ public class StudentAiApiIntegrationTest {
                 .andExpect(jsonPath("$.data.summary.requested").value(3))
                 .andExpect(jsonPath("$.data.summary.returned").value(2))
                 .andExpect(jsonPath("$.data.duplicatesIgnored[0]").value(choice.getQuestionId()))
-                .andExpect(jsonPath("$.data.quota.freeRemaining").value(20_000 - 200));
+                .andExpect(jsonPath("$.data.quota.freeRemaining").value(20_000 - 230)); // thinking tokens are billed too
         // The AI only sees the question and the correct answer, never wrong options or the student's choice.
         String sent = REQUESTS.get(0);
         assertTrue(sent.contains("extends"));
@@ -247,6 +247,10 @@ public class StudentAiApiIntegrationTest {
         assertEquals(0, new BigDecimal("3.33").compareTo(graded.getScoreEarned()));
         JsonNode criteria = json.readTree(graded.getAiCriteriaScores());
         assertEquals("Memory", criteria.get(0).path("name").asText());
+        JsonNode feedback = json.readTree(graded.getAiFeedbackJson());
+        assertEquals("Solid answer.", feedback.path("overallFeedback").asText());
+        assertEquals("fake-model", feedback.path("model").asText());
+        assertEquals("grading-v1", feedback.path("promptVersion").asText());
         assertEquals(0, new BigDecimal("1.33").compareTo(criteria.get(1).path("maxPoints").decimalValue()));
         assertEquals("GRADING", reload(attempt).getStatus());
 
@@ -261,7 +265,7 @@ public class StudentAiApiIntegrationTest {
         assertEquals(1L, em.createQuery("select count(n) from UserNotification n where n.user = :u", Long.class)
                 .setParameter("u", student).getSingleResult());
         em.createQuery("select l from AiUsageLog l where l.purpose = 'ESSAY_GRADING'", AiUsageLog.class).getResultList()
-                .forEach(l -> { assertEquals("SUCCESS", l.getStatus()); assertEquals(0, l.getReservedTokens()); assertEquals(120, l.getInputTokens()); });
+                .forEach(l -> { assertEquals("SUCCESS", l.getStatus()); assertEquals(0, l.getReservedTokens()); assertEquals(120, l.getInputTokens()); assertEquals(110, l.getOutputTokens()); });
 
         grade(student, null).andExpect(status().isConflict())
                 .andExpect(jsonPath("$.data.skipped[0].reason").value("ALREADY_GRADED"));
