@@ -48,7 +48,7 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * The six student attempt APIs (spec 6.1-6.5, 5.2).
+ * The seven student attempt APIs (spec 6.1-6.5, 5.2).
  *
  * <p>Contract highlights enforced here:</p>
  * <ul>
@@ -381,6 +381,40 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
                     attempt.getAutoSubmitted()));
         }
         return PageResponse.of(result, content);
+    }
+
+    // ---------------------------------------------------------------------------------
+    // SA-07
+    // ---------------------------------------------------------------------------------
+
+    /**
+     * Cancels an attempt the student no longer wants to keep. The row, its frozen paper, its
+     * drafts and its idempotency key are deleted in this one transaction, so nothing of the
+     * attempt is left behind: it never shows up in the history and the student can start the
+     * exam again. A closed attempt (submitted or auto-submitted) is a result, not a draft, and
+     * can never be cancelled.
+     */
+    @Override
+    @Transactional
+    public AttemptResponses.Cancelled cancel(Long userId, Long attemptId) {
+        ExamAttempt attempt = attempts.lockById(attemptId)
+                .orElseThrow(() -> new ResourceNotFoundException("Attempt not found"));
+        if (!Objects.equals(attempt.getUser().getUserId(), userId)) {
+            throw new ForbiddenException("Attempt belongs to another student");
+        }
+        if (!STATUS_IN_PROGRESS.equals(attempt.getStatus())) {
+            throw new ResourceConflictException("Attempt has already been submitted");
+        }
+
+        Long examId = attempt.getExam().getExamId();
+        // Children first: nothing of this attempt survives, neither answer nor start key. Each
+        // flush makes sure the rows are really gone before the parent attempt is deleted.
+        answers.deleteAll(answers.findByAttempt_AttemptId(attemptId));
+        answers.flush();
+        startKeys.deleteAll(startKeys.findByAttempt_AttemptId(attemptId));
+        startKeys.flush();
+        attempts.delete(attempt);
+        return new AttemptResponses.Cancelled(attemptId, examId);
     }
 
     // ---------------------------------------------------------------------------------

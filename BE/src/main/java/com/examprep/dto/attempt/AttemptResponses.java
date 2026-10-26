@@ -116,6 +116,9 @@ public final class AttemptResponses {
             Instant submittedAt,
             Boolean autoSubmitted) {}
 
+    /** SA-07: the attempt was discarded, nothing of it stays in the database. */
+    public record Cancelled(Long attemptId, Long examId) {}
+
     /** {@code data} of 409 ATTEMPT_IN_PROGRESS (SA-01). */
     public record AttemptInProgress(Long activeAttemptId, Instant deadlineAt) {}
 

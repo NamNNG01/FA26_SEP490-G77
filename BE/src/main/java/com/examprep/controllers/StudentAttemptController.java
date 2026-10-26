@@ -12,6 +12,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -26,7 +27,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 import java.net.URI;
 
 /**
- * Student exam-taking APIs (spec 6.1-6.5, 5.2): SA-01 … SA-06.
+ * Student exam-taking APIs (spec 6.1-6.5, 5.2): SA-01 … SA-07.
  *
  * <p>Every route lives under {@code /api/v1/student/**}, which {@code SecurityConfig} already
  * restricts to the STUDENT role (admin included for support).</p>
@@ -34,7 +35,7 @@ import java.net.URI;
 @RestController
 @RequestMapping("/api/v1/student")
 @RequiredArgsConstructor
-@Tag(name = "Student Attempt", description = "Taking an exam: start, reload, save drafts, submit, result, history")
+@Tag(name = "Student Attempt", description = "Taking an exam: start, reload, save drafts, submit, result, history, cancel")
 public class StudentAttemptController {
 
     private final StudentAttemptService attempts;
@@ -108,8 +109,18 @@ public class StudentAttemptController {
             @AuthenticationPrincipal UserPrincipal currentUser,
             @PathVariable Long examId,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(defaultValue = "20") int size) {        return ResponseEntity.ok(ApiResponse.success(attempts.history(currentUser.getId(), examId, page, size)));
+    }
+
+    @DeleteMapping("/attempts/{attemptId}")
+    @Operation(summary = "SA-07: Cancel an attempt",
+            description = "Discards an attempt that is still in progress: the attempt, its frozen paper, "
+                    + "its drafts and its idempotency key are deleted, so nothing of it is kept and the "
+                    + "student can start the exam again. An attempt that was already submitted is kept.")
+    public ResponseEntity<ApiResponse<AttemptResponses.Cancelled>> cancel(
+            @AuthenticationPrincipal UserPrincipal currentUser,
+            @PathVariable Long attemptId) {
         return ResponseEntity.ok(
-                ApiResponse.success(attempts.history(currentUser.getId(), examId, page, size)));
+                ApiResponse.success(attempts.cancel(currentUser.getId(), attemptId), "Attempt cancelled"));
     }
 }

@@ -46,6 +46,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -53,7 +54,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * End-to-end contract tests of the six student attempt APIs (spec 6.1-6.5, 5.2).
+ * End-to-end contract tests of the seven student attempt APIs (spec 6.1-6.5, 5.2).
  *
  * <p>The paper used by most tests has three questions with weights 1 / 2 / 2 and maxScore 10, so
  * P_q is 2.00 / 4.00 / 4.00 exactly as in the worked example of spec section 1.</p>
@@ -852,11 +853,67 @@ class StudentAttemptControllerTest {
     }
 
     // =================================================================================
+    // SA-07
+    // =================================================================================
+
+    @Test
+    void cancelDiscardsTheAttemptAndKeepsNothingOfItInTheDatabase() throws Exception {
+        String key = UUID.randomUUID().toString();
+        long attemptId = data(call(student, post(startUrl(mainExam)).header("Idempotency-Key", key))
+                .andExpect(status().isCreated())).path("attemptId").asLong();
+        save(attemptId, draft(single.getQuestionId(), 1, selected(singleRight.getOptionId())))
+                .andExpect(status().isOk());
+
+        JsonNode data = data(call(student, delete(attemptUrl(attemptId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("Attempt cancelled")));
+        assertEquals(attemptId, data.path("attemptId").asLong());
+        assertEquals(mainExam.getExamId(), data.path("examId").asLong());
+
+        assertEquals(0, attempts().size(), "the attempt row must not stay in the database");
+        assertEquals(0, answers(attemptId).size(), "the frozen paper and the drafts must be gone");
+        assertEquals(0, count(AttemptStartKey.class), "the idempotency key must be gone too");
+        assertEquals(0, data(call(student, get(historyUrl(mainExam))).andExpect(status().isOk()))
+                .path("totalElements").asInt(), "a cancelled attempt is not part of the history");
+
+        // Nothing is left, so the very same student can simply start the exam again.
+        long fresh = data(call(student, post(startUrl(mainExam))).andExpect(status().isCreated()))
+                .path("attemptId").asLong();
+        assertTrue(fresh != attemptId, "cancelling must not burn the single active attempt slot");
+        assertEquals("IN_PROGRESS", attempt(fresh).getStatus());
+    }
+
+    @Test
+    void cancelNeedsAStudentTokenAndOnlyWorksForTheOwner() throws Exception {
+        long attemptId = data(call(student, post(startUrl(mainExam))).andExpect(status().isCreated()))
+                .path("attemptId").asLong();
+
+        mvc.perform(delete(attemptUrl(attemptId))).andExpect(status().isUnauthorized());
+        call(manager, delete(attemptUrl(attemptId))).andExpect(status().isForbidden());
+        call(otherStudent, delete(attemptUrl(attemptId))).andExpect(status().isForbidden());
+        call(student, delete("/api/v1/student/attempts/999999")).andExpect(status().isNotFound());
+        assertEquals(1, attempts().size(), "a refused cancel must change nothing");
+    }
+
+    @Test
+    void cancelRefusesAnAttemptThatWasAlreadySubmitted() throws Exception {
+        long attemptId = submittedAttempt(false);
+
+        call(student, delete(attemptUrl(attemptId)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("Attempt has already been submitted"));
+        assertEquals(1, attempts().size());
+        assertEquals(3, answers(attemptId).size());
+        assertEquals("COMPLETED", attempt(attemptId).getStatus());
+    }
+
+    // =================================================================================
     // documentation
     // =================================================================================
 
     @Test
-    void allSixAttemptApisAreDocumented() throws Exception {
+    void everyAttemptApiIsDocumented() throws Exception {
         JsonNode paths = json.readTree(mvc.perform(get("/v3/api-docs")).andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString()).path("paths");
 
@@ -871,6 +928,8 @@ class StudentAttemptControllerTest {
                 "SA-04 is missing from the OpenAPI document");
         assertTrue(paths.path("/api/v1/student/attempts/{attemptId}/result").has("get"),
                 "SA-05 is missing from the OpenAPI document");
+        assertTrue(paths.path("/api/v1/student/attempts/{attemptId}").has("delete"),
+                "SA-07 is missing from the OpenAPI document");
     }
 
     // =================================================================================

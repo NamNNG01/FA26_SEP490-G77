@@ -5,8 +5,9 @@ import com.examprep.dto.attempt.AttemptRequests;
 import com.examprep.dto.attempt.AttemptResponses;
 
 /**
- * The six student attempt APIs (spec 6.1-6.5, 5.2):
- * SA-01 start, SA-02 reload, SA-03 save drafts, SA-04 submit, SA-05 result, SA-06 history.
+ * The seven student attempt APIs (spec 6.1-6.5, 5.2):
+ * SA-01 start, SA-02 reload, SA-03 save drafts, SA-04 submit, SA-05 result, SA-06 history,
+ * SA-07 cancel.
  */
 public interface StudentAttemptService {
 
@@ -27,4 +28,7 @@ public interface StudentAttemptService {
 
     /** SA-06: every attempt of one exam, newest first, paged inside the database. */
     PageResponse<AttemptResponses.HistoryItem> history(Long userId, Long examId, int page, int size);
+
+    /** SA-07: discards an attempt still in progress, keeping nothing of it. */
+    AttemptResponses.Cancelled cancel(Long userId, Long attemptId);
 }
