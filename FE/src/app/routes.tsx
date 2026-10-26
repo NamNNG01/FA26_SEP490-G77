@@ -24,6 +24,7 @@ export const ROUTES = {
   // Student
   studentDashboard: '/student/dashboard',
   studentCourses: '/student/courses',
+  studentCourseDetail: '/student/courses/:courseId',
   studentExams: '/student/exams',
   studentPublicExam: '/student/public-exam',
   /** Route pattern — render with publicExamPath(id). */

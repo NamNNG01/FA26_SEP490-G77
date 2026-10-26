@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router';
 import { Icon } from '@/assets/icons';
 import { ROUTES } from '@/app/routes';
 import { useAuth, landingPathForRole } from '@/auth/authContext';
+import { Role } from '@/utils/permissions';
 import { CourseSearchBar } from '@/features/catalog';
 import { Container } from './Container';
 
@@ -28,7 +29,8 @@ export function PublicNavbar() {
   const { isAuthenticated, user } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const dashboardPath = landingPathForRole(user?.role);
+  const isStudent = user?.role === Role.STUDENT;
+  const dashboardPath = isStudent ? ROUTES.studentCourses : landingPathForRole(user?.role);
 
   const navLinks = [
     { label: 'Home', to: ROUTES.landing },
@@ -91,7 +93,7 @@ export function PublicNavbar() {
                 onClick={() => goTo(dashboardPath)}
                 className="inline-flex h-9 items-center gap-1.5 rounded-[10px] bg-brand-600 px-4 text-base font-semibold text-white shadow-sm transition-colors hover:bg-brand-700 cursor-pointer"
               >
-                Dashboard
+                {isStudent ? 'My learning' : 'Dashboard'}
                 <Icon.ChevronRight className="h-4 w-4" />
               </button>
             ) : (
@@ -157,7 +159,7 @@ export function PublicNavbar() {
                   onClick={() => goTo(dashboardPath)}
                   className="mt-3 inline-flex h-10 w-full items-center justify-center rounded-[10px] bg-brand-600 text-base font-semibold text-white shadow-sm transition-colors hover:bg-brand-700 cursor-pointer"
                 >
-                  Dashboard
+                  {isStudent ? 'My learning' : 'Dashboard'}
                 </button>
               ) : (
                 <div className="mt-3 grid grid-cols-2 gap-2">

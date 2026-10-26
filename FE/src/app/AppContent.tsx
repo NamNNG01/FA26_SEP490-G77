@@ -31,6 +31,8 @@ import { QuestionBankPage, QuestionDetailPage, QuestionFormPage } from '@/featur
 import { CourseListPage, CourseDetailPage, CourseFormPage } from '@/features/course';
 import { FlashcardManagementPage, FlashcardDeckDetailPage } from '@/features/flashcard';
 import { PublicCoursesPage, PublicCourseDetailPage } from '@/features/catalog';
+import { MyCoursesPage } from '@/features/student/pages/MyCoursesPage';
+import { EnrolledCoursePage } from '@/features/student/pages/EnrolledCoursePage';
 import {
   AdminDashboard,
   UsersPage,
@@ -218,6 +220,13 @@ function AppRoutes() {
     <Routes>
       {publicRoutes(<SignedInHome isEntry={location.key === entryKey} />)}
 
+      <Route element={<PublicLayout />}>
+        <Route element={<RequireRole roles={ROLE_STUDENT} />}>
+          <Route path={ROUTES.studentCourses} element={<MyCoursesPage />} />
+          <Route path={ROUTES.studentCourseDetail} element={<EnrolledCoursePage />} />
+        </Route>
+      </Route>
+
       <Route element={<DashboardLayout />}>
         {/* Already signed in — respect ?redirect= before falling back. */}
         <Route path={ROUTES.login} element={<LoggedInLoginRedirect />} />
@@ -229,7 +238,6 @@ function AppRoutes() {
             practice attempts. No editing surfaces. */}
         <Route element={<RequireRole roles={ROLE_STUDENT} />}>
           <Route path={ROUTES.studentDashboard} element={<StudentDashboard />} />
-          <Route path={ROUTES.studentCourses} element={<CourseListPage readonly />} />
           <Route path={ROUTES.studentExams} element={<ExamListPage />} />
           <Route path={ROUTES.studentPublicExam} element={<PublicExamsPage />} />
           <Route path={ROUTES.studentPublicExamDetail} element={<PublicExamDetailPage />} />
