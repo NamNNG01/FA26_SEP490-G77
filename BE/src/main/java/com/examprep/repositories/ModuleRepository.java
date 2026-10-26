@@ -30,5 +30,13 @@ public interface ModuleRepository extends JpaRepository<Module, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT m FROM Module m WHERE m.moduleId = :id")
     Optional<Module> findForUpdate(@Param("id") Long id);
+
+    @Query("""
+    SELECT m FROM Module m
+    WHERE m.course.courseId = :courseId
+      AND m.status = 'VISIBLE'
+    ORDER BY m.orderIndex ASC, m.moduleId ASC
+    """)
+    List<Module> findVisibleModulesByCourseId(@Param("courseId") Long courseId);
 }
 
