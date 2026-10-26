@@ -1,68 +1,56 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Tabs } from '@/components/ui/Tabs';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Pagination } from '@/components/ui/Pagination';
 import { EmptyState } from '@/components/ui/Card';
-import { Skeleton } from '@/components/ui/Skeleton';
-import { StatCard } from '@/components/ui/StatCard';
 import { SearchInput } from '@/components/common/SearchInput';
 import { Icon } from '@/assets/icons';
-import { ROUTES, courseSearchPath, studentCoursePath } from '@/app/routes';
+import { ROUTES, studentCoursePath } from '@/app/routes';
 import { useDashboard } from '@/hooks/useDashboard';
-import type { StudentRecentAttempt, StudentSummary } from '@/services/dashboard.service';
+import type { StudentRecentAttempt } from '@/services/dashboard.service';
 import { getApiErrorMessage } from '@/utils/apiError';
-import { studentCourseService, type EnrollmentStatus, type MyCourse } from '@/services/studentCourse.service';
+import { studentCourseService, type MyCourse } from '@/services/studentCourse.service';
 import { CardGridSkeleton, CourseThumb, LoadError, PageTitle, STUDENT_PAGE_CLASS, formatDate } from '../components/studentUi';
 
 const PAGE_SIZE = 12;
+/** MC-01 caps `size` at 100 and has no keyword filter, so the list is loaded once and searched client-side. */
+const MY_COURSES_FETCH_SIZE = 100;
 const RECENT_ATTEMPTS = 3;
 
-type SummaryKey = 'enrolledCourses' | 'activeCourses' | 'completedCourses';
-
-const STATUS_TABS: { label: string; status?: EnrollmentStatus; countKey: SummaryKey }[] = [
-  { label: 'All', countKey: 'enrolledCourses' },
-  { label: 'In progress', status: 'ACTIVE', countKey: 'activeCourses' },
-  { label: 'Completed', status: 'COMPLETED', countKey: 'completedCourses' },
-];
+function matchesSearch(course: MyCourse, term: string) {
+  return [course.title, course.category?.name, course.manager?.fullName].some(v => v?.toLowerCase().includes(term));
+}
 
 /**
  * My Courses — the student home (the old dashboard is merged in here).
  *
- *  - stat row + recent attempts: GET /dashboard/student
- *  - enrolled courses grid:      MC-01, filtered by enrollment status
- *  - search box:                 hands off to the full catalog (/courses?q=…),
- *                                the same page the landing search leads to.
+ *  - recent attempts:            GET /dashboard/student
+ *  - enrolled courses grid:      MC-01
+ *  - search box:                 filters the enrolled courses only (title,
+ *                                category, manager) — not the public catalog.
  */
 export function MyCoursesPage() {
   const navigate = useNavigate();
-  const { data: dashboard, loading: dashboardLoading, error: dashboardError, refresh: refreshDashboard } = useDashboard();
+  const { data: dashboard } = useDashboard();
   const student = dashboard?.kind === 'student' ? dashboard : null;
 
-  const [tabIndex, setTabIndex] = useState(0);
   const [page, setPage] = useState(1);
   const [reload, setReload] = useState(0);
   const [search, setSearch] = useState('');
 
   const [courses, setCourses] = useState<MyCourse[]>([]);
-  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  const status = STATUS_TABS[tabIndex].status;
-  const tabLabels = STATUS_TABS.map(t => (student ? `${t.label} (${student.summary[t.countKey]})` : t.label));
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
     studentCourseService
-      .getMyCourses({ status, page: page - 1, size: PAGE_SIZE })
+      .getMyCourses({ page: 0, size: MY_COURSES_FETCH_SIZE })
       .then(res => {
-        if (cancelled) return;
-        setCourses(res.content);
-        setTotal(res.totalElements);
+        if (!cancelled) setCourses(res.content);
       })
       .catch(err => {
         if (!cancelled) setError(getApiErrorMessage(err, 'Failed to load your courses.'));
@@ -73,16 +61,15 @@ export function MyCoursesPage() {
     return () => {
       cancelled = true;
     };
-  }, [status, page, reload]);
+  }, [reload]);
 
-  const changeTab = (label: string) => {
-    setTabIndex(Math.max(tabLabels.indexOf(label), 0));
+  const term = search.trim().toLowerCase();
+  const filtered = useMemo(() => (term ? courses.filter(c => matchesSearch(c, term)) : courses), [courses, term]);
+  const pageItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  const changeSearch = (value: string) => {
+    setSearch(value);
     setPage(1);
-  };
-
-  const submitSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    navigate(courseSearchPath(search));
   };
 
   return (
@@ -91,29 +78,17 @@ export function MyCoursesPage() {
         title="My Courses"
         subtitle="Your enrolled courses and latest results."
         action={
-          <form onSubmit={submitSearch} role="search" className="flex w-full sm:w-auto gap-2">
+          <div role="search" className="w-full sm:w-auto">
             <SearchInput
               className="w-full sm:w-72"
-              placeholder="Find a new course…"
-              aria-label="Search all courses"
+              placeholder="Search my courses…"
+              aria-label="Search my courses"
               value={search}
-              onChange={e => setSearch(e.target.value)}
+              onChange={e => changeSearch(e.target.value)}
             />
-            <Button type="submit" variant="outline" icon={<Icon.Search className="w-4 h-4" />}>
-              Search
-            </Button>
-          </form>
+          </div>
         }
       />
-
-      <StatsRow
-        summary={student?.summary ?? null}
-        loading={dashboardLoading}
-        error={dashboardError}
-        onRetry={refreshDashboard}
-      />
-
-      <Tabs tabs={tabLabels} active={tabLabels[tabIndex]} onChange={changeTab} variant="underline" />
 
       {loading ? (
         <CardGridSkeleton />
@@ -123,20 +98,33 @@ export function MyCoursesPage() {
         <div className="card">
           <EmptyState
             icon={<Icon.Book className="w-7 h-7" />}
-            title={status ? 'No courses here' : 'You are not enrolled in any course yet'}
+            title="You are not enrolled in any course yet"
             message="Browse the catalog to find a course to start with."
             action={<Button onClick={() => navigate(ROUTES.courses)}>Browse courses</Button>}
+          />
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="card">
+          <EmptyState
+            icon={<Icon.Search className="w-7 h-7" />}
+            title="No matching courses"
+            message={`None of your courses match "${search.trim()}".`}
+            action={
+              <Button variant="outline" onClick={() => changeSearch('')}>
+                Clear search
+              </Button>
+            }
           />
         </div>
       ) : (
         <>
           <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-[clamp(1rem,2vw,1.25rem)]">
-            {courses.map(c => (
+            {pageItems.map(c => (
               <MyCourseCard key={c.courseId} course={c} onOpen={() => navigate(studentCoursePath(c.courseId))} />
             ))}
           </div>
           <div className="card">
-            <Pagination page={page} total={total} perPage={PAGE_SIZE} onChange={setPage} unit="courses" />
+            <Pagination page={page} total={filtered.length} perPage={PAGE_SIZE} onChange={setPage} unit="courses" />
           </div>
         </>
       )}
@@ -144,52 +132,6 @@ export function MyCoursesPage() {
       {student && student.recentAttempts.length > 0 && (
         <RecentAttempts attempts={student.recentAttempts.slice(0, RECENT_ATTEMPTS)} onViewAll={() => navigate(ROUTES.studentExams)} />
       )}
-    </div>
-  );
-}
-
-function StatsRow({
-  summary,
-  loading,
-  error,
-  onRetry,
-}: {
-  summary: StudentSummary | null;
-  loading: boolean;
-  error: string | null;
-  onRetry: () => void;
-}) {
-  if (loading) {
-    return (
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-[clamp(1rem,2vw,1.25rem)]">
-        {Array.from({ length: 4 }, (_, i) => (
-          <Skeleton key={i} className="h-[104px] rounded-[14px]" />
-        ))}
-      </div>
-    );
-  }
-  if (error || !summary) {
-    // The course list below still works — keep the failure small.
-    return (
-      <div className="card flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-        <p className="text-sm text-content-soft">{error ?? 'Your learning stats are unavailable.'}</p>
-        <Button size="sm" variant="ghost" icon={<Icon.RefreshCw className="w-4 h-4" />} onClick={onRetry}>
-          Retry
-        </Button>
-      </div>
-    );
-  }
-  const stats = [
-    { title: 'Enrolled Courses', value: String(summary.enrolledCourses), icon: <Icon.Book className="w-5 h-5" /> },
-    { title: 'In Progress', value: String(summary.activeCourses), icon: <Icon.TrendingUp className="w-5 h-5" /> },
-    { title: 'Completed', value: String(summary.completedCourses), icon: <Icon.CheckCircle className="w-5 h-5" /> },
-    { title: 'Average Score', value: `${summary.averageScore}%`, icon: <Icon.Award className="w-5 h-5" /> },
-  ];
-  return (
-    <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-[clamp(1rem,2vw,1.25rem)]">
-      {stats.map(s => (
-        <StatCard key={s.title} {...s} />
-      ))}
     </div>
   );
 }
@@ -233,12 +175,7 @@ function MyCourseCard({ course, onOpen }: { course: MyCourse; onOpen: () => void
     >
       <CourseThumb url={course.thumbnailUrl} title={course.title} />
       <div className="p-4 flex flex-col gap-3 flex-1">
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-2xs font-medium text-content-subtle truncate">{course.category?.name ?? 'Uncategorized'}</span>
-          <Badge variant={course.status === 'COMPLETED' ? 'success' : 'info'}>
-            {course.status === 'COMPLETED' ? 'Completed' : 'In progress'}
-          </Badge>
-        </div>
+        <span className="text-2xs font-medium text-content-subtle truncate">{course.category?.name ?? 'Uncategorized'}</span>
         <div>
           <h3 className="text-base font-semibold text-content leading-snug line-clamp-2">{course.title}</h3>
           {course.manager && <p className="text-xs text-content-subtle mt-0.5">by {course.manager.fullName}</p>}

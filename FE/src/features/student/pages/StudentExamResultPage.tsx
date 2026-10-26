@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { Progress } from '@/components/ui/Progress';
+import { Modal } from '@/components/ui/Modal';
 import { Select } from '@/components/ui/Select';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Spinner } from '@/components/ui/Spinner';
@@ -13,6 +14,7 @@ import { getApiErrorMessage } from '@/utils/apiError';
 import {
   RUBRIC_TYPES,
   studentAttemptService,
+  type AiQuota,
   type AttemptHistoryItem,
   type AttemptResult,
   type ResultQuestion,
@@ -34,12 +36,14 @@ const GRADING_FAILED = 'FAILED';
 
 const isGradingOpen = (q: ResultQuestion) => q.gradingStatus === GRADING_WAITING || GRADING_RUNNING.has(q.gradingStatus ?? '');
 
-type Outcome = 'correct' | 'incorrect' | 'unanswered' | 'pending';
-type Filter = 'all' | Outcome;
+type Outcome = 'correct' | 'incorrect' | 'graded' | 'unanswered' | 'pending';
+/** Status filter — only offered on quiz exams (no essay / code / diagram question). */
+type Filter = 'all' | 'correct' | 'incorrect' | 'unanswered';
 
-const OUTCOME: Record<Outcome, { label: string; badge: 'success' | 'danger' | 'default' | 'warning'; icon: React.ReactNode }> = {
+const OUTCOME: Record<Outcome, { label: string; badge: 'success' | 'danger' | 'info' | 'default' | 'warning'; icon: React.ReactNode }> = {
   correct: { label: 'Correct', badge: 'success', icon: <Icon.CheckCircle className="w-5 h-5 text-success" /> },
   incorrect: { label: 'Incorrect', badge: 'danger', icon: <Icon.XCircle className="w-5 h-5 text-danger" /> },
+  graded: { label: 'Graded', badge: 'info', icon: <Icon.Award className="w-5 h-5 text-primary" /> },
   unanswered: { label: 'Unanswered', badge: 'default', icon: <Icon.HelpCircle className="w-5 h-5 text-content-subtle" /> },
   pending: { label: 'Grading', badge: 'warning', icon: <Icon.Clock className="w-5 h-5 text-warning" /> },
 };
@@ -47,10 +51,52 @@ const OUTCOME: Record<Outcome, { label: string; badge: 'success' | 'danger' | 'd
 function outcomeOf(q: ResultQuestion): Outcome {
   if (isGradingOpen(q)) return 'pending';
   if (!isAnswered(q.yourResponse)) return 'unanswered';
+  // Essay / code / diagram answers carry rubric points, not a right/wrong verdict.
+  if (RUBRIC_TYPES.has(q.questionType)) return 'graded';
   if (q.isCorrect != null) return q.isCorrect ? 'correct' : 'incorrect';
-  // Rubric answers carry points, not a verdict: full marks count as correct.
   if (q.scoreEarned != null && q.maxPoints != null) return Number(q.scoreEarned) >= Number(q.maxPoints) ? 'correct' : 'incorrect';
   return 'incorrect';
+}
+
+/** Rubric answers get rubric feedback, not an explanation. */
+const hasExplanation = (q: ResultQuestion) => !RUBRIC_TYPES.has(q.questionType);
+
+/** SE-01 takes at most 20 question ids per call. */
+const EXPLAIN_BATCH = 20;
+/** BE `app.student-ai.explanation-output-budget` default. */
+const EXPLAIN_OUTPUT_BUDGET = 250;
+
+/** Correct answer in words, built like the BE prompt does (StudentAiServiceImpl#correctAnswer). */
+function correctAnswerText(q: ResultQuestion): string {
+  const textOf = (id: number) => q.options?.find(o => o.optionId === id)?.optionText ?? '';
+  if (q.questionType === 'ORDERING') return (q.correctAnswer?.orderedOptionIds ?? []).map(textOf).join(' -> ');
+  if (q.questionType === 'MATCHING') return (q.correctAnswer?.pairs ?? []).map(p => `${p.left} -> ${p.right}`).join('\n');
+  if (q.questionType === 'FILL_BLANK')
+    return Object.entries(q.correctAnswer?.blanks ?? {})
+      .map(([n, accepted]) => `Blank ${n}: ${accepted.join(' / ')}`)
+      .join('\n');
+  return (q.options ?? [])
+    .filter(o => o.isCorrectAnswer)
+    .map(o => o.optionText)
+    .join('; ');
+}
+
+/**
+ * Tokens the BE reserves to explain one question (spec 8.1 rule 4):
+ * ceil(promptChars / 2.5) × 1.3 + output budget. An estimate — the quota is
+ * settled on the real usage afterwards.
+ */
+function estimateExplainTokens(q: ResultQuestion): number {
+  const prompt = JSON.stringify({ questionId: q.questionId, questionType: q.questionType, question: q.content, correctAnswer: correctAnswerText(q) });
+  return Math.ceil(Math.ceil(prompt.length / 2.5) * 1.3) + EXPLAIN_OUTPUT_BUDGET;
+}
+
+const formatTokens = (n: number) => n.toLocaleString('en-US');
+
+interface ExplanationState {
+  text: string | null;
+  loading: boolean;
+  error: string | null;
 }
 
 function num(v: number | null | undefined): string {
@@ -61,8 +107,9 @@ function num(v: number | null | undefined): string {
  * Attempt review (SA-05) — reached from My Exams and right after submitting.
  * Two columns:
  *  - left: every question with its outcome, my answer, the correct answer
- *    and rubric feedback, always shown; only the explanation (cached, or
- *    generated on demand through SE-01) is collapsed;
+ *    and rubric feedback, always shown; only the explanation is collapsed —
+ *    opening it shows the cached text or asks the AI right away (SE-01).
+ *    Essay / code / diagram questions have no explanation;
  *  - right: a dropdown of my submitted attempts of this exam (SA-06, with
  *    their date), then the score, correct / incorrect counts and "Re-attempt".
  * `?examId=` alone opens the newest submitted attempt; `?attemptId=` picks one.
@@ -79,10 +126,21 @@ export function StudentExamResultPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
-  const [filter, setFilter] = useState<Filter>('all');
   const [open, setOpen] = useState<Set<number>>(() => new Set());
+  /** Explanations asked from the AI in this visit, by questionId. */
+  const [explanations, setExplanations] = useState<Record<number, ExplanationState>>({});
+  const explanationsRef = useRef(explanations);
+  explanationsRef.current = explanations;
+  const attemptIdRef = useRef(attemptId);
+  attemptIdRef.current = attemptId;
   /** Submitted attempts of the exam, newest first; null until loaded (or without examId). */
   const [attempts, setAttempts] = useState<AttemptHistoryItem[] | null>(null);
+  const [filter, setFilter] = useState<Filter>('all');
+  /** "Show all explanations" waiting for the student to accept the quota cost. */
+  const [confirmAll, setConfirmAll] = useState<{ ids: number[]; toGenerate: number; tokens: number } | null>(null);
+  const [quota, setQuota] = useState<AiQuota | null>(null);
+  const [quotaLoading, setQuotaLoading] = useState(false);
+  const [quotaError, setQuotaError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!examId) return;
@@ -120,8 +178,11 @@ export function StudentExamResultPage() {
   useEffect(() => {
     setResult(null);
     setLoading(true);
-    setFilter('all');
     setOpen(new Set());
+    setFilter('all');
+    setConfirmAll(null);
+    explanationsRef.current = {};
+    setExplanations({});
   }, [attemptId]);
 
   useEffect(() => {
@@ -152,7 +213,7 @@ export function StudentExamResultPage() {
 
   const outcomes = useMemo(() => (result?.questions ?? []).map(outcomeOf), [result]);
   const counts = useMemo(() => {
-    const c: Record<Outcome, number> = { correct: 0, incorrect: 0, unanswered: 0, pending: 0 };
+    const c: Record<Outcome, number> = { correct: 0, incorrect: 0, graded: 0, unanswered: 0, pending: 0 };
     outcomes.forEach(o => c[o]++);
     return c;
   }, [outcomes]);
@@ -196,6 +257,50 @@ export function StudentExamResultPage() {
     setSkipWait(false);
     setGradingError(null);
   }, [attemptId]);
+
+  /* ── Explanations: opening one asks the AI straight away (SE-01) ──────── */
+  const loadExplanations = useCallback(
+    async (questionIds: number[]) => {
+      if (!result) return;
+      const forAttempt = String(result.attemptId);
+      const need = questionIds.filter(id => {
+        const q = result.questions.find(x => x.questionId === id);
+        const e = explanationsRef.current[id];
+        return q != null && hasExplanation(q) && !q.explanation?.text && !e?.text && !e?.loading;
+      });
+      if (need.length === 0) return;
+      const patch = (entries: [number, ExplanationState][]) => {
+        // The student may have switched attempt meanwhile — drop the stale answer.
+        if (attemptIdRef.current !== forAttempt) return;
+        explanationsRef.current = { ...explanationsRef.current, ...Object.fromEntries(entries) };
+        setExplanations(explanationsRef.current);
+      };
+      patch(need.map(id => [id, { text: null, loading: true, error: null }]));
+      const chunks: number[][] = [];
+      for (let i = 0; i < need.length; i += EXPLAIN_BATCH) chunks.push(need.slice(i, i + EXPLAIN_BATCH));
+      await Promise.all(
+        chunks.map(async chunk => {
+          try {
+            const res = await studentAttemptService.explain(result.attemptId, chunk);
+            patch(
+              chunk.map(id => {
+                const item = res.items.find(x => x.questionId === id);
+                if (item?.explanation) return [id, { text: item.explanation, loading: false, error: null }];
+                const error = item?.reason
+                  ? `No explanation available (${item.reason.replace(/_/g, ' ').toLowerCase()}).`
+                  : 'No explanation available.';
+                return [id, { text: null, loading: false, error }];
+              }),
+            );
+          } catch (err) {
+            const error = getApiErrorMessage(err, 'Failed to get an explanation.');
+            patch(chunk.map(id => [id, { text: null, loading: false, error }]));
+          }
+        }),
+      );
+    },
+    [result],
+  );
 
   const breadcrumb = (
     <Breadcrumb
@@ -248,24 +353,66 @@ export function StudentExamResultPage() {
 
   const failedCount = result.questions.filter(q => q.gradingStatus === GRADING_FAILED).length;
 
-  const toggle = (questionId: number) =>
+  const toggle = (questionId: number) => {
+    const opening = !open.has(questionId);
     setOpen(prev => {
       const next = new Set(prev);
-      if (next.has(questionId)) next.delete(questionId);
-      else next.add(questionId);
+      if (opening) next.add(questionId);
+      else next.delete(questionId);
       return next;
     });
+    if (opening) loadExplanations([questionId]);
+  };
 
-  const visible = result.questions.map((q, i) => ({ q, i, outcome: outcomes[i] })).filter(x => filter === 'all' || x.outcome === filter);
-  const allOpen = visible.length > 0 && visible.every(x => open.has(x.q.questionId));
-
+  // Status filter only on quiz exams: essays have no right/wrong verdict to filter by.
+  const isQuiz = result.questions.length > 0 && result.questions.every(q => !RUBRIC_TYPES.has(q.questionType));
+  const activeFilter: Filter = isQuiz ? filter : 'all';
+  const visible = result.questions
+    .map((q, i) => ({ q, i, outcome: outcomes[i] }))
+    .filter(x => activeFilter === 'all' || x.outcome === activeFilter);
   const filters: { key: Filter; label: string; count: number }[] = [
     { key: 'all', label: 'All', count: result.questions.length },
     { key: 'correct', label: 'Correct', count: counts.correct },
     { key: 'incorrect', label: 'Incorrect', count: counts.incorrect },
     { key: 'unanswered', label: 'Unanswered', count: counts.unanswered },
-    { key: 'pending', label: 'Grading', count: counts.pending },
   ];
+
+  const explainable = visible.filter(x => hasExplanation(x.q)).map(x => x.q.questionId);
+  const allOpen = explainable.length > 0 && explainable.every(id => open.has(id));
+
+  const openAll = (ids: number[]) => {
+    setOpen(prev => new Set([...prev, ...ids]));
+    loadExplanations(ids);
+  };
+
+  const toggleAll = () => {
+    if (allOpen) {
+      setOpen(prev => new Set([...prev].filter(id => !explainable.includes(id))));
+      return;
+    }
+    // Questions that still need the AI — cached / manager explanations cost nothing.
+    const toGenerate = result.questions.filter(
+      q => explainable.includes(q.questionId) && !q.explanation?.text && !explanations[q.questionId]?.text,
+    );
+    if (toGenerate.length === 0) {
+      openAll(explainable);
+      return;
+    }
+    setConfirmAll({
+      ids: explainable,
+      toGenerate: toGenerate.length,
+      tokens: toGenerate.reduce((sum, q) => sum + estimateExplainTokens(q), 0),
+    });
+    setQuotaLoading(true);
+    setQuotaError(null);
+    studentAttemptService
+      .getAiQuota()
+      .then(setQuota)
+      .catch(err => setQuotaError(getApiErrorMessage(err, 'Could not load your AI quota.')))
+      .finally(() => setQuotaLoading(false));
+  };
+
+  const available = quota ? quota.free.remaining + (quota.plan?.remaining ?? 0) : null;
 
   return (
     <div className={`${STUDENT_PAGE_CLASS} space-y-[clamp(1.25rem,2.5vw,1.75rem)]`}>
@@ -299,32 +446,33 @@ export function StudentExamResultPage() {
         </aside>
 
         <section className="lg:order-1 space-y-3 min-w-0" aria-label="Questions">
-          <div className="flex flex-wrap items-center gap-2">
-            {filters
-              .filter(f => f.key === 'all' || f.count > 0)
-              .map(f => (
-                <button
-                  key={f.key}
-                  type="button"
-                  aria-pressed={filter === f.key}
-                  onClick={() => setFilter(f.key)}
-                  className={`px-3 py-1 rounded-full text-sm border transition-colors ${
-                    filter === f.key
-                      ? 'bg-primary-light border-brand-600 text-brand-ink font-medium'
-                      : 'border-line text-content-soft hover:bg-accent'
-                  }`}
-                >
-                  {f.label} <span className="text-content-subtle">({f.count})</span>
+          {(isQuiz || explainable.length > 0) && (
+            <div className="flex flex-wrap items-center gap-2">
+              {isQuiz &&
+                filters
+                  .filter(f => f.key === 'all' || f.count > 0)
+                  .map(f => (
+                    <button
+                      key={f.key}
+                      type="button"
+                      aria-pressed={activeFilter === f.key}
+                      onClick={() => setFilter(f.key)}
+                      className={`px-3 py-1 rounded-full text-sm border transition-colors ${
+                        activeFilter === f.key
+                          ? 'bg-primary-light border-brand-600 text-brand-ink font-medium'
+                          : 'border-line text-content-soft hover:bg-accent'
+                      }`}
+                    >
+                      {f.label} <span className="text-content-subtle">({f.count})</span>
+                    </button>
+                  ))}
+              {explainable.length > 0 && (
+                <button type="button" className="ml-auto text-sm text-brand-ink hover:underline" onClick={toggleAll}>
+                  {allOpen ? 'Hide all explanations' : 'Show all explanations'}
                 </button>
-              ))}
-            <button
-              type="button"
-              className="ml-auto text-sm text-brand-ink hover:underline"
-              onClick={() => setOpen(allOpen ? new Set() : new Set(visible.map(x => x.q.questionId)))}
-            >
-              {allOpen ? 'Hide all explanations' : 'Show all explanations'}
-            </button>
-          </div>
+              )}
+            </div>
+          )}
 
           {visible.length === 0 ? (
             <div className="card px-5 py-10 text-center text-sm text-content-soft">No question in this filter.</div>
@@ -332,17 +480,76 @@ export function StudentExamResultPage() {
             visible.map(({ q, i, outcome }) => (
               <ResultQuestionCard
                 key={q.questionId}
-                attemptId={result.attemptId}
                 question={q}
                 index={i}
                 outcome={outcome}
+                explanation={explanations[q.questionId]}
                 explanationOpen={open.has(q.questionId)}
                 onToggleExplanation={() => toggle(q.questionId)}
+                onRetryExplanation={() => loadExplanations([q.questionId])}
               />
             ))
           )}
         </section>
       </div>
+
+      <Modal
+        open={confirmAll != null}
+        onClose={() => setConfirmAll(null)}
+        title="Use AI quota for explanations?"
+        size="sm"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setConfirmAll(null)}>
+              Cancel
+            </Button>
+            <Button
+              icon={<Icon.Brain className="w-4 h-4" />}
+              disabled={quotaLoading}
+              onClick={() => {
+                if (confirmAll) openAll(confirmAll.ids);
+                setConfirmAll(null);
+              }}
+            >
+              Show all explanations
+            </Button>
+          </>
+        }
+      >
+        {confirmAll && (
+          <div className="space-y-3">
+            <p className="text-sm text-content-secondary leading-relaxed">
+              The AI will write explanations for <strong>{confirmAll.toGenerate}</strong> question
+              {confirmAll.toGenerate === 1 ? '' : 's'}
+              {confirmAll.ids.length > confirmAll.toGenerate &&
+                ` (the other ${confirmAll.ids.length - confirmAll.toGenerate} already have one and are free)`}
+              .
+            </p>
+            <dl className="grid grid-cols-2 gap-2">
+              <div className="rounded-[10px] border border-line px-3 py-2.5">
+                <dt className="text-xs text-content-subtle">Estimated cost</dt>
+                <dd className="text-lg font-semibold text-content">~{formatTokens(confirmAll.tokens)} tokens</dd>
+              </div>
+              <div className="rounded-[10px] border border-line px-3 py-2.5">
+                <dt className="text-xs text-content-subtle">Quota left</dt>
+                <dd className="text-lg font-semibold text-content">
+                  {quotaLoading ? <Spinner size="sm" /> : available != null ? `${formatTokens(available)} tokens` : '—'}
+                </dd>
+              </div>
+            </dl>
+            {quotaError && <p className="text-sm text-danger">{quotaError}</p>}
+            {available != null && available < confirmAll.tokens && (
+              <p className="flex items-start gap-2 text-sm text-warning">
+                <Icon.AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                Your quota may not be enough — some questions may be left without an explanation.
+              </p>
+            )}
+            <p className="text-xs text-content-subtle">
+              The cost is an estimate; your quota is charged for what the AI actually uses.
+            </p>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }
@@ -439,22 +646,30 @@ function ScoreCard({
   const score = result.totalScore != null ? Number(result.totalScore) : null;
   const pct = max && score != null ? Math.round((score / max) * 100) : null;
   const tone = pct == null ? 'text-content' : pct >= 80 ? 'text-success' : pct >= 50 ? 'text-warning' : 'text-danger';
+  // Correct / Incorrect only mean something for auto-graded questions; essays are "Graded".
+  const hasAutoGraded = result.questions.some(q => !RUBRIC_TYPES.has(q.questionType));
+  const tiles: Outcome[] = [
+    ...(hasAutoGraded ? (['correct', 'incorrect'] as Outcome[]) : []),
+    ...(counts.graded > 0 || !hasAutoGraded ? (['graded'] as Outcome[]) : []),
+    'unanswered',
+    'pending',
+  ];
 
   return (
-    <div className="card p-5 space-y-5">
+    <div className="card p-5 space-y-5 min-w-0">
       <div>
         <h1 className="text-base font-semibold text-content break-words">{result.examTitle}</h1>
         <p className="text-xs text-content-subtle mt-0.5">Submitted {formatDateTime(result.submittedAt)}</p>
       </div>
 
-      {picker}
+      {picker && <div className="min-w-0">{picker}</div>}
 
-      <p className="text-xs font-semibold text-content-subtle uppercase tracking-wide -mb-3">Your score</p>
-
-      <div className="text-center">
-        <p className={`text-[clamp(2.5rem,1.5rem+3vw,3.25rem)] font-black leading-none ${tone}`}>
-          {num(score)}
-          <span className="text-xl font-semibold text-content-subtle"> / {num(max)}</span>
+      <div className="text-center min-w-0">
+        <p className="text-xs font-semibold text-content-subtle uppercase tracking-wide mb-2 text-left">Your score</p>
+        {/* Wraps instead of overflowing the 320px column on long scores (e.g. 123.45 / 150). */}
+        <p className={`flex flex-wrap items-baseline justify-center gap-x-1.5 gap-y-1 leading-none ${tone}`}>
+          <span className="text-[clamp(2rem,1.5rem+1.5vw,2.75rem)] font-black break-all">{num(score)}</span>
+          <span className="text-lg font-semibold text-content-subtle whitespace-nowrap">/ {num(max)}</span>
         </p>
         {pct != null && <p className="text-sm text-content-soft mt-2">{pct}%</p>}
         {pct != null && (
@@ -465,19 +680,12 @@ function ScoreCard({
       </div>
 
       <dl className="grid grid-cols-2 gap-2">
-        {(
-          [
-            ['correct', counts.correct],
-            ['incorrect', counts.incorrect],
-            ['unanswered', counts.unanswered],
-            ['pending', counts.pending],
-          ] as [Outcome, number][]
-        ).map(([k, v]) => (
-          <div key={k} className="flex items-center gap-2 rounded-[10px] border border-line px-3 py-2.5">
-            {OUTCOME[k].icon}
-            <div className="flex flex-col-reverse">
-              <dt className="text-xs text-content-subtle">{OUTCOME[k].label}</dt>
-              <dd className="text-lg font-semibold text-content leading-tight">{v}</dd>
+        {tiles.map(k => (
+          <div key={k} className="flex items-center gap-2 min-w-0 rounded-[10px] border border-line px-3 py-2.5">
+            <span className="flex-shrink-0">{OUTCOME[k].icon}</span>
+            <div className="flex flex-col-reverse min-w-0">
+              <dt className="text-xs text-content-subtle truncate">{OUTCOME[k].label}</dt>
+              <dd className="text-lg font-semibold text-content leading-tight">{counts[k]}</dd>
             </div>
           </div>
         ))}
@@ -519,19 +727,21 @@ function ScoreCard({
 }
 
 function ResultQuestionCard({
-  attemptId,
   question: q,
   index,
   outcome,
+  explanation,
   explanationOpen,
   onToggleExplanation,
+  onRetryExplanation,
 }: {
-  attemptId: number;
   question: ResultQuestion;
   index: number;
   outcome: Outcome;
+  explanation: ExplanationState | undefined;
   explanationOpen: boolean;
   onToggleExplanation: () => void;
+  onRetryExplanation: () => void;
 }) {
   return (
     <article className="card overflow-hidden">
@@ -564,7 +774,15 @@ function ResultQuestionCard({
             <p className="text-sm text-content-secondary whitespace-pre-line">{q.overallFeedback}</p>
           </div>
         )}
-        <ExplanationBox attemptId={attemptId} question={q} open={explanationOpen} onToggle={onToggleExplanation} />
+        {hasExplanation(q) && (
+          <ExplanationBox
+            question={q}
+            state={explanation}
+            open={explanationOpen}
+            onToggle={onToggleExplanation}
+            onRetry={onRetryExplanation}
+          />
+        )}
       </div>
     </article>
   );
@@ -828,41 +1046,22 @@ function CriteriaReview({ question: q }: { question: ResultQuestion }) {
 
 /**
  * Explanation, collapsed by default. Shows the SA-05 text when cached;
- * otherwise the student can ask the AI for one (SE-01).
+ * otherwise opening it has already asked the AI (SE-01, done by the page).
  */
 function ExplanationBox({
-  attemptId,
   question: q,
+  state,
   open,
   onToggle,
+  onRetry,
 }: {
-  attemptId: number;
   question: ResultQuestion;
+  state: ExplanationState | undefined;
   open: boolean;
   onToggle: () => void;
+  onRetry: () => void;
 }) {
-  const [text, setText] = useState<string | null>(q.explanation?.text ?? null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  // Essay answers get rubric feedback instead.
-  if (RUBRIC_TYPES.has(q.questionType) && !text) return null;
-
-  const generate = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await studentAttemptService.explain(attemptId, [q.questionId]);
-      const item = res.items.find(x => x.questionId === q.questionId);
-      if (item?.explanation) setText(item.explanation);
-      else setError(item?.reason ? `No explanation available (${item.reason.replace(/_/g, ' ').toLowerCase()}).` : 'No explanation available.');
-    } catch (err) {
-      setError(getApiErrorMessage(err, 'Failed to get an explanation.'));
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  const text = q.explanation?.text ?? state?.text ?? null;
   const panelId = `explanation-${q.questionId}`;
   return (
     <div className="rounded-[10px] bg-primary-light/60 border border-line">
@@ -881,14 +1080,18 @@ function ExplanationBox({
         <div id={panelId} className="px-3 pb-3">
           {text ? (
             <p className="text-sm text-content-secondary whitespace-pre-line">{text}</p>
-          ) : (
+          ) : state?.error ? (
             <div className="flex flex-wrap items-center gap-3">
-              <p className="text-sm text-content-soft">No explanation yet.</p>
-              <Button size="sm" variant="outline" loading={loading} icon={<Icon.Brain className="w-4 h-4" />} onClick={generate}>
-                Explain with AI
+              <p className="text-sm text-danger">{state.error}</p>
+              <Button size="sm" variant="outline" icon={<Icon.RefreshCw className="w-4 h-4" />} onClick={onRetry}>
+                Try again
               </Button>
-              {error && <p className="w-full text-sm text-danger">{error}</p>}
             </div>
+          ) : (
+            <p className="flex items-center gap-2 text-sm text-content-soft" aria-live="polite">
+              <Spinner size="sm" />
+              AI is writing an explanation…
+            </p>
           )}
         </div>
       )}

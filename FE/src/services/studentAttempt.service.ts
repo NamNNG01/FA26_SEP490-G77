@@ -211,6 +211,15 @@ export interface ExplanationBatch {
   items: { questionId: number; explanation: string | null; source: string | null; reason: string | null }[];
 }
 
+/** SQ-01 — AI token quota (free daily allowance + an active plan's balance). */
+export interface AiQuota {
+  timezone: string;
+  free: { dailyLimit: number; usedToday: number; remaining: number; resetAt: string };
+  plan: { planName: string; tokenLimit: number; tokenUsed: number; remaining: number; startDate: string; endDate: string } | null;
+  expiredPlan: { planName: string; endDate: string } | null;
+  reservedPending: number;
+}
+
 /** SA-03 / SA-04 accept at most this many answers per call. */
 export const DRAFT_BATCH_LIMIT = 50;
 
@@ -277,6 +286,15 @@ export const studentAttemptService = {
     return res.data;
   },
 
+  /**
+   * Deletes an IN_PROGRESS attempt and its drafts — "Delete attempt" on the
+   * take screen's exit dialog.
+   * ponytail: proposed endpoint, not in the BE yet (docs/notes/student-delete-attempt-be-gap.md).
+   */
+  async deleteAttempt(attemptId: number | string): Promise<void> {
+    await api.request<ApiResponse<null>>({ method: 'delete', url: `/student/attempts/${attemptId}` });
+  },
+
   /** SA-05 */
   async getResult(attemptId: number | string): Promise<AttemptResult> {
     const res = await api.get<ApiResponse<AttemptResult>>(`/student/attempts/${attemptId}/result`);
@@ -316,6 +334,12 @@ export const studentAttemptService = {
     const res = await api.post<ApiResponse<ExplanationBatch>>(`/student/attempts/${attemptId}/explanations:batch`, {
       questionIds,
     });
+    return res.data;
+  },
+
+  /** SQ-01 */
+  async getAiQuota(): Promise<AiQuota> {
+    const res = await api.get<ApiResponse<AiQuota>>('/student/me/ai-quota');
     return res.data;
   },
 };

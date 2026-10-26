@@ -203,11 +203,14 @@ function CourseTree({ course }: { course: StudentCourseDetail }) {
     exams.forEach(exam => file(exam.moduleId, { kind: 'exam', exam }));
     decks.forEach(deck => file(deck.moduleId, { kind: 'deck', deck }));
     return {
-      modules: sortedModules(course).map<ModuleNode>(m => ({
-        moduleId: m.moduleId,
-        title: m.title,
-        leaves: byModule.get(m.moduleId) ?? [],
-      })),
+      // Empty modules are hidden — a student has nothing to open in them.
+      modules: sortedModules(course)
+        .map<ModuleNode>(m => ({
+          moduleId: m.moduleId,
+          title: m.title,
+          leaves: byModule.get(m.moduleId) ?? [],
+        }))
+        .filter(m => m.leaves.length > 0),
       loose: rootLeaves,
     };
   }, [course, exams, decks]);
@@ -221,7 +224,7 @@ function CourseTree({ course }: { course: StudentCourseDetail }) {
         <EmptyState
           icon={<Icon.Folder className="w-7 h-7" />}
           title="No content yet"
-          message="This course has no module, exam or flashcard deck yet."
+          message="This course has no exam or flashcard deck yet."
         />
       </div>
     );
@@ -274,19 +277,11 @@ function CourseTree({ course }: { course: StudentCourseDetail }) {
               />
               {open && (
                 <ul role="group">
-                  {m.leaves.length === 0 ? (
-                    <TreeItem last>
-                      <span className="flex items-center px-2 text-sm italic text-content-subtle" style={{ height: ROW }}>
-                        Empty
-                      </span>
+                  {m.leaves.map((leaf, j) => (
+                    <TreeItem key={leafKey(leaf)} last={j === m.leaves.length - 1}>
+                      <LeafRow leaf={leaf} onOpen={() => openLeaf(leaf)} />
                     </TreeItem>
-                  ) : (
-                    m.leaves.map((leaf, j) => (
-                      <TreeItem key={leafKey(leaf)} last={j === m.leaves.length - 1}>
-                        <LeafRow leaf={leaf} onOpen={() => openLeaf(leaf)} />
-                      </TreeItem>
-                    ))
-                  )}
+                  ))}
                 </ul>
               )}
             </TreeItem>
