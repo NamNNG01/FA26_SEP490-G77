@@ -10,6 +10,7 @@ import { useRequireAuth } from '@/hooks/useRequireAuth';
 import { PUBLIC_COURSES, findCourseBySlug } from '../data/publicCourses';
 import { CourseCatalogCard } from '../components/CourseCatalogCard';
 import { ProviderLogo } from '../components/ProviderLogo';
+import { StudentCourseDetail } from './StudentCourseDetail';
 
 /**
  * PublicCourseDetailPage  (/courses/:slug)
@@ -26,6 +27,8 @@ export function PublicCourseDetailPage() {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
   const requireAuth = useRequireAuth();
+
+  if (slug && /^\d+$/.test(slug)) return <StudentCourseDetail courseId={Number(slug)} />;
 
   const course = findCourseBySlug(slug);
 
