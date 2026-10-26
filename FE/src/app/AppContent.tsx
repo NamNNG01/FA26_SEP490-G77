@@ -47,7 +47,7 @@ import {
 
 import { ProfilePage } from "@/features/profile";
 
-import { StudentDashboard, StudentCoursesPage } from "@/features/student";
+import { StudentDashboard } from "@/features/student";
 
 import {
   TakeExamPage,
@@ -78,6 +78,11 @@ import {
 } from "@/features/flashcard";
 
 import { PublicCoursesPage, PublicCourseDetailPage } from "@/features/catalog";
+import { MyCoursesPage } from "@/features/student/pages/MyCoursesPage";
+import { EnrolledCoursePage } from "@/features/student/pages/EnrolledCoursePage";
+import { FlashcardStudyPage } from "@/features/student/pages/FlashcardStudyPage";
+import { StudentExamDetailPage } from "@/features/student/pages/StudentExamDetailPage";
+import { MyExamHistoryPage } from "@/features/student/pages/MyExamHistoryPage";
 
 import {
   AdminDashboard,
@@ -315,6 +320,16 @@ function AppRoutes() {
     <Routes>
       {publicRoutes(<SignedInHome isEntry={location.key === entryKey} />)}
 
+      <Route element={<PublicLayout />}>
+        <Route element={<RequireRole roles={ROLE_STUDENT} />}>
+          <Route path={ROUTES.studentCourses} element={<MyCoursesPage />} />
+          <Route path={ROUTES.studentCourseDetail} element={<EnrolledCoursePage />} />
+          <Route path={ROUTES.studentDeckCards} element={<FlashcardStudyPage />} />
+          <Route path={ROUTES.studentExamDetail} element={<StudentExamDetailPage />} />
+          <Route path={ROUTES.studentMyExams} element={<MyExamHistoryPage />} />
+        </Route>
+      </Route>
+
       <Route element={<DashboardLayout />}>
         {/* Already signed in — respect ?redirect= before falling back. */}
         <Route path={ROUTES.login} element={<LoggedInLoginRedirect />} />
@@ -331,10 +346,6 @@ function AppRoutes() {
           <Route
             path={ROUTES.studentDashboard}
             element={<StudentDashboard />}
-          />
-          <Route
-            path={ROUTES.studentCourses}
-            element={<StudentCoursesPage />}
           />
           <Route path={ROUTES.studentExams} element={<ExamListPage />} />
           <Route

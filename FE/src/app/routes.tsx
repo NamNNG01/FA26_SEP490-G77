@@ -40,6 +40,9 @@ export const ROUTES = {
 
   studentCourses: "/student/courses",
   studentCourseDetail: "/student/courses/:courseId",
+  studentDeckCards: "/student/decks/:deckId",
+  studentExamDetail: "/student/exams/:examId",
+  studentMyExams: "/student/my-exams",
 
   studentExams: "/student/exams",
 
