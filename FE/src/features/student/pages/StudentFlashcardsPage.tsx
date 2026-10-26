@@ -7,7 +7,7 @@ import { Icon } from '@/assets/icons';
 import { ROUTES, studentCoursePath, studentDeckPath } from '@/app/routes';
 import { getApiErrorMessage } from '@/utils/apiError';
 import { studentCourseService, type MyCourse, type StudentDeck } from '@/services/studentCourse.service';
-import { CardGridSkeleton, LoadError, PageTitle } from '../components/studentUi';
+import { CardGridSkeleton, LoadError, PageTitle, STUDENT_PAGE_CLASS } from '../components/studentUi';
 import { DeckCard, type DeckStudyState } from '../components/DeckCard';
 
 interface CourseDecks {
@@ -86,7 +86,7 @@ export function StudentFlashcardsPage() {
     });
 
   return (
-    <div className="space-y-[clamp(1.25rem,2.5vw,1.75rem)]">
+    <div className={`${STUDENT_PAGE_CLASS} space-y-[clamp(1.25rem,2.5vw,1.75rem)]`}>
       <PageTitle title="Flashcards" subtitle="Study the flashcard decks of your active courses." />
 
       {!loading && !error && groups.length > 0 && (

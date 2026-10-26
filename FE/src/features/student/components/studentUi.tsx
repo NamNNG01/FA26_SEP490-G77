@@ -3,6 +3,8 @@ import { Icon } from '@/assets/icons';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Button } from '@/components/ui/Button';
 
+export const STUDENT_PAGE_CLASS = 'mx-auto w-full max-w-[1400px] px-[clamp(1rem,2.5vw,2rem)] py-[clamp(1.25rem,2.5vw,1.75rem)]';
+
 /** Course thumbnail, or the brand placeholder when the course has none. */
 export function CourseThumb({ url, title, className = '' }: { url: string | null; title: string; className?: string }) {
   return url ? (
