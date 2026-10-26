@@ -51,7 +51,7 @@ public class StudentCourseServiceImpl implements StudentCourseService {
             throw new ResourceNotFoundException("Course not found");
         }
 
-        List<Module> modules = moduleRepository.findByCourseCourseIdOrderByOrderIndexAscModuleIdAsc(courseId);
+        List<Module> modules = moduleRepository.findVisibleModulesByCourseId(courseId);
         List<ModuleItemDto> moduleDtos = modules.stream()
                 .map(m -> new ModuleItemDto(m.getModuleId(), m.getTitle(), m.getOrderIndex()))
                 .toList();
