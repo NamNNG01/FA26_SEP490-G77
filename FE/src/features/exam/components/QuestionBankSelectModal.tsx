@@ -8,7 +8,11 @@ import { Input } from "@/components/ui/Input";
 import { Alert } from "@/components/ui/Alert";
 import { SearchInput } from "@/components/common/SearchInput";
 import { Icon } from "@/assets/icons";
-import { examService, type BankQuestionItem } from "@/services/exam.service";
+import {
+  examService,
+  type BankQuestionItem,
+  type Difficulty,
+} from "@/services/exam.service";
 import {
   courseService,
   type CourseSummaryItem,
@@ -47,7 +51,7 @@ export function QuestionBankSelectModal({
   const [moduleId, setModuleId] = useState<string>(
     initialModuleId ? String(initialModuleId) : "",
   );
-  const [difficulty, setDifficulty] = useState<string>("all");
+  const [difficulty, setDifficulty] = useState<Difficulty | "all">("all");
   const [questionType, setQuestionType] = useState<string>("all");
   const [defaultWeight, setDefaultWeight] = useState<number>(1);
   const [selectedMap, setSelectedMap] = useState<Map<number, BankQuestionItem>>(
@@ -277,7 +281,7 @@ export function QuestionBankSelectModal({
             className="min-w-0 lg:col-span-2"
             value={difficulty}
             onChange={(v) => {
-              setDifficulty(v);
+              setDifficulty(v as Difficulty | "all");
               setPage(0);
             }}
             options={[
