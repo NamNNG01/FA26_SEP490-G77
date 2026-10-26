@@ -26,8 +26,9 @@ import { Container } from './Container';
 export function PublicNavbar() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user, logout } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   const isStudent = user?.role === Role.STUDENT;
   const dashboardPath = isStudent ? ROUTES.studentCourses : landingPathForRole(user?.role);
@@ -47,6 +48,12 @@ export function PublicNavbar() {
   function goTo(path: string) {
     setMenuOpen(false);
     navigate(path);
+  }
+
+  async function handleLogout() {
+    setLoggingOut(true);
+    await logout();
+    setMenuOpen(false);
   }
 
   function isActive(path: string) {
@@ -95,14 +102,36 @@ export function PublicNavbar() {
           {/* Desktop auth actions */}
           <div className="hidden flex-shrink-0 items-center gap-2 lg:flex">
             {isAuthenticated ? (
-              <button
-                type="button"
-                onClick={() => goTo(dashboardPath)}
-                className="inline-flex h-9 items-center gap-1.5 rounded-[10px] bg-brand-600 px-4 text-base font-semibold text-white shadow-sm transition-colors hover:bg-brand-700 cursor-pointer"
-              >
-                {isStudent ? 'My learning' : 'Dashboard'}
-                <Icon.ChevronRight className="h-4 w-4" />
-              </button>
+              isStudent ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => goTo(dashboardPath)}
+                    className="inline-flex h-9 items-center gap-1.5 rounded-[10px] bg-brand-600 px-4 text-base font-semibold text-white shadow-sm transition-colors hover:bg-brand-700 cursor-pointer"
+                  >
+                    My learning
+                    <Icon.ChevronRight className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    disabled={loggingOut}
+                    className="inline-flex h-9 items-center gap-2 rounded-[10px] px-3 text-sm font-semibold text-content-muted transition-colors hover:bg-accent hover:text-content disabled:opacity-60 cursor-pointer"
+                  >
+                    <Icon.LogOut className="h-4 w-4" />
+                    {loggingOut ? 'Signing out…' : 'Log out'}
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => goTo(dashboardPath)}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-[10px] bg-brand-600 px-4 text-base font-semibold text-white shadow-sm transition-colors hover:bg-brand-700 cursor-pointer"
+                >
+                  Dashboard
+                  <Icon.ChevronRight className="h-4 w-4" />
+                </button>
+              )
             ) : (
               <>
                 <button
@@ -161,13 +190,34 @@ export function PublicNavbar() {
               </nav>
 
               {isAuthenticated ? (
-                <button
-                  type="button"
-                  onClick={() => goTo(dashboardPath)}
-                  className="mt-3 inline-flex h-10 w-full items-center justify-center rounded-[10px] bg-brand-600 text-base font-semibold text-white shadow-sm transition-colors hover:bg-brand-700 cursor-pointer"
-                >
-                  {isStudent ? 'My learning' : 'Dashboard'}
-                </button>
+                isStudent ? (
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => goTo(dashboardPath)}
+                      className="inline-flex h-10 items-center justify-center rounded-[10px] bg-brand-600 text-base font-semibold text-white shadow-sm transition-colors hover:bg-brand-700 cursor-pointer"
+                    >
+                      My learning
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleLogout}
+                      disabled={loggingOut}
+                      className="inline-flex h-10 items-center justify-center gap-2 rounded-[10px] border border-line text-sm font-semibold text-content-secondary transition-colors hover:bg-surface-hover disabled:opacity-60 cursor-pointer"
+                    >
+                      <Icon.LogOut className="h-4 w-4" />
+                      {loggingOut ? 'Signing out…' : 'Log out'}
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => goTo(dashboardPath)}
+                    className="mt-3 inline-flex h-10 w-full items-center justify-center rounded-[10px] bg-brand-600 text-base font-semibold text-white shadow-sm transition-colors hover:bg-brand-700 cursor-pointer"
+                  >
+                    Dashboard
+                  </button>
+                )
               ) : (
                 <div className="mt-3 grid grid-cols-2 gap-2">
                   <button

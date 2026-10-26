@@ -106,6 +106,7 @@ export function StudentCourseCatalog() {
 }
 
 function CatalogCourseCard({ course, onOpen }: { course: StudentCourseItem; onOpen: () => void }) {
+  const price = course.price === null ? 'Price unavailable' : course.price === 0 ? 'Free' : new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(course.price);
   return (
     <article className="group flex min-h-64 flex-col overflow-hidden rounded-2xl border border-line-soft bg-surface shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
       <div className="relative h-36 overflow-hidden bg-gradient-to-br from-brand-100 via-primary-light to-surface-alt">
@@ -117,7 +118,7 @@ function CatalogCourseCard({ course, onOpen }: { course: StudentCourseItem; onOp
         <h3 className="mt-2 text-lg font-semibold leading-snug text-content">{course.title}</h3>
         <p className="mt-1 text-sm text-content-soft">{course.manager?.fullName ? `Created by ${course.manager.fullName}` : 'Build a little more knowledge every day.'}</p>
         <div className="mt-auto flex items-center justify-between gap-3 pt-5">
-          <span className={`text-sm font-semibold ${course.price === 0 ? 'text-success' : 'text-content'}`}>{course.price === 0 ? 'Free' : new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(course.price)}</span>
+          <span className={`text-sm font-semibold ${course.price === 0 ? 'text-success' : 'text-content'}`}>{price}</span>
           <button type="button" onClick={onOpen} className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-brand-600 px-4 text-sm font-semibold text-white transition hover:bg-brand-700">Explore course<Icon.ChevronRight className="h-4 w-4" /></button>
         </div>
       </div>

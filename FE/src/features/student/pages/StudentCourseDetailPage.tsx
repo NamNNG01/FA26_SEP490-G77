@@ -8,10 +8,10 @@ import { EmptyState } from '@/components/ui/Card';
 import { Icon } from '@/assets/icons';
 import { ROUTES, studentDeckPath, studentExamPath } from '@/app/routes';
 import { getApiErrorMessage } from '@/utils/apiError';
+import type { ExamKind } from '@/services/exam.service';
 import {
   studentCourseService,
   type CourseExam,
-  type ExamKind,
   type StudentCourseDetail,
   type StudentDeck,
 } from '@/services/studentCourse.service';

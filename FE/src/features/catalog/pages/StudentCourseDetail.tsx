@@ -31,6 +31,7 @@ export function StudentCourseDetail({ courseId }: { courseId: number }) {
 
   const progress = course.enrollment?.progress;
   const enrolled = course.enrollment?.isEnrolled ?? course.isEnrolled ?? false;
+  const price = course.price === null ? 'Price unavailable' : course.price === 0 ? 'Free' : new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(course.price);
 
   return (
     <>
@@ -46,7 +47,7 @@ export function StudentCourseDetail({ courseId }: { courseId: number }) {
             </div>
             <div className="rounded-2xl border border-line-soft bg-surface p-5 shadow-sm">
               <p className="text-sm text-content-subtle">Course access</p>
-              <p className="mt-1 text-2xl font-bold text-content">{course.price === 0 ? 'Free' : new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(course.price)}</p>
+              <p className="mt-1 text-2xl font-bold text-content">{price}</p>
               {enrolled ? <div className="mt-4 rounded-xl bg-success-light px-4 py-3"><p className="text-sm font-semibold text-success">You’re enrolled</p>{typeof progress === 'number' && <p className="mt-1 text-xs text-content-soft">{Math.round(progress)}% course progress</p>}</div> : <p className="mt-3 text-sm leading-relaxed text-content-soft">Browse the course outline and see what you can learn.</p>}
               <div className="mt-4 grid grid-cols-2 gap-2">
                 <div className="rounded-xl bg-surface-alt p-3"><p className="text-xl font-bold text-content">{course.stats?.publishedExamCount ?? course.publishedExamCount ?? 0}</p><p className="mt-1 text-xs text-content-subtle">Practice exams</p></div>
