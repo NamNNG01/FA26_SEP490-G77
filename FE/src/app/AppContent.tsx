@@ -33,6 +33,9 @@ import { FlashcardManagementPage, FlashcardDeckDetailPage } from '@/features/fla
 import { PublicCoursesPage, PublicCourseDetailPage } from '@/features/catalog';
 import { MyCoursesPage } from '@/features/student/pages/MyCoursesPage';
 import { EnrolledCoursePage } from '@/features/student/pages/EnrolledCoursePage';
+import { FlashcardStudyPage } from '@/features/student/pages/FlashcardStudyPage';
+import { StudentExamDetailPage } from '@/features/student/pages/StudentExamDetailPage';
+import { MyExamHistoryPage } from '@/features/student/pages/MyExamHistoryPage';
 import {
   AdminDashboard,
   UsersPage,
@@ -224,6 +227,9 @@ function AppRoutes() {
         <Route element={<RequireRole roles={ROLE_STUDENT} />}>
           <Route path={ROUTES.studentCourses} element={<MyCoursesPage />} />
           <Route path={ROUTES.studentCourseDetail} element={<EnrolledCoursePage />} />
+          <Route path={ROUTES.studentDeckCards} element={<FlashcardStudyPage />} />
+          <Route path={ROUTES.studentExamDetail} element={<StudentExamDetailPage />} />
+          <Route path={ROUTES.studentMyExams} element={<MyExamHistoryPage />} />
         </Route>
       </Route>
 

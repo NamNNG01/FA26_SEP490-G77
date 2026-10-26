@@ -35,6 +35,12 @@ export function PublicNavbar() {
   const navLinks = [
     { label: 'Home', to: ROUTES.landing },
     { label: 'Courses', to: ROUTES.courses },
+    ...(isStudent
+      ? [
+          { label: 'My learning', to: ROUTES.studentCourses },
+          { label: 'Exam history', to: ROUTES.studentMyExams },
+        ]
+      : []),
     { label: 'Pricing', to: ROUTES.pricing },
   ];
 
