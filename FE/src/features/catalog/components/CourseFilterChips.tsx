@@ -1,31 +1,36 @@
 import React from 'react';
-import { COURSE_PROVIDERS } from '../data/providers';
-import type { CourseProviderId } from '../types';
+import type { CategoryResponse } from '@/services/course.service';
+
+/** Selected category id, or 'all'. */
+export type CategoryFilter = number | 'all';
 
 /**
  * CourseFilterChips
  *
- * Single-select provider filter for the course grid. Courses only — no
- * difficulty / rating / date facets yet, deliberately.
+ * Single-select category filter for the course grid (categories from
+ * PUB-01). Renders nothing until there are categories to pick from.
  */
 export function CourseFilterChips({
+  categories,
   value,
   onChange,
   className = '',
 }: {
-  value: CourseProviderId | 'all';
-  onChange: (next: CourseProviderId | 'all') => void;
+  categories: CategoryResponse[];
+  value: CategoryFilter;
+  onChange: (next: CategoryFilter) => void;
   className?: string;
 }) {
+  if (categories.length === 0) return null;
   return (
-    <div role="group" aria-label="Filter courses by provider" className={`flex flex-wrap gap-2 ${className}`}>
+    <div role="group" aria-label="Filter courses by category" className={`flex flex-wrap gap-2 ${className}`}>
       <FilterChip label="All" active={value === 'all'} onClick={() => onChange('all')} />
-      {COURSE_PROVIDERS.map((provider) => (
+      {categories.map((category) => (
         <FilterChip
-          key={provider.id}
-          label={provider.shortLabel}
-          active={value === provider.id}
-          onClick={() => onChange(provider.id)}
+          key={category.categoryId}
+          label={category.name}
+          active={value === category.categoryId}
+          onClick={() => onChange(category.categoryId)}
         />
       ))}
     </div>

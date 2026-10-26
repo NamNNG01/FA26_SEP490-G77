@@ -122,11 +122,11 @@ export function CourseDetailPage({
   const [saving, setSaving] = useState(false);
   const hasCourseChanges = Boolean(
     course &&
-      (title.trim() !== course.title.trim() ||
-        description.trim() !== (course.description ?? "").trim() ||
-        categoryId !== String(course.categoryId) ||
-        Number(price) !== Number(course.price) ||
-        isPublished !== course.isPublished),
+    (title.trim() !== course.title.trim() ||
+      description.trim() !== (course.description ?? "").trim() ||
+      categoryId !== String(course.categoryId) ||
+      Number(price) !== Number(course.price) ||
+      isPublished !== course.isPublished),
   );
   const [managerOptions, setManagerOptions] = useState<ManagerOption[]>([]);
   const [selectedManagerIds, setSelectedManagerIds] = useState<string[]>([]);
@@ -137,7 +137,8 @@ export function CourseDetailPage({
         : [course.managerId]
       ).map(String)
     : [];
-  const hasManagerChanges = canManageCourse &&
+  const hasManagerChanges =
+    canManageCourse &&
     savedManagerIds.join(",") !== selectedManagerIds.join(",");
   const hasAnyChanges = hasCourseChanges || hasManagerChanges;
 
@@ -166,7 +167,9 @@ export function CourseDetailPage({
   const [loadingStudents, setLoadingStudents] = useState(false);
   const [studentsError, setStudentsError] = useState<string | null>(null);
 
-  const setToast = (value: { type: "success" | "error"; message: string } | null) => {
+  const setToast = (
+    value: { type: "success" | "error"; message: string } | null,
+  ) => {
     if (value) notification[value.type](value.message);
   };
 
@@ -178,10 +181,13 @@ export function CourseDetailPage({
       })
       .catch((err) => {
         setCategories([]);
-        notification.error(getApiErrorMessage(err, "Failed to load categories."), {
-          title: "Could not load categories",
-          duration: null,
-        });
+        notification.error(
+          getApiErrorMessage(err, "Failed to load categories."),
+          {
+            title: "Could not load categories",
+            duration: null,
+          },
+        );
       });
   }, [notification]);
 
@@ -232,10 +238,13 @@ export function CourseDetailPage({
       })
       .catch((err) => {
         setManagerOptions([]);
-        notification.error(getApiErrorMessage(err, "Failed to load course managers."), {
-          title: "Could not load course managers",
-          duration: null,
-        });
+        notification.error(
+          getApiErrorMessage(err, "Failed to load course managers."),
+          {
+            title: "Could not load course managers",
+            duration: null,
+          },
+        );
       })
       .finally(() => setLoadingManagers(false));
   }, [isAdmin, notification]);
@@ -262,7 +271,10 @@ export function CourseDetailPage({
       const msg =
         err instanceof Error ? err.message : "Failed to load course details.";
       setError(msg);
-      notification.error(msg, { title: "Course details could not be loaded", duration: null });
+      notification.error(msg, {
+        title: "Course details could not be loaded",
+        duration: null,
+      });
     } finally {
       setLoading(false);
     }
@@ -291,14 +303,24 @@ export function CourseDetailPage({
       setStudentsError(
         getApiErrorMessage(err, "Failed to load enrolled students."),
       );
-      notification.error(getApiErrorMessage(err, "Failed to load enrolled students."), {
-        title: "Could not load enrolled students",
-        duration: null,
-      });
+      notification.error(
+        getApiErrorMessage(err, "Failed to load enrolled students."),
+        {
+          title: "Could not load enrolled students",
+          duration: null,
+        },
+      );
     } finally {
       setLoadingStudents(false);
     }
-  }, [courseId, studentSearch, studentStatus, studentPage, studentPageSize, notification]);
+  }, [
+    courseId,
+    studentSearch,
+    studentStatus,
+    studentPage,
+    studentPageSize,
+    notification,
+  ]);
 
   useEffect(() => {
     if (tab === "Enrolled Students") {
@@ -317,7 +339,10 @@ export function CourseDetailPage({
       .map(Number)
       .filter((id) => Number.isFinite(id) && id > 0);
     if (hasManagerChanges && managerIds.length === 0) {
-      setToast({ type: "error", message: "Assign at least one course manager." });
+      setToast({
+        type: "error",
+        message: "Assign at least one course manager.",
+      });
       return;
     }
     setSaving(true);
@@ -336,7 +361,10 @@ export function CourseDetailPage({
 
       let updated = course;
       if (Object.keys(updatePayload).length > 0) {
-        updated = await courseService.updateCourse(course.courseId, updatePayload);
+        updated = await courseService.updateCourse(
+          course.courseId,
+          updatePayload,
+        );
       }
 
       if (isPublished !== course.isPublished) {
@@ -353,13 +381,16 @@ export function CourseDetailPage({
       let savedManagerName = updated.managerName;
       if (hasManagerChanges) {
         savedManagers = managerIds.map((userId, index) => {
-          const option = managerOptions.find((manager) => manager.id === userId);
+          const option = managerOptions.find(
+            (manager) => manager.id === userId,
+          );
           const previous = course.managers?.find(
             (manager) => manager.userId === userId,
           );
           return {
             userId,
-            fullName: option?.name || previous?.fullName || `Manager #${userId}`,
+            fullName:
+              option?.name || previous?.fullName || `Manager #${userId}`,
             email: option?.email || previous?.email,
             primary: index === 0,
           };
@@ -536,7 +567,9 @@ export function CourseDetailPage({
             { label: "Course Detail" },
           ]}
         />
-        <p className="text-sm text-content-subtle">Course details could not be loaded. See the notification for details.</p>
+        <p className="text-sm text-content-subtle">
+          Course details could not be loaded. See the notification for details.
+        </p>
         <Button variant="outline" onClick={handleCancel}>
           Back to Courses
         </Button>
@@ -942,8 +975,16 @@ export function CourseDetailPage({
             </div>
           ) : studentsError ? (
             <div className="p-6 text-center text-sm text-content-subtle">
-              Student data could not be loaded. See the notification for details.
-              <Button variant="outline" size="sm" className="mx-auto mt-3" onClick={loadStudents}>Retry</Button>
+              Student data could not be loaded. See the notification for
+              details.
+              <Button
+                variant="outline"
+                size="sm"
+                className="mx-auto mt-3"
+                onClick={loadStudents}
+              >
+                Retry
+              </Button>
             </div>
           ) : students.length === 0 ? (
             <div className="p-12 text-center text-content-soft">
@@ -1055,7 +1096,6 @@ export function CourseDetailPage({
           />
         </div>
       </Modal>
-
     </div>
   );
 }
@@ -1107,9 +1147,8 @@ function CourseManagerList({
     .map((id) => availableManagers.find((manager) => String(manager.id) === id))
     .filter((manager): manager is ManagerOption => Boolean(manager));
   const hasMore = managerList.length > INITIAL_SHOW;
-  const visible = expanded || !hasMore
-    ? managerList
-    : managerList.slice(0, INITIAL_SHOW);
+  const visible =
+    expanded || !hasMore ? managerList : managerList.slice(0, INITIAL_SHOW);
 
   return (
     <div className="space-y-2">
@@ -1197,7 +1236,9 @@ function CourseManagerList({
                   {manager.fullName}
                 </p>
                 {manager.email && (
-                  <p className="text-xs text-content-soft truncate">{manager.email}</p>
+                  <p className="text-xs text-content-soft truncate">
+                    {manager.email}
+                  </p>
                 )}
               </div>
             </div>

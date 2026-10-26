@@ -1,13 +1,13 @@
 package com.examprep.controllers.student;
 
 import com.examprep.config.SecurityConfig;
+import com.examprep.controllers.StudentCourseController;
 import com.examprep.dto.student.*;
 import com.examprep.security.JwtTokenProvider;
 import com.examprep.security.RestAccessDeniedHandler;
 import com.examprep.security.RestAuthenticationEntryPoint;
 import com.examprep.security.UserPrincipal;
 import com.examprep.services.student.StudentCourseService;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;

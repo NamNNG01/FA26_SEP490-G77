@@ -57,9 +57,11 @@ public interface ExamRepository extends JpaRepository<Exam, Long>, JpaSpecificat
             CASE WHEN (SELECT COUNT(active) FROM ExamAttempt active
                        WHERE active.exam = ex AND active.user.userId = :userId
                          AND active.status = 'IN_PROGRESS') > 0
-                 THEN true ELSE false END
+                 THEN true ELSE false END,
+            m.moduleId,
+            CAST(NULL AS String)
         )
-        FROM Exam ex
+        FROM Exam ex LEFT JOIN ex.module m
         WHERE ex.course.courseId = :courseId AND ex.status = 'PUBLISHED'
         """,
             countQuery = """
@@ -72,6 +74,22 @@ public interface ExamRepository extends JpaRepository<Exam, Long>, JpaSpecificat
             @Param("userId") Long userId,
             Pageable pageable
     );
+
+    @Query("""
+    SELECT COUNT(e)
+    FROM Exam e
+    WHERE e.course.courseId = :courseId
+      AND e.status = 'PUBLISHED'
+    """)
+    long countPublishedExamsByCourseId(@Param("courseId") Long courseId);
+
+    /** [examId, questionType] of the fixed questions of these exams — MC-02 exam kind. */
+    @Query("SELECT eq.exam.examId, q.questionType FROM ExamQuestion eq JOIN eq.question q WHERE eq.exam.examId IN :examIds")
+    List<Object[]> findQuestionTypesByExamIds(@Param("examIds") java.util.Collection<Long> examIds);
+
+    /** [examId, questionType] of the random-draw configs of these exams — MC-02 exam kind. */
+    @Query("SELECT c.exam.examId, c.questionType FROM ExamConfig c WHERE c.exam.examId IN :examIds")
+    List<Object[]> findConfigTypesByExamIds(@Param("examIds") java.util.Collection<Long> examIds);
 
     @Query("SELECT new com.examprep.dto.student.QuestionTypeCountDto(q.questionType, CAST(COUNT(eq) AS int), eq.weight) " +
            "FROM ExamQuestion eq JOIN eq.question q " +

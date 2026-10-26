@@ -135,7 +135,7 @@ export function PublicExamsPage() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-[1400px] space-y-8">
+    <div className="mx-auto w-full max-w-[1400px] space-y-8 px-[clamp(1rem,2.5vw,2rem)] py-[clamp(1.25rem,2.5vw,1.75rem)]">
       {/* Page header */}
       <header>
         <h1 className="text-2xl font-bold tracking-tight text-foreground">Public Exam</h1>

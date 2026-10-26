@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Response bodies of the student attempt APIs (spec 6.1 SA-01 … 6.5 SA-05, 5.2 SA-06).
@@ -94,7 +95,21 @@ public final class AttemptResponses {
             String gradingError,
             List<Criterion> criteria,
             String overallFeedback,
-            Explanation explanation) {}
+            Explanation explanation,
+            CorrectAnswer correctAnswer) {}
+
+    /**
+     * The key of the question types whose options carry no {@code isCorrectAnswer} flag; only
+     * sent on SA-05, i.e. once the attempt is submitted. Exactly one field is set:
+     * ORDERING → {@code orderedOptionIds}, MATCHING → {@code pairs},
+     * FILL_BLANK → {@code blanks} (placeholder number → accepted spellings).
+     */
+    public record CorrectAnswer(
+            List<Long> orderedOptionIds,
+            List<MatchPair> pairs,
+            Map<String, List<String>> blanks) {}
+
+    public record MatchPair(String left, String right) {}
 
     public record Criterion(
             String criterionId,

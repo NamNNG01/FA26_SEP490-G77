@@ -1,6 +1,7 @@
 package com.examprep.repositories;
 
 import com.examprep.dto.StudentRecentAttempt;
+import com.examprep.dto.student.MyExamDto;
 import com.examprep.entities.ExamAttempt;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -38,15 +39,43 @@ public interface ExamAttemptRepository extends JpaRepository<ExamAttempt, Long> 
             "ORDER BY a.submitTime DESC")
     List<StudentRecentAttempt> findRecentAttemptsByUserId(@Param("userId") Long userId, Pageable pageable);
 
-    @Query("SELECT new com.examprep.dto.student.MyExamDto(" +
-           "att.attemptId, ex.examId, ex.title, att.startTime, att.submittedAt, att.totalScore, ex.maxScore, att.status) " +
-           "FROM ExamAttempt att JOIN att.exam ex " +
-           "WHERE att.user.userId = :userId " +
-           "ORDER BY att.startTime DESC")
-    Page<com.examprep.dto.student.MyExamDto> findMyExams(@Param("userId") Long userId, Pageable pageable);
+    @Query("""
+    SELECT new com.examprep.dto.student.MyExamDto(
+        ex.examId,
+        ex.title,
+        c.courseId,
+        c.title,
+        ex.maxScore,
+        COUNT(att),
+        MAX(CASE
+            WHEN att.status IN ('SUBMITTED', 'GRADING', 'COMPLETED')
+            THEN att.totalScore
+            ELSE NULL
+        END)
+    )
+    FROM ExamAttempt att
+    JOIN att.exam ex
+    LEFT JOIN ex.course c
+    WHERE att.user.userId = :userId
+    GROUP BY ex.examId, ex.title, c.courseId, c.title, ex.maxScore
+    ORDER BY MAX(att.startTime) DESC
+    """)
+    Page<MyExamDto> findMyExams(
+            @Param("userId") Long userId,
+            Pageable pageable
+    );
 
     @Query("SELECT att FROM ExamAttempt att WHERE att.exam.examId = :examId AND att.user.userId = :userId AND att.status = :status")
     Optional<ExamAttempt> findActiveAttempt(@Param("examId") Long examId, @Param("userId") Long userId, @Param("status") String status);
+
+
+    List<ExamAttempt> findByExam_ExamIdAndUser_UserId(
+            Long examId,
+            Long userId
+    );
+    Page<ExamAttempt> findByExam_ExamIdAndUser_UserId(
+            Long examId, Long userId, Pageable pageable
+    );
 
     /** SA-06: history of one exam for one student, newest attempt first, paged inside the database. */
     Page<ExamAttempt> findByUserUserIdAndExamExamIdOrderByStartTimeDescAttemptIdDesc(

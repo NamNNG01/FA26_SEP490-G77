@@ -41,6 +41,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -314,7 +315,8 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
                     row.getGradingError(),
                     rubricType ? criteria(row, key, rawMaxPoints) : null,
                     GRADING_AI_GRADED.equals(row.getGradingStatus()) ? overallFeedback(row) : null,
-                    explanation(live.get(display.questionId()))));
+                    explanation(live.get(display.questionId())),
+                    correctAnswer(display.questionType(), key)));
         }
 
         return new AttemptResponses.Result(
@@ -552,6 +554,40 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
     }
 
     /** Options with the correct-answer flag, taken from {@code key_snapshot} (spec 6.5). */
+    /** SA-05 only: the key of ORDERING / MATCHING / FILL_BLANK, which their options cannot carry. */
+    private AttemptResponses.CorrectAnswer correctAnswer(String questionType, Snapshots.KeySnapshot key) {
+        if (key == null || questionType == null) {
+            return null;
+        }
+        switch (questionType) {
+            case "ORDERING":
+                return key.correctOrder() == null || key.correctOrder().isEmpty() ? null
+                        : new AttemptResponses.CorrectAnswer(key.correctOrder(), null, null);
+            case "MATCHING":
+                if (key.pairs() == null || key.pairs().isEmpty()) {
+                    return null;
+                }
+                List<AttemptResponses.MatchPair> pairs = new ArrayList<>();
+                for (Snapshots.Pair pair : key.pairs()) {
+                    pairs.add(new AttemptResponses.MatchPair(pair.left(), pair.right()));
+                }
+                return new AttemptResponses.CorrectAnswer(null, pairs, null);
+            case "FILL_BLANK":
+                if (key.blanks() == null || key.blanks().isEmpty()) {
+                    return null;
+                }
+                Map<String, List<String>> blanks = new LinkedHashMap<>();
+                for (Snapshots.Blank blank : key.blanks()) {
+                    if (blank != null && blank.index() != null) {
+                        blanks.put(String.valueOf(blank.index()), blank.accepted() == null ? List.of() : blank.accepted());
+                    }
+                }
+                return new AttemptResponses.CorrectAnswer(null, null, blanks);
+            default:
+                return null;
+        }
+    }
+
     private List<AttemptResponses.Option> reviewOptions(Snapshots.DisplayQuestion display,
                                                         Snapshots.KeySnapshot key) {
         if (display.options() == null || display.options().isEmpty()) {

@@ -1,4 +1,4 @@
-package com.examprep.controllers.student;
+package com.examprep.controllers;
 
 import com.examprep.dto.ApiResponse;
 import com.examprep.dto.PageResponse;
@@ -41,6 +41,7 @@ public class StudentExamController {
         return ResponseEntity.ok(ApiResponse.success(dto));
     }
 
+
     @GetMapping("/my-exams")
     @Operation(summary = "ME-01: My Past Exam Attempts")
     public ResponseEntity<ApiResponse<PageResponse<MyExamDto>>> listMyExams(
@@ -51,4 +52,6 @@ public class StudentExamController {
         Page<MyExamDto> p = studentExamService.listMyExams(page, size, currentUser.getId());
         return ResponseEntity.ok(ApiResponse.success(PageResponse.of(p)));
     }
+
+
 }

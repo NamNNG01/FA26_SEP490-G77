@@ -13,8 +13,8 @@ export const ROUTES = {
 
   // Public marketing pages (no auth required)
   courses: '/courses',
-  /** Route pattern — render with coursePath(slug). */
-  courseDetail: '/courses/:slug',
+  /** Route pattern — render with coursePath(id). */
+  courseDetail: '/courses/:courseId',
   examsIntro: '/exams',
   pricing: '/pricing',
   forgotPassword: '/forgot-password',
@@ -22,9 +22,18 @@ export const ROUTES = {
   profile: '/profile',
 
   // Student
+  /** Legacy — redirects to My Courses (the dashboard was merged into it). */
   studentDashboard: '/student/dashboard',
   studentCourses: '/student/courses',
+  /** Route pattern — render with studentCoursePath(id). */
+  studentCourseDetail: '/student/courses/:courseId',
   studentExams: '/student/exams',
+  studentMyExams: '/student/my-exams',
+  /** Route pattern — render with studentExamPath(id). */
+  studentExamDetail: '/student/exams/:examId',
+  studentFlashcards: '/student/flashcards',
+  /** Route pattern — render with studentDeckPath(id). */
+  studentFlashcardDeck: '/student/flashcards/:deckId',
   studentPublicExam: '/student/public-exam',
   /** Route pattern — render with publicExamPath(id). */
   studentPublicExamDetail: '/student/public-exam/:examId',
@@ -63,9 +72,53 @@ export const ROUTES = {
   adminSettings: '/admin/settings',
 } as const;
 
-/** Concrete course detail URL — e.g. coursePath('aws-cloud-practitioner') → '/courses/aws-cloud-practitioner'. */
-export function coursePath(slug: string): string {
-  return `${ROUTES.courses}/${slug}`;
+/** Concrete course detail URL — e.g. coursePath(12) → '/courses/12'. */
+export function coursePath(courseId: number | string): string {
+  return `${ROUTES.courses}/${courseId}`;
+}
+
+/** Catalog URL, optionally pre-filled with a search — e.g. courseSearchPath('aws') → '/courses?q=aws'. */
+export function courseSearchPath(query?: string): string {
+  const q = query?.trim();
+  return q ? `${ROUTES.courses}?q=${encodeURIComponent(q)}` : ROUTES.courses;
+}
+
+export function studentCoursePath(id: number | string): string {
+  return `${ROUTES.studentCourses}/${id}`;
+}
+
+export function studentDeckPath(id: number | string): string {
+  return `${ROUTES.studentFlashcards}/${id}`;
+}
+
+/** Read-only exam detail — e.g. studentExamPath(12) → '/student/exams/12'. */
+export function studentExamPath(examId: number | string): string {
+  return `${ROUTES.studentExams}/${examId}`;
+}
+
+/** Take-exam screen, starting (or resuming) an attempt — e.g. '/student/exam?examId=12'. */
+export function studentTakeExamPath(examId: number | string): string {
+  return `${ROUTES.studentExam}?examId=${encodeURIComponent(String(examId))}`;
+}
+
+/** Take-exam screen for an attempt already started — e.g. '/student/exam?attemptId=7'. */
+export function studentResumeAttemptPath(attemptId: number | string): string {
+  return `${ROUTES.studentExam}?attemptId=${encodeURIComponent(String(attemptId))}`;
+}
+
+/** Attempt review of an exam, newest submitted attempt preselected — e.g. '/student/exam-result?examId=12'. */
+export function studentExamAttemptsPath(examId: number | string): string {
+  return `${ROUTES.studentExamResult}?examId=${encodeURIComponent(String(examId))}`;
+}
+
+/**
+ * Result of one submitted attempt — e.g. '/student/exam-result?attemptId=7&examId=12'.
+ * `examId` is optional: SA-05 does not return it, and the result page needs it for "Re-attempt".
+ */
+export function studentExamResultPath(attemptId: number | string, examId?: number | string): string {
+  const qs = new URLSearchParams({ attemptId: String(attemptId) });
+  if (examId != null) qs.set('examId', String(examId));
+  return `${ROUTES.studentExamResult}?${qs}`;
 }
 
 export function managerQuestionEditPath(id: number | string): string {
@@ -138,9 +191,9 @@ export interface MenuItem {
  */
 export const menuByRole: Record<string, MenuItem[]> = {
   STUDENT: [
-    { id: 'student-dashboard', title: 'Dashboard', icon: <Icon.Home className="w-4 h-4" />, path: ROUTES.studentDashboard },
     { id: 'student-courses', title: 'My Courses', icon: <Icon.Book className="w-4 h-4" />, path: ROUTES.studentCourses },
     { id: 'student-exams', title: 'My Exams', icon: <Icon.ClipboardList className="w-4 h-4" />, path: ROUTES.studentExams },
+    { id: 'student-flashcards', title: 'Flashcards', icon: <Icon.Layers className="w-4 h-4" />, path: ROUTES.studentFlashcards },
   ],
   COURSE_MANAGER: [
     { id: 'manager-dashboard', title: 'Dashboard', icon: <Icon.Home className="w-4 h-4" />, path: ROUTES.managerDashboard },

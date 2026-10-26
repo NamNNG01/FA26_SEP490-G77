@@ -1,14 +1,13 @@
 import { ROUTES } from '@/app/routes';
-import { PUBLIC_COURSES, COURSE_PROVIDERS } from '@/features/catalog';
 
 /**
  * Landing page content — single source of truth for every repeated UI
  * element. Sections render these arrays with map(), so copy and cards can
  * change without touching JSX.
  *
- * Course content itself lives in features/catalog (data/publicCourses.ts) —
- * this module only holds landing copy. The hero numbers are DERIVED from the
- * catalog so the page never advertises a figure the catalog can't back up.
+ * Course content comes from the backend through features/catalog — this
+ * module only holds landing copy. The hero figures and eyebrow are computed
+ * from the live catalog at render time (useCatalogOverview), never hard-coded.
  *
  * Copy rule: say something specific (a number, a format, a workflow step)
  * instead of a generic slogan.
@@ -18,22 +17,11 @@ import { PUBLIC_COURSES, COURSE_PROVIDERS } from '@/features/catalog';
  */
 
 // ---------------------------------------------------------------------
-// Catalog-derived figures
-// ---------------------------------------------------------------------
-const totalQuestions = PUBLIC_COURSES.reduce((sum, c) => sum + c.questionCount, 0);
-const totalMockExams = PUBLIC_COURSES.reduce((sum, c) => sum + c.examCount, 0);
-
-export const catalogStats = [
-  { value: totalQuestions.toLocaleString('en-US'), label: 'practice questions' },
-  { value: String(totalMockExams), label: 'timed mock exams' },
-  { value: String(COURSE_PROVIDERS.length), label: 'certification providers' },
-];
-
-// ---------------------------------------------------------------------
 // Hero
 // ---------------------------------------------------------------------
 export const heroContent = {
-  eyebrow: COURSE_PROVIDERS.map((p) => p.shortLabel).join(' · '),
+  /** Eyebrow when the catalog has no categories to list. */
+  eyebrowFallback: 'Certification exam preparation',
   title: 'Sit the exam before the exam.',
   subtitle:
     'Exam-style questions and full-length timed mocks for cloud and security certifications. After every attempt you see which topics cost you points, and why.',

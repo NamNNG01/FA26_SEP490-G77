@@ -1,6 +1,7 @@
 package com.examprep.controllers.student;
 
 import com.examprep.config.SecurityConfig;
+import com.examprep.controllers.StudentExamController;
 import com.examprep.dto.student.*;
 import com.examprep.security.JwtTokenProvider;
 import com.examprep.security.RestAccessDeniedHandler;

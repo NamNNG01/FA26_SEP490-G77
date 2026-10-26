@@ -107,7 +107,7 @@ export function PublicExamDetailPage() {
 
   if (!exam) {
     return (
-      <div className="mx-auto w-full max-w-[1400px] py-16">
+      <div className="mx-auto w-full max-w-[1400px] px-[clamp(1rem,2.5vw,2rem)] py-16">
         <div className="mx-auto max-w-md text-center">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-[14px] bg-primary-light dark:bg-primary/15">
             <Icon.Search className="h-6 w-6 text-primary" />
@@ -182,7 +182,7 @@ export function PublicExamDetailPage() {
   }, [draft.groups, draft.questions]);
 
   return (
-    <div className="mx-auto w-full max-w-[1400px] space-y-6">
+    <div className="mx-auto w-full max-w-[1400px] space-y-6 px-[clamp(1rem,2.5vw,2rem)] py-[clamp(1.25rem,2.5vw,1.75rem)]">
       <Breadcrumb
         items={[
           { label: 'Public Exam', onClick: () => navigate(listPath) },

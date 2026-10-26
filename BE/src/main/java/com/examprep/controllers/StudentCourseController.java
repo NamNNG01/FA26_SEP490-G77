@@ -1,4 +1,4 @@
-package com.examprep.controllers.student;
+package com.examprep.controllers;
 
 import com.examprep.dto.ApiResponse;
 import com.examprep.dto.PageResponse;
