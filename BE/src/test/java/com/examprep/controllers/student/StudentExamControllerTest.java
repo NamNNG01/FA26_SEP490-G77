@@ -48,8 +48,8 @@ class StudentExamControllerTest {
         ExamDetailDto detail = new ExamDetailDto(
                 5L, 1L, "Course 1", "Midterm Exam", "Desc", 60,
                 BigDecimal.TEN, 10, Instant.now(),
-                new ExamMyStatsDto(1L, BigDecimal.valueOf(8), "GRADED"),
-                new ExamActionsDto(true, false, null)
+                new ExamMyStatsDto(1L, BigDecimal.valueOf(8), Instant.now(), 100L),
+                new ExamActionsDto(true, null, true, null)
         );
         UserPrincipal principal = UserPrincipal.create(10L, "student@examprep.local", "STUDENT");
         when(studentExamService.getExamDetail(eq(5L), eq(10L))).thenReturn(detail);
@@ -64,8 +64,7 @@ class StudentExamControllerTest {
     @Test
     void listMyExams_Success() throws Exception {
         MyExamDto myExam = new MyExamDto(
-                100L, 5L, "Midterm Exam", Instant.now(), Instant.now(), BigDecimal.valueOf(8),
-                BigDecimal.TEN, "COMPLETED"
+                100L, "Midterm Exam", 5L, "Course 1", BigDecimal.TEN, 1L, BigDecimal.valueOf(8)
         );
         UserPrincipal principal = UserPrincipal.create(10L, "student@examprep.local", "STUDENT");
         when(studentExamService.listMyExams(anyInt(), anyInt(), eq(10L)))
@@ -74,6 +73,6 @@ class StudentExamControllerTest {
         mockMvc.perform(get("/api/v1/student/my-exams").with(user(principal)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.content[0].attemptId").value(100));
+                .andExpect(jsonPath("$.data.content[0].examId").value(100));
     }
 }

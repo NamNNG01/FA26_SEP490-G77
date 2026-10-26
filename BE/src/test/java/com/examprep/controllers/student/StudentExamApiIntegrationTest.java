@@ -124,7 +124,7 @@ class StudentExamApiIntegrationTest {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.examId").value(publishedExam.getExamId()))
                 .andExpect(jsonPath("$.data.title").value("Midterm Java"))
-                .andExpect(jsonPath("$.data.questionsSummary.totalCount").value(1));
+                .andExpect(jsonPath("$.data.questionCount").value(1));
     }
 
     @Test
@@ -132,7 +132,8 @@ class StudentExamApiIntegrationTest {
         mvc.perform(get("/api/v1/student/my-exams").with(user(UserPrincipal.create(student))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.content[0].attemptId").value(attempt.getAttemptId()))
-                .andExpect(jsonPath("$.data.content[0].totalScore").value(9));
+                .andExpect(jsonPath("$.data.content[0].examId").value(publishedExam.getExamId()))
+                .andExpect(jsonPath("$.data.content[0].attemptCount").value(1))
+                .andExpect(jsonPath("$.data.content[0].bestScore").value(9));
     }
 }
