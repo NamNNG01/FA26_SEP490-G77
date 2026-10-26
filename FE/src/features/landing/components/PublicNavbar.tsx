@@ -41,7 +41,9 @@ export function PublicNavbar() {
     ...(isStudent
       ? [{ label: "Exam history", to: ROUTES.studentMyExams }]
       : []),
-    { label: "Pricing", to: ROUTES.pricing },
+    isStudent
+      ? { label: "Flashcards", to: ROUTES.studentFlashcards }
+      : { label: "Pricing", to: ROUTES.pricing },
   ];
 
   function goTo(path: string) {
