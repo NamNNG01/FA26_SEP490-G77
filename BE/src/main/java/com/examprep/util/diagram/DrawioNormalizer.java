@@ -18,7 +18,8 @@ import java.util.zip.Inflater;
 
 /**
  * Reduces a draw.io file to what a grader needs: labelled shapes and the relations between them.
- * Geometry, colours and fonts are dropped (SE-02 "chuẩn hóa DIAGRAM").
+ * Colours, fonts and coordinates are dropped (SE-02 "chuẩn hóa DIAGRAM"); the only thing kept from the geometry is
+ * the top-to-bottom order of connections, which is the message order of a sequence diagram.
  */
 public final class DrawioNormalizer {
     private static final Set<String> RELATION_STYLE = Set.of("endArrow", "startArrow", "endFill", "startFill", "dashed");
@@ -51,10 +52,14 @@ public final class DrawioNormalizer {
         Set<String> edgeIds = new HashSet<>();
         for (Element model : models) {
             NodeList cells = model.getElementsByTagName("mxCell");
+            Map<String, Element> byId = new HashMap<>();
             for (int i = 0; i < cells.getLength(); i++) {
                 Element cell = (Element) cells.item(i);
+                byId.put(id(cell), cell);
                 if ("1".equals(cell.getAttribute("edge"))) edgeIds.add(id(cell));
             }
+            List<String[]> pageEdges = new ArrayList<>();
+            Map<String, Double> edgeY = new HashMap<>();
             for (int i = 0; i < cells.getLength(); i++) {
                 Element cell = (Element) cells.item(i);
                 String id = id(cell);
@@ -63,7 +68,8 @@ public final class DrawioNormalizer {
                 if ("1".equals(cell.getAttribute("edge"))) {
                     StringJoiner relation = new StringJoiner(", ");
                     style.forEach((k, v) -> { if (RELATION_STYLE.contains(k)) relation.add(k + "=" + v); });
-                    edges.add(new String[]{id, cell.getAttribute("source"), cell.getAttribute("target"), label, relation.toString()});
+                    pageEdges.add(new String[]{id, cell.getAttribute("source"), cell.getAttribute("target"), label, relation.toString()});
+                    edgeY.put(id, edgeY(cell, byId));
                 } else if ("1".equals(cell.getAttribute("vertex"))) {
                     String parent = cell.getAttribute("parent");
                     if (edgeIds.contains(parent)) {
@@ -74,6 +80,8 @@ public final class DrawioNormalizer {
                     vertices.add(new String[]{id, label, style.getOrDefault("shape", style.getOrDefault("", "")), parent});
                 }
             }
+            pageEdges.sort(Comparator.comparingDouble(e -> edgeY.get(e[0]))); // stable: unpositioned keep file order
+            edges.addAll(pageEdges);
         }
 
         StringBuilder text = new StringBuilder("Shapes:\n");
@@ -83,17 +91,53 @@ public final class DrawioNormalizer {
             if (labels.containsKey(v[3])) text.append(" inside ").append(labels.get(v[3]));
             text.append('\n');
         }
-        text.append("Connections:\n");
+        text.append("Connections (top to bottom):\n");
+        int order = 0;
         for (String[] e : edges) {
             String label = String.join(" ", edgeLabels.getOrDefault(e[0], List.of()));
             if (!e[3].isEmpty()) label = label.isEmpty() ? e[3] : e[3] + " " + label;
-            text.append("- ").append(labels.getOrDefault(e[1], "(unconnected)"))
+            text.append(++order).append(". ").append(labels.getOrDefault(e[1], "(unconnected)"))
                     .append(" -> ").append(labels.getOrDefault(e[2], "(unconnected)"));
             if (!label.isEmpty()) text.append(" : ").append(label);
             if (!e[4].isEmpty()) text.append(" (").append(e[4]).append(')');
             text.append('\n');
         }
         return new Result(text.toString(), vertices.size() + edges.size());
+    }
+
+    /** Highest point of an edge: its own points, else the middle of its source (or target) shape. */
+    private static double edgeY(Element edge, Map<String, Element> byId) {
+        double top = Double.MAX_VALUE;
+        NodeList points = edge.getElementsByTagName("mxPoint");
+        for (int i = 0; i < points.getLength(); i++) {
+            top = Math.min(top, number(((Element) points.item(i)).getAttribute("y")));
+        }
+        if (top != Double.MAX_VALUE) return top;
+        for (String end : List.of(edge.getAttribute("source"), edge.getAttribute("target"))) {
+            Element shape = byId.get(end);
+            if (shape != null) return absoluteY(shape, byId, 0) + number(geometry(shape, "height")) / 2;
+        }
+        return Double.MAX_VALUE;
+    }
+
+    // Child shapes (e.g. activation bars on a lifeline) are positioned relative to their parent.
+    private static double absoluteY(Element cell, Map<String, Element> byId, int depth) {
+        Element parent = byId.get(cell.getAttribute("parent"));
+        double y = number(geometry(cell, "y"));
+        return parent == null || depth > 20 || !"1".equals(parent.getAttribute("vertex")) ? y : y + absoluteY(parent, byId, depth + 1);
+    }
+
+    private static String geometry(Element cell, String attribute) {
+        Element geometry = first(cell, "mxGeometry");
+        return geometry == null ? "" : geometry.getAttribute(attribute);
+    }
+
+    private static double number(String value) {
+        try {
+            return value.isBlank() ? 0 : Double.parseDouble(value);
+        } catch (NumberFormatException ex) {
+            return 0;
+        }
     }
 
     // Cells with custom properties are wrapped: <UserObject id=".." label=".."><mxCell .../></UserObject>.
