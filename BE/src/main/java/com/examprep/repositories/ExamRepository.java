@@ -73,6 +73,13 @@ public interface ExamRepository extends JpaRepository<Exam, Long>, JpaSpecificat
             Pageable pageable
     );
 
+    @Query("""
+    SELECT COUNT(e)
+    FROM Exam e
+    WHERE e.course.courseId = :courseId
+      AND e.status = 'PUBLISHED'
+    """)
+    long countPublishedExamsByCourseId(@Param("courseId") Long courseId);
     @Query("SELECT new com.examprep.dto.student.QuestionTypeCountDto(q.questionType, CAST(COUNT(eq) AS int), eq.weight) " +
            "FROM ExamQuestion eq JOIN eq.question q " +
            "WHERE eq.exam.examId = :examId AND q.status = 'ACTIVE' AND q.approvalStatus = 'APPROVED' AND q.deletedAt IS NULL " +

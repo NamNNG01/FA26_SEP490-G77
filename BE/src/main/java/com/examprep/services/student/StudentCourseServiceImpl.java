@@ -16,6 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Locale;
 
 @Service
 @RequiredArgsConstructor
@@ -50,9 +51,8 @@ public class StudentCourseServiceImpl implements StudentCourseService {
                 .map(m -> new ModuleItemDto(m.getModuleId(), m.getTitle(), m.getOrderIndex()))
                 .toList();
 
-        long publishedExamCount = examRepository.findAll().stream()
-                .filter(e -> e.getCourse() != null && e.getCourse().getCourseId().equals(courseId) && "PUBLISHED".equals(e.getStatus()))
-                .count();
+        long publishedExamCount =
+                examRepository.countPublishedExamsByCourseId(courseId);
         long deckCount = deckRepository.findCourseDecksWithStats(courseId, userId != null ? userId : 0L).size();
 
         EnrollmentSummaryDto enrollmentSummary;
@@ -127,7 +127,7 @@ public class StudentCourseServiceImpl implements StudentCourseService {
         if (keyword == null || keyword.trim().isEmpty()) {
             return null;
         }
-        String trimmed = keyword.trim();
+        String trimmed = keyword.trim().toLowerCase(Locale.ROOT);
         if (trimmed.length() > 100) {
             trimmed = trimmed.substring(0, 100);
         }
