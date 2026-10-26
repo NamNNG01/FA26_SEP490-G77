@@ -153,7 +153,7 @@ public class StudentExamServiceImpl implements StudentExamService {
         if (size <= 0 || size > 100) {
             throw new BadRequestException("Page size must be between 1 and 100");
         }
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "startTime"));
+        Pageable pageable = PageRequest.of(page, size);
         return examAttemptRepository.findMyExams(userId, pageable);
     }
 
@@ -167,40 +167,4 @@ public class StudentExamServiceImpl implements StudentExamService {
         }
     }
 
-    @Override
-    public Page<ExamAttemptHistoryDto> getExamAttempts(
-            Long examId, int page, int size, Long userId) {
-
-        if (page < 0) {
-            throw new BadRequestException("Page index must not be less than zero");
-        }
-        if (size <= 0 || size > 100) {
-            throw new BadRequestException("Page size must be between 1 and 100");
-        }
-
-        Exam exam = examRepository.findById(examId)
-                .orElseThrow(() -> new ResourceNotFoundException("Exam not found"));
-
-        if (!"PUBLISHED".equals(exam.getStatus())) {
-            throw new ResourceNotFoundException("Exam not found");
-        }
-        if (exam.getCourse() != null) {
-            validateActiveEnrollment(exam.getCourse().getCourseId(), userId);
-        }
-
-        Pageable pageable = PageRequest.of(
-                page, size, Sort.by(Sort.Direction.DESC, "startTime"));
-
-        return examAttemptRepository
-                .findByExam_ExamIdAndUser_UserId(examId, userId, pageable)
-                .map(a -> new ExamAttemptHistoryDto(
-                        a.getAttemptId(),
-                        a.getStatus(),
-                        a.getTotalScore(),
-                        a.getExam().getMaxScore(),
-                        a.getStartTime(),
-                        a.getSubmittedAt(),
-                        a.getAutoSubmitted()
-                ));
-    }
 }

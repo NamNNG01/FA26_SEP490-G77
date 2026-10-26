@@ -41,19 +41,6 @@ public class StudentExamController {
         return ResponseEntity.ok(ApiResponse.success(dto));
     }
 
-    @GetMapping("/exams/{examId}/attempts")
-    @Operation(summary = "SA-06: Exam Attempt History")
-    public ResponseEntity<ApiResponse<PageResponse<ExamAttemptHistoryDto>>> getExamAttempts(
-            @PathVariable Long examId,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size,
-            @AuthenticationPrincipal UserPrincipal currentUser) {
-
-        Page<ExamAttemptHistoryDto> result = studentExamService.getExamAttempts(
-                examId, page, size, currentUser.getId());
-
-        return ResponseEntity.ok(ApiResponse.success(PageResponse.of(result)));
-    }
 
     @GetMapping("/my-exams")
     @Operation(summary = "ME-01: My Past Exam Attempts")
