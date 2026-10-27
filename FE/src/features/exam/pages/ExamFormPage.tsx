@@ -434,7 +434,6 @@ export function ExamFormPage({
     }
 
     if (!courseId) errors.courseId = MSG01;
-    if (!moduleId) errors.moduleId = "Select a module.";
 
     if (durationMinutes < 1 || durationMinutes > 600) {
       errors.durationMinutes = "Duration must be between 1 and 600 minutes.";
@@ -576,7 +575,7 @@ export function ExamFormPage({
             generationType === "RANDOM"
               ? configs.map((config) => ({
                   ...config,
-                  moduleId: Number(moduleId),
+                  moduleId: moduleId ? Number(moduleId) : undefined,
                 }))
               : [],
         });
@@ -601,7 +600,7 @@ export function ExamFormPage({
             generationType === "RANDOM"
               ? configs.map((config) => ({
                   ...config,
-                  moduleId: Number(moduleId),
+                  moduleId: moduleId ? Number(moduleId) : undefined,
                 }))
               : [],
         });
@@ -663,7 +662,7 @@ export function ExamFormPage({
         })),
         configs: configs.map((config) => ({
           ...config,
-          moduleId: Number(moduleId),
+          moduleId: moduleId ? Number(moduleId) : undefined,
         })),
       });
 
@@ -1284,7 +1283,7 @@ export function ExamFormPage({
 
                   <div>
                     <Select
-                      label="Module *"
+                      label="Module (optional)"
                       value={moduleId}
                       disabled={isReadOnly || !courseId || hasAddedQuestions}
                       onChange={(v) => {
@@ -1590,10 +1589,10 @@ export function ExamFormPage({
                         variant="outline"
                         icon={<Icon.Upload className="w-3.5 h-3.5" />}
                         onClick={() => setImportPreviewOpen(true)}
-                        disabled={!courseId || !moduleId}
+                        disabled={!courseId}
                         title={
-                          !courseId || !moduleId
-                            ? "Select a course and module before importing"
+                          !courseId
+                            ? "Select a course before importing"
                             : undefined
                         }
                       >
@@ -1605,10 +1604,10 @@ export function ExamFormPage({
                       size="sm"
                       icon={<Icon.Plus className="w-3.5 h-3.5" />}
                       onClick={() => setBankModalOpen(true)}
-                      disabled={!courseId || !moduleId}
+                      disabled={!courseId}
                       title={
-                        !courseId || !moduleId
-                          ? "Select a course and module before adding questions"
+                        !courseId
+                          ? "Select a course before adding questions"
                           : undefined
                       }
                     >
@@ -2133,9 +2132,10 @@ export function ExamFormPage({
         onSelect={handleAddQuestionsFromBank}
         allowedQuestionTypes={allowedQuestionTypes}
         existingQuestionIds={existingQuestionIds}
+        courseId={Number(courseId)}
+        initialModuleId={moduleId ? Number(moduleId) : undefined}
         courseName={courses.find((course) => String(course.courseId) === courseId)?.title ?? ""}
-        moduleName={modules.find((module) => String(module.moduleId) === moduleId)?.title ?? ""}
-        moduleId={Number(moduleId)}
+        modules={modules.map((module) => ({ moduleId: module.moduleId, title: module.title }))}
         loading={loading}
       />
 

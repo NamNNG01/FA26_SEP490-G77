@@ -20,9 +20,10 @@ interface QuestionBankSelectModalProps {
   onSelect: (items: { question: BankQuestionItem; weight: number }[]) => void;
   allowedQuestionTypes: string[];
   existingQuestionIds: Set<number>;
+  courseId: number;
+  initialModuleId?: number;
   courseName: string;
-  moduleName: string;
-  moduleId: number;
+  modules: { moduleId: number; title: string }[];
   loading?: boolean;
 }
 
@@ -32,15 +33,17 @@ export function QuestionBankSelectModal({
   onSelect,
   allowedQuestionTypes,
   existingQuestionIds,
+  courseId,
+  initialModuleId,
   courseName,
-  moduleName,
-  moduleId,
+  modules,
   loading = false,
 }: QuestionBankSelectModalProps) {
   const [questions, setQuestions] = useState<BankQuestionItem[]>([]);
   const [search, setSearch] = useState("");
   const [difficulty, setDifficulty] = useState<Difficulty | "all">("all");
   const [questionType, setQuestionType] = useState<string>("all");
+  const [moduleFilter, setModuleFilter] = useState<string>("");
   const [defaultWeight, setDefaultWeight] = useState<number>(1);
   const [selectedMap, setSelectedMap] = useState<Map<number, BankQuestionItem>>(
     new Map(),
@@ -52,14 +55,15 @@ export function QuestionBankSelectModal({
   const [questionsError, setQuestionsError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!open || !moduleId) return;
+    if (!open || !courseId) return;
     setFetching(true);
     setQuestionsError(null);
     const timer = setTimeout(() => {
       examService
         .getQuestions({
           search: search.trim() || undefined,
-          moduleId,
+          courseId,
+          moduleId: moduleFilter ? Number(moduleFilter) : undefined,
           groupType: "NONE",
           difficulty: difficulty !== "all" ? difficulty : undefined,
           questionType: questionType !== "all" ? questionType : undefined,
@@ -86,7 +90,8 @@ export function QuestionBankSelectModal({
   }, [
     open,
     search,
-    moduleId,
+    courseId,
+    moduleFilter,
     difficulty,
     questionType,
     page,
@@ -97,8 +102,9 @@ export function QuestionBankSelectModal({
     if (open) {
       setSelectedMap(new Map());
       setPage(0);
+      setModuleFilter(initialModuleId ? String(initialModuleId) : "");
     }
-  }, [open]);
+  }, [open, initialModuleId]);
 
   const toggleSelect = (q: BankQuestionItem) => {
     if (existingQuestionIds.has(q.questionId)) return;
@@ -207,10 +213,19 @@ export function QuestionBankSelectModal({
           />
           <Select
             className="min-w-0"
-            value={moduleName}
-            onChange={() => {}}
-            disabled
-            options={[{ label: moduleName, value: moduleName }]}
+            value={moduleFilter}
+            onChange={(value) => {
+              setModuleFilter(value);
+              setPage(0);
+            }}
+            disabled={!courseId}
+            options={[
+              { label: "All Modules", value: "" },
+              ...modules.map((module) => ({
+                label: module.title,
+                value: String(module.moduleId),
+              })),
+            ]}
           />
           <Select
             className="min-w-0 lg:col-span-2"
@@ -263,7 +278,7 @@ export function QuestionBankSelectModal({
             </div>
           ) : questions.length === 0 ? (
             <div className="py-12 text-center text-sm text-content-subtle">
-              No matching ACTIVE questions found for this module and filters.
+              No matching ACTIVE questions found for this course and filters.
             </div>
           ) : (
             questions.map((q) => {
