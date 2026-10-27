@@ -136,6 +136,9 @@ export function ExamFormPage({
   const isPublished = status === "PUBLISHED";
   const isArchived = status === "ARCHIVED";
   const isReadOnly = isPublished || isArchived;
+  // Published exams keep their configuration locked, but managers may still
+  // maintain the attached question set. Archived exams remain fully read-only.
+  const areQuestionsReadOnly = isArchived;
 
   const allowedQuestionTypes =
     formKind === "QUIZ"
@@ -251,7 +254,10 @@ export function ExamFormPage({
       })
       .catch((err) => {
         const message = getApiErrorMessage(err, "Failed to load courses.");
-        toast.error(message, { title: "Could not load courses", duration: null });
+        toast.error(message, {
+          title: "Could not load courses",
+          duration: null,
+        });
       });
   }, [toast]);
 
@@ -264,8 +270,14 @@ export function ExamFormPage({
         })
         .catch((err) => {
           setModules([]);
-          const message = getApiErrorMessage(err, "Failed to load course modules.");
-          toast.error(message, { title: "Could not load course modules", duration: null });
+          const message = getApiErrorMessage(
+            err,
+            "Failed to load course modules.",
+          );
+          toast.error(message, {
+            title: "Could not load course modules",
+            duration: null,
+          });
         });
     } else {
       setModules([]);
@@ -294,7 +306,10 @@ export function ExamFormPage({
       setGroups(data.groups || []);
       const detailWarnings = withoutRubricWarnings(data.warnings || []);
       if (detailWarnings.length > 0) {
-        toast.warning(detailWarnings.join(" "), { title: "Exam warnings", duration: null });
+        toast.warning(detailWarnings.join(" "), {
+          title: "Exam warnings",
+          duration: null,
+        });
       }
 
       const loadedQuestions = [...(data.questions || [])];
@@ -380,7 +395,9 @@ export function ExamFormPage({
       setStatus(res.status);
       const publishWarnings = withoutRubricWarnings(res.warnings || []);
       if (publishWarnings.length > 0) {
-        toast.warning(publishWarnings.join(" "), { title: `Status updated to ${targetStatus}` });
+        toast.warning(publishWarnings.join(" "), {
+          title: `Status updated to ${targetStatus}`,
+        });
       } else {
         toast.success(`Exam status successfully updated to ${targetStatus}.`);
       }
@@ -1073,7 +1090,8 @@ export function ExamFormPage({
           <div className="flex items-center gap-2.5">
             <Icon.Info className="w-5 h-5 text-brand-ink flex-shrink-0" />
             <span className="text-sm font-medium text-foreground">
-              This exam has been published. Unpublish it before editing.
+              This exam is published. You can edit question details, diagrams,
+              and rubrics; weights and exam settings are locked.
             </span>
           </div>
           <Button
@@ -1527,13 +1545,6 @@ export function ExamFormPage({
                 )}
               </div>
 
-              {isEdit && (
-                <div className="text-2xs text-content-subtle bg-surface-muted/50 p-2 rounded border border-line-soft">
-                  Note: Adding, removing, and changing question weights in edit
-                  mode updates the exam through backend APIs immediately.
-                </div>
-              )}
-
               {standaloneQuestions.length === 0 ? (
                 <div className="py-12 text-center text-sm text-content-subtle border-2 border-dashed border-line-soft rounded-[10px]">
                   No standalone questions attached. Add questions here or attach
@@ -1625,7 +1636,7 @@ export function ExamFormPage({
                             </div>
                           </div>
 
-                          {!isReadOnly && (
+                          {!areQuestionsReadOnly && (
                             <div className="flex items-center gap-1">
                               <button
                                 type="button"
@@ -1636,7 +1647,7 @@ export function ExamFormPage({
                               >
                                 <Icon.Edit className="w-4 h-4" />
                               </button>
-                              {!q.groupId && (
+                              {!q.groupId && !isReadOnly && (
                                 <button
                                   type="button"
                                   onClick={() =>
@@ -1659,7 +1670,7 @@ export function ExamFormPage({
                         {q.questionType === "DIAGRAM" && (
                           <ExamDiagramAnswer
                             questionId={q.questionId}
-                            readOnly={isReadOnly}
+                            readOnly={areQuestionsReadOnly}
                           />
                         )}
                       </div>
@@ -1668,76 +1679,78 @@ export function ExamFormPage({
               )}
             </div>
 
-            {generationType !== "RANDOM" && importedQuestionDrafts.length > 0 && (
-              <div className="card space-y-4 p-5">
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line-soft pb-2.5">
-                  <div>
-                    <h3 className="text-base font-bold text-content">
-                      Questions from Import Preview (
-                      {importedQuestionDrafts.length})
-                    </h3>
-                    <p className="text-xs text-content-subtle">
-                      Review and edit these questions before creating the exam.
-                      They will be saved to the Question Bank with the exam.
-                    </p>
-                  </div>
-                </div>
-                {importedQuestionDrafts.map((item, index) => (
-                  <div
-                    key={item.draft.key}
-                    className="space-y-2 rounded-[10px] border border-line p-3"
-                  >
-                    <QuestionFormBlock
-                      q={item.draft}
-                      index={index}
-                      onChange={(draft) =>
-                        updateImportedDraft(item.draft.key, draft)
-                      }
-                      showErrors={importedQuestionsSubmitted}
-                      removable
-                      onRemove={() => removeImportedDraft(item.draft.key)}
-                      allowedTypes={
-                        allowedQuestionTypes as EditableQuestionType[]
-                      }
-                    />
-                    <div className="flex flex-wrap items-center gap-3 border-t border-line-soft pt-2">
-                      <label className="inline-flex items-center gap-2 text-xs font-medium text-content-secondary">
-                        Exam Weight
-                        <input
-                          type="number"
-                          min={0}
-                          max={1000}
-                          step={1}
-                          className="w-20 rounded border border-line bg-surface px-2 py-1 text-content disabled:opacity-60"
-                          value={item.weight}
-                          onChange={(e) => {
-                            const weight = Number(e.target.value) || 0;
-                            setImportedQuestionDrafts((prev) =>
-                              prev.map((current) =>
-                                current.draft.key === item.draft.key
-                                  ? { ...current, weight }
-                                  : current,
-                              ),
-                            );
-                            setIsDirty(true);
-                          }}
-                        />
-                      </label>
-                      <span className="text-xs font-semibold text-brand-ink">
-                        Score: {formatScore(scoreForWeight(item.weight))} pts
-                      </span>
+            {generationType !== "RANDOM" &&
+              importedQuestionDrafts.length > 0 && (
+                <div className="card space-y-4 p-5">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line-soft pb-2.5">
+                    <div>
+                      <h3 className="text-base font-bold text-content">
+                        Questions from Import Preview (
+                        {importedQuestionDrafts.length})
+                      </h3>
+                      <p className="text-xs text-content-subtle">
+                        Review and edit these questions before creating the
+                        exam. They will be saved to the Question Bank with the
+                        exam.
+                      </p>
                     </div>
-                    {importedQuestionsSubmitted &&
-                      Object.keys(validateDraft(item.draft)).length > 0 && (
-                        <p className="text-xs text-danger">
-                          Fix the question validation errors above before
-                          creating the exam.
-                        </p>
-                      )}
                   </div>
-                ))}
-              </div>
-            )}
+                  {importedQuestionDrafts.map((item, index) => (
+                    <div
+                      key={item.draft.key}
+                      className="space-y-2 rounded-[10px] border border-line p-3"
+                    >
+                      <QuestionFormBlock
+                        q={item.draft}
+                        index={index}
+                        onChange={(draft) =>
+                          updateImportedDraft(item.draft.key, draft)
+                        }
+                        showErrors={importedQuestionsSubmitted}
+                        removable
+                        onRemove={() => removeImportedDraft(item.draft.key)}
+                        allowedTypes={
+                          allowedQuestionTypes as EditableQuestionType[]
+                        }
+                      />
+                      <div className="flex flex-wrap items-center gap-3 border-t border-line-soft pt-2">
+                        <label className="inline-flex items-center gap-2 text-xs font-medium text-content-secondary">
+                          Exam Weight
+                          <input
+                            type="number"
+                            min={0}
+                            max={1000}
+                            step={1}
+                            className="w-20 rounded border border-line bg-surface px-2 py-1 text-content disabled:opacity-60"
+                            value={item.weight}
+                            onChange={(e) => {
+                              const weight = Number(e.target.value) || 0;
+                              setImportedQuestionDrafts((prev) =>
+                                prev.map((current) =>
+                                  current.draft.key === item.draft.key
+                                    ? { ...current, weight }
+                                    : current,
+                                ),
+                              );
+                              setIsDirty(true);
+                            }}
+                          />
+                        </label>
+                        <span className="text-xs font-semibold text-brand-ink">
+                          Score: {formatScore(scoreForWeight(item.weight))} pts
+                        </span>
+                      </div>
+                      {importedQuestionsSubmitted &&
+                        Object.keys(validateDraft(item.draft)).length > 0 && (
+                          <p className="text-xs text-danger">
+                            Fix the question validation errors above before
+                            creating the exam.
+                          </p>
+                        )}
+                    </div>
+                  ))}
+                </div>
+              )}
 
             <div
               className={`card p-5 space-y-4 ${generationType === "RANDOM" ? "hidden" : ""}`}
@@ -1926,7 +1939,7 @@ export function ExamFormPage({
                                             )}
                                         </div>
                                       </div>
-                                      {!isReadOnly && (
+                                      {!areQuestionsReadOnly && (
                                         <button
                                           type="button"
                                           onClick={() =>
@@ -1943,7 +1956,7 @@ export function ExamFormPage({
                                     {q.questionType === "DIAGRAM" && (
                                       <ExamDiagramAnswer
                                         questionId={q.questionId}
-                                        readOnly={isReadOnly}
+                                        readOnly={areQuestionsReadOnly}
                                       />
                                     )}
                                   </div>
