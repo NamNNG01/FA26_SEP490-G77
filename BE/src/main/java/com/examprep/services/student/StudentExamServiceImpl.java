@@ -55,7 +55,7 @@ public class StudentExamServiceImpl implements StudentExamService {
         long attemptCount = attempts.size();
 
         List<ExamAttempt> submittedAttempts = attempts.stream()
-                .filter(a -> "SUBMITTED".equals(a.getStatus()))
+                .filter(a -> "SUBMITTED".equals(a.getStatus())||"COMPLETED".equals(a.getStatus()))
                 .toList();
 
         BigDecimal bestScore = submittedAttempts.stream()
