@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router";
+import { studentExamAttemptsPath } from "@/app/routes";
 import { Icon } from "@/assets/icons";
 import { Container } from "@/features/landing/components/Container";
 import {
@@ -200,7 +201,7 @@ export function StudentExamDetailPage() {
               {exam.actions.canViewHistory && (
                 <button
                   type="button"
-                  onClick={() => navigate("/student/my-exams")}
+                  onClick={() => navigate(studentExamAttemptsPath(examId))}
                   className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-line px-4 text-sm font-semibold text-content-secondary hover:bg-surface-hover"
                 >
                   <Icon.Clock className="h-4 w-4" />
