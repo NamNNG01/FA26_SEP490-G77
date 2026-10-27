@@ -226,6 +226,8 @@ export function ExamFormPage({
     questions.length +
     importedQuestionDrafts.length +
     configs.reduce((sum, config) => sum + config.numberOfQuestions, 0);
+  const hasAddedQuestions =
+    questions.length > 0 || importedQuestionDrafts.length > 0;
   const standaloneQuestions = questions.filter((question) => !question.groupId);
   const totalWeight =
     generationType === "RANDOM"
@@ -1205,7 +1207,7 @@ export function ExamFormPage({
                     <Select
                       label="Course *"
                       value={courseId}
-                      disabled={isReadOnly}
+                      disabled={isReadOnly || hasAddedQuestions}
                       onChange={(v) => {
                         setCourseId(v);
                         setModuleId("");
@@ -1236,7 +1238,7 @@ export function ExamFormPage({
                     <Select
                       label="Module *"
                       value={moduleId}
-                      disabled={isReadOnly || !courseId}
+                      disabled={isReadOnly || !courseId || hasAddedQuestions}
                       onChange={(v) => {
                         setModuleId(v);
                         setIsDirty(true);
@@ -1258,6 +1260,12 @@ export function ExamFormPage({
                     )}
                   </div>
                 </div>
+                {hasAddedQuestions && !isReadOnly && (
+                  <p className="text-xs text-content-subtle">
+                    Remove all added questions before changing the course or
+                    module.
+                  </p>
+                )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
@@ -1538,6 +1546,12 @@ export function ExamFormPage({
                       size="sm"
                       icon={<Icon.Plus className="w-3.5 h-3.5" />}
                       onClick={() => setBankModalOpen(true)}
+                      disabled={!courseId || !moduleId}
+                      title={
+                        !courseId || !moduleId
+                          ? "Select a course and module before adding questions"
+                          : undefined
+                      }
                     >
                       Select Questions from Bank
                     </Button>
@@ -2060,8 +2074,7 @@ export function ExamFormPage({
         onSelect={handleAddQuestionsFromBank}
         allowedQuestionTypes={allowedQuestionTypes}
         existingQuestionIds={existingQuestionIds}
-        initialCourseId={courseId ? Number(courseId) : undefined}
-        initialModuleId={moduleId ? Number(moduleId) : undefined}
+        moduleId={Number(moduleId)}
         loading={loading}
       />
 

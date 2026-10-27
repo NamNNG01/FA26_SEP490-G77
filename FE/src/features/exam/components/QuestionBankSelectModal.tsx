@@ -13,11 +13,6 @@ import {
   type BankQuestionItem,
   type Difficulty,
 } from "@/services/exam.service";
-import {
-  courseService,
-  type CourseSummaryItem,
-  type CourseModuleResponse,
-} from "@/services/course.service";
 import { getApiErrorMessage } from "@/utils/apiError";
 
 interface QuestionBankSelectModalProps {
@@ -26,8 +21,7 @@ interface QuestionBankSelectModalProps {
   onSelect: (items: { question: BankQuestionItem; weight: number }[]) => void;
   allowedQuestionTypes: string[];
   existingQuestionIds: Set<number>;
-  initialCourseId?: number;
-  initialModuleId?: number;
+  moduleId: number;
   loading?: boolean;
 }
 
@@ -37,20 +31,11 @@ export function QuestionBankSelectModal({
   onSelect,
   allowedQuestionTypes,
   existingQuestionIds,
-  initialCourseId,
-  initialModuleId,
+  moduleId,
   loading = false,
 }: QuestionBankSelectModalProps) {
   const [questions, setQuestions] = useState<BankQuestionItem[]>([]);
-  const [courses, setCourses] = useState<CourseSummaryItem[]>([]);
-  const [modules, setModules] = useState<CourseModuleResponse[]>([]);
   const [search, setSearch] = useState("");
-  const [courseId, setCourseId] = useState<string>(
-    initialCourseId ? String(initialCourseId) : "",
-  );
-  const [moduleId, setModuleId] = useState<string>(
-    initialModuleId ? String(initialModuleId) : "",
-  );
   const [difficulty, setDifficulty] = useState<Difficulty | "all">("all");
   const [questionType, setQuestionType] = useState<string>("all");
   const [defaultWeight, setDefaultWeight] = useState<number>(1);
@@ -61,47 +46,17 @@ export function QuestionBankSelectModal({
   const [page, setPage] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [totalElements, setTotalElements] = useState(0);
-  const [coursesError, setCoursesError] = useState<string | null>(null);
-  const [modulesError, setModulesError] = useState<string | null>(null);
   const [questionsError, setQuestionsError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!open) return;
-    courseService.getCourses().then((res) => {
-      setCourses(res.content || []);
-      setCoursesError(null);
-    }).catch((err) => {
-      setCourses([]);
-      setCoursesError(getApiErrorMessage(err, "Failed to load courses."));
-    });
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    if (courseId) {
-      setModulesError(null);
-      courseService.getCourseModules(courseId).then((mods) => {
-        setModules(mods || []);
-      }).catch((err) => {
-        setModules([]);
-        setModulesError(getApiErrorMessage(err, "Failed to load course modules."));
-      });
-    } else {
-      setModules([]);
-      setModuleId("");
-    }
-  }, [open, courseId]);
-
-  useEffect(() => {
-    if (!open) return;
+    if (!open || !moduleId) return;
     setFetching(true);
     setQuestionsError(null);
     const timer = setTimeout(() => {
       examService
         .getQuestions({
           search: search.trim() || undefined,
-          courseId: courseId ? Number(courseId) : undefined,
-          moduleId: moduleId ? Number(moduleId) : undefined,
+          moduleId,
           groupType: "NONE",
           difficulty: difficulty !== "all" ? difficulty : undefined,
           questionType: questionType !== "all" ? questionType : undefined,
@@ -128,7 +83,6 @@ export function QuestionBankSelectModal({
   }, [
     open,
     search,
-    courseId,
     moduleId,
     difficulty,
     questionType,
@@ -140,10 +94,8 @@ export function QuestionBankSelectModal({
     if (open) {
       setSelectedMap(new Map());
       setPage(0);
-      if (initialCourseId) setCourseId(String(initialCourseId));
-      if (initialModuleId) setModuleId(String(initialModuleId));
     }
-  }, [open, initialCourseId, initialModuleId]);
+  }, [open]);
 
   const toggleSelect = (q: BankQuestionItem) => {
     if (existingQuestionIds.has(q.questionId)) return;
@@ -231,11 +183,9 @@ export function QuestionBankSelectModal({
       }
     >
       <div className="space-y-4">
-        {coursesError && <Alert type="error" title="Could not load courses" message={coursesError} />}
-        {modulesError && <Alert type="error" title="Could not load modules" message={modulesError} />}
         {questionsError && <Alert type="error" title="Could not load questions" message={questionsError} />}
-        <div className="grid min-w-0 grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="min-w-0 sm:col-span-2 lg:col-span-2">
+        <div className="grid min-w-0 grid-cols-1 gap-2.5 sm:grid-cols-2">
+          <div className="min-w-0">
             <SearchInput
               placeholder="Search question text…"
               value={search}
@@ -245,38 +195,6 @@ export function QuestionBankSelectModal({
               }}
             />
           </div>
-          <Select
-            className="min-w-0"
-            value={courseId}
-            onChange={(v) => {
-              setCourseId(v);
-              setModuleId("");
-              setPage(0);
-            }}
-            options={[
-              { label: "All Courses", value: "" },
-              ...courses.map((c) => ({
-                label: c.title,
-                value: String(c.courseId),
-              })),
-            ]}
-          />
-          <Select
-            className="min-w-0"
-            value={moduleId}
-            onChange={(v) => {
-              setModuleId(v);
-              setPage(0);
-            }}
-            disabled={!courseId}
-            options={[
-              { label: "All Modules", value: "" },
-              ...modules.map((m) => ({
-                label: m.title,
-                value: String(m.moduleId),
-              })),
-            ]}
-          />
           <Select
             className="min-w-0 lg:col-span-2"
             value={difficulty}
@@ -328,7 +246,7 @@ export function QuestionBankSelectModal({
             </div>
           ) : questions.length === 0 ? (
             <div className="py-12 text-center text-sm text-content-subtle">
-              No matching ACTIVE questions found for the selected filters.
+              No matching ACTIVE questions found for this module and filters.
             </div>
           ) : (
             questions.map((q) => {
