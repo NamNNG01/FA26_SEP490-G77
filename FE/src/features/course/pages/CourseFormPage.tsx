@@ -233,7 +233,12 @@ export function CourseFormPage({
               type="number"
               min={0}
               value={price}
-              onChange={(e) => setPrice(e.target.value)}
+              onChange={(e) => {
+                const nextPrice = e.target.value;
+                if (nextPrice === "" || Number(nextPrice) >= 0) {
+                  setPrice(nextPrice);
+                }
+              }}
               hint="0 = Free"
             />
           </div>

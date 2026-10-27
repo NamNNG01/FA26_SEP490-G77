@@ -837,6 +837,54 @@ export function ExamFormPage({
     }
   };
 
+  const handleRemoveAllQuestions = async () => {
+    if (!isEdit) {
+      setQuestions([]);
+      setGroups([]);
+      setImportedQuestionDrafts([]);
+      setIsDirty(true);
+      toast.success("All questions removed from the draft exam.");
+      return;
+    }
+
+    if (!id || (questions.length === 0 && groups.length === 0)) return;
+
+    setLoading(true);
+    const removedQuestionIds = new Set<number>();
+    const failedGroupIds = new Set<number>();
+    const failures: string[] = [];
+
+    for (const group of groups) {
+      try {
+        await examService.removeGroupFromExam(Number(id), group.examGroupId);
+        questions
+          .filter((question) => question.groupId === group.groupId)
+          .forEach((question) => removedQuestionIds.add(question.examQuestionId));
+      } catch (err) {
+        failedGroupIds.add(group.groupId);
+        failures.push(`${group.title}: ${getApiErrorMessage(err, "Could not remove group.")}`);
+      }
+    }
+
+    for (const question of questions) {
+      if (removedQuestionIds.has(question.examQuestionId)) continue;
+      if (question.groupId && !failedGroupIds.has(question.groupId)) continue;
+      try {
+        await examService.removeQuestionFromExam(Number(id), question.examQuestionId);
+      } catch (err) {
+        failures.push(`Question #${question.questionId}: ${getApiErrorMessage(err, "Could not remove question.")}`);
+      }
+    }
+
+    setLoading(false);
+    if (failures.length > 0) {
+      toast.error(`Some questions could not be removed: ${failures.join(" ")}`);
+    } else {
+      toast.success("All questions removed from exam.");
+    }
+    loadExamDetail(Number(id));
+  };
+
   const handleQuestionWeightBlur = async (
     question: ExamQuestion,
     weight = question.weight ?? question.points ?? 1,
@@ -1515,6 +1563,17 @@ export function ExamFormPage({
 
                 {!isReadOnly && (
                   <div className="flex items-center gap-2">
+                    {(questions.length > 0 || groups.length > 0 || importedQuestionDrafts.length > 0) && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        icon={<Icon.Trash className="w-3.5 h-3.5" />}
+                        onClick={handleRemoveAllQuestions}
+                        disabled={loading}
+                      >
+                        Remove All
+                      </Button>
+                    )}
                     {formKind === "QUIZ" && isEdit && (
                       <Button
                         size="sm"
@@ -2074,6 +2133,8 @@ export function ExamFormPage({
         onSelect={handleAddQuestionsFromBank}
         allowedQuestionTypes={allowedQuestionTypes}
         existingQuestionIds={existingQuestionIds}
+        courseName={courses.find((course) => String(course.courseId) === courseId)?.title ?? ""}
+        moduleName={modules.find((module) => String(module.moduleId) === moduleId)?.title ?? ""}
         moduleId={Number(moduleId)}
         loading={loading}
       />
