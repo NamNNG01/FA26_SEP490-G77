@@ -1,6 +1,7 @@
 import React from 'react';
 import { Icon } from '@/assets/icons';
 import type { AnswerResponse, AttemptQuestion } from '@/services/studentAttempt.service';
+import { DiagramAnswerInput } from './DiagramAnswerInput';
 
 /** ESSAY / CODE text limit when the paper sets none (BE AnswerResponseValidator). */
 const DEFAULT_TEXT_LIMIT = 10_000;
@@ -65,8 +66,9 @@ export function QuestionAnswerInput({ question, value, onChange, roomy }: InputP
       return <OrderingInput question={question} value={value} onChange={onChange} />;
     case 'ESSAY':
     case 'CODE':
-    case 'DIAGRAM':
       return <TextInput question={question} value={value} onChange={onChange} roomy={roomy} />;
+    case 'DIAGRAM':
+      return <DiagramAnswerInput value={value} onChange={onChange} roomy={roomy} />;
     default:
       return <p className="text-sm text-content-soft">This question type can't be answered here.</p>;
   }
@@ -230,34 +232,25 @@ function OrderingInput({ question, value, onChange }: InputProps) {
 }
 
 function TextInput({ question, value, onChange, roomy }: InputProps) {
-  const isDiagram = question.questionType === 'DIAGRAM';
-  const field = isDiagram ? 'drawioXml' : 'text';
-  const text = (isDiagram ? value?.drawioXml : value?.text) ?? '';
-  const limit = isDiagram ? undefined : question.answerSpace?.maxLength ?? DEFAULT_TEXT_LIMIT;
+  const text = value?.text ?? '';
+  const limit = question.answerSpace?.maxLength ?? DEFAULT_TEXT_LIMIT;
   const words = text.trim() ? text.trim().split(/\s+/).length : 0;
   return (
     <div className="space-y-2">
-      {isDiagram && (
-        <p className="text-xs text-content-subtle">
-          Draw your diagram in draw.io, then paste its XML here (Extras → Edit Diagram).
-        </p>
-      )}
       <textarea
         aria-label="Your answer"
         value={text}
         maxLength={limit}
-        onChange={e => onChange({ [field]: e.target.value })}
-        placeholder={isDiagram ? '<mxfile>…</mxfile>' : 'Write your answer…'}
+        onChange={e => onChange({ text: e.target.value })}
+        placeholder="Write your answer…"
         spellCheck={question.questionType === 'ESSAY'}
         className={`${FIELD} py-2.5 w-full resize-y leading-relaxed ${roomy ? 'min-h-[50vh]' : 'min-h-[14rem]'} ${
           question.questionType !== 'ESSAY' ? 'font-mono text-sm' : 'text-base'
         }`}
       />
-      {!isDiagram && (
-        <p className="text-xs text-content-subtle text-right">
-          {words} words · {text.length.toLocaleString()} / {limit?.toLocaleString()} characters
-        </p>
-      )}
+      <p className="text-xs text-content-subtle text-right">
+        {words} words · {text.length.toLocaleString()} / {limit.toLocaleString()} characters
+      </p>
     </div>
   );
 }

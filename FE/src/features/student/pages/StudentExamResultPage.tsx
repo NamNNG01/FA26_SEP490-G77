@@ -21,6 +21,7 @@ import {
 } from '@/services/studentAttempt.service';
 import { LoadError, STUDENT_PAGE_CLASS, formatDateTime } from '../components/studentUi';
 import { QUESTION_TYPE_LABEL, QuestionText, isAnswered, optionLetter } from '../components/QuestionAnswerInput';
+import { useDrawioSnapshot } from '@/features/question/components/useDrawioSnapshot';
 
 /** While the AI grades, the result is re-read this often. */
 const POLL_MS = 4_000;
@@ -45,7 +46,7 @@ const OUTCOME: Record<Outcome, { label: string; badge: 'success' | 'danger' | 'i
   incorrect: { label: 'Incorrect', badge: 'danger', icon: <Icon.XCircle className="w-5 h-5 text-danger" /> },
   graded: { label: 'Graded', badge: 'info', icon: <Icon.Award className="w-5 h-5 text-primary" /> },
   unanswered: { label: 'Unanswered', badge: 'default', icon: <Icon.HelpCircle className="w-5 h-5 text-content-subtle" /> },
-  pending: { label: 'Grading', badge: 'warning', icon: <Icon.Clock className="w-5 h-5 text-warning" /> },
+  pending: { label: 'Not graded', badge: 'warning', icon: <Icon.Clock className="w-5 h-5 text-warning" /> },
 };
 
 function outcomeOf(q: ResultQuestion): Outcome {
@@ -99,6 +100,11 @@ interface ExplanationState {
   error: string | null;
 }
 
+const sortResult = (res: AttemptResult): AttemptResult => ({
+  ...res,
+  questions: [...res.questions].sort((a, b) => a.orderIndex - b.orderIndex),
+});
+
 function num(v: number | null | undefined): string {
   return v == null ? '—' : String(Math.round(Number(v) * 100) / 100);
 }
@@ -113,8 +119,9 @@ function num(v: number | null | undefined): string {
  *  - right: a dropdown of my submitted attempts of this exam (SA-06, with
  *    their date), then the score, correct / incorrect counts and "Re-attempt".
  * `?examId=` alone opens the newest submitted attempt; `?attemptId=` picks one.
- * Essay / code / diagram answers: the page asks the AI to grade them (SE-02)
- * and shows a "grading" screen, polling until every answer is scored.
+ * Essay / code / diagram answers: the attempt lands here SUBMITTED with its
+ * rubric answers ungraded. "Grade with AI" asks the AI (SE-02) and opens a
+ * "grading" modal, polling until every answer is scored.
  */
 export function StudentExamResultPage() {
   const navigate = useNavigate();
@@ -198,7 +205,7 @@ export function StudentExamResultPage() {
     studentAttemptService
       .getResult(attemptId)
       .then(res => {
-        if (!cancelled) setResult({ ...res, questions: [...res.questions].sort((a, b) => a.orderIndex - b.orderIndex) });
+        if (!cancelled) setResult(sortResult(res));
       })
       .catch(err => {
         if (!cancelled) setError(getApiErrorMessage(err, 'Failed to load the result.'));
@@ -220,14 +227,18 @@ export function StudentExamResultPage() {
 
   /* ── AI grading of essay / code / diagram answers ─────────────────────── */
   const [gradingError, setGradingError] = useState<string | null>(null);
-  /** The student chose to see the result before the AI finished (or after it failed to start). */
-  const [skipWait, setSkipWait] = useState(false);
-  /** Attempts SE-02 was already sent for in this visit — never ask twice on our own. */
-  const requestedRef = useRef<Set<number>>(new Set());
+  /** SE-02 sent and the result not re-read yet. */
+  const [requesting, setRequesting] = useState(false);
+  /** The student asked for grading in this visit — keeps the modal up to show a start error. */
+  const [gradingAsked, setGradingAsked] = useState(false);
+  /** The student closed the grading modal; the AI keeps going and the page keeps polling. */
+  const [dismissed, setDismissed] = useState(false);
 
   const requestGrading = useCallback(async (id: number) => {
-    requestedRef.current.add(id);
     setGradingError(null);
+    setGradingAsked(true);
+    setDismissed(false);
+    setRequesting(true);
     try {
       await studentAttemptService.requestGrading(id);
     } catch (err) {
@@ -235,16 +246,19 @@ export function StudentExamResultPage() {
       // 409 NOTHING_TO_GRADE: already queued/graded elsewhere — just re-read.
       if (status !== 409) setGradingError(getApiErrorMessage(err, 'Could not start the AI grading.'));
     }
-    setReload(r => r + 1);
+    // Re-read before dropping `requesting`, so the modal doesn't blink shut in between.
+    try {
+      const res = await studentAttemptService.getResult(id);
+      if (attemptIdRef.current === String(id)) setResult(sortResult(res));
+    } catch {
+      setReload(r => r + 1);
+    }
+    setRequesting(false);
   }, []);
 
   const waiting = result?.questions.some(q => q.gradingStatus === GRADING_WAITING) ?? false;
   const running = result?.questions.some(q => GRADING_RUNNING.has(q.gradingStatus ?? '')) ?? false;
-
-  // Submitted with essay answers: ask the AI to grade them (once per attempt and visit).
-  useEffect(() => {
-    if (result && waiting && !requestedRef.current.has(result.attemptId)) requestGrading(result.attemptId);
-  }, [result, waiting, requestGrading]);
+  const showGrading = !dismissed && (requesting || running || (gradingAsked && gradingError != null));
 
   // Poll while the AI is working, until every answer is graded or failed.
   useEffect(() => {
@@ -254,7 +268,8 @@ export function StudentExamResultPage() {
   }, [running, result]);
 
   useEffect(() => {
-    setSkipWait(false);
+    setDismissed(false);
+    setGradingAsked(false);
     setGradingError(null);
   }, [attemptId]);
 
@@ -337,20 +352,6 @@ export function StudentExamResultPage() {
     );
   }
 
-  if ((waiting || running) && !skipWait) {
-    return (
-      <div className={`${STUDENT_PAGE_CLASS} space-y-6`}>
-        {breadcrumb}
-        <GradingScreen
-          result={result}
-          error={gradingError}
-          onRetry={() => requestGrading(result.attemptId)}
-          onSkip={() => setSkipWait(true)}
-        />
-      </div>
-    );
-  }
-
   const failedCount = result.questions.filter(q => q.gradingStatus === GRADING_FAILED).length;
 
   const toggle = (questionId: number) => {
@@ -420,13 +421,16 @@ export function StudentExamResultPage() {
 
       <div className="grid lg:grid-cols-[minmax(0,1fr)_320px] gap-[clamp(1rem,2vw,1.5rem)] items-start">
         {/* Right column first on small screens: the score is the headline. */}
-        <aside className="lg:order-2 lg:sticky lg:top-[10px]">
+        {/* Sticks 10px below the public navbar (sticky, h-16 + 1px border = 65px). */}
+        <aside className="lg:order-2 lg:sticky lg:top-[75px]">
           <ScoreCard
             result={result}
             counts={counts}
             failedCount={failedCount}
             gradingError={gradingError}
-            onRetryGrading={() => requestGrading(result.attemptId)}
+            waitingForGrading={waiting && !running}
+            grading={requesting || running}
+            onRequestGrading={() => requestGrading(result.attemptId)}
             picker={
               attempts && attempts.length > 0 ? (
                 <Select
@@ -493,6 +497,15 @@ export function StudentExamResultPage() {
         </section>
       </div>
 
+      <Modal open={showGrading} onClose={() => setDismissed(true)} title="AI grading" size="sm">
+        <GradingScreen
+          result={result}
+          error={requesting ? null : gradingError}
+          onRetry={() => requestGrading(result.attemptId)}
+          onClose={() => setDismissed(true)}
+        />
+      </Modal>
+
       <Modal
         open={confirmAll != null}
         onClose={() => setConfirmAll(null)}
@@ -555,42 +568,41 @@ export function StudentExamResultPage() {
 }
 
 /**
- * Shown instead of the result while the AI grades the rubric answers: a
+ * Body of the grading modal while the AI grades the rubric answers: a
  * spinner with how many are done, re-read every few seconds by the page.
- * If grading could not start (e.g. 402 quota), offers retry or the
- * result without the AI scores.
+ * If grading could not start (e.g. 402 quota), offers retry or closing.
  */
 function GradingScreen({
   result,
   error,
   onRetry,
-  onSkip,
+  onClose,
 }: {
   result: AttemptResult;
   error: string | null;
   onRetry: () => void;
-  onSkip: () => void;
+  onClose: () => void;
 }) {
   const rubric = result.questions.filter(q => RUBRIC_TYPES.has(q.questionType) && q.gradingStatus !== 'AUTO');
   const done = rubric.filter(q => !isGradingOpen(q)).length;
   const total = Math.max(rubric.length, 1);
   return (
-    <div className="card max-w-xl mx-auto px-[clamp(1.25rem,4vw,2.5rem)] py-12 flex flex-col items-center text-center gap-5" aria-live="polite">
+    <div className="py-6 flex flex-col items-center text-center gap-5" aria-live="polite">
       {error ? (
         <>
           <div className="w-14 h-14 rounded-full bg-danger-light flex items-center justify-center">
             <Icon.AlertCircle className="w-7 h-7 text-danger" />
           </div>
           <div className="space-y-1.5">
-            <h1 className="text-lg font-bold text-content">AI grading could not start</h1>
+            <h2 className="text-lg font-bold text-content">AI grading could not start</h2>
             <p className="text-sm text-content-soft">{error}</p>
           </div>
           <div className="flex flex-wrap justify-center gap-2">
             <Button icon={<Icon.RefreshCw className="w-4 h-4" />} onClick={onRetry}>
               Try again
             </Button>
-            <Button variant="outline" onClick={onSkip}>
-              View result without AI scores
+            <Button variant="outline" onClick={onClose}>
+              Close
             </Button>
           </div>
         </>
@@ -601,7 +613,7 @@ function GradingScreen({
             <Icon.Brain className="absolute w-6 h-6 text-primary" />
           </div>
           <div className="space-y-1.5">
-            <h1 className="text-lg font-bold text-content">AI is grading your answers…</h1>
+            <h2 className="text-lg font-bold text-content">AI is grading your answers…</h2>
             <p className="text-sm text-content-soft">
               {result.examTitle} — your written answers are being scored against the rubric. This usually takes under a minute.
             </p>
@@ -612,9 +624,6 @@ function GradingScreen({
               {done} / {rubric.length} answers graded
             </p>
           </div>
-          <button type="button" onClick={onSkip} className="text-sm text-brand-ink hover:underline">
-            Show the result now
-          </button>
         </>
       )}
     </div>
@@ -627,7 +636,9 @@ function ScoreCard({
   picker,
   failedCount,
   gradingError,
-  onRetryGrading,
+  waitingForGrading,
+  grading,
+  onRequestGrading,
   onReattempt,
   onBack,
 }: {
@@ -638,7 +649,11 @@ function ScoreCard({
   /** Rubric answers the AI failed to grade (can be asked again). */
   failedCount: number;
   gradingError: string | null;
-  onRetryGrading: () => void;
+  /** Rubric answers wait for the student to ask the AI (attempt SUBMITTED). */
+  waitingForGrading: boolean;
+  /** SE-02 sent or the AI is working. */
+  grading: boolean;
+  onRequestGrading: () => void;
   onReattempt?: () => void;
   onBack: () => void;
 }) {
@@ -646,19 +661,14 @@ function ScoreCard({
   const score = result.totalScore != null ? Number(result.totalScore) : null;
   const pct = max && score != null ? Math.round((score / max) * 100) : null;
   const tone = pct == null ? 'text-content' : pct >= 80 ? 'text-success' : pct >= 50 ? 'text-warning' : 'text-danger';
-  // Correct / Incorrect only mean something for auto-graded questions; essays are "Graded".
-  const hasAutoGraded = result.questions.some(q => !RUBRIC_TYPES.has(q.questionType));
-  const tiles: Outcome[] = [
-    ...(hasAutoGraded ? (['correct', 'incorrect'] as Outcome[]) : []),
-    ...(counts.graded > 0 || !hasAutoGraded ? (['graded'] as Outcome[]) : []),
-    'unanswered',
-    'pending',
-  ];
 
   return (
     <div className="card p-5 space-y-5 min-w-0">
       <div>
-        <h1 className="text-base font-semibold text-content break-words">{result.examTitle}</h1>
+        <div className="flex items-start justify-between gap-2">
+          <h1 className="text-base font-semibold text-content break-words min-w-0">{result.examTitle}</h1>
+          <AttemptStatusBadge status={result.status} />
+        </div>
         <p className="text-xs text-content-subtle mt-0.5">Submitted {formatDateTime(result.submittedAt)}</p>
       </div>
 
@@ -679,32 +689,36 @@ function ScoreCard({
         )}
       </div>
 
-      <dl className="grid grid-cols-2 gap-2">
-        {tiles.map(k => (
-          <div key={k} className="flex items-center gap-2 min-w-0 rounded-[10px] border border-line px-3 py-2.5">
-            <span className="flex-shrink-0">{OUTCOME[k].icon}</span>
-            <div className="flex flex-col-reverse min-w-0">
-              <dt className="text-xs text-content-subtle truncate">{OUTCOME[k].label}</dt>
-              <dd className="text-lg font-semibold text-content leading-tight">{counts[k]}</dd>
-            </div>
-          </div>
-        ))}
-      </dl>
-
-      {(counts.pending > 0 || (result.pendingPoints != null && Number(result.pendingPoints) > 0)) && (
-        <p className="flex items-start gap-2 text-xs text-warning">
-          <Icon.Clock className="w-4 h-4 flex-shrink-0" />
-          {num(result.pendingPoints)} points are still being graded by AI. This page refreshes on its own.
-        </p>
+      {waitingForGrading || grading ? (
+        <div className="space-y-2 rounded-[10px] border border-warning-line bg-warning-light p-3">
+          <p className="flex items-start gap-2 text-xs text-warning">
+            <Icon.Clock className="w-4 h-4 flex-shrink-0" />
+            {grading
+              ? `AI is grading ${num(result.pendingPoints)} points of written answers…`
+              : `${num(result.pendingPoints)} points of written answers are not graded yet. Ask the AI to grade them against the rubric.`}
+          </p>
+          {gradingError && <p className="text-xs text-danger">{gradingError}</p>}
+          {/* Button's `loading` shows its spinner while SE-02 is sent and the AI is working. */}
+          <Button size="sm" className="w-full" icon={<Icon.Brain className="w-4 h-4" />} loading={grading} disabled={grading} onClick={onRequestGrading}>
+            {grading ? 'Grading…' : 'Grade with AI'}
+          </Button>
+        </div>
+      ) : (
+        (counts.pending > 0 || (result.pendingPoints != null && Number(result.pendingPoints) > 0)) && (
+          <p className="flex items-start gap-2 text-xs text-warning">
+            <Icon.Clock className="w-4 h-4 flex-shrink-0" />
+            {num(result.pendingPoints)} points are still being graded by AI. This page refreshes on its own.
+          </p>
+        )
       )}
 
-      {(failedCount > 0 || gradingError) && (
+      {!waitingForGrading && !grading && (failedCount > 0 || gradingError) && (
         <div className="space-y-2 rounded-[10px] border border-danger-solid bg-danger-light p-3">
           <p className="flex items-start gap-2 text-xs text-danger">
             <Icon.AlertCircle className="w-4 h-4 flex-shrink-0" />
             {gradingError ?? `AI grading failed for ${failedCount} question${failedCount === 1 ? '' : 's'}.`}
           </p>
-          <Button size="sm" variant="outline" icon={<Icon.RefreshCw className="w-4 h-4" />} onClick={onRetryGrading}>
+          <Button size="sm" variant="outline" icon={<Icon.RefreshCw className="w-4 h-4" />} loading={grading} disabled={grading} onClick={onRequestGrading}>
             Retry AI grading
           </Button>
         </div>
@@ -723,6 +737,24 @@ function ScoreCard({
         </Button>
       </div>
     </div>
+  );
+}
+
+/** Attempt status (BE): SUBMITTED waits for AI grading, GRADING while it runs, COMPLETED when scored. */
+const ATTEMPT_STATUS: Record<string, { label: string; badge: 'success' | 'warning' | 'info' | 'default' }> = {
+  SUBMITTED: { label: 'Submitted', badge: 'warning' },
+  GRADING: { label: 'Grading', badge: 'info' },
+  COMPLETED: { label: 'Completed', badge: 'success' },
+};
+
+function AttemptStatusBadge({ status }: { status: string }) {
+  const s = ATTEMPT_STATUS[status] ?? { label: status.replace(/_/g, ' ').toLowerCase(), badge: 'default' as const };
+  return (
+    <span className="flex-shrink-0">
+      <Badge variant={s.badge} size="sm">
+        {s.label}
+      </Badge>
+    </span>
   );
 }
 
@@ -854,7 +886,7 @@ function AnswerReview({ question: q }: { question: ResultQuestion }) {
       {!answered ? (
         <p className="text-sm text-content-subtle">You did not answer this question.</p>
       ) : q.questionType === 'DIAGRAM' ? (
-        <p className="text-sm text-content-secondary">Diagram submitted ({(r?.drawioXml ?? '').length.toLocaleString()} characters of XML).</p>
+        <DiagramReview xml={r?.drawioXml ?? ''} />
       ) : (
         <pre
           className={`text-sm text-content-secondary whitespace-pre-wrap break-words rounded-[10px] bg-surface-alt border border-line p-3 max-h-80 overflow-y-auto ${
@@ -864,6 +896,27 @@ function AnswerReview({ question: q }: { question: ResultQuestion }) {
           {r?.text}
         </pre>
       )}
+    </div>
+  );
+}
+
+/** The submitted diagram, rendered to a picture by a hidden draw.io (the BE keeps only the XML). */
+function DiagramReview({ xml }: { xml: string }) {
+  const snapshot = useDrawioSnapshot(xml);
+  return (
+    <div className="rounded-[10px] border border-line bg-white p-3 flex items-center justify-center min-h-[140px]">
+      {snapshot.svg ? (
+        <img src={snapshot.svg} alt="Your diagram" className="max-h-[420px] max-w-full object-contain" />
+      ) : snapshot.status === 'loading' ? (
+        <span className="flex items-center gap-2 text-sm text-content-soft">
+          <Spinner size="sm" /> Rendering your diagram…
+        </span>
+      ) : (
+        <span className="text-sm text-content-soft">
+          Diagram submitted ({xml.length.toLocaleString()} characters of XML) — couldn’t render a preview.
+        </span>
+      )}
+      {snapshot.frame}
     </div>
   );
 }

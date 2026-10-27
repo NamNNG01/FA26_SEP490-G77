@@ -345,19 +345,25 @@ export function StudentTakeExamPage() {
       )}
 
       <div className="flex flex-1 overflow-hidden flex-col md:flex-row">
-        <main className="flex-1 overflow-y-auto p-[clamp(1rem,2.5vw,1.5rem)]">
-          <div className={`${isEssay ? 'max-w-4xl' : 'max-w-3xl'} mx-auto space-y-5`}>
+        {/* Essay / diagram papers use the full width (30px gutters): draw.io and long answers need the room. */}
+        <main className={`flex-1 overflow-y-auto ${isEssay ? 'p-[30px]' : 'p-[clamp(1rem,2.5vw,1.5rem)]'}`}>
+          <div className={`${isEssay ? 'w-full space-y-3' : 'max-w-3xl mx-auto space-y-5'}`}>
+            {/* Question header: number, type and points — the card below holds only the question text. */}
             <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-sm font-semibold text-content uppercase tracking-wide">Question {current + 1}</h2>
               <Badge variant="info">{QUESTION_TYPE_LABEL[q.questionType] ?? q.questionType}</Badge>
               {q.maxPoints != null && <span className="text-xs text-content-subtle">{Number(q.maxPoints)} pts</span>}
               <span className="text-xs text-content-subtle ml-auto">
-                Question {current + 1} / {questions.length}
+                {current + 1} / {questions.length}
               </span>
             </div>
 
-            <div className="card p-[clamp(1rem,2.5vw,1.5rem)]">
-              <p className="text-xs font-semibold text-content-subtle uppercase tracking-wide mb-3">Question {current + 1}</p>
-              <QuestionText content={q.content} className="text-lg text-content leading-relaxed font-medium" />
+            {/* Essay papers: a compact question (scrolls past ~12vh) so the answer area stays on screen. */}
+            <div className={`card ${isEssay ? 'px-3 py-2 max-h-[12vh] overflow-y-auto' : 'p-[clamp(1rem,2.5vw,1.5rem)]'}`}>
+              <QuestionText
+                content={q.content}
+                className={`text-content font-medium ${isEssay ? 'text-xs leading-normal' : 'text-lg leading-relaxed'}`}
+              />
             </div>
 
             <QuestionAnswerInput
