@@ -437,7 +437,10 @@ export function StudentExamResultPage() {
                   label="Attempt"
                   options={attempts.map((a, i) => ({
                     value: String(a.attemptId),
-                    label: `#${attempts.length - i} · ${formatDateTime(a.submittedAt ?? a.startTime)} · ${num(a.totalScore)}/${num(a.maxScore)}`,
+                    // Written answers still ungraded: a "0/100" would read as a real score.
+                    label: `#${attempts.length - i} · ${formatDateTime(a.submittedAt ?? a.startTime)} · ${
+                      Number(a.pendingPoints ?? 0) > 0 ? 'Not graded' : `${num(a.totalScore)}/${num(a.maxScore)}`
+                    }`,
                   }))}
                   value={String(result.attemptId)}
                   onChange={v => examId && setSearchParams({ examId, attemptId: v })}
@@ -674,29 +677,27 @@ function ScoreCard({
 
       {picker && <div className="min-w-0">{picker}</div>}
 
-      <div className="text-center min-w-0">
-        <p className="text-xs font-semibold text-content-subtle uppercase tracking-wide mb-2 text-left">Your score</p>
-        {/* Wraps instead of overflowing the 320px column on long scores (e.g. 123.45 / 150). */}
-        <p className={`flex flex-wrap items-baseline justify-center gap-x-1.5 gap-y-1 leading-none ${tone}`}>
-          <span className="text-[clamp(2rem,1.5rem+1.5vw,2.75rem)] font-black break-all">{num(score)}</span>
-          <span className="text-lg font-semibold text-content-subtle whitespace-nowrap">/ {num(max)}</span>
-        </p>
-        {pct != null && <p className="text-sm text-content-soft mt-2">{pct}%</p>}
-        {pct != null && (
-          <div className="mt-3">
-            <Progress value={pct} size="sm" />
-          </div>
-        )}
-      </div>
+      {/* No score until the written answers are graded — "0 / 100" would read as a real result. */}
+      {!waitingForGrading && !grading && (
+        <div className="text-center min-w-0">
+          <p className="text-xs font-semibold text-content-subtle uppercase tracking-wide mb-2 text-left">Your score</p>
+          {/* Wraps instead of overflowing the 320px column on long scores (e.g. 123.45 / 150). */}
+          <p className={`flex flex-wrap items-baseline justify-center gap-x-1.5 gap-y-1 leading-none ${tone}`}>
+            <span className="text-[clamp(2rem,1.5rem+1.5vw,2.75rem)] font-black break-all">{num(score)}</span>
+            <span className="text-lg font-semibold text-content-subtle whitespace-nowrap">/ {num(max)}</span>
+          </p>
+        </div>
+      )}
 
       {waitingForGrading || grading ? (
-        <div className="space-y-2 rounded-[10px] border border-warning-line bg-warning-light p-3">
-          <p className="flex items-start gap-2 text-xs text-warning">
-            <Icon.Clock className="w-4 h-4 flex-shrink-0" />
-            {grading
-              ? `AI is grading ${num(result.pendingPoints)} points of written answers…`
-              : `${num(result.pendingPoints)} points of written answers are not graded yet. Ask the AI to grade them against the rubric.`}
-          </p>
+        // Just the button while waiting; the warning box only when there is something to say.
+        <div className={grading || gradingError ? 'space-y-2 rounded-[10px] border border-warning-line bg-warning-light p-3' : ''}>
+          {grading && (
+            <p className="flex items-start gap-2 text-xs text-warning">
+              <Icon.Clock className="w-4 h-4 flex-shrink-0" />
+              AI is grading {num(result.pendingPoints)} points of written answers…
+            </p>
+          )}
           {gradingError && <p className="text-xs text-danger">{gradingError}</p>}
           {/* Button's `loading` shows its spinner while SE-02 is sent and the AI is working. */}
           <Button size="sm" className="w-full" icon={<Icon.Brain className="w-4 h-4" />} loading={grading} disabled={grading} onClick={onRequestGrading}>
@@ -790,7 +791,8 @@ function ResultQuestionCard({
             {OUTCOME[outcome].label}
           </Badge>
           <span className="text-xs text-content-subtle">
-            {num(q.scoreEarned)} / {num(q.maxPoints)} pts
+            {/* Ungraded written answer: only its worth, not a "0 / 100". */}
+            {outcome === 'pending' ? `${num(q.maxPoints)} pts` : `${num(q.scoreEarned)} / ${num(q.maxPoints)} pts`}
           </span>
         </div>
       </header>
