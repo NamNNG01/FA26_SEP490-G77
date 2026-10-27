@@ -191,7 +191,6 @@ export function ExamAiGenerateTab({
   const questionCount = totalDiff;
   const canGenerate =
     courseId !== "" &&
-    moduleId !== "" &&
     isDiffMatch &&
     isTypeMatch &&
     maxScore > 0 &&
@@ -210,7 +209,6 @@ export function ExamAiGenerateTab({
   const handleGenerate = async () => {
     const errors: Record<string, string> = {};
     if (!courseId) errors.courseId = MSG01;
-    if (!moduleId) errors.moduleId = "Select a module.";
     if (!context.trim()) errors.context = MSG01;
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
@@ -434,14 +432,6 @@ export function ExamAiGenerateTab({
       );
       return;
     }
-    if (!moduleId) {
-      setFieldErrors({ moduleId: "Select a module before saving the exam." });
-      toast.error("Select a module before saving the exam.", {
-        title: "Module required",
-      });
-      return;
-    }
-
     for (let i = 0; i < draft.questions.length; i++) {
       const err = validateDraftQuestion(draft.questions[i]);
       if (err) {
@@ -569,7 +559,7 @@ export function ExamAiGenerateTab({
 
             <div>
               <Select
-                label="Module *"
+                label="Module (optional)"
                 value={moduleId}
                 onChange={(value) => {
                   setModuleId(value);
