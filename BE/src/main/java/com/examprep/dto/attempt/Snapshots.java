@@ -70,7 +70,9 @@ public final class Snapshots {
             List<Long> correctOrder,
             List<Blank> blanks,
             List<Pair> pairs,
-            Rubric rubric) {
+            Rubric rubric,
+            String drawioXml
+    ) {
     }
 
     /** FILL_BLANK: one placeholder with its accepted spellings. */

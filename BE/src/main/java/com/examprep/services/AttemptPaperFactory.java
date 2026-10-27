@@ -200,14 +200,16 @@ public class AttemptPaperFactory {
     /** Everything needed to grade and to review, frozen at start. Never returned before submit. */
     public Snapshots.KeySnapshot key(Question question, List<AnswerOption> options) {
         String type = question.getQuestionType();
+
         List<Long> correctOptionIds = null;
         List<Long> correctOrder = null;
         List<Snapshots.Blank> blanks = null;
         List<Snapshots.Pair> pairs = null;
         Snapshots.Rubric rubric = null;
+        String drawioXml = null;
 
-        if (("SINGLE_CHOICE".equals(type) || "MULTIPLE_CHOICE".equals(type) || "TRUE_FALSE".equals(type))
-                && options != null) {
+        if (("SINGLE_CHOICE".equals(type) || "MULTIPLE_CHOICE".equals(type)
+                || "TRUE_FALSE".equals(type)) && options != null) {
             List<Long> correct = new ArrayList<>();
             for (AnswerOption option : options) {
                 if (Boolean.TRUE.equals(option.getIsCorrect())) {
@@ -228,9 +230,19 @@ public class AttemptPaperFactory {
             rubric = rubric(question.getEssayGradingRubric());
         }
 
-        return new Snapshots.KeySnapshot(correctOptionIds, correctOrder, blanks, pairs, rubric);
-    }
+        if ("DIAGRAM".equals(type)) {
+            Map<String, Object> metadata = readMap(question.getQuestionMetadata());
+            if (metadata != null) {
+                Object value = metadata.get("drawioXml");
+                if (value instanceof String xml && !xml.isBlank()) {
+                    drawioXml = xml;
+                }
+            }
+        }
 
+        return new Snapshots.KeySnapshot(
+                correctOptionIds, correctOrder, blanks, pairs, rubric, drawioXml);
+    }
     /**
      * What the student sees for one question: content, shuffled options or matching columns and
      * the answer space. Never the answer (spec 0.3 rule 4).
