@@ -63,10 +63,12 @@ public interface ExamRepository extends JpaRepository<Exam, Long>, JpaSpecificat
         )
         FROM Exam ex LEFT JOIN ex.module m
         WHERE ex.course.courseId = :courseId AND ex.status = 'PUBLISHED'
+          AND (m IS NULL OR m.status <> 'HIDDEN')
         """,
             countQuery = """
         SELECT COUNT(ex) FROM Exam ex
         WHERE ex.course.courseId = :courseId AND ex.status = 'PUBLISHED'
+          AND NOT EXISTS (SELECT hm FROM Module hm WHERE hm = ex.module AND hm.status = 'HIDDEN')
         """
     )
     Page<CourseExamDto> findCourseExamsWithStats(
@@ -80,6 +82,7 @@ public interface ExamRepository extends JpaRepository<Exam, Long>, JpaSpecificat
     FROM Exam e
     WHERE e.course.courseId = :courseId
       AND e.status = 'PUBLISHED'
+      AND NOT EXISTS (SELECT hm FROM Module hm WHERE hm = e.module AND hm.status = 'HIDDEN')
     """)
     long countPublishedExamsByCourseId(@Param("courseId") Long courseId);
 

@@ -74,7 +74,7 @@ public class StudentAiServiceImpl implements StudentAiService {
     private final TransactionTemplate readTx;
     private final Map<String, Deque<Long>> calls = new ConcurrentHashMap<>();
     @Value("${app.student-ai.explanation-output-budget:250}") private int explanationOutputBudget;
-    @Value("${app.student-ai.grading-output-budget:800}") private int gradingOutputBudget;
+    @Value("${app.student-ai.grading-output-budget:1500}") private int gradingOutputBudget;
     @Value("${app.student-ai.explanation-deadline-ms:30000}") private long explanationDeadlineMillis;
     @Value("${app.student-ai.explanation-rate-per-minute:10}") private int explanationRatePerMinute;
     @Value("${app.student-ai.grading-rate-per-minute:5}") private int gradingRatePerMinute;

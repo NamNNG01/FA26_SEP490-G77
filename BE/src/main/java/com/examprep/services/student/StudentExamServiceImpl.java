@@ -34,7 +34,7 @@ public class StudentExamServiceImpl implements StudentExamService {
         Exam exam = examRepository.findById(examId)
                 .orElseThrow(() -> new ResourceNotFoundException("Exam not found"));
 
-        if (!"PUBLISHED".equals(exam.getStatus())) {
+        if (!exam.isVisibleToStudents()) {
             throw new ResourceNotFoundException("Exam not found");
         }
 
@@ -124,7 +124,7 @@ public class StudentExamServiceImpl implements StudentExamService {
     public ActiveAttemptDto getActiveAttempt(Long examId, Long userId) {
         Exam exam = examRepository.findById(examId)
                 .orElseThrow(() -> new ResourceNotFoundException("Exam not found"));
-        if (!"PUBLISHED".equals(exam.getStatus())) {
+        if (!exam.isVisibleToStudents()) {
             throw new ResourceNotFoundException("Exam not found");
         }
         if (exam.getCourse() != null) {

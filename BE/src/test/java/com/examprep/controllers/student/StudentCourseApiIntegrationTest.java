@@ -146,6 +146,29 @@ class StudentCourseApiIntegrationTest {
     }
 
     @Test
+    void hiddenModule_HidesItsExamsFromStudents() throws Exception {
+        Module hidden = Module.builder().course(publishedCourse).title("Draft chapter").orderIndex(2).status("HIDDEN").build();
+        em.persist(hidden);
+        Exam hiddenExam = Exam.builder().course(publishedCourse).module(hidden).createdBy(manager).title("Hidden Quiz")
+                .durationMinutes(30).isPractice(false).generationType("FIXED").maxScore(BigDecimal.TEN)
+                .status("PUBLISHED").publishedAt(Instant.now()).build();
+        em.persist(hiddenExam);
+        em.flush();
+        UserPrincipal principal = UserPrincipal.create(student);
+
+        mvc.perform(get("/api/v1/student/courses/" + publishedCourse.getCourseId() + "/exams").with(user(principal)))
+                .andExpect(jsonPath("$.data.totalElements").value(1))
+                .andExpect(jsonPath("$.data.content[0].title").value("Java Quiz"));
+        mvc.perform(get("/api/v1/student/courses/" + publishedCourse.getCourseId()))
+                .andExpect(jsonPath("$.data.modules.length()").value(1))
+                .andExpect(jsonPath("$.data.stats.publishedExamCount").value(1));
+        mvc.perform(get("/api/v1/student/courses")).andExpect(jsonPath("$.data.content[0].publishedExamCount").value(1));
+        mvc.perform(get("/api/v1/student/my-courses").with(user(principal)))
+                .andExpect(jsonPath("$.data.content[0].publishedExamCount").value(1));
+        mvc.perform(get("/api/v1/student/exams/" + hiddenExam.getExamId()).with(user(principal))).andExpect(status().isNotFound());
+    }
+
+    @Test
     void listCourseDecks_Enrolled_ReturnsOk() throws Exception {
         mvc.perform(get("/api/v1/student/courses/" + publishedCourse.getCourseId() + "/decks").with(user(UserPrincipal.create(student))))
                 .andExpect(status().isOk())

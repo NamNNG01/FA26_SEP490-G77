@@ -250,7 +250,7 @@ public class StudentAiApiIntegrationTest {
         JsonNode feedback = json.readTree(graded.getAiFeedbackJson());
         assertEquals("Solid answer.", feedback.path("overallFeedback").asText());
         assertEquals("fake-model", feedback.path("model").asText());
-        assertEquals("grading-v1", feedback.path("promptVersion").asText());
+        assertEquals("grading-v2", feedback.path("promptVersion").asText());
         assertEquals(0, new BigDecimal("1.33").compareTo(criteria.get(1).path("maxPoints").decimalValue()));
         assertEquals("GRADING", reload(attempt).getStatus());
 
