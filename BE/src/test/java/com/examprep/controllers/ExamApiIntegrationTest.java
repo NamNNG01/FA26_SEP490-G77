@@ -89,6 +89,36 @@ class ExamApiIntegrationTest {
                 .andExpect(status().isBadRequest());
     }
 
+    @Test void diagramQuestionsFoldIntoTheEssayKind() throws Exception {
+        Question diagram = question(module, "DIAGRAM", "Draw the request flow.");
+        Map<String,Object> payload = create();
+        payload.put("questionIds", List.of(
+                Map.of("questionId", essay.getQuestionId(), "weight", 1, "orderIndex", 0),
+                Map.of("questionId", diagram.getQuestionId(), "weight", 1, "orderIndex", 1)));
+        assertEquals("ESSAY", data(submit(payload).andExpect(status().isCreated())).path("examKind").asText());
+
+        // A diagram-only exam is an essay exam too.
+        payload.put("questionIds", List.of(Map.of("questionId", diagram.getQuestionId(), "weight", 1, "orderIndex", 0)));
+        assertEquals("ESSAY", data(submit(payload).andExpect(status().isCreated())).path("examKind").asText());
+
+        // Random rules are classified the same way.
+        payload.put("generationType", "RANDOM");
+        payload.put("questionIds", List.of());
+        payload.put("configs", List.of(
+                Map.of("questionType", "ESSAY", "numberOfQuestions", 1, "moduleId", module.getModuleId()),
+                Map.of("questionType", "DIAGRAM", "numberOfQuestions", 1, "moduleId", module.getModuleId())));
+        assertEquals("ESSAY", data(submit(payload).andExpect(status().isCreated())).path("examKind").asText());
+
+        call(manager, get("/api/v1/manager/exams").param("examKind", "ESSAY"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalElements").value(3));
+        // A diagram-only filter stays available for exams made solely of diagram questions.
+        call(manager, get("/api/v1/manager/exams").param("examKind", "DIAGRAM"))
+                .andExpect(jsonPath("$.data.totalElements").value(1));
+        call(manager, get("/api/v1/manager/exams").param("examKind", "QUIZ"))
+                .andExpect(jsonPath("$.data.totalElements").value(0));
+    }
+
     @Test void rejectsDuplicateInactiveAndForeignContentBeforeSaving() throws Exception {
         Map<String,Object> payload = create();
         payload.put("questionIds", List.of(Map.of("questionId", question.getQuestionId(), "weight", 2), Map.of("questionId", question.getQuestionId(), "weight", 2)));
@@ -207,7 +237,8 @@ class ExamApiIntegrationTest {
 
     @Test void attemptedExamsAllowOnlyDescriptionAndCannotBeDeleted() throws Exception {
         Exam exam = exam(course, module); attach(exam, question);
-        em.persist(ExamAttempt.builder().exam(exam).user(student).startTime(Instant.now()).status("IN_PROGRESS").build());
+        em.persist(ExamAttempt.builder().exam(exam).user(student).startTime(Instant.now())
+                .deadlineAt(Instant.now().plusSeconds(3600)).status("IN_PROGRESS").build());
         call(manager, put(path(exam)).contentType(MediaType.APPLICATION_JSON).content("{\"description\":\"Clarified\"}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.description").value("Clarified"));
         call(manager, put(path(exam)).contentType(MediaType.APPLICATION_JSON).content("{\"durationMinutes\":100}"))

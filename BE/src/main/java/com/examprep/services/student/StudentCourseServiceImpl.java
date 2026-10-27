@@ -105,7 +105,7 @@ public class StudentCourseServiceImpl implements StudentCourseService {
         for (List<Object[]> rows : List.of(examRepository.findQuestionTypesByExamIds(ids),
                 examRepository.findConfigTypesByExamIds(ids))) {
             for (Object[] row : rows) {
-                String kind = QuestionTypeUtil.kindOf((String) row[1]);
+                String kind = QuestionTypeUtil.examKindOf((String) row[1]);
                 if (kind != null) {
                     kinds.computeIfAbsent((Long) row[0], k -> new HashSet<>()).add(kind);
                 }

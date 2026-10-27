@@ -36,6 +36,15 @@ class QuestionTypeUtilTest {
     }
 
     @Test
+    void diagramQuestionsCountAsEssayForExamKind() {
+        assertEquals("QUIZ", QuestionTypeUtil.examKindOf("SINGLE_CHOICE"));
+        assertEquals("ESSAY", QuestionTypeUtil.examKindOf("ESSAY"));
+        assertEquals("ESSAY", QuestionTypeUtil.examKindOf("DIAGRAM"));
+        assertEquals("CODE", QuestionTypeUtil.examKindOf("CODE"));
+        assertNull(QuestionTypeUtil.examKindOf("MIXED"));
+    }
+
+    @Test
     void everyQuestionTypeIsKnown() {
         assertEquals(9, QuestionTypeUtil.QUESTION_TYPES.size());
         assertTrue(QuestionTypeUtil.QUESTION_TYPES.contains("ESSAY"));

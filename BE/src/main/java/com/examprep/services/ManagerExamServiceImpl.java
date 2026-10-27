@@ -267,14 +267,24 @@ public class ManagerExamServiceImpl implements ManagerExamService {
                         .map(k -> familyPresent(root, query, cb, k))
                         .toList();
 
-                for (int i = 0; i < 4; i++) {
-                    if (!KINDS.get(i).equals(kind)) {
-                        where.add(cb.not(present.get(i)));
+                for (int i = 0; i < KINDS.size(); i++) {
+                    String other = KINDS.get(i);
+
+                    // DIAGRAM is reported as ESSAY, so it never excludes an ESSAY exam.
+                    if (other.equals(kind)
+                            || (other.equals("DIAGRAM") && kind.equals("ESSAY"))) {
+                        continue;
                     }
+
+                    where.add(cb.not(present.get(i)));
                 }
 
                 if (!kind.equals("QUIZ")) {
-                    where.add(present.get(KINDS.indexOf(kind)));
+                    int index = KINDS.indexOf(kind);
+                    // An ESSAY exam is made of essay and/or diagram questions.
+                    where.add(kind.equals("ESSAY")
+                            ? cb.or(present.get(index), present.get(KINDS.indexOf("DIAGRAM")))
+                            : present.get(index));
                 }
             }
 
@@ -344,7 +354,8 @@ public class ManagerExamServiceImpl implements ManagerExamService {
         return cb.or(cb.exists(q),cb.exists(conf));
     }
     private Predicate familyPredicate(Path<String> type,CriteriaBuilder cb,String kind) {
-        return kind.equals("QUIZ")?cb.not(type.in("ESSAY","CODE","DIAGRAM")):cb.equal(type,kind);
+        if (kind.equals("QUIZ")) return cb.not(type.in("ESSAY","CODE","DIAGRAM"));
+        return cb.equal(type,kind);
     }
 
     @Override public ExamResponse detail(UserPrincipal user,Long id) { Exam e=read(id); check(user,e); return response(e,true); }
@@ -956,7 +967,7 @@ public class ManagerExamServiceImpl implements ManagerExamService {
     private BigDecimal weight(BigDecimal w) { if(w==null)return BigDecimal.ONE; if(w.signum()<=0 || w.compareTo(new BigDecimal("1000"))>0 || w.scale()>2) throw bad("Weight must be positive, at most 1000 and have at most two decimal places."); return w; }
     private BigDecimal maxScore(BigDecimal m) { if(m==null || m.signum()<=0 || m.compareTo(new BigDecimal("10000"))>0 || m.scale()>2) throw bad("Max score must be positive, at most 10000 and have at most two decimal places."); return m; }
     private int next(List<Integer> values) { int max=values.stream().mapToInt(Integer::intValue).max().orElse(-1); if(max==Integer.MAX_VALUE)throw conflict("Question order limit reached."); return max+1; }
-    private String family(String type) { String kind=QuestionTypeUtil.kindOf(type); return kind==null?"QUIZ":kind; }
+    private String family(String type) { String kind=QuestionTypeUtil.examKindOf(type); return kind==null?"QUIZ":kind; }
     private String pattern(String s) { return "%"+s.strip().toLowerCase(Locale.ROOT).replace("!","!!").replace("%","!%").replace("_","!_")+"%"; }
     private boolean admin(UserPrincipal user) { return "ADMIN".equals(user.getRole()); }
     private void positive(Long id) { if(id==null || id<=0)throw bad("ID must be a positive integer."); }

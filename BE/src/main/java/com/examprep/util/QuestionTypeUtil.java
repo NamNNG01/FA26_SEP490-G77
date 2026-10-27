@@ -33,6 +33,16 @@ public final class QuestionTypeUtil {
         return QUIZ_TYPES.contains(questionType) ? "QUIZ" : questionType;
     }
 
+    /**
+     * Kind of an exam built from this question type. DIAGRAM folds into ESSAY: both are
+     * rubric-graded long answers and the essay exam form holds them together, so an exam
+     * with essay and diagram questions is an ESSAY exam, not an unclassified one.
+     */
+    public static String examKindOf(String questionType) {
+        String kind = kindOf(questionType);
+        return "DIAGRAM".equals(kind) ? "ESSAY" : kind;
+    }
+
     public static boolean isValidKind(String value) {
         return value != null && KINDS.contains(value);
     }

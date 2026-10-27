@@ -299,6 +299,7 @@ class DashboardQueryIntegrationTest {
                 .exam(exam)
                 .user(user)
                 .startTime(Instant.parse("2026-09-01T00:00:00Z"))
+                .deadlineAt(submitTime)
                 .submitTime(submitTime)
                 .totalScore(score)
                 .status(status)

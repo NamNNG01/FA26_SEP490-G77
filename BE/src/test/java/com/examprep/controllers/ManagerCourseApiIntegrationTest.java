@@ -378,7 +378,8 @@ public class ManagerCourseApiIntegrationTest {
         call(admin, delete(path())).andExpect(status().isConflict());
         Course withExam = course(manager, "Exam course");
         Exam exam = exam(withExam, null);
-        ExamAttempt attempt = ExamAttempt.builder().exam(exam).user(student).startTime(Instant.now()).status("IN_PROGRESS").build();
+        ExamAttempt attempt = ExamAttempt.builder().exam(exam).user(student).startTime(Instant.now())
+                .deadlineAt(Instant.now().plusSeconds(3600)).status("IN_PROGRESS").build();
         em.persist(attempt);
         call(admin, delete("/api/v1/manager/courses/" + withExam.getCourseId())).andExpect(status().isConflict());
         assertNotNull(em.find(ExamAttempt.class, attempt.getAttemptId()));

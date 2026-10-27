@@ -431,6 +431,7 @@ class AdminUserApiIntegrationTest {
     private void attempt(Exam target, User actor, int score, Instant submittedAt) {
         em.persist(ExamAttempt.builder().exam(target).user(actor)
                 .startTime(submittedAt.minusSeconds(600)).submitTime(submittedAt)
+                .deadlineAt(submittedAt)
                 .totalScore(BigDecimal.valueOf(score)).status("COMPLETED").build());
     }
 
