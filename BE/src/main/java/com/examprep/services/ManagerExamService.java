@@ -17,6 +17,7 @@ public interface ManagerExamService {
     ExamResponse.QuestionLink addQuestion(UserPrincipal user, Long id, ExamRequests.QuestionLink request);
     ExamResponse.QuestionLink updateQuestionWeight(UserPrincipal user, Long id, Long linkId, ExamRequests.QuestionWeight request);
     void removeQuestion(UserPrincipal user, Long id, Long linkId);
+    void removeAllQuestions(UserPrincipal user, Long id);
     ExamResponse.GroupLink addGroup(UserPrincipal user, Long id, ExamRequests.GroupLink request);
     void removeGroup(UserPrincipal user, Long id, Long linkId);
     Map<String,Object> rubric(UserPrincipal user, Long questionId, ExamRequests.Rubric request);

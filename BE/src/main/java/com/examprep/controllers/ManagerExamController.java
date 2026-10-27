@@ -64,6 +64,10 @@ public class ManagerExamController {
     public ResponseEntity<ApiResponse<Void>> removeQuestion(@AuthenticationPrincipal UserPrincipal user,@PathVariable Long id,@PathVariable Long linkId) {
         service.removeQuestion(user,id,linkId); return ResponseEntity.ok(ApiResponse.success(null,"Question removed from exam."));
     }
+    @DeleteMapping("/exams/{id}/questions")
+    public ResponseEntity<ApiResponse<Void>> removeAllQuestions(@AuthenticationPrincipal UserPrincipal user,@PathVariable Long id) {
+        service.removeAllQuestions(user,id); return ResponseEntity.ok(ApiResponse.success(null,"All questions removed from exam."));
+    }
     @PostMapping("/exams/{id}/groups")
     public ResponseEntity<ApiResponse<ExamResponse.GroupLink>> addGroup(@AuthenticationPrincipal UserPrincipal user,@PathVariable Long id,@Valid @RequestBody ExamRequests.GroupLink request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(service.addGroup(user,id,request),ResponseCode.CREATED.getMessage()));

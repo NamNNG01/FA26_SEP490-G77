@@ -647,6 +647,11 @@ public class ManagerExamServiceImpl implements ManagerExamService {
         ExamQuestion link=links.findById(linkId).filter(l->l.getExam().getExamId().equals(id)).orElseThrow(()->missing("Exam question link"));
         links.delete(link); links.flush();
     }
+    @Override @Transactional public void removeAllQuestions(UserPrincipal user,Long id) {
+        Exam e=write(user,id); editable(e);
+        links.deleteByExamExamId(id); groupLinks.deleteByExamExamId(id);
+        links.flush(); groupLinks.flush();
+    }
     @Override @Transactional public ExamResponse.GroupLink addGroup(UserPrincipal user,Long id,ExamRequests.GroupLink r) {
         Exam e=write(user,id); editable(e); return groupLink(attachGroup(user,e,r,new HashSet<>()));
     }

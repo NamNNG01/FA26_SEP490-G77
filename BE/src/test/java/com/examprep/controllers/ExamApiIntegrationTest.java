@@ -400,6 +400,21 @@ class ExamApiIntegrationTest {
         assertNotNull(em.find(Question.class, q1.getQuestionId()));
     }
 
+    @Test void removeAllQuestionsClearsLinksAndGroupsWithoutTouchingBank() throws Exception {
+        Exam exam = exam(course, module); exam.setMaxScore(BigDecimal.valueOf(5));
+        attach(exam, question);
+        QuestionGroup group = QuestionGroup.builder().course(course).module(module).title("Group").build(); em.persist(group);
+        Question q1 = question(module, "ESSAY", "Q1"); q1.setGroup(group); em.persist(q1);
+        em.flush();
+        String payload = json.writeValueAsString(Map.of("groupId", group.getGroupId(), "questions", List.of(Map.of("questionId", q1.getQuestionId(), "weight", 5))));
+        call(collaborator, post(path(exam)+"/groups").contentType(MediaType.APPLICATION_JSON).content(payload)).andExpect(status().isCreated());
+        call(manager, delete(path(exam)+"/questions")).andExpect(status().isOk());
+        JsonNode detail = data(call(manager, get(path(exam))).andExpect(status().isOk()));
+        assertEquals(0, detail.path("questions").size());
+        assertEquals(0, detail.path("groups").size());
+        assertNotNull(em.find(Question.class, q1.getQuestionId()));
+    }
+
     @Test void publishSucceedsWithoutTotalPointsCheck() throws Exception {
         Exam exam = exam(course, module); exam.setMaxScore(BigDecimal.valueOf(500));
         attach(exam, question);
