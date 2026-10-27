@@ -76,11 +76,27 @@ public class CourseServiceImpl implements CourseService {
         Category category = category(request.categoryId());
         User manager = manager(request.managerId());
         List<User> coManagers = coManagers(request.managerIds(), manager.getUserId());
-        Course course = Course.builder().title(request.title().strip()).categoryId(category.getCategoryId())
-                .category(category).manager(manager).description(optionalText(request.description()))
+        BigDecimal price = request.price() == null
+                ? BigDecimal.ZERO
+                : request.price();
+
+        if (price.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException(
+                    "Price must be greater than or equal to 0"
+            );
+        }
+
+        Course course = Course.builder()
+                .title(request.title().strip())
+                .categoryId(category.getCategoryId())
+                .category(category)
+                .manager(manager)
+                .description(optionalText(request.description()))
                 .thumbnailUrl(optionalText(request.thumbnailUrl()))
-                .price(request.price() == null ? BigDecimal.ZERO : request.price()).isPublished(false)
-                .slug("pending-" + UUID.randomUUID()).build();
+                .price(price)
+                .isPublished(false)
+                .slug("pending-" + UUID.randomUUID())
+                .build();
         courses.saveAndFlush(course);
         course.setSlug(slug(course.getTitle(), course.getCourseId()));
         assignments.save(CourseManager.builder().course(course).user(manager).build());
