@@ -109,6 +109,13 @@ export function StudentExamDetailPage() {
         >
           <div className="absolute inset-0 bg-[url('/images/exam_taking.png')] bg-cover bg-center opacity-50" />
           <div className="absolute inset-0 bg-gradient-to-r from-surface-alt via-surface-alt/75 to-transparent" />
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                "radial-gradient(ellipse at 18% 85%, rgba(13, 124, 108, 0.12), transparent 62%)",
+            }}
+          />
         </div>
         <Container className="relative py-8 sm:py-11">
           <button
