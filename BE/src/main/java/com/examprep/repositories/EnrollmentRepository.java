@@ -27,7 +27,8 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
             "new com.examprep.dto.student.CategoryRefDto(cat.categoryId, cat.name), " +
             "new com.examprep.dto.student.ManagerRefDto(m.userId, m.fullName), " +
             "en.enrolledAt, en.status, en.progress, " +
-            "(SELECT COUNT(ex) FROM Exam ex WHERE ex.course = c AND ex.status = 'PUBLISHED'), " +
+            "(SELECT COUNT(ex) FROM Exam ex WHERE ex.course = c AND ex.status = 'PUBLISHED' " +
+            "AND NOT EXISTS (SELECT hm FROM Module hm WHERE hm = ex.module AND hm.status = 'HIDDEN')), " +
             "(SELECT COUNT(d) FROM Deck d WHERE d.course = c), " +
             "null) " +
             "FROM Enrollment en JOIN en.course c JOIN c.category cat JOIN c.manager m " +

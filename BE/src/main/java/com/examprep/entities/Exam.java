@@ -65,4 +65,7 @@ public class Exam implements Serializable {
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
+
+    // A hidden module hides its exams from students too.
+    public boolean isVisibleToStudents() { return "PUBLISHED".equals(status) && (module == null || !module.isHidden()); }
 }

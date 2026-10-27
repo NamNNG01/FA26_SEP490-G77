@@ -65,7 +65,6 @@ import java.util.Set;
 public class StudentAttemptServiceImpl implements StudentAttemptService {
 
     private static final String STATUS_IN_PROGRESS = "IN_PROGRESS";
-    private static final String STATUS_PUBLISHED = "PUBLISHED";
     private static final String GRADING_AI_GRADED = "AI_GRADED";
     private static final String GRADING_AUTO = "AUTO";
 
@@ -130,7 +129,7 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
             }
         }
 
-        if (!STATUS_PUBLISHED.equals(exam.getStatus())) {
+        if (!exam.isVisibleToStudents()) {
             throw new ResourceConflictException("Exam is not published");
         }
 

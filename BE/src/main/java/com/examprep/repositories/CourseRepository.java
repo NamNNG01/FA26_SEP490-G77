@@ -61,7 +61,8 @@ public interface CourseRepository extends JpaRepository<Course, Long> {
             "c.courseId, c.title, c.slug, c.thumbnailUrl, c.price, " +
             "new com.examprep.dto.student.CategoryRefDto(cat.categoryId, cat.name), " +
             "new com.examprep.dto.student.ManagerRefDto(m.userId, m.fullName), " +
-            "(SELECT COUNT(ex) FROM Exam ex WHERE ex.course = c AND ex.status = 'PUBLISHED'), " +
+            "(SELECT COUNT(ex) FROM Exam ex WHERE ex.course = c AND ex.status = 'PUBLISHED' " +
+            "AND NOT EXISTS (SELECT hm FROM Module hm WHERE hm = ex.module AND hm.status = 'HIDDEN')), " +
             "(SELECT COUNT(d) FROM Deck d WHERE d.course = c), " +
             "CASE WHEN :userId IS NOT NULL AND EXISTS (SELECT 1 FROM Enrollment en WHERE en.course = c AND en.user.userId = :userId AND en.status = 'ACTIVE') THEN true ELSE false END) " +
             "FROM Course c JOIN c.category cat JOIN c.manager m " +
