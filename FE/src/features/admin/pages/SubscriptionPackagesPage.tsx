@@ -20,6 +20,7 @@ export function SubscriptionPackagesPage() {
   const [packages, setPackages] = useState(initialPackages);
   const [modalOpen, setModalOpen] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [newPackagePrice, setNewPackagePrice] = useState("");
 
   const togglePackage = (id: string) => {
     setPackages(prev => prev.map(p => p.id === id ? { ...p, active: !p.active } : p));
@@ -79,7 +80,19 @@ export function SubscriptionPackagesPage() {
             <Select label="Billing Cycle" value="monthly" options={[{ label: 'Monthly', value: 'monthly' }, { label: 'Annual', value: 'annual' }, { label: 'One-time', value: 'once' }]} />
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <Input label="Price" type="number" placeholder="29.00" />
+            <Input
+              label="Price"
+              type="number"
+              min={0}
+              placeholder="29.00"
+              value={newPackagePrice}
+              onChange={(e) => {
+                const nextPrice = e.target.value;
+                if (nextPrice === "" || Number(nextPrice) >= 0) {
+                  setNewPackagePrice(nextPrice);
+                }
+              }}
+            />
             <Select label="Active" value="true" options={[{ label: 'Yes', value: 'true' }, { label: 'No', value: 'false' }]} />
           </div>
           <Input label="Description" placeholder="Short description shown on checkout" />

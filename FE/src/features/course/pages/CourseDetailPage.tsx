@@ -758,7 +758,12 @@ export function CourseDetailPage({
                   value={price}
                   disabled={!canManageCourse}
                   readOnly={!canManageCourse}
-                  onChange={(e) => setPrice(e.target.value)}
+                  onChange={(e) => {
+                    const nextPrice = e.target.value;
+                    if (nextPrice === "" || Number(nextPrice) >= 0) {
+                      setPrice(nextPrice);
+                    }
+                  }}
                   hint={canManageCourse ? "0 = Free" : undefined}
                 />
 
