@@ -28,7 +28,7 @@ import { roleLabel } from '@/utils/permissions';
  * A11y: pointer cursor, Escape/ArrowUp/ArrowDown support, outside-click and
  * route-change close, 150ms transitions, no page reload on theme change.
  */
-export function UserDropdown() {
+export function UserDropdown({ avatarOnly = false }: { avatarOnly?: boolean }) {
   const { user, logout } = useAuth();
   const { resolved, toggleTheme } = useTheme();
   const navigate = useNavigate();
@@ -105,19 +105,22 @@ export function UserDropdown() {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
+        aria-label={avatarOnly ? `${user.fullName} menu` : undefined}
         aria-haspopup="menu"
         aria-expanded={open}
-        className="flex items-center gap-2.5 rounded-[10px] px-1.5 py-1 cursor-pointer text-foreground hover:bg-accent hover:text-accent-foreground transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-primary/30"
+        className={`flex items-center gap-2.5 rounded-[10px] ${avatarOnly ? 'p-1' : 'px-1.5 py-1'} cursor-pointer text-foreground hover:bg-accent hover:text-accent-foreground transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-primary/30`}
       >
         <Avatar name={user.fullName} src={user.avatarUrl ?? undefined} size="sm" color="#0D7C6C" />
-        <div className="hidden sm:block text-left">
-          <p className="text-sm font-semibold leading-tight text-foreground">
-            {user.fullName}
-          </p>
-          <p className="text-2xs leading-tight text-muted-foreground">
-            {roleLabel(user.role)}
-          </p>
-        </div>
+        {!avatarOnly && (
+          <div className="hidden text-left sm:block">
+            <p className="text-sm font-semibold leading-tight text-foreground">
+              {user.fullName}
+            </p>
+            <p className="text-2xs leading-tight text-muted-foreground">
+              {roleLabel(user.role)}
+            </p>
+          </div>
+        )}
         <Icon.ChevronDown
           className={`w-4 h-4 text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`}
         />

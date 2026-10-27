@@ -5,6 +5,7 @@ import { ROUTES } from "@/app/routes";
 import { useAuth, landingPathForRole } from "@/auth/authContext";
 import { Role } from "@/utils/permissions";
 import { CourseSearchBar } from "@/features/catalog";
+import { UserDropdown } from "@/components/layout/UserDropdown";
 import { Container } from "./Container";
 
 /**
@@ -26,9 +27,8 @@ import { Container } from "./Container";
 export function PublicNavbar() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { isAuthenticated, user, logout } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
-  const [loggingOut, setLoggingOut] = useState(false);
 
   const isStudent = user?.role === Role.STUDENT;
   const dashboardPath = isStudent
@@ -49,12 +49,6 @@ export function PublicNavbar() {
   function goTo(path: string) {
     setMenuOpen(false);
     navigate(path);
-  }
-
-  async function handleLogout() {
-    setLoggingOut(true);
-    await logout();
-    setMenuOpen(false);
   }
 
   function isActive(path: string) {
@@ -122,15 +116,7 @@ export function PublicNavbar() {
                     My learning
                     <Icon.ChevronRight className="h-4 w-4" />
                   </button>
-                  <button
-                    type="button"
-                    onClick={handleLogout}
-                    disabled={loggingOut}
-                    className="inline-flex h-9 items-center gap-2 rounded-[10px] px-3 text-sm font-semibold text-content-muted transition-colors hover:bg-accent hover:text-content disabled:opacity-60 cursor-pointer"
-                  >
-                    <Icon.LogOut className="h-4 w-4" />
-                    {loggingOut ? "Signing out…" : "Log out"}
-                  </button>
+                  <UserDropdown avatarOnly />
                 </>
               ) : (
                 <button
@@ -205,7 +191,7 @@ export function PublicNavbar() {
 
               {isAuthenticated ? (
                 isStudent ? (
-                  <div className="mt-3 grid grid-cols-2 gap-2">
+                  <div className="mt-3 flex items-center justify-between">
                     <button
                       type="button"
                       onClick={() => goTo(dashboardPath)}
@@ -213,15 +199,7 @@ export function PublicNavbar() {
                     >
                       My learning
                     </button>
-                    <button
-                      type="button"
-                      onClick={handleLogout}
-                      disabled={loggingOut}
-                      className="inline-flex h-10 items-center justify-center gap-2 rounded-[10px] border border-line text-sm font-semibold text-content-secondary transition-colors hover:bg-surface-hover disabled:opacity-60 cursor-pointer"
-                    >
-                      <Icon.LogOut className="h-4 w-4" />
-                      {loggingOut ? "Signing out…" : "Log out"}
-                    </button>
+                    <UserDropdown avatarOnly />
                   </div>
                 ) : (
                   <button
