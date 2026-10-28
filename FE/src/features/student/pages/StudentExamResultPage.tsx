@@ -126,17 +126,17 @@ function num(v: number | null | undefined): string {
 
 /**
  * Attempt review (SA-05) — reached from My Exams and right after submitting.
- * Two columns:
+ * A header with the exam, a dropdown of my submitted attempts of this exam
+ * (SA-06, with their date), the score (per module when the exam spans
+ * several), "Re-attempt" and "Back"; below it two columns:
  *  - left: one question at a time (`?q=` 1-based, so a refresh or a shared
  *    link keeps it) with its outcome, my answer, the correct answer and rubric
  *    feedback; Previous / Next and ← → move through it. Only the explanation
  *    is collapsed — opening it shows the cached text or asks the AI right away
  *    (SE-01). Essay / code / diagram questions have no explanation and show
  *    the answer beside its rubric grade;
- *  - right: a dropdown of my submitted attempts of this exam (SA-06, with
- *    their date), the score (per module when the exam spans several),
- *    "Re-attempt", then a palette of every question coloured by outcome —
- *    a click opens that question.
+ *  - right, level with the question: a palette of every question coloured
+ *    by outcome — a click opens that question.
  * `?examId=` alone opens the newest submitted attempt; `?attemptId=` picks one.
  * Essay / code / diagram answers: the attempt lands here SUBMITTED with its
  * rubric answers ungraded. "Grade with AI" asks the AI (SE-02) and opens a
@@ -359,13 +359,10 @@ export function StudentExamResultPage() {
     return (
       <div className={`${STUDENT_PAGE_CLASS} space-y-6`}>
         {breadcrumb}
-        <div className="grid lg:grid-cols-[minmax(0,1fr)_320px] gap-6">
-          <div className="space-y-3">
-            {Array.from({ length: 4 }, (_, i) => (
-              <Skeleton key={i} className="h-16 w-full" />
-            ))}
-          </div>
-          <Skeleton className="h-72 w-full" />
+        <Skeleton className="h-32 w-full" />
+        <div className="grid lg:grid-cols-[minmax(0,1fr)_300px] gap-6">
+          <Skeleton className="h-80 w-full" />
+          <Skeleton className="h-56 w-full" />
         </div>
       </div>
     );
@@ -425,11 +422,8 @@ export function StudentExamResultPage() {
     <div className={`${STUDENT_PAGE_CLASS} space-y-[clamp(1.25rem,2.5vw,1.75rem)]`}>
       {breadcrumb}
 
-      <div className="grid lg:grid-cols-[minmax(0,1fr)_320px] gap-[clamp(1rem,2vw,1.5rem)] items-start">
-        {/* Right column first on small screens: the score is the headline. */}
-        {/* Sticks 10px below the public navbar (sticky, h-16 + 1px border = 65px); scrolls on its own when taller than the screen. */}
-        <aside className="lg:order-2 lg:sticky lg:top-[75px] lg:max-h-[calc(100vh-85px)] lg:overflow-y-auto space-y-4 min-w-0">
-          <ScoreCard
+      {/* The score is the headline: a full-width header above the question and its navigator. */}
+      <ScoreCard
             result={result}
             counts={counts}
             modules={modules}
@@ -459,24 +453,23 @@ export function StudentExamResultPage() {
             onBack={examId ? () => navigate(studentExamPath(examId)) : () => navigate(ROUTES.studentExams)}
           />
 
-          {total > 0 && (
+      <div className="grid lg:grid-cols-[minmax(0,1fr)_300px] gap-[clamp(1rem,2vw,1.5rem)] items-start">
+        {/* Navigator above the question on small screens (folded); beside it, top-aligned, from lg. */}
+        {/* Sticks 10px below the public navbar (sticky, h-16 + 1px border = 65px); scrolls on its own when taller than the screen. */}
+        {total > 0 && (
+          <aside className="lg:order-2 lg:sticky lg:top-[75px] lg:max-h-[calc(100vh-85px)] lg:overflow-y-auto min-w-0">
             <ResultPalette outcomes={outcomes} counts={counts} current={current} onSelect={goTo} />
-          )}
-        </aside>
+          </aside>
+        )}
 
         <section ref={questionRef} className="lg:order-1 space-y-3 min-w-0 scroll-mt-[85px]" aria-label="Question">
           {!q ? (
             <div className="card px-5 py-10 text-center text-sm text-content-soft">This attempt has no question.</div>
           ) : (
             <>
-              <QuestionNav
-                current={current}
-                total={total}
-                onPrev={navRef.current.prev}
-                onNext={navRef.current.next}
-              />
               <ResultQuestionCard
                 key={q.questionId}
+                nav={<QuestionNav current={current} total={total} onPrev={navRef.current.prev} onNext={navRef.current.next} />}
                 question={q}
                 index={current}
                 outcome={outcomes[current]}
@@ -577,8 +570,10 @@ function ResultPalette({
       </button>
 
       <div id="result-palette" className={`${expanded ? 'block' : 'hidden'} lg:block space-y-3`}>
-        {/* p-1: room for the current cell's ring inside the scroll box. */}
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(2.25rem,1fr))] gap-1.5 max-h-[min(40vh,18rem)] overflow-y-auto p-1 -m-1">
+        {/* p-1.5: room for the current cell's ring (2px + 2px offset) inside the scroll box, which
+            would clip it. No negative margin here — Tailwind v4's space-y sets margin-bottom, so one
+            would pull the legend up over the last row. */}
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(2.5rem,1fr))] auto-rows-[2.5rem] gap-2 max-h-[min(45vh,20rem)] overflow-y-auto p-1.5">
           {outcomes.map((o, i) => (
             <button
               key={i}
@@ -590,8 +585,8 @@ function ResultPalette({
               aria-current={i === current ? 'step' : undefined}
               aria-label={`Question ${i + 1}, ${OUTCOME[o].label.toLowerCase()}`}
               title={`Question ${i + 1} · ${OUTCOME[o].label}`}
-              className={`h-9 rounded-[8px] text-sm font-semibold transition-all ${PALETTE_CELL[o]} ${
-                i === current ? 'ring-2 ring-content ring-offset-2 ring-offset-surface scale-105' : 'hover:brightness-110'
+              className={`h-full rounded-[8px] text-sm font-semibold transition-all ${PALETTE_CELL[o]} ${
+                i === current ? 'ring-2 ring-content ring-offset-2 ring-offset-surface' : 'hover:brightness-110'
               }`}
             >
               {i + 1}
@@ -695,7 +690,7 @@ function ScoreCard({
   modules: ModuleScore[];
   /** Opens a question (a module's first one). */
   onOpenModule: (index: number) => void;
-  /** Attempt dropdown, shown above the score. */
+  /** Attempt dropdown, under the exam title. */
   picker?: React.ReactNode;
   /** Rubric answers the AI failed to grade (can be asked again). */
   failedCount: number;
@@ -713,38 +708,92 @@ function ScoreCard({
   const pct = pctOf(score, max);
   const tone = toneOf(pct);
 
+  const showScore = !waitingForGrading && !grading;
+  const stillGrading = counts.pending > 0 || (result.pendingPoints != null && Number(result.pendingPoints) > 0);
+
   return (
-    <div className="card p-5 space-y-5 min-w-0">
-      <div>
-        <div className="flex items-start justify-between gap-2">
-          <h1 className="text-base font-semibold text-content break-words min-w-0">{result.examTitle}</h1>
-          <AttemptStatusBadge status={result.status} />
+    <div className="card p-5 min-w-0 space-y-4">
+      <div className="flex flex-wrap items-start gap-x-8 gap-y-4">
+        {/* Exam, attempt and its picker. */}
+        <div className="flex-1 min-w-[min(100%,16rem)] space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-lg font-semibold text-content break-words min-w-0">{result.examTitle}</h1>
+            <AttemptStatusBadge status={result.status} />
+          </div>
+          <p className="text-xs text-content-subtle">
+            Submitted {formatDateTime(result.submittedAt)}
+            {result.autoSubmitted && ' · automatically when time ran out'}
+          </p>
+          {picker && <div className="max-w-sm pt-2">{picker}</div>}
         </div>
-        <p className="text-xs text-content-subtle mt-0.5">Submitted {formatDateTime(result.submittedAt)}</p>
+
+        {/* No score until the written answers are graded — "0 / 100" would read as a real result. */}
+        {showScore ? (
+          <div className="min-w-[10rem] space-y-1.5">
+            <p className="text-xs font-semibold text-content-subtle uppercase tracking-wide">Your score</p>
+            <p className={`flex flex-wrap items-baseline gap-x-1.5 leading-none ${tone}`}>
+              <span className="text-[clamp(2rem,1.5rem+1.5vw,2.75rem)] font-black break-all">{num(score)}</span>
+              <span className="text-lg font-semibold text-content-subtle whitespace-nowrap">/ {num(max)}</span>
+              {pct != null && <span className="text-sm font-semibold ml-1">{pct}%</span>}
+            </p>
+            <Progress value={pct ?? 0} size="sm" color={barColorOf(pct)} />
+          </div>
+        ) : (
+          // Just the button while waiting; the warning box only when there is something to say.
+          <div className={`w-full sm:w-64 ${grading || gradingError ? 'space-y-2 rounded-[10px] border border-warning-line bg-warning-light p-3' : ''}`}>
+            {grading && (
+              <p className="flex items-start gap-2 text-xs text-warning">
+                <Icon.Clock className="w-4 h-4 flex-shrink-0" />
+                AI is grading {num(result.pendingPoints)} points of written answers…
+              </p>
+            )}
+            {gradingError && <p className="text-xs text-danger">{gradingError}</p>}
+            {/* Button's `loading` shows its spinner while SE-02 is sent and the AI is working. */}
+            <Button size="sm" className="w-full" icon={<Icon.Brain className="w-4 h-4" />} loading={grading} disabled={grading} onClick={onRequestGrading}>
+              {grading ? 'Grading…' : 'Grade with AI'}
+            </Button>
+          </div>
+        )}
+
+        <div className="flex flex-wrap sm:flex-col gap-2 w-full sm:w-auto">
+          {onReattempt && (
+            <Button icon={<Icon.RefreshCw className="w-4 h-4" />} onClick={onReattempt}>
+              Re-attempt
+            </Button>
+          )}
+          <Button variant="outline" icon={<Icon.ChevronLeft className="w-4 h-4" />} onClick={onBack}>
+            Back to exam
+          </Button>
+        </div>
       </div>
 
-      {picker && <div className="min-w-0">{picker}</div>}
+      {showScore && stillGrading && (
+        <p className="flex items-start gap-2 text-xs text-warning">
+          <Icon.Clock className="w-4 h-4 flex-shrink-0" />
+          {num(result.pendingPoints)} points are still being graded by AI. This page refreshes on its own.
+        </p>
+      )}
 
-      {/* No score until the written answers are graded — "0 / 100" would read as a real result. */}
-      {!waitingForGrading && !grading && (
-        <div className="text-center min-w-0">
-          <p className="text-xs font-semibold text-content-subtle uppercase tracking-wide mb-2 text-left">Your score</p>
-          {/* Wraps instead of overflowing the 320px column on long scores (e.g. 123.45 / 150). */}
-          <p className={`flex flex-wrap items-baseline justify-center gap-x-1.5 gap-y-1 leading-none ${tone}`}>
-            <span className="text-[clamp(2rem,1.5rem+1.5vw,2.75rem)] font-black break-all">{num(score)}</span>
-            <span className="text-lg font-semibold text-content-subtle whitespace-nowrap">/ {num(max)}</span>
+      {showScore && (failedCount > 0 || gradingError) && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-[10px] border border-danger-solid bg-danger-light p-3">
+          <p className="flex items-start gap-2 text-xs text-danger">
+            <Icon.AlertCircle className="w-4 h-4 flex-shrink-0" />
+            {gradingError ?? `AI grading failed for ${failedCount} question${failedCount === 1 ? '' : 's'}.`}
           </p>
+          <Button size="sm" variant="outline" icon={<Icon.RefreshCw className="w-4 h-4" />} loading={grading} disabled={grading} onClick={onRequestGrading}>
+            Retry AI grading
+          </Button>
         </div>
       )}
 
-      {!waitingForGrading && !grading && modules.length > 0 && (
-        <div className="min-w-0">
+      {showScore && modules.length > 0 && (
+        <div className="border-t border-line pt-4 min-w-0">
           <p className="text-xs font-semibold text-content-subtle uppercase tracking-wide mb-2">Score by module</p>
-          <ul className="space-y-1">
+          <ul className="grid gap-x-6 gap-y-1 sm:grid-cols-2 xl:grid-cols-3">
             {modules.map(m => {
               const mPct = pctOf(m.earned, m.max);
               return (
-                <li key={m.key}>
+                <li key={m.key} className="min-w-0">
                   <button
                     type="button"
                     onClick={() => onOpenModule(m.first)}
@@ -771,55 +820,6 @@ function ScoreCard({
           </ul>
         </div>
       )}
-
-      {waitingForGrading || grading ? (
-        // Just the button while waiting; the warning box only when there is something to say.
-        <div className={grading || gradingError ? 'space-y-2 rounded-[10px] border border-warning-line bg-warning-light p-3' : ''}>
-          {grading && (
-            <p className="flex items-start gap-2 text-xs text-warning">
-              <Icon.Clock className="w-4 h-4 flex-shrink-0" />
-              AI is grading {num(result.pendingPoints)} points of written answers…
-            </p>
-          )}
-          {gradingError && <p className="text-xs text-danger">{gradingError}</p>}
-          {/* Button's `loading` shows its spinner while SE-02 is sent and the AI is working. */}
-          <Button size="sm" className="w-full" icon={<Icon.Brain className="w-4 h-4" />} loading={grading} disabled={grading} onClick={onRequestGrading}>
-            {grading ? 'Grading…' : 'Grade with AI'}
-          </Button>
-        </div>
-      ) : (
-        (counts.pending > 0 || (result.pendingPoints != null && Number(result.pendingPoints) > 0)) && (
-          <p className="flex items-start gap-2 text-xs text-warning">
-            <Icon.Clock className="w-4 h-4 flex-shrink-0" />
-            {num(result.pendingPoints)} points are still being graded by AI. This page refreshes on its own.
-          </p>
-        )
-      )}
-
-      {!waitingForGrading && !grading && (failedCount > 0 || gradingError) && (
-        <div className="space-y-2 rounded-[10px] border border-danger-solid bg-danger-light p-3">
-          <p className="flex items-start gap-2 text-xs text-danger">
-            <Icon.AlertCircle className="w-4 h-4 flex-shrink-0" />
-            {gradingError ?? `AI grading failed for ${failedCount} question${failedCount === 1 ? '' : 's'}.`}
-          </p>
-          <Button size="sm" variant="outline" icon={<Icon.RefreshCw className="w-4 h-4" />} loading={grading} disabled={grading} onClick={onRequestGrading}>
-            Retry AI grading
-          </Button>
-        </div>
-      )}
-
-      {result.autoSubmitted && <p className="text-xs text-content-subtle">Submitted automatically when time ran out.</p>}
-
-      <div className="flex flex-col gap-2">
-        {onReattempt && (
-          <Button icon={<Icon.RefreshCw className="w-4 h-4" />} onClick={onReattempt}>
-            Re-attempt
-          </Button>
-        )}
-        <Button variant="outline" icon={<Icon.ChevronLeft className="w-4 h-4" />} onClick={onBack}>
-          Back to exam
-        </Button>
-      </div>
     </div>
   );
 }
@@ -850,6 +850,7 @@ function ResultQuestionCard({
   explanationOpen,
   onToggleExplanation,
   onRetryExplanation,
+  nav,
 }: {
   question: ResultQuestion;
   index: number;
@@ -858,9 +859,12 @@ function ResultQuestionCard({
   explanationOpen: boolean;
   onToggleExplanation: () => void;
   onRetryExplanation: () => void;
+  /** "Question 3 of 40" bar on top of the card. */
+  nav?: React.ReactNode;
 }) {
   return (
     <article className="card overflow-hidden">
+      {nav && <div className="border-b border-line bg-surface-alt px-4 py-2.5">{nav}</div>}
       <header className="flex items-start gap-3 px-4 py-3.5">
         <span className="mt-0.5 flex-shrink-0">{OUTCOME[outcome].icon}</span>
         <div className="flex-1 min-w-0">
