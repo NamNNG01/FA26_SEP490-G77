@@ -13,15 +13,18 @@ export type TypeCounts<T extends string> = Partial<Record<T, string>>;
  * starts it at `defaultCount`. The menu is portalled to <body> so scroll
  * containers don't clip it; it closes on outside click, Escape, scroll or resize.
  */
-export function TypeCountSelect<T extends string>({ label, options, value, onChange, min, max, defaultCount = 5, placeholder = 'Pick types', error, disabled, className = '' }: {
+export function TypeCountSelect<T extends string>({ label, options, value, onChange, min, max, defaultCount = 5, placeholder = 'Pick types', header, error, disabled, className = '' }: {
   label?: string;
-  options: { label: string; value: T }[];
+  /** `max` caps that option below the shared `max`; `hint` is shown next to it in the menu only (not in the summary). */
+  options: { label: string; value: T; max?: number; hint?: string }[];
   value: TypeCounts<T>;
   onChange: (v: TypeCounts<T>) => void;
   min: number;
   max: number;
   defaultCount?: number;
   placeholder?: string;
+  /** Menu header; default "Questions per type (min–max)". */
+  header?: string;
   error?: string;
   disabled?: boolean;
   className?: string;
@@ -72,19 +75,20 @@ export function TypeCountSelect<T extends string>({ label, options, value, onCha
   const ordered = (next: TypeCounts<T>): TypeCounts<T> =>
     Object.fromEntries(options.filter(o => next[o.value] !== undefined).map(o => [o.value, next[o.value]])) as TypeCounts<T>;
 
+  const maxOf = (t: T) => Math.min(max, options.find(o => o.value === t)?.max ?? max);
   const toggle = (t: T) => {
     const next = { ...value };
     if (next[t] !== undefined) delete next[t];
-    else next[t] = String(defaultCount);
+    else next[t] = String(Math.min(defaultCount, maxOf(t)));
     onChange(ordered(next));
   };
   const setCount = (t: T, count: string) => onChange(ordered({ ...value, [t]: count }));
 
   const picked = options.filter(o => value[o.value] !== undefined);
   const summary = picked.length === 0 ? placeholder : picked.map(o => `${value[o.value] || '?'} ${o.label}`).join(', ');
-  const countInvalid = (c: string | undefined) => {
+  const countInvalid = (t: T, c: string | undefined) => {
     const n = Number(c);
-    return !(Number.isInteger(n) && n >= min && n <= max);
+    return !(Number.isInteger(n) && n >= min && n <= maxOf(t));
   };
 
   return (
@@ -118,22 +122,23 @@ export function TypeCountSelect<T extends string>({ label, options, value, onCha
           className="bg-surface rounded-[10px] border border-line shadow-lg z-50 py-1 max-h-80 overflow-y-auto"
         >
           <div className="flex items-center justify-between gap-3 px-3 py-1.5 border-b border-line-soft text-xs">
-            <span className="text-content-subtle">Questions per type ({min}–{max})</span>
+            <span className="text-content-subtle">{header ?? `Questions per type (${min}–${max})`}</span>
             <button type="button" className="text-content-soft hover:underline disabled:opacity-40" disabled={!picked.length} onClick={() => onChange({})}>Clear</button>
           </div>
           {options.map(o => {
             const checked = value[o.value] !== undefined;
-            const bad = checked && countInvalid(value[o.value]);
+            const bad = checked && countInvalid(o.value, value[o.value]);
             return (
               <div key={o.value} className="flex items-center gap-2.5 px-3 py-1.5 hover:bg-surface-hover">
                 <label className="flex flex-1 min-w-0 items-center gap-2.5 py-0.5 text-sm text-content-secondary cursor-pointer">
                   <input type="checkbox" checked={checked} onChange={() => toggle(o.value)} className="w-4 h-4 accent-brand-600" />
                   <span className="truncate">{o.label}</span>
+                  {o.hint && <span className="flex-shrink-0 text-xs text-content-subtle">{o.hint}</span>}
                 </label>
                 <input
                   type="number"
                   min={min}
-                  max={max}
+                  max={maxOf(o.value)}
                   inputMode="numeric"
                   value={value[o.value] ?? ''}
                   placeholder="—"

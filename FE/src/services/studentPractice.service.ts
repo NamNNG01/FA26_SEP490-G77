@@ -13,8 +13,16 @@ import type { AnswerResponse, AttemptQuestion } from './studentAttempt.service';
  * data. A practice quiz is taken and graded in the browser only — nothing is saved on the BE.
  */
 
-/** Types a practice quiz can grade on the client (rubric types need the AI grader). */
-export type PracticeQuestionType = 'SINGLE_CHOICE' | 'MULTIPLE_CHOICE' | 'TRUE_FALSE' | 'FILL_BLANK' | 'MATCHING' | 'ORDERING';
+/**
+ * Types of a practice quiz. Every type but ESSAY is graded on the client;
+ * ESSAY is not graded (that needs the AI rubric grader) — the review shows a sample answer instead.
+ */
+export type PracticeQuestionType = 'SINGLE_CHOICE' | 'MULTIPLE_CHOICE' | 'TRUE_FALSE' | 'FILL_BLANK' | 'MATCHING' | 'ORDERING' | 'ESSAY';
+
+/** Exam kind, as the BE's examKind: QUIZ = auto-graded types, ESSAY = written answers. */
+export type PracticeExamKind = 'QUIZ' | 'ESSAY';
+
+export const EXAM_KIND_LABEL: Record<PracticeExamKind, string> = { QUIZ: 'Quiz', ESSAY: 'Essay' };
 
 /** What the grader compares the student's `response` against. */
 export interface PracticeAnswerKey {
@@ -22,6 +30,8 @@ export interface PracticeAnswerKey {
   blanks?: Record<string, string>;
   matches?: { left: string; right: string }[];
   orderedOptionIds?: number[];
+  /** ESSAY: shown on the review, not graded. */
+  sampleAnswer?: string;
 }
 
 export interface PracticeQuestion extends AttemptQuestion {
@@ -52,15 +62,14 @@ export interface PracticeModule {
   courseTitle: string;
   title: string;
   orderIndex: number;
-  /** Demo value until the BE reports it. */
-  questionCount: number;
+  /** Questions the module holds per exam kind — demo values until the BE reports them. */
+  questionCounts: Record<PracticeExamKind, number>;
 }
 
 export interface RandomQuizRequest {
-  courseIds: number[];
-  /** Empty = every module of the chosen courses. */
-  moduleIds: number[];
-  questionCount: number;
+  examKind: PracticeExamKind;
+  /** How many questions to draw from each module. */
+  moduleCounts: { moduleId: number; count: number }[];
   timeLimitMinutes: number;
 }
 
@@ -230,6 +239,40 @@ function demoDraft(type: DraftQuestionType, topic: string): DraftQuestion {
   return list[Math.floor(Math.random() * list.length)](topic);
 }
 
+const ESSAY_TEMPLATES: { prompt: (topic: string) => string; sample: (topic: string) => string }[] = [
+  {
+    prompt: topic => `Explain the key ideas of "${topic}" and give one real-world example.`,
+    sample: topic =>
+      `A good answer defines the main terms of ${topic}, explains how they relate, and walks through one concrete example showing when and why it is used.`,
+  },
+  {
+    prompt: topic => `Compare two approaches covered in "${topic}". When would you choose each one?`,
+    sample: topic =>
+      `Name both approaches from ${topic}, list their strengths and trade-offs (cost, complexity, performance), and state a clear rule for choosing between them.`,
+  },
+  {
+    prompt: topic => `Describe a common mistake when applying "${topic}" and how to avoid it.`,
+    sample: topic => `Identify a typical pitfall in ${topic}, explain its consequence, and propose concrete steps or checks that prevent it.`,
+  },
+];
+
+function demoEssay(topic: string, source: string): PracticeQuestion {
+  const t = ESSAY_TEMPLATES[Math.floor(Math.random() * ESSAY_TEMPLATES.length)];
+  return {
+    questionId: newId(),
+    orderIndex: 0,
+    questionType: 'ESSAY',
+    content: t.prompt(topic),
+    options: null,
+    matching: null,
+    maxPoints: null,
+    answerSpace: null,
+    answerKey: { sampleAnswer: t.sample(topic) },
+    source,
+    groupTitle: null,
+  };
+}
+
 /* ── draft → practice question ───────────────────────────────────────────── */
 
 const BLANK = /\{\{(\d+)\}\}/g;
@@ -329,10 +372,13 @@ function toPracticeQuestion(q: DraftQuestion, orderIndex: number, source: string
 const norm = (s: string | undefined) => (s ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
 const sameSet = (a: number[] = [], b: number[] = []) => a.length === b.length && a.every(x => b.includes(x));
 
+/** False for ESSAY: it is not graded. */
 export function isPracticeCorrect(q: PracticeQuestion, r: AnswerResponse | null | undefined): boolean {
   if (!r) return false;
   const key = q.answerKey;
   switch (q.questionType) {
+    case 'ESSAY':
+      return false;
     case 'SINGLE_CHOICE':
     case 'MULTIPLE_CHOICE':
     case 'TRUE_FALSE':
@@ -395,31 +441,43 @@ export const studentPracticeService = {
           courseTitle: courses[i].title,
           title: m.title,
           orderIndex: m.orderIndex,
-          questionCount: 8 + Math.floor(seeded(m.moduleId) * 33),
+          questionCounts: {
+            QUIZ: 8 + Math.floor(seeded(m.moduleId) * 33),
+            ESSAY: 2 + Math.floor(seeded(m.moduleId + 7919) * 9),
+          },
         })),
     );
   },
 
-  /** Customize Random Quiz — demo: questions are spread across the chosen modules. */
+  /** Customize Random Quiz — demo: draws the asked number of questions from each module. */
   async generateRandomQuiz(req: RandomQuizRequest, modules: PracticeModule[]): Promise<PracticeQuiz> {
     await delay(700);
-    const pool = modules.filter(m => req.courseIds.includes(m.courseId) && (req.moduleIds.length === 0 || req.moduleIds.includes(m.moduleId)));
-    if (pool.length === 0) throw new Error('The selected courses have no module with questions.');
-    const available = pool.reduce((s, m) => s + m.questionCount, 0);
-    if (req.questionCount > available) throw new Error(`Only ${available} questions are available in the selected modules.`);
+    const byId = new Map(modules.map(m => [m.moduleId, m]));
+    const picks = req.moduleCounts.filter(p => p.count > 0);
+    if (picks.length === 0) throw new Error('Choose at least one module.');
+    for (const p of picks) {
+      const m = byId.get(p.moduleId);
+      if (!m) throw new Error('A selected module no longer exists.');
+      const available = m.questionCounts[req.examKind];
+      if (p.count > available) throw new Error(`"${m.title}" has only ${available} ${EXAM_KIND_LABEL[req.examKind].toLowerCase()} questions.`);
+    }
 
     const types: DraftQuestionType[] = ['MULTIPLE_CHOICE', 'TRUE_FALSE', 'FILL_BLANK', 'MATCHING', 'ORDERING'];
-    const left = new Map(pool.map(m => [m.moduleId, m.questionCount]));
     const questions: PracticeQuestion[] = [];
-    for (let i = 0; i < req.questionCount; i++) {
-      const open = pool.filter(m => (left.get(m.moduleId) ?? 0) > 0);
-      const m = open[i % open.length];
-      left.set(m.moduleId, (left.get(m.moduleId) ?? 0) - 1);
-      const draft = demoDraft(types[Math.floor(Math.random() * types.length)], m.title);
-      questions.push(toPracticeQuestion(draft, i, `${m.courseTitle} · ${m.title}`, null));
+    for (const p of picks) {
+      const m = byId.get(p.moduleId)!;
+      const source = `${m.courseTitle} · ${m.title}`;
+      for (let i = 0; i < p.count; i++) {
+        questions.push(
+          req.examKind === 'ESSAY'
+            ? demoEssay(m.title, source)
+            : toPracticeQuestion(demoDraft(types[Math.floor(Math.random() * types.length)], m.title), 0, source, null),
+        );
+      }
     }
-    const courseNames = [...new Set(pool.map(m => m.courseTitle))];
-    const title = courseNames.length === 1 ? `Random quiz — ${courseNames[0]}` : `Random quiz — ${courseNames.length} courses`;
+    const courseNames = [...new Set(picks.map(p => byId.get(p.moduleId)!.courseTitle))];
+    const kind = EXAM_KIND_LABEL[req.examKind];
+    const title = courseNames.length === 1 ? `Random ${kind.toLowerCase()} — ${courseNames[0]}` : `Random ${kind.toLowerCase()} — ${courseNames.length} courses`;
     return createQuiz(title, 'RANDOM', req.timeLimitMinutes, shuffle(questions).map((q, i) => ({ ...q, orderIndex: i })));
   },
 

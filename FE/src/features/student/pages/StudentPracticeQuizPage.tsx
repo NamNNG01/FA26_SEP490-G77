@@ -98,6 +98,8 @@ export function StudentPracticeQuizPage() {
   }
 
   const q = questions[current];
+  // Essay papers: wider column and a taller editor, like the take-exam screen.
+  const isEssay = questions.every(x => x.questionType === 'ESSAY');
   const unanswered = questions.length - answeredSet.size;
   const isFlagged = flagged.has(current + 1);
   const setAnswer = (r: AnswerResponse) => commit({ ...quiz, answers: { ...quiz.answers, [q.questionId]: r } });
@@ -116,7 +118,7 @@ export function StudentPracticeQuizPage() {
           <Icon.Logo className="w-7 h-7 flex-shrink-0 text-brand-ink" aria-hidden="true" />
           <span className="text-base font-bold text-content truncate">{quiz.title}</span>
           <span className="hidden sm:inline-flex flex-shrink-0 rounded-[6px] border border-line px-2 py-0.5 text-2xs font-medium text-content-soft">
-            Practice
+            {isEssay ? 'Essay practice' : 'Practice'}
           </span>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
@@ -132,7 +134,7 @@ export function StudentPracticeQuizPage() {
 
       <div className="flex flex-1 overflow-hidden flex-col md:flex-row">
         <main className="flex-1 overflow-y-auto p-[clamp(1rem,2.5vw,1.5rem)]">
-          <div className="max-w-3xl mx-auto space-y-5">
+          <div className={`${isEssay ? 'max-w-5xl' : 'max-w-3xl'} mx-auto space-y-5`}>
             {q.groupTitle && <p className="text-xs font-semibold text-content-soft uppercase tracking-wide">{q.groupTitle}</p>}
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-sm font-semibold text-content uppercase tracking-wide">Question {current + 1}</h2>
@@ -147,7 +149,7 @@ export function StudentPracticeQuizPage() {
               <QuestionText content={q.content} className="text-content font-medium text-lg leading-relaxed" />
             </div>
 
-            <QuestionAnswerInput key={q.questionId} question={q} value={quiz.answers[q.questionId] ?? null} onChange={setAnswer} />
+            <QuestionAnswerInput key={q.questionId} question={q} value={quiz.answers[q.questionId] ?? null} onChange={setAnswer} roomy={isEssay} />
 
             <div className="flex flex-wrap items-center justify-between gap-2">
               <Button variant="outline" disabled={current === 0} icon={<Icon.ChevronLeft className="w-4 h-4" />} onClick={() => setCurrent(current - 1)}>
@@ -212,7 +214,10 @@ export function StudentPracticeQuizPage() {
           </>
         }
       >
-        <p className="text-base text-content-secondary leading-relaxed">It is graded right away. Practice results are not saved to your history.</p>
+        <p className="text-base text-content-secondary leading-relaxed">
+          {isEssay ? 'Essay answers are not graded — you will see a sample answer to compare with.' : 'It is graded right away.'} Practice
+          results are not saved to your history.
+        </p>
         {unanswered > 0 && (
           <p className="mt-3 text-sm text-warning">
             {unanswered} question{unanswered === 1 ? ' is' : 's are'} still unanswered.
@@ -229,10 +234,13 @@ function PracticeResult({ quiz, onRetake, onExit }: { quiz: PracticeQuiz; onReta
   const rows = quiz.questions.map(q => {
     const response = quiz.answers[q.questionId] ?? null;
     const answered = isAnswered(response);
-    return { q, response, answered, correct: answered && isPracticeCorrect(q, response) };
+    return { q, response, answered, graded: q.questionType !== 'ESSAY', correct: answered && isPracticeCorrect(q, response) };
   });
-  const correct = rows.filter(r => r.correct).length;
-  const percent = rows.length ? Math.round((correct / rows.length) * 100) : 0;
+  // Essays are not graded: the score counts the other questions only.
+  const graded = rows.filter(r => r.graded);
+  const correct = graded.filter(r => r.correct).length;
+  const percent = graded.length ? Math.round((correct / graded.length) * 100) : 0;
+  const ungraded = rows.length - graded.length;
   const tone = percent >= 80 ? 'text-success' : percent >= 50 ? 'text-warning' : 'text-danger';
 
   return (
@@ -241,10 +249,20 @@ function PracticeResult({ quiz, onRetake, onExit }: { quiz: PracticeQuiz; onReta
         <section className="card p-[clamp(1rem,2.5vw,1.5rem)] text-center space-y-2">
           <p className="text-xs font-semibold uppercase tracking-wide text-content-subtle">Practice result</p>
           <h1 className="text-lg font-bold text-content break-words">{quiz.title}</h1>
-          <p className={`text-4xl font-bold ${tone}`}>{percent}%</p>
-          <p className="text-sm text-content-soft">
-            {correct} of {rows.length} correct · {rows.filter(r => !r.answered).length} unanswered
-          </p>
+          {graded.length > 0 ? (
+            <>
+              <p className={`text-4xl font-bold ${tone}`}>{percent}%</p>
+              <p className="text-sm text-content-soft">
+                {correct} of {graded.length} correct · {rows.filter(r => !r.answered).length} unanswered
+                {ungraded > 0 && ` · ${ungraded} essay not graded`}
+              </p>
+            </>
+          ) : (
+            <p className="text-sm text-content-soft">
+              {rows.filter(r => r.answered).length} of {rows.length} answered · essays are not graded, compare yours with the sample
+              answers below.
+            </p>
+          )}
           <div className="flex flex-wrap justify-center gap-2 pt-2">
             <Button variant="outline" onClick={onExit}>
               Back to My Courses
@@ -256,13 +274,18 @@ function PracticeResult({ quiz, onRetake, onExit }: { quiz: PracticeQuiz; onReta
         </section>
 
         <ol className="space-y-3">
-          {rows.map(({ q, response, answered, correct: ok }, i) => (
-            <li key={q.questionId} className={`card p-4 space-y-3 border-l-4 ${ok ? '!border-l-success-solid' : answered ? '!border-l-danger-solid' : '!border-l-line-strong'}`}>
+          {rows.map(({ q, response, answered, graded: isGraded, correct: ok }, i) => (
+            <li
+              key={q.questionId}
+              className={`card p-4 space-y-3 border-l-4 ${
+                !isGraded ? '!border-l-line-strong' : ok ? '!border-l-success-solid' : answered ? '!border-l-danger-solid' : '!border-l-line-strong'
+              }`}
+            >
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-sm font-semibold text-content">Question {i + 1}</span>
                 <Badge variant="info">{QUESTION_TYPE_LABEL[q.questionType] ?? q.questionType}</Badge>
-                <Badge variant={ok ? 'success' : answered ? 'danger' : 'default'} className="ml-auto">
-                  {ok ? 'Correct' : answered ? 'Incorrect' : 'Unanswered'}
+                <Badge variant={!isGraded ? (answered ? 'info' : 'default') : ok ? 'success' : answered ? 'danger' : 'default'} className="ml-auto">
+                  {!isGraded ? (answered ? 'Not graded' : 'Unanswered') : ok ? 'Correct' : answered ? 'Incorrect' : 'Unanswered'}
                 </Badge>
               </div>
               <QuestionText content={q.content} className="text-sm text-content" />
@@ -272,7 +295,7 @@ function PracticeResult({ quiz, onRetake, onExit }: { quiz: PracticeQuiz; onReta
                   <dd className="text-content-secondary whitespace-pre-line break-words">{answered ? describeResponse(q, response) : '—'}</dd>
                 </div>
                 <div className="rounded-[10px] bg-success-light px-3 py-2">
-                  <dt className="text-2xs uppercase tracking-wide text-success">Correct answer</dt>
+                  <dt className="text-2xs uppercase tracking-wide text-success">{isGraded ? 'Correct answer' : 'Sample answer'}</dt>
                   <dd className="text-content whitespace-pre-line break-words">{describeKey(q)}</dd>
                 </div>
               </dl>
@@ -303,6 +326,8 @@ function describeResponse(q: PracticeQuestion, r: AnswerResponse | null): string
       return (r.matches ?? []).map(m => `${m.left} → ${m.right}`).join('\n');
     case 'ORDERING':
       return (r.orderedOptionIds ?? []).map((id, i) => `${i + 1}. ${optionText(q, id)}`).join('\n');
+    case 'ESSAY':
+      return r.text?.trim() || '—';
   }
 }
 
@@ -312,6 +337,7 @@ function describeKey(q: PracticeQuestion): string {
     selectedOptionIds: k.correctOptionIds,
     blanks: k.blanks,
     matches: k.matches,
+    text: k.sampleAnswer,
     orderedOptionIds: k.orderedOptionIds,
   });
 }
