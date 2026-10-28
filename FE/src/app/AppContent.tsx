@@ -32,6 +32,7 @@ import {
   StudentExamDetailPage,
   StudentTakeExamPage,
   StudentExamResultPage,
+  StudentPracticeQuizPage,
 } from '@/features/student';
 import { ExamListPage, ExamFormPage } from '@/features/exam';
 import { PublicExamsPage, PublicExamDetailPage } from '@/features/public-exam';
@@ -245,6 +246,7 @@ function AppRoutes() {
 
       <Route element={<RequireRole roles={ROLE_STUDENT} />}>
         <Route path={ROUTES.studentExam} element={<StudentTakeExamPage />} />
+        <Route path={ROUTES.studentPractice} element={<StudentPracticeQuizPage />} />
       </Route>
 
       <Route element={<DashboardLayout />}>
