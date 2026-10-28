@@ -126,7 +126,7 @@ function num(v: number | null | undefined): string {
 
 /**
  * Attempt review (SA-05) — reached from My Exams and right after submitting.
- * A header with the exam, a dropdown of my submitted attempts of this exam
+ * A header with a dropdown of my submitted attempts of this exam
  * (SA-06, with their date), the score (per module when the exam spans
  * several), "Re-attempt" and "Back"; below it two columns:
  *  - left: one question at a time (`?q=` 1-based, so a refresh or a shared
@@ -437,6 +437,7 @@ export function StudentExamResultPage() {
               attempts && attempts.length > 0 ? (
                 <Select
                   label="Attempt"
+                  maxVisibleOptions={5}
                   options={attempts.map((a, i) => ({
                     value: String(a.attemptId),
                     // Written answers still ungraded: a "0/100" would read as a real score.
@@ -455,9 +456,8 @@ export function StudentExamResultPage() {
 
       <div className="grid lg:grid-cols-[minmax(0,1fr)_300px] gap-[clamp(1rem,2vw,1.5rem)] items-start">
         {/* Navigator above the question on small screens (folded); beside it, top-aligned, from lg. */}
-        {/* Sticks 10px below the public navbar (sticky, h-16 + 1px border = 65px); scrolls on its own when taller than the screen. */}
         {total > 0 && (
-          <aside className="lg:order-2 lg:sticky lg:top-[75px] lg:max-h-[calc(100vh-85px)] lg:overflow-y-auto min-w-0">
+          <aside className="lg:order-2 min-w-0">
             <ResultPalette outcomes={outcomes} counts={counts} current={current} onSelect={goTo} />
           </aside>
         )}
@@ -690,7 +690,7 @@ function ScoreCard({
   modules: ModuleScore[];
   /** Opens a question (a module's first one). */
   onOpenModule: (index: number) => void;
-  /** Attempt dropdown, under the exam title. */
+  /** Attempt dropdown, left of the score. */
   picker?: React.ReactNode;
   /** Rubric answers the AI failed to grade (can be asked again). */
   failedCount: number;
@@ -713,34 +713,32 @@ function ScoreCard({
 
   return (
     <div className="card p-5 min-w-0 space-y-4">
-      <div className="flex flex-wrap items-start gap-x-8 gap-y-4">
-        {/* Exam, attempt and its picker. */}
-        <div className="flex-1 min-w-[min(100%,16rem)] space-y-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-lg font-semibold text-content break-words min-w-0">{result.examTitle}</h1>
-            <AttemptStatusBadge status={result.status} />
-          </div>
-          <p className="text-xs text-content-subtle">
-            Submitted {formatDateTime(result.submittedAt)}
-            {result.autoSubmitted && ' · automatically when time ran out'}
-          </p>
-          {picker && <div className="max-w-sm pt-2">{picker}</div>}
+      {/* The breadcrumb names the exam; the heading stays for screen readers. */}
+      <h1 className="sr-only">{result.examTitle} — result</h1>
+      {/* Attempt picker | score, centred and large | actions. The 1fr side columns keep the score in the middle. */}
+      <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] md:items-center">
+        <div className="min-w-0 md:max-w-xs space-y-1">
+          {picker}
+          {result.autoSubmitted && <p className="text-xs text-content-subtle">Submitted automatically when time ran out.</p>}
         </div>
 
         {/* No score until the written answers are graded — "0 / 100" would read as a real result. */}
         {showScore ? (
-          <div className="min-w-[10rem] space-y-1.5">
-            <p className="text-xs font-semibold text-content-subtle uppercase tracking-wide">Your score</p>
-            <p className={`flex flex-wrap items-baseline gap-x-1.5 leading-none ${tone}`}>
-              <span className="text-[clamp(2rem,1.5rem+1.5vw,2.75rem)] font-black break-all">{num(score)}</span>
+          // As tall as the Re-attempt / Back pair beside it (~80px): label, one score line, bar.
+          <div className="text-center space-y-1.5 md:min-w-[16rem]">
+            <p className="text-xs font-semibold text-content-subtle uppercase tracking-wide leading-4">Your score</p>
+            <p className={`flex flex-wrap items-baseline justify-center gap-x-1.5 leading-none ${tone}`}>
+              <span className="text-[2.5rem] font-black break-all">{num(score)}</span>
               <span className="text-lg font-semibold text-content-subtle whitespace-nowrap">/ {num(max)}</span>
               {pct != null && <span className="text-sm font-semibold ml-1">{pct}%</span>}
             </p>
-            <Progress value={pct ?? 0} size="sm" color={barColorOf(pct)} />
+            <div className="mx-auto max-w-[14rem]">
+              <Progress value={pct ?? 0} size="sm" color={barColorOf(pct)} />
+            </div>
           </div>
         ) : (
           // Just the button while waiting; the warning box only when there is something to say.
-          <div className={`w-full sm:w-64 ${grading || gradingError ? 'space-y-2 rounded-[10px] border border-warning-line bg-warning-light p-3' : ''}`}>
+          <div className={`w-full md:w-64 ${grading || gradingError ? 'space-y-2 rounded-[10px] border border-warning-line bg-warning-light p-3' : ''}`}>
             {grading && (
               <p className="flex items-start gap-2 text-xs text-warning">
                 <Icon.Clock className="w-4 h-4 flex-shrink-0" />
@@ -755,7 +753,7 @@ function ScoreCard({
           </div>
         )}
 
-        <div className="flex flex-wrap sm:flex-col gap-2 w-full sm:w-auto">
+        <div className="flex flex-wrap md:flex-col gap-2 md:justify-self-end">
           {onReattempt && (
             <Button icon={<Icon.RefreshCw className="w-4 h-4" />} onClick={onReattempt}>
               Re-attempt
@@ -824,23 +822,6 @@ function ScoreCard({
   );
 }
 
-/** Attempt status (BE): SUBMITTED waits for AI grading, GRADING while it runs, COMPLETED when scored. */
-const ATTEMPT_STATUS: Record<string, { label: string; badge: 'success' | 'warning' | 'info' | 'default' }> = {
-  SUBMITTED: { label: 'Submitted', badge: 'warning' },
-  GRADING: { label: 'Grading', badge: 'info' },
-  COMPLETED: { label: 'Completed', badge: 'success' },
-};
-
-function AttemptStatusBadge({ status }: { status: string }) {
-  const s = ATTEMPT_STATUS[status] ?? { label: status.replace(/_/g, ' ').toLowerCase(), badge: 'default' as const };
-  return (
-    <span className="flex-shrink-0">
-      <Badge variant={s.badge} size="sm">
-        {s.label}
-      </Badge>
-    </span>
-  );
-}
 
 function ResultQuestionCard({
   question: q,
