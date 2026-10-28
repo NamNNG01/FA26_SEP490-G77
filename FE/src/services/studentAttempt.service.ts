@@ -132,6 +132,12 @@ export interface ResultQuestion {
   overallFeedback: string | null;
   explanation: { text: string; source: string | null } | null;
   /**
+   * Module the question belongs to — not sent by SA-05 yet
+   * (docs/notes/student-result-module-be-gap.md); the per-module score shows once it is.
+   */
+  moduleId?: number | null;
+  moduleName?: string | null;
+  /**
    * Key of ORDERING / MATCHING / FILL_BLANK (their options carry no
    * `isCorrectAnswer`). FILL_BLANK `blanks`: placeholder number → accepted spellings.
    */

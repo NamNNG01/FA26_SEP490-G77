@@ -39,6 +39,8 @@ export const ROUTES = {
   studentPublicExamDetail: '/student/public-exam/:examId',
   studentExam: '/student/exam',
   studentExamResult: '/student/exam-result',
+  /** Client-side practice quiz (random / from material) — render with studentPracticePath(id). */
+  studentPractice: '/student/practice',
 
   // Content Manager (backend role: COURSE_MANAGER)
   managerDashboard: '/manager/dashboard',
@@ -99,6 +101,11 @@ export function studentExamPath(examId: number | string): string {
 /** Take-exam screen, starting (or resuming) an attempt — e.g. '/student/exam?examId=12'. */
 export function studentTakeExamPath(examId: number | string): string {
   return `${ROUTES.studentExam}?examId=${encodeURIComponent(String(examId))}`;
+}
+
+/** Practice quiz screen — e.g. '/student/practice?quizId=pq1'. */
+export function studentPracticePath(quizId: string): string {
+  return `${ROUTES.studentPractice}?quizId=${encodeURIComponent(quizId)}`;
 }
 
 /** Take-exam screen for an attempt already started — e.g. '/student/exam?attemptId=7'. */

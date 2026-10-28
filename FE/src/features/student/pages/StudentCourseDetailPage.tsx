@@ -34,11 +34,14 @@ export function StudentCourseDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
+  /** Modules the content tree shows (empty ones are hidden); null until it has loaded. */
+  const [shownModules, setShownModules] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
+    setShownModules(null);
     studentCourseService
       .getCourseDetail(courseId)
       .then(res => {
@@ -88,6 +91,8 @@ export function StudentCourseDetailPage() {
 
   const enrollment = course.enrollment;
   const isActive = Boolean(enrollment?.isEnrolled && enrollment.status === 'ACTIVE');
+  // Count what the page lists: the tree hides empty modules, the locked list shows them all.
+  const moduleCount = isActive ? shownModules : course.modules.length;
 
   return (
     <div className={`${STUDENT_PAGE_CLASS} space-y-[clamp(1.25rem,2.5vw,1.75rem)]`}>
@@ -116,9 +121,11 @@ export function StudentCourseDetailPage() {
             <span className="inline-flex items-center gap-1.5">
               <Icon.Layers className="w-4 h-4" /> {course.stats.deckCount} decks
             </span>
-            <span className="inline-flex items-center gap-1.5">
-              <Icon.Folder className="w-4 h-4" /> {course.modules.length} modules
-            </span>
+            {moduleCount != null && (
+              <span className="inline-flex items-center gap-1.5">
+                <Icon.Folder className="w-4 h-4" /> {moduleCount} module{moduleCount === 1 ? '' : 's'}
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -136,7 +143,7 @@ export function StudentCourseDetailPage() {
       )}
 
       {isActive ? (
-        <CourseTree course={course} />
+        <CourseTree course={course} onModuleCount={setShownModules} />
       ) : (
         <LockedModules course={course} />
       )}
@@ -162,7 +169,7 @@ const ROW = 36;
 const MID = ROW / 2;
 const LINE = 'border-dotted border-content-subtle';
 
-function CourseTree({ course }: { course: StudentCourseDetail }) {
+function CourseTree({ course, onModuleCount }: { course: StudentCourseDetail; onModuleCount: (count: number) => void }) {
   const navigate = useNavigate();
   const [exams, setExams] = useState<CourseExam[]>([]);
   const [decks, setDecks] = useState<StudentDeck[]>([]);
@@ -214,6 +221,11 @@ function CourseTree({ course }: { course: StudentCourseDetail }) {
       loose: rootLeaves,
     };
   }, [course, exams, decks]);
+
+  // The header counts the modules shown here, not the empty ones hidden above.
+  useEffect(() => {
+    if (!loading && !error) onModuleCount(modules.length);
+  }, [loading, error, modules.length, onModuleCount]);
 
   if (loading) return <ListSkeleton rows={4} />;
   if (error) return <LoadError message={error} onRetry={() => setReload(r => r + 1)} />;

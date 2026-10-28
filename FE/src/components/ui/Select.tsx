@@ -11,7 +11,7 @@ const GAP = 4;
  * on outside click, Escape, Tab, scroll or resize. ↑/↓/Home/End move,
  * Enter/Space pick, typing a letter jumps to the next matching option.
  */
-export function Select({ label, options, value, onChange, className = '', triggerClassName, disabled, error, invalid, id: idProp, 'aria-label': ariaLabel }: {
+export function Select({ label, options, value, onChange, className = '', triggerClassName, disabled, error, invalid, id: idProp, 'aria-label': ariaLabel, maxVisibleOptions }: {
   label?: string; options: { label: string; value: string }[]; value?: string;
   onChange?: (v: string) => void; className?: string; disabled?: boolean;
   /** Replaces the trigger's size/typography classes (e.g. a compact pill); the colours and menu stay the same. */
@@ -22,6 +22,8 @@ export function Select({ label, options, value, onChange, className = '', trigge
   id?: string;
   /** Accessible name for filter-style selects that render no visible label. */
   'aria-label'?: string;
+  /** Rows the open menu shows before it scrolls (default: up to max-h-72). */
+  maxVisibleOptions?: number;
 }) {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
@@ -139,7 +141,11 @@ export function Select({ label, options, value, onChange, className = '', trigge
           role="listbox"
           aria-labelledby={label ? id : undefined}
           aria-label={label ? undefined : ariaLabel}
-          style={{ position: 'fixed', top: pos?.top ?? 0, left: pos?.left ?? 0, minWidth: pos?.width ?? 0, visibility: pos ? 'visible' : 'hidden' }}
+          style={{
+            position: 'fixed', top: pos?.top ?? 0, left: pos?.left ?? 0, minWidth: pos?.width ?? 0, visibility: pos ? 'visible' : 'hidden',
+            // One option row is 36px (py-2 + 20px line), plus the list's 4px top and bottom padding.
+            ...(maxVisibleOptions ? { maxHeight: maxVisibleOptions * 36 + 8 } : {}),
+          }}
           className="bg-surface rounded-[10px] border border-line shadow-lg z-50 py-1 max-h-72 overflow-y-auto"
         >
           {options.map((o, i) => {
