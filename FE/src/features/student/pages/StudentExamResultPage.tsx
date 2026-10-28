@@ -14,7 +14,6 @@ import { getApiErrorMessage } from '@/utils/apiError';
 import {
   RUBRIC_TYPES,
   studentAttemptService,
-  type AiQuota,
   type AttemptHistoryItem,
   type AttemptResult,
   type ResultQuestion,
@@ -64,35 +63,53 @@ const hasExplanation = (q: ResultQuestion) => !RUBRIC_TYPES.has(q.questionType);
 
 /** SE-01 takes at most 20 question ids per call. */
 const EXPLAIN_BATCH = 20;
-/** BE `app.student-ai.explanation-output-budget` default. */
-const EXPLAIN_OUTPUT_BUDGET = 250;
 
-/** Correct answer in words, built like the BE prompt does (StudentAiServiceImpl#correctAnswer). */
-function correctAnswerText(q: ResultQuestion): string {
-  const textOf = (id: number) => q.options?.find(o => o.optionId === id)?.optionText ?? '';
-  if (q.questionType === 'ORDERING') return (q.correctAnswer?.orderedOptionIds ?? []).map(textOf).join(' -> ');
-  if (q.questionType === 'MATCHING') return (q.correctAnswer?.pairs ?? []).map(p => `${p.left} -> ${p.right}`).join('\n');
-  if (q.questionType === 'FILL_BLANK')
-    return Object.entries(q.correctAnswer?.blanks ?? {})
-      .map(([n, accepted]) => `Blank ${n}: ${accepted.join(' / ')}`)
-      .join('\n');
-  return (q.options ?? [])
-    .filter(o => o.isCorrectAnswer)
-    .map(o => o.optionText)
-    .join('; ');
+/** Palette cell per outcome — the same colours as the outcome badges. */
+const PALETTE_CELL: Record<Outcome, string> = {
+  correct: 'bg-success-light text-success border-success-line',
+  incorrect: 'bg-danger-light text-danger border-danger-line',
+  graded: 'bg-primary-light text-brand-ink border-brand-200',
+  unanswered: 'bg-surface text-content-subtle border-line border-dashed',
+  pending: 'bg-warning-light text-warning border-warning-line',
+};
+
+/** Score colour: green ≥ 80 %, amber ≥ 50 %, red below. */
+const toneOf = (pct: number | null) => (pct == null ? 'text-content' : pct >= 80 ? 'text-success' : pct >= 50 ? 'text-warning' : 'text-danger');
+const barColorOf = (pct: number | null) =>
+  pct == null ? 'var(--color-primary)' : pct >= 80 ? 'var(--color-success-solid)' : pct >= 50 ? 'var(--color-warning)' : 'var(--color-danger-solid)';
+const pctOf = (earned: number | null | undefined, max: number | null | undefined) =>
+  max != null && Number(max) > 0 && earned != null ? Math.round((Number(earned) / Number(max)) * 100) : null;
+
+/** Score of one module of the exam (questions carrying its moduleId). */
+interface ModuleScore {
+  key: string;
+  name: string;
+  earned: number;
+  max: number;
+  /** Questions of the module still waiting for the AI. */
+  pending: number;
+  /** Index of its first question, to jump to. */
+  first: number;
 }
 
-/**
- * Tokens the BE reserves to explain one question (spec 8.1 rule 4):
- * ceil(promptChars / 2.5) × 1.3 + output budget. An estimate — the quota is
- * settled on the real usage afterwards.
- */
-function estimateExplainTokens(q: ResultQuestion): number {
-  const prompt = JSON.stringify({ questionId: q.questionId, questionType: q.questionType, question: q.content, correctAnswer: correctAnswerText(q) });
-  return Math.ceil(Math.ceil(prompt.length / 2.5) * 1.3) + EXPLAIN_OUTPUT_BUDGET;
+/** Per-module scores, or [] when SA-05 sends no module or the exam covers only one. */
+function moduleScores(questions: ResultQuestion[], outcomes: Outcome[]): ModuleScore[] {
+  const byKey = new Map<string, ModuleScore>();
+  questions.forEach((q, i) => {
+    if (q.moduleId == null && !q.moduleName) return;
+    const key = String(q.moduleId ?? q.moduleName);
+    const m = byKey.get(key) ?? { key, name: q.moduleName || `Module ${q.moduleId}`, earned: 0, max: 0, pending: 0, first: i };
+    m.max += Number(q.maxPoints ?? 0);
+    if (outcomes[i] === 'pending') m.pending++;
+    else m.earned += Number(q.scoreEarned ?? 0);
+    byKey.set(key, m);
+  });
+  return byKey.size >= 2 ? [...byKey.values()] : [];
 }
 
-const formatTokens = (n: number) => n.toLocaleString('en-US');
+/** Typing in a field (or a picker) keeps its arrow keys. */
+const isTypingTarget = (t: EventTarget | null) =>
+  t instanceof HTMLElement && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName) || t.getAttribute('role') === 'combobox');
 
 interface ExplanationState {
   text: string | null;
@@ -112,12 +129,17 @@ function num(v: number | null | undefined): string {
 /**
  * Attempt review (SA-05) — reached from My Exams and right after submitting.
  * Two columns:
- *  - left: every question with its outcome, my answer, the correct answer
- *    and rubric feedback, always shown; only the explanation is collapsed —
- *    opening it shows the cached text or asks the AI right away (SE-01).
- *    Essay / code / diagram questions have no explanation;
+ *  - left: one question at a time (`?q=` 1-based, so a refresh or a shared
+ *    link keeps it) with its outcome, my answer, the correct answer and rubric
+ *    feedback; Previous / Next and ← → move through it. Only the explanation
+ *    is collapsed — opening it shows the cached text or asks the AI right away
+ *    (SE-01). Essay / code / diagram questions have no explanation and show
+ *    the answer beside its rubric grade;
  *  - right: a dropdown of my submitted attempts of this exam (SA-06, with
- *    their date), then the score, correct / incorrect counts and "Re-attempt".
+ *    their date), the score (per module when the exam spans several),
+ *    "Re-attempt", then a palette of every question coloured by outcome —
+ *    a click opens that question; on quiz exams a status filter dims the rest
+ *    and Previous / Next skip them.
  * `?examId=` alone opens the newest submitted attempt; `?attemptId=` picks one.
  * Essay / code / diagram answers: the attempt lands here SUBMITTED with its
  * rubric answers ungraded. "Grade with AI" asks the AI (SE-02) and opens a
@@ -143,11 +165,23 @@ export function StudentExamResultPage() {
   /** Submitted attempts of the exam, newest first; null until loaded (or without examId). */
   const [attempts, setAttempts] = useState<AttemptHistoryItem[] | null>(null);
   const [filter, setFilter] = useState<Filter>('all');
-  /** "Show all explanations" waiting for the student to accept the quota cost. */
-  const [confirmAll, setConfirmAll] = useState<{ ids: number[]; toGenerate: number; tokens: number } | null>(null);
-  const [quota, setQuota] = useState<AiQuota | null>(null);
-  const [quotaLoading, setQuotaLoading] = useState(false);
-  const [quotaError, setQuotaError] = useState<string | null>(null);
+  /** Previous / Next of the question on screen, for the ← → keys (set every render). */
+  const navRef = useRef<{ prev?: () => void; next?: () => void }>({});
+  const questionRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || isTypingTarget(e.target)) return;
+      // A dialog on top (grading) owns the keyboard.
+      if (document.querySelector('[role="dialog"]')) return;
+      const go = e.key === 'ArrowLeft' ? navRef.current.prev : e.key === 'ArrowRight' ? navRef.current.next : undefined;
+      if (!go) return;
+      e.preventDefault();
+      go();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   useEffect(() => {
     if (!examId) return;
@@ -187,7 +221,6 @@ export function StudentExamResultPage() {
     setLoading(true);
     setOpen(new Set());
     setFilter('all');
-    setConfirmAll(null);
     explanationsRef.current = {};
     setExplanations({});
   }, [attemptId]);
@@ -353,6 +386,7 @@ export function StudentExamResultPage() {
   }
 
   const failedCount = result.questions.filter(q => q.gradingStatus === GRADING_FAILED).length;
+  const total = result.questions.length;
 
   const toggle = (questionId: number) => {
     const opening = !open.has(questionId);
@@ -366,54 +400,52 @@ export function StudentExamResultPage() {
   };
 
   // Status filter only on quiz exams: essays have no right/wrong verdict to filter by.
-  const isQuiz = result.questions.length > 0 && result.questions.every(q => !RUBRIC_TYPES.has(q.questionType));
+  const isQuiz = total > 0 && result.questions.every(q => !RUBRIC_TYPES.has(q.questionType));
   const activeFilter: Filter = isQuiz ? filter : 'all';
-  const visible = result.questions
-    .map((q, i) => ({ q, i, outcome: outcomes[i] }))
-    .filter(x => activeFilter === 'all' || x.outcome === activeFilter);
+  const matches = (i: number) => activeFilter === 'all' || outcomes[i] === activeFilter;
+  /** Indexes Previous / Next step through. */
+  const inFilter = result.questions.map((_, i) => i).filter(matches);
   const filters: { key: Filter; label: string; count: number }[] = [
-    { key: 'all', label: 'All', count: result.questions.length },
+    { key: 'all', label: 'All', count: total },
     { key: 'correct', label: 'Correct', count: counts.correct },
     { key: 'incorrect', label: 'Incorrect', count: counts.incorrect },
     { key: 'unanswered', label: 'Unanswered', count: counts.unanswered },
   ];
 
-  const explainable = visible.filter(x => hasExplanation(x.q)).map(x => x.q.questionId);
-  const allOpen = explainable.length > 0 && explainable.every(id => open.has(id));
+  const qParam = Number(searchParams.get('q'));
+  const current = total === 0 ? 0 : Number.isInteger(qParam) && qParam >= 1 ? Math.min(qParam, total) - 1 : 0;
+  const prevIndex = [...inFilter].reverse().find(i => i < current);
+  const nextIndex = inFilter.find(i => i > current);
+  const position = inFilter.indexOf(current);
 
-  const openAll = (ids: number[]) => {
-    setOpen(prev => new Set([...prev, ...ids]));
-    loadExplanations(ids);
-  };
-
-  const toggleAll = () => {
-    if (allOpen) {
-      setOpen(prev => new Set([...prev].filter(id => !explainable.includes(id))));
-      return;
-    }
-    // Questions that still need the AI — cached / manager explanations cost nothing.
-    const toGenerate = result.questions.filter(
-      q => explainable.includes(q.questionId) && !q.explanation?.text && !explanations[q.questionId]?.text,
+  const goTo = (index: number) => {
+    // replace: walking through 40 questions must not fill the Back button's history.
+    setSearchParams(
+      prev => {
+        const next = new URLSearchParams(prev);
+        next.set('q', String(index + 1));
+        return next;
+      },
+      { replace: true },
     );
-    if (toGenerate.length === 0) {
-      openAll(explainable);
-      return;
-    }
-    setConfirmAll({
-      ids: explainable,
-      toGenerate: toGenerate.length,
-      tokens: toGenerate.reduce((sum, q) => sum + estimateExplainTokens(q), 0),
-    });
-    setQuotaLoading(true);
-    setQuotaError(null);
-    studentAttemptService
-      .getAiQuota()
-      .then(setQuota)
-      .catch(err => setQuotaError(getApiErrorMessage(err, 'Could not load your AI quota.')))
-      .finally(() => setQuotaLoading(false));
+    // From the bottom of a long answer, bring the next question's top into view.
+    const top = questionRef.current?.getBoundingClientRect().top;
+    if (top != null && top < 0) questionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+  navRef.current = {
+    prev: prevIndex != null ? () => goTo(prevIndex) : undefined,
+    next: nextIndex != null ? () => goTo(nextIndex) : undefined,
   };
 
-  const available = quota ? quota.free.remaining + (quota.plan?.remaining ?? 0) : null;
+  const pickFilter = (key: Filter) => {
+    setFilter(key);
+    // Keep the question on screen when it fits the filter; otherwise open the filter's first one.
+    const first = result.questions.findIndex((_, i) => key === 'all' || outcomes[i] === key);
+    if (key !== 'all' && outcomes[current] !== key && first >= 0) goTo(first);
+  };
+
+  const modules = moduleScores(result.questions, outcomes);
+  const q = result.questions[current];
 
   return (
     <div className={`${STUDENT_PAGE_CLASS} space-y-[clamp(1.25rem,2.5vw,1.75rem)]`}>
@@ -421,11 +453,13 @@ export function StudentExamResultPage() {
 
       <div className="grid lg:grid-cols-[minmax(0,1fr)_320px] gap-[clamp(1rem,2vw,1.5rem)] items-start">
         {/* Right column first on small screens: the score is the headline. */}
-        {/* Sticks 10px below the public navbar (sticky, h-16 + 1px border = 65px). */}
-        <aside className="lg:order-2 lg:sticky lg:top-[75px]">
+        {/* Sticks 10px below the public navbar (sticky, h-16 + 1px border = 65px); scrolls on its own when taller than the screen. */}
+        <aside className="lg:order-2 lg:sticky lg:top-[75px] lg:max-h-[calc(100vh-85px)] lg:overflow-y-auto space-y-4 min-w-0">
           <ScoreCard
             result={result}
             counts={counts}
+            modules={modules}
+            onOpenModule={goTo}
             failedCount={failedCount}
             gradingError={gradingError}
             waitingForGrading={waiting && !running}
@@ -450,52 +484,55 @@ export function StudentExamResultPage() {
             onReattempt={examId ? () => navigate(studentTakeExamPath(examId)) : undefined}
             onBack={examId ? () => navigate(studentExamPath(examId)) : () => navigate(ROUTES.studentExams)}
           />
+
+          {total > 0 && (
+            <ResultPalette
+              outcomes={outcomes}
+              current={current}
+              matches={matches}
+              onSelect={goTo}
+              filters={
+                isQuiz
+                  ? filters.filter(f => f.key === 'all' || f.count > 0).map(f => ({ ...f, active: activeFilter === f.key, onClick: () => pickFilter(f.key) }))
+                  : undefined
+              }
+            />
+          )}
         </aside>
 
-        <section className="lg:order-1 space-y-3 min-w-0" aria-label="Questions">
-          {(isQuiz || explainable.length > 0) && (
-            <div className="flex flex-wrap items-center gap-2">
-              {isQuiz &&
-                filters
-                  .filter(f => f.key === 'all' || f.count > 0)
-                  .map(f => (
-                    <button
-                      key={f.key}
-                      type="button"
-                      aria-pressed={activeFilter === f.key}
-                      onClick={() => setFilter(f.key)}
-                      className={`px-3 py-1 rounded-full text-sm border transition-colors ${
-                        activeFilter === f.key
-                          ? 'bg-primary-light border-brand-600 text-brand-ink font-medium'
-                          : 'border-line text-content-soft hover:bg-accent'
-                      }`}
-                    >
-                      {f.label} <span className="text-content-subtle">({f.count})</span>
-                    </button>
-                  ))}
-              {explainable.length > 0 && (
-                <button type="button" className="ml-auto text-sm text-brand-ink hover:underline" onClick={toggleAll}>
-                  {allOpen ? 'Hide all explanations' : 'Show all explanations'}
-                </button>
-              )}
-            </div>
-          )}
-
-          {visible.length === 0 ? (
-            <div className="card px-5 py-10 text-center text-sm text-content-soft">No question in this filter.</div>
+        <section ref={questionRef} className="lg:order-1 space-y-3 min-w-0 scroll-mt-[85px]" aria-label="Question">
+          {!q ? (
+            <div className="card px-5 py-10 text-center text-sm text-content-soft">This attempt has no question.</div>
           ) : (
-            visible.map(({ q, i, outcome }) => (
+            <>
+              <QuestionNav
+                current={current}
+                total={total}
+                position={position}
+                filtered={activeFilter !== 'all' ? { label: filters.find(f => f.key === activeFilter)!.label, count: inFilter.length } : null}
+                onPrev={navRef.current.prev}
+                onNext={navRef.current.next}
+              />
               <ResultQuestionCard
                 key={q.questionId}
                 question={q}
-                index={i}
-                outcome={outcome}
+                index={current}
+                outcome={outcomes[current]}
                 explanation={explanations[q.questionId]}
                 explanationOpen={open.has(q.questionId)}
                 onToggleExplanation={() => toggle(q.questionId)}
                 onRetryExplanation={() => loadExplanations([q.questionId])}
               />
-            ))
+              <div className="flex items-center justify-between gap-3">
+                <Button variant="outline" icon={<Icon.ChevronLeft className="w-4 h-4" />} disabled={!navRef.current.prev} onClick={navRef.current.prev}>
+                  Previous
+                </Button>
+                <Button disabled={!navRef.current.next} onClick={navRef.current.next}>
+                  Next
+                  <Icon.ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
+            </>
           )}
         </section>
       </div>
@@ -508,64 +545,138 @@ export function StudentExamResultPage() {
           onClose={() => setDismissed(true)}
         />
       </Modal>
+    </div>
+  );
+}
 
-      <Modal
-        open={confirmAll != null}
-        onClose={() => setConfirmAll(null)}
-        title="Use AI quota for explanations?"
-        size="sm"
-        footer={
-          <>
-            <Button variant="outline" onClick={() => setConfirmAll(null)}>
-              Cancel
-            </Button>
-            <Button
-              icon={<Icon.Brain className="w-4 h-4" />}
-              disabled={quotaLoading}
-              onClick={() => {
-                if (confirmAll) openAll(confirmAll.ids);
-                setConfirmAll(null);
-              }}
-            >
-              Show all explanations
-            </Button>
-          </>
-        }
+/** "Question 3 of 40" with compact Previous / Next, above the question card. */
+function QuestionNav({
+  current,
+  total,
+  position,
+  filtered,
+  onPrev,
+  onNext,
+}: {
+  current: number;
+  total: number;
+  /** Place of the question within the filter, -1 when it is outside it. */
+  position: number;
+  filtered: { label: string; count: number } | null;
+  onPrev?: () => void;
+  onNext?: () => void;
+}) {
+  const arrow = 'w-9 h-9 rounded-[8px] border border-line flex items-center justify-center text-content-secondary hover:bg-accent disabled:opacity-40 disabled:pointer-events-none';
+  return (
+    <div className="flex items-center gap-3">
+      <p className="flex-1 min-w-0 text-sm text-content-soft" aria-live="polite">
+        <span className="font-semibold text-content">Question {current + 1}</span> of {total}
+        {filtered && position >= 0 && (
+          <span className="text-content-subtle">
+            {' '}
+            · {position + 1} / {filtered.count} {filtered.label.toLowerCase()}
+          </span>
+        )}
+      </p>
+      <span className="hidden sm:inline text-xs text-content-subtle">Use ← → to move</span>
+      <div className="flex gap-1.5">
+        <button type="button" className={arrow} aria-label="Previous question" disabled={!onPrev} onClick={onPrev}>
+          <Icon.ChevronLeft className="w-4 h-4" />
+        </button>
+        <button type="button" className={arrow} aria-label="Next question" disabled={!onNext} onClick={onNext}>
+          <Icon.ChevronRight className="w-4 h-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Every question as a numbered cell coloured by outcome; a click opens it.
+ * Cells outside the status filter are dimmed (still clickable). On small
+ * screens the grid folds behind a "Question 3 of 40" toggle.
+ */
+function ResultPalette({
+  outcomes,
+  current,
+  matches,
+  onSelect,
+  filters,
+}: {
+  outcomes: Outcome[];
+  current: number;
+  matches: (index: number) => boolean;
+  onSelect: (index: number) => void;
+  filters?: { key: Filter; label: string; count: number; active: boolean; onClick: () => void }[];
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const present = (Object.keys(OUTCOME) as Outcome[]).filter(o => outcomes.includes(o));
+  return (
+    <div className="card p-4 space-y-3 min-w-0">
+      <button
+        type="button"
+        aria-expanded={expanded}
+        aria-controls="result-palette"
+        onClick={() => setExpanded(e => !e)}
+        className="w-full flex items-center justify-between gap-2 text-left lg:pointer-events-none"
       >
-        {confirmAll && (
-          <div className="space-y-3">
-            <p className="text-sm text-content-secondary leading-relaxed">
-              The AI will write explanations for <strong>{confirmAll.toGenerate}</strong> question
-              {confirmAll.toGenerate === 1 ? '' : 's'}
-              {confirmAll.ids.length > confirmAll.toGenerate &&
-                ` (the other ${confirmAll.ids.length - confirmAll.toGenerate} already have one and are free)`}
-              .
-            </p>
-            <dl className="grid grid-cols-2 gap-2">
-              <div className="rounded-[10px] border border-line px-3 py-2.5">
-                <dt className="text-xs text-content-subtle">Estimated cost</dt>
-                <dd className="text-lg font-semibold text-content">~{formatTokens(confirmAll.tokens)} tokens</dd>
-              </div>
-              <div className="rounded-[10px] border border-line px-3 py-2.5">
-                <dt className="text-xs text-content-subtle">Quota left</dt>
-                <dd className="text-lg font-semibold text-content">
-                  {quotaLoading ? <Spinner size="sm" /> : available != null ? `${formatTokens(available)} tokens` : '—'}
-                </dd>
-              </div>
-            </dl>
-            {quotaError && <p className="text-sm text-danger">{quotaError}</p>}
-            {available != null && available < confirmAll.tokens && (
-              <p className="flex items-start gap-2 text-sm text-warning">
-                <Icon.AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                Your quota may not be enough — some questions may be left without an explanation.
-              </p>
-            )}
-            <p className="text-xs text-content-subtle">
-              The cost is an estimate; your quota is charged for what the AI actually uses.
-            </p>
+        <span className="text-sm font-semibold text-content">Questions</span>
+        <span className="flex items-center gap-1 text-xs text-content-subtle">
+          {current + 1} / {outcomes.length}
+          <Icon.ChevronDown className={`w-4 h-4 lg:hidden transition-transform ${expanded ? 'rotate-180' : ''}`} />
+        </span>
+      </button>
+
+      <div id="result-palette" className={`${expanded ? 'block' : 'hidden'} lg:block space-y-3`}>
+        {filters && (
+          <div className="flex flex-wrap gap-1.5">
+            {filters.map(f => (
+              <button
+                key={f.key}
+                type="button"
+                aria-pressed={f.active}
+                onClick={f.onClick}
+                className={`px-2.5 py-0.5 rounded-full text-xs border transition-colors ${
+                  f.active ? 'bg-primary-light border-brand-600 text-brand-ink font-medium' : 'border-line text-content-soft hover:bg-accent'
+                }`}
+              >
+                {f.label} <span className="text-content-subtle">({f.count})</span>
+              </button>
+            ))}
           </div>
         )}
-      </Modal>
+
+        {/* p-1: room for the current cell's ring inside the scroll box. */}
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(2.25rem,1fr))] gap-1.5 max-h-[min(40vh,18rem)] overflow-y-auto p-1 -m-1">
+          {outcomes.map((o, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => {
+                onSelect(i);
+                setExpanded(false);
+              }}
+              aria-current={i === current ? 'step' : undefined}
+              aria-label={`Question ${i + 1}, ${OUTCOME[o].label.toLowerCase()}`}
+              title={`Question ${i + 1} · ${OUTCOME[o].label}`}
+              className={`h-9 rounded-[8px] border text-sm font-semibold transition-all ${PALETTE_CELL[o]} ${
+                i === current ? 'ring-2 ring-brand-600 ring-offset-1 ring-offset-surface' : 'hover:brightness-95'
+              } ${matches(i) ? '' : 'opacity-30'}`}
+            >
+              {i + 1}
+            </button>
+          ))}
+        </div>
+
+        <ul className="flex flex-wrap gap-x-3 gap-y-1">
+          {present.map(o => (
+            <li key={o} className="flex items-center gap-1.5 text-xs text-content-soft">
+              <span className={`w-3 h-3 rounded-[3px] border ${PALETTE_CELL[o]}`} aria-hidden="true" />
+              {OUTCOME[o].label}
+            </li>
+          ))}
+        </ul>
+      </div>
     </div>
   );
 }
@@ -636,6 +747,8 @@ function GradingScreen({
 function ScoreCard({
   result,
   counts,
+  modules,
+  onOpenModule,
   picker,
   failedCount,
   gradingError,
@@ -647,6 +760,10 @@ function ScoreCard({
 }: {
   result: AttemptResult;
   counts: Record<Outcome, number>;
+  /** Score per module; empty hides the breakdown. */
+  modules: ModuleScore[];
+  /** Opens a question (a module's first one). */
+  onOpenModule: (index: number) => void;
   /** Attempt dropdown, shown above the score. */
   picker?: React.ReactNode;
   /** Rubric answers the AI failed to grade (can be asked again). */
@@ -662,8 +779,8 @@ function ScoreCard({
 }) {
   const max = result.maxScore != null ? Number(result.maxScore) : null;
   const score = result.totalScore != null ? Number(result.totalScore) : null;
-  const pct = max && score != null ? Math.round((score / max) * 100) : null;
-  const tone = pct == null ? 'text-content' : pct >= 80 ? 'text-success' : pct >= 50 ? 'text-warning' : 'text-danger';
+  const pct = pctOf(score, max);
+  const tone = toneOf(pct);
 
   return (
     <div className="card p-5 space-y-5 min-w-0">
@@ -686,6 +803,41 @@ function ScoreCard({
             <span className="text-[clamp(2rem,1.5rem+1.5vw,2.75rem)] font-black break-all">{num(score)}</span>
             <span className="text-lg font-semibold text-content-subtle whitespace-nowrap">/ {num(max)}</span>
           </p>
+        </div>
+      )}
+
+      {!waitingForGrading && !grading && modules.length > 0 && (
+        <div className="min-w-0">
+          <p className="text-xs font-semibold text-content-subtle uppercase tracking-wide mb-2">Score by module</p>
+          <ul className="space-y-1">
+            {modules.map(m => {
+              const mPct = pctOf(m.earned, m.max);
+              return (
+                <li key={m.key}>
+                  <button
+                    type="button"
+                    onClick={() => onOpenModule(m.first)}
+                    title={`Open the first question of ${m.name}`}
+                    className="w-full text-left rounded-[8px] px-2 py-1.5 -mx-2 hover:bg-accent space-y-1"
+                  >
+                    <span className="flex items-baseline justify-between gap-2">
+                      <span className="text-sm text-content truncate min-w-0">{m.name}</span>
+                      <span className={`text-xs font-semibold flex-shrink-0 ${toneOf(mPct)}`}>
+                        {num(m.earned)} / {num(m.max)}
+                        {mPct != null && <span className="text-content-subtle font-normal"> · {mPct}%</span>}
+                      </span>
+                    </span>
+                    <Progress value={mPct ?? 0} size="sm" color={barColorOf(mPct)} />
+                    {m.pending > 0 && (
+                      <span className="block text-xs text-warning">
+                        {m.pending} question{m.pending === 1 ? '' : 's'} not graded yet
+                      </span>
+                    )}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
         </div>
       )}
 
@@ -781,33 +933,53 @@ function ResultQuestionCard({
       <header className="flex items-start gap-3 px-4 py-3.5">
         <span className="mt-0.5 flex-shrink-0">{OUTCOME[outcome].icon}</span>
         <div className="flex-1 min-w-0">
-          <p className="text-xs text-content-subtle">
+          <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-content-subtle">
             Question {index + 1} · {QUESTION_TYPE_LABEL[q.questionType] ?? q.questionType}
+            {q.moduleName && (
+              <Badge size="sm" variant="default">
+                <Icon.Layers className="w-3 h-3" /> {q.moduleName}
+              </Badge>
+            )}
           </p>
           <QuestionText content={q.content} className="text-sm text-content mt-0.5" />
         </div>
         <div className="flex flex-col items-end gap-1 flex-shrink-0">
-          <Badge variant={OUTCOME[outcome].badge} size="sm">
-            {OUTCOME[outcome].label}
-          </Badge>
+          {q.gradingStatus === GRADING_FAILED ? (
+            <Badge variant="danger" size="sm">
+              Grading failed
+            </Badge>
+          ) : (
+            <Badge variant={OUTCOME[outcome].badge} size="sm">
+              {OUTCOME[outcome].label}
+            </Badge>
+          )}
           <span className="text-xs text-content-subtle">
             {/* Ungraded written answer: only its worth, not a "0 / 100". */}
-            {outcome === 'pending' ? `${num(q.maxPoints)} pts` : `${num(q.scoreEarned)} / ${num(q.maxPoints)} pts`}
+            {outcome === 'pending' || q.gradingStatus === GRADING_FAILED
+              ? `${num(q.maxPoints)} pts`
+              : `${num(q.scoreEarned)} / ${num(q.maxPoints)} pts`}
           </span>
         </div>
       </header>
 
-      {/* Answers are always shown; only the explanation is collapsible. */}
+      {RUBRIC_TYPES.has(q.questionType) ? (
+        // Written answer beside its grade once the card is wide enough (container query, not viewport:
+        // the sidebar and score column eat most of a laptop screen), so the rubric stays in view.
+        <div className="@container border-t border-line px-4 py-4">
+          <div className="grid gap-4 @3xl:grid-cols-[minmax(0,1fr)_minmax(15rem,20rem)] @3xl:items-start">
+          <div className="min-w-0">
+            <AnswerReview question={q} />
+          </div>
+          <div className="@3xl:sticky @3xl:top-[85px] min-w-0">
+            <RubricGrade question={q} outcome={outcome} />
+          </div>
+          </div>
+        </div>
+      ) : (
+      /* Answers are always shown; only the explanation is collapsible. */
       <div className="border-t border-line px-4 py-4 space-y-4">
         <AnswerReview question={q} />
         {q.gradingError && <p className="text-sm text-danger">Grading failed: {q.gradingError}</p>}
-        {q.criteria && q.criteria.length > 0 && <CriteriaReview question={q} />}
-        {q.overallFeedback && (
-          <div>
-            <p className="text-xs font-semibold text-content-subtle uppercase tracking-wide mb-1">Feedback</p>
-            <p className="text-sm text-content-secondary whitespace-pre-line">{q.overallFeedback}</p>
-          </div>
-        )}
         {hasExplanation(q) && (
           <ExplanationBox
             question={q}
@@ -818,6 +990,7 @@ function ResultQuestionCard({
           />
         )}
       </div>
+      )}
     </article>
   );
 }
@@ -882,21 +1055,95 @@ function AnswerReview({ question: q }: { question: ResultQuestion }) {
   if (q.questionType === 'MATCHING') return <MatchingReview question={q} />;
   if (q.questionType === 'FILL_BLANK') return <FillBlankReview question={q} />;
 
+  if (answered && q.questionType !== 'DIAGRAM') return <WrittenAnswer text={r?.text ?? ''} code={q.questionType === 'CODE'} />;
+
   return (
     <div>
       <p className="text-xs font-semibold text-content-subtle uppercase tracking-wide mb-1">Your answer</p>
       {!answered ? (
-        <p className="text-sm text-content-subtle">You did not answer this question.</p>
-      ) : q.questionType === 'DIAGRAM' ? (
-        <DiagramReview xml={r?.drawioXml ?? ''} />
+        <p className="rounded-[10px] border border-dashed border-line px-3 py-6 text-center text-sm text-content-subtle">
+          You did not answer this question.
+        </p>
       ) : (
-        <pre
-          className={`text-sm text-content-secondary whitespace-pre-wrap break-words rounded-[10px] bg-surface-alt border border-line p-3 max-h-80 overflow-y-auto ${
-            q.questionType === 'CODE' ? 'font-mono' : 'font-sans'
-          }`}
-        >
-          {r?.text}
-        </pre>
+        <DiagramReview xml={r?.drawioXml ?? ''} />
+      )}
+    </div>
+  );
+}
+
+/** Past this many lines a written answer folds, with "Show full answer". */
+const FOLD_LINES = 18;
+const FOLD_CHARS = 1500;
+
+/**
+ * Essay / code answer for reading: an essay in a relaxed sans paragraph with
+ * its word count; code monospaced with line numbers and a copy button.
+ * A long answer is folded behind a fade until expanded.
+ */
+function WrittenAnswer({ text, code }: { text: string; code: boolean }) {
+  const [expanded, setExpanded] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const lines = text.replace(/\n+$/, '').split('\n');
+  const words = text.trim().split(/\s+/).filter(Boolean).length;
+  const long = lines.length > FOLD_LINES || text.length > FOLD_CHARS;
+  const folded = long && !expanded;
+
+  const copy = () => {
+    navigator.clipboard
+      ?.writeText(text)
+      .then(() => {
+        setCopied(true);
+        window.setTimeout(() => setCopied(false), 1500);
+      })
+      .catch(() => undefined);
+  };
+
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-2 mb-1.5">
+        <p className="text-xs font-semibold text-content-subtle uppercase tracking-wide">Your answer</p>
+        <span className="flex items-center gap-2 text-xs text-content-subtle">
+          {code ? `${lines.length} line${lines.length === 1 ? '' : 's'}` : `${words.toLocaleString('en-US')} word${words === 1 ? '' : 's'}`}
+          {code && (
+            <button
+              type="button"
+              onClick={copy}
+              className="inline-flex items-center gap-1 rounded-[6px] border border-line px-2 py-0.5 text-content-soft hover:bg-accent"
+            >
+              {copied ? <Icon.Check className="w-3.5 h-3.5 text-success" /> : <Icon.Copy className="w-3.5 h-3.5" />}
+              {copied ? 'Copied' : 'Copy'}
+            </button>
+          )}
+        </span>
+      </div>
+
+      <div className={`relative rounded-[10px] border border-line bg-surface-alt ${folded ? 'max-h-[22rem] overflow-hidden' : ''}`}>
+        {code ? (
+          <pre className="overflow-x-auto py-3 text-[13px] leading-6 font-mono text-content-secondary">
+            <code className="grid grid-cols-[auto_minmax(0,1fr)]">
+              {lines.map((line, i) => (
+                <React.Fragment key={i}>
+                  <span className="select-none text-right pl-3 pr-3 text-content-subtle border-r border-line" aria-hidden="true">
+                    {i + 1}
+                  </span>
+                  <span className="pl-3 pr-4 whitespace-pre">{line || ' '}</span>
+                </React.Fragment>
+              ))}
+            </code>
+          </pre>
+        ) : (
+          <p className="px-4 py-3.5 text-[15px] leading-7 text-content whitespace-pre-wrap break-words">{text}</p>
+        )}
+        {folded && (
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 rounded-b-[10px] bg-gradient-to-t from-surface-alt to-transparent" />
+        )}
+      </div>
+
+      {long && (
+        <button type="button" onClick={() => setExpanded(e => !e)} className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-brand-ink hover:underline">
+          {expanded ? 'Collapse answer' : 'Show full answer'}
+          <Icon.ChevronDown className={`w-4 h-4 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+        </button>
       )}
     </div>
   );
@@ -1078,23 +1325,84 @@ function FillBlankReview({ question: q }: { question: ResultQuestion }) {
   );
 }
 
-function CriteriaReview({ question: q }: { question: ResultQuestion }) {
+/**
+ * Grade of an essay / code / diagram answer: the score with a bar, each
+ * rubric criterion with its own bar and feedback, then the overall feedback.
+ * Before the AI has graded it, just says so.
+ */
+function RubricGrade({ question: q, outcome }: { question: ResultQuestion; outcome: Outcome }) {
+  const failed = q.gradingStatus === GRADING_FAILED;
+  if (outcome === 'pending' || failed) {
+    return (
+      <div className={`rounded-[10px] border p-4 space-y-1.5 ${failed ? 'border-danger-line bg-danger-light' : 'border-warning-line bg-warning-light'}`}>
+        <p className={`flex items-center gap-2 text-sm font-semibold ${failed ? 'text-danger' : 'text-warning'}`}>
+          {failed ? <Icon.AlertCircle className="w-4 h-4" /> : <Icon.Clock className="w-4 h-4" />}
+          {failed ? 'AI grading failed' : 'Not graded yet'}
+        </p>
+        <p className="text-sm text-content-secondary">
+          {failed
+            ? q.gradingError ?? 'Retry the AI grading from the score panel.'
+            : q.gradingStatus === GRADING_WAITING
+              ? `Worth ${num(q.maxPoints)} pts. Use “Grade with AI” in the score panel to get your rubric score and feedback.`
+              : `Worth ${num(q.maxPoints)} pts. The AI is grading this answer…`}
+        </p>
+      </div>
+    );
+  }
+
+  const pct = pctOf(q.scoreEarned, q.maxPoints);
+  const criteria = q.criteria ?? [];
   return (
-    <div>
-      <p className="text-xs font-semibold text-content-subtle uppercase tracking-wide mb-2">Rubric</p>
-      <ul className="space-y-2">
-        {q.criteria!.map(c => (
-          <li key={c.criterionId} className="rounded-[10px] border border-line p-3">
-            <div className="flex items-start justify-between gap-3">
-              <span className="text-sm font-medium text-content">{c.name}</span>
-              <span className="text-sm font-semibold text-content-secondary flex-shrink-0">
-                {num(c.points)} / {num(c.maxPoints)}
-              </span>
-            </div>
-            {c.feedback && <p className="text-sm text-content-soft mt-1 whitespace-pre-line">{c.feedback}</p>}
-          </li>
-        ))}
-      </ul>
+    <div className="rounded-[10px] border border-line bg-surface p-4 space-y-4">
+      <div className="space-y-2">
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-xs font-semibold text-content-subtle uppercase tracking-wide">Score</p>
+          {q.gradingStatus === 'AI_GRADED' && (
+            <Badge size="sm" variant="purple">
+              <Icon.Brain className="w-3 h-3" /> AI graded
+            </Badge>
+          )}
+        </div>
+        <p className={`flex items-baseline gap-1.5 leading-none ${toneOf(pct)}`}>
+          <span className="text-3xl font-black">{num(q.scoreEarned)}</span>
+          <span className="text-sm font-semibold text-content-subtle">/ {num(q.maxPoints)} pts</span>
+          {pct != null && <span className="ml-auto text-sm font-semibold">{pct}%</span>}
+        </p>
+        <Progress value={pct ?? 0} size="sm" color={barColorOf(pct)} />
+      </div>
+
+      {criteria.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold text-content-subtle uppercase tracking-wide mb-2">Rubric</p>
+          <ul className="divide-y divide-line">
+            {criteria.map(c => {
+              const cPct = pctOf(c.points, c.maxPoints);
+              return (
+                <li key={c.criterionId} className="py-2.5 first:pt-0 last:pb-0 space-y-1.5">
+                  <div className="flex items-start justify-between gap-3">
+                    <span className="text-sm font-medium text-content">{c.name}</span>
+                    <span className={`text-sm font-semibold flex-shrink-0 ${toneOf(cPct)}`}>
+                      {num(c.points)}
+                      <span className="text-content-subtle font-normal"> / {num(c.maxPoints)}</span>
+                    </span>
+                  </div>
+                  <Progress value={cPct ?? 0} size="sm" color={barColorOf(cPct)} />
+                  {c.feedback && <p className="text-sm text-content-soft leading-relaxed whitespace-pre-line">{c.feedback}</p>}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+
+      {q.overallFeedback && (
+        <div className="rounded-[10px] border border-brand-200 bg-primary-light/60 p-3">
+          <p className="flex items-center gap-1.5 text-xs font-semibold text-brand-ink uppercase tracking-wide mb-1.5">
+            <Icon.Lightbulb className="w-4 h-4" /> Feedback
+          </p>
+          <p className="text-sm text-content-secondary leading-relaxed whitespace-pre-line">{q.overallFeedback}</p>
+        </div>
+      )}
     </div>
   );
 }
