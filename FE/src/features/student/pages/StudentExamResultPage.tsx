@@ -37,8 +37,6 @@ const GRADING_FAILED = 'FAILED';
 const isGradingOpen = (q: ResultQuestion) => q.gradingStatus === GRADING_WAITING || GRADING_RUNNING.has(q.gradingStatus ?? '');
 
 type Outcome = 'correct' | 'incorrect' | 'graded' | 'unanswered' | 'pending';
-/** Status filter — only offered on quiz exams (no essay / code / diagram question). */
-type Filter = 'all' | 'correct' | 'incorrect' | 'unanswered';
 
 const OUTCOME: Record<Outcome, { label: string; badge: 'success' | 'danger' | 'info' | 'default' | 'warning'; icon: React.ReactNode }> = {
   correct: { label: 'Correct', badge: 'success', icon: <Icon.CheckCircle className="w-5 h-5 text-success" /> },
@@ -64,13 +62,13 @@ const hasExplanation = (q: ResultQuestion) => !RUBRIC_TYPES.has(q.questionType);
 /** SE-01 takes at most 20 question ids per call. */
 const EXPLAIN_BATCH = 20;
 
-/** Palette cell per outcome — the same colours as the outcome badges. */
+/** Palette cell per outcome — solid fills, so the status reads at a glance in both themes. */
 const PALETTE_CELL: Record<Outcome, string> = {
-  correct: 'bg-success-light text-success border-success-line',
-  incorrect: 'bg-danger-light text-danger border-danger-line',
-  graded: 'bg-primary-light text-brand-ink border-brand-200',
-  unanswered: 'bg-surface text-content-subtle border-line border-dashed',
-  pending: 'bg-warning-light text-warning border-warning-line',
+  correct: 'bg-success-solid text-white',
+  incorrect: 'bg-danger-solid text-white',
+  graded: 'bg-brand-600 text-white',
+  unanswered: 'bg-content-subtle text-white',
+  pending: 'bg-highlight text-brand-950',
 };
 
 /** Score colour: green ≥ 80 %, amber ≥ 50 %, red below. */
@@ -138,8 +136,7 @@ function num(v: number | null | undefined): string {
  *  - right: a dropdown of my submitted attempts of this exam (SA-06, with
  *    their date), the score (per module when the exam spans several),
  *    "Re-attempt", then a palette of every question coloured by outcome —
- *    a click opens that question; on quiz exams a status filter dims the rest
- *    and Previous / Next skip them.
+ *    a click opens that question.
  * `?examId=` alone opens the newest submitted attempt; `?attemptId=` picks one.
  * Essay / code / diagram answers: the attempt lands here SUBMITTED with its
  * rubric answers ungraded. "Grade with AI" asks the AI (SE-02) and opens a
@@ -164,7 +161,6 @@ export function StudentExamResultPage() {
   attemptIdRef.current = attemptId;
   /** Submitted attempts of the exam, newest first; null until loaded (or without examId). */
   const [attempts, setAttempts] = useState<AttemptHistoryItem[] | null>(null);
-  const [filter, setFilter] = useState<Filter>('all');
   /** Previous / Next of the question on screen, for the ← → keys (set every render). */
   const navRef = useRef<{ prev?: () => void; next?: () => void }>({});
   const questionRef = useRef<HTMLElement>(null);
@@ -220,7 +216,6 @@ export function StudentExamResultPage() {
     setResult(null);
     setLoading(true);
     setOpen(new Set());
-    setFilter('all');
     explanationsRef.current = {};
     setExplanations({});
   }, [attemptId]);
@@ -399,24 +394,10 @@ export function StudentExamResultPage() {
     if (opening) loadExplanations([questionId]);
   };
 
-  // Status filter only on quiz exams: essays have no right/wrong verdict to filter by.
-  const isQuiz = total > 0 && result.questions.every(q => !RUBRIC_TYPES.has(q.questionType));
-  const activeFilter: Filter = isQuiz ? filter : 'all';
-  const matches = (i: number) => activeFilter === 'all' || outcomes[i] === activeFilter;
-  /** Indexes Previous / Next step through. */
-  const inFilter = result.questions.map((_, i) => i).filter(matches);
-  const filters: { key: Filter; label: string; count: number }[] = [
-    { key: 'all', label: 'All', count: total },
-    { key: 'correct', label: 'Correct', count: counts.correct },
-    { key: 'incorrect', label: 'Incorrect', count: counts.incorrect },
-    { key: 'unanswered', label: 'Unanswered', count: counts.unanswered },
-  ];
-
   const qParam = Number(searchParams.get('q'));
   const current = total === 0 ? 0 : Number.isInteger(qParam) && qParam >= 1 ? Math.min(qParam, total) - 1 : 0;
-  const prevIndex = [...inFilter].reverse().find(i => i < current);
-  const nextIndex = inFilter.find(i => i > current);
-  const position = inFilter.indexOf(current);
+  const prevIndex = current > 0 ? current - 1 : undefined;
+  const nextIndex = current < total - 1 ? current + 1 : undefined;
 
   const goTo = (index: number) => {
     // replace: walking through 40 questions must not fill the Back button's history.
@@ -435,13 +416,6 @@ export function StudentExamResultPage() {
   navRef.current = {
     prev: prevIndex != null ? () => goTo(prevIndex) : undefined,
     next: nextIndex != null ? () => goTo(nextIndex) : undefined,
-  };
-
-  const pickFilter = (key: Filter) => {
-    setFilter(key);
-    // Keep the question on screen when it fits the filter; otherwise open the filter's first one.
-    const first = result.questions.findIndex((_, i) => key === 'all' || outcomes[i] === key);
-    if (key !== 'all' && outcomes[current] !== key && first >= 0) goTo(first);
   };
 
   const modules = moduleScores(result.questions, outcomes);
@@ -486,17 +460,7 @@ export function StudentExamResultPage() {
           />
 
           {total > 0 && (
-            <ResultPalette
-              outcomes={outcomes}
-              current={current}
-              matches={matches}
-              onSelect={goTo}
-              filters={
-                isQuiz
-                  ? filters.filter(f => f.key === 'all' || f.count > 0).map(f => ({ ...f, active: activeFilter === f.key, onClick: () => pickFilter(f.key) }))
-                  : undefined
-              }
-            />
+            <ResultPalette outcomes={outcomes} counts={counts} current={current} onSelect={goTo} />
           )}
         </aside>
 
@@ -508,8 +472,6 @@ export function StudentExamResultPage() {
               <QuestionNav
                 current={current}
                 total={total}
-                position={position}
-                filtered={activeFilter !== 'all' ? { label: filters.find(f => f.key === activeFilter)!.label, count: inFilter.length } : null}
                 onPrev={navRef.current.prev}
                 onNext={navRef.current.next}
               />
@@ -553,16 +515,11 @@ export function StudentExamResultPage() {
 function QuestionNav({
   current,
   total,
-  position,
-  filtered,
   onPrev,
   onNext,
 }: {
   current: number;
   total: number;
-  /** Place of the question within the filter, -1 when it is outside it. */
-  position: number;
-  filtered: { label: string; count: number } | null;
   onPrev?: () => void;
   onNext?: () => void;
 }) {
@@ -571,12 +528,6 @@ function QuestionNav({
     <div className="flex items-center gap-3">
       <p className="flex-1 min-w-0 text-sm text-content-soft" aria-live="polite">
         <span className="font-semibold text-content">Question {current + 1}</span> of {total}
-        {filtered && position >= 0 && (
-          <span className="text-content-subtle">
-            {' '}
-            · {position + 1} / {filtered.count} {filtered.label.toLowerCase()}
-          </span>
-        )}
       </p>
       <span className="hidden sm:inline text-xs text-content-subtle">Use ← → to move</span>
       <div className="flex gap-1.5">
@@ -592,22 +543,20 @@ function QuestionNav({
 }
 
 /**
- * Every question as a numbered cell coloured by outcome; a click opens it.
- * Cells outside the status filter are dimmed (still clickable). On small
- * screens the grid folds behind a "Question 3 of 40" toggle.
+ * Every question as a numbered cell filled with its outcome's colour (legend
+ * with counts below); a click opens it. On small screens the grid folds
+ * behind a "Questions 3 / 40" toggle.
  */
 function ResultPalette({
   outcomes,
+  counts,
   current,
-  matches,
   onSelect,
-  filters,
 }: {
   outcomes: Outcome[];
+  counts: Record<Outcome, number>;
   current: number;
-  matches: (index: number) => boolean;
   onSelect: (index: number) => void;
-  filters?: { key: Filter; label: string; count: number; active: boolean; onClick: () => void }[];
 }) {
   const [expanded, setExpanded] = useState(false);
   const present = (Object.keys(OUTCOME) as Outcome[]).filter(o => outcomes.includes(o));
@@ -628,24 +577,6 @@ function ResultPalette({
       </button>
 
       <div id="result-palette" className={`${expanded ? 'block' : 'hidden'} lg:block space-y-3`}>
-        {filters && (
-          <div className="flex flex-wrap gap-1.5">
-            {filters.map(f => (
-              <button
-                key={f.key}
-                type="button"
-                aria-pressed={f.active}
-                onClick={f.onClick}
-                className={`px-2.5 py-0.5 rounded-full text-xs border transition-colors ${
-                  f.active ? 'bg-primary-light border-brand-600 text-brand-ink font-medium' : 'border-line text-content-soft hover:bg-accent'
-                }`}
-              >
-                {f.label} <span className="text-content-subtle">({f.count})</span>
-              </button>
-            ))}
-          </div>
-        )}
-
         {/* p-1: room for the current cell's ring inside the scroll box. */}
         <div className="grid grid-cols-[repeat(auto-fill,minmax(2.25rem,1fr))] gap-1.5 max-h-[min(40vh,18rem)] overflow-y-auto p-1 -m-1">
           {outcomes.map((o, i) => (
@@ -659,20 +590,20 @@ function ResultPalette({
               aria-current={i === current ? 'step' : undefined}
               aria-label={`Question ${i + 1}, ${OUTCOME[o].label.toLowerCase()}`}
               title={`Question ${i + 1} · ${OUTCOME[o].label}`}
-              className={`h-9 rounded-[8px] border text-sm font-semibold transition-all ${PALETTE_CELL[o]} ${
-                i === current ? 'ring-2 ring-brand-600 ring-offset-1 ring-offset-surface' : 'hover:brightness-95'
-              } ${matches(i) ? '' : 'opacity-30'}`}
+              className={`h-9 rounded-[8px] text-sm font-semibold transition-all ${PALETTE_CELL[o]} ${
+                i === current ? 'ring-2 ring-content ring-offset-2 ring-offset-surface scale-105' : 'hover:brightness-110'
+              }`}
             >
               {i + 1}
             </button>
           ))}
         </div>
 
-        <ul className="flex flex-wrap gap-x-3 gap-y-1">
+        <ul className="flex flex-wrap gap-x-3 gap-y-1.5">
           {present.map(o => (
             <li key={o} className="flex items-center gap-1.5 text-xs text-content-soft">
-              <span className={`w-3 h-3 rounded-[3px] border ${PALETTE_CELL[o]}`} aria-hidden="true" />
-              {OUTCOME[o].label}
+              <span className={`w-3 h-3 rounded-[3px] ${PALETTE_CELL[o]}`} aria-hidden="true" />
+              {OUTCOME[o].label} <span className="text-content-subtle">({counts[o]})</span>
             </li>
           ))}
         </ul>
