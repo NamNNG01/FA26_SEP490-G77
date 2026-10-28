@@ -6,3 +6,4 @@ export { StudentDeckStudyPage } from './pages/StudentDeckStudyPage';
 export { StudentExamDetailPage } from './pages/StudentExamDetailPage';
 export { StudentTakeExamPage } from './pages/StudentTakeExamPage';
 export { StudentExamResultPage } from './pages/StudentExamResultPage';
+export { StudentPracticeQuizPage } from './pages/StudentPracticeQuizPage';

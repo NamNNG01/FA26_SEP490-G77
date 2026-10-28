@@ -12,6 +12,8 @@ import type { StudentRecentAttempt } from '@/services/dashboard.service';
 import { getApiErrorMessage } from '@/utils/apiError';
 import { studentCourseService, type MyCourse } from '@/services/studentCourse.service';
 import { CardGridSkeleton, CourseThumb, LoadError, PageTitle, STUDENT_PAGE_CLASS, formatDate } from '../components/studentUi';
+import { RandomQuizModal } from '../components/RandomQuizModal';
+import { MaterialQuizModal } from '../components/MaterialQuizModal';
 
 const PAGE_SIZE = 12;
 /** MC-01 caps `size` at 100 and has no keyword filter, so the list is loaded once and searched client-side. */
@@ -29,6 +31,8 @@ function matchesSearch(course: MyCourse, term: string) {
  *  - enrolled courses grid:      MC-01
  *  - search box:                 filters the enrolled courses only (title,
  *                                category, manager) — not the public catalog.
+ *  - Customize Random Quiz /     practice quizzes the student builds on their
+ *    Material to Quiz Creator:   own (RandomQuizModal / MaterialQuizModal).
  */
 export function MyCoursesPage() {
   const navigate = useNavigate();
@@ -38,6 +42,7 @@ export function MyCoursesPage() {
   const [page, setPage] = useState(1);
   const [reload, setReload] = useState(0);
   const [search, setSearch] = useState('');
+  const [quizModal, setQuizModal] = useState<'random' | 'material' | null>(null);
 
   const [courses, setCourses] = useState<MyCourse[]>([]);
   const [loading, setLoading] = useState(true);
@@ -78,14 +83,22 @@ export function MyCoursesPage() {
         title="My Courses"
         subtitle="Your enrolled courses and latest results."
         action={
-          <div role="search" className="w-full sm:w-auto">
-            <SearchInput
-              className="w-full sm:w-72"
-              placeholder="Search my courses…"
-              aria-label="Search my courses"
-              value={search}
-              onChange={e => changeSearch(e.target.value)}
-            />
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+            <Button variant="outline" icon={<Icon.Zap className="w-4 h-4" />} onClick={() => setQuizModal('random')}>
+              Customize Random Quiz
+            </Button>
+            <Button variant="outline" icon={<Icon.Brain className="w-4 h-4" />} onClick={() => setQuizModal('material')}>
+              Material to Quiz Creator
+            </Button>
+            <div role="search" className="w-full sm:w-auto">
+              <SearchInput
+                className="w-full sm:w-72"
+                placeholder="Search my courses…"
+                aria-label="Search my courses"
+                value={search}
+                onChange={e => changeSearch(e.target.value)}
+              />
+            </div>
           </div>
         }
       />
@@ -128,6 +141,9 @@ export function MyCoursesPage() {
           </div>
         </>
       )}
+
+      <RandomQuizModal open={quizModal === 'random'} onClose={() => setQuizModal(null)} courses={courses} />
+      <MaterialQuizModal open={quizModal === 'material'} onClose={() => setQuizModal(null)} />
 
       {student && student.recentAttempts.length > 0 && (
         <RecentAttempts attempts={student.recentAttempts.slice(0, RECENT_ATTEMPTS)} onViewAll={() => navigate(ROUTES.studentExams)} />
