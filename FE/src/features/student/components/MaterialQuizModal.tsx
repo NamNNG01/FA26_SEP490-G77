@@ -4,7 +4,6 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
-import { MultiSelect } from '@/components/ui/MultiSelect';
 import { Alert } from '@/components/ui/Alert';
 import { Spinner } from '@/components/ui/Spinner';
 import { Icon } from '@/assets/icons';
@@ -28,6 +27,7 @@ import {
   type MaterialDraft,
 } from '@/services/studentPractice.service';
 import { optionLetter } from './QuestionAnswerInput';
+import { TypeCountSelect, type TypeCounts } from '@/features/question/components/TypeCountSelect';
 
 const FIELD =
   'w-full rounded-[10px] border border-line bg-surface px-3 text-sm text-content placeholder:text-content-subtle transition-all focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600';
@@ -62,14 +62,7 @@ export function MaterialQuizModal({ open, onClose }: { open: boolean; onClose: (
   const [file, setFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
-  const [types, setTypes] = useState<DraftQuestionType[]>(['MULTIPLE_CHOICE', 'TRUE_FALSE']);
-  const [counts, setCounts] = useState<Record<DraftQuestionType, string>>({
-    MULTIPLE_CHOICE: '10',
-    TRUE_FALSE: '5',
-    FILL_BLANK: '5',
-    MATCHING: '2',
-    ORDERING: '2',
-  });
+  const [counts, setCounts] = useState<TypeCounts<DraftQuestionType>>({ MULTIPLE_CHOICE: '10', TRUE_FALSE: '5' });
   const [touched, setTouched] = useState(false);
 
   const [draft, setDraft] = useState<MaterialDraft>(EMPTY_DRAFT);
@@ -92,20 +85,19 @@ export function MaterialQuizModal({ open, onClose }: { open: boolean; onClose: (
   }, [open]);
 
   /* ── generation settings ─────────────────────────────────────────────── */
+  const types = DRAFT_TYPES.filter(t => counts[t] != null);
   const typeCounts = Object.fromEntries(types.map(t => [t, Number(counts[t])])) as Record<DraftQuestionType, number>;
-  const countErrors = Object.fromEntries(
-    types.map(t => [t, !Number.isInteger(typeCounts[t]) || typeCounts[t] < 1 ? 'At least 1' : undefined]),
-  ) as Partial<Record<DraftQuestionType, string>>;
+  const badCount = types.some(t => !Number.isInteger(typeCounts[t]) || typeCounts[t] < 1);
   const total = types.reduce((s, t) => s + (Number.isInteger(typeCounts[t]) && typeCounts[t] > 0 ? typeCounts[t] : 0), 0);
-  const settingsError = !file
-    ? 'Upload a learning material first.'
-    : types.length === 0
+  const typesError =
+    types.length === 0
       ? 'Choose at least one question type.'
-      : Object.values(countErrors).some(Boolean)
+      : badCount
         ? 'Every question type needs a count of at least 1.'
         : total > PRACTICE_MAX_QUESTIONS
           ? `At most ${PRACTICE_MAX_QUESTIONS} questions in total.`
           : null;
+  const settingsError = !file ? 'Upload a learning material first.' : typesError;
 
   const pickFile = (f: File | undefined | null) => {
     if (!f) return;
@@ -340,46 +332,21 @@ export function MaterialQuizModal({ open, onClose }: { open: boolean; onClose: (
             {fileError && <p className="text-xs text-danger">{fileError}</p>}
           </div>
 
-          <div className="space-y-2">
-            <MultiSelect
-              label="Question Type"
-              placeholder="Choose question types…"
-              options={DRAFT_TYPES.map(t => ({ value: t, label: DRAFT_TYPE_LABEL[t] }))}
-              value={types}
-              onChange={setTypes}
-            />
-            {types.length > 0 && (
-              <ul className="space-y-1.5">
-                {types.map(t => (
-                  <li key={t} className="flex items-center gap-2">
-                    <label htmlFor={`count-${t}`} className="flex-1 text-xs text-content-soft">
-                      {DRAFT_TYPE_LABEL[t]}
-                    </label>
-                    <input
-                      id={`count-${t}`}
-                      type="number"
-                      min={1}
-                      max={PRACTICE_MAX_QUESTIONS}
-                      inputMode="numeric"
-                      value={counts[t]}
-                      onChange={e => setCounts(c => ({ ...c, [t]: e.target.value }))}
-                      aria-invalid={touched && countErrors[t] ? true : undefined}
-                      className={`${FIELD} h-8 w-20 ${touched && countErrors[t] ? '!border-danger-solid' : ''}`}
-                    />
-                  </li>
-                ))}
-              </ul>
-            )}
-            {types.length > 0 && (
-              <p className="text-xs text-content-subtle break-words">
-                {types.map(t => `${DRAFT_TYPE_LABEL[t]}: ${counts[t] || 0}`).join('; ')}
-              </p>
-            )}
-          </div>
+          <TypeCountSelect
+            label="Question Type"
+            placeholder="Choose question types…"
+            options={DRAFT_TYPES.map(t => ({ value: t, label: DRAFT_TYPE_LABEL[t] }))}
+            value={counts}
+            onChange={setCounts}
+            min={1}
+            max={PRACTICE_MAX_QUESTIONS}
+            error={touched ? (typesError ?? undefined) : undefined}
+            disabled={generating}
+          />
 
           <Input label="Number of question" value={String(total)} readOnly tabIndex={-1} className="[&_input]:bg-surface-alt" />
 
-          {touched && settingsError && <p className="text-xs text-danger">{settingsError}</p>}
+          {touched && !file && <p className="text-xs text-danger">Upload a learning material first.</p>}
           {genError && <p className="text-xs text-danger" role="alert">{genError}</p>}
           {hasQuestions && !generating && (
             <p className="text-xs text-content-subtle">Generating again replaces the current questions.</p>
