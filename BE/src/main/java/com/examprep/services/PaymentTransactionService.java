@@ -1,6 +1,9 @@
 package com.examprep.services;
 
+import com.examprep.dto.ResponseCode;
 import com.examprep.entities.*;
+import com.examprep.exceptions.BaseException;
+import com.examprep.exceptions.ResourceConflictException;
 import com.examprep.exceptions.ResourceNotFoundException;
 import com.examprep.repositories.*;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -31,9 +34,24 @@ public class PaymentTransactionService {
     public Payment createPending(Long userId, String orderCode, String type, Long refId, String title,
                                  BigDecimal amount, BigDecimal discountAmount, Discount discount, Instant expiresAt) {
         User user = users.findById(userId).orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        boolean reserved = false;
+        if (discount != null) {
+            Long discountId = discount.getDiscountId();
+            // The usage limit is reserved while the link is payable, not when the webhook arrives;
+            // otherwise two checkouts could both pass validation and overrun the cap.
+            if (userDiscounts.existsByUserUserIdAndDiscountDiscountIdAndIsUsedTrue(userId, discountId)
+                    || payments.existsByUserUserIdAndDiscountDiscountIdAndStatus(userId, discountId, Payment.PENDING)) {
+                throw new ResourceConflictException("Discount is already used or reserved by another checkout");
+            }
+            if (discounts.reserveUsage(discountId) == 0) {
+                throw new BaseException(ResponseCode.INVALID_DISCOUNT_CODE, "Discount is expired, used or does not apply");
+            }
+            reserved = true;
+        }
         Payment payment = Payment.builder().user(user).orderCode(orderCode).type(type).refId(refId).title(title)
-                .amount(amount).discountAmount(discountAmount).discount(discount).currency("VND")
-                .status(Payment.PENDING).expiresAt(expiresAt).createdAt(Instant.now()).updatedAt(Instant.now()).build();
+                .amount(amount).discountAmount(discountAmount).discount(discount).discountReserved(reserved)
+                .currency("VND").status(Payment.PENDING).expiresAt(expiresAt)
+                .createdAt(Instant.now()).updatedAt(Instant.now()).build();
         payments.saveAndFlush(payment);
         payment.setPayosOrderCode(payment.getPaymentId());
         return payments.save(payment);
@@ -53,6 +71,7 @@ public class PaymentTransactionService {
     public void markCheckoutFailed(String orderCode) {
         payments.lockByOrderCode(orderCode).ifPresent(payment -> {
             if (Payment.PENDING.equals(payment.getStatus())) {
+                releaseDiscount(payment);
                 payment.setStatus(Payment.FAILED);
                 payment.setUpdatedAt(Instant.now());
             }
@@ -61,11 +80,11 @@ public class PaymentTransactionService {
 
     @Transactional
     public void cancel(Long userId, String orderCode) {
-        Payment payment = payments.findByOrderCodeAndUserUserId(orderCode, userId)
-                .orElseThrow(() -> new ResourceNotFoundException("Payment not found"));
         Payment locked = payments.lockByOrderCode(orderCode).orElseThrow(() -> new ResourceNotFoundException("Payment not found"));
-        if (Payment.SUCCEEDED.equals(locked.getStatus())) throw new com.examprep.exceptions.ResourceConflictException("Payment already succeeded");
+        if (!locked.getUser().getUserId().equals(userId)) throw new ResourceNotFoundException("Payment not found");
+        if (Payment.SUCCEEDED.equals(locked.getStatus())) throw new ResourceConflictException("Payment already succeeded");
         if (Payment.PENDING.equals(locked.getStatus())) {
+            releaseDiscount(locked);
             locked.setStatus(Payment.CANCELLED);
             locked.setCancelledAt(Instant.now());
             locked.setUpdatedAt(Instant.now());
@@ -81,7 +100,10 @@ public class PaymentTransactionService {
         if (payment == null) return false;
         Payment locked = payments.lockByOrderCode(payment.getOrderCode()).orElse(null);
         if (locked == null || Payment.SUCCEEDED.equals(locked.getStatus())) return locked != null;
-        if (!Payment.PENDING.equals(locked.getStatus()) || data.path("amount").asLong(-1) != locked.getAmount().longValueExact()) return false;
+        // EXPIRED rows stay payable for a late webhook: the sweep only runs after the PayOS link
+        // itself expired, so a verified "paid" callback means the student paid just in time.
+        if ((!Payment.PENDING.equals(locked.getStatus()) && !Payment.EXPIRED.equals(locked.getStatus()))
+                || data.path("amount").asLong(-1) != locked.getAmount().longValueExact()) return false;
         Instant now = Instant.now();
         if (locked.getExpiresAt() != null && now.isAfter(locked.getExpiresAt())) {
             // The money was still captured: keep the purchase, but leave a trace for reconciliation.
@@ -137,7 +159,10 @@ public class PaymentTransactionService {
         if (discount == null) {
             return;
         }
-        discounts.incrementUsedCount(discount.getDiscountId());
+        // Checkouts reserve their usage before the link is issued; only legacy rows consume here.
+        if (!Boolean.TRUE.equals(payment.getDiscountReserved())) {
+            discounts.incrementUsedCount(discount.getDiscountId());
+        }
         // Persist the one-per-student rule that validatedDiscount() checks before checkout.
         User user = payment.getUser();
         UserDiscount assignment = userDiscounts
@@ -151,5 +176,12 @@ public class PaymentTransactionService {
         assignment.setIsUsed(true);
         assignment.setUsedAt(now);
         userDiscounts.save(assignment);
+    }
+
+    private void releaseDiscount(Payment payment) {
+        if (payment.getDiscount() != null && Boolean.TRUE.equals(payment.getDiscountReserved())) {
+            discounts.releaseUsage(payment.getDiscount().getDiscountId());
+            payment.setDiscountReserved(false);
+        }
     }
 }

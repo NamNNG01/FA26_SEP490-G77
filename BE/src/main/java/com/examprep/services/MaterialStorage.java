@@ -95,6 +95,46 @@ public class MaterialStorage {
         }
     }
 
+    /**
+     * Best-effort removal for a file whose {@code documents} row was never committed. Failures are
+     * logged, never thrown, so the original database error still reaches the caller.
+     */
+    public void delete(String publicId) {
+        if (publicId == null || publicId.isBlank()) {
+            return;
+        }
+        try {
+            if (PROVIDER_CLOUDINARY.equalsIgnoreCase(provider)) {
+                cloudinaryDelete(publicId);
+            } else {
+                Files.deleteIfExists(localDir.resolve(publicId.replace('/', '_')));
+            }
+        } catch (Exception ex) {
+            log.warn("Material cleanup failed: {}", ex.getMessage());
+        }
+    }
+
+    private void cloudinaryDelete(String publicId) {
+        if (cloudName.isEmpty() || apiKey.isEmpty() || apiSecret.isEmpty()) {
+            return;
+        }
+        long timestamp = Instant.now().getEpochSecond();
+        Map<String, String> signed = new TreeMap<>();
+        signed.put("public_id", publicId);
+        signed.put("timestamp", String.valueOf(timestamp));
+
+        MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+        signed.forEach(form::add);
+        form.add("api_key", apiKey);
+        form.add("signature", sha1(signable(signed) + apiSecret));
+        cloudinary.post()
+                .uri("/v1_1/{cloud}/raw/destroy", cloudName)
+                .contentType(MediaType.MULTIPART_FORM_DATA)
+                .body(form)
+                .retrieve()
+                .toBodilessEntity();
+    }
+
     private String cloudinaryUpload(String publicId, byte[] bytes) {
         if (cloudName.isEmpty() || apiKey.isEmpty() || apiSecret.isEmpty()) {
             throw new BaseException(ResponseCode.STORAGE_ERROR,

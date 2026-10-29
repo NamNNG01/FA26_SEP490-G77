@@ -53,12 +53,13 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * CD-03 … CD-07 (spec 19): coding tests judged by the self-hosted Judge0 sandbox.
+ * CD-03 … CD-07 (spec 19): coding tests judged by a Piston v2-compatible sandbox (the hosted
+ * OnlineCompiler.io endpoint by default).
  *
  * <p>Security rules from the spec: only the owner with an ACTIVE enrollment sees the exam's code
- * questions; hidden fixtures and answers never leave the server; judging uses Judge0 from the
- * backend only; CD-05 writes the verdict into the running attempt so SA-04/SA-05 count it (the
- * shared grader keeps rows already finalized by CD-05).</p>
+ * questions; hidden fixtures and answers never leave the server except as the sandbox's stdin;
+ * judging uses Piston from the backend only; CD-05 writes the verdict into the running attempt so
+ * SA-04/SA-05 count it (the shared grader keeps rows already finalized by CD-05).</p>
  */
 @Service
 @RequiredArgsConstructor
@@ -81,14 +82,14 @@ public class StudentCodeExamServiceImpl implements StudentCodeExamService {
     private final AttemptAnswerRepository answers;
     private final CodeSubmissionRepository submissions;
     private final UserRepository users;
-    private final Judge0Client judge0;
+    private final PistonClient piston;
     private final AttemptPaperFactory paperFactory;
     private final ObjectMapper json;
     private final AttemptAutoSubmitter autoSubmitter;
     private final PlatformTransactionManager transactionManager;
 
     private record PlannedAnswer(Long questionId, String language, String sourceCode,
-                                 List<Judge0Client.CaseInput> cases, BigDecimal maxPoints,
+                                 List<PistonClient.CaseInput> cases, BigDecimal maxPoints,
                                  int timeLimitMs, int memoryLimitKb) {}
 
     private record SubmitPlan(Long userId, Long attemptId, List<PlannedAnswer> answers) {}
@@ -111,7 +112,7 @@ public class StudentCodeExamServiceImpl implements StudentCodeExamService {
                 .collect(Collectors.toMap(link -> link.getQuestion().getQuestionId(),
                         ExamQuestion::getOrderIndex, (first, second) -> first));
         Map<Long, Question> questionById = codeQuestionIds.isEmpty() ? Map.of()
-                : questions.findActiveWithAccessRelationsByQuestionIdIn(codeQuestionIds).stream()
+                : questions.findDeliverableWithAccessRelationsByQuestionIdIn(codeQuestionIds).stream()
                 .collect(Collectors.toMap(Question::getQuestionId, question -> question, (first, second) -> first));
         Map<Long, CodeQuestionConfig> cfgById = configMap(codeQuestionIds);
         Map<Long, List<CodeTestCase>> fixturesByQuestion = fixtureMap(codeQuestionIds);
@@ -145,7 +146,7 @@ public class StudentCodeExamServiceImpl implements StudentCodeExamService {
 
     @Override
     public CodeExamResponses.RunResult run(Long userId, CodeExamRequests.Run request) {
-        Question question = questions.findActiveById(request.questionId())
+        Question question = questions.findDeliverableById(request.questionId())
                 .orElseThrow(() -> new ResourceNotFoundException("Question not found"));
         requireCodeQuestion(question);
         requireEnrollment(userId, courseIdOf(question));
@@ -159,7 +160,7 @@ public class StudentCodeExamServiceImpl implements StudentCodeExamService {
                     .map(CodeTestCase::getInputData)
                     .orElse("");
         }
-        Judge0Client.RunOutcome outcome = judge0.run(request.language(), request.sourceCode(), stdin,
+        PistonClient.RunOutcome outcome = piston.run(request.language(), request.sourceCode(), stdin,
                 timeLimit(cfg), memoryLimit(cfg));
         return new CodeExamResponses.RunResult(outcome.status(), outcome.stdout(), outcome.stderr(),
                 outcome.executionTimeMs());
@@ -171,16 +172,16 @@ public class StudentCodeExamServiceImpl implements StudentCodeExamService {
 
     @Override
     public CodeExamResponses.Submitted submit(Long userId, CodeExamRequests.Submit request) {
-        // Spec 0.3 rule 4: Judge0 is an external call, so it never runs inside a DB transaction.
+        // Spec 0.3 rule 4: Piston is an external call, so it never runs inside a DB transaction.
         TransactionTemplate read = new TransactionTemplate(transactionManager);
         read.setReadOnly(true);
         SubmitPlan plan = read.execute(status -> prepareSubmit(userId, request));
         if (plan == null) {
             throw new IllegalStateException("Coding submission could not be prepared");
         }
-        Map<Long, List<Judge0Client.CaseOutcome>> outcomes = new LinkedHashMap<>();
+        Map<Long, List<PistonClient.CaseOutcome>> outcomes = new LinkedHashMap<>();
         for (PlannedAnswer answer : plan.answers()) {
-            outcomes.put(answer.questionId(), judge0.judge(answer.language(), answer.sourceCode(), answer.cases(),
+            outcomes.put(answer.questionId(), piston.judge(answer.language(), answer.sourceCode(), answer.cases(),
                     answer.timeLimitMs(), answer.memoryLimitKb()));
         }
         return new TransactionTemplate(transactionManager).execute(status -> persistSubmit(plan, outcomes));
@@ -214,7 +215,7 @@ public class StudentCodeExamServiceImpl implements StudentCodeExamService {
         Set<Long> ids = requested.keySet();
         Map<Long, CodeQuestionConfig> cfgById = configMap(ids);
         Map<Long, List<CodeTestCase>> fixturesByQuestion = fixtureMap(ids);
-        Map<Long, Question> questionById = questions.findActiveWithAccessRelationsByQuestionIdIn(ids).stream()
+        Map<Long, Question> questionById = questions.findDeliverableWithAccessRelationsByQuestionIdIn(ids).stream()
                 .collect(Collectors.toMap(Question::getQuestionId, question -> question, (first, second) -> first));
         for (Long questionId : ids) {
             Question question = questionById.get(questionId);
@@ -251,8 +252,8 @@ public class StudentCodeExamServiceImpl implements StudentCodeExamService {
             Long questionId = answer.questionId();
             CodeQuestionConfig cfg = cfgById.get(questionId);
             AttemptAnswer row = rowById.get(questionId);
-            List<Judge0Client.CaseInput> inputs = fixturesByQuestion.get(questionId).stream()
-                    .map(fixture -> new Judge0Client.CaseInput(fixture.getTestCaseId(),
+            List<PistonClient.CaseInput> inputs = fixturesByQuestion.get(questionId).stream()
+                    .map(fixture -> new PistonClient.CaseInput(fixture.getTestCaseId(),
                             fixture.getInputData(), fixture.getExpectedOutput()))
                     .toList();
             BigDecimal maxPoints = AttemptScoring.output(AttemptScoring.questionMaxPoints(
@@ -265,7 +266,7 @@ public class StudentCodeExamServiceImpl implements StudentCodeExamService {
 
     /** Writes the verified verdicts while the attempt is still running; the attempt row stays locked. */
     private CodeExamResponses.Submitted persistSubmit(SubmitPlan plan,
-                                                      Map<Long, List<Judge0Client.CaseOutcome>> judged) {
+                                                      Map<Long, List<PistonClient.CaseOutcome>> judged) {
         ExamAttempt attempt = attempts.lockById(plan.attemptId())
                 .orElseThrow(() -> new ResourceNotFoundException("Attempt not found"));
         if (!STATUS_IN_PROGRESS.equals(attempt.getStatus())) {
@@ -287,10 +288,10 @@ public class StudentCodeExamServiceImpl implements StudentCodeExamService {
             if (row == null) {
                 throw new ResourceConflictException("The attempt has no answer row for this question");
             }
-            List<Judge0Client.CaseOutcome> outcomes =
+            List<PistonClient.CaseOutcome> outcomes =
                     judged.getOrDefault(planned.questionId(), List.of());
             int total = planned.cases().size();
-            int passedCount = (int) outcomes.stream().filter(Judge0Client.CaseOutcome::passed).count();
+            int passedCount = (int) outcomes.stream().filter(PistonClient.CaseOutcome::passed).count();
             boolean allPassed = passedCount == total;
             Integer failedIndex = null;
             if (!allPassed) {
@@ -310,9 +311,9 @@ public class StudentCodeExamServiceImpl implements StudentCodeExamService {
                     .language(planned.language())
                     .sourceCode(planned.sourceCode())
                     .status(allPassed ? CodeSubmission.PASSED : CodeSubmission.FAILED)
-                    .stdout(first(outcomes, Judge0Client.CaseOutcome::stdout))
+                    .stdout(first(outcomes, PistonClient.CaseOutcome::stdout))
                     .stderr(firstNonEmpty(outcomes, outcome -> outcome.stderr(), outcome -> outcome.compileOutput()))
-                    .compileOutput(first(outcomes, Judge0Client.CaseOutcome::compileOutput))
+                    .compileOutput(first(outcomes, PistonClient.CaseOutcome::compileOutput))
                     .timeMs(maxTime(outcomes))
                     .testResults(testResultsJson(outcomes))
                     .passedCount(passedCount)
@@ -346,10 +347,10 @@ public class StudentCodeExamServiceImpl implements StudentCodeExamService {
     @Override
     public List<CodeExamResponses.Language> languages() {
         return List.of(
-                new CodeExamResponses.Language(Judge0Client.JAVA, "Java 17"),
-                new CodeExamResponses.Language(Judge0Client.PYTHON, "Python 3.11"),
-                new CodeExamResponses.Language(Judge0Client.C, "C (gcc 13)"),
-                new CodeExamResponses.Language(Judge0Client.CPP, "C++ 17"));
+                new CodeExamResponses.Language(PistonClient.JAVA, "Java 25"),
+                new CodeExamResponses.Language(PistonClient.PYTHON, "Python 3.14"),
+                new CodeExamResponses.Language(PistonClient.C, "C (gcc 15)"),
+                new CodeExamResponses.Language(PistonClient.CPP, "C++ (g++ 15)"));
     }
 
     // ----------------------------------------------------------------------------------
@@ -381,10 +382,13 @@ public class StudentCodeExamServiceImpl implements StudentCodeExamService {
     // Helpers
     // ----------------------------------------------------------------------------------
 
-    /** CD-03/CD-05/CD-07: the exam must belong to a course the student is enrolled in. */
+    /** CD-03/CD-05/CD-07: the exam must be published to students and belong to their course. */
     private Exam requireExam(Long userId, Long examId) {
         Exam exam = exams.findById(examId)
                 .orElseThrow(() -> new ResourceNotFoundException("Exam not found"));
+        if (!exam.isVisibleToStudents()) {
+            throw new ResourceNotFoundException("Exam not found");
+        }
         requireEnrollment(userId, courseIdOf(exam));
         return exam;
     }
@@ -439,7 +443,7 @@ public class StudentCodeExamServiceImpl implements StudentCodeExamService {
     }
 
     private void requireLanguageAllowed(CodeQuestionConfig cfg, String language) {
-        if (!Judge0Client.supports(language)) {
+        if (!PistonClient.supports(language)) {
             throw new BaseException(ResponseCode.UNSUPPORTED_LANGUAGE, "Language is not supported: " + language);
         }
         if (!allowedLanguages(cfg).contains(language)) {
@@ -450,12 +454,12 @@ public class StudentCodeExamServiceImpl implements StudentCodeExamService {
 
     private List<String> allowedLanguages(CodeQuestionConfig cfg) {
         if (cfg == null || cfg.getAllowedLanguages() == null || cfg.getAllowedLanguages().isBlank()) {
-            return List.of(Judge0Client.JAVA, Judge0Client.PYTHON, Judge0Client.C, Judge0Client.CPP);
+            return List.of(PistonClient.JAVA, PistonClient.PYTHON, PistonClient.C, PistonClient.CPP);
         }
         try {
             List<String> parsed = json.readerForListOf(String.class).readValue(cfg.getAllowedLanguages());
             return parsed == null || parsed.isEmpty()
-                    ? List.of(Judge0Client.JAVA, Judge0Client.PYTHON, Judge0Client.C, Judge0Client.CPP)
+                    ? List.of(PistonClient.JAVA, PistonClient.PYTHON, PistonClient.C, PistonClient.CPP)
                     : parsed;
         } catch (Exception ex) {
             throw new IllegalStateException("Question code configuration is invalid", ex);
@@ -470,9 +474,9 @@ public class StudentCodeExamServiceImpl implements StudentCodeExamService {
         return cfg == null || cfg.getMemoryLimitKb() == null ? DEFAULT_MEMORY_KB : cfg.getMemoryLimitKb();
     }
 
-    private String testResultsJson(List<Judge0Client.CaseOutcome> outcomes) {
+    private String testResultsJson(List<PistonClient.CaseOutcome> outcomes) {
         ArrayNode array = json.createArrayNode();
-        for (Judge0Client.CaseOutcome outcome : outcomes) {
+        for (PistonClient.CaseOutcome outcome : outcomes) {
             ObjectNode row = array.addObject();
             row.put("testCaseId", outcome.testCaseId() == null ? -1 : outcome.testCaseId().intValue());
             row.put("passed", outcome.passed());
@@ -480,9 +484,9 @@ public class StudentCodeExamServiceImpl implements StudentCodeExamService {
         return array.toString();
     }
 
-    private static String first(List<Judge0Client.CaseOutcome> outcomes,
-                                java.util.function.Function<Judge0Client.CaseOutcome, String> getter) {
-        for (Judge0Client.CaseOutcome outcome : outcomes) {
+    private static String first(List<PistonClient.CaseOutcome> outcomes,
+                                java.util.function.Function<PistonClient.CaseOutcome, String> getter) {
+        for (PistonClient.CaseOutcome outcome : outcomes) {
             String value = getter.apply(outcome);
             if (value != null && !value.isBlank()) {
                 return truncate(value);
@@ -491,16 +495,16 @@ public class StudentCodeExamServiceImpl implements StudentCodeExamService {
         return null;
     }
 
-    private static String firstNonEmpty(List<Judge0Client.CaseOutcome> outcomes,
-                                        java.util.function.Function<Judge0Client.CaseOutcome, String> firstGetter,
-                                        java.util.function.Function<Judge0Client.CaseOutcome, String> secondGetter) {
+    private static String firstNonEmpty(List<PistonClient.CaseOutcome> outcomes,
+                                        java.util.function.Function<PistonClient.CaseOutcome, String> firstGetter,
+                                        java.util.function.Function<PistonClient.CaseOutcome, String> secondGetter) {
         String value = first(outcomes, firstGetter);
         return value != null ? value : first(outcomes, secondGetter);
     }
 
-    private static Integer maxTime(List<Judge0Client.CaseOutcome> outcomes) {
+    private static Integer maxTime(List<PistonClient.CaseOutcome> outcomes) {
         Integer max = null;
-        for (Judge0Client.CaseOutcome outcome : outcomes) {
+        for (PistonClient.CaseOutcome outcome : outcomes) {
             if (outcome.timeMs() != null && (max == null || outcome.timeMs() > max)) {
                 max = outcome.timeMs();
             }

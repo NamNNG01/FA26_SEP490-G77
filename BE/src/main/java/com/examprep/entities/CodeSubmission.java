@@ -47,9 +47,6 @@ public class CodeSubmission implements Serializable {
     @Column(name = "source_code", nullable = false)
     private String sourceCode;
 
-    @Column(name = "judge0_token", length = 100)
-    private String judge0Token;
-
     @Column(name = "status", nullable = false, length = 30)
     private String status;
 

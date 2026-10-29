@@ -55,7 +55,10 @@ app:
     local-dir: ${STORAGE_LOCAL_DIR:data/materials}
   material-ai:
     timeout-ms: ${MATERIAL_AI_TIMEOUT_MS:120000}
-  judge0:
-    base-url: ${JUDGE0_BASE_URL:http://localhost:2358}
-    auth-token: ${JUDGE0_AUTH_TOKEN:}
-    enabled: ${JUDGE0_ENABLED:false}
+  # CD-04/CD-05 code execution: Piston v2-compatible API. The default is the hosted
+  # OnlineCompiler.io endpoint; point PISTON_BASE_URL at a self-hosted Piston to switch.
+  # PISTON_API_KEY is required by the hosted provider; while it is blank CD-04/CD-05
+  # answer 503 CODE_EXECUTION_UNAVAILABLE.
+  piston:
+    base-url: ${PISTON_BASE_URL:https://api.onlinecompiler.io/api/v2/piston}
+    api-key: ${PISTON_API_KEY:}

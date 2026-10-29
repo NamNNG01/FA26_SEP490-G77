@@ -54,8 +54,7 @@ public class StudentProgressServiceImpl implements StudentProgressService {
 
         int totalItems = (int) (totalExams + totalDecks);
         int completedItems = (int) (completedExams + learnedDecks);
-        int progress = totalItems > 0 ? (completedItems * 100) / totalItems : 0;
-        if (progress > 100) progress = 100;
+        int progress = totalItems > 0 ? Math.min(100, (completedItems * 100) / totalItems) : 0;
 
         List<ExamAttempt> recentAttempts = examAttemptRepository.findRecentAttemptsByUserAndCourse(userId, courseId, PageRequest.of(0, 5));
         List<CourseProgressDto.RecentAttemptItem> recentAttemptItems = recentAttempts.stream()
@@ -78,6 +77,22 @@ public class StudentProgressServiceImpl implements StudentProgressService {
                 .progress(progress)
                 .recentAttempts(recentAttemptItems)
                 .build();
+    }
+
+    @Override
+    public int liveProgressPercent(Long userId, Long courseId) {
+        long totalExams = examRepository.countPublishedExamsByCourseId(courseId);
+        List<DeckDto> decks = deckRepository.findCourseDecksWithStats(courseId, userId);
+        int totalItems = (int) (totalExams + decks.size());
+        if (totalItems == 0) {
+            return -1;
+        }
+        long completedExams = examAttemptRepository.countCompletedExamsByUserAndCourse(userId, courseId);
+        long learnedDecks = decks.stream()
+                .filter(d -> d.cardCount() != null && d.cardCount() > 0 && d.learnedCount() != null && d.learnedCount() >= d.cardCount())
+                .count();
+        int completedItems = (int) (completedExams + learnedDecks);
+        return Math.min(100, (completedItems * 100) / totalItems);
     }
 
     @Override

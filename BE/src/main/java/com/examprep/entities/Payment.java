@@ -75,6 +75,11 @@ public class Payment implements Serializable {
     @JoinColumn(name = "discount_id")
     private Discount discount;
 
+    /** True when this checkout already counted against the discount's usage limit (released on cancel/failure). */
+    @Builder.Default
+    @Column(name = "discount_reserved", nullable = false)
+    private Boolean discountReserved = false;
+
     @Column(name = "title", length = 255)
     private String title;
 

@@ -20,6 +20,17 @@ public interface QuestionRepository extends JpaRepository<Question, Long>, JpaSp
     @Query("SELECT q FROM Question q WHERE q.questionId = :id AND q.deletedAt IS NULL")
     Optional<Question> findActiveById(@Param("id") Long id);
 
+    // Questions a student may receive: active and approved, not just soft-deleted.
+    @Query("""
+    SELECT q
+    FROM Question q
+    WHERE q.questionId = :id
+      AND q.deletedAt IS NULL
+      AND q.status = 'ACTIVE'
+      AND q.approvalStatus = 'APPROVED'
+    """)
+    Optional<Question> findDeliverableById(@Param("id") Long id);
+
     @Query("SELECT COUNT(o) FROM AnswerOption o WHERE o.question.questionId = :questionId")
     long countOptionsByQuestionId(@Param("questionId") Long questionId);
 
@@ -95,6 +106,25 @@ public interface QuestionRepository extends JpaRepository<Question, Long>, JpaSp
     );
 
     @Query("""
+    SELECT DISTINCT q
+    FROM Question q
+    LEFT JOIN FETCH q.course c
+    LEFT JOIN FETCH q.module m
+    LEFT JOIN FETCH m.course
+    LEFT JOIN FETCH q.group g
+    LEFT JOIN FETCH g.course
+    LEFT JOIN FETCH g.module gm
+    LEFT JOIN FETCH gm.course
+    WHERE q.questionId IN :ids
+      AND q.deletedAt IS NULL
+      AND q.status = 'ACTIVE'
+      AND q.approvalStatus = 'APPROVED'
+    """)
+    List<Question> findDeliverableWithAccessRelationsByQuestionIdIn(
+            @Param("ids") Collection<Long> ids
+    );
+
+    @Query("""
     SELECT o.question.questionId, COUNT(o)
     FROM AnswerOption o
     WHERE o.question.questionId IN :questionIds
@@ -133,6 +163,8 @@ public interface QuestionRepository extends JpaRepository<Question, Long>, JpaSp
     );
 
     // Questions a RANDOM/MIXED exam rule could draw: publishable (active, approved) and matching the rule.
+    // Student material-quiz questions live in the same course but are private to their owner, so the
+    // drawable pool excludes every AI question generated from a source document.
     @Query("""
     SELECT COUNT(q)
     FROM Question q
@@ -141,6 +173,7 @@ public interface QuestionRepository extends JpaRepository<Question, Long>, JpaSp
     WHERE q.deletedAt IS NULL
       AND q.status = 'ACTIVE'
       AND q.approvalStatus = 'APPROVED'
+      AND q.sourceDocumentId IS NULL
       AND q.questionType = :questionType
       AND (c.courseId = :courseId OR m.course.courseId = :courseId)
       AND (:moduleId IS NULL OR m.moduleId = :moduleId)
@@ -165,6 +198,7 @@ public interface QuestionRepository extends JpaRepository<Question, Long>, JpaSp
     WHERE q.deletedAt IS NULL
       AND q.status = 'ACTIVE'
       AND q.approvalStatus = 'APPROVED'
+      AND q.sourceDocumentId IS NULL
       AND q.questionType = :questionType
       AND (c.courseId = :courseId OR m.course.courseId = :courseId)
       AND (:moduleId IS NULL OR m.moduleId = :moduleId)

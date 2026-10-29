@@ -38,6 +38,7 @@ import java.util.Optional;
 public class AttemptWriter {
 
     private static final String STATUS_IN_PROGRESS = "IN_PROGRESS";
+    private static final String TYPE_CODE = "CODE";
 
     private final ExamAttemptRepository attempts;
     private final AttemptAnswerRepository answers;
@@ -123,6 +124,12 @@ public class AttemptWriter {
             if (row == null) {
                 reject(rejectedOut, entry.questionId(),
                         AttemptResponses.REASON_NOT_IN_ATTEMPT, "Question is not part of this attempt");
+                continue;
+            }
+            // CD-05 judged the exact submitted source; a later SA-03 draft must not detach it.
+            if (row.getGradedAt() != null && TYPE_CODE.equals(row.getQuestion().getQuestionType())) {
+                reject(rejectedOut, entry.questionId(), AttemptResponses.REASON_ALREADY_GRADED,
+                        "Coding answers are final once judged");
                 continue;
             }
             Snapshots.DisplayQuestion display =

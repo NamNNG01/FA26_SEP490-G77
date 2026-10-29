@@ -13,9 +13,11 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,11 +28,22 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.locks.ReentrantLock;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class PaymentServiceImpl implements PaymentService {
+    // A checkout spans PayOS calls, so the per-user serialisation lives in the app, not a DB lock.
+    private static final int CHECKOUT_LOCK_STRIPES = 64;
+    private static final ReentrantLock[] CHECKOUT_LOCKS = new ReentrantLock[CHECKOUT_LOCK_STRIPES];
+
+    static {
+        for (int i = 0; i < CHECKOUT_LOCKS.length; i++) {
+            CHECKOUT_LOCKS[i] = new ReentrantLock();
+        }
+    }
+
     private final PaymentRepository payments;
     private final SubscriptionPlanRepository plans;
     private final UserSubscriptionRepository subscriptions;
@@ -83,6 +96,18 @@ public class PaymentServiceImpl implements PaymentService {
 
     @Override
     public PaymentResponses.Checkout checkout(Long userId, Long courseId, Long planId, String discountCode) {
+        // One student cannot run two checkouts concurrently: the scan/reuse/cancel/create sequence
+        // must see the link the other call is about to issue.
+        ReentrantLock lock = CHECKOUT_LOCKS[Math.floorMod(Long.hashCode(userId), CHECKOUT_LOCKS.length)];
+        lock.lock();
+        try {
+            return doCheckout(userId, courseId, planId, discountCode);
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    private PaymentResponses.Checkout doCheckout(Long userId, Long courseId, Long planId, String discountCode) {
         if ((courseId == null) == (planId == null)) {
             throw new BadRequestException(ResponseCode.VALIDATION_ERROR, "Exactly one of courseId or planId is required");
         }
@@ -134,7 +159,13 @@ public class PaymentServiceImpl implements PaymentService {
         // within one second, and order_code is unique.
         String orderCode = type + "-" + refId + "-USER" + userId + "-" + Instant.now().toEpochMilli()
                 + "-" + UUID.randomUUID().toString().substring(0, 8);
-        Payment payment = transactions.createPending(userId, orderCode, type, refId, title, total, discountAmount, discount, expiresAt);
+        Payment payment;
+        try {
+            payment = transactions.createPending(userId, orderCode, type, refId, title, total, discountAmount, discount, expiresAt);
+        } catch (DataIntegrityViolationException ex) {
+            // A concurrent checkout won the one-pending-link/one-discount-reservation race.
+            throw new ResourceConflictException("A checkout for this item is already in progress");
+        }
         try {
             PayosClient.Link link = payos.create(payment.getPayosOrderCode(), total.intValueExact(), title + " " + orderCode);
             transactions.attachPayosLink(orderCode, link);
@@ -165,6 +196,23 @@ public class PaymentServiceImpl implements PaymentService {
             transactions.cancel(userId, orderCode);
         }
         return new PaymentResponses.Cancelled(orderCode, Payment.CANCELLED);
+    }
+
+    /** Abandoned checkout links give their discount reservation back once PayOS expired them. */
+    @Scheduled(initialDelayString = "${app.payments.reservation-sweep-ms:600000}",
+            fixedDelayString = "${app.payments.reservation-sweep-ms:600000}")
+    @Transactional
+    public void expireUnpaidReservations() {
+        Instant now = Instant.now();
+        for (Payment payment : payments.lockReservedExpired(Payment.PENDING, now)) {
+            if (payment.getDiscount() != null) {
+                discounts.releaseUsage(payment.getDiscount().getDiscountId());
+            }
+            payment.setDiscountReserved(false);
+            payment.setStatus(Payment.EXPIRED);
+            payment.setCancelledAt(now);
+            payment.setUpdatedAt(now);
+        }
     }
 
     @Override

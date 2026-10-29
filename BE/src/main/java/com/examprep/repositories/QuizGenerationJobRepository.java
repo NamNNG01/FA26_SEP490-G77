@@ -39,8 +39,9 @@ public interface QuizGenerationJobRepository extends JpaRepository<QuizGeneratio
     /** MQ-02: every job of one page of documents, one query. */
     List<QuizGenerationJob> findByUserUserIdAndDocumentDocIdInOrderByCreatedAtDesc(Long userId, Collection<Long> docIds);
 
-    /** MQ-06: attempt statistics of generated quizzes, [examId, count, maxScore] per row. */
+    /** MQ-06: finished attempt statistics of generated quizzes, [examId, count, maxScore] per row. */
     @Query("SELECT a.exam.examId, COUNT(a), MAX(a.totalScore) FROM ExamAttempt a "
-            + "WHERE a.user.userId = :userId AND a.exam.examId IN :examIds GROUP BY a.exam.examId")
+            + "WHERE a.user.userId = :userId AND a.exam.examId IN :examIds "
+            + "AND a.status IN ('SUBMITTED', 'COMPLETED') GROUP BY a.exam.examId")
     List<Object[]> statsByExams(@Param("userId") Long userId, @Param("examIds") Collection<Long> examIds);
 }

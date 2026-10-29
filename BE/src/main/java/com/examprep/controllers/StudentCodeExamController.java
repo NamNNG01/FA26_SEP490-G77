@@ -25,7 +25,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/student/code-exams")
 @RequiredArgsConstructor
-@Tag(name = "Student Code Exams", description = "CD-03 … CD-07: coding tests judged by the self-hosted Judge0 sandbox")
+@Tag(name = "Student Code Exams", description = "CD-03 … CD-07: coding tests judged by a Piston-compatible sandbox (hosted provider by default)")
 public class StudentCodeExamController {
     private final StudentCodeExamService service;
 
@@ -37,7 +37,7 @@ public class StudentCodeExamController {
     }
 
     @PostMapping("/run")
-    @Operation(summary = "CD-04: Run source against a public sample", description = "5 s CPU / 256 MB, isolated Judge0 container, no network.")
+    @Operation(summary = "CD-04: Run source against a public sample", description = "Runs in the provider's no-network sandbox with the question's run timeout (30 s cap).")
     public ResponseEntity<ApiResponse<CodeExamResponses.RunResult>> run(
             @AuthenticationPrincipal UserPrincipal user,
             @Valid @RequestBody CodeExamRequests.Run request) {

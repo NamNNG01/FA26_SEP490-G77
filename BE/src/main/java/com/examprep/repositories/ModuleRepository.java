@@ -27,6 +27,14 @@ public interface ModuleRepository extends JpaRepository<Module, Long> {
     @Query("SELECT m.course.courseId FROM Module m WHERE m.moduleId = :id")
     Optional<Long> findCourseId(@Param("id") Long id);
 
+    /** The module a lesson belongs to, scoped to the course MQ-03 validated the lesson against. */
+    @Query(value = """
+            SELECT l.module_id FROM lessons l JOIN modules m ON m.module_id = l.module_id
+            WHERE l.lesson_id = :lessonId AND m.course_id = :courseId
+            """, nativeQuery = true)
+    Optional<Long> findModuleIdByLessonAndCourse(@Param("lessonId") Long lessonId,
+                                                 @Param("courseId") Long courseId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT m FROM Module m WHERE m.moduleId = :id")
     Optional<Module> findForUpdate(@Param("id") Long id);

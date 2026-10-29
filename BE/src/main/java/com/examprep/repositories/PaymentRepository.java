@@ -11,6 +11,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -28,6 +29,13 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select p from Payment p where p.orderCode = :orderCode")
     Optional<Payment> lockByOrderCode(@Param("orderCode") String orderCode);
+
+    boolean existsByUserUserIdAndDiscountDiscountIdAndStatus(Long userId, Long discountId, String status);
+
+    /** Checkouts whose discount reservation must be released because the link expired unpaid. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select p from Payment p where p.status = :status and p.discountReserved = true and p.expiresAt < :now")
+    List<Payment> lockReservedExpired(@Param("status") String status, @Param("now") Instant now);
 
     Page<Payment> findByUserUserIdOrderByCreatedAtDesc(Long userId, Pageable pageable);
 }

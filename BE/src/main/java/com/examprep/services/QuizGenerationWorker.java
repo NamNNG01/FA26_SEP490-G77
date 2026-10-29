@@ -9,6 +9,7 @@ import com.examprep.entities.Course;
 import com.examprep.entities.Document;
 import com.examprep.entities.Exam;
 import com.examprep.entities.ExamQuestion;
+import com.examprep.entities.Module;
 import com.examprep.entities.Question;
 import com.examprep.entities.QuizGenerationJob;
 import com.examprep.entities.User;
@@ -18,6 +19,7 @@ import com.examprep.repositories.CourseRepository;
 import com.examprep.repositories.DocumentRepository;
 import com.examprep.repositories.ExamQuestionRepository;
 import com.examprep.repositories.ExamRepository;
+import com.examprep.repositories.ModuleRepository;
 import com.examprep.repositories.QuestionRepository;
 import com.examprep.repositories.QuizGenerationJobRepository;
 import com.examprep.repositories.UserRepository;
@@ -102,6 +104,7 @@ public class QuizGenerationWorker {
     private final AnswerOptionRepository options;
     private final ExamRepository exams;
     private final ExamQuestionRepository examLinks;
+    private final ModuleRepository modules;
     private final AiUsageLogRepository logs;
     private final AiQuotaService quota;
     private final QuestionValidator questionValidator;
@@ -125,7 +128,8 @@ public class QuizGenerationWorker {
     private record Generated(List<Item> questions, AiResponse response) {}
 
     private record Claimed(Long jobId, Long userId, Long courseId, Long docId, String docTitle,
-                           String content, int questionCount, String difficulty, Long logId) {}
+                           String content, int questionCount, String difficulty, Long logId,
+                           Long sourceLessonId) {}
 
     /** Queues one job; called by the service right after its transaction commits. */
     public void dispatch(Long jobId) {
@@ -203,7 +207,8 @@ public class QuizGenerationWorker {
             return new Claimed(job.getJobId(), job.getUser().getUserId(), course.getCourseId(),
                     document.getDocId(), document.getTitle(), document.getExtractedContent(),
                     job.getQuestionCount(), job.getDifficulty(),
-                    job.getAiUsageLog() == null ? null : job.getAiUsageLog().getLogId());
+                    job.getAiUsageLog() == null ? null : job.getAiUsageLog().getLogId(),
+                    job.getSourceLessonId());
         });
     }
 
@@ -317,6 +322,11 @@ public class QuizGenerationWorker {
         }
         Course course = courses.findById(claimed.courseId()).orElseThrow();
         User student = users.findById(claimed.userId()).orElseThrow();
+        // MQ-03's sourceLessonId anchors the generated quiz to that lesson's module.
+        Module module = claimed.sourceLessonId() == null ? null
+                : modules.findModuleIdByLessonAndCourse(claimed.sourceLessonId(), claimed.courseId())
+                .flatMap(modules::findById)
+                .orElse(null);
         Instant now = Instant.now();
         int count = generated.questions().size();
         String title = "Quiz từ tài liệu " + (claimed.docTitle() == null ? "" : claimed.docTitle()).strip();
@@ -325,6 +335,7 @@ public class QuizGenerationWorker {
         }
         Exam exam = exams.save(Exam.builder()
                 .course(course)
+                .module(module)
                 .createdBy(student)
                 .title(title)
                 .description("Đề trích từ tài liệu: " + (claimed.docTitle() == null ? "" : claimed.docTitle()))
@@ -375,6 +386,8 @@ public class QuizGenerationWorker {
         }
         job.setStatus(STATUS_COMPLETED);
         job.setProgress(100);
+        // The provider may return fewer valid questions than requested; MQ-04/MQ-06 report what exists.
+        job.setQuestionCount(count);
         job.setResultExam(exam);
         job.setActualTokens(actualTokens(generated.response()));
         job.setCompletedAt(now);

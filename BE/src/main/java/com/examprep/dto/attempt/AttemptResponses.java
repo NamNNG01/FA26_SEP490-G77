@@ -57,6 +57,7 @@ public final class AttemptResponses {
 
     public static final String REASON_NOT_IN_ATTEMPT = "NOT_IN_ATTEMPT";
     public static final String REASON_INVALID_RESPONSE = "INVALID_RESPONSE";
+    public static final String REASON_ALREADY_GRADED = "ALREADY_GRADED";
 
     /** SA-04 */
     public record Submitted(

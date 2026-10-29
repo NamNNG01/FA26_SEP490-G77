@@ -150,6 +150,8 @@ class ExamApiIntegrationTest {
         payload.put("configs", List.of(Map.of("questionType", "SINGLE_CHOICE", "numberOfQuestions", 2, "moduleId", module.getModuleId())));
         // Bank has one active SINGLE_CHOICE in the module; a DRAFT one does not count. The rule draws two.
         question(module, "SINGLE_CHOICE", "Draft question").setStatus("DRAFT");
+        // Material-quiz questions are private to their owner's generated quiz, not course draw stock.
+        question(module, "SINGLE_CHOICE", "Generated from a student material").setSourceDocumentId(424242L);
         submit(payload).andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("Random rule 1 needs 2 SINGLE_CHOICE question(s) but the question bank has only 1 active, approved one(s)."));
         Question second = question(module, "SINGLE_CHOICE", "Second active question");

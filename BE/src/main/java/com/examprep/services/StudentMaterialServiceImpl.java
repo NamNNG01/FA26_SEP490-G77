@@ -115,29 +115,36 @@ public class StudentMaterialServiceImpl implements StudentMaterialService {
         String fileUrl = storage.store(publicId, fileName, bytes);
         String storedTitle = cleanTitle;
         String storedFileName = cleanFileName;
-        Uploaded uploaded = new TransactionTemplate(transactionManager).execute(status -> {
-            if (!enrollments.existsByCourse_CourseIdAndUser_UserIdAndStatus(courseId, userId, Enrollment.STATUS_ACTIVE)) {
-                throw new ForbiddenException("You are not enrolled in this course");
-            }
-            Course course = courses.findById(courseId)
-                    .orElseThrow(() -> new ResourceNotFoundException("Course not found"));
-            User student = users.findById(userId)
-                    .orElseThrow(() -> new ResourceNotFoundException("User not found"));
-            Document document = documents.save(Document.builder()
-                    .user(student)
-                    .course(course)
-                    .generationType("MATERIAL")
-                    .extractedContent(text)
-                    .status("UPLOADED")
-                    .title(storedTitle)
-                    .fileName(storedFileName)
-                    .fileUrl(fileUrl)
-                    .fileSizeKb((bytes.length + 1023) / 1024)
-                    .pageCount(pageCount)
-                    .createdAt(Instant.now())
-                    .build());
-            return new Uploaded(document.getDocId(), storedFileName, pageCount, storedTitle);
-        });
+        Uploaded uploaded;
+        try {
+            uploaded = new TransactionTemplate(transactionManager).execute(status -> {
+                if (!enrollments.existsByCourse_CourseIdAndUser_UserIdAndStatus(courseId, userId, Enrollment.STATUS_ACTIVE)) {
+                    throw new ForbiddenException("You are not enrolled in this course");
+                }
+                Course course = courses.findById(courseId)
+                        .orElseThrow(() -> new ResourceNotFoundException("Course not found"));
+                User student = users.findById(userId)
+                        .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+                Document document = documents.save(Document.builder()
+                        .user(student)
+                        .course(course)
+                        .generationType("MATERIAL")
+                        .extractedContent(text)
+                        .status("UPLOADED")
+                        .title(storedTitle)
+                        .fileName(storedFileName)
+                        .fileUrl(fileUrl)
+                        .fileSizeKb((bytes.length + 1023) / 1024)
+                        .pageCount(pageCount)
+                        .createdAt(Instant.now())
+                        .build());
+                return new Uploaded(document.getDocId(), storedFileName, pageCount, storedTitle);
+            });
+        } catch (RuntimeException ex) {
+            // The file was stored outside the transaction; without a documents row it is an orphan.
+            storage.delete(publicId);
+            throw ex;
+        }
         if (uploaded == null) {
             throw new BaseException(ResponseCode.INTERNAL_SERVER_ERROR, "Material could not be saved");
         }

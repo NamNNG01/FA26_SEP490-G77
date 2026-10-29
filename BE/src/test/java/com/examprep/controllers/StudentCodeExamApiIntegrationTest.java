@@ -4,7 +4,7 @@ import com.examprep.dto.ResponseCode;
 import com.examprep.entities.*;
 import com.examprep.exceptions.BaseException;
 import com.examprep.security.UserPrincipal;
-import com.examprep.services.Judge0Client;
+import com.examprep.services.PistonClient;
 import com.examprep.services.StudentAttemptService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -44,9 +44,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * End-to-end contract tests of CD-03 … CD-07 (spec 19): listing code questions, running a sample,
  * submitting code, supported languages and submission history.
  *
- * <p>Judge0 is mocked: the tests control every verdict (accepted, wrong output, compile error,
- * unavailable) while the service, the quota-free scoring of the running attempt and the persisted
- * submissions all run against H2. Hidden fixtures are asserted never to leave the server.</p>
+ * <p>The sandbox client is mocked: the tests control every verdict (accepted, wrong output,
+ * compile error, unavailable) while the service, the quota-free scoring of the running attempt
+ * and the persisted submissions all run against H2. Hidden fixtures are asserted never to leave
+ * the server.</p>
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -58,7 +59,7 @@ public class StudentCodeExamApiIntegrationTest {
     @Autowired ObjectMapper json;
     @Autowired EntityManager em;
     @Autowired StudentAttemptService attemptService;
-    @MockBean Judge0Client judge0;
+    @MockBean PistonClient piston;
 
     User manager, student, other, outsider;
     Category category;
@@ -170,16 +171,59 @@ public class StudentCodeExamApiIntegrationTest {
                 .andExpect(jsonPath("$.data.questions.length()").value(1));
     }
 
+    @Test
+    void codeApiOnlyServesPublishedExamsAndDeliverableQuestions() throws Exception {
+        Exam draftExam = Exam.builder().course(course).createdBy(manager).title("Draft code exam")
+                .durationMinutes(30).isPractice(false).generationType("STATIC")
+                .maxScore(new BigDecimal("10")).status("DRAFT").build();
+        em.persist(draftExam);
+        em.flush();
+        call(student, get("/api/v1/student/code-exams/" + draftExam.getExamId() + "/questions"))
+                .andExpect(status().isNotFound());
+
+        // A question withdrawn after the exam was published disappears from CD-03 and CD-04/CD-05.
+        long attemptId = startAttempt();
+        codeQuestion.setStatus("DRAFT");
+        em.flush();
+        call(student, get("/api/v1/student/code-exams/" + exam.getExamId() + "/questions"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.questions.length()").value(1));
+        call(student, post("/api/v1/student/code-exams/run").contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("questionId", codeQuestion.getQuestionId(),
+                        "language", "JAVA", "sourceCode", "class Main {}"))))
+                .andExpect(status().isNotFound());
+
+        call(student, post("/api/v1/student/code-exams/submit").contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("examId", exam.getExamId(),
+                        "answers", List.of(Map.of("questionId", codeQuestion.getQuestionId(),
+                                "language", "JAVA", "sourceCode", "PASS"))))))
+                .andExpect(status().isNotFound());
+        assertEquals(0, submissions().size());
+
+        codeQuestion.setStatus("ACTIVE");
+        codeQuestion.setApprovalStatus("PENDING");
+        em.flush();
+        call(student, get("/api/v1/student/code-exams/" + exam.getExamId() + "/questions"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.questions.length()").value(1));
+        call(student, post("/api/v1/student/code-exams/run").contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("questionId", codeQuestion.getQuestionId(),
+                        "language", "JAVA", "sourceCode", "class Main {}"))))
+                .andExpect(status().isNotFound());
+        verifyNoInteractions(piston);
+        assertNull(answerOf(attemptId, codeQuestion.getQuestionId()).getScoreEarned());
+    }
+
     // =================================================================================
     // CD-04
     // =================================================================================
 
     @Test
     void runUsesThePublicSampleAndReturnsTheJudgeOutcome() throws Exception {
-        when(judge0.run(eq("PYTHON"), eq("print('cba')"), eq("abc"), eq(2_000), eq(131_072)))
-                .thenReturn(new Judge0Client.RunOutcome("COMPLETED", "cba\n", null, 120));
-        when(judge0.run(eq("JAVA"), eq("class Main {}"), eq("custom-input"), eq(5_000), eq(262_144)))
-                .thenReturn(new Judge0Client.RunOutcome("FAILED", null, "error: ';' expected", null));
+        when(piston.run(eq("PYTHON"), eq("print('cba')"), eq("abc"), eq(2_000), eq(131_072)))
+                .thenReturn(new PistonClient.RunOutcome("COMPLETED", "cba\n", null, 120));
+        when(piston.run(eq("JAVA"), eq("class Main {}"), eq("custom-input"), eq(5_000), eq(262_144)))
+                .thenReturn(new PistonClient.RunOutcome("FAILED", null, "error: ';' expected", null));
 
         call(student, post("/api/v1/student/code-exams/run").contentType(MediaType.APPLICATION_JSON)
                 .content(json.writeValueAsString(Map.of("questionId", codeQuestion.getQuestionId(),
@@ -189,7 +233,7 @@ public class StudentCodeExamApiIntegrationTest {
                 .andExpect(jsonPath("$.data.stdout").value("cba\n"))
                 .andExpect(jsonPath("$.data.stderr").doesNotExist())
                 .andExpect(jsonPath("$.data.executionTimeMs").value(120));
-        verify(judge0).run("PYTHON", "print('cba')", "abc", 2_000, 131_072);
+        verify(piston).run("PYTHON", "print('cba')", "abc", 2_000, 131_072);
 
         call(student, post("/api/v1/student/code-exams/run").contentType(MediaType.APPLICATION_JSON)
                 .content(json.writeValueAsString(Map.of("questionId", sumQuestion.getQuestionId(),
@@ -199,13 +243,13 @@ public class StudentCodeExamApiIntegrationTest {
                 .andExpect(jsonPath("$.data.stderr").value("error: ';' expected"))
                 .andExpect(jsonPath("$.data.stdout").doesNotExist());
 
-        when(judge0.run(anyString(), anyString(), anyString(), anyInt(), anyInt()))
-                .thenThrow(new BaseException(ResponseCode.CODE_EXECUTION_UNAVAILABLE, "Judge0 is down"));
+        when(piston.run(anyString(), anyString(), anyString(), anyInt(), anyInt()))
+                .thenThrow(new BaseException(ResponseCode.CODE_EXECUTION_UNAVAILABLE, "Piston is down"));
         call(student, post("/api/v1/student/code-exams/run").contentType(MediaType.APPLICATION_JSON)
                 .content(json.writeValueAsString(Map.of("questionId", codeQuestion.getQuestionId(),
                         "language", "JAVA", "sourceCode", "class Main {}"))))
                 .andExpect(status().isServiceUnavailable())
-                .andExpect(jsonPath("$.message").value("Judge0 is down"));
+                .andExpect(jsonPath("$.message").value("Piston is down"));
     }
 
     @Test
@@ -237,7 +281,7 @@ public class StudentCodeExamApiIntegrationTest {
                 .content(json.writeValueAsString(Map.of("questionId", codeQuestion.getQuestionId(),
                         "language", "JAVA", "sourceCode", "x".repeat(100 * 1024 + 1)))))
                 .andExpect(status().isBadRequest());
-        verifyNoInteractions(judge0);
+        verifyNoInteractions(piston);
     }
 
     // =================================================================================
@@ -272,8 +316,8 @@ public class StudentCodeExamApiIntegrationTest {
         assertEquals(2, partial.path("failedTestCase").asInt()); // 1-based index of the first failure
 
         // Both public and hidden fixtures reach the judge; limits come from the config.
-        verify(judge0).judge(eq("JAVA"), eq("PASS"), argThat(cases -> cases.size() == 3), eq(2_000), eq(131_072));
-        verify(judge0).judge(eq("CPP"), eq("PARTIAL"), argThat(cases -> cases.size() == 2), eq(5_000), eq(262_144));
+        verify(piston).judge(eq("JAVA"), eq("PASS"), argThat(cases -> cases.size() == 3), eq(2_000), eq(131_072));
+        verify(piston).judge(eq("CPP"), eq("PARTIAL"), argThat(cases -> cases.size() == 2), eq(5_000), eq(262_144));
 
         List<CodeSubmission> rows = submissions();
         assertEquals(2, rows.size());
@@ -323,6 +367,17 @@ public class StudentCodeExamApiIntegrationTest {
         assertEquals(3, submissions().size());
         assertEquals(0, BigDecimal.ZERO.compareTo(answerOf(attemptId, codeQuestion.getQuestionId()).getScoreEarned()));
         assertEquals("IN_PROGRESS", em.find(ExamAttempt.class, attemptId).getStatus());
+
+        // SA-03 cannot detach the judged source from its all-or-nothing verdict.
+        ResultActions draftSave = call(student, put("/api/v1/student/attempts/" + attemptId + "/answers")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("answers", List.of(Map.of(
+                        "questionId", codeQuestion.getQuestionId(), "seq", 1,
+                        "response", Map.of("text", "class Sneaky {}")))))));
+        JsonNode draftSaved = data(draftSave.andExpect(status().isOk()));
+        assertEquals("ALREADY_GRADED", draftSaved.path("rejected").get(0).path("reason").asText());
+        assertEquals("{\"text\":\"FAIL\"}", answerOf(attemptId, codeQuestion.getQuestionId()).getResponse());
+        assertTrue(draftSaved.path("saved").isEmpty());
     }
 
     @Test
@@ -390,7 +445,7 @@ public class StudentCodeExamApiIntegrationTest {
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.message").value("The attempt has no answer row for this question"));
 
-        verifyNoInteractions(judge0);
+        verifyNoInteractions(piston);
         assertEquals(0, submissions().size());
         assertNull(answerOf(attemptId, codeQuestion.getQuestionId()).getScoreEarned());
 
@@ -418,22 +473,22 @@ public class StudentCodeExamApiIntegrationTest {
         call(student, post("/api/v1/student/code-exams/submit").contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.message").value("The attempt deadline has passed"));
-        verifyNoInteractions(judge0);
+        verifyNoInteractions(piston);
         assertEquals(0, submissions().size());
     }
 
     @Test
     void submitPropagatesJudgeUnavailabilityAndWritesNothing() throws Exception {
         long attemptId = startAttempt();
-        when(judge0.judge(anyString(), anyString(), anyList(), anyInt(), anyInt()))
-                .thenThrow(new BaseException(ResponseCode.CODE_EXECUTION_UNAVAILABLE, "Judge0 is down"));
+        when(piston.judge(anyString(), anyString(), anyList(), anyInt(), anyInt()))
+                .thenThrow(new BaseException(ResponseCode.CODE_EXECUTION_UNAVAILABLE, "Piston is down"));
 
         call(student, post("/api/v1/student/code-exams/submit").contentType(MediaType.APPLICATION_JSON)
                 .content(json.writeValueAsString(Map.of("examId", exam.getExamId(),
                         "answers", List.of(Map.of("questionId", codeQuestion.getQuestionId(),
                                 "language", "JAVA", "sourceCode", "PASS"))))))
                 .andExpect(status().isServiceUnavailable())
-                .andExpect(jsonPath("$.message").value("Judge0 is down"));
+                .andExpect(jsonPath("$.message").value("Piston is down"));
         assertEquals(0, submissions().size());
         AttemptAnswer row = answerOf(attemptId, codeQuestion.getQuestionId());
         assertNull(row.getScoreEarned());
@@ -450,7 +505,7 @@ public class StudentCodeExamApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.length()").value(4))
                 .andExpect(jsonPath("$.data[0].id").value("JAVA"))
-                .andExpect(jsonPath("$.data[0].name").value("Java 17"))
+                .andExpect(jsonPath("$.data[0].name").value("Java 25"))
                 .andExpect(jsonPath("$.data[1].id").value("PYTHON"))
                 .andExpect(jsonPath("$.data[2].id").value("C"))
                 .andExpect(jsonPath("$.data[3].id").value("CPP"));
@@ -523,14 +578,14 @@ public class StudentCodeExamApiIntegrationTest {
     // =================================================================================
 
     private void stubJudge() {
-        when(judge0.judge(anyString(), anyString(), anyList(), anyInt(), anyInt())).thenAnswer(invocation -> {
+        when(piston.judge(anyString(), anyString(), anyList(), anyInt(), anyInt())).thenAnswer(invocation -> {
             String source = invocation.getArgument(1);
-            List<Judge0Client.CaseInput> cases = invocation.getArgument(2);
-            List<Judge0Client.CaseOutcome> outcomes = new ArrayList<>();
+            List<PistonClient.CaseInput> cases = invocation.getArgument(2);
+            List<PistonClient.CaseOutcome> outcomes = new ArrayList<>();
             for (int i = 0; i < cases.size(); i++) {
-                Judge0Client.CaseInput testCase = cases.get(i);
+                PistonClient.CaseInput testCase = cases.get(i);
                 boolean pass = source.contains("PASS") || (source.contains("PARTIAL") && i == 0);
-                outcomes.add(new Judge0Client.CaseOutcome(testCase.testCaseId(), pass,
+                outcomes.add(new PistonClient.CaseOutcome(testCase.testCaseId(), pass,
                         pass ? testCase.expectedOutput() : "wrong", null, null, 10 + i));
             }
             return outcomes;

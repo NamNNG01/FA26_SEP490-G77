@@ -25,6 +25,18 @@ public interface DiscountRepository extends JpaRepository<Discount, Long> {
     @Query("update Discount d set d.usedCount = d.usedCount + 1 where d.discountId = :discountId")
     int incrementUsedCount(@Param("discountId") Long discountId);
 
+    /** Reserves one usage for a live checkout; 0 rows means the limit is already exhausted. */
+    @Modifying
+    @Query("update Discount d set d.usedCount = d.usedCount + 1 "
+            + "where d.discountId = :discountId and d.usedCount < d.usageLimit")
+    int reserveUsage(@Param("discountId") Long discountId);
+
+    /** Gives a reservation back when its checkout is cancelled, expires, or fails before payment. */
+    @Modifying
+    @Query("update Discount d set d.usedCount = case when d.usedCount > 0 then d.usedCount - 1 else 0 end "
+            + "where d.discountId = :discountId")
+    int releaseUsage(@Param("discountId") Long discountId);
+
     /** Contest API 12: active, not deleted, not expired, usable for courses, remaining (section 6.2) above zero. */
     @Query("SELECT d FROM Discount d WHERE d.isActive = true AND d.deletedAt IS NULL AND (d.expiresAt IS NULL OR d.expiresAt > :now) " +
             "AND d.appliesTo IN ('COURSE', 'ALL') " +

@@ -2,6 +2,7 @@ package com.examprep.controllers;
 
 import com.examprep.entities.*;
 import com.examprep.security.UserPrincipal;
+import com.examprep.services.PaymentServiceImpl;
 import com.examprep.services.PayosClient;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -52,6 +53,7 @@ class StudentPaymentApiIntegrationTest {
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper json;
     @Autowired EntityManager em;
+    @Autowired PaymentServiceImpl paymentService;
     @MockBean PayosClient payos;
 
     User manager, student, other, subscriber;
@@ -313,6 +315,61 @@ class StudentPaymentApiIntegrationTest {
     // =================================================================================
     // EN-04
     // =================================================================================
+
+    @Test
+    void checkoutReservesTheDiscountUsageUntilTheCheckoutIsCancelled() throws Exception {
+        String orderCode = checkoutOrderCode(paidCourse, "SAVE10");
+        em.refresh(percentDiscount);
+        assertEquals(1, percentDiscount.getUsedCount(), "a live checkout reserves one usage");
+
+        // The same student cannot stack a second live checkout on the same code.
+        call(student, post("/api/v1/student/subscription/checkout").contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("planId", basicPlan.getPlanId(), "discountCode", "SAVE10"))))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("Discount is already used or reserved by another checkout"));
+
+        call(student, delete("/api/v1/student/payments/" + orderCode)).andExpect(status().isOk());
+        em.refresh(percentDiscount);
+        assertEquals(0, percentDiscount.getUsedCount(), "cancelling releases the reservation");
+
+        percentDiscount.setUsageLimit(1);
+        em.flush();
+        call(student, post("/api/v1/student/subscription/checkout").contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("planId", basicPlan.getPlanId(), "discountCode", "SAVE10"))))
+                .andExpect(status().isCreated());
+        em.refresh(percentDiscount);
+        assertEquals(1, percentDiscount.getUsedCount());
+
+        // The reservation, not just a completed payment, consumes the cap for everybody.
+        call(other, post(checkoutUrl(paidCourse)).contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("discountCode", "SAVE10"))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Discount is expired, used or does not apply"));
+    }
+
+    @Test
+    void enrollmentStateReportsAndPersistsTheLiveCompletionPercentage() throws Exception {
+        call(student, post("/api/v1/student/courses/" + freeCourse.getCourseId() + "/enroll"))
+                .andExpect(status().isCreated());
+        Exam exam = Exam.builder().course(freeCourse).createdBy(manager).title("Free course quiz")
+                .durationMinutes(30).isPractice(false).generationType("STATIC")
+                .maxScore(new BigDecimal("10")).status("PUBLISHED").publishedAt(Instant.now()).build();
+        em.persist(exam);
+        em.persist(ExamAttempt.builder().exam(exam).user(student)
+                .startTime(Instant.now().minus(20, ChronoUnit.MINUTES))
+                .deadlineAt(Instant.now().plus(10, ChronoUnit.MINUTES))
+                .status("COMPLETED").totalScore(new BigDecimal("8")).submitTime(Instant.now())
+                .examSnapshot("{\"maxScore\":10}").build());
+        em.flush();
+
+        call(student, get("/api/v1/student/courses/" + freeCourse.getCourseId() + "/enrollment"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.progress").value(100));
+
+        Enrollment row = enrollments(freeCourse, student).get(0);
+        em.refresh(row);
+        assertEquals(100, row.getProgress(), "EN-03 writes the LP-01 percentage back to the enrollment");
+    }
 
     @Test
     void cancellingAnEnrollmentMarksItCancelled() throws Exception {
@@ -786,6 +843,29 @@ class StudentPaymentApiIntegrationTest {
         payWebhook(orderCode, pending.getAmount().longValue());
         assertEquals(Payment.SUCCEEDED, payment(orderCode).getStatus());
         assertEquals(1, enrollments(paidCourse, student).size());
+    }
+
+    @Test
+    void theReservationSweepReturnsTheDiscountAndALateWebhookStillGrantsAccess() throws Exception {
+        String orderCode = checkoutOrderCode(paidCourse, "SAVE10");
+        Payment pending = payment(orderCode);
+        em.refresh(percentDiscount);
+        assertEquals(1, percentDiscount.getUsedCount()); // reserved while the link is payable
+        pending.setExpiresAt(Instant.now().minus(5, ChronoUnit.MINUTES));
+        em.flush();
+
+        paymentService.expireUnpaidReservations();
+
+        assertEquals(Payment.EXPIRED, payment(orderCode).getStatus());
+        em.refresh(percentDiscount);
+        assertEquals(0, percentDiscount.getUsedCount()); // the abandoned checkout returned its usage
+
+        // The PayOS link had expired, so a verified "paid" callback means the student paid in time.
+        payWebhook(orderCode, pending.getAmount().longValue());
+        assertEquals(Payment.SUCCEEDED, payment(orderCode).getStatus());
+        assertEquals(1, enrollments(paidCourse, student).size());
+        em.refresh(percentDiscount);
+        assertEquals(1, percentDiscount.getUsedCount()); // consumed exactly once by the late capture
     }
 
     @Test
