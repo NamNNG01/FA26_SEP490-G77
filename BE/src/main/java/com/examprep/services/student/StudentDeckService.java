@@ -1,5 +1,8 @@
 package com.examprep.services.student;
 
+import com.examprep.dto.IdCount;
+import com.examprep.dto.student.StudentDeckDtos;
+import com.examprep.dto.PageResponse;
 import com.examprep.dto.ResponseCode;
 import com.examprep.dto.student.StudentDeckDtos.*;
 import com.examprep.entities.*;
@@ -13,16 +16,20 @@ import com.examprep.util.attempt.AnswerText;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
- * Personal decks and cards (FC-01..06, FC-10). A personal deck is one whose owner is the student;
+ * Personal decks and cards (FC-01..06, FC-10, FC-12, FC-13). A personal deck is one whose owner is the student;
  * course decks (owned by a manager) are read-only for students.
  */
 @Service
@@ -71,6 +78,43 @@ public class StudentDeckService {
         cards.deleteByDeck(deckId);
         decks.delete(deck);
         decks.flush();
+    }
+
+    // ------------------------------------------------------------------ FC-13
+
+    /** MINE = the caller's own decks; COURSE = decks of the courses the caller is ACTIVE-enrolled in (not their own). */
+    @Transactional(readOnly = true)
+    public PageResponse<DeckListItem> list(Long userId, String scope, Long courseId, String search, String mode, int page, int size) {
+        if (page < 0 || size < 1 || size > 100 || (long) page * size > Integer.MAX_VALUE) {
+            throw new BadRequestException("Page must be nonnegative and size must be 1-100.");
+        }
+        String modeFilter = mode == null ? "" : mode.strip();
+        if (!modeFilter.isEmpty() && !modeFilter.matches(StudentDeckDtos.MODES)) throw new BadRequestException("mode must be one of " + StudentDeckDtos.MODES + ".");
+        String text = search == null ? "" : search.strip().toLowerCase(Locale.ROOT);
+        String pattern = "%" + text.replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%";
+        PageRequest pageable = PageRequest.of(page, size);
+        Page<Deck> result = switch (scope == null ? "" : scope) {
+            case "MINE" -> decks.findOwnedDecks(userId, modeFilter, pattern, pageable);
+            case "COURSE" -> {
+                if (courseId != null) enrolledCourse(userId, courseId);
+                yield decks.findEnrolledCourseDecks(userId, courseId, modeFilter, pattern, pageable);
+            }
+            default -> throw new BadRequestException("scope must be MINE or COURSE.");
+        };
+        List<Long> ids = result.getContent().stream().map(Deck::getDeckId).toList();
+        if (ids.isEmpty()) return PageResponse.of(result, List.of());
+        Map<Long, Long> cardCounts = byDeck(cards.countByDecks(ids));
+        Map<Long, Long> known = byDeck(progress.countKnownByDecks(userId, ids));
+        Map<Long, Long> starred = byDeck(progress.countStarredByDecks(userId, ids));
+        return PageResponse.of(result, result.getContent().stream().map(d -> new DeckListItem(d.getDeckId(), d.getTitle(),
+                d.getDescription(), d.getMode(), d.getCourse() == null ? null : d.getCourse().getCourseId(),
+                d.getCourse() == null ? null : d.getCourse().getTitle(), d.getUser().getUserId(), d.getUser().getFullName(),
+                cardCounts.getOrDefault(d.getDeckId(), 0L), known.getOrDefault(d.getDeckId(), 0L),
+                starred.getOrDefault(d.getDeckId(), 0L), d.getVisibility(), d.getReviewStatus(), d.getCreatedAt())).toList());
+    }
+
+    private static Map<Long, Long> byDeck(List<IdCount> counts) {
+        return counts.stream().collect(Collectors.toMap(IdCount::id, IdCount::total));
     }
 
     // ------------------------------------------------------------------ FC-04..06

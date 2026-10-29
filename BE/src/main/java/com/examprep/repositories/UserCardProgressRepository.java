@@ -1,5 +1,6 @@
 package com.examprep.repositories;
 
+import com.examprep.dto.IdCount;
 import com.examprep.entities.UserCardProgress;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -25,6 +26,14 @@ public interface UserCardProgressRepository extends JpaRepository<UserCardProgre
     void deleteByCard(@Param("cardId") Long cardId);
 
     Optional<UserCardProgress> findByUserUserIdAndCardCardId(Long userId, Long cardId);
+
+    @Query("SELECT new com.examprep.dto.IdCount(p.card.deck.deckId, COUNT(p)) FROM UserCardProgress p " +
+            "WHERE p.user.userId = :userId AND p.card.deck.deckId IN :ids AND p.status = 'KNOWN' GROUP BY p.card.deck.deckId")
+    List<IdCount> countKnownByDecks(@Param("userId") Long userId, @Param("ids") List<Long> ids);
+
+    @Query("SELECT new com.examprep.dto.IdCount(p.card.deck.deckId, COUNT(p)) FROM UserCardProgress p " +
+            "WHERE p.user.userId = :userId AND p.card.deck.deckId IN :ids AND p.isStarred = true GROUP BY p.card.deck.deckId")
+    List<IdCount> countStarredByDecks(@Param("userId") Long userId, @Param("ids") List<Long> ids);
 
     @Query("SELECT COUNT(p) FROM UserCardProgress p WHERE p.user.userId = :userId AND p.card.deck.deckId = :deckId AND p.status = 'KNOWN'")
     long countKnown(@Param("userId") Long userId, @Param("deckId") Long deckId);
