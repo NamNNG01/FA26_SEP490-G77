@@ -4,8 +4,6 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
-import { Tabs } from '@/components/ui/Tabs';
-import { Badge } from '@/components/ui/Badge';
 import { Alert } from '@/components/ui/Alert';
 import { Progress } from '@/components/ui/Progress';
 import { Spinner } from '@/components/ui/Spinner';
@@ -30,11 +28,9 @@ import { formatDate } from './studentUi';
 
 const DEFAULT_POLL_MS = 2000;
 const EXTENSIONS = MATERIAL_ACCEPT.split(',');
-const MATERIALS_FETCH_SIZE = 50;
 
-type Source = 'UPLOAD' | 'EXISTING';
-const SOURCE_TABS: Record<Source, string> = { UPLOAD: 'Upload new file', EXISTING: 'My materials' };
-const SOURCE_BY_TAB: Record<string, Source> = { 'Upload new file': 'UPLOAD', 'My materials': 'EXISTING' };
+/** Value of the "+ Upload new file" entry in the material dropdown. */
+const UPLOAD_NEW = '';
 
 const DIFFICULTY_OPTIONS: { value: MaterialDifficulty; label: string }[] = [
   { value: 'EASY', label: 'Easy' },
@@ -52,14 +48,26 @@ function formatSize(bytes: number) {
  * Material to Quiz Creator — upload a PDF / DOCX (MQ-01) or pick one uploaded before (MQ-02),
  * let the AI write the multiple-choice questions (MQ-03, polled with MQ-04), then start the quiz
  * (MQ-05) on the take-exam screen. Generated quizzes are listed in Exam History (MQ-06).
- * A job keeps running on the BE when the modal closes; it shows up again under "My materials".
+ * A job keeps running on the BE when the modal closes; it shows up again on My Materials.
+ * `initialCourseId` / `initialDocumentId` preselect a material (the "Generate quiz" button of My Materials).
  */
-export function MaterialQuizModal({ open, onClose, courses }: { open: boolean; onClose: () => void; courses: MyCourse[] }) {
+export function MaterialQuizModal({
+  open,
+  onClose,
+  courses,
+  initialCourseId = null,
+  initialDocumentId = null,
+}: {
+  open: boolean;
+  onClose: () => void;
+  courses: MyCourse[];
+  initialCourseId?: number | null;
+  initialDocumentId?: number | null;
+}) {
   const navigate = useNavigate();
   const fileInput = useRef<HTMLInputElement>(null);
 
   const [courseId, setCourseId] = useState('');
-  const [source, setSource] = useState<Source>('UPLOAD');
   const [file, setFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -95,12 +103,12 @@ export function MaterialQuizModal({ open, onClose, courses }: { open: boolean; o
       stopPolling();
       return;
     }
-    setCourseId(courses[0] ? String(courses[0].courseId) : '');
-    setSource('UPLOAD');
+    const preset = initialCourseId != null && courses.some(c => c.courseId === initialCourseId) ? initialCourseId : courses[0]?.courseId;
+    setCourseId(preset != null ? String(preset) : '');
     setFile(null);
     setFileError(null);
     setTitle('');
-    setDocumentId(null);
+    setDocumentId(preset === initialCourseId ? initialDocumentId : null);
     setQuestionCount(String(MATERIAL_QUESTIONS.default));
     setDifficulty('MEDIUM');
     setTouched(false);
@@ -109,12 +117,9 @@ export function MaterialQuizModal({ open, onClose, courses }: { open: boolean; o
     setError(null);
     setJob(null);
     setStarting(false);
-  }, [open, courses]);
+  }, [open, courses, initialCourseId, initialDocumentId]);
 
   useEffect(() => stopPolling, []);
-
-  // A material belongs to one course.
-  useEffect(() => setDocumentId(null), [courseId]);
 
   // Materials of the course (MQ-02), newest first. A reload keeps the picked material.
   useEffect(() => {
@@ -126,9 +131,9 @@ export function MaterialQuizModal({ open, onClose, courses }: { open: boolean; o
     let cancelled = false;
     setLoadingMaterials(true);
     materialService
-      .list(Number(courseId), 0, MATERIALS_FETCH_SIZE)
-      .then(res => {
-        if (!cancelled) setMaterials(res.content);
+      .listAll(Number(courseId))
+      .then(list => {
+        if (!cancelled) setMaterials(list);
       })
       .catch(err => {
         if (!cancelled) setMaterialsError(getApiErrorMessage(err, 'Failed to load your materials.'));
@@ -185,14 +190,7 @@ export function MaterialQuizModal({ open, onClose, courses }: { open: boolean; o
   const countNum = Number(questionCount);
   const errors = {
     course: courseId ? undefined : 'Select a course.',
-    material:
-      source === 'UPLOAD'
-        ? file
-          ? undefined
-          : 'Upload a PDF or DOCX file.'
-        : documentId != null
-          ? undefined
-          : 'Pick one of your materials.',
+    material: documentId != null || file ? undefined : 'Upload a PDF or DOCX file, or pick one of your materials.',
     count:
       Number.isInteger(countNum) && countNum >= MATERIAL_QUESTIONS.min && countNum <= MATERIAL_QUESTIONS.max
         ? undefined
@@ -201,6 +199,13 @@ export function MaterialQuizModal({ open, onClose, courses }: { open: boolean; o
   const invalid = Boolean(errors.course || errors.material || errors.count);
 
   const selected = materials.find(m => m.documentId === documentId) ?? null;
+  const materialOptions = [
+    { value: UPLOAD_NEW, label: '+ Upload new file' },
+    ...materials.map(m => ({
+      value: String(m.documentId),
+      label: m.jobs.some(j => isJobRunning(j.status)) ? `${m.title} (generating…)` : m.title,
+    })),
+  ];
   const runningJob = selected?.jobs.find(j => isJobRunning(j.status)) ?? null;
 
   const generate = async () => {
@@ -208,7 +213,7 @@ export function MaterialQuizModal({ open, onClose, courses }: { open: boolean; o
     if (invalid) return;
     setBusy(true);
     setError(null);
-    let docId = source === 'EXISTING' ? documentId : null;
+    let docId = documentId;
     try {
       if (docId == null && file) {
         const uploaded = await materialService.upload(file, Number(courseId), title);
@@ -216,7 +221,6 @@ export function MaterialQuizModal({ open, onClose, courses }: { open: boolean; o
         // A retry after this point reuses the uploaded material instead of uploading again.
         setFile(null);
         setTitle('');
-        setSource('EXISTING');
         setDocumentId(docId);
         setMaterialsReload(r => r + 1);
       }
@@ -243,9 +247,9 @@ export function MaterialQuizModal({ open, onClose, courses }: { open: boolean; o
 
   const findRunningJob = async (docId: number) => {
     try {
-      const res = await materialService.list(Number(courseId), 0, MATERIALS_FETCH_SIZE);
-      setMaterials(res.content);
-      return res.content.find(m => m.documentId === docId)?.jobs.find(j => isJobRunning(j.status)) ?? null;
+      const list = await materialService.listAll(Number(courseId));
+      setMaterials(list);
+      return list.find(m => m.documentId === docId)?.jobs.find(j => isJobRunning(j.status)) ?? null;
     } catch {
       return null;
     }
@@ -296,7 +300,7 @@ export function MaterialQuizModal({ open, onClose, courses }: { open: boolean; o
           disabled={starting}
           onClick={() => {
             onClose();
-            navigate(ROUTES.studentExams);
+            navigate(ROUTES.studentMaterials);
           }}
         >
           Later
@@ -332,23 +336,33 @@ export function MaterialQuizModal({ open, onClose, courses }: { open: boolean; o
                   label="Course"
                   options={courses.map(c => ({ value: String(c.courseId), label: c.title }))}
                   value={courseId}
-                  onChange={setCourseId}
+                  onChange={v => {
+                    // A material belongs to one course.
+                    setCourseId(v);
+                    setDocumentId(null);
+                  }}
                   error={touched ? errors.course : undefined}
                 />
 
                 <div className="space-y-3">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <Tabs
-                      tabs={Object.values(SOURCE_TABS)}
-                      active={SOURCE_TABS[source]}
-                      onChange={t => {
-                        setSource(SOURCE_BY_TAB[t]);
-                        setTouched(false);
-                      }}
-                    />
-                  </div>
+                  <Select
+                    label="Material"
+                    options={materialOptions}
+                    value={documentId == null ? UPLOAD_NEW : String(documentId)}
+                    onChange={v => setDocumentId(v === UPLOAD_NEW ? null : Number(v))}
+                    disabled={loadingMaterials}
+                    maxVisibleOptions={8}
+                  />
+                  {materialsError && (
+                    <div className="flex flex-wrap items-center gap-3">
+                      <p className="text-xs text-danger">{materialsError}</p>
+                      <Button size="sm" variant="outline" onClick={() => setMaterialsReload(r => r + 1)}>
+                        Retry
+                      </Button>
+                    </div>
+                  )}
 
-                  {source === 'UPLOAD' ? (
+                  {documentId == null ? (
                     <>
                       <div
                         onDragOver={e => {
@@ -414,18 +428,33 @@ export function MaterialQuizModal({ open, onClose, courses }: { open: boolean; o
                         maxLength={255}
                       />
                     </>
+                  ) : selected ? (
+                    <div className="flex items-center gap-3 rounded-[12px] border border-line px-4 py-3">
+                      <Icon.FileText className="w-8 h-8 text-primary flex-shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-content truncate" title={selected.fileName}>
+                          {selected.fileName}
+                        </p>
+                        <p className="flex flex-wrap gap-x-3 text-xs text-content-subtle">
+                          {selected.pageCount != null && (
+                            <span>
+                              {selected.pageCount} page{selected.pageCount === 1 ? '' : 's'}
+                            </span>
+                          )}
+                          <span>Uploaded {formatDate(selected.uploadedAt)}</span>
+                          <span>
+                            {completedCount(selected)} quiz{completedCount(selected) === 1 ? '' : 'zes'} generated
+                          </span>
+                        </p>
+                      </div>
+                    </div>
                   ) : (
-                    <MaterialPicker
-                      materials={materials}
-                      loading={loadingMaterials}
-                      error={materialsError}
-                      selectedId={documentId}
-                      onSelect={setDocumentId}
-                      onRetry={() => setMaterialsReload(r => r + 1)}
-                      invalid={touched && Boolean(errors.material)}
-                    />
+                    loadingMaterials && (
+                      <div className="flex justify-center py-4">
+                        <Spinner />
+                      </div>
+                    )
                   )}
-                  {source === 'EXISTING' && touched && errors.material && <p className="text-xs text-danger">{errors.material}</p>}
                 </div>
 
                 {runningJob ? (
@@ -474,7 +503,7 @@ export function MaterialQuizModal({ open, onClose, courses }: { open: boolean; o
                 {job.status === 'PENDING' ? 'Queued…' : 'Reading the material and writing questions…'}
               </p>
               <p className="text-xs text-content-subtle">
-                {job.questionCount} questions · You can close this window — the quiz keeps generating and appears in Exam History.
+                {job.questionCount} questions · You can close this window — the quiz keeps generating and shows up on My Materials.
               </p>
             </div>
             <div className="w-full max-w-sm">
@@ -487,7 +516,7 @@ export function MaterialQuizModal({ open, onClose, courses }: { open: boolean; o
           <div className="space-y-4">
             <Alert type="success" title="Your quiz is ready" message={`${job.questionCount} questions were generated from your material.`} />
             <p className="text-sm text-content-soft">
-              Answers are checked when you submit. You can take the quiz again any time from Exam History.
+              Answers are checked when you submit. You can take the quiz again any time from My Materials or Exam History.
             </p>
             {error && <AiErrorAlert error={error} />}
           </div>
@@ -511,95 +540,4 @@ export function MaterialQuizModal({ open, onClose, courses }: { open: boolean; o
   );
 }
 
-function MaterialPicker({
-  materials,
-  loading,
-  error,
-  selectedId,
-  onSelect,
-  onRetry,
-  invalid,
-}: {
-  materials: MaterialItem[];
-  loading: boolean;
-  error: string | null;
-  selectedId: number | null;
-  onSelect: (id: number) => void;
-  onRetry: () => void;
-  invalid: boolean;
-}) {
-  if (loading) {
-    return (
-      <div className="flex justify-center py-6">
-        <Spinner />
-      </div>
-    );
-  }
-  if (error) {
-    return (
-      <div className="flex flex-wrap items-center gap-3">
-        <p className="text-sm text-danger">{error}</p>
-        <Button size="sm" variant="outline" onClick={onRetry}>
-          Retry
-        </Button>
-      </div>
-    );
-  }
-  if (materials.length === 0) {
-    return <p className="text-sm text-content-soft">You have not uploaded any material for this course yet.</p>;
-  }
-  return (
-    <ul
-      role="radiogroup"
-      aria-label="Your materials"
-      className={`max-h-64 overflow-y-auto rounded-[12px] border divide-y divide-line ${invalid ? 'border-danger-solid' : 'border-line'}`}
-    >
-      {materials.map(m => {
-        const active = m.documentId === selectedId;
-        const running = m.jobs.some(j => j.status === 'PENDING' || j.status === 'PROCESSING');
-        const done = m.jobs.filter(j => j.status === 'COMPLETED').length;
-        return (
-          <li key={m.documentId}>
-            <button
-              type="button"
-              role="radio"
-              aria-checked={active}
-              onClick={() => onSelect(m.documentId)}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors ${active ? 'bg-primary-light' : 'hover:bg-accent'}`}
-            >
-              <span
-                className={`w-4 h-4 rounded-full border-2 flex-shrink-0 ${active ? 'border-primary bg-primary shadow-[inset_0_0_0_2px_var(--color-surface)]' : 'border-line'}`}
-              />
-              <Icon.FileText className="w-5 h-5 text-primary flex-shrink-0" />
-              <span className="min-w-0 flex-1">
-                <span className="block text-sm font-medium text-content truncate" title={m.title}>
-                  {m.title}
-                </span>
-                <span className="flex flex-wrap gap-x-3 text-xs text-content-subtle">
-                  <span className="truncate max-w-[14rem]" title={m.fileName}>
-                    {m.fileName}
-                  </span>
-                  {m.pageCount != null && (
-                    <span>
-                      {m.pageCount} page{m.pageCount === 1 ? '' : 's'}
-                    </span>
-                  )}
-                  <span>Uploaded {formatDate(m.uploadedAt)}</span>
-                </span>
-              </span>
-              {running ? (
-                <Badge variant="info" size="sm">
-                  Generating
-                </Badge>
-              ) : done > 0 ? (
-                <Badge variant="success" size="sm">
-                  {done} quiz{done === 1 ? '' : 'zes'}
-                </Badge>
-              ) : null}
-            </button>
-          </li>
-        );
-      })}
-    </ul>
-  );
-}
+const completedCount = (m: MaterialItem) => m.jobs.filter(j => j.status === 'COMPLETED').length;

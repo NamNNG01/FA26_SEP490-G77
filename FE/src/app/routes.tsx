@@ -33,6 +33,8 @@ export const ROUTES = {
   /** Route pattern — render with studentWeaknessReportPath(id). AI-04 report of one course. */
   studentWeaknessReport: '/student/courses/:courseId/weakness-report',
   studentExams: '/student/exams',
+  /** Materials the student uploaded (MQ-02) and the quizzes generated from them. */
+  studentMaterials: '/student/materials',
   studentMyExams: '/student/my-exams',
   studentLearningActivities: '/student/learning-activity',
   studentQuestionNotebook: '/student/questions/saved',
@@ -219,6 +221,7 @@ export const menuByRole: Record<string, MenuItem[]> = {
   STUDENT: [
     { id: 'student-courses', title: 'My Courses', icon: <Icon.Book className="w-4 h-4" />, path: ROUTES.studentCourses },
     { id: 'student-exams', title: 'Exam History', icon: <Icon.ClipboardList className="w-4 h-4" />, path: ROUTES.studentExams },
+    { id: 'student-materials', title: 'My Materials', icon: <Icon.FileText className="w-4 h-4" />, path: ROUTES.studentMaterials },
     { id: 'student-contests', title: 'Contests', icon: <Icon.Trophy className="w-4 h-4" />, path: ROUTES.studentContests },
     { id: 'student-flashcards', title: 'Flashcards', icon: <Icon.Layers className="w-4 h-4" />, path: ROUTES.studentFlashcards },
     { id: 'student-activity', title: 'Learning Activity', icon: <Icon.Activity className="w-4 h-4" />, path: ROUTES.studentLearningActivities },

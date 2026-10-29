@@ -117,6 +117,16 @@ export const materialService = {
     return api.get<ApiResponse<PageResponse<MaterialItem>>>(`/student/materials?${qs}`).then(r => r.data);
   },
 
+  /** MQ-02, every page of one course — MaterialItem has no courseId, so My Materials loads per course. */
+  async listAll(courseId: number): Promise<MaterialItem[]> {
+    const items: MaterialItem[] = [];
+    for (let page = 0; ; page++) {
+      const res = await materialService.list(courseId, page, 100);
+      items.push(...res.content);
+      if (res.last || res.content.length === 0) return items;
+    }
+  },
+
   /** MQ-03 */
   async generateQuiz(documentId: number, body: GenerateQuizRequest): Promise<MaterialJobAccepted> {
     return api.post<ApiResponse<MaterialJobAccepted>>(`/student/materials/${documentId}/generate-quiz`, body).then(r => r.data);

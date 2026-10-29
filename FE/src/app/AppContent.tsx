@@ -28,6 +28,7 @@ import {
   MyCoursesPage,
   StudentCourseDetailPage,
   MyExamsPage,
+  MyMaterialsPage,
   StudentFlashcardsPage,
   StudentDeckStudyPage,
   StudentExamDetailPage,
@@ -245,6 +246,7 @@ function AppRoutes() {
         <Route element={<RequireRole roles={ROLE_STUDENT} />}>
           <Route path={ROUTES.courses} element={<PublicCoursesPage />} />
           <Route path={ROUTES.courseDetail} element={<PublicCourseDetailPage />} />
+          <Route path={ROUTES.studentMaterials} element={<MyMaterialsPage />} />
           <Route path={ROUTES.studentPracticeExams} element={<Navigate to={`${ROUTES.studentExams}?type=PRACTICE`} replace />} />
           <Route path={ROUTES.studentProfile} element={<ProfilePage />} />
           <Route path={ROUTES.studentDashboard} element={<Navigate to={ROUTES.studentCourses} replace />} />
