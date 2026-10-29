@@ -234,8 +234,8 @@ export function StudentTakeExamPage() {
     [session, flush, navigate],
   );
 
-  /** Where Cancel / Delete attempt lead: a practice exam has no course exam page. */
-  const exitPath = (examId: number) => (practice ? ROUTES.studentPracticeExams : studentExamPath(examId));
+  /** Where Cancel / Delete attempt lead: a practice exam has no course exam page — it is listed in Exam History. */
+  const exitPath = (examId: number) => (practice ? `${ROUTES.studentExams}?type=PRACTICE` : studentExamPath(examId));
 
   const saveAndExit = async () => {
     if (!session) return;

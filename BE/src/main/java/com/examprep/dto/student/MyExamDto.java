@@ -9,5 +9,7 @@ public record MyExamDto(
         String courseTitle,
         BigDecimal maxScore,
         Long attemptCount,
-        BigDecimal bestScore
+        BigDecimal bestScore,
+        /** Exam.mode: EXAM, PRACTICE, SMART_PRACTICE or MATERIAL_QUIZ. */
+        String mode
 ) {}

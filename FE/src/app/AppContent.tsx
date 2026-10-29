@@ -33,14 +33,12 @@ import {
   StudentExamDetailPage,
   StudentTakeExamPage,
   StudentExamResultPage,
-  StudentPracticeQuizPage,
   StudentLearningActivityPage,
   StudentQuestionNotebookPage,
   StudentContestsPage,
   StudentCommunityPage,
   StudentContributionsPage,
   StudentWeaknessReportPage,
-  StudentPracticeExamsPage,
 } from '@/features/student';
 import { ExamListPage, ExamFormPage } from '@/features/exam';
 import { PublicExamsPage, PublicExamDetailPage } from '@/features/public-exam';
@@ -247,7 +245,7 @@ function AppRoutes() {
         <Route element={<RequireRole roles={ROLE_STUDENT} />}>
           <Route path={ROUTES.courses} element={<PublicCoursesPage />} />
           <Route path={ROUTES.courseDetail} element={<PublicCourseDetailPage />} />
-          <Route path={ROUTES.studentPracticeExams} element={<StudentPracticeExamsPage />} />
+          <Route path={ROUTES.studentPracticeExams} element={<Navigate to={`${ROUTES.studentExams}?type=PRACTICE`} replace />} />
           <Route path={ROUTES.studentProfile} element={<ProfilePage />} />
           <Route path={ROUTES.studentDashboard} element={<Navigate to={ROUTES.studentCourses} replace />} />
           <Route path={ROUTES.studentCourses} element={<MyCoursesPage />} />
@@ -274,7 +272,6 @@ function AppRoutes() {
 
       <Route element={<RequireRole roles={ROLE_STUDENT} />}>
         <Route path={ROUTES.studentExam} element={<StudentTakeExamPage />} />
-        <Route path={ROUTES.studentPractice} element={<StudentPracticeQuizPage />} />
       </Route>
 
       <Route element={<DashboardLayout />}>

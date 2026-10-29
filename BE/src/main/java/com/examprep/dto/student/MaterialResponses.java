@@ -34,5 +34,6 @@ public final class MaterialResponses {
 
     /** MQ-06 */
     public record HistoryItem(Long jobId, Long documentId, String documentTitle, Integer questionCount,
-                              BigDecimal bestScore, Integer attemptCount, Instant createdAt) {}
+                              BigDecimal bestScore, Integer attemptCount, Instant createdAt,
+                              Long quizId) {}
 }

@@ -1,109 +1,177 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
+import { Tabs } from '@/components/ui/Tabs';
+import { Badge } from '@/components/ui/Badge';
 import { Alert } from '@/components/ui/Alert';
+import { Progress } from '@/components/ui/Progress';
 import { Spinner } from '@/components/ui/Spinner';
 import { Icon } from '@/assets/icons';
-import { studentPracticePath } from '@/app/routes';
+import { ROUTES, studentResumeAttemptPath } from '@/app/routes';
 import { getApiErrorMessage } from '@/utils/apiError';
+import type { MyCourse } from '@/services/studentCourse.service';
+import { getAiError, type AiError } from '@/services/studentAi.service';
 import {
-  DRAFT_TYPES,
-  DRAFT_TYPE_LABEL,
   MATERIAL_ACCEPT,
   MATERIAL_MAX_BYTES,
-  PRACTICE_MAX_MINUTES,
-  PRACTICE_MAX_QUESTIONS,
-  blankIndices,
-  convertDraft,
-  newKey,
-  studentPracticeService,
-  validateDraft,
-  type DraftGroup,
-  type DraftQuestion,
-  type DraftQuestionType,
-  type MaterialDraft,
-} from '@/services/studentPractice.service';
-import { optionLetter } from './QuestionAnswerInput';
-import { TypeCountSelect, type TypeCounts } from '@/features/question/components/TypeCountSelect';
+  MATERIAL_QUESTIONS,
+  errorStatus,
+  isJobRunning,
+  materialService,
+  type MaterialDifficulty,
+  type MaterialItem,
+  type MaterialJobState,
+} from '@/services/studentMaterial.service';
+import { AiErrorAlert } from './aiUi';
+import { formatDate } from './studentUi';
 
-const FIELD =
-  'w-full rounded-[10px] border border-line bg-surface px-3 text-sm text-content placeholder:text-content-subtle transition-all focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600';
-const PILL = 'h-8 pl-3 pr-8 rounded-[8px] text-xs font-medium';
-const NEW_GROUP = '__new';
-const SINGLE = '';
+const DEFAULT_POLL_MS = 2000;
 const EXTENSIONS = MATERIAL_ACCEPT.split(',');
+const MATERIALS_FETCH_SIZE = 50;
 
-const EMPTY_DRAFT: MaterialDraft = { title: '', groups: [], questions: [] };
+type Source = 'UPLOAD' | 'EXISTING';
+const SOURCE_TABS: Record<Source, string> = { UPLOAD: 'Upload new file', EXISTING: 'My materials' };
+const SOURCE_BY_TAB: Record<string, Source> = { 'Upload new file': 'UPLOAD', 'My materials': 'EXISTING' };
+
+const DIFFICULTY_OPTIONS: { value: MaterialDifficulty; label: string }[] = [
+  { value: 'EASY', label: 'Easy' },
+  { value: 'MEDIUM', label: 'Medium' },
+  { value: 'HARD', label: 'Hard' },
+];
+
+type Phase = 'form' | 'processing' | 'completed' | 'failed';
 
 function formatSize(bytes: number) {
   return bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-/** Groups with no question left are dropped. */
-function prune(draft: MaterialDraft): MaterialDraft {
-  const used = new Set(draft.questions.map(q => q.groupKey));
-  return { ...draft, groups: draft.groups.filter(g => used.has(g.key)) };
-}
-
 /**
- * Material to Quiz Creator — upload a PDF / DOCX / PPTX, choose how many
- * questions of each type, let the AI draft them, edit / regroup / remove, and
- * start the quiz. Occupies 90% of the screen: the question list and the
- * "Exam Information" panel scroll on their own (the panel sits above the list on narrow screens).
+ * Material to Quiz Creator — upload a PDF / DOCX (MQ-01) or pick one uploaded before (MQ-02),
+ * let the AI write the multiple-choice questions (MQ-03, polled with MQ-04), then start the quiz
+ * (MQ-05) on the take-exam screen. Generated quizzes are listed in Exam History (MQ-06).
+ * A job keeps running on the BE when the modal closes; it shows up again under "My materials".
  */
-export function MaterialQuizModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function MaterialQuizModal({ open, onClose, courses }: { open: boolean; onClose: () => void; courses: MyCourse[] }) {
   const navigate = useNavigate();
   const fileInput = useRef<HTMLInputElement>(null);
-  const abortRef = useRef<AbortController | null>(null);
 
+  const [courseId, setCourseId] = useState('');
+  const [source, setSource] = useState<Source>('UPLOAD');
   const [file, setFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
-  const [counts, setCounts] = useState<TypeCounts<DraftQuestionType>>({ MULTIPLE_CHOICE: '10', TRUE_FALSE: '5' });
+  const [title, setTitle] = useState('');
+  const [documentId, setDocumentId] = useState<number | null>(null);
+  const [questionCount, setQuestionCount] = useState(String(MATERIAL_QUESTIONS.default));
+  const [difficulty, setDifficulty] = useState<MaterialDifficulty>('MEDIUM');
   const [touched, setTouched] = useState(false);
 
-  const [draft, setDraft] = useState<MaterialDraft>(EMPTY_DRAFT);
-  const [generating, setGenerating] = useState(false);
-  const [genError, setGenError] = useState<string | null>(null);
-  const [minutes, setMinutes] = useState('');
-  const [showErrors, setShowErrors] = useState(false);
+  const [materials, setMaterials] = useState<MaterialItem[]>([]);
+  const [loadingMaterials, setLoadingMaterials] = useState(false);
+  const [materialsError, setMaterialsError] = useState<string | null>(null);
+  const [materialsReload, setMaterialsReload] = useState(0);
 
+  const [phase, setPhase] = useState<Phase>('form');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<AiError | null>(null);
+  const [job, setJob] = useState<MaterialJobState | null>(null);
+  const [starting, setStarting] = useState(false);
+  const pollTimer = useRef<number | null>(null);
+  /** Job being polled; a reply for any other job (or after close) is dropped. */
+  const activeJob = useRef<number | null>(null);
+
+  const stopPolling = () => {
+    activeJob.current = null;
+    if (pollTimer.current != null) window.clearTimeout(pollTimer.current);
+    pollTimer.current = null;
+  };
+
+  // Fresh form each time the modal opens; stop polling when it closes.
   useEffect(() => {
-    if (open) return;
-    abortRef.current?.abort();
+    if (!open) {
+      stopPolling();
+      return;
+    }
+    setCourseId(courses[0] ? String(courses[0].courseId) : '');
+    setSource('UPLOAD');
     setFile(null);
     setFileError(null);
-    setDraft(EMPTY_DRAFT);
-    setGenError(null);
+    setTitle('');
+    setDocumentId(null);
+    setQuestionCount(String(MATERIAL_QUESTIONS.default));
+    setDifficulty('MEDIUM');
     setTouched(false);
-    setShowErrors(false);
-    setMinutes('');
-    setGenerating(false);
-  }, [open]);
+    setPhase('form');
+    setBusy(false);
+    setError(null);
+    setJob(null);
+    setStarting(false);
+  }, [open, courses]);
 
-  /* ── generation settings ─────────────────────────────────────────────── */
-  const types = DRAFT_TYPES.filter(t => counts[t] != null);
-  const typeCounts = Object.fromEntries(types.map(t => [t, Number(counts[t])])) as Record<DraftQuestionType, number>;
-  const badCount = types.some(t => !Number.isInteger(typeCounts[t]) || typeCounts[t] < 1);
-  const total = types.reduce((s, t) => s + (Number.isInteger(typeCounts[t]) && typeCounts[t] > 0 ? typeCounts[t] : 0), 0);
-  const typesError =
-    types.length === 0
-      ? 'Choose at least one question type.'
-      : badCount
-        ? 'Every question type needs a count of at least 1.'
-        : total > PRACTICE_MAX_QUESTIONS
-          ? `At most ${PRACTICE_MAX_QUESTIONS} questions in total.`
-          : null;
-  const settingsError = !file ? 'Upload a learning material first.' : typesError;
+  useEffect(() => stopPolling, []);
+
+  // A material belongs to one course.
+  useEffect(() => setDocumentId(null), [courseId]);
+
+  // Materials of the course (MQ-02), newest first. A reload keeps the picked material.
+  useEffect(() => {
+    setMaterialsError(null);
+    if (!open || !courseId) {
+      setMaterials([]);
+      return;
+    }
+    let cancelled = false;
+    setLoadingMaterials(true);
+    materialService
+      .list(Number(courseId), 0, MATERIALS_FETCH_SIZE)
+      .then(res => {
+        if (!cancelled) setMaterials(res.content);
+      })
+      .catch(err => {
+        if (!cancelled) setMaterialsError(getApiErrorMessage(err, 'Failed to load your materials.'));
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingMaterials(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, courseId, materialsReload]);
+
+  const poll = (jobId: number) => {
+    materialService
+      .getJob(jobId)
+      .then(({ job: state, retryAfterMs }) => {
+        if (activeJob.current !== jobId) return;
+        setJob(state);
+        if (state.status === 'COMPLETED' && state.quizId != null) setPhase('completed');
+        else if (state.status === 'FAILED') setPhase('failed');
+        else pollTimer.current = window.setTimeout(() => poll(jobId), retryAfterMs ?? DEFAULT_POLL_MS);
+      })
+      .catch(err => {
+        if (activeJob.current !== jobId) return;
+        setError(getAiError(err, 'Lost track of the quiz generation.'));
+        setPhase('failed');
+      });
+  };
+
+  const track = (jobId: number, questionCountOfJob: number) => {
+    stopPolling();
+    setJob({ jobId, status: 'PENDING', progress: 0, questionCount: questionCountOfJob, errorMessage: null, quizId: null });
+    setError(null);
+    setPhase('processing');
+    activeJob.current = jobId;
+    poll(jobId);
+  };
 
   const pickFile = (f: File | undefined | null) => {
     if (!f) return;
     const ext = f.name.slice(f.name.lastIndexOf('.')).toLowerCase();
     if (!EXTENSIONS.includes(ext)) {
-      setFileError('Only PDF, DOCX or PPTX files are supported.');
+      setFileError('Only PDF or DOCX files are supported.');
       return;
     }
     if (f.size > MATERIAL_MAX_BYTES) {
@@ -114,582 +182,424 @@ export function MaterialQuizModal({ open, onClose }: { open: boolean; onClose: (
     setFile(f);
   };
 
+  const countNum = Number(questionCount);
+  const errors = {
+    course: courseId ? undefined : 'Select a course.',
+    material:
+      source === 'UPLOAD'
+        ? file
+          ? undefined
+          : 'Upload a PDF or DOCX file.'
+        : documentId != null
+          ? undefined
+          : 'Pick one of your materials.',
+    count:
+      Number.isInteger(countNum) && countNum >= MATERIAL_QUESTIONS.min && countNum <= MATERIAL_QUESTIONS.max
+        ? undefined
+        : `Enter ${MATERIAL_QUESTIONS.min} – ${MATERIAL_QUESTIONS.max} questions.`,
+  };
+  const invalid = Boolean(errors.course || errors.material || errors.count);
+
+  const selected = materials.find(m => m.documentId === documentId) ?? null;
+  const runningJob = selected?.jobs.find(j => isJobRunning(j.status)) ?? null;
+
   const generate = async () => {
     setTouched(true);
-    if (settingsError || !file) return;
-    abortRef.current?.abort();
-    const ctrl = new AbortController();
-    abortRef.current = ctrl;
-    setGenerating(true);
-    setGenError(null);
+    if (invalid) return;
+    setBusy(true);
+    setError(null);
+    let docId = source === 'EXISTING' ? documentId : null;
     try {
-      const res = await studentPracticeService.generateFromMaterial(file, typeCounts, ctrl.signal);
-      setDraft(d => ({ ...res, title: d.title.trim() ? d.title : res.title }));
-      setMinutes(String(Math.min(PRACTICE_MAX_MINUTES, Math.max(5, Math.ceil(res.questions.length * 1.5)))));
-      setShowErrors(false);
-    } catch (err) {
-      if (!ctrl.signal.aborted) setGenError(getApiErrorMessage(err, 'Failed to generate questions. Please try again.'));
-    } finally {
-      if (abortRef.current === ctrl) setGenerating(false);
-    }
-  };
-
-  /* ── editing ─────────────────────────────────────────────────────────── */
-  const updateQuestion = (key: string, next: DraftQuestion) =>
-    setDraft(d => prune({ ...d, questions: d.questions.map(q => (q.key === key ? next : q)) }));
-  const removeQuestion = (key: string) => setDraft(d => prune({ ...d, questions: d.questions.filter(q => q.key !== key) }));
-  const renameGroup = (key: string, title: string) =>
-    setDraft(d => ({ ...d, groups: d.groups.map(g => (g.key === key ? { ...g, title } : g)) }));
-  const setGroup = (q: DraftQuestion, value: string) => {
-    if (value !== NEW_GROUP) return updateQuestion(q.key, { ...q, groupKey: value || null });
-    const group: DraftGroup = { key: newKey('g'), title: `Group ${draft.groups.length + 1}` };
-    setDraft(d => prune({ ...d, groups: [...d.groups, group], questions: d.questions.map(x => (x.key === q.key ? { ...x, groupKey: group.key } : x)) }));
-  };
-  const addQuestion = () => setDraft(d => ({ ...d, questions: [...d.questions, convertDraft(emptyQuestion(), 'MULTIPLE_CHOICE')] }));
-
-  const errorsByKey = useMemo(() => new Map(draft.questions.map(q => [q.key, validateDraft(q)])), [draft.questions]);
-  const invalidCount = [...errorsByKey.values()].filter(e => e.length > 0).length;
-  const minutesNum = Number(minutes);
-  const minutesError =
-    !Number.isInteger(minutesNum) || minutesNum < 1 || minutesNum > PRACTICE_MAX_MINUTES ? `Enter 1 – ${PRACTICE_MAX_MINUTES} minutes.` : undefined;
-
-  const start = () => {
-    setShowErrors(true);
-    if (invalidCount > 0 || minutesError || draft.questions.length === 0) {
-      document.querySelector<HTMLElement>('[data-draft-invalid="true"]')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      return;
-    }
-    const quiz = studentPracticeService.createFromDrafts(draft, minutesNum, file?.name ?? null);
-    onClose();
-    navigate(studentPracticePath(quiz.quizId));
-  };
-
-  /** Question list as blocks: a group box (all its questions together) or a single question. */
-  const blocks = useMemo(() => {
-    const out: ({ kind: 'single'; q: DraftQuestion } | { kind: 'group'; group: DraftGroup; questions: DraftQuestion[] })[] = [];
-    const seen = new Set<string>();
-    for (const q of draft.questions) {
-      const group = q.groupKey ? draft.groups.find(g => g.key === q.groupKey) : undefined;
-      if (!group) out.push({ kind: 'single', q });
-      else if (!seen.has(group.key)) {
-        seen.add(group.key);
-        out.push({ kind: 'group', group, questions: draft.questions.filter(x => x.groupKey === group.key) });
+      if (docId == null && file) {
+        const uploaded = await materialService.upload(file, Number(courseId), title);
+        docId = uploaded.documentId;
+        // A retry after this point reuses the uploaded material instead of uploading again.
+        setFile(null);
+        setTitle('');
+        setSource('EXISTING');
+        setDocumentId(docId);
+        setMaterialsReload(r => r + 1);
       }
+      if (docId == null) return;
+      const accepted = await materialService.generateQuiz(docId, {
+        questionCount: countNum,
+        difficulty,
+      });
+      track(accepted.jobId, accepted.questionCount);
+    } catch (err) {
+      // 409 DUPLICATE_REQUEST: a job of this material is still running — follow it instead.
+      if (errorStatus(err) === 409 && docId != null) {
+        const running = await findRunningJob(docId);
+        if (running) {
+          track(running.jobId, running.questionCount);
+          return;
+        }
+      }
+      setError(getAiError(err, 'Failed to start the quiz generation.'));
+    } finally {
+      setBusy(false);
     }
-    return out;
-  }, [draft]);
-  const numberOf = useMemo(() => {
-    const m = new Map<string, number>();
-    let n = 0;
-    for (const b of blocks) for (const q of b.kind === 'single' ? [b.q] : b.questions) m.set(q.key, ++n);
-    return m;
-  }, [blocks]);
+  };
 
-  const groupOptions = [
-    { value: SINGLE, label: 'Single' },
-    ...draft.groups.map(g => ({ value: g.key, label: g.title.trim() || 'Untitled group' })),
-    { value: NEW_GROUP, label: '+ New group' },
-  ];
+  const findRunningJob = async (docId: number) => {
+    try {
+      const res = await materialService.list(Number(courseId), 0, MATERIALS_FETCH_SIZE);
+      setMaterials(res.content);
+      return res.content.find(m => m.documentId === docId)?.jobs.find(j => isJobRunning(j.status)) ?? null;
+    } catch {
+      return null;
+    }
+  };
 
-  const renderQuestion = (q: DraftQuestion) => (
-    <QuestionEditor
-      key={q.key}
-      number={numberOf.get(q.key) ?? 0}
-      question={q}
-      groupOptions={groupOptions}
-      errors={showErrors ? (errorsByKey.get(q.key) ?? []) : []}
-      onChange={next => updateQuestion(q.key, next)}
-      onGroup={v => setGroup(q, v)}
-      onRemove={() => removeQuestion(q.key)}
-    />
-  );
+  const backToForm = () => {
+    stopPolling();
+    setPhase('form');
+    setError(null);
+    setJob(null);
+    setTouched(false);
+    setMaterialsReload(r => r + 1);
+  };
 
-  const hasQuestions = draft.questions.length > 0;
+  const startQuiz = async () => {
+    if (!job) return;
+    setStarting(true);
+    setError(null);
+    try {
+      const started = await materialService.start(job.jobId);
+      onClose();
+      navigate(studentResumeAttemptPath(started.attemptId));
+    } catch (err) {
+      setError(getAiError(err, 'Failed to start the quiz.'));
+      setStarting(false);
+    }
+  };
+
+  const footer =
+    phase === 'form' ? (
+      <>
+        <Button variant="outline" disabled={busy} onClick={onClose}>
+          Cancel
+        </Button>
+        <Button
+          loading={busy}
+          disabled={busy || courses.length === 0 || (touched && invalid)}
+          icon={<Icon.Zap className="w-4 h-4" />}
+          onClick={generate}
+        >
+          Generate
+        </Button>
+      </>
+    ) : phase === 'completed' ? (
+      <>
+        <Button
+          variant="outline"
+          disabled={starting}
+          onClick={() => {
+            onClose();
+            navigate(ROUTES.studentExams);
+          }}
+        >
+          Later
+        </Button>
+        <Button loading={starting} disabled={starting} icon={<Icon.ChevronRight className="w-4 h-4" />} onClick={startQuiz}>
+          Start quiz
+        </Button>
+      </>
+    ) : phase === 'failed' ? (
+      <Button variant="outline" icon={<Icon.RefreshCw className="w-4 h-4" />} onClick={backToForm}>
+        Try again
+      </Button>
+    ) : (
+      <Button variant="outline" onClick={onClose}>
+        Close
+      </Button>
+    );
 
   return (
-    <Modal open={open} onClose={onClose} title="Material to Quiz Creator" size="screen">
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)] lg:h-full">
-        {/* ── Generated questions ───────────────────────────────────────── */}
-        <section aria-label="Generated questions" className="min-w-0 space-y-4 order-2 lg:order-1 lg:overflow-y-auto lg:pr-2">
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <h2 className="text-base font-semibold text-content">Generate Questions</h2>
-            {hasQuestions && (
-              <span className="text-xs text-content-subtle">
-                {draft.questions.length} question{draft.questions.length === 1 ? '' : 's'}
-              </span>
+    <Modal open={open} onClose={() => !busy && !starting && onClose()} title="Material to Quiz Creator" size="lg" footer={footer}>
+      <div className="space-y-5">
+        {phase === 'form' && (
+          <>
+            <p className="text-sm text-content-soft">
+              Upload your lecture notes or slides as PDF / DOCX and the AI writes multiple-choice questions from them. Longer files
+              use more of your AI quota.
+            </p>
+            {courses.length === 0 ? (
+              <p className="text-sm text-content-soft">Enroll in a course first to create a quiz from your materials.</p>
+            ) : (
+              <>
+                <Select
+                  label="Course"
+                  options={courses.map(c => ({ value: String(c.courseId), label: c.title }))}
+                  value={courseId}
+                  onChange={setCourseId}
+                  error={touched ? errors.course : undefined}
+                />
+
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <Tabs
+                      tabs={Object.values(SOURCE_TABS)}
+                      active={SOURCE_TABS[source]}
+                      onChange={t => {
+                        setSource(SOURCE_BY_TAB[t]);
+                        setTouched(false);
+                      }}
+                    />
+                  </div>
+
+                  {source === 'UPLOAD' ? (
+                    <>
+                      <div
+                        onDragOver={e => {
+                          e.preventDefault();
+                          setDragOver(true);
+                        }}
+                        onDragLeave={() => setDragOver(false)}
+                        onDrop={e => {
+                          e.preventDefault();
+                          setDragOver(false);
+                          pickFile(e.dataTransfer.files?.[0]);
+                        }}
+                        className={`rounded-[12px] border-2 border-dashed px-4 py-5 text-center transition-colors ${
+                          dragOver ? 'border-brand-600 bg-primary-light' : touched && errors.material ? 'border-danger-solid' : 'border-line'
+                        }`}
+                      >
+                        {file ? (
+                          <div className="flex items-center gap-3 text-left">
+                            <Icon.FileText className="w-8 h-8 text-primary flex-shrink-0" />
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-medium text-content truncate" title={file.name}>
+                                {file.name}
+                              </p>
+                              <p className="text-xs text-content-subtle">{formatSize(file.size)}</p>
+                            </div>
+                            <button
+                              type="button"
+                              aria-label="Remove file"
+                              onClick={() => setFile(null)}
+                              className="p-1.5 rounded-[6px] text-content-subtle hover:bg-accent hover:text-content"
+                            >
+                              <Icon.X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ) : (
+                          <>
+                            <Icon.Upload className="w-6 h-6 mx-auto text-content-subtle" />
+                            <p className="mt-2 text-sm text-content-secondary">Drag &amp; Drop PDF or DOCX</p>
+                            <p className="text-xs text-content-subtle">Up to {formatSize(MATERIAL_MAX_BYTES)}</p>
+                            <Button size="sm" variant="outline" className="mt-3" onClick={() => fileInput.current?.click()}>
+                              Browse File
+                            </Button>
+                          </>
+                        )}
+                        <input
+                          ref={fileInput}
+                          type="file"
+                          accept={MATERIAL_ACCEPT}
+                          className="hidden"
+                          onChange={e => {
+                            pickFile(e.target.files?.[0]);
+                            e.target.value = '';
+                          }}
+                        />
+                      </div>
+                      {fileError && <p className="text-xs text-danger">{fileError}</p>}
+                      {touched && !fileError && errors.material && <p className="text-xs text-danger">{errors.material}</p>}
+                      <Input
+                        label="Title (optional)"
+                        placeholder={file ? file.name.replace(/\.[^.]+$/, '') : 'Defaults to the file name'}
+                        value={title}
+                        onChange={e => setTitle(e.target.value)}
+                        maxLength={255}
+                      />
+                    </>
+                  ) : (
+                    <MaterialPicker
+                      materials={materials}
+                      loading={loadingMaterials}
+                      error={materialsError}
+                      selectedId={documentId}
+                      onSelect={setDocumentId}
+                      onRetry={() => setMaterialsReload(r => r + 1)}
+                      invalid={touched && Boolean(errors.material)}
+                    />
+                  )}
+                  {source === 'EXISTING' && touched && errors.material && <p className="text-xs text-danger">{errors.material}</p>}
+                </div>
+
+                {runningJob ? (
+                  <Alert
+                    type="info"
+                    message={`A quiz of ${runningJob.questionCount} questions is still being generated from this material.`}
+                  />
+                ) : null}
+
+                <div className="grid gap-x-6 gap-y-5 sm:grid-cols-2">
+                  <Input
+                    label="Question Count"
+                    type="number"
+                    inputMode="numeric"
+                    min={MATERIAL_QUESTIONS.min}
+                    max={MATERIAL_QUESTIONS.max}
+                    value={questionCount}
+                    onChange={e => setQuestionCount(e.target.value)}
+                    hint={`${MATERIAL_QUESTIONS.min} – ${MATERIAL_QUESTIONS.max} multiple-choice questions`}
+                    error={touched ? errors.count : undefined}
+                  />
+                  <Select
+                    label="Difficulty"
+                    options={DIFFICULTY_OPTIONS}
+                    value={difficulty}
+                    onChange={v => setDifficulty(v as MaterialDifficulty)}
+                  />
+                </div>
+
+                {runningJob && (
+                  <Button variant="outline" icon={<Icon.Eye className="w-4 h-4" />} onClick={() => track(runningJob.jobId, runningJob.questionCount)}>
+                    Follow the running generation
+                  </Button>
+                )}
+              </>
             )}
-          </div>
+            {error && <AiErrorAlert error={error} />}
+          </>
+        )}
 
-          <Input
-            aria-label="Exam name"
-            placeholder="Exam name — filled in from the material when you generate"
-            value={draft.title}
-            onChange={e => setDraft(d => ({ ...d, title: e.target.value }))}
-            className="sm:max-w-md"
-          />
-
-          {generating ? (
-            <div className="card flex flex-col items-center justify-center gap-3 py-16 text-center">
-              <Spinner />
-              <p className="text-sm text-content-soft">Reading {file?.name} and drafting {total} questions…</p>
-            </div>
-          ) : !hasQuestions ? (
-            <div className="rounded-[14px] border-2 border-dashed border-line flex flex-col items-center justify-center gap-2 py-16 px-6 text-center">
-              <Icon.Brain className="w-9 h-9 text-content-subtle" />
-              <p className="text-sm font-medium text-content-secondary">No questions yet</p>
-              <p className="text-xs text-content-subtle max-w-sm">
-                Upload a learning material, choose the question types and counts, then press Generate. You can edit every question
-                before starting the quiz.
+        {phase === 'processing' && job && (
+          <div className="flex flex-col items-center gap-4 py-8 text-center">
+            <Spinner />
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-content">
+                {job.status === 'PENDING' ? 'Queued…' : 'Reading the material and writing questions…'}
+              </p>
+              <p className="text-xs text-content-subtle">
+                {job.questionCount} questions · You can close this window — the quiz keeps generating and appears in Exam History.
               </p>
             </div>
-          ) : (
-            <div className="space-y-4">
-              {blocks.map(b =>
-                b.kind === 'single' ? (
-                  renderQuestion(b.q)
-                ) : (
-                  <div key={b.group.key} className="rounded-[14px] border-2 border-line p-[clamp(0.75rem,1.5vw,1rem)] space-y-4">
-                    <input
-                      aria-label="Group title"
-                      value={b.group.title}
-                      onChange={e => renameGroup(b.group.key, e.target.value)}
-                      placeholder="Group title"
-                      className="w-full bg-transparent text-base font-bold text-content border-b border-transparent hover:border-line focus:border-brand-600 focus:outline-none py-1"
-                    />
-                    {b.questions.map(renderQuestion)}
-                  </div>
-                ),
-              )}
-              <Button variant="outline" icon={<Icon.Plus className="w-4 h-4" />} onClick={addQuestion}>
-                Add question
-              </Button>
+            <div className="w-full max-w-sm">
+              <Progress value={job.progress ?? 0} label="Progress" />
             </div>
-          )}
-        </section>
-
-        {/* ── Exam information ──────────────────────────────────────────── */}
-        <aside className="card p-[clamp(1rem,1.8vw,1.25rem)] space-y-5 self-start lg:max-h-full lg:overflow-y-auto order-1 lg:order-2">
-          <h2 className="text-base font-semibold text-content">Exam Information</h2>
-
-          <Alert type="info" message="Demo mode: questions are sample data until the backend supports students." />
-
-          <div className="space-y-1.5">
-            <p className="text-sm font-medium text-content-secondary">Upload File</p>
-            <div
-              onDragOver={e => {
-                e.preventDefault();
-                setDragOver(true);
-              }}
-              onDragLeave={() => setDragOver(false)}
-              onDrop={e => {
-                e.preventDefault();
-                setDragOver(false);
-                pickFile(e.dataTransfer.files?.[0]);
-              }}
-              className={`rounded-[12px] border-2 border-dashed px-4 py-5 text-center transition-colors ${
-                dragOver ? 'border-brand-600 bg-primary-light' : touched && !file ? 'border-danger-solid' : 'border-line'
-              }`}
-            >
-              {file ? (
-                <div className="flex items-center gap-3 text-left">
-                  <Icon.FileText className="w-8 h-8 text-primary flex-shrink-0" />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-content truncate" title={file.name}>
-                      {file.name}
-                    </p>
-                    <p className="text-xs text-content-subtle">{formatSize(file.size)}</p>
-                  </div>
-                  <button
-                    type="button"
-                    aria-label="Remove file"
-                    onClick={() => setFile(null)}
-                    className="p-1.5 rounded-[6px] text-content-subtle hover:bg-accent hover:text-content"
-                  >
-                    <Icon.X className="w-4 h-4" />
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <Icon.Upload className="w-6 h-6 mx-auto text-content-subtle" />
-                  <p className="mt-2 text-sm text-content-secondary">Drag &amp; Drop PDF, DOCX, PPTX</p>
-                  <p className="text-xs text-content-subtle">Up to {formatSize(MATERIAL_MAX_BYTES)}</p>
-                  <Button size="sm" variant="outline" className="mt-3" onClick={() => fileInput.current?.click()}>
-                    Browse File
-                  </Button>
-                </>
-              )}
-              <input
-                ref={fileInput}
-                type="file"
-                accept={MATERIAL_ACCEPT}
-                className="hidden"
-                onChange={e => {
-                  pickFile(e.target.files?.[0]);
-                  e.target.value = '';
-                }}
-              />
-            </div>
-            {fileError && <p className="text-xs text-danger">{fileError}</p>}
           </div>
+        )}
 
-          <TypeCountSelect
-            label="Question Type"
-            placeholder="Choose question types…"
-            options={DRAFT_TYPES.map(t => ({ value: t, label: DRAFT_TYPE_LABEL[t] }))}
-            value={counts}
-            onChange={setCounts}
-            min={1}
-            max={PRACTICE_MAX_QUESTIONS}
-            error={touched ? (typesError ?? undefined) : undefined}
-            disabled={generating}
-          />
-
-          <Input label="Number of question" value={String(total)} readOnly tabIndex={-1} className="[&_input]:bg-surface-alt" />
-
-          {touched && !file && <p className="text-xs text-danger">Upload a learning material first.</p>}
-          {genError && <p className="text-xs text-danger" role="alert">{genError}</p>}
-          {hasQuestions && !generating && (
-            <p className="text-xs text-content-subtle">Generating again replaces the current questions.</p>
-          )}
-
-          <div className="flex gap-2">
-            <Button className="flex-1" loading={generating} disabled={generating} icon={<Icon.Zap className="w-4 h-4" />} onClick={generate}>
-              {hasQuestions ? 'Regenerate' : 'Generate'}
-            </Button>
-            <Button variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
+        {phase === 'completed' && job && (
+          <div className="space-y-4">
+            <Alert type="success" title="Your quiz is ready" message={`${job.questionCount} questions were generated from your material.`} />
+            <p className="text-sm text-content-soft">
+              Answers are checked when you submit. You can take the quiz again any time from Exam History.
+            </p>
+            {error && <AiErrorAlert error={error} />}
           </div>
+        )}
 
-          {hasQuestions && !generating && (
-            <div className="pt-4 border-t border-line-soft space-y-3">
-              <Input
-                label="Time Limit (minutes)"
-                type="number"
-                inputMode="numeric"
-                min={1}
-                max={PRACTICE_MAX_MINUTES}
-                value={minutes}
-                onChange={e => setMinutes(e.target.value)}
-                error={showErrors ? minutesError : undefined}
+        {phase === 'failed' && (
+          <div className="space-y-4">
+            {error ? (
+              <AiErrorAlert error={error} />
+            ) : (
+              <Alert
+                type="error"
+                title="The quiz could not be generated"
+                message={`${(job?.errorMessage?.trim() || 'Something went wrong while generating the questions').replace(/[.!]?$/, '.')} Your AI quota was refunded.`}
               />
-              {showErrors && invalidCount > 0 && (
-                <p className="text-xs text-danger">
-                  {invalidCount} question{invalidCount === 1 ? ' needs' : 's need'} fixing before you can start.
-                </p>
-              )}
-              <Button className="w-full" icon={<Icon.ChevronRight className="w-4 h-4" />} onClick={start}>
-                Start Quiz ({draft.questions.length})
-              </Button>
-            </div>
-          )}
-        </aside>
+            )}
+          </div>
+        )}
       </div>
     </Modal>
   );
 }
 
-function emptyQuestion(): DraftQuestion {
-  return {
-    key: newKey('q'),
-    type: 'MULTIPLE_CHOICE',
-    content: '',
-    options: [],
-    trueFalse: true,
-    blanks: {},
-    pairs: [],
-    items: [],
-    groupKey: null,
-  };
-}
-
-/* ── one question card ─────────────────────────────────────────────────── */
-
-interface EditorProps {
-  number: number;
-  question: DraftQuestion;
-  groupOptions: { value: string; label: string }[];
-  errors: string[];
-  onChange: (next: DraftQuestion) => void;
-  onGroup: (value: string) => void;
-  onRemove: () => void;
-}
-
-function QuestionEditor({ number, question: q, groupOptions, errors, onChange, onGroup, onRemove }: EditorProps) {
-  // Last caret in the question text; null (never focused) = insert at the end.
-  const caretRef = useRef<{ start: number; end: number } | null>(null);
-  const invalid = errors.length > 0;
-
-  const insertBlank = () => {
-    const next = String(Math.max(0, ...blankIndices(q.content).map(Number)) + 1);
-    const { start, end } = caretRef.current ?? { start: q.content.length, end: q.content.length };
-    onChange({ ...q, content: `${q.content.slice(0, start)}{{${next}}}${q.content.slice(end)}` });
-    caretRef.current = null;
-  };
-
-  return (
-    <article
-      data-draft-invalid={invalid}
-      aria-label={`Question ${number}`}
-      className={`card p-[clamp(0.75rem,1.5vw,1rem)] space-y-3 ${invalid ? '!border-danger-solid' : ''}`}
-    >
-      <header className="flex flex-wrap items-center gap-2">
-        <h3 className="text-sm font-bold text-content mr-1">Question {number}</h3>
-        <Select
-          aria-label="Question type"
-          triggerClassName={PILL}
-          className="w-40"
-          options={DRAFT_TYPES.map(t => ({ value: t, label: DRAFT_TYPE_LABEL[t] }))}
-          value={q.type}
-          onChange={t => onChange(convertDraft(q, t as DraftQuestionType))}
-        />
-        <Select
-          aria-label="Group"
-          triggerClassName={PILL}
-          className="w-40"
-          options={groupOptions}
-          value={q.groupKey ?? SINGLE}
-          onChange={onGroup}
-        />
-        <Button size="sm" variant="ghost" className="ml-auto text-danger" icon={<Icon.Trash className="w-3.5 h-3.5" />} onClick={onRemove}>
-          Remove
-        </Button>
-      </header>
-
-      <textarea
-        aria-label="Question text"
-        value={q.content}
-        onChange={e => onChange({ ...q, content: e.target.value })}
-        onSelect={e => (caretRef.current = { start: e.currentTarget.selectionStart, end: e.currentTarget.selectionEnd })}
-        placeholder="Question text"
-        rows={3}
-        className={`${FIELD} py-2 resize-y leading-relaxed`}
-      />
-
-      {q.type === 'MULTIPLE_CHOICE' && <ChoiceEditor q={q} onChange={onChange} />}
-      {q.type === 'TRUE_FALSE' && <TrueFalseEditor q={q} onChange={onChange} />}
-      {q.type === 'FILL_BLANK' && <FillBlankEditor q={q} onChange={onChange} onInsertBlank={insertBlank} />}
-      {q.type === 'MATCHING' && <MatchingEditor q={q} onChange={onChange} />}
-      {q.type === 'ORDERING' && <OrderingEditor q={q} onChange={onChange} />}
-
-      {invalid && (
-        <ul className="text-xs text-danger space-y-0.5" role="alert">
-          {errors.map(e => (
-            <li key={e}>• {e}</li>
-          ))}
-        </ul>
-      )}
-    </article>
-  );
-}
-
-type PartProps = { q: DraftQuestion; onChange: (next: DraftQuestion) => void };
-
-function RemoveButton({ label, onClick, disabled }: { label: string; onClick: () => void; disabled?: boolean }) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      disabled={disabled}
-      onClick={onClick}
-      className="p-1.5 rounded-[6px] text-content-subtle hover:bg-accent hover:text-danger disabled:opacity-30 disabled:hover:bg-transparent flex-shrink-0"
-    >
-      <Icon.X className="w-4 h-4" />
-    </button>
-  );
-}
-
-function AddLink({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
-  return (
-    <button type="button" onClick={onClick} className="inline-flex items-center gap-1 text-xs font-medium text-brand-ink hover:underline">
-      <Icon.Plus className="w-3.5 h-3.5" /> {children}
-    </button>
-  );
-}
-
-function ChoiceEditor({ q, onChange }: PartProps) {
-  const set = (key: string, patch: Partial<DraftQuestion['options'][number]>) =>
-    onChange({ ...q, options: q.options.map(o => (o.key === key ? { ...o, ...patch } : o)) });
-  return (
-    <div className="space-y-2">
-      <p className="text-xs text-content-subtle">Click a letter to mark it correct — several correct options make it a multi-select question.</p>
-      {q.options.map((o, i) => (
-        <div key={o.key} className="flex items-center gap-2">
-          <button
-            type="button"
-            aria-pressed={o.correct}
-            aria-label={`Option ${optionLetter(i)} is ${o.correct ? 'correct' : 'not correct'}`}
-            onClick={() => set(o.key, { correct: !o.correct })}
-            className={`w-9 h-9 rounded-[8px] border-2 text-sm font-bold flex items-center justify-center flex-shrink-0 transition-colors ${
-              o.correct ? 'border-success-solid bg-success-light text-success' : 'border-line text-content-secondary hover:border-brand-600'
-            }`}
-          >
-            {o.correct ? <Icon.Check className="w-4 h-4" /> : optionLetter(i)}
-          </button>
-          <input
-            aria-label={`Option ${optionLetter(i)} text`}
-            value={o.text}
-            onChange={e => set(o.key, { text: e.target.value })}
-            placeholder={`Option ${optionLetter(i)} text`}
-            className={`${FIELD} h-9`}
-          />
-          <RemoveButton
-            label={`Remove option ${optionLetter(i)}`}
-            disabled={q.options.length <= 2}
-            onClick={() => onChange({ ...q, options: q.options.filter(x => x.key !== o.key) })}
-          />
-        </div>
-      ))}
-      <AddLink onClick={() => onChange({ ...q, options: [...q.options, { key: newKey('o'), text: '', correct: false }] })}>Add option</AddLink>
-    </div>
-  );
-}
-
-function TrueFalseEditor({ q, onChange }: PartProps) {
-  return (
-    <div className="space-y-2">
-      <p className="text-xs text-content-subtle">Choose the correct answer.</p>
-      <div className="grid grid-cols-2 gap-3" role="radiogroup" aria-label="Correct answer">
-        {[true, false].map(v => (
-          <button
-            key={String(v)}
-            type="button"
-            role="radio"
-            aria-checked={q.trueFalse === v}
-            onClick={() => onChange({ ...q, trueFalse: v })}
-            className={`h-10 rounded-[10px] border-2 text-sm font-bold transition-colors ${
-              q.trueFalse === v ? 'border-success-solid bg-success-light text-success' : 'border-line text-content-secondary hover:border-brand-600'
-            }`}
-          >
-            {v ? 'TRUE' : 'FALSE'}
-          </button>
-        ))}
+function MaterialPicker({
+  materials,
+  loading,
+  error,
+  selectedId,
+  onSelect,
+  onRetry,
+  invalid,
+}: {
+  materials: MaterialItem[];
+  loading: boolean;
+  error: string | null;
+  selectedId: number | null;
+  onSelect: (id: number) => void;
+  onRetry: () => void;
+  invalid: boolean;
+}) {
+  if (loading) {
+    return (
+      <div className="flex justify-center py-6">
+        <Spinner />
       </div>
-    </div>
-  );
-}
-
-function FillBlankEditor({ q, onChange, onInsertBlank }: PartProps & { onInsertBlank: () => void }) {
-  const ids = blankIndices(q.content);
-  const parts = q.content.split(/(\{\{\d+\}\})/g);
-  return (
-    <div className="space-y-2.5">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs text-content-subtle">
-          Write <code className="font-mono">{'{{1}}'}</code>, <code className="font-mono">{'{{2}}'}</code>… where a blank goes.
-        </p>
-        <Button size="sm" variant="outline" icon={<Icon.Plus className="w-3.5 h-3.5" />} onClick={onInsertBlank}>
-          Insert blank
+    );
+  }
+  if (error) {
+    return (
+      <div className="flex flex-wrap items-center gap-3">
+        <p className="text-sm text-danger">{error}</p>
+        <Button size="sm" variant="outline" onClick={onRetry}>
+          Retry
         </Button>
       </div>
-      {ids.map(n => (
-        <label key={n} className="flex items-center gap-2">
-          <span className="w-10 text-sm font-semibold text-content-secondary">({n})</span>
-          <input
-            value={q.blanks[n] ?? ''}
-            onChange={e => onChange({ ...q, blanks: { ...q.blanks, [n]: e.target.value } })}
-            placeholder={`Answer for blank ${n}`}
-            className={`${FIELD} h-9`}
-          />
-        </label>
-      ))}
-      {ids.length > 0 && (
-        <p className="rounded-[10px] bg-surface-alt px-3 py-2 text-sm text-content-secondary break-words">
-          <span className="text-2xs uppercase tracking-wide text-content-subtle mr-2">Preview</span>
-          {parts.map((p, i) => {
-            const m = /^\{\{(\d+)\}\}$/.exec(p);
-            return m ? (
-              <strong key={i} className="text-content underline decoration-dotted underline-offset-4">
-                {q.blanks[m[1]]?.trim() || '______'}
-              </strong>
-            ) : (
-              <React.Fragment key={i}>{p}</React.Fragment>
-            );
-          })}
-        </p>
-      )}
-    </div>
-  );
-}
-
-function MatchingEditor({ q, onChange }: PartProps) {
-  const set = (key: string, patch: Partial<DraftQuestion['pairs'][number]>) =>
-    onChange({ ...q, pairs: q.pairs.map(p => (p.key === key ? { ...p, ...patch } : p)) });
+    );
+  }
+  if (materials.length === 0) {
+    return <p className="text-sm text-content-soft">You have not uploaded any material for this course yet.</p>;
+  }
   return (
-    <div className="space-y-2">
-      {q.pairs.map((p, i) => (
-        <div key={p.key} className="flex items-center gap-2">
-          <input
-            aria-label={`Item ${i + 1} left`}
-            value={p.left}
-            onChange={e => set(p.key, { left: e.target.value })}
-            placeholder={`Item ${i + 1} left`}
-            className={`${FIELD} h-9 text-center`}
-          />
-          <span className="text-content-subtle text-sm flex-shrink-0" aria-hidden="true">
-            =&gt;
-          </span>
-          <input
-            aria-label={`Item ${i + 1} right`}
-            value={p.right}
-            onChange={e => set(p.key, { right: e.target.value })}
-            placeholder={`Item ${i + 1} right`}
-            className={`${FIELD} h-9 text-center`}
-          />
-          <RemoveButton
-            label={`Remove pair ${i + 1}`}
-            disabled={q.pairs.length <= 2}
-            onClick={() => onChange({ ...q, pairs: q.pairs.filter(x => x.key !== p.key) })}
-          />
-        </div>
-      ))}
-      <AddLink onClick={() => onChange({ ...q, pairs: [...q.pairs, { key: newKey('p'), left: '', right: '' }] })}>Add pair</AddLink>
-    </div>
-  );
-}
-
-function OrderingEditor({ q, onChange }: PartProps) {
-  const move = (from: number, to: number) => {
-    if (to < 0 || to >= q.items.length) return;
-    const items = [...q.items];
-    [items[from], items[to]] = [items[to], items[from]];
-    onChange({ ...q, items });
-  };
-  return (
-    <div className="space-y-2">
-      <p className="text-xs text-content-subtle">Enter the items in the correct order — they are shuffled in the quiz.</p>
-      {q.items.map((item, i) => (
-        <div key={item.key} className="flex items-center gap-2">
-          <span className="w-7 h-7 rounded-full bg-surface-muted text-xs font-semibold text-content-secondary flex items-center justify-center flex-shrink-0">
-            {i + 1}
-          </span>
-          <input
-            aria-label={`Ordering item ${i + 1}`}
-            value={item.text}
-            onChange={e => onChange({ ...q, items: q.items.map(x => (x.key === item.key ? { ...x, text: e.target.value } : x)) })}
-            placeholder={`Ordering item ${i + 1}`}
-            className={`${FIELD} h-9`}
-          />
-          <button type="button" aria-label="Move up" disabled={i === 0} onClick={() => move(i, i - 1)} className="p-1.5 rounded-[6px] hover:bg-accent disabled:opacity-30">
-            <Icon.ArrowUp className="w-4 h-4" />
-          </button>
-          <button
-            type="button"
-            aria-label="Move down"
-            disabled={i === q.items.length - 1}
-            onClick={() => move(i, i + 1)}
-            className="p-1.5 rounded-[6px] hover:bg-accent disabled:opacity-30"
-          >
-            <Icon.ArrowDown className="w-4 h-4" />
-          </button>
-          <RemoveButton
-            label={`Remove item ${i + 1}`}
-            disabled={q.items.length <= 2}
-            onClick={() => onChange({ ...q, items: q.items.filter(x => x.key !== item.key) })}
-          />
-        </div>
-      ))}
-      <AddLink onClick={() => onChange({ ...q, items: [...q.items, { key: newKey('i'), text: '' }] })}>Add item</AddLink>
-    </div>
+    <ul
+      role="radiogroup"
+      aria-label="Your materials"
+      className={`max-h-64 overflow-y-auto rounded-[12px] border divide-y divide-line ${invalid ? 'border-danger-solid' : 'border-line'}`}
+    >
+      {materials.map(m => {
+        const active = m.documentId === selectedId;
+        const running = m.jobs.some(j => j.status === 'PENDING' || j.status === 'PROCESSING');
+        const done = m.jobs.filter(j => j.status === 'COMPLETED').length;
+        return (
+          <li key={m.documentId}>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={active}
+              onClick={() => onSelect(m.documentId)}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors ${active ? 'bg-primary-light' : 'hover:bg-accent'}`}
+            >
+              <span
+                className={`w-4 h-4 rounded-full border-2 flex-shrink-0 ${active ? 'border-primary bg-primary shadow-[inset_0_0_0_2px_var(--color-surface)]' : 'border-line'}`}
+              />
+              <Icon.FileText className="w-5 h-5 text-primary flex-shrink-0" />
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-medium text-content truncate" title={m.title}>
+                  {m.title}
+                </span>
+                <span className="flex flex-wrap gap-x-3 text-xs text-content-subtle">
+                  <span className="truncate max-w-[14rem]" title={m.fileName}>
+                    {m.fileName}
+                  </span>
+                  {m.pageCount != null && (
+                    <span>
+                      {m.pageCount} page{m.pageCount === 1 ? '' : 's'}
+                    </span>
+                  )}
+                  <span>Uploaded {formatDate(m.uploadedAt)}</span>
+                </span>
+              </span>
+              {running ? (
+                <Badge variant="info" size="sm">
+                  Generating
+                </Badge>
+              ) : done > 0 ? (
+                <Badge variant="success" size="sm">
+                  {done} quiz{done === 1 ? '' : 'zes'}
+                </Badge>
+              ) : null}
+            </button>
+          </li>
+        );
+      })}
+    </ul>
   );
 }

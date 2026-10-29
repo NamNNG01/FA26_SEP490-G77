@@ -228,6 +228,16 @@ export const studentPracticeExamService = {
     return api.get<ApiResponse<PageResponse<PracticeExamItem>>>(`/student/practice-exams?page=${page}&size=${size}`).then(r => r.data);
   },
 
+  /** PQ-02, every page — Exam History merges it with ME-01. */
+  async listAll(): Promise<PracticeExamItem[]> {
+    const items: PracticeExamItem[] = [];
+    for (let page = 0; ; page++) {
+      const res = await studentPracticeExamService.list(page, 100);
+      items.push(...res.content);
+      if (res.last || res.content.length === 0) return items;
+    }
+  },
+
   /** PQ-03 */
   async remove(practiceId: number): Promise<void> {
     await api.request<ApiResponse<null>>({ method: 'delete', url: `/student/practice-exams/${practiceId}` });

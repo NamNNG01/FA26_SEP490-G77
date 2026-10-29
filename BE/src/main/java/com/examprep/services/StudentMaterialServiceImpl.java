@@ -350,7 +350,7 @@ public class StudentMaterialServiceImpl implements StudentMaterialService {
             int attemptCount = row == null ? 0 : ((Number) row[1]).intValue();
             return new HistoryItem(job.getJobId(), job.getDocument().getDocId(),
                     job.getDocument().getTitle(), job.getQuestionCount(), best, attemptCount,
-                    job.getCreatedAt());
+                    job.getCreatedAt(), job.getResultExam() == null ? null : job.getResultExam().getExamId());
         }).toList();
         return PageResponse.of(result, items);
     }
