@@ -10,11 +10,12 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@JsonInclude(JsonInclude.Include.NON_NULL)
 public class ApiResponse<T> {
 
     private boolean success;
     private String message;
+    /** The envelope always carries {@code data}, even when it is null (spec §0.2). */
+    @JsonInclude(JsonInclude.Include.ALWAYS)
     private T data;
 
     public static <T> ApiResponse<T> success(T data) {

@@ -57,7 +57,8 @@ public class SecurityConfig {
                                 "/api/v1/auth/login",
                                 "/api/v1/auth/refresh",
                                 "/api/v1/auth/password/forgot",
-                                "/api/v1/auth/password/reset"
+                                "/api/v1/auth/password/reset",
+                                "/api/v1/webhooks/payos"
                         ).permitAll()
                         // Public catalog reads (SRS Permission Matrix grants Guests
                         // Full View rights on the course list; unauthenticated
@@ -67,7 +68,8 @@ public class SecurityConfig {
                                 "/api/v1/courses",
                                 "/api/v1/courses/*",
                                 "/api/v1/student/courses",
-                                "/api/v1/student/courses/*"
+                                "/api/v1/student/courses/*",
+                                "/api/v1/student/subscription/plans"
                         ).permitAll()
                         // Role-restricted Endpoints
                         .requestMatchers("/api/v1/admin/**").hasRole(User.ROLE_ADMIN)

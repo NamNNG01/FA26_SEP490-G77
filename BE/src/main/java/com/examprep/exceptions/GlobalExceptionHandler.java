@@ -10,9 +10,12 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.HashMap;
@@ -92,6 +95,20 @@ public class GlobalExceptionHandler {
         log.warn("Type Mismatch: {}", ex.getMessage());
         return ResponseEntity.status(ResponseCode.BAD_REQUEST.getHttpStatus())
                 .body(ApiResponse.error(ResponseCode.BAD_REQUEST, "Invalid request parameter"));
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ApiResponse<Object>> handleMaxUploadSize(MaxUploadSizeExceededException ex) {
+        log.warn("Upload rejected by the multipart limit: {}", ex.getMessage());
+        return ResponseEntity.status(ResponseCode.FILE_TOO_LARGE.getHttpStatus())
+                .body(ApiResponse.error(ResponseCode.FILE_TOO_LARGE));
+    }
+
+    @ExceptionHandler({MissingServletRequestParameterException.class, MissingServletRequestPartException.class})
+    public ResponseEntity<ApiResponse<Object>> handleMissingParameter(Exception ex) {
+        log.warn("Missing request parameter: {}", ex.getMessage());
+        return ResponseEntity.status(ResponseCode.BAD_REQUEST.getHttpStatus())
+                .body(ApiResponse.error(ResponseCode.BAD_REQUEST, ex.getMessage()));
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)

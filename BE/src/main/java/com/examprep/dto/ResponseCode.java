@@ -32,7 +32,21 @@ public enum ResponseCode {
     AI_UPSTREAM_ERROR(HttpStatus.BAD_GATEWAY, "AI_UPSTREAM_ERROR", "AI provider could not generate a draft"),
     AI_TIMEOUT(HttpStatus.GATEWAY_TIMEOUT, "AI_TIMEOUT", "AI generation timed out"),
     QUOTA_EXCEEDED(HttpStatus.PAYMENT_REQUIRED, "QUOTA_EXCEEDED", "Not enough AI quota"),
+    INVALID_DISCOUNT_CODE(HttpStatus.BAD_REQUEST, "INVALID_DISCOUNT_CODE", "Discount code is not valid"),
+    COURSE_NOT_FREE(HttpStatus.CONFLICT, "COURSE_NOT_FREE", "Use checkout to enroll in this course"),
+    ALREADY_ENROLLED(HttpStatus.CONFLICT, "ALREADY_ENROLLED", "Already enrolled in this course"),
+    DUPLICATE_REQUEST(HttpStatus.CONFLICT, "DUPLICATE_REQUEST", "A matching request is already processing"),
     NOTHING_TO_GRADE(HttpStatus.CONFLICT, "NOTHING_TO_GRADE", "No question can be graded"),
+    UNSUPPORTED_FILE_TYPE(HttpStatus.BAD_REQUEST, "UNSUPPORTED_FILE_TYPE", "Unsupported file type"),
+    FILE_TOO_LARGE(HttpStatus.BAD_REQUEST, "FILE_TOO_LARGE", "File is too large"),
+    PAYMENT_PROVIDER_ERROR(HttpStatus.BAD_GATEWAY, "PAYMENT_PROVIDER_ERROR", "Payment provider could not create checkout"),
+    CODE_EXECUTION_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "CODE_EXECUTION_UNAVAILABLE", "Code execution service is unavailable"),
+    /** MQ-03: reservation did not fit; {@code data} carries estimated/available/quota token counts. */
+    AI_QUOTA_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS, "QUOTA_EXCEEDED", "Not enough AI quota"),
+    /** CD-04/CD-05: the requested language is not enabled for this question. */
+    UNSUPPORTED_LANGUAGE(HttpStatus.BAD_REQUEST, "UNSUPPORTED_LANGUAGE", "Programming language is not supported"),
+    /** MQ-01: the configured file store rejected the upload. */
+    STORAGE_ERROR(HttpStatus.BAD_GATEWAY, "STORAGE_ERROR", "File storage is unavailable"),
 
     // Domain Specific Errors
     EXAM_NOT_FOUND(HttpStatus.NOT_FOUND, "EXAM_NOT_FOUND", "Exam with the specified ID does not exist"),

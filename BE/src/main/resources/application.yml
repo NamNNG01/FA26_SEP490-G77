@@ -1,4 +1,8 @@
 spring:
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 21MB
   application:
     name: exam-prep-backend
   profiles:
@@ -38,3 +42,24 @@ app:
     enabled: ${MAIL_ENABLED:false}
     from: ${MAIL_FROM:no-reply@examprep.local}
     from-name: ${MAIL_FROM_NAME:ExamPrep}
+  payos:
+    base-url: ${PAYOS_BASE_URL:https://api-merchant.payos.vn}
+    client-id: ${PAYOS_CLIENT_ID:}
+    api-key: ${PAYOS_API_KEY:}
+    checksum-key: ${PAYOS_CHECKSUM_KEY:}
+    return-url: ${PAYOS_RETURN_URL:http://localhost:3000/payment/return}
+    cancel-url: ${PAYOS_CANCEL_URL:http://localhost:3000/payment/cancel}
+  cloudinary:
+    cloud-name: ${CLOUDINARY_CLOUD_NAME:}
+    api-key: ${CLOUDINARY_API_KEY:}
+    api-secret: ${CLOUDINARY_API_SECRET:}
+  # MQ-01 material files: 'cloudinary' (private raw assets) or 'local' (disk folder for dev/test).
+  storage:
+    provider: ${STORAGE_PROVIDER:local}
+    local-dir: ${STORAGE_LOCAL_DIR:data/materials}
+  material-ai:
+    timeout-ms: ${MATERIAL_AI_TIMEOUT_MS:120000}
+  judge0:
+    base-url: ${JUDGE0_BASE_URL:http://localhost:2358}
+    auth-token: ${JUDGE0_AUTH_TOKEN:}
+    enabled: ${JUDGE0_ENABLED:false}
