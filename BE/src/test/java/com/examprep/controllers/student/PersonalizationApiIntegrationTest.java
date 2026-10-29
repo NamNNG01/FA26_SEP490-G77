@@ -226,6 +226,156 @@ class PersonalizationApiIntegrationTest {
         smart(outsider, "{" + c + "}").andExpect(status().isForbidden());
     }
 
+    // ------------------------------------------------------------------ AI-03
+
+    String recommendationReply(long deckId, long examId) {
+        return "{\"recommendations\":["
+                + "{\"type\":\"EXAM\",\"refId\":" + examId + ",\"title\":\"x\",\"reason\":\"Practise exams\",\"priority\":\"MEDIUM\"},"
+                + "{\"type\":\"FLASHCARD_DECK\",\"refId\":" + deckId + ",\"title\":\"ignored\",\"reason\":\"Review OOP words\",\"priority\":\"HIGH\"},"
+                + "{\"type\":\"FLASHCARD_DECK\",\"refId\":" + Long.MAX_VALUE + ",\"title\":\"ghost\",\"reason\":\"r\",\"priority\":\"HIGH\"},"
+                + "{\"type\":\"PODCAST\",\"refId\":null,\"title\":\"p\",\"reason\":\"r\",\"priority\":\"HIGH\"},"
+                + "{\"type\":\"REVIEW_SESSION\",\"refId\":null,\"title\":\"Redo 10 wrong questions\",\"reason\":\"r\",\"priority\":\"HIGH\"},"
+                + "{\"type\":\"WEAK_TOPIC\",\"refId\":" + weak.getModuleId() + ",\"title\":\"Polymorphism\",\"reason\":\"r\",\"priority\":\"LOW\"},"
+                + "{\"type\":\"WEAK_TOPIC\",\"refId\":" + strong.getModuleId() + ",\"title\":\"Data\",\"reason\":\"r\",\"priority\":\"LOW\"},"
+                + "{\"type\":\"REVIEW_SESSION\",\"refId\":null,\"title\":\"Again\",\"reason\":\"r\",\"priority\":\"MEDIUM\"}]}";
+    }
+
+    @Test void recommendationsDropUnknownRefIdsAndCapAtFive() throws Exception {
+        history(student, 5, Instant.now().minusSeconds(60));
+        Deck deck = Deck.builder().user(manager).course(course).title("OOP words").isPublic(false).build();
+        em.persist(deck);
+        Exam exam = f.exam(course, weak, manager, "EXAM");
+        em.flush();
+        REPLIES.add(recommendationReply(deck.getDeckId(), exam.getExamId()));
+        JsonNode data = data(recommend(student).andExpect(status().isOk()));
+        assertEquals("GENERATED", data.path("source").asText());
+        JsonNode items = data.path("recommendations");
+        assertEquals(5, items.size());
+        assertEquals("HIGH", items.get(0).path("priority").asText());
+        assertEquals("OOP words", items.get(0).path("title").asText());
+        for (JsonNode item : items) {
+            assertNotEquals("PODCAST", item.path("type").asText());
+            assertNotEquals(Long.MAX_VALUE, item.path("refId").asLong());
+        }
+        assertEquals("Polymorphism", data.path("weaknesses").get(0).path("name").asText());
+        assertEquals("HIGH", data.path("weaknesses").get(0).path("priority").asText());
+        assertEquals(100, data.path("strengths").get(0).path("accuracy").asInt());
+        int readiness = data.path("overallReadiness").asInt();
+        assertTrue(readiness > 0 && readiness < 100, "readiness " + readiness);
+        assertTrue(data.path("quota").has("freeRemaining"));
+        assertEquals("SUCCESS", onlyLog("RECOMMENDATION").getStatus());
+    }
+
+    @Test void recommendationsAreCachedFreeAndClearedBySubmission() throws Exception {
+        history(student, 5, Instant.now().minusSeconds(60));
+        REPLIES.add("{\"recommendations\":[]}");
+        recommend(student).andExpect(jsonPath("$.data.source").value("GENERATED"));
+        recommend(student).andExpect(jsonPath("$.data.source").value("CACHED"));
+        assertEquals(1, REQUESTS.size());
+        assertEquals(1L, em.createQuery("select count(l) from AiUsageLog l", Long.class).getSingleResult());
+        history(student, 1, Instant.now().plusSeconds(5));
+        REPLIES.add("{\"recommendations\":[]}");
+        recommend(student).andExpect(jsonPath("$.data.source").value("GENERATED"));
+        assertEquals(2, REQUESTS.size());
+    }
+
+    @Test void fewAttemptsGivesEmptyListWithoutAi() throws Exception {
+        history(student, 2, Instant.now());
+        recommend(student).andExpect(status().isOk()).andExpect(jsonPath("$.data.recommendations.length()").value(0))
+                .andExpect(jsonPath("$.data.message").isNotEmpty());
+        assertEquals(0, REQUESTS.size());
+        assertEquals(0L, em.createQuery("select count(l) from AiUsageLog l", Long.class).getSingleResult());
+        recommend(f.account(User.ROLE_STUDENT)).andExpect(status().isForbidden());
+    }
+
+    @Test void recommendationsQuota429() throws Exception {
+        history(student, 5, Instant.now());
+        em.persist(AiUsageLog.builder().user(student).purpose("EXPLANATION").status("SUCCESS").inputTokens(20_000).outputTokens(0)
+                .billingSource("FREE").build());
+        em.flush();
+        recommend(student).andExpect(status().isTooManyRequests()).andExpect(jsonPath("$.data.code").value("QUOTA_EXCEEDED"));
+    }
+
+    // ------------------------------------------------------------------ AI-04
+
+    /** n attempts with 4 wrong answers in the weak module and one right answer in the strong one. */
+    void wrongHistory(int attempts) {
+        Exam exam = f.exam(course, weak, manager, "EXAM");
+        for (int i = 0; i < attempts; i++) {
+            ExamAttempt a = f.finishedAttempt(exam, student, Instant.now().minus(i + 1, ChronoUnit.HOURS), "2");
+            for (int k = 0; k < 4; k++) f.answer(a, weakQs.get((i + k) % 8), false);
+            f.answer(a, strongQs.get(i % 8), true);
+        }
+        em.flush();
+    }
+
+    String weaknessReply() {
+        return "{\"summary\":\"Bạn yếu Polymorphism.\",\"categories\":[{\"categoryId\":" + weak.getModuleId() + ",\"commonMistakes\":["
+                + "{\"pattern\":\"override vs overload\",\"frequency\":8,\"suggestion\":\"Ôn thẻ 5\"},"
+                + "{\"pattern\":\"dispatch\",\"frequency\":0,\"suggestion\":\"s\"},"
+                + "{\"pattern\":\"p3\",\"frequency\":2,\"suggestion\":\"s\"},"
+                + "{\"pattern\":\"p4\",\"frequency\":1,\"suggestion\":\"s\"}]},"
+                + "{\"categoryId\":" + Long.MAX_VALUE + ",\"commonMistakes\":[{\"pattern\":\"ghost\",\"frequency\":1,\"suggestion\":\"s\"}]}],"
+                + "\"actionPlan\":[\"1\",\"2\",\"3\",\"4\",\"5\",\"6\"]}";
+    }
+
+    @Test void weaknessReportShapeAndCachePerPeriod() throws Exception {
+        wrongHistory(6);
+        REPLIES.add(weaknessReply());
+        JsonNode data = data(weakness(student, "{\"courseId\":" + course.getCourseId() + "}").andExpect(status().isOk()));
+        assertEquals("GENERATED", data.path("source").asText());
+        assertEquals("LAST_30_DAYS", data.path("period").asText());
+        assertEquals("Bạn yếu Polymorphism.", data.path("summary").asText());
+        JsonNode first = data.path("categoryBreakdown").get(0);
+        assertEquals(weak.getModuleId(), first.path("categoryId").asLong());
+        assertEquals(24, first.path("totalQuestions").asInt());
+        assertEquals(0, first.path("accuracy").asInt());
+        assertEquals(3, first.path("commonMistakes").size());
+        assertEquals(1, first.path("commonMistakes").get(1).path("frequency").asInt());
+        assertEquals(0, data.path("categoryBreakdown").get(1).path("commonMistakes").size());
+        assertEquals(5, data.path("actionPlan").size());
+        assertEquals("SINGLE_CHOICE", data.path("questionTypeBreakdown").get(0).path("questionType").asText());
+        assertTrue(REQUESTS.get(0).contains(weakQs.get(0).getContent()));
+
+        REPLIES.add(weaknessReply());
+        weakness(student, "{\"courseId\":" + course.getCourseId() + ",\"period\":\"ALL_TIME\"}").andExpect(jsonPath("$.data.source").value("GENERATED"));
+        weakness(student, "{\"courseId\":" + course.getCourseId() + ",\"period\":\"LAST_30_DAYS\"}").andExpect(jsonPath("$.data.source").value("CACHED"));
+        assertEquals(2, REQUESTS.size());
+    }
+
+    @Test void weaknessInsufficient422() throws Exception {
+        history(student, 5, Instant.now());
+        weakness(student, "{\"courseId\":" + course.getCourseId() + "}")
+                .andExpect(status().isUnprocessableEntity()).andExpect(jsonPath("$.data.code").value("INSUFFICIENT_DATA"));
+    }
+
+    @Test void weaknessTimeoutIs500AndRefunds() throws Exception {
+        wrongHistory(6);
+        providerDelayMillis = 3_000;
+        REPLIES.add(weaknessReply());
+        weakness(student, "{\"courseId\":" + course.getCourseId() + "}")
+                .andExpect(status().isInternalServerError()).andExpect(jsonPath("$.data.code").value("AI_TIMEOUT"));
+        AiUsageLog log = onlyLog("WEAKNESS_REPORT");
+        assertEquals("TIMEOUT", log.getStatus());
+        assertEquals(0, log.getReservedTokens());
+    }
+
+    @Test void weaknessRejectsShortActionPlanAndBadPeriod() throws Exception {
+        wrongHistory(6);
+        weakness(student, "{\"courseId\":" + course.getCourseId() + ",\"period\":\"LAST_YEAR\"}").andExpect(status().isBadRequest());
+        REPLIES.add("{\"summary\":\"s\",\"categories\":[],\"actionPlan\":[\"only one\"]}");
+        weakness(student, "{\"courseId\":" + course.getCourseId() + "}").andExpect(status().isBadGateway());
+        assertEquals("FAILED", onlyLog("WEAKNESS_REPORT").getStatus());
+    }
+
+    ResultActions recommend(User actor) throws Exception {
+        return mvc.perform(get("/api/v1/student/ai/recommendations").param("courseId", course.getCourseId().toString()).with(as(actor)));
+    }
+
+    ResultActions weakness(User actor, String body) throws Exception {
+        return mvc.perform(post("/api/v1/student/ai/weakness-report").with(as(actor)).contentType(MediaType.APPLICATION_JSON).content(body));
+    }
+
     // ------------------------------------------------------------------ helpers
 
     ResultActions smart(User actor, String body) throws Exception {

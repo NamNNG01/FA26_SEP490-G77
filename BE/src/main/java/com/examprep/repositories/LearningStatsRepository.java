@@ -51,4 +51,14 @@ public interface LearningStatsRepository extends Repository<AttemptAnswer, Long>
     @Query("SELECT COUNT(DISTINCT aa.question.questionId) FROM AttemptAnswer aa JOIN aa.attempt a WHERE a.user.userId = :userId " +
             "AND a.exam.course.courseId = :courseId AND a.status IN ('SUBMITTED', 'COMPLETED') AND aa.isCorrect IS NOT NULL")
     long answeredQuestions(@Param("userId") Long userId, @Param("courseId") Long courseId);
+
+    /** [deckId, title] of the course's own decks plus the student's decks attached to it (AI-03 candidates). */
+    @Query("SELECT d.deckId, d.title FROM Deck d WHERE d.course.courseId = :courseId " +
+            "AND (d.user.roleName <> 'STUDENT' OR d.user.userId = :userId) ORDER BY d.deckId DESC")
+    List<Object[]> courseDecks(@Param("userId") Long userId, @Param("courseId") Long courseId, Pageable page);
+
+    /** [examId, title, moduleTitle] of the course's published exams in visible modules. */
+    @Query("SELECT e.examId, e.title, m.title FROM Exam e LEFT JOIN e.module m WHERE e.course.courseId = :courseId " +
+            "AND e.status = 'PUBLISHED' AND e.mode = 'EXAM' AND (m IS NULL OR m.status <> 'HIDDEN') ORDER BY e.examId DESC")
+    List<Object[]> courseExams(@Param("courseId") Long courseId, Pageable page);
 }

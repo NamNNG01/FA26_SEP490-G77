@@ -32,4 +32,16 @@ public class StudentPersonalizationController {
         if ("PROCESSING".equals(status.status())) reply.header("Retry-After", "2");
         return reply.body(ApiResponse.success(status));
     }
+
+    @GetMapping("/recommendations")
+    public ResponseEntity<ApiResponse<Recommendations>> recommendations(@AuthenticationPrincipal UserPrincipal user,
+            @RequestParam Long courseId) {
+        return ResponseEntity.ok(ApiResponse.success(personalization.recommendations(user.getId(), courseId)));
+    }
+
+    @PostMapping("/weakness-report")
+    public ResponseEntity<ApiResponse<WeaknessReport>> weaknessReport(@AuthenticationPrincipal UserPrincipal user,
+            @Valid @RequestBody WeaknessRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(personalization.weaknessReport(user.getId(), request)));
+    }
 }
