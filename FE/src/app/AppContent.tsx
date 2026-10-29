@@ -232,6 +232,7 @@ function AppRoutes() {
 
       <Route element={<PublicLayout />}>
         <Route element={<RequireRole roles={ROLE_STUDENT} />}>
+          <Route path={ROUTES.studentProfile} element={<ProfilePage />} />
           <Route path={ROUTES.studentDashboard} element={<Navigate to={ROUTES.studentCourses} replace />} />
           <Route path={ROUTES.studentCourses} element={<MyCoursesPage />} />
           <Route path={ROUTES.studentCourseDetail} element={<StudentCourseDetailPage />} />
@@ -263,6 +264,7 @@ function AppRoutes() {
         {/* COURSE_MANAGER — authors content. Includes ADMIN, since
             administrators have full system access. */}
         <Route element={<RequireRole roles={ROLE_MANAGER} />}>
+          <Route path={ROUTES.profile} element={<ProfilePage />} />
           <Route path={ROUTES.managerDashboard} element={<CMDashboard />} />
           <Route path={ROUTES.managerCourses} element={<CourseListPage />} />
           <Route path={ROUTES.managerCourseDetail} element={<CourseDetailPage />} />
@@ -300,9 +302,6 @@ function AppRoutes() {
           <Route path={ROUTES.adminAuditLogs} element={<AuditLogsPage />} />
           <Route path={ROUTES.adminSettings} element={<SystemSettingsPage />} />
         </Route>
-
-        {/* Common — reachable by every signed-in role */}
-        <Route path={ROUTES.profile} element={<ProfilePage />} />
 
         {/* Fallback (404) — goes to the role landing, NOT /login (which
             would immediately bounce back here and could look like a

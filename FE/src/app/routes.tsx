@@ -25,6 +25,7 @@ export const ROUTES = {
   /** Legacy — redirects to My Courses (the dashboard was merged into it). */
   studentDashboard: '/student/dashboard',
   studentCourses: '/student/courses',
+  studentProfile: '/student/profile',
   /** Route pattern — render with studentCoursePath(id). */
   studentCourseDetail: '/student/courses/:courseId',
   studentExams: '/student/exams',
