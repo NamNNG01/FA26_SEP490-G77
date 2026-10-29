@@ -171,6 +171,62 @@ class StudentDeckApiIntegrationTest {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.length()").value(1));
     }
 
+    // ------------------------------------------------------------------ FC-13
+
+    @Test void listMineShowsOnlyOwnDecksWithFilters() throws Exception {
+        long flash = deck(student, "FLASHCARD");
+        long code = deck(student, "CODE_SNIPPET");
+        deck(other, "FLASHCARD");
+        card(flash, "{\"frontText\":\"a\",\"backText\":\"b\"}");
+        mvc.perform(get("/api/v1/student/decks?scope=MINE").with(as(student)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalElements").value(2))
+                .andExpect(jsonPath("$.data.content[?(@.deckId == " + flash + ")].cardCount").value(1))
+                .andExpect(jsonPath("$.data.content[?(@.deckId == " + flash + ")].ownerId").value(student.getUserId().intValue()))
+                .andExpect(jsonPath("$.data.content[?(@.deckId == " + flash + ")].reviewStatus").value("NONE"));
+        mvc.perform(get("/api/v1/student/decks?scope=MINE&mode=FLASHCARD").with(as(student)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalElements").value(1))
+                .andExpect(jsonPath("$.data.content[0].deckId").value(flash));
+        send(put("/api/v1/student/decks/" + code), student, "{\"title\":\"Java 100%_words\"}").andExpect(status().isOk());
+        mvc.perform(get("/api/v1/student/decks?scope=MINE").param("search", "100%_").with(as(student)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalElements").value(1))
+                .andExpect(jsonPath("$.data.content[0].deckId").value(code));
+    }
+
+    @Test void listCourseShowsManagerAndPublicDecksButNotOwn() throws Exception {
+        f.enroll(other, course);
+        Deck managerDeck = Deck.builder().user(manager).course(course).title("Course deck").isPublic(false).build();
+        em.persist(managerDeck);
+        em.flush();
+        String body = send(post("/api/v1/student/decks"), other, "{\"title\":\"Classmate\",\"mode\":\"FLASHCARD\",\"courseId\":" + course.getCourseId() + "}")
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        long classmate = json.readTree(body).path("data").path("deckId").asLong();
+        send(post("/api/v1/student/decks"), student, "{\"title\":\"Mine\",\"mode\":\"FLASHCARD\",\"courseId\":" + course.getCourseId() + "}")
+                .andExpect(status().isCreated());
+        mvc.perform(get("/api/v1/student/decks?scope=COURSE").with(as(student)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalElements").value(1))
+                .andExpect(jsonPath("$.data.content[0].deckId").value(managerDeck.getDeckId()))
+                .andExpect(jsonPath("$.data.content[0].courseTitle").value(course.getTitle()));
+        em.find(Deck.class, classmate).setVisibility("PUBLIC");
+        em.flush();
+        mvc.perform(get("/api/v1/student/decks?scope=COURSE&courseId=" + course.getCourseId()).with(as(student)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.totalElements").value(2));
+    }
+
+    @Test void listRejectsBadParams() throws Exception {
+        User stranger = f.account(User.ROLE_STUDENT);
+        em.flush();
+        mvc.perform(get("/api/v1/student/decks").with(as(student))).andExpect(status().isBadRequest());
+        mvc.perform(get("/api/v1/student/decks?scope=ALL").with(as(student))).andExpect(status().isBadRequest());
+        mvc.perform(get("/api/v1/student/decks?scope=MINE&mode=X").with(as(student))).andExpect(status().isBadRequest());
+        mvc.perform(get("/api/v1/student/decks?scope=MINE&size=101").with(as(student))).andExpect(status().isBadRequest());
+        mvc.perform(get("/api/v1/student/decks?scope=COURSE&courseId=" + course.getCourseId()).with(as(stranger)))
+                .andExpect(status().isForbidden());
+    }
+
     // ------------------------------------------------------------------ FC-12
 
     @Test void cardFromSingleChoiceQuestion() throws Exception {

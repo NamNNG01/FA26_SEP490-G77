@@ -1,6 +1,7 @@
 package com.examprep.controllers;
 
 import com.examprep.dto.ApiResponse;
+import com.examprep.dto.PageResponse;
 import com.examprep.dto.student.StudentDeckDtos.*;
 import com.examprep.security.UserPrincipal;
 import com.examprep.services.student.CardImportService;
@@ -16,7 +17,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
-/** Personal flashcards and study: FC-01..10, FP-01..03, FV-01 (Deadline1 sections 14-15). */
+/** Personal flashcards and study: FC-01..13, FP-01..03, FV-01 (Deadline1 sections 14-15). */
 @RestController
 @RequestMapping("/api/v1/student")
 @RequiredArgsConstructor
@@ -24,6 +25,14 @@ public class StudentDeckController {
     private final StudentDeckService decks;
     private final StudentStudyService study;
     private final CardImportService imports;
+
+    @GetMapping("/decks")
+    public ResponseEntity<ApiResponse<PageResponse<DeckListItem>>> list(@AuthenticationPrincipal UserPrincipal user,
+            @RequestParam(required = false) String scope, @RequestParam(required = false) Long courseId, @RequestParam(required = false) String search,
+            @RequestParam(required = false) String mode, @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(ApiResponse.success(decks.list(user.getId(), scope, courseId, search, mode, page, size)));
+    }
 
     @PostMapping("/decks")
     public ResponseEntity<ApiResponse<DeckView>> create(@AuthenticationPrincipal UserPrincipal user, @Valid @RequestBody DeckCreate request) {
