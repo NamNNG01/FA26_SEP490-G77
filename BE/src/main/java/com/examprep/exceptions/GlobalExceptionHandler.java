@@ -101,6 +101,13 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error(ResponseCode.CONFLICT, "Resource already exists or state conflict"));
     }
 
+    @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
+    public ResponseEntity<ApiResponse<Object>> handleUploadTooLarge(org.springframework.web.multipart.MaxUploadSizeExceededException ex) {
+        log.warn("Upload too large: {}", ex.getMessage());
+        return ResponseEntity.status(ResponseCode.PAYLOAD_TOO_LARGE.getHttpStatus())
+                .body(ApiResponse.builder().success(false).message("File is too large").data(Map.of("code", "FILE_TOO_LARGE")).build());
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Object>> handleGenericException(Exception ex) {
         log.error("Unhandled Internal Server Error: ", ex);

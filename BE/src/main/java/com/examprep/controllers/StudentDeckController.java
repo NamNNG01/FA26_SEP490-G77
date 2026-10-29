@@ -3,6 +3,7 @@ package com.examprep.controllers;
 import com.examprep.dto.ApiResponse;
 import com.examprep.dto.student.StudentDeckDtos.*;
 import com.examprep.security.UserPrincipal;
+import com.examprep.services.student.CardImportService;
 import com.examprep.services.student.StudentDeckService;
 import com.examprep.services.student.StudentStudyService;
 import jakarta.validation.Valid;
@@ -11,6 +12,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -21,6 +23,7 @@ import java.util.List;
 public class StudentDeckController {
     private final StudentDeckService decks;
     private final StudentStudyService study;
+    private final CardImportService imports;
 
     @PostMapping("/decks")
     public ResponseEntity<ApiResponse<DeckView>> create(@AuthenticationPrincipal UserPrincipal user, @Valid @RequestBody DeckCreate request) {
@@ -96,5 +99,20 @@ public class StudentDeckController {
     public ResponseEntity<ApiResponse<ViewerView>> viewer(@AuthenticationPrincipal UserPrincipal user, @PathVariable Long deckId,
             @RequestParam(defaultValue = "0") int cardLimit) {
         return ResponseEntity.ok(ApiResponse.success(study.viewer(user.getId(), deckId, cardLimit)));
+    }
+
+    @PostMapping(value = "/decks/{deckId}/cards/import", consumes = "multipart/form-data")
+    public ResponseEntity<ApiResponse<CardImportService.Started>> importCards(@AuthenticationPrincipal UserPrincipal user,
+            @PathVariable Long deckId, @RequestParam("file") MultipartFile file) {
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(ApiResponse.success(imports.start(user.getId(), deckId, file), "Import started"));
+    }
+
+    @GetMapping("/decks/{deckId}/imports/{importId}")
+    public ResponseEntity<ApiResponse<CardImportService.Status>> importStatus(@AuthenticationPrincipal UserPrincipal user,
+            @PathVariable Long deckId, @PathVariable Long importId) {
+        CardImportService.Status status = imports.status(user.getId(), deckId, importId);
+        ResponseEntity.BodyBuilder reply = ResponseEntity.ok();
+        if ("PROCESSING".equals(status.status())) reply.header("Retry-After", "2");
+        return reply.body(ApiResponse.success(status));
     }
 }
