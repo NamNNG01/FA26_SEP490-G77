@@ -33,6 +33,7 @@ import {
   StudentTakeExamPage,
   StudentExamResultPage,
   StudentPracticeQuizPage,
+  StudentWeaknessReportPage,
 } from '@/features/student';
 import { ExamListPage, ExamFormPage } from '@/features/exam';
 import { PublicExamsPage, PublicExamDetailPage } from '@/features/public-exam';
@@ -233,6 +234,7 @@ function AppRoutes() {
           <Route path={ROUTES.studentDashboard} element={<Navigate to={ROUTES.studentCourses} replace />} />
           <Route path={ROUTES.studentCourses} element={<MyCoursesPage />} />
           <Route path={ROUTES.studentCourseDetail} element={<StudentCourseDetailPage />} />
+          <Route path={ROUTES.studentWeaknessReport} element={<StudentWeaknessReportPage />} />
           <Route path={ROUTES.studentExams} element={<MyExamsPage />} />
           <Route path={ROUTES.studentMyExams} element={<MyExamsPage />} />
           <Route path={ROUTES.studentFlashcards} element={<StudentFlashcardsPage />} />
