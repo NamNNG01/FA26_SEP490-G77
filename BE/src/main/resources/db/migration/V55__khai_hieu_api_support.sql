@@ -1,4 +1,4 @@
--- V52__khai_hieu_api_support.sql
+-- V55__khai_hieu_api_support.sql
 -- Additive storage for Khai Hieu's EN, MQ, SB/PY, CD and NT endpoints.
 
 -- One enrollment row is retained across cancel/re-enroll cycles; serialize active writes in services.

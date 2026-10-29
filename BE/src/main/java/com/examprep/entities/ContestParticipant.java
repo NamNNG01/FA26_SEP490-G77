@@ -62,4 +62,7 @@ public class ContestParticipant implements Serializable {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "reward_user_discount_id")
     private UserDiscount rewardUserDiscount;
+
+    @Column(name = "reward_granted_at")
+    private Instant rewardGrantedAt;
 }

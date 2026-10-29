@@ -330,6 +330,7 @@ public class QuizGenerationWorker {
                 .description("Đề trích từ tài liệu: " + (claimed.docTitle() == null ? "" : claimed.docTitle()))
                 .durationMinutes(Math.max(10, count))
                 .isPractice(true)
+                .mode(Exam.MODE_MATERIAL_QUIZ)
                 .generationType("STATIC")
                 .maxScore(BigDecimal.valueOf(count))
                 .status("PUBLISHED")

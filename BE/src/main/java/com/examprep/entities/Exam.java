@@ -68,4 +68,18 @@ public class Exam implements Serializable {
 
     // A hidden module hides its exams from students too.
     public boolean isVisibleToStudents() { return "PUBLISHED".equals(status) && (module == null || !module.isHidden()); }
+
+    public static final String MODE_EXAM = "EXAM";
+    public static final String MODE_MATERIAL_QUIZ = "MATERIAL_QUIZ";
+
+    /** EXAM for course exams; PRACTICE (PQ-01) and SMART_PRACTICE (AI-01) are a student's own generated exams. */
+    @Builder.Default
+    @Column(name = "mode", nullable = false, length = 30)
+    private String mode = MODE_EXAM;
+
+    @Column(name = "practice_exam_id")
+    private Long practiceExamId;
+
+    @Column(name = "ai_job_id")
+    private Long aiJobId;
 }

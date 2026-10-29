@@ -101,7 +101,8 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Object>> handleMaxUploadSize(MaxUploadSizeExceededException ex) {
         log.warn("Upload rejected by the multipart limit: {}", ex.getMessage());
         return ResponseEntity.status(ResponseCode.FILE_TOO_LARGE.getHttpStatus())
-                .body(ApiResponse.error(ResponseCode.FILE_TOO_LARGE));
+                .body(ApiResponse.builder().success(false).message("File is too large")
+                        .data(Map.of("code", "FILE_TOO_LARGE")).build());
     }
 
     @ExceptionHandler({MissingServletRequestParameterException.class, MissingServletRequestPartException.class})

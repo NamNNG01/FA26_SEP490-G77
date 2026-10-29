@@ -1,4 +1,4 @@
--- V53__khai_hieu_hardening.sql
+-- V56__khai_hieu_hardening.sql
 -- MQ-03: one active quiz job per (student, document). The application check alone is racy, so the
 -- database enforces it and legacy duplicates are failed (their reservations are refunded).
 

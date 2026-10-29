@@ -38,7 +38,10 @@ public enum ResponseCode {
     DUPLICATE_REQUEST(HttpStatus.CONFLICT, "DUPLICATE_REQUEST", "A matching request is already processing"),
     NOTHING_TO_GRADE(HttpStatus.CONFLICT, "NOTHING_TO_GRADE", "No question can be graded"),
     UNSUPPORTED_FILE_TYPE(HttpStatus.BAD_REQUEST, "UNSUPPORTED_FILE_TYPE", "Unsupported file type"),
+    /** MQ-01: a material over 20MB, rejected at the multipart boundary. */
     FILE_TOO_LARGE(HttpStatus.BAD_REQUEST, "FILE_TOO_LARGE", "File is too large"),
+    /** FC-07: a flashcard import over 5MB, rejected by the service. */
+    PAYLOAD_TOO_LARGE(HttpStatus.PAYLOAD_TOO_LARGE, "FILE_TOO_LARGE", "File is too large"),
     PAYMENT_PROVIDER_ERROR(HttpStatus.BAD_GATEWAY, "PAYMENT_PROVIDER_ERROR", "Payment provider could not create checkout"),
     CODE_EXECUTION_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "CODE_EXECUTION_UNAVAILABLE", "Code execution service is unavailable"),
     /** MQ-03: reservation did not fit; {@code data} carries estimated/available/quota token counts. */
