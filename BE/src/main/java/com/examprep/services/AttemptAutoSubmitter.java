@@ -72,6 +72,12 @@ public class AttemptAutoSubmitter {
         boolean waitingForAi = false;
         List<BigDecimal> scores = new ArrayList<>();
         for (AttemptAnswer row : rows) {
+            // CD-05 finalized a code answer while the attempt was still running: its verdict and
+            // score stand (spec 19.3), so this row is never re-graded here.
+            if (row.getGradedAt() != null && row.getScoreEarned() != null) {
+                scores.add(row.getScoreEarned());
+                continue;
+            }
             JsonNode response = paperFactory.readResponse(row.getResponse());
             Snapshots.DisplayQuestion display =
                     paperFactory.read(row.getDisplaySnapshot(), Snapshots.DisplayQuestion.class);
