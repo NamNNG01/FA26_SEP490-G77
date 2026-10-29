@@ -174,6 +174,26 @@ export function UserDropdown({ avatarOnly = false }: { avatarOnly?: boolean }) {
                 <Icon.Book className="w-4 h-4 text-muted-foreground" />
                 Question Notebook
               </button>
+              <button
+                type="button"
+                role="menuitem"
+                data-menu-item
+                onClick={() => handleNavigate(ROUTES.studentDiscussions)}
+                className={menuItemClass}
+              >
+                <Icon.Users className="w-4 h-4 text-muted-foreground" />
+                Community
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                data-menu-item
+                onClick={() => handleNavigate(ROUTES.studentContributions)}
+                className={menuItemClass}
+              >
+                <Icon.FileText className="w-4 h-4 text-muted-foreground" />
+                My Contributions
+              </button>
             </>
           )}
 

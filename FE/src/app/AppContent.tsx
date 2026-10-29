@@ -36,6 +36,8 @@ import {
   StudentLearningActivityPage,
   StudentQuestionNotebookPage,
   StudentContestsPage,
+  StudentCommunityPage,
+  StudentContributionsPage,
 } from '@/features/student';
 import { ExamListPage, ExamFormPage } from '@/features/exam';
 import { PublicExamsPage, PublicExamDetailPage } from '@/features/public-exam';
@@ -243,6 +245,10 @@ function AppRoutes() {
           <Route path={ROUTES.studentQuestionNotebook} element={<StudentQuestionNotebookPage />} />
           <Route path={ROUTES.studentContests} element={<StudentContestsPage />} />
           <Route path={ROUTES.studentContestDetail} element={<StudentContestsPage />} />
+          <Route path={ROUTES.studentDiscussions} element={<StudentCommunityPage />} />
+          <Route path={ROUTES.studentDiscussionDetail} element={<StudentCommunityPage />} />
+          <Route path={ROUTES.studentContributions} element={<StudentContributionsPage />} />
+          <Route path={ROUTES.studentContributionDetail} element={<StudentContributionsPage />} />
           <Route path={ROUTES.studentFlashcards} element={<StudentFlashcardsPage />} />
           <Route path={ROUTES.studentFlashcardDeck} element={<StudentDeckStudyPage />} />
           <Route path={ROUTES.studentPublicExam} element={<PublicExamsPage />} />

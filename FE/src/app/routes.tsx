@@ -34,6 +34,10 @@ export const ROUTES = {
   studentMyExams: '/student/my-exams',
   studentLearningActivities: '/student/learning-activity',
   studentQuestionNotebook: '/student/questions/saved',
+  studentDiscussions: '/student/discussions',
+  studentDiscussionDetail: '/student/discussions/:discussionId',
+  studentContributions: '/student/contributions',
+  studentContributionDetail: '/student/contributions/:contributionId',
   /** Route pattern — render with studentExamPath(id). */
   studentExamDetail: '/student/exams/:examId',
   studentFlashcards: '/student/flashcards',
