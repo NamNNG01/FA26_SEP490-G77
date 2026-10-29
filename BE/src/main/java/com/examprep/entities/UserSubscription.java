@@ -40,4 +40,8 @@ public class UserSubscription implements Serializable {
 
     @Column(name = "paid_amount", nullable = false, precision = 10, scale = 2)
     private BigDecimal paidAmount;
+
+    @Builder.Default
+    @Column(name = "auto_renew", nullable = false)
+    private Boolean autoRenew = false;
 }
