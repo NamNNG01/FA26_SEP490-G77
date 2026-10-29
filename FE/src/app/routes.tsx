@@ -27,6 +27,8 @@ export const ROUTES = {
   studentCourses: '/student/courses',
   /** Route pattern — render with studentCoursePath(id). */
   studentCourseDetail: '/student/courses/:courseId',
+  /** Route pattern — render with studentWeaknessReportPath(id). AI-04 report of one course. */
+  studentWeaknessReport: '/student/courses/:courseId/weakness-report',
   studentExams: '/student/exams',
   studentMyExams: '/student/my-exams',
   /** Route pattern — render with studentExamPath(id). */
@@ -87,6 +89,11 @@ export function courseSearchPath(query?: string): string {
 
 export function studentCoursePath(id: number | string): string {
   return `${ROUTES.studentCourses}/${id}`;
+}
+
+/** AI weakness report of a course — e.g. studentWeaknessReportPath(6) → '/student/courses/6/weakness-report'. */
+export function studentWeaknessReportPath(courseId: number | string): string {
+  return `${studentCoursePath(courseId)}/weakness-report`;
 }
 
 export function studentDeckPath(id: number | string): string {
