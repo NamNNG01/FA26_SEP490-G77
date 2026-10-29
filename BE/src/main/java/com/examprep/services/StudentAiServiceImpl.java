@@ -43,7 +43,6 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 public class StudentAiServiceImpl implements StudentAiService {
     private static final Set<String> RUBRIC_TYPES = Set.of("ESSAY", "DIAGRAM");
-    private static final Set<String> CHOICE_TYPES = Set.of("SINGLE_CHOICE", "MULTIPLE_CHOICE", "TRUE_FALSE");
     private static final int EXPLANATION_LOT = 10;
     private static final int LOT_ENVELOPE_TOKENS = 100;
     private static final int MAX_EXPLANATION_CHARS = 4000;
