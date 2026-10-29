@@ -6,6 +6,7 @@ import com.examprep.entities.*;
 import com.examprep.exceptions.BaseException;
 import com.examprep.repositories.*;
 import com.examprep.security.UserPrincipal;
+import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,11 +33,15 @@ public class ContestRewardPayer {
     private final ManagerContestService manager;
     private final ContestRanker ranker;
     private final ContestRules rules;
+    private final EntityManager em;
 
     /** Called once per contest; API 10 calls it outside any transaction, so each contest commits on its own. */
     @Transactional
     public PayResult pay(UserPrincipal user, Long contestId) {
         Contest contest = manager.scoped(user, contests.findForUpdate(contestId));
+        // open-in-view keeps one persistence context for the whole request: API 10 loaded every contest before
+        // paying, and FOR UPDATE alone hands back that cached copy, so re-read it under the lock.
+        em.refresh(contest);
         Instant now = Instant.now();
         if (!PENDING_REWARD.equals(status(contest, now))) {
             throw error(ResponseCode.CONFLICT, "CONTEST_NOT_PENDING_REWARD", "This contest is not waiting for its rewards.");
@@ -49,7 +54,7 @@ public class ContestRewardPayer {
         List<ContestReward> prizes = rewards.findByContestContestIdOrderByRankPositionAsc(contestId).stream()
                 .filter(r -> byRank.containsKey(r.getRankPosition())).toList();
         Map<Long, Discount> locked = discounts.lockAll(prizes.stream().map(r -> r.getDiscount().getDiscountId()).collect(Collectors.toSet()))
-                .stream().collect(Collectors.toMap(Discount::getDiscountId, d -> d));
+                .stream().peek(em::refresh).collect(Collectors.toMap(Discount::getDiscountId, d -> d));
         SortedMap<Integer, Discount> winning = new TreeMap<>();
         prizes.forEach(r -> winning.put(r.getRankPosition(), locked.get(r.getDiscount().getDiscountId())));
         List<Issue> issues = rules.issues(winning, now, true);

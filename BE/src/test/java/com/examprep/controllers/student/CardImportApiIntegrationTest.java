@@ -98,6 +98,28 @@ class CardImportApiIntegrationTest {
         assertEquals("answer", card.getBackText());
     }
 
+    @Test void wideOrTallXlsxIsBounded() throws Exception {
+        XSSFWorkbook book = new XSSFWorkbook();
+        XSSFSheet sheet = book.createSheet();
+        sheet.createRow(0).createCell(0).setCellValue("front");
+        sheet.getRow(0).createCell(1).setCellValue("back");
+        sheet.createRow(1).createCell(0).setCellValue("q");
+        sheet.getRow(1).createCell(1).setCellValue("a");
+        for (int r = 2; r < 3000; r++) sheet.createRow(r).createCell(16_000).setCellValue("x"); // far right: never read
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        book.write(out);
+        JsonNode started = data(upload(deck.getDeckId(), "cards.xlsx", out.toByteArray(), student).andExpect(status().isAccepted()));
+        assertEquals(1, started.path("totalRows").asInt());
+
+        XSSFWorkbook tall = new XSSFWorkbook();
+        XSSFSheet t = tall.createSheet();
+        t.createRow(0).createCell(0).setCellValue("front");
+        t.createRow(500_000).createCell(0).setCellValue("q");
+        out = new ByteArrayOutputStream();
+        tall.write(out);
+        upload(deck.getDeckId(), "cards.xlsx", out.toByteArray(), student).andExpect(status().isBadRequest());
+    }
+
     @Test void pdfRenamedToCsv400() throws Exception {
         upload(deck.getDeckId(), "cards.csv", "%PDF-1.7\n%âã\n1 0 obj".getBytes(StandardCharsets.ISO_8859_1), student)
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.data.code").value("UNSUPPORTED_FILE_TYPE"));

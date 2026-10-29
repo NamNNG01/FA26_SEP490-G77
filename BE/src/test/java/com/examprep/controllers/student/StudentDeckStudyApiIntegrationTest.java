@@ -89,6 +89,14 @@ class StudentDeckStudyApiIntegrationTest {
         mvc.perform(get("/api/v1/student/decks/" + deck.getDeckId() + "/viewer").with(as(outsider))).andExpect(status().isForbidden());
     }
 
+    @Test void managerCourseDeckMarkedPublicStillNeedsEnrollment() throws Exception {
+        deck.setVisibility(Deck.VISIBILITY_PUBLIC); // V42 copied is_public=TRUE into visibility for old manager decks
+        em.flush();
+        mvc.perform(get("/api/v1/student/decks/" + deck.getDeckId() + "/viewer").with(as(outsider))).andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/student/decks/" + deck.getDeckId() + "/cards").with(as(outsider))).andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/student/decks/" + deck.getDeckId() + "/viewer").with(as(student))).andExpect(status().isOk());
+    }
+
     @Test void learnAllKeepsExisting() throws Exception {
         progress(cards.get(0), "{\"status\":\"WRONG\"}");
         mvc.perform(put("/api/v1/student/decks/" + deck.getDeckId() + "/learn-all").with(as(student)))

@@ -3,8 +3,12 @@ package com.examprep.services.contest;
 import com.examprep.entities.Contest;
 import com.examprep.entities.ContestParticipant;
 import com.examprep.entities.ExamAttempt;
+import com.examprep.repositories.AttemptAnswerRepository;
 import com.examprep.repositories.ContestParticipantRepository;
 import com.examprep.repositories.ContestRepository;
+import com.examprep.services.AttemptAutoSubmitter;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -34,11 +38,18 @@ public class ContestRanker {
 
     private final ContestRepository contests;
     private final ContestParticipantRepository participants;
+    private final EntityManager em;
+    private final AttemptAnswerRepository answers;
+    private final AttemptAutoSubmitter autoSubmitter;
     private final TransactionTemplate tx;
 
-    public ContestRanker(ContestRepository contests, ContestParticipantRepository participants, PlatformTransactionManager transactionManager) {
+    public ContestRanker(ContestRepository contests, ContestParticipantRepository participants, EntityManager em,
+                         AttemptAnswerRepository answers, AttemptAutoSubmitter autoSubmitter, PlatformTransactionManager transactionManager) {
         this.contests = contests;
         this.participants = participants;
+        this.em = em;
+        this.answers = answers;
+        this.autoSubmitter = autoSubmitter;
         this.tx = new TransactionTemplate(transactionManager);
     }
 
@@ -62,12 +73,25 @@ public class ContestRanker {
                 || contest.getEndTime().isAfter(now)) return;
         List<Long> attemptIds = participants.findByContestContestIdOrderByParticipantIdAsc(id).stream()
                 .map(ContestParticipant::getAttemptId).filter(Objects::nonNull).toList();
+        closeExpired(attemptIds, now);
         if (!attemptIds.isEmpty() && (participants.countUnfinishedAttempts(attemptIds) > 0 || participants.countPendingGrading(attemptIds) > 0)) {
             if (contest.getEndTime().plus(STUCK).isBefore(now)) log.warn("Contest {} still waits for attempts or grading after 24h", id);
             return;
         }
         rank(contest);
         contest.setRankedAt(now);
+    }
+
+    /** Nothing auto-submits an abandoned attempt on its own, so the ranker closes those past their deadline (as SA-01 does). */
+    private void closeExpired(List<Long> attemptIds, Instant now) {
+        if (attemptIds.isEmpty()) return;
+        for (ExamAttempt a : participants.findAttempts(attemptIds)) {
+            if (!"IN_PROGRESS".equals(a.getStatus()) || !autoSubmitter.isExpired(a, now)) continue;
+            em.refresh(a, LockModeType.PESSIMISTIC_WRITE); // re-read under the lock: SA-02 may have just closed it
+            if ("IN_PROGRESS".equals(a.getStatus()))
+                autoSubmitter.gradeAndClose(a, answers.findByAttemptIdOrdered(a.getAttemptId()), now);
+        }
+        em.flush();
     }
 
     /**

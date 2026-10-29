@@ -185,8 +185,10 @@ public class StudentDeckService {
     /** Owner, a public deck, or a manager's course deck the caller is actively enrolled in. */
     public Deck readableDeck(Long userId, Long deckId) {
         Deck deck = decks.findDetail(deckId).orElseThrow(() -> new ResourceNotFoundException("Deck not found."));
-        if (deck.getUser().getUserId().equals(userId) || Deck.VISIBILITY_PUBLIC.equals(deck.getVisibility())) return deck;
-        boolean courseDeck = deck.getCourse() != null && !User.ROLE_STUDENT.equals(deck.getUser().getRoleName());
+        boolean studentDeck = User.ROLE_STUDENT.equals(deck.getUser().getRoleName());
+        // Only a student's approved deck (FC-10) is public to all; V42 also marked old manager course decks PUBLIC.
+        if (deck.getUser().getUserId().equals(userId) || (studentDeck && Deck.VISIBILITY_PUBLIC.equals(deck.getVisibility()))) return deck;
+        boolean courseDeck = deck.getCourse() != null && !studentDeck;
         if (courseDeck && enrollments.existsByCourse_CourseIdAndUser_UserIdAndStatus(
                 deck.getCourse().getCourseId(), userId, Enrollment.STATUS_ACTIVE)) return deck;
         throw new ForbiddenException("You cannot study this deck.");

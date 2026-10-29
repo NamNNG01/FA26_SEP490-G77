@@ -115,6 +115,19 @@ class ContestRankingIntegrationTest {
         assertNotNull(f.reload(contest).getRankedAt());
     }
 
+    @Test void abandonedAttemptPastDeadlineIsClosedAndRanked() throws Exception {
+        ContestParticipant gone = participant(null, 100, 1, "IN_PROGRESS");
+        ExamAttempt attempt = em.find(ExamAttempt.class, gone.getAttemptId());
+        attempt.setDeadlineAt(end.minusSeconds(60)); // closed the tab, nobody ever touched it again
+        em.flush();
+        ranker.rankDue();
+        em.flush();
+        em.clear();
+        assertNotNull(em.find(Contest.class, contest.getContestId()).getRankedAt());
+        assertEquals("COMPLETED", em.find(ExamAttempt.class, gone.getAttemptId()).getStatus());
+        assertEquals(1, em.find(ContestParticipant.class, gone.getParticipantId()).getRank());
+    }
+
     @Test void leaderboardBeforeReadyAndAfter() throws Exception {
         participant("9", 600, 30, "SUBMITTED");
         participant("5", 600, 30, "SUBMITTED");

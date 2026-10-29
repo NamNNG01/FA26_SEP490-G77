@@ -7,6 +7,7 @@ import com.examprep.exceptions.BaseException;
 import com.examprep.repositories.ContestRepository;
 import com.examprep.security.UserPrincipal;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -17,6 +18,7 @@ import static com.examprep.services.contest.ContestRules.*;
  * API 10. Deliberately not transactional: every contest is paid through {@link ContestRewardPayer#pay}, which opens
  * its own transaction, in endTime order, so one blocked contest never undoes another.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ContestBatchPayer {
@@ -52,6 +54,12 @@ public class ContestBatchPayer {
                         null, null, null));
             } catch (BaseException ex) {
                 rows.add(failure(c.getContestId(), c.getTitle(), ex));
+            } catch (RuntimeException ex) {
+                // e.g. a concurrent API 9 already granted the vouchers (unique index) or a lock timeout: this contest
+                // rolled back, the others stay paid.
+                log.warn("Batch pay of contest {} failed: {}", c.getContestId(), ex.getClass().getSimpleName());
+                rows.add(failure(c.getContestId(), c.getTitle(),
+                        error(ResponseCode.CONFLICT, "PAYMENT_FAILED", "Could not pay this contest, reload and try again.")));
             }
         }
         for (Long id : ids) {

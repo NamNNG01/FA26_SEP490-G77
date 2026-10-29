@@ -46,6 +46,8 @@ import java.util.concurrent.Executors;
 public class CardImportService {
     public static final long MAX_BYTES = 5L * 1024 * 1024;
     public static final int MAX_ROWS = 2000;
+    private static final int MAX_XLSX_COLUMNS = 26;
+    private static final int MAX_XLSX_ROW_INDEX = 100_000; // blank rows are allowed between cards, just not a million
     private static final int CHUNK = 100;
     private static final List<String> COLUMNS = List.of("front", "back", "code_language", "code_body");
     private static final Duration STALE = Duration.ofMinutes(10);
@@ -97,6 +99,7 @@ public class CardImportService {
         } catch (IOException ex) {
             throw unsupported();
         }
+        tx.executeWithoutResult(status -> decks.ownedDeck(userId, deckId)); // before parsing: strangers never make us parse
         List<Row> rows = parse(bytes);
         return tx.execute(status -> {
             decks.ownedDeck(userId, deckId);
@@ -215,17 +218,27 @@ public class CardImportService {
         // POI's ZipSecureFile defaults (inflate ratio, entry size) guard against zip bombs.
         try (Workbook book = new XSSFWorkbook(new ByteArrayInputStream(bytes))) {
             Sheet sheet = book.getSheetAt(0);
+            if (sheet.getLastRowNum() > MAX_XLSX_ROW_INDEX) throw new BadRequestException("A file may hold at most " + MAX_ROWS + " cards.");
             DataFormatter formatter = new DataFormatter();
             List<List<String>> table = new ArrayList<>();
+            int filled = 0;
             for (int r = 0; r <= sheet.getLastRowNum(); r++) {
                 org.apache.poi.ss.usermodel.Row row = sheet.getRow(r);
                 List<String> cells = new ArrayList<>();
                 if (row != null && !row.getZeroHeight()) {
-                    for (int c = 0; c < Math.max(0, row.getLastCellNum()); c++) cells.add(cellText(row.getCell(c), formatter));
+                    // A tiny sheet can claim 16,384 columns and a million rows: read only the first few columns
+                    // and stop once there are more non-empty rows than a file may hold.
+                    int width = Math.min(MAX_XLSX_COLUMNS, Math.max(0, row.getLastCellNum()));
+                    for (int c = 0; c < width; c++) cells.add(cellText(row.getCell(c), formatter));
+                }
+                if (cells.stream().anyMatch(c -> !c.isBlank()) && ++filled > MAX_ROWS + 1) {
+                    throw new BadRequestException("A file may hold at most " + MAX_ROWS + " cards.");
                 }
                 table.add(cells);
             }
             return table;
+        } catch (BadRequestException ex) {
+            throw ex;
         } catch (IOException | RuntimeException ex) {
             throw unsupported();
         }
