@@ -29,7 +29,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * Personal decks and cards (FC-01..06, FC-10, FC-12, FC-13). A personal deck is one whose owner is the student;
+ * Personal decks and cards (FC-01..06, FC-10, FC-12..15). A personal deck is one whose owner is the student;
  * course decks (owned by a manager) are read-only for students.
  */
 @Service
@@ -37,6 +37,8 @@ import java.util.stream.Collectors;
 @Transactional
 public class StudentDeckService {
     public static final Set<String> CODE_LANGUAGES = Set.of("JAVA", "PYTHON", "C", "CPP");
+    private static final String REVIEW_PENDING = "PENDING_REVIEW";
+    private static final String REVIEW_APPROVED = "APPROVED";
 
     private final DeckRepository decks;
     private final FlashcardRepository cards;
@@ -59,7 +61,7 @@ public class StudentDeckService {
     }
 
     public DeckView update(Long userId, Long deckId, DeckUpdate request) {
-        Deck deck = ownedDeck(userId, deckId);
+        Deck deck = editableDeck(userId, deckId);
         long count = cards.countByDeckDeckId(deckId);
         if (request.mode() != null && !request.mode().equals(deck.getMode()) && count > 0) {
             throw new ResourceConflictException("A deck with cards cannot change its mode.");
@@ -72,8 +74,10 @@ public class StudentDeckService {
         return view(deck, count);
     }
 
+    /** A deck waiting for review may be deleted; a public one may not (other students study it). */
     public void delete(Long userId, Long deckId) {
         Deck deck = ownedDeck(userId, deckId);
+        if (REVIEW_APPROVED.equals(deck.getReviewStatus())) throw locked();
         progress.deleteByDeck(deckId);
         cards.deleteByDeck(deckId);
         decks.delete(deck);
@@ -117,10 +121,26 @@ public class StudentDeckService {
         return counts.stream().collect(Collectors.toMap(IdCount::id, IdCount::total));
     }
 
+    // ------------------------------------------------------------------ FC-14
+
+    @Transactional(readOnly = true)
+    public DeckDetail detail(Long userId, Long deckId) {
+        Deck deck = readableDeck(userId, deckId);
+        boolean owner = deck.getUser().getUserId().equals(userId);
+        List<Long> id = List.of(deckId);
+        return new DeckDetail(deck.getDeckId(), deck.getTitle(), deck.getDescription(), deck.getMode(),
+                deck.getCourse() == null ? null : deck.getCourse().getCourseId(),
+                deck.getCourse() == null ? null : deck.getCourse().getTitle(), deck.getUser().getUserId(),
+                deck.getUser().getFullName(), owner, cards.countByDeckDeckId(deckId),
+                byDeck(progress.countKnownByDecks(userId, id)).getOrDefault(deckId, 0L),
+                byDeck(progress.countStarredByDecks(userId, id)).getOrDefault(deckId, 0L), deck.getVisibility(),
+                deck.getReviewStatus(), owner ? deck.getReviewNote() : null, deck.getSubmittedAt(), deck.getCreatedAt());
+    }
+
     // ------------------------------------------------------------------ FC-04..06
 
     public CardView addCard(Long userId, Long deckId, CardWrite request) {
-        Deck deck = ownedDeck(userId, deckId);
+        Deck deck = editableDeck(userId, deckId);
         Flashcard card = Flashcard.builder().deck(deck).position(cards.maxPosition(deckId) + 1).build();
         apply(card, deck.getMode(), request);
         return cardView(cards.saveAndFlush(card));
@@ -152,8 +172,25 @@ public class StudentDeckService {
         if (cards.countByDeckDeckId(deckId) == 0) {
             throw new BaseException(ResponseCode.UNPROCESSABLE_VALIDATION_ERROR, "Add at least one card before asking for review.");
         }
-        deck.setReviewStatus("PENDING_REVIEW");
+        deck.setReviewStatus(REVIEW_PENDING);
         deck.setSubmittedAt(Instant.now());
+        decks.flush();
+        return new PublishRequestView(deck.getDeckId(), deck.getVisibility(), deck.getReviewStatus(), deck.getSubmittedAt());
+    }
+
+    // ------------------------------------------------------------------ FC-15
+
+    /** Takes a deck back out of the review queue so the owner can edit it again. */
+    public PublishRequestView withdrawReview(Long userId, Long deckId) {
+        Deck deck = ownedDeck(userId, deckId);
+        switch (deck.getReviewStatus()) {
+            case REVIEW_PENDING -> { }
+            case REVIEW_APPROVED -> throw coded(ResponseCode.CONFLICT, "ALREADY_PUBLIC", "The deck is already public.");
+            default -> throw coded(ResponseCode.CONFLICT, "NOT_PENDING_REVIEW", "The deck is not waiting for review.");
+        }
+        deck.setReviewStatus("NONE");
+        deck.setVisibility(Deck.VISIBILITY_PRIVATE);
+        deck.setSubmittedAt(null);
         decks.flush();
         return new PublishRequestView(deck.getDeckId(), deck.getVisibility(), deck.getReviewStatus(), deck.getSubmittedAt());
     }
@@ -161,7 +198,7 @@ public class StudentDeckService {
     // ------------------------------------------------------------------ FC-12
 
     public CardFromQuestionView cardFromQuestion(Long userId, Long deckId, FromQuestion request) {
-        Deck deck = ownedDeck(userId, deckId);
+        Deck deck = editableDeck(userId, deckId);
         if (!"FLASHCARD".equals(deck.getMode())) {
             throw new BaseException(ResponseCode.UNPROCESSABLE_VALIDATION_ERROR, "Questions can only be saved to FLASHCARD decks.");
         }
@@ -226,6 +263,17 @@ public class StudentDeckService {
         return deck;
     }
 
+    /** {@link #ownedDeck} whose content may change: not while it waits for review (withdraw first, FC-15), never once public. */
+    public Deck editableDeck(Long userId, Long deckId) {
+        Deck deck = ownedDeck(userId, deckId);
+        if (REVIEW_PENDING.equals(deck.getReviewStatus()) || REVIEW_APPROVED.equals(deck.getReviewStatus())) throw locked();
+        return deck;
+    }
+
+    private static BaseException locked() {
+        return coded(ResponseCode.CONFLICT, "DECK_LOCKED", "A deck waiting for review or already public cannot be changed.");
+    }
+
     /** Owner, a public deck, or a manager's course deck the caller is actively enrolled in. */
     public Deck readableDeck(Long userId, Long deckId) {
         Deck deck = decks.findDetail(deckId).orElseThrow(() -> new ResourceNotFoundException("Deck not found."));
@@ -240,7 +288,7 @@ public class StudentDeckService {
 
     private Flashcard ownedCard(Long userId, Long cardId) {
         Flashcard card = cards.findDetail(cardId).orElseThrow(() -> new ResourceNotFoundException("Card not found."));
-        ownedDeck(userId, card.getDeck().getDeckId());
+        editableDeck(userId, card.getDeck().getDeckId());
         return card;
     }
 
@@ -306,7 +354,8 @@ public class StudentDeckService {
 
     DeckView view(Deck deck, long cardCount) {
         return new DeckView(deck.getDeckId(), deck.getTitle(), deck.getDescription(), deck.getMode(),
-                deck.getCourse() == null ? null : deck.getCourse().getCourseId(), cardCount, deck.getVisibility(),
+                deck.getCourse() == null ? null : deck.getCourse().getCourseId(),
+                deck.getCourse() == null ? null : deck.getCourse().getTitle(), cardCount, deck.getVisibility(),
                 deck.getReviewStatus(), deck.getReviewNote(), deck.getCreatedAt());
     }
 

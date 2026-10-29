@@ -21,7 +21,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/** FC-01..06 and FC-10. */
+/** FC-01..06, FC-10 and FC-12..15. */
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
@@ -156,6 +156,77 @@ class StudentDeckApiIntegrationTest {
         em.flush();
         mvc.perform(post("/api/v1/student/decks/" + deck + "/publish-request").with(as(student)))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.data.code").value("ALREADY_PUBLIC"));
+    }
+
+    // ------------------------------------------------------------------ FC-14 / FC-15 / DECK_LOCKED
+
+    @Test void detailShowsOwnProgressAndHidesReviewNoteFromOthers() throws Exception {
+        String body = send(post("/api/v1/student/decks"), student, "{\"title\":\"Shared\",\"mode\":\"FLASHCARD\",\"courseId\":" + course.getCourseId() + "}")
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.data.courseTitle").value(course.getTitle()))
+                .andReturn().getResponse().getContentAsString();
+        long deck = json.readTree(body).path("data").path("deckId").asLong();
+        long card = card(deck, "{\"frontText\":\"a\",\"backText\":\"b\"}");
+        card(deck, "{\"frontText\":\"c\",\"backText\":\"d\"}");
+        em.persist(UserCardProgress.builder().user(student).card(em.find(Flashcard.class, card)).isStarred(true).status("KNOWN").build());
+        Deck entity = em.find(Deck.class, deck);
+        entity.setReviewStatus("APPROVED");
+        entity.setVisibility("PUBLIC");
+        entity.setReviewNote("internal note");
+        em.flush();
+
+        mvc.perform(get("/api/v1/student/decks/" + deck).with(as(student)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.isOwner").value(true))
+                .andExpect(jsonPath("$.data.courseTitle").value(course.getTitle()))
+                .andExpect(jsonPath("$.data.ownerName").value(student.getFullName()))
+                .andExpect(jsonPath("$.data.cardCount").value(2)).andExpect(jsonPath("$.data.learnedCount").value(1))
+                .andExpect(jsonPath("$.data.starredCount").value(1)).andExpect(jsonPath("$.data.reviewNote").value("internal note"));
+        mvc.perform(get("/api/v1/student/decks/" + deck).with(as(other)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.isOwner").value(false))
+                .andExpect(jsonPath("$.data.learnedCount").value(0)).andExpect(jsonPath("$.data.reviewNote").isEmpty());
+        long privateDeck = deck(student, "FLASHCARD");
+        mvc.perform(get("/api/v1/student/decks/" + privateDeck).with(as(other))).andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/student/decks/" + Long.MAX_VALUE).with(as(student))).andExpect(status().isNotFound());
+    }
+
+    @Test void withdrawReviewTransitions() throws Exception {
+        long deck = deck(student, "FLASHCARD");
+        card(deck, "{\"frontText\":\"a\",\"backText\":\"b\"}");
+        String path = "/api/v1/student/decks/" + deck + "/withdraw-review";
+        mvc.perform(post(path).with(as(student))).andExpect(status().isConflict()).andExpect(jsonPath("$.data.code").value("NOT_PENDING_REVIEW"));
+        mvc.perform(post("/api/v1/student/decks/" + deck + "/publish-request").with(as(student))).andExpect(status().isOk());
+        mvc.perform(post(path).with(as(other))).andExpect(status().isForbidden());
+        mvc.perform(post(path).with(as(student)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.message").value("Review request withdrawn"))
+                .andExpect(jsonPath("$.data.reviewStatus").value("NONE")).andExpect(jsonPath("$.data.visibility").value("PRIVATE"))
+                .andExpect(jsonPath("$.data.submittedAt").isEmpty());
+        Deck entity = em.find(Deck.class, deck);
+        entity.setReviewStatus("APPROVED");
+        entity.setVisibility("PUBLIC");
+        em.flush();
+        mvc.perform(post(path).with(as(student))).andExpect(status().isConflict()).andExpect(jsonPath("$.data.code").value("ALREADY_PUBLIC"));
+    }
+
+    @Test void pendingOrPublicDeckIsLocked() throws Exception {
+        long deck = deck(student, "FLASHCARD");
+        long card = card(deck, "{\"frontText\":\"a\",\"backText\":\"b\"}");
+        mvc.perform(post("/api/v1/student/decks/" + deck + "/publish-request").with(as(student))).andExpect(status().isOk());
+        send(put("/api/v1/student/decks/" + deck), student, "{\"title\":\"x\"}").andExpect(status().isConflict()).andExpect(jsonPath("$.data.code").value("DECK_LOCKED"));
+        send(post("/api/v1/student/decks/" + deck + "/cards"), student, "{\"frontText\":\"c\",\"backText\":\"d\"}").andExpect(status().isConflict());
+        send(put("/api/v1/student/cards/" + card), student, "{\"frontText\":\"z\"}").andExpect(status().isConflict());
+        mvc.perform(delete("/api/v1/student/cards/" + card).with(as(student))).andExpect(status().isConflict());
+        send(put("/api/v1/student/cards/" + card + "/progress"), student, "{\"status\":\"KNOWN\"}").andExpect(status().isOk());
+
+        Deck entity = em.find(Deck.class, deck);
+        entity.setReviewStatus("APPROVED");
+        entity.setVisibility("PUBLIC");
+        em.flush();
+        mvc.perform(delete("/api/v1/student/decks/" + deck).with(as(student)))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.data.code").value("DECK_LOCKED"));
+
+        long pending = deck(student, "FLASHCARD");
+        card(pending, "{\"frontText\":\"a\",\"backText\":\"b\"}");
+        mvc.perform(post("/api/v1/student/decks/" + pending + "/publish-request").with(as(student))).andExpect(status().isOk());
+        mvc.perform(delete("/api/v1/student/decks/" + pending).with(as(student))).andExpect(status().isOk());
     }
 
     @Test void classmatesDoNotSeePrivateCourseAttachedDeck() throws Exception {

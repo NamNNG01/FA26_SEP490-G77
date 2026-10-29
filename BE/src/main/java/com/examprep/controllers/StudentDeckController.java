@@ -17,7 +17,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
-/** Personal flashcards and study: FC-01..13, FP-01..03, FV-01 (Deadline1 sections 14-15). */
+/** Personal flashcards and study: FC-01..15, FP-01..03, FV-01 (Deadline1 sections 14-15; FC-14/15 off-spec, see deviations doc). */
 @RestController
 @RequestMapping("/api/v1/student")
 @RequiredArgsConstructor
@@ -37,6 +37,11 @@ public class StudentDeckController {
     @PostMapping("/decks")
     public ResponseEntity<ApiResponse<DeckView>> create(@AuthenticationPrincipal UserPrincipal user, @Valid @RequestBody DeckCreate request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(decks.create(user.getId(), request), "Deck created"));
+    }
+
+    @GetMapping("/decks/{deckId}")
+    public ResponseEntity<ApiResponse<DeckDetail>> detail(@AuthenticationPrincipal UserPrincipal user, @PathVariable Long deckId) {
+        return ResponseEntity.ok(ApiResponse.success(decks.detail(user.getId(), deckId)));
     }
 
     @PutMapping("/decks/{deckId}")
@@ -72,6 +77,11 @@ public class StudentDeckController {
     @PostMapping("/decks/{deckId}/publish-request")
     public ResponseEntity<ApiResponse<PublishRequestView>> publishRequest(@AuthenticationPrincipal UserPrincipal user, @PathVariable Long deckId) {
         return ResponseEntity.ok(ApiResponse.success(decks.requestPublish(user.getId(), deckId), "Sent for review"));
+    }
+
+    @PostMapping("/decks/{deckId}/withdraw-review")
+    public ResponseEntity<ApiResponse<PublishRequestView>> withdrawReview(@AuthenticationPrincipal UserPrincipal user, @PathVariable Long deckId) {
+        return ResponseEntity.ok(ApiResponse.success(decks.withdrawReview(user.getId(), deckId), "Review request withdrawn"));
     }
 
     @PutMapping("/cards/{cardId}/progress")

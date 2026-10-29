@@ -234,7 +234,7 @@ public class StudentAiServiceImpl implements StudentAiService {
         try {
             response = AiCalls.complete(aiClient, AiRequest.builder().systemPrompt(EXPLAIN_PROMPT).prompt(prompt.toString())
                     // Headroom for thinking models, whose reasoning counts against maxOutputTokens.
-                    .maxTokens(lot.size() * 1024 + 2048).responseSchema(EXPLAIN_SCHEMA).build(),
+                    .maxTokens(lot.size() * 1024 + 8192).responseSchema(EXPLAIN_SCHEMA).build(),
                     Math.min(30_000, deadline - System.currentTimeMillis()));
         } catch (AiCalls.Failure ex) {
             log.warn("Explanation AI call failed: {} ({} questions)", ex.reason(), lot.size());

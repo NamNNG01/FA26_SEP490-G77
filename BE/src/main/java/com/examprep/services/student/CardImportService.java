@@ -99,10 +99,10 @@ public class CardImportService {
         } catch (IOException ex) {
             throw unsupported();
         }
-        tx.executeWithoutResult(status -> decks.ownedDeck(userId, deckId)); // before parsing: strangers never make us parse
+        tx.executeWithoutResult(status -> decks.editableDeck(userId, deckId)); // before parsing: strangers never make us parse
         List<Row> rows = parse(bytes);
         return tx.execute(status -> {
-            decks.ownedDeck(userId, deckId);
+            decks.editableDeck(userId, deckId);
             CardImport row = imports.save(CardImport.builder().userId(userId).deckId(deckId).totalRows(rows.size())
                     .fileName(fileName(file.getOriginalFilename())).build());
             Long id = row.getImportId();

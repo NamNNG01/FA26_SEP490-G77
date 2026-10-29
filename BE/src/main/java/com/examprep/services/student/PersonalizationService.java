@@ -162,8 +162,9 @@ public class PersonalizationService {
         AiResponse response;
         List<Long> picked = new ArrayList<>();
         try {
+            // The answer is short, but thinking models spend ~1-1.5k of maxOutputTokens on reasoning first.
             response = AiCalls.complete(aiClient, AiRequest.builder().systemPrompt(SMART_PROMPT).prompt(work.prompt())
-                    .maxTokens(2048).responseSchema(SMART_SCHEMA).build(), smartTimeoutMillis);
+                    .maxTokens(8192).responseSchema(SMART_SCHEMA).build(), smartTimeoutMillis);
             for (JsonNode id : json.readTree(response.getText()).path("questionIds")) {
                 if (id.canConvertToLong()) picked.add(id.asLong());
             }
@@ -489,7 +490,7 @@ public class PersonalizationService {
     private AiResponse call(String system, String prompt, Map<String, Object> schema, long timeout, Long logId, long started,
                             boolean timeoutIs500) {
         try {
-            return AiCalls.complete(aiClient, AiRequest.builder().systemPrompt(system).prompt(prompt).maxTokens(4096)
+            return AiCalls.complete(aiClient, AiRequest.builder().systemPrompt(system).prompt(prompt).maxTokens(8192)
                     .responseSchema(schema).build(), timeout);
         } catch (AiCalls.Failure ex) {
             boolean timedOut = AiCalls.TIMEOUT.equals(ex.reason());

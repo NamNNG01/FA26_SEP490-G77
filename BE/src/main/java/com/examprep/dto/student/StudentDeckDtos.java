@@ -6,7 +6,7 @@ import jakarta.validation.constraints.*;
 import java.time.Instant;
 import java.util.List;
 
-/** Request/response bodies of FC-01..12, FP-01..03 and FV-01. */
+/** Request/response bodies of FC-01..15, FP-01..03 and FV-01. */
 public final class StudentDeckDtos {
     private StudentDeckDtos() {}
 
@@ -30,8 +30,8 @@ public final class StudentDeckDtos {
                             @Size(max = 20000) String codeBody) {}
 
     @JsonInclude(JsonInclude.Include.ALWAYS)
-    public record DeckView(Long deckId, String title, String description, String mode, Long courseId, long cardCount,
-                           String visibility, String reviewStatus, String reviewNote, Instant createdAt) {}
+    public record DeckView(Long deckId, String title, String description, String mode, Long courseId, String courseTitle,
+                           long cardCount, String visibility, String reviewStatus, String reviewNote, Instant createdAt) {}
 
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record CardView(Long cardId, Long deckId, String frontText, String backText, String codeLanguage, String codeBody,
@@ -84,6 +84,15 @@ public final class StudentDeckDtos {
     public record DeckListItem(Long deckId, String title, String description, String mode, Long courseId, String courseTitle,
                                Long ownerId, String ownerName, long cardCount, long learnedCount, long starredCount,
                                String visibility, String reviewStatus, Instant createdAt) {}
+
+    // ------------------------------------------------------------- FC-14
+
+    /** learnedCount / starredCount are the caller's own progress; reviewNote is only shown to the owner. */
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record DeckDetail(Long deckId, String title, String description, String mode, Long courseId, String courseTitle,
+                             Long ownerId, String ownerName, boolean isOwner, long cardCount, long learnedCount,
+                             long starredCount, String visibility, String reviewStatus, String reviewNote,
+                             Instant submittedAt, Instant createdAt) {}
 
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record CardFromQuestionView(Long cardId, Long deckId, String frontText, String backText, int position,
