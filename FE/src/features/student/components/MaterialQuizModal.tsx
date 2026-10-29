@@ -17,6 +17,7 @@ import {
   MATERIAL_MAX_BYTES,
   MATERIAL_QUESTIONS,
   errorStatus,
+  fileSha256,
   isJobRunning,
   materialService,
   type MaterialDifficulty,
@@ -81,6 +82,13 @@ export function MaterialQuizModal({
   const [loadingMaterials, setLoadingMaterials] = useState(false);
   const [materialsError, setMaterialsError] = useState<string | null>(null);
   const [materialsReload, setMaterialsReload] = useState(0);
+  /** The BE links one material to several courses (see studentMaterial.service). */
+  const [linked, setLinked] = useState(false);
+  /** Shown when a picked file turned out to be a material uploaded before. */
+  const [notice, setNotice] = useState<string | null>(null);
+  const [checkingFile, setCheckingFile] = useState(false);
+  /** Latest picked file; a hash check for an older pick is dropped. */
+  const pickedFile = useRef<File | null>(null);
 
   const [phase, setPhase] = useState<Phase>('form');
   const [busy, setBusy] = useState(false);
@@ -108,6 +116,9 @@ export function MaterialQuizModal({
     setFile(null);
     setFileError(null);
     setTitle('');
+    setNotice(null);
+    setCheckingFile(false);
+    pickedFile.current = null;
     setDocumentId(preset === initialCourseId ? initialDocumentId : null);
     setQuestionCount(String(MATERIAL_QUESTIONS.default));
     setDifficulty('MEDIUM');
@@ -121,19 +132,21 @@ export function MaterialQuizModal({
 
   useEffect(() => stopPolling, []);
 
-  // Materials of the course (MQ-02), newest first. A reload keeps the picked material.
+  // Every material of the student with its courses (MQ-02), newest first. A reload keeps the picked material.
   useEffect(() => {
     setMaterialsError(null);
-    if (!open || !courseId) {
+    if (!open) {
       setMaterials([]);
       return;
     }
     let cancelled = false;
     setLoadingMaterials(true);
     materialService
-      .listAll(Number(courseId))
-      .then(list => {
-        if (!cancelled) setMaterials(list);
+      .listWithCourses(courses.map(c => ({ courseId: c.courseId, title: c.title })))
+      .then(res => {
+        if (cancelled) return;
+        setMaterials(res.items);
+        setLinked(res.linked);
       })
       .catch(err => {
         if (!cancelled) setMaterialsError(getApiErrorMessage(err, 'Failed to load your materials.'));
@@ -144,7 +157,7 @@ export function MaterialQuizModal({
     return () => {
       cancelled = true;
     };
-  }, [open, courseId, materialsReload]);
+  }, [open, courses, materialsReload]);
 
   const poll = (jobId: number) => {
     materialService
@@ -184,7 +197,43 @@ export function MaterialQuizModal({
       return;
     }
     setFileError(null);
+    setNotice(null);
     setFile(f);
+    pickedFile.current = f;
+    checkDuplicate(f);
+  };
+
+  /** Same content uploaded before → reuse that material instead of storing the file again. */
+  const checkDuplicate = async (f: File) => {
+    setCheckingFile(true);
+    try {
+      const hash = await fileSha256(f);
+      const found = hash ? await materialService.lookup(hash) : null;
+      if (!found || pickedFile.current !== f) return;
+      pickedFile.current = null;
+      setFile(null);
+      setTitle('');
+      setDocumentId(found.documentId);
+      const courseTitle = courses.find(c => String(c.courseId) === courseId)?.title;
+      const attached = found.courses.some(c => String(c.courseId) === courseId);
+      setNotice(
+        `You uploaded this file before as "${found.title}", so it is reused instead of being uploaded again.${
+          attached || !courseTitle ? '' : ` It will also be added to ${courseTitle}.`
+        }`,
+      );
+      if (!materials.some(m => m.documentId === found.documentId)) setMaterialsReload(r => r + 1);
+    } finally {
+      if (pickedFile.current === f || pickedFile.current === null) setCheckingFile(false);
+    }
+  };
+
+  const inCourse = (m: MaterialItem) => (m.courses ?? []).some(c => String(c.courseId) === courseId);
+
+  const changeCourse = (value: string) => {
+    setCourseId(value);
+    setNotice(null);
+    // A material can only be added to another course when the BE links materials to several courses.
+    if (!linked) setDocumentId(null);
   };
 
   const countNum = Number(questionCount);
@@ -199,18 +248,22 @@ export function MaterialQuizModal({
   const invalid = Boolean(errors.course || errors.material || errors.count);
 
   const selected = materials.find(m => m.documentId === documentId) ?? null;
+  // Materials of the course first; with linked courses the others follow and get added on Generate.
+  const pickable = linked ? [...materials.filter(inCourse), ...materials.filter(m => !inCourse(m))] : materials.filter(inCourse);
   const materialOptions = [
     { value: UPLOAD_NEW, label: '+ Upload new file' },
-    ...materials.map(m => ({
-      value: String(m.documentId),
-      label: m.jobs.some(j => isJobRunning(j.status)) ? `${m.title} (generating…)` : m.title,
-    })),
+    ...pickable.map(m => {
+      const where = inCourse(m) ? '' : ` · in ${(m.courses ?? []).map(c => c.title).join(', ')}`;
+      const running = m.jobs.some(j => isJobRunning(j.status)) ? ' (generating…)' : '';
+      return { value: String(m.documentId), label: `${m.title}${where}${running}` };
+    }),
   ];
+  const needsAttach = linked && selected != null && !inCourse(selected);
   const runningJob = selected?.jobs.find(j => isJobRunning(j.status)) ?? null;
 
   const generate = async () => {
     setTouched(true);
-    if (invalid) return;
+    if (invalid || checkingFile) return;
     setBusy(true);
     setError(null);
     let docId = documentId;
@@ -218,6 +271,7 @@ export function MaterialQuizModal({
       if (docId == null && file) {
         const uploaded = await materialService.upload(file, Number(courseId), title);
         docId = uploaded.documentId;
+        if (uploaded.duplicate) setNotice(`You uploaded this file before as "${uploaded.title}", so it was reused.`);
         // A retry after this point reuses the uploaded material instead of uploading again.
         setFile(null);
         setTitle('');
@@ -225,9 +279,14 @@ export function MaterialQuizModal({
         setMaterialsReload(r => r + 1);
       }
       if (docId == null) return;
+      if (needsAttach && docId === selected?.documentId) {
+        await materialService.attachCourse(docId, Number(courseId));
+        setMaterialsReload(r => r + 1);
+      }
       const accepted = await materialService.generateQuiz(docId, {
         questionCount: countNum,
         difficulty,
+        courseId: Number(courseId),
       });
       track(accepted.jobId, accepted.questionCount);
     } catch (err) {
@@ -247,7 +306,7 @@ export function MaterialQuizModal({
 
   const findRunningJob = async (docId: number) => {
     try {
-      const list = await materialService.listAll(Number(courseId));
+      const { items: list } = await materialService.listWithCourses(courses.map(c => ({ courseId: c.courseId, title: c.title })));
       setMaterials(list);
       return list.find(m => m.documentId === docId)?.jobs.find(j => isJobRunning(j.status)) ?? null;
     } catch {
@@ -286,7 +345,7 @@ export function MaterialQuizModal({
         </Button>
         <Button
           loading={busy}
-          disabled={busy || courses.length === 0 || (touched && invalid)}
+          disabled={busy || checkingFile || courses.length === 0 || (touched && invalid)}
           icon={<Icon.Zap className="w-4 h-4" />}
           onClick={generate}
         >
@@ -336,11 +395,7 @@ export function MaterialQuizModal({
                   label="Course"
                   options={courses.map(c => ({ value: String(c.courseId), label: c.title }))}
                   value={courseId}
-                  onChange={v => {
-                    // A material belongs to one course.
-                    setCourseId(v);
-                    setDocumentId(null);
-                  }}
+                  onChange={changeCourse}
                   error={touched ? errors.course : undefined}
                 />
 
@@ -349,7 +404,10 @@ export function MaterialQuizModal({
                     label="Material"
                     options={materialOptions}
                     value={documentId == null ? UPLOAD_NEW : String(documentId)}
-                    onChange={v => setDocumentId(v === UPLOAD_NEW ? null : Number(v))}
+                    onChange={v => {
+                      setDocumentId(v === UPLOAD_NEW ? null : Number(v));
+                      setNotice(null);
+                    }}
                     disabled={loadingMaterials}
                     maxVisibleOptions={8}
                   />
@@ -362,6 +420,13 @@ export function MaterialQuizModal({
                     </div>
                   )}
 
+                  {notice && <Alert type="info" message={notice} />}
+                  {!notice && needsAttach && (
+                    <p className="text-xs text-content-subtle">
+                      This material will also be added to {courses.find(c => String(c.courseId) === courseId)?.title}.
+                    </p>
+                  )}
+                  {checkingFile && <p className="text-xs text-content-subtle">Checking whether you uploaded this file before…</p>}
                   {documentId == null ? (
                     <>
                       <div
@@ -391,7 +456,10 @@ export function MaterialQuizModal({
                             <button
                               type="button"
                               aria-label="Remove file"
-                              onClick={() => setFile(null)}
+                              onClick={() => {
+                                pickedFile.current = null;
+                                setFile(null);
+                              }}
                               className="p-1.5 rounded-[6px] text-content-subtle hover:bg-accent hover:text-content"
                             >
                               <Icon.X className="w-4 h-4" />

@@ -21,11 +21,6 @@ const MY_COURSES_FETCH_SIZE = 100;
 /** How often the list refreshes while a quiz is being generated. */
 const REFRESH_MS = 4000;
 
-interface MaterialRow extends MaterialItem {
-  courseId: number;
-  courseTitle: string;
-}
-
 const JOB_BADGE: Record<MaterialJobBrief['status'], { variant: 'info' | 'success' | 'danger'; label: string }> = {
   PENDING: { variant: 'info', label: 'Queued' },
   PROCESSING: { variant: 'info', label: 'Generating' },
@@ -33,20 +28,11 @@ const JOB_BADGE: Record<MaterialJobBrief['status'], { variant: 'info' | 'success
   FAILED: { variant: 'danger', label: 'Failed' },
 };
 
-/** MQ-02 per enrolled course (MaterialItem has no courseId), newest upload first. */
-async function loadMaterials(courses: MyCourse[]): Promise<MaterialRow[]> {
-  const lists = await Promise.all(
-    courses.map(c =>
-      materialService.listAll(c.courseId).then(items => items.map(m => ({ ...m, courseId: c.courseId, courseTitle: c.title }))),
-    ),
-  );
-  return lists.flat().sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt));
-}
-
 /**
- * My Materials — files the student uploaded for the Material to Quiz Creator (MQ-02) and the
- * quizzes generated from each one. "Generate quiz" opens the creator with the material picked;
- * a ready quiz starts with MQ-05. The list refreshes itself while a quiz is being generated.
+ * My Materials — files the student uploaded for the Material to Quiz Creator (MQ-02), the courses
+ * each one is attached to and the quizzes generated from it. One file is one material, whatever the
+ * number of courses (see materialService.listWithCourses for the current BE). "Generate quiz" opens
+ * the creator with the material picked; a ready quiz starts with MQ-05. The list refreshes itself while a quiz is being generated.
  */
 export function MyMaterialsPage() {
   const navigate = useNavigate();
@@ -54,7 +40,7 @@ export function MyMaterialsPage() {
   const [page, setPage] = useState(1);
   const [reload, setReload] = useState(0);
   const [courses, setCourses] = useState<MyCourse[]>([]);
-  const [rows, setRows] = useState<MaterialRow[]>([]);
+  const [rows, setRows] = useState<MaterialItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -73,7 +59,7 @@ export function MyMaterialsPage() {
     studentCourseService
       .getMyCourses({ page: 0, size: MY_COURSES_FETCH_SIZE })
       .then(async res => {
-        const list = await loadMaterials(res.content);
+        const { items: list } = await materialService.listWithCourses(res.content.map(c => ({ courseId: c.courseId, title: c.title })));
         if (cancelled) return;
         setCourses(res.content);
         setRows(list);
@@ -108,7 +94,7 @@ export function MyMaterialsPage() {
     () =>
       rows.filter(
         r =>
-          (course === ALL || String(r.courseId) === course) &&
+          (course === ALL || (r.courses ?? []).some(c => String(c.courseId) === course)) &&
           (!term || r.title.toLowerCase().includes(term) || r.fileName.toLowerCase().includes(term)),
       ),
     [rows, course, term],
@@ -132,6 +118,16 @@ export function MyMaterialsPage() {
       setStartingJob(null);
     }
   };
+
+  /** The filtered course when the material has it, else its first course. */
+  const courseForQuiz = (row: MaterialItem) => {
+    const ids = (row.courses ?? []).map(c => c.courseId);
+    return course !== ALL && ids.includes(Number(course)) ? Number(course) : (ids[0] ?? null);
+  };
+
+  /** Course name on a quiz chip — only needed when the material has several courses. */
+  const jobCourse = (row: MaterialItem, job: MaterialJobBrief) =>
+    (row.courses ?? []).length > 1 && job.courseId != null ? (row.courses ?? []).find(c => c.courseId === job.courseId)?.title : undefined;
 
   const closeModal = () => {
     setModal(null);
@@ -236,14 +232,21 @@ export function MyMaterialsPage() {
                   </div>
                   <div className="flex-1 min-w-[12rem]">
                     <p className="text-sm font-semibold text-content break-words">{row.title}</p>
+                    {(row.courses ?? []).length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 my-1">
+                        {(row.courses ?? []).map(c => (
+                          <button
+                            key={c.courseId}
+                            type="button"
+                            onClick={() => navigate(studentCoursePath(c.courseId))}
+                            className="rounded-full bg-primary-light px-2.5 py-0.5 text-2xs font-medium text-primary hover:underline"
+                          >
+                            {c.title}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                     <p className="flex flex-wrap gap-x-3 text-xs text-content-subtle">
-                      <button
-                        type="button"
-                        onClick={() => navigate(studentCoursePath(row.courseId))}
-                        className="hover:text-primary hover:underline text-left"
-                      >
-                        {row.courseTitle}
-                      </button>
                       <span className="truncate max-w-[16rem]" title={row.fileName}>
                         {row.fileName}
                       </span>
@@ -258,7 +261,7 @@ export function MyMaterialsPage() {
                   <Button
                     size="sm"
                     icon={<Icon.Zap className="w-4 h-4" />}
-                    onClick={() => setModal({ courseId: row.courseId, documentId: row.documentId })}
+                    onClick={() => setModal({ courseId: courseForQuiz(row), documentId: row.documentId })}
                   >
                     Generate quiz
                   </Button>
@@ -271,6 +274,7 @@ export function MyMaterialsPage() {
                         key={job.jobId}
                         className="flex items-center gap-2 rounded-[10px] border border-line bg-surface-alt px-3 py-1.5 text-xs text-content-secondary"
                       >
+                        {jobCourse(row, job) && <span className="font-medium text-content">{jobCourse(row, job)}</span>}
                         <span>{job.questionCount} questions</span>
                         <Badge variant={JOB_BADGE[job.status].variant} size="sm">
                           {JOB_BADGE[job.status].label}
