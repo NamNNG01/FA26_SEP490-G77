@@ -115,4 +115,11 @@ public class StudentDeckController {
         if ("PROCESSING".equals(status.status())) reply.header("Retry-After", "2");
         return reply.body(ApiResponse.success(status));
     }
+
+    @PostMapping("/decks/{deckId}/cards/from-question")
+    public ResponseEntity<ApiResponse<CardFromQuestionView>> fromQuestion(@AuthenticationPrincipal UserPrincipal user,
+            @PathVariable Long deckId, @Valid @RequestBody FromQuestion request) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success(decks.cardFromQuestion(user.getId(), deckId, request), "Card created from question"));
+    }
 }

@@ -9,6 +9,9 @@ import com.examprep.exceptions.ForbiddenException;
 import com.examprep.exceptions.ResourceConflictException;
 import com.examprep.exceptions.ResourceNotFoundException;
 import com.examprep.repositories.*;
+import com.examprep.util.attempt.AnswerText;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,6 +37,9 @@ public class StudentDeckService {
     private final CourseRepository courses;
     private final EnrollmentRepository enrollments;
     private final UserRepository users;
+    private final ExamAttemptRepository attempts;
+    private final AttemptAnswerRepository answers;
+    private final ObjectMapper json;
 
     // ------------------------------------------------------------------ FC-01..03
 
@@ -106,6 +112,65 @@ public class StudentDeckService {
         deck.setSubmittedAt(Instant.now());
         decks.flush();
         return new PublishRequestView(deck.getDeckId(), deck.getVisibility(), deck.getReviewStatus(), deck.getSubmittedAt());
+    }
+
+    // ------------------------------------------------------------------ FC-12
+
+    public CardFromQuestionView cardFromQuestion(Long userId, Long deckId, FromQuestion request) {
+        Deck deck = ownedDeck(userId, deckId);
+        if (!"FLASHCARD".equals(deck.getMode())) {
+            throw new BaseException(ResponseCode.UNPROCESSABLE_VALIDATION_ERROR, "Questions can only be saved to FLASHCARD decks.");
+        }
+        ExamAttempt attempt = attempts.findWithExamById(request.attemptId())
+                .filter(a -> a.getUser().getUserId().equals(userId))
+                .orElseThrow(() -> new ResourceNotFoundException("Attempt not found."));
+        if (!Set.of("SUBMITTED", "COMPLETED").contains(attempt.getStatus())) {
+            throw coded(ResponseCode.ATTEMPT_NOT_SUBMITTED, "ATTEMPT_NOT_SUBMITTED", "Submit the attempt first.");
+        }
+        Long courseId = attempt.getExam().getCourse().getCourseId();
+        if (!enrollments.existsByCourse_CourseIdAndUser_UserIdAndStatus(courseId, userId, Enrollment.STATUS_ACTIVE)) {
+            throw new ForbiddenException("You are not enrolled in this course.");
+        }
+        AttemptAnswer answer = answers.findWithQuestionByAttemptId(attempt.getAttemptId()).stream()
+                .filter(a -> a.getQuestion().getQuestionId().equals(request.questionId())).findFirst()
+                .orElseThrow(() -> new ResourceNotFoundException("The question is not part of this attempt."));
+        cards.findFirstByDeckDeckIdAndSourceQuestionId(deckId, request.questionId()).ifPresent(existing -> {
+            throw new BaseException(ResponseCode.CONFLICT, "This question is already in the deck.",
+                    Map.of("code", "ALREADY_EXISTS", "cardId", existing.getCardId()));
+        });
+        Question question = answer.getQuestion();
+        JsonNode display = tree(answer.getDisplaySnapshot());
+        String front = display.path("content").asText(question.getContent());
+        String back = backText(question, answer, display);
+        if (back == null || back.isBlank()) {
+            throw new BaseException(ResponseCode.UNPROCESSABLE_VALIDATION_ERROR, "This question has no answer text to save yet.");
+        }
+        Flashcard card = cards.saveAndFlush(Flashcard.builder().deck(deck).frontText(front).backText(back)
+                .position(cards.maxPosition(deckId) + 1).sourceQuestionId(question.getQuestionId())
+                .sourceAttemptId(attempt.getAttemptId()).build());
+        return new CardFromQuestionView(card.getCardId(), deckId, front, back, card.getPosition(),
+                card.getSourceQuestionId(), card.getSourceAttemptId());
+    }
+
+    /** Spec 14.12: choice/keyed types give the correct answer (+ explanation); essays give AI feedback or the sample answer, never the rubric. */
+    private String backText(Question question, AttemptAnswer answer, JsonNode display) {
+        JsonNode key = tree(answer.getKeySnapshot());
+        if (Set.of("ESSAY", "DIAGRAM").contains(question.getQuestionType())) {
+            String feedback = tree(answer.getAiFeedbackJson()).path("overallFeedback").asText("");
+            return !feedback.isBlank() ? feedback : key.path("sampleAnswer").asText(null);
+        }
+        String correct = AnswerText.correctAnswer(question.getQuestionType(), display, key);
+        String explanation = optionalText(question.getAiExplanation());
+        if (correct == null) return explanation;
+        return explanation == null ? correct : correct + "\n\n" + explanation;
+    }
+
+    private JsonNode tree(String value) {
+        try {
+            return value == null || value.isBlank() ? json.createObjectNode() : json.readTree(value);
+        } catch (java.io.IOException ex) {
+            return json.createObjectNode();
+        }
     }
 
     // ------------------------------------------------------------------ access, shared with study/import/FC-12

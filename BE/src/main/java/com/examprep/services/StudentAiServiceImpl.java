@@ -15,6 +15,7 @@ import com.examprep.exceptions.ResourceConflictException;
 import com.examprep.exceptions.ResourceNotFoundException;
 import com.examprep.repositories.*;
 import com.examprep.security.UserPrincipal;
+import com.examprep.util.attempt.AnswerText;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -203,25 +204,7 @@ public class StudentAiServiceImpl implements StudentAiService {
 
     /** Correct answer in words, from the attempt's own snapshots (spec: the AI never sees wrong options or the student's answer). */
     private String correctAnswer(String type, JsonNode display, JsonNode key) {
-        Map<Long, String> options = new HashMap<>();
-        for (JsonNode option : display.path("options")) options.put(option.path("optionId").asLong(), option.path("optionText").asText());
-        List<String> parts = new ArrayList<>();
-        if (CHOICE_TYPES.contains(type)) {
-            key.path("correctOptionIds").forEach(id -> { if (options.containsKey(id.asLong())) parts.add(options.get(id.asLong())); });
-            return parts.isEmpty() ? null : String.join("; ", parts);
-        }
-        switch (type) {
-            case "ORDERING" -> key.path("correctOrder").forEach(id -> { if (options.containsKey(id.asLong())) parts.add(options.get(id.asLong())); });
-            case "MATCHING" -> key.path("pairs").forEach(p -> parts.add(p.path("left").asText() + " -> " + p.path("right").asText()));
-            case "FILL_BLANK" -> key.path("blanks").forEach(b -> {
-                List<String> accepted = new ArrayList<>();
-                b.path("accepted").forEach(a -> accepted.add(a.asText()));
-                parts.add("Blank " + b.path("index").asText() + ": " + String.join(" / ", accepted));
-            });
-            default -> { }
-        }
-        if (parts.isEmpty()) return null;
-        return String.join("ORDERING".equals(type) ? " -> " : "\n", parts);
+        return AnswerText.correctAnswer(type, display, key);
     }
 
     private Long reserveExplanation(Long userId, Long attemptId, Long courseId, List<Pending> lot) {

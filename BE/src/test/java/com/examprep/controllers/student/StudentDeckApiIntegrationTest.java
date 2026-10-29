@@ -171,6 +171,77 @@ class StudentDeckApiIntegrationTest {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.length()").value(1));
     }
 
+    // ------------------------------------------------------------------ FC-12
+
+    @Test void cardFromSingleChoiceQuestion() throws Exception {
+        var module = f.module(course, "OOP");
+        Exam exam = f.exam(course, module, manager, "EXAM");
+        Question q = f.question(course, module, "EASY");
+        q.setAiExplanation("Because it is.");
+        ExamAttempt attempt = f.finishedAttempt(exam, student, java.time.Instant.now(), "5");
+        f.answer(attempt, q, false);
+        long deck = deck(student, "FLASHCARD");
+        String body = "{\"questionId\":" + q.getQuestionId() + ",\"attemptId\":" + attempt.getAttemptId() + "}";
+        send(post("/api/v1/student/decks/" + deck + "/cards/from-question"), student, body)
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.message").value("Card created from question"))
+                .andExpect(jsonPath("$.data.frontText").value(q.getContent()))
+                .andExpect(jsonPath("$.data.backText").value("right\n\nBecause it is."))
+                .andExpect(jsonPath("$.data.position").value(1))
+                .andExpect(jsonPath("$.data.sourceQuestionId").value(q.getQuestionId()))
+                .andExpect(jsonPath("$.data.sourceAttemptId").value(attempt.getAttemptId()));
+        send(post("/api/v1/student/decks/" + deck + "/cards/from-question"), student, body)
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.data.code").value("ALREADY_EXISTS"))
+                .andExpect(jsonPath("$.data.cardId").exists());
+        long code = deck(student, "CODE_SNIPPET");
+        send(post("/api/v1/student/decks/" + code + "/cards/from-question"), student, body).andExpect(status().isUnprocessableEntity());
+    }
+
+    @Test void cardFromEssayUsesFeedbackNotRubric() throws Exception {
+        var module = f.module(course, "OOP");
+        Exam exam = f.exam(course, module, manager, "EXAM");
+        Question q = Question.builder().course(course).module(module).questionType("ESSAY").difficulty("EASY").content("Explain GC.")
+                .essayGradingRubric("{\"criteria\":[{\"name\":\"secret rubric\"}]}").build();
+        em.persist(q);
+        ExamAttempt attempt = f.finishedAttempt(exam, student, java.time.Instant.now(), "5");
+        em.persist(AttemptAnswer.builder().attempt(attempt).question(q).weightSnapshot(java.math.BigDecimal.ONE)
+                .displaySnapshot("{\"content\":\"Explain GC.\"}").keySnapshot("{\"sampleAnswer\":\"Roots and reachability.\"}")
+                .aiFeedbackJson("{\"overallFeedback\":\"Good on roots, missed generations.\"}").gradingStatus("AI_GRADED").build());
+        Question q2 = Question.builder().course(course).module(module).questionType("ESSAY").difficulty("EASY").content("Explain JIT.").build();
+        em.persist(q2);
+        em.persist(AttemptAnswer.builder().attempt(attempt).question(q2).weightSnapshot(java.math.BigDecimal.ONE)
+                .displaySnapshot("{\"content\":\"Explain JIT.\"}").keySnapshot("{\"sampleAnswer\":\"Compiles hot code.\"}").gradingStatus("PENDING").build());
+        em.flush();
+        long deck = deck(student, "FLASHCARD");
+        send(post("/api/v1/student/decks/" + deck + "/cards/from-question"), student,
+                "{\"questionId\":" + q.getQuestionId() + ",\"attemptId\":" + attempt.getAttemptId() + "}")
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.data.backText").value("Good on roots, missed generations."));
+        send(post("/api/v1/student/decks/" + deck + "/cards/from-question"), student,
+                "{\"questionId\":" + q2.getQuestionId() + ",\"attemptId\":" + attempt.getAttemptId() + "}")
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.data.backText").value("Compiles hot code."));
+    }
+
+    @Test void cardFromQuestionChecksAttempt() throws Exception {
+        var module = f.module(course, "OOP");
+        Exam exam = f.exam(course, module, manager, "EXAM");
+        Question q = f.question(course, module, "EASY");
+        Question notInAttempt = f.question(course, module, "EASY");
+        ExamAttempt attempt = f.finishedAttempt(exam, student, java.time.Instant.now(), "5");
+        f.answer(attempt, q, true);
+        long deck = deck(student, "FLASHCARD");
+        String path = "/api/v1/student/decks/" + deck + "/cards/from-question";
+        send(post(path), student, "{\"questionId\":" + notInAttempt.getQuestionId() + ",\"attemptId\":" + attempt.getAttemptId() + "}").andExpect(status().isNotFound());
+        send(post(path), student, "{\"questionId\":" + q.getQuestionId() + "}").andExpect(status().isBadRequest());
+        attempt.setStatus("IN_PROGRESS");
+        em.flush();
+        send(post(path), student, "{\"questionId\":" + q.getQuestionId() + ",\"attemptId\":" + attempt.getAttemptId() + "}")
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.data.code").value("ATTEMPT_NOT_SUBMITTED"));
+        attempt.setStatus("SUBMITTED");
+        em.flush();
+        long othersDeck = deck(other, "FLASHCARD");
+        send(post("/api/v1/student/decks/" + othersDeck + "/cards/from-question"), other,
+                "{\"questionId\":" + q.getQuestionId() + ",\"attemptId\":" + attempt.getAttemptId() + "}").andExpect(status().isNotFound());
+    }
+
     long deck(User owner, String mode) throws Exception {
         String body = send(post("/api/v1/student/decks"), owner, "{\"title\":\"Deck " + System.nanoTime() + "\",\"mode\":\"" + mode + "\"}")
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
