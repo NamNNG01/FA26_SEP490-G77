@@ -2,12 +2,17 @@ import React from 'react';
 import { Icon } from '@/assets/icons';
 import { Progress } from '@/components/ui/Progress';
 import type { StudentDeck } from '@/services/studentCourse.service';
+import type { StudentDeckView } from '@/services/studentDeck.service';
 
-/** Router state the deck study page reads for its header (MC-04 returns cards only). */
+/** Router state the deck page reads until (or instead of) FC-14 answers. */
 export interface DeckStudyState {
   deckTitle: string;
   courseId?: number;
   courseTitle?: string;
+  /** The deck as the list / create call saw it; `isOwner` marks the student's own deck. */
+  deck?: StudentDeckView;
+  /** Flashcards tab to return to. */
+  tab?: 'mine' | 'course';
 }
 
 export function DeckCard({ deck, onOpen }: { deck: StudentDeck; onOpen: () => void }) {

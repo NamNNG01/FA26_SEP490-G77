@@ -77,6 +77,14 @@ public final class StudentDeckDtos {
 
     public record FromQuestion(@NotNull @Positive Long questionId, @NotNull @Positive Long attemptId) {}
 
+    // ------------------------------------------------------------- FC-13
+
+    /** learnedCount / starredCount are the caller's own progress. */
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record DeckListItem(Long deckId, String title, String description, String mode, Long courseId, String courseTitle,
+                               Long ownerId, String ownerName, long cardCount, long learnedCount, long starredCount,
+                               String visibility, String reviewStatus, Instant createdAt) {}
+
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record CardFromQuestionView(Long cardId, Long deckId, String frontText, String backText, int position,
                                        Long sourceQuestionId, Long sourceAttemptId) {}

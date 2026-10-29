@@ -25,6 +25,31 @@ public interface DeckRepository extends JpaRepository<Deck, Long> {
     Page<Deck> findManagedDecks(@Param("managerId") Long managerId, @Param("courseId") Long courseId,
                                @Param("isPublic") Boolean isPublic, @Param("search") String search, Pageable pageable);
 
+    /** FC-13 MINE: every deck the caller owns, newest first. mode "" = any. */
+    @EntityGraph(attributePaths = {"course", "user"})
+    @Query(value = "SELECT d FROM Deck d WHERE d.user.userId = :userId AND (:mode = '' OR d.mode = :mode) " +
+            "AND LOWER(d.title) LIKE :search ESCAPE '!' ORDER BY d.createdAt DESC, d.deckId DESC",
+            countQuery = "SELECT COUNT(d) FROM Deck d WHERE d.user.userId = :userId AND (:mode = '' OR d.mode = :mode) " +
+            "AND LOWER(d.title) LIKE :search ESCAPE '!'")
+    Page<Deck> findOwnedDecks(@Param("userId") Long userId, @Param("mode") String mode, @Param("search") String search,
+                              Pageable pageable);
+
+    /**
+     * FC-13 COURSE: decks of the courses the caller is ACTIVE-enrolled in - manager decks plus other students'
+     * PUBLIC decks, never the caller's own. courseId null = every enrolled course; mode "" = any.
+     */
+    @EntityGraph(attributePaths = {"course", "user"})
+    @Query(value = "SELECT d FROM Deck d JOIN d.course c WHERE " + COURSE_DECKS + " ORDER BY c.title, d.title, d.deckId",
+            countQuery = "SELECT COUNT(d) FROM Deck d JOIN d.course c WHERE " + COURSE_DECKS)
+    Page<Deck> findEnrolledCourseDecks(@Param("userId") Long userId, @Param("courseId") Long courseId, @Param("mode") String mode,
+                                       @Param("search") String search, Pageable pageable);
+
+    String COURSE_DECKS = "EXISTS (SELECT e.enrollmentId FROM Enrollment e WHERE e.course = c AND e.user.userId = :userId " +
+            "AND e.status = 'ACTIVE') AND d.user.userId <> :userId " +
+            "AND (d.user.roleName <> 'STUDENT' OR d.visibility = 'PUBLIC') " +
+            "AND (:courseId IS NULL OR c.courseId = :courseId) AND (:mode = '' OR d.mode = :mode) " +
+            "AND LOWER(d.title) LIKE :search ESCAPE '!'";
+
     @EntityGraph(attributePaths = {"course", "user"})
     @Query("SELECT d FROM Deck d WHERE d.deckId = :id")
     Optional<Deck> findDetail(@Param("id") Long id);

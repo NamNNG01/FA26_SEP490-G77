@@ -21,6 +21,11 @@ import {
 import { LoadError, STUDENT_PAGE_CLASS, formatDateTime } from '../components/studentUi';
 import { QUESTION_TYPE_LABEL, QuestionText, isAnswered, optionLetter } from '../components/QuestionAnswerInput';
 import { useDrawioSnapshot } from '@/features/question/components/useDrawioSnapshot';
+import { SAVABLE_QUESTION_TYPES } from '@/services/studentDeck.service';
+import { SaveToFlashcardsModal } from '../components/flashcards/SaveToFlashcardsModal';
+
+/** FC-12 needs the attempt submitted (or completed). */
+const SAVABLE_ATTEMPT_STATUSES: ReadonlySet<string> = new Set(['SUBMITTED', 'COMPLETED']);
 
 /** While the AI grades, the result is re-read this often. */
 const POLL_MS = 4_000;
@@ -211,8 +216,14 @@ export function StudentExamResultPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [examId]);
 
+  /** Questions to save as flashcards (modal open while set). */
+  const [saveQuestions, setSaveQuestions] = useState<number[] | null>(null);
+  /** Questions saved to a deck in this visit, for the "Saved" mark. */
+  const [savedIds, setSavedIds] = useState<Set<number>>(() => new Set());
+
   // Switching attempt: show the skeleton instead of the previous attempt's answers.
   useEffect(() => {
+    setSavedIds(new Set());
     setResult(null);
     setLoading(true);
     setOpen(new Set());
@@ -417,6 +428,8 @@ export function StudentExamResultPage() {
 
   const modules = moduleScores(result.questions, outcomes);
   const q = result.questions[current];
+  const canSave = SAVABLE_ATTEMPT_STATUSES.has(result.status);
+  const savableIds = canSave ? result.questions.filter(x => SAVABLE_QUESTION_TYPES.has(x.questionType)).map(x => x.questionId) : [];
 
   return (
     <div className={`${STUDENT_PAGE_CLASS} space-y-[clamp(1.25rem,2.5vw,1.75rem)]`}>
@@ -450,6 +463,7 @@ export function StudentExamResultPage() {
                 />
               ) : undefined
             }
+            onSaveAll={savableIds.length > 0 ? () => setSaveQuestions(savableIds) : undefined}
             onReattempt={examId ? () => navigate(studentTakeExamPath(examId)) : undefined}
             onBack={examId ? () => navigate(studentExamPath(examId)) : () => navigate(ROUTES.studentExams)}
           />
@@ -477,6 +491,19 @@ export function StudentExamResultPage() {
                 explanationOpen={open.has(q.questionId)}
                 onToggleExplanation={() => toggle(q.questionId)}
                 onRetryExplanation={() => loadExplanations([q.questionId])}
+                saveAction={
+                  savableIds.includes(q.questionId) ? (
+                    savedIds.has(q.questionId) ? (
+                      <Button size="sm" variant="ghost" icon={<Icon.Check className="w-4 h-4" />} onClick={() => setSaveQuestions([q.questionId])}>
+                        Saved to flashcards
+                      </Button>
+                    ) : (
+                      <Button size="sm" variant="outline" icon={<Icon.Layers className="w-4 h-4" />} onClick={() => setSaveQuestions([q.questionId])}>
+                        Save to flashcards
+                      </Button>
+                    )
+                  ) : undefined
+                }
               />
               <div className="flex items-center justify-between gap-3">
                 <Button variant="outline" icon={<Icon.ChevronLeft className="w-4 h-4" />} disabled={!navRef.current.prev} onClick={navRef.current.prev}>
@@ -491,6 +518,17 @@ export function StudentExamResultPage() {
           )}
         </section>
       </div>
+
+      {saveQuestions && (
+        <SaveToFlashcardsModal
+          attemptId={result.attemptId}
+          questionIds={saveQuestions}
+          examId={examId}
+          examTitle={result.examTitle}
+          onClose={() => setSaveQuestions(null)}
+          onSaved={ids => setSavedIds(prev => new Set([...prev, ...ids]))}
+        />
+      )}
 
       <Modal open={showGrading} onClose={() => setDismissed(true)} title="AI grading" size="sm">
         <GradingScreen
@@ -681,6 +719,7 @@ function ScoreCard({
   waitingForGrading,
   grading,
   onRequestGrading,
+  onSaveAll,
   onReattempt,
   onBack,
 }: {
@@ -700,6 +739,8 @@ function ScoreCard({
   /** SE-02 sent or the AI is working. */
   grading: boolean;
   onRequestGrading: () => void;
+  /** Saves every savable question as a flashcard (FC-12); absent when none can be saved. */
+  onSaveAll?: () => void;
   onReattempt?: () => void;
   onBack: () => void;
 }) {
@@ -757,6 +798,11 @@ function ScoreCard({
           {onReattempt && (
             <Button icon={<Icon.RefreshCw className="w-4 h-4" />} onClick={onReattempt}>
               Re-attempt
+            </Button>
+          )}
+          {onSaveAll && (
+            <Button variant="outline" icon={<Icon.Layers className="w-4 h-4" />} onClick={onSaveAll}>
+              Save all to flashcards
             </Button>
           )}
           <Button variant="outline" icon={<Icon.ChevronLeft className="w-4 h-4" />} onClick={onBack}>
@@ -832,6 +878,7 @@ function ResultQuestionCard({
   onToggleExplanation,
   onRetryExplanation,
   nav,
+  saveAction,
 }: {
   question: ResultQuestion;
   index: number;
@@ -842,6 +889,8 @@ function ResultQuestionCard({
   onRetryExplanation: () => void;
   /** "Question 3 of 40" bar on top of the card. */
   nav?: React.ReactNode;
+  /** "Save to flashcards" button, under the answer. */
+  saveAction?: React.ReactNode;
 }) {
   return (
     <article className="card overflow-hidden">
@@ -905,6 +954,7 @@ function ResultQuestionCard({
             onRetry={onRetryExplanation}
           />
         )}
+        {saveAction && <div className="flex justify-end">{saveAction}</div>}
       </div>
       )}
     </article>
