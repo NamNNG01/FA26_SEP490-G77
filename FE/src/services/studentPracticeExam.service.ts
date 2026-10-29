@@ -1,7 +1,7 @@
 import { api } from './api';
 import type { ApiResponse } from '@/auth/authContext';
 import type { PageResponse } from './course.service';
-import type { AnswerResponse, AttemptQuestion } from './studentAttempt.service';
+import type { AnswerResponse, AttemptQuestion, ResultQuestion } from './studentAttempt.service';
 
 /**
  * StudentPracticeExamService — custom practice exams (Deadline1 §18, PracticeExamController).
@@ -51,18 +51,105 @@ export interface PracticeExamItem {
   createdAt: string;
 }
 
+/** Key of ORDERING / MATCHING / FILL_BLANK — same shape as SA-05 `ResultQuestion.correctAnswer`. */
+export type CorrectAnswer = NonNullable<ResultQuestion['correctAnswer']>;
+
 /** Result of "Check answer" on one question of a practice attempt. */
 export interface AnswerCheck {
   /** False when the question type can't be checked before submitting. */
   supported: boolean;
   isCorrect: boolean | null;
+  /** Correct options of a choice question (empty for the other types). */
   correctOptionIds: number[];
+  correctAnswer?: CorrectAnswer | null;
+  /** The question's explanation, if it has one. */
+  explanation?: string | null;
   /** True while the check is mocked on the FE. */
   demo: boolean;
 }
 
 /** Question types "Check answer" can grade (the others are shown after submitting). */
-export const CHECKABLE_TYPES: ReadonlySet<string> = new Set(['SINGLE_CHOICE', 'MULTIPLE_CHOICE', 'TRUE_FALSE']);
+export const CHECKABLE_TYPES: ReadonlySet<string> = new Set([
+  'SINGLE_CHOICE',
+  'MULTIPLE_CHOICE',
+  'TRUE_FALSE',
+  'MATCHING',
+  'ORDERING',
+  'FILL_BLANK',
+]);
+
+/** Checked as soon as an option is picked: the answer is one choice. */
+export const INSTANT_CHECK_TYPES: ReadonlySet<string> = new Set(['SINGLE_CHOICE', 'TRUE_FALSE']);
+
+/** Fill-blank spellings are compared trimmed, with single spaces, ignoring case. */
+export function normalizeBlank(text: string | null | undefined): string {
+  return (text ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+/** Placeholder numbers of a fill-blank question (`{{n}}`); "1" when the text has none. */
+export function blankKeys(question: AttemptQuestion): string[] {
+  const keys = [...new Set([...question.content.matchAll(/\{\{(\d+)\}\}/g)].map(m => m[1]))];
+  return keys.length > 0 ? keys : ['1'];
+}
+
+export type CheckOutcome = 'correct' | 'partial' | 'wrong';
+
+/**
+ * How many parts of a checked answer are right — options, pairs, positions or blanks —
+ * so a question with several parts can say "3 / 4" instead of only right / wrong.
+ */
+export function checkParts(
+  question: AttemptQuestion,
+  response: AnswerResponse | null | undefined,
+  check: AnswerCheck,
+): { correct: number; total: number; outcome: CheckOutcome } {
+  const key = check.correctAnswer;
+  let correct = 0;
+  let total = 1;
+  switch (question.questionType) {
+    case 'SINGLE_CHOICE':
+    case 'TRUE_FALSE': {
+      const picked = response?.selectedOptionIds ?? [];
+      correct = picked.length === 1 && check.correctOptionIds.includes(picked[0]) ? 1 : 0;
+      break;
+    }
+    case 'MULTIPLE_CHOICE': {
+      // One part per correct option, plus one per wrong option picked.
+      const keyIds = new Set(check.correctOptionIds);
+      const picked = response?.selectedOptionIds ?? [];
+      correct = picked.filter(id => keyIds.has(id)).length;
+      total = keyIds.size + picked.filter(id => !keyIds.has(id)).length;
+      break;
+    }
+    case 'MATCHING': {
+      const given = new Map((response?.matches ?? []).map(m => [m.left, m.right]));
+      const pairs = key?.pairs ?? [];
+      correct = pairs.filter(p => given.get(p.left) === p.right).length;
+      total = pairs.length;
+      break;
+    }
+    case 'ORDERING': {
+      const given = response?.orderedOptionIds ?? [];
+      const order = key?.orderedOptionIds ?? [];
+      correct = order.filter((id, i) => given[i] === id).length;
+      total = order.length;
+      break;
+    }
+    case 'FILL_BLANK': {
+      const given = response?.blanks ?? {};
+      const blanks = key?.blanks ?? {};
+      const keys = Object.keys(blanks);
+      correct = keys.filter(k => blanks[k].some(a => normalizeBlank(a) === normalizeBlank(given[k]))).length;
+      total = keys.length;
+      break;
+    }
+  }
+  total = Math.max(total, 1);
+  // The server verdict wins over the part count.
+  if (check.isCorrect) return { correct: total, total, outcome: 'correct' };
+  if (check.isCorrect === false) correct = Math.min(correct, total - 1);
+  return { correct, total, outcome: correct === total ? 'correct' : correct > 0 ? 'partial' : 'wrong' };
+}
 
 type ErrorBody = { message?: string; data?: { code?: string; available?: number } | null };
 
@@ -96,6 +183,40 @@ function mockCorrectOptions(q: AttemptQuestion): number[] {
   return [options[Math.floor(seeded(q.questionId) * options.length)].optionId];
 }
 
+/** Stable shuffle, seeded by the question. */
+function mockShuffle<T>(items: T[], seed: number): T[] {
+  return items
+    .map((item, i) => ({ item, k: seeded(seed * 17 + i) }))
+    .sort((a, b) => a.k - b.k)
+    .map(x => x.item);
+}
+
+/** Demo key of an ORDERING / MATCHING / FILL_BLANK question — fixed per questionId. */
+function mockCorrectAnswer(q: AttemptQuestion, response: AnswerResponse | null): CorrectAnswer | null {
+  switch (q.questionType) {
+    case 'ORDERING':
+      return { orderedOptionIds: mockShuffle((q.options ?? []).map(o => o.optionId), q.questionId) };
+    case 'MATCHING': {
+      const rights = mockShuffle(q.matching?.rights ?? [], q.questionId);
+      if (rights.length === 0) return { pairs: [] };
+      return { pairs: (q.matching?.lefts ?? []).map((left, i) => ({ left, right: rights[i % rights.length] })) };
+    }
+    case 'FILL_BLANK': {
+      // No key on the FE: some blanks accept what was typed, the others a placeholder word.
+      const blanks: Record<string, string[]> = {};
+      for (const n of blankKeys(q)) {
+        const typed = response?.blanks?.[n]?.trim();
+        blanks[n] = [typed && seeded(q.questionId * 7 + Number(n)) < 0.6 ? typed : `answer ${n}`];
+      }
+      return { blanks };
+    }
+    default:
+      return null;
+  }
+}
+
+const MOCK_EXPLANATION = 'Demo explanation — the real explanation of this question shows here once the check API returns it.';
+
 export const studentPracticeExamService = {
   /** PQ-01 */
   async create(body: PracticeExamRequest): Promise<PracticeExamCreated> {
@@ -113,7 +234,8 @@ export const studentPracticeExamService = {
   },
 
   /**
-   * Instant check of one answer in a practice attempt. MOCK until the BE adds
+   * Instant check of one answer in a practice attempt (all six auto-graded types; the
+   * response carries `correctAnswer` and `explanation` too). MOCK until the BE adds
    * `POST /student/attempts/{attemptId}/questions/{questionId}/check` for PRACTICE / SMART_PRACTICE
    * exams (docs/notes/student-practice-check-answer-be-gap.md); then replace the body with:
    *   const res = await api.post<ApiResponse<AnswerCheck>>(
@@ -126,9 +248,17 @@ export const studentPracticeExamService = {
     if (!CHECKABLE_TYPES.has(question.questionType)) {
       return { supported: false, isCorrect: null, correctOptionIds: [], demo: true };
     }
-    const correct = mockCorrectOptions(question);
-    const given = response?.selectedOptionIds ?? [];
-    const isCorrect = given.length === correct.length && given.every(id => correct.includes(id));
-    return { supported: true, isCorrect, correctOptionIds: correct, demo: true };
+    const isChoice = ['SINGLE_CHOICE', 'MULTIPLE_CHOICE', 'TRUE_FALSE'].includes(question.questionType);
+    const check: AnswerCheck = {
+      supported: true,
+      isCorrect: null,
+      correctOptionIds: isChoice ? mockCorrectOptions(question) : [],
+      correctAnswer: isChoice ? null : mockCorrectAnswer(question, response),
+      explanation: MOCK_EXPLANATION,
+      demo: true,
+    };
+    const parts = checkParts(question, response, check);
+    const extraPicks = isChoice && (response?.selectedOptionIds ?? []).some(id => !check.correctOptionIds.includes(id));
+    return { ...check, isCorrect: parts.correct === parts.total && !extraPicks };
   },
 };

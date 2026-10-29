@@ -1,22 +1,38 @@
 import React from 'react';
 
-export function QuestionPalette({ total, current, answered, flagged, onSelect }: {
-  total: number; current: number; answered: Set<number>; flagged: Set<number>; onSelect: (n: number) => void;
+/** Practice: tone of a checked question in the palette (also used by its legend swatches). */
+export const PALETTE_RESULT_TONE = {
+  correct: 'bg-success-solid text-white border-success-solid',
+  partial: 'bg-warning-light text-warning-strong border-warning-strong border-dashed',
+  wrong: 'bg-danger-light text-danger-strong border-danger-solid',
+} as const;
+
+const RESULT_LABEL = { correct: 'correct', partial: 'partly correct', wrong: 'wrong' } as const;
+
+export function QuestionPalette({ total, current, answered, flagged, results, onSelect }: {
+  total: number; current: number; answered: Set<number>; flagged: Set<number>;
+  /** Practice: how each checked question went (question number → outcome). */
+  results?: Map<number, keyof typeof PALETTE_RESULT_TONE>;
+  onSelect: (n: number) => void;
 }) {
   return (
     <div className="flex flex-wrap gap-2">
-      {Array.from({ length: total }, (_, i) => i + 1).map(n => (
+      {Array.from({ length: total }, (_, i) => i + 1).map(n => {
+        const result = results?.get(n);
+        return (
         <button key={n} type="button" onClick={() => onSelect(n)}
           aria-current={n === current ? 'step' : undefined}
-          aria-label={`Question ${n}${flagged.has(n) ? ', flagged' : answered.has(n) ? ', answered' : ''}`}
+          aria-label={`Question ${n}${result ? `, ${RESULT_LABEL[result]}` : ''}${flagged.has(n) ? ', flagged' : !result && answered.has(n) ? ', answered' : ''}`}
           className={`w-9 h-9 rounded-[8px] text-sm font-semibold transition-all border
             ${n === current ? 'bg-brand-600 text-white border-brand-600 shadow-sm' :
+              result ? PALETTE_RESULT_TONE[result] :
               flagged.has(n) ? 'bg-warning-light text-warning border-warning-line' :
               answered.has(n) ? 'bg-success-light text-success border-success-line' :
               'bg-surface text-content-secondary border-line hover:bg-accent'}`}>
           {n}
         </button>
-      ))}
+        );
+      })}
     </div>
   );
 }
