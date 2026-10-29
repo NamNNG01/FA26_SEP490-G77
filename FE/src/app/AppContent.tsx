@@ -16,6 +16,7 @@ import { AuthLayout } from '@/layouts/AuthLayout';
 import { DashboardLayout } from '@/layouts/DashboardLayout';
 import { PublicLayout } from '@/layouts/PublicLayout';
 import { LoadingScreen } from '@/components/LoadingScreen';
+import { Role } from '@/utils/permissions';
 
 import { LoginPage } from '@/features/auth';
 import { LandingPage } from '@/features/landing';
@@ -39,6 +40,7 @@ import {
   StudentCommunityPage,
   StudentContributionsPage,
   StudentWeaknessReportPage,
+  StudentPracticeExamsPage,
 } from '@/features/student';
 import { ExamListPage, ExamFormPage } from '@/features/exam';
 import { PublicExamsPage, PublicExamDetailPage } from '@/features/public-exam';
@@ -67,7 +69,8 @@ import {
  *  - unauthenticated → PublicLayout (header / main / footer, NO sidebar) for
  *                      the public pages, plus auth forms in the narrow
  *                      centered AuthLayout.
- *  - authenticated   → the public pages KEEP PublicLayout (no sidebar), while
+ *  - authenticated   → the public pages KEEP PublicLayout (no sidebar; a student's
+ *                      catalog /courses is the exception), while
  *                      the application screens render inside DashboardLayout
  *                      (header + role-filtered Sidebar, swapped by <Outlet />).
  *
@@ -115,13 +118,15 @@ const examsPlaceholder = (
 /**
  * Public routes — identical for guests and signed-in users, always
  * PublicLayout. Only the "/" element differs (see SignedInHome).
+ * `withCatalog = false` leaves the catalog out: a signed-in student browses it
+ * inside DashboardLayout (with the sidebar) instead.
  */
-function publicRoutes(home: React.ReactNode = <LandingPage />) {
+function publicRoutes(home: React.ReactNode = <LandingPage />, withCatalog = true) {
   return (
     <Route element={<PublicLayout />}>
       <Route path={ROUTES.landing} element={home} />
-      <Route path={ROUTES.courses} element={<PublicCoursesPage />} />
-      <Route path={ROUTES.courseDetail} element={<PublicCourseDetailPage />} />
+      {withCatalog && <Route path={ROUTES.courses} element={<PublicCoursesPage />} />}
+      {withCatalog && <Route path={ROUTES.courseDetail} element={<PublicCourseDetailPage />} />}
       <Route path={ROUTES.pricing} element={pricingPlaceholder} />
       <Route path={ROUTES.examsIntro} element={examsPlaceholder} />
     </Route>
@@ -227,15 +232,22 @@ function AppRoutes() {
     );
   }
 
-  // 3. Authenticated → public pages keep the public shell; the application
+  const isStudent = user.role === Role.STUDENT;
+
+  // 3. Authenticated → public pages keep the public shell (a student's catalog
+  //     moves into the dashboard shell); the application
   //     screens render inside ONE DashboardLayout so the sidebar is mounted
   //     exactly once and persists across route changes.
   return (
     <Routes>
-      {publicRoutes(<SignedInHome isEntry={location.key === entryKey} />)}
+      {publicRoutes(<SignedInHome isEntry={location.key === entryKey} />, !isStudent)}
 
-      <Route element={<PublicLayout />}>
+      {/* STUDENT — header (Home · Courses) + sidebar, like the other roles. */}
+      <Route element={<DashboardLayout />}>
         <Route element={<RequireRole roles={ROLE_STUDENT} />}>
+          <Route path={ROUTES.courses} element={<PublicCoursesPage />} />
+          <Route path={ROUTES.courseDetail} element={<PublicCourseDetailPage />} />
+          <Route path={ROUTES.studentPracticeExams} element={<StudentPracticeExamsPage />} />
           <Route path={ROUTES.studentProfile} element={<ProfilePage />} />
           <Route path={ROUTES.studentDashboard} element={<Navigate to={ROUTES.studentCourses} replace />} />
           <Route path={ROUTES.studentCourses} element={<MyCoursesPage />} />

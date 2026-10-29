@@ -35,18 +35,11 @@ export function PublicNavbar() {
     ? ROUTES.studentCourses
     : landingPathForRole(user?.role);
 
+  // A student's own pages (exam history, contests, flashcards…) live in the dashboard sidebar.
   const navLinks: { label: string; to: string }[] = [
     { label: "Home", to: ROUTES.landing },
     { label: "Courses", to: ROUTES.courses },
-    ...(isStudent
-      ? [
-          { label: "Exam history", to: ROUTES.studentMyExams },
-          { label: "Contests", to: ROUTES.studentContests },
-        ]
-      : []),
-    isStudent
-      ? { label: "Flashcards", to: ROUTES.studentFlashcards }
-      : { label: "Pricing", to: ROUTES.pricing },
+    ...(isStudent ? [] : [{ label: "Pricing", to: ROUTES.pricing }]),
   ];
 
   function goTo(path: string) {

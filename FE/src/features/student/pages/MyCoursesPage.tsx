@@ -12,7 +12,6 @@ import type { StudentRecentAttempt } from '@/services/dashboard.service';
 import { getApiErrorMessage } from '@/utils/apiError';
 import { studentCourseService, type MyCourse } from '@/services/studentCourse.service';
 import { CardGridSkeleton, CourseThumb, LoadError, PageTitle, STUDENT_PAGE_CLASS, formatDate } from '../components/studentUi';
-import { RandomQuizModal } from '../components/RandomQuizModal';
 import { MaterialQuizModal } from '../components/MaterialQuizModal';
 import { SmartPracticeModal } from '../components/SmartPracticeModal';
 import { RecommendationsCard } from '../components/RecommendationsCard';
@@ -34,9 +33,8 @@ function matchesSearch(course: MyCourse, term: string) {
  *  - enrolled courses grid:      MC-01
  *  - search box:                 filters the enrolled courses only (title,
  *                                category, manager) — not the public catalog.
- *  - Customize Random Quiz /     practice quizzes the student builds on their
- *    Material to Quiz Creator:   own (RandomQuizModal / MaterialQuizModal).
- *  - Smart Practice:             AI-01/02 exam built from the student's weak modules.
+ *  - Material to Quiz Creator:   practice quiz the student builds from a file (MaterialQuizModal).
+ *  - Smart Practice:             practice exam — AI-01/02 (weak modules) or PQ-01 (random questions).
  *  - Recommended for you:        AI-03 card for one picked course (called on demand).
  */
 export function MyCoursesPage() {
@@ -47,7 +45,7 @@ export function MyCoursesPage() {
   const [page, setPage] = useState(1);
   const [reload, setReload] = useState(0);
   const [search, setSearch] = useState('');
-  const [quizModal, setQuizModal] = useState<'random' | 'material' | 'smart' | null>(null);
+  const [quizModal, setQuizModal] = useState<'material' | 'smart' | null>(null);
   const [smartCourseId, setSmartCourseId] = useState<number | null>(null);
 
   const [courses, setCourses] = useState<MyCourse[]>([]);
@@ -97,9 +95,6 @@ export function MyCoursesPage() {
           <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
             <Button variant="outline" icon={<AiSparkle />} onClick={() => openSmartPractice()}>
               Smart Practice
-            </Button>
-            <Button variant="outline" icon={<Icon.Zap className="w-4 h-4" />} onClick={() => setQuizModal('random')}>
-              Customize Random Quiz
             </Button>
             <Button variant="outline" icon={<Icon.Brain className="w-4 h-4" />} onClick={() => setQuizModal('material')}>
               Material to Quiz Creator
@@ -158,7 +153,6 @@ export function MyCoursesPage() {
         </>
       )}
 
-      <RandomQuizModal open={quizModal === 'random'} onClose={() => setQuizModal(null)} courses={courses} />
       <MaterialQuizModal open={quizModal === 'material'} onClose={() => setQuizModal(null)} />
       <SmartPracticeModal open={quizModal === 'smart'} onClose={() => setQuizModal(null)} courses={courses} initialCourseId={smartCourseId} />
 

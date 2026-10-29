@@ -1,16 +1,12 @@
-import { studentCourseService } from './studentCourse.service';
 import type { AnswerResponse, AttemptQuestion } from './studentAttempt.service';
 
 /**
- * StudentPracticeService — practice quizzes a student builds on their own.
+ * StudentPracticeService — Material to Quiz Creator: AI drafts questions from an uploaded
+ * PDF / DOCX / PPTX, the student edits them, then takes them.
  *
- *  - Customize Random Quiz: draws questions from the modules of enrolled courses.
- *  - Material to Quiz Creator: AI drafts questions from an uploaded PDF / DOCX / PPTX,
- *    the student edits them, then takes them.
- *
- * The BE has no student endpoint for either yet (docs/notes/student-practice-quiz-be-gaps.md):
- * the course / module list is real (CL-02), the question counts and the questions are demo
- * data. A practice quiz is taken and graded in the browser only — nothing is saved on the BE.
+ * The BE has no student endpoint for it yet (docs/notes/student-practice-quiz-be-gaps.md):
+ * the questions are demo data. A practice quiz is taken and graded in the browser only —
+ * nothing is saved on the BE. (Random practice exams are real: studentPracticeExam.service.ts.)
  */
 
 /**
@@ -18,11 +14,6 @@ import type { AnswerResponse, AttemptQuestion } from './studentAttempt.service';
  * ESSAY is not graded (that needs the AI rubric grader) — the review shows a sample answer instead.
  */
 export type PracticeQuestionType = 'SINGLE_CHOICE' | 'MULTIPLE_CHOICE' | 'TRUE_FALSE' | 'FILL_BLANK' | 'MATCHING' | 'ORDERING' | 'ESSAY';
-
-/** Exam kind, as the BE's examKind: QUIZ = auto-graded types, ESSAY = written answers. */
-export type PracticeExamKind = 'QUIZ' | 'ESSAY';
-
-export const EXAM_KIND_LABEL: Record<PracticeExamKind, string> = { QUIZ: 'Quiz', ESSAY: 'Essay' };
 
 /** What the grader compares the student's `response` against. */
 export interface PracticeAnswerKey {
@@ -46,7 +37,7 @@ export interface PracticeQuestion extends AttemptQuestion {
 export interface PracticeQuiz {
   quizId: string;
   title: string;
-  origin: 'RANDOM' | 'MATERIAL';
+  origin: 'MATERIAL';
   timeLimitMinutes: number;
   createdAt: string;
   /** Set when the student opens the quiz; the deadline counts from here. */
@@ -54,23 +45,6 @@ export interface PracticeQuiz {
   questions: PracticeQuestion[];
   answers: Record<number, AnswerResponse | null>;
   submittedAt: string | null;
-}
-
-export interface PracticeModule {
-  moduleId: number;
-  courseId: number;
-  courseTitle: string;
-  title: string;
-  orderIndex: number;
-  /** Questions the module holds per exam kind — demo values until the BE reports them. */
-  questionCounts: Record<PracticeExamKind, number>;
-}
-
-export interface RandomQuizRequest {
-  examKind: PracticeExamKind;
-  /** How many questions to draw from each module. */
-  moduleCounts: { moduleId: number; count: number }[];
-  timeLimitMinutes: number;
 }
 
 /** One question the material creator drafted — edited in the modal, then turned into a PracticeQuestion. */
@@ -119,12 +93,6 @@ let nextId = 1;
 const newId = () => nextId++;
 let nextKey = 1;
 export const newKey = (prefix = 'k') => `${prefix}${Date.now().toString(36)}${(nextKey++).toString(36)}`;
-
-/** Stable 0..1 number from a seed, so a module always reports the same demo count. */
-function seeded(seed: number): number {
-  const x = Math.sin(seed * 9301 + 49297) * 233280;
-  return x - Math.floor(x);
-}
 
 function shuffle<T>(list: T[]): T[] {
   const a = [...list];
@@ -237,40 +205,6 @@ const TEMPLATES: Record<DraftQuestionType, Template[]> = {
 function demoDraft(type: DraftQuestionType, topic: string): DraftQuestion {
   const list = TEMPLATES[type];
   return list[Math.floor(Math.random() * list.length)](topic);
-}
-
-const ESSAY_TEMPLATES: { prompt: (topic: string) => string; sample: (topic: string) => string }[] = [
-  {
-    prompt: topic => `Explain the key ideas of "${topic}" and give one real-world example.`,
-    sample: topic =>
-      `A good answer defines the main terms of ${topic}, explains how they relate, and walks through one concrete example showing when and why it is used.`,
-  },
-  {
-    prompt: topic => `Compare two approaches covered in "${topic}". When would you choose each one?`,
-    sample: topic =>
-      `Name both approaches from ${topic}, list their strengths and trade-offs (cost, complexity, performance), and state a clear rule for choosing between them.`,
-  },
-  {
-    prompt: topic => `Describe a common mistake when applying "${topic}" and how to avoid it.`,
-    sample: topic => `Identify a typical pitfall in ${topic}, explain its consequence, and propose concrete steps or checks that prevent it.`,
-  },
-];
-
-function demoEssay(topic: string, source: string): PracticeQuestion {
-  const t = ESSAY_TEMPLATES[Math.floor(Math.random() * ESSAY_TEMPLATES.length)];
-  return {
-    questionId: newId(),
-    orderIndex: 0,
-    questionType: 'ESSAY',
-    content: t.prompt(topic),
-    options: null,
-    matching: null,
-    maxPoints: null,
-    answerSpace: null,
-    answerKey: { sampleAnswer: t.sample(topic) },
-    source,
-    groupTitle: null,
-  };
 }
 
 /* ── draft → practice question ───────────────────────────────────────────── */
@@ -426,61 +360,6 @@ function createQuiz(title: string, origin: PracticeQuiz['origin'], timeLimitMinu
 /* ── service ─────────────────────────────────────────────────────────────── */
 
 export const studentPracticeService = {
-  /**
-   * Modules of the chosen courses with the questions each holds.
-   * Modules: CL-02 (real). Question count: demo — the BE does not report it to students.
-   */
-  async getModules(courses: { courseId: number; title: string }[]): Promise<PracticeModule[]> {
-    const details = await Promise.all(courses.map(c => studentCourseService.getCourseDetail(c.courseId)));
-    return details.flatMap((d, i) =>
-      [...(d.modules ?? [])]
-        .sort((a, b) => a.orderIndex - b.orderIndex)
-        .map(m => ({
-          moduleId: m.moduleId,
-          courseId: courses[i].courseId,
-          courseTitle: courses[i].title,
-          title: m.title,
-          orderIndex: m.orderIndex,
-          questionCounts: {
-            QUIZ: 8 + Math.floor(seeded(m.moduleId) * 33),
-            ESSAY: 2 + Math.floor(seeded(m.moduleId + 7919) * 9),
-          },
-        })),
-    );
-  },
-
-  /** Customize Random Quiz — demo: draws the asked number of questions from each module. */
-  async generateRandomQuiz(req: RandomQuizRequest, modules: PracticeModule[]): Promise<PracticeQuiz> {
-    await delay(700);
-    const byId = new Map(modules.map(m => [m.moduleId, m]));
-    const picks = req.moduleCounts.filter(p => p.count > 0);
-    if (picks.length === 0) throw new Error('Choose at least one module.');
-    for (const p of picks) {
-      const m = byId.get(p.moduleId);
-      if (!m) throw new Error('A selected module no longer exists.');
-      const available = m.questionCounts[req.examKind];
-      if (p.count > available) throw new Error(`"${m.title}" has only ${available} ${EXAM_KIND_LABEL[req.examKind].toLowerCase()} questions.`);
-    }
-
-    const types: DraftQuestionType[] = ['MULTIPLE_CHOICE', 'TRUE_FALSE', 'FILL_BLANK', 'MATCHING', 'ORDERING'];
-    const questions: PracticeQuestion[] = [];
-    for (const p of picks) {
-      const m = byId.get(p.moduleId)!;
-      const source = `${m.courseTitle} · ${m.title}`;
-      for (let i = 0; i < p.count; i++) {
-        questions.push(
-          req.examKind === 'ESSAY'
-            ? demoEssay(m.title, source)
-            : toPracticeQuestion(demoDraft(types[Math.floor(Math.random() * types.length)], m.title), 0, source, null),
-        );
-      }
-    }
-    const courseNames = [...new Set(picks.map(p => byId.get(p.moduleId)!.courseTitle))];
-    const kind = EXAM_KIND_LABEL[req.examKind];
-    const title = courseNames.length === 1 ? `Random ${kind.toLowerCase()} — ${courseNames[0]}` : `Random ${kind.toLowerCase()} — ${courseNames.length} courses`;
-    return createQuiz(title, 'RANDOM', req.timeLimitMinutes, shuffle(questions).map((q, i) => ({ ...q, orderIndex: i })));
-  },
-
   /** Material to Quiz Creator — demo: AI drafts from the file name, grouped by question type. */
   async generateFromMaterial(file: File, typeCounts: Partial<Record<DraftQuestionType, number>>, signal?: AbortSignal): Promise<MaterialDraft> {
     await delay(1200, signal);

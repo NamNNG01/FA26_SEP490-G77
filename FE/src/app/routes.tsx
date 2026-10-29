@@ -52,6 +52,8 @@ export const ROUTES = {
   studentExamResult: '/student/exam-result',
   /** Client-side practice quiz (random / from material) — render with studentPracticePath(id). */
   studentPractice: '/student/practice',
+  /** Custom practice exams the student generated (PQ-02). */
+  studentPracticeExams: '/student/practice-exams',
 
   // Content Manager (backend role: COURSE_MANAGER)
   managerDashboard: '/manager/dashboard',
@@ -117,6 +119,14 @@ export function studentExamPath(examId: number | string): string {
 /** Take-exam screen, starting (or resuming) an attempt — e.g. '/student/exam?examId=12'. */
 export function studentTakeExamPath(examId: number | string): string {
   return `${ROUTES.studentExam}?examId=${encodeURIComponent(String(examId))}`;
+}
+
+/**
+ * Take-exam screen for a practice exam (PQ-01 / AI-01) — e.g. '/student/exam?examId=12&practice=1'.
+ * `practice=1` turns on "Check answer" per question.
+ */
+export function studentTakePracticePath(examId: number | string): string {
+  return `${studentTakeExamPath(examId)}&practice=1`;
 }
 
 /** Practice quiz screen — e.g. '/student/practice?quizId=pq1'. */
@@ -215,7 +225,9 @@ export interface MenuItem {
 export const menuByRole: Record<string, MenuItem[]> = {
   STUDENT: [
     { id: 'student-courses', title: 'My Courses', icon: <Icon.Book className="w-4 h-4" />, path: ROUTES.studentCourses },
-    { id: 'student-exams', title: 'My Exams', icon: <Icon.ClipboardList className="w-4 h-4" />, path: ROUTES.studentExams },
+    { id: 'student-exams', title: 'Exam History', icon: <Icon.ClipboardList className="w-4 h-4" />, path: ROUTES.studentExams },
+    { id: 'student-practice-exams', title: 'Practice Exams', icon: <Icon.Zap className="w-4 h-4" />, path: ROUTES.studentPracticeExams },
+    { id: 'student-contests', title: 'Contests', icon: <Icon.Trophy className="w-4 h-4" />, path: ROUTES.studentContests },
     { id: 'student-flashcards', title: 'Flashcards', icon: <Icon.Layers className="w-4 h-4" />, path: ROUTES.studentFlashcards },
     { id: 'student-activity', title: 'Learning Activity', icon: <Icon.Activity className="w-4 h-4" />, path: ROUTES.studentLearningActivities },
     { id: 'student-notebook', title: 'Question Notebook', icon: <Icon.Star className="w-4 h-4" />, path: ROUTES.studentQuestionNotebook },

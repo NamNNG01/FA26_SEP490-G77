@@ -1,7 +1,7 @@
 import React from 'react';
-import { Link, Outlet, useLocation } from 'react-router';
+import { Link, NavLink, Outlet, useLocation } from 'react-router';
 import { useAuth, landingPathForRole } from '@/auth/authContext';
-import { getMenuForRole } from '@/app/routes';
+import { ROUTES, getMenuForRole } from '@/app/routes';
 import { Role } from '@/utils/permissions';
 import { CourseSearchBar } from '@/features/catalog';
 import { Sidebar } from '@/components/layout/Sidebar';
@@ -15,10 +15,15 @@ import { Icon } from '@/assets/icons';
  * while <Outlet /> swaps the page content, so sidebar state (collapse) and
  * scroll position survive navigation.
  *
- * Header layout: [Logo → role dashboard] [course search — STUDENT only] ...... [UserDropdown].
+ * Header layout: [Logo → role dashboard] [course search — STUDENT only] ... [Home · Courses — STUDENT only] [UserDropdown].
  * The user menu (Profile / Theme / Logout) lives in UserDropdown; there is
  * no standalone Logout button anymore.
  */
+const STUDENT_HEADER_LINKS = [
+  { label: 'Home', to: ROUTES.landing },
+  { label: 'Courses', to: ROUTES.courses },
+];
+
 export function DashboardLayout() {
   const { user } = useAuth();
   const location = useLocation();
@@ -53,6 +58,25 @@ export function DashboardLayout() {
           </div>
         ) : (
           <div className="flex-1" />
+        )}
+        {/* Students keep the two site-wide links in the header; their own pages are in the sidebar. */}
+        {user?.role === Role.STUDENT && (
+          <nav aria-label="Site" className="hidden md:flex items-center gap-1 flex-shrink-0">
+            {STUDENT_HEADER_LINKS.map((link) => (
+              <NavLink
+                key={link.to}
+                to={link.to}
+                end={link.to === ROUTES.landing}
+                className={({ isActive }) =>
+                  `rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                    isActive ? 'bg-primary-light text-brand-ink' : 'text-content-soft hover:bg-surface-hover hover:text-content'
+                  }`
+                }
+              >
+                {link.label}
+              </NavLink>
+            ))}
+          </nav>
         )}
         <div className="flex items-center gap-2 ml-1 pl-3 border-l border-line-soft">
           <UserDropdown />

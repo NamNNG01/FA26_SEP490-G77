@@ -7,7 +7,7 @@ import { Spinner } from '@/components/ui/Spinner';
 import { TimerDisplay } from '@/components/common/TimerDisplay';
 import { QuestionPalette } from '@/components/common/QuestionPalette';
 import { Icon } from '@/assets/icons';
-import { studentExamPath, studentExamResultPath } from '@/app/routes';
+import { ROUTES, studentExamPath, studentExamResultPath } from '@/app/routes';
 import { studentProgressService } from '@/services/studentProgress.service';
 import { getApiErrorMessage } from '@/utils/apiError';
 import {
@@ -17,6 +17,7 @@ import {
   type AnswerResponse,
   type AttemptSession,
 } from '@/services/studentAttempt.service';
+import { CHECKABLE_TYPES, studentPracticeExamService, type AnswerCheck } from '@/services/studentPracticeExam.service';
 import { QUESTION_TYPE_LABEL, QuestionAnswerInput, QuestionText, isAnswered } from '../components/QuestionAnswerInput';
 
 /** Unsaved answers are pushed to SA-03 this often. */
@@ -38,6 +39,9 @@ type SaveState = 'saved' | 'dirty' | 'saving' | 'error';
  *    screen submits on its own (and the BE auto-submits if the tab is gone).
  *  - Only questions made entirely of essay / code / diagram get the "Essay"
  *    layout (wider, taller editor); every other paper is a quiz.
+ *  - `&practice=1` (a practice exam, PQ-01 / AI-01): each answer can be checked
+ *    at once ("Check answer") — the correct answer shows and the question locks.
+ *    The checks are kept per attempt in sessionStorage so a reload keeps them.
  */
 export function StudentTakeExamPage() {
   const navigate = useNavigate();
@@ -46,6 +50,7 @@ export function StudentTakeExamPage() {
   const contestEndsAt = (location.state as { endsAt?: string } | null)?.endsAt;
   const examIdParam = searchParams.get('examId');
   const attemptIdParam = searchParams.get('attemptId');
+  const practice = searchParams.get('practice') === '1';
 
   const [session, setSession] = useState<AttemptSession | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -62,6 +67,8 @@ export function StudentTakeExamPage() {
   const [confirm, setConfirm] = useState<'submit' | 'cancel' | null>(null);
   const [busy, setBusy] = useState<'submit' | 'cancel' | 'delete' | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [checks, setChecks] = useState<Record<number, AnswerCheck>>({});
+  const [checking, setChecking] = useState<number | null>(null);
 
   // Draft bookkeeping lives in refs: the autosave timer must see the latest values.
   const answersRef = useRef(answers);
@@ -102,7 +109,8 @@ export function StudentTakeExamPage() {
         setSession({ ...s, deadlineAt: contestEndsAt ?? s.deadlineAt, questions: [...s.questions].sort((a, b) => a.orderIndex - b.orderIndex) });
         setCurrent(0);
         setSaveState('saved');
-        if (!attemptIdParam) setSearchParams({ attemptId: String(s.attemptId) }, { replace: true });
+        setChecks(practice ? loadChecks(s.attemptId) : {});
+        if (!attemptIdParam) setSearchParams({ attemptId: String(s.attemptId), ...(practice ? { practice: '1' } : {}) }, { replace: true });
       })
       .catch(err => {
         if (!cancelled) setLoadError(getApiErrorMessage(err, 'Failed to open the exam.'));
@@ -203,6 +211,9 @@ export function StudentTakeExamPage() {
     [session, flush, navigate],
   );
 
+  /** Where Cancel / Delete attempt lead: a practice exam has no course exam page. */
+  const exitPath = (examId: number) => (practice ? ROUTES.studentPracticeExams : studentExamPath(examId));
+
   const saveAndExit = async () => {
     if (!session) return;
     setBusy('cancel');
@@ -210,7 +221,7 @@ export function StudentTakeExamPage() {
     try {
       await flush();
       finishedRef.current = true;
-      navigate(studentExamPath(session.examId), { replace: true });
+      navigate(exitPath(session.examId), { replace: true });
     } catch (err) {
       setActionError(getApiErrorMessage(err, 'Failed to save your answers. Please try again.'));
       setBusy(null);
@@ -225,7 +236,7 @@ export function StudentTakeExamPage() {
     finishedRef.current = true;
     try {
       await studentAttemptService.deleteAttempt(session.attemptId);
-      navigate(studentExamPath(session.examId), { replace: true });
+      navigate(exitPath(session.examId), { replace: true });
     } catch (err) {
       finishedRef.current = false;
       setActionError(getApiErrorMessage(err, 'Failed to delete this attempt. Please try again.'));
@@ -298,8 +309,8 @@ export function StudentTakeExamPage() {
     return (
       <FullScreenMessage>
         <p className="text-base text-content-soft">This exam has no question.</p>
-        <Button variant="outline" onClick={() => navigate(studentExamPath(session.examId))}>
-          Back to exam
+        <Button variant="outline" onClick={() => navigate(exitPath(session.examId))}>
+          Back
         </Button>
       </FullScreenMessage>
     );
@@ -331,6 +342,28 @@ export function StudentTakeExamPage() {
     } finally { setBookmarkBusy(false); }
   };
 
+  const check = checks[q.questionId];
+  const checkAnswer = async () => {
+    if (checking != null || check) return;
+    const questionId = q.questionId;
+    setChecking(questionId);
+    setActionError(null);
+    try {
+      // Store the answer first: a checked answer is final, and the result must count it.
+      if (dirtyRef.current.has(questionId)) await flush();
+      const res = await studentPracticeExamService.checkAnswer(session.attemptId, q, answers[questionId] ?? null);
+      setChecks(prev => {
+        const next = { ...prev, [questionId]: res };
+        saveChecks(session.attemptId, next);
+        return next;
+      });
+    } catch (err) {
+      setActionError(getApiErrorMessage(err, 'Could not check this answer.'));
+    } finally {
+      setChecking(null);
+    }
+  };
+
   return (
     <div className="h-[100dvh] flex flex-col bg-surface-alt">
       <header className="min-h-14 bg-surface border-b border-line-soft flex flex-wrap items-center px-[clamp(0.75rem,2vw,1.5rem)] py-2 gap-x-4 gap-y-2 flex-shrink-0">
@@ -340,6 +373,11 @@ export function StudentTakeExamPage() {
           <span className="hidden sm:inline-flex flex-shrink-0 rounded-[6px] border border-line px-2 py-0.5 text-2xs font-medium text-content-soft">
             {isEssay ? 'Essay' : 'Quiz'}
           </span>
+          {practice && (
+            <Badge variant="info" size="sm">
+              Practice
+            </Badge>
+          )}
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           <SaveIndicator state={saveState} />
@@ -391,13 +429,27 @@ export function StudentTakeExamPage() {
               />
             </div>
 
-            <QuestionAnswerInput
-              key={q.questionId}
-              question={q}
-              value={answers[q.questionId] ?? null}
-              onChange={r => setAnswer(q.questionId, r)}
-              roomy={isEssay}
-            />
+            {/* A checked practice answer is locked: the fieldset disables every control of the input. */}
+            <fieldset disabled={Boolean(check)} className="min-w-0">
+              <QuestionAnswerInput
+                key={q.questionId}
+                question={q}
+                value={answers[q.questionId] ?? null}
+                onChange={r => setAnswer(q.questionId, r)}
+                roomy={isEssay}
+                reveal={check?.supported ? check.correctOptionIds : null}
+              />
+            </fieldset>
+
+            {practice && !RUBRIC_TYPES.has(q.questionType) && (
+              <PracticeCheck
+                check={check}
+                checking={checking === q.questionId}
+                canCheck={isAnswered(answers[q.questionId])}
+                checkable={CHECKABLE_TYPES.has(q.questionType)}
+                onCheck={checkAnswer}
+              />
+            )}
 
             <div className="flex flex-wrap items-center justify-between gap-2">
               <Button
@@ -530,6 +582,88 @@ export function StudentTakeExamPage() {
         </p>
         {actionError && <p className="mt-3 text-sm text-danger">{actionError}</p>}
       </Modal>
+    </div>
+  );
+}
+
+const CHECKS_PREFIX = 'practice-checks:';
+
+function loadChecks(attemptId: number): Record<number, AnswerCheck> {
+  try {
+    const raw = sessionStorage.getItem(CHECKS_PREFIX + attemptId);
+    return raw ? (JSON.parse(raw) as Record<number, AnswerCheck>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveChecks(attemptId: number, checks: Record<number, AnswerCheck>) {
+  try {
+    sessionStorage.setItem(CHECKS_PREFIX + attemptId, JSON.stringify(checks));
+  } catch {
+    // Storage blocked: the checks still hold until a reload.
+  }
+}
+
+/** Practice mode: the "Check answer" button, then the verdict for the question. */
+function PracticeCheck({
+  check,
+  checking,
+  canCheck,
+  checkable,
+  onCheck,
+}: {
+  check: AnswerCheck | undefined;
+  checking: boolean;
+  canCheck: boolean;
+  checkable: boolean;
+  onCheck: () => void;
+}) {
+  if (!check) {
+    return (
+      <div className="flex flex-wrap items-center gap-3">
+        <Button
+          variant="outline"
+          icon={<Icon.CheckCircle className="w-4 h-4" />}
+          loading={checking}
+          disabled={!canCheck || checking}
+          onClick={onCheck}
+        >
+          Check answer
+        </Button>
+        <span className="text-xs text-content-subtle">
+          {checkable ? 'Your answer is locked once checked.' : 'The correct answer of this question type shows after you submit.'}
+        </span>
+      </div>
+    );
+  }
+  const tone = !check.supported
+    ? 'border-line bg-surface text-content-soft'
+    : check.isCorrect
+      ? 'border-success-line bg-success-light text-success-strong'
+      : 'border-danger-line bg-danger-light text-danger-strong';
+  return (
+    <div role="status" className={`flex flex-wrap items-center gap-2 rounded-[10px] border px-4 py-3 text-sm font-medium ${tone}`}>
+      {!check.supported ? (
+        <>
+          <Icon.Info className="w-4 h-4 flex-shrink-0" /> Answer saved — the correct answer shows after you submit.
+        </>
+      ) : check.isCorrect ? (
+        <>
+          <Icon.CheckCircle className="w-4 h-4 flex-shrink-0" /> Correct!
+        </>
+      ) : (
+        <>
+          <Icon.XCircle className="w-4 h-4 flex-shrink-0" /> Not quite — the correct answer is marked in green.
+        </>
+      )}
+      {check.demo && (
+        <span className="ml-auto">
+          <Badge variant="warning" size="sm">
+            Demo
+          </Badge>
+        </span>
+      )}
     </div>
   );
 }

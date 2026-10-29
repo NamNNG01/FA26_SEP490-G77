@@ -49,15 +49,20 @@ interface InputProps {
   onChange: (next: AnswerResponse) => void;
   /** Essay screen: a taller editor. */
   roomy?: boolean;
+  /**
+   * Practice "Check answer": the correct options of a choice question. When set the
+   * options are read-only — correct ones turn green, a wrong pick turns red.
+   */
+  reveal?: number[] | null;
 }
 
 /** The answer control for one question, by type. Emits the SA-03 `response` payload. */
-export function QuestionAnswerInput({ question, value, onChange, roomy }: InputProps) {
+export function QuestionAnswerInput({ question, value, onChange, roomy, reveal }: InputProps) {
   switch (question.questionType) {
     case 'SINGLE_CHOICE':
     case 'TRUE_FALSE':
     case 'MULTIPLE_CHOICE':
-      return <ChoiceInput question={question} value={value} onChange={onChange} />;
+      return <ChoiceInput question={question} value={value} onChange={onChange} reveal={reveal} />;
     case 'FILL_BLANK':
       return <FillBlankInput question={question} value={value} onChange={onChange} />;
     case 'MATCHING':
@@ -74,10 +79,12 @@ export function QuestionAnswerInput({ question, value, onChange, roomy }: InputP
   }
 }
 
-function ChoiceInput({ question, value, onChange }: InputProps) {
+function ChoiceInput({ question, value, onChange, reveal }: InputProps) {
   const multi = question.questionType === 'MULTIPLE_CHOICE';
   const selected = new Set(value?.selectedOptionIds ?? []);
+  const correct = reveal ? new Set(reveal) : null;
   const toggle = (id: number) => {
+    if (correct) return;
     if (!multi) return onChange({ selectedOptionIds: [id] });
     const next = new Set(selected);
     if (next.has(id)) next.delete(id);
@@ -89,25 +96,51 @@ function ChoiceInput({ question, value, onChange }: InputProps) {
       {multi && <p className="text-xs text-content-subtle">Select every correct answer.</p>}
       {(question.options ?? []).map((opt, i) => {
         const isOn = selected.has(opt.optionId);
+        const tone = !correct
+          ? isOn
+            ? 'border-brand-600 bg-primary-light'
+            : 'border-line bg-surface hover:border-brand-600 hover:bg-surface-hover'
+          : correct.has(opt.optionId)
+            ? 'border-success-solid bg-success-light'
+            : isOn
+              ? 'border-danger-solid bg-danger-light'
+              : 'border-line bg-surface opacity-70';
+        const badge = !correct
+          ? isOn
+            ? 'bg-brand-600 text-white'
+            : 'bg-surface-muted text-content-secondary'
+          : correct.has(opt.optionId)
+            ? 'bg-success-solid text-white'
+            : isOn
+              ? 'bg-danger-solid text-white'
+              : 'bg-surface-muted text-content-secondary';
         return (
           <button
             key={opt.optionId}
             type="button"
             role={multi ? 'checkbox' : 'radio'}
             aria-checked={isOn}
+            aria-disabled={correct ? true : undefined}
             onClick={() => toggle(opt.optionId)}
-            className={`w-full text-left flex items-start gap-3 p-4 rounded-[10px] border-2 transition-all ${
-              isOn ? 'border-brand-600 bg-primary-light' : 'border-line bg-surface hover:border-brand-600 hover:bg-surface-hover'
-            }`}
+            className={`w-full text-left flex items-start gap-3 p-4 rounded-[10px] border-2 transition-all ${correct ? 'cursor-default' : ''} ${tone}`}
           >
             <span
-              className={`w-7 h-7 flex items-center justify-center text-sm font-bold flex-shrink-0 mt-0.5 ${multi ? 'rounded-[6px]' : 'rounded-full'} ${
-                isOn ? 'bg-brand-600 text-white' : 'bg-surface-muted text-content-secondary'
-              }`}
+              className={`w-7 h-7 flex items-center justify-center text-sm font-bold flex-shrink-0 mt-0.5 ${multi ? 'rounded-[6px]' : 'rounded-full'} ${badge}`}
             >
-              {multi && isOn ? <Icon.Check className="w-4 h-4" /> : optionLetter(i)}
+              {correct && correct.has(opt.optionId) ? (
+                <Icon.Check className="w-4 h-4" />
+              ) : correct && isOn ? (
+                <Icon.X className="w-4 h-4" />
+              ) : multi && isOn ? (
+                <Icon.Check className="w-4 h-4" />
+              ) : (
+                optionLetter(i)
+              )}
             </span>
-            <span className="text-base leading-relaxed text-content-secondary break-words">{opt.optionText}</span>
+            <span className="flex-1 text-base leading-relaxed text-content-secondary break-words">{opt.optionText}</span>
+            {correct?.has(opt.optionId) && (
+              <span className="flex-shrink-0 self-center text-xs font-semibold text-success-strong">Correct answer</span>
+            )}
           </button>
         );
       })}
