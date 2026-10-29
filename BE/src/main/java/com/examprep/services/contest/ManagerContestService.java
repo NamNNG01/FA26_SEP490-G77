@@ -396,7 +396,7 @@ public class ManagerContestService {
 
     // ------------------------------------------------------------------ detail (API 2 body)
 
-    Detail detail(Contest contest) {
+    public Detail detail(Contest contest) {
         Instant now = Instant.now();
         String status = status(contest, now), ranking = rankingStatus(contest, now);
         List<ContestReward> prizeRows = rewards.findByContestContestIdOrderByRankPositionAsc(contest.getContestId());
@@ -455,13 +455,13 @@ public class ManagerContestService {
     // ------------------------------------------------------------------ scope and helpers
 
     /** 404 when missing, deleted or outside the caller's courses (spec section 3: never reveal existence). */
-    Contest scoped(UserPrincipal user, Optional<Contest> found) {
+    public Contest scoped(UserPrincipal user, Optional<Contest> found) {
         Contest contest = found.orElseThrow(ContestRules::notFound);
         if (contest.getCourse() == null || !manages(user, contest.getCourse())) throw notFound();
         return contest;
     }
 
-    boolean manages(UserPrincipal user, Course course) {
+    public boolean manages(UserPrincipal user, Course course) {
         return admin(user) || course.getManager().getUserId().equals(user.getId())
                 || assignments.existsByCourseCourseIdAndUserUserId(course.getCourseId(), user.getId());
     }
@@ -473,7 +473,7 @@ public class ManagerContestService {
         }
     }
 
-    void notify(User user, String title, String content, String type) {
+    public void notify(User user, String title, String content, String type) {
         Notification n = notifications.save(Notification.builder().title(title).content(content).type(type).targetType("USER").build());
         userNotifications.save(UserNotification.builder().user(user).notification(n).isRead(false).build());
     }

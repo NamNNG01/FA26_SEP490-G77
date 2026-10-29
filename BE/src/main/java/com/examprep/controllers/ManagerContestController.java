@@ -4,6 +4,8 @@ import com.examprep.dto.ApiResponse;
 import com.examprep.dto.ContestDtos.*;
 import com.examprep.dto.PageResponse;
 import com.examprep.security.UserPrincipal;
+import com.examprep.services.contest.ContestBatchPayer;
+import com.examprep.services.contest.ContestRewardPayer;
 import com.examprep.services.contest.ManagerContestService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -20,6 +22,8 @@ import java.time.Instant;
 @RequiredArgsConstructor
 public class ManagerContestController {
     private final ManagerContestService contests;
+    private final ContestRewardPayer payer;
+    private final ContestBatchPayer batchPayer;
 
     @GetMapping("/contests")
     public ResponseEntity<ApiResponse<PageResponse<ListItem>>> list(@AuthenticationPrincipal UserPrincipal user,
@@ -69,6 +73,19 @@ public class ManagerContestController {
     public ResponseEntity<ApiResponse<PageResponse<LeaderboardRow>>> leaderboard(@AuthenticationPrincipal UserPrincipal user,
             @PathVariable Long id, @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size) {
         return ResponseEntity.ok(ApiResponse.success(contests.leaderboard(user, id, page, size)));
+    }
+
+    @PostMapping("/contests/{id}/pay-rewards")
+    public ResponseEntity<ApiResponse<PayResult>> payRewards(@AuthenticationPrincipal UserPrincipal user, @PathVariable Long id) {
+        PayResult result = payer.pay(user, id);
+        return ResponseEntity.ok(ApiResponse.success(result, "Đã trả thưởng cho " + result.rewardsGranted() + " người thắng"));
+    }
+
+    @PostMapping("/contests/batch-pay-rewards")
+    public ResponseEntity<ApiResponse<BatchResult>> batchPayRewards(@AuthenticationPrincipal UserPrincipal user,
+            @RequestBody(required = false) BatchPayRequest body) {
+        ContestBatchPayer.Outcome outcome = batchPayer.payAll(user, body);
+        return ResponseEntity.ok(ApiResponse.success(outcome.result(), outcome.message()));
     }
 
     @GetMapping("/contest-options/exams")
