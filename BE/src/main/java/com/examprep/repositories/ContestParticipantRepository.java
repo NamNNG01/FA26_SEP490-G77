@@ -11,6 +11,7 @@ import org.springframework.stereotype.Repository;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface ContestParticipantRepository extends JpaRepository<ContestParticipant, Long> {
@@ -38,4 +39,10 @@ public interface ContestParticipantRepository extends JpaRepository<ContestParti
     @EntityGraph(attributePaths = "user")
     @Query("SELECT p FROM ContestParticipant p WHERE p.contest.contestId = :id AND p.rank IS NOT NULL ORDER BY p.rank, p.participantId")
     Page<ContestParticipant> findRanked(@Param("id") Long contestId, Pageable pageable);
+
+    boolean existsByContest_ContestIdAndUser_UserId(Long contestId, Long userId);
+    long countByContest_ContestId(Long contestId);
+    Optional<ContestParticipant> findByContest_ContestIdAndUser_UserId(Long contestId, Long userId);
+    List<ContestParticipant> findByContest_ContestIdOrderByScoreDescFinishedAtAsc(Long contestId);
+    Page<ContestParticipant> findByUser_UserIdOrderByJoinedAtDesc(Long userId, Pageable pageable);
 }

@@ -1,4 +1,4 @@
--- V48__long_flashcard_contest_fixups.sql
+-- V52__long_flashcard_contest_fixups.sql
 -- Aligns V41-V43 with the Part 2 spec (FC/FP/PQ/AI) and the contest manager spec (Deadline 2).
 
 -- decks.mode is the card layout (spec 14), not PERSONAL/COURSE (personal = course_id IS NULL).

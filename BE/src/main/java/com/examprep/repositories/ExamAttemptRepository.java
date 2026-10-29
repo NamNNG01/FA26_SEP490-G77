@@ -19,7 +19,6 @@ import java.util.Optional;
 public interface ExamAttemptRepository extends JpaRepository<ExamAttempt, Long> {
     boolean existsByExamExamId(Long examId);
 
-    // Serialises SE-02 and the grading worker on one attempt's status. No join: FOR UPDATE would also lock the exam/course rows.
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT a FROM ExamAttempt a WHERE a.attemptId = :id")
     Optional<ExamAttempt> lockById(@Param("id") Long id);
@@ -38,6 +37,18 @@ public interface ExamAttemptRepository extends JpaRepository<ExamAttempt, Long> 
             "WHERE a.user.userId = :userId AND a.submitTime IS NOT NULL " +
             "ORDER BY a.submitTime DESC")
     List<StudentRecentAttempt> findRecentAttemptsByUserId(@Param("userId") Long userId, Pageable pageable);
+
+    @Query("SELECT COUNT(DISTINCT a.exam.examId) FROM ExamAttempt a WHERE a.user.userId = :userId AND a.exam.course.courseId = :courseId AND a.status = 'COMPLETED'")
+    long countCompletedExamsByUserAndCourse(@Param("userId") Long userId, @Param("courseId") Long courseId);
+
+    @Query("SELECT AVG(a.totalScore * 10.0 / a.exam.maxScore) FROM ExamAttempt a WHERE a.user.userId = :userId AND a.exam.course.courseId = :courseId AND a.status = 'COMPLETED' AND a.totalScore IS NOT NULL AND a.exam.maxScore > 0")
+    Double averageScoreByUserAndCourse(@Param("userId") Long userId, @Param("courseId") Long courseId);
+
+    @Query("SELECT a FROM ExamAttempt a JOIN FETCH a.exam e WHERE a.user.userId = :userId AND e.course.courseId = :courseId AND a.submitTime IS NOT NULL ORDER BY a.submitTime DESC")
+    List<ExamAttempt> findRecentAttemptsByUserAndCourse(@Param("userId") Long userId, @Param("courseId") Long courseId, Pageable pageable);
+
+    @Query("SELECT a FROM ExamAttempt a LEFT JOIN FETCH a.exam e WHERE a.user.userId = :userId AND a.submitTime IS NOT NULL ORDER BY a.submitTime DESC")
+    Page<ExamAttempt> findActivityAttemptsByUser(@Param("userId") Long userId, Pageable pageable);
 
     @Query("""
     SELECT new com.examprep.dto.student.MyExamDto(
@@ -68,7 +79,6 @@ public interface ExamAttemptRepository extends JpaRepository<ExamAttempt, Long> 
     @Query("SELECT att FROM ExamAttempt att WHERE att.exam.examId = :examId AND att.user.userId = :userId AND att.status = :status")
     Optional<ExamAttempt> findActiveAttempt(@Param("examId") Long examId, @Param("userId") Long userId, @Param("status") String status);
 
-
     List<ExamAttempt> findByExam_ExamIdAndUser_UserId(
             Long examId,
             Long userId
@@ -77,7 +87,6 @@ public interface ExamAttemptRepository extends JpaRepository<ExamAttempt, Long> 
             Long examId, Long userId, Pageable pageable
     );
 
-    /** SA-06: history of one exam for one student, newest attempt first, paged inside the database. */
     Page<ExamAttempt> findByUserUserIdAndExamExamIdOrderByStartTimeDescAttemptIdDesc(
             Long userId, Long examId, Pageable pageable);
 }

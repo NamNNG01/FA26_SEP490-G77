@@ -24,7 +24,7 @@ public class ExamAttempt implements Serializable {
     private Long attemptId;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "exam_id", nullable = false)
+    @JoinColumn(name = "exam_id")
     private Exam exam;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -56,4 +56,8 @@ public class ExamAttempt implements Serializable {
 
     @Column(name = "status", nullable = false, length = 50)
     private String status;
+
+    @Builder.Default
+    @Column(name = "mode", length = 30)
+    private String mode = "NORMAL";
 }
