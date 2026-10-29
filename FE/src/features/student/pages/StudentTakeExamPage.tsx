@@ -5,9 +5,9 @@ import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { Spinner } from '@/components/ui/Spinner';
 import { TimerDisplay } from '@/components/common/TimerDisplay';
-import { QuestionPalette } from '@/components/common/QuestionPalette';
+import { PALETTE_RESULT_TONE, QuestionPalette } from '@/components/common/QuestionPalette';
 import { Icon } from '@/assets/icons';
-import { studentExamPath, studentExamResultPath } from '@/app/routes';
+import { ROUTES, studentExamPath, studentExamResultPath } from '@/app/routes';
 import { studentProgressService } from '@/services/studentProgress.service';
 import { getApiErrorMessage } from '@/utils/apiError';
 import {
@@ -17,6 +17,16 @@ import {
   type AnswerResponse,
   type AttemptSession,
 } from '@/services/studentAttempt.service';
+import {
+  CHECKABLE_TYPES,
+  INSTANT_CHECK_TYPES,
+  blankKeys,
+  checkParts,
+  studentPracticeExamService,
+  type AnswerCheck,
+  type CheckOutcome,
+} from '@/services/studentPracticeExam.service';
+import type { AttemptQuestion } from '@/services/studentAttempt.service';
 import { QUESTION_TYPE_LABEL, QuestionAnswerInput, QuestionText, isAnswered } from '../components/QuestionAnswerInput';
 
 /** Unsaved answers are pushed to SA-03 this often. */
@@ -38,6 +48,12 @@ type SaveState = 'saved' | 'dirty' | 'saving' | 'error';
  *    screen submits on its own (and the BE auto-submits if the tab is gone).
  *  - Only questions made entirely of essay / code / diagram get the "Essay"
  *    layout (wider, taller editor); every other paper is a quiz.
+ *  - `&practice=1` (a practice exam, PQ-01 / AI-01): each answer is checked at
+ *    once — the correct answer and the explanation show and the question locks.
+ *    Single choice / true-false are checked on the pick; multiple choice, matching,
+ *    ordering and fill-blank have a check button that shows how far the answer is.
+ *    Keys: 1–9 / A–Z pick an option, Enter checks or goes to the next question.
+ *    The checks are kept per attempt in sessionStorage so a reload keeps them.
  */
 export function StudentTakeExamPage() {
   const navigate = useNavigate();
@@ -46,6 +62,7 @@ export function StudentTakeExamPage() {
   const contestEndsAt = (location.state as { endsAt?: string } | null)?.endsAt;
   const examIdParam = searchParams.get('examId');
   const attemptIdParam = searchParams.get('attemptId');
+  const practice = searchParams.get('practice') === '1';
 
   const [session, setSession] = useState<AttemptSession | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -62,6 +79,17 @@ export function StudentTakeExamPage() {
   const [confirm, setConfirm] = useState<'submit' | 'cancel' | null>(null);
   const [busy, setBusy] = useState<'submit' | 'cancel' | 'delete' | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [checks, setChecks] = useState<Record<number, AnswerCheck>>({});
+  const [checking, setChecking] = useState<number | null>(null);
+  /** Question just checked: its "Next question" button takes the focus. */
+  const [justChecked, setJustChecked] = useState<number | null>(null);
+  // Practice shortcuts: the handler is rebuilt every render, the listener stays.
+  const keyHandlerRef = useRef<((e: KeyboardEvent) => void) | null>(null);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => keyHandlerRef.current?.(e);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   // Draft bookkeeping lives in refs: the autosave timer must see the latest values.
   const answersRef = useRef(answers);
@@ -102,7 +130,8 @@ export function StudentTakeExamPage() {
         setSession({ ...s, deadlineAt: contestEndsAt ?? s.deadlineAt, questions: [...s.questions].sort((a, b) => a.orderIndex - b.orderIndex) });
         setCurrent(0);
         setSaveState('saved');
-        if (!attemptIdParam) setSearchParams({ attemptId: String(s.attemptId) }, { replace: true });
+        setChecks(practice ? loadChecks(s.attemptId) : {});
+        if (!attemptIdParam) setSearchParams({ attemptId: String(s.attemptId), ...(practice ? { practice: '1' } : {}) }, { replace: true });
       })
       .catch(err => {
         if (!cancelled) setLoadError(getApiErrorMessage(err, 'Failed to open the exam.'));
@@ -157,6 +186,8 @@ export function StudentTakeExamPage() {
   const setAnswer = (questionId: number, response: AnswerResponse) => {
     seqRef.current[questionId] = (seqRef.current[questionId] ?? 0) + 1;
     dirtyRef.current.add(questionId);
+    // Updated now, not on the next render: a practice check flushes right after.
+    answersRef.current = { ...answersRef.current, [questionId]: response };
     setAnswers(prev => ({ ...prev, [questionId]: response }));
     setSaveState('dirty');
   };
@@ -203,6 +234,9 @@ export function StudentTakeExamPage() {
     [session, flush, navigate],
   );
 
+  /** Where Cancel / Delete attempt lead: a practice exam has no course exam page. */
+  const exitPath = (examId: number) => (practice ? ROUTES.studentPracticeExams : studentExamPath(examId));
+
   const saveAndExit = async () => {
     if (!session) return;
     setBusy('cancel');
@@ -210,7 +244,7 @@ export function StudentTakeExamPage() {
     try {
       await flush();
       finishedRef.current = true;
-      navigate(studentExamPath(session.examId), { replace: true });
+      navigate(exitPath(session.examId), { replace: true });
     } catch (err) {
       setActionError(getApiErrorMessage(err, 'Failed to save your answers. Please try again.'));
       setBusy(null);
@@ -225,7 +259,7 @@ export function StudentTakeExamPage() {
     finishedRef.current = true;
     try {
       await studentAttemptService.deleteAttempt(session.attemptId);
-      navigate(studentExamPath(session.examId), { replace: true });
+      navigate(exitPath(session.examId), { replace: true });
     } catch (err) {
       finishedRef.current = false;
       setActionError(getApiErrorMessage(err, 'Failed to delete this attempt. Please try again.'));
@@ -259,6 +293,15 @@ export function StudentTakeExamPage() {
     return s;
   }, [questions, answers]);
   const unanswered = questions.length - answeredSet.size;
+  /** Practice: question number → how its checked answer went. */
+  const results = useMemo(() => {
+    const m = new Map<number, CheckOutcome>();
+    questions.forEach((q, i) => {
+      const c = checks[q.questionId];
+      if (c?.supported) m.set(i + 1, checkParts(q, answers[q.questionId], c).outcome);
+    });
+    return m;
+  }, [questions, checks, answers]);
 
   const goTo = (index: number) => {
     setCurrent(Math.max(0, Math.min(questions.length - 1, index)));
@@ -298,8 +341,8 @@ export function StudentTakeExamPage() {
     return (
       <FullScreenMessage>
         <p className="text-base text-content-soft">This exam has no question.</p>
-        <Button variant="outline" onClick={() => navigate(studentExamPath(session.examId))}>
-          Back to exam
+        <Button variant="outline" onClick={() => navigate(exitPath(session.examId))}>
+          Back
         </Button>
       </FullScreenMessage>
     );
@@ -331,6 +374,69 @@ export function StudentTakeExamPage() {
     } finally { setBookmarkBusy(false); }
   };
 
+  const check = checks[q.questionId];
+  const checkable = practice && CHECKABLE_TYPES.has(q.questionType);
+  const progress = checkProgress(q, answers[q.questionId]);
+  const isLast = current === questions.length - 1;
+  const goNext = () => (isLast ? setConfirm('submit') : goTo(current + 1));
+
+  const checkAnswer = async () => {
+    if (checking != null || check) return;
+    const questionId = q.questionId;
+    // An untouched ordering is checked as shown: store that order as the answer first.
+    if (q.questionType === 'ORDERING' && !answersRef.current[questionId]?.orderedOptionIds?.length) {
+      setAnswer(questionId, { orderedOptionIds: (q.options ?? []).map(o => o.optionId) });
+    }
+    setChecking(questionId);
+    setActionError(null);
+    try {
+      // Store the answer first: a checked answer is final, and the result must count it.
+      if (dirtyRef.current.has(questionId)) await flush();
+      const res = await studentPracticeExamService.checkAnswer(session.attemptId, q, answersRef.current[questionId] ?? null);
+      setChecks(prev => {
+        const next = { ...prev, [questionId]: res };
+        saveChecks(session.attemptId, next);
+        return next;
+      });
+      setJustChecked(questionId);
+    } catch (err) {
+      setActionError(getApiErrorMessage(err, 'Could not check this answer.'));
+    } finally {
+      setChecking(null);
+    }
+  };
+
+  /** Practice single choice / true-false: picking an option is the answer, check it at once. */
+  const changeAnswer = (response: AnswerResponse) => {
+    setAnswer(q.questionId, response);
+    if (practice && !check && INSTANT_CHECK_TYPES.has(q.questionType)) void checkAnswer();
+  };
+
+  keyHandlerRef.current = e => {
+    if (!practice || confirm || e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return;
+    const target = e.target as HTMLElement | null;
+    if (target?.closest('input, textarea, select, [contenteditable="true"], [role="dialog"]')) return;
+    if (e.key === 'Enter') {
+      // A focused button already reacts to Enter by itself.
+      if (target?.closest('button, a')) return;
+      if (check) goNext();
+      else if (checkable && progress.ready) void checkAnswer();
+      else return;
+      e.preventDefault();
+      return;
+    }
+    if (check || !CHOICE_TYPES.has(q.questionType) || e.key.length !== 1) return;
+    const index = /[1-9]/.test(e.key) ? Number(e.key) - 1 : /[a-z]/i.test(e.key) ? e.key.toLowerCase().charCodeAt(0) - 97 : -1;
+    const option = q.options?.[index];
+    if (!option) return;
+    e.preventDefault();
+    if (q.questionType !== 'MULTIPLE_CHOICE') return changeAnswer({ selectedOptionIds: [option.optionId] });
+    const picked = new Set(answers[q.questionId]?.selectedOptionIds ?? []);
+    if (picked.has(option.optionId)) picked.delete(option.optionId);
+    else picked.add(option.optionId);
+    changeAnswer({ selectedOptionIds: [...picked] });
+  };
+
   return (
     <div className="h-[100dvh] flex flex-col bg-surface-alt">
       <header className="min-h-14 bg-surface border-b border-line-soft flex flex-wrap items-center px-[clamp(0.75rem,2vw,1.5rem)] py-2 gap-x-4 gap-y-2 flex-shrink-0">
@@ -340,6 +446,11 @@ export function StudentTakeExamPage() {
           <span className="hidden sm:inline-flex flex-shrink-0 rounded-[6px] border border-line px-2 py-0.5 text-2xs font-medium text-content-soft">
             {isEssay ? 'Essay' : 'Quiz'}
           </span>
+          {practice && (
+            <Badge variant="info" size="sm">
+              Practice
+            </Badge>
+          )}
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           <SaveIndicator state={saveState} />
@@ -391,13 +502,34 @@ export function StudentTakeExamPage() {
               />
             </div>
 
-            <QuestionAnswerInput
-              key={q.questionId}
-              question={q}
-              value={answers[q.questionId] ?? null}
-              onChange={r => setAnswer(q.questionId, r)}
-              roomy={isEssay}
-            />
+            {/* A checked practice answer is locked: a revealed input locks itself (its key stays
+                readable), any other checked one is disabled by the fieldset. */}
+            <fieldset disabled={Boolean(check) && !check?.supported} className="min-w-0">
+              <QuestionAnswerInput
+                key={q.questionId}
+                question={q}
+                value={answers[q.questionId] ?? null}
+                onChange={changeAnswer}
+                roomy={isEssay}
+                practice={practice}
+                reveal={check?.supported ? check : null}
+                onEnter={checkable && !check && progress.ready ? () => void checkAnswer() : undefined}
+              />
+            </fieldset>
+
+            {practice && !RUBRIC_TYPES.has(q.questionType) && (
+              <PracticeCheck
+                key={q.questionId}
+                question={q}
+                response={answers[q.questionId]}
+                check={check}
+                checking={checking === q.questionId}
+                progress={progress}
+                checkable={CHECKABLE_TYPES.has(q.questionType)}
+                focusNext={justChecked === q.questionId}
+                onCheck={checkAnswer}
+              />
+            )}
 
             <div className="flex flex-wrap items-center justify-between gap-2">
               <Button
@@ -418,12 +550,12 @@ export function StudentTakeExamPage() {
                 >
                   {isFlagged ? 'Flagged' : 'Flag for review'}
                 </Button>
-                {current < questions.length - 1 ? (
-                  <Button iconRight={<Icon.ChevronRight className="w-4 h-4" />} onClick={() => goTo(current + 1)}>
+                {!isLast ? (
+                  <Button data-next-question iconRight={<Icon.ChevronRight className="w-4 h-4" />} onClick={goNext}>
                     Next question
                   </Button>
                 ) : (
-                  <Button icon={<Icon.Check className="w-4 h-4" />} onClick={() => setConfirm('submit')}>
+                  <Button data-next-question icon={<Icon.Check className="w-4 h-4" />} onClick={goNext}>
                     Finish
                   </Button>
                 )}
@@ -439,11 +571,19 @@ export function StudentTakeExamPage() {
             current={current + 1}
             answered={answeredSet}
             flagged={flagged}
+            results={practice ? results : undefined}
             onSelect={n => goTo(n - 1)}
           />
           <div className="mt-4 space-y-2 pt-4 border-t border-line-soft">
             {[
-              { swatch: 'bg-success-light border-success-line', label: 'Answered', count: answeredSet.size },
+              ...(practice
+                ? [
+                    { swatch: PALETTE_RESULT_TONE.correct, label: 'Correct', count: countOutcome(results, 'correct') },
+                    { swatch: PALETTE_RESULT_TONE.partial, label: 'Partly correct', count: countOutcome(results, 'partial') },
+                    { swatch: PALETTE_RESULT_TONE.wrong, label: 'Wrong', count: countOutcome(results, 'wrong') },
+                  ]
+                : []),
+              { swatch: 'bg-success-light border-success-line', label: practice ? 'Answered, not checked' : 'Answered', count: practice ? answeredSet.size - results.size : answeredSet.size },
               { swatch: 'bg-warning-light border-warning-line', label: 'Flagged', count: flagged.size },
               { swatch: 'bg-surface-alt border-line', label: 'Unanswered', count: unanswered },
             ].map(s => (
@@ -532,6 +672,213 @@ export function StudentTakeExamPage() {
       </Modal>
     </div>
   );
+}
+
+const CHECKS_PREFIX = 'practice-checks:';
+
+function loadChecks(attemptId: number): Record<number, AnswerCheck> {
+  try {
+    const raw = sessionStorage.getItem(CHECKS_PREFIX + attemptId);
+    return raw ? (JSON.parse(raw) as Record<number, AnswerCheck>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveChecks(attemptId: number, checks: Record<number, AnswerCheck>) {
+  try {
+    sessionStorage.setItem(CHECKS_PREFIX + attemptId, JSON.stringify(checks));
+  } catch {
+    // Storage blocked: the checks still hold until a reload.
+  }
+}
+
+const CHOICE_TYPES: ReadonlySet<string> = new Set(['SINGLE_CHOICE', 'MULTIPLE_CHOICE', 'TRUE_FALSE']);
+
+function countOutcome(results: Map<number, CheckOutcome>, outcome: CheckOutcome): number {
+  let n = 0;
+  results.forEach(o => {
+    if (o === outcome) n++;
+  });
+  return n;
+}
+
+interface CheckProgress {
+  /** Text of the check button: says how far the answer is. */
+  label: string;
+  /** The answer is complete enough to be checked. */
+  ready: boolean;
+  /** Why it can't be checked yet. */
+  hint: string | null;
+}
+
+/** Practice: what the check button of a question says, and whether it can be pressed. */
+function checkProgress(q: AttemptQuestion, response: AnswerResponse | null | undefined): CheckProgress {
+  switch (q.questionType) {
+    case 'MULTIPLE_CHOICE': {
+      const n = response?.selectedOptionIds?.length ?? 0;
+      return { label: 'Check answer', ready: n > 0, hint: n > 0 ? null : 'Pick every correct option, then check.' };
+    }
+    case 'MATCHING': {
+      const lefts = q.matching?.lefts ?? [];
+      const done = new Set((response?.matches ?? []).filter(m => m.right).map(m => m.left));
+      const n = lefts.filter(l => done.has(l)).length;
+      const ready = lefts.length > 0 && n === lefts.length;
+      return { label: `Check answer (${n}/${lefts.length} pairs)`, ready, hint: ready ? null : 'Match every item to check.' };
+    }
+    case 'FILL_BLANK': {
+      const keys = blankKeys(q);
+      const n = keys.filter(k => response?.blanks?.[k]?.trim()).length;
+      const ready = n === keys.length;
+      return {
+        label: keys.length > 1 ? `Check answer (${n}/${keys.length} blanks)` : 'Check answer',
+        ready,
+        hint: ready ? 'Press Enter in the last blank to check.' : keys.length > 1 ? 'Fill every blank to check.' : 'Type your answer to check.',
+      };
+    }
+    case 'ORDERING':
+      return { label: 'Lock in order', ready: true, hint: 'Put the items in order, then lock it in.' };
+    default:
+      return { label: 'Check answer', ready: isAnswered(response), hint: null };
+  }
+}
+
+const OUTCOME_TONE: Record<CheckOutcome, string> = {
+  correct: 'border-success-line bg-success-light text-success-strong',
+  partial: 'border-warning-line bg-warning-light text-warning-strong',
+  wrong: 'border-danger-line bg-danger-light text-danger-strong',
+};
+
+/** What the green marks mean, by question type. */
+const REVEAL_HINT: Record<string, string> = {
+  SINGLE_CHOICE: 'The correct answer is marked in green.',
+  TRUE_FALSE: 'The correct answer is marked in green.',
+  MULTIPLE_CHOICE: 'Correct options are green — a dashed one is a correct option you missed.',
+  MATCHING: 'Each wrong pair shows its correct match.',
+  ORDERING: 'Each item out of place shows where it belongs.',
+  FILL_BLANK: 'Each wrong blank shows the accepted answer.',
+};
+
+/**
+ * Practice mode, below the answer: before the check, the check button (single choice /
+ * true-false have none — the pick is the check); after it, the verdict, the explanation
+ * (collapsed). The page's own "Next question" button goes on.
+ */
+function PracticeCheck({
+  question,
+  response,
+  check,
+  checking,
+  progress,
+  checkable,
+  focusNext,
+  onCheck,
+}: {
+  question: AttemptQuestion;
+  response: AnswerResponse | null | undefined;
+  check: AnswerCheck | undefined;
+  checking: boolean;
+  progress: CheckProgress;
+  checkable: boolean;
+  /** Just checked: move the focus to the page's "Next question" so Enter goes on. */
+  focusNext: boolean;
+  onCheck: () => void;
+}) {
+  const [showExplanation, setShowExplanation] = useState(false);
+  useEffect(() => {
+    if (check && focusNext) document.querySelector<HTMLButtonElement>('[data-next-question]')?.focus({ preventScroll: true });
+  }, [check, focusNext]);
+
+  if (!check) {
+    if (!checkable) {
+      return <p className="text-xs text-content-subtle">The correct answer of this question type shows after you submit.</p>;
+    }
+    if (INSTANT_CHECK_TYPES.has(question.questionType)) {
+      return (
+        <p className="text-xs text-content-subtle">
+          {checking ? 'Checking…' : 'Pick an answer — it is checked right away and locked.'}
+          <span className="hidden md:inline"> Keys: 1–{Math.min(question.options?.length ?? 4, 9)} or A–{optionLetterOf(question)}.</span>
+        </p>
+      );
+    }
+    return (
+      <div className="flex flex-wrap items-center gap-3">
+        <Button
+          icon={<Icon.CheckCircle className="w-4 h-4" />}
+          loading={checking}
+          disabled={!progress.ready || checking}
+          onClick={onCheck}
+        >
+          {progress.label}
+        </Button>
+        <span className="text-xs text-content-subtle">
+          {progress.hint ?? 'Your answer is locked once checked.'}
+          {progress.ready && question.questionType !== 'FILL_BLANK' && <span className="hidden md:inline"> Press Enter to check.</span>}
+        </span>
+      </div>
+    );
+  }
+
+  if (!check.supported) {
+    return (
+      <div role="status" className="flex items-center gap-2 rounded-[10px] border border-line bg-surface px-4 py-3 text-sm font-medium text-content-soft">
+        <Icon.Info className="w-4 h-4 flex-shrink-0" /> Answer saved — the correct answer shows after you submit.
+      </div>
+    );
+  }
+
+  const { correct, total, outcome } = checkParts(question, response, check);
+  const score = total > 1 ? ` — ${correct} / ${total}` : '';
+  const title = outcome === 'correct' ? 'Correct!' : outcome === 'partial' ? `Partly correct${score}` : `Not quite${score}`;
+  const explanation = check.explanation?.trim();
+  const panelId = `explanation-${question.questionId}`;
+
+  return (
+    <div className={`rounded-[10px] border ${OUTCOME_TONE[outcome]}`}>
+      <div role="status" className="flex flex-wrap items-start gap-x-2 gap-y-1 px-4 pt-3">
+        {outcome === 'correct' ? (
+          <Icon.CheckCircle className="w-5 h-5 flex-shrink-0" />
+        ) : outcome === 'partial' ? (
+          <Icon.AlertCircle className="w-5 h-5 flex-shrink-0" />
+        ) : (
+          <Icon.XCircle className="w-5 h-5 flex-shrink-0" />
+        )}
+        <div className="flex-1 min-w-0">
+          <p className="text-base font-semibold">{title}</p>
+          {outcome !== 'correct' && <p className="text-sm opacity-90">{REVEAL_HINT[question.questionType]}</p>}
+        </div>
+        {check.demo && (
+          <Badge variant="warning" size="sm">
+            Demo
+          </Badge>
+        )}
+      </div>
+
+      <div className="mt-3 border-t border-line-soft">
+        <button
+          type="button"
+          aria-expanded={showExplanation}
+          aria-controls={panelId}
+          onClick={() => setShowExplanation(s => !s)}
+          className="w-full flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-content-secondary hover:bg-surface transition-colors"
+        >
+          <Icon.Lightbulb className="w-4 h-4 flex-shrink-0 text-warning" />
+          {showExplanation ? 'Hide explanation' : 'Show explanation'}
+          <Icon.ChevronDown className={`w-4 h-4 ml-auto transition-transform ${showExplanation ? 'rotate-180' : ''}`} />
+        </button>
+        {showExplanation && (
+          <div id={panelId} className="px-4 pb-3 text-sm leading-relaxed text-content-secondary whitespace-pre-line break-words">
+            {explanation || <span className="text-content-subtle">No explanation has been added to this question yet.</span>}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Last option letter of a choice question, for the shortcut hint. */
+function optionLetterOf(q: AttemptQuestion): string {
+  return String.fromCharCode(64 + Math.min(Math.max(q.options?.length ?? 1, 1), 26));
 }
 
 function FullScreenMessage({ children }: { children: React.ReactNode }) {
