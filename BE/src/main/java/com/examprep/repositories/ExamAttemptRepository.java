@@ -62,13 +62,14 @@ public interface ExamAttemptRepository extends JpaRepository<ExamAttempt, Long> 
             WHEN att.status IN ('SUBMITTED', 'GRADING', 'COMPLETED')
             THEN att.totalScore
             ELSE NULL
-        END)
+        END),
+        ex.mode
     )
     FROM ExamAttempt att
     JOIN att.exam ex
     LEFT JOIN ex.course c
     WHERE att.user.userId = :userId
-    GROUP BY ex.examId, ex.title, c.courseId, c.title, ex.maxScore
+    GROUP BY ex.examId, ex.title, c.courseId, c.title, ex.maxScore, ex.mode
     ORDER BY MAX(att.startTime) DESC
     """)
     Page<MyExamDto> findMyExams(

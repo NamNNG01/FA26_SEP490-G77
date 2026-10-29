@@ -33,6 +33,8 @@ export const ROUTES = {
   /** Route pattern — render with studentWeaknessReportPath(id). AI-04 report of one course. */
   studentWeaknessReport: '/student/courses/:courseId/weakness-report',
   studentExams: '/student/exams',
+  /** Materials the student uploaded (MQ-02) and the quizzes generated from them. */
+  studentMaterials: '/student/materials',
   studentMyExams: '/student/my-exams',
   studentLearningActivities: '/student/learning-activity',
   studentQuestionNotebook: '/student/questions/saved',
@@ -50,9 +52,7 @@ export const ROUTES = {
   studentPublicExamDetail: '/student/public-exam/:examId',
   studentExam: '/student/exam',
   studentExamResult: '/student/exam-result',
-  /** Client-side practice quiz (random / from material) — render with studentPracticePath(id). */
-  studentPractice: '/student/practice',
-  /** Custom practice exams the student generated (PQ-02). */
+  /** Old Practice Exams page — redirects to Exam History filtered to practice exams. */
   studentPracticeExams: '/student/practice-exams',
 
   // Content Manager (backend role: COURSE_MANAGER)
@@ -127,11 +127,6 @@ export function studentTakeExamPath(examId: number | string): string {
  */
 export function studentTakePracticePath(examId: number | string): string {
   return `${studentTakeExamPath(examId)}&practice=1`;
-}
-
-/** Practice quiz screen — e.g. '/student/practice?quizId=pq1'. */
-export function studentPracticePath(quizId: string): string {
-  return `${ROUTES.studentPractice}?quizId=${encodeURIComponent(quizId)}`;
 }
 
 /** Take-exam screen for an attempt already started — e.g. '/student/exam?attemptId=7'. */
@@ -226,7 +221,7 @@ export const menuByRole: Record<string, MenuItem[]> = {
   STUDENT: [
     { id: 'student-courses', title: 'My Courses', icon: <Icon.Book className="w-4 h-4" />, path: ROUTES.studentCourses },
     { id: 'student-exams', title: 'Exam History', icon: <Icon.ClipboardList className="w-4 h-4" />, path: ROUTES.studentExams },
-    { id: 'student-practice-exams', title: 'Practice Exams', icon: <Icon.Zap className="w-4 h-4" />, path: ROUTES.studentPracticeExams },
+    { id: 'student-materials', title: 'My Materials', icon: <Icon.FileText className="w-4 h-4" />, path: ROUTES.studentMaterials },
     { id: 'student-contests', title: 'Contests', icon: <Icon.Trophy className="w-4 h-4" />, path: ROUTES.studentContests },
     { id: 'student-flashcards', title: 'Flashcards', icon: <Icon.Layers className="w-4 h-4" />, path: ROUTES.studentFlashcards },
     { id: 'student-activity', title: 'Learning Activity', icon: <Icon.Activity className="w-4 h-4" />, path: ROUTES.studentLearningActivities },

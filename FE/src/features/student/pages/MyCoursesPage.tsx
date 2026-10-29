@@ -33,7 +33,7 @@ function matchesSearch(course: MyCourse, term: string) {
  *  - enrolled courses grid:      MC-01
  *  - search box:                 filters the enrolled courses only (title,
  *                                category, manager) — not the public catalog.
- *  - Material to Quiz Creator:   practice quiz the student builds from a file (MaterialQuizModal).
+ *  - Material to Quiz Creator:   AI quiz generated from a file the student uploads (MaterialQuizModal, MQ-01..MQ-05).
  *  - Smart Practice:             practice exam — AI-01/02 (weak modules) or PQ-01 (random questions).
  *  - Recommended for you:        AI-03 card for one picked course (called on demand).
  */
@@ -153,7 +153,7 @@ export function MyCoursesPage() {
         </>
       )}
 
-      <MaterialQuizModal open={quizModal === 'material'} onClose={() => setQuizModal(null)} />
+      <MaterialQuizModal open={quizModal === 'material'} onClose={() => setQuizModal(null)} courses={courses} />
       <SmartPracticeModal open={quizModal === 'smart'} onClose={() => setQuizModal(null)} courses={courses} initialCourseId={smartCourseId} />
 
       {student && student.recentAttempts.length > 0 && (

@@ -598,6 +598,7 @@ public class StudentMaterialApiIntegrationTest {
         assertEquals("Chapter 2", newest.path("documentTitle").asText());
         assertEquals(5, newest.path("questionCount").asInt());
         assertEquals(0, newest.path("attemptCount").asInt());
+        assertEquals(exam2.getExamId(), newest.path("quizId").asLong());
 
         JsonNode oldest = data.path("content").get(1);
         assertEquals(older.getJobId(), oldest.path("jobId").asLong());

@@ -135,6 +135,8 @@ export interface MyExam {
   maxScore: number | null;
   attemptCount: number;
   bestScore: number | null;
+  /** Exam.mode — EXAM (course exam), PRACTICE (PQ-01), SMART_PRACTICE (AI-01), MATERIAL_QUIZ (MQ-03), CONTEST. */
+  mode?: string | null;
 }
 
 export interface PageParams {

@@ -1,18 +1,73 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import { Button } from '@/components/ui/Button';
 import { Pagination } from '@/components/ui/Pagination';
 import { EmptyState } from '@/components/ui/Card';
 import { Select } from '@/components/ui/Select';
+import { Badge, type BadgeVariant } from '@/components/ui/Badge';
+import { Modal } from '@/components/ui/Modal';
+import { useToast } from '@/components/ui/ToastHost';
 import { SearchInput } from '@/components/common/SearchInput';
 import { Icon } from '@/assets/icons';
-import { ROUTES, studentCoursePath, studentExamAttemptsPath, studentTakeExamPath } from '@/app/routes';
+import {
+  ROUTES,
+  studentCoursePath,
+  studentExamAttemptsPath,
+  studentResumeAttemptPath,
+  studentTakeExamPath,
+  studentTakePracticePath,
+} from '@/app/routes';
 import { getApiErrorMessage } from '@/utils/apiError';
-import { studentCourseService, type MyExam } from '@/services/studentCourse.service';
-import { ListSkeleton, LoadError, PageTitle, STUDENT_PAGE_CLASS, formatScore } from '../components/studentUi';
+import { studentCourseService } from '@/services/studentCourse.service';
+import { studentPracticeExamService } from '@/services/studentPracticeExam.service';
+import { materialService } from '@/services/studentMaterial.service';
+import { ListSkeleton, LoadError, PageTitle, STUDENT_PAGE_CLASS, formatDate, formatScore } from '../components/studentUi';
 
 const PAGE_SIZE = 10;
 const ALL = '';
+/** Practice exams are scored out of 10 (PracticeExamService.createGeneratedExam). */
+const PRACTICE_MAX_SCORE = 10;
+
+/** Exam.mode of a row (ME-01 `mode`). */
+type ExamKind = 'EXAM' | 'PRACTICE' | 'SMART_PRACTICE' | 'MATERIAL_QUIZ' | 'CONTEST';
+
+const KIND_LABEL: Record<ExamKind, string> = {
+  EXAM: 'Course exam',
+  PRACTICE: 'Practice exam',
+  SMART_PRACTICE: 'Smart practice',
+  MATERIAL_QUIZ: 'Material quiz',
+  CONTEST: 'Contest',
+};
+const KIND_BADGE: Record<ExamKind, BadgeVariant> = {
+  EXAM: 'default',
+  PRACTICE: 'info',
+  SMART_PRACTICE: 'purple',
+  MATERIAL_QUIZ: 'success',
+  CONTEST: 'warning',
+};
+const KIND_OPTIONS = [{ label: 'All types', value: ALL }, ...(Object.keys(KIND_LABEL) as ExamKind[]).map(k => ({ label: KIND_LABEL[k], value: k }))];
+
+const toKind = (mode: string | null | undefined): ExamKind => (mode && mode in KIND_LABEL ? (mode as ExamKind) : 'EXAM');
+
+/** One exam of the history, whatever produced it. */
+interface HistoryRow {
+  examId: number;
+  title: string;
+  kind: ExamKind;
+  courseId: number | null;
+  courseTitle: string | null;
+  maxScore: number | null;
+  attemptCount: number;
+  bestScore: number | null;
+  /** PQ-02 entry — retake and delete need it. */
+  practiceId: number | null;
+  /** MQ-06 job — a material quiz is retaken with MQ-05. */
+  jobId: number | null;
+  /** Material the quiz was generated from. */
+  documentTitle: string | null;
+  /** Set for rows not taken yet (from PQ-02 / MQ-06): they sort by it. */
+  createdAt: string | null;
+}
 
 type SortKey = 'recent' | 'title' | 'bestScoreDesc' | 'bestScoreAsc' | 'attempts';
 
@@ -25,10 +80,10 @@ const SORT_OPTIONS: { label: string; value: SortKey }[] = [
 ];
 
 /** Best score as a share of the max, so exams with different max scores compare fairly; untaken = -1. */
-const ratio = (e: MyExam) => (e.bestScore == null || !e.maxScore ? -1 : Number(e.bestScore) / Number(e.maxScore));
+const ratio = (e: HistoryRow) => (e.bestScore == null || !e.maxScore ? -1 : Number(e.bestScore) / Number(e.maxScore));
 
-function sortExams(list: MyExam[], sort: SortKey): MyExam[] {
-  // ME-01 already returns the most recent first.
+function sortRows(list: HistoryRow[], sort: SortKey): HistoryRow[] {
+  // mergeHistory already puts the most recent first.
   if (sort === 'recent') return list;
   const copy = [...list];
   if (sort === 'title') copy.sort((a, b) => a.title.localeCompare(b.title));
@@ -39,31 +94,112 @@ function sortExams(list: MyExam[], sort: SortKey): MyExam[] {
 }
 
 /**
- * My Exams — every exam the student has attempted, with attempt count and
- * best score (ME-01). Exams not taken yet are listed on each course page.
- * ME-01 has no filter params, so the whole list is loaded once and searched,
- * filtered by course and sorted here.
+ * ME-01 lists every exam with an attempt (course exams, practice, smart practice, material quizzes),
+ * newest attempt first. PQ-02 and MQ-06 add what only they know (practiceId / jobId) and the
+ * practice exams and material quizzes not taken yet — those go on top, newest first.
+ */
+async function loadHistory(): Promise<HistoryRow[]> {
+  const [exams, practices, materials] = await Promise.all([
+    studentCourseService.getAllMyExams(),
+    studentPracticeExamService.listAll(),
+    materialService.allHistory(),
+  ]);
+  const practiceByExam = new Map(practices.map(p => [p.examId, p]));
+  const materialByQuiz = new Map(materials.filter(m => m.quizId != null).map(m => [m.quizId as number, m]));
+
+  const taken: HistoryRow[] = exams.map(e => {
+    const practice = practiceByExam.get(e.examId);
+    const material = materialByQuiz.get(e.examId);
+    return {
+      examId: e.examId,
+      title: e.title,
+      // Without `mode` (older BE) the PQ-02 / MQ-06 match still tells the type.
+      kind: e.mode ? toKind(e.mode) : practice ? 'PRACTICE' : material ? 'MATERIAL_QUIZ' : 'EXAM',
+      courseId: e.courseId ?? null,
+      courseTitle: e.courseTitle ?? null,
+      maxScore: e.maxScore,
+      attemptCount: e.attemptCount,
+      bestScore: e.bestScore,
+      practiceId: practice?.practiceId ?? null,
+      jobId: material?.jobId ?? null,
+      documentTitle: material?.documentTitle ?? null,
+      createdAt: null,
+    };
+  });
+  const takenIds = new Set(exams.map(e => e.examId));
+  const untaken: HistoryRow[] = [
+    ...practices
+      .filter(p => !takenIds.has(p.examId))
+      .map(p => ({
+        examId: p.examId,
+        title: p.title,
+        kind: 'PRACTICE' as const,
+        courseId: null,
+        courseTitle: null,
+        maxScore: PRACTICE_MAX_SCORE,
+        attemptCount: p.attemptCount ?? 0,
+        bestScore: p.bestScore,
+        practiceId: p.practiceId,
+        jobId: null,
+        documentTitle: null,
+        createdAt: p.createdAt,
+      })),
+    ...materials
+      .filter(m => m.quizId != null && !takenIds.has(m.quizId))
+      .map(m => ({
+        examId: m.quizId as number,
+        title: m.documentTitle,
+        kind: 'MATERIAL_QUIZ' as const,
+        courseId: null,
+        courseTitle: null,
+        maxScore: null,
+        attemptCount: m.attemptCount,
+        bestScore: m.bestScore,
+        practiceId: null,
+        jobId: m.jobId,
+        documentTitle: m.documentTitle,
+        createdAt: m.createdAt,
+      })),
+  ].sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''));
+  return [...untaken, ...taken];
+}
+
+/**
+ * Exam History — every exam the student has taken or generated: course exams (ME-01), practice
+ * exams (PQ-02), smart practice (AI-01) and quizzes generated from a material (MQ-06), with a
+ * type filter. Lists are loaded whole and searched, filtered and sorted here.
+ * `?type=PRACTICE` (etc.) preselects the type filter.
  */
 export function MyExamsPage() {
   const navigate = useNavigate();
+  const toast = useToast();
+  const [searchParams] = useSearchParams();
   const [page, setPage] = useState(1);
   const [reload, setReload] = useState(0);
-  const [exams, setExams] = useState<MyExam[]>([]);
+  const [rows, setRows] = useState<HistoryRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const [search, setSearch] = useState('');
   const [course, setCourse] = useState(ALL);
+  const [kind, setKind] = useState(() => {
+    const type = searchParams.get('type') ?? '';
+    return type in KIND_LABEL ? type : ALL;
+  });
   const [sort, setSort] = useState<SortKey>('recent');
+
+  const [startingJob, setStartingJob] = useState<number | null>(null);
+  const [toDelete, setToDelete] = useState<HistoryRow | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    studentCourseService
-      .getAllMyExams()
+    loadHistory()
       .then(res => {
-        if (!cancelled) setExams(res);
+        if (!cancelled) setRows(res);
       })
       .catch(err => {
         if (!cancelled) setError(getApiErrorMessage(err, 'Failed to load your exams.'));
@@ -77,24 +213,29 @@ export function MyExamsPage() {
   }, [reload]);
 
   const courseOptions = useMemo(() => {
-    const byId = new Map(exams.map(e => [e.courseId, e.courseTitle ?? 'Untitled course']));
+    const byId = new Map(rows.filter(r => r.courseId != null).map(r => [r.courseId as number, r.courseTitle ?? 'Untitled course']));
     return [
       { label: 'All courses', value: ALL },
       ...[...byId].sort((a, b) => a[1].localeCompare(b[1])).map(([id, title]) => ({ label: title, value: String(id) })),
     ];
-  }, [exams]);
+  }, [rows]);
 
   const term = search.trim().toLowerCase();
   const filtered = useMemo(
     () =>
-      sortExams(
-        exams.filter(e => (course === ALL || String(e.courseId) === course) && (!term || e.title.toLowerCase().includes(term))),
+      sortRows(
+        rows.filter(
+          r =>
+            (course === ALL || String(r.courseId) === course) &&
+            (kind === ALL || r.kind === kind) &&
+            (!term || r.title.toLowerCase().includes(term) || (r.documentTitle ?? '').toLowerCase().includes(term)),
+        ),
         sort,
       ),
-    [exams, course, term, sort],
+    [rows, course, kind, term, sort],
   );
   const pageItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-  const filtersActive = term !== '' || course !== ALL || sort !== 'recent';
+  const filtersActive = term !== '' || course !== ALL || kind !== ALL || sort !== 'recent';
 
   const withPageReset =
     <T,>(setter: (v: T) => void) =>
@@ -105,15 +246,58 @@ export function MyExamsPage() {
   const clearFilters = () => {
     setSearch('');
     setCourse(ALL);
+    setKind(ALL);
     setSort('recent');
     setPage(1);
   };
 
+  /** A material quiz gets a fresh attempt from MQ-05; the rest start with SA-01. */
+  const retake = async (row: HistoryRow) => {
+    if (row.kind === 'PRACTICE' || row.kind === 'SMART_PRACTICE') {
+      navigate(studentTakePracticePath(row.examId));
+      return;
+    }
+    if (row.kind === 'MATERIAL_QUIZ' && row.jobId != null) {
+      setStartingJob(row.jobId);
+      try {
+        const started = await materialService.start(row.jobId);
+        navigate(studentResumeAttemptPath(started.attemptId));
+      } catch (err) {
+        toast.error(getApiErrorMessage(err, 'Failed to start the quiz.'));
+        setStartingJob(null);
+      }
+      return;
+    }
+    navigate(studentTakeExamPath(row.examId));
+  };
+
+  /** A deleted practice exam is archived on the BE: its attempts stay, it cannot be taken again. */
+  const canRetake = (row: HistoryRow) => (row.kind === 'PRACTICE' ? row.practiceId != null : row.kind !== 'MATERIAL_QUIZ' || row.jobId != null);
+
+  const confirmDelete = async () => {
+    if (toDelete?.practiceId == null) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await studentPracticeExamService.remove(toDelete.practiceId);
+      toast.success(`Deleted "${toDelete.title}".`);
+      setToDelete(null);
+      setReload(r => r + 1);
+    } catch (err) {
+      setDeleteError(getApiErrorMessage(err, 'Failed to delete the practice exam.'));
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <div className={`${STUDENT_PAGE_CLASS} space-y-[clamp(1.25rem,2.5vw,1.75rem)]`}>
-      <PageTitle title="My Exams" subtitle="Exams you have taken and your best score on each." />
+      <PageTitle
+        title="Exam History"
+        subtitle="Course exams, practice exams and quizzes from your materials — with your best score on each."
+      />
 
-      {!loading && !error && exams.length > 0 && (
+      {!loading && !error && rows.length > 0 && (
         <div className="card px-4 py-3 flex flex-wrap lg:flex-nowrap items-center gap-3">
           <SearchInput
             className="w-full sm:w-60 lg:w-auto lg:min-w-0 lg:flex-[1.5]"
@@ -121,6 +305,13 @@ export function MyExamsPage() {
             aria-label="Search exams"
             value={search}
             onChange={e => withPageReset(setSearch)(e.target.value)}
+          />
+          <Select
+            aria-label="Filter by exam type"
+            value={kind}
+            onChange={withPageReset(setKind)}
+            options={KIND_OPTIONS}
+            className="w-full sm:w-44 lg:w-auto lg:min-w-0 lg:flex-1"
           />
           <Select
             aria-label="Filter by course"
@@ -152,12 +343,12 @@ export function MyExamsPage() {
         <ListSkeleton />
       ) : error ? (
         <LoadError message={error} onRetry={() => setReload(r => r + 1)} />
-      ) : exams.length === 0 ? (
+      ) : rows.length === 0 ? (
         <div className="card">
           <EmptyState
             icon={<Icon.ClipboardList className="w-7 h-7" />}
             title="No exams taken yet"
-            message="Open one of your courses to start an exam."
+            message="Open one of your courses to start an exam, or build a practice quiz from My Courses."
             action={<Button onClick={() => navigate(ROUTES.studentCourses)}>Go to My Courses</Button>}
           />
         </div>
@@ -166,7 +357,7 @@ export function MyExamsPage() {
           <EmptyState
             icon={<Icon.Search className="w-7 h-7" />}
             title="No matching exams"
-            message="Try another name or course."
+            message="Try another name, type or course."
             action={
               <Button variant="outline" onClick={clearFilters}>
                 Clear filters
@@ -177,52 +368,95 @@ export function MyExamsPage() {
       ) : (
         <div className="card overflow-hidden">
           <ul className="divide-y divide-line">
-            {pageItems.map(exam => (
-              <li key={exam.examId} className="flex flex-wrap items-center gap-x-4 gap-y-3 px-[clamp(0.875rem,1.5vw,1.25rem)] py-4">
+            {pageItems.map(row => (
+              <li key={row.examId} className="flex flex-wrap items-center gap-x-4 gap-y-3 px-[clamp(0.875rem,1.5vw,1.25rem)] py-4">
                 <div className="w-9 h-9 rounded-[10px] bg-primary-light flex items-center justify-center flex-shrink-0">
-                  <Icon.Award className="w-4.5 h-4.5 text-primary" />
+                  {row.kind === 'MATERIAL_QUIZ' ? (
+                    <Icon.FileText className="w-4.5 h-4.5 text-primary" />
+                  ) : row.kind === 'PRACTICE' || row.kind === 'SMART_PRACTICE' ? (
+                    <Icon.Zap className="w-4.5 h-4.5 text-primary" />
+                  ) : (
+                    <Icon.Award className="w-4.5 h-4.5 text-primary" />
+                  )}
                 </div>
                 <div className="flex-1 min-w-[12rem]">
-                  <button
-                    type="button"
-                    onClick={() => navigate(studentExamAttemptsPath(exam.examId))}
-                    className="block text-sm font-semibold text-content break-words text-left hover:text-primary hover:underline"
-                  >
-                    {exam.title}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => navigate(studentCoursePath(exam.courseId))}
-                    className="text-xs text-content-subtle hover:text-primary hover:underline text-left"
-                  >
-                    {exam.courseTitle}
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {row.attemptCount > 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => navigate(studentExamAttemptsPath(row.examId))}
+                        className="block text-sm font-semibold text-content break-words text-left hover:text-primary hover:underline"
+                      >
+                        {row.title}
+                      </button>
+                    ) : (
+                      <span className="text-sm font-semibold text-content break-words">{row.title}</span>
+                    )}
+                    <Badge variant={KIND_BADGE[row.kind]} size="sm">
+                      {KIND_LABEL[row.kind]}
+                    </Badge>
+                  </div>
+                  <p className="flex flex-wrap gap-x-3 text-xs text-content-subtle">
+                    {row.courseId != null && row.courseTitle && (
+                      <button
+                        type="button"
+                        onClick={() => navigate(studentCoursePath(row.courseId as number))}
+                        className="hover:text-primary hover:underline text-left"
+                      >
+                        {row.courseTitle}
+                      </button>
+                    )}
+                    {row.documentTitle && row.documentTitle !== row.title && <span>From {row.documentTitle}</span>}
+                    {row.createdAt && <span>Created {formatDate(row.createdAt)}</span>}
+                  </p>
                 </div>
                 <div className="flex gap-6 text-center">
                   <div>
-                    <p className="text-sm font-semibold text-content">{exam.attemptCount}</p>
+                    <p className="text-sm font-semibold text-content">{row.attemptCount}</p>
                     <p className="text-2xs text-content-subtle">Attempts</p>
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-content">{formatScore(exam.bestScore, exam.maxScore)}</p>
+                    <p className="text-sm font-semibold text-content">{formatScore(row.bestScore, row.maxScore)}</p>
                     <p className="text-2xs text-content-subtle">Best score</p>
                   </div>
                 </div>
-                <Button
-                  size="sm"
-                  icon={<Icon.Eye className="w-4 h-4" />}
-                  onClick={() => navigate(studentExamAttemptsPath(exam.examId))}
-                >
-                  View attempts
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  icon={<Icon.RefreshCw className="w-4 h-4" />}
-                  onClick={() => navigate(studentTakeExamPath(exam.examId))}
-                >
-                  Retake
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  {row.attemptCount > 0 && (
+                    <Button
+                      size="sm"
+                      icon={<Icon.Eye className="w-4 h-4" />}
+                      onClick={() => navigate(studentExamAttemptsPath(row.examId))}
+                    >
+                      View attempts
+                    </Button>
+                  )}
+                  {canRetake(row) && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      icon={<Icon.RefreshCw className="w-4 h-4" />}
+                      loading={row.jobId != null && startingJob === row.jobId}
+                      disabled={startingJob != null}
+                      onClick={() => retake(row)}
+                    >
+                      {row.attemptCount > 0 ? 'Retake' : 'Start'}
+                    </Button>
+                  )}
+                  {row.practiceId != null && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      aria-label={`Delete ${row.title}`}
+                      title="Delete"
+                      onClick={() => {
+                        setDeleteError(null);
+                        setToDelete(row);
+                      }}
+                    >
+                      <Icon.Trash className="w-4 h-4 text-danger" />
+                    </Button>
+                  )}
+                </div>
               </li>
             ))}
           </ul>
@@ -231,6 +465,29 @@ export function MyExamsPage() {
           </div>
         </div>
       )}
+
+      <Modal
+        open={toDelete != null}
+        onClose={() => !deleting && setToDelete(null)}
+        title="Delete this practice exam?"
+        size="sm"
+        footer={
+          <>
+            <Button variant="outline" disabled={deleting} onClick={() => setToDelete(null)}>
+              Cancel
+            </Button>
+            <Button variant="danger" loading={deleting} disabled={deleting} icon={<Icon.Trash className="w-4 h-4" />} onClick={confirmDelete}>
+              Delete
+            </Button>
+          </>
+        }
+      >
+        <p className="text-base text-content-secondary leading-relaxed">
+          <span className="font-semibold text-content">{toDelete?.title}</span> can no longer be taken. Attempts you already took
+          stay in your history.
+        </p>
+        {deleteError && <p className="mt-3 text-sm text-danger">{deleteError}</p>}
+      </Modal>
     </div>
   );
 }

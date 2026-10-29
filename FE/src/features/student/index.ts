@@ -1,16 +1,15 @@
 export { MyCoursesPage } from './pages/MyCoursesPage';
 export { StudentCourseDetailPage } from './pages/StudentCourseDetailPage';
 export { MyExamsPage } from './pages/MyExamsPage';
+export { MyMaterialsPage } from './pages/MyMaterialsPage';
 export { StudentFlashcardsPage } from './pages/StudentFlashcardsPage';
 export { StudentDeckStudyPage } from './pages/StudentDeckStudyPage';
 export { StudentExamDetailPage } from './pages/StudentExamDetailPage';
 export { StudentTakeExamPage } from './pages/StudentTakeExamPage';
 export { StudentExamResultPage } from './pages/StudentExamResultPage';
-export { StudentPracticeQuizPage } from './pages/StudentPracticeQuizPage';
 export { StudentLearningActivityPage } from './pages/StudentLearningActivityPage';
 export { StudentQuestionNotebookPage } from './pages/StudentQuestionNotebookPage';
 export { StudentContestsPage } from './pages/StudentContestsPage';
 export { StudentCommunityPage } from './pages/StudentCommunityPage';
 export { StudentContributionsPage } from './pages/StudentContributionsPage';
 export { StudentWeaknessReportPage } from './pages/StudentWeaknessReportPage';
-export { StudentPracticeExamsPage } from './pages/StudentPracticeExamsPage';
