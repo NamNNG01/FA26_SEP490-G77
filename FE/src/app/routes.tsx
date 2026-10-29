@@ -25,10 +25,19 @@ export const ROUTES = {
   /** Legacy — redirects to My Courses (the dashboard was merged into it). */
   studentDashboard: '/student/dashboard',
   studentCourses: '/student/courses',
+  studentProfile: '/student/profile',
+  studentContests: '/student/contests',
+  studentContestDetail: '/student/contests/:contestId',
   /** Route pattern — render with studentCoursePath(id). */
   studentCourseDetail: '/student/courses/:courseId',
   studentExams: '/student/exams',
   studentMyExams: '/student/my-exams',
+  studentLearningActivities: '/student/learning-activity',
+  studentQuestionNotebook: '/student/questions/saved',
+  studentDiscussions: '/student/discussions',
+  studentDiscussionDetail: '/student/discussions/:discussionId',
+  studentContributions: '/student/contributions',
+  studentContributionDetail: '/student/contributions/:contributionId',
   /** Route pattern — render with studentExamPath(id). */
   studentExamDetail: '/student/exams/:examId',
   studentFlashcards: '/student/flashcards',
@@ -201,6 +210,8 @@ export const menuByRole: Record<string, MenuItem[]> = {
     { id: 'student-courses', title: 'My Courses', icon: <Icon.Book className="w-4 h-4" />, path: ROUTES.studentCourses },
     { id: 'student-exams', title: 'My Exams', icon: <Icon.ClipboardList className="w-4 h-4" />, path: ROUTES.studentExams },
     { id: 'student-flashcards', title: 'Flashcards', icon: <Icon.Layers className="w-4 h-4" />, path: ROUTES.studentFlashcards },
+    { id: 'student-activity', title: 'Learning Activity', icon: <Icon.Activity className="w-4 h-4" />, path: ROUTES.studentLearningActivities },
+    { id: 'student-notebook', title: 'Question Notebook', icon: <Icon.Star className="w-4 h-4" />, path: ROUTES.studentQuestionNotebook },
   ],
   COURSE_MANAGER: [
     { id: 'manager-dashboard', title: 'Dashboard', icon: <Icon.Home className="w-4 h-4" />, path: ROUTES.managerDashboard },

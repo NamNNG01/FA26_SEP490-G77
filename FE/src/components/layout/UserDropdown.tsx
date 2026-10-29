@@ -5,14 +5,15 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { ROUTES } from '@/app/routes';
 import { Avatar } from '@/components/ui/Avatar';
 import { Icon } from '@/assets/icons';
-import { roleLabel } from '@/utils/permissions';
+import { Role, roleLabel } from '@/utils/permissions';
 
 /**
  * UserDropdown
  *
- * Header user menu (top-right) with exactly three items:
- *   - Profile → navigate(ROUTES.profile) via React Router (route registry,
- *               no hardcoded path here).
+ * Header user menu (top-right) with role-aware navigation:
+ *   - Profile → students use the header-based student profile route; managers
+ *               and admins use the dashboard profile route.
+ *   - Students also get quick links to Learning Activity and Question Notebook.
  *   - Theme   → INSTANTLY toggles to the next registered theme via
  *               useTheme().toggleTheme() — cycles dynamically through all
  *               themes registered in ThemeProvider (no hardcoded names).
@@ -82,7 +83,12 @@ export function UserDropdown({ avatarOnly = false }: { avatarOnly?: boolean }) {
 
   function handleProfile() {
     setOpen(false);
-    navigate(ROUTES.profile);
+    navigate(user?.role === Role.STUDENT ? ROUTES.studentProfile : ROUTES.profile);
+  }
+
+  function handleNavigate(path: string) {
+    setOpen(false);
+    navigate(path);
   }
 
   function handleTheme() {
@@ -145,6 +151,51 @@ export function UserDropdown({ avatarOnly = false }: { avatarOnly?: boolean }) {
             <Icon.User className="w-4 h-4 text-muted-foreground" />
             Profile
           </button>
+
+          {user.role === Role.STUDENT && (
+            <>
+              <button
+                type="button"
+                role="menuitem"
+                data-menu-item
+                onClick={() => handleNavigate(ROUTES.studentLearningActivities)}
+                className={menuItemClass}
+              >
+                <Icon.Activity className="w-4 h-4 text-muted-foreground" />
+                Learning Activity
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                data-menu-item
+                onClick={() => handleNavigate(ROUTES.studentQuestionNotebook)}
+                className={menuItemClass}
+              >
+                <Icon.Book className="w-4 h-4 text-muted-foreground" />
+                Question Notebook
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                data-menu-item
+                onClick={() => handleNavigate(ROUTES.studentDiscussions)}
+                className={menuItemClass}
+              >
+                <Icon.Users className="w-4 h-4 text-muted-foreground" />
+                Community
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                data-menu-item
+                onClick={() => handleNavigate(ROUTES.studentContributions)}
+                className={menuItemClass}
+              >
+                <Icon.FileText className="w-4 h-4 text-muted-foreground" />
+                My Contributions
+              </button>
+            </>
+          )}
 
           {/* Theme — instant cycle through registered themes */}
           <button

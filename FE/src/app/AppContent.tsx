@@ -33,6 +33,11 @@ import {
   StudentTakeExamPage,
   StudentExamResultPage,
   StudentPracticeQuizPage,
+  StudentLearningActivityPage,
+  StudentQuestionNotebookPage,
+  StudentContestsPage,
+  StudentCommunityPage,
+  StudentContributionsPage,
 } from '@/features/student';
 import { ExamListPage, ExamFormPage } from '@/features/exam';
 import { PublicExamsPage, PublicExamDetailPage } from '@/features/public-exam';
@@ -230,11 +235,20 @@ function AppRoutes() {
 
       <Route element={<PublicLayout />}>
         <Route element={<RequireRole roles={ROLE_STUDENT} />}>
+          <Route path={ROUTES.studentProfile} element={<ProfilePage />} />
           <Route path={ROUTES.studentDashboard} element={<Navigate to={ROUTES.studentCourses} replace />} />
           <Route path={ROUTES.studentCourses} element={<MyCoursesPage />} />
           <Route path={ROUTES.studentCourseDetail} element={<StudentCourseDetailPage />} />
           <Route path={ROUTES.studentExams} element={<MyExamsPage />} />
           <Route path={ROUTES.studentMyExams} element={<MyExamsPage />} />
+          <Route path={ROUTES.studentLearningActivities} element={<StudentLearningActivityPage />} />
+          <Route path={ROUTES.studentQuestionNotebook} element={<StudentQuestionNotebookPage />} />
+          <Route path={ROUTES.studentContests} element={<StudentContestsPage />} />
+          <Route path={ROUTES.studentContestDetail} element={<StudentContestsPage />} />
+          <Route path={ROUTES.studentDiscussions} element={<StudentCommunityPage />} />
+          <Route path={ROUTES.studentDiscussionDetail} element={<StudentCommunityPage />} />
+          <Route path={ROUTES.studentContributions} element={<StudentContributionsPage />} />
+          <Route path={ROUTES.studentContributionDetail} element={<StudentContributionsPage />} />
           <Route path={ROUTES.studentFlashcards} element={<StudentFlashcardsPage />} />
           <Route path={ROUTES.studentFlashcardDeck} element={<StudentDeckStudyPage />} />
           <Route path={ROUTES.studentPublicExam} element={<PublicExamsPage />} />
@@ -259,6 +273,7 @@ function AppRoutes() {
         {/* COURSE_MANAGER — authors content. Includes ADMIN, since
             administrators have full system access. */}
         <Route element={<RequireRole roles={ROLE_MANAGER} />}>
+          <Route path={ROUTES.profile} element={<ProfilePage />} />
           <Route path={ROUTES.managerDashboard} element={<CMDashboard />} />
           <Route path={ROUTES.managerCourses} element={<CourseListPage />} />
           <Route path={ROUTES.managerCourseDetail} element={<CourseDetailPage />} />
@@ -296,9 +311,6 @@ function AppRoutes() {
           <Route path={ROUTES.adminAuditLogs} element={<AuditLogsPage />} />
           <Route path={ROUTES.adminSettings} element={<SystemSettingsPage />} />
         </Route>
-
-        {/* Common — reachable by every signed-in role */}
-        <Route path={ROUTES.profile} element={<ProfilePage />} />
 
         {/* Fallback (404) — goes to the role landing, NOT /login (which
             would immediately bounce back here and could look like a
