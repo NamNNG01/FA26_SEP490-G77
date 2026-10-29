@@ -46,9 +46,11 @@ public interface DeckRepository extends JpaRepository<Deck, Long> {
     @Query("SELECT new com.examprep.dto.student.DeckDto(" +
             "d.deckId, d.title, d.description, d.isPublic, " +
             "(SELECT COUNT(f) FROM Flashcard f WHERE f.deck = d), " +
-            "(SELECT COUNT(p) FROM UserCardProgress p JOIN p.card f WHERE f.deck = d AND p.user.userId = :userId AND p.status = 'LEARNED'), " +
+            "(SELECT COUNT(p) FROM UserCardProgress p JOIN p.card f WHERE f.deck = d AND p.user.userId = :userId AND p.status = 'KNOWN'), " +
             "(SELECT COUNT(p) FROM UserCardProgress p JOIN p.card f WHERE f.deck = d AND p.user.userId = :userId AND p.isStarred = true)) " +
-            "FROM Deck d WHERE d.course.courseId = :courseId")
+            "FROM Deck d WHERE d.course.courseId = :courseId " +
+            // Students' own decks attached to the course stay private (FC-01, spec 9.6).
+            "AND (d.user.roleName <> 'STUDENT' OR d.user.userId = :userId OR d.visibility = 'PUBLIC')")
     List<com.examprep.dto.student.DeckDto> findCourseDecksWithStats(@Param("courseId") Long courseId, @Param("userId") Long userId);
 }
 

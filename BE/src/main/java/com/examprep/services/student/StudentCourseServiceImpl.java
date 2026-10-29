@@ -127,7 +127,10 @@ public class StudentCourseServiceImpl implements StudentCourseService {
     public Page<CardDto> listDeckCards(Long deckId, int page, int size, Long userId) {
         Deck deck = deckRepository.findById(deckId)
                 .orElseThrow(() -> new ResourceNotFoundException("Deck not found"));
-        if (deck.getCourse() != null) {
+        boolean ownOrPublic = deck.getUser().getUserId().equals(userId) || "PUBLIC".equals(deck.getVisibility());
+        if (ownOrPublic) {
+            // Personal (FC-01) or approved public deck (FC-10).
+        } else if (deck.getCourse() != null && !"STUDENT".equals(deck.getUser().getRoleName())) {
             validateActiveEnrollment(deck.getCourse().getCourseId(), userId);
         } else if (!Boolean.TRUE.equals(deck.getIsPublic()) && (deck.getUser() == null || !deck.getUser().getUserId().equals(userId))) {
             throw new ForbiddenException("Access denied to deck");
