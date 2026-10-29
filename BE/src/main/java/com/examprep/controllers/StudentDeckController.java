@@ -4,6 +4,7 @@ import com.examprep.dto.ApiResponse;
 import com.examprep.dto.student.StudentDeckDtos.*;
 import com.examprep.security.UserPrincipal;
 import com.examprep.services.student.StudentDeckService;
+import com.examprep.services.student.StudentStudyService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -11,12 +12,15 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
-/** Personal flashcards: FC-01..06, FC-10 (Deadline1 section 14). */
+import java.util.List;
+
+/** Personal flashcards and study: FC-01..10, FP-01..03, FV-01 (Deadline1 sections 14-15). */
 @RestController
 @RequestMapping("/api/v1/student")
 @RequiredArgsConstructor
 public class StudentDeckController {
     private final StudentDeckService decks;
+    private final StudentStudyService study;
 
     @PostMapping("/decks")
     public ResponseEntity<ApiResponse<DeckView>> create(@AuthenticationPrincipal UserPrincipal user, @Valid @RequestBody DeckCreate request) {
@@ -56,5 +60,41 @@ public class StudentDeckController {
     @PostMapping("/decks/{deckId}/publish-request")
     public ResponseEntity<ApiResponse<PublishRequestView>> publishRequest(@AuthenticationPrincipal UserPrincipal user, @PathVariable Long deckId) {
         return ResponseEntity.ok(ApiResponse.success(decks.requestPublish(user.getId(), deckId), "Sent for review"));
+    }
+
+    @PutMapping("/cards/{cardId}/progress")
+    public ResponseEntity<ApiResponse<ProgressView>> progress(@AuthenticationPrincipal UserPrincipal user, @PathVariable Long cardId,
+            @Valid @RequestBody ProgressWrite request) {
+        return ResponseEntity.ok(ApiResponse.success(study.writeProgress(user.getId(), cardId, request)));
+    }
+
+    @PutMapping("/decks/{deckId}/learn-all")
+    public ResponseEntity<ApiResponse<DeckLearnedView>> learnAll(@AuthenticationPrincipal UserPrincipal user, @PathVariable Long deckId) {
+        return ResponseEntity.ok(ApiResponse.success(study.learnAll(user.getId(), deckId)));
+    }
+
+    @PostMapping("/decks/{deckId}/study-sessions")
+    public ResponseEntity<ApiResponse<StudySessionView>> startSession(@AuthenticationPrincipal UserPrincipal user, @PathVariable Long deckId,
+            @Valid @RequestBody SessionStart request) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success(study.startSession(user.getId(), deckId, request), "Study session started"));
+    }
+
+    @PostMapping("/study-sessions/{sessionId}/finish")
+    public ResponseEntity<ApiResponse<SessionSummary>> finishSession(@AuthenticationPrincipal UserPrincipal user, @PathVariable String sessionId,
+            @Valid @RequestBody(required = false) SessionFinish request) {
+        return ResponseEntity.ok(ApiResponse.success(study.finishSession(user.getId(), sessionId, request)));
+    }
+
+    @GetMapping("/decks/{deckId}/review-cards")
+    public ResponseEntity<ApiResponse<List<StudyCard>>> reviewCards(@AuthenticationPrincipal UserPrincipal user, @PathVariable Long deckId,
+            @RequestParam(defaultValue = "20") int limit) {
+        return ResponseEntity.ok(ApiResponse.success(study.reviewCards(user.getId(), deckId, limit)));
+    }
+
+    @GetMapping("/decks/{deckId}/viewer")
+    public ResponseEntity<ApiResponse<ViewerView>> viewer(@AuthenticationPrincipal UserPrincipal user, @PathVariable Long deckId,
+            @RequestParam(defaultValue = "0") int cardLimit) {
+        return ResponseEntity.ok(ApiResponse.success(study.viewer(user.getId(), deckId, cardLimit)));
     }
 }

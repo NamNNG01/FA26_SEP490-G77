@@ -111,14 +111,14 @@ public class StudentDeckService {
     // ------------------------------------------------------------------ access, shared with study/import/FC-12
 
     /** The caller's own deck, locked for writing. 404 missing, 403 someone else's (a course deck included). */
-    Deck ownedDeck(Long userId, Long deckId) {
+    public Deck ownedDeck(Long userId, Long deckId) {
         Deck deck = decks.findForUpdate(deckId).orElseThrow(() -> new ResourceNotFoundException("Deck not found."));
         if (!deck.getUser().getUserId().equals(userId)) throw new ForbiddenException("Only the owner can change this deck.");
         return deck;
     }
 
     /** Owner, a public deck, or a manager's course deck the caller is actively enrolled in. */
-    Deck readableDeck(Long userId, Long deckId) {
+    public Deck readableDeck(Long userId, Long deckId) {
         Deck deck = decks.findDetail(deckId).orElseThrow(() -> new ResourceNotFoundException("Deck not found."));
         if (deck.getUser().getUserId().equals(userId) || Deck.VISIBILITY_PUBLIC.equals(deck.getVisibility())) return deck;
         boolean courseDeck = deck.getCourse() != null && !User.ROLE_STUDENT.equals(deck.getUser().getRoleName());

@@ -43,4 +43,6 @@ public interface FlashcardRepository extends JpaRepository<Flashcard, Long> {
 
     @Query("SELECT COALESCE(MAX(f.position), 0) FROM Flashcard f WHERE f.deck.deckId = :deckId")
     int maxPosition(@Param("deckId") Long deckId);
+
+    List<Flashcard> findByDeckDeckIdOrderByPositionAscCardIdAsc(Long deckId);
 }

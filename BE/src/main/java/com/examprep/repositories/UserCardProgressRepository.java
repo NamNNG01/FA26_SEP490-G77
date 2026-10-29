@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface UserCardProgressRepository extends JpaRepository<UserCardProgress, Long> {
@@ -22,5 +23,9 @@ public interface UserCardProgressRepository extends JpaRepository<UserCardProgre
     @Modifying
     @Query("DELETE FROM UserCardProgress p WHERE p.card.cardId = :cardId")
     void deleteByCard(@Param("cardId") Long cardId);
-}
 
+    Optional<UserCardProgress> findByUserUserIdAndCardCardId(Long userId, Long cardId);
+
+    @Query("SELECT COUNT(p) FROM UserCardProgress p WHERE p.user.userId = :userId AND p.card.deck.deckId = :deckId AND p.status = 'KNOWN'")
+    long countKnown(@Param("userId") Long userId, @Param("deckId") Long deckId);
+}
