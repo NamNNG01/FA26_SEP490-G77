@@ -24,6 +24,16 @@ public interface ContestParticipantRepository extends JpaRepository<ContestParti
     @EntityGraph(attributePaths = "user")
     List<ContestParticipant> findByContestContestIdOrderByParticipantIdAsc(Long contestId);
 
+    @Query("SELECT a FROM ExamAttempt a WHERE a.attemptId IN :ids")
+    List<com.examprep.entities.ExamAttempt> findAttempts(@Param("ids") Collection<Long> attemptIds);
+
+    /** Attempts still being written or graded block ranking (section 6.3 step 1). */
+    @Query("SELECT COUNT(a) FROM ExamAttempt a WHERE a.attemptId IN :ids AND a.status IN ('IN_PROGRESS', 'GRADING')")
+    long countUnfinishedAttempts(@Param("ids") Collection<Long> attemptIds);
+
+    @Query("SELECT COUNT(aa) FROM AttemptAnswer aa WHERE aa.attempt.attemptId IN :ids AND aa.gradingStatus IN ('PENDING', 'PENDING_AI', 'GRADING')")
+    long countPendingGrading(@Param("ids") Collection<Long> attemptIds);
+
     /** Ranked rows only, best first (API 8). */
     @EntityGraph(attributePaths = "user")
     @Query("SELECT p FROM ContestParticipant p WHERE p.contest.contestId = :id AND p.rank IS NOT NULL ORDER BY p.rank, p.participantId")

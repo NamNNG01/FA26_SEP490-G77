@@ -65,6 +65,12 @@ public class ManagerContestController {
         return ResponseEntity.ok(ApiResponse.success(null, "Deleted"));
     }
 
+    @GetMapping("/contests/{id}/leaderboard")
+    public ResponseEntity<ApiResponse<PageResponse<LeaderboardRow>>> leaderboard(@AuthenticationPrincipal UserPrincipal user,
+            @PathVariable Long id, @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(ApiResponse.success(contests.leaderboard(user, id, page, size)));
+    }
+
     @GetMapping("/contest-options/exams")
     public ResponseEntity<ApiResponse<PageResponse<ExamOption>>> examOptions(@AuthenticationPrincipal UserPrincipal user,
             @RequestParam(required = false) Long courseId, @RequestParam(required = false) String keyword,

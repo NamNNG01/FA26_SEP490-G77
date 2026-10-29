@@ -214,6 +214,27 @@ public class ManagerContestService {
         contest.setDeletedAt(Instant.now());
     }
 
+    // ------------------------------------------------------------------ API 8
+
+    @Transactional(readOnly = true)
+    public PageResponse<LeaderboardRow> leaderboard(UserPrincipal user, Long id, int page, int size) {
+        checkPage(page, size);
+        Contest contest = scoped(user, contests.findLive(id));
+        if (!"READY".equals(rankingStatus(contest, Instant.now()))) {
+            throw error(ResponseCode.CONFLICT, "RANKING_NOT_READY", "Ranks are not calculated yet.");
+        }
+        Map<Integer, Discount> prizes = new HashMap<>();
+        rewards.findByContestContestIdOrderByRankPositionAsc(id).forEach(r -> prizes.put(r.getRankPosition(), r.getDiscount()));
+        Page<ContestParticipant> result = participants.findRanked(id, PageRequest.of(page, size));
+        return PageResponse.of(result, result.getContent().stream().map(p -> {
+            Discount d = prizes.get(p.getRank());
+            return new LeaderboardRow(p.getRank(), new LeaderboardUser(p.getUser().getUserId(), p.getUser().getFullName(), p.getUser().getAvatarUrl()),
+                    p.getScore(), p.getTimeTakenSec(), p.getFinishedAt(),
+                    d == null ? null : new PlannedReward(d.getDiscountId(), d.getCode(), d.getDiscountType(), ContestRules.value(d)),
+                    p.getRewardGrantedAt() != null, p.getRewardGrantedAt());
+        }).toList());
+    }
+
     // ------------------------------------------------------------------ API 11 / 12
 
     @Transactional(readOnly = true)
