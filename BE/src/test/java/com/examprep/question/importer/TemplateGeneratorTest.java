@@ -9,6 +9,7 @@ import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFParagraph;
 import org.apache.poi.xwpf.usermodel.XWPFRun;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -17,7 +18,11 @@ import java.util.List;
 
 public class TemplateGeneratorTest {
 
+    // Regenerates the tracked binaries under src/main/resources, so it must never run as part of a
+    // normal build: PDF/DOCX output embeds timestamps and dirties the working tree on every run.
+    // Run explicitly with -DgenerateTemplates=true when the template text changes.
     @Test
+    @EnabledIfSystemProperty(named = "generateTemplates", matches = "true")
     public void generateTemplatesFromTxt() throws Exception {
         Path txtPath = Paths.get("docs/import/template-v2.txt");
         if (!Files.exists(txtPath)) {
