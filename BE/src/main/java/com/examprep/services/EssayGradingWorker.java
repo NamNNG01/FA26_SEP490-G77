@@ -169,7 +169,8 @@ public class EssayGradingWorker {
         for (Long id : answers.findStuckGrading(now.minusMillis(timeoutMillis * 2))) {
             tx.executeWithoutResult(status -> finish(id, null, new Outcome(null, null, null, null, AiCalls.TIMEOUT, 0)));
         }
-        Integer expired = tx.execute(status -> logs.expirePending(now.minusSeconds(120)));
+        // Part 2 §9.9: a reservation is only abandoned after five minutes without a settlement.
+        Integer expired = tx.execute(status -> logs.expirePending(now.minusSeconds(300)));
         if (expired != null && expired > 0) log.info("Refunded {} expired AI reservations", expired);
         if (answers.existsByGradingStatus(QUEUED)) kick();
     }

@@ -18,14 +18,14 @@ public interface AiUsageLogRepository extends JpaRepository<AiUsageLog, Long> {
     @Query("SELECT COALESCE(SUM(l.inputTokens + l.outputTokens), 0) FROM AiUsageLog l WHERE l.user.userId = :userId AND l.createdAt >= :startDate")
     Integer sumTokensByUserSince(@Param("userId") Long userId, @Param("startDate") Instant startDate);
 
-    // Student AI quota (SE-01/SE-02/SQ-01): [settled tokens, tokens still reserved]. FAILED/TIMEOUT logs are refunded.
+    // Student AI quota (Part 2 §9.9): [settled tokens, tokens still reserved] for every AI purpose.
+    // FAILED/TIMEOUT logs are refunded.
     @Query("""
             SELECT COALESCE(SUM(CASE WHEN l.status IN ('SUCCESS', 'PARTIAL')
                         THEN COALESCE(l.inputTokens, 0) + COALESCE(l.outputTokens, 0) ELSE 0 END), 0),
                    COALESCE(SUM(CASE WHEN l.status = 'PENDING' THEN l.reservedTokens ELSE 0 END), 0)
             FROM AiUsageLog l
             WHERE l.user.userId = :userId AND l.billingSource = :source
-              AND l.purpose IN ('EXPLANATION', 'ESSAY_GRADING')
               AND l.createdAt >= :from AND l.createdAt < :to""")
     List<Object[]> sumStudentUsage(@Param("userId") Long userId, @Param("source") String source,
             @Param("from") Instant from, @Param("to") Instant to);

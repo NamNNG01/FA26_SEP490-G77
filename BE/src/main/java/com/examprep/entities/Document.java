@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.io.Serializable;
+import java.time.Instant;
 
 @Entity
 @Table(name = "documents")
@@ -35,4 +36,22 @@ public class Document implements Serializable {
 
     @Column(name = "status", nullable = false, length = 20)
     private String status;
+
+    @Column(name = "title", length = 255)
+    private String title;
+
+    @Column(name = "file_name", length = 255)
+    private String fileName;
+
+    @Column(name = "file_url", length = 512)
+    private String fileUrl;
+
+    @Column(name = "file_size_kb")
+    private Integer fileSizeKb;
+
+    @Column(name = "page_count")
+    private Integer pageCount;
+
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private Instant createdAt;
 }

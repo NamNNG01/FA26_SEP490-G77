@@ -14,11 +14,11 @@ import java.util.zip.ZipInputStream;
 
 @Component
 public class MaterialTextReader {
-    private static final int LIMIT=10*1024*1024;
+    private static final int LIMIT=20*1024*1024;
     private static final int TEXT_LIMIT=1_000_000;
 
     public String read(String filename,byte[] bytes) {
-        if(bytes==null || bytes.length==0 || bytes.length>LIMIT) throw bad("File must contain data and be at most 10MB.");
+        if(bytes==null || bytes.length==0 || bytes.length>LIMIT) throw bad("File must contain data and be at most 20MB.");
         String name=filename==null?"":filename.toLowerCase(Locale.ROOT);
         try {
             String text;
@@ -43,6 +43,13 @@ public class MaterialTextReader {
             return text;
         } catch(BadRequestException ex) { throw ex; }
         catch(Exception ex) { throw bad("Could not extract text from this file. Use a valid, unencrypted PDF, DOCX or UTF-8 TXT file."); }
+    }
+
+    /** Page count of a PDF upload; DOCX has no stable page count, so callers get {@code null}. */
+    public Integer pageCount(String filename,byte[] bytes) {
+        if(filename==null || !filename.toLowerCase(Locale.ROOT).endsWith(".pdf")) return null;
+        try(var document=Loader.loadPDF(bytes)) { return document.getNumberOfPages(); }
+        catch(Exception ex) { return null; }
     }
 
     private String docx(byte[] bytes) throws Exception {
