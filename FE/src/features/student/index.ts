@@ -9,3 +9,4 @@ export { StudentExamResultPage } from './pages/StudentExamResultPage';
 export { StudentPracticeQuizPage } from './pages/StudentPracticeQuizPage';
 export { StudentLearningActivityPage } from './pages/StudentLearningActivityPage';
 export { StudentQuestionNotebookPage } from './pages/StudentQuestionNotebookPage';
+export { StudentContestsPage } from './pages/StudentContestsPage';

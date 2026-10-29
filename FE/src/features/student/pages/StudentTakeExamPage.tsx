@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router';
+import { useLocation, useNavigate, useSearchParams } from 'react-router';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
@@ -41,7 +41,9 @@ type SaveState = 'saved' | 'dirty' | 'saving' | 'error';
  */
 export function StudentTakeExamPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
+  const contestEndsAt = (location.state as { endsAt?: string } | null)?.endsAt;
   const examIdParam = searchParams.get('examId');
   const attemptIdParam = searchParams.get('attemptId');
 
@@ -97,7 +99,7 @@ export function StudentTakeExamPage() {
         dirtyRef.current = new Set();
         setAnswers(initial);
         setBookmarkedQuestions(new Set());
-        setSession({ ...s, questions: [...s.questions].sort((a, b) => a.orderIndex - b.orderIndex) });
+        setSession({ ...s, deadlineAt: contestEndsAt ?? s.deadlineAt, questions: [...s.questions].sort((a, b) => a.orderIndex - b.orderIndex) });
         setCurrent(0);
         setSaveState('saved');
         if (!attemptIdParam) setSearchParams({ attemptId: String(s.attemptId) }, { replace: true });
