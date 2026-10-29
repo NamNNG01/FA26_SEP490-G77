@@ -218,6 +218,8 @@ public class ManagerExamServiceImpl implements ManagerExamService {
             Join<Module, Course> mc = m.join("course", JoinType.LEFT);
 
             List<Predicate> where = new ArrayList<>();
+            // Students' own generated exams (PQ-01, AI-01) are not course exams.
+            where.add(cb.equal(root.get("mode"), Exam.MODE_EXAM));
 
             if (!admin(user)) {
                 where.add(cb.or(
