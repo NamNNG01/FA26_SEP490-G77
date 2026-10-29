@@ -35,6 +35,15 @@ public class Notification implements Serializable {
     @Column(name = "target_type", length = 50)
     private String targetType;
 
+    @Column(name = "link", length = 512)
+    private String link;
+
+    @Column(name = "reference_id")
+    private Long referenceId;
+
+    @Column(name = "reference_type", length = 50)
+    private String referenceType;
+
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
