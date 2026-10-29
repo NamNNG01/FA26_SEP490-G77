@@ -33,6 +33,8 @@ public enum ResponseCode {
     AI_TIMEOUT(HttpStatus.GATEWAY_TIMEOUT, "AI_TIMEOUT", "AI generation timed out"),
     QUOTA_EXCEEDED(HttpStatus.PAYMENT_REQUIRED, "QUOTA_EXCEEDED", "Not enough AI quota"),
     NOTHING_TO_GRADE(HttpStatus.CONFLICT, "NOTHING_TO_GRADE", "No question can be graded"),
+    /** FC-07: upload over the size limit; data.code is FILE_TOO_LARGE. */
+    PAYLOAD_TOO_LARGE(HttpStatus.PAYLOAD_TOO_LARGE, "FILE_TOO_LARGE", "File is too large"),
 
     // Domain Specific Errors
     EXAM_NOT_FOUND(HttpStatus.NOT_FOUND, "EXAM_NOT_FOUND", "Exam with the specified ID does not exist"),

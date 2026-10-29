@@ -33,4 +33,12 @@ public class UserCardProgress implements Serializable {
 
     @Column(name = "status", nullable = false, length = 30)
     private String status;
+
+    /** Times the student marked the card "review again" (spec 9.2). */
+    @Builder.Default
+    @Column(name = "wrong_count", nullable = false)
+    private Integer wrongCount = 0;
+
+    @Column(name = "last_reviewed_at")
+    private java.time.Instant lastReviewedAt;
 }

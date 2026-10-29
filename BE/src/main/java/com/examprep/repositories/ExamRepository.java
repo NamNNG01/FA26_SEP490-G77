@@ -21,11 +21,11 @@ public interface ExamRepository extends JpaRepository<Exam, Long>, JpaSpecificat
     boolean existsByModuleModuleId(Long moduleId);
     boolean existsByCourseCourseIdOrModuleCourseCourseId(Long courseId, Long moduleCourseId);
 
-    @Query("SELECT new com.examprep.dto.IdCount(e.module.moduleId, COUNT(e)) FROM Exam e WHERE e.module.moduleId IN :ids GROUP BY e.module.moduleId")
+    @Query("SELECT new com.examprep.dto.IdCount(e.module.moduleId, COUNT(e)) FROM Exam e WHERE e.module.moduleId IN :ids AND e.mode = 'EXAM' GROUP BY e.module.moduleId")
     List<IdCount> countByModules(@Param("ids") List<Long> ids);
 
     @Query("SELECT new com.examprep.dto.IdCount(c.courseId, COUNT(DISTINCT e.examId)) FROM Exam e LEFT JOIN e.module m, Course c " +
-            "WHERE c.courseId IN :ids AND (e.course.courseId = c.courseId OR m.course.courseId = c.courseId) GROUP BY c.courseId")
+            "WHERE c.courseId IN :ids AND e.mode = 'EXAM' AND (e.course.courseId = c.courseId OR m.course.courseId = c.courseId) GROUP BY c.courseId")
     List<IdCount> countByCourses(@Param("ids") List<Long> ids);
 
     @Override
@@ -62,12 +62,12 @@ public interface ExamRepository extends JpaRepository<Exam, Long>, JpaSpecificat
             CAST(NULL AS String)
         )
         FROM Exam ex LEFT JOIN ex.module m
-        WHERE ex.course.courseId = :courseId AND ex.status = 'PUBLISHED'
+        WHERE ex.course.courseId = :courseId AND ex.status = 'PUBLISHED' AND ex.mode = 'EXAM'
           AND (m IS NULL OR m.status <> 'HIDDEN')
         """,
             countQuery = """
         SELECT COUNT(ex) FROM Exam ex
-        WHERE ex.course.courseId = :courseId AND ex.status = 'PUBLISHED'
+        WHERE ex.course.courseId = :courseId AND ex.status = 'PUBLISHED' AND ex.mode = 'EXAM'
           AND NOT EXISTS (SELECT hm FROM Module hm WHERE hm = ex.module AND hm.status = 'HIDDEN')
         """
     )
@@ -82,6 +82,7 @@ public interface ExamRepository extends JpaRepository<Exam, Long>, JpaSpecificat
     FROM Exam e
     WHERE e.course.courseId = :courseId
       AND e.status = 'PUBLISHED'
+      AND e.mode = 'EXAM'
       AND NOT EXISTS (SELECT hm FROM Module hm WHERE hm = e.module AND hm.status = 'HIDDEN')
     """)
     long countPublishedExamsByCourseId(@Param("courseId") Long courseId);
