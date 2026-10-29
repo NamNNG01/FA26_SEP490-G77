@@ -168,6 +168,7 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
                 .startTime(now)
                 .deadlineAt(now.plus(exam.getDurationMinutes() == null ? 0 : exam.getDurationMinutes(), ChronoUnit.MINUTES))
                 .status(STATUS_IN_PROGRESS)
+                .mode(exam.getMode())
                 .autoSubmitted(false)
                 .examSnapshot(paperFactory.write(new Snapshots.ExamSnapshot(
                         examId, exam.getTitle(), exam.getMaxScore(), exam.getDurationMinutes(),

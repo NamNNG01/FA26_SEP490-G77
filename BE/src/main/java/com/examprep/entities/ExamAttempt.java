@@ -59,5 +59,5 @@ public class ExamAttempt implements Serializable {
 
     @Builder.Default
     @Column(name = "mode", length = 30)
-    private String mode = "NORMAL";
+    private String mode = "EXAM";
 }

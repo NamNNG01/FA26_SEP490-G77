@@ -2,6 +2,8 @@ package com.examprep.entities;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
@@ -51,6 +53,7 @@ public class Contest implements Serializable {
     @Column(name = "banner_url", length = 512)
     private String bannerUrl;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "reward_config", columnDefinition = "JSON")
     private String rewardConfig;
 
