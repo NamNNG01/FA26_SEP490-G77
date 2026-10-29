@@ -39,7 +39,10 @@ export function PublicNavbar() {
     { label: "Home", to: ROUTES.landing },
     { label: "Courses", to: ROUTES.courses },
     ...(isStudent
-      ? [{ label: "Exam history", to: ROUTES.studentMyExams }]
+      ? [
+          { label: "Exam history", to: ROUTES.studentMyExams },
+          { label: "Contests", to: ROUTES.studentContests },
+        ]
       : []),
     isStudent
       ? { label: "Flashcards", to: ROUTES.studentFlashcards }
