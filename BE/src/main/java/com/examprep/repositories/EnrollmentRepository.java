@@ -22,6 +22,10 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
 
     Optional<Enrollment> findByUser_UserIdAndCourse_CourseId(Long userId, Long courseId);
 
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT e FROM Enrollment e WHERE e.user.userId = :userId AND e.course.courseId = :courseId")
+    Optional<Enrollment> findForUpdate(@Param("userId") Long userId, @Param("courseId") Long courseId);
+
     @Query("SELECT new com.examprep.dto.student.MyCourseDto(" +
             "c.courseId, c.title, c.slug, c.thumbnailUrl, c.price, " +
             "new com.examprep.dto.student.CategoryRefDto(cat.categoryId, cat.name), " +

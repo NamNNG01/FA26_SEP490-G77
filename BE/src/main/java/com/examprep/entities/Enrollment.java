@@ -17,6 +17,7 @@ public class Enrollment implements Serializable {
 
     public static final String STATUS_ACTIVE = "ACTIVE";
     public static final String STATUS_COMPLETED = "COMPLETED";
+    public static final String STATUS_CANCELLED = "CANCELLED";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -44,4 +45,10 @@ public class Enrollment implements Serializable {
     @Builder.Default
     @Column(name = "progress", nullable = false)
     private Integer progress = 0;
+
+    @Column(name = "cancelled_at")
+    private Instant cancelledAt;
+
+    @Column(name = "cancel_reason", length = 255)
+    private String cancelReason;
 }
