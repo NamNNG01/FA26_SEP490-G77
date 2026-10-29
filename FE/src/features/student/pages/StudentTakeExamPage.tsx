@@ -8,6 +8,7 @@ import { TimerDisplay } from '@/components/common/TimerDisplay';
 import { QuestionPalette } from '@/components/common/QuestionPalette';
 import { Icon } from '@/assets/icons';
 import { studentExamPath, studentExamResultPath } from '@/app/routes';
+import { studentProgressService } from '@/services/studentProgress.service';
 import { getApiErrorMessage } from '@/utils/apiError';
 import {
   DRAFT_BATCH_LIMIT,
@@ -51,6 +52,8 @@ export function StudentTakeExamPage() {
   const [answers, setAnswers] = useState<Record<number, AnswerResponse | null>>({});
   const [current, setCurrent] = useState(0);
   const [flagged, setFlagged] = useState<Set<number>>(() => new Set());
+  const [bookmarkedQuestions, setBookmarkedQuestions] = useState<Set<number>>(() => new Set());
+  const [bookmarkBusy, setBookmarkBusy] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>('saved');
   const [remaining, setRemaining] = useState<number | null>(null);
 
@@ -93,6 +96,7 @@ export function StudentTakeExamPage() {
         seqRef.current = seqs;
         dirtyRef.current = new Set();
         setAnswers(initial);
+        setBookmarkedQuestions(new Set());
         setSession({ ...s, questions: [...s.questions].sort((a, b) => a.orderIndex - b.orderIndex) });
         setCurrent(0);
         setSaveState('saved');
@@ -308,6 +312,22 @@ export function StudentTakeExamPage() {
       else next.add(current + 1);
       return next;
     });
+  const toggleQuestionBookmark = async () => {
+    if (!q || bookmarkBusy) return;
+    setBookmarkBusy(true);
+    setActionError(null);
+    try {
+      const result = await studentProgressService.toggleBookmark(q.questionId);
+      setBookmarkedQuestions(current => {
+        const next = new Set(current);
+        if (result.isBookmarked) next.add(q.questionId);
+        else next.delete(q.questionId);
+        return next;
+      });
+    } catch (err) {
+      setActionError(getApiErrorMessage(err, 'Could not update the bookmark.'));
+    } finally { setBookmarkBusy(false); }
+  };
 
   return (
     <div className="h-[100dvh] flex flex-col bg-surface-alt">
@@ -353,7 +373,10 @@ export function StudentTakeExamPage() {
               <h2 className="text-sm font-semibold text-content uppercase tracking-wide">Question {current + 1}</h2>
               <Badge variant="info">{QUESTION_TYPE_LABEL[q.questionType] ?? q.questionType}</Badge>
               {q.maxPoints != null && <span className="text-xs text-content-subtle">{Number(q.maxPoints)} pts</span>}
-              <span className="text-xs text-content-subtle ml-auto">
+              <Button size="sm" variant="ghost" className="ml-auto" disabled={bookmarkBusy} aria-pressed={bookmarkedQuestions.has(q.questionId)} aria-label={bookmarkedQuestions.has(q.questionId) ? 'Remove bookmark' : 'Bookmark question'} title={bookmarkedQuestions.has(q.questionId) ? 'Remove bookmark' : 'Bookmark question'} onClick={toggleQuestionBookmark}>
+                <Icon.Star className={`w-4 h-4 ${bookmarkedQuestions.has(q.questionId) ? 'fill-current text-warning' : ''}`} />
+              </Button>
+              <span className="text-xs text-content-subtle">
                 {current + 1} / {questions.length}
               </span>
             </div>

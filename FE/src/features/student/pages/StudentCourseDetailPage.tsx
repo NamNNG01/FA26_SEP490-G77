@@ -6,6 +6,7 @@ import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/Card';
 import { Icon } from '@/assets/icons';
+import { Progress } from '@/components/ui/Progress';
 import { ROUTES, studentDeckPath, studentExamPath } from '@/app/routes';
 import { getApiErrorMessage } from '@/utils/apiError';
 import type { ExamKind } from '@/services/exam.service';
@@ -17,6 +18,7 @@ import {
 } from '@/services/studentCourse.service';
 import { CourseThumb, ListSkeleton, LoadError, STUDENT_PAGE_CLASS, formatScore } from '../components/studentUi';
 import type { DeckStudyState } from '../components/DeckCard';
+import { studentProgressService, type CourseProgress } from '@/services/studentProgress.service';
 
 /**
  * Student course detail — course info (CL-02), then the course content as a
@@ -143,12 +145,51 @@ export function StudentCourseDetailPage() {
       )}
 
       {isActive ? (
-        <CourseTree course={course} onModuleCount={setShownModules} />
+        <>
+          <CourseProgressPanel courseId={course.courseId} />
+          <CourseTree course={course} onModuleCount={setShownModules} />
+        </>
       ) : (
         <LockedModules course={course} />
       )}
     </div>
   );
+}
+
+function CourseProgressPanel({ courseId }: { courseId: number }) {
+  const [progress, setProgress] = useState<CourseProgress | null>(null);
+  const [error, setError] = useState(false);
+  const [reload, setReload] = useState(0);
+  useEffect(() => {
+    let cancelled = false;
+    studentProgressService.getCourseProgress(courseId)
+      .then(data => { if (!cancelled) { setProgress(data); setError(false); } })
+      .catch(() => { if (!cancelled) setError(true); });
+    return () => { cancelled = true; };
+  }, [courseId, reload]);
+
+  if (error) return <div className="card flex flex-wrap items-center justify-between gap-3 p-4">
+    <p className="text-sm text-content-soft">Course progress could not be loaded.</p>
+    <button type="button" className="text-sm font-medium text-primary hover:underline" onClick={() => setReload(v => v + 1)}>Try again</button>
+  </div>;
+  if (!progress) return <div className="card p-4 text-sm text-content-subtle">Loading course progress…</div>;
+
+  return <section className="card p-4 sm:p-5 space-y-4" aria-label="Course progress">
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <h2 className="font-semibold text-content">Your progress</h2>
+        <p className="mt-1 text-xs text-content-subtle">{progress.completedExams} of {progress.totalExams} exams completed · {progress.learnedDecks} of {progress.totalDecks} decks learned</p>
+      </div>
+      <div className="text-right"><p className="text-xl font-bold text-primary">{progress.progress}%</p><p className="text-xs text-content-subtle">overall</p></div>
+    </div>
+    <Progress value={progress.progress} />
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3">
+      <p className="text-sm text-content-secondary">Average score <span className="font-semibold text-content">{progress.averageScore == null ? '—' : progress.averageScore.toFixed(2)}</span></p>
+      {progress.recentAttempts.length > 0 && <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-content-subtle">
+        {progress.recentAttempts.slice(0, 3).map(attempt => <li key={attempt.attemptId}>{attempt.examTitle}: <span className="font-medium text-content-secondary">{attempt.totalScore}/{attempt.maxScore}</span></li>)}
+      </ul>}
+    </div>
+  </section>;
 }
 
 
