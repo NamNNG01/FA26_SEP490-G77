@@ -17,14 +17,13 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/student")
 @RequiredArgsConstructor
-@Tag(name = "Student Contributions", description = "Student question, document and tip contributions APIs")
+@Tag(name = "Student Contributions", description = "Student question and tip contributions APIs")
 public class StudentContributionController {
 
     private final StudentContributionService contributionService;
@@ -37,18 +36,6 @@ public class StudentContributionController {
     ) {
         Map<String, Object> data = contributionService.createQuestionContribution(request, currentUser != null ? currentUser.getId() : null);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(data, "Question contribution submitted successfully"));
-    }
-
-    @PostMapping("/contributions/documents")
-    @Operation(summary = "CQ-02: Student document contribution")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> createDocumentContribution(
-            @RequestParam("file") MultipartFile file,
-            @RequestParam("courseId") Long courseId,
-            @RequestParam("title") String title,
-            @AuthenticationPrincipal UserPrincipal currentUser
-    ) {
-        Map<String, Object> data = contributionService.createDocumentContribution(file, courseId, title, currentUser != null ? currentUser.getId() : null);
-        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(data, "Document contribution submitted successfully"));
     }
 
     @GetMapping("/contributions")
@@ -79,10 +66,9 @@ public class StudentContributionController {
     public ResponseEntity<ApiResponse<Map<String, Object>>> resubmitContribution(
             @PathVariable Long contributionId,
             @RequestBody(required = false) Object requestBody,
-            @RequestParam(value = "file", required = false) MultipartFile file,
             @AuthenticationPrincipal UserPrincipal currentUser
     ) {
-        Map<String, Object> data = contributionService.resubmitContribution(contributionId, requestBody, file, currentUser != null ? currentUser.getId() : null);
+        Map<String, Object> data = contributionService.resubmitContribution(contributionId, requestBody, currentUser != null ? currentUser.getId() : null);
         return ResponseEntity.ok(ApiResponse.success(data, "Contribution resubmitted successfully"));
     }
 

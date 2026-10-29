@@ -24,16 +24,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 
 @Slf4j
 @Service
@@ -126,65 +119,6 @@ public class StudentContributionServiceImpl implements StudentContributionServic
                 "contributionId", saved.getContributionId(),
                 "status", saved.getStatus(),
                 "createdAt", saved.getSubmittedAt() != null ? saved.getSubmittedAt().toString() : ""
-        );
-    }
-
-    @Override
-    public Map<String, Object> createDocumentContribution(MultipartFile file, Long courseId, String title, Long userId) {
-        if (courseId == null) {
-            throw new BadRequestException("Course ID is required");
-        }
-        validateActiveEnrollment(courseId, userId);
-
-        if (file == null || file.isEmpty()) {
-            throw new BadRequestException("File is required");
-        }
-        if (file.getSize() > 20L * 1024 * 1024) {
-            throw new BadRequestException("File size exceeds 20 MB limit");
-        }
-
-        String originalFilename = file.getOriginalFilename();
-        String ext = originalFilename != null && originalFilename.contains(".") ?
-                originalFilename.substring(originalFilename.lastIndexOf(".")).toLowerCase() : "";
-
-        if (!List.of(".pdf", ".docx", ".pptx", ".xlsx").contains(ext)) {
-            throw new BaseException(ResponseCode.BAD_REQUEST, "Unsupported file type", Map.of("code", "UNSUPPORTED_FILE_TYPE"));
-        }
-
-        String fileUrl = null;
-        try {
-            Path uploadPath = Paths.get("uploads", "documents");
-            if (!Files.exists(uploadPath)) {
-                Files.createDirectories(uploadPath);
-            }
-            String uniqueName = UUID.randomUUID().toString() + "_" + (originalFilename != null ? originalFilename : "doc");
-            Path targetPath = uploadPath.resolve(uniqueName);
-            Files.copy(file.getInputStream(), targetPath, StandardCopyOption.REPLACE_EXISTING);
-            fileUrl = targetPath.toString();
-        } catch (IOException e) {
-            log.error("Failed to store uploaded document file", e);
-            throw new BadRequestException("Failed to store uploaded file");
-        }
-
-        QuestionContribution contribution = QuestionContribution.builder()
-                .userId(userId)
-                .courseId(courseId)
-                .type("DOCUMENT")
-                .title(title != null ? title : originalFilename)
-                .content(title != null ? title : (originalFilename != null ? originalFilename : "Document Contribution"))
-                .fileUrl(fileUrl)
-                .fileName(originalFilename)
-                .fileSizeKb((int) (file.getSize() / 1024))
-                .status("PENDING")
-                .resubmissionCount(0)
-                .build();
-
-        QuestionContribution saved = contributionRepository.save(contribution);
-
-        return Map.of(
-                "contributionId", saved.getContributionId(),
-                "status", saved.getStatus(),
-                "fileName", saved.getFileName() != null ? saved.getFileName() : ""
         );
     }
 
@@ -286,9 +220,6 @@ public class StudentContributionServiceImpl implements StudentContributionServic
                 .difficulty(c.getDifficulty())
                 .essayGradingRubric(essayGradingRubric)
                 .questionMetadata(questionMetadata)
-                .fileName(c.getFileName())
-                .fileSizeKb(c.getFileSizeKb())
-                .fileUrl(c.getFileUrl())
                 .sourceReference(c.getSourceReference())
                 .reviewNote(c.getReviewNote())
                 .resubmissionCount(c.getResubmissionCount())
@@ -298,7 +229,7 @@ public class StudentContributionServiceImpl implements StudentContributionServic
     }
 
     @Override
-    public Map<String, Object> resubmitContribution(Long contributionId, Object requestBody, MultipartFile file, Long userId) {
+    public Map<String, Object> resubmitContribution(Long contributionId, Object requestBody, Long userId) {
         if (userId == null) {
             throw new ForbiddenException("Authentication required");
         }
@@ -358,40 +289,6 @@ public class StudentContributionServiceImpl implements StudentContributionServic
             c.setTitle(tReq.getTitle().trim());
             c.setContent(tReq.getContent().trim());
             c.setSourceReference(tReq.getSourceReference());
-        } else if ("DOCUMENT".equals(c.getType())) {
-            if (file != null && !file.isEmpty()) {
-                if (file.getSize() > 20L * 1024 * 1024) {
-                    throw new BadRequestException("File size exceeds 20 MB limit");
-                }
-                String originalFilename = file.getOriginalFilename();
-                String ext = originalFilename != null && originalFilename.contains(".") ?
-                        originalFilename.substring(originalFilename.lastIndexOf(".")).toLowerCase() : "";
-                if (!List.of(".pdf", ".docx", ".pptx", ".xlsx").contains(ext)) {
-                    throw new BaseException(ResponseCode.BAD_REQUEST, "Unsupported file type", Map.of("code", "UNSUPPORTED_FILE_TYPE"));
-                }
-                try {
-                    Path uploadPath = Paths.get("uploads", "documents");
-                    if (!Files.exists(uploadPath)) {
-                        Files.createDirectories(uploadPath);
-                    }
-                    String uniqueName = UUID.randomUUID().toString() + "_" + (originalFilename != null ? originalFilename : "doc");
-                    Path targetPath = uploadPath.resolve(uniqueName);
-                    Files.copy(file.getInputStream(), targetPath, StandardCopyOption.REPLACE_EXISTING);
-                    c.setFileUrl(targetPath.toString());
-                    c.setFileName(originalFilename);
-                    c.setFileSizeKb((int) (file.getSize() / 1024));
-                } catch (IOException e) {
-                    throw new BadRequestException("Failed to store uploaded file");
-                }
-            }
-            if (requestBody instanceof Map) {
-                Map<?, ?> map = (Map<?, ?>) requestBody;
-                if (map.containsKey("title") && map.get("title") != null) {
-                    String title = map.get("title").toString();
-                    c.setTitle(title);
-                    c.setContent(title);
-                }
-            }
         }
 
         c.setStatus("PENDING");

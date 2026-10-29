@@ -29,8 +29,8 @@ class StudentV2FeaturesApiIntegrationTest {
     @Autowired EntityManager em;
     @Autowired ObjectMapper json;
     Fixtures f;
-    User student, manager;
-    Course course;
+    User student, other, manager;
+    Course course, foreignCourse;
     Module oop;
     Question q;
 
@@ -38,31 +38,55 @@ class StudentV2FeaturesApiIntegrationTest {
         f = new Fixtures(em);
         manager = f.account(User.ROLE_COURSE_MANAGER);
         student = f.account(User.ROLE_STUDENT);
+        other = f.account(User.ROLE_STUDENT);
         course = f.course(manager);
+        foreignCourse = f.course(manager);
         f.enroll(student, course);
         oop = f.module(course, "OOP");
         q = f.question(course, oop, "MEDIUM");
         em.flush();
     }
 
-    @Test void testProgressLp01Lp02() throws Exception {
+    @Test void testProgressLp01Lp02NegativeAndEdgeCases() throws Exception {
         mvc.perform(get("/api/v1/student/progress/courses/" + course.getCourseId())
                 .with(as(student)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.courseId").value(course.getCourseId()));
 
-        mvc.perform(get("/api/v1/student/progress/activities")
+        mvc.perform(get("/api/v1/student/progress/courses/" + foreignCourse.getCourseId())
                 .with(as(student)))
-                .andExpect(status().isOk());
+                .andExpect(status().isForbidden());
+
+        mvc.perform(get("/api/v1/student/progress/courses/999999")
+                .with(as(student)))
+                .andExpect(status().isNotFound());
+
+        mvc.perform(get("/api/v1/student/progress/activities")
+                .param("type", "EXAM")
+                .param("page", "0")
+                .param("size", "10")
+                .with(as(student)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content").isArray());
     }
 
-    @Test void testMistakeNotebookMn01ToMn05() throws Exception {
+    @Test void testMistakeNotebookMn01ToMn05Comprehensive() throws Exception {
         mvc.perform(post("/api/v1/student/questions/" + q.getQuestionId() + "/bookmark")
                 .with(as(student)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.isBookmarked").value(true));
 
+        mvc.perform(post("/api/v1/student/questions/" + q.getQuestionId() + "/bookmark")
+                .with(as(student)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.isBookmarked").value(false));
+
+        mvc.perform(post("/api/v1/student/questions/" + q.getQuestionId() + "/bookmark")
+                .with(as(student)))
+                .andExpect(status().isOk());
+
         JsonNode savedList = json.readTree(mvc.perform(get("/api/v1/student/questions/saved")
+                .param("type", "bookmarked")
                 .with(as(student)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.totalElements").value(1))
@@ -71,8 +95,10 @@ class StudentV2FeaturesApiIntegrationTest {
         Long reviewId = savedList.get(0).path("reviewId").asLong();
 
         mvc.perform(get("/api/v1/student/questions/weak-spots")
+                .param("limit", "5")
                 .with(as(student)))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data").isArray());
 
         mvc.perform(post("/api/v1/student/questions/review-session")
                 .with(as(student))
@@ -81,17 +107,39 @@ class StudentV2FeaturesApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.attemptId").exists());
 
+        mvc.perform(post("/api/v1/student/questions/review-session")
+                .with(as(student))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"type\":\"bookmarked\",\"size\":100}"))
+                .andExpect(status().isBadRequest());
+
+        // Other student delete returns 404 (not found / not owner security pattern)
+        mvc.perform(delete("/api/v1/student/questions/saved/" + reviewId)
+                .with(as(other)))
+                .andExpect(status().isNotFound());
+
         mvc.perform(delete("/api/v1/student/questions/saved/" + reviewId)
                 .with(as(student)))
                 .andExpect(status().isOk());
     }
 
-    @Test void testDiscussionsAndTipsDi01ToDi08() throws Exception {
-        String discReq = "{\"courseId\":" + course.getCourseId() + ",\"title\":\"How to learn Java?\",\"content\":\"Please share tips.\",\"tag\":\"question\"}";
+    @Test void testDiscussionsAndTipsDi01ToDi08Comprehensive() throws Exception {
+        mvc.perform(post("/api/v1/student/discussions")
+                .with(as(student))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"courseId\":" + course.getCourseId() + ",\"title\":\"\",\"content\":\"\",\"tag\":\"question\"}"))
+                .andExpect(status().isBadRequest());
+
+        mvc.perform(post("/api/v1/student/discussions")
+                .with(as(other))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"courseId\":" + course.getCourseId() + ",\"title\":\"Java\",\"content\":\"Help\",\"tag\":\"question\"}"))
+                .andExpect(status().isForbidden());
+
         JsonNode created = json.readTree(mvc.perform(post("/api/v1/student/discussions")
                 .with(as(student))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(discReq))
+                .content("{\"courseId\":" + course.getCourseId() + ",\"title\":\"How to learn Java?\",\"content\":\"Please share tips.\",\"tag\":\"question\"}"))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString()).path("data");
 
@@ -99,6 +147,7 @@ class StudentV2FeaturesApiIntegrationTest {
 
         mvc.perform(get("/api/v1/student/discussions")
                 .param("courseId", course.getCourseId().toString())
+                .param("sort", "latest")
                 .with(as(student)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.totalElements").value(1));
@@ -129,6 +178,12 @@ class StudentV2FeaturesApiIntegrationTest {
                 .param("courseId", course.getCourseId().toString())
                 .with(as(student)))
                 .andExpect(status().isOk());
+
+        mvc.perform(patch("/api/v1/student/discussions/" + discId)
+                .with(as(other))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"isClosed\":true}"))
+                .andExpect(status().isForbidden());
 
         mvc.perform(patch("/api/v1/student/discussions/" + discId)
                 .with(as(student))

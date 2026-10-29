@@ -29,9 +29,6 @@ public class ContributionDetailDto {
     private String difficulty;
     private Object essayGradingRubric;
     private Object questionMetadata;
-    private String fileName;
-    private Integer fileSizeKb;
-    private String fileUrl;
     private String sourceReference;
     private String reviewNote;
     private Integer resubmissionCount;

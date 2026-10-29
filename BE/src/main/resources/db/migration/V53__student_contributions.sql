@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS question_contributions (
     title                 VARCHAR(500),
     content               TEXT         NOT NULL,
     module_id             BIGINT       REFERENCES modules(module_id) ON DELETE SET NULL,
-    group_id              BIGINT       REFERENCES question_groups(question_group_id) ON DELETE SET NULL,
+    group_id              BIGINT       REFERENCES question_groups(group_id) ON DELETE SET NULL,
     question_type         VARCHAR(50),
     options_json          JSON,
     answer_key_json       JSON,
@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS question_contributions (
 ALTER TABLE question_contributions ADD COLUMN IF NOT EXISTS type VARCHAR(30) NOT NULL DEFAULT 'QUESTION';
 ALTER TABLE question_contributions ADD COLUMN IF NOT EXISTS title VARCHAR(500);
 ALTER TABLE question_contributions ADD COLUMN IF NOT EXISTS module_id BIGINT REFERENCES modules(module_id) ON DELETE SET NULL;
-ALTER TABLE question_contributions ADD COLUMN IF NOT EXISTS group_id BIGINT REFERENCES question_groups(question_group_id) ON DELETE SET NULL;
+ALTER TABLE question_contributions ADD COLUMN IF NOT EXISTS group_id BIGINT REFERENCES question_groups(group_id) ON DELETE SET NULL;
 ALTER TABLE question_contributions ADD COLUMN IF NOT EXISTS essay_grading_rubric_json JSON;
 ALTER TABLE question_contributions ADD COLUMN IF NOT EXISTS question_metadata_json JSON;
 ALTER TABLE question_contributions ADD COLUMN IF NOT EXISTS file_name VARCHAR(255);

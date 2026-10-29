@@ -75,18 +75,9 @@ public class QuestionContribution implements Serializable {
     @Column(name = "question_metadata_json", columnDefinition = "jsonb")
     private String questionMetadataJson;
 
-    @Column(name = "file_url", length = 512)
-    private String fileUrl;
-
-    @Column(name = "file_name", length = 255)
-    private String fileName;
-
-    @Column(name = "file_size_kb")
-    private Integer fileSizeKb;
-
     @Column(name = "source_reference", length = 500)
     private String sourceReference;
-
+    
     @Builder.Default
     @Column(name = "status", nullable = false, length = 20)
     private String status = "PENDING"; // PENDING, ACCEPTED, REJECTED
