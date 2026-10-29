@@ -12,3 +12,4 @@ export { StudentQuestionNotebookPage } from './pages/StudentQuestionNotebookPage
 export { StudentContestsPage } from './pages/StudentContestsPage';
 export { StudentCommunityPage } from './pages/StudentCommunityPage';
 export { StudentContributionsPage } from './pages/StudentContributionsPage';
+export { StudentWeaknessReportPage } from './pages/StudentWeaknessReportPage';
