@@ -31,7 +31,6 @@ public class StudentContestServiceImpl implements StudentContestService {
     private final ExamAttemptRepository examAttemptRepository;
     private final ExamQuestionRepository examQuestionRepository;
     private final AttemptPaperFactory attemptPaperFactory;
-    private final AttemptShuffler attemptShuffler;
 
     private String determineStatus(Contest c, Instant now) {
         if ("CANCELLED".equals(c.getStatus())) {
@@ -133,7 +132,7 @@ public class StudentContestServiceImpl implements StudentContestService {
             Optional<ExamAttempt> existingAtt = examAttemptRepository.findById(participant.getAttemptId());
             if (existingAtt.isPresent() && "IN_PROGRESS".equals(existingAtt.get().getStatus())) {
                 ExamAttempt att = existingAtt.get();
-                List<Question> questions = attemptPaperFactory.resolve(c.getExam(), attemptShuffler, 123L).items().stream().map(AttemptPaperFactory.Item::question).toList();
+                List<Question> questions = attemptPaperFactory.resolve(c.getExam(), new AttemptShuffler(123L), 123L).items().stream().map(AttemptPaperFactory.Item::question).toList();
                 Map<Long, List<AnswerOption>> optionsMap = attemptPaperFactory.optionsOf(questions);
                 List<ContestStartResponseDto.QuestionDto> qDtos = new ArrayList<>();
                 int idx = 1;
@@ -149,7 +148,7 @@ public class StudentContestServiceImpl implements StudentContestService {
         Instant durationDeadline = now.plusSeconds((long) c.getDurationMinutes() * 60);
         Instant deadlineAt = (c.getEndTime() != null && durationDeadline.isAfter(c.getEndTime())) ? c.getEndTime() : durationDeadline;
 
-        AttemptPaperFactory.Paper paper = attemptPaperFactory.resolve(c.getExam(), attemptShuffler, System.currentTimeMillis());
+        AttemptPaperFactory.Paper paper = attemptPaperFactory.resolve(c.getExam(), new AttemptShuffler(System.currentTimeMillis()), System.currentTimeMillis());
         List<Question> questions = paper.items().stream().map(AttemptPaperFactory.Item::question).toList();
         Map<Long, List<AnswerOption>> optionsMap = attemptPaperFactory.optionsOf(questions);
 
