@@ -28,6 +28,8 @@ import {
 } from '@/services/studentPracticeExam.service';
 import type { AttemptQuestion } from '@/services/studentAttempt.service';
 import { QUESTION_TYPE_LABEL, QuestionAnswerInput, QuestionText, isAnswered } from '../components/QuestionAnswerInput';
+import { studentCodeExamService, type CodeLanguageInfo, type CodeQuestion } from '@/services/studentCodeExam.service';
+import { CodeQuestionWorkspace, currentCodeAnswer } from '../components/code/CodeQuestionWorkspace';
 
 /** Unsaved answers are pushed to SA-03 this often. */
 const AUTOSAVE_MS = 4000;
@@ -48,6 +50,8 @@ type SaveState = 'saved' | 'dirty' | 'saving' | 'error';
  *    screen submits on its own (and the BE auto-submits if the tab is gone).
  *  - Only questions made entirely of essay / code / diagram get the "Essay"
  *    layout (wider, taller editor); every other paper is a quiz.
+ *  - CODE questions get a 20/80 workspace (question | VS Code–style editor with Run, CD-04).
+ *    Submit grades them on every test case first (CD-05), then submits the attempt.
  *  - `&practice=1` (a practice exam, PQ-01 / AI-01): each answer is checked at
  *    once — the correct answer and the explanation show and the question locks.
  *    Single choice / true-false are checked on the pick; multiple choice, matching,
@@ -83,6 +87,11 @@ export function StudentTakeExamPage() {
   const [checking, setChecking] = useState<number | null>(null);
   /** Question just checked: its "Next question" button takes the focus. */
   const [justChecked, setJustChecked] = useState<number | null>(null);
+  /** CD-03 per CODE question, and the CD-06 languages. Empty when the paper has no CODE question or they failed to load. */
+  const [codeMeta, setCodeMeta] = useState<Map<number, CodeQuestion>>(() => new Map());
+  const [codeLanguages, setCodeLanguages] = useState<CodeLanguageInfo[]>([]);
+  /** CD-05 failed on a manual submit: the confirm button becomes "Submit anyway". */
+  const [codeGradeFailed, setCodeGradeFailed] = useState(false);
   // Practice shortcuts: the handler is rebuilt every render, the listener stays.
   const keyHandlerRef = useRef<((e: KeyboardEvent) => void) | null>(null);
   useEffect(() => {
@@ -141,6 +150,22 @@ export function StudentTakeExamPage() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [attemptIdParam, examIdParam, reload]);
+
+  // CODE questions: languages, template and sample I/O. A failure leaves the editor usable without them.
+  const sessionExamId = session?.examId;
+  const hasCode = Boolean(session?.questions.some(q => q.questionType === 'CODE'));
+  useEffect(() => {
+    if (sessionExamId == null || !hasCode) return;
+    let cancelled = false;
+    Promise.allSettled([studentCodeExamService.getQuestions(sessionExamId), studentCodeExamService.getLanguages()]).then(([qs, langs]) => {
+      if (cancelled) return;
+      if (qs.status === 'fulfilled') setCodeMeta(new Map((qs.value?.questions ?? []).map(c => [c.questionId, c])));
+      if (langs.status === 'fulfilled') setCodeLanguages(langs.value);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionExamId, hasCode]);
 
   /* ── Drafts ───────────────────────────────────────────────────────────── */
   const flush = useCallback(async (): Promise<void> => {
@@ -211,7 +236,7 @@ export function StudentTakeExamPage() {
 
   /* ── Submit / cancel ──────────────────────────────────────────────────── */
   const submit = useCallback(
-    async (auto = false) => {
+    async (auto = false, skipCode = false) => {
       if (!session || finishedRef.current || submittingRef.current) return;
       submittingRef.current = true;
       setBusy('submit');
@@ -221,6 +246,28 @@ export function StudentTakeExamPage() {
         await flush().catch(err => {
           if (!auto) throw err;
         });
+        // CODE answers are graded on the test cases (CD-05) before the attempt is closed.
+        const codeAnswers = skipCode
+          ? []
+          : session.questions
+              .filter(q => q.questionType === 'CODE')
+              .map(q =>
+                currentCodeAnswer(session.attemptId, q.questionId, codeMeta.get(q.questionId) ?? null, codeLanguages, answersRef.current[q.questionId]?.text),
+              )
+              .filter(a => a != null);
+        if (codeAnswers.length > 0) {
+          try {
+            await studentCodeExamService.submit(session.examId, codeAnswers);
+          } catch (err) {
+            // Time is up: never hold the attempt back for grading.
+            if (!auto) {
+              setCodeGradeFailed(true);
+              setActionError(getApiErrorMessage(err, 'Your code could not be graded.'));
+              setBusy(null);
+              return;
+            }
+          }
+        }
         await studentAttemptService.submit(session.attemptId);
         finishedRef.current = true;
         navigate(studentExamResultPath(session.attemptId, session.examId), { replace: true });
@@ -231,7 +278,7 @@ export function StudentTakeExamPage() {
         submittingRef.current = false;
       }
     },
-    [session, flush, navigate],
+    [session, flush, navigate, codeMeta, codeLanguages],
   );
 
   /** Where Cancel / Delete attempt lead: a practice exam has no course exam page — it is listed in Exam History. */
@@ -378,6 +425,7 @@ export function StudentTakeExamPage() {
   const checkable = practice && CHECKABLE_TYPES.has(q.questionType);
   const progress = checkProgress(q, answers[q.questionId]);
   const isLast = current === questions.length - 1;
+  const isCode = q.questionType === 'CODE';
   const goNext = () => (isLast ? setConfirm('submit') : goTo(current + 1));
 
   const checkAnswer = async () => {
@@ -479,8 +527,9 @@ export function StudentTakeExamPage() {
 
       <div className="flex flex-1 overflow-hidden flex-col md:flex-row">
         {/* Essay / diagram papers use the full width (30px gutters): draw.io and long answers need the room. */}
-        <main className={`flex-1 overflow-y-auto ${isEssay ? 'p-[30px]' : 'p-[clamp(1rem,2.5vw,1.5rem)]'}`}>
-          <div className={`${isEssay ? 'w-full space-y-3' : 'max-w-3xl mx-auto space-y-5'}`}>
+        <main className={`flex-1 overflow-y-auto ${isCode ? 'p-[clamp(0.75rem,1.5vw,1.25rem)]' : isEssay ? 'p-[30px]' : 'p-[clamp(1rem,2.5vw,1.5rem)]'}`}>
+          {/* CODE: the workspace fills the height between the question header and the nav buttons. */}
+          <div className={isCode ? 'w-full space-y-3 md:h-full md:flex md:flex-col' : isEssay ? 'w-full space-y-3' : 'max-w-3xl mx-auto space-y-5'}>
             {/* Question header: number, type and points — the card below holds only the question text. */}
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-sm font-semibold text-content uppercase tracking-wide">Question {current + 1}</h2>
@@ -494,28 +543,44 @@ export function StudentTakeExamPage() {
               </span>
             </div>
 
-            {/* Essay papers: a compact question (scrolls past ~12vh) so the answer area stays on screen. */}
-            <div className={`card ${isEssay ? 'px-3 py-2 max-h-[12vh] overflow-y-auto' : 'p-[clamp(1rem,2.5vw,1.5rem)]'}`}>
-              <QuestionText
-                content={q.content}
-                className={`text-content font-medium ${isEssay ? 'text-xs leading-normal' : 'text-lg leading-relaxed'}`}
-              />
-            </div>
+            {isCode ? (
+              <div className="md:min-h-0 md:flex-1">
+                <CodeQuestionWorkspace
+                  key={q.questionId}
+                  attemptId={session.attemptId}
+                  question={q}
+                  meta={codeMeta.get(q.questionId) ?? null}
+                  languages={codeLanguages}
+                  value={answers[q.questionId] ?? null}
+                  onChange={changeAnswer}
+                />
+              </div>
+            ) : (
+              <>
+                {/* Essay papers: a compact question (scrolls past ~12vh) so the answer area stays on screen. */}
+                <div className={`card ${isEssay ? 'px-3 py-2 max-h-[12vh] overflow-y-auto' : 'p-[clamp(1rem,2.5vw,1.5rem)]'}`}>
+                  <QuestionText
+                    content={q.content}
+                    className={`text-content font-medium ${isEssay ? 'text-xs leading-normal' : 'text-lg leading-relaxed'}`}
+                  />
+                </div>
 
-            {/* A checked practice answer is locked: a revealed input locks itself (its key stays
-                readable), any other checked one is disabled by the fieldset. */}
-            <fieldset disabled={Boolean(check) && !check?.supported} className="min-w-0">
-              <QuestionAnswerInput
-                key={q.questionId}
-                question={q}
-                value={answers[q.questionId] ?? null}
-                onChange={changeAnswer}
-                roomy={isEssay}
-                practice={practice}
-                reveal={check?.supported ? check : null}
-                onEnter={checkable && !check && progress.ready ? () => void checkAnswer() : undefined}
-              />
-            </fieldset>
+                {/* A checked practice answer is locked: a revealed input locks itself (its key stays
+                    readable), any other checked one is disabled by the fieldset. */}
+                <fieldset disabled={Boolean(check) && !check?.supported} className="min-w-0">
+                  <QuestionAnswerInput
+                    key={q.questionId}
+                    question={q}
+                    value={answers[q.questionId] ?? null}
+                    onChange={changeAnswer}
+                    roomy={isEssay}
+                    practice={practice}
+                    reveal={check?.supported ? check : null}
+                    onEnter={checkable && !check && progress.ready ? () => void checkAnswer() : undefined}
+                  />
+                </fieldset>
+              </>
+            )}
 
             {practice && !RUBRIC_TYPES.has(q.questionType) && (
               <PracticeCheck
@@ -601,16 +666,28 @@ export function StudentTakeExamPage() {
 
       <Modal
         open={confirm === 'submit'}
-        onClose={() => busy == null && setConfirm(null)}
+        onClose={() => {
+          if (busy != null) return;
+          setConfirm(null);
+          setCodeGradeFailed(false);
+        }}
         title="Are you sure you want to submit?"
         size="sm"
         footer={
           <>
-            <Button variant="outline" disabled={busy != null} onClick={() => setConfirm(null)}>
+            <Button
+              variant="outline"
+              disabled={busy != null}
+              onClick={() => {
+                setConfirm(null);
+                setCodeGradeFailed(false);
+              }}
+            >
               Keep working
             </Button>
-            <Button loading={busy === 'submit'} disabled={busy != null} onClick={() => submit(false)}>
-              Submit exam
+            {/* CD-05 failed: submitting anyway closes the attempt without the test-case grading. */}
+            <Button loading={busy === 'submit'} disabled={busy != null} onClick={() => submit(false, codeGradeFailed)}>
+              {codeGradeFailed ? 'Submit anyway' : 'Submit exam'}
             </Button>
           </>
         }
