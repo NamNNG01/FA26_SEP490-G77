@@ -41,6 +41,7 @@ import {
   StudentCommunityPage,
   StudentContributionsPage,
   StudentWeaknessReportPage,
+  StudentNotificationsPage,
 } from '@/features/student';
 import { PaymentHistoryPage, PaymentReturnPage } from '@/features/payment';
 import { ExamListPage, ExamFormPage } from '@/features/exam';
@@ -269,6 +270,7 @@ function AppRoutes() {
           <Route path={ROUTES.studentDiscussionDetail} element={<StudentCommunityPage />} />
           <Route path={ROUTES.studentContributions} element={<StudentContributionsPage />} />
           <Route path={ROUTES.studentContributionDetail} element={<StudentContributionsPage />} />
+          <Route path={ROUTES.studentNotifications} element={<StudentNotificationsPage />} />
           <Route path={ROUTES.studentFlashcards} element={<StudentFlashcardsPage />} />
           <Route path={ROUTES.studentFlashcardDeck} element={<StudentDeckStudyPage />} />
           <Route path={ROUTES.studentPublicExam} element={<PublicExamsPage />} />

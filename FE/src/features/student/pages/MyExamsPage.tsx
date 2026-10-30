@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { Button } from '@/components/ui/Button';
-import { Pagination } from '@/components/ui/Pagination';
+import { Table, type TableColumn } from '@/components/ui/Table';
+import { Dropdown, type DropdownItem } from '@/components/ui/Dropdown';
 import { EmptyState } from '@/components/ui/Card';
 import { Select } from '@/components/ui/Select';
 import { Badge, type BadgeVariant } from '@/components/ui/Badge';
@@ -297,6 +298,144 @@ export function MyExamsPage() {
     }
   };
 
+  /** Row actions for the "…" menu — only the ones that apply to this exam. */
+  const rowActions = (row: HistoryRow): DropdownItem[] => {
+    const items: DropdownItem[] = [];
+    if (row.attemptCount > 0) {
+      items.push({ label: 'View attempts', icon: <Icon.Eye />, onClick: () => navigate(studentExamAttemptsPath(row.examId)) });
+    }
+    if (canRetake(row)) {
+      const starting = row.jobId != null && startingJob === row.jobId;
+      items.push({
+        label: starting ? 'Starting…' : row.attemptCount > 0 ? 'Retake' : 'Start',
+        icon: <Icon.RefreshCw />,
+        disabled: startingJob != null,
+        onClick: () => void retake(row),
+      });
+    }
+    if (row.practiceId != null) {
+      items.push({
+        label: 'Delete',
+        icon: <Icon.Trash />,
+        danger: true,
+        onClick: () => {
+          setDeleteError(null);
+          setToDelete(row);
+        },
+      });
+    }
+    return items;
+  };
+
+  const asRow = (r: Record<string, unknown>) => r as unknown as HistoryRow;
+
+  const columns: TableColumn[] = [
+    {
+      key: 'title',
+      label: 'Exam',
+      className: 'min-w-[16rem]',
+      render: r => {
+        const row = asRow(r);
+        return (
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 min-w-0">
+              {row.attemptCount > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => navigate(studentExamAttemptsPath(row.examId))}
+                  className="truncate text-sm font-semibold text-content text-left hover:text-primary hover:underline"
+                  title={row.title}
+                >
+                  {row.title}
+                </button>
+              ) : (
+                <span className="truncate text-sm font-semibold text-content" title={row.title}>
+                  {row.title}
+                </span>
+              )}
+              {row.hasCode && (
+                <Badge variant="warning" size="sm">
+                  Code
+                </Badge>
+              )}
+            </div>
+            {(row.documentTitle && row.documentTitle !== row.title) || row.createdAt ? (
+              <p className="flex gap-x-3 text-xs text-content-subtle truncate">
+                {row.documentTitle && row.documentTitle !== row.title && <span className="truncate">From {row.documentTitle}</span>}
+                {row.createdAt && <span className="whitespace-nowrap">Created {formatDate(row.createdAt)}</span>}
+              </p>
+            ) : null}
+          </div>
+        );
+      },
+    },
+    {
+      key: 'kind',
+      label: 'Type',
+      render: r => {
+        const row = asRow(r);
+        return (
+          <Badge variant={KIND_BADGE[row.kind]} size="sm" className="whitespace-nowrap">
+            {KIND_LABEL[row.kind]}
+          </Badge>
+        );
+      },
+    },
+    {
+      key: 'courseTitle',
+      label: 'Course',
+      render: r => {
+        const row = asRow(r);
+        return row.courseId != null && row.courseTitle ? (
+          <button
+            type="button"
+            onClick={() => navigate(studentCoursePath(row.courseId as number))}
+            className="block max-w-full truncate text-left text-sm text-content-secondary hover:text-primary hover:underline"
+            title={row.courseTitle}
+          >
+            {row.courseTitle}
+          </button>
+        ) : (
+          <span className="text-content-subtle">—</span>
+        );
+      },
+    },
+    {
+      key: 'attemptCount',
+      label: 'Attempts',
+      width: '96px',
+      render: r => <span className="font-medium text-content">{asRow(r).attemptCount}</span>,
+    },
+    {
+      key: 'bestScore',
+      label: 'Best score',
+      width: '120px',
+      render: r => {
+        const row = asRow(r);
+        return <span className="whitespace-nowrap font-medium text-content">{formatScore(row.bestScore, row.maxScore)}</span>;
+      },
+    },
+    {
+      key: 'actions',
+      label: '',
+      width: '56px',
+      render: r => {
+        const row = asRow(r);
+        const items = rowActions(row);
+        return items.length === 0 ? null : (
+          <Dropdown
+            trigger={
+              <button type="button" aria-label={`Actions for ${row.title}`} className="p-1.5 hover:bg-accent rounded-[6px]">
+                <Icon.MoreHorizontal className="w-4 h-4 text-content-soft" />
+              </button>
+            }
+            items={items}
+          />
+        );
+      },
+    },
+  ];
+
   return (
     <div className={`${STUDENT_PAGE_CLASS} space-y-[clamp(1.25rem,2.5vw,1.75rem)]`}>
       <PageTitle
@@ -375,107 +514,13 @@ export function MyExamsPage() {
         </div>
       ) : (
         <div className="card overflow-hidden">
-          <ul className="divide-y divide-line">
-            {pageItems.map(row => (
-              <li key={row.examId} className="flex flex-wrap items-center gap-x-4 gap-y-3 px-[clamp(0.875rem,1.5vw,1.25rem)] py-4">
-                <div className="w-9 h-9 rounded-[10px] bg-primary-light flex items-center justify-center flex-shrink-0">
-                  {row.kind === 'MATERIAL_QUIZ' ? (
-                    <Icon.FileText className="w-4.5 h-4.5 text-primary" />
-                  ) : row.kind === 'PRACTICE' || row.kind === 'SMART_PRACTICE' ? (
-                    <Icon.Zap className="w-4.5 h-4.5 text-primary" />
-                  ) : (
-                    <Icon.Award className="w-4.5 h-4.5 text-primary" />
-                  )}
-                </div>
-                <div className="flex-1 min-w-[12rem]">
-                  <div className="flex flex-wrap items-center gap-2">
-                    {row.attemptCount > 0 ? (
-                      <button
-                        type="button"
-                        onClick={() => navigate(studentExamAttemptsPath(row.examId))}
-                        className="block text-sm font-semibold text-content break-words text-left hover:text-primary hover:underline"
-                      >
-                        {row.title}
-                      </button>
-                    ) : (
-                      <span className="text-sm font-semibold text-content break-words">{row.title}</span>
-                    )}
-                    <Badge variant={KIND_BADGE[row.kind]} size="sm">
-                      {KIND_LABEL[row.kind]}
-                    </Badge>
-                    {row.hasCode && (
-                      <Badge variant="warning" size="sm">
-                        Code
-                      </Badge>
-                    )}
-                  </div>
-                  <p className="flex flex-wrap gap-x-3 text-xs text-content-subtle">
-                    {row.courseId != null && row.courseTitle && (
-                      <button
-                        type="button"
-                        onClick={() => navigate(studentCoursePath(row.courseId as number))}
-                        className="hover:text-primary hover:underline text-left"
-                      >
-                        {row.courseTitle}
-                      </button>
-                    )}
-                    {row.documentTitle && row.documentTitle !== row.title && <span>From {row.documentTitle}</span>}
-                    {row.createdAt && <span>Created {formatDate(row.createdAt)}</span>}
-                  </p>
-                </div>
-                <div className="flex gap-6 text-center">
-                  <div>
-                    <p className="text-sm font-semibold text-content">{row.attemptCount}</p>
-                    <p className="text-2xs text-content-subtle">Attempts</p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-content">{formatScore(row.bestScore, row.maxScore)}</p>
-                    <p className="text-2xs text-content-subtle">Best score</p>
-                  </div>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {row.attemptCount > 0 && (
-                    <Button
-                      size="sm"
-                      icon={<Icon.Eye className="w-4 h-4" />}
-                      onClick={() => navigate(studentExamAttemptsPath(row.examId))}
-                    >
-                      View attempts
-                    </Button>
-                  )}
-                  {canRetake(row) && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      icon={<Icon.RefreshCw className="w-4 h-4" />}
-                      loading={row.jobId != null && startingJob === row.jobId}
-                      disabled={startingJob != null}
-                      onClick={() => retake(row)}
-                    >
-                      {row.attemptCount > 0 ? 'Retake' : 'Start'}
-                    </Button>
-                  )}
-                  {row.practiceId != null && (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      aria-label={`Delete ${row.title}`}
-                      title="Delete"
-                      onClick={() => {
-                        setDeleteError(null);
-                        setToDelete(row);
-                      }}
-                    >
-                      <Icon.Trash className="w-4 h-4 text-danger" />
-                    </Button>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
-          <div className="border-t border-line">
-            <Pagination page={page} total={filtered.length} perPage={PAGE_SIZE} onChange={setPage} unit="exams" />
-          </div>
+          <Table
+            columns={columns}
+            data={pageItems as unknown as Record<string, unknown>[]}
+            perPage={PAGE_SIZE}
+            serverPagination={{ page, total: filtered.length, onChange: setPage }}
+            unit="exams"
+          />
         </div>
       )}
 
