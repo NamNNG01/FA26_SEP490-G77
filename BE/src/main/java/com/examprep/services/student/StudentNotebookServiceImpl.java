@@ -47,8 +47,8 @@ public class StudentNotebookServiceImpl implements StudentNotebookService {
             type = "all";
         }
         Pageable pageable = PageRequest.of(page, size);
-        String searchTerm = (search != null && !search.isBlank()) ? search.trim() : null;
-        if (searchTerm != null && searchTerm.length() > 100) {
+        String searchTerm = (search != null && !search.isBlank()) ? search.trim() : "";
+        if (searchTerm.length() > 100) {
             searchTerm = searchTerm.substring(0, 100);
         }
 

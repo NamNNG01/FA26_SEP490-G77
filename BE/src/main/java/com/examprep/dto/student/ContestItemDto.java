@@ -1,5 +1,6 @@
 package com.examprep.dto.student;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -25,5 +26,6 @@ public class ContestItemDto {
     private Integer maxParticipants;
     private long registeredCount;
     private String status; // UPCOMING, ONGOING, ENDED, CANCELLED
+    @JsonProperty("isRegistered")
     private boolean isRegistered;
 }

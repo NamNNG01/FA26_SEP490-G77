@@ -1,5 +1,6 @@
 package com.examprep.dto.student;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -20,10 +21,13 @@ public class DiscussionDetailDto {
     private DiscussionItemDto.AuthorDto author;
     private long upvoteCount;
     private long commentCount;
+    @JsonProperty("isPinned")
     private boolean isPinned;
+    @JsonProperty("isUpvoted")
     private boolean isUpvoted;
     private boolean isBookmarked;
     private boolean isAuthor;
+    @JsonProperty("isClosed")
     private boolean isClosed;
     private Instant createdAt;
     private Instant updatedAt;
