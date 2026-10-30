@@ -47,6 +47,10 @@ const KIND_BADGE: Record<ExamKind, BadgeVariant> = {
 };
 const KIND_OPTIONS = [{ label: 'All types', value: ALL }, ...(Object.keys(KIND_LABEL) as ExamKind[]).map(k => ({ label: KIND_LABEL[k], value: k }))];
 
+/** Type filter value for exams with a CODE question (ME-01 `hasCodeQuestions`) — across every kind. */
+const CODE_FILTER = 'CODE';
+const CODE_OPTION = { label: 'Coding exam', value: CODE_FILTER };
+
 const toKind = (mode: string | null | undefined): ExamKind => (mode && mode in KIND_LABEL ? (mode as ExamKind) : 'EXAM');
 
 /** One exam of the history, whatever produced it. */
@@ -67,6 +71,8 @@ interface HistoryRow {
   documentTitle: string | null;
   /** Set for rows not taken yet (from PQ-02 / MQ-06): they sort by it. */
   createdAt: string | null;
+  /** Has a CODE question (ME-01 only). */
+  hasCode?: boolean;
 }
 
 type SortKey = 'recent' | 'title' | 'bestScoreDesc' | 'bestScoreAsc' | 'attempts';
@@ -124,6 +130,7 @@ async function loadHistory(): Promise<HistoryRow[]> {
       jobId: material?.jobId ?? null,
       documentTitle: material?.documentTitle ?? null,
       createdAt: null,
+      hasCode: e.hasCodeQuestions === true,
     };
   });
   const takenIds = new Set(exams.map(e => e.examId));
@@ -184,7 +191,7 @@ export function MyExamsPage() {
   const [course, setCourse] = useState(ALL);
   const [kind, setKind] = useState(() => {
     const type = searchParams.get('type') ?? '';
-    return type in KIND_LABEL ? type : ALL;
+    return type in KIND_LABEL || type === CODE_FILTER ? type : ALL;
   });
   const [sort, setSort] = useState<SortKey>('recent');
 
@@ -227,7 +234,7 @@ export function MyExamsPage() {
         rows.filter(
           r =>
             (course === ALL || String(r.courseId) === course) &&
-            (kind === ALL || r.kind === kind) &&
+            (kind === ALL || (kind === CODE_FILTER ? r.hasCode === true : r.kind === kind)) &&
             (!term || r.title.toLowerCase().includes(term) || (r.documentTitle ?? '').toLowerCase().includes(term)),
         ),
         sort,
@@ -310,7 +317,8 @@ export function MyExamsPage() {
             aria-label="Filter by exam type"
             value={kind}
             onChange={withPageReset(setKind)}
-            options={KIND_OPTIONS}
+            // "Coding exam" only once the BE marks exams with CODE questions (or it is preselected by ?type=CODE).
+            options={rows.some(r => r.hasCode) || kind === CODE_FILTER ? [...KIND_OPTIONS, CODE_OPTION] : KIND_OPTIONS}
             className="w-full sm:w-44 lg:w-auto lg:min-w-0 lg:flex-1"
           />
           <Select
@@ -395,6 +403,11 @@ export function MyExamsPage() {
                     <Badge variant={KIND_BADGE[row.kind]} size="sm">
                       {KIND_LABEL[row.kind]}
                     </Badge>
+                    {row.hasCode && (
+                      <Badge variant="warning" size="sm">
+                        Code
+                      </Badge>
+                    )}
                   </div>
                   <p className="flex flex-wrap gap-x-3 text-xs text-content-subtle">
                     {row.courseId != null && row.courseTitle && (
