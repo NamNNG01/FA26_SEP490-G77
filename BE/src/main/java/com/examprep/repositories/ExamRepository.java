@@ -87,6 +87,18 @@ public interface ExamRepository extends JpaRepository<Exam, Long>, JpaSpecificat
     """)
     long countPublishedExamsByCourseId(@Param("courseId") Long courseId);
 
+    /** [moduleId, published exam count] of the course — CL-02 module summary. */
+    @Query("""
+    SELECT new com.examprep.dto.IdCount(e.module.moduleId, COUNT(e))
+    FROM Exam e
+    WHERE e.course.courseId = :courseId
+      AND e.status = 'PUBLISHED'
+      AND e.mode = 'EXAM'
+      AND e.module IS NOT NULL
+    GROUP BY e.module.moduleId
+    """)
+    List<com.examprep.dto.IdCount> countPublishedExamsByModule(@Param("courseId") Long courseId);
+
     /** [examId, questionType] of the fixed questions of these exams — MC-02 exam kind. */
     @Query("SELECT eq.exam.examId, q.questionType FROM ExamQuestion eq JOIN eq.question q WHERE eq.exam.examId IN :examIds")
     List<Object[]> findQuestionTypesByExamIds(@Param("examIds") java.util.Collection<Long> examIds);

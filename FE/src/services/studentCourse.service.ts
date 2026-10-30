@@ -50,6 +50,21 @@ export interface StudentCourseCard {
 export type StudentCourseItem = StudentCourseCard;
 export type StudentCoursePage = PageResponse<StudentCourseCard>;
 
+/**
+ * CL-02 module. `description`, `examCount` and `deckCount` are not sent by the BE yet
+ * (docs/notes/course-detail-module-summary-be-gap.md) — absent until it does.
+ */
+export interface CourseModuleSummary {
+  moduleId: number;
+  title: string;
+  orderIndex: number;
+  description?: string | null;
+  /** Published exams of the module. */
+  examCount?: number;
+  /** Flashcard decks of the module. */
+  deckCount?: number;
+}
+
 /** CL-02 CourseDetailDto */
 export interface StudentCourseDetail {
   courseId: number;
@@ -60,7 +75,7 @@ export interface StudentCourseDetail {
   price: number | null;
   category: CategoryRef | null;
   manager: ManagerRef | null;
-  modules: { moduleId: number; title: string; orderIndex: number }[];
+  modules: CourseModuleSummary[];
   stats: { publishedExamCount: number; deckCount: number };
   isEnrolled?: boolean;
   publishedExamCount?: number;

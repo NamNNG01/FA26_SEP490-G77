@@ -52,8 +52,15 @@ public class StudentCourseServiceImpl implements StudentCourseService {
         }
 
         List<Module> modules = moduleRepository.findVisibleModulesByCourseId(courseId);
+        Map<Long, Long> examsByModule = new HashMap<>();
+        examRepository.countPublishedExamsByModule(courseId).forEach(c -> examsByModule.put(c.id(), c.total()));
+        Map<Long, Long> decksByModule = new HashMap<>();
+        deckRepository.countCourseDecksByModule(courseId, userId != null ? userId : 0L)
+                .forEach(c -> decksByModule.put(c.id(), c.total()));
         List<ModuleItemDto> moduleDtos = modules.stream()
-                .map(m -> new ModuleItemDto(m.getModuleId(), m.getTitle(), m.getOrderIndex()))
+                .map(m -> new ModuleItemDto(m.getModuleId(), m.getTitle(), m.getOrderIndex(), m.getDescription(),
+                        examsByModule.getOrDefault(m.getModuleId(), 0L),
+                        decksByModule.getOrDefault(m.getModuleId(), 0L)))
                 .toList();
 
         long publishedExamCount =

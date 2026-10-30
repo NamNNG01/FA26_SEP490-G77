@@ -32,6 +32,11 @@ public class Deck implements Serializable {
     @JoinColumn(name = "course_id")
     private Course course;
 
+    /** Optional module of {@link #course} (V60); counted per module by CL-02. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "module_id")
+    private Module module;
+
     @Column(name = "title", nullable = false, length = 255)
     private String title;
 
