@@ -35,6 +35,8 @@ export const ROUTES = {
   studentExams: '/student/exams',
   /** Materials the student uploaded (MQ-02) and the quizzes generated from them. */
   studentMaterials: '/student/materials',
+  /** Study plans (SB-01..SB-04): the ACTIVE plan, auto-renew and upgrades. */
+  studentSubscription: '/student/subscription',
   studentMyExams: '/student/my-exams',
   studentLearningActivities: '/student/learning-activity',
   studentQuestionNotebook: '/student/questions/saved',
@@ -226,6 +228,7 @@ export const menuByRole: Record<string, MenuItem[]> = {
     { id: 'student-flashcards', title: 'Flashcards', icon: <Icon.Layers className="w-4 h-4" />, path: ROUTES.studentFlashcards },
     { id: 'student-activity', title: 'Learning Activity', icon: <Icon.Activity className="w-4 h-4" />, path: ROUTES.studentLearningActivities },
     { id: 'student-notebook', title: 'Question Notebook', icon: <Icon.Star className="w-4 h-4" />, path: ROUTES.studentQuestionNotebook },
+    { id: 'student-subscription', title: 'Subscription', icon: <Icon.Package className="w-4 h-4" />, path: ROUTES.studentSubscription },
   ],
   COURSE_MANAGER: [
     { id: 'manager-dashboard', title: 'Dashboard', icon: <Icon.Home className="w-4 h-4" />, path: ROUTES.managerDashboard },
