@@ -59,7 +59,8 @@ export function MyCoursesPage() {
     studentCourseService
       .getMyCourses({ page: 0, size: MY_COURSES_FETCH_SIZE })
       .then(res => {
-        if (!cancelled) setCourses(res.content);
+        // Courses left with EN-04 come back as CANCELLED; they are no longer the student's.
+        if (!cancelled) setCourses(res.content.filter(c => c.status !== 'CANCELLED'));
       })
       .catch(err => {
         if (!cancelled) setError(getApiErrorMessage(err, 'Failed to load your courses.'));

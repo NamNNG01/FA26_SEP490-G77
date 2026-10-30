@@ -23,7 +23,6 @@ import { studentCourseService } from '@/services/studentCourse.service';
 import { studentPracticeExamService } from '@/services/studentPracticeExam.service';
 import { materialService } from '@/services/studentMaterial.service';
 import { ListSkeleton, LoadError, PageTitle, STUDENT_PAGE_CLASS, formatDate, formatScore } from '../components/studentUi';
-
 const PAGE_SIZE = 10;
 const ALL = '';
 /** Practice exams are scored out of 10 (PracticeExamService.createGeneratedExam). */
@@ -74,6 +73,8 @@ interface HistoryRow {
   createdAt: string | null;
   /** Has a CODE question (ME-01 only). */
   hasCode?: boolean;
+  /** Its course was left (EN-04): listed, but neither its attempts nor a retake open. */
+  courseLeft?: boolean;
 }
 
 type SortKey = 'recent' | 'title' | 'bestScoreDesc' | 'bestScoreAsc' | 'attempts';
@@ -106,11 +107,16 @@ function sortRows(list: HistoryRow[], sort: SortKey): HistoryRow[] {
  * practice exams and material quizzes not taken yet — those go on top, newest first.
  */
 async function loadHistory(): Promise<HistoryRow[]> {
-  const [exams, practices, materials] = await Promise.all([
+  const [exams, practices, materials, myCourses] = await Promise.all([
     studentCourseService.getAllMyExams(),
     studentPracticeExamService.listAll(),
     materialService.allHistory(),
+    // MC-01 tells which courses were left; without it no row is locked (SA-01 still refuses).
+    studentCourseService.getMyCourses({ page: 0, size: 100 }).catch(() => null),
   ]);
+  const leftCourses = new Set(
+    (myCourses?.content ?? []).filter(c => c.status === 'CANCELLED').map(c => c.courseId),
+  );
   const practiceByExam = new Map(practices.map(p => [p.examId, p]));
   const materialByQuiz = new Map(materials.filter(m => m.quizId != null).map(m => [m.quizId as number, m]));
 
@@ -132,6 +138,7 @@ async function loadHistory(): Promise<HistoryRow[]> {
       documentTitle: material?.documentTitle ?? null,
       createdAt: null,
       hasCode: e.hasCodeQuestions === true,
+      courseLeft: e.courseId != null && leftCourses.has(e.courseId),
     };
   });
   const takenIds = new Set(exams.map(e => e.examId));
@@ -280,7 +287,11 @@ export function MyExamsPage() {
   };
 
   /** A deleted practice exam is archived on the BE: its attempts stay, it cannot be taken again. */
-  const canRetake = (row: HistoryRow) => (row.kind === 'PRACTICE' ? row.practiceId != null : row.kind !== 'MATERIAL_QUIZ' || row.jobId != null);
+  const canRetake = (row: HistoryRow) =>
+    !row.courseLeft && (row.kind === 'PRACTICE' ? row.practiceId != null : row.kind !== 'MATERIAL_QUIZ' || row.jobId != null);
+
+  /** Attempts of a left course are closed to the student. */
+  const canViewAttempts = (row: HistoryRow) => row.attemptCount > 0 && !row.courseLeft;
 
   const confirmDelete = async () => {
     if (toDelete?.practiceId == null) return;
@@ -301,7 +312,7 @@ export function MyExamsPage() {
   /** Row actions for the "…" menu — only the ones that apply to this exam. */
   const rowActions = (row: HistoryRow): DropdownItem[] => {
     const items: DropdownItem[] = [];
-    if (row.attemptCount > 0) {
+    if (canViewAttempts(row)) {
       items.push({ label: 'View attempts', icon: <Icon.Eye />, onClick: () => navigate(studentExamAttemptsPath(row.examId)) });
     }
     if (canRetake(row)) {
@@ -339,7 +350,7 @@ export function MyExamsPage() {
         return (
           <div className="min-w-0">
             <div className="flex items-center gap-2 min-w-0">
-              {row.attemptCount > 0 ? (
+              {canViewAttempts(row) ? (
                 <button
                   type="button"
                   onClick={() => navigate(studentExamAttemptsPath(row.examId))}
@@ -387,14 +398,21 @@ export function MyExamsPage() {
       render: r => {
         const row = asRow(r);
         return row.courseId != null && row.courseTitle ? (
-          <button
-            type="button"
-            onClick={() => navigate(studentCoursePath(row.courseId as number))}
-            className="block max-w-full truncate text-left text-sm text-content-secondary hover:text-primary hover:underline"
-            title={row.courseTitle}
-          >
-            {row.courseTitle}
-          </button>
+          <div className="min-w-0">
+            <button
+              type="button"
+              onClick={() => navigate(studentCoursePath(row.courseId as number))}
+              className="block max-w-full truncate text-left text-sm text-content-secondary hover:text-primary hover:underline"
+              title={row.courseTitle}
+            >
+              {row.courseTitle}
+            </button>
+            {row.courseLeft && (
+              <Badge variant="default" size="sm" className="mt-0.5 whitespace-nowrap">
+                Left course
+              </Badge>
+            )}
+          </div>
         ) : (
           <span className="text-content-subtle">—</span>
         );

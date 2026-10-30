@@ -15,6 +15,8 @@ import type { PageResponse } from './course.service';
  *   GET /api/v1/student/decks/{deckId}/cards        (MC-04)
  *   GET /api/v1/student/my-exams                    (ME-01) — exams the student has attempted
  *   POST /api/v1/student/courses/{courseId}/enroll  (EN-02) — free courses only (paid: PY-01, payment.service)
+ *   GET /api/v1/student/courses/{courseId}/enrollment (EN-03) — checked before EN-02 / PY-01 and after payment
+ *   DELETE /api/v1/student/my-courses/{courseId}    (EN-04) — leave the course, no refund
  */
 
 export interface CategoryRef {
@@ -81,6 +83,14 @@ export interface StudentCourseDetail {
   enrollment: { isEnrolled: boolean; status: EnrollmentStatus | null; progress: number | null } | null;
 }
 
+/** EN-03 */
+export interface EnrollmentState {
+  isEnrolled: boolean;
+  status: EnrollmentStatus | 'CANCELLED' | null;
+  progress: number;
+  enrolledAt: string | null;
+}
+
 /** MC-01 MyCourseDto */
 export interface MyCourse {
   courseId: number;
@@ -91,7 +101,8 @@ export interface MyCourse {
   category: CategoryRef | null;
   manager: ManagerRef | null;
   enrolledAt: string;
-  status: EnrollmentStatus;
+  /** Without a `status` filter MC-01 also returns courses the student left (EN-04). */
+  status: EnrollmentStatus | 'CANCELLED';
   progress: number | null;
   publishedExamCount: number;
   deckCount: number;
@@ -254,7 +265,22 @@ export const studentCourseService = {
     }
   },
 
-  /** EN-02 — 400 COURSE_NOT_FREE for a paid course, 409 already enrolled. */
+  /** EN-03 — `isEnrolled` false (status null) when the student never joined or cancelled. */
+  async getEnrollment(courseId: number): Promise<EnrollmentState> {
+    const res = await api.get<ApiResponse<EnrollmentState>>(`/student/courses/${courseId}/enrollment`);
+    return res.data;
+  },
+
+  /** EN-04 — 404 when not enrolled. Attempts and progress stay for a later re-enroll; no refund. */
+  async cancelEnrollment(courseId: number): Promise<{ courseId: number; status: 'CANCELLED' }> {
+    const res = await api.request<ApiResponse<{ courseId: number; status: 'CANCELLED' }>>({
+      method: 'delete',
+      url: `/student/my-courses/${courseId}`,
+    });
+    return res.data;
+  },
+
+  /** EN-02 — 409 COURSE_NOT_FREE for a paid course; already enrolled returns the existing row. */
   async enrollFree(courseId: number): Promise<{ courseId: number; status: EnrollmentStatus; enrolledAt: string }> {
     const res = await api.post<ApiResponse<{ courseId: number; status: EnrollmentStatus; enrolledAt: string }>>(
       `/student/courses/${courseId}/enroll`,
