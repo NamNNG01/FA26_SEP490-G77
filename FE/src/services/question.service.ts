@@ -157,6 +157,27 @@ export interface QuestionCreateRequest {
   /** Optional question score; rubric criterion weights are stored separately. */
   defaultPoints?: number | null;
   essayGradingRubric?: unknown;
+  /** CODE only — not accepted by the BE yet (docs/notes/student-code-exam-be-gap.md). */
+  codeConfig?: CodeQuestionConfig | null;
+}
+
+/** One CODE test case (code_test_cases). Public ones are shown to students; the first is the sample. */
+export interface CodeTestCaseDto {
+  testCaseId?: number | null;
+  inputData: string;
+  expectedOutput: string;
+  hidden: boolean;
+  orderIndex: number;
+}
+
+/** CODE settings (code_question_configs) plus the test cases, sent and read with the question. */
+export interface CodeQuestionConfig {
+  /** JAVA / PYTHON / C / CPP. */
+  allowedLanguages: string[];
+  codeTemplate: string | null;
+  timeLimitMs: number;
+  memoryLimitKb: number;
+  testCases: CodeTestCaseDto[];
 }
 
 /** QuestionUpdateRequest — every field optional; `lockVersion` guards concurrent edits. */
@@ -188,6 +209,8 @@ export interface QuestionDetail {
   options: AnswerOption[];
   createdAt: string | null;
   updatedAt: string | null;
+  /** CODE only — not sent by the BE yet. */
+  codeConfig?: CodeQuestionConfig | null;
 }
 
 /**

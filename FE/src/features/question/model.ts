@@ -24,9 +24,9 @@ import { hasDiagramContent, plantUmlToDrawioXml } from './diagram';
 /**
  * Types the editor offers — all the ones QuestionValidator accepts. DIAGRAM
  * sends its draw.io XML in questionMetadata.drawioXml; ORDERING sends keyed
- * options plus answerKey.correctOrder. CODE has no editor yet.
+ * options plus answerKey.correctOrder; CODE sends `codeConfig` (languages, template, limits, test cases).
  */
-export type EditableQuestionType = Exclude<QuestionType, 'CODE'>;
+export type EditableQuestionType = QuestionType;
 
 export const QUESTION_TYPE_OPTIONS: { label: string; value: EditableQuestionType }[] = [
   { label: 'Single Choice', value: 'SINGLE_CHOICE' },
@@ -36,11 +36,12 @@ export const QUESTION_TYPE_OPTIONS: { label: string; value: EditableQuestionType
   { label: 'Fill in the Blank', value: 'FILL_BLANK' },
   { label: 'Ordering', value: 'ORDERING' },
   { label: 'Essay', value: 'ESSAY' },
+  { label: 'Code', value: 'CODE' },
   { label: 'Diagram', value: 'DIAGRAM' },
 ];
 
-/** Types the AI can draft (ExamAiServiceImpl.TYPES) — AI-01 doesn't draft ORDERING yet. */
-export const AI_QUESTION_TYPE_OPTIONS = QUESTION_TYPE_OPTIONS.filter(t => t.value !== 'ORDERING') as { label: string; value: QuestionType }[];
+/** Types the AI can draft (ExamAiServiceImpl.TYPES) — AI-01 doesn't draft ORDERING or CODE yet. */
+export const AI_QUESTION_TYPE_OPTIONS = QUESTION_TYPE_OPTIONS.filter(t => t.value !== 'ORDERING' && t.value !== 'CODE') as { label: string; value: QuestionType }[];
 
 /**
  * A question group holds exactly one kind (QuestionTypeUtil): every choice /
@@ -52,10 +53,11 @@ const QUIZ_TYPES: QuestionType[] = ['SINGLE_CHOICE', 'MULTIPLE_CHOICE', 'TRUE_FA
 
 export const GROUP_KIND_LABELS: Record<GroupKind, string> = { QUIZ: 'Quiz', ESSAY: 'Essay', CODE: 'Code', DIAGRAM: 'Diagram' };
 
-/** Kinds a new group can be created with — CODE has no question editor yet. */
+/** Kinds a new group can be created with. */
 export const GROUP_KIND_OPTIONS: { label: string; value: GroupKind; hint: string }[] = [
   { label: 'Quiz', value: 'QUIZ', hint: 'Single choice, multiple choice, true/false, matching, fill in the blank, ordering' },
   { label: 'Essay', value: 'ESSAY', hint: 'Written answers graded by a rubric' },
+  { label: 'Code', value: 'CODE', hint: 'Programs graded by running test cases' },
   { label: 'Diagram', value: 'DIAGRAM', hint: 'Diagram answers graded by a rubric' },
 ];
 
@@ -83,6 +85,19 @@ export const MAX_CONTENT_LENGTH = 10000;
 export const MAX_SKILL_TAG_LENGTH = 100;
 export const MIN_OPTIONS = 2;
 export const MAX_OPTIONS = 10;
+
+/** CODE limits (Piston sandbox; the BE caps a run at 30 s). */
+export const CODE_LANGUAGE_OPTIONS = [
+  { value: 'JAVA', label: 'Java' },
+  { value: 'PYTHON', label: 'Python' },
+  { value: 'C', label: 'C' },
+  { value: 'CPP', label: 'C++' },
+];
+export const CODE_TIME_LIMIT_MS = { min: 100, max: 30000, default: 5000 };
+export const CODE_MEMORY_LIMIT_KB = { min: 16384, max: 524288, default: 262144 };
+export const MAX_TEST_CASES = 50;
+/** Same 100 KB as a student's source code (CD-04 / CD-05), counted in UTF-8 bytes. */
+export const MAX_CODE_TEXT_BYTES = 100 * 1024;
 
 export const DIFFICULTY_OPTIONS: { label: string; value: QuestionDifficulty }[] = [
   { label: 'Easy', value: 'EASY' },
@@ -125,6 +140,24 @@ export interface RubricCriterionDraft {
   descriptors: string;
 }
 
+/** One CODE test case; the first public one is the sample students see. */
+export interface TestCaseDraft {
+  key: string;
+  testCaseId?: number | null;
+  input: string;
+  expectedOutput: string;
+  hidden: boolean;
+}
+
+/** CODE settings — numbers kept as text while typing. */
+export interface CodeDraft {
+  languages: string[];
+  template: string;
+  timeLimitMs: string;
+  memoryLimitKb: string;
+  testCases: TestCaseDraft[];
+}
+
 export interface QuestionDraft {
   key: string;
   questionId?: number;
@@ -153,6 +186,8 @@ export interface QuestionDraft {
   /** ESSAY / DIAGRAM grading rubric; empty = no rubric. */
   rubric: RubricCriterionDraft[];
   rubricNotes: string;
+  /** CODE — graded only by its test cases: all pass = full points. */
+  code: CodeDraft;
   /** Drafted by AI-03 and accepted into the form. */
   fromAi?: boolean;
   /** A Q-09 import block the backend couldn't read — shown on the question until dismissed. */
@@ -186,6 +221,17 @@ const emptyOrdering = (): OrderItemDraft[] => [0, 1, 2].map(() => ({ key: newKey
 
 export const emptyCriterion = (): RubricCriterionDraft => ({ key: newKey('crit'), name: '', weight: '', descriptors: '' });
 
+export const emptyTestCase = (hidden = false): TestCaseDraft => ({ key: newKey('tc'), input: '', expectedOutput: '', hidden });
+
+/** A new CODE question: every language, the default limits, one public (sample) test case. */
+const emptyCode = (): CodeDraft => ({
+  languages: CODE_LANGUAGE_OPTIONS.map(l => l.value),
+  template: '',
+  timeLimitMs: String(CODE_TIME_LIMIT_MS.default),
+  memoryLimitKb: String(CODE_MEMORY_LIMIT_KB.default),
+  testCases: [emptyTestCase()],
+});
+
 export function emptyDraft(): QuestionDraft {
   return {
     key: newKey('q'),
@@ -204,6 +250,7 @@ export function emptyDraft(): QuestionDraft {
     diagramSvg: '',
     rubric: [],
     rubricNotes: '',
+    code: emptyCode(),
   };
 }
 
@@ -225,6 +272,11 @@ export function copyDraft(q: QuestionDraft): QuestionDraft {
     blanks: Object.fromEntries(Object.entries(q.blanks).map(([n, b]) => [n, { ...b }])),
     ordering: q.ordering.map(o => ({ ...o, key: newKey('ord'), optionId: undefined })),
     rubric: q.rubric.map(c => ({ ...c, key: newKey('crit') })),
+    code: {
+      ...q.code,
+      languages: [...q.code.languages],
+      testCases: q.code.testCases.map(t => ({ ...t, key: newKey('tc'), testCaseId: undefined })),
+    },
   };
 }
 
@@ -338,8 +390,35 @@ export function validateDraft(q: QuestionDraft): QuestionErrors {
       else if (error) errors.answers = error;
       break;
     }
+    case 'CODE': {
+      const error = codeError(q.code);
+      if (error) errors.answers = error;
+      break;
+    }
   }
   return errors;
+}
+
+const bytes = (s: string) => new TextEncoder().encode(s).length;
+
+/** First problem of a CODE question's settings, or undefined. */
+export function codeError(c: CodeDraft): string | undefined {
+  if (c.languages.length === 0) return 'Allow at least one language.';
+  if (bytes(c.template) > MAX_CODE_TEXT_BYTES) return 'The starter code can be at most 100 KB.';
+  const time = Number(c.timeLimitMs);
+  if (!Number.isInteger(time) || time < CODE_TIME_LIMIT_MS.min || time > CODE_TIME_LIMIT_MS.max)
+    return `Time limit must be a whole number from ${CODE_TIME_LIMIT_MS.min} to ${CODE_TIME_LIMIT_MS.max} ms.`;
+  const memory = Number(c.memoryLimitKb);
+  if (!Number.isInteger(memory) || memory < CODE_MEMORY_LIMIT_KB.min || memory > CODE_MEMORY_LIMIT_KB.max)
+    return `Memory limit must be a whole number from ${CODE_MEMORY_LIMIT_KB.min / 1024} to ${CODE_MEMORY_LIMIT_KB.max / 1024} MB.`;
+  if (c.testCases.length === 0) return 'Add at least one test case.';
+  if (c.testCases.length > MAX_TEST_CASES) return `A question can have at most ${MAX_TEST_CASES} test cases.`;
+  const missing = c.testCases.findIndex(t => t.expectedOutput.trim() === '');
+  if (missing >= 0) return `Test case ${missing + 1} needs an expected output.`;
+  if (c.testCases.some(t => bytes(t.input) > MAX_CODE_TEXT_BYTES || bytes(t.expectedOutput) > MAX_CODE_TEXT_BYTES))
+    return 'A test case input or output can be at most 100 KB.';
+  if (c.testCases.every(t => t.hidden)) return 'Keep at least one test case public — students see the first one as the sample.';
+  return undefined;
 }
 
 /** An essay can't be created without at least one rubric criterion. */
@@ -421,6 +500,52 @@ export function toCreateRequest(q: QuestionDraft, courseId: number, moduleId: nu
     ...(q.explanation.trim() ? { explanation: q.explanation.trim() } : {}),
     ...(Object.keys(metadata).length ? { questionMetadata: metadata } : {}),
     ...toRubric(q),
+    ...toCodeConfig(q),
+  };
+}
+
+/** CODE settings and test cases; nothing for other types. Test cases are sent in their list order. */
+function toCodeConfig(q: QuestionDraft): Pick<QuestionCreateRequest, 'codeConfig'> {
+  if (q.type !== 'CODE') return {};
+  const c = q.code;
+  return {
+    codeConfig: {
+      allowedLanguages: c.languages,
+      codeTemplate: c.template.trim() ? c.template : null,
+      timeLimitMs: Number(c.timeLimitMs),
+      memoryLimitKb: Number(c.memoryLimitKb),
+      testCases: c.testCases.map((t, i) => ({
+        testCaseId: t.testCaseId ?? null,
+        inputData: t.input,
+        expectedOutput: t.expectedOutput,
+        hidden: t.hidden,
+        orderIndex: i,
+      })),
+    },
+  };
+}
+
+/** A stored codeConfig → editor fields (defaults for anything missing). */
+function fromCodeConfig(raw: QuestionDetail['codeConfig']): CodeDraft {
+  const base = emptyCode();
+  if (!raw) return base;
+  const known = CODE_LANGUAGE_OPTIONS.map(l => l.value);
+  const languages = Array.isArray(raw.allowedLanguages) ? raw.allowedLanguages.filter(l => known.includes(l)) : [];
+  const testCases = [...(raw.testCases ?? [])]
+    .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0))
+    .map(t => ({
+      key: newKey('tc'),
+      testCaseId: t.testCaseId ?? null,
+      input: t.inputData ?? '',
+      expectedOutput: t.expectedOutput ?? '',
+      hidden: Boolean(t.hidden),
+    }));
+  return {
+    languages: languages.length ? languages : base.languages,
+    template: raw.codeTemplate ?? '',
+    timeLimitMs: raw.timeLimitMs != null ? String(raw.timeLimitMs) : base.timeLimitMs,
+    memoryLimitKb: raw.memoryLimitKb != null ? String(raw.memoryLimitKb) : base.memoryLimitKb,
+    testCases: testCases.length ? testCases : base.testCases,
   };
 }
 
@@ -489,6 +614,7 @@ export function toUpdateRequest(q: QuestionDraft, moduleId: number | null, extra
     options: toOptions(q),
     answerKey: toAnswerKey(q),
     ...toRubric(q),
+    ...toCodeConfig(q),
     lockVersion: q.lockVersion ?? null,
   };
 }
@@ -561,6 +687,7 @@ export function fromDetail(d: QuestionDetail): QuestionDraft {
     diagramXml: typeof metadata.drawioXml === 'string' ? metadata.drawioXml : '',
     diagramSvg: typeof metadata.drawioSvg === 'string' ? metadata.drawioSvg : '',
     ...fromRubric(d.essayGradingRubric),
+    code: fromCodeConfig(d.codeConfig),
   };
 }
 
