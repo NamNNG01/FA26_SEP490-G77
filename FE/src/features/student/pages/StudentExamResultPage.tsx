@@ -23,6 +23,8 @@ import { QUESTION_TYPE_LABEL, QuestionText, isAnswered, optionLetter } from '../
 import { useDrawioSnapshot } from '@/features/question/components/useDrawioSnapshot';
 import { SAVABLE_QUESTION_TYPES } from '@/services/studentDeck.service';
 import { SaveToFlashcardsModal } from '../components/flashcards/SaveToFlashcardsModal';
+import { studentCodeExamService, type CodeLanguageInfo, type CodeSubmission } from '@/services/studentCodeExam.service';
+import { CodeSubmissionHistory, CodeTestCaseStatus, latestSubmissionBefore } from '../components/code/CodeSubmissionHistory';
 
 /** FC-12 needs the attempt submitted (or completed). */
 const SAVABLE_ATTEMPT_STATUSES: ReadonlySet<string> = new Set(['SUBMITTED', 'COMPLETED']);
@@ -215,6 +217,23 @@ export function StudentExamResultPage() {
     // The list only depends on the exam; picking an attempt must not refetch it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [examId]);
+
+  /** CD-07 of the exam (every attempt) and CD-06; null until loaded, or when the exam has no CODE question / they failed. */
+  const [codeSubs, setCodeSubs] = useState<CodeSubmission[] | null>(null);
+  const [codeLanguages, setCodeLanguages] = useState<CodeLanguageInfo[]>([]);
+  const resultHasCode = Boolean(result?.questions.some(x => x.questionType === 'CODE'));
+  useEffect(() => {
+    if (!examId || !resultHasCode) return;
+    let cancelled = false;
+    Promise.allSettled([studentCodeExamService.getAllSubmissions(examId), studentCodeExamService.getLanguages()]).then(([subs, langs]) => {
+      if (cancelled) return;
+      setCodeSubs(subs.status === 'fulfilled' ? subs.value : null);
+      if (langs.status === 'fulfilled') setCodeLanguages(langs.value);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [examId, resultHasCode]);
 
   /** Questions to save as flashcards (modal open while set). */
   const [saveQuestions, setSaveQuestions] = useState<number[] | null>(null);
@@ -505,6 +524,15 @@ export function StudentExamResultPage() {
                   ) : undefined
                 }
               />
+              {q.questionType === 'CODE' && codeSubs && (() => {
+                const sub = latestSubmissionBefore(codeSubs, q.questionId, result.submittedAt);
+                return sub ? (
+                  <div className="card flex flex-wrap items-center gap-2 px-4 py-3 text-sm text-content-soft">
+                    <span className="font-medium text-content">Test cases</span>
+                    <CodeTestCaseStatus submission={sub} />
+                  </div>
+                ) : null;
+              })()}
               <div className="flex items-center justify-between gap-3">
                 <Button variant="outline" icon={<Icon.ChevronLeft className="w-4 h-4" />} disabled={!navRef.current.prev} onClick={navRef.current.prev}>
                   Previous
@@ -518,6 +546,17 @@ export function StudentExamResultPage() {
           )}
         </section>
       </div>
+
+      {codeSubs && (
+        <CodeSubmissionHistory
+          submissions={codeSubs}
+          languages={codeLanguages}
+          questions={result.questions
+            .map((x, i) => ({ x, i }))
+            .filter(({ x }) => x.questionType === 'CODE')
+            .map(({ x, i }) => ({ questionId: x.questionId, label: `Q${i + 1} · ${truncate(x.content, 40)}` }))}
+        />
+      )}
 
       {saveQuestions && (
         <SaveToFlashcardsModal
@@ -1426,4 +1465,10 @@ function ExplanationBox({
       )}
     </div>
   );
+}
+
+/** First `max` characters of a question on one line, for filter labels. */
+function truncate(text: string, max: number): string {
+  const line = text.replace(/\s+/g, ' ').trim();
+  return line.length > max ? `${line.slice(0, max - 1)}…` : line;
 }
