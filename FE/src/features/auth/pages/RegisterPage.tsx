@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import { isAxiosError } from 'axios';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -7,10 +7,18 @@ import { Alert } from '@/components/ui/Alert';
 import { useAuth, landingPathForRole } from '@/auth/authContext';
 import { AuthPageHeader } from '../components/AuthPageHeader';
 import { Icon } from '@/assets/icons';
+import { ROUTES } from '@/app/routes';
+import { safeRedirect, withRedirectTarget } from '@/hooks/useRequireAuth';
 
+/**
+ * Sign-up form. `?redirect=` (e.g. a guest buying a course) is where the new
+ * account lands once it is created, and it is kept on the "Sign in" link.
+ */
 export function RegisterPage() {
   const { register } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const redirectTo = safeRedirect(searchParams.get('redirect'));
 
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -78,7 +86,7 @@ export function RegisterPage() {
       // Backend register always creates STUDENT accounts; use the fresh
       // user returned by register() rather than stale context state.
       const registeredUser = await register(email, password, fullName);
-      navigate(landingPathForRole(registeredUser.role), { replace: true });
+      navigate(redirectTo ?? landingPathForRole(registeredUser.role), { replace: true });
     } catch (err: unknown) {
       // 409 = the backend hit a database conflict while saving the account
       // (GlobalExceptionHandler → DataIntegrityViolationException); its
@@ -170,7 +178,7 @@ export function RegisterPage() {
               Already have an account?{' '}
               <button
                 type="button"
-                onClick={() => navigate('/login')}
+                onClick={() => navigate(withRedirectTarget(ROUTES.login, redirectTo))}
                 className="text-sm text-brand-ink hover:underline font-medium"
               >
                 Sign in

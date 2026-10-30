@@ -2,6 +2,7 @@ import React from 'react';
 import { Outlet } from 'react-router';
 import { PublicNavbar } from '@/features/landing/components/PublicNavbar';
 import { PublicFooter } from '@/features/landing/components/PublicFooter';
+import { useScrollTopOnRouteChange } from '@/hooks/useScrollTopOnRouteChange';
 
 /**
  * PublicLayout
@@ -13,11 +14,13 @@ import { PublicFooter } from '@/features/landing/components/PublicFooter';
  *
  * Scroll behavior: the app root sets `html, body, #root { overflow: hidden }`,
  * so this layout owns the scroll container for the whole public document.
- * `overflow-x-hidden` guarantees no horizontal scrolling.
+ * `overflow-x-hidden` guarantees no horizontal scrolling. The container goes
+ * back to the top on every new page (useScrollTopOnRouteChange).
  */
 export function PublicLayout() {
+  const scrollRef = useScrollTopOnRouteChange<HTMLDivElement>();
   return (
-    <div className="h-full min-h-0 overflow-y-auto overflow-x-hidden bg-surface">
+    <div ref={scrollRef} className="h-full min-h-0 overflow-y-auto overflow-x-hidden bg-surface">
       <PublicNavbar />
 
       <main>

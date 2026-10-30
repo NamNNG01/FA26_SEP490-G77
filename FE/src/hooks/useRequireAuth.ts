@@ -19,6 +19,11 @@ export function loginPathFor(target: string): string {
   return withRedirectTarget(ROUTES.login, target);
 }
 
+/** Sign-up URL that remembers where the new learner was heading. */
+export function registerPathFor(target: string): string {
+  return withRedirectTarget(ROUTES.register, target);
+}
+
 /**
  * Appends `?redirect=<target>` to any auth route, so a learner who bails to
  * Register or Forgot password still lands back where they started.

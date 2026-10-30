@@ -8,13 +8,14 @@ import { Sidebar } from '@/components/layout/Sidebar';
 import { UserDropdown } from '@/components/layout/UserDropdown';
 import { NotificationBell } from '@/components/layout/NotificationBell';
 import { Icon } from '@/assets/icons';
+import { useScrollTopOnRouteChange } from '@/hooks/useScrollTopOnRouteChange';
 
 /**
  * DashboardLayout
  *
  * Rendered once by the layout route in AppContent.tsx. It stays mounted
- * while <Outlet /> swaps the page content, so sidebar state (collapse) and
- * scroll position survive navigation.
+ * while <Outlet /> swaps the page content, so sidebar state (collapse)
+ * survives navigation; <main> scrolls back to the top on every new page.
  *
  * Header layout: [Logo → role dashboard] [course search — STUDENT only] ... [Home · Courses — STUDENT only] [NotificationBell — STUDENT only] [UserDropdown].
  * The user menu (Profile / Theme / Logout) lives in UserDropdown; there is
@@ -29,6 +30,7 @@ export function DashboardLayout() {
   const { user } = useAuth();
   const location = useLocation();
   const [collapsed, setCollapsed] = React.useState(false);
+  const mainRef = useScrollTopOnRouteChange<HTMLElement>();
   const items = getMenuForRole(user?.role);
 
   // Take Exam is a fullscreen flow — hide header/sidebar for it.
@@ -98,7 +100,7 @@ export function DashboardLayout() {
         </aside>
 
         {/* Main content — swapped by the router, layout stays mounted */}
-        <main className="flex-1 overflow-y-auto">
+        <main ref={mainRef} className="flex-1 overflow-y-auto">
           {/* .dashboard-content owns the page gutter and max width for EVERY
               page, overriding each page's own padding (styles/index.css), so
               all dashboard screens line up on the same edges. */}

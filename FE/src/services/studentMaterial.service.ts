@@ -13,20 +13,23 @@ import type { PageResponse } from './course.service';
  *   POST /api/v1/student/materials/quiz-jobs/{jobId}/start      (MQ-05) — attempt, taken with SA-02..SA-05
  *   GET  /api/v1/student/materials/quiz-history?page=&size=     (MQ-06)
  *
- * One material for several courses (docs/notes/student-material-quiz-be-gap.md — not on the BE yet):
- *   GET  /api/v1/student/materials/lookup?sha256=               — material with the same content, or 404
- *   POST /api/v1/student/materials/{documentId}/courses         — attach an existing material to a course
+ * One material for several courses (a file is one material per student, keyed by its SHA-256):
+ *   GET    /api/v1/student/materials/lookup?sha256=             — material with the same content, or 404
+ *   POST   /api/v1/student/materials/{documentId}/courses       — attach an existing material to a course
+ *   DELETE /api/v1/student/materials/{documentId}               — delete the material, its jobs and the file
  *   MQ-01 answers a re-upload with the existing material (`duplicate: true`), MQ-02 items carry `courses`,
- *   MQ-03 takes the `courseId` of the quiz. Until then every upload is a new material of one course;
- *   `hasCourseLinks` tells which BE answered.
+ *   MQ-03 takes the `courseId` of the quiz. An older BE without them stores every upload as a new material
+ *   of one course; `hasCourseLinks` tells which BE answered.
  *
  * Errors: MQ-01 400 UNSUPPORTED_FILE_TYPE / FILE_TOO_LARGE, 403 not enrolled;
  * MQ-03 409 DUPLICATE_REQUEST (a job of the material is still running), 429 QUOTA_EXCEEDED;
- * MQ-05 409 job not COMPLETED.
+ * MQ-05 409 job not COMPLETED; DELETE 409 while a quiz is being generated, 404 already gone.
  */
 
 export const MATERIAL_ACCEPT = '.pdf,.docx';
 export const MATERIAL_MAX_BYTES = 20 * 1024 * 1024;
+/** Files one account may keep (FE only — the BE does not count). Re-using a file uploaded before is not a new file. */
+export const MATERIAL_MAX_FILES = 10;
 export const MATERIAL_QUESTIONS = { min: 5, max: 30, default: 10 };
 
 export type MaterialDifficulty = 'EASY' | 'MEDIUM' | 'HARD';
@@ -182,6 +185,11 @@ export const materialService = {
   /** Attaches an existing material to another course the student is enrolled in. */
   async attachCourse(documentId: number, courseId: number): Promise<void> {
     await api.post<ApiResponse<unknown>>(`/student/materials/${documentId}/courses`, { courseId });
+  },
+
+  /** Deletes a material from every course it is attached to, with its generation jobs and stored file. */
+  async remove(documentId: number): Promise<void> {
+    await api.request<ApiResponse<unknown>>({ method: 'delete', url: `/student/materials/${documentId}` });
   },
 
   /** MQ-03 */

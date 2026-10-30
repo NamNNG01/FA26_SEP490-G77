@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useLocation, useNavigate } from "react-router";
+import { useLocation, useNavigate, useSearchParams } from "react-router";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Alert } from "@/components/ui/Alert";
@@ -7,6 +7,7 @@ import { useAuth, landingPathForRole } from "@/auth/authContext";
 import { AuthPageHeader } from "../components/AuthPageHeader";
 import { Icon } from "@/assets/icons";
 import { ROUTES } from "@/app/routes";
+import { safeRedirect, withRedirectTarget } from "@/hooks/useRequireAuth";
 
 /**
  * Router state LoginPage understands:
@@ -14,6 +15,9 @@ import { ROUTES } from "@/app/routes";
  *   email         — prefill (e.g. coming back from Forgot / Reset password)
  *   passwordReset — show the "password updated" banner after AUTH-07
  *   sessionChanged — the stored session was rejected on boot / refresh
+ *
+ * `?redirect=` (useRequireAuth) also says where to go after signing in; it is
+ * passed on to Register so a learner who creates an account still comes back.
  */
 type LoginLocationState = {
   from?: string;
@@ -27,6 +31,8 @@ export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const locationState = location.state as LoginLocationState;
+  const [searchParams] = useSearchParams();
+  const redirectTo = safeRedirect(searchParams.get("redirect"));
 
   const [email, setEmail] = useState(locationState?.email ?? "");
   const [password, setPassword] = useState("");
@@ -44,7 +50,7 @@ export function LoginPage() {
       // authenticated branch in the same commit. Use the FRESH user
       // returned by login(); the context value in this closure is stale.
       const loggedInUser = await login(email, password);
-      const from = locationState?.from;
+      const from = redirectTo ?? locationState?.from;
       navigate(from ?? landingPathForRole(loggedInUser.role), {
         replace: true,
       });
@@ -153,7 +159,7 @@ export function LoginPage() {
               Don't have an account?{" "}
               <button
                 type="button"
-                onClick={() => navigate("/register")}
+                onClick={() => navigate(withRedirectTarget(ROUTES.register, redirectTo))}
                 className="text-sm text-brand-ink hover:underline font-medium cursor-pointer"
               >
                 Create one
