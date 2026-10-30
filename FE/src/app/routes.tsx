@@ -37,6 +37,11 @@ export const ROUTES = {
   studentMaterials: '/student/materials',
   /** Study plans (SB-01..SB-04): the ACTIVE plan, auto-renew and upgrades. */
   studentSubscription: '/student/subscription',
+  /** PayOS orders of courses and plans (PY-06). */
+  studentPayments: '/student/payments',
+  /** PayOS return / cancel URLs (BE app.payos.return-url, cancel-url). */
+  paymentReturn: '/payment/return',
+  paymentCancel: '/payment/cancel',
   studentMyExams: '/student/my-exams',
   studentLearningActivities: '/student/learning-activity',
   studentQuestionNotebook: '/student/questions/saved',
@@ -229,6 +234,7 @@ export const menuByRole: Record<string, MenuItem[]> = {
     { id: 'student-activity', title: 'Learning Activity', icon: <Icon.Activity className="w-4 h-4" />, path: ROUTES.studentLearningActivities },
     { id: 'student-notebook', title: 'Question Notebook', icon: <Icon.Star className="w-4 h-4" />, path: ROUTES.studentQuestionNotebook },
     { id: 'student-subscription', title: 'Subscription', icon: <Icon.Package className="w-4 h-4" />, path: ROUTES.studentSubscription },
+    { id: 'student-payments', title: 'Payments', icon: <Icon.Archive className="w-4 h-4" />, path: ROUTES.studentPayments },
   ],
   COURSE_MANAGER: [
     { id: 'manager-dashboard', title: 'Dashboard', icon: <Icon.Home className="w-4 h-4" />, path: ROUTES.managerDashboard },

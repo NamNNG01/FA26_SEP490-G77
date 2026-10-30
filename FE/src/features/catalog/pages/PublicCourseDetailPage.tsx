@@ -14,6 +14,9 @@ import { studentCourseService, type StudentCourseDetail } from '@/services/stude
 import { CourseCatalogCard } from '../components/CourseCatalogCard';
 import { CourseLogo, formatPrice } from '../components/CourseLogo';
 import { useCatalogCourses } from '../hooks/usePublicCatalog';
+import { Button } from '@/components/ui/Button';
+import { useToast } from '@/components/ui/ToastHost';
+import { PaymentCheckoutModal, type PaymentItem } from '@/features/payment/components/PaymentCheckoutModal';
 
 /**
  * PublicCourseDetailPage  (/courses/:courseId)
@@ -22,9 +25,11 @@ import { useCatalogCourses } from '../hooks/usePublicCatalog';
  * link, search result and "View Course" button.
  *
  * Actions:
- *  - guest                → sign in, then come back here;
- *  - enrolled student     → open the course in My Courses;
- *  - anyone else          → enrollment is not available yet (no API).
+ *  - guest                 → sign in, then come back here;
+ *  - enrolled student      → open the course in My Courses;
+ *  - student, free course  → EN-02 enroll, then open the course;
+ *  - student, paid course  → PaymentCheckoutModal (PY-01 + PayOS), access once PY-04 says SUCCEEDED;
+ *  - other roles           → enrollment is for students.
  * PrepExam is a preparation platform, so the page never promises a certificate.
  */
 export function PublicCourseDetailPage() {
@@ -37,10 +42,15 @@ export function PublicCourseDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
+  const [reload, setReload] = useState(0);
+  const [buying, setBuying] = useState<PaymentItem | null>(null);
+  const [enrolling, setEnrolling] = useState(false);
+  const toast = useToast();
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
+    // A refresh after a purchase keeps the page on screen.
+    if (reload === 0) setLoading(true);
     setError(null);
     setNotFound(false);
     studentCourseService
@@ -60,7 +70,7 @@ export function PublicCourseDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [courseId]);
+  }, [courseId, reload]);
 
   if (loading) return <DetailSkeleton />;
 
@@ -82,8 +92,32 @@ export function PublicCourseDetailPage() {
   }
 
   const price = formatPrice(course.price);
+  const isFree = !Number(course.price ?? 0);
   const enrollment = course.enrollment;
   const isStudent = user?.role === Role.STUDENT;
+
+  /** PY-04 said SUCCEEDED: the webhook has enrolled the student — refresh CL-02 for "Go to course". */
+  function handlePaid(item: PaymentItem) {
+    toast.success(`You are enrolled in ${item.title}`);
+    setReload((r) => r + 1);
+  }
+
+  /** EN-02 — a free course is joined right away. */
+  async function handleEnrollFree() {
+    if (!course) return;
+    setEnrolling(true);
+    try {
+      await studentCourseService.enrollFree(course.courseId);
+      toast.success(`You are enrolled in ${course.title}`);
+      navigate(studentCoursePath(course.courseId));
+    } catch (err) {
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      if (status === 409) navigate(studentCoursePath(course.courseId));
+      else toast.error(getApiErrorMessage(err, 'Could not enroll in the course.'));
+    } finally {
+      setEnrolling(false);
+    }
+  }
   const modules = [...course.modules].sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
 
   const stats = [
@@ -182,13 +216,21 @@ export function PublicCourseDetailPage() {
                     className="w-full"
                     withArrow
                   />
+                ) : isStudent && isFree ? (
+                  <Button size="lg" className="w-full" loading={enrolling} onClick={handleEnrollFree}>
+                    Enroll for free
+                  </Button>
+                ) : isStudent ? (
+                  <Button size="lg" className="w-full" onClick={() => setBuying(coursePaymentItem(course))}>
+                    Buy course
+                  </Button>
                 ) : (
                   <button
                     type="button"
                     disabled
                     className="inline-flex h-11 w-full cursor-not-allowed items-center justify-center rounded-[10px] bg-surface-muted px-4 text-sm font-semibold text-content-subtle"
                   >
-                    {isStudent ? 'Enrollment coming soon' : 'Enrollment is for students'}
+                    Enrollment is for students
                   </button>
                 )}
               </div>
@@ -214,8 +256,20 @@ export function PublicCourseDetailPage() {
           <RelatedCourses categoryId={course.category.categoryId} categoryName={course.category.name} excludeId={course.courseId} />
         )}
       </Container>
+      <PaymentCheckoutModal item={buying} onClose={() => setBuying(null)} onPaid={handlePaid} />
     </>
   );
+}
+
+function coursePaymentItem(course: StudentCourseDetail): PaymentItem {
+  return {
+    target: { courseId: course.courseId },
+    type: 'COURSE',
+    refId: course.courseId,
+    title: course.title,
+    subtitle: course.category?.name,
+    price: Number(course.price ?? 0),
+  };
 }
 
 /** Up to three other courses of the same category (CL-01). */

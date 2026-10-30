@@ -14,6 +14,7 @@ import type { PageResponse } from './course.service';
  *   GET /api/v1/student/courses/{courseId}/decks    (MC-03) — ACTIVE enrollment only
  *   GET /api/v1/student/decks/{deckId}/cards        (MC-04)
  *   GET /api/v1/student/my-exams                    (ME-01) — exams the student has attempted
+ *   POST /api/v1/student/courses/{courseId}/enroll  (EN-02) — free courses only (paid: PY-01, payment.service)
  */
 
 export interface CategoryRef {
@@ -237,5 +238,13 @@ export const studentCourseService = {
       exams.push(...res.content);
       if (res.last || res.content.length === 0) return exams;
     }
+  },
+
+  /** EN-02 — 400 COURSE_NOT_FREE for a paid course, 409 already enrolled. */
+  async enrollFree(courseId: number): Promise<{ courseId: number; status: EnrollmentStatus; enrolledAt: string }> {
+    const res = await api.post<ApiResponse<{ courseId: number; status: EnrollmentStatus; enrolledAt: string }>>(
+      `/student/courses/${courseId}/enroll`,
+    );
+    return res.data;
   },
 };

@@ -7,19 +7,19 @@ import { useToast } from '@/components/ui/ToastHost';
 import { Icon } from '@/assets/icons';
 import { getApiErrorMessage } from '@/utils/apiError';
 import {
-  formatVnd,
   refreshCurrentSubscription,
   subscriptionService,
   useCurrentSubscription,
   type CurrentSubscription,
   type SubscriptionPlan,
 } from '@/services/studentSubscription.service';
+import { formatVnd } from '@/services/payment.service';
+import { PaymentCheckoutModal, type PaymentItem } from '@/features/payment/components/PaymentCheckoutModal';
 import { CardGridSkeleton, LoadError, PageTitle, STUDENT_PAGE_CLASS, formatDate } from '../components/studentUi';
-import { SubscriptionCheckoutModal } from '../components/SubscriptionCheckoutModal';
 
 /**
  * Subscription — the student's ACTIVE plan (SB-02) with its auto-renew switch (SB-04), and every
- * plan on offer (SB-01). A paid plan is bought through SubscriptionCheckoutModal (SB-03 + PayOS).
+ * plan on offer (SB-01). A paid plan is bought through PaymentCheckoutModal (PY-01 + PayOS).
  */
 export function StudentSubscriptionPage() {
   const { user } = useAuth();
@@ -30,7 +30,7 @@ export function StudentSubscriptionPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
-  const [buying, setBuying] = useState<SubscriptionPlan | null>(null);
+  const [buying, setBuying] = useState<PaymentItem | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -44,8 +44,8 @@ export function StudentSubscriptionPage() {
     return () => { cancelled = true; };
   }, [reload]);
 
-  function handlePaid(planName: string) {
-    toast.success(`${planName} is now active`);
+  function handlePaid(item: PaymentItem) {
+    toast.success(`${item.title} is now active`);
     void refreshCurrentSubscription();
     setReload(r => r + 1);
   }
@@ -57,7 +57,6 @@ export function StudentSubscriptionPage() {
       <CurrentPlanCard loaded={current.loaded} subscription={current.data} />
 
       <section className="space-y-3">
-        <h2 className="text-base font-semibold text-content">Plans</h2>
         {loading ? (
           <CardGridSkeleton count={3} />
         ) : error ? (
@@ -67,15 +66,26 @@ export function StudentSubscriptionPage() {
         ) : (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-[clamp(1rem,2vw,1.25rem)]">
             {plans.map(plan => (
-              <PlanCard key={plan.planId} plan={plan} onChoose={() => setBuying(plan)} />
+              <PlanCard key={plan.planId} plan={plan} onChoose={() => setBuying(planPaymentItem(plan))} />
             ))}
           </div>
         )}
       </section>
 
-      <SubscriptionCheckoutModal plan={buying} onClose={() => setBuying(null)} onPaid={handlePaid} />
+      <PaymentCheckoutModal item={buying} onClose={() => setBuying(null)} onPaid={handlePaid} />
     </div>
   );
+}
+
+function planPaymentItem(plan: SubscriptionPlan): PaymentItem {
+  return {
+    target: { planId: plan.planId },
+    type: 'SUBSCRIPTION',
+    refId: plan.planId,
+    title: plan.name,
+    subtitle: `${plan.durationDays} days`,
+    price: plan.price,
+  };
 }
 
 function CurrentPlanCard({ loaded, subscription }: { loaded: boolean; subscription: CurrentSubscription | null }) {

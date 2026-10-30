@@ -42,6 +42,7 @@ import {
   StudentContributionsPage,
   StudentWeaknessReportPage,
 } from '@/features/student';
+import { PaymentHistoryPage, PaymentReturnPage } from '@/features/payment';
 import { ExamListPage, ExamFormPage } from '@/features/exam';
 import { PublicExamsPage, PublicExamDetailPage } from '@/features/public-exam';
 import { CMDashboard } from '@/features/content-manager';
@@ -249,6 +250,9 @@ function AppRoutes() {
           <Route path={ROUTES.courseDetail} element={<PublicCourseDetailPage />} />
           <Route path={ROUTES.studentMaterials} element={<MyMaterialsPage />} />
           <Route path={ROUTES.studentSubscription} element={<StudentSubscriptionPage />} />
+          <Route path={ROUTES.studentPayments} element={<PaymentHistoryPage />} />
+          <Route path={ROUTES.paymentReturn} element={<PaymentReturnPage />} />
+          <Route path={ROUTES.paymentCancel} element={<PaymentReturnPage cancelled />} />
           <Route path={ROUTES.studentPracticeExams} element={<Navigate to={`${ROUTES.studentExams}?type=PRACTICE`} replace />} />
           <Route path={ROUTES.studentProfile} element={<ProfilePage />} />
           <Route path={ROUTES.studentDashboard} element={<Navigate to={ROUTES.studentCourses} replace />} />

@@ -7,16 +7,12 @@ import type { ApiResponse } from '@/auth/authContext';
  *
  *   GET   /api/v1/student/subscription/plans        (SB-01) — public; `isCurrent` needs the token
  *   GET   /api/v1/student/subscription/current      (SB-02) — `data: null` without an ACTIVE plan
- *   POST  /api/v1/student/subscription/checkout     (SB-03) — 201, PayOS link; the plan is NOT active yet
  *   PATCH /api/v1/student/subscription/auto-renew   (SB-04) — ACTIVE plan only
  *
- * The plan turns ACTIVE through the PayOS webhook, so after SB-03 the payment is followed with
- * StudentPaymentController (PY-02 status, PY-04 cancel):
- *   GET    /api/v1/student/payments/{orderCode}/status
- *   DELETE /api/v1/student/payments/{orderCode}
+ * A plan is bought with the shared PY-01 checkout (payment.service, `{ planId }`); it turns ACTIVE
+ * through the PayOS webhook. SB-03 (`/subscription/checkout`) answers the same and is not used.
  *
- * Errors: SB-03 400 INVALID_DISCOUNT_CODE, 404 plan not found, 409 free plan / checkout already in
- * progress; SB-04 404 no ACTIVE plan.
+ * Errors: SB-04 404 no ACTIVE plan.
  */
 
 /** SB-01 */
@@ -43,36 +39,6 @@ export interface CurrentSubscription {
   autoRenew: boolean;
 }
 
-/** SB-03 */
-export interface SubscriptionCheckout {
-  orderCode: string;
-  planId: number;
-  planName: string;
-  originalPrice: number;
-  discountAmount: number;
-  totalPrice: number;
-  paymentUrl: string;
-  qrCode: string;
-  expiresAt: string;
-}
-
-export type PaymentStatus = 'PENDING' | 'SUCCEEDED' | 'FAILED' | 'EXPIRED' | 'CANCELLED';
-
-/** PY-02 */
-export interface PaymentState {
-  orderCode: string;
-  status: PaymentStatus;
-  paidAt: string | null;
-  expiresAt: string | null;
-}
-
-export const isPaymentFinal = (status: PaymentStatus) => status !== 'PENDING';
-
-export function formatVnd(amount: number | null | undefined): string {
-  if (amount == null) return '—';
-  return `${Number(amount).toLocaleString('vi-VN')} ₫`;
-}
-
 export const subscriptionService = {
   async getPlans(): Promise<SubscriptionPlan[]> {
     const res = await api.get<ApiResponse<SubscriptionPlan[]>>('/student/subscription/plans');
@@ -84,15 +50,6 @@ export const subscriptionService = {
     return res.data ?? null;
   },
 
-  async checkout(planId: number, discountCode?: string): Promise<SubscriptionCheckout> {
-    const code = discountCode?.trim();
-    const res = await api.post<ApiResponse<SubscriptionCheckout>>('/student/subscription/checkout', {
-      planId,
-      ...(code ? { discountCode: code } : {}),
-    });
-    return res.data;
-  },
-
   async setAutoRenew(autoRenew: boolean): Promise<{ subscriptionId: number; autoRenew: boolean }> {
     const res = await api.request<ApiResponse<{ subscriptionId: number; autoRenew: boolean }>>({
       method: 'patch',
@@ -100,15 +57,6 @@ export const subscriptionService = {
       data: { autoRenew },
     });
     return res.data;
-  },
-
-  async getPaymentStatus(orderCode: string): Promise<PaymentState> {
-    const res = await api.get<ApiResponse<PaymentState>>(`/student/payments/${encodeURIComponent(orderCode)}/status`);
-    return res.data;
-  },
-
-  async cancelPayment(orderCode: string): Promise<void> {
-    await api.request<ApiResponse<unknown>>({ method: 'delete', url: `/student/payments/${encodeURIComponent(orderCode)}` });
   },
 };
 
