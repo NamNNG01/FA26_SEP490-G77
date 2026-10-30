@@ -102,7 +102,8 @@ public class StudentMaterialQuizResumeCommitTest {
                 em.persist(ExamQuestion.builder().exam(exam).question(question)
                         .weight(BigDecimal.ONE).orderIndex(i).build());
             }
-            Document document = Document.builder().user(student).course(course).generationType("MATERIAL")
+            Document document = Document.builder().user(student)
+                    .courses(new java.util.LinkedHashSet<>(java.util.Set.of(course))).generationType("MATERIAL")
                     .extractedContent("Material text").status("UPLOADED").title("Week 1")
                     .fileName("week1.docx").fileUrl("https://cdn.test/week1.docx").fileSizeKb(1)
                     .pageCount(1).createdAt(Instant.now()).build();

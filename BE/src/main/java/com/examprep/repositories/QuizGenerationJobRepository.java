@@ -6,6 +6,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -38,6 +39,14 @@ public interface QuizGenerationJobRepository extends JpaRepository<QuizGeneratio
 
     /** MQ-02: every job of one page of documents, one query. */
     List<QuizGenerationJob> findByUserUserIdAndDocumentDocIdInOrderByCreatedAtDesc(Long userId, Collection<Long> docIds);
+
+    /** The job that generated an exam (a material quiz attempt carries it back as {@code quizJobId}). */
+    Optional<QuizGenerationJob> findFirstByResultExamExamIdAndUserUserIdOrderByJobIdDesc(Long examId, Long userId);
+
+    /** A deleted material takes its generation jobs with it. */
+    @Modifying
+    @Query("delete from QuizGenerationJob j where j.document.docId = :docId")
+    int deleteByDocumentDocId(@Param("docId") Long docId);
 
     /** MQ-06: finished attempt statistics of generated quizzes, [examId, count, maxScore] per row. */
     @Query("SELECT a.exam.examId, COUNT(a), MAX(a.totalScore) FROM ExamAttempt a "

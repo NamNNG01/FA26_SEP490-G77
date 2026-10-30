@@ -34,8 +34,10 @@ import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -129,7 +131,12 @@ public class StudentMaterialApiIntegrationTest {
         assertEquals("Week 1 notes", data.path("title").asText());
 
         assertEquals(student.getUserId(), saved.getUser().getUserId());
-        assertEquals(course.getCourseId(), saved.getCourse().getCourseId());
+        assertEquals(List.of(course.getCourseId()), List.of(data.path("courseIds").get(0).asLong()));
+        assertEquals(Set.of(course.getCourseId()), saved.getCourses().stream().map(Course::getCourseId)
+                .collect(java.util.stream.Collectors.toSet()));
+        assertFalse(data.path("duplicate").asBoolean());
+        assertNotNull(saved.getSha256());
+        assertEquals("materials/user/notes.pdf", saved.getStorageKey());
         assertEquals("MATERIAL", saved.getGenerationType());
         assertEquals("UPLOADED", saved.getStatus());
         assertEquals("Nội dung tài liệu: lập trình hướng đối tượng.", saved.getExtractedContent());
@@ -210,6 +217,164 @@ public class StudentMaterialApiIntegrationTest {
         assertEquals(before, documentsOf(student));
     }
 
+    @Test
+    void uploadingTheSameFileAgainLinksTheCourseInsteadOfStoringItTwice() throws Exception {
+        Course second = course("Advanced Java");
+        em.persist(Enrollment.builder().course(second).user(student).enrolledAt(Instant.now())
+                .status(Enrollment.STATUS_ACTIVE).build());
+        em.flush();
+        byte[] bytes = "SAME-CONTENT".getBytes(StandardCharsets.UTF_8);
+
+        JsonNode first = data(call(student, multipart("/api/v1/student/materials")
+                .file(new MockMultipartFile("file", "slides.pdf", "application/pdf", bytes))
+                .param("courseId", course.getCourseId().toString()))
+                .andExpect(status().isCreated()));
+        assertFalse(first.path("duplicate").asBoolean());
+        long docId = first.path("documentId").asLong();
+
+        clearInvocations(reader, storage);
+        JsonNode again = data(call(student, multipart("/api/v1/student/materials")
+                .file(new MockMultipartFile("file", "slides.pdf", "application/pdf", bytes))
+                .param("courseId", second.getCourseId().toString()))
+                .andExpect(status().isCreated()));
+
+        assertTrue(again.path("duplicate").asBoolean());
+        assertEquals(docId, again.path("documentId").asLong());
+        assertEquals(2, again.path("courseIds").size());
+        assertEquals(course.getCourseId(), again.path("courseIds").get(0).asLong());
+        assertEquals(second.getCourseId(), again.path("courseIds").get(1).asLong());
+        assertEquals(1L, documentsOf(student));
+        // The content was neither extracted again nor stored a second time.
+        verifyNoInteractions(reader, storage);
+
+        Document saved = em.find(Document.class, docId);
+        JsonNode lookup = data(call(student, get("/api/v1/student/materials/lookup")
+                .param("sha256", saved.getSha256().toUpperCase(java.util.Locale.ROOT)))
+                .andExpect(status().isOk()));
+        assertEquals(docId, lookup.path("documentId").asLong());
+        assertEquals(2, lookup.path("courses").size());
+    }
+
+    // =================================================================================
+    // lookup / attach / delete
+    // =================================================================================
+
+    @Test
+    void lookupValidatesTheHashAndHidesOtherStudentsMaterials() throws Exception {
+        Document doc = document(student, course, "lookup", "Lookup material", Instant.now());
+        doc.setSha256("a".repeat(64));
+        em.flush();
+
+        JsonNode found = data(call(student, get("/api/v1/student/materials/lookup")
+                .param("sha256", "A".repeat(64))).andExpect(status().isOk()));
+        assertEquals(doc.getDocId(), found.path("documentId").asLong());
+        assertEquals("Lookup material", found.path("title").asText());
+        assertEquals("material.docx", found.path("fileName").asText());
+        assertEquals(1, found.path("courses").size());
+        assertEquals(course.getCourseId(), found.path("courses").get(0).path("courseId").asLong());
+        assertEquals("Java OOP", found.path("courses").get(0).path("title").asText());
+
+        call(student, get("/api/v1/student/materials/lookup").param("sha256", "not-a-hash"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("sha256 must be 64 hexadecimal characters"));
+        call(student, get("/api/v1/student/materials/lookup")).andExpect(status().isBadRequest());
+        call(student, get("/api/v1/student/materials/lookup").param("sha256", "b".repeat(64)))
+                .andExpect(status().isNotFound());
+        call(other, get("/api/v1/student/materials/lookup").param("sha256", "a".repeat(64)))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void attachCourseLinksAnotherEnrolledCourseIdempotently() throws Exception {
+        Document doc = document(student, course, "attach", "Attach material", Instant.now());
+        Course second = course("Second course");
+        em.persist(Enrollment.builder().course(second).user(student).enrolledAt(Instant.now())
+                .status(Enrollment.STATUS_ACTIVE).build());
+        Course unenrolled = course("Unenrolled course");
+        em.flush();
+        String url = "/api/v1/student/materials/" + doc.getDocId() + "/courses";
+        String body = "{\"courseId\":" + second.getCourseId() + "}";
+
+        JsonNode linked = data(call(student, post(url).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Material attached")));
+        assertEquals(doc.getDocId(), linked.path("documentId").asLong());
+        assertEquals(2, linked.path("courses").size());
+
+        // A second call is a no-op, not a duplicate join row or an error.
+        call(student, post(url).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.courses.length()").value(2));
+
+        call(other, post(url).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isNotFound());
+        call(student, post(url).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"courseId\":" + unenrolled.getCourseId() + "}"))
+                .andExpect(status().isForbidden());
+        call(student, post(url).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"courseId\":" + Long.MAX_VALUE + "}"))
+                .andExpect(status().isNotFound());
+        call(student, post(url).contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isBadRequest());
+
+        em.flush();
+        em.clear();
+        assertEquals(Set.of(course.getCourseId(), second.getCourseId()),
+                em.find(Document.class, doc.getDocId()).getCourses().stream()
+                        .map(Course::getCourseId).collect(java.util.stream.Collectors.toSet()));
+    }
+
+    @Test
+    void deleteRemovesTheMaterialItsJobsAndDetachesQuestions() throws Exception {
+        JsonNode uploaded = data(call(student, multipart("/api/v1/student/materials")
+                .file(new MockMultipartFile("file", "delete-me.pdf", "application/pdf",
+                        "DELETE-ME".getBytes(StandardCharsets.UTF_8)))
+                .param("courseId", course.getCourseId().toString()))
+                .andExpect(status().isCreated()));
+        long docId = uploaded.path("documentId").asLong();
+        Document doc = em.find(Document.class, docId);
+
+        Question question = Question.builder().course(course).createdBy(manager)
+                .questionType("SINGLE_CHOICE").difficulty("EASY").content("Generated from material")
+                .sourceDocumentId(docId).build();
+        em.persist(question);
+        job(doc, student, QuizGenerationWorker.STATUS_COMPLETED, 5, null, Instant.now());
+        em.flush();
+        long questionId = question.getQuestionId();
+
+        call(student, delete("/api/v1/student/materials/" + docId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Material deleted"));
+
+        assertNull(em.find(Document.class, docId));
+        assertEquals(0L, em.createQuery(
+                        "select count(j) from QuizGenerationJob j where j.document.docId = :id", Long.class)
+                .setParameter("id", docId).getSingleResult());
+        verify(storage).delete("materials/user/notes.pdf");
+        em.clear();
+        assertNull(em.find(Question.class, questionId).getSourceDocumentId());
+
+        call(student, delete("/api/v1/student/materials/" + docId)).andExpect(status().isNotFound());
+    }
+
+    @Test
+    void deleteIsRejectedWhileAQuizIsBeingGenerated() throws Exception {
+        Document doc = material("busy");
+        job(doc, student, QuizGenerationWorker.STATUS_PENDING, 5, null, Instant.now());
+        em.flush();
+
+        call(student, delete("/api/v1/student/materials/" + doc.getDocId()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("A quiz is being generated from this material"));
+        assertNotNull(em.find(Document.class, doc.getDocId()));
+
+        Document foreign = document(other, course, "foreign", "Foreign material", Instant.now());
+        em.flush();
+        call(student, delete("/api/v1/student/materials/" + foreign.getDocId()))
+                .andExpect(status().isNotFound());
+        assertNotNull(em.find(Document.class, foreign.getDocId()));
+    }
+
     // =================================================================================
     // MQ-02
     // =================================================================================
@@ -244,6 +409,10 @@ public class StudentMaterialApiIntegrationTest {
         assertEquals(newestJob.getJobId(), first.path("jobs").get(0).path("jobId").asLong());
         assertEquals("FAILED", first.path("jobs").get(0).path("status").asText());
         assertEquals("COMPLETED", first.path("jobs").get(1).path("status").asText());
+        assertEquals(course.getCourseId(), first.path("jobs").get(0).path("courseId").asLong());
+        assertEquals(1, first.path("courses").size());
+        assertEquals(course.getCourseId(), first.path("courses").get(0).path("courseId").asLong());
+        assertEquals("Java OOP", first.path("courses").get(0).path("title").asText());
 
         JsonNode second = data.path("content").get(1);
         assertEquals(older.getDocId(), second.path("documentId").asLong());
@@ -401,6 +570,51 @@ public class StudentMaterialApiIntegrationTest {
     }
 
     @Test
+    void generateUsesTheRequestedCourseOfTheMaterial() throws Exception {
+        Course second = course("Second course");
+        em.persist(Enrollment.builder().course(second).user(student).enrolledAt(Instant.now())
+                .status(Enrollment.STATUS_ACTIVE).build());
+        Course notLinked = course("Not linked course");
+        em.persist(Enrollment.builder().course(notLinked).user(student).enrolledAt(Instant.now())
+                .status(Enrollment.STATUS_ACTIVE).build());
+        Course unenrolled = course("Unenrolled course");
+
+        Document multi = document(student, course, "m".repeat(200), "Multi course", Instant.now());
+        multi.getCourses().add(second);
+        Document single = document(student, course, "s".repeat(200), "Single course", Instant.now());
+        Document linkedToUnenrolled = document(student, course, "u".repeat(200), "Unenrolled", Instant.now());
+        linkedToUnenrolled.getCourses().add(unenrolled);
+        em.flush();
+
+        JsonNode accepted = data(call(student, post("/api/v1/student/materials/" + multi.getDocId() + "/generate-quiz")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"questionCount\":10,\"courseId\":" + second.getCourseId() + "}"))
+                .andExpect(status().isAccepted()));
+        assertEquals(second.getCourseId(), em.find(QuizGenerationJob.class, accepted.path("jobId").asLong())
+                .getCourse().getCourseId());
+
+        // A course of mine that is not attached to this material.
+        call(student, post("/api/v1/student/materials/" + single.getDocId() + "/generate-quiz")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"questionCount\":10,\"courseId\":" + notLinked.getCourseId() + "}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("courseId is not one of the material's courses"));
+
+        // Attached to the material, but the student is not enrolled in it.
+        call(student, post("/api/v1/student/materials/" + linkedToUnenrolled.getDocId() + "/generate-quiz")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"questionCount\":10,\"courseId\":" + unenrolled.getCourseId() + "}"))
+                .andExpect(status().isForbidden());
+
+        // Omitting courseId picks the first course of the material.
+        JsonNode defaults = data(call(student, post("/api/v1/student/materials/" + single.getDocId() + "/generate-quiz")
+                .contentType(MediaType.APPLICATION_JSON).content("{\"questionCount\":10}"))
+                .andExpect(status().isAccepted()));
+        assertEquals(course.getCourseId(), em.find(QuizGenerationJob.class, defaults.path("jobId").asLong())
+                .getCourse().getCourseId());
+    }
+
+    @Test
     void generateReturns429WhenQuotaIsExhausted() throws Exception {
         Document subject = material("x".repeat(200));
         em.persist(AiUsageLog.builder().user(student).purpose("EXPLANATION").status("SUCCESS")
@@ -524,6 +738,20 @@ public class StudentMaterialApiIntegrationTest {
         assertEquals(3, resumed.path("questions").size());
         assertEquals(1L, em.createQuery("select count(a) from ExamAttempt a where a.exam = :exam and a.user = :u", Long.class)
                 .setParameter("exam", exam).setParameter("u", student).getSingleResult());
+
+        // SA-02 and SA-05 expose the mode and the job, so the client can resume through MQ-05.
+        call(student, get("/api/v1/student/attempts/" + attemptId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.examMode").value("MATERIAL_QUIZ"))
+                .andExpect(jsonPath("$.data.quizJobId").value(job.getJobId()));
+
+        call(student, post("/api/v1/student/attempts/" + attemptId + "/submit")
+                .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isOk());
+        call(student, get("/api/v1/student/attempts/" + attemptId + "/result"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.examMode").value("MATERIAL_QUIZ"))
+                .andExpect(jsonPath("$.data.quizJobId").value(job.getJobId()));
     }
 
     @Test
@@ -599,6 +827,7 @@ public class StudentMaterialApiIntegrationTest {
         assertEquals(5, newest.path("questionCount").asInt());
         assertEquals(0, newest.path("attemptCount").asInt());
         assertEquals(exam2.getExamId(), newest.path("quizId").asLong());
+        assertEquals(course.getCourseId(), newest.path("courseId").asLong());
 
         JsonNode oldest = data.path("content").get(1);
         assertEquals(older.getJobId(), oldest.path("jobId").asLong());
@@ -664,7 +893,8 @@ public class StudentMaterialApiIntegrationTest {
     }
 
     private Document document(User owner, Course ownerCourse, String content, String title, Instant createdAt) {
-        Document value = Document.builder().user(owner).course(ownerCourse).generationType("MATERIAL")
+        Document value = Document.builder().user(owner)
+                .courses(new LinkedHashSet<>(Set.of(ownerCourse))).generationType("MATERIAL")
                 .extractedContent(content).status("UPLOADED").title(title).fileName("material.docx")
                 .fileUrl("https://cdn.test/material.docx").fileSizeKb(10).pageCount(2)
                 .createdAt(createdAt).build();
@@ -677,7 +907,8 @@ public class StudentMaterialApiIntegrationTest {
     }
 
     private QuizGenerationJob job(Document doc, User owner, String status, int count, Exam result, Instant createdAt) {
-        QuizGenerationJob value = QuizGenerationJob.builder().user(owner).document(doc).course(doc.getCourse())
+        Course linked = doc.getCourses().stream().findFirst().orElse(null);
+        QuizGenerationJob value = QuizGenerationJob.builder().user(owner).document(doc).course(linked)
                 .questionCount(count).difficulty("MEDIUM").status(status).progress(0)
                 .resultExam(result).createdAt(createdAt).updatedAt(createdAt).build();
         em.persist(value);

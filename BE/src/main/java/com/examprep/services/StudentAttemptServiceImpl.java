@@ -12,6 +12,7 @@ import com.examprep.entities.Enrollment;
 import com.examprep.entities.Exam;
 import com.examprep.entities.ExamAttempt;
 import com.examprep.entities.Question;
+import com.examprep.entities.QuizGenerationJob;
 import com.examprep.entities.User;
 import com.examprep.exceptions.BadRequestException;
 import com.examprep.exceptions.BaseException;
@@ -24,6 +25,7 @@ import com.examprep.repositories.EnrollmentRepository;
 import com.examprep.repositories.ExamAttemptRepository;
 import com.examprep.repositories.ExamRepository;
 import com.examprep.repositories.QuestionRepository;
+import com.examprep.repositories.QuizGenerationJobRepository;
 import com.examprep.repositories.UserRepository;
 import com.examprep.util.attempt.AttemptGrader;
 import com.examprep.util.attempt.AttemptScoring;
@@ -80,6 +82,7 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
     private final AttemptAnswerRepository answers;
     private final AttemptStartKeyRepository startKeys;
     private final QuestionRepository questions;
+    private final QuizGenerationJobRepository quizJobs;
     private final AttemptPaperFactory paperFactory;
     private final AttemptAutoSubmitter autoSubmitter;
     private final AttemptWriter writer;
@@ -332,7 +335,9 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
                 AttemptScoring.output(maxScore),
                 attempt.getSubmittedAt(),
                 attempt.getAutoSubmitted(),
-                questions);
+                questions,
+                attempt.getMode(),
+                quizJobId(attempt));
     }
 
     // ---------------------------------------------------------------------------------
@@ -504,7 +509,24 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
                 Instant.now(),
                 maxScore,
                 questions,
-                drafts == null ? null : List.copyOf(drafts));
+                drafts == null ? null : List.copyOf(drafts),
+                attempt.getMode(),
+                quizJobId(attempt));
+    }
+
+    /**
+     * The generation job behind a material quiz, so the client can resume it with MQ-05 instead of
+     * starting a fresh attempt through SA-01. Derived from the result exam, which also covers
+     * attempts opened through SA-01 directly.
+     */
+    private Long quizJobId(ExamAttempt attempt) {
+        if (!Exam.MODE_MATERIAL_QUIZ.equals(attempt.getMode()) || attempt.getExam() == null) {
+            return null;
+        }
+        return quizJobs.findFirstByResultExamExamIdAndUserUserIdOrderByJobIdDesc(
+                        attempt.getExam().getExamId(), attempt.getUser().getUserId())
+                .map(QuizGenerationJob::getJobId)
+                .orElse(null);
     }
 
     private List<BigDecimal> weights(List<AttemptAnswer> rows) {

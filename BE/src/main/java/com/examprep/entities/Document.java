@@ -2,9 +2,12 @@ package com.examprep.entities;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.BatchSize;
 
 import java.io.Serializable;
 import java.time.Instant;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 @Entity
 @Table(name = "documents")
@@ -24,9 +27,15 @@ public class Document implements Serializable {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "course_id")
-    private Course course;
+    /** Courses this material is attached to; one file can be used by several courses. */
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(name = "document_courses",
+            joinColumns = @JoinColumn(name = "doc_id"),
+            inverseJoinColumns = @JoinColumn(name = "course_id"))
+    @OrderBy("courseId ASC")
+    @BatchSize(size = 100)
+    @Builder.Default
+    private Set<Course> courses = new LinkedHashSet<>();
 
     @Column(name = "generation_type", nullable = false, length = 50)
     private String generationType;
@@ -51,6 +60,14 @@ public class Document implements Serializable {
 
     @Column(name = "page_count")
     private Integer pageCount;
+
+    /** Hex SHA-256 of the file content; unique per owner so a re-upload reuses the material. */
+    @Column(name = "sha256", length = 64)
+    private String sha256;
+
+    /** Provider key of the stored file, used to remove it when the material is deleted. */
+    @Column(name = "storage_key", length = 512)
+    private String storageKey;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;

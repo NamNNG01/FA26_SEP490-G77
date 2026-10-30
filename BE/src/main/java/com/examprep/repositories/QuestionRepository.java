@@ -77,6 +77,11 @@ public interface QuestionRepository extends JpaRepository<Question, Long>, JpaSp
     @Modifying
     @Query("UPDATE Question q SET q.group = null WHERE q.group.groupId = :groupId")
     int detachFromGroup(@Param("groupId") Long groupId);
+
+    /** A deleted material no longer owns the questions generated from it. */
+    @Modifying
+    @Query("UPDATE Question q SET q.sourceDocumentId = null WHERE q.sourceDocumentId = :documentId")
+    int clearSourceDocument(@Param("documentId") Long documentId);
     @Query("""
     SELECT q
     FROM Question q

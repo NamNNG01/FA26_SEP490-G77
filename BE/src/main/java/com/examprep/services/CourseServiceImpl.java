@@ -174,7 +174,7 @@ public class CourseServiceImpl implements CourseService {
         if (enrollments.existsByCourseCourseId(id)
                 || exams.existsByCourseCourseIdOrModuleCourseCourseId(id, id)
                 || questions.existsByCourseCourseIdOrModuleCourseCourseId(id, id)
-                || documents.existsByCourseCourseId(id)
+                || documents.existsByCoursesCourseId(id)
                 || aiLogs.existsByCourseCourseId(id)
                 || configs.existsByModuleCourseCourseId(id)
                 || groups.existsByCourseCourseIdOrModuleCourseCourseId(id, id))

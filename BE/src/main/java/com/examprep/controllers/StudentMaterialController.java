@@ -12,6 +12,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -58,6 +59,31 @@ public class StudentMaterialController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
         return ResponseEntity.ok(ApiResponse.success(service.list(user.getId(), courseId, page, size)));
+    }
+
+    @GetMapping("/lookup")
+    @Operation(summary = "A material of mine with the same content (SHA-256), or 404")
+    public ResponseEntity<ApiResponse<MaterialResponses.Lookup>> lookup(
+            @AuthenticationPrincipal UserPrincipal user, @RequestParam String sha256) {
+        return ResponseEntity.ok(ApiResponse.success(service.lookup(user.getId(), sha256)));
+    }
+
+    @PostMapping("/{documentId}/courses")
+    @Operation(summary = "Attach an existing material to another course of mine")
+    public ResponseEntity<ApiResponse<MaterialResponses.Lookup>> attachCourse(
+            @AuthenticationPrincipal UserPrincipal user,
+            @PathVariable Long documentId,
+            @Valid @RequestBody MaterialRequests.AttachCourse request) {
+        return ResponseEntity.ok(ApiResponse.success(
+                service.attachCourse(user.getId(), documentId, request.courseId()), "Material attached"));
+    }
+
+    @DeleteMapping("/{documentId}")
+    @Operation(summary = "Delete one of my materials")
+    public ResponseEntity<ApiResponse<Void>> delete(
+            @AuthenticationPrincipal UserPrincipal user, @PathVariable Long documentId) {
+        service.delete(user.getId(), documentId);
+        return ResponseEntity.ok(ApiResponse.success(null, "Material deleted"));
     }
 
     @PostMapping("/{documentId}/generate-quiz")

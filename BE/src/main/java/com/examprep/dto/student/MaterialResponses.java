@@ -8,14 +8,18 @@ import java.util.List;
 public final class MaterialResponses {
     private MaterialResponses() {}
 
-    /** MQ-01 */
-    public record Uploaded(Long documentId, String fileName, Integer pageCount, String title) {}
+    /** A course a material is attached to. */
+    public record CourseLink(Long courseId, String title) {}
 
-    public record JobBrief(Long jobId, Integer questionCount, String status) {}
+    /** MQ-01: {@code duplicate} means the file was already stored and only the course was linked. */
+    public record Uploaded(Long documentId, String fileName, Integer pageCount, String title,
+                           Boolean duplicate, List<Long> courseIds) {}
+
+    public record JobBrief(Long jobId, Integer questionCount, String status, Long courseId) {}
 
     /** MQ-02 */
     public record DocumentItem(Long documentId, String title, String fileName, Integer pageCount,
-                               Instant uploadedAt, List<JobBrief> jobs) {}
+                               Instant uploadedAt, List<JobBrief> jobs, List<CourseLink> courses) {}
 
     /** MQ-03 (202) */
     public record JobAccepted(Long jobId, String status, Integer questionCount) {}
@@ -23,6 +27,9 @@ public final class MaterialResponses {
     /** MQ-04 */
     public record JobState(Long jobId, String status, Integer progress, Integer questionCount,
                            String errorMessage, Long quizId) {}
+
+    /** GET /lookup and POST /{documentId}/courses. */
+    public record Lookup(Long documentId, String title, String fileName, List<CourseLink> courses) {}
 
     /** MQ-05: options never carry the correct flag. */
     public record StartedOption(Long optionId, String optionText) {}
@@ -35,5 +42,5 @@ public final class MaterialResponses {
     /** MQ-06 */
     public record HistoryItem(Long jobId, Long documentId, String documentTitle, Integer questionCount,
                               BigDecimal bestScore, Integer attemptCount, Instant createdAt,
-                              Long quizId) {}
+                              Long quizId, Long courseId) {}
 }

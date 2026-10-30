@@ -11,11 +11,20 @@ import com.examprep.dto.student.MaterialResponses;
  */
 public interface StudentMaterialService {
 
-    /** MQ-01: stores the file and creates the {@code documents} row. */
+    /** MQ-01: stores the file once per owner and attaches it to the course; a re-upload only links. */
     MaterialResponses.Uploaded upload(Long userId, String fileName, byte[] bytes, Long courseId, String title);
 
-    /** MQ-02: my own materials, newest first, each with its generation jobs. */
+    /** MQ-02: my own materials, newest first, each with its courses and generation jobs. */
     PageResponse<MaterialResponses.DocumentItem> list(Long userId, Long courseId, int page, int size);
+
+    /** The material of this student with the same content, or 404. */
+    MaterialResponses.Lookup lookup(Long userId, String sha256);
+
+    /** Attaches an already uploaded material to another course (idempotent). */
+    MaterialResponses.Lookup attachCourse(Long userId, Long documentId, Long courseId);
+
+    /** Deletes a material, its generation jobs and the stored file. */
+    void delete(Long userId, Long documentId);
 
     /** MQ-03: reserves quota and queues the generation; the AI call runs outside the transaction. */
     MaterialResponses.JobAccepted generateQuiz(Long userId, Long documentId, MaterialRequests.GenerateQuiz request);

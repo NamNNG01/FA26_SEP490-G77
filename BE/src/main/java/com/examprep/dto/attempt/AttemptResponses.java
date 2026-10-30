@@ -27,7 +27,9 @@ public final class AttemptResponses {
             Instant serverTime,
             BigDecimal maxScore,
             List<Question> questions,
-            List<Answer> answers) {}
+            List<Answer> answers,
+            String examMode,
+            Long quizJobId) {}
 
     public record Question(
             Long questionId,
@@ -79,7 +81,9 @@ public final class AttemptResponses {
             BigDecimal maxScore,
             Instant submittedAt,
             Boolean autoSubmitted,
-            List<ResultQuestion> questions) {}
+            List<ResultQuestion> questions,
+            String examMode,
+            Long quizJobId) {}
 
     public record ResultQuestion(
             Long questionId,
