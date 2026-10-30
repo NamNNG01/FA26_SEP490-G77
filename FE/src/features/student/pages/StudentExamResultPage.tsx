@@ -18,6 +18,7 @@ import {
   type AttemptResult,
   type ResultQuestion,
 } from '@/services/studentAttempt.service';
+import { EmptyState } from '@/components/ui/Card';
 import { LoadError, STUDENT_PAGE_CLASS, formatDateTime } from '../components/studentUi';
 import { QUESTION_TYPE_LABEL, QuestionText, isAnswered, optionLetter } from '../components/QuestionAnswerInput';
 import { useDrawioSnapshot } from '@/features/question/components/useDrawioSnapshot';
@@ -154,6 +155,8 @@ export function StudentExamResultPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const attemptId = searchParams.get('attemptId');
   const examId = searchParams.get('examId');
+  /** SA-06 answered 403: the course was left (EN-04), so none of its attempts are shown. */
+  const [notEnrolled, setNotEnrolled] = useState(false);
 
   const [result, setResult] = useState<AttemptResult | null>(null);
   const [loading, setLoading] = useState(true);
@@ -206,6 +209,11 @@ export function StudentExamResultPage() {
       .catch(err => {
         if (cancelled) return;
         setAttempts([]);
+        if ((err as { response?: { status?: number } })?.response?.status === 403) {
+          setNotEnrolled(true);
+          setLoading(false);
+          return;
+        }
         if (!attemptId) {
           setError(getApiErrorMessage(err, 'Failed to load your attempts.'));
           setLoading(false);
@@ -379,11 +387,28 @@ export function StudentExamResultPage() {
     <Breadcrumb
       items={[
         { label: 'My Exams', onClick: () => navigate(ROUTES.studentExams) },
-        ...(examId ? [{ label: result?.examTitle ?? 'Exam', onClick: () => navigate(studentExamPath(examId)) }] : []),
+        ...(examId && !notEnrolled ? [{ label: result?.examTitle ?? 'Exam', onClick: () => navigate(studentExamPath(examId)) }] : []),
         { label: 'Attempts' },
       ]}
     />
   );
+
+  // Checked first: SA-05 may still answer for one attempt, but a left course shows nothing.
+  if (notEnrolled) {
+    return (
+      <div className={`${STUDENT_PAGE_CLASS} space-y-6`}>
+        {breadcrumb}
+        <div className="card">
+          <EmptyState
+            icon={<Icon.Lock className="w-7 h-7" />}
+            title="Attempts not available"
+            message="You are no longer enrolled in the course of this exam, so its attempts and results are closed."
+            action={<Button onClick={() => navigate(ROUTES.studentExams)}>Back to My Exams</Button>}
+          />
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (

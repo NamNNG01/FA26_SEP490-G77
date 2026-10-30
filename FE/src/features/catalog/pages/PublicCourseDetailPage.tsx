@@ -27,8 +27,10 @@ import { PaymentCheckoutModal, type PaymentItem } from '@/features/payment/compo
  * Actions:
  *  - guest                 → sign in, then come back here;
  *  - enrolled student      → open the course in My Courses;
+ *  - student, any course   → EN-03 first; already enrolled opens the course;
  *  - student, free course  → EN-02 enroll, then open the course;
- *  - student, paid course  → PaymentCheckoutModal (PY-01 + PayOS), access once PY-04 says SUCCEEDED;
+ *  - student, paid course  → PaymentCheckoutModal (PY-01 + PayOS); once PY-04 says SUCCEEDED,
+ *                            EN-03 confirms the enrollment and the course opens;
  *  - other roles           → enrollment is for students.
  * PrepExam is a preparation platform, so the page never promises a certificate.
  */
@@ -96,24 +98,48 @@ export function PublicCourseDetailPage() {
   const enrollment = course.enrollment;
   const isStudent = user?.role === Role.STUDENT;
 
-  /** PY-04 said SUCCEEDED: the webhook has enrolled the student — refresh CL-02 for "Go to course". */
-  function handlePaid(item: PaymentItem) {
+  /**
+   * PY-04 said SUCCEEDED: EN-03 confirms the webhook has enrolled the student. If it has not landed
+   * yet, refresh CL-02 so the page still ends up on "Go to course".
+   */
+  async function handlePaid(item: PaymentItem) {
+    if (!course) return;
     toast.success(`You are enrolled in ${item.title}`);
+    try {
+      const state = await studentCourseService.getEnrollment(course.courseId);
+      if (state.isEnrolled) {
+        navigate(studentCoursePath(course.courseId));
+        return;
+      }
+    } catch {
+      // fall through to the CL-02 refresh
+    }
     setReload((r) => r + 1);
   }
 
-  /** EN-02 — a free course is joined right away. */
-  async function handleEnrollFree() {
+  /**
+   * EN-03 first — CL-02 may be stale (bought in another tab, cancelled since) — then EN-02 for a
+   * free course or the PY-01 checkout modal for a paid one.
+   */
+  async function handleJoin() {
     if (!course) return;
     setEnrolling(true);
     try {
-      await studentCourseService.enrollFree(course.courseId);
-      toast.success(`You are enrolled in ${course.title}`);
-      navigate(studentCoursePath(course.courseId));
+      const state = await studentCourseService.getEnrollment(course.courseId);
+      // EN-03 only counts ACTIVE as enrolled; a COMPLETED course is still owned — never sell it again.
+      if (state.isEnrolled || state.status === 'COMPLETED') {
+        navigate(studentCoursePath(course.courseId));
+        return;
+      }
+      if (isFree) {
+        await studentCourseService.enrollFree(course.courseId);
+        toast.success(`You are enrolled in ${course.title}`);
+        navigate(studentCoursePath(course.courseId));
+        return;
+      }
+      setBuying(coursePaymentItem(course));
     } catch (err) {
-      const status = (err as { response?: { status?: number } })?.response?.status;
-      if (status === 409) navigate(studentCoursePath(course.courseId));
-      else toast.error(getApiErrorMessage(err, 'Could not enroll in the course.'));
+      toast.error(getApiErrorMessage(err, 'Could not enroll in the course.'));
     } finally {
       setEnrolling(false);
     }
@@ -212,11 +238,11 @@ export function PublicCourseDetailPage() {
                     withArrow
                   />
                 ) : isStudent && isFree ? (
-                  <Button size="lg" className="w-full" loading={enrolling} onClick={handleEnrollFree}>
+                  <Button size="lg" className="w-full" loading={enrolling} onClick={handleJoin}>
                     Enroll for free
                   </Button>
                 ) : isStudent ? (
-                  <Button size="lg" className="w-full" onClick={() => setBuying(coursePaymentItem(course))}>
+                  <Button size="lg" className="w-full" loading={enrolling} onClick={handleJoin}>
                     Buy course
                   </Button>
                 ) : (

@@ -2,6 +2,9 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { Badge } from '@/components/ui/Badge';
 import { Alert } from '@/components/ui/Alert';
+import { Button } from '@/components/ui/Button';
+import { Modal } from '@/components/ui/Modal';
+import { useToast } from '@/components/ui/ToastHost';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/Card';
@@ -26,7 +29,9 @@ import { studentProgressService, type CourseProgress } from '@/services/studentP
  * flashcard decks (MC-03); anything not filed under a module sits at the
  * root, next to the modules. Leaves open the read-only exam / deck pages.
  * MC-02/03 only answer for an ACTIVE enrollment, so other states only list
- * the modules.
+ * the modules. An enrolled student can leave the course from the info card
+ * (EN-04) after a warning: no refund, access ends. An exam in progress must be
+ * finished first.
  */
 export function StudentCourseDetailPage() {
   const { courseId = '' } = useParams<{ courseId: string }>();
@@ -38,6 +43,8 @@ export function StudentCourseDetailPage() {
   const [reload, setReload] = useState(0);
   /** Modules the content tree shows (empty ones are hidden); null until it has loaded. */
   const [shownModules, setShownModules] = useState<number | null>(null);
+  const [leaving, setLeaving] = useState(false);
+  const toast = useToast();
 
   useEffect(() => {
     let cancelled = false;
@@ -110,6 +117,17 @@ export function StudentCourseDetailPage() {
                 {enrollment.status === 'COMPLETED' ? 'Completed' : 'In progress'}
               </Badge>
             )}
+            {isActive && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="ml-auto text-danger hover:text-danger"
+                icon={<Icon.LogOut className="w-4 h-4" />}
+                onClick={() => setLeaving(true)}
+              >
+                Leave course
+              </Button>
+            )}
           </div>
           <div>
             <h1 className="text-[clamp(1.25rem,1.1rem+0.6vw,1.5rem)] font-bold text-content">{course.title}</h1>
@@ -152,7 +170,162 @@ export function StudentCourseDetailPage() {
       ) : (
         <LockedModules course={course} />
       )}
+
+      <LeaveCourseModal
+        open={leaving}
+        course={course}
+        onClose={() => setLeaving(false)}
+        onLeft={() => {
+          toast.success(`You left ${course.title}`);
+          navigate(ROUTES.studentCourses);
+        }}
+      />
     </div>
+  );
+}
+
+/**
+ * EN-04 — warns that a paid course is not refunded and that every exam and deck locks. An exam
+ * still in progress (MC-02 `hasActiveAttempt`) blocks leaving: the modal links to it instead.
+ */
+function LeaveCourseModal({
+  open,
+  course,
+  onClose,
+  onLeft,
+}: {
+  open: boolean;
+  course: StudentCourseDetail;
+  onClose: () => void;
+  onLeft: () => void;
+}) {
+  const navigate = useNavigate();
+  const [leaving, setLeaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  /** Exams with an attempt in progress; null while MC-02 is being read. */
+  const [inProgress, setInProgress] = useState<CourseExam[] | null>(null);
+  const [checkError, setCheckError] = useState<string | null>(null);
+  const [recheck, setRecheck] = useState(0);
+  const isPaid = Number(course.price ?? 0) > 0;
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    setError(null);
+    setCheckError(null);
+    setInProgress(null);
+    studentCourseService
+      .getAllCourseExams(course.courseId)
+      .then(exams => {
+        if (!cancelled) setInProgress(exams.filter(e => e.hasActiveAttempt));
+      })
+      .catch(err => {
+        if (!cancelled) setCheckError(getApiErrorMessage(err, 'Could not check your exams in progress.'));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, course.courseId, recheck]);
+
+  const blocked = inProgress != null && inProgress.length > 0;
+  const canLeave = inProgress != null && !blocked;
+
+  async function confirmLeave() {
+    setLeaving(true);
+    setError(null);
+    try {
+      await studentCourseService.cancelEnrollment(course.courseId);
+      onLeft();
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Could not leave the course.'));
+    } finally {
+      setLeaving(false);
+    }
+  }
+
+  return (
+    <Modal
+      open={open}
+      onClose={() => !leaving && onClose()}
+      title={blocked ? 'Finish your exams first' : 'Leave this course?'}
+      size="sm"
+      footer={
+        blocked ? (
+          <Button variant="outline" onClick={onClose}>
+            Close
+          </Button>
+        ) : (
+          <>
+            <Button variant="outline" disabled={leaving} onClick={onClose}>
+              Stay enrolled
+            </Button>
+            <Button
+              variant="danger"
+              loading={leaving}
+              disabled={leaving || !canLeave}
+              icon={<Icon.LogOut className="w-4 h-4" />}
+              onClick={confirmLeave}
+            >
+              Leave course
+            </Button>
+          </>
+        )
+      }
+    >
+      {inProgress == null && !checkError ? (
+        <p className="text-sm text-content-subtle">Checking your exams in progress…</p>
+      ) : checkError ? (
+        <div className="space-y-2">
+          <p className="text-sm text-danger">{checkError}</p>
+          <button type="button" className="text-sm font-medium text-primary hover:underline" onClick={() => setRecheck(v => v + 1)}>
+            Try again
+          </button>
+        </div>
+      ) : blocked ? (
+        <div className="space-y-3">
+          <p className="text-base text-content-secondary leading-relaxed">
+            You still have {inProgress.length === 1 ? 'an exam' : `${inProgress.length} exams`} in progress in{' '}
+            <span className="font-semibold text-content">{course.title}</span>. Submit or cancel{' '}
+            {inProgress.length === 1 ? 'it' : 'them'} before leaving the course.
+          </p>
+          <ul className="space-y-1.5">
+            {inProgress.map(exam => (
+              <li key={exam.examId}>
+                <button
+                  type="button"
+                  onClick={() => navigate(studentExamPath(exam.examId))}
+                  className="w-full flex items-center gap-2 rounded-[8px] border border-line px-3 py-2 text-left text-sm hover:bg-primary-light transition-colors"
+                >
+                  <Icon.ClipboardList className="w-4 h-4 flex-shrink-0 text-primary" />
+                  <span className="truncate font-medium text-content">{exam.title}</span>
+                  <Badge variant="warning" size="sm" className="ml-auto flex-shrink-0">
+                    In progress
+                  </Badge>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+      <div className="flex gap-3">
+        <Icon.AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5 text-danger" />
+        <div className="space-y-2 text-base text-content-secondary leading-relaxed">
+          <p>
+            You will lose access to every exam and flashcard deck in{' '}
+            <span className="font-semibold text-content">{course.title}</span>.
+          </p>
+          {isPaid && <p className="font-medium text-danger">This course was paid for and will not be refunded.</p>}
+          <p className="text-sm text-content-subtle">
+            {isPaid
+              ? 'To come back later you will have to buy the course again.'
+              : 'You can enroll again later for free.'}{' '}
+            Your past attempts and progress are kept.
+          </p>
+        </div>
+      </div>
+      )}
+      {error && <p className="mt-3 text-sm text-danger">{error}</p>}
+    </Modal>
   );
 }
 
