@@ -118,7 +118,10 @@ export function PublicCourseDetailPage() {
       setEnrolling(false);
     }
   }
-  const modules = [...course.modules].sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
+  // Empty modules (no exam, no flashcard deck) are neither listed nor counted.
+  const modules = course.modules
+    .filter(hasContent)
+    .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
   // A signed-in student sees this page inside the dashboard shell, which owns the gutter and the gap
   // under the header (.dashboard-content) — so no hero strip and no Container padding there.
   const inDashboard = isStudent;
@@ -269,6 +272,12 @@ export function PublicCourseDetailPage() {
       <PaymentCheckoutModal item={buying} onClose={() => setBuying(null)} onPaid={handlePaid} />
     </>
   );
+}
+
+/** A module with at least one exam or flashcard deck. Without the counts (an older BE) it is kept. */
+function hasContent(m: CourseModuleSummary): boolean {
+  if (m.examCount == null && m.deckCount == null) return true;
+  return (m.examCount ?? 0) + (m.deckCount ?? 0) > 0;
 }
 
 function plural(count: number, noun: string): string {
