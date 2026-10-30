@@ -24,6 +24,7 @@ import { QUESTION_TYPE_LABEL, QuestionText, isAnswered, optionLetter } from '../
 import { useDrawioSnapshot } from '@/features/question/components/useDrawioSnapshot';
 import { SAVABLE_QUESTION_TYPES } from '@/services/studentDeck.service';
 import { SaveToFlashcardsModal } from '../components/flashcards/SaveToFlashcardsModal';
+import { RetryWrongQuestionsModal } from '../components/RetryWrongQuestionsModal';
 import { studentCodeExamService, type CodeLanguageInfo, type CodeSubmission } from '@/services/studentCodeExam.service';
 import { CodeSubmissionHistory, CodeTestCaseStatus, latestSubmissionBefore } from '../components/code/CodeSubmissionHistory';
 
@@ -247,10 +248,13 @@ export function StudentExamResultPage() {
   const [saveQuestions, setSaveQuestions] = useState<number[] | null>(null);
   /** Questions saved to a deck in this visit, for the "Saved" mark. */
   const [savedIds, setSavedIds] = useState<Set<number>>(() => new Set());
+  /** "Retry wrong questions" (PQ-04) open. */
+  const [retrying, setRetrying] = useState(false);
 
   // Switching attempt: show the skeleton instead of the previous attempt's answers.
   useEffect(() => {
     setSavedIds(new Set());
+    setRetrying(false);
     setResult(null);
     setLoading(true);
     setOpen(new Set());
@@ -474,6 +478,10 @@ export function StudentExamResultPage() {
   const q = result.questions[current];
   const canSave = SAVABLE_ATTEMPT_STATUSES.has(result.status);
   const savableIds = canSave ? result.questions.filter(x => SAVABLE_QUESTION_TYPES.has(x.questionType)).map(x => x.questionId) : [];
+  // PQ-04 takes the same statuses; a rubric answer below full marks counts as wrong there too.
+  const hasWrong = result.questions.some(
+    (x, i) => outcomes[i] === 'incorrect' || outcomes[i] === 'unanswered' || (outcomes[i] === 'graded' && Number(x.scoreEarned ?? 0) < Number(x.maxPoints ?? 0)),
+  );
 
   return (
     <div className={`${STUDENT_PAGE_CLASS} space-y-[clamp(1.25rem,2.5vw,1.75rem)]`}>
@@ -508,6 +516,7 @@ export function StudentExamResultPage() {
               ) : undefined
             }
             onSaveAll={savableIds.length > 0 ? () => setSaveQuestions(savableIds) : undefined}
+            onRetryWrong={canSave && hasWrong ? () => setRetrying(true) : undefined}
             onReattempt={examId ? () => navigate(studentTakeExamPath(examId)) : undefined}
             onBack={examId ? () => navigate(studentExamPath(examId)) : () => navigate(ROUTES.studentExams)}
           />
@@ -593,6 +602,8 @@ export function StudentExamResultPage() {
           onSaved={ids => setSavedIds(prev => new Set([...prev, ...ids]))}
         />
       )}
+
+      {retrying && <RetryWrongQuestionsModal result={result} onClose={() => setRetrying(false)} />}
 
       <Modal open={showGrading} onClose={() => setDismissed(true)} title="AI grading" size="sm">
         <GradingScreen
@@ -784,6 +795,7 @@ function ScoreCard({
   grading,
   onRequestGrading,
   onSaveAll,
+  onRetryWrong,
   onReattempt,
   onBack,
 }: {
@@ -805,6 +817,8 @@ function ScoreCard({
   onRequestGrading: () => void;
   /** Saves every savable question as a flashcard (FC-12); absent when none can be saved. */
   onSaveAll?: () => void;
+  /** Answers the wrong questions again (PQ-04); absent when there are none or the attempt isn't submitted. */
+  onRetryWrong?: () => void;
   onReattempt?: () => void;
   onBack: () => void;
 }) {
@@ -862,6 +876,11 @@ function ScoreCard({
           {onReattempt && (
             <Button icon={<Icon.RefreshCw className="w-4 h-4" />} onClick={onReattempt}>
               Re-attempt
+            </Button>
+          )}
+          {onRetryWrong && (
+            <Button variant="outline" icon={<Icon.XCircle className="w-4 h-4" />} onClick={onRetryWrong}>
+              Retry wrong questions
             </Button>
           )}
           {onSaveAll && (
