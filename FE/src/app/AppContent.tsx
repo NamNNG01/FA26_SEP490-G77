@@ -136,8 +136,10 @@ function publicRoutes(home: React.ReactNode = <LandingPage />, withCatalog = tru
 }
 
 /**
- * A signed-in visitor hitting /login?redirect=… goes back where they were
- * heading instead of being dropped on their role dashboard.
+ * A signed-in visitor hitting /login?redirect=… or /register?redirect=… goes
+ * back where they were heading instead of being dropped on their role
+ * dashboard. This also catches the auth forms themselves: once login() /
+ * register() set the user, this route renders before their own navigate().
  */
 function LoggedInLoginRedirect() {
   const [searchParams] = useSearchParams();
@@ -287,7 +289,7 @@ function AppRoutes() {
       <Route element={<DashboardLayout />}>
         {/* Already signed in — respect ?redirect= before falling back. */}
         <Route path={ROUTES.login} element={<LoggedInLoginRedirect />} />
-        <Route path={ROUTES.register} element={<Navigate to={landing} replace />} />
+        <Route path={ROUTES.register} element={<LoggedInLoginRedirect />} />
         <Route path={ROUTES.forgotPassword} element={<ForgotPasswordPage />} />
         <Route path={ROUTES.resetPassword} element={<ResetPasswordPage />} />
 

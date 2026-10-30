@@ -15,6 +15,7 @@ import { getAiError, type AiError } from '@/services/studentAi.service';
 import {
   MATERIAL_ACCEPT,
   MATERIAL_MAX_BYTES,
+  MATERIAL_MAX_FILES,
   MATERIAL_QUESTIONS,
   errorStatus,
   fileSha256,
@@ -28,6 +29,7 @@ import { AiErrorAlert } from './aiUi';
 import { formatDate } from './studentUi';
 
 const DEFAULT_POLL_MS = 2000;
+const FILE_LIMIT_MESSAGE = `You already have ${MATERIAL_MAX_FILES} files. Delete one in My Materials to upload a new file — files you uploaded before can still be used.`;
 const EXTENSIONS = MATERIAL_ACCEPT.split(',');
 
 /** Value of the "+ Upload new file" entry in the material dropdown. */
@@ -49,7 +51,8 @@ function formatSize(bytes: number) {
  * Material to Quiz Creator — upload a PDF / DOCX (MQ-01) or pick one uploaded before (MQ-02),
  * let the AI write the multiple-choice questions (MQ-03, polled with MQ-04), then start the quiz
  * (MQ-05) on the take-exam screen. Generated quizzes are listed in Exam History (MQ-06).
- * A job keeps running on the BE when the modal closes; it shows up again on My Materials.
+ * The modal cannot be closed while the file uploads or the quiz is being generated. A file uploaded before
+ * is reused silently (lookup by SHA-256).
  * `initialCourseId` / `initialDocumentId` preselect a material (the "Generate quiz" button of My Materials).
  */
 export function MaterialQuizModal({
@@ -84,8 +87,8 @@ export function MaterialQuizModal({
   const [materialsReload, setMaterialsReload] = useState(0);
   /** The BE links one material to several courses (see studentMaterial.service). */
   const [linked, setLinked] = useState(false);
-  /** Shown when a picked file turned out to be a material uploaded before. */
-  const [notice, setNotice] = useState<string | null>(null);
+  /** The picked file turned out to be a material uploaded before (reused silently, no "will also be added" hint). */
+  const [reused, setReused] = useState(false);
   const [checkingFile, setCheckingFile] = useState(false);
   /** Latest picked file; a hash check for an older pick is dropped. */
   const pickedFile = useRef<File | null>(null);
@@ -116,7 +119,7 @@ export function MaterialQuizModal({
     setFile(null);
     setFileError(null);
     setTitle('');
-    setNotice(null);
+    setReused(false);
     setCheckingFile(false);
     pickedFile.current = null;
     setDocumentId(preset === initialCourseId ? initialDocumentId : null);
@@ -185,6 +188,10 @@ export function MaterialQuizModal({
     poll(jobId);
   };
 
+  // MATERIAL_MAX_FILES per account: a new file is refused once the list is full; a file uploaded before
+  // (found by the hash check) is reused and does not count.
+  const atFileLimit = !loadingMaterials && !materialsError && materials.length >= MATERIAL_MAX_FILES;
+
   const pickFile = (f: File | undefined | null) => {
     if (!f) return;
     const ext = f.name.slice(f.name.lastIndexOf('.')).toLowerCase();
@@ -197,7 +204,7 @@ export function MaterialQuizModal({
       return;
     }
     setFileError(null);
-    setNotice(null);
+    setReused(false);
     setFile(f);
     pickedFile.current = f;
     checkDuplicate(f);
@@ -209,18 +216,20 @@ export function MaterialQuizModal({
     try {
       const hash = await fileSha256(f);
       const found = hash ? await materialService.lookup(hash) : null;
-      if (!found || pickedFile.current !== f) return;
+      if (pickedFile.current !== f) return;
+      if (!found) {
+        if (atFileLimit) {
+          pickedFile.current = null;
+          setFile(null);
+          setFileError(FILE_LIMIT_MESSAGE);
+        }
+        return;
+      }
       pickedFile.current = null;
       setFile(null);
       setTitle('');
       setDocumentId(found.documentId);
-      const courseTitle = courses.find(c => String(c.courseId) === courseId)?.title;
-      const attached = found.courses.some(c => String(c.courseId) === courseId);
-      setNotice(
-        `You uploaded this file before as "${found.title}", so it is reused instead of being uploaded again.${
-          attached || !courseTitle ? '' : ` It will also be added to ${courseTitle}.`
-        }`,
-      );
+      setReused(true);
       if (!materials.some(m => m.documentId === found.documentId)) setMaterialsReload(r => r + 1);
     } finally {
       if (pickedFile.current === f || pickedFile.current === null) setCheckingFile(false);
@@ -231,7 +240,7 @@ export function MaterialQuizModal({
 
   const changeCourse = (value: string) => {
     setCourseId(value);
-    setNotice(null);
+    setReused(false);
     // A material can only be added to another course when the BE links materials to several courses.
     if (!linked) setDocumentId(null);
   };
@@ -264,6 +273,10 @@ export function MaterialQuizModal({
   const generate = async () => {
     setTouched(true);
     if (invalid || checkingFile) return;
+    if (documentId == null && file && atFileLimit) {
+      setFileError(FILE_LIMIT_MESSAGE);
+      return;
+    }
     setBusy(true);
     setError(null);
     let docId = documentId;
@@ -271,7 +284,7 @@ export function MaterialQuizModal({
       if (docId == null && file) {
         const uploaded = await materialService.upload(file, Number(courseId), title);
         docId = uploaded.documentId;
-        if (uploaded.duplicate) setNotice(`You uploaded this file before as "${uploaded.title}", so it was reused.`);
+        if (uploaded.duplicate) setReused(true);
         // A retry after this point reuses the uploaded material instead of uploading again.
         setFile(null);
         setTitle('');
@@ -373,13 +386,16 @@ export function MaterialQuizModal({
         Try again
       </Button>
     ) : (
-      <Button variant="outline" onClick={onClose}>
-        Close
+      <Button variant="outline" loading disabled>
+        Generating…
       </Button>
     );
 
+  // No closing while the file uploads, the quiz is being generated or the quiz is starting.
+  const locked = busy || starting || phase === 'processing';
+
   return (
-    <Modal open={open} onClose={() => !busy && !starting && onClose()} title="Material to Quiz Creator" size="lg" footer={footer}>
+    <Modal open={open} onClose={onClose} dismissible={!locked} title="Material to Quiz Creator" size="lg" footer={footer}>
       <div className="space-y-5">
         {phase === 'form' && (
           <>
@@ -406,7 +422,7 @@ export function MaterialQuizModal({
                     value={documentId == null ? UPLOAD_NEW : String(documentId)}
                     onChange={v => {
                       setDocumentId(v === UPLOAD_NEW ? null : Number(v));
-                      setNotice(null);
+                      setReused(false);
                     }}
                     disabled={loadingMaterials}
                     maxVisibleOptions={8}
@@ -420,13 +436,13 @@ export function MaterialQuizModal({
                     </div>
                   )}
 
-                  {notice && <Alert type="info" message={notice} />}
-                  {!notice && needsAttach && (
+                  {!reused && needsAttach && (
                     <p className="text-xs text-content-subtle">
                       This material will also be added to {courses.find(c => String(c.courseId) === courseId)?.title}.
                     </p>
                   )}
                   {checkingFile && <p className="text-xs text-content-subtle">Checking whether you uploaded this file before…</p>}
+                  {documentId == null && atFileLimit && !fileError && <Alert type="warning" message={FILE_LIMIT_MESSAGE} />}
                   {documentId == null ? (
                     <>
                       <div
@@ -469,7 +485,9 @@ export function MaterialQuizModal({
                           <>
                             <Icon.Upload className="w-6 h-6 mx-auto text-content-subtle" />
                             <p className="mt-2 text-sm text-content-secondary">Drag &amp; Drop PDF or DOCX</p>
-                            <p className="text-xs text-content-subtle">Up to {formatSize(MATERIAL_MAX_BYTES)}</p>
+                            <p className="text-xs text-content-subtle">
+                              Up to {formatSize(MATERIAL_MAX_BYTES)} · {Math.min(materials.length, MATERIAL_MAX_FILES)}/{MATERIAL_MAX_FILES} files used
+                            </p>
                             <Button size="sm" variant="outline" className="mt-3" onClick={() => fileInput.current?.click()}>
                               Browse File
                             </Button>
@@ -571,7 +589,7 @@ export function MaterialQuizModal({
                 {job.status === 'PENDING' ? 'Queued…' : 'Reading the material and writing questions…'}
               </p>
               <p className="text-xs text-content-subtle">
-                {job.questionCount} questions · You can close this window — the quiz keeps generating and shows up on My Materials.
+                {job.questionCount} questions · Please keep this window open until the quiz is ready.
               </p>
             </div>
             <div className="w-full max-w-sm">

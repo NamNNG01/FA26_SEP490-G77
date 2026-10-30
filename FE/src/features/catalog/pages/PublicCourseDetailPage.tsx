@@ -1,5 +1,5 @@
-import { useEffect, useState, type ReactNode } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { Icon } from '@/assets/icons';
 import { ROUTES, coursePath, studentCoursePath } from '@/app/routes';
 import { Container } from '@/features/landing/components/Container';
@@ -9,7 +9,7 @@ import { CTAButton } from '@/features/landing/components/CTAButton';
 import { useAuth } from '@/auth/authContext';
 import { Role } from '@/utils/permissions';
 import { getApiErrorMessage } from '@/utils/apiError';
-import { useRequireAuth } from '@/hooks/useRequireAuth';
+import { registerPathFor } from '@/hooks/useRequireAuth';
 import { studentCourseService, type CourseModuleSummary, type StudentCourseDetail } from '@/services/studentCourse.service';
 import { CourseCatalogCard } from '../components/CourseCatalogCard';
 import { CourseLogo, formatPrice } from '../components/CourseLogo';
@@ -25,7 +25,8 @@ import { PaymentCheckoutModal, type PaymentItem } from '@/features/payment/compo
  * link, search result and "View Course" button.
  *
  * Actions:
- *  - guest                 → sign in, then come back here;
+ *  - guest                 → create an account (or sign in from there), then come back here with
+ *                            `?checkout=1`, which resumes the purchase as if "Buy course" was clicked;
  *  - enrolled student      → open the course in My Courses;
  *  - student, any course   → EN-03 first; already enrolled opens the course;
  *  - student, free course  → EN-02 enroll, then open the course;
@@ -37,7 +38,7 @@ import { PaymentCheckoutModal, type PaymentItem } from '@/features/payment/compo
 export function PublicCourseDetailPage() {
   const { courseId = '' } = useParams<{ courseId: string }>();
   const navigate = useNavigate();
-  const requireAuth = useRequireAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { isAuthenticated, user } = useAuth();
 
   const [course, setCourse] = useState<StudentCourseDetail | null>(null);
@@ -73,6 +74,25 @@ export function PublicCourseDetailPage() {
       cancelled = true;
     };
   }, [courseId, reload]);
+
+  // Back from sign-up / sign-in with `?checkout=1`: resume the purchase once, then drop the flag
+  // so a refresh does not reopen the checkout.
+  const wantsCheckout = searchParams.get(CHECKOUT_PARAM) === '1';
+  const checkoutResumed = useRef(false);
+  useEffect(() => {
+    if (!wantsCheckout || loading || !course || checkoutResumed.current) return;
+    checkoutResumed.current = true;
+    setSearchParams(
+      (params) => {
+        params.delete(CHECKOUT_PARAM);
+        return params;
+      },
+      { replace: true },
+    );
+    if (user?.role === Role.STUDENT && !course.enrollment?.isEnrolled) void handleJoin();
+    // handleJoin reads the course loaded above; the ref keeps this to a single run.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wantsCheckout, loading, course, user]);
 
   if (loading) return <DetailSkeleton />;
 
@@ -225,8 +245,8 @@ export function PublicCourseDetailPage() {
               <div className="mt-4 space-y-2">
                 {!isAuthenticated ? (
                   <CTAButton
-                    label="Sign in to enroll"
-                    onClick={() => requireAuth(coursePath(course.courseId))}
+                    label={isFree ? 'Enroll for free' : 'Buy course'}
+                    onClick={() => navigate(registerPathFor(`${coursePath(course.courseId)}?${CHECKOUT_PARAM}=1`))}
                     className="w-full"
                     withArrow
                   />
@@ -260,7 +280,7 @@ export function PublicCourseDetailPage() {
                 {!isAuthenticated && (
                   <li className="flex items-start gap-2 text-xs leading-relaxed text-content-soft">
                     <Icon.Lock className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-content-subtle" />
-                    A free account is required to practise — you’ll come straight back to this course after signing in.
+                    Create a free account (or sign in) first — you’ll come straight back here to finish enrolling.
                   </li>
                 )}
                 <li className="flex items-start gap-2 text-xs leading-relaxed text-content-soft">
@@ -299,6 +319,9 @@ export function PublicCourseDetailPage() {
     </>
   );
 }
+
+/** Query flag of a purchase started as a guest: `/courses/12?checkout=1`. */
+const CHECKOUT_PARAM = 'checkout';
 
 /** A module with at least one exam or flashcard deck. Without the counts (an older BE) it is kept. */
 function hasContent(m: CourseModuleSummary): boolean {

@@ -3,14 +3,19 @@ import { Icon } from '@/assets/icons';
 
 const FOCUSABLE_SELECTOR = 'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-export function Modal({ open, isOpen, onClose, title, children, footer, size = 'md' }: {
+/**
+ * `dismissible={false}` hides the close button and ignores Escape / backdrop clicks — for a step
+ * that must finish first (an upload, a running job).
+ */
+export function Modal({ open, isOpen, onClose, title, children, footer, size = 'md', dismissible = true }: {
   open?: boolean; isOpen?: boolean; onClose: () => void; title?: string; children: React.ReactNode;
-  footer?: React.ReactNode; size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | 'full' | 'screen';
+  footer?: React.ReactNode; size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | 'full' | 'screen'; dismissible?: boolean;
 }) {
   const isVisible = Boolean(open ?? isOpen);
   const panelRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
+  // Read at call time, so toggling `dismissible` needs no re-subscription.
+  onCloseRef.current = dismissible ? onClose : () => {};
 
   useEffect(() => {
     if (!isVisible) return;
@@ -52,12 +57,12 @@ export function Modal({ open, isOpen, onClose, title, children, footer, size = '
   const widths = { sm: 'max-w-sm', md: 'max-w-md', lg: 'max-w-2xl', xl: 'max-w-4xl', '2xl': 'max-w-6xl', full: 'max-w-[85vw] h-[85vh]', screen: 'max-w-[90vw] h-[90vh]' };
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" onClick={() => onCloseRef.current()} />
       <div ref={panelRef} role="dialog" aria-modal="true" className={`relative min-w-0 bg-surface rounded-[14px] shadow-xl w-full ${widths[size]} flex flex-col max-h-[90vh]`}>
         {title && (
           <div className="flex items-center justify-between gap-4 px-6 py-4 border-b border-line-soft">
             <h3 className="min-w-0 text-lg font-semibold text-content">{title}</h3>
-            <button onClick={onClose} className="text-content-subtle hover:text-content-secondary transition-colors"><Icon.X className="w-5 h-5" /></button>
+            {dismissible && <button onClick={onClose} aria-label="Close" className="text-content-subtle hover:text-content-secondary transition-colors"><Icon.X className="w-5 h-5" /></button>}
           </div>
         )}
         <div className="min-w-0 px-6 py-4 overflow-y-auto flex-1 min-h-0">{children}</div>
