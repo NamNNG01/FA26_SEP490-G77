@@ -50,10 +50,7 @@ export interface StudentCourseCard {
 export type StudentCourseItem = StudentCourseCard;
 export type StudentCoursePage = PageResponse<StudentCourseCard>;
 
-/**
- * CL-02 module. `description`, `examCount` and `deckCount` are not sent by the BE yet
- * (docs/notes/course-detail-module-summary-be-gap.md) — absent until it does.
- */
+/** CL-02 module. The summary fields are optional so an older BE (without them) still renders. */
 export interface CourseModuleSummary {
   moduleId: number;
   title: string;
