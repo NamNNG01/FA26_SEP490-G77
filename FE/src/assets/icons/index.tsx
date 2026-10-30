@@ -650,6 +650,18 @@ export const Icon = {
       <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
     </svg>
   ),
+  Play: (p: React.SVGProps<SVGSVGElement>) => (
+    <svg
+      {...p}
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      stroke="currentColor"
+      strokeWidth={1.75}
+      strokeLinejoin="round"
+    >
+      <polygon points="6 4 20 12 6 20 6 4" />
+    </svg>
+  ),
   Scan: (p: React.SVGProps<SVGSVGElement>) => (
     <svg
       {...p}
