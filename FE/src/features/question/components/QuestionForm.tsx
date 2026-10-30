@@ -20,6 +20,7 @@ import {
 } from "../model";
 import type { QuestionDifficulty } from "@/services/question.service";
 import { DiagramAnswer } from "./DiagramAnswer";
+import { CodeAnswer } from "./CodeAnswer";
 
 const MAX_OPTIONS = 10;
 
@@ -353,6 +354,8 @@ export function AnswerSection({
     }
     case "ESSAY":
       return <RubricAnswers q={q} set={set} error={error} />;
+    case "CODE":
+      return <CodeAnswer q={q} set={set} error={error} />;
   }
 }
 
