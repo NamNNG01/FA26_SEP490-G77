@@ -11,7 +11,15 @@ import { Icon } from '@/assets/icons';
 import { ROUTES, studentCoursePath, studentResumeAttemptPath } from '@/app/routes';
 import { getApiErrorMessage } from '@/utils/apiError';
 import { studentCourseService, type MyCourse } from '@/services/studentCourse.service';
-import { isJobRunning, materialService, type MaterialItem, type MaterialJobBrief } from '@/services/studentMaterial.service';
+import { Modal } from '@/components/ui/Modal';
+import {
+  MATERIAL_MAX_FILES,
+  errorStatus,
+  isJobRunning,
+  materialService,
+  type MaterialItem,
+  type MaterialJobBrief,
+} from '@/services/studentMaterial.service';
 import { ListSkeleton, LoadError, PageTitle, STUDENT_PAGE_CLASS, formatDate } from '../components/studentUi';
 import { MaterialQuizModal } from '../components/MaterialQuizModal';
 
@@ -28,11 +36,25 @@ const JOB_BADGE: Record<MaterialJobBrief['status'], { variant: 'info' | 'success
   FAILED: { variant: 'danger', label: 'Failed' },
 };
 
+/** The quizzes modal shows this many quiz rows, then scrolls. */
+const QUIZ_ROWS_VISIBLE = 5;
+/** Height of one quiz row in the modal. */
+const QUIZ_ROW_REM = 4;
+
+/** Row button of a material — e.g. "3 quizzes", "1 quiz · generating". */
+function quizCountLabel(row: MaterialItem): string {
+  const count = row.jobs.length;
+  const label = count === 0 ? 'No quizzes' : `${count} quiz${count === 1 ? '' : 'zes'}`;
+  return row.jobs.some(j => isJobRunning(j.status)) ? `${label} · generating` : label;
+}
+
 /**
  * My Materials — files the student uploaded for the Material to Quiz Creator (MQ-02), the courses
  * each one is attached to and the quizzes generated from it. One file is one material, whatever the
  * number of courses (see materialService.listWithCourses for the current BE). "Generate quiz" opens
- * the creator with the material picked; a ready quiz starts with MQ-05. The list refreshes itself while a quiz is being generated.
+ * the creator with the material picked. The quizzes of a file are not listed inline: the file name (or its quiz
+ * count) opens a modal with them, where a ready quiz starts with MQ-05. The list refreshes itself while a quiz is being generated.
+ * An account keeps up to MATERIAL_MAX_FILES files; "Delete" removes one from every course (not while a quiz is being generated).
  */
 export function MyMaterialsPage() {
   const navigate = useNavigate();
@@ -49,6 +71,10 @@ export function MyMaterialsPage() {
 
   const [modal, setModal] = useState<{ courseId: number | null; documentId: number | null } | null>(null);
   const [startingJob, setStartingJob] = useState<number | null>(null);
+  /** Material whose quizzes are shown in the modal (read from `rows`, so refreshes update it). */
+  const [viewing, setViewing] = useState<number | null>(null);
+  const [deleting, setDeleting] = useState<MaterialItem | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
   const loadedOnce = useRef(false);
 
   useEffect(() => {
@@ -134,6 +160,30 @@ export function MyMaterialsPage() {
     setReload(r => r + 1);
   };
 
+  const viewingRow = viewing == null ? null : (rows.find(r => r.documentId === viewing) ?? null);
+
+  const confirmDelete = async () => {
+    if (!deleting) return;
+    setDeleteBusy(true);
+    try {
+      await materialService.remove(deleting.documentId);
+      toast.success(`Deleted "${deleting.title}"`);
+    } catch (err) {
+      const status = errorStatus(err);
+      if (status === 404) toast.success(`"${deleting.title}" was already deleted`);
+      else
+        toast.error(
+          status === 409
+            ? 'A quiz is being generated from this material. Delete it once the quiz is ready.'
+            : getApiErrorMessage(err, 'Failed to delete the material.'),
+        );
+    } finally {
+      setDeleteBusy(false);
+      setDeleting(null);
+      setReload(r => r + 1);
+    }
+  };
+
   const uploadButton = (
     <Button
       icon={<Icon.Upload className="w-4 h-4" />}
@@ -148,7 +198,9 @@ export function MyMaterialsPage() {
     <div className={`${STUDENT_PAGE_CLASS} space-y-[clamp(1.25rem,2.5vw,1.75rem)]`}>
       <PageTitle
         title="My Materials"
-        subtitle="Lecture notes and slides you uploaded, and the quizzes the AI generated from them."
+        subtitle={`Lecture notes and slides you uploaded, and the quizzes the AI generated from them.${
+          loading || error ? '' : ` ${Math.min(rows.length, MATERIAL_MAX_FILES)}/${MATERIAL_MAX_FILES} files used.`
+        }`}
         action={!loading && !error ? uploadButton : undefined}
       />
 
@@ -225,13 +277,19 @@ export function MyMaterialsPage() {
         <div className="card overflow-hidden">
           <ul className="divide-y divide-line">
             {pageItems.map(row => (
-              <li key={row.documentId} className="px-[clamp(0.875rem,1.5vw,1.25rem)] py-4 space-y-3">
+              <li key={row.documentId} className="px-[clamp(0.875rem,1.5vw,1.25rem)] py-4">
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
                   <div className="w-9 h-9 rounded-[10px] bg-primary-light flex items-center justify-center flex-shrink-0">
                     <Icon.FileText className="w-4.5 h-4.5 text-primary" />
                   </div>
                   <div className="flex-1 min-w-[12rem]">
-                    <p className="text-sm font-semibold text-content break-words">{row.title}</p>
+                    <button
+                      type="button"
+                      onClick={() => setViewing(row.documentId)}
+                      className="text-left text-sm font-semibold text-content break-words hover:text-brand-ink hover:underline"
+                    >
+                      {row.title}
+                    </button>
                     {(row.courses ?? []).length > 0 && (
                       <div className="flex flex-wrap gap-1.5 my-1">
                         {(row.courses ?? []).map(c => (
@@ -258,6 +316,9 @@ export function MyMaterialsPage() {
                       <span>Uploaded {formatDate(row.uploadedAt)}</span>
                     </p>
                   </div>
+                  <Button size="sm" variant="outline" icon={<Icon.ClipboardList className="w-4 h-4" />} onClick={() => setViewing(row.documentId)}>
+                    {quizCountLabel(row)}
+                  </Button>
                   <Button
                     size="sm"
                     icon={<Icon.Zap className="w-4 h-4" />}
@@ -265,35 +326,16 @@ export function MyMaterialsPage() {
                   >
                     Generate quiz
                   </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    icon={<Icon.Trash className="w-4 h-4" />}
+                    aria-label={`Delete ${row.title}`}
+                    title={row.jobs.some(j => isJobRunning(j.status)) ? 'A quiz is being generated from this material' : 'Delete material'}
+                    disabled={row.jobs.some(j => isJobRunning(j.status))}
+                    onClick={() => setDeleting(row)}
+                  />
                 </div>
-
-                {row.jobs.length > 0 && (
-                  <ul aria-label={`Quizzes from ${row.title}`} className="flex flex-wrap gap-2 sm:pl-13">
-                    {row.jobs.map(job => (
-                      <li
-                        key={job.jobId}
-                        className="flex items-center gap-2 rounded-[10px] border border-line bg-surface-alt px-3 py-1.5 text-xs text-content-secondary"
-                      >
-                        {jobCourse(row, job) && <span className="font-medium text-content">{jobCourse(row, job)}</span>}
-                        <span>{job.questionCount} questions</span>
-                        <Badge variant={JOB_BADGE[job.status].variant} size="sm">
-                          {JOB_BADGE[job.status].label}
-                        </Badge>
-                        {job.status === 'COMPLETED' && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            loading={startingJob === job.jobId}
-                            disabled={startingJob != null}
-                            onClick={() => startQuiz(job.jobId)}
-                          >
-                            Start
-                          </Button>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                )}
               </li>
             ))}
           </ul>
@@ -310,6 +352,104 @@ export function MyMaterialsPage() {
         initialCourseId={modal?.courseId ?? null}
         initialDocumentId={modal?.documentId ?? null}
       />
+
+      <Modal
+        open={viewingRow != null}
+        onClose={() => setViewing(null)}
+        title={viewingRow ? `Quizzes from ${viewingRow.title}` : undefined}
+        size="lg"
+        footer={
+          viewingRow && (
+            <>
+              <Button variant="outline" onClick={() => setViewing(null)}>
+                Close
+              </Button>
+              <Button
+                icon={<Icon.Zap className="w-4 h-4" />}
+                onClick={() => {
+                  setViewing(null);
+                  setModal({ courseId: courseForQuiz(viewingRow), documentId: viewingRow.documentId });
+                }}
+              >
+                Generate quiz
+              </Button>
+            </>
+          )
+        }
+      >
+        {viewingRow &&
+          (viewingRow.jobs.length === 0 ? (
+            <EmptyState
+              icon={<Icon.ClipboardList className="w-7 h-7" />}
+              title="No quizzes yet"
+              message="Generate a quiz and the AI writes multiple-choice questions from this file."
+            />
+          ) : (
+            // Rows are a fixed QUIZ_ROW_REM tall (+ 1px divider), so the list shows QUIZ_ROWS_VISIBLE and scrolls past that.
+            <ul
+              className="divide-y divide-line overflow-y-auto overscroll-contain rounded-[12px] border border-line"
+              style={{ maxHeight: `calc(${QUIZ_ROWS_VISIBLE * QUIZ_ROW_REM}rem + ${QUIZ_ROWS_VISIBLE}px)` }}
+            >
+              {viewingRow.jobs.map((job, i) => (
+                <li
+                  key={job.jobId}
+                  className="flex items-center gap-3 px-4"
+                  style={{ height: `${QUIZ_ROW_REM}rem` }}
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-content">Quiz {viewingRow.jobs.length - i}</p>
+                    <p className="truncate text-xs text-content-subtle">
+                      {job.questionCount} questions
+                      {jobCourse(viewingRow, job) && <> · {jobCourse(viewingRow, job)}</>}
+                    </p>
+                  </div>
+                  <Badge variant={JOB_BADGE[job.status].variant} size="sm">
+                    {JOB_BADGE[job.status].label}
+                  </Badge>
+                  {job.status === 'COMPLETED' && (
+                    <Button
+                      size="sm"
+                      loading={startingJob === job.jobId}
+                      disabled={startingJob != null}
+                      icon={<Icon.ChevronRight className="w-4 h-4" />}
+                      onClick={() => startQuiz(job.jobId)}
+                    >
+                      Start
+                    </Button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          ))}
+      </Modal>
+
+      <Modal
+        open={deleting != null}
+        onClose={() => !deleteBusy && setDeleting(null)}
+        title="Delete material?"
+        size="sm"
+        footer={
+          <>
+            <Button variant="outline" disabled={deleteBusy} onClick={() => setDeleting(null)}>
+              Cancel
+            </Button>
+            <Button variant="danger" loading={deleteBusy} onClick={confirmDelete}>
+              Delete
+            </Button>
+          </>
+        }
+      >
+        {deleting && (
+          <div className="space-y-2 text-sm text-content-secondary">
+            <p>
+              <span className="font-semibold text-content">{deleting.title}</span> will be removed
+              {(deleting.courses ?? []).length > 1 ? ` from all ${(deleting.courses ?? []).length} courses it is in` : ''}, and the
+              quizzes generated from it leave your material quiz list.
+            </p>
+            <p className="text-content-soft">This cannot be undone.</p>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

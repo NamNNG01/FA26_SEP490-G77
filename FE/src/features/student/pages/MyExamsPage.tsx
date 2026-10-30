@@ -22,11 +22,9 @@ import { getApiErrorMessage } from '@/utils/apiError';
 import { studentCourseService } from '@/services/studentCourse.service';
 import { studentPracticeExamService } from '@/services/studentPracticeExam.service';
 import { materialService } from '@/services/studentMaterial.service';
-import { ListSkeleton, LoadError, PageTitle, STUDENT_PAGE_CLASS, formatDate, formatScore } from '../components/studentUi';
+import { ListSkeleton, LoadError, PageTitle, STUDENT_PAGE_CLASS, formatScore } from '../components/studentUi';
 const PAGE_SIZE = 10;
 const ALL = '';
-/** Practice exams are scored out of 10 (PracticeExamService.createGeneratedExam). */
-const PRACTICE_MAX_SCORE = 10;
 
 /** Exam.mode of a row (ME-01 `mode`). */
 type ExamKind = 'EXAM' | 'PRACTICE' | 'SMART_PRACTICE' | 'MATERIAL_QUIZ' | 'CONTEST';
@@ -69,8 +67,6 @@ interface HistoryRow {
   jobId: number | null;
   /** Material the quiz was generated from. */
   documentTitle: string | null;
-  /** Set for rows not taken yet (from PQ-02 / MQ-06): they sort by it. */
-  createdAt: string | null;
   /** Has a CODE question (ME-01 only). */
   hasCode?: boolean;
   /** Its course was left (EN-04): listed, but neither its attempts nor a retake open. */
@@ -103,8 +99,7 @@ function sortRows(list: HistoryRow[], sort: SortKey): HistoryRow[] {
 
 /**
  * ME-01 lists every exam with an attempt (course exams, practice, smart practice, material quizzes),
- * newest attempt first. PQ-02 and MQ-06 add what only they know (practiceId / jobId) and the
- * practice exams and material quizzes not taken yet — those go on top, newest first.
+ * newest attempt first. PQ-02 and MQ-06 add what only they know (practiceId / jobId).
  */
 async function loadHistory(): Promise<HistoryRow[]> {
   const [exams, practices, materials, myCourses] = await Promise.all([
@@ -136,51 +131,17 @@ async function loadHistory(): Promise<HistoryRow[]> {
       practiceId: practice?.practiceId ?? null,
       jobId: material?.jobId ?? null,
       documentTitle: material?.documentTitle ?? null,
-      createdAt: null,
       hasCode: e.hasCodeQuestions === true,
       courseLeft: e.courseId != null && leftCourses.has(e.courseId),
     };
   });
-  const takenIds = new Set(exams.map(e => e.examId));
-  const untaken: HistoryRow[] = [
-    ...practices
-      .filter(p => !takenIds.has(p.examId))
-      .map(p => ({
-        examId: p.examId,
-        title: p.title,
-        kind: 'PRACTICE' as const,
-        courseId: null,
-        courseTitle: null,
-        maxScore: PRACTICE_MAX_SCORE,
-        attemptCount: p.attemptCount ?? 0,
-        bestScore: p.bestScore,
-        practiceId: p.practiceId,
-        jobId: null,
-        documentTitle: null,
-        createdAt: p.createdAt,
-      })),
-    ...materials
-      .filter(m => m.quizId != null && !takenIds.has(m.quizId))
-      .map(m => ({
-        examId: m.quizId as number,
-        title: m.documentTitle,
-        kind: 'MATERIAL_QUIZ' as const,
-        courseId: null,
-        courseTitle: null,
-        maxScore: null,
-        attemptCount: m.attemptCount,
-        bestScore: m.bestScore,
-        practiceId: null,
-        jobId: m.jobId,
-        documentTitle: m.documentTitle,
-        createdAt: m.createdAt,
-      })),
-  ].sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''));
-  return [...untaken, ...taken];
+  // Only exams taken at least once: a practice exam or material quiz that was generated but never
+  // started stays out (material quizzes are still listed on My Materials).
+  return taken.filter(r => r.attemptCount > 0);
 }
 
 /**
- * Exam History — every exam the student has taken or generated: course exams (ME-01), practice
+ * Exam History — every exam the student has taken at least once: course exams (ME-01), practice
  * exams (PQ-02), smart practice (AI-01) and quizzes generated from a material (MQ-06), with a
  * type filter. Lists are loaded whole and searched, filtered and sorted here.
  * `?type=PRACTICE` (etc.) preselects the type filter.
@@ -370,12 +331,11 @@ export function MyExamsPage() {
                 </Badge>
               )}
             </div>
-            {(row.documentTitle && row.documentTitle !== row.title) || row.createdAt ? (
+            {row.documentTitle && row.documentTitle !== row.title && (
               <p className="flex gap-x-3 text-xs text-content-subtle truncate">
-                {row.documentTitle && row.documentTitle !== row.title && <span className="truncate">From {row.documentTitle}</span>}
-                {row.createdAt && <span className="whitespace-nowrap">Created {formatDate(row.createdAt)}</span>}
+                <span className="truncate">From {row.documentTitle}</span>
               </p>
-            ) : null}
+            )}
           </div>
         );
       },
