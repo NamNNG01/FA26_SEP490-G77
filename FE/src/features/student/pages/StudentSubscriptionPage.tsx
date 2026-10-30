@@ -3,7 +3,6 @@ import { useAuth } from '@/auth/authContext';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Switch } from '@/components/ui/Switch';
-import { Skeleton } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/ToastHost';
 import { Icon } from '@/assets/icons';
 import { getApiErrorMessage } from '@/utils/apiError';
@@ -103,28 +102,8 @@ function CurrentPlanCard({ loaded, subscription }: { loaded: boolean; subscripti
     }
   }
 
-  if (!loaded) {
-    return (
-      <div className="card p-5 space-y-3">
-        <Skeleton className="h-5 w-40" />
-        <Skeleton className="h-4 w-64" />
-      </div>
-    );
-  }
-
-  if (!subscription) {
-    return (
-      <div className="card p-5 flex items-center gap-4">
-        <div className="w-10 h-10 rounded-[10px] bg-surface-muted flex items-center justify-center shrink-0">
-          <Icon.Package className="w-5 h-5 text-content-soft" />
-        </div>
-        <div className="min-w-0">
-          <p className="font-semibold text-content">No active plan</p>
-          <p className="text-sm text-content-soft">You are using the free features. Pick a plan below to unlock more.</p>
-        </div>
-      </div>
-    );
-  }
+  // Without an ACTIVE plan the plan grid says it all (no placeholder either, so nothing flashes).
+  if (!loaded || !subscription) return null;
 
   const totalDays = Math.max(1, Math.ceil((Date.parse(subscription.expiresAt) - Date.parse(subscription.startedAt)) / 86_400_000));
   const left = Math.max(0, subscription.daysRemaining);
