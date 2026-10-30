@@ -14,6 +14,7 @@ import type { PageResponse } from './course.service';
  *   GET /api/v1/student/courses/{courseId}/decks    (MC-03) — ACTIVE enrollment only
  *   GET /api/v1/student/decks/{deckId}/cards        (MC-04)
  *   GET /api/v1/student/my-exams                    (ME-01) — exams the student has attempted
+ *   POST /api/v1/student/courses/{courseId}/enroll  (EN-02) — free courses only (paid: PY-01, payment.service)
  */
 
 export interface CategoryRef {
@@ -49,6 +50,18 @@ export interface StudentCourseCard {
 export type StudentCourseItem = StudentCourseCard;
 export type StudentCoursePage = PageResponse<StudentCourseCard>;
 
+/** CL-02 module. The summary fields are optional so an older BE (without them) still renders. */
+export interface CourseModuleSummary {
+  moduleId: number;
+  title: string;
+  orderIndex: number;
+  description?: string | null;
+  /** Published exams of the module. */
+  examCount?: number;
+  /** Flashcard decks of the module. */
+  deckCount?: number;
+}
+
 /** CL-02 CourseDetailDto */
 export interface StudentCourseDetail {
   courseId: number;
@@ -59,7 +72,7 @@ export interface StudentCourseDetail {
   price: number | null;
   category: CategoryRef | null;
   manager: ManagerRef | null;
-  modules: { moduleId: number; title: string; orderIndex: number }[];
+  modules: CourseModuleSummary[];
   stats: { publishedExamCount: number; deckCount: number };
   isEnrolled?: boolean;
   publishedExamCount?: number;
@@ -237,5 +250,13 @@ export const studentCourseService = {
       exams.push(...res.content);
       if (res.last || res.content.length === 0) return exams;
     }
+  },
+
+  /** EN-02 — 400 COURSE_NOT_FREE for a paid course, 409 already enrolled. */
+  async enrollFree(courseId: number): Promise<{ courseId: number; status: EnrollmentStatus; enrolledAt: string }> {
+    const res = await api.post<ApiResponse<{ courseId: number; status: EnrollmentStatus; enrolledAt: string }>>(
+      `/student/courses/${courseId}/enroll`,
+    );
+    return res.data;
   },
 };

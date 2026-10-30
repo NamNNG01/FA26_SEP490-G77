@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { Icon } from '@/assets/icons';
 import { ROUTES, coursePath, studentCoursePath } from '@/app/routes';
@@ -10,10 +10,13 @@ import { useAuth } from '@/auth/authContext';
 import { Role } from '@/utils/permissions';
 import { getApiErrorMessage } from '@/utils/apiError';
 import { useRequireAuth } from '@/hooks/useRequireAuth';
-import { studentCourseService, type StudentCourseDetail } from '@/services/studentCourse.service';
+import { studentCourseService, type CourseModuleSummary, type StudentCourseDetail } from '@/services/studentCourse.service';
 import { CourseCatalogCard } from '../components/CourseCatalogCard';
 import { CourseLogo, formatPrice } from '../components/CourseLogo';
 import { useCatalogCourses } from '../hooks/usePublicCatalog';
+import { Button } from '@/components/ui/Button';
+import { useToast } from '@/components/ui/ToastHost';
+import { PaymentCheckoutModal, type PaymentItem } from '@/features/payment/components/PaymentCheckoutModal';
 
 /**
  * PublicCourseDetailPage  (/courses/:courseId)
@@ -22,9 +25,11 @@ import { useCatalogCourses } from '../hooks/usePublicCatalog';
  * link, search result and "View Course" button.
  *
  * Actions:
- *  - guest                → sign in, then come back here;
- *  - enrolled student     → open the course in My Courses;
- *  - anyone else          → enrollment is not available yet (no API).
+ *  - guest                 → sign in, then come back here;
+ *  - enrolled student      → open the course in My Courses;
+ *  - student, free course  → EN-02 enroll, then open the course;
+ *  - student, paid course  → PaymentCheckoutModal (PY-01 + PayOS), access once PY-04 says SUCCEEDED;
+ *  - other roles           → enrollment is for students.
  * PrepExam is a preparation platform, so the page never promises a certificate.
  */
 export function PublicCourseDetailPage() {
@@ -37,10 +42,15 @@ export function PublicCourseDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
+  const [reload, setReload] = useState(0);
+  const [buying, setBuying] = useState<PaymentItem | null>(null);
+  const [enrolling, setEnrolling] = useState(false);
+  const toast = useToast();
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
+    // A refresh after a purchase keeps the page on screen.
+    if (reload === 0) setLoading(true);
     setError(null);
     setNotFound(false);
     studentCourseService
@@ -60,7 +70,7 @@ export function PublicCourseDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [courseId]);
+  }, [courseId, reload]);
 
   if (loading) return <DetailSkeleton />;
 
@@ -82,89 +92,108 @@ export function PublicCourseDetailPage() {
   }
 
   const price = formatPrice(course.price);
+  const isFree = !Number(course.price ?? 0);
   const enrollment = course.enrollment;
   const isStudent = user?.role === Role.STUDENT;
-  const modules = [...course.modules].sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
+
+  /** PY-04 said SUCCEEDED: the webhook has enrolled the student — refresh CL-02 for "Go to course". */
+  function handlePaid(item: PaymentItem) {
+    toast.success(`You are enrolled in ${item.title}`);
+    setReload((r) => r + 1);
+  }
+
+  /** EN-02 — a free course is joined right away. */
+  async function handleEnrollFree() {
+    if (!course) return;
+    setEnrolling(true);
+    try {
+      await studentCourseService.enrollFree(course.courseId);
+      toast.success(`You are enrolled in ${course.title}`);
+      navigate(studentCoursePath(course.courseId));
+    } catch (err) {
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      if (status === 409) navigate(studentCoursePath(course.courseId));
+      else toast.error(getApiErrorMessage(err, 'Could not enroll in the course.'));
+    } finally {
+      setEnrolling(false);
+    }
+  }
+  // Empty modules (no exam, no flashcard deck) are neither listed nor counted.
+  const modules = course.modules
+    .filter(hasContent)
+    .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
+  // A signed-in student sees this page inside the dashboard shell, which owns the gutter and the gap
+  // under the header (.dashboard-content) — so no hero strip and no Container padding there.
+  const inDashboard = isStudent;
 
   const stats = [
-    { value: String(course.stats.publishedExamCount), label: 'Mock Exams', icon: <Icon.ClipboardList className="h-4 w-4" /> },
-    { value: String(course.stats.deckCount), label: 'Flashcard Decks', icon: <Icon.Layers className="h-4 w-4" /> },
-    { value: String(modules.length), label: 'Modules', icon: <Icon.Folder className="h-4 w-4" /> },
+    { label: plural(course.stats.publishedExamCount, 'mock exam'), icon: <Icon.ClipboardList className="h-3.5 w-3.5" /> },
+    { label: plural(course.stats.deckCount, 'flashcard deck'), icon: <Icon.Layers className="h-3.5 w-3.5" /> },
+    { label: plural(modules.length, 'module'), icon: <Icon.Folder className="h-3.5 w-3.5" /> },
   ];
 
-  return (
+  const header = (
     <>
-      {/* Hero strip — course identity */}
-      <div className="border-b border-line-soft bg-surface-alt">
-        <Container className="py-[clamp(1.75rem,4vw,2.75rem)]">
-          <Breadcrumb
-            items={[
-              { label: 'Home', onClick: () => navigate(ROUTES.landing) },
-              { label: 'Courses', onClick: () => navigate(ROUTES.courses) },
-              { label: course.title },
-            ]}
-          />
+      <Breadcrumb
+        items={[
+          { label: 'Home', onClick: () => navigate(ROUTES.landing) },
+          { label: 'Courses', onClick: () => navigate(ROUTES.courses) },
+          { label: course.title },
+        ]}
+      />
 
-          <div className="mt-5 flex flex-col gap-5 sm:flex-row sm:items-start">
-            <CourseLogo title={course.title} thumbnailUrl={course.thumbnailUrl} size={56} className="rounded-[14px]" />
+      <div className="mt-4 flex flex-col gap-5 sm:flex-row sm:items-start">
+        <CourseLogo title={course.title} thumbnailUrl={course.thumbnailUrl} size={56} className="rounded-[14px]" />
 
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2.5">
-                <h1 className="text-[clamp(1.375rem,1.1rem+1.2vw,1.75rem)] font-bold tracking-tight text-content">
-                  {course.title}
-                </h1>
-                {enrollment?.isEnrolled && <Badge variant="success">Enrolled</Badge>}
-              </div>
-              <p className="mt-1.5 text-base text-content-soft">
-                {course.category?.name ?? 'Uncategorized'}
-                {course.manager && <> · by {course.manager.fullName}</>}
-              </p>
-              {course.description && (
-                <p className="mt-3 max-w-[min(46rem,100%)] text-lg leading-relaxed whitespace-pre-line text-content-secondary">
-                  {course.description}
-                </p>
-              )}
-            </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <h1 className="text-[clamp(1.375rem,1.1rem+1.2vw,1.75rem)] font-bold tracking-tight text-content">
+              {course.title}
+            </h1>
+            {enrollment?.isEnrolled && <Badge variant="success">Enrolled</Badge>}
           </div>
-        </Container>
+          <p className="mt-1.5 text-base text-content-soft">
+            {course.category?.name ?? 'Uncategorized'}
+            {course.manager && <> · by {course.manager.fullName}</>}
+          </p>
+          <ul className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-content-subtle">
+            {stats.map((stat) => (
+              <li key={stat.label} className="inline-flex items-center gap-1.5">
+                <span className="text-brand-ink">{stat.icon}</span>
+                {stat.label}
+              </li>
+            ))}
+          </ul>
+          {course.description && (
+            <p className="mt-3 max-w-[min(46rem,100%)] text-base leading-relaxed whitespace-pre-line text-content-secondary">
+              {course.description}
+            </p>
+          )}
+        </div>
       </div>
+    </>
+  );
 
-      <Container className="py-[clamp(2rem,4vw,3rem)]">
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(320px,1fr))] gap-[clamp(1.5rem,3vw,2.5rem)]">
-          {/* Main column */}
-          <div className="min-w-0">
-            <div className="grid grid-cols-3 gap-3">
-              {stats.map((stat) => (
-                <div key={stat.label} className="card p-4">
-                  <span className="text-brand-ink">{stat.icon}</span>
-                  <p className="mt-2 text-xl leading-none font-bold text-content">{stat.value}</p>
-                  <p className="mt-1.5 text-2xs leading-snug text-content-subtle">{stat.label}</p>
-                </div>
-              ))}
-            </div>
+  const body = (
+    <>
+      <div className="grid grid-cols-1 gap-[clamp(1.5rem,3vw,2.5rem)] lg:grid-cols-[minmax(0,7fr)_minmax(0,3fr)]">
+          {/* Main column — 70 % */}
+          <section className="min-w-0">
+            <h2 className="text-lg font-bold text-content">Course modules</h2>
+            {modules.length > 0 ? (
+              <ol className="mt-3 card divide-y divide-line overflow-hidden">
+                {modules.map((m, i) => (
+                  <ModuleRow key={m.moduleId} module={m} index={i + 1} />
+                ))}
+              </ol>
+            ) : (
+              <p className="mt-3 text-base text-content-soft">Modules are being prepared.</p>
+            )}
+          </section>
 
-            <section className="mt-[clamp(1.5rem,3vw,2rem)]">
-              <h2 className="text-lg font-bold text-content">Course modules</h2>
-              {modules.length > 0 ? (
-                <ol className="mt-3 card divide-y divide-line">
-                  {modules.map((m, i) => (
-                    <li key={m.moduleId} className="flex items-center gap-3 px-4 py-3">
-                      <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-surface-muted text-xs font-semibold text-content-secondary">
-                        {i + 1}
-                      </span>
-                      <span className="text-base text-content-secondary">{m.title}</span>
-                    </li>
-                  ))}
-                </ol>
-              ) : (
-                <p className="mt-3 text-base text-content-soft">Modules are being prepared.</p>
-              )}
-            </section>
-          </div>
-
-          {/* Action sidebar */}
+          {/* Action sidebar — 30 % */}
           <aside className="min-w-0">
-            <div className="card sticky top-24 p-5">
+            <div className="card sticky top-6 p-5">
               <p className={`text-xl font-bold ${price === 'Free' ? 'text-success' : 'text-brand-ink'}`}>{price}</p>
 
               <div className="mt-4 space-y-2">
@@ -182,13 +211,21 @@ export function PublicCourseDetailPage() {
                     className="w-full"
                     withArrow
                   />
+                ) : isStudent && isFree ? (
+                  <Button size="lg" className="w-full" loading={enrolling} onClick={handleEnrollFree}>
+                    Enroll for free
+                  </Button>
+                ) : isStudent ? (
+                  <Button size="lg" className="w-full" onClick={() => setBuying(coursePaymentItem(course))}>
+                    Buy course
+                  </Button>
                 ) : (
                   <button
                     type="button"
                     disabled
                     className="inline-flex h-11 w-full cursor-not-allowed items-center justify-center rounded-[10px] bg-surface-muted px-4 text-sm font-semibold text-content-subtle"
                   >
-                    {isStudent ? 'Enrollment coming soon' : 'Enrollment is for students'}
+                    Enrollment is for students
                   </button>
                 )}
               </div>
@@ -208,14 +245,99 @@ export function PublicCourseDetailPage() {
               </ul>
             </div>
           </aside>
-        </div>
+      </div>
 
-        {course.category?.categoryId != null && (
-          <RelatedCourses categoryId={course.category.categoryId} categoryName={course.category.name} excludeId={course.courseId} />
-        )}
-      </Container>
+      {course.category?.categoryId != null && (
+        <RelatedCourses categoryId={course.category.categoryId} categoryName={course.category.name} excludeId={course.courseId} />
+      )}
     </>
   );
+
+  return (
+    <>
+      {inDashboard ? (
+        <div>
+          <div className="border-b border-line-soft pb-[clamp(1.25rem,2.5vw,1.75rem)]">{header}</div>
+          <div className="pt-[clamp(1.25rem,2.5vw,1.75rem)]">{body}</div>
+        </div>
+      ) : (
+        <>
+          {/* Hero strip — course identity */}
+          <div className="border-b border-line-soft bg-surface-alt">
+            <Container className="py-[clamp(1.75rem,4vw,2.75rem)]">{header}</Container>
+          </div>
+          <Container className="py-[clamp(2rem,4vw,3rem)]">{body}</Container>
+        </>
+      )}
+      <PaymentCheckoutModal item={buying} onClose={() => setBuying(null)} onPaid={handlePaid} />
+    </>
+  );
+}
+
+/** A module with at least one exam or flashcard deck. Without the counts (an older BE) it is kept. */
+function hasContent(m: CourseModuleSummary): boolean {
+  if (m.examCount == null && m.deckCount == null) return true;
+  return (m.examCount ?? 0) + (m.deckCount ?? 0) > 0;
+}
+
+function plural(count: number, noun: string): string {
+  return `${count} ${noun}${count === 1 ? '' : 's'}`;
+}
+
+/** One module — expands to its description and its exam / flashcard deck counts. */
+function ModuleRow({ module, index }: { module: CourseModuleSummary; index: number }) {
+  const [open, setOpen] = useState(false);
+  const panelId = `module-${module.moduleId}`;
+  const counts = [
+    module.examCount != null && { icon: <Icon.ClipboardList className="h-4 w-4" />, label: plural(module.examCount, 'mock exam') },
+    module.deckCount != null && { icon: <Icon.Layers className="h-4 w-4" />, label: plural(module.deckCount, 'flashcard deck') },
+  ].filter(Boolean) as { icon: ReactNode; label: string }[];
+
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        aria-controls={panelId}
+        className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-surface-hover"
+      >
+        <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-surface-muted text-xs font-semibold text-content-secondary">
+          {index}
+        </span>
+        <span className="min-w-0 flex-1 text-base font-medium text-content-secondary">{module.title}</span>
+        <Icon.ChevronDown className={`h-4 w-4 flex-shrink-0 text-content-subtle transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div id={panelId} className="space-y-3 px-4 pb-4 pl-14">
+          <p className="text-sm leading-relaxed whitespace-pre-line text-content-soft">
+            {module.description?.trim() || 'No description for this module yet.'}
+          </p>
+          {counts.length > 0 && (
+            <ul className="flex flex-wrap gap-x-5 gap-y-1 text-sm text-content-secondary">
+              {counts.map((c) => (
+                <li key={c.label} className="inline-flex items-center gap-1.5">
+                  <span className="text-brand-ink">{c.icon}</span>
+                  {c.label}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </li>
+  );
+}
+
+function coursePaymentItem(course: StudentCourseDetail): PaymentItem {
+  return {
+    target: { courseId: course.courseId },
+    type: 'COURSE',
+    refId: course.courseId,
+    title: course.title,
+    subtitle: course.category?.name,
+    price: Number(course.price ?? 0),
+  };
 }
 
 /** Up to three other courses of the same category (CL-01). */

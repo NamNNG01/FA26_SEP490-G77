@@ -33,6 +33,7 @@ public class DeckServiceImpl implements DeckService {
     private final CourseRepository courses;
     private final CourseManagerRepository assignments;
     private final UserRepository users;
+    private final ModuleRepository modules;
 
     @Override
     public PageResponse<DeckResponse> list(UserPrincipal user, String search, Long courseId, Boolean isPublic, int page, int size) {
@@ -65,7 +66,8 @@ public class DeckServiceImpl implements DeckService {
         User owner = users.findById(user.getId()).orElseThrow(() -> new ResourceNotFoundException("User not found."));
         String title = request.title().strip();
         assertTitleAvailable(course, owner.getUserId(), title, -1L);
-        Deck deck = decks.saveAndFlush(Deck.builder().user(owner).course(course).title(title)
+        com.examprep.entities.Module module = request.moduleId() == null ? null : courseModule(course, request.moduleId());
+        Deck deck = decks.saveAndFlush(Deck.builder().user(owner).course(course).module(module).title(title)
                 .description(optionalText(request.description())).isPublic(request.isPublic()).build());
         return response(deck, 0, List.of());
     }
@@ -87,6 +89,12 @@ public class DeckServiceImpl implements DeckService {
         if (request.description() != null) deck.setDescription(optionalText(request.description()));
         if (request.isPublic() != null) deck.setIsPublic(request.isPublic());
         if (destination != null) deck.setCourse(destination);
+        if (request.moduleId() != null) {
+            deck.setModule(request.moduleId() == 0 ? null : courseModule(effectiveCourse, request.moduleId()));
+        } else if (courseChanged && deck.getModule() != null) {
+            // The module belonged to the previous course.
+            deck.setModule(null);
+        }
         decks.flush();
         return detailResponse(deck);
     }
@@ -162,6 +170,16 @@ public class DeckServiceImpl implements DeckService {
         return course;
     }
 
+    /** A module of the deck's course — 400 for a deck without course or a module of another course. */
+    private com.examprep.entities.Module courseModule(Course course, Long moduleId) {
+        if (course == null) throw new BadRequestException("A module can only be set on a course deck.");
+        com.examprep.entities.Module module = modules.findById(moduleId)
+                .orElseThrow(() -> new ResourceNotFoundException("Module not found."));
+        if (!module.getCourse().getCourseId().equals(course.getCourseId()))
+            throw new BadRequestException("The module does not belong to the deck's course.");
+        return module;
+    }
+
     private void checkAccess(UserPrincipal user, Deck deck) {
         if (admin(user)) return;
         if (deck.getCourse() != null) checkCourseAccess(user, deck.getCourse());
@@ -190,7 +208,9 @@ public class DeckServiceImpl implements DeckService {
         Course course = deck.getCourse();
         return new DeckResponse(deck.getDeckId(), deck.getTitle(), course == null ? null : course.getCourseId(),
                 course == null ? null : course.getTitle(), deck.getUser().getUserId(), deck.getUser().getFullName(),
-                deck.getIsPublic(), count, content == null ? null : deck.getDescription(), content);
+                deck.getIsPublic(), count, content == null ? null : deck.getDescription(), content,
+                deck.getModule() == null ? null : deck.getModule().getModuleId(),
+                deck.getModule() == null ? null : deck.getModule().getTitle());
     }
 
     private boolean admin(UserPrincipal user) { return User.ROLE_ADMIN.equals(user.getRole()); }

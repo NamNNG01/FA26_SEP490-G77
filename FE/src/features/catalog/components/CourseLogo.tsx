@@ -49,9 +49,9 @@ export function CourseLogo({
   );
 }
 
-/** "Free" for 0 / missing, otherwise "$49" / "$49.50". */
+/** "Free" for 0 / missing, otherwise VND — the amount PayOS charges, e.g. "99.000 ₫". */
 export function formatPrice(price: number | null | undefined): string {
   const value = Number(price ?? 0);
   if (!value) return 'Free';
-  return `$${value.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+  return `${value.toLocaleString('vi-VN', { maximumFractionDigits: 0 })} ₫`;
 }

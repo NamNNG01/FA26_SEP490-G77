@@ -4,10 +4,18 @@ import { Icon } from '@/assets/icons';
 import { Container } from '@/features/landing/components/Container';
 import { studentCourseService, type StudentCourseItem, type StudentCoursePage } from '@/services/studentCourse.service';
 import { useDebounce } from '@/hooks';
+import { formatPrice } from '@/features/catalog/components/CourseLogo';
+import { useAuth } from '@/auth/authContext';
+import { Role } from '@/utils/permissions';
 
 const PAGE_SIZE = 9;
 
 export function StudentCourseCatalog() {
+  // A signed-in student sees the catalog inside the dashboard shell, which owns the gutter and the gap
+  // under the header (.dashboard-content) — no full-bleed hero and no Container padding there.
+  const { user } = useAuth();
+  const inDashboard = user?.role === Role.STUDENT;
+  const Shell = inDashboard ? Plain : Container;
   const navigate = useNavigate();
   const [page, setPage] = useState<StudentCoursePage | null>(null);
   const [keyword, setKeyword] = useState('');
@@ -45,8 +53,8 @@ export function StudentCourseCatalog() {
 
   return (
     <>
-      <section className="overflow-hidden border-b border-line-soft bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-primary-light via-surface-alt to-surface-alt">
-        <Container className="py-8 sm:py-10">
+      <section className={inDashboard ? 'border-b border-line-soft pb-6' : 'overflow-hidden border-b border-line-soft bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-primary-light via-surface-alt to-surface-alt'}>
+        <Shell className={inDashboard ? '' : 'py-8 sm:py-10'}>
           <p className="text-sm font-semibold text-brand-ink">Find your next learning path</p>
           <h1 className="mt-2 max-w-2xl text-3xl font-bold tracking-tight text-content sm:text-4xl">Learn at your own pace</h1>
           <p className="mt-3 max-w-xl text-base leading-relaxed text-content-soft">Explore courses, build your knowledge, and get ready for the exams that matter to you.</p>
@@ -61,10 +69,10 @@ export function StudentCourseCatalog() {
               <option value="title">Course name</option>
             </select>
           </div>
-        </Container>
+        </Shell>
       </section>
 
-      <Container className="py-5 sm:py-7">
+      <Shell className={inDashboard ? 'pt-6' : 'py-5 sm:py-7'}>
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-xl font-bold text-content">Explore courses</h2>
@@ -100,13 +108,18 @@ export function StudentCourseCatalog() {
             <button type="button" onClick={resetFilters} className="mt-5 rounded-lg px-4 py-2 text-sm font-semibold text-brand-ink hover:bg-primary-light">Clear filters</button>
           </div>
         )}
-      </Container>
+      </Shell>
     </>
   );
 }
 
+/** Container stand-in inside the dashboard shell. */
+function Plain({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+  return <div className={className}>{children}</div>;
+}
+
 function CatalogCourseCard({ course, onOpen }: { course: StudentCourseItem; onOpen: () => void }) {
-  const price = course.price === null ? 'Price unavailable' : course.price === 0 ? 'Free' : new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(course.price);
+  const price = course.price === null ? 'Price unavailable' : formatPrice(course.price);
   return (
     <article className="group flex min-h-64 flex-col overflow-hidden rounded-2xl border border-line-soft bg-surface shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
       <div className="relative h-36 overflow-hidden bg-gradient-to-br from-brand-100 via-primary-light to-surface-alt">

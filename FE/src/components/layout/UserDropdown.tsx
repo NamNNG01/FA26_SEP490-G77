@@ -6,6 +6,7 @@ import { ROUTES } from '@/app/routes';
 import { Avatar } from '@/components/ui/Avatar';
 import { Icon } from '@/assets/icons';
 import { Role, roleLabel } from '@/utils/permissions';
+import { useCurrentSubscription } from '@/services/studentSubscription.service';
 
 /**
  * UserDropdown
@@ -14,6 +15,7 @@ import { Role, roleLabel } from '@/utils/permissions';
  *   - Profile → students use the header-based student profile route; managers
  *               and admins use the dashboard profile route.
  *   - Students also get quick links to Learning Activity and Question Notebook.
+ *   - Under the name: a student's ACTIVE plan (SB-02, 'Free' without one); the role for others.
  *   - Theme   → INSTANTLY toggles to the next registered theme via
  *               useTheme().toggleTheme() — cycles dynamically through all
  *               themes registered in ThemeProvider (no hardcoded names).
@@ -34,6 +36,8 @@ export function UserDropdown({ avatarOnly = false }: { avatarOnly?: boolean }) {
   const { resolved, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
+  const isStudent = user?.role === Role.STUDENT;
+  const subscription = useCurrentSubscription(isStudent ? user?.userId ?? null : null);
 
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -123,7 +127,9 @@ export function UserDropdown({ avatarOnly = false }: { avatarOnly?: boolean }) {
               {user.fullName}
             </p>
             <p className="text-2xs leading-tight text-muted-foreground">
-              {roleLabel(user.role)}
+              {isStudent
+                ? subscription.loaded ? subscription.data?.planName ?? 'Free' : ' '
+                : roleLabel(user.role)}
             </p>
           </div>
         )}

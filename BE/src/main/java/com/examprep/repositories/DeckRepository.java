@@ -15,7 +15,7 @@ import java.util.Optional;
 
 @Repository
 public interface DeckRepository extends JpaRepository<Deck, Long> {
-    @EntityGraph(attributePaths = {"course", "user"})
+    @EntityGraph(attributePaths = {"course", "user", "module"})
     @Query("SELECT d FROM Deck d LEFT JOIN d.course c WHERE (:managerId IS NULL " +
             "OR (c IS NULL AND d.user.userId = :managerId) " +
             "OR c.manager.userId = :managerId " +
@@ -50,7 +50,7 @@ public interface DeckRepository extends JpaRepository<Deck, Long> {
             "AND (:courseId IS NULL OR c.courseId = :courseId) AND (:mode = '' OR d.mode = :mode) " +
             "AND LOWER(d.title) LIKE :search ESCAPE '!'";
 
-    @EntityGraph(attributePaths = {"course", "user"})
+    @EntityGraph(attributePaths = {"course", "user", "module"})
     @Query("SELECT d FROM Deck d WHERE d.deckId = :id")
     Optional<Deck> findDetail(@Param("id") Long id);
 
@@ -77,5 +77,12 @@ public interface DeckRepository extends JpaRepository<Deck, Long> {
             // Students' own decks attached to the course stay private (FC-01, spec 9.6).
             "AND (d.user.roleName <> 'STUDENT' OR d.user.userId = :userId OR d.visibility = 'PUBLIC')")
     List<com.examprep.dto.student.DeckDto> findCourseDecksWithStats(@Param("courseId") Long courseId, @Param("userId") Long userId);
+
+    /** [moduleId, deck count] of the course decks this user can see (same rule as above) — CL-02 module summary. */
+    @Query("SELECT new com.examprep.dto.IdCount(d.module.moduleId, COUNT(d)) " +
+            "FROM Deck d WHERE d.course.courseId = :courseId AND d.module IS NOT NULL " +
+            "AND (d.user.roleName <> 'STUDENT' OR d.user.userId = :userId OR d.visibility = 'PUBLIC') " +
+            "GROUP BY d.module.moduleId")
+    List<com.examprep.dto.IdCount> countCourseDecksByModule(@Param("courseId") Long courseId, @Param("userId") Long userId);
 }
 

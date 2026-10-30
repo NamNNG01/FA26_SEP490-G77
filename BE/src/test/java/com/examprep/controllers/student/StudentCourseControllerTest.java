@@ -64,7 +64,7 @@ class StudentCourseControllerTest {
         CourseDetailDto detail = new CourseDetailDto(
                 1L, "Java Basics", "java-basics", "Desc", "https://...", BigDecimal.ZERO,
                 new CategoryRefDto(1L, "Programming"), new ManagerRefDto(2L, "Manager A"),
-                List.of(new ModuleItemDto(10L, "Module 1", 1)),
+                List.of(new ModuleItemDto(10L, "Module 1", 1, "Intro", 2L, 1L)),
                 new CourseStatsDto(3L, 2L),
                 new EnrollmentSummaryDto(false, null, null)
         );
