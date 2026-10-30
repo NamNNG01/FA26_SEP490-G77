@@ -6,6 +6,7 @@ import { useAuth, landingPathForRole } from "@/auth/authContext";
 import { Role } from "@/utils/permissions";
 import { CourseSearchBar } from "@/features/catalog";
 import { UserDropdown } from "@/components/layout/UserDropdown";
+import { NotificationBell } from "@/components/layout/NotificationBell";
 import { Container } from "./Container";
 
 /**
@@ -112,6 +113,7 @@ export function PublicNavbar() {
                     My learning
                     <Icon.ChevronRight className="h-4 w-4" />
                   </button>
+                  <NotificationBell />
                   <UserDropdown avatarOnly />
                 </>
               ) : (
@@ -195,7 +197,10 @@ export function PublicNavbar() {
                     >
                       My learning
                     </button>
-                    <UserDropdown avatarOnly />
+                    <div className="flex items-center gap-1">
+                      <NotificationBell />
+                      <UserDropdown avatarOnly />
+                    </div>
                   </div>
                 ) : (
                   <button

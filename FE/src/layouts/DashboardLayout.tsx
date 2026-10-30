@@ -6,6 +6,7 @@ import { Role } from '@/utils/permissions';
 import { CourseSearchBar } from '@/features/catalog';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { UserDropdown } from '@/components/layout/UserDropdown';
+import { NotificationBell } from '@/components/layout/NotificationBell';
 import { Icon } from '@/assets/icons';
 
 /**
@@ -15,7 +16,7 @@ import { Icon } from '@/assets/icons';
  * while <Outlet /> swaps the page content, so sidebar state (collapse) and
  * scroll position survive navigation.
  *
- * Header layout: [Logo → role dashboard] [course search — STUDENT only] ... [Home · Courses — STUDENT only] [UserDropdown].
+ * Header layout: [Logo → role dashboard] [course search — STUDENT only] ... [Home · Courses — STUDENT only] [NotificationBell — STUDENT only] [UserDropdown].
  * The user menu (Profile / Theme / Logout) lives in UserDropdown; there is
  * no standalone Logout button anymore.
  */
@@ -79,6 +80,7 @@ export function DashboardLayout() {
           </nav>
         )}
         <div className="flex items-center gap-2 ml-1 pl-3 border-l border-line-soft">
+          <NotificationBell />
           <UserDropdown />
         </div>
       </header>

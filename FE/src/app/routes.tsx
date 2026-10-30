@@ -49,6 +49,8 @@ export const ROUTES = {
   studentDiscussionDetail: '/student/discussions/:discussionId',
   studentContributions: '/student/contributions',
   studentContributionDetail: '/student/contributions/:contributionId',
+  /** Inbox (NT-01..NT-03); the header bell opens the newest few. */
+  studentNotifications: '/student/notifications',
   /** Route pattern — render with studentExamPath(id). */
   studentExamDetail: '/student/exams/:examId',
   studentFlashcards: '/student/flashcards',
