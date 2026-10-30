@@ -10,6 +10,8 @@ import type { AnswerResponse, AttemptQuestion, ResultQuestion } from './studentA
  *   POST   /api/v1/student/practice-exams                (PQ-01) — 201, random PUBLISHED questions of the course
  *   GET    /api/v1/student/practice-exams?page=&size=     (PQ-02)
  *   DELETE /api/v1/student/practice-exams/{practiceId}    (PQ-03) — attempts already taken are kept
+ *   GET    /api/v1/student/attempts/{attemptId}/wrong-questions (PQ-04) — wrong answers of a SUBMITTED /
+ *          COMPLETED attempt as they were shown, without any key; 403 not mine, 409 ATTEMPT_NOT_SUBMITTED
  *
  * Errors of PQ-01: 400 out-of-range values, 403 not enrolled, 422 NOT_ENOUGH_QUESTIONS (data.available).
  * "Category" in these bodies is a module of the course.
@@ -151,6 +153,17 @@ export function checkParts(
   return { correct, total, outcome: correct === total ? 'correct' : correct > 0 ? 'partial' : 'wrong' };
 }
 
+/** PQ-04 item: the question as the student saw it (no key, no answer). */
+interface WrongQuestionItem {
+  questionId: number;
+  orderIndex: number | null;
+  questionType: AttemptQuestion['questionType'];
+  content: string | null;
+  options?: { optionId: number; optionText: string }[] | null;
+  matching?: AttemptQuestion['matching'];
+  answerSpace?: AttemptQuestion['answerSpace'];
+}
+
 type ErrorBody = { message?: string; data?: { code?: string; available?: number } | null };
 
 /** Readable PQ-01 error, with the bank size on NOT_ENOUGH_QUESTIONS. */
@@ -241,6 +254,21 @@ export const studentPracticeExamService = {
   /** PQ-03 */
   async remove(practiceId: number): Promise<void> {
     await api.request<ApiResponse<null>>({ method: 'delete', url: `/student/practice-exams/${practiceId}` });
+  },
+
+  /** PQ-04, as answerable questions. */
+  async getWrongQuestions(attemptId: number | string): Promise<AttemptQuestion[]> {
+    const res = await api.get<ApiResponse<WrongQuestionItem[]>>(`/student/attempts/${attemptId}/wrong-questions`);
+    return res.data.map(q => ({
+      questionId: q.questionId,
+      orderIndex: q.orderIndex ?? 0,
+      questionType: q.questionType,
+      content: q.content ?? '',
+      options: q.options ? q.options.map(o => ({ optionId: o.optionId, optionText: o.optionText, isCorrectAnswer: null })) : null,
+      matching: q.matching ?? null,
+      maxPoints: null,
+      answerSpace: q.answerSpace ?? null,
+    }));
   },
 
   /**

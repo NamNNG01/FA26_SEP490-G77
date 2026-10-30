@@ -20,14 +20,13 @@ import {
 import {
   CHECKABLE_TYPES,
   INSTANT_CHECK_TYPES,
-  blankKeys,
   checkParts,
   studentPracticeExamService,
   type AnswerCheck,
   type CheckOutcome,
 } from '@/services/studentPracticeExam.service';
-import type { AttemptQuestion } from '@/services/studentAttempt.service';
 import { QUESTION_TYPE_LABEL, QuestionAnswerInput, QuestionText, isAnswered } from '../components/QuestionAnswerInput';
+import { PracticeCheck, checkProgress } from '../components/PracticeCheck';
 import { studentCodeExamService, type CodeLanguageInfo, type CodeQuestion } from '@/services/studentCodeExam.service';
 import { CodeQuestionWorkspace, currentCodeAnswer } from '../components/code/CodeQuestionWorkspace';
 
@@ -586,7 +585,6 @@ export function StudentTakeExamPage() {
               <PracticeCheck
                 key={q.questionId}
                 question={q}
-                response={answers[q.questionId]}
                 check={check}
                 checking={checking === q.questionId}
                 progress={progress}
@@ -778,184 +776,6 @@ function countOutcome(results: Map<number, CheckOutcome>, outcome: CheckOutcome)
     if (o === outcome) n++;
   });
   return n;
-}
-
-interface CheckProgress {
-  /** Text of the check button: says how far the answer is. */
-  label: string;
-  /** The answer is complete enough to be checked. */
-  ready: boolean;
-  /** Why it can't be checked yet. */
-  hint: string | null;
-}
-
-/** Practice: what the check button of a question says, and whether it can be pressed. */
-function checkProgress(q: AttemptQuestion, response: AnswerResponse | null | undefined): CheckProgress {
-  switch (q.questionType) {
-    case 'MULTIPLE_CHOICE': {
-      const n = response?.selectedOptionIds?.length ?? 0;
-      return { label: 'Check answer', ready: n > 0, hint: n > 0 ? null : 'Pick every correct option, then check.' };
-    }
-    case 'MATCHING': {
-      const lefts = q.matching?.lefts ?? [];
-      const done = new Set((response?.matches ?? []).filter(m => m.right).map(m => m.left));
-      const n = lefts.filter(l => done.has(l)).length;
-      const ready = lefts.length > 0 && n === lefts.length;
-      return { label: `Check answer (${n}/${lefts.length} pairs)`, ready, hint: ready ? null : 'Match every item to check.' };
-    }
-    case 'FILL_BLANK': {
-      const keys = blankKeys(q);
-      const n = keys.filter(k => response?.blanks?.[k]?.trim()).length;
-      const ready = n === keys.length;
-      return {
-        label: keys.length > 1 ? `Check answer (${n}/${keys.length} blanks)` : 'Check answer',
-        ready,
-        hint: ready ? 'Press Enter in the last blank to check.' : keys.length > 1 ? 'Fill every blank to check.' : 'Type your answer to check.',
-      };
-    }
-    case 'ORDERING':
-      return { label: 'Lock in order', ready: true, hint: 'Put the items in order, then lock it in.' };
-    default:
-      return { label: 'Check answer', ready: isAnswered(response), hint: null };
-  }
-}
-
-const OUTCOME_TONE: Record<CheckOutcome, string> = {
-  correct: 'border-success-line bg-success-light text-success-strong',
-  partial: 'border-warning-line bg-warning-light text-warning-strong',
-  wrong: 'border-danger-line bg-danger-light text-danger-strong',
-};
-
-/** What the green marks mean, by question type. */
-const REVEAL_HINT: Record<string, string> = {
-  SINGLE_CHOICE: 'The correct answer is marked in green.',
-  TRUE_FALSE: 'The correct answer is marked in green.',
-  MULTIPLE_CHOICE: 'Correct options are green — a dashed one is a correct option you missed.',
-  MATCHING: 'Each wrong pair shows its correct match.',
-  ORDERING: 'Each item out of place shows where it belongs.',
-  FILL_BLANK: 'Each wrong blank shows the accepted answer.',
-};
-
-/**
- * Practice mode, below the answer: before the check, the check button (single choice /
- * true-false have none — the pick is the check); after it, the verdict, the explanation
- * (collapsed). The page's own "Next question" button goes on.
- */
-function PracticeCheck({
-  question,
-  response,
-  check,
-  checking,
-  progress,
-  checkable,
-  focusNext,
-  onCheck,
-}: {
-  question: AttemptQuestion;
-  response: AnswerResponse | null | undefined;
-  check: AnswerCheck | undefined;
-  checking: boolean;
-  progress: CheckProgress;
-  checkable: boolean;
-  /** Just checked: move the focus to the page's "Next question" so Enter goes on. */
-  focusNext: boolean;
-  onCheck: () => void;
-}) {
-  const [showExplanation, setShowExplanation] = useState(false);
-  useEffect(() => {
-    if (check && focusNext) document.querySelector<HTMLButtonElement>('[data-next-question]')?.focus({ preventScroll: true });
-  }, [check, focusNext]);
-
-  if (!check) {
-    if (!checkable) {
-      return <p className="text-xs text-content-subtle">The correct answer of this question type shows after you submit.</p>;
-    }
-    if (INSTANT_CHECK_TYPES.has(question.questionType)) {
-      return (
-        <p className="text-xs text-content-subtle">
-          {checking ? 'Checking…' : 'Pick an answer — it is checked right away and locked.'}
-          <span className="hidden md:inline"> Keys: 1–{Math.min(question.options?.length ?? 4, 9)} or A–{optionLetterOf(question)}.</span>
-        </p>
-      );
-    }
-    return (
-      <div className="flex flex-wrap items-center gap-3">
-        <Button
-          icon={<Icon.CheckCircle className="w-4 h-4" />}
-          loading={checking}
-          disabled={!progress.ready || checking}
-          onClick={onCheck}
-        >
-          {progress.label}
-        </Button>
-        <span className="text-xs text-content-subtle">
-          {progress.hint ?? 'Your answer is locked once checked.'}
-          {progress.ready && question.questionType !== 'FILL_BLANK' && <span className="hidden md:inline"> Press Enter to check.</span>}
-        </span>
-      </div>
-    );
-  }
-
-  if (!check.supported) {
-    return (
-      <div role="status" className="flex items-center gap-2 rounded-[10px] border border-line bg-surface px-4 py-3 text-sm font-medium text-content-soft">
-        <Icon.Info className="w-4 h-4 flex-shrink-0" /> Answer saved — the correct answer shows after you submit.
-      </div>
-    );
-  }
-
-  const { correct, total, outcome } = checkParts(question, response, check);
-  const score = total > 1 ? ` — ${correct} / ${total}` : '';
-  const title = outcome === 'correct' ? 'Correct!' : outcome === 'partial' ? `Partly correct${score}` : `Not quite${score}`;
-  const explanation = check.explanation?.trim();
-  const panelId = `explanation-${question.questionId}`;
-
-  return (
-    <div className={`rounded-[10px] border ${OUTCOME_TONE[outcome]}`}>
-      <div role="status" className="flex flex-wrap items-start gap-x-2 gap-y-1 px-4 pt-3">
-        {outcome === 'correct' ? (
-          <Icon.CheckCircle className="w-5 h-5 flex-shrink-0" />
-        ) : outcome === 'partial' ? (
-          <Icon.AlertCircle className="w-5 h-5 flex-shrink-0" />
-        ) : (
-          <Icon.XCircle className="w-5 h-5 flex-shrink-0" />
-        )}
-        <div className="flex-1 min-w-0">
-          <p className="text-base font-semibold">{title}</p>
-          {outcome !== 'correct' && <p className="text-sm opacity-90">{REVEAL_HINT[question.questionType]}</p>}
-        </div>
-        {check.demo && (
-          <Badge variant="warning" size="sm">
-            Demo
-          </Badge>
-        )}
-      </div>
-
-      <div className="mt-3 border-t border-line-soft">
-        <button
-          type="button"
-          aria-expanded={showExplanation}
-          aria-controls={panelId}
-          onClick={() => setShowExplanation(s => !s)}
-          className="w-full flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-content-secondary hover:bg-surface transition-colors"
-        >
-          <Icon.Lightbulb className="w-4 h-4 flex-shrink-0 text-warning" />
-          {showExplanation ? 'Hide explanation' : 'Show explanation'}
-          <Icon.ChevronDown className={`w-4 h-4 ml-auto transition-transform ${showExplanation ? 'rotate-180' : ''}`} />
-        </button>
-        {showExplanation && (
-          <div id={panelId} className="px-4 pb-3 text-sm leading-relaxed text-content-secondary whitespace-pre-line break-words">
-            {explanation || <span className="text-content-subtle">No explanation has been added to this question yet.</span>}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/** Last option letter of a choice question, for the shortcut hint. */
-function optionLetterOf(q: AttemptQuestion): string {
-  return String.fromCharCode(64 + Math.min(Math.max(q.options?.length ?? 1, 1), 26));
 }
 
 function FullScreenMessage({ children }: { children: React.ReactNode }) {
