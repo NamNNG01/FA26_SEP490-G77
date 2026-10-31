@@ -76,4 +76,12 @@ public final class AdminPlanDtos {
             Boolean isActive,
             Integer sortOrder
     ) {}
+
+    /** API 24 body: only the on/off flag; deactivating just hides the plan from the purchase screen. */
+    public record StatusUpdateRequest(@NotNull Boolean isActive) {}
+
+    public record StatusUpdateResponse(Long planId, Boolean isActive) {}
+
+    /** API 25 body: every non-deleted plan id, exactly once, in the new display order. */
+    public record ReorderRequest(@NotNull List<Long> orderedPlanIds) {}
 }

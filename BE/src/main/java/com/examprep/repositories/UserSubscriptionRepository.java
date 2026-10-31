@@ -35,4 +35,9 @@ public interface UserSubscriptionRepository extends JpaRepository<UserSubscripti
     // [planId, totalCount]
     @Query("SELECT s.plan.planId, COUNT(s) FROM UserSubscription s WHERE s.plan.planId IN :ids GROUP BY s.plan.planId")
     List<Object[]> countTotalByPlanIds(@Param("ids") Collection<Long> ids);
+
+    // API 26 delete guard: status-only on purpose (an expired-but-ACTIVE row still blocks, so the
+    // delete is conservative and never strands a subscription row flagged ACTIVE).
+    @Query("SELECT COUNT(s) FROM UserSubscription s WHERE s.plan.planId = :planId AND s.status = 'ACTIVE'")
+    long countActiveByPlan(@Param("planId") Long planId);
 }

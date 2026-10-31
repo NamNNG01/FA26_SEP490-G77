@@ -5,6 +5,9 @@ import com.examprep.dto.AdminPlanDtos.PlanDetail;
 import com.examprep.dto.AdminPlanDtos.PlanItem;
 import com.examprep.dto.AdminPlanDtos.PlanWriteRequest;
 import com.examprep.dto.AdminPlanDtos.PublicPlanItem;
+import com.examprep.dto.AdminPlanDtos.ReorderRequest;
+import com.examprep.dto.AdminPlanDtos.StatusUpdateRequest;
+import com.examprep.dto.AdminPlanDtos.StatusUpdateResponse;
 import com.examprep.dto.PageResponse;
 import com.examprep.dto.ResponseCode;
 import com.examprep.entities.SubscriptionPlan;
@@ -137,6 +140,69 @@ public class AdminSubscriptionPlanService {
 
         planRepository.save(plan);
         return detail(id);
+    }
+
+    // ------------------------------------------------------------------ status / reorder / delete (API 24, 25, 26)
+
+    /** API 24: deactivating only hides the plan from the purchase screen — no other side effects. */
+    public StatusUpdateResponse setStatus(Long id, StatusUpdateRequest req) {
+        SubscriptionPlan plan = planRepository.findAvailable(id)
+                .orElseThrow(() -> ContestRules.error(ResponseCode.RESOURCE_NOT_FOUND, "PLAN_NOT_FOUND", "Subscription plan not found"));
+
+        plan.setIsActive(req.isActive());
+        planRepository.save(plan);
+        return new StatusUpdateResponse(id, plan.getIsActive());
+    }
+
+    /**
+     * API 25: {@code orderedPlanIds} must list every non-deleted plan exactly once (no missing, no
+     * extra, no duplicates). Validation happens before any write, so a bad request leaves the DB
+     * untouched; a valid one assigns {@code sort_order = index}.
+     */
+    public List<PlanItem> reorder(ReorderRequest req) {
+        List<SubscriptionPlan> plans = planRepository.findAllAvailable();
+        Map<Long, SubscriptionPlan> byId = new LinkedHashMap<>();
+        for (SubscriptionPlan plan : plans) byId.put(plan.getPlanId(), plan);
+
+        List<Long> ordered = req.orderedPlanIds() == null ? List.of() : req.orderedPlanIds();
+        Set<Long> requested = new HashSet<>(ordered);
+        boolean complete = ordered.size() == plans.size()
+                && requested.size() == ordered.size()
+                && requested.equals(byId.keySet());
+        if (!complete) {
+            throw ContestRules.invalid("orderedPlanIds", "Phải truyền đủ toàn bộ gói chưa xoá");
+        }
+
+        List<SubscriptionPlan> reordered = new ArrayList<>(ordered.size());
+        for (int i = 0; i < ordered.size(); i++) {
+            SubscriptionPlan plan = byId.get(ordered.get(i));
+            plan.setSortOrder(i);
+            reordered.add(plan);
+        }
+        planRepository.saveAll(reordered);
+
+        Map<Long, Long> activeCounts = toCountMap(userSubscriptionRepository.countActiveByPlanIds(ordered, Instant.now()));
+        return reordered.stream()
+                .map(p -> toItem(p, readFeatures(p.getFeaturesJson()),
+                        activeCounts.getOrDefault(p.getPlanId(), 0L)))
+                .toList();
+    }
+
+    /**
+     * API 26: soft delete. Blocked while any subscription row is still flagged ACTIVE (window is
+     * irrelevant — conservative, so no ACTIVE row is ever stranded on a deleted plan).
+     */
+    public void delete(Long id) {
+        SubscriptionPlan plan = planRepository.findAvailable(id)
+                .orElseThrow(() -> ContestRules.error(ResponseCode.RESOURCE_NOT_FOUND, "PLAN_NOT_FOUND", "Subscription plan not found"));
+
+        if (userSubscriptionRepository.countActiveByPlan(id) > 0) {
+            throw ContestRules.error(ResponseCode.CONFLICT, "PLAN_HAS_ACTIVE_SUBSCRIBERS",
+                    "Plan still has active subscribers; deactivate it instead");
+        }
+
+        plan.setDeletedAt(Instant.now());
+        planRepository.save(plan);
     }
 
     // ------------------------------------------------------------------ mapping

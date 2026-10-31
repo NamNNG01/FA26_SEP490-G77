@@ -20,6 +20,10 @@ public interface SubscriptionPlanRepository extends JpaRepository<SubscriptionPl
     @Query("select p from SubscriptionPlan p where p.planId = :id and p.deletedAt is null")
     Optional<SubscriptionPlan> findAvailable(@Param("id") Long id);
 
+    /** API 25 reorder: every non-deleted plan, current display order first. */
+    @Query("SELECT p FROM SubscriptionPlan p WHERE p.deletedAt IS NULL ORDER BY p.sortOrder ASC, p.planId ASC")
+    List<SubscriptionPlan> findAllAvailable();
+
     /** API 20 admin list: optional case-insensitive name search + exact status, soft-deleted rows excluded. */
     @Query("SELECT p FROM SubscriptionPlan p WHERE p.deletedAt IS NULL " +
             "AND (:keyword IS NULL OR LOWER(p.planName) LIKE :keyword) " +

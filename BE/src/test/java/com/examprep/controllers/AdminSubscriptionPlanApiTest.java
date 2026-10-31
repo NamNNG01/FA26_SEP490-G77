@@ -352,7 +352,147 @@ class AdminSubscriptionPlanApiTest {
         assertTrue(planRepository.findAvailable(created.planId()).isPresent());
     }
 
+    // ------------------------------------------------------------------ status / reorder / delete (API 24, 25, 26)
+
+    @Test
+    void togglePlanStatusHidesPlanFromPublicListOnly() {
+        StatusUpdateResponse response = service.setStatus(planA.getPlanId(), new StatusUpdateRequest(false));
+
+        assertEquals(planA.getPlanId(), response.planId());
+        assertFalse(response.isActive());
+
+        em.flush();
+        em.clear();
+
+        assertTrue(service.publicList().stream().noneMatch(p -> "Plan A".equals(p.planName())),
+                "a deactivated plan disappears from the purchase screen");
+
+        PlanItem adminItem = service.list(null, null, 0, 20, "sortOrder,asc").getContent().stream()
+                .filter(i -> planA.getPlanId().equals(i.planId()))
+                .findFirst().orElseThrow();
+        assertFalse(adminItem.isActive(), "the admin list still shows the plan with its new flag");
+        assertTrue(planRepository.findAvailable(planA.getPlanId()).isPresent(), "deactivate is not a delete");
+
+        assertTrue(service.setStatus(planA.getPlanId(), new StatusUpdateRequest(true)).isActive(),
+                "toggling back re-publishes the plan");
+    }
+
+    @Test
+    void reorderRequiresCompletePlanList() {
+        assertValidationField(assertThrows(BaseException.class,
+                () -> service.reorder(new ReorderRequest(List.of(planA.getPlanId(), planB.getPlanId())))), "orderedPlanIds");
+        assertValidationField(assertThrows(BaseException.class,
+                () -> service.reorder(new ReorderRequest(List.of(planA.getPlanId(), planB.getPlanId(),
+                        planC.getPlanId(), planC.getPlanId())))), "orderedPlanIds");
+        assertValidationField(assertThrows(BaseException.class,
+                () -> service.reorder(new ReorderRequest(List.of(planA.getPlanId(), planB.getPlanId(),
+                        planC.getPlanId(), 999_999L)))), "orderedPlanIds");
+        assertValidationField(assertThrows(BaseException.class,
+                () -> service.reorder(new ReorderRequest(List.of(planA.getPlanId(), planD.getPlanId(),
+                        planB.getPlanId(), planC.getPlanId())))), "orderedPlanIds");
+
+        List<PlanItem> reordered = service.reorder(new ReorderRequest(
+                List.of(planC.getPlanId(), planB.getPlanId(), planA.getPlanId())));
+
+        assertEquals(List.of("Plan C", "Plan B", "Plan A"), names(reordered));
+        assertEquals(List.of(0, 1, 2), reordered.stream().map(PlanItem::sortOrder).toList());
+        assertEquals(0L, reordered.get(0).activeSubscribers());
+        assertEquals(1L, reordered.get(1).activeSubscribers());
+        assertEquals(2L, reordered.get(2).activeSubscribers());
+
+        em.flush();
+        em.clear();
+        assertEquals(0, planRepository.findAvailable(planC.getPlanId()).orElseThrow().getSortOrder());
+        assertEquals(1, planRepository.findAvailable(planB.getPlanId()).orElseThrow().getSortOrder());
+        assertEquals(2, planRepository.findAvailable(planA.getPlanId()).orElseThrow().getSortOrder());
+        assertEquals(4, planRepository.findById(planD.getPlanId()).orElseThrow().getSortOrder(),
+                "soft-deleted plans are outside the reorder set");
+
+        assertEquals(List.of("Plan C", "Plan B", "Plan A"),
+                names(service.list(null, null, 0, 20, "sortOrder,asc").getContent()));
+        assertEquals(List.of("Plan B", "Plan A"), service.publicList().stream()
+                .map(PublicPlanItem::planName).toList(), "public order follows the new sort_order");
+    }
+
+    @Test
+    void reorderLeavesDbUntouchedWhenInvalid() {
+        Map<Long, Integer> before = planRepository.findAll().stream()
+                .collect(java.util.stream.Collectors.toMap(SubscriptionPlan::getPlanId, SubscriptionPlan::getSortOrder));
+
+        assertThrows(BaseException.class, () -> service.reorder(new ReorderRequest(
+                List.of(planA.getPlanId(), planB.getPlanId(), planC.getPlanId(), planA.getPlanId()))));
+
+        em.flush();
+        em.clear();
+        for (SubscriptionPlan persisted : planRepository.findAll()) {
+            assertEquals(before.get(persisted.getPlanId()), persisted.getSortOrder(),
+                    "sort_order must not change on an invalid reorder (plan " + persisted.getPlanName() + ")");
+        }
+    }
+
+    @Test
+    void deletePlanBlockedByActiveSubscriber() {
+        BaseException blocked = assertThrows(BaseException.class, () -> service.delete(planA.getPlanId()));
+        assertEquals(ResponseCode.CONFLICT, blocked.getResponseCode());
+        assertEquals(409, blocked.getResponseCode().getHttpStatus().value());
+        assertEquals("PLAN_HAS_ACTIVE_SUBSCRIBERS", ((Map<?, ?>) blocked.getData()).get("code"));
+        em.flush();
+        em.clear();
+        assertTrue(planRepository.findAvailable(planA.getPlanId()).isPresent(), "a blocked delete leaves the row untouched");
+
+        // Conservative ruling: an ACTIVE row outside its paid window still blocks delete.
+        SubscriptionPlan pastWindow = plan("Plan E", true, 5, "[]");
+        subscription(account(User.ROLE_STUDENT), pastWindow,
+                Instant.now().minus(90, ChronoUnit.DAYS), Instant.now().minus(60, ChronoUnit.DAYS), "ACTIVE");
+        em.flush();
+        em.clear();
+        assertThrows(BaseException.class, () -> service.delete(pastWindow.getPlanId()));
+
+        List<UserSubscription> planSubs = subscriptionRepository.findAll().stream()
+                .filter(s -> s.getPlan().getPlanId().equals(planA.getPlanId())).toList();
+        planSubs.forEach(s -> s.setStatus("EXPIRED"));
+        subscriptionRepository.saveAll(planSubs);
+        em.flush();
+        em.clear();
+
+        service.delete(planA.getPlanId());
+        em.flush();
+        em.clear();
+
+        assertTrue(service.publicList().stream().noneMatch(p -> "Plan A".equals(p.planName())));
+        BaseException gone = assertThrows(BaseException.class, () -> service.detail(planA.getPlanId()));
+        assertEquals(ResponseCode.RESOURCE_NOT_FOUND, gone.getResponseCode());
+        assertEquals("PLAN_NOT_FOUND", ((Map<?, ?>) gone.getData()).get("code"));
+        assertNotNull(planRepository.findById(planA.getPlanId()).orElseThrow().getDeletedAt(),
+                "soft delete keeps the row with deleted_at set");
+        assertTrue(subscriptionRepository.findAll().stream()
+                .anyMatch(s -> s.getPlan().getPlanId().equals(planA.getPlanId())), "subscriptions are preserved");
+    }
+
+    @Test
+    void deleteUnknownOrAlreadyDeletedIs404() {
+        BaseException unknown = assertThrows(BaseException.class, () -> service.delete(999_999L));
+        assertEquals(ResponseCode.RESOURCE_NOT_FOUND, unknown.getResponseCode());
+        assertEquals(404, unknown.getResponseCode().getHttpStatus().value());
+        assertEquals("PLAN_NOT_FOUND", ((Map<?, ?>) unknown.getData()).get("code"));
+
+        BaseException softDeleted = assertThrows(BaseException.class, () -> service.delete(planD.getPlanId()));
+        assertEquals("PLAN_NOT_FOUND", ((Map<?, ?>) softDeleted.getData()).get("code"));
+
+        service.delete(planC.getPlanId());
+        BaseException twice = assertThrows(BaseException.class, () -> service.delete(planC.getPlanId()));
+        assertEquals("PLAN_NOT_FOUND", ((Map<?, ?>) twice.getData()).get("code"));
+    }
+
     // ------------------------------------------------------------------ helpers
+
+    private static void assertValidationField(BaseException ex, String field) {
+        assertEquals(ResponseCode.VALIDATION_ERROR, ex.getResponseCode());
+        assertEquals(400, ex.getResponseCode().getHttpStatus().value());
+        Map<?, ?> data = (Map<?, ?>) ex.getData();
+        assertEquals("VALIDATION_FAILED", data.get("code"));
+        assertEquals(field, ((Map<?, ?>) ((List<?>) data.get("errors")).get(0)).get("field"));
+    }
 
     private static List<String> names(List<PlanItem> items) {
         return items.stream().map(PlanItem::planName).toList();
