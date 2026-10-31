@@ -7,6 +7,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -25,4 +26,12 @@ public interface UserSubscriptionRepository extends JpaRepository<UserSubscripti
 
     @Query("SELECT s FROM UserSubscription s JOIN FETCH s.plan WHERE s.user.userId = :userId AND s.endDate < :now ORDER BY s.endDate DESC LIMIT 1")
     Optional<UserSubscription> findLatestExpiredByUser(@Param("userId") Long userId, @Param("now") Instant now);
+
+    // Subscriber counts for admin plan list/detail (group C): [planId, activeCount]
+    @Query("SELECT s.plan.planId, COUNT(s) FROM UserSubscription s WHERE s.plan.planId IN :ids AND s.status = 'ACTIVE' GROUP BY s.plan.planId")
+    List<Object[]> countActiveByPlanIds(@Param("ids") Collection<Long> ids);
+
+    // [planId, totalCount]
+    @Query("SELECT s.plan.planId, COUNT(s) FROM UserSubscription s WHERE s.plan.planId IN :ids GROUP BY s.plan.planId")
+    List<Object[]> countTotalByPlanIds(@Param("ids") Collection<Long> ids);
 }

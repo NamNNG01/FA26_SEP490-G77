@@ -9,7 +9,9 @@ import org.springframework.stereotype.Repository;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
+import jakarta.persistence.LockModeType;
 
 @Repository
 public interface AiUsageLogRepository extends JpaRepository<AiUsageLog, Long> {
@@ -41,4 +43,12 @@ public interface AiUsageLogRepository extends JpaRepository<AiUsageLog, Long> {
                               WHERE a.attempt_answer_id = ai_usage_logs.attempt_answer_id
                                 AND a.grading_status IN ('QUEUED', 'GRADING'))""", nativeQuery = true)
     int expirePending(@Param("cutoff") Instant cutoff);
+
+    // Worker claim (group E): pessimistic row lock so concurrent settlements cannot interleave.
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT l FROM AiUsageLog l WHERE l.logId = :logId")
+    Optional<AiUsageLog> lockById(@Param("logId") Long logId);
+
+    // Ownership check for the AI log detail endpoint.
+    Optional<AiUsageLog> findByLogIdAndUserUserId(Long logId, Long userId);
 }
