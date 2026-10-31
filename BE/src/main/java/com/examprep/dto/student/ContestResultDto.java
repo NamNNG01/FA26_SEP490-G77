@@ -29,5 +29,7 @@ public class ContestResultDto {
         private String value;
         private String description;
         private boolean claimed;
+        private Integer rankPosition;
+        private boolean claimable;
     }
 }

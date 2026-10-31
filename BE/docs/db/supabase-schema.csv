@@ -433,7 +433,7 @@ table_name,column_name,data_type,udt_name,is_nullable,column_default
 "practice_exams","practice_exam_id","bigint","int8","NO","nextval('practice_exams_practice_exam_id_seq'::regclass)"
 "practice_exams","user_id","bigint","int8","NO",""
 "practice_exams","course_id","bigint","int8","NO",""
-"practice_exams","title","character varying","varchar","NO","'?? luy?n t?p'::character varying"
+"practice_exams","title","character varying","varchar","NO","'Đề luyện tập'::character varying"
 "practice_exams","question_count","integer","int4","NO","10"
 "practice_exams","duration_minutes","integer","int4","NO","30"
 "practice_exams","difficulty","character varying","varchar","YES",""

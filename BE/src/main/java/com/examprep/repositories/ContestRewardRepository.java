@@ -22,5 +22,9 @@ public interface ContestRewardRepository extends JpaRepository<ContestReward, Lo
     List<Object[]> countByContests(@Param("ids") Collection<Long> ids);
 
     List<ContestReward> findByContest_ContestId(Long contestId);
+
+    @EntityGraph(attributePaths = "discount")
+    List<ContestReward> findByContest_ContestIdIn(Collection<Long> contestIds);
+
     Optional<ContestReward> findByRewardIdAndContest_ContestId(Long rewardId, Long contestId);
 }

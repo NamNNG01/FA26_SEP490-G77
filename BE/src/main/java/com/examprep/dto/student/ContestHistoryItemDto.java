@@ -19,4 +19,14 @@ public class ContestHistoryItemDto {
     private BigDecimal score;
     private Integer rank;
     private String status;
+    private CourseRef course;
+    private Instant startTime;
+
+    @Data
+    @AllArgsConstructor
+    @NoArgsConstructor
+    public static class CourseRef {
+        private Long courseId;
+        private String title;
+    }
 }

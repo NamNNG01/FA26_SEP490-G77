@@ -9,10 +9,12 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.Instant;
 import java.util.Map;
 
 @RestController
@@ -27,12 +29,15 @@ public class StudentContestController {
     @Operation(summary = "CT-01: List Contests")
     public ResponseEntity<ApiResponse<PageResponse<ContestItemDto>>> listContests(
             @RequestParam(required = false) String status,
+            @RequestParam(required = false) Long courseId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @AuthenticationPrincipal UserPrincipal currentUser
     ) {
         Long userId = currentUser != null ? currentUser.getId() : null;
-        Page<ContestItemDto> p = contestService.listContests(status, page, size, userId);
+        Page<ContestItemDto> p = contestService.listContests(status, courseId, from, to, page, size, userId);
         return ResponseEntity.ok(ApiResponse.success(PageResponse.of(p)));
     }
 
@@ -81,11 +86,14 @@ public class StudentContestController {
     @GetMapping("/history")
     @Operation(summary = "CT-06: Contest Participation History")
     public ResponseEntity<ApiResponse<PageResponse<ContestHistoryItemDto>>> listContestHistory(
+            @RequestParam(required = false) Long courseId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @AuthenticationPrincipal UserPrincipal currentUser
     ) {
-        Page<ContestHistoryItemDto> p = contestService.listContestHistory(page, size, currentUser.getId());
+        Page<ContestHistoryItemDto> p = contestService.listContestHistory(courseId, from, to, page, size, currentUser.getId());
         return ResponseEntity.ok(ApiResponse.success(PageResponse.of(p)));
     }
 

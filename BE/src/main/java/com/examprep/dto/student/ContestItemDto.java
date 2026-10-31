@@ -28,4 +28,24 @@ public class ContestItemDto {
     private String status; // UPCOMING, ONGOING, ENDED, CANCELLED
     @JsonProperty("isRegistered")
     private boolean isRegistered;
+    private CourseRef course;
+    private List<RewardItem> rewards;
+
+    @Data
+    @AllArgsConstructor
+    @NoArgsConstructor
+    public static class CourseRef {
+        private Long courseId;
+        private String title;
+    }
+
+    @Data
+    @AllArgsConstructor
+    @NoArgsConstructor
+    public static class RewardItem {
+        private Integer rankPosition;
+        private String discountCode;
+        private String discountType;
+        private BigDecimal value;
+    }
 }

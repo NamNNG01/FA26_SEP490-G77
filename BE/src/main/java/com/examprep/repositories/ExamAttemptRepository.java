@@ -90,4 +90,7 @@ public interface ExamAttemptRepository extends JpaRepository<ExamAttempt, Long> 
 
     Page<ExamAttempt> findByUserUserIdAndExamExamIdOrderByStartTimeDescAttemptIdDesc(
             Long userId, Long examId, Pageable pageable);
+
+    List<ExamAttempt> findByUser_UserIdAndExam_ExamIdAndStatusAndMode(
+            Long userId, Long examId, String status, String mode);
 }
