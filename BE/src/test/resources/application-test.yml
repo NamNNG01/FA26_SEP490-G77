@@ -40,3 +40,6 @@ app:
     # provider: ExamAiApiIntegrationTest points app.ai.base-url at a local stub
     # server, everything else never reaches the AI endpoints.
     api-key: test-only-dummy-gemini-key
+    # The flashcard worker sweep would race the tests that drive it by hand.
+    flashcard:
+      sweep-ms: 3600000

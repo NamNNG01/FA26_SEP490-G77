@@ -55,6 +55,16 @@ app:
     local-dir: ${STORAGE_LOCAL_DIR:data/materials}
   material-ai:
     timeout-ms: ${MATERIAL_AI_TIMEOUT_MS:120000}
+  # API 31 flashcard generation. Free/plan token accounting is unchanged (D2: reuse
+  # app.student-ai.free-daily-tokens), so no free-token-limit key lives here.
+  ai:
+    flashcard:
+      timeout-ms: ${AI_FLASHCARD_TIMEOUT_MS:90000}
+      sweep-ms: ${AI_FLASHCARD_SWEEP_MS:60000}
+      rate-per-minute: 5
+      min-content-chars: 20
+      max-cards: 50
+      output-budget-per-card: 120
   # CD-04/CD-05 code execution: Piston v2-compatible API. The default is the hosted
   # OnlineCompiler.io endpoint; point PISTON_BASE_URL at a self-hosted Piston to switch.
   # PISTON_API_KEY is required by the hosted provider; while it is blank CD-04/CD-05
