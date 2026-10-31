@@ -19,23 +19,34 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import static com.examprep.controllers.student.Fixtures.as;
 import static org.junit.jupiter.api.Assertions.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
  * Group C (admin subscription-plan config) — API 20/21 list + detail and the public plan list
- * feeding API 27. HTTP routing/auth assertions for these endpoints are added with the controller
- * in Task 6; at this stage the same contract is asserted through the service (the controller is a
- * thin envelope over it) so the service can be committed on its own.
+ * feeding API 27, asserted both through the service (business contract) and over HTTP (routing,
+ * status codes, auth and the error envelope produced by {@code GlobalExceptionHandler}).
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -43,6 +54,7 @@ import static org.junit.jupiter.api.Assertions.*;
 @Transactional
 class AdminSubscriptionPlanApiTest {
 
+    @Autowired MockMvc mvc;
     @Autowired AdminSubscriptionPlanService service;
     @Autowired SubscriptionPlanRepository planRepository;
     @Autowired UserSubscriptionRepository subscriptionRepository;
@@ -482,6 +494,157 @@ class AdminSubscriptionPlanApiTest {
         service.delete(planC.getPlanId());
         BaseException twice = assertThrows(BaseException.class, () -> service.delete(planC.getPlanId()));
         assertEquals("PLAN_NOT_FOUND", ((Map<?, ?>) twice.getData()).get("code"));
+    }
+
+    // ------------------------------------------------------------------ HTTP layer (Task 6)
+
+    @Test
+    void adminRoutesShapeAndStatusCodes() throws Exception {
+        PlanWriteRequest createRequest = new PlanWriteRequest("HTTP Plan", "http description",
+                new BigDecimal("120000"), 30, 100000, List.of("One feature"), true, 5);
+
+        String createdBody = mvc.perform(post("/api/v1/admin/subscription-plans")
+                        .with(as(admin))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(createRequest)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("Plan created"))
+                .andExpect(jsonPath("$.data.planId").isNumber())
+                .andReturn().getResponse().getContentAsString();
+        long planId = json.readTree(createdBody).path("data").path("planId").asLong();
+
+        mvc.perform(get("/api/v1/admin/subscription-plans").with(as(admin)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.content").isNotEmpty());
+
+        mvc.perform(get("/api/v1/admin/subscription-plans/" + planId).with(as(admin)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.planId").value(planId))
+                .andExpect(jsonPath("$.data.planName").value("HTTP Plan"));
+
+        PlanWriteRequest updateRequest = new PlanWriteRequest("HTTP Plan Renamed", "updated",
+                new BigDecimal("130000"), 45, 150000, List.of("One feature", "Two"), true, 6);
+        mvc.perform(put("/api/v1/admin/subscription-plans/" + planId)
+                        .with(as(admin))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(updateRequest)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.planId").value(planId))
+                .andExpect(jsonPath("$.data.planName").value("HTTP Plan Renamed"))
+                .andExpect(jsonPath("$.data.sortOrder").value(6));
+
+        mvc.perform(patch("/api/v1/admin/subscription-plans/" + planId + "/status")
+                        .with(as(admin))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"isActive\":false}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.planId").value(planId))
+                .andExpect(jsonPath("$.data.isActive").value(false));
+
+        List<Long> reversedIds = new ArrayList<>(planRepository.findAllAvailable().stream()
+                .map(SubscriptionPlan::getPlanId).toList());
+        Collections.reverse(reversedIds);
+
+        String reorderedBody = mvc.perform(put("/api/v1/admin/subscription-plans/reorder")
+                        .with(as(admin))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(new ReorderRequest(reversedIds))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andReturn().getResponse().getContentAsString();
+        JsonNode reordered = json.readTree(reorderedBody).path("data");
+        assertEquals(reversedIds.size(), reordered.size());
+        for (int i = 0; i < reversedIds.size(); i++) {
+            assertEquals(reversedIds.get(i).longValue(), reordered.get(i).path("planId").asLong(),
+                    "reorder response follows the requested order");
+            assertEquals(i, reordered.get(i).path("sortOrder").asInt());
+        }
+
+        mvc.perform(delete("/api/v1/admin/subscription-plans/" + planId).with(as(admin)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("Plan deleted"))
+                .andExpect(jsonPath("$.data").isEmpty());
+
+        mvc.perform(get("/api/v1/admin/subscription-plans/" + planId).with(as(admin)))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void detailNotFoundViaHttp() throws Exception {
+        // Soft-deleted plan: the service raises BaseException, GlobalExceptionHandler renders the envelope.
+        mvc.perform(get("/api/v1/admin/subscription-plans/" + planD.getPlanId()).with(as(admin)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.data.code").value("PLAN_NOT_FOUND"));
+
+        mvc.perform(get("/api/v1/admin/subscription-plans/999999").with(as(admin)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.data.code").value("PLAN_NOT_FOUND"));
+    }
+
+    @Test
+    void studentForbiddenOnAdminList() throws Exception {
+        mvc.perform(get("/api/v1/admin/subscription-plans").with(as(subscriberOne)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.success").value(false));
+    }
+
+    @Test
+    void publicListAllowsAnonymous() throws Exception {
+        mvc.perform(get("/api/v1/subscription-plans"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.length()").value(2))
+                .andExpect(jsonPath("$.data[0].planName").value("Plan A"))
+                .andExpect(jsonPath("$.data[1].planName").value("Plan B"))
+                .andExpect(jsonPath("$.data[0].isActive").value(true))
+                .andExpect(jsonPath("$.data[0].currency").value("VND"));
+    }
+
+    @Test
+    void reorderRouteDoesNotCollideWithId() throws Exception {
+        List<Long> ids = planRepository.findAllAvailable().stream().map(SubscriptionPlan::getPlanId).toList();
+
+        mvc.perform(put("/api/v1/admin/subscription-plans/reorder")
+                        .with(as(admin))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(new ReorderRequest(ids))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.length()").value(ids.size()));
+
+        // A non-existent numeric id still routes to PUT /{id} and yields the business 404 envelope.
+        PlanWriteRequest valid = new PlanWriteRequest("Junk id plan", null, new BigDecimal("1000"),
+                30, 1000, null, true, 0);
+        mvc.perform(put("/api/v1/admin/subscription-plans/999999")
+                        .with(as(admin))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(valid)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.data.code").value("PLAN_NOT_FOUND"));
+    }
+
+    @Test
+    void createRejectsBlankPlanNameWithValidationEnvelope() throws Exception {
+        PlanWriteRequest blank = new PlanWriteRequest("   ", null, new BigDecimal("1000"),
+                30, 1000, null, true, 0);
+
+        // Bean-validation failures use GlobalExceptionHandler's field→message map (data.<field>),
+        // not the service's data.errors[] list.
+        mvc.perform(post("/api/v1/admin/subscription-plans")
+                        .with(as(admin))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(blank)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.data.planName").exists());
     }
 
     // ------------------------------------------------------------------ helpers

@@ -69,7 +69,8 @@ public class SecurityConfig {
                                 "/api/v1/courses/*",
                                 "/api/v1/student/courses",
                                 "/api/v1/student/courses/*",
-                                "/api/v1/student/subscription/plans"
+                                "/api/v1/student/subscription/plans",
+                                "/api/v1/subscription-plans"
                         ).permitAll()
                         // Role-restricted Endpoints
                         .requestMatchers("/api/v1/admin/**").hasRole(User.ROLE_ADMIN)
