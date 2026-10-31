@@ -28,8 +28,9 @@ public interface UserSubscriptionRepository extends JpaRepository<UserSubscripti
     Optional<UserSubscription> findLatestExpiredByUser(@Param("userId") Long userId, @Param("now") Instant now);
 
     // Subscriber counts for admin plan list/detail (group C): [planId, activeCount]
-    @Query("SELECT s.plan.planId, COUNT(s) FROM UserSubscription s WHERE s.plan.planId IN :ids AND s.status = 'ACTIVE' GROUP BY s.plan.planId")
-    List<Object[]> countActiveByPlanIds(@Param("ids") Collection<Long> ids);
+    // "Active" matches findActiveSubscriptionByUser: status ACTIVE inside the paid window.
+    @Query("SELECT s.plan.planId, COUNT(s) FROM UserSubscription s WHERE s.plan.planId IN :ids AND s.status = 'ACTIVE' AND s.startDate <= :now AND s.endDate >= :now GROUP BY s.plan.planId")
+    List<Object[]> countActiveByPlanIds(@Param("ids") Collection<Long> ids, @Param("now") Instant now);
 
     // [planId, totalCount]
     @Query("SELECT s.plan.planId, COUNT(s) FROM UserSubscription s WHERE s.plan.planId IN :ids GROUP BY s.plan.planId")
