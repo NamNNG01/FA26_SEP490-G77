@@ -21,6 +21,7 @@ public interface ContestRewardRepository extends JpaRepository<ContestReward, Lo
     @Query("SELECT r.contest.contestId, COUNT(r) FROM ContestReward r WHERE r.contest.contestId IN :ids GROUP BY r.contest.contestId")
     List<Object[]> countByContests(@Param("ids") Collection<Long> ids);
 
+    @EntityGraph(attributePaths = "discount")
     List<ContestReward> findByContest_ContestId(Long contestId);
 
     @EntityGraph(attributePaths = "discount")

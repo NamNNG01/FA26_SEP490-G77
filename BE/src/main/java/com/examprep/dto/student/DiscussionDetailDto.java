@@ -26,12 +26,21 @@ public class DiscussionDetailDto {
     @JsonProperty("isUpvoted")
     private boolean isUpvoted;
     private boolean isBookmarked;
+    @JsonProperty("isAuthor")
     private boolean isAuthor;
     @JsonProperty("isClosed")
     private boolean isClosed;
     private Instant createdAt;
     private Instant updatedAt;
     private List<CommentDto> comments;
+
+    public boolean isAuthor() {
+        return isAuthor;
+    }
+
+    public void setIsAuthor(boolean isAuthor) {
+        this.isAuthor = isAuthor;
+    }
 
     @Data
     @Builder

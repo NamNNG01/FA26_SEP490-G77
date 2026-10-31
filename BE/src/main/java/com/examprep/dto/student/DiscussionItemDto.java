@@ -24,10 +24,19 @@ public class DiscussionItemDto {
     private boolean isPinned;
     @JsonProperty("isUpvoted")
     private boolean isUpvoted;
+    @JsonProperty("isAuthor")
     private boolean isAuthor;
     private Instant createdAt;
     private Instant lastCommentAt;
     private CourseRefDto course;
+
+    public boolean isAuthor() {
+        return isAuthor;
+    }
+
+    public void setIsAuthor(boolean isAuthor) {
+        this.isAuthor = isAuthor;
+    }
 
     @Data
     @Builder

@@ -25,9 +25,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -54,9 +56,18 @@ public class StudentNotebookServiceImpl implements StudentNotebookService {
 
         Page<StudentQuestionReview> reviews = reviewRepository.findSavedQuestions(userId, type, searchTerm, pageable);
 
+        List<Long> questionIds = reviews.getContent().stream()
+                .map(r -> r.getQuestion().getQuestionId())
+                .distinct()
+                .toList();
+
+        Map<Long, List<AnswerOption>> optionsByQuestionId = questionIds.isEmpty() ? Collections.emptyMap() :
+                answerOptionRepository.findByQuestionIds(questionIds).stream()
+                        .collect(Collectors.groupingBy(o -> o.getQuestion().getQuestionId()));
+
         return reviews.map(r -> {
             Question q = r.getQuestion();
-            List<AnswerOption> options = answerOptionRepository.findByQuestionIds(List.of(q.getQuestionId()));
+            List<AnswerOption> options = optionsByQuestionId.getOrDefault(q.getQuestionId(), Collections.emptyList());
             List<QuestionReviewItemDto.OptionDto> optionDtos = options.stream()
                     .map(o -> new QuestionReviewItemDto.OptionDto(o.getOptionId(), o.getOptionText()))
                     .toList();
@@ -154,11 +165,20 @@ public class StudentNotebookServiceImpl implements StudentNotebookService {
                 .build();
         examAttemptRepository.save(attempt);
 
+        List<Long> questionIds = candidates.stream()
+                .map(r -> r.getQuestion().getQuestionId())
+                .distinct()
+                .toList();
+
+        Map<Long, List<AnswerOption>> optionsByQuestionId = questionIds.isEmpty() ? Collections.emptyMap() :
+                answerOptionRepository.findByQuestionIds(questionIds).stream()
+                        .collect(Collectors.groupingBy(o -> o.getQuestion().getQuestionId()));
+
         List<ReviewSessionResponseDto.ReviewQuestionDto> questionDtos = new java.util.ArrayList<>();
         int index = 1;
         for (StudentQuestionReview r : candidates) {
             Question q = r.getQuestion();
-            List<AnswerOption> options = answerOptionRepository.findByQuestionIds(List.of(q.getQuestionId()));
+            List<AnswerOption> options = optionsByQuestionId.getOrDefault(q.getQuestionId(), Collections.emptyList());
             List<ReviewSessionResponseDto.OptionDto> optDtos = options.stream()
                     .map(o -> new ReviewSessionResponseDto.OptionDto(o.getOptionId(), o.getOptionText()))
                     .toList();
@@ -181,9 +201,19 @@ public class StudentNotebookServiceImpl implements StudentNotebookService {
             limit = 5;
         }
         List<StudentQuestionReview> weakSpots = reviewRepository.findWeakSpots(userId, PageRequest.of(0, limit));
+
+        List<Long> questionIds = weakSpots.stream()
+                .map(r -> r.getQuestion().getQuestionId())
+                .distinct()
+                .toList();
+
+        Map<Long, List<AnswerOption>> optionsByQuestionId = questionIds.isEmpty() ? Collections.emptyMap() :
+                answerOptionRepository.findByQuestionIds(questionIds).stream()
+                        .collect(Collectors.groupingBy(o -> o.getQuestion().getQuestionId()));
+
         return weakSpots.stream().map(r -> {
             Question q = r.getQuestion();
-            List<AnswerOption> options = answerOptionRepository.findByQuestionIds(List.of(q.getQuestionId()));
+            List<AnswerOption> options = optionsByQuestionId.getOrDefault(q.getQuestionId(), Collections.emptyList());
             List<QuestionReviewItemDto.OptionDto> optionDtos = options.stream()
                     .map(o -> new QuestionReviewItemDto.OptionDto(o.getOptionId(), o.getOptionText()))
                     .toList();

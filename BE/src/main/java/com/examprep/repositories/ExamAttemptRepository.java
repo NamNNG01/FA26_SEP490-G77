@@ -47,7 +47,22 @@ public interface ExamAttemptRepository extends JpaRepository<ExamAttempt, Long> 
     @Query("SELECT a FROM ExamAttempt a JOIN FETCH a.exam e WHERE a.user.userId = :userId AND e.course.courseId = :courseId AND a.submitTime IS NOT NULL ORDER BY a.submitTime DESC")
     List<ExamAttempt> findRecentAttemptsByUserAndCourse(@Param("userId") Long userId, @Param("courseId") Long courseId, Pageable pageable);
 
-    @Query("SELECT a FROM ExamAttempt a LEFT JOIN FETCH a.exam e WHERE a.user.userId = :userId AND a.submitTime IS NOT NULL ORDER BY a.submitTime DESC")
+    @Query(value = "SELECT a FROM ExamAttempt a LEFT JOIN FETCH a.exam e " +
+            "WHERE a.user.userId = :userId AND a.submitTime IS NOT NULL AND a.mode <> 'REVIEW' " +
+            "AND (:mode IS NULL OR " +
+            "     (:mode = 'EXAM' AND a.mode IN ('EXAM', 'CONTEST', 'PRACTICE')) OR " +
+            "     (:mode = 'QUIZ' AND a.mode = 'QUIZ') OR " +
+            "     (:mode = a.mode)) " +
+            "ORDER BY a.submitTime DESC",
+            countQuery = "SELECT COUNT(a) FROM ExamAttempt a " +
+            "WHERE a.user.userId = :userId AND a.submitTime IS NOT NULL AND a.mode <> 'REVIEW' " +
+            "AND (:mode IS NULL OR " +
+            "     (:mode = 'EXAM' AND a.mode IN ('EXAM', 'CONTEST', 'PRACTICE')) OR " +
+            "     (:mode = 'QUIZ' AND a.mode = 'QUIZ') OR " +
+            "     (:mode = a.mode))")
+    Page<ExamAttempt> findActivityAttemptsByUserAndMode(@Param("userId") Long userId, @Param("mode") String mode, Pageable pageable);
+
+    @Query("SELECT a FROM ExamAttempt a LEFT JOIN FETCH a.exam e WHERE a.user.userId = :userId AND a.submitTime IS NOT NULL AND a.mode <> 'REVIEW' ORDER BY a.submitTime DESC")
     Page<ExamAttempt> findActivityAttemptsByUser(@Param("userId") Long userId, Pageable pageable);
 
     @Query("""

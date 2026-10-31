@@ -16,9 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 
 @Service
 @RequiredArgsConstructor
@@ -43,8 +41,8 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
         }
     }
 
-    private DiscussionItemDto mapToDto(Discussion d, Long userId) {
-        boolean isUpvoted = userId != null && upvoteRepository.existsByDiscussion_DiscussionIdAndUser_UserId(d.getDiscussionId(), userId);
+    private DiscussionItemDto mapToDto(Discussion d, Long userId, Set<Long> upvotedIds) {
+        boolean isUpvoted = userId != null && upvotedIds.contains(d.getDiscussionId());
         boolean isAuthor = userId != null && d.getUser().getUserId().equals(userId);
 
         User author = d.getUser();
@@ -100,7 +98,12 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
         }
 
         Page<Discussion> discussions = discussionRepository.findDiscussions(courseId, tag, searchTerm, sort, pageable);
-        return discussions.map(d -> mapToDto(d, userId));
+        List<Long> discussionIds = discussions.getContent().stream().map(Discussion::getDiscussionId).toList();
+        Set<Long> upvotedIds = (userId != null && !discussionIds.isEmpty())
+                ? new HashSet<>(upvoteRepository.findUpvotedDiscussionIds(userId, discussionIds))
+                : Collections.emptySet();
+
+        return discussions.map(d -> mapToDto(d, userId, upvotedIds));
     }
 
     @Override
@@ -111,7 +114,7 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
 
         boolean isUpvoted = userId != null && upvoteRepository.existsByDiscussion_DiscussionIdAndUser_UserId(discussionId, userId);
         boolean isBookmarked = userId != null && bookmarkRepository.existsByDiscussion_DiscussionIdAndUser_UserId(discussionId, userId);
-        boolean isAuthor = userId != null && d.getUser().getUserId().equals(discussionId);
+        boolean isAuthor = userId != null && d.getUser().getUserId().equals(userId);
 
         User author = d.getUser();
         String displayName = Boolean.TRUE.equals(d.getIsAnonymous()) ? "Học sinh ẩn danh" : author.getFullName();
@@ -151,7 +154,7 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
                 .isUpvoted(isUpvoted)
                 .isBookmarked(isBookmarked)
                 .isAuthor(isAuthor)
-                .isClosed(Boolean.TRUE.equals(d.getIsClosed()))
+                .isClosed(Boolean.TRUE.equals(d.getIsClosed()) || "CLOSED".equals(d.getStatus()))
                 .createdAt(d.getCreatedAt())
                 .updatedAt(d.getUpdatedAt())
                 .comments(commentDtos)
@@ -160,22 +163,28 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
 
     @Override
     public DiscussionItemDto createDiscussion(CreateDiscussionRequestDto request, Long userId) {
-        if (request.getContent() == null || request.getContent().trim().isEmpty()) {
-            throw new BaseException(ResponseCode.VALIDATION_ERROR, "Empty content");
-        }
         validateActiveEnrollment(request.getCourseId(), userId);
+
+        if (request.getTitle() == null || request.getTitle().isBlank()) {
+            throw new BadRequestException("Title is required");
+        }
+        if (request.getContent() == null || request.getContent().isBlank()) {
+            throw new BadRequestException("Content is required");
+        }
 
         Course course = courseRepository.findById(request.getCourseId())
                 .orElseThrow(() -> new ResourceNotFoundException("Course not found"));
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
+        String tag = (request.getTag() != null && request.getTag().equalsIgnoreCase("tip")) ? "tip" : "question";
+
         Discussion d = Discussion.builder()
                 .course(course)
                 .user(user)
                 .title(request.getTitle().trim())
                 .content(request.getContent().trim())
-                .tag(request.getTag() != null ? request.getTag() : "question")
+                .tag(tag)
                 .isAnonymous(Boolean.TRUE.equals(request.getIsAnonymous()))
                 .status("OPEN")
                 .isPinned(false)
@@ -185,15 +194,12 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
                 .isClosed(false)
                 .build();
 
-        discussionRepository.save(d);
-        return mapToDto(d, userId);
+        Discussion saved = discussionRepository.save(d);
+        return mapToDto(saved, userId, Collections.emptySet());
     }
 
     @Override
     public DiscussionDetailDto.CommentDto createComment(Long discussionId, CreateCommentRequestDto request, Long userId) {
-        if (request.getContent() == null || request.getContent().trim().isEmpty()) {
-            throw new BaseException(ResponseCode.VALIDATION_ERROR, "Empty content");
-        }
         Discussion d = discussionRepository.findById(discussionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Discussion not found"));
 
@@ -286,7 +292,12 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
     public Page<DiscussionItemDto> listTips(Long courseId, int page, int size, Long userId) {
         Pageable pageable = PageRequest.of(page, size);
         Page<Discussion> discussions = discussionRepository.findDiscussions(courseId, "tip", null, "latest", pageable);
-        return discussions.map(d -> mapToDto(d, userId));
+        List<Long> discussionIds = discussions.getContent().stream().map(Discussion::getDiscussionId).toList();
+        Set<Long> upvotedIds = (userId != null && !discussionIds.isEmpty())
+                ? new HashSet<>(upvoteRepository.findUpvotedDiscussionIds(userId, discussionIds))
+                : Collections.emptySet();
+
+        return discussions.map(d -> mapToDto(d, userId, upvotedIds));
     }
 
     @Override
@@ -295,11 +306,16 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
                 .orElseThrow(() -> new ResourceNotFoundException("Discussion not found"));
 
         if (!d.getUser().getUserId().equals(userId)) {
-            throw new ForbiddenException("Only author can update discussion status");
+            throw new ForbiddenException("Only author can update discussion");
         }
 
-        d.setIsClosed(request.getIsClosed());
-        discussionRepository.save(d);
-        return mapToDto(d, userId);
+        if (request.getIsClosed() != null) {
+            d.setIsClosed(request.getIsClosed());
+            d.setStatus(request.getIsClosed() ? "CLOSED" : "OPEN");
+        }
+
+        Discussion saved = discussionRepository.save(d);
+        boolean isUpvoted = upvoteRepository.existsByDiscussion_DiscussionIdAndUser_UserId(discussionId, userId);
+        return mapToDto(saved, userId, isUpvoted ? Set.of(discussionId) : Collections.emptySet());
     }
 }
