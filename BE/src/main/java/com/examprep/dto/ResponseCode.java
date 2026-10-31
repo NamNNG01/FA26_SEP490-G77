@@ -54,6 +54,8 @@ public enum ResponseCode {
     FLASHCARD_QUOTA_EXCEEDED(HttpStatus.PAYMENT_REQUIRED, "AI_QUOTA_EXCEEDED", "Not enough AI quota"),
     /** API 31: more than 5 flashcard generations per minute for one user. */
     FLASHCARD_RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS, "RATE_LIMITED", "Too many generation requests"),
+    /** API 31: a material file that is not pdf/docx/txt (the shared UNSUPPORTED_FILE_TYPE enum is 400). */
+    FLASHCARD_UNSUPPORTED_FILE_TYPE(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "UNSUPPORTED_FILE_TYPE", "Unsupported file type"),
 
     // Domain Specific Errors
     EXAM_NOT_FOUND(HttpStatus.NOT_FOUND, "EXAM_NOT_FOUND", "Exam with the specified ID does not exist"),
