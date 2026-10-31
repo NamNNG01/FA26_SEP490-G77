@@ -1,6 +1,7 @@
 package com.examprep.services.student;
 
 import com.examprep.dto.ResponseCode;
+import com.examprep.dto.attempt.Snapshots;
 import com.examprep.dto.student.*;
 import com.examprep.entities.*;
 import com.examprep.exceptions.BaseException;
@@ -31,6 +32,11 @@ public class StudentContestServiceImpl implements StudentContestService {
     private final ExamAttemptRepository examAttemptRepository;
     private final ExamQuestionRepository examQuestionRepository;
     private final AttemptPaperFactory attemptPaperFactory;
+    private final AttemptAnswerRepository answerRepository;
+
+    /** Same values SA-01 writes on a fresh paper (StudentAttemptServiceImpl). */
+    private static final int DRAFT_SEQ_EMPTY = -1;
+    private static final String GRADING_AUTO = "AUTO";
 
     private String determineStatus(Contest c, Instant now) {
         if ("CANCELLED".equals(c.getStatus())) {
@@ -132,25 +138,17 @@ public class StudentContestServiceImpl implements StudentContestService {
             Optional<ExamAttempt> existingAtt = examAttemptRepository.findById(participant.getAttemptId());
             if (existingAtt.isPresent() && "IN_PROGRESS".equals(existingAtt.get().getStatus())) {
                 ExamAttempt att = existingAtt.get();
-                List<Question> questions = attemptPaperFactory.resolve(c.getExam(), new AttemptShuffler(123L), 123L).items().stream().map(AttemptPaperFactory.Item::question).toList();
-                Map<Long, List<AnswerOption>> optionsMap = attemptPaperFactory.optionsOf(questions);
-                List<ContestStartResponseDto.QuestionDto> qDtos = new ArrayList<>();
-                int idx = 1;
-                for (Question q : questions) {
-                    List<AnswerOption> opts = optionsMap.getOrDefault(q.getQuestionId(), List.of());
-                    List<ContestStartResponseDto.OptionDto> optDtos = opts.stream().map(o -> new ContestStartResponseDto.OptionDto(o.getOptionId(), o.getOptionText())).toList();
-                    qDtos.add(new ContestStartResponseDto.QuestionDto(q.getQuestionId(), idx++, q.getQuestionType(), q.getContent(), optDtos));
-                }
-                return new ContestStartResponseDto(att.getAttemptId(), c.getExam().getExamId(), c.getDurationMinutes(), att.getDeadlineAt(), qDtos);
+                List<AttemptAnswer> rows = answerRepository.findByAttemptIdOrdered(att.getAttemptId());
+                // Attempts started before the paper was frozen here have no answer rows: freeze it now.
+                List<Question> questions = rows.isEmpty()
+                        ? freezePaper(att, c.getExam())
+                        : rows.stream().map(AttemptAnswer::getQuestion).toList();
+                return new ContestStartResponseDto(att.getAttemptId(), c.getExam().getExamId(), c.getDurationMinutes(), att.getDeadlineAt(), questionDtos(questions));
             }
         }
 
         Instant durationDeadline = now.plusSeconds((long) c.getDurationMinutes() * 60);
         Instant deadlineAt = (c.getEndTime() != null && durationDeadline.isAfter(c.getEndTime())) ? c.getEndTime() : durationDeadline;
-
-        AttemptPaperFactory.Paper paper = attemptPaperFactory.resolve(c.getExam(), new AttemptShuffler(System.currentTimeMillis()), System.currentTimeMillis());
-        List<Question> questions = paper.items().stream().map(AttemptPaperFactory.Item::question).toList();
-        Map<Long, List<AnswerOption>> optionsMap = attemptPaperFactory.optionsOf(questions);
 
         User user = userRepository.findById(userId).orElseThrow();
         ExamAttempt attempt = ExamAttempt.builder()
@@ -163,10 +161,56 @@ public class StudentContestServiceImpl implements StudentContestService {
                 .autoSubmitted(false)
                 .build();
         examAttemptRepository.save(attempt);
+        examAttemptRepository.flush();
+        List<Question> questions = freezePaper(attempt, c.getExam());
 
         participant.setAttemptId(attempt.getAttemptId());
         participantRepository.save(participant);
 
+        return new ContestStartResponseDto(attempt.getAttemptId(), c.getExam().getExamId(), c.getDurationMinutes(), deadlineAt, questionDtos(questions));
+    }
+
+    /**
+     * Freezes the paper of a contest attempt the way SA-01 does: exam_snapshot plus one attempt_answers
+     * row per question (display, key and weight snapshots). SA-02..SA-05 read only these rows, so an
+     * attempt without them shows no questions and cannot be saved or submitted. Returns the questions
+     * in paper order.
+     */
+    private List<Question> freezePaper(ExamAttempt attempt, Exam exam) {
+        long seed = AttemptShuffler.newSeed();
+        AttemptShuffler shuffler = new AttemptShuffler(seed);
+        AttemptPaperFactory.Paper paper = attemptPaperFactory.resolve(exam, shuffler, seed);
+        List<Question> questions = paper.items().stream().map(AttemptPaperFactory.Item::question).toList();
+        Map<Long, List<AnswerOption>> optionsMap = attemptPaperFactory.optionsOf(questions);
+
+        attempt.setExamSnapshot(attemptPaperFactory.write(new Snapshots.ExamSnapshot(
+                exam.getExamId(), exam.getTitle(), exam.getMaxScore(), exam.getDurationMinutes(), seed, paper.items().size())));
+        examAttemptRepository.save(attempt);
+
+        List<AttemptAnswer> rows = new ArrayList<>();
+        int order = 1;
+        for (AttemptPaperFactory.Item item : paper.items()) {
+            Question question = item.question();
+            List<AnswerOption> questionOptions = optionsMap.getOrDefault(question.getQuestionId(), List.of());
+            Snapshots.KeySnapshot key = attemptPaperFactory.key(question, questionOptions);
+            Snapshots.DisplayQuestion display = attemptPaperFactory.display(question, key, questionOptions, order++, shuffler);
+            rows.add(AttemptAnswer.builder()
+                    .attempt(attempt)
+                    .question(question)
+                    .displaySnapshot(attemptPaperFactory.write(display))
+                    .keySnapshot(attemptPaperFactory.write(key))
+                    .draftSeq(DRAFT_SEQ_EMPTY)
+                    .weightSnapshot(item.weight())
+                    .questionVersion(question.getScoringVersion() == null ? 1 : question.getScoringVersion())
+                    .gradingStatus(GRADING_AUTO)
+                    .build());
+        }
+        answerRepository.saveAll(rows);
+        return questions;
+    }
+
+    private List<ContestStartResponseDto.QuestionDto> questionDtos(List<Question> questions) {
+        Map<Long, List<AnswerOption>> optionsMap = attemptPaperFactory.optionsOf(questions);
         List<ContestStartResponseDto.QuestionDto> qDtos = new ArrayList<>();
         int idx = 1;
         for (Question q : questions) {
@@ -174,8 +218,7 @@ public class StudentContestServiceImpl implements StudentContestService {
             List<ContestStartResponseDto.OptionDto> optDtos = opts.stream().map(o -> new ContestStartResponseDto.OptionDto(o.getOptionId(), o.getOptionText())).toList();
             qDtos.add(new ContestStartResponseDto.QuestionDto(q.getQuestionId(), idx++, q.getQuestionType(), q.getContent(), optDtos));
         }
-
-        return new ContestStartResponseDto(attempt.getAttemptId(), c.getExam().getExamId(), c.getDurationMinutes(), deadlineAt, qDtos);
+        return qDtos;
     }
 
     @Override
