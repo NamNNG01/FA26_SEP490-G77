@@ -26,6 +26,27 @@ export function ContestStatusBadge({ status }: { status: ContestStatus }) {
   return <Badge variant={STATUS_VARIANT[status] ?? 'default'}>{STATUS_LABEL[status] ?? status}</Badge>;
 }
 
+/** Gold / silver / bronze for ranks 1–3: ring, medal colour and a light fill (alpha keeps it readable in dark mode). */
+const MEDAL: Record<number, { name: string; color: string; fill: string }> = {
+  1: { name: 'Gold', color: '#D4A017', fill: 'rgba(212, 160, 23, 0.14)' },
+  2: { name: 'Silver', color: '#9CA3AF', fill: 'rgba(156, 163, 175, 0.16)' },
+  3: { name: 'Bronze', color: '#CD7F32', fill: 'rgba(205, 127, 50, 0.14)' },
+};
+
+/** Leaderboard rank cell: a medal with a gold/silver/bronze ring for ranks 1–3, plain "#n" from rank 4. */
+export function RankMedal({ rank }: { rank: number | null | undefined }) {
+  if (rank == null) return <span className="font-semibold text-content-soft">—</span>;
+  const medal = MEDAL[rank];
+  if (!medal) return <span className="font-semibold text-content">#{rank}</span>;
+  return <span className="inline-flex items-center gap-1.5" title={`${medal.name} — rank ${rank}`}>
+    <span className="flex h-8 w-8 items-center justify-center rounded-full border-2" style={{ borderColor: medal.color, backgroundColor: medal.fill }}>
+      <Icon.Award className="h-4 w-4" style={{ color: medal.color }} aria-hidden />
+    </span>
+    <span className="font-semibold tabular-nums" style={{ color: medal.color }}>{rank}</span>
+    <span className="sr-only">{medal.name} medal</span>
+  </span>;
+}
+
 /** Shown next to the status once the contest ended; nothing before that. */
 export function RankingBadge({ ranking }: { ranking: RankingStatus }) {
   if (!ranking) return null;

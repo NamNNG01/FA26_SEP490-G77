@@ -24,6 +24,7 @@ import {
 } from '@/services/studentContest.service';
 import { getApiErrorMessage } from '@/utils/apiError';
 import { LoadError, PageTitle, STUDENT_PAGE_CLASS } from '../components/studentUi';
+import { RankMedal } from '@/features/contest/components/contestUi';
 
 const PAGE_SIZE = 9;
 const LIST_TABS = ['Contests', 'History'];
@@ -424,7 +425,7 @@ function Results({ contest, leaderboard, result, busy, onClaim }: {
             const mine = row.isCurrentUser;
             const prize = prizeText(row.reward) ?? (mine && reward ? reward.value : null);
             return <tr key={`${row.rank}-${row.userId}`} className={mine ? 'bg-primary-light/50' : ''}>
-              <td className="px-4 py-3 font-semibold">#{row.rank}</td>
+              <td className="px-4 py-3"><RankMedal rank={row.rank} /></td>
               <td className="px-4 py-3"><div className="flex items-center gap-2"><Avatar name={row.studentName || '?'} src={row.avatarUrl ?? undefined} size="sm" /><span className={mine ? 'font-semibold' : ''}>{row.studentName}{mine ? ' (You)' : ''}</span></div></td>
               <td className="px-4 py-3 text-right tabular-nums">{row.score}</td>
               <td className="px-4 py-3">{prize ?? <span className="text-content-soft">—</span>}</td>
@@ -432,7 +433,7 @@ function Results({ contest, leaderboard, result, busy, onClaim }: {
             </tr>;
           })}
           {result && !ownInTable && <tr className="bg-primary-light/50">
-            <td className="px-4 py-3 font-semibold">{result.rank ? `#${result.rank}` : '—'}</td>
+            <td className="px-4 py-3"><RankMedal rank={result.rank} /></td>
             <td className="px-4 py-3 font-semibold">You</td>
             <td className="px-4 py-3 text-right tabular-nums">{result.score ?? '—'}</td>
             <td className="px-4 py-3">{reward?.value ?? <span className="text-content-soft">—</span>}</td>

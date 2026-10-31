@@ -23,6 +23,7 @@ import { CardGridSkeleton, LoadError, PageTitle, STUDENT_PAGE_CLASS } from '../c
 import type { DeckStudyState } from '../components/DeckCard';
 import { FlashDeckCard } from '../components/flashcards/FlashDeckCard';
 import { DeckFormModal } from '../components/flashcards/DeckFormModal';
+import { AiFlashcardGenerateModal } from '../components/flashcards/AiFlashcardGenerateModal';
 
 const TAB_MINE = 'My decks';
 const TAB_COURSE = 'Course decks';
@@ -71,6 +72,7 @@ function MyDecksTab() {
   const [query, setQuery] = useState('');
   const [mode, setMode] = useState<DeckMode | ''>('');
   const [creating, setCreating] = useState(false);
+  const [generating, setGenerating] = useState(false);
 
   // Debounce the search box before asking the server.
   useEffect(() => {
@@ -149,7 +151,12 @@ function MyDecksTab() {
             onChange={v => setMode(v as DeckMode | '')}
           />
         </div>
-        {newDeck}
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" icon={<Icon.Zap className="w-4 h-4" />} onClick={() => setGenerating(true)}>
+            Generate with AI
+          </Button>
+          {newDeck}
+        </div>
       </div>
 
       {loading ? (
@@ -207,6 +214,10 @@ function MyDecksTab() {
             open({ ...deck, isOwner: true });
           }}
         />
+      )}
+
+      {generating && (
+        <AiFlashcardGenerateModal onClose={() => setGenerating(false)} onSaved={() => setReload(r => r + 1)} />
       )}
     </div>
   );
