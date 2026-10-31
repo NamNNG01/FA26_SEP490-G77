@@ -282,7 +282,9 @@ class AdminSubscriptionPlanApiTest {
         BigDecimal paidAmount = snapshot.getPaidAmount();
         Instant startDate = snapshot.getStartDate();
         em.clear();
-        Instant createdAt = planRepository.findAvailable(planA.getPlanId()).orElseThrow().getCreatedAt();
+        SubscriptionPlan before = planRepository.findAvailable(planA.getPlanId()).orElseThrow();
+        Instant createdAt = before.getCreatedAt();
+        Instant updatedAtBefore = before.getUpdatedAt();
 
         PlanDetail updated = service.update(planA.getPlanId(), new PlanWriteRequest(
                 "Plan A Plus", "updated description", new BigDecimal("199000"), 60, 300000,
@@ -304,6 +306,7 @@ class AdminSubscriptionPlanApiTest {
         em.clear();
         SubscriptionPlan persisted = planRepository.findAvailable(planA.getPlanId()).orElseThrow();
         assertEquals(0, new BigDecimal("199000").compareTo(persisted.getPrice()));
+        assertTrue(persisted.getUpdatedAt().isAfter(updatedAtBefore), "updated_at must be refreshed on update");
 
         UserSubscription reloaded = subscriptionRepository.findById(subscriptionId).orElseThrow();
         assertEquals(0, paidAmount.compareTo(reloaded.getPaidAmount()),
@@ -320,6 +323,33 @@ class AdminSubscriptionPlanApiTest {
 
         assertEquals(ResponseCode.RESOURCE_NOT_FOUND, missing.getResponseCode());
         assertEquals("PLAN_NOT_FOUND", ((Map<?, ?>) missing.getData()).get("code"));
+    }
+
+    @Test
+    void updateKeepsNameWhenUnchangedSelf() {
+        PlanDetail updated = service.update(planA.getPlanId(), new PlanWriteRequest(
+                "  plan a  ", planA.getDescription(), planA.getPrice(), 30, 200000,
+                List.of("AI quizzes"), true, 1));
+
+        assertEquals("Plan A", updated.planName(), "case-only self-rename keeps the stored casing");
+    }
+
+    @Test
+    void createIgnoresSoftDeletedDuplicateName() {
+        SubscriptionPlan beta = plan("Beta", true, 10, "[]");
+        beta.setDeletedAt(Instant.now());
+        planRepository.saveAndFlush(beta);
+        em.clear();
+
+        PlanDetail created = service.create(new PlanWriteRequest(
+                " beta ", "fresh beta", new BigDecimal("50000"), 30, 1000, List.of("One"), true, 11));
+
+        assertEquals("beta", created.planName());
+        assertNotEquals(beta.getPlanId(), created.planId(), "soft-deleted plan must not be reused");
+        em.flush();
+        em.clear();
+        assertTrue(planRepository.findAvailable(beta.getPlanId()).isEmpty());
+        assertTrue(planRepository.findAvailable(created.planId()).isPresent());
     }
 
     // ------------------------------------------------------------------ helpers

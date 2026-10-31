@@ -122,6 +122,8 @@ public class AdminSubscriptionPlanService {
                 .ifPresent(other -> {
                     throw ContestRules.error(ResponseCode.CONFLICT, "PLAN_NAME_EXISTS", "Subscription plan name already exists");
                 });
+        // A case-only self-rename keeps the stored casing (the unique index is on LOWER(plan_name)).
+        if (plan.getPlanName().equalsIgnoreCase(planName)) planName = plan.getPlanName();
 
         plan.setPlanName(planName);
         plan.setDescription(req.description());
@@ -129,8 +131,9 @@ public class AdminSubscriptionPlanService {
         plan.setDurationDays(req.durationDays());
         plan.setAiTokenLimit(req.aiTokenLimit());
         plan.setFeaturesJson(writeFeatures(validateFeatures(req.features())));
-        plan.setIsActive(req.isActive() != null ? req.isActive() : true);
-        plan.setSortOrder(req.sortOrder() != null ? req.sortOrder() : 0);
+        // Null keeps the current value on update; defaults only apply on create.
+        if (req.isActive() != null) plan.setIsActive(req.isActive());
+        if (req.sortOrder() != null) plan.setSortOrder(req.sortOrder());
 
         planRepository.save(plan);
         return detail(id);
