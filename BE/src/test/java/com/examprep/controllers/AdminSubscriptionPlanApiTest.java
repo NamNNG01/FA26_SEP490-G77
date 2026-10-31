@@ -184,6 +184,20 @@ class AdminSubscriptionPlanApiTest {
         assertEquals(List.of("AI quizzes", "Offline notes"), published.get(0).features());
     }
 
+    @Test
+    void featuresJsonSurvivesDatabaseRoundTrip() {
+        SubscriptionPlan plan = SubscriptionPlan.builder().planName("Round trip plan").price(new BigDecimal("1000"))
+                .durationDays(30).aiTokenLimit(1000).description("round trip")
+                .featuresJson(service.writeFeatures(List.of("A", "B"))).isActive(true).sortOrder(9).build();
+        Long planId = planRepository.saveAndFlush(plan).getPlanId();
+
+        em.clear();
+        SubscriptionPlan reloaded = planRepository.findAvailable(planId).orElseThrow();
+
+        assertEquals(List.of("A", "B"), service.readFeatures(reloaded.getFeaturesJson()),
+                "features_json must survive the Hibernate/DB binding unchanged");
+    }
+
     // ------------------------------------------------------------------ helpers
 
     private static List<String> names(List<PlanItem> items) {

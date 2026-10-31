@@ -144,8 +144,6 @@ public class AdminSubscriptionPlanService {
         if (featuresJson == null || featuresJson.isBlank()) return List.of();
         try {
             JsonNode root = objectMapper.readTree(featuresJson);
-            // Some drivers (H2's JSON column) hand back the document as a JSON string literal.
-            if (root != null && root.isTextual()) root = objectMapper.readTree(root.asText());
             if (root == null || !root.isArray()) return List.of();
             List<String> features = new ArrayList<>();
             for (JsonNode node : root) {
