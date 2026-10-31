@@ -312,7 +312,7 @@ export function StudentDeckStudyPage() {
           <EmptyState
             icon={<Icon.Layers className="w-7 h-7" />}
             title="This deck has no cards yet"
-            message={editable ? 'Add cards one by one or import them from a CSV / XLSX file.' : undefined}
+            message={editable ? deck.mode === 'FLASHCARD' ? 'Add cards one by one or import from a Word, Excel, or PDF template.' : 'Add cards one by one or import them from a CSV / XLSX file.' : undefined}
             action={editable ? <Button onClick={() => setDialog({ kind: 'card' })}>Add card</Button> : undefined}
           />
         </div>
@@ -387,7 +387,7 @@ export function StudentDeckStudyPage() {
         />
       )}
       {dialog?.kind === 'import' && (
-        <ImportCardsModal deckId={deckId} mode={deck.mode} onClose={() => setDialog(null)} onImported={() => void reloadCards()} />
+        <ImportCardsModal deckId={deckId} deckTitle={deck.title} mode={deck.mode} onClose={() => setDialog(null)} onImported={() => void reloadCards()} />
       )}
       {dialog?.kind === 'deleteCard' && (
         <ConfirmModal
