@@ -28,6 +28,7 @@ import {
 } from "@/services/course.service";
 import { AddModuleModal } from "@/components/modules/AddModuleModal";
 import { EditModuleModal } from "@/components/modules/EditModuleModal";
+import { coursePriceError } from "../coursePrice";
 import { useAuth } from "@/auth/authContext";
 import { Role } from "@/utils/permissions";
 import { api } from "@/services/api";
@@ -335,6 +336,11 @@ export function CourseDetailPage({
       setToast({ type: "error", message: "Course title cannot be empty." });
       return;
     }
+    const priceError = hasCourseChanges ? coursePriceError(price) : null;
+    if (priceError) {
+      setToast({ type: "error", message: priceError });
+      return;
+    }
     const managerIds = selectedManagerIds
       .map(Number)
       .filter((id) => Number.isFinite(id) && id > 0);
@@ -352,7 +358,7 @@ export function CourseDetailPage({
         updatePayload.title = title.trim();
         updatePayload.description = description.trim() || undefined;
         updatePayload.categoryId = categoryId ? Number(categoryId) : undefined;
-        updatePayload.price = Number(price) >= 0 ? Number(price) : 0;
+        updatePayload.price = Number(price);
       }
       if (hasManagerChanges) {
         updatePayload.managerId = managerIds[0];

@@ -9,6 +9,7 @@ import { AuthPageHeader } from '../components/AuthPageHeader';
 import { Icon } from '@/assets/icons';
 import { ROUTES } from '@/app/routes';
 import { safeRedirect, withRedirectTarget } from '@/hooks/useRequireAuth';
+import { PASSWORD_TOO_LONG_MESSAGE, isPasswordTooLong } from '@/services/password.service';
 
 /**
  * Sign-up form. `?redirect=` (e.g. a guest buying a course) is where the new
@@ -40,17 +41,18 @@ export function RegisterPage() {
     // - Email: @NotBlank, @Email, @Size(max=150)
     // - Password: @NotBlank, @Size(min=6)
     // - Full name: @NotBlank, @Size(max=100)
-    if (!email.trim()) {
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) {
       setError('Email is required');
       setLoading(false);
       return;
     }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
       setError('Invalid email format');
       setLoading(false);
       return;
     }
-    if (email.length > 150) {
+    if (trimmedEmail.length > 150) {
       setError('Email must not exceed 150 characters');
       setLoading(false);
       return;
@@ -62,6 +64,11 @@ export function RegisterPage() {
     }
     if (password.length < 6) {
       setError('Password must be at least 6 characters');
+      setLoading(false);
+      return;
+    }
+    if (isPasswordTooLong(password)) {
+      setError(PASSWORD_TOO_LONG_MESSAGE);
       setLoading(false);
       return;
     }
@@ -85,7 +92,7 @@ export function RegisterPage() {
       // Auth state is updated at this point — navigate after it commits.
       // Backend register always creates STUDENT accounts; use the fresh
       // user returned by register() rather than stale context state.
-      const registeredUser = await register(email, password, fullName);
+      const registeredUser = await register(trimmedEmail, password, fullName);
       navigate(redirectTo ?? landingPathForRole(registeredUser.role), { replace: true });
     } catch (err: unknown) {
       // 409 = the backend hit a database conflict while saving the account

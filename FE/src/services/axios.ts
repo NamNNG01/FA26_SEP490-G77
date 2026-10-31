@@ -2,6 +2,7 @@ import axios from 'axios';
 import { config } from '@/config';
 import { clearAuth, getAccessToken, getRefreshToken, saveTokens } from '@/auth/storage';
 import { emitSessionExpired } from '@/auth/sessionExpired';
+import { serverErrorMessage } from '@/utils/apiError';
 
 export const apiClient = axios.create({
   baseURL: config.apiBaseUrl,
@@ -131,7 +132,8 @@ apiClient.interceptors.response.use(
     // Surface the backend's ApiResponse.message (e.g. "Email is already
     // registered.") instead of Axios' generic "Request failed with status
     // code 4xx". The error stays an AxiosError, so .response is still there.
-    const serverMessage = error.response?.data?.message;
+    // A failed @Valid only says "Validation failed…"; show which fields failed instead.
+    const serverMessage = serverErrorMessage(error.response?.data);
     if (typeof serverMessage === 'string' && serverMessage.trim()) {
       error.message = serverMessage;
     }
