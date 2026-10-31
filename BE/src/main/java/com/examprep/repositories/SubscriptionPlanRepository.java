@@ -1,6 +1,8 @@
 package com.examprep.repositories;
 
 import com.examprep.entities.SubscriptionPlan;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -15,4 +17,10 @@ public interface SubscriptionPlanRepository extends JpaRepository<SubscriptionPl
     Optional<SubscriptionPlan> findByPlanIdAndIsActiveTrueAndDeletedAtIsNull(Long planId);
     @Query("select p from SubscriptionPlan p where p.planId = :id and p.deletedAt is null")
     Optional<SubscriptionPlan> findAvailable(@Param("id") Long id);
+
+    /** API 20 admin list: optional case-insensitive name search + exact status, soft-deleted rows excluded. */
+    @Query("SELECT p FROM SubscriptionPlan p WHERE p.deletedAt IS NULL " +
+            "AND (:keyword IS NULL OR LOWER(p.planName) LIKE :keyword) " +
+            "AND (:isActive IS NULL OR p.isActive = :isActive)")
+    Page<SubscriptionPlan> search(@Param("keyword") String keyword, @Param("isActive") Boolean isActive, Pageable pageable);
 }
