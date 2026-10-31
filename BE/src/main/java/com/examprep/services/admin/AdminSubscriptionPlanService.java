@@ -332,16 +332,16 @@ public class AdminSubscriptionPlanService {
         return PageRequest.of(safePage, safeSize, sort(sort));
     }
 
-    /** Whitelisted properties only; anything else falls back to the display order. */
+    /** Whitelisted properties only; anything else falls back to the display order. A missing direction defaults to ASC. */
     private static Sort sort(String sort) {
         String property = null;
-        Sort.Direction direction = Sort.Direction.DESC;
+        Sort.Direction direction = Sort.Direction.ASC;
         if (sort != null && !sort.isBlank()) {
             String[] parts = sort.split(",");
             String requested = parts[0].trim();
             if (SORTABLE.contains(requested)) {
                 property = requested;
-                if (parts.length > 1 && "asc".equalsIgnoreCase(parts[1].trim())) direction = Sort.Direction.ASC;
+                if (parts.length > 1 && "desc".equalsIgnoreCase(parts[1].trim())) direction = Sort.Direction.DESC;
             }
         }
         if (property == null) {

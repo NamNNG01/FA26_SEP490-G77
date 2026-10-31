@@ -32,6 +32,19 @@ public interface AiUsageLogRepository extends JpaRepository<AiUsageLog, Long> {
     List<Object[]> sumStudentUsage(@Param("userId") Long userId, @Param("source") String source,
             @Param("from") Instant from, @Param("to") Instant to);
 
+    // Spec 8 (line 1016): running (PROCESSING) jobs still hold their reservation. The shared
+    // sumStudentUsage only counts PENDING reservations (house-wide), so the flashcard/plan callers
+    // add these sums on top of their snapshot. Window semantics mirror sumStudentUsage
+    // (createdAt >= :from AND createdAt < :to) so the rows land in the caller's bucket.
+    @Query("""
+            SELECT l.billingSource, COALESCE(SUM(l.reservedTokens), 0)
+            FROM AiUsageLog l
+            WHERE l.user.userId = :userId AND l.status = 'PROCESSING'
+              AND l.createdAt >= :from AND l.createdAt < :to
+            GROUP BY l.billingSource""")
+    List<Object[]> sumProcessingReservedByWindow(@Param("userId") Long userId,
+            @Param("from") Instant from, @Param("to") Instant to);
+
     Optional<AiUsageLog> findFirstByAttemptAnswerIdAndStatusOrderByLogIdDesc(Long attemptAnswerId, String status);
 
     // Reservations nobody settled within the window are refunded; grading logs wait while their answer is queued.

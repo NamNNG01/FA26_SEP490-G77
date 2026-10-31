@@ -142,15 +142,31 @@ public class AiFlashcardServiceImpl implements AiFlashcardService {
         TransactionTemplate tx = new TransactionTemplate(transactionManager);
         GenerateAccepted accepted = tx.execute(status -> {
             quota.lock(userId);
-            AiQuotaService.Snapshot snapshot = quota.snapshot(userId);
+            AiQuotaService.Snapshot snapshot = snapshotWithRunningJobs(userId);
             long estimate = AiQuotaService.estimate(content.length(), cards * outputBudgetPerCard + 500);
-            List<String> source = quota.allocate(snapshot, List.of(estimate));
-            if (source == null) {
-                throw new BaseException(ResponseCode.FLASHCARD_QUOTA_EXCEEDED, "Not enough AI quota", Map.of(
-                        "code", "AI_QUOTA_EXCEEDED",
-                        "estimatedTokens", estimate,
-                        "tokenRemaining", snapshot.available(),
-                        "tokenLimit", snapshot.planName() != null ? snapshot.planLimit() : snapshot.freeLimit()));
+            String billingSource;
+            if (snapshot.planName() != null) {
+                // Spec 8 (line 1014): an ACTIVE plan bills the shared PLAN pool only — the FREE
+                // allowance is never a fallback for a subscriber (allocate() prefers FREE house-wide
+                // and is therefore only used on the plan-less path below).
+                if (snapshot.planRemaining() < estimate) {
+                    throw new BaseException(ResponseCode.FLASHCARD_QUOTA_EXCEEDED, "Not enough AI quota", Map.of(
+                            "code", "AI_QUOTA_EXCEEDED",
+                            "estimatedTokens", estimate,
+                            "tokenRemaining", snapshot.planRemaining(),
+                            "tokenLimit", snapshot.planLimit()));
+                }
+                billingSource = AiQuotaService.PLAN;
+            } else {
+                List<String> source = quota.allocate(snapshot, List.of(estimate));
+                if (source == null) {
+                    throw new BaseException(ResponseCode.FLASHCARD_QUOTA_EXCEEDED, "Not enough AI quota", Map.of(
+                            "code", "AI_QUOTA_EXCEEDED",
+                            "estimatedTokens", estimate,
+                            "tokenRemaining", snapshot.available(),
+                            "tokenLimit", snapshot.planName() != null ? snapshot.planLimit() : snapshot.freeLimit()));
+                }
+                billingSource = source.get(0);
             }
             User owner = users.getReferenceById(userId);
             Document document = documents.save(Document.builder()
@@ -169,7 +185,7 @@ public class AiFlashcardServiceImpl implements AiFlashcardService {
                     .purpose(PURPOSE)
                     .status(STATUS_PENDING)
                     .reservedTokens((int) estimate)
-                    .billingSource(source.get(0))
+                    .billingSource(billingSource)
                     .questionCount(cards)
                     // request_params is the designated carrier of the document link (no column for it).
                     .requestParams(requestParams(cards, lang, cardStyle, focus, hasFile, clippedName, document.getDocId()))
@@ -179,6 +195,36 @@ public class AiFlashcardServiceImpl implements AiFlashcardService {
         // The reservation is committed: the worker can now claim the job row.
         worker.dispatch(accepted.generationId());
         return accepted;
+    }
+
+    /**
+     * Spec 8 (line 1016): used = Σ(input+output) + Σ(reserved_tokens) of RUNNING jobs. The shared
+     * {@code snapshot()} counts reserved tokens of PENDING jobs only (house-wide, unchanged), so this
+     * scoped copy adds the PROCESSING reservations of each bucket's own window — the exact windows
+     * {@link AiQuotaService#snapshot} computes: the current house day for FREE, the subscription
+     * window (end date inclusive) for PLAN — and rebuilds the record without touching the shared
+     * service.
+     */
+    private AiQuotaService.Snapshot snapshotWithRunningJobs(Long userId) {
+        AiQuotaService.Snapshot snapshot = quota.snapshot(userId);
+        long freeReserved = snapshot.freeReserved() + processingReserved(userId, AiQuotaService.FREE,
+                snapshot.freeResetAt().minus(Duration.ofDays(1)), snapshot.freeResetAt());
+        long planReserved = snapshot.planName() == null ? snapshot.planReserved()
+                : snapshot.planReserved() + processingReserved(userId, AiQuotaService.PLAN,
+                        snapshot.planStart(), snapshot.planEnd().plusSeconds(1));
+        return new AiQuotaService.Snapshot(snapshot.freeLimit(), snapshot.freeUsed(), freeReserved,
+                snapshot.freeResetAt(), snapshot.planName(), snapshot.planLimit(), snapshot.planStart(),
+                snapshot.planEnd(), snapshot.planUsed(), planReserved);
+    }
+
+    /** PROCESSING reservations grouped by billingSource in the window → the asked bucket's sum. */
+    private long processingReserved(Long userId, String source, Instant from, Instant to) {
+        for (Object[] row : logs.sumProcessingReservedByWindow(userId, from, to)) {
+            if (source.equals(row[0])) {
+                return ((Number) row[1]).longValue();
+            }
+        }
+        return 0;
     }
 
     // ---------------------------------------------------------------- API 32/33 (Task 10/11)
@@ -244,13 +290,14 @@ public class AiFlashcardServiceImpl implements AiFlashcardService {
     /**
      * API 33: one quota window, the one currently enforced. A student with an ACTIVE plan is billed
      * against the plan pool (period = the subscription window); everybody else against the daily FREE
-     * allowance. The daily window is derived from the snapshot's own {@code freeResetAt} (the next-day
+     * allowance. Reserved tokens include RUNNING (PROCESSING) jobs, per spec 8 line 1016. The daily
+     * window is derived from the snapshot's own {@code freeResetAt} (the next-day
      * start in the house zone), so periodStart/periodEnd can never straddle two clocks at midnight
      * (deviation log #2). The DB keeps FREE/PLAN (D1); only this DTO renames them to FREE_QUOTA/SUBSCRIPTION.
      */
     @Override
     public UsageInfo usage(Long userId) {
-        AiQuotaService.Snapshot snapshot = quota.snapshot(userId);
+        AiQuotaService.Snapshot snapshot = snapshotWithRunningJobs(userId);
         if (snapshot.planName() != null) {
             return new UsageInfo("SUBSCRIPTION", snapshot.planName(), snapshot.planLimit(), snapshot.planUsed(),
                     snapshot.planReserved(), snapshot.planRemaining(), snapshot.planStart(), snapshot.planEnd());

@@ -12,7 +12,9 @@ import com.examprep.entities.User;
 import com.examprep.entities.UserSubscription;
 import com.examprep.repositories.AiUsageLogRepository;
 import com.examprep.repositories.DeckRepository;
+import com.examprep.repositories.SubscriptionPlanRepository;
 import com.examprep.repositories.UserRepository;
+import com.examprep.repositories.UserSubscriptionRepository;
 import com.examprep.services.AiQuotaService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -97,9 +99,12 @@ public class AiFlashcardApiTest {
     @Autowired UserRepository users;
     @Autowired AiUsageLogRepository logs;
     @Autowired DeckRepository decks;
+    @Autowired SubscriptionPlanRepository plans;
+    @Autowired UserSubscriptionRepository subscriptions;
     @MockBean AiClient aiClient;
 
     @Value("${app.student-ai.free-daily-tokens:20000}") long freeDailyTokens;
+    @Value("${app.ai.flashcard.output-budget-per-card:120}") int outputBudgetPerCard;
 
     Fixtures f;
 
@@ -454,6 +459,85 @@ public class AiFlashcardApiTest {
                 .andExpect(status().isPaymentRequired())
                 .andExpect(jsonPath("$.data.code").value("AI_QUOTA_EXCEEDED"))
                 .andExpect(jsonPath("$.data.estimatedTokens").isNumber());
+    }
+
+    // ------------------------------------------------------------------ spec audit: PLAN pool + RUNNING jobs
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void subscriberBillsPlanPoolNotFree() throws Exception {
+        User student = committedAccount(User.ROLE_STUDENT);
+        SubscriptionPlan plan = plans.save(SubscriptionPlan.builder()
+                .planName("Standard " + UUID.randomUUID()).price(new BigDecimal("99000"))
+                .durationDays(30).aiTokenLimit(50_000).isActive(true).sortOrder(1).build());
+        subscriptions.save(UserSubscription.builder().user(student).plan(plan)
+                .startDate(Instant.now().minus(1, ChronoUnit.DAYS))
+                .endDate(Instant.now().plus(29, ChronoUnit.DAYS))
+                .status("ACTIVE").paidAmount(plan.getPrice()).autoRenew(false).build());
+        when(aiClient.complete(any())).thenReturn(AiResponse.builder()
+                .text("{\"cards\":[{\"frontText\":\"Quang hợp là gì?\",\"backText\":\"Quá trình tổng hợp\"}]}")
+                .inputTokens(120).outputTokens(30).model("gemini-test").build());
+
+        long id = generate(student);
+        await(student, id, "COMPLETED");
+
+        // The subscriber bills the shared PLAN pool only (spec §8 line 1014) — never FREE-first.
+        AiUsageLog job = logs.findById(id).orElseThrow();
+        assertEquals("PLAN", job.getBillingSource(), job.toString());
+        try (Connection connection = dataSource.getConnection();
+             java.sql.PreparedStatement statement = connection.prepareStatement(
+                     "select count(*) from ai_usage_logs where user_id = ? and billing_source = 'FREE'")) {
+            statement.setLong(1, student.getUserId());
+            try (var rows = statement.executeQuery()) {
+                assertTrue(rows.next());
+                assertEquals(0, rows.getLong(1), "the daily FREE bucket must stay untouched for a subscriber");
+            }
+        }
+
+        JsonNode usage = usage(student);
+        assertEquals("SUBSCRIPTION", usage.path("billingSource").asText());
+        assertTrue(usage.path("tokenUsed").asLong() > 0, usage.toString());
+    }
+
+    @Test
+    void subscriberExhaustedPlanReturns402() throws Exception {
+        User student = f.account(User.ROLE_STUDENT);
+        SubscriptionPlan plan = SubscriptionPlan.builder().planName("Tiny " + UUID.randomUUID())
+                .price(new BigDecimal("99000")).durationDays(30).aiTokenLimit(500).isActive(true).build();
+        em.persist(plan);
+        em.persist(UserSubscription.builder().user(student).plan(plan)
+                .startDate(Instant.now().minus(1, ChronoUnit.DAYS))
+                .endDate(Instant.now().plus(29, ChronoUnit.DAYS))
+                .status("ACTIVE").paidAmount(plan.getPrice()).autoRenew(false).build());
+        em.flush();
+
+        // The 20-card estimate (~2951 tokens) exceeds the 500-token plan pool: the PLAN bucket alone
+        // must reject — the daily FREE allowance is no fallback for a subscriber (spec §8 line 1014).
+        MvcResult result = mvc.perform(multipart(URL).param("text", CONTENT).param("numberOfCards", "20").with(as(student)))
+                .andExpect(status().isPaymentRequired())
+                .andReturn();
+        JsonNode data = json.readTree(result.getResponse().getContentAsString(StandardCharsets.UTF_8)).path("data");
+        assertEquals("AI_QUOTA_EXCEEDED", data.path("code").asText());
+        assertEquals(500, data.path("tokenRemaining").asLong());
+        assertEquals(500, data.path("tokenLimit").asLong());
+    }
+
+    @Test
+    void processingReservationCountsTowardQuota() throws Exception {
+        User student = f.account(User.ROLE_STUDENT);
+        long estimate = AiQuotaService.estimate(CONTENT.length(), outputBudgetPerCard + 500);
+        // A RUNNING (PROCESSING) job still holds its reservation (spec §8 line 1016); the shared
+        // snapshot() alone only counts PENDING ones, so without the fix this request would be 202.
+        em.persist(AiUsageLog.builder().user(student).purpose("EXPLANATION").status("PROCESSING")
+                .billingSource("FREE").reservedTokens((int) (freeDailyTokens - estimate + 1)).build());
+        em.flush();
+
+        MvcResult result = mvc.perform(multipart(URL).param("text", CONTENT).param("numberOfCards", "1").with(as(student)))
+                .andExpect(status().isPaymentRequired())
+                .andReturn();
+        JsonNode data = json.readTree(result.getResponse().getContentAsString(StandardCharsets.UTF_8)).path("data");
+        assertEquals("AI_QUOTA_EXCEEDED", data.path("code").asText());
+        assertEquals(estimate, data.path("estimatedTokens").asLong());
     }
 
     // ------------------------------------------------------------------ rate limit

@@ -59,7 +59,7 @@ public class AdminSubscriptionPlanController {
         return ResponseEntity.ok(ApiResponse.success(service.setStatus(id, request)));
     }
 
-    /** Declared before {@code /{id}} cannot collide: Spring matches the literal segment first. */
+    /** Cannot collide with {@code /{id}}: Spring pattern specificity always prefers the literal {@code /reorder} segment over the {@code /{id}} template. */
     @PutMapping("/reorder")
     @Operation(summary = "API 25: Reorder Subscription Plans")
     public ResponseEntity<ApiResponse<List<PlanItem>>> reorder(@Valid @RequestBody ReorderRequest request) {

@@ -118,6 +118,9 @@ class AdminSubscriptionPlanApiTest {
         // Unknown sort property falls back to sortOrder,asc.
         assertEquals(List.of("Plan A", "Plan B", "Plan C"),
                 names(service.list(null, null, 0, 20, "notAColumn,desc").getContent()));
+        // A whitelisted property without an explicit direction defaults to ASC (not DESC).
+        assertEquals(List.of("Plan A", "Plan B", "Plan C"),
+                names(service.list(null, null, 0, 20, "planName").getContent()));
         // Size is clamped to 100.
         assertEquals(100, service.list(null, null, 0, 500, "sortOrder,asc").getSize());
         // features_json round-trips through the same normalization (used by create/update in Task 4).
@@ -636,15 +639,18 @@ class AdminSubscriptionPlanApiTest {
         PlanWriteRequest blank = new PlanWriteRequest("   ", null, new BigDecimal("1000"),
                 30, 1000, null, true, 0);
 
-        // Bean-validation failures use GlobalExceptionHandler's field→message map (data.<field>),
-        // not the service's data.errors[] list.
+        // Bean-validation failures render the spec §1.2 envelope (data.code + data.errors[]), the same
+        // shape ContestRules.invalid produces for service-level validation — ApiValidationAdvice takes
+        // precedence over GlobalExceptionHandler's legacy {field: message} map for these controllers.
         mvc.perform(post("/api/v1/admin/subscription-plans")
                         .with(as(admin))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json.writeValueAsString(blank)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false))
-                .andExpect(jsonPath("$.data.planName").exists());
+                .andExpect(jsonPath("$.data.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.data.errors[0].field").value("planName"))
+                .andExpect(jsonPath("$.data.errors[0].message").isNotEmpty());
     }
 
     // ------------------------------------------------------------------ helpers
