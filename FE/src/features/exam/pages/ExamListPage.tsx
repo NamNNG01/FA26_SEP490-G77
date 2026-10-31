@@ -106,10 +106,13 @@ export function ExamListPage() {
         })
         .catch((err) => {
           setModules([]);
-          toast.error(getApiErrorMessage(err, "Failed to load course modules."), {
-            title: "Could not load course modules",
-            duration: null,
-          });
+          toast.error(
+            getApiErrorMessage(err, "Failed to load course modules."),
+            {
+              title: "Could not load course modules",
+              duration: null,
+            },
+          );
         });
     } else {
       setModules([]);
@@ -162,8 +165,16 @@ export function ExamListPage() {
         let currentPage = 0;
         let hasMore = true;
         while (hasMore) {
-          const response = await examService.getExams({ ...filters, page: currentPage, size: 100 });
-          allAssessments.push(...(response.content || []).filter((exam) => exam.examKind !== "QUIZ" && exam.examKind !== "CODE"));
+          const response = await examService.getExams({
+            ...filters,
+            page: currentPage,
+            size: 100,
+          });
+          allAssessments.push(
+            ...(response.content || []).filter(
+              (exam) => exam.examKind !== "QUIZ" && exam.examKind !== "CODE",
+            ),
+          );
           hasMore = !response.last && response.content.length > 0;
           currentPage += 1;
         }
@@ -194,7 +205,8 @@ export function ExamListPage() {
       if (errorObj?.name === "CanceledError" || errorObj?.name === "AbortError")
         return;
       if (errorObj?.response?.status === 403) {
-        const message = "You do not have permission to view exams for this course.";
+        const message =
+          "You do not have permission to view exams for this course.";
         setError(message);
         toast.error(message, { title: "Could not load exams", duration: null });
       } else {
@@ -314,7 +326,8 @@ export function ExamListPage() {
   const handleEditExam = (exam: ExamListItem) => {
     if (exam.examKind === "QUIZ") {
       navigate(`/manager/exams/quiz/${exam.examId}`);
-    } else if (exam.examKind !== "CODE") navigate(`/manager/exams/essay/${exam.examId}`);
+    } else if (exam.examKind !== "CODE")
+      navigate(`/manager/exams/essay/${exam.examId}`);
   };
 
   const handleApplyStatusChange = async () => {
@@ -583,7 +596,9 @@ export function ExamListPage() {
 
         {error ? (
           <div className="p-12 text-center space-y-3">
-            <p className="text-sm text-danger font-medium">Exam list could not be loaded. See the notification for details.</p>
+            <p className="text-sm text-danger font-medium">
+              Exam list could not be loaded. See the notification for details.
+            </p>
             <Button size="sm" variant="outline" onClick={fetchExams}>
               Retry
             </Button>
@@ -696,10 +711,14 @@ export function ExamListPage() {
                       </td>
                       <td className="px-3 py-3">
                         <Badge
-                          variant={exam.examKind === "QUIZ" ? "purple" : "default"}
+                          variant={
+                            exam.examKind === "QUIZ" ? "purple" : "default"
+                          }
                           className="text-2xs"
                         >
-                          {exam.examKind === "DIAGRAM" || !exam.examKind ? "ESSAY" : exam.examKind}
+                          {exam.examKind === "DIAGRAM" || !exam.examKind
+                            ? "ESSAY"
+                            : exam.examKind}
                         </Badge>
                       </td>
                       <td className="px-3 py-3 text-center text-content-secondary font-medium">
@@ -722,7 +741,8 @@ export function ExamListPage() {
                           }
                           className="text-2xs"
                         >
-                          {exam.status}
+                          {exam.status.charAt(0) +
+                            exam.status.slice(1).toLowerCase()}
                         </Badge>
                       </td>
                       <td className="px-3 py-3 text-xs text-content-subtle whitespace-nowrap">
@@ -987,15 +1007,33 @@ export function ExamListPage() {
         size="sm"
         footer={
           <div className="flex items-center justify-end gap-2 w-full">
-            <Button variant="outline" onClick={() => setBulkDeleteConfirmOpen(false)} disabled={bulkDeleting}>Cancel</Button>
-            <Button variant="danger" onClick={handleBulkDelete} loading={bulkDeleting} disabled={bulkDeleting || selectedExamIds.size === 0}>
-              Delete {selectedExamIds.size} Exam{selectedExamIds.size === 1 ? '' : 's'}
+            <Button
+              variant="outline"
+              onClick={() => setBulkDeleteConfirmOpen(false)}
+              disabled={bulkDeleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={handleBulkDelete}
+              loading={bulkDeleting}
+              disabled={bulkDeleting || selectedExamIds.size === 0}
+            >
+              Delete {selectedExamIds.size} Exam
+              {selectedExamIds.size === 1 ? "" : "s"}
             </Button>
           </div>
         }
       >
         <p className="text-sm text-content">
-          Permanently delete the <strong>{selectedExamIds.size} selected exam{selectedExamIds.size === 1 ? '' : 's'}</strong>? This action cannot be undone. Exams with student attempts may fail to delete.
+          Permanently delete the{" "}
+          <strong>
+            {selectedExamIds.size} selected exam
+            {selectedExamIds.size === 1 ? "" : "s"}
+          </strong>
+          ? This action cannot be undone. Exams with student attempts may fail
+          to delete.
         </p>
       </Modal>
 

@@ -60,6 +60,7 @@ import {
   AuditLogsPage,
   SystemSettingsPage,
   CategoriesPage,
+  DiscountsPage,
 } from '@/features/admin';
 
 /**
@@ -329,6 +330,7 @@ function AppRoutes() {
           <Route path={ROUTES.adminUsers} element={<UsersPage />} />
           <Route path={`${ROUTES.adminUsers}/:userId`} element={<UserDetailPage />} />
           <Route path={ROUTES.adminCategories} element={<CategoriesPage />} />
+          <Route path={ROUTES.adminDiscounts} element={<DiscountsPage />} />
           <Route path={ROUTES.adminSubscriptions} element={<SubscriptionPackagesPage />} />
           <Route path={ROUTES.adminAnalytics} element={<AnalyticsPage />} />
           <Route path={ROUTES.adminAuditLogs} element={<AuditLogsPage />} />
