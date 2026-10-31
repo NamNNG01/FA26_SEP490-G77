@@ -11,6 +11,7 @@ import {
   type ImportStatusView,
 } from '@/services/studentDeck.service';
 import { plural } from './flashcardUi';
+import { FlashcardImportModal } from './FlashcardImportModal';
 
 const POLL_MS = 2000;
 const ACCEPT = '.csv,.xlsx';
@@ -49,7 +50,20 @@ function downloadTemplate(mode: DeckMode) {
  * Import cards from CSV / XLSX (FC-07), then poll FC-11 until the background
  * job finishes. Closing the modal stops polling; the import keeps running on the server.
  */
-export function ImportCardsModal({
+export function ImportCardsModal(props: {
+  deckId: number;
+  deckTitle?: string;
+  mode: DeckMode;
+  onClose: () => void;
+  onImported: () => void;
+}) {
+  if (props.mode === 'FLASHCARD') {
+    return <FlashcardImportModal deckId={props.deckId} deckTitle={props.deckTitle ?? 'this deck'} onClose={props.onClose} onImported={props.onImported} />;
+  }
+  return <LegacyImportCardsModal {...props} />;
+}
+
+function LegacyImportCardsModal({
   deckId,
   mode,
   onClose,

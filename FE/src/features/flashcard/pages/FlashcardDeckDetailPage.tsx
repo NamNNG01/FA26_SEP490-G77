@@ -8,6 +8,7 @@ import { useToast } from '@/components/ui/ToastHost';
 import { UnsavedChangesModal } from '@/components/common/UnsavedChangesModal';
 import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
 import { Icon } from '@/assets/icons';
+import { FlashcardImportModal } from '@/features/student/components/flashcards/FlashcardImportModal';
 import { ROUTES } from '@/app/routes';
 import { deckService, type Deck, type DeckUpdateRequest } from '@/services/deck.service';
 import {
@@ -66,6 +67,7 @@ export function FlashcardDeckDetailPage() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -196,7 +198,10 @@ export function FlashcardDeckDetailPage() {
           <section className="card p-5 space-y-4" aria-labelledby="deck-overview-title">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h3 id="deck-overview-title" className="text-lg font-semibold text-content">Deck Information</h3>
-              {dirty && <Button variant="ghost" size="sm" onClick={discardChanges} disabled={saving}>Discard changes</Button>}
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" icon={<Icon.Upload className="h-4 w-4" />} onClick={() => setImportOpen(true)} disabled={dirty || editor.hasInput || saving}>Import file</Button>
+                {dirty && <Button variant="ghost" size="sm" onClick={discardChanges} disabled={saving}>Discard changes</Button>}
+              </div>
             </div>
             {saveError && <Alert type="error" message={saveError} />}
             {/* Always editable — Save sends only the changed fields. */}
@@ -235,6 +240,8 @@ export function FlashcardDeckDetailPage() {
           be permanently deleted, together with every learner's progress on them. This cannot be undone.
         </p>
       </Modal>
+
+      {importOpen && <FlashcardImportModal deckId={deck.deckId} deckTitle={deck.title} onClose={() => setImportOpen(false)} onImported={() => { void refreshDeck(); }} />}
 
       <UnsavedChangesModal blocker={blocker} message="You have unsaved changes to this deck. If you leave now, they will be lost." />
     </div>
