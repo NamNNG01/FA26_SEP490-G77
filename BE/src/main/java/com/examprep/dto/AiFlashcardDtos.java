@@ -17,10 +17,10 @@ public final class AiFlashcardDtos {
             Integer reservedTokens
     ) {}
 
-    /** One generated card before it is saved into a deck ({@code tempId} is stable inside one generation). */
+    /** One generated card before it is saved into a deck ({@code tempId} such as {@code c1} is stable inside one generation). */
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record GenerationCard(
-            Long tempId,
+            String tempId,
             String frontText,
             String backText
     ) {}
