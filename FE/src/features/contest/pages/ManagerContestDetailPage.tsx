@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { Alert } from '@/components/ui/Alert';
-import { Tabs } from '@/components/ui/Tabs';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { Spinner } from '@/components/ui/Spinner';
 import { Avatar } from '@/components/ui/Avatar';
@@ -21,7 +20,6 @@ import {
   CANCEL_REASON_MAX,
   type ContestDetail,
   type LeaderboardRow,
-  type PrizeIssue,
 } from '@/services/managerContest.service';
 import {
   CONTEST_ERROR_TEXT,
@@ -31,11 +29,13 @@ import {
   RankingBadge,
   formatDateTime,
   formatDuration,
+  issueText,
   prizeValue,
 } from '../components/contestUi';
 import { PayRewardsDialog } from '../components/PayRewardsDialog';
 
-const TABS = ['Overview', 'Leaderboard'];
+/** The page reloads the contest (and its leaderboard) this often while the tab is visible. */
+const REFRESH_MS = 30_000;
 const LEADERBOARD_SIZE = 20;
 
 const errorText = (err: unknown, fallback: string) => {
@@ -50,40 +50,46 @@ export function ManagerContestDetailPage() {
   const [contest, setContest] = useState<ContestDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [tab, setTab] = useState(TABS[0]);
+  const [tick, setTick] = useState(0);
   const [publishing, setPublishing] = useState(false);
-  const [publishIssues, setPublishIssues] = useState<{ message: string; issues: PrizeIssue[] } | null>(null);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [working, setWorking] = useState(false);
   const [paying, setPaying] = useState(false);
 
-  const load = useCallback(async () => {
+  /** silent: background refresh — a failure keeps the data on screen instead of the error page. */
+  const load = useCallback(async (silent = false) => {
     if (!contestId) return;
-    setLoadError(null);
+    if (!silent) setLoadError(null);
     try {
       setContest(await managerContestService.get(contestId));
+      setTick(t => t + 1);
     } catch (err) {
-      setLoadError(errorText(err, 'Could not load the contest.'));
+      if (!silent) setLoadError(errorText(err, 'Could not load the contest.'));
     } finally {
       setLoading(false);
     }
   }, [contestId]);
   useEffect(() => { setLoading(true); void load(); }, [load]);
 
+  // Live numbers (participants, ranking, payments) every 30 s; paused while hidden or while a dialog is open.
+  const dialogOpen = cancelOpen || deleteOpen || paying;
+  useEffect(() => {
+    if (dialogOpen) return;
+    const id = window.setInterval(() => { if (document.visibilityState === 'visible') void load(true); }, REFRESH_MS);
+    return () => window.clearInterval(id);
+  }, [dialogOpen, load]);
+
   const publish = async () => {
     if (!contest) return;
     setPublishing(true);
-    setPublishIssues(null);
     try {
       setContest(await managerContestService.publish(contest.contestId));
       toast.success('Contest published.');
     } catch (err) {
-      const issues = contestErrorIssues(err);
-      const message = errorText(err, 'Could not publish the contest.');
-      if (issues.length || contestErrorCode(err)) setPublishIssues({ message, issues });
-      else toast.error(message);
+      const issues = contestErrorIssues(err).map(issueText);
+      toast.error(errorText(err, 'Could not publish the contest.'), { title: 'Could not publish', details: issues, duration: issues.length ? null : undefined });
     } finally {
       setPublishing(false);
     }
@@ -153,12 +159,6 @@ export function ManagerContestDetailPage() {
         </div>
       </header>
 
-      {publishIssues && (
-        <div className="space-y-2">
-          <Alert type="error" title="Could not publish" message={publishIssues.message} />
-          {publishIssues.issues.length > 0 && <div className="card p-3"><IssueList issues={publishIssues.issues} /></div>}
-        </div>
-      )}
       {blocked && (
         <div className="space-y-2 rounded-[10px] border border-warning-line bg-warning-light p-4">
           <p className="text-sm font-semibold text-warning-strong">Rewards cannot be paid yet</p>
@@ -180,9 +180,8 @@ export function ManagerContestDetailPage() {
         <Alert type="success" message={`Rewards paid ${formatDateTime(c.rewardedAt)}${c.rewardedBy ? ` by ${c.rewardedBy.fullName}` : ''}.`} />
       )}
 
-      <Tabs tabs={TABS} active={tab} onChange={setTab} variant="underline" />
-
-      {tab === 'Overview' ? <Overview contest={c} /> : <Leaderboard contest={c} />}
+      <Overview contest={c} />
+      {c.rankingStatus === 'READY' ? <Leaderboard contest={c} refreshKey={tick} /> : <Prizes contest={c} />}
 
       <Modal open={cancelOpen} onClose={() => !working && setCancelOpen(false)} title="Cancel this contest?" dismissible={!working}
         footer={<>
@@ -215,81 +214,75 @@ export function ManagerContestDetailPage() {
 }
 
 function Overview({ contest: c }: { contest: ContestDetail }) {
-  const ranked = c.rankingStatus === 'READY';
   return (
-    <div className="space-y-5">
-      <section className="card grid grid-cols-2 gap-4 p-5 sm:grid-cols-4">
-        <Info label="Starts">{formatDateTime(c.startTime)}</Info>
-        <Info label="Ends">{formatDateTime(c.endTime)}</Info>
-        <Info label="Participants">{c.participantCount.toLocaleString()}</Info>
-        <Info label="Prize ranks">{c.topN}</Info>
-        <Info label="Exam">{c.exam.title}</Info>
-        <Info label="Duration">{c.exam.durationMinutes} min</Info>
-        <Info label="Questions">{c.exam.questionCount}</Info>
-        <Info label="Max score">{c.exam.maxScore ?? '—'}</Info>
-        <Info label="Ranked">{formatDateTime(c.rankedAt)}</Info>
-        <Info label="Rewarded">{formatDateTime(c.rewardedAt)}</Info>
-        {c.description && <div className="col-span-2 sm:col-span-4"><Info label="Description"><p className="whitespace-pre-line font-normal text-content-secondary">{c.description}</p></Info></div>}
-      </section>
-
-      <section className="card overflow-hidden">
-        <div className="border-b border-line-soft px-5 py-3">
-          <h2 className="font-semibold text-content">Prizes</h2>
-          {!ranked && <p className="text-xs text-content-soft">Winners appear once the contest has ended and ranks are calculated.</p>}
-        </div>
-        {c.rewards.length === 0 ? (
-          <p className="px-5 py-8 text-center text-sm text-content-soft">No prizes yet. Add at least one before publishing.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] text-left text-sm">
-              <thead className="bg-surface-muted text-xs uppercase text-content-soft">
-                <tr><th className="px-5 py-2.5">Rank</th><th className="px-5 py-2.5">Discount</th><th className="px-5 py-2.5">Validity</th><th className="px-5 py-2.5">Winner</th><th className="px-5 py-2.5">Granted</th></tr>
-              </thead>
-              <tbody className="divide-y divide-line-soft">
-                {c.rewards.map(r => (
-                  <tr key={r.rewardId}>
-                    <td className="px-5 py-3 font-semibold text-content">#{r.rankPosition}</td>
-                    <td className="px-5 py-3"><p className="font-medium text-content">{r.discount.code}</p><p className="text-xs text-content-soft">{r.discount.name} · {prizeValue(r.discount.discountType, r.discount.value)}</p></td>
-                    <td className="px-5 py-3"><Badge variant={r.discount.validity === 'ACTIVE' ? 'success' : r.discount.validity === 'UPCOMING' ? 'info' : 'warning'}>{r.discount.validity}</Badge></td>
-                    <td className="px-5 py-3">{r.winner ? <span>{r.winner.fullName} <span className="text-xs text-content-soft">· {r.winner.score}</span></span> : <span className="text-content-soft">{ranked ? 'Nobody at this rank' : '—'}</span>}</td>
-                    <td className="px-5 py-3">{r.granted ? <span className="inline-flex items-center gap-1 text-success"><Icon.CheckCircle className="h-4 w-4" /> Yes</span> : <span className="text-content-soft">No</span>}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-    </div>
+    <section className="card grid grid-cols-2 gap-4 p-5 sm:grid-cols-4">
+      <Info label="Starts">{formatDateTime(c.startTime)}</Info>
+      <Info label="Ends">{formatDateTime(c.endTime)}</Info>
+      <Info label="Participants">{c.participantCount.toLocaleString()}</Info>
+      <Info label="Prize ranks">{c.topN}</Info>
+      <Info label="Exam">{c.exam.title}</Info>
+      <Info label="Duration">{c.exam.durationMinutes} min</Info>
+      <Info label="Questions">{c.exam.questionCount}</Info>
+      <Info label="Max score">{c.exam.maxScore ?? '—'}</Info>
+      <Info label="Ranked">{formatDateTime(c.rankedAt)}</Info>
+      <Info label="Rewarded">{formatDateTime(c.rewardedAt)}</Info>
+      {c.description && <div className="col-span-2 sm:col-span-4"><Info label="Description"><p className="whitespace-pre-line font-normal text-content-secondary">{c.description}</p></Info></div>}
+    </section>
   );
 }
 
-function Leaderboard({ contest }: { contest: ContestDetail }) {
+/** Before the contest is ranked: the prize of each rank. */
+function Prizes({ contest: c }: { contest: ContestDetail }) {
+  return (
+    <section className="card overflow-hidden">
+      <div className="border-b border-line-soft px-5 py-3">
+        <h2 className="font-semibold text-content">Prizes</h2>
+        <p className="text-xs text-content-soft">
+          {c.status === 'CANCELLED' ? 'The contest was cancelled before it was ranked.'
+            : c.rankingStatus === 'CALCULATING' ? CONTEST_ERROR_TEXT.RANKING_NOT_READY
+            : 'The leaderboard and winners appear once the contest has ended and ranks are calculated.'}
+        </p>
+      </div>
+      {c.rewards.length === 0 ? (
+        <p className="px-5 py-8 text-center text-sm text-content-soft">No prizes yet. Add at least one before publishing.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[560px] text-left text-sm">
+            <thead className="bg-surface-muted text-xs uppercase text-content-soft">
+              <tr><th className="px-5 py-2.5">Rank</th><th className="px-5 py-2.5">Discount</th><th className="px-5 py-2.5">Validity</th></tr>
+            </thead>
+            <tbody className="divide-y divide-line-soft">
+              {c.rewards.map(r => (
+                <tr key={r.rewardId}>
+                  <td className="px-5 py-3 font-semibold text-content">#{r.rankPosition}</td>
+                  <td className="px-5 py-3"><p className="font-medium text-content">{r.discount.code}</p><p className="text-xs text-content-soft">{r.discount.name} · {prizeValue(r.discount.discountType, r.discount.value)}</p></td>
+                  <td className="px-5 py-3"><Badge variant={r.discount.validity === 'ACTIVE' ? 'success' : r.discount.validity === 'UPCOMING' ? 'info' : 'warning'}>{r.discount.validity}</Badge></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** Once ranked: one table of rank, student, score and the prize of that rank (granted or not). */
+function Leaderboard({ contest, refreshKey }: { contest: ContestDetail; refreshKey: number }) {
   const [page, setPage] = useState(1);
   const [data, setData] = useState<PageResponse<LeaderboardRow> | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const ready = contest.rankingStatus === 'READY';
+  const toast = useToast();
 
   useEffect(() => {
-    if (!ready) return;
     let cancelled = false;
     setLoading(true);
-    setError(null);
     managerContestService.leaderboard(contest.contestId, page - 1, LEADERBOARD_SIZE)
       .then(res => { if (!cancelled) setData(res); })
-      .catch(err => { if (!cancelled) setError(errorText(err, 'Could not load the leaderboard.')); })
+      .catch(err => { if (!cancelled) toast.error(errorText(err, 'Could not load the leaderboard.')); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [contest.contestId, contest.rewardedAt, page, ready]);
-
-  if (!ready) {
-    const message = contest.status === 'CANCELLED' ? 'The contest was cancelled before it was ranked.'
-      : contest.rankingStatus === 'CALCULATING' ? CONTEST_ERROR_TEXT.RANKING_NOT_READY
-      : 'The leaderboard opens after the contest ends and ranks are calculated.';
-    return <div className="card px-5 py-10 text-center text-sm text-content-soft">{message}</div>;
-  }
-  if (error) return <Alert type="error" message={error} />;
+  }, [contest.contestId, page, refreshKey, toast]);
 
   const columns: TableColumn[] = [
     { key: 'rank', label: 'Rank', width: '72px', render: row => <span className="font-semibold text-content">#{Number(row.rank)}</span> },
@@ -302,28 +295,37 @@ function Leaderboard({ contest }: { contest: ContestDetail }) {
     },
     { key: 'score', label: 'Score', render: row => <span className="tabular-nums">{row.score == null ? '—' : String(row.score)}</span> },
     { key: 'timeSpentSeconds', label: 'Time', render: row => <span className="tabular-nums text-content-secondary">{formatDuration(row.timeSpentSeconds as number | null)}</span> },
-    { key: 'submittedAt', label: 'Submitted', render: row => <span className="whitespace-nowrap text-content-secondary">{formatDateTime(row.submittedAt as string | null)}</span> },
     {
       key: 'reward', label: 'Prize',
       render: row => {
         const r = row as unknown as LeaderboardRow;
+        return r.reward
+          ? <span className="whitespace-nowrap font-medium text-content">{r.reward.code} <span className="text-xs font-normal text-content-soft">· {prizeValue(r.reward.discountType, r.reward.value)}</span></span>
+          : <span className="text-content-soft">—</span>;
+      },
+    },
+    {
+      key: 'granted', label: 'Reward',
+      render: row => {
+        const r = row as unknown as LeaderboardRow;
         if (!r.reward) return <span className="text-content-soft">—</span>;
-        return (
-          <div className="whitespace-nowrap">
-            <p className="font-medium text-content">{r.reward.code} <span className="text-xs font-normal text-content-soft">· {prizeValue(r.reward.discountType, r.reward.value)}</span></p>
-            <p className="text-xs">{r.rewardGranted ? <span className="text-success">Granted {formatDateTime(r.rewardGrantedAt)}</span> : <span className="text-content-soft">Not granted yet</span>}</p>
-          </div>
-        );
+        return r.rewardGranted
+          ? <span className="inline-flex items-center gap-1 whitespace-nowrap text-success" title={formatDateTime(r.rewardGrantedAt)}><Icon.CheckCircle className="h-4 w-4" /> Paid</span>
+          : <Badge variant="warning">Not paid</Badge>;
       },
     },
   ];
 
   return (
-    <div className={`card overflow-hidden transition-opacity ${loading && data ? 'opacity-60' : ''}`} aria-busy={loading}>
+    <section className={`card overflow-hidden transition-opacity ${loading && data ? 'opacity-60' : ''}`} aria-busy={loading}>
+      <div className="border-b border-line-soft px-5 py-3">
+        <h2 className="font-semibold text-content">Leaderboard &amp; prizes</h2>
+        <p className="text-xs text-content-soft">Ranked {formatDateTime(contest.rankedAt)} · updates every 30 seconds.</p>
+      </div>
       <Table columns={columns} data={(data?.content ?? []).map(r => ({ ...r, id: `${r.rank}-${r.user.userId}` })) as unknown as Record<string, unknown>[]}
         perPage={LEADERBOARD_SIZE} unit="participants"
         serverPagination={{ page, total: data?.totalElements ?? 0, onChange: setPage }}
         emptyState={loading ? 'Loading leaderboard…' : 'Nobody submitted this contest.'} />
-    </div>
+    </section>
   );
 }

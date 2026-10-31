@@ -13,6 +13,7 @@ import { ROUTES, managerContestPath } from '@/app/routes';
 import { courseService, type CourseSummaryItem } from '@/services/course.service';
 import {
   managerContestService,
+  quizExamIds,
   contestErrorCode,
   contestErrorIssues,
   contestFieldErrors,
@@ -23,9 +24,8 @@ import {
   type ContestDiscountOption,
   type ContestExamOption,
   type ContestWrite,
-  type PrizeIssue,
 } from '@/services/managerContest.service';
-import { CONTEST_ERROR_TEXT, ContestStatusBadge, IssueList, hcmInputToIso, prizeValue, toHcmInput } from '../components/contestUi';
+import { CONTEST_ERROR_TEXT, ContestStatusBadge, hcmInputToIso, issueText, prizeValue, toHcmInput } from '../components/contestUi';
 
 type FormState = {
   title: string;
@@ -72,7 +72,6 @@ export function ManagerContestFormPage({ mode }: { mode: 'create' | 'edit' }) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState<'save' | 'publish' | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const [formError, setFormError] = useState<{ message: string; issues: PrizeIssue[] } | null>(null);
 
   const scope = editScope(contest);
 
@@ -116,14 +115,16 @@ export function ManagerContestFormPage({ mode }: { mode: 'create' | 'edit' }) {
     return () => { cancelled = true; };
   }, [contestId, mode]);
 
-  // Eligible exams of the chosen course (API 11). The contest's own exam is "in an active contest", so add it back.
+  // Eligible quiz exams of the chosen course (API 11 ∩ quiz exams). The contest's own exam is
+  // "in an active contest", so API 11 leaves it out — add it back.
   useEffect(() => {
     if (!form.courseId) { setExams([]); return; }
     let cancelled = false;
     setExamsLoading(true);
-    managerContestService.allExamOptions(Number(form.courseId))
-      .then(list => {
+    Promise.all([managerContestService.allExamOptions(Number(form.courseId)), quizExamIds(Number(form.courseId))])
+      .then(([options, quizIds]) => {
         if (cancelled) return;
+        let list = options.filter(e => (quizIds ? quizIds.has(e.examId) : !e.hasEssayQuestions));
         const own = contest?.exam;
         if (own && contest?.course && String(contest.course.courseId) === form.courseId && !list.some(e => e.examId === own.examId)) {
           list = [{ examId: own.examId, title: own.title, courseId: contest.course.courseId, durationMinutes: own.durationMinutes,
@@ -198,19 +199,17 @@ export function ManagerContestFormPage({ mode }: { mode: 'create' | 'edit' }) {
     const fields = contestFieldErrors(err);
     setFieldErrors(fields);
     const code = contestErrorCode(err);
-    setFormError({
-      message: Object.keys(fields).length && code === 'VALIDATION_FAILED'
-        ? 'Some fields are not valid.'
-        : (code && CONTEST_ERROR_TEXT[code]) || getApiErrorMessage(err, fallback),
-      issues: contestErrorIssues(err),
-    });
+    const issues = contestErrorIssues(err).map(issueText);
+    toast.error(Object.keys(fields).length && code === 'VALIDATION_FAILED'
+      ? 'Some fields are not valid.'
+      : (code && CONTEST_ERROR_TEXT[code]) || getApiErrorMessage(err, fallback),
+    { details: issues.length ? issues : Object.values(fields), duration: issues.length ? null : undefined });
   };
 
   const submit = async (publish: boolean) => {
-    setFormError(null);
     const errors = validate(publish);
     setFieldErrors(errors);
-    if (Object.keys(errors).length) { setFormError({ message: 'Please fix the highlighted fields.', issues: [] }); return; }
+    if (Object.keys(errors).length) { toast.error('Please fix the highlighted fields.', { details: Object.values(errors) }); return; }
     setSaving(publish ? 'publish' : 'save');
     let saved: ContestDetail;
     try {
@@ -280,12 +279,6 @@ export function ManagerContestFormPage({ mode }: { mode: 'create' | 'edit' }) {
       {contest?.status === 'ONGOING' && <Alert type="info" message="The contest is running: only the title, description and a later end time can change." />}
       {contest?.status === 'PENDING_REWARD' && <Alert type="info" message="The contest has ended: only the title, description and the discount of each prize rank can change." />}
       {contest?.status === 'UPCOMING' && <Alert type="info" message="Changing the exam, start time or prizes of a published contest re-runs the publish checks." />}
-      {formError && (
-        <div className="space-y-2">
-          <Alert type="error" message={formError.message} />
-          {formError.issues.length > 0 && <div className="card p-3"><IssueList issues={formError.issues} /></div>}
-        </div>
-      )}
 
       <section className="card space-y-4 p-5">
         <h2 className="font-semibold text-content">Details</h2>
@@ -311,7 +304,7 @@ export function ManagerContestFormPage({ mode }: { mode: 'create' | 'edit' }) {
               options={exams.map(e => ({ label: `${e.title} · ${e.durationMinutes} min · ${e.questionCount} questions`, value: String(e.examId) }))} />
             {fieldErrors.examId && <span className="text-xs text-danger">{fieldErrors.examId}</span>}
             {scope.full && form.courseId && !examsLoading && (
-              <span className="text-xs text-content-soft">Only published, non-practice exams that are not in another active contest are listed.</span>
+              <span className="text-xs text-content-soft">Only published quiz exams that are not in another active contest are listed.</span>
             )}
           </div>
         </div>
@@ -335,7 +328,7 @@ export function ManagerContestFormPage({ mode }: { mode: 'create' | 'edit' }) {
           </div>
           {scope.full && (
             <Button size="sm" variant="outline" icon={<Icon.Plus className="h-4 w-4" />} disabled={form.rewards.length >= MAX_PRIZE_RANKS}
-              onClick={() => update('rewards', [...form.rewards, form.rewards[form.rewards.length - 1] ?? ''])}>
+              onClick={() => update('rewards', [...form.rewards, ''])}>
               Add rank
             </Button>
           )}

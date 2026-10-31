@@ -50,7 +50,6 @@ export function ManagerContestListPage() {
   const [sort, setSort] = useState(SORTS[0].value);
   const [courses, setCourses] = useState<CourseSummaryItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   /** Payable contests picked for API 10, kept across pages (id → title). */
   const [selected, setSelected] = useState<Map<number, string>>(new Map());
   const [batchConfirm, setBatchConfirm] = useState(false);
@@ -73,7 +72,6 @@ export function ManagerContestListPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    setError(null);
     try {
       setPage(await managerContestService.list({
         keyword: search, status: statuses, courseId: courseId ? Number(courseId) : undefined,
@@ -83,12 +81,12 @@ export function ManagerContestListPage() {
       }));
     } catch (err) {
       const code = contestErrorCode(err);
-      setError((code && CONTEST_ERROR_TEXT[code]) || getApiErrorMessage(err, 'Could not load contests.'));
+      toast.error((code && CONTEST_ERROR_TEXT[code]) || getApiErrorMessage(err, 'Could not load contests.'));
       setPage(EMPTY);
     } finally {
       setLoading(false);
     }
-  }, [courseId, from, search, pageIndex, sort, statuses, to]);
+  }, [courseId, from, search, pageIndex, sort, statuses, to, toast]);
   useEffect(() => { void load(); }, [load]);
 
   const resetPage = () => setPageIndex(1);
@@ -107,14 +105,6 @@ export function ManagerContestListPage() {
       return next;
     });
   };
-  const payableOnPage = page.content.filter(c => c.canPayReward);
-  const allOnPage = payableOnPage.length > 0 && payableOnPage.every(c => selected.has(c.contestId));
-  const toggleAllOnPage = () => setSelected(prev => {
-    const next = new Map(prev);
-    if (allOnPage) payableOnPage.forEach(c => next.delete(c.contestId));
-    else payableOnPage.forEach(c => { if (next.size < MAX_BATCH_PAY) next.set(c.contestId, c.title); });
-    return next;
-  });
 
   const payBatch = async () => {
     setBatchPaying(true);
@@ -234,15 +224,7 @@ export function ManagerContestListPage() {
         </div>
       )}
 
-      {error && <Alert type="error" message={error} />}
-
       <div className={`card overflow-hidden transition-opacity ${loading && page.content.length ? 'opacity-60' : ''}`} aria-busy={loading}>
-        {payableOnPage.length > 0 && (
-          <div className="flex items-center gap-2 border-b border-line-soft px-4 py-2 text-xs text-content-soft">
-            <Checkbox checked={allOnPage} indeterminate={!allOnPage && payableOnPage.some(c => selected.has(c.contestId))} onChange={toggleAllOnPage} />
-            Select every payable contest on this page
-          </div>
-        )}
         <Table columns={columns} data={page.content.map(c => ({ ...c, id: c.contestId })) as unknown as Record<string, unknown>[]}
           perPage={PAGE_SIZE} unit="contests"
           serverPagination={{ page: pageIndex, total: page.totalElements, onChange: setPageIndex }}

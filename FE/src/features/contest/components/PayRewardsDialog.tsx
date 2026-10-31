@@ -3,6 +3,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Alert';
 import { Icon } from '@/assets/icons';
+import { useToast } from '@/components/ui/ToastHost';
 import { getApiErrorMessage } from '@/utils/apiError';
 import {
   managerContestService,
@@ -11,15 +12,10 @@ import {
   type PayResult,
   type PrizeIssue,
 } from '@/services/managerContest.service';
-import { CONTEST_ERROR_TEXT, IssueList } from './contestUi';
-
-type Phase =
-  | { kind: 'confirm' }
-  | { kind: 'paid'; result: PayResult }
-  | { kind: 'failed'; message: string; issues: PrizeIssue[] };
+import { CONTEST_ERROR_TEXT, IssueList, issueText } from './contestUi';
 
 /**
- * Confirm → API 9 → winners, or the reasons nothing was paid (all-or-nothing).
+ * Confirm → API 9 → winners. A failure (nothing paid: all-or-nothing) is a toast with the reasons.
  * `blockers` are the detail page's live payBlockers, shown before the manager confirms.
  */
 export function PayRewardsDialog({ contest, blockers = [], onClose, onPaid }: {
@@ -29,42 +25,45 @@ export function PayRewardsDialog({ contest, blockers = [], onClose, onPaid }: {
   /** Called after a successful payment (the dialog stays open on the winners list). */
   onPaid: (result: PayResult) => void;
 }) {
-  const [phase, setPhase] = useState<Phase>({ kind: 'confirm' });
+  const toast = useToast();
+  const [result, setResult] = useState<PayResult | null>(null);
   const [paying, setPaying] = useState(false);
+  const contestId = contest?.contestId ?? null;
 
-  useEffect(() => { if (contest) setPhase({ kind: 'confirm' }); }, [contest]);
+  // Reset only when another contest is opened: the parent reloads (new object, same id) after paying,
+  // and that must not bring the confirm step back.
+  useEffect(() => { setResult(null); }, [contestId]);
 
   const pay = async () => {
     if (!contest) return;
     setPaying(true);
     try {
-      const result = await managerContestService.payRewards(contest.contestId);
-      setPhase({ kind: 'paid', result });
-      onPaid(result);
+      const paid = await managerContestService.payRewards(contest.contestId);
+      setResult(paid);
+      onPaid(paid);
     } catch (err) {
       const code = contestErrorCode(err);
-      setPhase({
-        kind: 'failed',
-        message: (code && CONTEST_ERROR_TEXT[code]) || getApiErrorMessage(err, 'Could not pay the rewards.'),
-        issues: contestErrorIssues(err),
-      });
+      const issues = contestErrorIssues(err).map(issueText);
+      toast.error((code && CONTEST_ERROR_TEXT[code]) || getApiErrorMessage(err, 'Could not pay the rewards.'),
+        { details: issues, duration: issues.length ? null : undefined });
+      onClose();
     } finally {
       setPaying(false);
     }
   };
 
-  const close = () => { if (!paying) onClose(); };
+  const close = () => { if (!paying) { setResult(null); onClose(); } };
 
-  const footer = phase.kind === 'confirm'
-    ? <>
+  const footer = result
+    ? <Button onClick={close}>Close</Button>
+    : <>
         <Button variant="outline" disabled={paying} onClick={close}>Cancel</Button>
         <Button loading={paying} disabled={paying} icon={<Icon.Award className="h-4 w-4" />} onClick={() => void pay()}>Pay rewards</Button>
-      </>
-    : <Button onClick={close}>Close</Button>;
+      </>;
 
   return (
-    <Modal open={!!contest} onClose={close} title={phase.kind === 'paid' ? 'Rewards paid' : 'Pay rewards?'} footer={footer} dismissible={!paying}>
-      {phase.kind === 'confirm' && (
+    <Modal open={!!contest} onClose={close} title={result ? 'Rewards paid' : 'Pay rewards?'} footer={footer} dismissible={!paying}>
+      {!result ? (
         <div className="space-y-3">
           <p className="text-sm text-content-secondary">
             Grant the prize discounts of <strong>{contest?.title}</strong> to its winners. Ranks without a participant are skipped.
@@ -78,16 +77,14 @@ export function PayRewardsDialog({ contest, blockers = [], onClose, onPaid }: {
             </div>
           )}
         </div>
-      )}
-
-      {phase.kind === 'paid' && (
+      ) : (
         <div className="space-y-3">
-          <Alert type="success" message={phase.result.rewardsGranted
-            ? `Granted ${phase.result.rewardsGranted} prize${phase.result.rewardsGranted === 1 ? '' : 's'}.`
+          <Alert type="success" message={result.rewardsGranted
+            ? `Granted ${result.rewardsGranted} prize${result.rewardsGranted === 1 ? '' : 's'}.`
             : 'Nobody took part, so no prizes were granted. The contest is now rewarded.'} />
-          {phase.result.winners.length > 0 && (
+          {result.winners.length > 0 && (
             <ul className="divide-y divide-line-soft rounded-[10px] border border-line-soft">
-              {phase.result.winners.map(w => (
+              {result.winners.map(w => (
                 <li key={`${w.rank}-${w.userId}`} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
                   <span className="min-w-0 truncate"><span className="font-semibold text-content">#{w.rank}</span> {w.fullName}</span>
                   <span className="font-mono text-xs text-content-soft">{w.discount.code}</span>
@@ -95,13 +92,6 @@ export function PayRewardsDialog({ contest, blockers = [], onClose, onPaid }: {
               ))}
             </ul>
           )}
-        </div>
-      )}
-
-      {phase.kind === 'failed' && (
-        <div className="space-y-3">
-          <Alert type="error" message={phase.message} />
-          <IssueList issues={phase.issues} />
         </div>
       )}
     </Modal>

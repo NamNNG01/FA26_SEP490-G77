@@ -1,6 +1,7 @@
 import { api } from './api';
 import type { ApiResponse } from '@/auth/authContext';
 import type { PageResponse } from './course.service';
+import { examService } from './exam.service';
 
 /**
  * ManagerContestService — contests of the courses the caller manages (Deadline 2, APIs 1-12).
@@ -204,6 +205,23 @@ export interface ContestDiscountOption {
   value: number;
   remaining: number;
   expiredAt: string | null;
+}
+
+/**
+ * Ids of the course's QUIZ exams (manager exam list, examKind=QUIZ) — contests run on quiz exams only.
+ * API 11 does not filter by kind yet (docs/notes/contest-be-gaps-2026-10-31.md); null when the list fails.
+ */
+export async function quizExamIds(courseId: number): Promise<Set<number> | null> {
+  try {
+    const ids = new Set<number>();
+    for (let page = 0; ; page++) {
+      const res = await examService.getExams({ courseId, examKind: 'QUIZ', page, size: 100 });
+      res.content.filter(e => e.examKind === 'QUIZ').forEach(e => ids.add(e.examId));
+      if (res.last || res.content.length === 0 || page + 1 >= res.totalPages) return ids;
+    }
+  } catch {
+    return null;
+  }
 }
 
 // ------------------------------------------------------------- errors
