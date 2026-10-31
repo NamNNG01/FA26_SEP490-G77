@@ -32,8 +32,9 @@ export interface FlashcardImportPreview {
 export interface FlashcardBulkRequest {
   deckId?: number;
   newDeck?: { title: string; description?: string; isPublic: boolean; courseId: number | null };
-  source: 'IMPORT';
-  aiGenerationId: null;
+  source: 'IMPORT' | 'AI';
+  /** Required when source = AI (the API 31 generationId). */
+  aiGenerationId: number | null;
   skipDuplicates: boolean;
   cards: { frontText: string; backText: string }[];
 }
