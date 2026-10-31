@@ -15,6 +15,8 @@ import java.util.Optional;
 public interface SubscriptionPlanRepository extends JpaRepository<SubscriptionPlan, Long> {
     List<SubscriptionPlan> findByIsActiveTrueAndDeletedAtIsNullOrderBySortOrderAscPlanIdAsc();
     Optional<SubscriptionPlan> findByPlanIdAndIsActiveTrueAndDeletedAtIsNull(Long planId);
+    /** API 22/23 uniqueness: names are case-insensitive among non-deleted plans only. */
+    Optional<SubscriptionPlan> findByPlanNameIgnoreCaseAndDeletedAtIsNull(String planName);
     @Query("select p from SubscriptionPlan p where p.planId = :id and p.deletedAt is null")
     Optional<SubscriptionPlan> findAvailable(@Param("id") Long id);
 

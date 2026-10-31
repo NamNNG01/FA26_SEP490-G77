@@ -198,6 +198,130 @@ class AdminSubscriptionPlanApiTest {
                 "features_json must survive the Hibernate/DB binding unchanged");
     }
 
+    // ------------------------------------------------------------------ create / update (API 22, 23)
+
+    @Test
+    void createPlanReturns201ShapeAndRoundTripsFeatures() {
+        PlanWriteRequest request = new PlanWriteRequest("  New Plan  ", "new description", new BigDecimal("150000"),
+                15, 50000, java.util.Arrays.asList("  Feature one  ", "", null, "Feature two"), null, null);
+
+        PlanDetail detail = service.create(request);
+
+        assertNotNull(detail.planId());
+        assertEquals("New Plan", detail.planName());
+        assertEquals("new description", detail.description());
+        assertEquals(0, new BigDecimal("150000").compareTo(detail.price()));
+        assertEquals("VND", detail.currency());
+        assertEquals(15, detail.durationDays());
+        assertEquals(50000, detail.aiTokenLimit());
+        assertEquals(List.of("Feature one", "Feature two"), detail.features());
+        assertTrue(detail.isActive(), "isActive defaults to true");
+        assertEquals(0, detail.sortOrder(), "sortOrder defaults to 0");
+        assertEquals(0L, detail.activeSubscribers());
+        assertEquals(0L, detail.totalSubscribers());
+        assertNotNull(detail.createdAt());
+        assertNotNull(detail.updatedAt());
+
+        em.flush();
+        em.clear();
+        SubscriptionPlan persisted = planRepository.findAvailable(detail.planId()).orElseThrow();
+        assertEquals("New Plan", persisted.getPlanName());
+        assertTrue(persisted.getIsActive());
+        assertEquals(0, persisted.getSortOrder());
+        assertNotNull(persisted.getCreatedAt());
+        assertEquals(List.of("Feature one", "Feature two"), service.readFeatures(persisted.getFeaturesJson()));
+    }
+
+    @Test
+    void createPlanRejectsDuplicateNameCaseInsensitive() {
+        BaseException duplicate = assertThrows(BaseException.class, () -> service.create(new PlanWriteRequest(
+                " plan a ", null, new BigDecimal("1000"), 30, 1000, null, true, 0)));
+
+        assertEquals(ResponseCode.CONFLICT, duplicate.getResponseCode());
+        assertEquals(409, duplicate.getResponseCode().getHttpStatus().value());
+        assertEquals("PLAN_NAME_EXISTS", ((Map<?, ?>) duplicate.getData()).get("code"));
+    }
+
+    @Test
+    void createPlanRejectsTooManyFeatures() {
+        List<String> features = java.util.stream.IntStream.rangeClosed(1, 21)
+                .mapToObj(i -> "Feature " + i).toList();
+
+        BaseException invalid = assertThrows(BaseException.class, () -> service.create(new PlanWriteRequest(
+                "Many features", null, new BigDecimal("1000"), 30, 1000, features, true, 0)));
+
+        assertEquals(ResponseCode.VALIDATION_ERROR, invalid.getResponseCode());
+        assertEquals(400, invalid.getResponseCode().getHttpStatus().value());
+        Map<?, ?> data = (Map<?, ?>) invalid.getData();
+        assertEquals("VALIDATION_FAILED", data.get("code"));
+        List<?> errors = (List<?>) data.get("errors");
+        assertEquals("features", ((Map<?, ?>) errors.get(0)).get("field"));
+    }
+
+    @Test
+    void createPlanRejectsTooLongFeatureItems() {
+        String tooLong = "x".repeat(201);
+
+        BaseException invalid = assertThrows(BaseException.class, () -> service.create(new PlanWriteRequest(
+                "Long feature", null, new BigDecimal("1000"), 30, 1000, List.of(tooLong), true, 0)));
+
+        assertEquals(ResponseCode.VALIDATION_ERROR, invalid.getResponseCode());
+        Map<?, ?> data = (Map<?, ?>) invalid.getData();
+        assertEquals("VALIDATION_FAILED", data.get("code"));
+        List<?> errors = (List<?>) data.get("errors");
+        assertEquals("features", ((Map<?, ?>) errors.get(0)).get("field"));
+    }
+
+    @Test
+    void updatePlanReplacesFieldsAndNeverTouchesSubscriptionSnapshot() {
+        UserSubscription snapshot = subscriptionRepository.findAll().stream()
+                .filter(s -> s.getPlan().getPlanId().equals(planA.getPlanId()))
+                .filter(s -> "ACTIVE".equals(s.getStatus()))
+                .findFirst().orElseThrow();
+        Long subscriptionId = snapshot.getSubscriptionId();
+        BigDecimal paidAmount = snapshot.getPaidAmount();
+        Instant startDate = snapshot.getStartDate();
+        em.clear();
+        Instant createdAt = planRepository.findAvailable(planA.getPlanId()).orElseThrow().getCreatedAt();
+
+        PlanDetail updated = service.update(planA.getPlanId(), new PlanWriteRequest(
+                "Plan A Plus", "updated description", new BigDecimal("199000"), 60, 300000,
+                List.of("  New feature  ", "Second feature"), false, 7));
+
+        assertEquals(planA.getPlanId(), updated.planId());
+        assertEquals("Plan A Plus", updated.planName());
+        assertEquals("updated description", updated.description());
+        assertEquals(0, new BigDecimal("199000").compareTo(updated.price()));
+        assertEquals(60, updated.durationDays());
+        assertEquals(300000, updated.aiTokenLimit());
+        assertEquals(List.of("New feature", "Second feature"), updated.features());
+        assertFalse(updated.isActive());
+        assertEquals(7, updated.sortOrder());
+        assertEquals("VND", updated.currency());
+        assertEquals(createdAt, updated.createdAt(), "created_at is immutable on update");
+
+        em.flush();
+        em.clear();
+        SubscriptionPlan persisted = planRepository.findAvailable(planA.getPlanId()).orElseThrow();
+        assertEquals(0, new BigDecimal("199000").compareTo(persisted.getPrice()));
+
+        UserSubscription reloaded = subscriptionRepository.findById(subscriptionId).orElseThrow();
+        assertEquals(0, paidAmount.compareTo(reloaded.getPaidAmount()),
+                "paid_amount is a snapshot and must survive plan price edits");
+        assertEquals("ACTIVE", reloaded.getStatus());
+        assertEquals(planA.getPlanId(), reloaded.getPlan().getPlanId());
+        assertEquals(startDate, reloaded.getStartDate());
+    }
+
+    @Test
+    void updateSoftDeletedPlanReturns404() {
+        BaseException missing = assertThrows(BaseException.class, () -> service.update(planD.getPlanId(),
+                new PlanWriteRequest("Plan D delete", null, new BigDecimal("1000"), 30, 1000, null, true, 0)));
+
+        assertEquals(ResponseCode.RESOURCE_NOT_FOUND, missing.getResponseCode());
+        assertEquals("PLAN_NOT_FOUND", ((Map<?, ?>) missing.getData()).get("code"));
+    }
+
     // ------------------------------------------------------------------ helpers
 
     private static List<String> names(List<PlanItem> items) {

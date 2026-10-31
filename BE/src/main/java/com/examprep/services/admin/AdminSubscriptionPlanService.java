@@ -3,6 +3,7 @@ package com.examprep.services.admin;
 import com.examprep.dto.AdminPlanDtos;
 import com.examprep.dto.AdminPlanDtos.PlanDetail;
 import com.examprep.dto.AdminPlanDtos.PlanItem;
+import com.examprep.dto.AdminPlanDtos.PlanWriteRequest;
 import com.examprep.dto.AdminPlanDtos.PublicPlanItem;
 import com.examprep.dto.PageResponse;
 import com.examprep.dto.ResponseCode;
@@ -85,6 +86,54 @@ public class AdminSubscriptionPlanService {
         return planRepository.findByIsActiveTrueAndDeletedAtIsNullOrderBySortOrderAscPlanIdAsc().stream()
                 .map(p -> toPublic(p, readFeatures(p.getFeaturesJson())))
                 .toList();
+    }
+
+    // ------------------------------------------------------------------ create / update (API 22, 23)
+
+    public PlanDetail create(PlanWriteRequest req) {
+        String planName = planName(req);
+        if (planRepository.findByPlanNameIgnoreCaseAndDeletedAtIsNull(planName).isPresent()) {
+            throw ContestRules.error(ResponseCode.CONFLICT, "PLAN_NAME_EXISTS", "Subscription plan name already exists");
+        }
+
+        SubscriptionPlan plan = SubscriptionPlan.builder()
+                .planName(planName)
+                .description(req.description())
+                .price(req.price())
+                .durationDays(req.durationDays())
+                .aiTokenLimit(req.aiTokenLimit())
+                .featuresJson(writeFeatures(validateFeatures(req.features())))
+                .isActive(req.isActive() != null ? req.isActive() : true)
+                .sortOrder(req.sortOrder() != null ? req.sortOrder() : 0)
+                .build();
+
+        SubscriptionPlan saved = planRepository.save(plan);
+        return detail(saved.getPlanId());
+    }
+
+    /** Full replace — running subscriptions keep their {@code paid_amount} snapshot (separate table). */
+    public PlanDetail update(Long id, PlanWriteRequest req) {
+        SubscriptionPlan plan = planRepository.findAvailable(id)
+                .orElseThrow(() -> ContestRules.error(ResponseCode.RESOURCE_NOT_FOUND, "PLAN_NOT_FOUND", "Subscription plan not found"));
+
+        String planName = planName(req);
+        planRepository.findByPlanNameIgnoreCaseAndDeletedAtIsNull(planName)
+                .filter(other -> !other.getPlanId().equals(id))
+                .ifPresent(other -> {
+                    throw ContestRules.error(ResponseCode.CONFLICT, "PLAN_NAME_EXISTS", "Subscription plan name already exists");
+                });
+
+        plan.setPlanName(planName);
+        plan.setDescription(req.description());
+        plan.setPrice(req.price());
+        plan.setDurationDays(req.durationDays());
+        plan.setAiTokenLimit(req.aiTokenLimit());
+        plan.setFeaturesJson(writeFeatures(validateFeatures(req.features())));
+        plan.setIsActive(req.isActive() != null ? req.isActive() : true);
+        plan.setSortOrder(req.sortOrder() != null ? req.sortOrder() : 0);
+
+        planRepository.save(plan);
+        return detail(id);
     }
 
     // ------------------------------------------------------------------ mapping
@@ -180,6 +229,33 @@ public class AdminSubscriptionPlanService {
     }
 
     // ------------------------------------------------------------------ helpers
+
+    private static String planName(PlanWriteRequest req) {
+        String name = req.planName() == null ? "" : req.planName().trim();
+        if (name.isEmpty()) {
+            throw ContestRules.invalid("planName", "Tên gói không được để trống");
+        }
+        return name;
+    }
+
+    /** Trims, drops null/blank entries, then rejects >20 items or >200 chars instead of truncating silently. */
+    private static List<String> validateFeatures(List<String> features) {
+        if (features == null) return List.of();
+        List<String> normalized = new ArrayList<>();
+        for (String feature : features) {
+            if (feature == null) continue;
+            String value = feature.trim();
+            if (value.isEmpty()) continue;
+            if (value.length() > MAX_FEATURE_LENGTH) {
+                throw ContestRules.invalid("features", "Mỗi mục tối đa " + MAX_FEATURE_LENGTH + " ký tự");
+            }
+            normalized.add(value);
+        }
+        if (normalized.size() > MAX_FEATURES) {
+            throw ContestRules.invalid("features", "Tối đa " + MAX_FEATURES + " mục");
+        }
+        return normalized;
+    }
 
     private static Pageable pageable(int page, int size, String sort) {
         int safeSize = Math.min(Math.max(size, 1), MAX_PAGE_SIZE);

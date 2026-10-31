@@ -1,6 +1,11 @@
 package com.examprep.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -44,6 +49,18 @@ public final class AdminPlanDtos {
             long totalSubscribers,
             Instant createdAt,
             Instant updatedAt
+    ) {}
+
+    /** API 22/23 body: the plan is fully described by this payload (update replaces every field). */
+    public record PlanWriteRequest(
+            @NotBlank @Size(max = 100) String planName,
+            @Size(max = 1000) String description,
+            @NotNull @DecimalMin(value = "0") BigDecimal price,
+            @NotNull @Min(1) Integer durationDays,
+            @NotNull @Min(0) Integer aiTokenLimit,
+            List<@Size(max = 200) String> features,
+            Boolean isActive,
+            Integer sortOrder
     ) {}
 
     @JsonInclude(JsonInclude.Include.ALWAYS)
