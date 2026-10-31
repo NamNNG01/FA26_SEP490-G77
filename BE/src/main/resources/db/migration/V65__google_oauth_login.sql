@@ -1,5 +1,12 @@
--- V64__google_oauth_login.sql
+-- V65__google_oauth_login.sql
 -- AUTH-09 Google Sign-In.
+--
+-- NOTE ON THE VERSION NUMBER: this file was authored as V64, but the shared
+-- Supabase schema already recorded a version 64 ("student performance indexes")
+-- on 2026-10-31 before this migration existed. Flyway validates the description
+-- and checksum of every applied version, so two different V64s would make the
+-- backend refuse to start everywhere. Renumbered to V65 rather than rewriting
+-- an applied version's history.
 
 -- A Google account authenticates against Google, so the row it owns on first
 -- sign-in has no password of its own. Existing password accounts keep their
