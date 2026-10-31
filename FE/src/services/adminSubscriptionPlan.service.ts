@@ -18,6 +18,8 @@ import type { Page } from './adminDiscount.service';
  */
 
 export const PLAN_NAME_MAX = 100;
+/** subscription_plans.price is DECIMAL(10,2). */
+export const PLAN_PRICE_MAX = 99_999_999.99;
 export const PLAN_FEATURES_MAX = 20;
 export const PLAN_FEATURE_TEXT_MAX = 200;
 

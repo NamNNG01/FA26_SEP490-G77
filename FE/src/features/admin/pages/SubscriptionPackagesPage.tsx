@@ -16,6 +16,7 @@ import {
   PLAN_FEATURES_MAX,
   PLAN_FEATURE_TEXT_MAX,
   PLAN_NAME_MAX,
+  PLAN_PRICE_MAX,
   adminSubscriptionPlanService,
   type AdminSubscriptionPlan,
   type AdminSubscriptionPlanDetail,
@@ -100,6 +101,8 @@ export function SubscriptionPackagesPage() {
     if (!payload.planName) { setNameError('Plan name is required.'); return; }
     if (payload.planName.length > PLAN_NAME_MAX) { setNameError(`Plan name must be ${PLAN_NAME_MAX} characters or fewer.`); return; }
     if (!Number.isFinite(payload.price) || payload.price < 0) { toast.error('Price must be 0 or more (0 = free plan).'); return; }
+    if (payload.price > PLAN_PRICE_MAX) { toast.error('Price must not exceed 99,999,999.99 VND.'); return; }
+    if (!/^\d+(\.\d{1,2})?$/.test(form.price.trim())) { toast.error('Price can have at most 2 decimal places.'); return; }
     if (!Number.isInteger(payload.durationDays) || payload.durationDays < 1) { toast.error('Duration must be at least 1 day.'); return; }
     if (!Number.isInteger(payload.aiTokenLimit) || payload.aiTokenLimit < 0) { toast.error('AI token limit must be 0 or more.'); return; }
     if (payload.features.length > PLAN_FEATURES_MAX) { toast.error(`A plan can list at most ${PLAN_FEATURES_MAX} features.`); return; }
@@ -205,7 +208,7 @@ export function SubscriptionPackagesPage() {
         {editing && editing.activeSubscribers > 0 && <p className="rounded-[10px] bg-warning-light/40 px-3 py-2 text-xs text-content-secondary">{formatInteger(editing.activeSubscribers)} students are on this plan. A new price only applies to future purchases; a new AI token limit applies to them right away.</p>}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Input label="Plan name" required maxLength={PLAN_NAME_MAX} value={form.planName} error={nameError ?? undefined} onChange={e => { updateForm('planName', e.target.value); setNameError(null); }} />
-          <Input label="Price (VND)" type="number" min={0} step={1000} required value={form.price} onChange={e => updateForm('price', e.target.value)} hint="0 = free plan" />
+          <Input label="Price (VND)" type="number" min={0} max={PLAN_PRICE_MAX} step={1000} required value={form.price} onChange={e => updateForm('price', e.target.value)} hint="0 = free plan" />
           <Input label="Duration (days)" type="number" min={1} required value={form.durationDays} onChange={e => updateForm('durationDays', e.target.value)} />
           <Input label="AI token limit" type="number" min={0} step={1000} required value={form.aiTokenLimit} onChange={e => updateForm('aiTokenLimit', e.target.value)} hint="Total tokens for the whole plan period." />
         </div>
