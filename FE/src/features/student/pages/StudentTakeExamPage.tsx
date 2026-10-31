@@ -10,6 +10,7 @@ import { Icon } from '@/assets/icons';
 import { ROUTES, studentExamPath, studentExamResultPath } from '@/app/routes';
 import { studentProgressService } from '@/services/studentProgress.service';
 import { getApiErrorMessage } from '@/utils/apiError';
+import { useToast } from '@/components/ui/ToastHost';
 import {
   DRAFT_BATCH_LIMIT,
   RUBRIC_TYPES,
@@ -63,6 +64,9 @@ export function StudentTakeExamPage() {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const contestEndsAt = (location.state as { endsAt?: string } | null)?.endsAt;
+  /** Set when the attempt was opened from a contest page. */
+  const contestId = (location.state as { contestId?: number } | null)?.contestId ?? null;
+  const toast = useToast();
   const examIdParam = searchParams.get('examId');
   const attemptIdParam = searchParams.get('attemptId');
   const practice = searchParams.get('practice') === '1';
@@ -269,6 +273,9 @@ export function StudentTakeExamPage() {
         }
         await studentAttemptService.submit(session.attemptId);
         finishedRef.current = true;
+        if (contestId != null || session.examMode === 'CONTEST') {
+          toast.info('You can take this contest again, but your result will not change.', { title: 'Contest submitted', duration: 10_000 });
+        }
         navigate(studentExamResultPath(session.attemptId, session.examId), { replace: true });
       } catch (err) {
         setActionError(getApiErrorMessage(err, 'Failed to submit. Please try again.'));
@@ -277,7 +284,7 @@ export function StudentTakeExamPage() {
         submittingRef.current = false;
       }
     },
-    [session, flush, navigate, codeMeta, codeLanguages],
+    [session, flush, navigate, codeMeta, codeLanguages, contestId, toast],
   );
 
   /** Where Cancel / Delete attempt lead: a practice exam has no course exam page — it is listed in Exam History. */

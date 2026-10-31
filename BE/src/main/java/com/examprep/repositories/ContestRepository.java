@@ -34,13 +34,17 @@ public interface ContestRepository extends JpaRepository<Contest, Long>, JpaSpec
             "AND c.status NOT IN ('CANCELLED', 'REWARDED') AND c.contestId <> :excludeId")
     long countActiveForExam(@Param("examId") Long examId, @Param("excludeId") Long excludeId);
 
-    /** API 11: exams of the course that may start a contest (spec rules 2 and 3). */
+    /** API 11: exams of the course that may start a contest (spec rules 2 and 3, plus quiz-only: no ESSAY/CODE/DIAGRAM). */
     @Query(value = "SELECT e FROM Exam e WHERE e.course.courseId = :courseId AND e.status = 'PUBLISHED' AND e.isPractice = false " +
             "AND e.mode = 'EXAM' AND LOWER(e.title) LIKE :keyword ESCAPE '!' AND NOT EXISTS (SELECT c FROM Contest c WHERE c.exam = e " +
-            "AND c.deletedAt IS NULL AND c.status NOT IN ('CANCELLED', 'REWARDED')) ORDER BY e.publishedAt DESC, e.examId DESC",
+            "AND c.deletedAt IS NULL AND c.status NOT IN ('CANCELLED', 'REWARDED')) " +
+            "AND NOT EXISTS (SELECT eq FROM ExamQuestion eq WHERE eq.exam = e AND eq.question.questionType IN ('ESSAY', 'CODE', 'DIAGRAM')) " +
+            "AND NOT EXISTS (SELECT ec FROM ExamConfig ec WHERE ec.exam = e AND ec.questionType IN ('ESSAY', 'CODE', 'DIAGRAM')) ORDER BY e.publishedAt DESC, e.examId DESC",
             countQuery = "SELECT COUNT(e) FROM Exam e WHERE e.course.courseId = :courseId AND e.status = 'PUBLISHED' AND e.isPractice = false " +
             "AND e.mode = 'EXAM' AND LOWER(e.title) LIKE :keyword ESCAPE '!' AND NOT EXISTS (SELECT c FROM Contest c WHERE c.exam = e " +
-            "AND c.deletedAt IS NULL AND c.status NOT IN ('CANCELLED', 'REWARDED'))")
+            "AND c.deletedAt IS NULL AND c.status NOT IN ('CANCELLED', 'REWARDED')) " +
+            "AND NOT EXISTS (SELECT eq FROM ExamQuestion eq WHERE eq.exam = e AND eq.question.questionType IN ('ESSAY', 'CODE', 'DIAGRAM')) " +
+            "AND NOT EXISTS (SELECT ec FROM ExamConfig ec WHERE ec.exam = e AND ec.questionType IN ('ESSAY', 'CODE', 'DIAGRAM'))")
     Page<Exam> findEligibleExams(@Param("courseId") Long courseId, @Param("keyword") String keyword, Pageable pageable);
 
     /** [examId, randomly drawn question count] of exams with random rules. */
@@ -51,4 +55,9 @@ public interface ContestRepository extends JpaRepository<Contest, Long>, JpaSpec
     @Query("SELECT c.contestId FROM Contest c WHERE c.status = 'PUBLISHED' AND c.deletedAt IS NULL AND c.rankedAt IS NULL " +
             "AND c.endTime <= :now ORDER BY c.endTime")
     List<Long> findDueForRanking(@Param("now") Instant now);
+
+    /** Reminder scheduler: published contests starting in (now, until] that were not reminded yet. */
+    @Query("SELECT c.contestId FROM Contest c WHERE c.status = 'PUBLISHED' AND c.deletedAt IS NULL AND c.reminderSentAt IS NULL " +
+            "AND c.startTime > :now AND c.startTime <= :until ORDER BY c.startTime")
+    List<Long> findDueForReminder(@Param("now") Instant now, @Param("until") Instant until);
 }

@@ -38,6 +38,7 @@ public class ManagerContestApiIntegrationTest {
     @Autowired MockMvc mvc;
     @Autowired EntityManager em;
     @Autowired ObjectMapper json;
+    @Autowired com.examprep.services.contest.ContestReminder reminder;
     Fixtures f;
     User manager, otherManager, student;
     Course course, foreignCourse;
@@ -230,8 +231,11 @@ public class ManagerContestApiIntegrationTest {
         send(post("/api/v1/manager/contests/" + id + "/cancel"), manager, "{\"reason\":\"Lỗi đề thi\"}")
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.status").value("CANCELLED"))
                 .andExpect(jsonPath("$.data.cancelReason").value("Lỗi đề thi"));
-        assertEquals(1L, em.createQuery("select count(n) from UserNotification n where n.user = :u and n.notification.type = 'CONTEST_CANCELLED'", Long.class)
-                .setParameter("u", student).getSingleResult());
+        Notification sent = em.createQuery("select n.notification from UserNotification n where n.user = :u and n.notification.type = 'CONTEST_CANCELLED'",
+                Notification.class).setParameter("u", student).getSingleResult();
+        assertEquals("/student/contests/" + id, sent.getLink());
+        assertEquals(id, sent.getReferenceId());
+        assertEquals("CONTEST", sent.getReferenceType());
         send(post("/api/v1/manager/contests/" + id + "/cancel"), manager, "{\"reason\":\"again\"}")
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.data.code").value("CONTEST_LOCKED"));
     }
@@ -281,18 +285,53 @@ public class ManagerContestApiIntegrationTest {
         create(body(exam, inHours(1), inHours(3), "[]"));
         Exam draft = f.exam(course, module, manager, "EXAM");
         draft.setStatus("DRAFT");
+        Question quiz = Question.builder().course(course).module(module).questionType("SINGLE_CHOICE").difficulty("EASY").content("q").build();
         Question essay = Question.builder().course(course).module(module).questionType("ESSAY").difficulty("EASY").content("e").build();
+        em.persist(quiz);
         em.persist(essay);
-        em.persist(ExamQuestion.builder().exam(exam2).question(essay).orderIndex(1).build());
+        em.persist(ExamQuestion.builder().exam(exam2).question(quiz).orderIndex(1).build());
+        Exam essayExam = f.exam(course, module, manager, "EXAM");
+        em.persist(ExamQuestion.builder().exam(essayExam).question(quiz).orderIndex(1).build());
+        em.persist(ExamQuestion.builder().exam(essayExam).question(essay).orderIndex(2).build());
+        Exam codeRule = f.exam(course, module, manager, "EXAM");
+        em.persist(ExamConfig.builder().exam(codeRule).questionType("CODE").numberOfQuestions(2).build());
         em.flush();
         mvc.perform(get("/api/v1/manager/contest-options/exams").param("courseId", course.getCourseId().toString()).with(as(manager)))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.totalElements").value(1))
                 .andExpect(jsonPath("$.data.content[0].examId").value(exam2.getExamId()))
-                .andExpect(jsonPath("$.data.content[0].hasEssayQuestions").value(true))
+                .andExpect(jsonPath("$.data.content[0].hasEssayQuestions").value(false))
                 .andExpect(jsonPath("$.data.content[0].questionCount").value(1));
+        for (Exam notQuiz : new Exam[]{essayExam, codeRule}) {
+            send(post("/api/v1/manager/contests"), manager, body(notQuiz, inHours(5), inHours(7), "[]"))
+                    .andExpect(status().isUnprocessableEntity()).andExpect(jsonPath("$.data.code").value("EXAM_NOT_ELIGIBLE"))
+                    .andExpect(jsonPath("$.message").value("Contests can only use quiz exams."));
+        }
         mvc.perform(get("/api/v1/manager/contest-options/exams").param("courseId", foreignCourse.getCourseId().toString()).with(as(manager)))
                 .andExpect(status().isForbidden());
         mvc.perform(get("/api/v1/manager/contest-options/exams").with(as(manager))).andExpect(status().isBadRequest());
+    }
+
+    @Test void remindsParticipantsOnceFiveMinutesBefore() throws Exception {
+        long soon = create(body(exam, inHours(1), inHours(3), rewards12()));
+        long later = create(body(exam2, inHours(1), inHours(3), rewards12()));
+        publish(soon).andExpect(status().isOk());
+        publish(later).andExpect(status().isOk());
+        Contest c = em.find(Contest.class, soon);
+        c.setStartTime(Instant.now().plus(4, ChronoUnit.MINUTES));
+        em.persist(ContestParticipant.builder().contest(c).user(student).build());
+        em.persist(ContestParticipant.builder().contest(em.find(Contest.class, later)).user(student).build());
+        em.flush();
+        reminder.remindDue();
+        reminder.remindDue();
+        em.flush();
+        em.clear();
+        Notification sent = em.createQuery("select n.notification from UserNotification n where n.user = :u and n.notification.type = 'CONTEST_REMINDER'",
+                Notification.class).setParameter("u", student).getSingleResult();
+        assertEquals(soon, sent.getReferenceId());
+        assertEquals("/student/contests/" + soon, sent.getLink());
+        assertTrue(sent.getContent().contains("4 phút"), sent.getContent());
+        assertNotNull(em.find(Contest.class, soon).getReminderSentAt());
+        assertNull(em.find(Contest.class, later).getReminderSentAt());
     }
 
     @Test void discountOptionsOnlyAvailable() throws Exception {

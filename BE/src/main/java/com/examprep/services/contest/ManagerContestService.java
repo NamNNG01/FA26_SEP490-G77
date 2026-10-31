@@ -33,6 +33,8 @@ public class ManagerContestService {
     private static final int MAX_REWARDS = 50;
     private static final Map<String, String> SORTS = Map.of("startTime", "startTime", "endTime", "endTime", "title", "title", "createdAt", "createdAt");
     private static final Set<String> RUBRIC_TYPES = Set.of("ESSAY", "DIAGRAM");
+    /** Team rule (deviates from spec 6.6): contests use quiz exams only. Same split as E-01 familyPredicate. */
+    static final Set<String> NON_QUIZ_TYPES = Set.of("ESSAY", "CODE", "DIAGRAM");
 
     private final ContestRepository contests;
     private final ContestRewardRepository rewards;
@@ -200,7 +202,7 @@ public class ManagerContestService {
         contest.setCancelledAt(Instant.now());
         contest.setCancelReason(text == null || text.isEmpty() ? null : text);
         for (ContestParticipant p : joined) {
-            notify(p.getUser(), "Cuộc thi đã bị huỷ – " + contest.getTitle(),
+            notify(p.getUser(), contest, "Cuộc thi đã bị huỷ – " + contest.getTitle(),
                     "Cuộc thi \"" + contest.getTitle() + "\" đã bị huỷ" + (contest.getCancelReason() == null ? "." : ": " + contest.getCancelReason()),
                     "CONTEST_CANCELLED");
         }
@@ -245,7 +247,7 @@ public class ManagerContestService {
         Page<Exam> result = contests.findEligibleExams(courseId, like(keyword), PageRequest.of(page, size));
         List<Long> ids = result.getContent().stream().map(Exam::getExamId).toList();
         Map<Long, Long> counts = questionCounts(ids);
-        Set<Long> essay = essayExams(ids);
+        Set<Long> essay = examsWithTypes(ids, RUBRIC_TYPES);
         return PageResponse.of(result, result.getContent().stream().map(e -> new ExamOption(e.getExamId(), e.getTitle(), courseId,
                 e.getDurationMinutes(), e.getMaxScore(), counts.getOrDefault(e.getExamId(), 0L), essay.contains(e.getExamId()),
                 e.getPublishedAt())).toList());
@@ -270,6 +272,9 @@ public class ManagerContestService {
                 || Boolean.TRUE.equals(exam.getIsPractice()) || !Exam.MODE_EXAM.equals(exam.getMode())) {
             throw error(ResponseCode.UNPROCESSABLE_VALIDATION_ERROR, "EXAM_NOT_ELIGIBLE",
                     "The exam must be a published, non-practice exam of a course you manage.");
+        }
+        if (!examsWithTypes(List.of(exam.getExamId()), NON_QUIZ_TYPES).isEmpty()) {
+            throw error(ResponseCode.UNPROCESSABLE_VALIDATION_ERROR, "EXAM_NOT_ELIGIBLE", "Contests can only use quiz exams.");
         }
         if (Duration.between(fields.start(), fields.end()).toMinutes() < exam.getDurationMinutes()) {
             throw invalid("endTime", "endTime - startTime must be at least the exam duration (" + exam.getDurationMinutes() + " minutes)");
@@ -444,12 +449,13 @@ public class ManagerContestService {
         return counts;
     }
 
-    private Set<Long> essayExams(List<Long> examIds) {
-        Set<Long> essay = new HashSet<>();
-        if (examIds.isEmpty()) return essay;
-        exams.findQuestionTypesByExamIds(examIds).forEach(r -> { if (RUBRIC_TYPES.contains((String) r[1])) essay.add((Long) r[0]); });
-        exams.findConfigTypesByExamIds(examIds).forEach(r -> { if (RUBRIC_TYPES.contains((String) r[1])) essay.add((Long) r[0]); });
-        return essay;
+    /** Exams holding a fixed question or a random-draw rule of one of these types. */
+    private Set<Long> examsWithTypes(List<Long> examIds, Set<String> types) {
+        Set<Long> found = new HashSet<>();
+        if (examIds.isEmpty()) return found;
+        exams.findQuestionTypesByExamIds(examIds).forEach(r -> { if (types.contains((String) r[1])) found.add((Long) r[0]); });
+        exams.findConfigTypesByExamIds(examIds).forEach(r -> { if (types.contains((String) r[1])) found.add((Long) r[0]); });
+        return found;
     }
 
     // ------------------------------------------------------------------ scope and helpers
@@ -473,8 +479,10 @@ public class ManagerContestService {
         }
     }
 
-    public void notify(User user, String title, String content, String type) {
-        Notification n = notifications.save(Notification.builder().title(title).content(content).type(type).targetType("USER").build());
+    /** A contest notification for one user; the link opens the student contest page. */
+    public void notify(User user, Contest contest, String title, String content, String type) {
+        Notification n = notifications.save(Notification.builder().title(title).content(content).type(type).targetType("USER")
+                .link("/student/contests/" + contest.getContestId()).referenceId(contest.getContestId()).referenceType("CONTEST").build());
         userNotifications.save(UserNotification.builder().user(user).notification(n).isRead(false).build());
     }
 

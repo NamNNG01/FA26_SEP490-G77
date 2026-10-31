@@ -24,8 +24,6 @@ import type { PageResponse } from './course.service';
  *   GET    /api/v1/student/decks/{deckId}/review-cards        (FP-03)
  *   GET    /api/v1/student/decks/{deckId}/viewer              (FV-01)
  *   GET    /api/v1/student/decks?scope=MINE|COURSE            (FC-13)
- *
- * Not on the BE yet (docs/notes/student-flashcards-be-gaps-2026-10-29.md):
  *   GET    /api/v1/student/decks/{deckId}                     (FC-14)
  *   POST   /api/v1/student/decks/{deckId}/withdraw-review     (FC-15)
  */
@@ -314,7 +312,7 @@ export const studentDeckService = {
     }
   },
 
-  /** FC-14 (not on the BE yet). */
+  /** FC-14 */
   async getDeck(deckId: number | string): Promise<StudentDeckView> {
     const res = await api.get<ApiResponse<StudentDeckView>>(`/student/decks/${deckId}`);
     return res.data;
@@ -339,7 +337,7 @@ export const studentDeckService = {
     return res.data;
   },
 
-  /** FC-15 (not on the BE yet). */
+  /** FC-15 */
   async withdrawReview(deckId: number | string): Promise<PublishRequestView> {
     const res = await api.post<ApiResponse<PublishRequestView>>(`/student/decks/${deckId}/withdraw-review`);
     return res.data;
