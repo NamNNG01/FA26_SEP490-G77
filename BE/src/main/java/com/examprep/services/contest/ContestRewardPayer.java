@@ -72,7 +72,7 @@ public class ContestRewardPayer {
             p.setRewardClaimed(true);
             p.setRewardUserDiscount(voucher);
             p.setRewardGrantedAt(now);
-            manager.notify(p.getUser(), "Chúc mừng bạn đạt hạng " + prize.getKey() + " – " + contest.getTitle(),
+            manager.notify(p.getUser(), contest, "Chúc mừng bạn đạt hạng " + prize.getKey() + " – " + contest.getTitle(),
                     "Bạn nhận được mã giảm giá " + d.getCode() + " (" + valueText(d) + "). Xem trong mục Ưu đãi của tôi.", "CONTEST_REWARD");
             winners.add(new PaidWinner(prize.getKey(), p.getUser().getUserId(), p.getUser().getFullName(),
                     new WinnerDiscount(d.getDiscountId(), d.getCode())));

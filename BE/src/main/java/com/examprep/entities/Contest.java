@@ -67,6 +67,9 @@ public class Contest implements Serializable {
     @Column(name = "status", nullable = false, length = 20)
     private String status = "DRAFT";
 
+    @Column(name = "reminder_sent_at")
+    private Instant reminderSentAt;
+
     @Column(name = "ranked_at")
     private Instant rankedAt;
 
