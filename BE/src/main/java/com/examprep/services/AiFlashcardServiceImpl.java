@@ -21,7 +21,6 @@ import com.examprep.services.contest.ContestRules;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -47,7 +46,6 @@ import java.util.concurrent.ConcurrentHashMap;
  * quiz flow. The worker is only dispatched after that transaction returns (committed), so it can
  * never see a half-written job.</p>
  */
-@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AiFlashcardServiceImpl implements AiFlashcardService {
@@ -58,7 +56,6 @@ public class AiFlashcardServiceImpl implements AiFlashcardService {
     private static final int MAX_CONTENT_CHARS = 20_000;
     private static final int MAX_FOCUS_TOPIC_CHARS = 200;
     private static final int DEFAULT_CARDS = 20;
-    private static final int CONTENT_CLIP = 1_000_000;
     private static final int TITLE_CHARS = 255;
     private static final String PURPOSE = "FLASHCARD_GENERATE";
     private static final String STATUS_PENDING = "PENDING";
@@ -132,17 +129,16 @@ public class AiFlashcardServiceImpl implements AiFlashcardService {
                     "Nội dung tối đa " + MAX_CONTENT_CHARS + " ký tự");
         }
 
-        String requestParams = requestParams(cards, lang, cardStyle, focus, hasFile, fileName);
         String title = clip(hasFile ? fileName : "AI text input", TITLE_CHARS);
         Integer fileSizeKb = hasFile ? (int) ((file.getSize() + 1023) / 1024) : null;
-        String contentToStore = clip(content, CONTENT_CLIP);
+        String clippedName = fileName == null ? null : clip(fileName, TITLE_CHARS);
 
         // 7. One short transaction: quota reservation + documents row + job row.
         TransactionTemplate tx = new TransactionTemplate(transactionManager);
         GenerateAccepted accepted = tx.execute(status -> {
             quota.lock(userId);
             AiQuotaService.Snapshot snapshot = quota.snapshot(userId);
-            long estimate = AiQuotaService.estimate(contentToStore.length(), cards * outputBudgetPerCard + 500);
+            long estimate = AiQuotaService.estimate(content.length(), cards * outputBudgetPerCard + 500);
             List<String> source = quota.allocate(snapshot, List.of(estimate));
             if (source == null) {
                 throw new BaseException(ResponseCode.FLASHCARD_QUOTA_EXCEEDED, "Not enough AI quota", Map.of(
@@ -152,13 +148,13 @@ public class AiFlashcardServiceImpl implements AiFlashcardService {
                         "tokenLimit", snapshot.planName() != null ? snapshot.planLimit() : snapshot.freeLimit()));
             }
             User owner = users.getReferenceById(userId);
-            documents.save(Document.builder()
+            Document document = documents.save(Document.builder()
                     .user(owner)
                     .generationType("FLASHCARD")
                     .status("COMPLETED")
-                    .extractedContent(contentToStore)
+                    .extractedContent(content)
                     .title(title)
-                    .fileName(fileName)
+                    .fileName(clippedName)
                     .fileSizeKb(fileSizeKb)
                     .createdAt(Instant.now())
                     .build());
@@ -170,14 +166,12 @@ public class AiFlashcardServiceImpl implements AiFlashcardService {
                     .reservedTokens((int) estimate)
                     .billingSource(source.get(0))
                     .questionCount(cards)
-                    .requestParams(requestParams)
+                    // request_params is the designated carrier of the document link (no column for it).
+                    .requestParams(requestParams(cards, lang, cardStyle, focus, hasFile, clippedName, document.getDocId()))
                     .build());
             return new GenerateAccepted(job.getLogId(), STATUS_PENDING, (int) estimate);
         });
         // The reservation is committed: the worker can now claim the job row.
-        if (accepted == null) {
-            throw new BaseException(ResponseCode.INTERNAL_SERVER_ERROR, "Flashcard generation could not be queued");
-        }
         worker.dispatch(accepted.generationId());
         return accepted;
     }
@@ -241,7 +235,8 @@ public class AiFlashcardServiceImpl implements AiFlashcardService {
         }
     }
 
-    private String requestParams(int cards, String language, String style, String focus, boolean hasFile, String fileName) {
+    private String requestParams(int cards, String language, String style, String focus, boolean hasFile, String fileName,
+            Long docId) {
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("numberOfCards", cards);
         params.put("language", language);
@@ -249,6 +244,7 @@ public class AiFlashcardServiceImpl implements AiFlashcardService {
         params.put("focusTopic", focus);
         params.put("inputType", hasFile ? "FILE" : "TEXT");
         params.put("fileName", hasFile ? fileName : "");
+        params.put("docId", docId);
         try {
             return json.writeValueAsString(params);
         } catch (JsonProcessingException ex) {

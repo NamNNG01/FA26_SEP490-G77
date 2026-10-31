@@ -29,7 +29,6 @@ import java.sql.Connection;
 import static com.examprep.controllers.student.Fixtures.as;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -60,7 +59,7 @@ public class AiFlashcardApiTest {
     @Autowired EntityManager em;
     @Autowired DataSource dataSource;
     @MockBean AiClient aiClient;
-    @MockBean FlashcardGenerationWorker worker;
+    @MockBean FlashcardGenerationWorker flashcardGenerationWorker;
 
     @Value("${app.student-ai.free-daily-tokens:20000}") long freeDailyTokens;
 
@@ -102,8 +101,10 @@ public class AiFlashcardApiTest {
                         "select d from Document d where d.user = :user and d.generationType = 'FLASHCARD'", Document.class)
                 .setParameter("user", student).getSingleResult();
         assertEquals(CONTENT, document.getExtractedContent());
+        // The worker finds the material through request_params.docId (no dedicated column).
+        assertTrue(job.getRequestParams().contains("\"docId\":" + document.getDocId()), job.getRequestParams());
 
-        verify(worker).dispatch(anyLong());
+        verify(flashcardGenerationWorker).dispatch(job.getLogId());
     }
 
     // ------------------------------------------------------------------ input shape
@@ -163,6 +164,40 @@ public class AiFlashcardApiTest {
                 .andExpect(jsonPath("$.data.errors[0].field").value("style"));
     }
 
+    @Test
+    void generateRejectsOversizeText() throws Exception {
+        User student = f.account(User.ROLE_STUDENT);
+
+        mvc.perform(multipart(URL).param("text", "a".repeat(20_001)).with(as(student)))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.data.code").value("CONTENT_TOO_LONG"));
+    }
+
+    // ------------------------------------------------------------------ content extraction
+
+    @Test
+    void generateMapsPdfWithoutTextLayer() throws Exception {
+        User student = f.account(User.ROLE_STUDENT);
+        MockMultipartFile file = new MockMultipartFile("file", "notes.pdf", "application/pdf",
+                "not really a pdf".getBytes(StandardCharsets.UTF_8));
+
+        mvc.perform(multipart(URL).file(file).with(as(student)))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.data.code").value("PDF_NO_TEXT_LAYER"));
+    }
+
+    @Test
+    void generateMapsUnreadableDocx() throws Exception {
+        User student = f.account(User.ROLE_STUDENT);
+        MockMultipartFile file = new MockMultipartFile("file", "notes.docx",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                "not really a docx".getBytes(StandardCharsets.UTF_8));
+
+        mvc.perform(multipart(URL).file(file).with(as(student)))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.data.code").value("EMPTY_CONTENT"));
+    }
+
     // ------------------------------------------------------------------ course access
 
     @Test
@@ -173,6 +208,18 @@ public class AiFlashcardApiTest {
 
         mvc.perform(multipart(URL).param("text", CONTENT)
                         .param("courseId", course.getCourseId().toString()).with(as(student)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.data.code").value("FORBIDDEN_COURSE"));
+    }
+
+    @Test
+    void generateRejectsCourseManagerNotOwningCourse() throws Exception {
+        User owner = f.account(User.ROLE_COURSE_MANAGER);
+        Course course = f.course(owner);
+        User otherManager = f.account(User.ROLE_COURSE_MANAGER);
+
+        mvc.perform(multipart(URL).param("text", CONTENT)
+                        .param("courseId", course.getCourseId().toString()).with(as(otherManager)))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.data.code").value("FORBIDDEN_COURSE"));
     }
