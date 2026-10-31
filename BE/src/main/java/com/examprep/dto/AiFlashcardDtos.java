@@ -45,7 +45,11 @@ public final class AiFlashcardDtos {
             String errorMessage
     ) {}
 
-    /** API 33 response: current AI quota window for FREE (daily) or PLAN (monthly) billing. */
+    /**
+     * API 33 response: the quota window currently enforced. FREE_QUOTA is the daily allowance
+     * ({@code [00:00, 24:00)} Asia/Ho_Chi_Minh); SUBSCRIPTION is PLAN (kỳ hạn của subscription đang
+     * chạy: {@code [startDate, endDate]} của gói {@code durationDays} ngày).
+     */
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record UsageInfo(
             String billingSource,

@@ -496,6 +496,18 @@ public class AiFlashcardApiTest {
         assertInstant(dayEnd, Instant.parse(data.path("periodEnd").asText()));
         assertTrue(Instant.parse(data.path("periodEnd").asText())
                 .isAfter(Instant.parse(data.path("periodStart").asText())));
+        // Single clock: the period is exactly one house-zone day derived from the snapshot's reset instant.
+        assertEquals(Instant.parse(data.path("periodEnd").asText()),
+                Instant.parse(data.path("periodStart").asText()).plus(1, ChronoUnit.DAYS));
+    }
+
+    @Test
+    void usageMeRejectsAnonymous() throws Exception {
+        // No URL rule for /api/v1/ai/** beyond "authenticated", so Spring's entry point answers first
+        // (401); the @PreAuthorize role guard never runs for an anonymous caller.
+        mvc.perform(get(USAGE))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success").value(false));
     }
 
     @Test
