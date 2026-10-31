@@ -34,6 +34,11 @@ app:
   frontend:
     base-url: ${FRONTEND_URL:http://localhost:3000}
     password-reset-path: ${PASSWORD_RESET_PATH:/reset-password}
+  # AUTH-09 Google Sign-In. GOOGLE_CLIENT_ID is the OAuth 2.0 Web client id from
+  # Google Cloud Console, and doubles as the expected token audience. While it is
+  # blank the endpoint rejects every call and the FE hides the button.
+  google:
+    client-id: ${GOOGLE_CLIENT_ID:}
   mail:
     enabled: ${MAIL_ENABLED:false}
     from: ${MAIL_FROM:no-reply@examprep.local}

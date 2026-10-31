@@ -2,6 +2,7 @@ package com.examprep.controllers;
 
 import com.examprep.config.SecurityConfig;
 import com.examprep.dto.*;
+import com.examprep.exceptions.UnauthorizedException;
 import com.examprep.services.AuthService;
 import com.examprep.security.JwtTokenProvider;
 import com.examprep.security.RestAccessDeniedHandler;
@@ -105,6 +106,87 @@ class AuthControllerTest {
                 .andExpect(jsonPath("$.data.accessToken").value("accessToken123"))
                 .andExpect(jsonPath("$.data.refreshToken").value("refreshToken123"))
                 .andExpect(jsonPath("$.data.expiresIn").value(900));
+    }
+
+    @Test
+    void googleLogin_NewAccount_ReturnsSessionAndNewUserFlag() throws Exception {
+        GoogleLoginRequest request = GoogleLoginRequest.builder()
+                .idToken("googleIdToken")
+                .build();
+
+        GoogleLoginResponse googleResponse = GoogleLoginResponse.builder()
+                .accessToken("accessToken123")
+                .refreshToken("refreshToken123")
+                .tokenType("Bearer")
+                .expiresIn(900)
+                .newUser(true)
+                .user(UserResponse.builder()
+                        .userId(102L)
+                        .email("new.student@gmail.com")
+                        .fullName("Nguyen Van B")
+                        .role("STUDENT")
+                        .status("ACTIVE")
+                        .build())
+                .build();
+
+        when(authService.loginWithGoogle(any(GoogleLoginRequest.class))).thenReturn(googleResponse);
+
+        mockMvc.perform(post("/api/v1/auth/google")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("Account created successfully."))
+                .andExpect(jsonPath("$.data.accessToken").value("accessToken123"))
+                .andExpect(jsonPath("$.data.refreshToken").value("refreshToken123"))
+                .andExpect(jsonPath("$.data.newUser").value(true))
+                .andExpect(jsonPath("$.data.user.role").value("STUDENT"));
+    }
+
+    @Test
+    void googleLogin_ReturningAccount_ReportsLoginSuccessful() throws Exception {
+        GoogleLoginResponse googleResponse = GoogleLoginResponse.builder()
+                .accessToken("accessToken123")
+                .refreshToken("refreshToken123")
+                .newUser(false)
+                .user(UserResponse.builder().userId(101L).role("STUDENT").status("ACTIVE").build())
+                .build();
+
+        when(authService.loginWithGoogle(any(GoogleLoginRequest.class))).thenReturn(googleResponse);
+
+        mockMvc.perform(post("/api/v1/auth/google")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"idToken\":\"googleIdToken\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Login successful."))
+                .andExpect(jsonPath("$.data.newUser").value(false));
+    }
+
+    @Test
+    void googleLogin_MissingIdToken_ReturnsValidationError() throws Exception {
+        mockMvc.perform(post("/api/v1/auth/google")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"idToken\":\"\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.data.idToken").exists());
+    }
+
+    @Test
+    void googleLogin_InvalidToken_ReturnsUnauthorizedWithoutTouchingTheService() throws Exception {
+        when(authService.loginWithGoogle(any(GoogleLoginRequest.class)))
+                .thenThrow(new UnauthorizedException("Invalid or expired Google ID token."));
+
+        mockMvc.perform(post("/api/v1/auth/google")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"idToken\":\"not-a-real-token\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value("Invalid or expired Google ID token."));
     }
 
     @Test

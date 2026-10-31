@@ -10,11 +10,14 @@ import com.examprep.entities.RefreshToken;
 import com.examprep.repositories.RefreshTokenRepository;
 import com.examprep.entities.User;
 import com.examprep.repositories.UserRepository;
+import com.examprep.security.GoogleTokenVerifier;
+import com.examprep.security.GoogleUserInfo;
 import com.examprep.security.JwtTokenProvider;
 import com.examprep.security.UserPrincipal;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -47,6 +50,9 @@ class AuthServiceTest {
 
     @Mock
     private PasswordResetMailService mailService;
+
+    @Mock
+    private GoogleTokenVerifier googleTokenVerifier;
 
     @InjectMocks
     private AuthServiceImpl authService;
@@ -532,5 +538,175 @@ class AuthServiceTest {
         when(userRepository.findById(999L)).thenReturn(Optional.empty());
 
         assertThrows(ResourceNotFoundException.class, () -> authService.changePassword(request, currentUser));
+    }
+
+    // ---------------------------------------------------------------- AUTH-09
+
+    private static GoogleUserInfo googleUser(String subject, String email, boolean emailVerified) {
+        return new GoogleUserInfo(
+                subject, email, emailVerified, "Nguyen Van A", "https://lh3.googleusercontent.com/a/avatar");
+    }
+
+    private GoogleLoginRequest googleRequest() {
+        return GoogleLoginRequest.builder().idToken("googleIdToken").build();
+    }
+
+    /** A provisioned account is a different instance from {@code testUser}, so match on type. */
+    private void stubSession() {
+        when(tokenProvider.generateAccessToken(any(User.class))).thenReturn("mockAccessToken");
+        when(tokenProvider.generateRawRefreshToken()).thenReturn("mockRawRefreshToken");
+        when(tokenProvider.hashToken("mockRawRefreshToken")).thenReturn("mockHashedRefreshToken");
+    }
+
+    @Test
+    void loginWithGoogle_UnknownAccount_ProvisionsStudent() {
+        when(googleTokenVerifier.verify("googleIdToken"))
+                .thenReturn(googleUser("google-sub-1", "New.Student@Gmail.com", true));
+        when(userRepository.findByGoogleId("google-sub-1")).thenReturn(Optional.empty());
+        when(userRepository.findByEmail("new.student@gmail.com")).thenReturn(Optional.empty());
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        stubSession();
+
+        GoogleLoginResponse response = authService.loginWithGoogle(googleRequest());
+
+        assertTrue(response.isNewUser());
+        assertEquals("new.student@gmail.com", response.getUser().getEmail());
+        assertEquals("STUDENT", response.getUser().getRole());
+
+        ArgumentCaptor<User> saved = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(saved.capture());
+        User provisioned = saved.getValue();
+        assertEquals("google-sub-1", provisioned.getGoogleId());
+        assertEquals("ACTIVE", provisioned.getStatus());
+        assertNull(provisioned.getPasswordHash(), "a Google-only account has no password to match");
+        assertNotNull(provisioned.getLastLoginAt());
+        verify(refreshTokenRepository, times(1)).save(any(RefreshToken.class));
+    }
+
+    @Test
+    void loginWithGoogle_LinkedAccount_ReusesItAndSkipsEmailLookup() {
+        testUser.setGoogleId("google-sub-1");
+        when(googleTokenVerifier.verify("googleIdToken"))
+                .thenReturn(googleUser("google-sub-1", "student@gmail.com", true));
+        when(userRepository.findByGoogleId("google-sub-1")).thenReturn(Optional.of(testUser));
+        when(userRepository.save(testUser)).thenReturn(testUser);
+        stubSession();
+
+        GoogleLoginResponse response = authService.loginWithGoogle(googleRequest());
+
+        assertFalse(response.isNewUser());
+        assertEquals(101L, response.getUser().getUserId());
+        assertNotNull(testUser.getLastLoginAt());
+        verify(userRepository, never()).findByEmail(anyString());
+    }
+
+    @Test
+    void loginWithGoogle_ExistingPasswordAccount_LinksGoogleIdAndKeepsPassword() {
+        when(googleTokenVerifier.verify("googleIdToken"))
+                .thenReturn(googleUser("google-sub-9", "Student@Gmail.com", true));
+        when(userRepository.findByGoogleId("google-sub-9")).thenReturn(Optional.empty());
+        when(userRepository.findByEmail("student@gmail.com")).thenReturn(Optional.of(testUser));
+        when(userRepository.save(testUser)).thenReturn(testUser);
+        stubSession();
+
+        GoogleLoginResponse response = authService.loginWithGoogle(googleRequest());
+
+        assertFalse(response.isNewUser());
+        assertEquals("google-sub-9", testUser.getGoogleId());
+        assertEquals("hashedPassword", testUser.getPasswordHash(), "linking must not clear the password");
+        assertEquals("https://lh3.googleusercontent.com/a/avatar", testUser.getAvatarUrl());
+    }
+
+    @Test
+    void loginWithGoogle_UnverifiedGoogleEmail_ThrowsUnauthorizedException() {
+        when(googleTokenVerifier.verify("googleIdToken"))
+                .thenReturn(googleUser("google-sub-1", "student@gmail.com", false));
+
+        assertThrows(UnauthorizedException.class, () -> authService.loginWithGoogle(googleRequest()));
+        verify(userRepository, never()).save(any(User.class));
+        verify(refreshTokenRepository, never()).save(any(RefreshToken.class));
+    }
+
+    @Test
+    void loginWithGoogle_EmailOwnedByAnotherGoogleAccount_ThrowsUnauthorizedException() {
+        testUser.setGoogleId("google-sub-original");
+        when(googleTokenVerifier.verify("googleIdToken"))
+                .thenReturn(googleUser("google-sub-other", "student@gmail.com", true));
+        when(userRepository.findByGoogleId("google-sub-other")).thenReturn(Optional.empty());
+        when(userRepository.findByEmail("student@gmail.com")).thenReturn(Optional.of(testUser));
+
+        assertThrows(UnauthorizedException.class, () -> authService.loginWithGoogle(googleRequest()));
+        verify(userRepository, never()).save(any(User.class));
+    }
+
+    @Test
+    void loginWithGoogle_InactiveAccount_ThrowsUnauthorizedException() {
+        testUser.setStatus("INACTIVE");
+        testUser.setGoogleId("google-sub-1");
+        when(googleTokenVerifier.verify("googleIdToken"))
+                .thenReturn(googleUser("google-sub-1", "student@gmail.com", true));
+        when(userRepository.findByGoogleId("google-sub-1")).thenReturn(Optional.of(testUser));
+
+        assertThrows(UnauthorizedException.class, () -> authService.loginWithGoogle(googleRequest()));
+        verify(userRepository, never()).save(any(User.class));
+    }
+
+    @Test
+    void loginWithGoogle_GoogleEmailMissing_ThrowsUnauthorizedException() {
+        when(googleTokenVerifier.verify("googleIdToken"))
+                .thenReturn(new GoogleUserInfo("google-sub-1", "  ", true, null, null));
+
+        assertThrows(UnauthorizedException.class, () -> authService.loginWithGoogle(googleRequest()));
+        verify(userRepository, never()).save(any(User.class));
+    }
+
+    @Test
+    void loginWithGoogle_OverlongProfileName_IsTruncatedToTheColumnWidth() {
+        String longName = "A".repeat(140);
+        when(googleTokenVerifier.verify("googleIdToken"))
+                .thenReturn(new GoogleUserInfo("google-sub-1", "student@gmail.com", true, longName, null));
+        when(userRepository.findByGoogleId("google-sub-1")).thenReturn(Optional.empty());
+        when(userRepository.findByEmail("student@gmail.com")).thenReturn(Optional.empty());
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        stubSession();
+
+        authService.loginWithGoogle(googleRequest());
+
+        ArgumentCaptor<User> saved = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(saved.capture());
+        assertEquals(AuthServiceImpl.USER_FULL_NAME_MAX_LENGTH, saved.getValue().getFullName().length());
+    }
+
+    @Test
+    void loginWithGoogle_MissingDisplayName_FallsBackToTheEmailLocalPart() {
+        when(googleTokenVerifier.verify("googleIdToken"))
+                .thenReturn(new GoogleUserInfo("google-sub-1", "student@gmail.com", true, null, null));
+        when(userRepository.findByGoogleId("google-sub-1")).thenReturn(Optional.empty());
+        when(userRepository.findByEmail("student@gmail.com")).thenReturn(Optional.empty());
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        stubSession();
+
+        authService.loginWithGoogle(googleRequest());
+
+        ArgumentCaptor<User> saved = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(saved.capture());
+        assertEquals("student", saved.getValue().getFullName());
+    }
+
+    @Test
+    void loginWithGoogle_OverlongAvatarUrl_IsDroppedInsteadOfTruncated() {
+        String longAvatar = "https://lh3.googleusercontent.com/a/" + "x".repeat(600);
+        when(googleTokenVerifier.verify("googleIdToken"))
+                .thenReturn(new GoogleUserInfo("google-sub-1", "student@gmail.com", true, "Nguyen Van A", longAvatar));
+        when(userRepository.findByGoogleId("google-sub-1")).thenReturn(Optional.empty());
+        when(userRepository.findByEmail("student@gmail.com")).thenReturn(Optional.empty());
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        stubSession();
+
+        authService.loginWithGoogle(googleRequest());
+
+        ArgumentCaptor<User> saved = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(saved.capture());
+        assertNull(saved.getValue().getAvatarUrl());
     }
 }

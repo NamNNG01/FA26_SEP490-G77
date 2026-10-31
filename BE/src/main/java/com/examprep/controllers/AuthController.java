@@ -35,6 +35,14 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.success(response, "Login successful."));
     }
 
+    @PostMapping("/google")
+    @Operation(summary = "AUTH-09: Google Sign-In", description = "Verifies a Google ID token, links it to an existing account or provisions a new STUDENT one, then returns Access Token (15m) and Refresh Token (7d).")
+    public ResponseEntity<ApiResponse<GoogleLoginResponse>> googleLogin(@Valid @RequestBody GoogleLoginRequest request) {
+        GoogleLoginResponse response = authService.loginWithGoogle(request);
+        String message = response.isNewUser() ? "Account created successfully." : "Login successful.";
+        return ResponseEntity.ok(ApiResponse.success(response, message));
+    }
+
     @PostMapping("/refresh")
     @Operation(summary = "AUTH-03: Refresh Token Rotation", description = "Exchanges a valid refresh token for a new Access Token and new Refresh Token pair.")
     public ResponseEntity<ApiResponse<TokenResponse>> refreshToken(@Valid @RequestBody RefreshTokenRequest request) {

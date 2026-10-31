@@ -10,6 +10,8 @@ import com.examprep.entities.RefreshToken;
 import com.examprep.repositories.RefreshTokenRepository;
 import com.examprep.entities.User;
 import com.examprep.repositories.UserRepository;
+import com.examprep.security.GoogleTokenVerifier;
+import com.examprep.security.GoogleUserInfo;
 import com.examprep.security.JwtTokenProvider;
 import com.examprep.security.UserPrincipal;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +35,7 @@ public class AuthServiceImpl implements AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider tokenProvider;
     private final PasswordResetMailService mailService;
+    private final GoogleTokenVerifier googleTokenVerifier;
 
     @Value("${app.frontend.base-url:http://localhost:3000}")
     private String frontendBaseUrl;
@@ -42,6 +45,11 @@ public class AuthServiceImpl implements AuthService {
 
     public static final long RESET_TOKEN_EXPIRATION_MS = 15 * 60 * 1000L;
     public static final long RESET_TOKEN_EXPIRATION_MINUTES = RESET_TOKEN_EXPIRATION_MS / 60000L;
+
+    // Column widths the Google profile data has to fit into (V1 + V4 migrations).
+    static final int USER_EMAIL_MAX_LENGTH = 150;
+    static final int USER_FULL_NAME_MAX_LENGTH = 100;
+    static final int USER_AVATAR_URL_MAX_LENGTH = 512;
 
     @Override
     @Transactional
@@ -102,11 +110,85 @@ public class AuthServiceImpl implements AuthService {
         // UM-01..05: surface "Last Login" in the admin user screens.
         user.setLastLoginAt(Instant.now());
 
+        LoginResponse session = issueSession(user);
+        log.info("User ID {} logged in successfully.", user.getUserId());
+        return session;
+    }
+
+    @Override
+    @Transactional
+    public GoogleLoginResponse loginWithGoogle(GoogleLoginRequest request) {
+        log.info("Processing Google Sign-In");
+
+        // Only claims that survived signature/audience/issuer/expiry checks — see
+        // GoogleTokenVerifier. Everything below works off these, never the raw token.
+        GoogleUserInfo googleUser = googleTokenVerifier.verify(request.getIdToken());
+        String email = normalizeEmail(googleUser.email());
+
+        if (email == null || email.isEmpty()) {
+            throw new UnauthorizedException("The Google account does not expose an email address.");
+        }
+        if (email.length() > USER_EMAIL_MAX_LENGTH) {
+            throw new BadRequestException("Email must not exceed 150 characters.");
+        }
+        // Linking an account by email is only safe for an address Google has
+        // verified; otherwise a Google account could claim someone else's row.
+        if (!googleUser.emailVerified()) {
+            throw new UnauthorizedException("The Google account email address has not been verified.");
+        }
+
+        boolean newUser = false;
+        User user = userRepository.findByGoogleId(googleUser.googleId()).orElse(null);
+
+        if (user == null) {
+            user = userRepository.findByEmail(email).orElse(null);
+        }
+
+        if (user == null) {
+            user = User.builder()
+                    .email(email)
+                    .fullName(resolveFullName(googleUser, email))
+                    .avatarUrl(safeAvatarUrl(googleUser.avatarUrl()))
+                    .googleId(googleUser.googleId())
+                    .roleName(User.ROLE_STUDENT)
+                    .status(User.STATUS_ACTIVE)
+                    .build();
+            newUser = true;
+            log.info("Provisioning a new STUDENT account from Google Sign-In");
+        } else {
+            if (!User.STATUS_ACTIVE.equalsIgnoreCase(user.getStatus())) {
+                throw new UnauthorizedException("User account is inactive or blocked.");
+            }
+            if (user.getGoogleId() != null && !user.getGoogleId().equals(googleUser.googleId())) {
+                log.warn("Google Sign-In refused for user ID {}: another Google account already owns this email",
+                        user.getUserId());
+                throw new UnauthorizedException("This email address is linked to a different Google account.");
+            }
+            // Link a pre-existing password account and backfill missing profile data.
+            if (user.getGoogleId() == null) {
+                user.setGoogleId(googleUser.googleId());
+            }
+            if (user.getAvatarUrl() == null || user.getAvatarUrl().isBlank()) {
+                user.setAvatarUrl(safeAvatarUrl(googleUser.avatarUrl()));
+            }
+            log.info("Google Sign-In matched user ID {}", user.getUserId());
+        }
+
+        user.setLastLoginAt(Instant.now());
+        User savedUser = userRepository.save(user);
+
+        return GoogleLoginResponse.from(issueSession(savedUser), newUser);
+    }
+
+    /**
+     * Mints the access/refresh pair shared by every successful sign-in
+     * (AUTH-02 and AUTH-09). The caller owns the transaction and is
+     * responsible for having refreshed {@code lastLoginAt} first.
+     */
+    private LoginResponse issueSession(User user) {
         String accessToken = tokenProvider.generateAccessToken(user);
         String rawRefreshToken = tokenProvider.generateRawRefreshToken();
         refreshTokenRepository.save(newRefreshToken(user, rawRefreshToken));
-
-        log.info("User ID {} logged in successfully.", user.getUserId());
 
         return LoginResponse.builder()
                 .accessToken(accessToken)
@@ -306,5 +388,36 @@ public class AuthServiceImpl implements AuthService {
 
     private static String normalizeEmail(String email) {
         return email == null ? null : email.trim().toLowerCase(Locale.ROOT);
+    }
+
+    /**
+     * A Google profile may omit the display name. Fall back to the local part of
+     * the email, and keep the result inside {@code users.full_name}.
+     */
+    private static String resolveFullName(GoogleUserInfo googleUser, String email) {
+        String name = googleUser.fullName();
+        if (name == null || name.isBlank()) {
+            int at = email.indexOf('@');
+            name = at > 0 ? email.substring(0, at) : email;
+        }
+        name = name.trim();
+        return name.length() > USER_FULL_NAME_MAX_LENGTH
+                ? name.substring(0, USER_FULL_NAME_MAX_LENGTH)
+                : name;
+    }
+
+    /**
+     * A truncated URL points nowhere, so an over-long picture is dropped rather
+     * than stored broken. It is display data only — the avatar can stay empty.
+     */
+    private static String safeAvatarUrl(String avatarUrl) {
+        if (avatarUrl == null) {
+            return null;
+        }
+        String trimmed = avatarUrl.trim();
+        if (trimmed.isEmpty() || trimmed.length() > USER_AVATAR_URL_MAX_LENGTH) {
+            return null;
+        }
+        return trimmed;
     }
 }

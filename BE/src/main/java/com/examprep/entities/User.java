@@ -38,8 +38,20 @@ public class User implements Serializable {
     @Column(name = "email", nullable = false, unique = true, length = 255)
     private String email;
 
-    @Column(name = "password_hash", nullable = false)
+    /**
+     * NULL for an account that only ever signed in with AUTH-09 (Google).
+     * Such an account cannot pass AUTH-02: BCrypt matches against an empty
+     * encoded password return false.
+     */
+    @Column(name = "password_hash")
     private String passwordHash;
+
+    /**
+     * AUTH-09: Google's stable subject identifier ("sub"). Set on the first
+     * Google sign-in and used to recognise the account afterwards.
+     */
+    @Column(name = "google_id", length = 255)
+    private String googleId;
 
     @Column(name = "full_name", nullable = false, length = 100)
     private String fullName;
