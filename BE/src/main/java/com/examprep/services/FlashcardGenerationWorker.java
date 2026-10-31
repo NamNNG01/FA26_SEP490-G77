@@ -130,6 +130,11 @@ public class FlashcardGenerationWorker {
         pool.execute(() -> run(logId));
     }
 
+    /** Test hook: seeds the in-process claim clock without running the async pipeline. */
+    void registerClaimForTest(Long logId, Instant claimTime) {
+        claimedAt.put(logId, claimTime);
+    }
+
     /**
      * Restart recovery: PENDING rows whose dispatch was lost are re-dispatched, and rows stuck in
      * PROCESSING past twice the AI timeout are failed with a full refund (same policy as MQ-03).
@@ -174,7 +179,6 @@ public class FlashcardGenerationWorker {
             if (claimed == null) {
                 return;
             }
-            claimedAt.put(logId, Instant.now());
             long started = System.currentTimeMillis();
             try {
                 Generated generated = callAi(claimed);
@@ -221,6 +225,8 @@ public class FlashcardGenerationWorker {
             }
             job.setStatus(STATUS_PROCESSING);
             logs.save(job);
+            // Inside the claim transaction: a concurrent sweep must never observe a live, unregistered claim.
+            claimedAt.put(logId, Instant.now());
             return new Claimed(logId, docId, document.getExtractedContent(),
                     Math.max(1, params.path("numberOfCards").asInt(DEFAULT_CARDS)),
                     params.path("language").asText("AUTO"),
