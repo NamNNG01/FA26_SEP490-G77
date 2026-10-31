@@ -38,3 +38,6 @@ logs/
 
 # Personal dev seed with plaintext test credentials for the shared dev DB
 BE/docs/seed-admin.sql
+
+# SDD scratch workspace
+.superpowers/
