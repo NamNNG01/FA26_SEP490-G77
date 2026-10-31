@@ -21,6 +21,4 @@ Thumbs.db
 *.log
 logs/
 *.md
-*.xls
-*.xlsx
 /docs/

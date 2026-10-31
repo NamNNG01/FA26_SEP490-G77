@@ -28,7 +28,7 @@ import java.util.*;
 @Service
 @RequiredArgsConstructor
 @Transactional
-public class PracticeExamService {
+public class    PracticeExamService {
     /** Types SA-04 grades without AI, so a practice exam has a score as soon as it is submitted. */
     public static final List<String> AUTO_GRADED = List.of("SINGLE_CHOICE", "MULTIPLE_CHOICE", "TRUE_FALSE", "FILL_BLANK", "ORDERING", "MATCHING");
     public static final BigDecimal MAX_SCORE = BigDecimal.TEN;
