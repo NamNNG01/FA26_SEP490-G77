@@ -19,6 +19,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.text.Normalizer;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -27,6 +28,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -60,6 +62,8 @@ public class FlashcardGenerationWorker {
     private static final int CARD_CHARS = 2_000;
     private static final int DEFAULT_CARDS = 20;
     private static final int PENDING_GRACE_SECONDS = 60;
+    /** Jackson is thread-safe for reads; parse is static so the validation rules can be unit-tested. */
+    private static final ObjectMapper PARSE_JSON = new ObjectMapper();
 
     private static final String SYSTEM = """
             You are a university tutor writing study flashcards from one study material for a student.
@@ -87,13 +91,24 @@ public class FlashcardGenerationWorker {
     @Value("${app.ai.flashcard.timeout-ms:90000}")
     private long timeoutMillis;
 
+    @Value("${app.ai.flashcard.sweep-ms:60000}")
+    private long sweepMillis;
+
+    /**
+     * Claim clock per log id. {@code QuizGenerationJob} carries an {@code updatedAt} bumped at claim
+     * (the MQ-03 sweep anchors on it), but {@code ai_usage_logs} has no such column. Keeping the
+     * in-memory instant avoids a migration and stops the sweep from failing a job that waited in
+     * PENDING and is still inside its AI call.
+     */
+    private final Map<Long, Instant> claimedAt = new ConcurrentHashMap<>();
+
     private final ExecutorService pool = Executors.newSingleThreadExecutor(task -> {
         Thread thread = new Thread(task, "flashcard-generation");
         thread.setDaemon(true);
         return thread;
     });
 
-    private record Card(String tempId, String frontText, String backText) {}
+    record Card(String tempId, String frontText, String backText) {}
 
     private record Claimed(Long logId, Long docId, String content, int numberOfCards, String language, String style,
                            String focusTopic) {}
@@ -126,9 +141,16 @@ public class FlashcardGenerationWorker {
         for (Long id : idsByStatus(STATUS_PENDING, now.minusSeconds(PENDING_GRACE_SECONDS))) {
             dispatch(id);
         }
-        long processingCutoff = Math.max(300, timeoutMillis * 2 / 1000);
-        for (Long id : idsByStatus(STATUS_PROCESSING, now.minusSeconds(processingCutoff))) {
-            tx().executeWithoutResult(status -> failLog(id, CODE_TIMEOUT, 0));
+        long timeoutSeconds = Math.max(300, timeoutMillis * 2 / 1000);
+        Instant claimCutoff = now.minusSeconds(timeoutSeconds);
+        // Rows this process never claimed are restart orphans: give them 2×timeout plus one sweep
+        // period of slack (a tracked job can have an old createdAt after a long PENDING wait).
+        Instant orphanCutoff = now.minusSeconds(timeoutSeconds + Math.max(1, sweepMillis / 1000));
+        for (Long id : idsByStatus(STATUS_PROCESSING, orphanCutoff)) {
+            Instant claimTime = claimedAt.get(id);
+            if (claimTime == null || claimTime.isBefore(claimCutoff)) {
+                tx().executeWithoutResult(status -> failLog(id, CODE_TIMEOUT, 0));
+            }
         }
     }
 
@@ -147,23 +169,29 @@ public class FlashcardGenerationWorker {
     }
 
     private void run(Long logId) {
-        Claimed claimed = claim(logId);
-        if (claimed == null) {
-            return;
-        }
-        long started = System.currentTimeMillis();
         try {
-            Generated generated = callAi(claimed);
-            long duration = System.currentTimeMillis() - started;
-            tx().executeWithoutResult(status -> finish(claimed, generated, duration));
-        } catch (GenerationFailure ex) {
-            long duration = System.currentTimeMillis() - started;
-            log.warn("FLASHCARD_GENERATION_FAILED | logId={} | {}", logId, ex.code);
-            tx().executeWithoutResult(status -> failLog(logId, ex.code, duration));
+            Claimed claimed = claim(logId);
+            if (claimed == null) {
+                return;
+            }
+            claimedAt.put(logId, Instant.now());
+            long started = System.currentTimeMillis();
+            try {
+                Generated generated = callAi(claimed);
+                long duration = System.currentTimeMillis() - started;
+                tx().executeWithoutResult(status -> finish(claimed, generated, duration));
+            } catch (GenerationFailure ex) {
+                long duration = System.currentTimeMillis() - started;
+                log.warn("FLASHCARD_GENERATION_FAILED | logId={} | {}", logId, ex.code);
+                tx().executeWithoutResult(status -> failLog(logId, ex.code, duration));
+            } catch (RuntimeException ex) {
+                long duration = System.currentTimeMillis() - started;
+                log.warn("FLASHCARD_GENERATION_FAILED | logId={} | {}", logId, ex.getMessage());
+                tx().executeWithoutResult(status -> failLog(logId, CODE_PROVIDER, duration));
+            }
         } catch (RuntimeException ex) {
-            long duration = System.currentTimeMillis() - started;
-            log.warn("FLASHCARD_GENERATION_FAILED | logId={} | {}", logId, ex.getMessage());
-            tx().executeWithoutResult(status -> failLog(logId, CODE_PROVIDER, duration));
+            // A failing claim/settlement must be logged here, never escape to the executor thread.
+            log.warn("FLASHCARD_JOB_ABORTED | logId={} | {}", logId, ex.getMessage());
         }
     }
 
@@ -229,10 +257,11 @@ public class FlashcardGenerationWorker {
         if (response == null) {
             throw new GenerationFailure(CODE_PROVIDER);
         }
-        return new Generated(parse(response.getText(), claimed.numberOfCards()), response);
+        return new Generated(parseCards(response.getText(), claimed.numberOfCards()), response);
     }
 
-    private List<Card> parse(String text, int maxCards) {
+    /** Validate one AI draft: fences/preamble stripped, blanks dropped, sides clipped, NFC-deduped. */
+    static List<Card> parseCards(String text, int maxCards) {
         int open = text == null ? -1 : text.indexOf('{');
         int close = text == null ? -1 : text.lastIndexOf('}');
         if (open < 0 || close < open) {
@@ -240,7 +269,7 @@ public class FlashcardGenerationWorker {
         }
         JsonNode root;
         try {
-            root = json.readTree(text.substring(open, close + 1));
+            root = PARSE_JSON.readTree(text.substring(open, close + 1));
         } catch (Exception ex) {
             throw new GenerationFailure(CODE_INVALID);
         }
@@ -276,20 +305,25 @@ public class FlashcardGenerationWorker {
         // The row lock serialises finish against a concurrent sweep/failLog settlement.
         AiUsageLog job = logs.lockById(claimed.logId()).orElse(null);
         if (job == null || !STATUS_PROCESSING.equals(job.getStatus())) {
+            claimedAt.remove(claimed.logId());
             return;
         }
         job.setResult(resultJson(generated.cards()));
         job.setQuestionCount(generated.cards().size());
         quota.settle(job, STATUS_SUCCESS, generated.response(), duration, null);
+        claimedAt.remove(claimed.logId());
     }
 
     /** FAILED: keep the machine-readable code for API 32 and refund the whole reservation. */
     private void failLog(Long logId, String code, long duration) {
         AiUsageLog job = logs.lockById(logId).orElse(null);
-        if (job == null || STATUS_SUCCESS.equals(job.getStatus())) {
+        // SUCCESS/FAILED rows are already settled: keep them idempotent and never overwrite a code.
+        if (job == null || STATUS_SUCCESS.equals(job.getStatus()) || STATUS_FAILED.equals(job.getStatus())) {
+            claimedAt.remove(logId);
             return;
         }
         quota.settle(job, STATUS_FAILED, null, duration, code);
+        claimedAt.remove(logId);
     }
 
     private String resultJson(List<Card> cards) {
@@ -321,7 +355,10 @@ public class FlashcardGenerationWorker {
     }
 
     private static String normalize(String value) {
-        return value == null ? "" : value.strip().replaceAll("\\s+", " ").toLowerCase(Locale.ROOT);
+        // Canonical (NFC) form first, so Vietnamese text typed composed or decomposed dedupes.
+        return value == null ? ""
+                : Normalizer.normalize(value, Normalizer.Form.NFC).strip().replaceAll("\\s+", " ")
+                .toLowerCase(Locale.ROOT);
     }
 
     private static Map<String, Object> map(Object... pairs) {

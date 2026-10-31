@@ -188,6 +188,11 @@ public class AiFlashcardServiceImpl implements AiFlashcardService {
         AiUsageLog job = logs.findByLogIdAndUserUserId(generationId, userId)
                 .orElseThrow(() -> ContestRules.error(ResponseCode.FLASHCARD_GENERATION_NOT_FOUND,
                         "GENERATION_NOT_FOUND", "Không tìm thấy lượt tạo flashcard"));
+        if (!PURPOSE.equals(job.getPurpose())) {
+            // A log id of another AI purpose is not a generation, even when the caller owns it.
+            throw ContestRules.error(ResponseCode.FLASHCARD_GENERATION_NOT_FOUND,
+                    "GENERATION_NOT_FOUND", "Không tìm thấy lượt tạo flashcard");
+        }
         boolean saved = job.getSavedAt() != null;
         String status = job.getStatus();
 

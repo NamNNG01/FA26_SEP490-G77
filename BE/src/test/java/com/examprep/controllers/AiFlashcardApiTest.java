@@ -251,6 +251,34 @@ public class AiFlashcardApiTest {
     }
 
     @Test
+    void pollRejectsOtherAiPurposeLog() throws Exception {
+        User student = f.account(User.ROLE_STUDENT);
+        // Owned by the caller, but an EXPLANATION log id is not a flashcard generation.
+        AiUsageLog other = AiUsageLog.builder().user(student).purpose("EXPLANATION").status("SUCCESS")
+                .billingSource("FREE").reservedTokens(0).build();
+        em.persist(other);
+        em.flush();
+
+        mvc.perform(get(DETAIL + other.getLogId()).with(as(student)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.data.code").value("GENERATION_NOT_FOUND"));
+    }
+
+    @Test
+    void pollDegradesUnexpectedResultShapeToEmptyCards() throws Exception {
+        User student = f.account(User.ROLE_STUDENT);
+        // H2's JSON column rejects syntactically invalid JSON, so this seeds valid JSON with the wrong
+        // shape: the poll must degrade to cards=[] instead of a 500 (same guard as an unparseable body).
+        AiUsageLog job = seed(student, "SUCCESS", "[]", 1, 1, null);
+        em.flush();
+
+        mvc.perform(get(DETAIL + job.getLogId()).with(as(student)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("COMPLETED"))
+                .andExpect(jsonPath("$.data.cards").isEmpty());
+    }
+
+    @Test
     void pollMapsCompletedGenerationAndSavedFlag() throws Exception {
         User student = f.account(User.ROLE_STUDENT);
         AiUsageLog job = seed(student, "SUCCESS",
