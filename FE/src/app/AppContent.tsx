@@ -45,6 +45,7 @@ import {
 } from '@/features/student';
 import { PaymentHistoryPage, PaymentReturnPage } from '@/features/payment';
 import { ExamListPage, ExamFormPage } from '@/features/exam';
+import { ManagerContestListPage, ManagerContestFormPage, ManagerContestDetailPage } from '@/features/contest';
 import { PublicExamsPage, PublicExamDetailPage } from '@/features/public-exam';
 import { CMDashboard } from '@/features/content-manager';
 import { QuestionBankPage, QuestionDetailPage, QuestionFormPage } from '@/features/question';
@@ -314,6 +315,10 @@ function AppRoutes() {
           {/* Same shared components as the student practice-exam area. */}
           <Route path={ROUTES.managerPracticeExams} element={<PublicExamsPage />} />
           <Route path={ROUTES.managerPracticeExamDetail} element={<PublicExamDetailPage />} />
+          <Route path={ROUTES.managerContests} element={<ManagerContestListPage />} />
+          <Route path={ROUTES.managerContestCreate} element={<ManagerContestFormPage mode="create" />} />
+          <Route path={ROUTES.managerContestDetail} element={<ManagerContestDetailPage />} />
+          <Route path={ROUTES.managerContestEdit} element={<ManagerContestFormPage mode="edit" />} />
         </Route>
 
         {/* COURSE_MANAGER only — ADMIN is NOT allowed here. */}
