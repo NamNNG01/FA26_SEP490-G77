@@ -1,6 +1,7 @@
 package com.examprep.controllers;
 
 import com.examprep.dto.AiFlashcardDtos.GenerateAccepted;
+import com.examprep.dto.AiFlashcardDtos.GenerationDetail;
 import com.examprep.dto.ApiResponse;
 import com.examprep.security.UserPrincipal;
 import com.examprep.services.AiFlashcardService;
@@ -11,6 +12,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -43,5 +46,14 @@ public class AiFlashcardController {
             @RequestParam(name = "courseId", required = false) Long courseId) {
         GenerateAccepted accepted = service.generate(user, file, text, numberOfCards, language, style, focusTopic, courseId);
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(ApiResponse.success(accepted, "Đã tiếp nhận yêu cầu"));
+    }
+
+    /** API 32: poll one generation; only its owner can see it (foreign/missing ids are both 404). */
+    @GetMapping("/generations/{generationId}")
+    @Operation(summary = "API 32: Get Flashcard Generation")
+    public ResponseEntity<ApiResponse<GenerationDetail>> generation(
+            @AuthenticationPrincipal UserPrincipal user,
+            @PathVariable("generationId") Long generationId) {
+        return ResponseEntity.ok(ApiResponse.success(service.generation(user.getId(), generationId)));
     }
 }

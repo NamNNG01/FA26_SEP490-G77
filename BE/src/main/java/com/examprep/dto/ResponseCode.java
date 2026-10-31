@@ -56,6 +56,8 @@ public enum ResponseCode {
     FLASHCARD_RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS, "RATE_LIMITED", "Too many generation requests"),
     /** API 31: a material file that is not pdf/docx/txt (the shared UNSUPPORTED_FILE_TYPE enum is 400). */
     FLASHCARD_UNSUPPORTED_FILE_TYPE(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "UNSUPPORTED_FILE_TYPE", "Unsupported file type"),
+    /** API 32: the generation does not exist or belongs to another user (existence is not leaked). */
+    FLASHCARD_GENERATION_NOT_FOUND(HttpStatus.NOT_FOUND, "GENERATION_NOT_FOUND", "Generation not found"),
 
     // Domain Specific Errors
     EXAM_NOT_FOUND(HttpStatus.NOT_FOUND, "EXAM_NOT_FOUND", "Exam with the specified ID does not exist"),

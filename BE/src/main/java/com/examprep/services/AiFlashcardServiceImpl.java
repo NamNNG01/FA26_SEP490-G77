@@ -1,5 +1,6 @@
 package com.examprep.services;
 
+import com.examprep.dto.AiFlashcardDtos;
 import com.examprep.dto.AiFlashcardDtos.GenerateAccepted;
 import com.examprep.dto.AiFlashcardDtos.GenerationDetail;
 import com.examprep.dto.AiFlashcardDtos.UsageInfo;
@@ -19,6 +20,7 @@ import com.examprep.repositories.UserRepository;
 import com.examprep.security.UserPrincipal;
 import com.examprep.services.contest.ContestRules;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -30,6 +32,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -59,6 +62,7 @@ public class AiFlashcardServiceImpl implements AiFlashcardService {
     private static final int TITLE_CHARS = 255;
     private static final String PURPOSE = "FLASHCARD_GENERATE";
     private static final String STATUS_PENDING = "PENDING";
+    private static final String STATUS_PROCESSING = "PROCESSING";
 
     private final DocumentRepository documents;
     private final CourseRepository courses;
@@ -180,8 +184,55 @@ public class AiFlashcardServiceImpl implements AiFlashcardService {
 
     @Override
     public GenerationDetail generation(Long userId, Long generationId) {
-        // skeleton — logic lands in Task 10
-        throw new BaseException(ResponseCode.INTERNAL_SERVER_ERROR, "Not implemented yet");
+        // Ownership is part of the lookup: a foreign job is indistinguishable from a missing one (404).
+        AiUsageLog job = logs.findByLogIdAndUserUserId(generationId, userId)
+                .orElseThrow(() -> ContestRules.error(ResponseCode.FLASHCARD_GENERATION_NOT_FOUND,
+                        "GENERATION_NOT_FOUND", "Không tìm thấy lượt tạo flashcard"));
+        boolean saved = job.getSavedAt() != null;
+        String status = job.getStatus();
+
+        if (STATUS_PENDING.equals(status) || STATUS_PROCESSING.equals(status)) {
+            return new GenerationDetail(generationId, status, null, null, saved, null, null);
+        }
+        if (!"SUCCESS".equals(status) && !"PARTIAL".equals(status)) {
+            // FAILED/TIMEOUT: the reserve was refunded; error_message holds the API 32 machine code.
+            return new GenerationDetail(generationId, "FAILED", List.of(), null, saved, errorCode(job.getErrorMessage()), null);
+        }
+        // House status SUCCESS maps to the spec's COMPLETED.
+        long remaining = quota.snapshot(userId).available();
+        return new GenerationDetail(generationId, "COMPLETED", cards(job.getResult()),
+                new AiFlashcardDtos.GenerationUsage(job.getInputTokens(), job.getOutputTokens(), remaining),
+                saved, null, null);
+    }
+
+    /** Result JSON → cards; a malformed/absent payload degrades to an empty list instead of a 500. */
+    private List<AiFlashcardDtos.GenerationCard> cards(String result) {
+        if (result == null || result.isBlank()) {
+            return List.of();
+        }
+        try {
+            JsonNode root = json.readTree(result);
+            List<AiFlashcardDtos.GenerationCard> cards = new ArrayList<>();
+            for (JsonNode row : root.path("cards")) {
+                String tempId = row.path("tempId").asText("");
+                cards.add(new AiFlashcardDtos.GenerationCard(
+                        tempId.isBlank() ? "c" + (cards.size() + 1) : tempId,
+                        row.path("frontText").asText(""),
+                        row.path("backText").asText("")));
+            }
+            return cards;
+        } catch (JsonProcessingException ex) {
+            return List.of();
+        }
+    }
+
+    /** A sweep-failed reservation is reported as a timeout; anything unexpected is a provider error. */
+    private static String errorCode(String errorMessage) {
+        if ("AI_TIMEOUT".equals(errorMessage) || "TIMEOUT".equals(errorMessage)
+                || "RESERVATION_EXPIRED".equals(errorMessage)) {
+            return "AI_TIMEOUT";
+        }
+        return "AI_INVALID_OUTPUT".equals(errorMessage) ? "AI_INVALID_OUTPUT" : "AI_PROVIDER_ERROR";
     }
 
     @Override
