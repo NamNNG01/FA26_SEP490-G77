@@ -26,6 +26,7 @@ import {
   ContestStatusBadge,
   Info,
   IssueList,
+  RankMedal,
   RankingBadge,
   formatDateTime,
   formatDuration,
@@ -285,7 +286,7 @@ function Leaderboard({ contest, refreshKey }: { contest: ContestDetail; refreshK
   }, [contest.contestId, page, refreshKey, toast]);
 
   const columns: TableColumn[] = [
-    { key: 'rank', label: 'Rank', width: '72px', render: row => <span className="font-semibold text-content">#{Number(row.rank)}</span> },
+    { key: 'rank', label: 'Rank', width: '96px', render: row => <RankMedal rank={Number(row.rank)} /> },
     {
       key: 'user', label: 'Student',
       render: row => {
