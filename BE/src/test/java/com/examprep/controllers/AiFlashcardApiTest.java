@@ -5,10 +5,15 @@ import com.examprep.ai.AiResponse;
 import com.examprep.controllers.student.Fixtures;
 import com.examprep.entities.AiUsageLog;
 import com.examprep.entities.Course;
+import com.examprep.entities.Deck;
 import com.examprep.entities.Document;
+import com.examprep.entities.SubscriptionPlan;
 import com.examprep.entities.User;
+import com.examprep.entities.UserSubscription;
 import com.examprep.repositories.AiUsageLogRepository;
+import com.examprep.repositories.DeckRepository;
 import com.examprep.repositories.UserRepository;
+import com.examprep.services.AiQuotaService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityManager;
@@ -19,6 +24,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -29,9 +35,14 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import javax.sql.DataSource;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static com.examprep.controllers.student.Fixtures.as;
@@ -44,11 +55,13 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * API 31 + 32 (Deadline 2 group E): POST /api/v1/ai/flashcards/generate and the generation poll.
+ * API 31 + 32 + 33 (Deadline 2 group E): POST /api/v1/ai/flashcards/generate, the generation poll and
+ * GET /api/v1/ai/usage/me.
  *
  * <p>Validation tests stay inside the test transaction, so the real worker can never see their
  * uncommitted job rows and every reservation is rolled back. The end-to-end flow tests opt out of
@@ -63,6 +76,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 public class AiFlashcardApiTest {
     private static final String URL = "/api/v1/ai/flashcards/generate";
     private static final String DETAIL = "/api/v1/ai/flashcards/generations/";
+    private static final String USAGE = "/api/v1/ai/usage/me";
+    private static final String BULK = "/api/v1/flashcards/bulk";
     private static final String CONTENT =
             "Photosynthesis converts light energy into chemical energy stored in glucose inside chloroplasts.";
 
@@ -81,6 +96,7 @@ public class AiFlashcardApiTest {
     @Autowired ObjectMapper json;
     @Autowired UserRepository users;
     @Autowired AiUsageLogRepository logs;
+    @Autowired DeckRepository decks;
     @MockBean AiClient aiClient;
 
     @Value("${app.student-ai.free-daily-tokens:20000}") long freeDailyTokens;
@@ -455,6 +471,110 @@ public class AiFlashcardApiTest {
                 .andExpect(jsonPath("$.data.code").value("RATE_LIMITED"));
     }
 
+    // ------------------------------------------------------------------ API 33 usage
+
+    @Test
+    void usageMeReturnsFreeQuotaShape() throws Exception {
+        User student = f.account(User.ROLE_STUDENT);
+
+        JsonNode data = usage(student);
+
+        assertEquals("FREE_QUOTA", data.path("billingSource").asText());
+        assertTrue(data.path("planName").isNull(), data.toString());
+        assertEquals(freeDailyTokens, data.path("tokenLimit").asLong());
+        // The window is self-consistent: nothing is counted twice and nothing disappears.
+        assertEquals(freeDailyTokens, data.path("tokenUsed").asLong() + data.path("tokenReserved").asLong()
+                + data.path("tokenRemaining").asLong(), data.toString());
+
+        // Deviation log #2: the FREE period is the enforced daily window, not a calendar month.
+        LocalDate today = LocalDate.now(AiQuotaService.ZONE);
+        Instant dayStart = today.atStartOfDay(AiQuotaService.ZONE).toInstant();
+        Instant dayEnd = today.plusDays(1).atStartOfDay(AiQuotaService.ZONE).toInstant();
+        assertNotNull(data.path("periodStart").textValue(), data.toString());
+        assertNotNull(data.path("periodEnd").textValue(), data.toString());
+        assertInstant(dayStart, Instant.parse(data.path("periodStart").asText()));
+        assertInstant(dayEnd, Instant.parse(data.path("periodEnd").asText()));
+        assertTrue(Instant.parse(data.path("periodEnd").asText())
+                .isAfter(Instant.parse(data.path("periodStart").asText())));
+    }
+
+    @Test
+    void usageMeReturnsSubscriptionShape() throws Exception {
+        User student = f.account(User.ROLE_STUDENT);
+        Instant start = Instant.now().minus(5, ChronoUnit.DAYS);
+        Instant end = Instant.now().plus(25, ChronoUnit.DAYS);
+        SubscriptionPlan plan = SubscriptionPlan.builder().planName("Standard " + UUID.randomUUID())
+                .price(new BigDecimal("99000")).durationDays(30).aiTokenLimit(600_000).build();
+        em.persist(plan);
+        em.persist(UserSubscription.builder().user(student).plan(plan).startDate(start).endDate(end)
+                .status("ACTIVE").paidAmount(new BigDecimal("99000")).autoRenew(false).build());
+        em.flush();
+
+        JsonNode data = usage(student);
+
+        // D1: the DB keeps PLAN, the API 33 payload names it SUBSCRIPTION.
+        assertEquals("SUBSCRIPTION", data.path("billingSource").asText());
+        assertEquals(plan.getPlanName(), data.path("planName").asText());
+        assertEquals(600_000, data.path("tokenLimit").asLong());
+        assertEquals(600_000, data.path("tokenUsed").asLong() + data.path("tokenReserved").asLong()
+                + data.path("tokenRemaining").asLong(), data.toString());
+        // The period is the subscription window, not the daily FREE window.
+        assertInstant(start, Instant.parse(data.path("periodStart").asText()));
+        assertInstant(end, Instant.parse(data.path("periodEnd").asText()));
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void usageMeReflectsUsageAfterGenerate() throws Exception {
+        User student = committedAccount(User.ROLE_STUDENT);
+        when(aiClient.complete(any())).thenReturn(AiResponse.builder()
+                .text("{\"cards\":[{\"frontText\":\"Photosynthesis là gì?\",\"backText\":\"Quá trình quang hợp\"}]}")
+                .inputTokens(120).outputTokens(30).model("gemini-test").build());
+
+        JsonNode before = usage(student);
+        assertEquals(0, before.path("tokenUsed").asLong());
+        assertEquals(freeDailyTokens, before.path("tokenRemaining").asLong());
+
+        long id = generate(student);
+        await(student, id, "COMPLETED");
+
+        JsonNode after = usage(student);
+        // The worker settled the reservation on the real token count (120 in + 30 out).
+        assertEquals(150, after.path("tokenUsed").asLong(), after.toString());
+        assertTrue(after.path("tokenUsed").asLong() > before.path("tokenUsed").asLong());
+        assertEquals(freeDailyTokens - 150, after.path("tokenRemaining").asLong());
+    }
+
+    // ------------------------------------------------------------------ saved flag E2E (group D)
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void generationSavedFlagReflectsBulkSave() throws Exception {
+        User student = committedAccount(User.ROLE_STUDENT);
+        Deck deck = decks.save(Deck.builder().user(student).title("AI deck").isPublic(false).build());
+        when(aiClient.complete(any())).thenReturn(AiResponse.builder()
+                .text("{\"cards\":[{\"frontText\":\"Photosynthesis là gì?\",\"backText\":\"Quá trình quang hợp\"}]}")
+                .inputTokens(100).outputTokens(20).model("gemini-test").build());
+
+        long id = generate(student);
+        assertFalse(await(student, id, "COMPLETED").path("saved").asBoolean());
+
+        // Group D save endpoint: source=AI + the generation id flips ai_usage_logs.saved_at.
+        Map<String, Object> body = Map.of(
+                "deckId", deck.getDeckId(),
+                "source", "AI",
+                "aiGenerationId", id,
+                "cards", List.of(Map.of("frontText", "Photosynthesis là gì?", "backText", "Quá trình quang hợp")));
+        mvc.perform(post(BULK).with(as(student))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(body)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.createdCount").value(1));
+
+        assertTrue(await(student, id, "COMPLETED").path("saved").asBoolean(), "API 32 must report saved=true");
+        assertNotNull(logs.findById(id).orElseThrow().getSavedAt(), "ai_usage_logs.saved_at must be set");
+    }
+
     // ------------------------------------------------------------------ helpers
 
     /** Committed user: the flow tests run without the test transaction, so the worker can see the jobs. */
@@ -489,6 +609,21 @@ public class AiFlashcardApiTest {
             }
             Thread.sleep(100);
         }
+    }
+
+    /** Polls API 33 and returns its {@code data} payload. */
+    private JsonNode usage(User user) throws Exception {
+        MvcResult result = mvc.perform(get(USAGE).with(as(user)))
+                .andExpect(status().isOk())
+                .andReturn();
+        return json.readTree(result.getResponse().getContentAsString(StandardCharsets.UTF_8)).path("data");
+    }
+
+    /** Stored instants round-trip through H2 with microsecond precision; compare to the second. */
+    private static void assertInstant(Instant expected, Instant actual) {
+        assertNotNull(actual);
+        assertTrue(Math.abs(expected.toEpochMilli() - actual.toEpochMilli()) <= 1_000,
+                "expected " + expected + " but was " + actual);
     }
 
     private AiUsageLog seed(User user, String status, String result, Integer inputTokens, Integer outputTokens,

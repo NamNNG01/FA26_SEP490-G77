@@ -31,6 +31,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
@@ -240,10 +241,23 @@ public class AiFlashcardServiceImpl implements AiFlashcardService {
         return "AI_INVALID_OUTPUT".equals(errorMessage) ? "AI_INVALID_OUTPUT" : "AI_PROVIDER_ERROR";
     }
 
+    /**
+     * API 33: one quota window, the one currently enforced. A student with an ACTIVE plan is billed
+     * against the plan pool (period = the subscription window); everybody else against the daily FREE
+     * allowance (period = today in the house zone up to {@code freeResetAt}, deviation log #2). The DB
+     * keeps FREE/PLAN (D1); only this DTO renames them to FREE_QUOTA/SUBSCRIPTION.
+     */
     @Override
     public UsageInfo usage(Long userId) {
-        // skeleton — logic lands in Task 11
-        throw new BaseException(ResponseCode.INTERNAL_SERVER_ERROR, "Not implemented yet");
+        AiQuotaService.Snapshot snapshot = quota.snapshot(userId);
+        if (snapshot.planName() != null) {
+            return new UsageInfo("SUBSCRIPTION", snapshot.planName(), snapshot.planLimit(), snapshot.planUsed(),
+                    snapshot.planReserved(), snapshot.planRemaining(), snapshot.planStart(), snapshot.planEnd());
+        }
+        // The FREE window is the daily one the reservation actually enforces: [today 00:00, freeResetAt).
+        Instant periodStart = LocalDate.now(AiQuotaService.ZONE).atStartOfDay(AiQuotaService.ZONE).toInstant();
+        return new UsageInfo("FREE_QUOTA", null, snapshot.freeLimit(), snapshot.freeUsed(), snapshot.freeReserved(),
+                snapshot.freeRemaining(), periodStart, snapshot.freeResetAt());
     }
 
     // ---------------------------------------------------------------- validation
