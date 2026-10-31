@@ -68,9 +68,10 @@ public class StudentCourseServiceImpl implements StudentCourseService {
         long deckCount = deckRepository.findCourseDecksWithStats(courseId, userId != null ? userId : 0L).size();
 
         EnrollmentSummaryDto enrollmentSummary;
-        if (userId != null && enrollmentRepository.findByUser_UserIdAndCourse_CourseId(userId, courseId).isPresent()) {
-            Enrollment en = enrollmentRepository.findByUser_UserIdAndCourse_CourseId(userId, courseId).get();
-            enrollmentSummary = new EnrollmentSummaryDto(true, en.getStatus(), en.getProgress());
+        if (userId != null) {
+            java.util.Optional<Enrollment> enOpt = enrollmentRepository.findByUser_UserIdAndCourse_CourseId(userId, courseId);
+            enrollmentSummary = enOpt.map(en -> new EnrollmentSummaryDto(true, en.getStatus(), en.getProgress()))
+                    .orElseGet(() -> new EnrollmentSummaryDto(false, null, null));
         } else {
             enrollmentSummary = new EnrollmentSummaryDto(false, null, null);
         }

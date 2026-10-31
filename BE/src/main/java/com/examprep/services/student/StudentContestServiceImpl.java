@@ -114,17 +114,25 @@ public class StudentContestServiceImpl implements StudentContestService {
         List<Long> contestIds = pageContests.getContent().stream().map(Contest::getContestId).toList();
 
         Map<Long, Long> registeredCounts = new HashMap<>();
-        Map<Long, Boolean> registeredUsers = new HashMap<>();
+        Set<Long> registeredContestIds = new HashSet<>();
         List<ContestReward> allRewards = new ArrayList<>();
+        Map<Long, Integer> questionCounts = new HashMap<>();
 
         if (!contestIds.isEmpty()) {
             participantRepository.countByContests(contestIds).forEach(row -> registeredCounts.put((Long) row[0], ((Number) row[1]).longValue()));
             if (userId != null) {
-                participantRepository.findByContest_ContestIdIn(contestIds).stream()
-                        .filter(p -> p.getUser().getUserId().equals(userId))
-                        .forEach(p -> registeredUsers.put(p.getContest().getContestId(), true));
+                registeredContestIds.addAll(participantRepository.findRegisteredContestIds(userId, contestIds));
             }
             allRewards = rewardRepository.findByContest_ContestIdIn(contestIds);
+
+            List<Long> examIds = pageContests.getContent().stream()
+                    .map(c -> c.getExam() != null ? c.getExam().getExamId() : null)
+                    .filter(Objects::nonNull)
+                    .distinct()
+                    .toList();
+            if (!examIds.isEmpty()) {
+                examQuestionRepository.countByExamIds(examIds).forEach(row -> questionCounts.put((Long) row[0], ((Number) row[1]).intValue()));
+            }
         }
 
         Map<Long, List<ContestItemDto.RewardItem>> rewardMap = allRewards.stream()
@@ -141,8 +149,8 @@ public class StudentContestServiceImpl implements StudentContestService {
         return pageContests.map(c -> {
             String status = determineStatus(c, now);
             long registeredCount = registeredCounts.getOrDefault(c.getContestId(), 0L);
-            boolean isRegistered = registeredUsers.getOrDefault(c.getContestId(), false);
-            int qCount = c.getExam() != null ? examQuestionRepository.findByExamExamIdOrderByOrderIndexAscExamQuestionIdAsc(c.getExam().getExamId()).size() : 0;
+            boolean isRegistered = registeredContestIds.contains(c.getContestId());
+            int qCount = c.getExam() != null ? questionCounts.getOrDefault(c.getExam().getExamId(), 0) : 0;
 
             ContestItemDto.CourseRef courseRef = c.getCourse() != null ? new ContestItemDto.CourseRef(c.getCourse().getCourseId(), c.getCourse().getTitle()) : null;
             List<ContestItemDto.RewardItem> rewards = rewardMap.getOrDefault(c.getContestId(), List.of());

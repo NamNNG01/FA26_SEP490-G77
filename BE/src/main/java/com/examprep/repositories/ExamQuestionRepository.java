@@ -37,5 +37,6 @@ public interface ExamQuestionRepository extends JpaRepository<ExamQuestion, Long
             @Param("examIds") Collection<Long> examIds
     );
 
-
+    @Query("SELECT eq.exam.examId, COUNT(eq) FROM ExamQuestion eq WHERE eq.exam.examId IN :examIds GROUP BY eq.exam.examId")
+    List<Object[]> countByExamIds(@Param("examIds") Collection<Long> examIds);
 }

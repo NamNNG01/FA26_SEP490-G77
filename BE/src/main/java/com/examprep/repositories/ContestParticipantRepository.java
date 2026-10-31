@@ -44,7 +44,13 @@ public interface ContestParticipantRepository extends JpaRepository<ContestParti
     boolean existsByContest_ContestIdAndUser_UserId(Long contestId, Long userId);
     long countByContest_ContestId(Long contestId);
     Optional<ContestParticipant> findByContest_ContestIdAndUser_UserId(Long contestId, Long userId);
+
+    @EntityGraph(attributePaths = "user")
     List<ContestParticipant> findByContest_ContestIdOrderByScoreDescFinishedAtAsc(Long contestId);
+
     Page<ContestParticipant> findByUser_UserIdOrderByJoinedAtDesc(Long userId, Pageable pageable);
     List<ContestParticipant> findByContest_ContestIdIn(Collection<Long> contestIds);
+
+    @Query("SELECT p.contest.contestId FROM ContestParticipant p WHERE p.user.userId = :userId AND p.contest.contestId IN :contestIds")
+    List<Long> findRegisteredContestIds(@Param("userId") Long userId, @Param("contestIds") Collection<Long> contestIds);
 }

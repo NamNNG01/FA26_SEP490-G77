@@ -97,18 +97,27 @@ public class StudentProgressServiceImpl implements StudentProgressService {
 
     @Override
     public Page<StudentActivityDto> getActivityHistory(String type, int page, int size, Long userId) {
+        String normalizedType = (type != null && !type.isBlank()) ? type.trim().toUpperCase() : null;
         Pageable pageable = PageRequest.of(page, size);
-        Page<ExamAttempt> attempts = examAttemptRepository.findActivityAttemptsByUser(userId, pageable);
 
-        return attempts.map(att -> new StudentActivityDto(
-                "EXAM",
-                att.getAttemptId(),
-                att.getExam() != null ? att.getExam().getTitle() : "Practice Exam",
-                att.getTotalScore(),
-                att.getExam() != null ? att.getExam().getMaxScore() : null,
-                null,
-                null,
-                att.getSubmitTime()
-        ));
+        if ("FLASHCARD".equals(normalizedType)) {
+            return Page.empty(pageable);
+        }
+
+        Page<ExamAttempt> attempts = examAttemptRepository.findActivityAttemptsByUserAndMode(userId, normalizedType, pageable);
+
+        return attempts.map(att -> {
+            String actType = "QUIZ".equalsIgnoreCase(att.getMode()) ? "QUIZ" : "EXAM";
+            return new StudentActivityDto(
+                    actType,
+                    att.getAttemptId(),
+                    att.getExam() != null ? att.getExam().getTitle() : "Practice Exam",
+                    att.getTotalScore(),
+                    att.getExam() != null ? att.getExam().getMaxScore() : null,
+                    null,
+                    null,
+                    att.getSubmitTime()
+            );
+        });
     }
 }

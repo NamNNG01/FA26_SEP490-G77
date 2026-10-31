@@ -16,11 +16,15 @@ public interface StudentQuestionReviewRepository extends JpaRepository<StudentQu
 
     Optional<StudentQuestionReview> findByStudent_UserIdAndQuestion_QuestionId(Long studentId, Long questionId);
 
-    @Query("SELECT r FROM StudentQuestionReview r JOIN FETCH r.question q " +
+    @Query(value = "SELECT r FROM StudentQuestionReview r JOIN FETCH r.question q " +
            "WHERE r.student.userId = :studentId " +
            "AND (:type = 'all' OR (:type = 'wrong' AND r.status = 'WRONG_BOOKMARKED') OR (:type = 'bookmarked' AND r.bookmark = true)) " +
-            "AND (:search = '' OR LOWER(q.content) LIKE LOWER(CONCAT('%', :search, '%'))) " +
-           "ORDER BY r.lastPracticedAt DESC")
+           "AND (:search = '' OR LOWER(q.content) LIKE LOWER(CONCAT('%', :search, '%'))) " +
+           "ORDER BY r.lastPracticedAt DESC",
+           countQuery = "SELECT COUNT(r) FROM StudentQuestionReview r " +
+           "WHERE r.student.userId = :studentId " +
+           "AND (:type = 'all' OR (:type = 'wrong' AND r.status = 'WRONG_BOOKMARKED') OR (:type = 'bookmarked' AND r.bookmark = true)) " +
+           "AND (:search = '' OR LOWER(r.question.content) LIKE LOWER(CONCAT('%', :search, '%')))")
     Page<StudentQuestionReview> findSavedQuestions(
             @Param("studentId") Long studentId,
             @Param("type") String type,

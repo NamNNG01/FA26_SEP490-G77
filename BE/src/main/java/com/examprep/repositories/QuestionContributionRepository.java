@@ -11,10 +11,13 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface QuestionContributionRepository extends JpaRepository<QuestionContribution, Long> {
 
-    @Query("SELECT c FROM QuestionContribution c WHERE c.userId = :userId " +
+    @Query(value = "SELECT c FROM QuestionContribution c WHERE c.userId = :userId " +
            "AND (:type IS NULL OR c.type = :type) " +
            "AND (:status IS NULL OR c.status = :status) " +
-           "ORDER BY c.submittedAt DESC")
+           "ORDER BY c.submittedAt DESC",
+           countQuery = "SELECT COUNT(c) FROM QuestionContribution c WHERE c.userId = :userId " +
+           "AND (:type IS NULL OR c.type = :type) " +
+           "AND (:status IS NULL OR c.status = :status)")
     Page<QuestionContribution> findByStudentAndFilters(
             @Param("userId") Long userId,
             @Param("type") String type,
