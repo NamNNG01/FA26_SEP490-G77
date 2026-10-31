@@ -78,6 +78,8 @@ export interface AttemptSession {
   serverTime: string;
   maxScore: number | null;
   questions: AttemptQuestion[];
+  /** Exam.mode of the attempt — EXAM, PRACTICE, SMART_PRACTICE, MATERIAL_QUIZ, CONTEST. */
+  examMode?: string | null;
   /** SA-02 only. */
   answers: { questionId: number; draftSeq: number | null; response: AnswerResponse | null }[] | null;
 }

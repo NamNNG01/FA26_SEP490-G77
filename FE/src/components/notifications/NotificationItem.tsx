@@ -1,6 +1,7 @@
 import React from 'react';
 import { Icon } from '@/assets/icons';
 import type { StudentNotification } from '@/services/studentNotification.service';
+import { ROUTES } from '@/app/routes';
 
 /** Icon per NT-01 `type`; unknown types fall back to the bell. */
 function typeIcon(type: string | null): React.ReactNode {
@@ -14,6 +15,8 @@ function typeIcon(type: string | null): React.ReactNode {
       return <Icon.Trophy className={cls} />;
     case 'CONTEST_CANCELLED':
       return <Icon.XCircle className={cls} />;
+    case 'CONTEST_REMINDER':
+      return <Icon.Clock className={cls} />;
     default:
       return <Icon.Bell className={cls} />;
   }
@@ -33,7 +36,9 @@ export function formatRelativeTime(iso: string): string {
 
 /** In-app path for the notification, or null when it only informs (clicking just marks it read). */
 export function notificationTarget(n: StudentNotification): string | null {
-  return n.link && n.link.startsWith('/') ? n.link : null;
+  if (n.link && n.link.startsWith('/')) return n.link;
+  // Contest notifications carry no link yet (docs/notes/contest-be-gaps-2026-10-31.md): open the contests page.
+  return n.type?.startsWith('CONTEST_') ? ROUTES.studentContests : null;
 }
 
 /**

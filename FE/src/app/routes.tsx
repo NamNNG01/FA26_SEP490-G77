@@ -86,6 +86,12 @@ export const ROUTES = {
   /** Same pages as the student practice-exam area, mounted under /manager. */
   managerPracticeExams: '/manager/practice-exams',
   managerPracticeExamDetail: '/manager/practice-exams/:examId',
+  managerContests: '/manager/contests',
+  managerContestCreate: '/manager/contests/new',
+  /** Route pattern — render with managerContestPath(id). */
+  managerContestDetail: '/manager/contests/:contestId',
+  /** Route pattern — render with managerContestEditPath(id). */
+  managerContestEdit: '/manager/contests/:contestId/edit',
 
   adminDashboard: '/admin/dashboard',
   adminUsers: '/admin/users',
@@ -168,6 +174,14 @@ export function managerQuestionDuplicatePath(id: number | string): string {
   return `${ROUTES.managerQuestionCreate}?duplicate=${encodeURIComponent(String(id))}`;
 }
 
+export function managerContestPath(id: number | string): string {
+  return `${ROUTES.managerContests}/${id}`;
+}
+
+export function managerContestEditPath(id: number | string): string {
+  return `${managerContestPath(id)}/edit`;
+}
+
 export function managerCourseDetailPath(id: number | string): string {
   return `${ROUTES.managerCourses}/${id}`;
 }
@@ -245,6 +259,7 @@ export const menuByRole: Record<string, MenuItem[]> = {
     { id: 'manager-questions', title: 'Question Bank', icon: <Icon.Database className="w-4 h-4" />, path: ROUTES.managerQuestions },
     { id: 'manager-exams', title: 'Exams', icon: <Icon.ClipboardList className="w-4 h-4" />, path: ROUTES.managerExams },
     { id: 'manager-flashcards', title: 'Flashcards', icon: <Icon.Layers className="w-4 h-4" />, path: ROUTES.managerFlashcards },
+    { id: 'manager-contests', title: 'Contests', icon: <Icon.Trophy className="w-4 h-4" />, path: ROUTES.managerContests },
   ],
   ADMIN: [
     { id: 'admin-dashboard', title: 'Dashboard', icon: <Icon.Home className="w-4 h-4" />, path: ROUTES.adminDashboard },
