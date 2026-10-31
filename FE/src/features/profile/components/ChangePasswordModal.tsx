@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/Input';
 import { Alert } from '@/components/ui/Alert';
 import { useToast } from '@/components/ui/ToastHost';
 import { Icon } from '@/assets/icons';
-import { passwordService, PASSWORD_MIN_LENGTH } from '@/services/password.service';
+import { passwordService, PASSWORD_MIN_LENGTH, PASSWORD_TOO_LONG_MESSAGE, isPasswordTooLong } from '@/services/password.service';
 
 const PASSWORD_TIPS = [
   `Use at least ${PASSWORD_MIN_LENGTH} characters — longer passwords are harder to guess.`,
@@ -66,6 +66,8 @@ export function ChangePasswordModal({ open, onClose }: { open: boolean; onClose:
       next.newPassword = 'New password is required';
     } else if (newPassword.length < PASSWORD_MIN_LENGTH) {
       next.newPassword = `Password must be at least ${PASSWORD_MIN_LENGTH} characters`;
+    } else if (isPasswordTooLong(newPassword)) {
+      next.newPassword = PASSWORD_TOO_LONG_MESSAGE;
     } else if (newPassword === currentPassword) {
       next.newPassword = 'New password must be different from the current password';
     }

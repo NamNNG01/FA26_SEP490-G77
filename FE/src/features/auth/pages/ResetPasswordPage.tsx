@@ -7,7 +7,7 @@ import { Alert } from '@/components/ui/Alert';
 import { Icon } from '@/assets/icons';
 import { ROUTES } from '@/app/routes';
 import { useAuth } from '@/auth/authContext';
-import { passwordService, PASSWORD_MIN_LENGTH } from '@/services/password.service';
+import { passwordService, PASSWORD_MIN_LENGTH, PASSWORD_TOO_LONG_MESSAGE, isPasswordTooLong } from '@/services/password.service';
 import { AuthPageHeader } from '../components/AuthPageHeader';
 
 /**
@@ -86,6 +86,10 @@ export function ResetPasswordPage() {
     }
     if (password.length < PASSWORD_MIN_LENGTH) {
       setError(`Password must be at least ${PASSWORD_MIN_LENGTH} characters`);
+      return;
+    }
+    if (isPasswordTooLong(password)) {
+      setError(PASSWORD_TOO_LONG_MESSAGE);
       return;
     }
     if (password !== confirmPassword) {

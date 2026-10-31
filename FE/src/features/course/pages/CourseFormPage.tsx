@@ -14,6 +14,7 @@ import {
   type CourseDetailResponse,
 } from "@/services/course.service";
 import { getApiErrorMessage } from "@/utils/apiError";
+import { coursePriceError } from "../coursePrice";
 
 export function CourseFormPage({
   mode = "create",
@@ -113,6 +114,11 @@ export function CourseFormPage({
       notification.error("Please select a category.");
       return;
     }
+    const priceError = coursePriceError(price);
+    if (priceError) {
+      notification.error(priceError);
+      return;
+    }
     setSubmitting(true);
 
     try {
@@ -121,7 +127,7 @@ export function CourseFormPage({
           title: title.trim(),
           categoryId: Number(categoryId),
           description: description.trim() || undefined,
-          price: Number(price) >= 0 ? Number(price) : 0,
+          price: Number(price),
         });
         notification.success("Course updated successfully.");
         setTimeout(() => handleCancel(), 1000);
@@ -130,7 +136,7 @@ export function CourseFormPage({
           title: title.trim(),
           categoryId: Number(categoryId),
           description: description.trim() || undefined,
-          price: Number(price) >= 0 ? Number(price) : 0,
+          price: Number(price),
           managerId: Number(managerId) || 1,
         });
         notification.success("Course created successfully.");

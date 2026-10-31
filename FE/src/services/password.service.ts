@@ -19,6 +19,16 @@ import type { ApiResponse } from '@/auth/authContext';
 /** Same rule as ResetPasswordRequest.newPassword (@Size(min = 6)). */
 export const PASSWORD_MIN_LENGTH = 6;
 
+/** BCrypt only uses the first 72 bytes of a password, so longer ones are rejected up front. */
+export const PASSWORD_MAX_BYTES = 72;
+
+/** True when the password's UTF-8 form is longer than BCrypt can hash. */
+export function isPasswordTooLong(password: string): boolean {
+  return new TextEncoder().encode(password).length > PASSWORD_MAX_BYTES;
+}
+
+export const PASSWORD_TOO_LONG_MESSAGE = `Password must be at most ${PASSWORD_MAX_BYTES} characters`;
+
 export const passwordService = {
   /** Resolves with the backend's confirmation message. */
   async forgotPassword(email: string): Promise<string> {
