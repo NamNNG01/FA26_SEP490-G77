@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router';
 import type { UserResponse } from '@/auth/authContext';
+import { ROUTES } from '@/app/routes';
 import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -21,7 +23,8 @@ function memberDetails(user: UserResponse): string {
 
 /**
  * User Header Card: avatar, full name, email, member details, role badge,
- * account actions (Edit Profile, Change Password modal, Logout All Devices)
+ * account actions (Edit Profile, Change Password modal — or Set Password for a
+ * Google-only account — and Logout All Devices)
  * and 4 activity statistics.
  */
 export function ProfileHeaderCard({
@@ -38,6 +41,11 @@ export function ProfileHeaderCard({
   onEdit: () => void;
 }) {
   const [passwordOpen, setPasswordOpen] = useState(false);
+  const navigate = useNavigate();
+  // A Google-only account (AUTH-09) has no current password to confirm, so it
+  // sets one through the Forgot password email instead. Older responses
+  // without the flag keep Change Password.
+  const canChangePassword = user.hasPassword !== false;
 
   return (
     <div className="card p-6">
@@ -63,19 +71,33 @@ export function ProfileHeaderCard({
           >
             Edit Profile
           </Button>
-          <Button
-            variant="outline"
-            icon={<Icon.Lock className="w-4 h-4" />}
-            onClick={() => setPasswordOpen(true)}
-            className="w-full"
-          >
-            Change Password
-          </Button>
+          {canChangePassword ? (
+            <Button
+              variant="outline"
+              icon={<Icon.Lock className="w-4 h-4" />}
+              onClick={() => setPasswordOpen(true)}
+              className="w-full"
+            >
+              Change Password
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              icon={<Icon.Lock className="w-4 h-4" />}
+              onClick={() => navigate(ROUTES.forgotPassword, { state: { email: user.email } })}
+              title="You sign in with Google. We'll email you a link to set a password."
+              className="w-full"
+            >
+              Set Password
+            </Button>
+          )}
           <LogoutAllDevicesButton className="w-full" />
         </div>
       </div>
 
-      <ChangePasswordModal open={passwordOpen} onClose={() => setPasswordOpen(false)} />
+      {canChangePassword && (
+        <ChangePasswordModal open={passwordOpen} onClose={() => setPasswordOpen(false)} />
+      )}
 
       <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-4">
         {statsLoading

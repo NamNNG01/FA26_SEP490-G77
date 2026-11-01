@@ -141,7 +141,8 @@ class AuthControllerTest {
                 .andExpect(jsonPath("$.data.accessToken").value("accessToken123"))
                 .andExpect(jsonPath("$.data.refreshToken").value("refreshToken123"))
                 .andExpect(jsonPath("$.data.newUser").value(true))
-                .andExpect(jsonPath("$.data.user.role").value("STUDENT"));
+                .andExpect(jsonPath("$.data.user.role").value("STUDENT"))
+                .andExpect(jsonPath("$.data.user.hasPassword").value(false));
     }
 
     @Test

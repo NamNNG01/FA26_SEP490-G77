@@ -15,7 +15,7 @@ export const apiClient = axios.create({
 /**
  * Endpoints that never carry an Authorization header.
  *
- * register, login, refresh, password/forgot, password/reset: permitAll
+ * register, login, google, refresh, password/forgot, password/reset: permitAll
  *     (no token required — SecurityConfig). Being public also keeps a 401
  *     "Invalid or expired reset token." out of the refresh flow below.
  * logout / logout-all: PROTECTED (require a Bearer token) — the backend
@@ -24,6 +24,7 @@ export const apiClient = axios.create({
 const PUBLIC_ENDPOINTS = [
   '/auth/register',
   '/auth/login',
+  '/auth/google',
   '/auth/refresh',
   '/auth/password/forgot',
   '/auth/password/reset',

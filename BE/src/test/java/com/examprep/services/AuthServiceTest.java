@@ -127,6 +127,7 @@ class AuthServiceTest {
         assertEquals("Bearer", response.getTokenType());
         assertEquals(900, response.getExpiresIn());
         assertEquals("student@gmail.com", response.getUser().getEmail());
+        assertTrue(response.getUser().isHasPassword());
         verify(refreshTokenRepository, times(1)).save(any(RefreshToken.class));
     }
 
@@ -572,6 +573,7 @@ class AuthServiceTest {
         assertTrue(response.isNewUser());
         assertEquals("new.student@gmail.com", response.getUser().getEmail());
         assertEquals("STUDENT", response.getUser().getRole());
+        assertFalse(response.getUser().isHasPassword(), "a Google-only account must report no password");
 
         ArgumentCaptor<User> saved = ArgumentCaptor.forClass(User.class);
         verify(userRepository).save(saved.capture());
@@ -614,6 +616,7 @@ class AuthServiceTest {
         assertFalse(response.isNewUser());
         assertEquals("google-sub-9", testUser.getGoogleId());
         assertEquals("hashedPassword", testUser.getPasswordHash(), "linking must not clear the password");
+        assertTrue(response.getUser().isHasPassword());
         assertEquals("https://lh3.googleusercontent.com/a/avatar", testUser.getAvatarUrl());
     }
 
