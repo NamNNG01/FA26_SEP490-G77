@@ -19,6 +19,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByEmail(String email);
     boolean existsByEmail(String email);
 
+    /** AUTH-09: recognise the account that already owns this Google subject id. */
+    Optional<User> findByGoogleId(String googleId);
+
     /**
      * Row lock on the student, taken by SA-01 so two "start attempt" requests from the same
      * student are serialized before the single-active-attempt check runs.

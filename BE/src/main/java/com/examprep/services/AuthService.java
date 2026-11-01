@@ -10,6 +10,13 @@ public interface AuthService {
 
     LoginResponse login(LoginRequest request);
 
+    /**
+     * AUTH-09: verifies a Google ID token, then links it to the account that
+     * already owns the Google subject id or the verified email, or provisions a
+     * new STUDENT account. Always answers with the same token pair AUTH-02 issues.
+     */
+    GoogleLoginResponse loginWithGoogle(GoogleLoginRequest request);
+
     TokenResponse refreshToken(RefreshTokenRequest request);
 
     void logout(LogoutRequest request, UserPrincipal currentUser);

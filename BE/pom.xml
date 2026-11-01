@@ -22,6 +22,8 @@
         <jjwt.version>0.12.6</jjwt.version>
         <springdoc.version>2.6.0</springdoc.version>
         <lombok.version>1.18.38</lombok.version>
+        <google-api-client.version>2.7.2</google-api-client.version>
+        <google-http-client.version>1.45.0</google-http-client.version>
     </properties>
 
     <dependencies>
@@ -96,6 +98,20 @@
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
             <version>${springdoc.version}</version>
+        </dependency>
+
+        <!-- AUTH-09 Google Sign-In: verifies the Google ID token (JWKS signature,
+             audience, issuer, expiry) before an account is looked up or created. -->
+        <dependency>
+            <groupId>com.google.api-client</groupId>
+            <artifactId>google-api-client</artifactId>
+            <version>${google-api-client.version}</version>
+        </dependency>
+        <!-- JsonFactory (JacksonFactory) required by GoogleIdTokenVerifier. -->
+        <dependency>
+            <groupId>com.google.http-client</groupId>
+            <artifactId>google-http-client-jackson2</artifactId>
+            <version>${google-http-client.version}</version>
         </dependency>
 
         <!-- HTML Sanitizer -->
