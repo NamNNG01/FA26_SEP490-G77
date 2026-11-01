@@ -30,6 +30,8 @@ export interface UserResponse {
   role: string;
   status: string;
   createdAt: string; // Instant → ISO string (added with USER-01)
+  /** False for a Google-only account (AUTH-09) that never set a password. */
+  hasPassword?: boolean;
 }
 
 export interface LoginResponse {
@@ -38,6 +40,11 @@ export interface LoginResponse {
   tokenType: string;
   expiresIn: number;
   user: UserResponse;
+}
+
+/** AUTH-09: LoginResponse plus whether this call created the account. */
+export interface GoogleLoginResponse extends LoginResponse {
+  newUser: boolean;
 }
 
 export interface TokenResponse {
@@ -72,6 +79,8 @@ export interface AuthState {
 interface AuthContextValue extends AuthState {
   login: (email: string, password: string) => Promise<UserResponse>;
   register: (email: string, password: string, fullName: string) => Promise<UserResponse>;
+  /** POST /auth/google with a Google ID token (AUTH-09). */
+  loginWithGoogle: (idToken: string) => Promise<{ user: UserResponse; newUser: boolean }>;
   logout: () => Promise<void>;
   /** POST /auth/logout-all — revokes every session. Throws on failure. */
   logoutAll: () => Promise<void>;
@@ -221,9 +230,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function login(email: string, password: string): Promise<UserResponse> {
-    const res = await apiClient.post('/auth/login', { email, password });
-    const body = res.data as ApiResponse<LoginResponse>;
+  // Store the token pair + user from AUTH-02 / AUTH-09 and mark the session
+  // authenticated.
+  function startSession(body: ApiResponse<LoginResponse>): UserResponse {
     const data = body.data;
 
     if (!data?.accessToken || !data.user) {
@@ -244,6 +253,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       reauthRequired: false,
     });
     return data.user;
+  }
+
+  async function login(email: string, password: string): Promise<UserResponse> {
+    const res = await apiClient.post('/auth/login', { email, password });
+    return startSession(res.data as ApiResponse<LoginResponse>);
+  }
+
+  async function loginWithGoogle(
+    idToken: string,
+  ): Promise<{ user: UserResponse; newUser: boolean }> {
+    const res = await apiClient.post('/auth/google', { idToken });
+    const body = res.data as ApiResponse<GoogleLoginResponse>;
+    const user = startSession(body);
+    return { user, newUser: body.data.newUser === true };
   }
 
   async function register(
@@ -301,6 +324,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         ...state,
         login,
         register,
+        loginWithGoogle,
         logout,
         logoutAll,
         setAuth,

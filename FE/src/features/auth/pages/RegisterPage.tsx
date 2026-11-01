@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/Input';
 import { Alert } from '@/components/ui/Alert';
 import { useAuth, landingPathForRole } from '@/auth/authContext';
 import { AuthPageHeader } from '../components/AuthPageHeader';
+import { GoogleSignInButton } from '../components/GoogleSignInButton';
 import { Icon } from '@/assets/icons';
 import { ROUTES } from '@/app/routes';
 import { safeRedirect, withRedirectTarget } from '@/hooks/useRequireAuth';
@@ -179,6 +180,16 @@ export function RegisterPage() {
               Create Account
             </Button>
           </form>
+
+          <GoogleSignInButton
+            mode="signup"
+            redirectTo={redirectTo}
+            onStart={() => {
+              setError('');
+              setConfirmError('');
+            }}
+            onError={setError}
+          />
 
           <div className="mt-5 pt-5 border-t border-line-soft flex flex-col gap-3 items-center">
             <p className="text-sm text-content-soft flex items-center gap-2">
