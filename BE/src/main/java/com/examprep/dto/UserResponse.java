@@ -21,6 +21,12 @@ public class UserResponse {
     private String role;
     private String status;
     private Instant createdAt;
+    /**
+     * False for an account created by AUTH-09 that has never set a password, so
+     * the client can hide password-only features. Only ever a flag — the hash
+     * itself never leaves the server. Serialises as {@code hasPassword}.
+     */
+    private boolean hasPassword;
 
     public static UserResponse from(User user) {
         if (user == null) return null;
@@ -32,6 +38,7 @@ public class UserResponse {
                 .role(user.getRoleName())
                 .status(user.getStatus())
                 .createdAt(user.getCreatedAt())
+                .hasPassword(user.getPasswordHash() != null)
                 .build();
     }
 }
