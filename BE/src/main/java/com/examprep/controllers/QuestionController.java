@@ -142,6 +142,16 @@ public class QuestionController {
         return ResponseEntity.ok(ApiResponse.success(updated, "Question status updated successfully"));
     }
 
+    @PatchMapping("/batch/status")
+    @Operation(summary = "Batch update questions status")
+    public ResponseEntity<ApiResponse<List<QuestionDetailDto>>> batchUpdateStatus(
+            @Valid @RequestBody QuestionBatchStatusRequest request,
+            @AuthenticationPrincipal UserPrincipal currentUser) {
+        User user = resolveUser(currentUser);
+        List<QuestionDetailDto> updated = questionService.batchUpdateStatus(request, user);
+        return ResponseEntity.ok(ApiResponse.success(updated, "Questions status updated successfully"));
+    }
+
     @GetMapping("/import-template")
     @Operation(summary = "Q-09: Download question import template (PDF or DOCX)")
     public ResponseEntity<org.springframework.core.io.Resource> downloadTemplate(

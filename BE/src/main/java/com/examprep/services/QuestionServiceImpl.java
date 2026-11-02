@@ -208,7 +208,7 @@ public class QuestionServiceImpl implements QuestionService {
             String source = "MANUAL";
             String creatorRole = "MANAGER";
             String approvalStatus = "APPROVED";
-            String status = req.getStatus() != null ? req.getStatus() : "ACTIVE";
+            String status = "INACTIVE";
 
             QuestionGroup group = null;
             if (req.getGroupId() != null) {
@@ -347,9 +347,10 @@ public class QuestionServiceImpl implements QuestionService {
         Question q = questionRepository.findActiveById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Question not found"));
 
-        if (!accessPolicy.canModify(currentUser, q)) {
-            throw new ForbiddenException("You do not have permission to modify this question");
+        if ("ACTIVE".equalsIgnoreCase(q.getStatus()) || "ARCHIVED".equalsIgnoreCase(q.getStatus())) {
+            throw new ResourceConflictException("Cannot update question when status is ACTIVE or ARCHIVED");
         }
+
         if (req.getModuleId() != null) {
             com.examprep.entities.Module module = moduleRepository.findById(req.getModuleId())
                     .orElseThrow(() -> new ResourceNotFoundException("Module not found"));
@@ -768,15 +769,24 @@ public class QuestionServiceImpl implements QuestionService {
             throw new ResourceConflictException("Lock version mismatch");
         }
 
-        String newStatus = req.getStatus();
-        if ("ACTIVE".equals(newStatus)) {
+        String currentStatus = q.getStatus() != null ? q.getStatus().toUpperCase() : "INACTIVE";
+        String newStatus = req.getStatus() != null ? req.getStatus().toUpperCase() : "";
+
+        if ("INACTIVE".equals(currentStatus) && "ACTIVE".equals(newStatus)) {
             if (!"APPROVED".equals(q.getApprovalStatus())) {
                 throw new BadRequestException("Cannot activate question that is not approved");
             }
             List<AnswerOption> options = answerOptionRepository.findByQuestion_QuestionId(q.getQuestionId());
             QuestionPayload payload = QuestionPayload.fromEntity(q, options, objectMapper);
             questionValidator.validateOrThrow(payload);
-
+        } else if ("ACTIVE".equals(currentStatus) && "ARCHIVED".equals(newStatus)) {
+            // Allowed: ACTIVE -> ARCHIVED
+        } else if ("ACTIVE".equals(currentStatus) && ("INACTIVE".equals(newStatus) || "DRAFT".equals(newStatus))) {
+            throw new ResourceConflictException("Once active, a question can only be updated to archived");
+        } else if ("ARCHIVED".equals(currentStatus)) {
+            throw new ResourceConflictException("Archived questions cannot change status");
+        } else if (!currentStatus.equals(newStatus)) {
+            throw new ResourceConflictException("Invalid status transition from " + currentStatus + " to " + newStatus);
         }
 
         q.setStatus(newStatus);
@@ -784,6 +794,23 @@ public class QuestionServiceImpl implements QuestionService {
         List<AnswerOption> options = answerOptionRepository.findByQuestion_QuestionId(q.getQuestionId());
         return mapToDetailDto(q, options);
     }
+
+    @Override
+    @Transactional
+    public List<QuestionDetailDto> batchUpdateStatus(QuestionBatchStatusRequest req, User currentUser) {
+        if (req == null || req.getQuestionIds() == null || req.getQuestionIds().isEmpty()) {
+            throw new BadRequestException("Question IDs are required");
+        }
+        String newStatus = req.getStatus() != null ? req.getStatus().toUpperCase() : "";
+        List<QuestionDetailDto> results = new ArrayList<>();
+        for (Long id : req.getQuestionIds()) {
+            QuestionStatusRequest sReq = QuestionStatusRequest.builder().status(newStatus).build();
+            results.add(updateQuestionStatus(id, sReq, currentUser));
+        }
+        return results;
+    }
+
+
 
     private QuestionDetailDto mapToDetailDto(Question q, List<AnswerOption> options) {
         Object metadataObj = parseJson(q.getQuestionMetadata());

@@ -34,4 +34,6 @@ public interface QuestionService {
 
     QuestionDetailDto updateQuestionStatus(Long id, QuestionStatusRequest request, User currentUser);
 
+    List<QuestionDetailDto> batchUpdateStatus(QuestionBatchStatusRequest request, User currentUser);
+
 }

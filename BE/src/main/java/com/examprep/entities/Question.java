@@ -109,7 +109,7 @@ public class Question implements Serializable {
 
     @Builder.Default
     @Column(name = "status", nullable = false, length = 20)
-    private String status = "ACTIVE";
+    private String status = "INACTIVE";
 
     @Builder.Default
     @Column(name = "approval_status", nullable = false, length = 20)
