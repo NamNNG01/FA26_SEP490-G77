@@ -52,6 +52,8 @@ export function QuestionForm({
   allowedTypes,
   kindError,
   duplicateError,
+  leading,
+  readOnly,
 }: {
   q: QuestionDraft;
   index: number;
@@ -76,6 +78,10 @@ export function QuestionForm({
   kindError?: string;
   /** The backend found this question's content already in the course — it can't be saved until changed. */
   duplicateError?: string;
+  /** Shown before the index in the header (e.g. a selection checkbox). */
+  leading?: React.ReactNode;
+  /** Shows the question without letting it be edited (a saved question on the create page). */
+  readOnly?: boolean;
 }) {
   const textRef = useRef<HTMLTextAreaElement>(null);
   const errors = validateDraft(q);
@@ -115,6 +121,7 @@ export function QuestionForm({
       {/* Header: index, title, attention badge, reorder controls */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
+          {leading}
           <span className="min-w-6 h-6 px-1 rounded-[6px] bg-brand-600/10 text-brand-ink flex items-center justify-center text-xs font-bold">
             #{index + 1}
           </span>
@@ -191,6 +198,8 @@ export function QuestionForm({
         </div>
       </div>
 
+      {/* Read-only: the fields stay visible but can't be focused or changed */}
+      <div inert={readOnly} className={`space-y-3 ${readOnly ? 'opacity-75' : ''}`}>
       {duplicateError && (
         <div
           role="alert"
@@ -312,6 +321,7 @@ export function QuestionForm({
           className="w-full h-[64px] px-3 py-2 rounded-[10px] border border-line text-sm text-content bg-surface resize-y focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600 transition-all"
           placeholder="Why the answer is correct — shown to students during review."
         />
+      </div>
       </div>
     </section>
   );

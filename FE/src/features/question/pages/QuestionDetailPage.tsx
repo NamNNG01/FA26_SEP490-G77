@@ -10,7 +10,7 @@ import { Spinner } from '@/components/ui/Spinner';
 import { useToast } from '@/components/ui/ToastHost';
 import { Icon } from '@/assets/icons';
 import { ROUTES } from '@/app/routes';
-import { QUESTION_STATUS_LABELS, questionService, type QuestionDifficulty, type QuestionStatus } from '@/services/question.service';
+import { NEXT_QUESTION_STATUS, QUESTION_STATUS_LABELS, questionService, type QuestionDifficulty, type QuestionStatus } from '@/services/question.service';
 import { questionGroupService, type QuestionGroup } from '@/services/questionGroup.service';
 import { AnswerSection } from '../components/QuestionForm';
 import { QuestionLocationCard } from '../components/QuestionLocationCard';
@@ -35,8 +35,12 @@ import { SaveErrorAlert } from '../components/SaveErrorAlert';
 
 type Confirm = 'discard' | 'delete' | null;
 
-const STATUS_VARIANT: Record<QuestionStatus, BadgeVariant> = { ACTIVE: 'success', INACTIVE: 'danger', DRAFT: 'default' };
-const STATUS_OPTIONS = (Object.keys(QUESTION_STATUS_LABELS) as QuestionStatus[]).map(value => ({ label: QUESTION_STATUS_LABELS[value], value }));
+const STATUS_VARIANT: Record<QuestionStatus, BadgeVariant> = { INACTIVE: 'default', ACTIVE: 'success', ARCHIVED: 'danger' };
+/** The saved status plus the one it can move to next. */
+const statusOptions = (saved: QuestionStatus) =>
+  [saved, NEXT_QUESTION_STATUS[saved]]
+    .filter((s): s is QuestionStatus => s != null)
+    .map(value => ({ label: QUESTION_STATUS_LABELS[value] ?? value, value }));
 const TYPE_VARIANT: Partial<Record<EditableQuestionType, BadgeVariant>> = { ESSAY: 'purple', TRUE_FALSE: 'success', ORDERING: 'warning' };
 const typeLabel = (t: EditableQuestionType) => QUESTION_TYPE_OPTIONS.find(o => o.value === t)?.label ?? t;
 
@@ -178,7 +182,9 @@ export function QuestionDetailPage() {
     }
     setSaving(true);
     try {
-      const updated = await questionService.updateQuestion(q.questionId, toUpdateRequest(q, moduleId ? Number(moduleId) : null, { status }));
+      let updated = await questionService.updateQuestion(q.questionId, toUpdateRequest(q, moduleId ? Number(moduleId) : null));
+      // Status moves go through the status API, which checks the Draft → Published → Archived order.
+      if (status !== savedStatus) [updated] = await questionService.batchUpdateStatus([q.questionId], status);
       setQ(fromDetail(updated));
       setStatus(updated.status);
       setSavedStatus(updated.status);
@@ -239,6 +245,8 @@ export function QuestionDetailPage() {
   const groupKind = asGroupKind(linkedGroup?.questionType);
   const typeOptions = QUESTION_TYPE_OPTIONS.filter(o => o.value === q.type || typesOfKind(groupKind).includes(o.value));
   const locked = saving || busy;
+  /** The backend won't save an archived question, so it's shown read-only (it can still be deleted). */
+  const archived = savedStatus === 'ARCHIVED';
 
   return (
     <div ref={scrollRef} className={`${pageCls} scroll-mt-5`}>
@@ -251,6 +259,9 @@ export function QuestionDetailPage() {
       </div>
 
       {saveError && <SaveErrorAlert error={saveError} onReload={() => setReloadKey(k => k + 1)} />}
+      {archived && (
+        <Alert type="info" title="This question is archived" message="Archived questions are read-only and their status can’t be changed. You can still delete it." />
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-6 items-start">
         {/* Main editor — scrolls with the page; the sidebar stays pinned */}
@@ -275,13 +286,14 @@ export function QuestionDetailPage() {
                 value={q.content}
                 onChange={e => update({ content: e.target.value })}
                 aria-invalid={Boolean(errors.content)}
-                disabled={locked}
+                disabled={locked || archived}
                 className={`${textareaCls(Boolean(errors.content))} h-[120px]`}
                 placeholder={q.type === 'FILL_BLANK' ? 'e.g. The capital of France is {{1}}.' : 'Enter the question…'}
               />
               {errors.content && <p className="text-xs text-danger mt-1">{errors.content}</p>}
             </div>
 
+            <div inert={archived} className="space-y-4">
             <QuestionGroupPicker
               groups={groups}
               loading={groupsLoading}
@@ -314,6 +326,7 @@ export function QuestionDetailPage() {
                 placeholder="Why the correct answer is correct — students see this when reviewing their attempt."
               />
             </div>
+              </div>
 
             {/* Lifecycle actions */}
             <div className="flex flex-wrap gap-2 border-t border-line pt-4">
@@ -338,9 +351,9 @@ export function QuestionDetailPage() {
               showErrors={submitted}
               hideHeading
             />
-            <Select label="Status" value={status} onChange={markDirty(v => setStatus(v as QuestionStatus))} options={STATUS_OPTIONS} disabled={locked} />
+            <Select label="Status" value={status} onChange={markDirty(v => setStatus(v as QuestionStatus))} options={statusOptions(savedStatus)} disabled={locked || savedStatus === 'ARCHIVED'} />
             <div className="space-y-2 pt-1">
-              <Button className="w-full" icon={<Icon.CheckCircle className="w-4 h-4" />} onClick={save} loading={saving} disabled={locked || Boolean(validateDraft(q).type)}>
+              <Button className="w-full" icon={<Icon.CheckCircle className="w-4 h-4" />} onClick={save} loading={saving} disabled={locked || archived || Boolean(validateDraft(q).type)}>
                 Save Changes
               </Button>
               <Button variant="ghost" className="w-full" onClick={cancel} disabled={saving}>Cancel</Button>

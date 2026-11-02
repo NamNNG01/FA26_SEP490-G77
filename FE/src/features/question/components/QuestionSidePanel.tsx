@@ -13,8 +13,12 @@ export const SIDEBAR_CLS = 'space-y-4 pb-4 lg:sticky lg:top-[10px] lg:max-h-[cal
 /** Right-hand column: optional tabs, Location card + Actions card. */
 export function QuestionSidePanel({
   mode, count, courseId, moduleId, onLocationChange, showErrors, prerequisiteNote,
-  onAdd, onImport, onSave, saveLabel, onCancel, onToggleStatus, saving, statusBusy, isActive, tabs,
+  onAdd, onImport, onSave, saveLabel, onCancel, onToggleStatus, saving, statusBusy, isActive, tabs, onPublish, publishCount = 0, publishing,
 }: {
+  /** Create mode: publishes the saved drafts ticked in the list — disabled until some are. */
+  onPublish?: () => void;
+  publishCount?: number;
+  publishing?: boolean;
   /** Shown above the Location card (the create page's Manual / AI Generate switch). */
   tabs?: React.ReactNode;
   mode: 'create' | 'edit';
@@ -77,6 +81,19 @@ export function QuestionSidePanel({
             disabled={saving || statusBusy}
           >
             {isActive ? 'Archive' : 'Publish'}
+          </Button>
+        )}
+        {onPublish && (
+          <Button
+            variant="outline"
+            className="w-full"
+            icon={<Icon.CheckCircle className="w-4 h-4" />}
+            onClick={onPublish}
+            loading={publishing}
+            disabled={saving || publishing || publishCount === 0}
+            title={publishCount === 0 ? 'Save questions, then tick the drafts to publish' : undefined}
+          >
+            Publish ({publishCount})
           </Button>
         )}
         <Button variant="ghost" className="w-full" onClick={onCancel} disabled={saving}>Cancel</Button>
