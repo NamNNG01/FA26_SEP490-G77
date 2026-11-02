@@ -10,6 +10,7 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -24,6 +25,34 @@ public interface DeckRepository extends JpaRepository<Deck, Long> {
             "AND (:isPublic IS NULL OR d.isPublic = :isPublic) AND LOWER(d.title) LIKE :search ESCAPE '!'")
     Page<Deck> findManagedDecks(@Param("managerId") Long managerId, @Param("courseId") Long courseId,
                                @Param("isPublic") Boolean isPublic, @Param("search") String search, Pageable pageable);
+
+    @EntityGraph(attributePaths = {"course", "user", "module"})
+    @Query(value = "SELECT d FROM Deck d JOIN d.course c WHERE d.course IS NOT NULL AND d.submittedAt IS NOT NULL " +
+            "AND (:myCourseIds IS NULL OR c.courseId IN :myCourseIds) " +
+            "AND (:moduleId IS NULL OR d.module.moduleId = :moduleId) " +
+            "AND (:status IS NULL OR d.reviewStatus = :status) " +
+            "AND (:contributorId IS NULL OR d.user.userId = :contributorId) " +
+            "AND (:keyword IS NULL OR LOWER(d.title) LIKE :keyword ESCAPE '!' OR LOWER(d.description) LIKE :keyword ESCAPE '!') " +
+            "AND (cast(:submittedFrom as timestamp) IS NULL OR d.submittedAt >= :submittedFrom) " +
+            "AND (cast(:submittedTo as timestamp) IS NULL OR d.submittedAt < :submittedTo)",
+           countQuery = "SELECT COUNT(d) FROM Deck d JOIN d.course c WHERE d.course IS NOT NULL AND d.submittedAt IS NOT NULL " +
+            "AND (:myCourseIds IS NULL OR c.courseId IN :myCourseIds) " +
+            "AND (:moduleId IS NULL OR d.module.moduleId = :moduleId) " +
+            "AND (:status IS NULL OR d.reviewStatus = :status) " +
+            "AND (:contributorId IS NULL OR d.user.userId = :contributorId) " +
+            "AND (:keyword IS NULL OR LOWER(d.title) LIKE :keyword ESCAPE '!' OR LOWER(d.description) LIKE :keyword ESCAPE '!') " +
+            "AND (cast(:submittedFrom as timestamp) IS NULL OR d.submittedAt >= :submittedFrom) " +
+            "AND (cast(:submittedTo as timestamp) IS NULL OR d.submittedAt < :submittedTo)")
+    Page<Deck> findManagedReviewDecks(
+            @Param("myCourseIds") List<Long> myCourseIds,
+            @Param("moduleId") Long moduleId,
+            @Param("status") String status,
+            @Param("contributorId") Long contributorId,
+            @Param("keyword") String keyword,
+            @Param("submittedFrom") Instant submittedFrom,
+            @Param("submittedTo") Instant submittedTo,
+            Pageable pageable
+    );
 
     /** FC-13 MINE: every deck the caller owns, newest first. mode "" = any. */
     @EntityGraph(attributePaths = {"course", "user"})
@@ -85,4 +114,3 @@ public interface DeckRepository extends JpaRepository<Deck, Long> {
             "GROUP BY d.module.moduleId")
     List<com.examprep.dto.IdCount> countCourseDecksByModule(@Param("courseId") Long courseId, @Param("userId") Long userId);
 }
-

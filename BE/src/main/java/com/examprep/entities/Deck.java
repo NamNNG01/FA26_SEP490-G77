@@ -80,4 +80,12 @@ public class Deck implements Serializable {
     @LastModifiedDate
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
+
+    @Builder.Default
+    @Column(name = "resubmission_count", nullable = false)
+    private Integer resubmissionCount = 0;
+
+    @Version
+    @Column(name = "version")
+    private Long version;
 }

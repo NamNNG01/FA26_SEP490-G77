@@ -4,6 +4,7 @@ import com.examprep.dto.ApiResponse;
 import com.examprep.dto.ResponseCode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
@@ -31,6 +32,40 @@ public class GlobalExceptionHandler {
         ResponseCode code = ex.getResponseCode();
         return ResponseEntity.status(code.getHttpStatus())
                 .body(ApiResponse.builder().success(false).message(ex.getMessage()).data(ex.getData()).build());
+    }
+
+    @ExceptionHandler(org.springframework.orm.ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<ApiResponse<Object>> handleOptimisticLock(org.springframework.orm.ObjectOptimisticLockingFailureException ex) {
+        log.warn("Optimistic lock failure: {}", ex.getMessage());
+        Map<String, Object> errorData = Map.of(
+                "code", "RESOURCE_CONFLICT",
+                "subCode", "VERSION_CONFLICT"
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiResponse.builder()
+                        .success(false)
+                        .message("Nội dung vừa được người khác thay đổi, vui lòng tải lại.")
+                        .data(errorData)
+                        .build());
+    }
+
+    @ExceptionHandler(ReviewException.class)
+    public ResponseEntity<ApiResponse<Object>> handleReviewException(ReviewException ex) {
+        log.warn("Review Exception: [{}] {} - {}", ex.getCode(), ex.getSubCode(), ex.getMessage());
+        Map<String, Object> errorData = new HashMap<>();
+        errorData.put("code", ex.getCode());
+        if (ex.getSubCode() != null) {
+            errorData.put("subCode", ex.getSubCode());
+        }
+        if (ex.getDetails() != null) {
+            errorData.put("details", ex.getDetails());
+        }
+        return ResponseEntity.status(ex.getStatus())
+                .body(ApiResponse.builder()
+                        .success(false)
+                        .message(ex.getMessage())
+                        .data(errorData)
+                        .build());
     }
 
     @ExceptionHandler(QuestionValidationException.class)

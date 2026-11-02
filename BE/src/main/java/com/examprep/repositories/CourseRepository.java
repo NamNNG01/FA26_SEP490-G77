@@ -21,6 +21,23 @@ public interface CourseRepository extends JpaRepository<Course, Long> {
 
     String MANAGER_SCOPE = "(c.manager.userId = :managerId OR EXISTS (SELECT cm.courseManagerId FROM CourseManager cm WHERE cm.course = c AND cm.user.userId = :managerId))";
 
+    @Query("""
+    SELECT DISTINCT c.courseId FROM Course c
+    WHERE c.manager.userId = :userId
+    OR EXISTS (SELECT 1 FROM CourseManager cm
+    WHERE cm.course = c AND cm.user.userId = :userId)
+    """)
+    List<Long> findCourseIdsManagedByUser(@Param("userId") Long userId);
+
+    @Query("""
+    SELECT COUNT(c) > 0 FROM Course c
+    WHERE c.courseId = :courseId AND (
+      c.manager.userId = :userId
+      OR EXISTS (SELECT 1 FROM CourseManager cm WHERE cm.course = c AND cm.user.userId = :userId)
+    )
+    """)
+    boolean existsManagedCourse(@Param("courseId") Long courseId, @Param("userId") Long userId);
+
     @Query("SELECT COUNT(c) FROM Course c WHERE " + MANAGER_SCOPE)
     long countByManagerId(@Param("managerId") Long managerId);
 

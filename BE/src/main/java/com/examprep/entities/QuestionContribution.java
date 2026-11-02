@@ -98,6 +98,10 @@ public class QuestionContribution implements Serializable {
     @Column(name = "resubmission_count", nullable = false)
     private Integer resubmissionCount = 0;
 
+    @Version
+    @Column(name = "version")
+    private Long version;
+
     @CreationTimestamp
     @Column(name = "submitted_at", nullable = false, updatable = false)
     private Instant submittedAt;
