@@ -27,4 +27,16 @@ class ContentHashUtilTest {
 
         assertNotEquals(hash1, hash2);
     }
+
+    @Test
+    void testDuplicateOptionTextCountsPreservedInHash() {
+        String content = "Test Question";
+        List<String> options1 = Arrays.asList("Apple", "Apple", "Banana");
+        List<String> options2 = Arrays.asList("Apple", "Banana");
+
+        String hash1 = ContentHashUtil.computeHash(content, options1);
+        String hash2 = ContentHashUtil.computeHash(content, options2);
+
+        assertNotEquals(hash1, hash2, "Hashes must differ when option counts differ even if option values overlap");
+    }
 }

@@ -3,6 +3,7 @@ package com.examprep.util;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -13,7 +14,7 @@ public class ContentHashUtil {
         return text.trim().toLowerCase().replaceAll("\\s+", " ");
     }
 
-    public static String computeHash(String content, List<String> options, String answerKey) {
+    public static String computeHash(String content, List<String> options) {
         StringBuilder sb = new StringBuilder();
         sb.append("content:").append(normalizeText(content)).append("|");
         if (options != null && !options.isEmpty()) {
@@ -22,9 +23,8 @@ public class ContentHashUtil {
                     .sorted()
                     .collect(Collectors.toList());
             sb.append("options:").append(String.join(",", sortedOptions)).append("|");
-        }
-        if (answerKey != null && !answerKey.trim().isEmpty()) {
-            sb.append("answerKey:").append(normalizeText(answerKey)).append("|");
+        } else {
+            sb.append("options:|");
         }
 
         try {
@@ -42,28 +42,11 @@ public class ContentHashUtil {
         }
     }
 
-    public static String computeOrderingHash(String content, List<String> orderedOptionTexts) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("content:").append(normalizeText(content)).append("|");
-        if (orderedOptionTexts != null && !orderedOptionTexts.isEmpty()) {
-            List<String> normalized = orderedOptionTexts.stream()
-                    .map(ContentHashUtil::normalizeText)
-                    .collect(Collectors.toList());
-            sb.append("orderedOptions:").append(String.join(",", normalized)).append("|");
-        }
+    public static String computeHash(String content, List<String> options, String answerKey) {
+        return computeHash(content, options);
+    }
 
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hashBytes = digest.digest(sb.toString().getBytes(StandardCharsets.UTF_8));
-            StringBuilder hexString = new StringBuilder();
-            for (byte b : hashBytes) {
-                String hex = Integer.toHexString(0xff & b);
-                if (hex.length() == 1) hexString.append('0');
-                hexString.append(hex);
-            }
-            return hexString.toString();
-        } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException("SHA-256 algorithm not available", e);
-        }
+    public static String computeOrderingHash(String content, List<String> orderedOptionTexts) {
+        return computeHash(content, orderedOptionTexts);
     }
 }

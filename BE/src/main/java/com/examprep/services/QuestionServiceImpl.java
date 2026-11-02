@@ -458,6 +458,17 @@ public class QuestionServiceImpl implements QuestionService {
 
         questionValidator.validateOrThrow(payload);
 
+        List<String> optionTextsForHash = optionsToValidate.stream().map(AnswerOptionDto::getOptionText).collect(Collectors.toList());
+        String newHash = ContentHashUtil.computeHash(contentToValidate, optionTextsForHash);
+        Long courseId = q.getCourse() != null ? q.getCourse().getCourseId() : null;
+        if (courseId != null) {
+            List<Long> duplicateIds = questionRepository.findDuplicateQuestionIds(courseId, newHash, q.getQuestionId(), Pageable.ofSize(1));
+            if (!duplicateIds.isEmpty()) {
+                throw new ResourceConflictException("Question already exists in course");
+            }
+        }
+        q.setContentHash(newHash);
+
         boolean scoreAffectingChanged = false;
 
         if (req.getContent() != null) {
@@ -621,7 +632,6 @@ public class QuestionServiceImpl implements QuestionService {
                 q.setScoringVersion(q.getScoringVersion() + 1);
             }
 
-            String newHash = ContentHashUtil.computeOrderingHash(contentToValidate, orderedOptionTexts);
             q.setContentHash(newHash);
         } else {
             if (req.getAnswerKey() != null) {
@@ -641,8 +651,6 @@ public class QuestionServiceImpl implements QuestionService {
             if (scoreAffectingChanged) {
                 q.setScoringVersion(q.getScoringVersion() + 1);
             }
-            List<String> optionTexts = updatedOptions.stream().map(AnswerOption::getOptionText).collect(Collectors.toList());
-            String newHash = ContentHashUtil.computeHash(q.getContent(), optionTexts, q.getAnswerKey());
             q.setContentHash(newHash);
         }
 
@@ -828,32 +836,7 @@ public class QuestionServiceImpl implements QuestionService {
     @Override
     public String contentHash(QuestionCreateRequest req) {
         List<String> optionTexts = req.getOptions() == null ? null : req.getOptions().stream().map(AnswerOptionDto::getOptionText).collect(Collectors.toList());
-        String answerKeyJson = serializeJson(req.getAnswerKey(), "answerKey");
-        if ("ORDERING".equals(req.getQuestionType())) {
-            List<Object> correctOrder = req.getCorrectOrder();
-            if (correctOrder == null && req.getAnswerKey() instanceof Map<?, ?> map && map.get("correctOrder") instanceof List<?> list) correctOrder = new ArrayList<>(list);
-
-            Map<String, String> keyToText = new HashMap<>();
-            if (req.getOptions() != null) {
-                for (int j = 0; j < req.getOptions().size(); j++) {
-                    AnswerOptionDto option = req.getOptions().get(j);
-                    keyToText.put(option.getKey() != null ? option.getKey() : String.valueOf(j), option.getOptionText());
-                }
-            }
-
-            List<String> orderedTexts = new ArrayList<>();
-            if (correctOrder != null) {
-                for (Object item : correctOrder) {
-                    String key = item == null ? "" : item.toString();
-                    String text = keyToText.get(key);
-                    if (text == null) throw new BadRequestException("Invalid key in correct order: " + key);
-                    orderedTexts.add(text);
-                }
-            }
-            return ContentHashUtil.computeOrderingHash(req.getContent(), orderedTexts);
-        } else {
-            return ContentHashUtil.computeHash(req.getContent(), optionTexts, answerKeyJson);
-        }
+        return ContentHashUtil.computeHash(req.getContent(), optionTexts);
     }
 
     private String serializeJson(Object obj, String fieldName) {
