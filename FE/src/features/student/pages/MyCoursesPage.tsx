@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Pagination } from '@/components/ui/Pagination';
 import { EmptyState } from '@/components/ui/Card';
+import { Progress } from '@/components/ui/Progress';
 import { SearchInput } from '@/components/common/SearchInput';
 import { Icon } from '@/assets/icons';
 import { ROUTES, studentCoursePath, studentWeaknessReportPath } from '@/app/routes';
@@ -221,6 +222,7 @@ function MyCourseCard({ course, onOpen }: { course: MyCourse; onOpen: () => void
               <Icon.Calendar className="w-3.5 h-3.5" /> {formatDate(course.enrolledAt)}
             </span>
           </div>
+          {course.status !== 'CANCELLED' && <Progress value={course.progress ?? 0} label="Progress" size="sm" />}
           {course.nextExam && (
             <p className="mt-auto pt-2 border-t border-line text-xs text-content-soft truncate">
               Next exam: <span className="font-medium text-content-secondary">{course.nextExam.title}</span>

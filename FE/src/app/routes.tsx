@@ -32,6 +32,8 @@ export const ROUTES = {
   studentCourseDetail: '/student/courses/:courseId',
   /** Route pattern — render with studentWeaknessReportPath(id). AI-04 report of one course. */
   studentWeaknessReport: '/student/courses/:courseId/weakness-report',
+  /** Route pattern — render with studentModulePath(courseId, moduleId). `general` = content outside any module. */
+  studentModuleDetail: '/student/courses/:courseId/modules/:moduleId',
   studentExams: '/student/exams',
   /** Materials the student uploaded (MQ-02) and the quizzes generated from them. */
   studentMaterials: '/student/materials',
@@ -121,6 +123,11 @@ export function studentCoursePath(id: number | string): string {
 /** AI weakness report of a course — e.g. studentWeaknessReportPath(6) → '/student/courses/6/weakness-report'. */
 export function studentWeaknessReportPath(courseId: number | string): string {
   return `${studentCoursePath(courseId)}/weakness-report`;
+}
+
+/** Module of a course — e.g. studentModulePath(6, 3) → '/student/courses/6/modules/3'. */
+export function studentModulePath(courseId: number | string, moduleId: number | string): string {
+  return `${studentCoursePath(courseId)}/modules/${moduleId}`;
 }
 
 export function studentDeckPath(id: number | string): string {

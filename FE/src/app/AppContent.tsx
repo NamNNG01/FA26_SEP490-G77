@@ -27,6 +27,7 @@ import { ProfilePage } from '@/features/profile';
 import {
   MyCoursesPage,
   StudentCourseDetailPage,
+  StudentModuleDetailPage,
   MyExamsPage,
   MyMaterialsPage,
   StudentSubscriptionPage,
@@ -257,6 +258,7 @@ function AppRoutes() {
           <Route path={ROUTES.studentCourses} element={<MyCoursesPage />} />
           <Route path={ROUTES.studentCourseDetail} element={<StudentCourseDetailPage />} />
           <Route path={ROUTES.studentWeaknessReport} element={<StudentWeaknessReportPage />} />
+          <Route path={ROUTES.studentModuleDetail} element={<StudentModuleDetailPage />} />
           <Route path={ROUTES.studentExams} element={<MyExamsPage />} />
           <Route path={ROUTES.studentMyExams} element={<MyExamsPage />} />
           <Route path={ROUTES.studentLearningActivities} element={<StudentLearningActivityPage />} />
