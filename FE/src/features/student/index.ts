@@ -1,5 +1,6 @@
 export { MyCoursesPage } from './pages/MyCoursesPage';
 export { StudentCourseDetailPage } from './pages/StudentCourseDetailPage';
+export { StudentModuleDetailPage } from './pages/StudentModuleDetailPage';
 export { MyExamsPage } from './pages/MyExamsPage';
 export { MyMaterialsPage } from './pages/MyMaterialsPage';
 export { StudentSubscriptionPage } from './pages/StudentSubscriptionPage';
