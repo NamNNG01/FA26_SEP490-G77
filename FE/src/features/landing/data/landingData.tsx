@@ -29,24 +29,6 @@ export const heroContent = {
   secondaryCtaLabel: 'Start practising free',
 };
 
-/** The interactive sample question shown in the hero. */
-export const sampleQuestion = {
-  course: 'AWS Certified Cloud Practitioner',
-  topic: 'Compute & Storage',
-  position: 'Question 14 of 65',
-  prompt:
-    'A startup wants to run code only when an order is placed, pay nothing while idle, and manage no servers. Which AWS service fits best?',
-  options: [
-    { id: 'A', text: 'Amazon EC2 Reserved Instances' },
-    { id: 'B', text: 'AWS Lambda' },
-    { id: 'C', text: 'Amazon Lightsail' },
-    { id: 'D', text: 'AWS Outposts' },
-  ],
-  correctId: 'B',
-  explanation:
-    'Lambda runs your code on demand and bills per millisecond of execution, so idle time costs nothing and there are no servers to patch. Reserved Instances and Lightsail are always-on servers; Outposts is on-premises hardware.',
-};
-
 // ---------------------------------------------------------------------
 // How it works — three steps, each paired with a small product visual
 // ---------------------------------------------------------------------
@@ -91,14 +73,3 @@ export const howItWorksSteps: HowItWorksStep[] = [
 
 /** Smaller capabilities that don't need their own block. */
 export const alsoIncluded = ['Flashcards built from each course', 'Readiness score per exam', 'Practice streaks'];
-
-// ---------------------------------------------------------------------
-// Final CTA
-// ---------------------------------------------------------------------
-export const finalCtaContent = {
-  title: 'Your first practice set takes about 15 minutes.',
-  subtitle:
-    'Free account, no card required. PrepExam is a preparation platform. It does not issue certificates; you sit the official exam with the provider.',
-  primaryCta: { label: 'Create free account', to: ROUTES.register },
-  secondaryCta: { label: 'View pricing', to: ROUTES.pricing },
-};

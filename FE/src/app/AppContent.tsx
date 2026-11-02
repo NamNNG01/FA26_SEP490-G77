@@ -20,7 +20,7 @@ import { Role } from '@/utils/permissions';
 
 import { LoginPage } from '@/features/auth';
 import { LandingPage } from '@/features/landing';
-import { PlaceholderPage } from '@/features/public';
+import { PlaceholderPage, PricingPage } from '@/features/public';
 import { RegisterPage } from '@/features/auth/pages/RegisterPage';
 import { ForgotPasswordPage, ResetPasswordPage } from '@/features/auth/pages/AuthPages';
 import { ProfilePage } from '@/features/profile';
@@ -101,17 +101,10 @@ function useLandingPath(): string {
 }
 
 /**
- * Shared public marketing placeholders. Mounted inside PublicLayout in both
- * auth branches, so these stay module-level constants instead of being
+ * Shared public marketing placeholder. Mounted inside PublicLayout in both
+ * auth branches, so it stays a module-level constant instead of being
  * duplicated per branch.
  */
-const pricingPlaceholder = (
-  <PlaceholderPage
-    title="Pricing Plans"
-    subtitle="Simple, student-friendly pricing is on the way. You can browse every course and search the catalog for free in the meantime."
-  />
-);
-
 const examsPlaceholder = (
   <PlaceholderPage
     title="Mock Exams"
@@ -131,7 +124,7 @@ function publicRoutes(home: React.ReactNode = <LandingPage />, withCatalog = tru
       <Route path={ROUTES.landing} element={home} />
       {withCatalog && <Route path={ROUTES.courses} element={<PublicCoursesPage />} />}
       {withCatalog && <Route path={ROUTES.courseDetail} element={<PublicCourseDetailPage />} />}
-      <Route path={ROUTES.pricing} element={pricingPlaceholder} />
+      <Route path={ROUTES.pricing} element={<PricingPage />} />
       <Route path={ROUTES.examsIntro} element={examsPlaceholder} />
     </Route>
   );
