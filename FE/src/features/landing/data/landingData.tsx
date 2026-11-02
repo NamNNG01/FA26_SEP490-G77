@@ -73,14 +73,3 @@ export const howItWorksSteps: HowItWorksStep[] = [
 
 /** Smaller capabilities that don't need their own block. */
 export const alsoIncluded = ['Flashcards built from each course', 'Readiness score per exam', 'Practice streaks'];
-
-// ---------------------------------------------------------------------
-// Final CTA
-// ---------------------------------------------------------------------
-export const finalCtaContent = {
-  title: 'Your first practice set takes about 15 minutes.',
-  subtitle:
-    'Free account, no card required. PrepExam is a preparation platform. It does not issue certificates; you sit the official exam with the provider.',
-  primaryCta: { label: 'Create free account', to: ROUTES.register },
-  secondaryCta: { label: 'View pricing', to: ROUTES.pricing },
-};
