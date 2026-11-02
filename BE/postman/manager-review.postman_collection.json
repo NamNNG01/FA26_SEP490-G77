@@ -1,0 +1,300 @@
+{
+  "info": {
+    "_postman_id": "manager-review-collection-v2-1",
+    "name": "Manager Content Review APEPP",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "01 - Contributions List",
+      "item": [
+        {
+          "name": "00 - Manager Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{managerEmail}}\",\n  \"password\": \"{{managerPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "login"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Login successful', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const response = pm.response.json();",
+                  "",
+                  "if (response.success && response.data && response.data.accessToken) {",
+                  "    pm.environment.set('managerToken', response.data.accessToken);",
+                  "    console.log('Manager token saved successfully');",
+                  "} else {",
+                  "    console.error('Login failed or accessToken not found');",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[HAPPY] List Pending Contributions",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{managerToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/manager/contributions?status=PENDING&page=0&size=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "manager", "contributions"],
+              "query": [
+                { "key": "status", "value": "PENDING" },
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "20" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "[EXCEPTION] Unauthorized List Contributions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/manager/contributions",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "manager", "contributions"]
+            }
+          }
+        },
+        {
+          "name": "[EXCEPTION] Forbidden List Contributions as Student",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{studentToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/manager/contributions",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "manager", "contributions"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - Contributions Detail",
+      "item": [
+        {
+          "name": "[HAPPY] Get Contribution Detail",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{managerToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/manager/contributions/{{sampleContributionId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "manager", "contributions", "{{sampleContributionId}}"]
+            }
+          }
+        },
+        {
+          "name": "[EXCEPTION] Contribution Not Found",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{managerToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/manager/contributions/999999",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "manager", "contributions", "999999"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 - Contributions Approve",
+      "item": [
+        {
+          "name": "[HAPPY] Approve Contribution",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{managerToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"version\": 0,\n  \"note\": \"Approved successfully\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/manager/contributions/{{sampleContributionId}}/approve",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "manager", "contributions", "{{sampleContributionId}}", "approve"]
+            }
+          }
+        },
+        {
+          "name": "[EXCEPTION] Approve Already Reviewed",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{managerToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"version\": 1,\n  \"note\": \"Double approval\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/manager/contributions/{{sampleContributionId}}/approve",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "manager", "contributions", "{{sampleContributionId}}", "approve"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 - Contributions Reject",
+      "item": [
+        {
+          "name": "[HAPPY] Reject Contribution",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{managerToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"version\": 0,\n  \"reason\": \"Incorrect answer options and content.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/manager/contributions/{{sampleContributionRejectId}}/reject",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "manager", "contributions", "{{sampleContributionRejectId}}", "reject"]
+            }
+          }
+        },
+        {
+          "name": "[EXCEPTION] Reject Missing Reason",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{managerToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"version\": 0,\n  \"reason\": \"Bad\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/manager/contributions/{{sampleContributionRejectId}}/reject",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "manager", "contributions", "{{sampleContributionRejectId}}", "reject"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 - Contributions Stats",
+      "item": [
+        {
+          "name": "[HAPPY] Get Review Stats",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{managerToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/manager/contributions/stats",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "manager", "contributions", "stats"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 - Decks Review",
+      "item": [
+        {
+          "name": "[HAPPY] List Reviewable Decks",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{managerToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/manager/decks/review?status=PENDING",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "manager", "decks", "review"],
+              "query": [
+                { "key": "status", "value": "PENDING" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "[HAPPY] Get Deck Review Detail",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{managerToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/manager/decks/review/{{sampleDeckId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "manager", "decks", "review", "{{sampleDeckId}}"]
+            }
+          }
+        },
+        {
+          "name": "[HAPPY] Approve Deck",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{managerToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"version\": 0,\n  \"note\": \"Good deck\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/manager/decks/review/{{sampleDeckId}}/approve",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "manager", "decks", "review", "{{sampleDeckId}}", "approve"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
