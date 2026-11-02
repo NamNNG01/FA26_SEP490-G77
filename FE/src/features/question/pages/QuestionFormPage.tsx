@@ -7,13 +7,15 @@ import { Modal } from '@/components/ui/Modal';
 import { Spinner } from '@/components/ui/Spinner';
 import { useToast } from '@/components/ui/ToastHost';
 import { ROUTES } from '@/app/routes';
-import { questionService, type QuestionStatus } from '@/services/question.service';
+import { QUESTION_STATUS_LABELS, questionService, type QuestionDetail, type QuestionStatus } from '@/services/question.service';
 import { questionGroupService, type QuestionGroup } from '@/services/questionGroup.service';
 import { QuestionForm as QuestionFormBlock } from '../components/QuestionForm';
 import { QuestionSidePanel } from '../components/QuestionSidePanel';
 import { ImportPdfModal } from '../components/ImportPdfModal';
 import { GroupContextCard, contextKind, emptyGroupContext, groupContextErrors, type GroupContextValue } from '../components/GroupContextCard';
 import { AiGeneratePanel, type AiGeneratePanelHandle } from '../components/AiGeneratePanel';
+import { Badge } from '@/components/ui/Badge';
+import { Checkbox } from '@/components/ui/Checkbox';
 import { UnsavedChangesModal } from '@/components/common/UnsavedChangesModal';
 import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
 import {
@@ -48,6 +50,13 @@ type Confirm = 'archive' | null;
  */
 type CreateMode = 'manual' | 'ai';
 
+/** A question saved on this visit, kept on the page (read-only) so it can be published from here. */
+interface SavedQuestion {
+  detail: QuestionDetail;
+  /** Built once, so the card keeps its keys across renders. */
+  draft: QuestionDraft;
+}
+
 const typeLabel = (t: string) => QUESTION_TYPE_OPTIONS.find(o => o.value === t)?.label ?? t;
 
 export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
@@ -64,7 +73,12 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
   const [questions, setQuestions] = useState<QuestionDraft[]>(() => (isEdit ? [] : restored?.questions.length ? restored.questions : [emptyDraft()]));
   const [courseId, setCourseId] = useState(restored?.courseId ?? '');
   const [moduleId, setModuleId] = useState(restored?.moduleId ?? '');
-  const [status, setStatus] = useState<QuestionStatus>('ACTIVE');
+  const [status, setStatus] = useState<QuestionStatus>('INACTIVE');
+  /** Create mode: questions saved on this visit (manual and AI), in save order — they start as Draft. */
+  const [saved, setSaved] = useState<SavedQuestion[]>([]);
+  /** Saved drafts ticked for publishing. */
+  const [toPublish, setToPublish] = useState<Set<number>>(() => new Set());
+  const [publishing, setPublishing] = useState(false);
   /** Create mode: standalone batch, or questions that share one group passage. */
   const [groupCtx, setGroupCtx] = useState<GroupContextValue>(() => restored?.groupCtx ?? emptyGroupContext());
   const [groups, setGroups] = useState<QuestionGroup[]>([]);
@@ -441,8 +455,38 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
     const module = moduleId ? Number(moduleId) : null;
     const payload = drafts.map(q => ({ ...toCreateRequest(q, Number(courseId), module), groupId }));
     const created = await questionService.createQuestionsBatch(Number(courseId), module, payload);
-    toast.success(`${created.length} question${created.length === 1 ? '' : 's'} saved${groupId != null ? ' to the question group' : ''}.`);
+    toast.success(`${created.length} question${created.length === 1 ? '' : 's'} saved as Draft${groupId != null ? ' to the question group' : ''}.`);
+    setSaved(prev => [...prev, ...created.map(detail => ({ detail, draft: fromDetail(detail) }))]);
     return created.length;
+  };
+
+  const savedDrafts = saved.filter(s => s.detail.status === 'INACTIVE');
+  const pickedDrafts = savedDrafts.filter(s => toPublish.has(s.detail.questionId));
+  const allDraftsPicked = savedDrafts.length > 0 && pickedDrafts.length === savedDrafts.length;
+  const togglePublish = (id: number) =>
+    setToPublish(prev => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  const toggleAllDrafts = () => setToPublish(allDraftsPicked ? new Set() : new Set(savedDrafts.map(s => s.detail.questionId)));
+
+  /** Publishes the ticked drafts in one call, then shows their new status. */
+  const publishSaved = async () => {
+    const ids = pickedDrafts.map(s => s.detail.questionId);
+    if (!ids.length) return;
+    setPublishing(true);
+    try {
+      const updated = await questionService.batchUpdateStatus(ids, 'ACTIVE');
+      toast.success(`${updated.length} question${updated.length === 1 ? '' : 's'} published.`);
+      // Back to the bank — anything still unsaved on the page asks before it's dropped.
+      goToBank();
+    } catch (err) {
+      showSaveError(describeSaveError(err, 'Could not publish the questions.'));
+    } finally {
+      setPublishing(false);
+    }
   };
 
   const groupReady = () => {
@@ -469,17 +513,14 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
       if (isEdit) {
         await questionService.updateQuestion(questions[0].questionId!, toUpdateRequest(questions[0], moduleId ? Number(moduleId) : null));
         toast.success('Question updated.');
-      } else {
-        await createBatch(questions);
-      }
-      // AI suggestions still waiting in the other tab — stay here with a fresh manual form.
-      if (!isEdit && aiBusy) {
-        resetManual();
+        setDirty(false);
+        leave(goToBank);
         return;
       }
-      setDirty(false);
-      if (!isEdit) clearCreateDraft();
-      leave(goToBank);
+      await createBatch(questions);
+      // The saved questions stay on the page (read-only) to be published; "Add Question" starts the next one.
+      resetManual();
+      setQuestions([]);
     } catch (err) {
       const error = describeSaveError(err, 'Could not save. Please try again.');
       showSaveError(error);
@@ -507,9 +548,7 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
     try {
       await createBatch(aiAccepted);
       setSubmitted(false);
-      const left = aiRef.current?.removeAccepted() ?? 0;
-      // Manual questions still waiting in the other tab keep the page open.
-      if (left === 0 && !manualBusy) leave(goToBank);
+      aiRef.current?.removeAccepted();
     } catch (err) {
       showSaveError(describeSaveError(err, 'Could not save. Please try again.'));
     } finally {
@@ -524,7 +563,7 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
     if (!q?.questionId) return;
     setStatusBusy(true);
     try {
-      const updated = await questionService.updateQuestionStatus(q.questionId, next, q.lockVersion);
+      const [updated] = await questionService.batchUpdateStatus([q.questionId], next);
       setStatus(updated.status);
       setQuestions(prev => prev.map(p => ({ ...p, lockVersion: updated.lockVersion })));
       toast.success(next === 'ACTIVE' ? 'Question published.' : 'Question archived.');
@@ -629,9 +668,52 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
             </div>
           )}
 
+          {/* Question list header — Select all picks the saved drafts to publish */}
+          {!isEdit && (createMode === 'manual' || saved.length > 0) && (
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+              <h3 className="text-base font-semibold text-content">
+                Questions <span className="text-content-soft font-normal">({saved.length + (createMode === 'manual' ? questions.length : 0)})</span>
+              </h3>
+              <Checkbox
+                label={savedDrafts.length > 0 ? `Select all drafts (${savedDrafts.length})` : 'Select all drafts'}
+                checked={allDraftsPicked}
+                indeterminate={pickedDrafts.length > 0 && !allDraftsPicked}
+                onChange={toggleAllDrafts}
+                disabled={publishing || savedDrafts.length === 0}
+              />
+            </div>
+          )}
+
+          {/* Questions saved on this visit stay in the list, read-only, until published */}
+          {!isEdit && saved.map(({ detail, draft }, i) => {
+            const isDraft = detail.status === 'INACTIVE';
+            return (
+              <QuestionFormBlock
+                key={draft.key}
+                q={draft}
+                index={i}
+                onChange={() => {}}
+                showErrors={false}
+                readOnly
+                leading={
+                  <Checkbox
+                    checked={toPublish.has(detail.questionId)}
+                    onChange={() => togglePublish(detail.questionId)}
+                    disabled={!isDraft || publishing}
+                  />
+                }
+                actions={
+                  <Badge variant={isDraft ? 'default' : 'success'} className="whitespace-nowrap">
+                    {QUESTION_STATUS_LABELS[detail.status] ?? detail.status}
+                  </Badge>
+                }
+              />
+            );
+          })}
+
           {/* Manual mode — question blocks scroll with the page; the side panel stays pinned */}
           <div ref={listRef} className={`space-y-3 scroll-mt-5 ${createMode === 'manual' ? '' : 'hidden'}`}>
-            {questions.length === 0 && (
+            {questions.length === 0 && saved.length === 0 && (
               <div className="card p-10 text-center">
                 <p className="text-base font-medium text-content-secondary">No questions yet</p>
                 <p className="text-sm text-content-subtle mt-1">Use “Add Question” or import a PDF or Word file.</p>
@@ -641,7 +723,7 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
               <div key={q.key} id={q.key} className="scroll-mt-4">
                 <QuestionFormBlock
                   q={q}
-                  index={i}
+                  index={saved.length + i}
                   onChange={updated => updateQuestion(i, updated)}
                   showErrors={submitted}
                   removable={!isEdit}
@@ -662,6 +744,9 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
 
         <QuestionSidePanel
           tabs={modeSwitch}
+          onPublish={isEdit ? undefined : publishSaved}
+          publishCount={pickedDrafts.length}
+          publishing={publishing}
           mode={mode}
           count={questions.length}
           courseId={courseId}
@@ -674,7 +759,7 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
           onSave={save}
           saveLabel={!isEdit && createMode === 'ai' ? `Save Accepted (${aiAccepted.length})` : undefined}
           onCancel={cancel}
-          onToggleStatus={isEdit ? () => (status === 'ACTIVE' ? setConfirm('archive') : changeStatus('ACTIVE')) : undefined}
+          onToggleStatus={isEdit && status !== 'ARCHIVED' ? () => (status === 'ACTIVE' ? setConfirm('archive') : changeStatus('ACTIVE')) : undefined}
           saving={saving}
           statusBusy={statusBusy}
           isActive={status === 'ACTIVE'}
@@ -719,11 +804,11 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
         footer={
           <>
             <Button variant="ghost" onClick={() => setConfirm(null)} disabled={statusBusy}>Cancel</Button>
-            <Button variant="danger" onClick={() => changeStatus('INACTIVE')} loading={statusBusy}>Archive</Button>
+            <Button variant="danger" onClick={() => changeStatus('ARCHIVED')} loading={statusBusy}>Archive</Button>
           </>
         }
       >
-        <p className="text-sm text-content-secondary">Archived questions are no longer used when new exams are generated. You can publish it again later.</p>
+        <p className="text-sm text-content-secondary">Archived questions are no longer used when new exams are generated, and their status can’t be changed again.</p>
       </Modal>
     </div>
   );

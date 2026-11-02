@@ -30,13 +30,21 @@ export type QuestionType =
 
 export type QuestionDifficulty = 'EASY' | 'MEDIUM' | 'HARD';
 
-export type QuestionStatus = 'ACTIVE' | 'INACTIVE' | 'DRAFT';
+/** New questions are saved INACTIVE; the only moves are INACTIVE → ACTIVE → ARCHIVED (final). */
+export type QuestionStatus = 'INACTIVE' | 'ACTIVE' | 'ARCHIVED';
 
-/** UI names for the stored statuses: ACTIVE shows as Published, INACTIVE as Archived. */
+/** UI names for the stored statuses: INACTIVE shows as Draft, ACTIVE as Published. */
 export const QUESTION_STATUS_LABELS: Record<QuestionStatus, string> = {
+  INACTIVE: 'Draft',
   ACTIVE: 'Published',
-  INACTIVE: 'Archived',
-  DRAFT: 'Draft',
+  ARCHIVED: 'Archived',
+};
+
+/** The one status a question can move to next, or null once archived. */
+export const NEXT_QUESTION_STATUS: Record<QuestionStatus, QuestionStatus | null> = {
+  INACTIVE: 'ACTIVE',
+  ACTIVE: 'ARCHIVED',
+  ARCHIVED: null,
 };
 
 /** QuestionListItemDto */
@@ -512,12 +520,15 @@ export const questionService = {
     return res.data;
   },
 
-  /** Q-08 */
-  async updateQuestionStatus(id: number | string, status: QuestionStatus, lockVersion?: number | null): Promise<QuestionDetail> {
-    const res = await api.request<ApiResponse<QuestionDetail>>({
+  /**
+   * The one way to change question status (one question or many): moves every
+   * listed question to the same status, all or nothing.
+   */
+  async batchUpdateStatus(questionIds: number[], status: QuestionStatus): Promise<QuestionDetail[]> {
+    const res = await api.request<ApiResponse<QuestionDetail[]>>({
       method: 'patch',
-      url: `/manager/questions/${id}/status`,
-      data: { status, lockVersion },
+      url: '/manager/questions/batch/status',
+      data: { questionIds, status },
     });
     return res.data;
   },

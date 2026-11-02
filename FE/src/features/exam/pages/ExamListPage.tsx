@@ -493,7 +493,7 @@ export function ExamListPage() {
                 onClick: () => navigate("/manager/exams/quiz/new"),
               },
               {
-                label: "Essay Exam",
+                label: "Assessment Exam",
                 icon: <Icon.FileText className="w-4 h-4" />,
                 onClick: () => handleNewExam("ESSAY"),
               },

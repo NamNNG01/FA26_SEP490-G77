@@ -16,6 +16,7 @@ import { ROUTES, managerQuestionDuplicatePath, managerQuestionEditPath } from '@
 import { courseService, type CourseModuleResponse, type CourseSummaryItem } from '@/services/course.service';
 import { getUserRoleCode } from '@/auth/storage';
 import {
+  NEXT_QUESTION_STATUS,
   QUESTION_STATUS_LABELS,
   questionService,
   type QuestionListItem,
@@ -44,7 +45,8 @@ const STATUS_LABELS: Record<string, string> = QUESTION_STATUS_LABELS;
 
 const TYPE_VARIANT: Record<string, BadgeVariant> = { ESSAY: 'purple', TRUE_FALSE: 'success', CODE: 'warning', DIAGRAM: 'warning' };
 const DIFFICULTY_VARIANT: Record<string, BadgeVariant> = { EASY: 'success', MEDIUM: 'warning', HARD: 'danger' };
-const STATUS_VARIANT: Record<string, BadgeVariant> = { ACTIVE: 'success', INACTIVE: 'danger', DRAFT: 'default' };
+const STATUS_VARIANT: Record<string, BadgeVariant> = { INACTIVE: 'default', ACTIVE: 'success', ARCHIVED: 'danger' };
+const BULK_ACTION_LABELS: Partial<Record<QuestionStatus, string>> = { ACTIVE: 'Publish', ARCHIVED: 'Archive' };
 
 const toOptions = (allLabel: string, labels: Record<string, string>) => [
   { label: allLabel, value: ALL },
@@ -143,6 +145,8 @@ export function QuestionBankPage() {
     let cancelled = false;
     setLoading(true);
     setError(null);
+    // Selection only covers the rows on screen, so a new page or filter starts empty.
+    setSelected(new Set());
     questionService
       .getQuestions({
         search: debouncedQuery || undefined,
@@ -199,19 +203,40 @@ export function QuestionBankPage() {
 
   const rows: Row[] = (result?.content ?? []).map(q => ({ ...q, id: q.questionId }));
 
-  const [statusBusyId, setStatusBusyId] = useState<number | null>(null);
-  const changeStatus = async (q: Row, next: QuestionStatus) => {
-    setStatusBusyId(q.questionId);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const selectedRows = rows.filter(r => selected.has(String(r.id)));
+  const selectedStatuses = new Set(selectedRows.map(r => r.status));
+  // Questions move together only when they share a status; mixed or archived selections can't.
+  const bulkStatus = selectedStatuses.size === 1 ? NEXT_QUESTION_STATUS[selectedRows[0].status as QuestionStatus] ?? null : null;
+  const bulkBlockedReason =
+    selectedStatuses.size > 1 ? 'Select questions with the same status — Draft to publish, or Published to archive.'
+      : selectedStatuses.has('ARCHIVED') ? 'Archived questions can’t change status.'
+      : null;
+  const [bulkBusy, setBulkBusy] = useState(false);
+  /** Archiving can't be undone, so the bulk Archive asks first. */
+  const [confirmArchive, setConfirmArchive] = useState(false);
+  const archiveCount = selectedRows.length;
+
+  const bulkChangeStatus = async (next: QuestionStatus) => {
+    const ids = selectedRows.map(r => r.questionId);
+    setBulkBusy(true);
     try {
-      await questionService.updateQuestionStatus(q.questionId, next, q.lockVersion);
-      toast.success(next === 'ACTIVE' ? 'Question published.' : 'Question archived.');
-      // Refetch so the row reflects the new status and still matches the active filter.
+      await questionService.batchUpdateStatus(ids, next);
+      const noun = `${ids.length} question${ids.length === 1 ? '' : 's'}`;
+      toast.success(next === 'ACTIVE' ? `${noun} published.` : `${noun} archived.`);
+      setConfirmArchive(false);
+      // Refetch so the rows show their new status and still match the active filter.
       setReloadKey(k => k + 1);
     } catch (err) {
+      // All or nothing: nothing moved, so the selection stays for another try.
       toast.error(err instanceof Error && err.message ? err.message : 'Could not change the status.');
     } finally {
-      setStatusBusyId(null);
+      setBulkBusy(false);
     }
+  };
+  const runBulk = () => {
+    if (bulkStatus === 'ARCHIVED') setConfirmArchive(true);
+    else if (bulkStatus) bulkChangeStatus(bulkStatus);
   };
 
   /** Question waiting for a confirmation to replace the unsaved New Questions draft. */
@@ -306,17 +331,16 @@ export function QuestionBankPage() {
       width: '48px',
       render: r => {
         const q = asRow(r);
-        const published = q.status === 'ACTIVE';
         return (
           // The menu is portalled, but React events still bubble to the row's onClick.
+          // Status changes live in the bulk bar (tick the row), not in this menu.
           <div onClick={e => e.stopPropagation()}>
             <Dropdown
               trigger={
                 <button
                   type="button"
                   aria-label="Question actions"
-                  disabled={statusBusyId === q.questionId}
-                  className="p-1.5 hover:bg-accent rounded-[6px] disabled:opacity-50"
+                  className="p-1.5 hover:bg-accent rounded-[6px]"
                 >
                   <Icon.MoreHorizontal className="w-4 h-4 text-content-soft" />
                 </button>
@@ -324,10 +348,6 @@ export function QuestionBankPage() {
               items={[
                 { label: 'Detail', icon: <Icon.Eye />, onClick: () => navigate(managerQuestionEditPath(q.questionId)) },
                 { label: 'Duplicate', icon: <Icon.Copy />, onClick: () => duplicate(q) },
-                // Published questions can be archived; Draft and Archived ones can be published.
-                published
-                  ? { label: 'Archive', icon: <Icon.Package />, danger: true, onClick: () => changeStatus(q, 'INACTIVE') }
-                  : { label: 'Publish', icon: <Icon.CheckCircle />, onClick: () => changeStatus(q, 'ACTIVE') },
               ]}
             />
           </div>
@@ -407,8 +427,32 @@ export function QuestionBankPage() {
       )}
 
       <div className={`card overflow-hidden transition-opacity ${loading && result ? 'opacity-60' : ''}`} aria-busy={loading}>
+        {selectedRows.length > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-line-soft bg-primary-light">
+            <div className="flex items-center gap-3 text-sm">
+              <span className="font-medium text-content">{selectedRows.length} selected</span>
+              <button type="button" onClick={() => setSelected(new Set())} className="text-brand-ink hover:underline">Clear</button>
+            </div>
+            <div className="flex flex-wrap items-center justify-end gap-3">
+              {bulkBlockedReason && <span className="text-xs text-content-soft">{bulkBlockedReason}</span>}
+              <Button
+                size="sm"
+                variant={bulkStatus === 'ARCHIVED' ? 'danger' : 'primary'}
+                icon={bulkStatus === 'ARCHIVED' ? <Icon.Package className="w-4 h-4" /> : <Icon.CheckCircle className="w-4 h-4" />}
+                disabled={!bulkStatus || bulkBusy}
+                loading={bulkBusy && !confirmArchive}
+                onClick={runBulk}
+              >
+                {(bulkStatus && BULK_ACTION_LABELS[bulkStatus]) || 'Change status'}
+              </Button>
+            </div>
+          </div>
+        )}
         <Table
           columns={columns}
+          selectable
+          selectedKeys={selected}
+          onSelectionChange={setSelected}
           data={rows as unknown as Record<string, unknown>[]}
           perPage={PAGE_SIZE}
           unit="questions"
@@ -423,6 +467,23 @@ export function QuestionBankPage() {
           }
         />
       </div>
+
+      <Modal
+        open={confirmArchive}
+        onClose={() => { if (!bulkBusy) setConfirmArchive(false); }}
+        title={archiveCount === 1 ? 'Archive question?' : `Archive ${archiveCount} questions?`}
+        size="sm"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setConfirmArchive(false)} disabled={bulkBusy}>Cancel</Button>
+            <Button variant="danger" onClick={() => bulkChangeStatus('ARCHIVED')} loading={bulkBusy} disabled={bulkBusy}>Archive</Button>
+          </>
+        }
+      >
+        <p className="text-sm text-content-secondary">
+          Archived questions are no longer used when new exams are generated, and their status can’t be changed again.
+        </p>
+      </Modal>
 
       <Modal
         open={confirmDuplicate != null}
