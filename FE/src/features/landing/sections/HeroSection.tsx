@@ -2,7 +2,6 @@ import React from 'react';
 import { ROUTES } from '@/app/routes';
 import { Container } from '../components/Container';
 import { CTAButton } from '../components/CTAButton';
-import { SampleQuestionCard } from '../components/SampleQuestionCard';
 import { useRequireAuth } from '@/hooks/useRequireAuth';
 import { useCatalogOverview } from '@/features/catalog';
 import { heroContent } from '../data/landingData';
@@ -13,10 +12,8 @@ const EYEBROW_MAX_CATEGORIES = 5;
 /**
  * HeroSection
  *
- * Two columns: the value proposition and CTAs on the left, an answerable
- * sample question on the right. The question replaces the old Featured
- * Course card (that course already leads the Popular Courses grid below):
- * showing the practice → explanation loop does more than describing it.
+ * One centered column: the value proposition and CTAs. The hard-coded
+ * sample question card was removed so the hero shows no made-up content.
  *
  * CTAs:
  *  - "Browse courses" → /courses, open to guests.
@@ -27,9 +24,6 @@ const EYEBROW_MAX_CATEGORIES = 5;
  * useCatalogOverview) replace generic trust badges.
  *
  * No scroll-reveal here: the hero is above the fold, so it renders at once.
- *
- * Fluid CSS Grid hero — zoom-safe, no fixed columns:
- *   grid-template-columns: repeat(auto-fit, minmax(350px, 1fr))
  */
 export function HeroSection() {
   const requireAuth = useRequireAuth();
@@ -58,8 +52,8 @@ export function HeroSection() {
 
       <div className="relative">
         <Container>
-          <div className="grid grid-cols-[repeat(auto-fit,minmax(350px,1fr))] items-center gap-[clamp(32px,4vw,64px)] py-[clamp(3rem,7vw,6rem)]">
-            <div className="min-w-0 text-center min-[900px]:text-left">
+          <div className="py-[clamp(3rem,7vw,6rem)]">
+            <div className="mx-auto max-w-[820px] min-w-0 text-center">
               <div>
                 <p className="text-xs font-semibold tracking-[0.08em] text-brand-ink uppercase">
                   {eyebrow}
@@ -73,13 +67,13 @@ export function HeroSection() {
               </div>
 
               <div>
-                <p className="mx-auto mt-[clamp(1.25rem,2.5vw,1.75rem)] max-w-[min(560px,100%)] text-[clamp(1rem,0.95rem+0.3vw,1.125rem)] leading-relaxed text-content-muted min-[900px]:mx-0">
+                <p className="mx-auto mt-[clamp(1.25rem,2.5vw,1.75rem)] max-w-[min(560px,100%)] text-[clamp(1rem,0.95rem+0.3vw,1.125rem)] leading-relaxed text-content-muted">
                   {heroContent.subtitle}
                 </p>
               </div>
 
               <div>
-                <div className="mt-[clamp(1.5rem,3vw,2.25rem)] flex flex-wrap justify-center gap-3 min-[900px]:justify-start">
+                <div className="mt-[clamp(1.5rem,3vw,2.25rem)] flex flex-wrap justify-center gap-3">
                   <CTAButton
                     label={heroContent.primaryCta.label}
                     to={heroContent.primaryCta.to}
@@ -96,7 +90,7 @@ export function HeroSection() {
               </div>
 
               <div>
-                <dl className="mt-[clamp(2rem,3.5vw,2.75rem)] flex flex-wrap justify-center gap-x-8 gap-y-4 min-[900px]:justify-start">
+                <dl className="mt-[clamp(2rem,3.5vw,2.75rem)] flex flex-wrap justify-center gap-x-8 gap-y-4">
                   {catalogStats.map((stat) => (
                     // Label first in the DOM (dt → dd), number shown on top visually.
                     <div key={stat.label} className="flex flex-col-reverse text-left">
@@ -108,10 +102,6 @@ export function HeroSection() {
                   ))}
                 </dl>
               </div>
-            </div>
-
-            <div className="flex justify-center min-[900px]:justify-end">
-              <SampleQuestionCard />
             </div>
           </div>
         </Container>

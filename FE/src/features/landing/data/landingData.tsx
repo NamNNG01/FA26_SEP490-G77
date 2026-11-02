@@ -29,24 +29,6 @@ export const heroContent = {
   secondaryCtaLabel: 'Start practising free',
 };
 
-/** The interactive sample question shown in the hero. */
-export const sampleQuestion = {
-  course: 'AWS Certified Cloud Practitioner',
-  topic: 'Compute & Storage',
-  position: 'Question 14 of 65',
-  prompt:
-    'A startup wants to run code only when an order is placed, pay nothing while idle, and manage no servers. Which AWS service fits best?',
-  options: [
-    { id: 'A', text: 'Amazon EC2 Reserved Instances' },
-    { id: 'B', text: 'AWS Lambda' },
-    { id: 'C', text: 'Amazon Lightsail' },
-    { id: 'D', text: 'AWS Outposts' },
-  ],
-  correctId: 'B',
-  explanation:
-    'Lambda runs your code on demand and bills per millisecond of execution, so idle time costs nothing and there are no servers to patch. Reserved Instances and Lightsail are always-on servers; Outposts is on-premises hardware.',
-};
-
 // ---------------------------------------------------------------------
 // How it works — three steps, each paired with a small product visual
 // ---------------------------------------------------------------------
