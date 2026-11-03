@@ -1,5 +1,6 @@
 package com.examprep.dto.student;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -16,6 +17,7 @@ public class QuestionReviewItemDto {
     private Long reviewId;
     private Long questionId;
     private boolean isWrong;
+    @JsonProperty("isBookmarked")
     private boolean isBookmarked;
     private String questionText;
     private String questionType;
