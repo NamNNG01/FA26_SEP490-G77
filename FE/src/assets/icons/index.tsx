@@ -496,6 +496,18 @@ export const Icon = {
       <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
     </svg>
   ),
+  RotateCcw: (p: React.SVGProps<SVGSVGElement>) => (
+    <svg
+      {...p}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.75}
+    >
+      <polyline points="1 4 1 10 7 10" />
+      <path d="M3.51 15a9 9 0 102.13-9.36L1 10" />
+    </svg>
+  ),
   Database: (p: React.SVGProps<SVGSVGElement>) => (
     <svg
       {...p}
