@@ -1,0 +1,300 @@
+{
+  "info": {
+    "name": "Module Practice (MP-01..MP-12)",
+    "description": "Student Module Practice APIs (migration V68). Every request needs a STUDENT bearer token and an enrolled course.\n\nVariables to fill: baseUrl, token, moduleId (a VISIBLE module of an enrolled course that holds ACTIVE/APPROVED questions), questionId. sessionId / sessionQuestionId / practiceAnswerId are captured automatically from the responses.\n\nMP-10 (bookmark a question) is not duplicated here: it is the existing notebook API `POST {{baseUrl}}/api/v1/student/questions/{{questionId}}/bookmark`.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080" },
+    { "key": "token", "value": "" },
+    { "key": "moduleId", "value": "" },
+    { "key": "questionId", "value": "" },
+    { "key": "sessionId", "value": "" },
+    { "key": "sessionQuestionId", "value": "" },
+    { "key": "practiceAnswerId", "value": "" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }]
+  },
+  "item": [
+    {
+      "name": "MP-01 Practice overview",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/student/modules/{{moduleId}}/practice/overview",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "student", "modules", "{{moduleId}}", "practice", "overview"]
+        },
+        "description": "Eligible, practised and ever-correct questions, attempt statistics, accuracy, questions needing review and the open session if there is one."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('200', () => pm.response.to.have.status(200));",
+              "const d = pm.response.json().data;",
+              "if (d.activeSession) { pm.collectionVariables.set('sessionId', d.activeSession.sessionId); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "MP-02 Start or resume a session",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"questionCount\": 30,\n  \"mode\": \"ALL\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/student/modules/{{moduleId}}/practice/sessions",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "student", "modules", "{{moduleId}}", "practice", "sessions"]
+        },
+        "description": "201 when a session was created, 200 with resumed=true when the open session of this module was returned. Both fields are optional; mode is ALL or REVIEW. 422 when the module has nothing to practise."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('2xx', () => pm.response.to.be.success);",
+              "const d = pm.response.json().data;",
+              "pm.collectionVariables.set('sessionId', d.sessionId);",
+              "const first = (d.questions || []).find(q => !q.answered);",
+              "if (first) { pm.collectionVariables.set('sessionQuestionId', first.sessionQuestionId); pm.collectionVariables.set('questionId', first.questionId); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "MP-03 Resume a session",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/student/practice/sessions/{{sessionId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "student", "practice", "sessions", "{{sessionId}}"]
+        },
+        "description": "The persisted question order, the current progress and the next unanswered question. The order is never re-randomized. 404 for another student's session."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": { "exec": ["pm.test('200', () => pm.response.to.have.status(200));"] }
+        }
+      ]
+    },
+    {
+      "name": "MP-04 One question",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/student/practice/sessions/{{sessionId}}/questions/{{sessionQuestionId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "student", "practice", "sessions", "{{sessionId}}", "questions", "{{sessionQuestionId}}"]
+        },
+        "description": "Content, shuffled options or matching columns, media and passage, plus the student's own attempts. Never the answer key."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('200', () => pm.response.to.have.status(200));",
+              "const raw = pm.response.text();",
+              "pm.test('no answer key', () => !raw.includes('correctOptionIds') && !raw.includes('keySnapshot'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "MP-05 Submit an attempt (single choice)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"response\": { \"selectedOptionIds\": [1] },\n  \"timeSpentSeconds\": 25,\n  \"requestKey\": \"{{$guid}}\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/student/practice/sessions/{{sessionId}}/questions/{{sessionQuestionId}}/answers",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "student", "practice", "sessions", "{{sessionId}}", "questions", "{{sessionQuestionId}}", "answers"]
+        },
+        "description": "Objective types are graded immediately (AUTO, 1.00/0.00); ESSAY, DIAGRAM and CODE are QUEUED for the AI rubric worker. Replaying the same requestKey returns the stored attempt with duplicate=true. Other payloads: MULTIPLE_CHOICE {\"selectedOptionIds\":[1,2]}, TRUE_FALSE {\"selectedOptionIds\":[1]}, FILL_BLANK {\"blanks\":{\"1\":\"java\"}}, MATCHING {\"matches\":[{\"left\":\"A\",\"right\":\"1\"}]}, ORDERING {\"orderedOptionIds\":[3,1,2]}, ESSAY/CODE {\"text\":\"...\"}, DIAGRAM {\"drawioXml\":\"<mxfile...\"}."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('200', () => pm.response.to.have.status(200));",
+              "const d = pm.response.json().data;",
+              "pm.collectionVariables.set('practiceAnswerId', d.practiceAnswerId);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "MP-06 Attempt history",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/student/practice/sessions/{{sessionId}}/questions/{{sessionQuestionId}}/answers",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "student", "practice", "sessions", "{{sessionId}}", "questions", "{{sessionQuestionId}}", "answers"]
+        },
+        "description": "Every attempt of this practice question, oldest first. No attempt is ever overwritten."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": { "exec": ["pm.test('200', () => pm.response.to.have.status(200));"] }
+        }
+      ]
+    },
+    {
+      "name": "MP-07 Complete the session",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "" },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/student/practice/sessions/{{sessionId}}/complete",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "student", "practice", "sessions", "{{sessionId}}", "complete"]
+        },
+        "description": "Closes the session early if the student wants to; unanswered questions stay unanswered and are never marked wrong. Idempotent."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": { "exec": ["pm.test('200', () => pm.response.to.have.status(200));"] }
+        }
+      ]
+    },
+    {
+      "name": "MP-08 Session result",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/student/practice/sessions/{{sessionId}}/result",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "student", "practice", "sessions", "{{sessionId}}", "result"]
+        },
+        "description": "Unique-question statistics kept apart from attempt statistics, with the latest outcome of every question."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": { "exec": ["pm.test('200', () => pm.response.to.have.status(200));"] }
+        }
+      ]
+    },
+    {
+      "name": "MP-09 AI explanation",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"sessionId\": {{sessionId}},\n  \"sessionQuestionId\": {{sessionQuestionId}}\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/student/practice/questions/{{questionId}}/explanation",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "student", "practice", "questions", "{{questionId}}", "explanation"]
+        },
+        "description": "Explains the question for the attempt named by practiceAnswerId (or the latest one) from the session's frozen snapshots. Reuses a manager or version-matching AI explanation; otherwise generates one through the shared AI quota. 402 when the reservation does not fit, 429 above the per-minute window. ESSAY/DIAGRAM/CODE answer source=NOT_APPLICABLE."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('200', () => pm.response.to.have.status(200));",
+              "pm.test('a source is reported', () => pm.response.json().data.source !== undefined);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "MP-10 Bookmark (existing notebook API)",
+      "request": {
+        "method": "POST",
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/student/questions/{{questionId}}/bookmark",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "student", "questions", "{{questionId}}", "bookmark"]
+        },
+        "description": "Reused as-is (MN-02). Module Practice does not add a second bookmark system, and MP-12 never deletes a bookmark."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": { "exec": ["pm.test('200', () => pm.response.to.have.status(200));"] }
+        }
+      ]
+    },
+    {
+      "name": "MP-11 Review questions",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/student/modules/{{moduleId}}/practice/review-questions?page=0&size=20",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "student", "modules", "{{moduleId}}", "practice", "review-questions"],
+          "query": [
+            { "key": "page", "value": "0" },
+            { "key": "size", "value": "20" }
+          ]
+        },
+        "description": "Paged questions whose latest finalized attempt is wrong. Questions that are no longer deliverable never appear."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": { "exec": ["pm.test('200', () => pm.response.to.have.status(200));"] }
+        }
+      ]
+    },
+    {
+      "name": "MP-12 Reset practice progress",
+      "request": {
+        "method": "DELETE",
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/student/modules/{{moduleId}}/practice/progress",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "student", "modules", "{{moduleId}}", "practice", "progress"]
+        },
+        "description": "Deletes only this student's Module Practice data of this module (sessions, their frozen questions, every attempt and the aggregated progress). The mistake notebook, its bookmarks, exams, flashcards and AI usage history are untouched. Returns deletedSessions and deletedProgressRecords."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('200', () => pm.response.to.have.status(200));",
+              "pm.collectionVariables.set('sessionId', '');",
+              "pm.collectionVariables.set('sessionQuestionId', '');"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
