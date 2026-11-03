@@ -21,6 +21,7 @@ import {
 import type { QuestionDifficulty } from "@/services/question.service";
 import { DiagramAnswer } from "./DiagramAnswer";
 import { CodeAnswer } from "./CodeAnswer";
+import { InsertImageButton, QuestionContent, hasQuestionImage } from "@/components/common/QuestionContent";
 
 const MAX_OPTIONS = 10;
 
@@ -254,6 +255,8 @@ export function QuestionForm({
           >
             Question Text *
           </label>
+          <div className="flex items-center gap-2">
+          <InsertImageButton textarea={textRef} value={q.content} onChange={(content) => set({ content })} />
           {q.type === "FILL_BLANK" && (
             <button
               type="button"
@@ -263,6 +266,7 @@ export function QuestionForm({
               + Insert blank
             </button>
           )}
+          </div>
         </div>
         <textarea
           id={`${q.key}-content`}
@@ -281,6 +285,14 @@ export function QuestionForm({
               : "Enter the question…"
           }
         />
+        {hasQuestionImage(q.content) && (
+          <div className="mt-2 rounded-[10px] border border-line-faint bg-surface-alt p-3">
+            <p className="text-2xs font-semibold uppercase text-content-subtle mb-1">Preview</p>
+            <p className="text-sm text-content whitespace-pre-line break-words">
+              <QuestionContent text={q.content} />
+            </p>
+          </div>
+        )}
         {contentError && (
           <p className="text-xs text-danger mt-1">{contentError}</p>
         )}

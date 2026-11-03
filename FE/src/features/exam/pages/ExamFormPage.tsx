@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { QuestionContent } from "@/components/common/QuestionContent";
 import { useParams, useNavigate, useLocation } from "react-router";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { Button } from "@/components/ui/Button";
@@ -1613,8 +1614,8 @@ export function ExamFormPage({
                               #{idx + 1}
                             </span>
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-content leading-snug">
-                                {q.content}
+                              <p className="text-sm font-medium text-content leading-snug whitespace-pre-line break-words">
+                                <QuestionContent text={q.content} />
                               </p>
                               <div className="flex flex-wrap items-center gap-2 mt-2">
                                 <Badge
@@ -1913,8 +1914,8 @@ export function ExamFormPage({
                                           <span className="mt-0.5 text-xs font-bold text-brand-ink">
                                             #{questionIndex + 1}
                                           </span>
-                                          <p className="text-sm font-medium leading-snug text-content">
-                                            {q.content}
+                                          <p className="text-sm font-medium leading-snug text-content whitespace-pre-line break-words">
+                                            <QuestionContent text={q.content} />
                                           </p>
                                         </div>
                                         <div className="ml-6 mt-2 flex flex-wrap items-center gap-2">
