@@ -12,6 +12,7 @@ import {
 } from '@/services/studentDeck.service';
 import { plural } from './flashcardUi';
 import { FlashcardImportModal } from './FlashcardImportModal';
+import { CARD_CSV_HEADER, downloadCsv } from './cardCsv';
 
 const POLL_MS = 2000;
 const ACCEPT = '.csv,.xlsx';
@@ -32,18 +33,8 @@ const TEMPLATE_ROWS: Record<DeckMode, string[][]> = {
   ],
 };
 
-const csvCell = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
-
 function downloadTemplate(mode: DeckMode) {
-  const rows = [['front', 'back', 'code_language', 'code_body'], ...TEMPLATE_ROWS[mode]];
-  const csv = rows.map(r => r.map(csvCell).join(',')).join('\r\n');
-  // BOM so Excel opens Vietnamese text as UTF-8.
-  const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `flashcards-${mode.toLowerCase()}-template.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+  downloadCsv([CARD_CSV_HEADER, ...TEMPLATE_ROWS[mode]], `flashcards-${mode.toLowerCase()}-template.csv`);
 }
 
 /**

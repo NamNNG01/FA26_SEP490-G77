@@ -45,9 +45,9 @@ type SaveState = 'saved' | 'dirty' | 'saving' | 'error';
  *  - Answers are kept locally and saved as drafts (SA-03) every few seconds,
  *    when moving between questions, and before leaving.
  *  - Submit asks for confirmation, flushes the drafts and submits (SA-04).
- *  - Cancel saves the drafts and leaves; the attempt stays IN_PROGRESS and can
- *    be continued later. The deadline is the server's: when it passes, the
- *    screen submits on its own (and the BE auto-submits if the tab is gone).
+ *  - Cancel asks once, then deletes the attempt and its drafts (SA-07) and
+ *    leaves — nothing of it is kept. The deadline is the server's: when it passes,
+ *    the screen submits on its own (and the BE auto-submits if the tab is gone).
  *  - Only questions made entirely of essay / code / diagram get the "Essay"
  *    layout (wider, taller editor); every other paper is a quiz.
  *  - CODE questions get a 20/80 workspace (question | VS Code–style editor with Run, CD-04).
@@ -58,6 +58,8 @@ type SaveState = 'saved' | 'dirty' | 'saving' | 'error';
  *    ordering and fill-blank have a check button that shows how far the answer is.
  *    Keys: 1–9 / A–Z pick an option, Enter checks or goes to the next question.
  *    The checks are kept per attempt in sessionStorage so a reload keeps them.
+ *    Practice is untimed: no timer, no auto-submit, and the result shows no score.
+ *    Its Submit is called Finish and needs no confirmation (it still closes the attempt with SA-04).
  */
 export function StudentTakeExamPage() {
   const navigate = useNavigate();
@@ -84,7 +86,7 @@ export function StudentTakeExamPage() {
   const [remaining, setRemaining] = useState<number | null>(null);
 
   const [confirm, setConfirm] = useState<'submit' | 'cancel' | null>(null);
-  const [busy, setBusy] = useState<'submit' | 'cancel' | 'delete' | null>(null);
+  const [busy, setBusy] = useState<'submit' | 'cancel' | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [checks, setChecks] = useState<Record<number, AnswerCheck>>({});
   const [checking, setChecking] = useState<number | null>(null);
@@ -126,7 +128,7 @@ export function StudentTakeExamPage() {
       .then(s => {
         if (cancelled) return;
         if (s.status !== 'IN_PROGRESS') {
-          navigate(studentExamResultPath(s.attemptId, s.examId), { replace: true });
+          navigate(studentExamResultPath(s.attemptId, s.examId, practice), { replace: true });
           return;
         }
         const initial: Record<number, AnswerResponse | null> = {};
@@ -276,37 +278,24 @@ export function StudentTakeExamPage() {
         if (contestId != null || session.examMode === 'CONTEST') {
           toast.info('You can take this contest again, but your result will not change.', { title: 'Contest submitted', duration: 10_000 });
         }
-        navigate(studentExamResultPath(session.attemptId, session.examId), { replace: true });
+        navigate(studentExamResultPath(session.attemptId, session.examId, practice), { replace: true });
       } catch (err) {
-        setActionError(getApiErrorMessage(err, 'Failed to submit. Please try again.'));
+        setActionError(getApiErrorMessage(err, practice ? 'Failed to finish. Please try again.' : 'Failed to submit. Please try again.'));
         setBusy(null);
       } finally {
         submittingRef.current = false;
       }
     },
-    [session, flush, navigate, codeMeta, codeLanguages, contestId, toast],
+    [session, flush, navigate, codeMeta, codeLanguages, contestId, toast, practice],
   );
 
-  /** Where Cancel / Delete attempt lead: a practice exam has no course exam page — it is listed in Exam History. */
+  /** Where Cancel leads: a practice exam has no course exam page — it is listed in Exam History. */
   const exitPath = (examId: number) => (practice ? `${ROUTES.studentExams}?type=PRACTICE` : studentExamPath(examId));
 
-  const saveAndExit = async () => {
+  /** Cancel: the attempt is thrown away (SA-07), never kept to continue later. */
+  const cancelAttempt = async () => {
     if (!session) return;
     setBusy('cancel');
-    setActionError(null);
-    try {
-      await flush();
-      finishedRef.current = true;
-      navigate(exitPath(session.examId), { replace: true });
-    } catch (err) {
-      setActionError(getApiErrorMessage(err, 'Failed to save your answers. Please try again.'));
-      setBusy(null);
-    }
-  };
-
-  const deleteAttempt = async () => {
-    if (!session) return;
-    setBusy('delete');
     setActionError(null);
     // Stop autosave and the leave prompt first: the drafts are being thrown away.
     finishedRef.current = true;
@@ -315,14 +304,15 @@ export function StudentTakeExamPage() {
       navigate(exitPath(session.examId), { replace: true });
     } catch (err) {
       finishedRef.current = false;
-      setActionError(getApiErrorMessage(err, 'Failed to delete this attempt. Please try again.'));
+      setActionError(getApiErrorMessage(err, 'Failed to cancel this attempt. Please try again.'));
       setBusy(null);
     }
   };
 
   /* ── Timer (server clock) ─────────────────────────────────────────────── */
+  // Practice is untimed: no countdown and no auto-submit.
   useEffect(() => {
-    if (!session) return;
+    if (!session || practice) return;
     const offset = Date.parse(session.serverTime) - Date.now();
     const deadline = Date.parse(session.deadlineAt);
     const tick = () => {
@@ -333,7 +323,7 @@ export function StudentTakeExamPage() {
     tick();
     const id = window.setInterval(tick, 1000);
     return () => window.clearInterval(id);
-  }, [session, submit]);
+  }, [session, submit, practice]);
 
   /* ── Derived ──────────────────────────────────────────────────────────── */
   const questions = session?.questions ?? [];
@@ -444,8 +434,9 @@ export function StudentTakeExamPage() {
     setChecking(questionId);
     setActionError(null);
     try {
-      // Store the answer first: a checked answer is final, and the result must count it.
-      if (dirtyRef.current.has(questionId)) await flush();
+      // Saved alongside, not before: the check carries the answer itself, and waiting for the
+      // draft save (and any autosave in flight) delayed every check. Submit flushes anyway.
+      if (dirtyRef.current.has(questionId)) flush().catch(() => undefined);
       const res = await studentPracticeExamService.checkAnswer(session.attemptId, q, answersRef.current[questionId] ?? null);
       setChecks(prev => {
         const next = { ...prev, [questionId]: res };
@@ -473,7 +464,11 @@ export function StudentTakeExamPage() {
     if (e.key === 'Enter') {
       // A focused button already reacts to Enter by itself.
       if (target?.closest('button, a')) return;
-      if (check) goNext();
+      // Last question: Enter does not finish — that is the header button's job.
+      if (check) {
+        if (isLast) return;
+        goNext();
+      }
       else if (checkable && progress.ready) void checkAnswer();
       else return;
       e.preventDefault();
@@ -519,8 +514,15 @@ export function StudentTakeExamPage() {
             Cancel
           </Button>
           {/* Primary, not red: submitting is the expected finish, not a destructive action. */}
-          <Button size="sm" disabled={busy != null} loading={busy === 'submit'} onClick={() => setConfirm('submit')}>
-            Submit
+          {/* Practice finishes at once: every answer is already checked and locked, so there is nothing to confirm.
+              A failed code grading turns it into "Finish anyway", as the exam's confirm dialog does. */}
+          <Button
+            size="sm"
+            disabled={busy != null}
+            loading={busy === 'submit'}
+            onClick={() => (practice ? void submit(false, codeGradeFailed) : setConfirm('submit'))}
+          >
+            {practice ? (codeGradeFailed ? 'Finish anyway' : 'Finish') : 'Submit'}
           </Button>
         </div>
       </header>
@@ -625,9 +627,12 @@ export function StudentTakeExamPage() {
                     Next question
                   </Button>
                 ) : (
-                  <Button data-next-question icon={<Icon.Check className="w-4 h-4" />} onClick={goNext}>
-                    Finish
-                  </Button>
+                  // Practice finishes from the header only.
+                  !practice && (
+                    <Button data-next-question icon={<Icon.Check className="w-4 h-4" />} onClick={goNext}>
+                      Finish
+                    </Button>
+                  )
                 )}
               </div>
             </div>
@@ -721,34 +726,18 @@ export function StudentTakeExamPage() {
       <Modal
         open={confirm === 'cancel'}
         onClose={() => busy == null && setConfirm(null)}
-        title="Save and exit?"
+        title="Exit this attempt?"
         size="sm"
+        // Only one way out: closing the dialog (×, backdrop) keeps working.
         footer={
-          <>
-            <Button
-              variant="danger"
-              loading={busy === 'delete'}
-              disabled={busy != null}
-              icon={<Icon.Trash className="w-4 h-4" />}
-              onClick={deleteAttempt}
-            >
-              Delete attempt
-            </Button>
-            <Button loading={busy === 'cancel'} disabled={busy != null} onClick={saveAndExit}>
-              Save & exit
-            </Button>
-          </>
+          <Button variant="danger" loading={busy === 'cancel'} disabled={busy != null} onClick={cancelAttempt}>
+            Exit
+          </Button>
         }
       >
         <p className="text-base text-content-secondary leading-relaxed">
-          Your answers are saved and you can continue this attempt later from the exam page.
-        </p>
-        <p className="mt-3 text-sm text-warning">
-          The timer keeps running while you are away — the attempt is submitted automatically when time is up.
-        </p>
-        <p className="mt-3 text-sm text-danger">
-          Delete attempt throws away all {answeredSet.size} answer{answeredSet.size === 1 ? '' : 's'} of this attempt — it will
-          not count in your history. This cannot be undone.
+          Exiting discards this attempt and all {answeredSet.size} answer{answeredSet.size === 1 ? '' : 's'} in it — nothing is
+          saved and it will not count in your history. This cannot be undone.
         </p>
         {actionError && <p className="mt-3 text-sm text-danger">{actionError}</p>}
       </Modal>

@@ -20,7 +20,7 @@ import type { AnswerResponse, AttemptQuestion, ResultQuestion } from './studentA
 export const PRACTICE_QUESTIONS = { min: 5, max: 100, default: 20 };
 export const PRACTICE_MINUTES = { min: 1, max: 180, default: 30 };
 
-export type PracticeExamType = 'MIDTERM' | 'FINAL';
+export type PracticeExamType = 'QUIZ' | 'ESSAY';
 export type PracticeDifficulty = 'EASY' | 'MEDIUM' | 'HARD';
 
 export interface PracticeExamRequest {
@@ -282,7 +282,6 @@ export const studentPracticeExamService = {
    */
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async checkAnswer(attemptId: number, question: AttemptQuestion, response: AnswerResponse | null): Promise<AnswerCheck> {
-    await new Promise(r => window.setTimeout(r, 250));
     if (!CHECKABLE_TYPES.has(question.questionType)) {
       return { supported: false, isCorrect: null, correctOptionIds: [], demo: true };
     }

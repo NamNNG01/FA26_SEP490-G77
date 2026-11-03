@@ -158,18 +158,23 @@ export function studentResumeAttemptPath(attemptId: number | string): string {
   return `${ROUTES.studentExam}?attemptId=${encodeURIComponent(String(attemptId))}`;
 }
 
-/** Attempt review of an exam, newest submitted attempt preselected — e.g. '/student/exam-result?examId=12'. */
-export function studentExamAttemptsPath(examId: number | string): string {
-  return `${ROUTES.studentExamResult}?examId=${encodeURIComponent(String(examId))}`;
+/**
+ * Attempt review of an exam, newest submitted attempt preselected — e.g. '/student/exam-result?examId=12'.
+ * `practice` adds `&practice=1`: the result then shows no score (SA-05 does not tell the exam mode).
+ */
+export function studentExamAttemptsPath(examId: number | string, practice = false): string {
+  return `${ROUTES.studentExamResult}?examId=${encodeURIComponent(String(examId))}${practice ? '&practice=1' : ''}`;
 }
 
 /**
  * Result of one submitted attempt — e.g. '/student/exam-result?attemptId=7&examId=12'.
  * `examId` is optional: SA-05 does not return it, and the result page needs it for "Re-attempt".
+ * `practice` adds `&practice=1`, as for studentExamAttemptsPath.
  */
-export function studentExamResultPath(attemptId: number | string, examId?: number | string): string {
+export function studentExamResultPath(attemptId: number | string, examId?: number | string, practice = false): string {
   const qs = new URLSearchParams({ attemptId: String(attemptId) });
   if (examId != null) qs.set('examId', String(examId));
+  if (practice) qs.set('practice', '1');
   return `${ROUTES.studentExamResult}?${qs}`;
 }
 

@@ -19,10 +19,13 @@ import {
   studentTakePracticePath,
 } from '@/app/routes';
 import { getApiErrorMessage } from '@/utils/apiError';
-import { studentCourseService } from '@/services/studentCourse.service';
+import { studentCourseService, type MyCourse } from '@/services/studentCourse.service';
 import { studentPracticeExamService } from '@/services/studentPracticeExam.service';
 import { materialService } from '@/services/studentMaterial.service';
 import { ListSkeleton, LoadError, PageTitle, STUDENT_PAGE_CLASS, formatScore } from '../components/studentUi';
+import { SmartPracticeModal } from '../components/SmartPracticeModal';
+import { MaterialQuizModal } from '../components/MaterialQuizModal';
+import { AiSparkle } from '../components/aiUi';
 const PAGE_SIZE = 10;
 const ALL = '';
 
@@ -32,7 +35,7 @@ type ExamKind = 'EXAM' | 'PRACTICE' | 'SMART_PRACTICE' | 'MATERIAL_QUIZ' | 'CONT
 const KIND_LABEL: Record<ExamKind, string> = {
   EXAM: 'Course exam',
   PRACTICE: 'Practice exam',
-  SMART_PRACTICE: 'Smart practice',
+  SMART_PRACTICE: 'Personal quiz',
   MATERIAL_QUIZ: 'Material quiz',
   CONTEST: 'Contest',
 };
@@ -50,6 +53,9 @@ const CODE_FILTER = 'CODE';
 const CODE_OPTION = { label: 'Coding exam', value: CODE_FILTER };
 
 const toKind = (mode: string | null | undefined): ExamKind => (mode && mode in KIND_LABEL ? (mode as ExamKind) : 'EXAM');
+
+/** Taken in practice mode (checked answer by answer): no time limit and no score. */
+const isPractice = (kind: ExamKind) => kind === 'PRACTICE' || kind === 'SMART_PRACTICE';
 
 /** One exam of the history, whatever produced it. */
 interface HistoryRow {
@@ -83,8 +89,8 @@ const SORT_OPTIONS: { label: string; value: SortKey }[] = [
   { label: 'Most attempts', value: 'attempts' },
 ];
 
-/** Best score as a share of the max, so exams with different max scores compare fairly; untaken = -1. */
-const ratio = (e: HistoryRow) => (e.bestScore == null || !e.maxScore ? -1 : Number(e.bestScore) / Number(e.maxScore));
+/** Best score as a share of the max, so exams with different max scores compare fairly; untaken or practice = -1. */
+const ratio = (e: HistoryRow) => (isPractice(e.kind) || e.bestScore == null || !e.maxScore ? -1 : Number(e.bestScore) / Number(e.maxScore));
 
 function sortRows(list: HistoryRow[], sort: SortKey): HistoryRow[] {
   // mergeHistory already puts the most recent first.
@@ -98,10 +104,11 @@ function sortRows(list: HistoryRow[], sort: SortKey): HistoryRow[] {
 }
 
 /**
- * ME-01 lists every exam with an attempt (course exams, practice, smart practice, material quizzes),
+ * ME-01 lists every exam with an attempt (course exams, practice, personal quizzes, material quizzes),
  * newest attempt first. PQ-02 and MQ-06 add what only they know (practiceId / jobId).
+ * Also returns the enrolled courses (MC-01, without CANCELLED) for the quiz builders.
  */
-async function loadHistory(): Promise<HistoryRow[]> {
+async function loadHistory(): Promise<{ rows: HistoryRow[]; courses: MyCourse[] }> {
   const [exams, practices, materials, myCourses] = await Promise.all([
     studentCourseService.getAllMyExams(),
     studentPracticeExamService.listAll(),
@@ -137,12 +144,15 @@ async function loadHistory(): Promise<HistoryRow[]> {
   });
   // Only exams taken at least once: a practice exam or material quiz that was generated but never
   // started stays out (material quizzes are still listed on My Materials).
-  return taken.filter(r => r.attemptCount > 0);
+  return {
+    rows: taken.filter(r => r.attemptCount > 0),
+    courses: (myCourses?.content ?? []).filter(c => c.status !== 'CANCELLED'),
+  };
 }
 
 /**
  * Exam History — every exam the student has taken at least once: course exams (ME-01), practice
- * exams (PQ-02), smart practice (AI-01) and quizzes generated from a material (MQ-06), with a
+ * exams (PQ-02), personal quizzes (AI-01) and quizzes generated from a material (MQ-06), with a
  * type filter. Lists are loaded whole and searched, filtered and sorted here.
  * `?type=PRACTICE` (etc.) preselects the type filter.
  */
@@ -153,6 +163,8 @@ export function MyExamsPage() {
   const [page, setPage] = useState(1);
   const [reload, setReload] = useState(0);
   const [rows, setRows] = useState<HistoryRow[]>([]);
+  const [myCourses, setMyCourses] = useState<MyCourse[]>([]);
+  const [quizModal, setQuizModal] = useState<'material' | 'personal' | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -175,7 +187,9 @@ export function MyExamsPage() {
     setError(null);
     loadHistory()
       .then(res => {
-        if (!cancelled) setRows(res);
+        if (cancelled) return;
+        setRows(res.rows);
+        setMyCourses(res.courses);
       })
       .catch(err => {
         if (!cancelled) setError(getApiErrorMessage(err, 'Failed to load your exams.'));
@@ -229,7 +243,7 @@ export function MyExamsPage() {
 
   /** A material quiz gets a fresh attempt from MQ-05; the rest start with SA-01. */
   const retake = async (row: HistoryRow) => {
-    if (row.kind === 'PRACTICE' || row.kind === 'SMART_PRACTICE') {
+    if (isPractice(row.kind)) {
       navigate(studentTakePracticePath(row.examId));
       return;
     }
@@ -274,7 +288,7 @@ export function MyExamsPage() {
   const rowActions = (row: HistoryRow): DropdownItem[] => {
     const items: DropdownItem[] = [];
     if (canViewAttempts(row)) {
-      items.push({ label: 'View attempts', icon: <Icon.Eye />, onClick: () => navigate(studentExamAttemptsPath(row.examId)) });
+      items.push({ label: 'View attempts', icon: <Icon.Eye />, onClick: () => navigate(studentExamAttemptsPath(row.examId, isPractice(row.kind))) });
     }
     if (canRetake(row)) {
       const starting = row.jobId != null && startingJob === row.jobId;
@@ -314,7 +328,7 @@ export function MyExamsPage() {
               {canViewAttempts(row) ? (
                 <button
                   type="button"
-                  onClick={() => navigate(studentExamAttemptsPath(row.examId))}
+                  onClick={() => navigate(studentExamAttemptsPath(row.examId, isPractice(row.kind)))}
                   className="truncate text-sm font-semibold text-content text-left hover:text-primary hover:underline"
                   title={row.title}
                 >
@@ -390,6 +404,8 @@ export function MyExamsPage() {
       width: '120px',
       render: r => {
         const row = asRow(r);
+        // Practice has no score.
+        if (isPractice(row.kind)) return <span className="text-content-subtle">—</span>;
         return <span className="whitespace-nowrap font-medium text-content">{formatScore(row.bestScore, row.maxScore)}</span>;
       },
     },
@@ -419,6 +435,16 @@ export function MyExamsPage() {
       <PageTitle
         title="Exam History"
         subtitle="Course exams, practice exams and quizzes from your materials — with your best score on each."
+        action={
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+            <Button variant="outline" icon={<AiSparkle />} onClick={() => setQuizModal('personal')}>
+              Create personal quiz
+            </Button>
+            <Button variant="outline" icon={<Icon.Brain className="w-4 h-4" />} onClick={() => setQuizModal('material')}>
+              Material to Quiz Creator
+            </Button>
+          </div>
+        }
       />
 
       {!loading && !error && rows.length > 0 && (
@@ -473,7 +499,7 @@ export function MyExamsPage() {
           <EmptyState
             icon={<Icon.ClipboardList className="w-7 h-7" />}
             title="No exams taken yet"
-            message="Open one of your courses to start an exam, or build a practice quiz from My Courses."
+            message="Open one of your courses to start an exam, or create a personal quiz above."
             action={<Button onClick={() => navigate(ROUTES.studentCourses)}>Go to My Courses</Button>}
           />
         </div>
@@ -501,6 +527,9 @@ export function MyExamsPage() {
           />
         </div>
       )}
+
+      <SmartPracticeModal open={quizModal === 'personal'} onClose={() => setQuizModal(null)} courses={myCourses} />
+      <MaterialQuizModal open={quizModal === 'material'} onClose={() => setQuizModal(null)} courses={myCourses} />
 
       <Modal
         open={toDelete != null}

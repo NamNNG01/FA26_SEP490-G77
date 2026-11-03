@@ -16,7 +16,6 @@ import { CardGridSkeleton, CourseThumb, LoadError, PageTitle, STUDENT_PAGE_CLASS
 import { MaterialQuizModal } from '../components/MaterialQuizModal';
 import { SmartPracticeModal } from '../components/SmartPracticeModal';
 import { RecommendationsCard } from '../components/RecommendationsCard';
-import { AiSparkle } from '../components/aiUi';
 
 const PAGE_SIZE = 12;
 /** MC-01 caps `size` at 100 and has no keyword filter, so the list is loaded once and searched client-side. */
@@ -35,7 +34,7 @@ function matchesSearch(course: MyCourse, term: string) {
  *  - search box:                 filters the enrolled courses only (title,
  *                                category, manager) — not the public catalog.
  *  - Material to Quiz Creator:   AI quiz generated from a file the student uploads (MaterialQuizModal, MQ-01..MQ-05).
- *  - Smart Practice:             practice exam — AI-01/02 (weak modules) or PQ-01 (random questions).
+ *  - Create Personal Quiz:       opened from a recommendation only; its button lives on the course detail page.
  *  - Recommended for you:        AI-03 card for one picked course (called on demand).
  */
 export function MyCoursesPage() {
@@ -95,9 +94,6 @@ export function MyCoursesPage() {
         subtitle="Your enrolled courses and latest results."
         action={
           <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-            <Button variant="outline" icon={<AiSparkle />} onClick={() => openSmartPractice()}>
-              Smart Practice
-            </Button>
             <Button variant="outline" icon={<Icon.Brain className="w-4 h-4" />} onClick={() => setQuizModal('material')}>
               Material to Quiz Creator
             </Button>

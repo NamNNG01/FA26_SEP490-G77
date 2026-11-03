@@ -42,8 +42,8 @@ const MODE_BY_TAB: Record<string, SmartPracticeMode> = { AI: 'AI', Random: 'RAND
 type Phase = 'form' | 'processing' | 'completed' | 'failed';
 
 const EXAM_TYPE_OPTIONS: { value: PracticeExamType; label: string }[] = [
-  { value: 'MIDTERM', label: 'Midterm' },
-  { value: 'FINAL', label: 'Final' },
+  { value: 'QUIZ', label: 'Quiz' },
+  { value: 'ESSAY', label: 'Assessment' },
 ];
 
 const DIFFICULTY_OPTIONS: { value: '' | PracticeDifficulty; label: string }[] = [
@@ -53,11 +53,14 @@ const DIFFICULTY_OPTIONS: { value: '' | PracticeDifficulty; label: string }[] = 
   { value: 'HARD', label: 'Hard' },
 ];
 
+/** Free-text guidance the student gives the AI (sent as `context`). */
+const AI_CONTEXT_MAX = 500;
+
 const limitsOf = (mode: SmartPracticeMode) =>
   mode === 'AI' ? { questions: SMART_QUESTIONS, minutes: SMART_MINUTES } : { questions: PRACTICE_QUESTIONS, minutes: PRACTICE_MINUTES };
 
 /**
- * Smart Practice — a practice exam the student builds for one course. Two ways to pick the questions:
+ * Create Personal Quiz — a practice exam the student builds for one course. Two ways to pick the questions:
  *
  *  - AI (AI-01 + AI-02): the AI picks questions from the student's weak modules. The modal shows the
  *    analysis from the 202 response, polls the job, and offers "Start practice" when the exam is ready.
@@ -65,6 +68,7 @@ const limitsOf = (mode: SmartPracticeMode) =>
  *    difficulty. The exam is created at once and the student goes straight to it.
  *
  * Both open the take screen in practice mode (each answer can be checked right away).
+ * `lockCourse` (course detail page) fixes the course to `initialCourseId` and hides the course picker.
  */
 export function SmartPracticeModal({
   open,
@@ -72,22 +76,25 @@ export function SmartPracticeModal({
   courses,
   initialCourseId,
   initialMode = 'AI',
+  lockCourse = false,
 }: {
   open: boolean;
   onClose: () => void;
-  courses: MyCourse[];
+  courses: Pick<MyCourse, 'courseId' | 'title'>[];
   initialCourseId?: number | null;
   initialMode?: SmartPracticeMode;
+  lockCourse?: boolean;
 }) {
   const navigate = useNavigate();
   const [mode, setMode] = useState<SmartPracticeMode>(initialMode);
   const [courseId, setCourseId] = useState('');
   const [questionCount, setQuestionCount] = useState(String(SMART_QUESTIONS.default));
-  const [minutes, setMinutes] = useState(String(SMART_MINUTES.default));
   const [touched, setTouched] = useState(false);
+  // AI only
+  const [aiContext, setAiContext] = useState('');
 
   // Random only
-  const [examType, setExamType] = useState<PracticeExamType>('MIDTERM');
+  const [examType, setExamType] = useState<PracticeExamType>('QUIZ');
   const [difficulty, setDifficulty] = useState<'' | PracticeDifficulty>('');
   const [moduleIds, setModuleIds] = useState<string[]>([]);
   const [modules, setModules] = useState<{ value: string; label: string }[]>([]);
@@ -113,7 +120,6 @@ export function SmartPracticeModal({
   const resetCounts = (m: SmartPracticeMode) => {
     const limits = limitsOf(m);
     setQuestionCount(String(limits.questions.default));
-    setMinutes(String(limits.minutes.default));
   };
 
   // Fresh form each time the modal opens; stop polling when it closes.
@@ -126,9 +132,10 @@ export function SmartPracticeModal({
     setCourseId(preset != null ? String(preset) : '');
     setMode(initialMode);
     resetCounts(initialMode);
-    setExamType('MIDTERM');
+    setExamType('QUIZ');
     setDifficulty('');
     setModuleIds([]);
+    setAiContext('');
     setTouched(false);
     setPhase('form');
     setBusy(false);
@@ -190,26 +197,23 @@ export function SmartPracticeModal({
       })
       .catch(err => {
         if (activeJob.current !== jobId) return;
-        setError(getAiError(err, 'Lost track of the smart practice job.'));
+        setError(getAiError(err, 'Lost track of the personal quiz job.'));
         setPhase('failed');
       });
   };
 
   const limits = limitsOf(mode);
   const countNum = Number(questionCount);
-  const minutesNum = Number(minutes);
+  // Practice is untimed: the student sets no limit, the BE (which still wants one) gets the longest it allows.
+  const minutesNum = limits.minutes.max;
   const errors = {
     course: courseId ? undefined : 'Select a course.',
     count:
       Number.isInteger(countNum) && countNum >= limits.questions.min && countNum <= limits.questions.max
         ? undefined
         : `Enter ${limits.questions.min} – ${limits.questions.max} questions.`,
-    minutes:
-      Number.isInteger(minutesNum) && minutesNum >= limits.minutes.min && minutesNum <= limits.minutes.max
-        ? undefined
-        : `Enter ${limits.minutes.min} – ${limits.minutes.max} minutes.`,
   };
-  const invalid = Boolean(errors.course || errors.count || errors.minutes);
+  const invalid = Boolean(errors.course || errors.count);
 
   const generateAi = async () => {
     setBusy(true);
@@ -219,13 +223,14 @@ export function SmartPracticeModal({
         courseId: Number(courseId),
         questionCount: countNum,
         durationMinutes: minutesNum,
+        context: aiContext.trim() || undefined,
       });
       setStarted(job);
       setPhase('processing');
       activeJob.current = job.jobId;
       poll(job.jobId);
     } catch (err) {
-      setError(getAiError(err, 'Failed to start the smart practice.'));
+      setError(getAiError(err, 'Failed to start the personal quiz.'));
     } finally {
       setBusy(false);
     }
@@ -293,7 +298,7 @@ export function SmartPracticeModal({
     ) : null;
 
   return (
-    <Modal open={open} onClose={() => !busy && onClose()} title="Smart Practice" size="lg" footer={footer}>
+    <Modal open={open} onClose={() => !busy && onClose()} title="Create Personal Quiz" size="lg" footer={footer}>
       <div className="space-y-5">
         {phase === 'form' && (
           <>
@@ -306,40 +311,52 @@ export function SmartPracticeModal({
                 : 'Random questions from the course question bank. Narrow them down by module and difficulty if you like. Practice exams do not count towards your course progress.'}
             </p>
             {courses.length === 0 ? (
-              <p className="text-sm text-content-soft">Enroll in a course first to get a smart practice.</p>
+              <p className="text-sm text-content-soft">Enroll in a course first to create a personal quiz.</p>
             ) : (
               <div className="grid gap-x-6 gap-y-5 sm:grid-cols-2">
+                {!lockCourse && (
+                  <div className="min-w-0 sm:col-span-2">
+                    <Select
+                      label="Course"
+                      options={courses.map(c => ({ value: String(c.courseId), label: c.title }))}
+                      value={courseId}
+                      onChange={setCourseId}
+                      error={touched ? errors.course : undefined}
+                    />
+                  </div>
+                )}
                 <div className="min-w-0 sm:col-span-2">
-                  <Select
-                    label="Course"
-                    options={courses.map(c => ({ value: String(c.courseId), label: c.title }))}
-                    value={courseId}
-                    onChange={setCourseId}
-                    error={touched ? errors.course : undefined}
+                  <Input
+                    label="Question Count"
+                    type="number"
+                    inputMode="numeric"
+                    min={limits.questions.min}
+                    max={limits.questions.max}
+                    value={questionCount}
+                    onChange={e => setQuestionCount(e.target.value)}
+                    hint={`${limits.questions.min} – ${limits.questions.max}`}
+                    error={touched ? errors.count : undefined}
                   />
                 </div>
-                <Input
-                  label="Question Count"
-                  type="number"
-                  inputMode="numeric"
-                  min={limits.questions.min}
-                  max={limits.questions.max}
-                  value={questionCount}
-                  onChange={e => setQuestionCount(e.target.value)}
-                  hint={`${limits.questions.min} – ${limits.questions.max}`}
-                  error={touched ? errors.count : undefined}
-                />
-                <Input
-                  label="Time Limit (minutes)"
-                  type="number"
-                  inputMode="numeric"
-                  min={limits.minutes.min}
-                  max={limits.minutes.max}
-                  value={minutes}
-                  onChange={e => setMinutes(e.target.value)}
-                  hint={`${limits.minutes.min} – ${limits.minutes.max}`}
-                  error={touched ? errors.minutes : undefined}
-                />
+                {mode === 'AI' && (
+                  <label className="min-w-0 flex flex-col gap-1.5 sm:col-span-2">
+                    <span className="text-sm font-medium text-content-secondary">Context for the AI (optional)</span>
+                    <textarea
+                      rows={3}
+                      maxLength={AI_CONTEXT_MAX}
+                      value={aiContext}
+                      onChange={e => setAiContext(e.target.value)}
+                      placeholder="e.g. Focus on chapter 3, I keep mixing up joins and subqueries. More scenario-based questions please."
+                      className="w-full rounded-[10px] border border-line bg-surface p-3 text-sm text-content placeholder:text-content-subtle focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/20"
+                    />
+                    <span className="flex justify-between gap-2 text-xs text-content-subtle">
+                      <span>Tell the AI what to focus on, what you struggle with or the kind of questions you want.</span>
+                      <span className="flex-shrink-0">
+                        {aiContext.length}/{AI_CONTEXT_MAX}
+                      </span>
+                    </span>
+                  </label>
+                )}
                 {mode === 'RANDOM' && (
                   <>
                     <Select
@@ -393,7 +410,6 @@ export function SmartPracticeModal({
             </p>
             <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-content-soft">
               {result.questionCount != null && <span>{result.questionCount} questions</span>}
-              <span>{minutesNum} minutes</span>
               {result.estimatedDifficulty && <span>Difficulty: {result.estimatedDifficulty}</span>}
             </div>
             {result.focusAreas && result.focusAreas.length > 0 && (

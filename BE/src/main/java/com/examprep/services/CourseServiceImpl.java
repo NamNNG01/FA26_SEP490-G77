@@ -106,6 +106,22 @@ public class CourseServiceImpl implements CourseService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public void checkWritable(UserPrincipal user, Long id) {
+        checkAccess(user, readCourse(id));
+    }
+
+    @Override
+    @Transactional
+    public CourseResponse setThumbnail(UserPrincipal user, Long id, String thumbnailUrl) {
+        Course course = writeCourse(id);
+        checkAccess(user, course);
+        course.setThumbnailUrl(thumbnailUrl);
+        courses.flush();
+        return detailResponse(course);
+    }
+
+    @Override
     @Transactional
     public CourseResponse update(UserPrincipal user, Long id, CourseRequests.Update request) {
         Course course = writeCourse(id);

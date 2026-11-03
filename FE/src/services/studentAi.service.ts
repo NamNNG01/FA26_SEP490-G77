@@ -36,6 +36,8 @@ export interface SmartPracticeRequest {
   courseId: number;
   questionCount?: number;
   durationMinutes?: number;
+  /** Free-text guidance for the AI (focus topics, weak points, question style). Ignored until the BE reads it. */
+  context?: string;
 }
 
 export interface CategoryAccuracy {

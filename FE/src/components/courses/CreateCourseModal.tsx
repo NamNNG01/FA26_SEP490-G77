@@ -8,6 +8,9 @@ import { useToast } from '@/components/ui/ToastHost';
 import { Icon } from '@/assets/icons';
 import { api } from '@/services/api';
 import { getApiErrorMessage } from '@/utils/apiError';
+import { CourseThumbnailField } from './CourseThumbnailField';
+import { uploadService } from '@/services/upload.service';
+import { useObjectUrl } from '@/utils/useObjectUrl';
 import {
   courseService,
   type CategoryResponse,
@@ -33,6 +36,8 @@ export function CreateCourseModal({
   const [title, setTitle] = useState('');
   const [categoryId, setCategoryId] = useState<string>('');
   const [description, setDescription] = useState('');
+  const [thumbnail, setThumbnail] = useState<File | null>(null);
+  const thumbnailPreview = useObjectUrl(thumbnail);
   const [price, setPrice] = useState('0');
   const [managerIds, setManagerIds] = useState<string[]>([]);
   const [categories, setCategories] = useState<CategoryResponse[]>([]);
@@ -55,6 +60,7 @@ export function CreateCourseModal({
 
     setTitle('');
     setDescription('');
+    setThumbnail(null);
     setPrice('0');
     setManagerIds([]);
     setErrors({});
@@ -152,7 +158,16 @@ export function CreateCourseModal({
         managerId: Number(managerIds[0]),
         managerIds: managerIds.map(Number),
       });
-      onCreated(created);
+      let result = created;
+      if (thumbnail) {
+        // The course exists either way; a failed image only costs the thumbnail.
+        try {
+          result = await uploadService.uploadCourseThumbnail(created.courseId, thumbnail);
+        } catch (err) {
+          toast.warning(getApiErrorMessage(err, 'Course created, but the thumbnail could not be uploaded.'));
+        }
+      }
+      onCreated(result);
       onClose();
     } catch (err: unknown) {
       const message = getApiErrorMessage(err, 'Failed to create course. Please try again.');
@@ -337,6 +352,14 @@ export function CreateCourseModal({
           </p>
           {errors.managerIds && <p className="text-[12px] text-red-500 mt-1">{errors.managerIds}</p>}
         </div>
+
+        <CourseThumbnailField
+          url={thumbnailPreview}
+          disabled={submitting}
+          onPick={setThumbnail}
+          onError={(m) => toast.error(m)}
+          onRemove={() => setThumbnail(null)}
+        />
 
         <div>
           <label className="text-[13px] font-medium text-[#374151] block mb-1.5">

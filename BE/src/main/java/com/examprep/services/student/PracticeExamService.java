@@ -57,14 +57,16 @@ public class    PracticeExamService {
                 throw new BadRequestException("categoryIds must be visible modules of this course: " + moduleId);
             }
         }
-        List<QuestionCandidate> pool = candidates(courseId, moduleIds, request.difficulty());
+        boolean essay = "ESSAY".equals(request.examType());
+        List<QuestionCandidate> pool = practices.findCandidates(courseId, essay ? List.of("ESSAY") : AUTO_GRADED,
+                moduleIds.isEmpty(), moduleIds.isEmpty() ? List.of(-1L) : moduleIds, request.difficulty());
         int count = request.questionCount();
         if (pool.size() < count) throw notEnough(pool.size());
         List<QuestionCandidate> drawn = new ArrayList<>(pool);
         Collections.shuffle(drawn);
         drawn = drawn.subList(0, count);
 
-        String title = "Đề luyện tùy chọn - " + ("FINAL".equals(request.examType()) ? "Cuối kỳ" : "Giữa kỳ");
+        String title = "Đề luyện tùy chọn - " + (essay ? "Tự luận" : "Trắc nghiệm");
         PracticeExam practice = practices.save(PracticeExam.builder().userId(userId).courseId(courseId).title(title)
                 .questionCount(count).durationMinutes(request.durationMinutes()).difficulty(request.difficulty())
                 .categoryIds(moduleIds.isEmpty() ? null : write(moduleIds)).build());

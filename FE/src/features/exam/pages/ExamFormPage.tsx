@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { QuestionContent } from "@/components/common/QuestionContent";
 import { useParams, useNavigate, useLocation } from "react-router";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { Button } from "@/components/ui/Button";
@@ -849,37 +850,13 @@ export function ExamFormPage({
     if (!id || (questions.length === 0 && groups.length === 0)) return;
 
     setLoading(true);
-    const removedQuestionIds = new Set<number>();
-    const failedGroupIds = new Set<number>();
-    const failures: string[] = [];
-
-    for (const group of groups) {
-      try {
-        await examService.removeGroupFromExam(Number(id), group.examGroupId);
-        questions
-          .filter((question) => question.groupId === group.groupId)
-          .forEach((question) => removedQuestionIds.add(question.examQuestionId));
-      } catch (err) {
-        failedGroupIds.add(group.groupId);
-        failures.push(`${group.title}: ${getApiErrorMessage(err, "Could not remove group.")}`);
-      }
-    }
-
-    for (const question of questions) {
-      if (removedQuestionIds.has(question.examQuestionId)) continue;
-      if (question.groupId && !failedGroupIds.has(question.groupId)) continue;
-      try {
-        await examService.removeQuestionFromExam(Number(id), question.examQuestionId);
-      } catch (err) {
-        failures.push(`Question #${question.questionId}: ${getApiErrorMessage(err, "Could not remove question.")}`);
-      }
-    }
-
-    setLoading(false);
-    if (failures.length > 0) {
-      toast.error(`Some questions could not be removed: ${failures.join(" ")}`);
-    } else {
+    try {
+      await examService.removeAllQuestionsFromExam(Number(id));
       toast.success("All questions removed from exam.");
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, "Could not remove the questions."));
+    } finally {
+      setLoading(false);
     }
     loadExamDetail(Number(id));
   };
@@ -1637,8 +1614,8 @@ export function ExamFormPage({
                               #{idx + 1}
                             </span>
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-content leading-snug">
-                                {q.content}
+                              <p className="text-sm font-medium text-content leading-snug whitespace-pre-line break-words">
+                                <QuestionContent text={q.content} />
                               </p>
                               <div className="flex flex-wrap items-center gap-2 mt-2">
                                 <Badge
@@ -1937,8 +1914,8 @@ export function ExamFormPage({
                                           <span className="mt-0.5 text-xs font-bold text-brand-ink">
                                             #{questionIndex + 1}
                                           </span>
-                                          <p className="text-sm font-medium leading-snug text-content">
-                                            {q.content}
+                                          <p className="text-sm font-medium leading-snug text-content whitespace-pre-line break-words">
+                                            <QuestionContent text={q.content} />
                                           </p>
                                         </div>
                                         <div className="ml-6 mt-2 flex flex-wrap items-center gap-2">

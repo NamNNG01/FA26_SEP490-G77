@@ -6,6 +6,7 @@ import { Checkbox } from "@/components/ui/Checkbox";
 import { Select } from "@/components/ui/Select";
 import { Alert } from "@/components/ui/Alert";
 import { SearchInput } from "@/components/common/SearchInput";
+import { questionPlainText } from "@/components/common/QuestionContent";
 import { Icon } from "@/assets/icons";
 import {
   examService,
@@ -306,7 +307,7 @@ export function QuestionBankSelectModal({
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-content leading-snug line-clamp-2">
-                      {q.content}
+                      {questionPlainText(q.content)}
                     </p>
                     <div className="flex flex-wrap items-center gap-2 mt-1.5">
                       <Badge

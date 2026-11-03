@@ -813,6 +813,11 @@ export const examService = {
     await api.request<ApiResponse<null>>({ method: 'delete', url: `/manager/exams/${id}/questions/${examQuestionId}` });
   },
 
+  /** Removes every question and group link of the exam in one call. */
+  async removeAllQuestionsFromExam(id: number): Promise<void> {
+    await api.request<ApiResponse<null>>({ method: 'delete', url: `/manager/exams/${id}/questions` });
+  },
+
   async addGroupToExam(id: number, payload: { groupId: number; questions: { questionId: number; weight: number }[]; orderIndex?: number }): Promise<ExamGroup> {
     const res = await api.post<ApiResponse<ExamGroup>>(`/manager/exams/${id}/groups`, payload);
     return res.data;

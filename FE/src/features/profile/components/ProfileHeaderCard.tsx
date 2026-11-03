@@ -1,11 +1,15 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router';
-import type { UserResponse } from '@/auth/authContext';
+import { useAuth, type UserResponse } from '@/auth/authContext';
 import { ROUTES } from '@/app/routes';
 import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/assets/icons';
+import { ImagePickButton } from '@/components/common/ImagePickButton';
+import { useToast } from '@/components/ui/ToastHost';
+import { uploadService } from '@/services/upload.service';
+import { getApiErrorMessage } from '@/utils/apiError';
 import { roleLabel } from '@/utils/permissions';
 import type { ProfileStat } from '../hooks/useProfileOverview';
 import { ChangePasswordModal } from './ChangePasswordModal';
@@ -41,7 +45,22 @@ export function ProfileHeaderCard({
   onEdit: () => void;
 }) {
   const [passwordOpen, setPasswordOpen] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const navigate = useNavigate();
+  const { updateUser } = useAuth();
+  const toast = useToast();
+
+  const changeAvatar = async (file: File) => {
+    setUploadingAvatar(true);
+    try {
+      updateUser(await uploadService.uploadAvatar(file));
+      toast.success('Avatar updated.');
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Could not upload the avatar.'));
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
   // A Google-only account (AUTH-09) has no current password to confirm, so it
   // sets one through the Forgot password email instead. Older responses
   // without the flag keep Change Password.
@@ -50,7 +69,17 @@ export function ProfileHeaderCard({
   return (
     <div className="card p-6">
       <div className="flex flex-col sm:flex-row sm:items-start gap-4">
-        <Avatar name={user.fullName} src={user.avatarUrl ?? undefined} size="xl" color="#0D7C6C" />
+        <div className="flex flex-col items-center gap-2 shrink-0">
+          <Avatar name={user.fullName} src={user.avatarUrl ?? undefined} size="xl" color="#0D7C6C" />
+          <ImagePickButton
+            variant="ghost"
+            loading={uploadingAvatar}
+            onPick={changeAvatar}
+            onError={(m) => toast.error(m)}
+          >
+            Change photo
+          </ImagePickButton>
+        </div>
 
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-3 flex-wrap">

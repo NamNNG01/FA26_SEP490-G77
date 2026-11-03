@@ -58,18 +58,18 @@ class PracticeExamApiIntegrationTest {
         draft.setStatus("DRAFT");
         Question pending = f.question(course, oop, "EASY");
         pending.setApprovalStatus("PENDING");
-        Question essay = Question.builder().course(course).module(oop).questionType("ESSAY").difficulty("EASY").content("essay").build();
+        Question essay = Question.builder().course(course).module(oop).questionType("ESSAY").status("ACTIVE").difficulty("EASY").content("essay").build();
         em.persist(essay);
         em.flush();
     }
 
     @Test void createDrawsMatchingPublishedQuestions() throws Exception {
         JsonNode data = data(create(student, "{\"courseId\":" + course.getCourseId() + ",\"questionCount\":10,\"durationMinutes\":30,"
-                + "\"difficulty\":\"EASY\",\"categoryIds\":[" + oop.getModuleId() + "],\"examType\":\"FINAL\"}")
+                + "\"difficulty\":\"EASY\",\"categoryIds\":[" + oop.getModuleId() + "],\"examType\":\"QUIZ\"}")
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.message").value("Practice exam created")));
         assertEquals(10, data.path("questionCount").asInt());
         assertEquals(30, data.path("durationMinutes").asInt());
-        assertTrue(data.path("title").asText().contains("Cuối kỳ"));
+        assertTrue(data.path("title").asText().contains("Trắc nghiệm"));
         Exam exam = em.find(Exam.class, data.path("examId").asLong());
         assertEquals("PRACTICE", exam.getMode());
         assertEquals("PUBLISHED", exam.getStatus());
@@ -79,6 +79,23 @@ class PracticeExamApiIntegrationTest {
                 .setParameter("e", exam).getResultList());
         assertEquals(easyOop, drawn);
         mvc.perform(post("/api/v1/student/exams/" + exam.getExamId() + "/attempts").with(as(student))).andExpect(status().isCreated());
+    }
+
+    @Test void essayTypeDrawsOnlyEssays() throws Exception {
+        Set<Long> essays = new HashSet<>();
+        for (int i = 0; i < 4; i++) {
+            Question q = Question.builder().course(course).module(io).questionType("ESSAY").status("ACTIVE").difficulty("EASY").content("essay " + i).build();
+            em.persist(q);
+            essays.add(q.getQuestionId());
+        }
+        em.flush();
+        essays.add(em.createQuery("select q.questionId from Question q where q.content = 'essay'", Long.class).getSingleResult());
+        JsonNode data = data(create(student, "{\"courseId\":" + course.getCourseId() + ",\"questionCount\":5,\"durationMinutes\":30,"
+                + "\"examType\":\"ESSAY\"}").andExpect(status().isCreated()));
+        assertTrue(data.path("title").asText().contains("Tự luận"));
+        Set<Long> drawn = new HashSet<>(em.createQuery("select eq.question.questionId from ExamQuestion eq where eq.exam.examId = :e", Long.class)
+                .setParameter("e", data.path("examId").asLong()).getResultList());
+        assertEquals(essays, drawn);
     }
 
     @Test void notEnoughQuestions422() throws Exception {
@@ -95,7 +112,7 @@ class PracticeExamApiIntegrationTest {
         create(student, "{" + c + ",\"questionCount\":5,\"durationMinutes\":0}").andExpect(status().isBadRequest());
         create(student, "{" + c + ",\"questionCount\":5,\"durationMinutes\":181}").andExpect(status().isBadRequest());
         create(student, "{" + c + ",\"questionCount\":5,\"durationMinutes\":10,\"difficulty\":\"X\"}").andExpect(status().isBadRequest());
-        create(student, "{" + c + ",\"questionCount\":5,\"durationMinutes\":10,\"examType\":\"QUIZ\"}").andExpect(status().isBadRequest());
+        create(student, "{" + c + ",\"questionCount\":5,\"durationMinutes\":10,\"examType\":\"FINAL\"}").andExpect(status().isBadRequest());
         create(student, "{\"questionCount\":5,\"durationMinutes\":10}").andExpect(status().isBadRequest());
         Course foreign = f.course(manager);
         Module foreignModule = f.module(foreign, "Other");

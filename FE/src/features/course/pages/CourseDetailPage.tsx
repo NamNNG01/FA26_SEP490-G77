@@ -33,6 +33,8 @@ import { useAuth } from "@/auth/authContext";
 import { Role } from "@/utils/permissions";
 import { api } from "@/services/api";
 import { getApiErrorMessage } from "@/utils/apiError";
+import { CourseThumbnailField } from "@/components/courses/CourseThumbnailField";
+import { uploadService } from "@/services/upload.service";
 
 interface ManagerOption {
   id: number;
@@ -105,6 +107,7 @@ export function CourseDetailPage({
   const courseId = rawId;
   const { user } = useAuth();
   const notification = useToast();
+  const [uploadingThumbnail, setUploadingThumbnail] = useState(false);
   const isAdmin = user?.role === Role.ADMIN;
   const canManageCourse = isAdmin;
   const canCreateModule = !isAdmin;
@@ -726,6 +729,36 @@ export function CourseDetailPage({
               </div>
 
               <div className="space-y-4">
+                <CourseThumbnailField
+                  url={course.thumbnailUrl}
+                  disabled={!canManageCourse}
+                  uploading={uploadingThumbnail}
+                  onError={(m) => notification.error(m)}
+                  onPick={async (file) => {
+                    setUploadingThumbnail(true);
+                    try {
+                      const updated = await uploadService.uploadCourseThumbnail(course.courseId, file);
+                      setCourse((prev) => (prev ? { ...prev, thumbnailUrl: updated.thumbnailUrl } : prev));
+                      notification.success("Thumbnail updated.");
+                    } catch (err) {
+                      notification.error(getApiErrorMessage(err, "Could not upload the thumbnail."));
+                    } finally {
+                      setUploadingThumbnail(false);
+                    }
+                  }}
+                  onRemove={async () => {
+                    setUploadingThumbnail(true);
+                    try {
+                      await courseService.updateCourse(course.courseId, { thumbnailUrl: "" });
+                      setCourse((prev) => (prev ? { ...prev, thumbnailUrl: null } : prev));
+                    } catch (err) {
+                      notification.error(getApiErrorMessage(err, "Could not remove the thumbnail."));
+                    } finally {
+                      setUploadingThumbnail(false);
+                    }
+                  }}
+                />
+
                 <Select
                   label="Publication Status"
                   value={isPublished ? "published" : "draft"}
