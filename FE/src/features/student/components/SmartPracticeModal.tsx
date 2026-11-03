@@ -89,7 +89,6 @@ export function SmartPracticeModal({
   const [mode, setMode] = useState<SmartPracticeMode>(initialMode);
   const [courseId, setCourseId] = useState('');
   const [questionCount, setQuestionCount] = useState(String(SMART_QUESTIONS.default));
-  const [minutes, setMinutes] = useState(String(SMART_MINUTES.default));
   const [touched, setTouched] = useState(false);
   // AI only
   const [aiContext, setAiContext] = useState('');
@@ -121,7 +120,6 @@ export function SmartPracticeModal({
   const resetCounts = (m: SmartPracticeMode) => {
     const limits = limitsOf(m);
     setQuestionCount(String(limits.questions.default));
-    setMinutes(String(limits.minutes.default));
   };
 
   // Fresh form each time the modal opens; stop polling when it closes.
@@ -206,19 +204,16 @@ export function SmartPracticeModal({
 
   const limits = limitsOf(mode);
   const countNum = Number(questionCount);
-  const minutesNum = Number(minutes);
+  // Practice is untimed: the student sets no limit, the BE (which still wants one) gets the longest it allows.
+  const minutesNum = limits.minutes.max;
   const errors = {
     course: courseId ? undefined : 'Select a course.',
     count:
       Number.isInteger(countNum) && countNum >= limits.questions.min && countNum <= limits.questions.max
         ? undefined
         : `Enter ${limits.questions.min} – ${limits.questions.max} questions.`,
-    minutes:
-      Number.isInteger(minutesNum) && minutesNum >= limits.minutes.min && minutesNum <= limits.minutes.max
-        ? undefined
-        : `Enter ${limits.minutes.min} – ${limits.minutes.max} minutes.`,
   };
-  const invalid = Boolean(errors.course || errors.count || errors.minutes);
+  const invalid = Boolean(errors.course || errors.count);
 
   const generateAi = async () => {
     setBusy(true);
@@ -330,28 +325,19 @@ export function SmartPracticeModal({
                     />
                   </div>
                 )}
-                <Input
-                  label="Question Count"
-                  type="number"
-                  inputMode="numeric"
-                  min={limits.questions.min}
-                  max={limits.questions.max}
-                  value={questionCount}
-                  onChange={e => setQuestionCount(e.target.value)}
-                  hint={`${limits.questions.min} – ${limits.questions.max}`}
-                  error={touched ? errors.count : undefined}
-                />
-                <Input
-                  label="Time Limit (minutes)"
-                  type="number"
-                  inputMode="numeric"
-                  min={limits.minutes.min}
-                  max={limits.minutes.max}
-                  value={minutes}
-                  onChange={e => setMinutes(e.target.value)}
-                  hint={`${limits.minutes.min} – ${limits.minutes.max}`}
-                  error={touched ? errors.minutes : undefined}
-                />
+                <div className="min-w-0 sm:col-span-2">
+                  <Input
+                    label="Question Count"
+                    type="number"
+                    inputMode="numeric"
+                    min={limits.questions.min}
+                    max={limits.questions.max}
+                    value={questionCount}
+                    onChange={e => setQuestionCount(e.target.value)}
+                    hint={`${limits.questions.min} – ${limits.questions.max}`}
+                    error={touched ? errors.count : undefined}
+                  />
+                </div>
                 {mode === 'AI' && (
                   <label className="min-w-0 flex flex-col gap-1.5 sm:col-span-2">
                     <span className="text-sm font-medium text-content-secondary">Context for the AI (optional)</span>
@@ -424,7 +410,6 @@ export function SmartPracticeModal({
             </p>
             <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-content-soft">
               {result.questionCount != null && <span>{result.questionCount} questions</span>}
-              <span>{minutesNum} minutes</span>
               {result.estimatedDifficulty && <span>Difficulty: {result.estimatedDifficulty}</span>}
             </div>
             {result.focusAreas && result.focusAreas.length > 0 && (
