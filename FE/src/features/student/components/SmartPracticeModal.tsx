@@ -42,8 +42,8 @@ const MODE_BY_TAB: Record<string, SmartPracticeMode> = { AI: 'AI', Random: 'RAND
 type Phase = 'form' | 'processing' | 'completed' | 'failed';
 
 const EXAM_TYPE_OPTIONS: { value: PracticeExamType; label: string }[] = [
-  { value: 'MIDTERM', label: 'Midterm' },
-  { value: 'FINAL', label: 'Final' },
+  { value: 'QUIZ', label: 'Multiple choice' },
+  { value: 'ESSAY', label: 'Essay' },
 ];
 
 const DIFFICULTY_OPTIONS: { value: '' | PracticeDifficulty; label: string }[] = [
@@ -87,7 +87,7 @@ export function SmartPracticeModal({
   const [touched, setTouched] = useState(false);
 
   // Random only
-  const [examType, setExamType] = useState<PracticeExamType>('MIDTERM');
+  const [examType, setExamType] = useState<PracticeExamType>('QUIZ');
   const [difficulty, setDifficulty] = useState<'' | PracticeDifficulty>('');
   const [moduleIds, setModuleIds] = useState<string[]>([]);
   const [modules, setModules] = useState<{ value: string; label: string }[]>([]);
@@ -126,7 +126,7 @@ export function SmartPracticeModal({
     setCourseId(preset != null ? String(preset) : '');
     setMode(initialMode);
     resetCounts(initialMode);
-    setExamType('MIDTERM');
+    setExamType('QUIZ');
     setDifficulty('');
     setModuleIds([]);
     setTouched(false);

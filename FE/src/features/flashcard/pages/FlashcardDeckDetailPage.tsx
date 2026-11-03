@@ -99,7 +99,7 @@ export function FlashcardDeckDetailPage() {
 
   if (loading) {
     return (
-      <div className="p-4 sm:p-6 lg:p-8">
+      <div className="p-8">
         <div className="py-16 text-center text-content-subtle">
           <div className="inline-block w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mb-3" />
           <p className="text-sm">Loading flashcard deck…</p>
@@ -110,7 +110,7 @@ export function FlashcardDeckDetailPage() {
 
   if (!deck || !saved) {
     return (
-      <div className="p-4 sm:p-6 lg:p-8">
+      <div className="p-8">
         <div className="card mx-auto max-w-md px-6 py-14 text-center">
           <Icon.Layers className="w-10 h-10 mx-auto text-content-faint" />
           <h2 className="mt-4 text-xl font-bold text-content">Deck not available</h2>
@@ -181,7 +181,7 @@ export function FlashcardDeckDetailPage() {
   }
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 space-y-5">
+    <div className="p-8 space-y-5">
       <div className="space-y-2">
         <Breadcrumb items={[{ label: 'Flashcards', onClick: backToList }, { label: deck.title }]} />
         <div className="min-w-0">

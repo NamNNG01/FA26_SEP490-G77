@@ -42,6 +42,9 @@ class UserControllerTest {
     private UserService userService;
 
     @MockBean
+    private com.examprep.services.MaterialStorage materialStorage;
+
+    @MockBean
     private JwtTokenProvider jwtTokenProvider;
 
     @MockBean

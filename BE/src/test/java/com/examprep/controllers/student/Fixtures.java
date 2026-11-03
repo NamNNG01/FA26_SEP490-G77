@@ -66,7 +66,7 @@ public final class Fixtures {
 
     /** ACTIVE + APPROVED single-choice question with two options (second one correct). */
     public Question question(Course course, Module module, String difficulty) {
-        Question q = Question.builder().course(course).module(module).questionType("SINGLE_CHOICE").difficulty(difficulty)
+        Question q = Question.builder().course(course).module(module).questionType("SINGLE_CHOICE").status("ACTIVE").difficulty(difficulty)
                 .content("Question " + UUID.randomUUID()).build();
         em.persist(q);
         em.persist(AnswerOption.builder().question(q).optionText("wrong").isCorrect(false).orderIndex(1).build());

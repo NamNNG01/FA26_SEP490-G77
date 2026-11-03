@@ -14,6 +14,9 @@ import {
   type CourseDetailResponse,
 } from "@/services/course.service";
 import { getApiErrorMessage } from "@/utils/apiError";
+import { CourseThumbnailField } from "@/components/courses/CourseThumbnailField";
+import { uploadService } from "@/services/upload.service";
+import { useObjectUrl } from "@/utils/useObjectUrl";
 import { coursePriceError } from "../coursePrice";
 
 export function CourseFormPage({
@@ -40,6 +43,8 @@ export function CourseFormPage({
   const [title, setTitle] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [description, setDescription] = useState("");
+  const [thumbnail, setThumbnail] = useState<File | null>(null);
+  const thumbnailPreview = useObjectUrl(thumbnail);
   const [price, setPrice] = useState("0");
   const [managerId, setManagerId] = useState("");
   const [categories, setCategories] = useState<CategoryResponse[]>([]);
@@ -105,6 +110,16 @@ export function CourseFormPage({
     }
   };
 
+  /** Runs after the course is saved; a failed image never undoes the save. */
+  const uploadThumbnail = async (id: number | string) => {
+    if (!thumbnail) return;
+    try {
+      await uploadService.uploadCourseThumbnail(id, thumbnail);
+    } catch (err) {
+      notification.warning(getApiErrorMessage(err, "Course saved, but the thumbnail could not be uploaded."));
+    }
+  };
+
   const handleSubmit = async () => {
     if (!title.trim()) {
       notification.error("Course title is required.");
@@ -129,6 +144,7 @@ export function CourseFormPage({
           description: description.trim() || undefined,
           price: Number(price),
         });
+        await uploadThumbnail(courseId);
         notification.success("Course updated successfully.");
         setTimeout(() => handleCancel(), 1000);
       } else {
@@ -139,6 +155,7 @@ export function CourseFormPage({
           price: Number(price),
           managerId: Number(managerId) || 1,
         });
+        await uploadThumbnail(created.courseId);
         notification.success("Course created successfully.");
         setTimeout(() => {
           if (onNavigate) {
@@ -248,6 +265,14 @@ export function CourseFormPage({
               hint="0 = Free"
             />
           </div>
+
+          <CourseThumbnailField
+            url={thumbnailPreview}
+            disabled={submitting}
+            onPick={setThumbnail}
+            onError={(m) => notification.error(m)}
+            onRemove={() => setThumbnail(null)}
+          />
 
           <div>
             <label className="text-sm font-medium text-content-secondary block mb-1.5">

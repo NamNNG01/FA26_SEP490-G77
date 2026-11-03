@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { InsertImageButton, QuestionContent, hasQuestionImage } from '@/components/common/QuestionContent';
 import { useNavigate, useParams } from 'react-router';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { Alert } from '@/components/ui/Alert';
@@ -78,6 +79,7 @@ export function QuestionDetailPage() {
   const [saveError, setSaveError] = useState<SaveError | null>(null);
   const [confirm, setConfirm] = useState<Confirm>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (!questionId) return;
@@ -216,7 +218,7 @@ export function QuestionDetailPage() {
     }
   };
 
-  const pageCls = 'px-4 sm:px-8 py-6 space-y-4';
+  const pageCls = 'p-8 space-y-5';
   const crumbs = [{ label: 'Question', onClick: cancel }, { label: 'Question Detail' }];
 
   if (loading || loadError || !q) {
@@ -277,12 +279,14 @@ export function QuestionDetailPage() {
                   </h3>
                 </div>
                 <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <InsertImageButton textarea={contentRef} value={q.content} onChange={content => update({ content })} disabled={locked || archived} />
                   <Badge variant={STATUS_VARIANT[savedStatus] ?? 'default'}>{QUESTION_STATUS_LABELS[savedStatus] ?? savedStatus}</Badge>
                   <Badge variant={TYPE_VARIANT[q.type] ?? 'info'}>{typeLabel(q.type)}</Badge>
                 </div>
               </div>
               <textarea
                 id="question-content"
+                ref={contentRef}
                 value={q.content}
                 onChange={e => update({ content: e.target.value })}
                 aria-invalid={Boolean(errors.content)}
@@ -290,6 +294,12 @@ export function QuestionDetailPage() {
                 className={`${textareaCls(Boolean(errors.content))} h-[120px]`}
                 placeholder={q.type === 'FILL_BLANK' ? 'e.g. The capital of France is {{1}}.' : 'Enter the question…'}
               />
+              {hasQuestionImage(q.content) && (
+                <div className="mt-2 rounded-[10px] border border-line-faint bg-surface-alt p-3">
+                  <p className="text-2xs font-semibold uppercase text-content-subtle mb-1">Preview</p>
+                  <p className="text-sm text-content whitespace-pre-line break-words"><QuestionContent text={q.content} /></p>
+                </div>
+              )}
               {errors.content && <p className="text-xs text-danger mt-1">{errors.content}</p>}
             </div>
 

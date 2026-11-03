@@ -148,8 +148,62 @@ public class MaterialStorage {
         signed.put("public_id", publicId);
         signed.put("timestamp", String.valueOf(timestamp));
 
+        return signedUpload("raw", signed, "application/octet-stream", bytes).path("secure_url").asText();
+    }
+
+    /** Uploaded public image as Cloudinary describes it. */
+    public record StoredImage(String url, String publicId, String format, int width, int height, long bytes) {}
+
+    public static final long MAX_IMAGE_BYTES = 5L * 1024 * 1024;
+
+    /**
+     * Validates and uploads a public image (avatar, course thumbnail, question media). Images always go to
+     * Cloudinary whatever {@code app.storage.provider} says: the browser needs a public URL, a disk path is useless.
+     * With {@code overwrite} the same publicId is replaced in place, so re-uploading an avatar leaves no orphan.
+     *
+     * @throws BaseException 400 FILE_TOO_LARGE / UNSUPPORTED_FILE_TYPE, 502 STORAGE_ERROR
+     */
+    public StoredImage storeImage(String publicId, byte[] bytes, boolean overwrite) {
+        if (bytes == null || bytes.length == 0) {
+            throw new BaseException(ResponseCode.BAD_REQUEST, "File must contain data", Map.of("code", "EMPTY_FILE"));
+        }
+        if (bytes.length > MAX_IMAGE_BYTES) {
+            throw new BaseException(ResponseCode.FILE_TOO_LARGE, "Image must not exceed 5MB", Map.of("code", "FILE_TOO_LARGE"));
+        }
+        String format = imageFormat(bytes);
+        if (format == null) {
+            throw new BaseException(ResponseCode.UNSUPPORTED_FILE_TYPE, "Only JPG, PNG, WEBP and GIF images are supported",
+                    Map.of("code", "UNSUPPORTED_FILE_TYPE"));
+        }
+        if (cloudName.isEmpty() || apiKey.isEmpty() || apiSecret.isEmpty()) {
+            throw new BaseException(ResponseCode.STORAGE_ERROR,
+                    "Cloudinary is not configured; set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET");
+        }
+        Map<String, String> signed = new TreeMap<>();
+        signed.put("public_id", publicId);
+        signed.put("timestamp", String.valueOf(Instant.now().getEpochSecond()));
+        if (overwrite) {
+            signed.put("overwrite", "true");
+            signed.put("invalidate", "true");
+        }
+        JsonNode r = signedUpload("image", signed, "image/" + format, bytes);
+        return new StoredImage(r.path("secure_url").asText(), r.path("public_id").asText(publicId),
+                r.path("format").asText(format), r.path("width").asInt(), r.path("height").asInt(), r.path("bytes").asLong(bytes.length));
+    }
+
+    /** Magic-byte sniffing: the client's filename and content type are not trusted. SVG is refused (it can carry script). */
+    static String imageFormat(byte[] b) {
+        if (b.length >= 3 && (b[0] & 0xFF) == 0xFF && (b[1] & 0xFF) == 0xD8 && (b[2] & 0xFF) == 0xFF) return "jpeg";
+        if (b.length >= 8 && (b[0] & 0xFF) == 0x89 && b[1] == 'P' && b[2] == 'N' && b[3] == 'G') return "png";
+        if (b.length >= 6 && b[0] == 'G' && b[1] == 'I' && b[2] == 'F' && b[3] == '8') return "gif";
+        if (b.length >= 12 && b[0] == 'R' && b[1] == 'I' && b[2] == 'F' && b[3] == 'F'
+                && b[8] == 'W' && b[9] == 'E' && b[10] == 'B' && b[11] == 'P') return "webp";
+        return null;
+    }
+
+    private JsonNode signedUpload(String resourceType, Map<String, String> signed, String mime, byte[] bytes) {
         MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
-        form.add("file", "data:application/octet-stream;base64," + Base64.getEncoder().encodeToString(bytes));
+        form.add("file", "data:" + mime + ";base64," + Base64.getEncoder().encodeToString(bytes));
         signed.forEach(form::add);
         form.add("api_key", apiKey);
         form.add("signature", sha1(signable(signed) + apiSecret));
@@ -157,7 +211,7 @@ public class MaterialStorage {
         JsonNode response;
         try {
             response = cloudinary.post()
-                    .uri("/v1_1/{cloud}/raw/upload", cloudName)
+                    .uri("/v1_1/{cloud}/{type}/upload", cloudName, resourceType)
                     .contentType(MediaType.MULTIPART_FORM_DATA)
                     .body(form)
                     .retrieve()
@@ -172,7 +226,7 @@ public class MaterialStorage {
             log.warn("Cloudinary upload rejected: {}", message);
             throw new BaseException(ResponseCode.STORAGE_ERROR, "File storage rejected the upload");
         }
-        return url;
+        return response;
     }
 
     private String signable(Map<String, String> signed) {

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
+import { questionPlainText } from '@/components/common/QuestionContent';
 import { Button } from '@/components/ui/Button';
 import { Badge, type BadgeVariant } from '@/components/ui/Badge';
 import { Select } from '@/components/ui/Select';
@@ -254,8 +255,8 @@ export function QuestionBankPage() {
       label: 'Question',
       width: '40%',
       render: r => (
-        <p className="text-sm font-medium text-content line-clamp-2 whitespace-normal" title={asRow(r).content}>
-          {asRow(r).content}
+        <p className="text-sm font-medium text-content line-clamp-2 whitespace-normal" title={questionPlainText(asRow(r).content)}>
+          {questionPlainText(asRow(r).content)}
         </p>
       ),
     },
@@ -369,9 +370,9 @@ export function QuestionBankPage() {
   };
 
   return (
-    <div className="p-4 sm:p-8 space-y-5">
+    <div className="p-8 space-y-5">
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-xl font-bold text-content">Question</h2>
+        <h2 className="text-xl font-bold text-content">Question Bank</h2>
         <Button icon={<Icon.Plus className="w-4 h-4" />} onClick={() => navigate(ROUTES.managerQuestionCreate)}>
           Add Question
         </Button>

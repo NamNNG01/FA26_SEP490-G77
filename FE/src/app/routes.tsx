@@ -72,6 +72,7 @@ export const ROUTES = {
   managerCourseCreate: '/manager/courses/new',
   managerCourseDetail: '/manager/courses/:courseId',
   managerQuestions: '/manager/question-bank',
+  managerReviews: '/manager/reviews',
   managerQuestionCreate: '/manager/question-bank/new',
   /** Route pattern — render with managerQuestionEditPath(id). */
   managerQuestionEdit: '/manager/question-bank/:questionId',
@@ -264,6 +265,7 @@ export const menuByRole: Record<string, MenuItem[]> = {
     { id: 'manager-dashboard', title: 'Dashboard', icon: <Icon.Home className="w-4 h-4" />, path: ROUTES.managerDashboard },
     { id: 'manager-courses', title: 'Courses', icon: <Icon.Book className="w-4 h-4" />, path: ROUTES.managerCourses },
     { id: 'manager-questions', title: 'Question Bank', icon: <Icon.Database className="w-4 h-4" />, path: ROUTES.managerQuestions },
+    { id: 'manager-reviews', title: 'Content review', icon: <Icon.CheckCircle className="w-4 h-4" />, path: ROUTES.managerReviews },
     { id: 'manager-exams', title: 'Exams', icon: <Icon.ClipboardList className="w-4 h-4" />, path: ROUTES.managerExams },
     { id: 'manager-flashcards', title: 'Flashcards', icon: <Icon.Layers className="w-4 h-4" />, path: ROUTES.managerFlashcards },
     { id: 'manager-contests', title: 'Contests', icon: <Icon.Trophy className="w-4 h-4" />, path: ROUTES.managerContests },

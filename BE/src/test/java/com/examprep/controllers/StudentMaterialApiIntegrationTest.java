@@ -9,6 +9,7 @@ import com.examprep.services.AiQuotaService;
 import com.examprep.services.MaterialStorage;
 import com.examprep.services.MaterialTextReader;
 import com.examprep.services.QuizGenerationWorker;
+import com.examprep.services.StudentMaterialServiceImpl;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityManager;
@@ -215,6 +216,21 @@ public class StudentMaterialApiIntegrationTest {
                 .andExpect(status().isBadGateway())
                 .andExpect(jsonPath("$.message").value("Storage is down"));
         assertEquals(before, documentsOf(student));
+    }
+
+    @Test
+    void uploadIsRejectedOnceTheStudentHoldsTheMaximumNumberOfMaterials() throws Exception {
+        for (int i = 0; i < StudentMaterialServiceImpl.MAX_MATERIALS; i++) material("content " + i);
+        em.flush();
+        clearInvocations(reader, storage);
+        call(student, multipart("/api/v1/student/materials")
+                .file(new MockMultipartFile("file", "one-more.pdf", "application/pdf", "MORE".getBytes(StandardCharsets.UTF_8)))
+                .param("courseId", course.getCourseId().toString()))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.data.code").value("MATERIAL_LIMIT_REACHED"))
+                .andExpect(jsonPath("$.data.limit").value(StudentMaterialServiceImpl.MAX_MATERIALS));
+        verifyNoInteractions(reader, storage);
+        assertEquals(StudentMaterialServiceImpl.MAX_MATERIALS, documentsOf(student));
     }
 
     @Test

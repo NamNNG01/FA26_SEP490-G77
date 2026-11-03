@@ -3,6 +3,7 @@ import { Icon } from '@/assets/icons';
 import type { AnswerResponse, AttemptQuestion } from '@/services/studentAttempt.service';
 import { normalizeBlank, type CorrectAnswer } from '@/services/studentPracticeExam.service';
 import { DiagramAnswerInput } from './DiagramAnswerInput';
+import { QuestionContent } from '@/components/common/QuestionContent';
 
 /** ESSAY / CODE text limit when the paper sets none (BE AnswerResponseValidator). */
 const DEFAULT_TEXT_LIMIT = 10_000;
@@ -41,7 +42,11 @@ export function isAnswered(response: AnswerResponse | null | undefined): boolean
 
 /** Question text — fill-blank `{{n}}` placeholders become "(n) ____". */
 export function QuestionText({ content, className = '' }: { content: string; className?: string }) {
-  return <p className={`whitespace-pre-line break-words ${className}`}>{content.replace(BLANK, '($1) ______')}</p>;
+  return (
+    <p className={`whitespace-pre-line break-words ${className}`}>
+      <QuestionContent text={content.replace(BLANK, '($1) ______')} />
+    </p>
+  );
 }
 
 interface InputProps {
