@@ -178,11 +178,11 @@ export function ManagerContestListPage() {
   ];
 
   return (
-    <div className="space-y-5 py-6">
+    <div className="p-8 space-y-5">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-content">Contests</h1>
-          <p className="mt-1 text-sm text-content-soft">Schedule contests on your course exams, follow their ranking and pay the prize discounts.</p>
+          <h1 className="text-xl font-bold text-content">Contests</h1>
+          <p className="mt-0.5 text-xs text-content-subtle">Schedule contests on your course exams, follow their ranking and pay the prize discounts.</p>
         </div>
         <Button icon={<Icon.Plus className="h-4 w-4" />} onClick={() => navigate(ROUTES.managerContestCreate)}>New contest</Button>
       </header>

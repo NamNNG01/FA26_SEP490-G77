@@ -216,7 +216,7 @@ export function QuestionDetailPage() {
     }
   };
 
-  const pageCls = 'px-4 sm:px-8 py-6 space-y-4';
+  const pageCls = 'p-8 space-y-5';
   const crumbs = [{ label: 'Question', onClick: cancel }, { label: 'Question Detail' }];
 
   if (loading || loadError || !q) {

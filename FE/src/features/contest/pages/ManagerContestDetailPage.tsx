@@ -128,7 +128,7 @@ export function ManagerContestDetailPage() {
   if (loading) return <div className="flex justify-center py-20"><Spinner /></div>;
   if (loadError || !contest) {
     return (
-      <div className="space-y-4 py-6">
+      <div className="p-8 space-y-5">
         <Alert type="error" message={loadError ?? 'Contest not found.'} />
         <Button variant="outline" onClick={() => navigate(ROUTES.managerContests)}>Back to contests</Button>
       </div>
@@ -139,17 +139,17 @@ export function ManagerContestDetailPage() {
   const blocked = c.canPayReward && c.payBlockers.length > 0;
 
   return (
-    <div className="space-y-5 py-6">
+    <div className="p-8 space-y-5">
       <Breadcrumb items={[{ label: 'Contests', onClick: () => navigate(ROUTES.managerContests) }, { label: c.title }]} />
 
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="truncate text-2xl font-bold text-content">{c.title}</h1>
+            <h1 className="truncate text-xl font-bold text-content">{c.title}</h1>
             <ContestStatusBadge status={c.status} />
             <RankingBadge ranking={c.rankingStatus} />
           </div>
-          <p className="mt-1 text-sm text-content-soft">{c.course?.title ?? '—'} · {c.exam.title}</p>
+          <p className="mt-0.5 text-xs text-content-subtle">{c.course?.title ?? '—'} · {c.exam.title}</p>
         </div>
         <div className="flex flex-wrap gap-2">
           {c.canEdit && <Button variant="outline" icon={<Icon.Edit className="h-4 w-4" />} onClick={() => navigate(managerContestEditPath(c.contestId))}>Edit</Button>}
