@@ -215,7 +215,7 @@ export function FlashcardManagementPage() {
   };
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 space-y-5">
+    <div className="p-8 space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold text-content">Flashcard Management</h2>

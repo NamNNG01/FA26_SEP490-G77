@@ -578,7 +578,7 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
   const cancel = goToBank;
 
   const title = isEdit ? 'Edit Question' : 'New Questions';
-  const pageCls = 'px-4 sm:px-8 py-6 space-y-4';
+  const pageCls = 'p-8 space-y-5';
 
   if ((isEdit || duplicateOf) && (loading || loadError)) {
     return (

@@ -369,9 +369,9 @@ export function QuestionBankPage() {
   };
 
   return (
-    <div className="p-4 sm:p-8 space-y-5">
+    <div className="p-8 space-y-5">
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-xl font-bold text-content">Question</h2>
+        <h2 className="text-xl font-bold text-content">Question Bank</h2>
         <Button icon={<Icon.Plus className="w-4 h-4" />} onClick={() => navigate(ROUTES.managerQuestionCreate)}>
           Add Question
         </Button>

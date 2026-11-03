@@ -58,8 +58,8 @@ export function ManagerReviewPage() {
   const page = Number(pageData.page || 0);
   const detailStatus = detail && statusOf(detail, kind);
 
-  return <main className="mx-auto max-w-7xl space-y-5 p-4 md:p-8">
-    <header><p className="text-sm font-semibold uppercase tracking-wide text-brand-600">Manager workspace</p><h1 className="mt-1 text-3xl font-bold text-content">Content review</h1><p className="mt-2 text-content-secondary">Review student submitted questions and course flashcard decks.</p></header>
+  return <main className="space-y-5 p-8">
+    <header><h1 className="text-xl font-bold text-content">Content review</h1><p className="mt-0.5 text-xs text-content-subtle">Review student submitted questions and course flashcard decks.</p></header>
     <div className="flex flex-wrap gap-2 border-b border-line">
       {(['contributions', 'decks'] as Kind[]).map((tab) => <button key={tab} onClick={() => setKind(tab)} className={`border-b-2 px-4 py-3 font-medium ${kind === tab ? 'border-brand-600 text-brand-700' : 'border-transparent text-content-secondary'}`}>{tab === 'contributions' ? 'Question contributions' : 'Flashcard decks'}</button>)}
     </div>

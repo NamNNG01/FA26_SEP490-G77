@@ -252,10 +252,10 @@ export function ManagerContestFormPage({ mode }: { mode: 'create' | 'edit' }) {
   const backTo = contest ? managerContestPath(contest.contestId) : ROUTES.managerContests;
 
   if (loading) return <div className="flex justify-center py-20"><Spinner /></div>;
-  if (loadError) return <div className="space-y-4 py-6"><Alert type="error" message={loadError} /><Button variant="outline" onClick={() => navigate(ROUTES.managerContests)}>Back to contests</Button></div>;
+  if (loadError) return <div className="p-8 space-y-5"><Alert type="error" message={loadError} /><Button variant="outline" onClick={() => navigate(ROUTES.managerContests)}>Back to contests</Button></div>;
   if (scope.locked) {
     return (
-      <div className="space-y-4 py-6">
+      <div className="p-8 space-y-5">
         <Alert type="warning" message={CONTEST_ERROR_TEXT.CONTEST_LOCKED} />
         <Button variant="outline" onClick={() => navigate(backTo)}>Back to contest</Button>
       </div>
@@ -265,14 +265,14 @@ export function ManagerContestFormPage({ mode }: { mode: 'create' | 'edit' }) {
   const canPublish = !contest || contest.status === 'DRAFT';
 
   return (
-    <div className="mx-auto max-w-4xl space-y-5 py-6">
+    <div className="mx-auto max-w-4xl p-8 space-y-5">
       <Breadcrumb items={[
         { label: 'Contests', onClick: () => navigate(ROUTES.managerContests) },
         ...(contest ? [{ label: contest.title, onClick: () => navigate(backTo) }] : []),
         { label: mode === 'create' ? 'New' : 'Edit' },
       ]} />
       <header className="flex flex-wrap items-center gap-3">
-        <h1 className="text-2xl font-bold text-content">{title}</h1>
+        <h1 className="text-xl font-bold text-content">{title}</h1>
         {contest && <ContestStatusBadge status={contest.status} />}
       </header>
 
