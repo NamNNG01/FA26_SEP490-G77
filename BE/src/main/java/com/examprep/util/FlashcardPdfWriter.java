@@ -81,28 +81,29 @@ public class FlashcardPdfWriter {
             List<float[]> tableExtents = new ArrayList<>();
             PDPageContentStream cs = null;
             try {
-                // Title and info block, first page only.
+                // Title and info block, first page only, never allowed to run into the table.
                 PDPage page = newPage(doc);
                 cs = new PDPageContentStream(doc, page);
+                float floorY = BOTTOM + 2 * HEADER_H + 8f;
                 y = PAGE_H - MARGIN;
-                y = drawWrapped(cs, bold, 16f, deck.title(), MARGIN, TABLE_W, y, TEAL) - 6f;
+                y = drawWrapped(cs, bold, 16f, deck.title(), MARGIN, TABLE_W, y, TEAL, floorY);
                 List<String> meta = new ArrayList<>();
                 meta.add("Course: " + (blank(deck.courseName()) ? "Personal" : deck.courseName()));
                 if (!blank(deck.ownerName())) meta.add("Owner: " + deck.ownerName());
                 meta.add("Type: " + modeLabel(deck.mode()));
                 if (!blank(deck.visibility())) meta.add("Visibility: " + deck.visibility());
                 meta.add("Cards: " + cards.size());
-                y = drawWrapped(cs, regular, META_SIZE, String.join("   ·   ", meta), MARGIN, TABLE_W, y, MUTED) - 2f;
+                y = drawWrapped(cs, regular, META_SIZE, String.join("   ·   ", meta), MARGIN, TABLE_W, y, MUTED, floorY);
                 y = drawWrapped(cs, regular, META_SIZE, "Exported "
                         + ZonedDateTime.now(ZoneOffset.UTC).format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")) + " UTC",
-                        MARGIN, TABLE_W, y, MUTED);
+                        MARGIN, TABLE_W, y, MUTED, floorY);
                 if (!blank(deck.description())) {
-                    y = drawWrapped(cs, regular, META_SIZE, deck.description(), MARGIN, TABLE_W, y, MUTED);
+                    y = drawWrapped(cs, regular, META_SIZE, deck.description(), MARGIN, TABLE_W, y, MUTED, floorY);
                 }
                 if (cards.isEmpty()) {
-                    y = drawWrapped(cs, regular, META_SIZE, "This deck has no cards.", MARGIN, TABLE_W, y, MUTED) - 4f;
+                    y = drawWrapped(cs, regular, META_SIZE, "This deck has no cards.", MARGIN, TABLE_W, y, MUTED, floorY);
                 }
-                y -= 8f;
+                y = Math.min(y, floorY) - 8f;
 
                 // Table header.
                 y = drawTableHeader(cs, bold, y, widths, labels);
@@ -197,7 +198,8 @@ public class FlashcardPdfWriter {
     }
 
     private static PDFont font(PDDocument doc, int index) throws IOException {
-        return PDType0Font.load(doc, new ByteArrayInputStream(FONT_BYTES[index]));
+        // embedSubset=true makes PDDocument.save() subset the font automatically.
+        return PDType0Font.load(doc, new ByteArrayInputStream(FONT_BYTES[index]), true);
     }
 
     private static PDPage newPage(PDDocument doc) {
@@ -243,7 +245,7 @@ public class FlashcardPdfWriter {
         return lines;
     }
 
-    /** Word-wrap to a pixel width; hard-splits tokens longer than a whole line; newlines break. */
+    /** Word-wrap to a pixel width; hard-splits tokens longer than a whole line; newlines break. O(text length). */
     private static List<String> wrap(String text, PDFont font, float size, float width) {
         List<String> out = new ArrayList<>();
         for (String paragraph : safe(text, font).split("\n", -1)) {
@@ -253,15 +255,12 @@ public class FlashcardPdfWriter {
             }
             StringBuilder line = new StringBuilder();
             for (String word : paragraph.trim().split(" +")) {
-                while (widthOf(word, font, size) > width && word.length() > 1) {
-                    int cut = word.length();
-                    while (cut > 1 && widthOf(word.substring(0, cut), font, size) > width) cut--;
+                if (word.length() > 1 && widthOf(word, font, size) > width) {
                     if (line.length() > 0) {
                         out.add(line.toString());
-                        line = new StringBuilder();
                     }
-                    out.add(word.substring(0, cut));
-                    word = word.substring(cut);
+                    line = new StringBuilder(hardSplit(word, font, size, width, out));
+                    continue;
                 }
                 String candidate = line.length() == 0 ? word : line + " " + word;
                 if (line.length() > 0 && widthOf(candidate, font, size) > width) {
@@ -274,6 +273,32 @@ public class FlashcardPdfWriter {
             out.add(line.toString());
         }
         return out;
+    }
+
+    /** Chunks an over-wide token into whole lines; returns the tail that starts the next line. O(token length). */
+    private static String hardSplit(String word, PDFont font, float size, float width, List<String> out) {
+        int pos = 0;
+        while (pos < word.length()) {
+            float acc = 0f;
+            int i = pos;
+            while (i < word.length()) {
+                acc += charWidth(word.charAt(i), font, size);
+                if (acc > width && i > pos) break;
+                i++;
+            }
+            if (i >= word.length()) return word.substring(pos);
+            out.add(word.substring(pos, i));
+            pos = i;
+        }
+        return "";
+    }
+
+    private static float charWidth(char c, PDFont font, float size) {
+        try {
+            return font.getStringWidth(String.valueOf(c)) / 1000f * size;
+        } catch (IOException | IllegalArgumentException e) {
+            return size * 0.6f;
+        }
     }
 
     private static float widthOf(String s, PDFont font, float size) {
@@ -309,10 +334,21 @@ public class FlashcardPdfWriter {
         cs.endText();
     }
 
-    /** Word-wrapped text ending at the returned y (the y below its last line). */
-    private static float drawWrapped(PDPageContentStream cs, PDFont font, float size, String text, float x, float width, float y, float[] color) throws IOException {
-        for (String line : wrap(text, font, size, width)) {
-            drawText(cs, font, size, line, x, y - size - 2f, color);
+    /** Word-wrapped text ending at the returned y; drops lines that would cross floorY and marks the cut with "…". */
+    private static float drawWrapped(PDPageContentStream cs, PDFont font, float size, String text, float x, float width,
+                                     float y, float[] color, float floorY) throws IOException {
+        List<String> lines = wrap(text, font, size, width);
+        int drawn = 0;
+        for (int i = 0; i < lines.size(); i++) {
+            boolean more = i < lines.size() - 1;
+            float nextY = y - (size + 3f);
+            if (nextY < floorY + (more ? size + 3f : 0)) break;
+            drawText(cs, font, size, lines.get(i), x, y - size - 2f, color);
+            y = nextY;
+            drawn++;
+        }
+        if (drawn < lines.size()) {
+            drawText(cs, font, size, "…", x, y - size - 2f, color);
             y -= size + 3f;
         }
         return y;

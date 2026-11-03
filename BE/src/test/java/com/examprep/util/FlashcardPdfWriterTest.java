@@ -10,7 +10,6 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-
 class FlashcardPdfWriterTest {
 
     private final FlashcardPdfWriter writer = new FlashcardPdfWriter();
@@ -69,5 +68,41 @@ class FlashcardPdfWriterTest {
     void fileNameSanitizesNonAscii() {
         assertEquals("oop-phat-trien-phan-mem-flashcards.pdf", FlashcardPdfWriter.fileName(" OOP: phát triển phần mềm? "));
         assertEquals("deck-flashcards.pdf", FlashcardPdfWriter.fileName("???"));
+    }
+
+    @Test
+    @org.junit.jupiter.api.Timeout(30)
+    void unbreakableTokenDoesNotHang() throws IOException {
+        // API-valid worst case: CardWrite allows 20,000-char code bodies (StudentDeckDtos).
+        String body = "x".repeat(20000);
+        FlashcardPdfWriter.RenderedPdf out = writer.write(new FlashcardPdfWriter.DeckData(
+                "Base64", null, null, "CODE_SNIPPET", "PRIVATE", null,
+                List.of(new FlashcardPdfWriter.CardData("What is this?", "The payload", "JAVA", body))));
+        try (PDDocument document = Loader.loadPDF(out.content())) {
+            assertTrue(document.getNumberOfPages() >= 2, "expected the unbreakable token to span pages");
+        }
+    }
+
+    @Test
+    void smallDeckPdfIsSubsetSoDownloadsStaySmall() throws IOException {
+        FlashcardPdfWriter.RenderedPdf out = writer.write(new FlashcardPdfWriter.DeckData(
+                "Nhỏ", "Môn học", "Chủ sở hữu", "FLASHCARD", "PRIVATE", "Mô tả ngắn",
+                List.of(new FlashcardPdfWriter.CardData("Trước", "Sau", null, null))));
+        assertTrue(out.content().length < 300_000,
+                "expected a subset font export, got " + out.content().length + " bytes (full TTFs ≈ 1.8 MB)");
+    }
+
+    @Test
+    void overlongDescriptionIsTruncatedNotInvisible() throws IOException {
+        String description = "Mô tả ".repeat(1400) + " ENDMARK";
+        FlashcardPdfWriter.RenderedPdf out = writer.write(new FlashcardPdfWriter.DeckData(
+                "Dài mô tả", null, null, "FLASHCARD", "PRIVATE", description,
+                List.of(new FlashcardPdfWriter.CardData("Trước", "Sau", null, null))));
+        try (PDDocument document = Loader.loadPDF(out.content())) {
+            assertEquals(1, document.getNumberOfPages(), "header block must not push the table off page 1");
+        }
+        String extracted = text(out.content());
+        assertTrue(extracted.contains("…"), "expected a visible truncation marker");
+        assertTrue(!extracted.contains("ENDMARK"), "dropped description lines must not be in the PDF at all");
     }
 }
