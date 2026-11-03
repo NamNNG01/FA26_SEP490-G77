@@ -2,14 +2,19 @@ package com.examprep.controllers;
 
 import com.examprep.dto.ApiResponse;
 import com.examprep.dto.PageResponse;
+import com.examprep.dto.ResponseCode;
 import com.examprep.dto.student.StudentDeckDtos.*;
 import com.examprep.security.UserPrincipal;
+import com.examprep.services.contest.ContestRules;
 import com.examprep.services.student.CardImportService;
 import com.examprep.services.student.StudentDeckService;
 import com.examprep.services.student.StudentStudyService;
+import com.examprep.util.FlashcardPdfWriter;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -140,5 +145,17 @@ public class StudentDeckController {
             @PathVariable Long deckId, @Valid @RequestBody FromQuestion request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(decks.cardFromQuestion(user.getId(), deckId, request), "Card created from question"));
+    }
+
+    @GetMapping("/decks/{deckId}/export")
+    public ResponseEntity<byte[]> exportDeck(@AuthenticationPrincipal UserPrincipal user, @PathVariable Long deckId,
+            @RequestParam(defaultValue = "pdf") String format) {
+        if (!"pdf".equalsIgnoreCase(format)) {
+            throw ContestRules.error(ResponseCode.BAD_REQUEST, "INVALID_FORMAT", "Invalid export format. Supported: pdf");
+        }
+        FlashcardPdfWriter.RenderedPdf pdf = decks.exportDeckPdf(user.getId(), deckId);
+        return ResponseEntity.ok().contentType(MediaType.APPLICATION_PDF)
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + pdf.fileName() + "\"")
+                .body(pdf.content());
     }
 }
