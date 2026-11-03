@@ -282,7 +282,6 @@ export const studentPracticeExamService = {
    */
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async checkAnswer(attemptId: number, question: AttemptQuestion, response: AnswerResponse | null): Promise<AnswerCheck> {
-    await new Promise(r => window.setTimeout(r, 250));
     if (!CHECKABLE_TYPES.has(question.questionType)) {
       return { supported: false, isCorrect: null, correctOptionIds: [], demo: true };
     }

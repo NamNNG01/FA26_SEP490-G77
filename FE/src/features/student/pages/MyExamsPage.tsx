@@ -54,6 +54,9 @@ const CODE_OPTION = { label: 'Coding exam', value: CODE_FILTER };
 
 const toKind = (mode: string | null | undefined): ExamKind => (mode && mode in KIND_LABEL ? (mode as ExamKind) : 'EXAM');
 
+/** Taken in practice mode (checked answer by answer): no time limit and no score. */
+const isPractice = (kind: ExamKind) => kind === 'PRACTICE' || kind === 'SMART_PRACTICE';
+
 /** One exam of the history, whatever produced it. */
 interface HistoryRow {
   examId: number;
@@ -86,8 +89,8 @@ const SORT_OPTIONS: { label: string; value: SortKey }[] = [
   { label: 'Most attempts', value: 'attempts' },
 ];
 
-/** Best score as a share of the max, so exams with different max scores compare fairly; untaken = -1. */
-const ratio = (e: HistoryRow) => (e.bestScore == null || !e.maxScore ? -1 : Number(e.bestScore) / Number(e.maxScore));
+/** Best score as a share of the max, so exams with different max scores compare fairly; untaken or practice = -1. */
+const ratio = (e: HistoryRow) => (isPractice(e.kind) || e.bestScore == null || !e.maxScore ? -1 : Number(e.bestScore) / Number(e.maxScore));
 
 function sortRows(list: HistoryRow[], sort: SortKey): HistoryRow[] {
   // mergeHistory already puts the most recent first.
@@ -240,7 +243,7 @@ export function MyExamsPage() {
 
   /** A material quiz gets a fresh attempt from MQ-05; the rest start with SA-01. */
   const retake = async (row: HistoryRow) => {
-    if (row.kind === 'PRACTICE' || row.kind === 'SMART_PRACTICE') {
+    if (isPractice(row.kind)) {
       navigate(studentTakePracticePath(row.examId));
       return;
     }
@@ -285,7 +288,7 @@ export function MyExamsPage() {
   const rowActions = (row: HistoryRow): DropdownItem[] => {
     const items: DropdownItem[] = [];
     if (canViewAttempts(row)) {
-      items.push({ label: 'View attempts', icon: <Icon.Eye />, onClick: () => navigate(studentExamAttemptsPath(row.examId)) });
+      items.push({ label: 'View attempts', icon: <Icon.Eye />, onClick: () => navigate(studentExamAttemptsPath(row.examId, isPractice(row.kind))) });
     }
     if (canRetake(row)) {
       const starting = row.jobId != null && startingJob === row.jobId;
@@ -325,7 +328,7 @@ export function MyExamsPage() {
               {canViewAttempts(row) ? (
                 <button
                   type="button"
-                  onClick={() => navigate(studentExamAttemptsPath(row.examId))}
+                  onClick={() => navigate(studentExamAttemptsPath(row.examId, isPractice(row.kind)))}
                   className="truncate text-sm font-semibold text-content text-left hover:text-primary hover:underline"
                   title={row.title}
                 >
@@ -401,6 +404,8 @@ export function MyExamsPage() {
       width: '120px',
       render: r => {
         const row = asRow(r);
+        // Practice has no score.
+        if (isPractice(row.kind)) return <span className="text-content-subtle">—</span>;
         return <span className="whitespace-nowrap font-medium text-content">{formatScore(row.bestScore, row.maxScore)}</span>;
       },
     },
