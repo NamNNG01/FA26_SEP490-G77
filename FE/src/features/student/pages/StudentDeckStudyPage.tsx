@@ -24,6 +24,13 @@ import { CardFace, ConfirmModal, DeckModeBadge, DeckStatusBadge, plural } from '
 import { DeckFormModal } from '../components/flashcards/DeckFormModal';
 import { CardFormModal } from '../components/flashcards/CardFormModal';
 import { ImportCardsModal } from '../components/flashcards/ImportCardsModal';
+import { downloadDecksXlsx, fileSlug } from '@/utils/flashcardXlsx';
+
+const MODE_LABEL: Record<StudentDeckView['mode'], string> = {
+  FLASHCARD: 'Flashcard',
+  CODE_SNIPPET: 'Code snippet',
+  CODE_OUTPUT: 'Code output',
+};
 import {
   StudyActions,
   StudySession,
@@ -71,6 +78,7 @@ export function StudentDeckStudyPage() {
   const [reload, setReload] = useState(0);
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const [busy, setBusy] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const study = useDeckStudy(deckId, setProgress);
 
   useEffect(() => {
@@ -159,6 +167,30 @@ export function StudentDeckStudyPage() {
       }
     } finally {
       setBusy(false);
+    }
+  };
+
+  const exportDeck = async () => {
+    if (!deck) return;
+    setExporting(true);
+    try {
+      await downloadDecksXlsx(
+        [
+          {
+            title: deck.title,
+            courseName: deck.courseTitle,
+            mode: MODE_LABEL[deck.mode],
+            visibility: deck.visibility === 'PUBLIC' ? 'Public' : 'Private',
+            description: deck.description,
+            cards,
+          },
+        ],
+        fileSlug(deck.title),
+      );
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Could not export the deck.'));
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -295,14 +327,32 @@ export function StudentDeckStudyPage() {
 
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-base font-semibold text-content">All cards ({cards.length})</h2>
-            {editable && (
+            {(editable || (isOwner && cards.length > 0)) && (
               <div className="flex flex-wrap gap-2">
-                <Button variant="outline" size="sm" icon={<Icon.Upload className="w-4 h-4" />} onClick={() => setDialog({ kind: 'import' })}>
-                  Import from file
-                </Button>
-                <Button size="sm" icon={<Icon.Plus className="w-4 h-4" />} onClick={() => setDialog({ kind: 'card' })}>
-                  Add card
-                </Button>
+                {/* Only the student's own decks: course decks are course content. */}
+                {isOwner && cards.length > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    icon={<Icon.Download className="w-4 h-4" />}
+                    onClick={exportDeck}
+                    loading={exporting}
+                    disabled={exporting}
+                    title="Download this deck with all its cards as an Excel file"
+                  >
+                    Export (.xlsx)
+                  </Button>
+                )}
+                {editable && (
+                  <>
+                    <Button variant="outline" size="sm" icon={<Icon.Upload className="w-4 h-4" />} onClick={() => setDialog({ kind: 'import' })}>
+                      Import from file
+                    </Button>
+                    <Button size="sm" icon={<Icon.Plus className="w-4 h-4" />} onClick={() => setDialog({ kind: 'card' })}>
+                      Add card
+                    </Button>
+                  </>
+                )}
               </div>
             )}
           </div>

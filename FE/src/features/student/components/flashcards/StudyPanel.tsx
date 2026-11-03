@@ -3,16 +3,18 @@ import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/ToastHost';
 import { Icon } from '@/assets/icons';
 import { getApiErrorMessage } from '@/utils/apiError';
-import { studentDeckService, type DeckMode, type StudyCard } from '@/services/studentDeck.service';
+import { isEndpointMissing, studentDeckService, type DeckMode, type StudyCard } from '@/services/studentDeck.service';
 import { CardFace, ConfirmModal, plural } from './flashcardUi';
 
-/** A study run: a server session (FP-01/02) or a review of missed cards (FP-03, no session). */
-type Run = { kind: 'session'; sessionId: string } | { kind: 'review' };
+/**
+ * A study run, always a server session (FP-01/02). "review" studies only the cards not learned
+ * yet (NEW / LEARNING) — the cards the student has not reached.
+ */
+type Run = { kind: 'session' | 'review'; sessionId: string };
 
 export interface StudySummary {
   total: number;
-  known: number;
-  wrong: number;
+  studied: number;
   review: boolean;
 }
 
@@ -27,10 +29,10 @@ const isTyping = (t: EventTarget | null) => {
 };
 
 /**
- * Study state of one deck: "Start studying" opens a study session in the BE's
- * order (FP-01), "Review missed cards" takes the LEARNING cards most-missed
- * first (FP-03). Each flipped card is marked Known (FC-08 KNOWN) or Not yet
- * (FC-08 WRONG); the end closes the session (FP-02) and leaves a summary.
+ * Study state of one deck, Quizlet style: moving forward from a card (Next or the → key, flipped
+ * or not) counts it as studied and saves it as KNOWN right away (FC-08), so the deck progress grows
+ * card by card. Going back does not count anything. "Start studying" takes every card in the BE's
+ * order; "Review missed cards" only the cards not learned yet. The end closes the session (FP-02).
  */
 export function useDeckStudy(deckId: number, onProgress: (p: DeckProgress) => void) {
   const toast = useToast();
@@ -38,40 +40,33 @@ export function useDeckStudy(deckId: number, onProgress: (p: DeckProgress) => vo
   const [cards, setCards] = useState<StudyCard[]>([]);
   const [index, setIndex] = useState(0);
   const [flipped, setFlipped] = useState(false);
-  const [marks, setMarks] = useState<Record<number, 'KNOWN' | 'WRONG'>>({});
+  /** Cards counted as studied in this run. */
+  const [studied, setStudied] = useState<Record<number, true>>({});
   const [summary, setSummary] = useState<StudySummary | null>(null);
   const [starting, setStarting] = useState<'session' | 'review' | null>(null);
   const [finishing, setFinishing] = useState(false);
-  const marksRef = useRef(marks);
-  marksRef.current = marks;
+  const studiedRef = useRef(studied);
+  studiedRef.current = studied;
   const onProgressRef = useRef(onProgress);
   onProgressRef.current = onProgress;
 
   const begin = async (kind: 'session' | 'review') => {
     setStarting(kind);
     try {
-      let list: StudyCard[];
-      if (kind === 'session') {
-        const s = await studentDeckService.startSession(deckId);
-        list = s.cards;
-        onProgressRef.current({ learned: list.filter(c => c.status === 'KNOWN').length, total: list.length });
-        if (list.length === 0) {
-          toast.info('This deck has no cards yet.');
-          return;
-        }
-        setRun({ kind: 'session', sessionId: s.sessionId });
-      } else {
-        list = await studentDeckService.getReviewCards(deckId, 50);
-        if (list.length === 0) {
-          toast.info('No missed cards to review. Nice work!');
-          return;
-        }
-        setRun({ kind: 'review' });
+      const s = await studentDeckService.startSession(deckId);
+      onProgressRef.current({ learned: s.cards.filter(c => c.status === 'KNOWN').length, total: s.cards.length });
+      const list = kind === 'review' ? s.cards.filter(c => c.status !== 'KNOWN') : s.cards;
+      if (list.length === 0) {
+        // Nothing to study: close the session that was just opened.
+        studentDeckService.finishSession(s.sessionId, [], []).catch(() => {});
+        toast.info(s.cards.length === 0 ? 'This deck has no cards yet.' : 'Every card is learned already. Nice work!');
+        return;
       }
+      setRun({ kind, sessionId: s.sessionId });
       setCards(list);
       setIndex(0);
       setFlipped(false);
-      setMarks({});
+      setStudied({});
       setSummary(null);
     } catch (err) {
       toast.error(getApiErrorMessage(err, 'Could not start studying.'));
@@ -82,60 +77,62 @@ export function useDeckStudy(deckId: number, onProgress: (p: DeckProgress) => vo
 
   const finish = useCallback(async () => {
     if (!run) return;
-    const m = marksRef.current;
-    const known = Object.keys(m).filter(id => m[Number(id)] === 'KNOWN').map(Number);
-    const wrong = Object.keys(m).filter(id => m[Number(id)] === 'WRONG').map(Number);
-    let result: StudySummary = { total: cards.length, known: known.length, wrong: wrong.length, review: run.kind === 'review' };
-    if (run.kind === 'session') {
-      setFinishing(true);
-      try {
-        const s = await studentDeckService.finishSession(run.sessionId, known, wrong);
-        result = { total: s.totalCards, known: s.knownCount, wrong: s.wrongCount, review: false };
-      } catch (err) {
-        // The progress is already saved card by card; only the session summary failed.
-        toast.error(getApiErrorMessage(err, 'Could not close the study session.'));
-      } finally {
-        setFinishing(false);
-      }
+    const ids = Object.keys(studiedRef.current).map(Number);
+    let result: StudySummary = { total: cards.length, studied: ids.length, review: run.kind === 'review' };
+    setFinishing(true);
+    try {
+      const s = await studentDeckService.finishSession(run.sessionId, ids, []);
+      result = { ...result, studied: s.knownCount };
+    } catch (err) {
+      // The progress is already saved card by card; only the session summary failed.
+      toast.error(getApiErrorMessage(err, 'Could not close the study session.'));
+    } finally {
+      setFinishing(false);
     }
     setRun(null);
     setSummary(result);
   }, [run, cards.length, toast]);
 
-  const mark = (status: 'KNOWN' | 'WRONG') => {
-    const card = cards[index];
-    if (!card || !flipped) return;
-    const cardId = card.cardId;
-    setMarks(m => ({ ...m, [cardId]: status }));
+  /** Counts a card as studied once per run and saves it as KNOWN. */
+  const countStudied = (card: StudyCard) => {
+    if (studiedRef.current[card.cardId]) return;
+    studiedRef.current = { ...studiedRef.current, [card.cardId]: true };
+    setStudied(studiedRef.current);
     studentDeckService
-      .writeProgress(cardId, { status })
+      .writeProgress(card.cardId, { status: 'KNOWN' })
       .then(p => onProgressRef.current({ learned: p.learnedCount, total: p.totalCards }))
       .catch(err => toast.error(getApiErrorMessage(err, 'Could not save your progress for this card.')));
+  };
+
+  /** Next card (or the end of the run on the last one); the card left behind counts as studied. */
+  const next = () => {
+    const card = cards[index];
+    if (!card || finishing) return;
+    countStudied(card);
     if (index < cards.length - 1) {
       setIndex(i => i + 1);
       setFlipped(false);
     } else {
-      // Last card: put the mark in marksRef now so finish() counts it.
-      marksRef.current = { ...marksRef.current, [cardId]: status };
       void finish();
     }
+  };
+
+  const prev = () => {
+    if (index === 0) return;
+    setIndex(i => i - 1);
+    setFlipped(false);
   };
 
   const toggleStar = () => {
     const card = cards[index];
     if (!card) return;
-    const next = !card.isStarred;
+    const nextStar = !card.isStarred;
     const cardId = card.cardId;
-    setCards(cs => cs.map(c => (c.cardId === cardId ? { ...c, isStarred: next } : c)));
-    studentDeckService.writeProgress(cardId, { isStarred: next }).catch(err => {
-      setCards(cs => cs.map(c => (c.cardId === cardId ? { ...c, isStarred: !next } : c)));
+    setCards(cs => cs.map(c => (c.cardId === cardId ? { ...c, isStarred: nextStar } : c)));
+    studentDeckService.writeProgress(cardId, { isStarred: nextStar }).catch(err => {
+      setCards(cs => cs.map(c => (c.cardId === cardId ? { ...c, isStarred: !nextStar } : c)));
       toast.error(getApiErrorMessage(err, 'Could not update the star.'));
     });
-  };
-
-  const go = (delta: number) => {
-    setIndex(i => Math.min(Math.max(i + delta, 0), cards.length - 1));
-    setFlipped(false);
   };
 
   return {
@@ -144,17 +141,16 @@ export function useDeckStudy(deckId: number, onProgress: (p: DeckProgress) => vo
     index,
     card: cards[index] as StudyCard | undefined,
     flipped,
-    marks,
+    studied,
     summary,
     starting,
     finishing,
     begin,
     finish,
-    mark,
+    next,
+    prev,
     toggleStar,
-    go,
     flip: () => setFlipped(f => !f),
-    showAnswer: () => setFlipped(true),
     dismissSummary: () => setSummary(null),
   };
 }
@@ -174,88 +170,106 @@ export function StudyActions({
   onProgress: (p: DeckProgress) => void;
 }) {
   const toast = useToast();
-  const [confirmLearnAll, setConfirmLearnAll] = useState(false);
-  const [learningAll, setLearningAll] = useState(false);
+  const [confirm, setConfirm] = useState<'learnAll' | 'reset' | null>(null);
+  const [working, setWorking] = useState(false);
   const busy = study.starting != null || study.run != null;
 
   const learnAll = async () => {
-    setLearningAll(true);
+    setWorking(true);
     try {
       const res = await studentDeckService.learnAll(deckId);
       onProgress({ learned: res.learnedCount, total: res.totalCards });
       toast.success('Every card is marked as learned.');
-      setConfirmLearnAll(false);
+      setConfirm(null);
     } catch (err) {
       toast.error(getApiErrorMessage(err, 'Could not mark the deck as learned.'));
     } finally {
-      setLearningAll(false);
+      setWorking(false);
+    }
+  };
+
+  const resetProgress = async () => {
+    setWorking(true);
+    try {
+      const res = await studentDeckService.resetProgress(deckId);
+      onProgress({ learned: res.learnedCount, total: res.totalCards });
+      study.dismissSummary();
+      toast.success('Your progress on this deck is back to 0.');
+      setConfirm(null);
+    } catch (err) {
+      toast.error(
+        isEndpointMissing(err) ? 'Resetting progress is not available on the server yet.' : getApiErrorMessage(err, 'Could not reset your progress.'),
+      );
+    } finally {
+      setWorking(false);
     }
   };
 
   if (cardCount === 0) return null;
   return (
     <div className="flex flex-col gap-2">
-        <Button
-          className="w-full"
-          icon={<Icon.Zap className="w-4 h-4" />}
-          onClick={() => study.begin('session')}
-          loading={study.starting === 'session'}
-          disabled={busy}
-        >
-          {study.summary ? 'Study again' : 'Start studying'}
+      <Button
+        className="w-full"
+        icon={<Icon.Zap className="w-4 h-4" />}
+        onClick={() => study.begin('session')}
+        loading={study.starting === 'session'}
+        disabled={busy}
+      >
+        {study.summary ? 'Study again' : 'Start studying'}
+      </Button>
+      <Button
+        className="w-full"
+        variant="outline"
+        icon={<Icon.RefreshCw className="w-4 h-4" />}
+        onClick={() => study.begin('review')}
+        loading={study.starting === 'review'}
+        disabled={busy}
+      >
+        Review missed cards
+      </Button>
+      <div className="grid grid-cols-2 gap-2">
+        <Button variant="ghost" size="sm" icon={<Icon.CheckCircle className="w-4 h-4" />} onClick={() => setConfirm('learnAll')} disabled={busy}>
+          Mark all learned
         </Button>
-        <Button
-          className="w-full"
-          variant="outline"
-          icon={<Icon.RefreshCw className="w-4 h-4" />}
-          onClick={() => study.begin('review')}
-          loading={study.starting === 'review'}
-          disabled={busy}
-        >
-          Review missed cards
+        <Button variant="ghost" size="sm" icon={<Icon.RotateCcw className="w-4 h-4" />} onClick={() => setConfirm('reset')} disabled={busy}>
+          Reset progress
         </Button>
-        <Button
-          className="w-full"
-          variant="ghost"
-          icon={<Icon.CheckCircle className="w-4 h-4" />}
-          onClick={() => setConfirmLearnAll(true)}
-          disabled={busy}
-        >
-          Mark all as learned
-        </Button>
-      {confirmLearnAll && (
+      </div>
+      {confirm === 'learnAll' && (
         <ConfirmModal
           title="Mark all as learned?"
           message="Every card you haven't studied yet will be marked as known. Cards you already studied keep their status."
           confirmLabel="Mark all"
-          busy={learningAll}
+          busy={working}
           onConfirm={learnAll}
-          onClose={() => setConfirmLearnAll(false)}
+          onClose={() => setConfirm(null)}
+        />
+      )}
+      {confirm === 'reset' && (
+        <ConfirmModal
+          title="Reset your progress?"
+          message="Every card of this deck goes back to not learned and the progress starts again from 0. Your starred cards stay starred."
+          confirmLabel="Reset progress"
+          danger
+          busy={working}
+          onConfirm={resetProgress}
+          onClose={() => setConfirm(null)}
         />
       )}
     </div>
   );
 }
 
-/** "Session finished — 8 known · 2 not yet" banner above the card list. */
+/** "Session finished — 8 of 10 cards studied" banner above the card list. */
 export function StudySummaryBanner({ summary, onClose }: { summary: StudySummary; onClose: () => void }) {
-  const skipped = Math.max(summary.total - summary.known - summary.wrong, 0);
   return (
     <div className="card px-5 py-3.5 flex flex-wrap items-center gap-x-6 gap-y-2">
       <span className="flex items-center gap-2 text-sm font-semibold text-content">
         <Icon.CheckCircle className="w-5 h-5 text-success" /> {summary.review ? 'Review finished' : 'Session finished'}
       </span>
       <span className="text-sm">
-        <strong className="text-success">{summary.known}</strong> <span className="text-content-soft">known</span>
+        <strong className="text-success">{summary.studied}</strong> <span className="text-content-soft">of {plural(summary.total, 'card')} studied</span>
       </span>
-      <span className="text-sm">
-        <strong className="text-warning">{summary.wrong}</strong> <span className="text-content-soft">not yet</span>
-      </span>
-      {skipped > 0 && (
-        <span className="text-sm">
-          <strong className="text-content">{skipped}</strong> <span className="text-content-soft">skipped</span>
-        </span>
-      )}
       <button type="button" onClick={onClose} aria-label="Dismiss" className="ml-auto text-content-subtle hover:text-content">
         <Icon.X className="w-4 h-4" />
       </button>
@@ -263,9 +277,13 @@ export function StudySummaryBanner({ summary, onClose }: { summary: StudySummary
   );
 }
 
-/** The card being studied: flip, Known / Not yet, star. Keys: Space flip · 1 Known · 2 Not yet · S star · ← → move. */
+/** Shared look of both card faces; the colors tell front from back. */
+const FACE_CLASS =
+  '[grid-area:1/1] min-h-72 rounded-[14px] border-2 shadow-sm p-[clamp(1.25rem,4vw,2.5rem)] flex flex-col items-center justify-center gap-4 [backface-visibility:hidden]';
+
+/** The card being studied: flip, star, move. Keys: Space flip · ← previous · → next · S star. */
 export function StudySession({ study, mode }: { study: DeckStudy; mode: DeckMode }) {
-  const { run, card, cards, index, flipped, marks } = study;
+  const { run, card, cards, index, flipped } = study;
 
   const keyRef = useRef<(e: KeyboardEvent) => void>(() => {});
   keyRef.current = (e: KeyboardEvent) => {
@@ -275,10 +293,8 @@ export function StudySession({ study, mode }: { study: DeckStudy; mode: DeckMode
       if ((e.target as HTMLElement | null)?.tagName === 'BUTTON' && e.key === 'Enter') return;
       e.preventDefault();
       study.flip();
-    } else if (e.key === 'ArrowLeft') study.go(-1);
-    else if (e.key === 'ArrowRight') study.go(1);
-    else if (e.key === '1') study.mark('KNOWN');
-    else if (e.key === '2') study.mark('WRONG');
+    } else if (e.key === 'ArrowLeft') study.prev();
+    else if (e.key === 'ArrowRight') study.next();
     else if (e.key.toLowerCase() === 's') study.toggleStar();
   };
   useEffect(() => {
@@ -315,7 +331,7 @@ export function StudySession({ study, mode }: { study: DeckStudy; mode: DeckMode
   }, [cardId, index]);
 
   if (!run || !card) return null;
-  const markOf = marks[card.cardId];
+  const isLast = index === cards.length - 1;
 
   return (
     // overflow-x-clip: the sliding card must not widen the page on a phone.
@@ -341,19 +357,15 @@ export function StudySession({ study, mode }: { study: DeckStudy; mode: DeckMode
           style={{ transform: flipped ? 'rotateY(180deg)' : 'rotateY(0deg)' }}
         >
           {/* Both faces share one grid cell, so the card is as tall as the taller face. */}
-          <div
-            aria-hidden={flipped}
-            className="card [grid-area:1/1] min-h-72 p-[clamp(1.25rem,4vw,2.5rem)] flex flex-col items-center justify-center gap-4 [backface-visibility:hidden]"
-          >
-            <span className="text-2xs font-semibold uppercase tracking-wide text-content-subtle">Front</span>
+          <div aria-hidden={flipped} className={`${FACE_CLASS} border-line-strong bg-surface`}>
+            <span className="rounded-full border border-line-strong px-2.5 py-0.5 text-2xs font-semibold uppercase tracking-wide text-content-soft">
+              Front
+            </span>
             <CardFace card={card} mode={mode} side="front" />
             <span className="text-xs text-content-subtle">Click or press Space to flip</span>
           </div>
-          <div
-            aria-hidden={!flipped}
-            className="card bg-primary-light [grid-area:1/1] min-h-72 p-[clamp(1.25rem,4vw,2.5rem)] flex flex-col items-center justify-center gap-4 [backface-visibility:hidden] [transform:rotateY(180deg)]"
-          >
-            <span className="text-2xs font-semibold uppercase tracking-wide text-content-subtle">Back</span>
+          <div aria-hidden={!flipped} className={`${FACE_CLASS} border-primary bg-primary-light [transform:rotateY(180deg)]`}>
+            <span className="rounded-full bg-primary px-2.5 py-0.5 text-2xs font-semibold uppercase tracking-wide text-white">Back</span>
             <CardFace card={card} mode={mode} side="back" />
           </div>
         </button>
@@ -369,44 +381,22 @@ export function StudySession({ study, mode }: { study: DeckStudy; mode: DeckMode
         >
           <Icon.Star className={`w-5 h-5 ${card.isStarred ? 'fill-current' : ''}`} />
         </button>
-        {markOf && (
-          <span className={`absolute z-10 top-4 left-4 text-xs font-semibold ${markOf === 'KNOWN' ? 'text-success' : 'text-warning'}`}>
-            {markOf === 'KNOWN' ? 'Known' : 'Not yet'}
-          </span>
-        )}
       </div>
 
-      {flipped ? (
-        <div className="grid grid-cols-2 gap-3">
-          <Button variant="outline" size="lg" icon={<Icon.X className="w-4 h-4" />} onClick={() => study.mark('WRONG')}>
-            Not yet
-          </Button>
-          <Button size="lg" icon={<Icon.Check className="w-4 h-4" />} onClick={() => study.mark('KNOWN')}>
-            Known
-          </Button>
-        </div>
-      ) : (
-        <Button variant="secondary" size="lg" className="w-full" onClick={study.showAnswer}>
-          Show answer
-        </Button>
-      )}
-
-      <div className="flex items-center justify-between gap-3">
-        <Button variant="ghost" size="sm" icon={<Icon.ChevronLeft className="w-4 h-4" />} onClick={() => study.go(-1)} disabled={index === 0}>
+      <div className="grid grid-cols-2 gap-3">
+        <Button variant="outline" size="lg" icon={<Icon.ChevronLeft className="w-4 h-4" />} onClick={study.prev} disabled={index === 0}>
           Previous
         </Button>
-        <span className="text-xs text-content-subtle">{plural(Object.keys(marks).length, 'card')} marked</span>
         <Button
-          variant="ghost"
-          size="sm"
-          iconRight={<Icon.ChevronRight className="w-4 h-4" />}
-          onClick={() => study.go(1)}
-          disabled={index === cards.length - 1}
+          size="lg"
+          iconRight={isLast ? <Icon.Check className="w-4 h-4" /> : <Icon.ChevronRight className="w-4 h-4" />}
+          onClick={study.next}
+          disabled={study.finishing}
         >
-          Skip
+          {isLast ? 'Finish' : 'Next'}
         </Button>
       </div>
-      <p className="text-center text-xs text-content-subtle">Keys: Space flip · 1 Known · 2 Not yet · S star · ← → move</p>
+      <p className="text-center text-xs text-content-subtle">Keys: Space flip · ← previous · → next · S star</p>
     </div>
   );
 }

@@ -17,29 +17,34 @@ import type { PageResponse } from '@/services/course.service';
 import { deckService, type Deck, type DeckListParams } from '@/services/deck.service';
 import { VisibilityBadge, errorMessage, useManagedCourses } from '../components/DeckEditor';
 import { CreateDeckModal } from '../components/CreateDeckModal';
+import { downloadDecksXlsx, fileSlug, type XlsxDeck } from '@/utils/flashcardXlsx';
 
 const ALL = 'all';
 
 const asDeck = (r: Record<string, unknown>) => r as unknown as Deck;
 
-/** Quotes a CSV cell when it contains a delimiter, quote or newline. */
-const csvCell = (v: string | number) => {
-  const s = String(v);
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-};
-
-function downloadCsv(decks: Deck[]) {
-  const header = ['Deck ID', 'Deck Name', 'Course', 'Cards', 'Owner', 'Visibility'];
-  const rows = decks.map(d => [d.deckId, d.title, d.courseName ?? 'Personal', d.cardCount, d.ownerName, d.isPublic ? 'Public' : 'Private']);
-  const csv = [header, ...rows].map(r => r.map(csvCell).join(',')).join('\n');
-  // BOM so Excel opens UTF-8 names correctly.
-  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `flashcard-decks-${new Date().toISOString().slice(0, 10)}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+/** Reads every deck with its cards (F-03), a few at a time. */
+async function loadDecksWithCards(decks: Deck[], onProgress: (done: number) => void): Promise<XlsxDeck[]> {
+  const out: XlsxDeck[] = new Array(decks.length);
+  let next = 0;
+  let done = 0;
+  const worker = async () => {
+    while (next < decks.length) {
+      const i = next++;
+      const d = await deckService.getDeck(decks[i].deckId);
+      out[i] = {
+        title: d.title,
+        courseName: d.courseName,
+        ownerName: d.ownerName,
+        visibility: d.isPublic ? 'Public' : 'Private',
+        description: d.description,
+        cards: d.cards ?? [],
+      };
+      onProgress(++done);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(4, decks.length) }, worker));
+  return out;
 }
 
 /**
@@ -66,7 +71,8 @@ export function FlashcardManagementPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [toDelete, setToDelete] = useState<Deck | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [exporting, setExporting] = useState(false);
+  /** Export in progress: decks read so far / to read. */
+  const [exporting, setExporting] = useState<{ done: number; total: number } | null>(null);
 
   const filters: Omit<DeckListParams, 'page' | 'size'> = {
     search: debouncedQuery || undefined,
@@ -124,20 +130,25 @@ export function FlashcardManagementPage() {
     }
   };
 
-  const handleExport = async () => {
-    setExporting(true);
+  /** Exports one deck, or every deck matching the filters, with all their cards as XLSX. */
+  const handleExport = async (only?: Deck) => {
+    if (exporting) return;
+    setExporting({ done: 0, total: 0 });
     try {
-      const rows = await deckService.getAllDecks(filters);
-      if (rows.length === 0) {
+      const list = only ? [only] : await deckService.getAllDecks(filters);
+      if (list.length === 0) {
         toast.warning('There are no decks to export.');
         return;
       }
-      downloadCsv(rows);
-      toast.success(`Exported ${rows.length} flashcard deck${rows.length > 1 ? 's' : ''}.`);
+      setExporting({ done: 0, total: list.length });
+      const decksWithCards = await loadDecksWithCards(list, done => setExporting({ done, total: list.length }));
+      const date = new Date().toISOString().slice(0, 10);
+      await downloadDecksXlsx(decksWithCards, only ? `${fileSlug(only.title)}-${date}` : `flashcard-decks-${date}`);
+      toast.success(`Exported ${list.length} flashcard deck${list.length > 1 ? 's' : ''}.`);
     } catch (err) {
       toast.error(errorMessage(err, 'Could not export flashcard decks.'));
     } finally {
-      setExporting(false);
+      setExporting(null);
     }
   };
 
@@ -193,6 +204,7 @@ export function FlashcardManagementPage() {
               }
               items={[
                 { label: 'Detail', icon: <Icon.Eye />, onClick: () => navigate(flashcardDeckPath(String(d.deckId))) },
+                { label: 'Export (.xlsx)', icon: <Icon.Download />, onClick: () => handleExport(d) },
                 d.isPublic
                   ? { label: 'Make private', icon: <Icon.Lock />, onClick: () => setPublic(d, false) }
                   : { label: 'Make public', icon: <Icon.Users />, onClick: () => setPublic(d, true) },
@@ -222,8 +234,14 @@ export function FlashcardManagementPage() {
           <p className="text-sm text-content-soft mt-0.5">Manage flashcard decks across your courses.</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" icon={<Icon.Download className="w-4 h-4" />} onClick={handleExport} disabled={exporting}>
-            {exporting ? 'Exporting…' : 'Export'}
+          <Button
+            variant="outline"
+            icon={<Icon.Download className="w-4 h-4" />}
+            onClick={() => handleExport()}
+            disabled={exporting != null}
+            title="Download the decks matching the filters, with all their cards, as an Excel file"
+          >
+            {exporting ? (exporting.total > 1 ? `Exporting ${exporting.done}/${exporting.total}…` : 'Exporting…') : 'Export (.xlsx)'}
           </Button>
           <Button icon={<Icon.Plus className="w-4 h-4" />} onClick={() => setCreateOpen(true)}>New deck</Button>
         </div>
