@@ -18,6 +18,8 @@ public interface DocumentRepository extends JpaRepository<Document, Long> {
 
     Optional<Document> findByUserUserIdAndSha256(Long userId, String sha256);
 
+    long countByUserUserId(Long userId);
+
     @Query("select d from Document d where d.docId = :id and d.user.userId = :userId")
     Optional<Document> findOwned(@Param("id") Long id, @Param("userId") Long userId);
 }

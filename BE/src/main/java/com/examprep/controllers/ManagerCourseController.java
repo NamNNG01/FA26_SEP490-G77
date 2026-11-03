@@ -3,6 +3,7 @@ package com.examprep.controllers;
 import com.examprep.dto.*;
 import com.examprep.security.UserPrincipal;
 import com.examprep.services.CourseService;
+import com.examprep.services.MaterialStorage;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -12,6 +13,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 import java.util.List;
 
 @RestController
@@ -20,6 +22,7 @@ import java.util.List;
 @Tag(name = "Manager Courses", description = "Scoped course and module administration (C-04–C-14)")
 public class ManagerCourseController {
     private final CourseService service;
+    private final MaterialStorage storage;
 
     @GetMapping("/courses")
     @Operation(summary = "C-04: List managed courses, including drafts")
@@ -50,6 +53,16 @@ public class ManagerCourseController {
     public ResponseEntity<ApiResponse<CourseResponse>> update(@AuthenticationPrincipal UserPrincipal user, @PathVariable Long id,
             @Valid @RequestBody CourseRequests.Update request) {
         return ResponseEntity.ok(ApiResponse.success(service.update(user, id, request)));
+    }
+
+    @PostMapping(value = "/courses/{id}/thumbnail", consumes = "multipart/form-data")
+    @Operation(summary = "C-15: Upload course thumbnail (JPG/PNG/WEBP/GIF, max 5MB) to Cloudinary")
+    public ResponseEntity<ApiResponse<CourseResponse>> uploadThumbnail(@AuthenticationPrincipal UserPrincipal user, @PathVariable Long id,
+            @RequestParam MultipartFile file) {
+        service.checkWritable(user, id);
+        // Upload runs outside the transaction; the fixed publicId means a new thumbnail replaces the old one.
+        MaterialStorage.StoredImage image = storage.storeImage("courses/course" + id + "/thumbnail", UserController.bytes(file), true);
+        return ResponseEntity.ok(ApiResponse.success(service.setThumbnail(user, id, image.url()), "Thumbnail updated successfully."));
     }
 
     @PatchMapping("/courses/{id}/publish")

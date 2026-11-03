@@ -77,6 +77,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class StudentMaterialServiceImpl implements StudentMaterialService {
     private static final int MAX_BYTES = 20 * 1024 * 1024;
+    /** Materials one student may keep; deleting one frees a slot. */
+    public static final int MAX_MATERIALS = 50;
     private static final int MAX_PAGE_SIZE = 100;
     private static final int OUTPUT_BUDGET = 500;
     private static final String STATUS_IN_PROGRESS = "IN_PROGRESS";
@@ -124,6 +126,12 @@ public class StudentMaterialServiceImpl implements StudentMaterialService {
         Uploaded existing = attachExisting(userId, sha256, courseId);
         if (existing != null) {
             return existing;
+        }
+        // ponytail: two parallel uploads at 49 can both pass; lock the user row if an exact cap matters.
+        if (documents.countByUserUserId(userId) >= MAX_MATERIALS) {
+            throw new BaseException(ResponseCode.MATERIAL_LIMIT_REACHED,
+                    "You can keep at most " + MAX_MATERIALS + " materials. Delete one to upload another.",
+                    Map.of("code", "MATERIAL_LIMIT_REACHED", "limit", MAX_MATERIALS));
         }
 
         String text = reader.read(fileName, bytes);

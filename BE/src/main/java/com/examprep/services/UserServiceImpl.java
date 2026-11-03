@@ -28,6 +28,15 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional
+    public UserResponse setAvatar(Long userId, String avatarUrl) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found."));
+        user.setAvatarUrl(avatarUrl);
+        return UserResponse.from(user);
+    }
+
+    @Override
+    @Transactional
     public UserResponse updateProfile(Long userId, UpdateProfileRequest request) {
         boolean hasFullName = request.getFullName() != null;
         boolean hasAvatarUrl = request.getAvatarUrl() != null;

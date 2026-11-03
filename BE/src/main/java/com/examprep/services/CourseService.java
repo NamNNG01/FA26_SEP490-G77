@@ -9,6 +9,11 @@ public interface CourseService {
     CourseResponse detail(UserPrincipal user, Long id);
     CourseResponse create(CourseRequests.Create request);
     CourseResponse update(UserPrincipal user, Long id, CourseRequests.Update request);
+
+    /** Throws 404/403 unless the user may edit the course (checked before an upload reaches storage). */
+    void checkWritable(UserPrincipal user, Long id);
+
+    CourseResponse setThumbnail(UserPrincipal user, Long id, String thumbnailUrl);
     CourseResponse publish(Long id, CourseRequests.Publish request);
     void deleteCourse(Long id);
     List<ModuleResponse> modules(UserPrincipal user, Long courseId);
