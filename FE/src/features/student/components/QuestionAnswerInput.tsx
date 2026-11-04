@@ -64,6 +64,11 @@ interface InputProps {
   onEnter?: () => void;
   /** Practice: an ordering is confirmed with the check button, so no "Keep this order" link. */
   practice?: boolean;
+  /**
+   * Module practice: the verdict of the whole answer, without its key. A choice question colours
+   * the picked options green / red; any other type gets a green / red frame around the answer.
+   */
+  verdict?: boolean | null;
 }
 
 export interface AnswerReveal {
@@ -72,12 +77,27 @@ export interface AnswerReveal {
 }
 
 /** The answer control for one question, by type. Emits the SA-03 `response` payload. */
-export function QuestionAnswerInput({ question, value, onChange, roomy, reveal, onEnter, practice }: InputProps) {
+export function QuestionAnswerInput(props: InputProps) {
+  const { question, verdict } = props;
+  if (verdict == null || CHOICE_TYPES.has(question.questionType)) return <AnswerControl {...props} />;
+  return (
+    <div className={`rounded-[12px] border-2 p-3 ${partTone(verdict)}`}>
+      <p className={`flex items-center gap-1.5 text-xs font-semibold mb-2 ${verdict ? 'text-success-strong' : 'text-danger-strong'}`}>
+        <PartMark ok={verdict} /> {verdict ? 'Correct' : 'Wrong'}
+      </p>
+      <AnswerControl {...props} />
+    </div>
+  );
+}
+
+const CHOICE_TYPES: ReadonlySet<string> = new Set(['SINGLE_CHOICE', 'TRUE_FALSE', 'MULTIPLE_CHOICE']);
+
+function AnswerControl({ question, value, onChange, roomy, reveal, onEnter, practice, verdict }: InputProps) {
   switch (question.questionType) {
     case 'SINGLE_CHOICE':
     case 'TRUE_FALSE':
     case 'MULTIPLE_CHOICE':
-      return <ChoiceInput question={question} value={value} onChange={onChange} reveal={reveal} />;
+      return <ChoiceInput question={question} value={value} onChange={onChange} reveal={reveal} verdict={verdict} />;
     case 'FILL_BLANK':
       return <FillBlankInput question={question} value={value} onChange={onChange} reveal={reveal} onEnter={onEnter} />;
     case 'MATCHING':
@@ -94,7 +114,7 @@ export function QuestionAnswerInput({ question, value, onChange, roomy, reveal, 
   }
 }
 
-function ChoiceInput({ question, value, onChange, reveal }: InputProps) {
+function ChoiceInput({ question, value, onChange, reveal, verdict }: InputProps) {
   const multi = question.questionType === 'MULTIPLE_CHOICE';
   const selected = new Set(value?.selectedOptionIds ?? []);
   const correct = reveal ? new Set(reveal.correctOptionIds) : null;
@@ -113,7 +133,15 @@ function ChoiceInput({ question, value, onChange, reveal }: InputProps) {
         const isOn = selected.has(opt.optionId);
         // Multiple choice: a correct option the student left out is "missed" (dashed).
         const missed = Boolean(correct && multi && correct.has(opt.optionId) && !isOn);
-        const tone = !correct
+        // Module practice: only the picks are judged, as one verdict; the key stays hidden.
+        const judged = !correct && verdict != null;
+        const tone = judged
+          ? isOn
+            ? verdict
+              ? 'border-success-solid bg-success-light'
+              : 'border-danger-solid bg-danger-light'
+            : 'border-line bg-surface opacity-70'
+          : !correct
           ? isOn
             ? 'border-brand-600 bg-primary-light'
             : 'border-line bg-surface hover:border-brand-600 hover:bg-surface-hover'
@@ -124,7 +152,13 @@ function ChoiceInput({ question, value, onChange, reveal }: InputProps) {
             : isOn
               ? 'border-danger-solid bg-danger-light'
               : 'border-line bg-surface opacity-70';
-        const badge = !correct
+        const badge = judged
+          ? isOn
+            ? verdict
+              ? 'bg-success-solid text-white'
+              : 'bg-danger-solid text-white'
+            : 'bg-surface-muted text-content-secondary'
+          : !correct
           ? isOn
             ? 'bg-brand-600 text-white'
             : 'bg-surface-muted text-content-secondary'
@@ -146,7 +180,9 @@ function ChoiceInput({ question, value, onChange, reveal }: InputProps) {
             <span
               className={`w-7 h-7 flex items-center justify-center text-sm font-bold flex-shrink-0 mt-0.5 ${multi ? 'rounded-[6px]' : 'rounded-full'} ${badge}`}
             >
-              {correct && correct.has(opt.optionId) ? (
+              {judged && isOn ? (
+                verdict ? <Icon.Check className="w-4 h-4" /> : <Icon.X className="w-4 h-4" />
+              ) : correct && correct.has(opt.optionId) ? (
                 <Icon.Check className="w-4 h-4" />
               ) : correct && isOn ? (
                 <Icon.X className="w-4 h-4" />
@@ -157,6 +193,11 @@ function ChoiceInput({ question, value, onChange, reveal }: InputProps) {
               )}
             </span>
             <span className="flex-1 text-base leading-relaxed text-content-secondary break-words">{opt.optionText}</span>
+            {judged && isOn && (
+              <span className={`flex-shrink-0 self-center text-xs font-semibold ${verdict ? 'text-success-strong' : 'text-danger-strong'}`}>
+                {verdict ? 'Correct' : 'Wrong'}
+              </span>
+            )}
             {correct?.has(opt.optionId) && (
               <span className="flex-shrink-0 self-center text-xs font-semibold text-success-strong">
                 {missed ? 'Missed' : 'Correct answer'}

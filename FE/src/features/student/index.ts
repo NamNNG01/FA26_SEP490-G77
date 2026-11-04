@@ -9,6 +9,7 @@ export { StudentDeckStudyPage } from './pages/StudentDeckStudyPage';
 export { StudentExamDetailPage } from './pages/StudentExamDetailPage';
 export { StudentTakeExamPage } from './pages/StudentTakeExamPage';
 export { StudentExamResultPage } from './pages/StudentExamResultPage';
+export { StudentPracticeResultPage } from './pages/StudentPracticeResultPage';
 export { StudentLearningActivityPage } from './pages/StudentLearningActivityPage';
 export { StudentQuestionNotebookPage } from './pages/StudentQuestionNotebookPage';
 export { StudentContestsPage } from './pages/StudentContestsPage';

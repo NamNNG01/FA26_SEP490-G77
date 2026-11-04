@@ -18,6 +18,7 @@ import { deckService, type Deck, type DeckListParams } from '@/services/deck.ser
 import { VisibilityBadge, errorMessage, useManagedCourses } from '../components/DeckEditor';
 import { CreateDeckModal } from '../components/CreateDeckModal';
 import { downloadDecksXlsx, fileSlug, type XlsxDeck } from '@/utils/flashcardXlsx';
+import { getApiErrorMessage } from '@/utils/apiError';
 
 const ALL = 'all';
 
@@ -152,6 +153,19 @@ export function FlashcardManagementPage() {
     }
   };
 
+  /** One deck as a PDF, rendered by the BE. */
+  const handleExportPdf = async (d: Deck) => {
+    if (exporting) return;
+    setExporting({ done: 0, total: 1 });
+    try {
+      await deckService.exportPdf(d.deckId, `${fileSlug(d.title)}.pdf`);
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Could not export the deck as PDF.'));
+    } finally {
+      setExporting(null);
+    }
+  };
+
   const columns: TableColumn[] = [
     {
       key: 'title',
@@ -205,6 +219,7 @@ export function FlashcardManagementPage() {
               items={[
                 { label: 'Detail', icon: <Icon.Eye />, onClick: () => navigate(flashcardDeckPath(String(d.deckId))) },
                 { label: 'Export (.xlsx)', icon: <Icon.Download />, onClick: () => handleExport(d) },
+                { label: 'Export (.pdf)', icon: <Icon.FileText />, onClick: () => handleExportPdf(d) },
                 d.isPublic
                   ? { label: 'Make private', icon: <Icon.Lock />, onClick: () => setPublic(d, false) }
                   : { label: 'Make public', icon: <Icon.Users />, onClick: () => setPublic(d, true) },

@@ -64,6 +64,8 @@ export const ROUTES = {
   studentPublicExamDetail: '/student/public-exam/:examId',
   studentExam: '/student/exam',
   studentExamResult: '/student/exam-result',
+  /** Route pattern — render with studentPracticeResultPath(sessionId). Module Practice result (MP-08). */
+  studentPracticeResult: '/student/practice/sessions/:sessionId/result',
   /** Old Practice Exams page — redirects to Exam History filtered to practice exams. */
   studentPracticeExams: '/student/practice-exams',
 
@@ -153,6 +155,21 @@ export function studentTakeExamPath(examId: number | string): string {
  */
 export function studentTakePracticePath(examId: number | string): string {
   return `${studentTakeExamPath(examId)}&practice=1`;
+}
+
+/**
+ * Take-exam screen running a Module Practice session (MP-03…MP-07) — e.g. '/student/exam?practiceSessionId=5'.
+ * `sessionQuestionId` opens that question first instead of the next unanswered one.
+ */
+export function studentModulePracticePath(sessionId: number | string, sessionQuestionId?: number | string): string {
+  const qs = new URLSearchParams({ practiceSessionId: String(sessionId) });
+  if (sessionQuestionId != null) qs.set('question', String(sessionQuestionId));
+  return `${ROUTES.studentExam}?${qs}`;
+}
+
+/** Result of one Module Practice session (MP-08) — e.g. '/student/practice/sessions/5/result'. */
+export function studentPracticeResultPath(sessionId: number | string): string {
+  return ROUTES.studentPracticeResult.replace(':sessionId', encodeURIComponent(String(sessionId)));
 }
 
 /** Take-exam screen for an attempt already started — e.g. '/student/exam?attemptId=7'. */

@@ -35,18 +35,22 @@ type ExamKind = 'EXAM' | 'PRACTICE' | 'SMART_PRACTICE' | 'MATERIAL_QUIZ' | 'CONT
 const KIND_LABEL: Record<ExamKind, string> = {
   EXAM: 'Course exam',
   PRACTICE: 'Practice exam',
-  SMART_PRACTICE: 'Personal quiz',
+  // AI-built practice exams are shown, and filtered, as practice exams.
+  SMART_PRACTICE: 'Practice exam',
   MATERIAL_QUIZ: 'Material quiz',
   CONTEST: 'Contest',
 };
 const KIND_BADGE: Record<ExamKind, BadgeVariant> = {
   EXAM: 'default',
   PRACTICE: 'info',
-  SMART_PRACTICE: 'purple',
+  SMART_PRACTICE: 'info',
   MATERIAL_QUIZ: 'success',
   CONTEST: 'warning',
 };
-const KIND_OPTIONS = [{ label: 'All types', value: ALL }, ...(Object.keys(KIND_LABEL) as ExamKind[]).map(k => ({ label: KIND_LABEL[k], value: k }))];
+const KIND_OPTIONS = [
+  { label: 'All types', value: ALL },
+  ...(Object.keys(KIND_LABEL) as ExamKind[]).filter(k => k !== 'SMART_PRACTICE').map(k => ({ label: KIND_LABEL[k], value: k })),
+];
 
 /** Type filter value for exams with a CODE question (ME-01 `hasCodeQuestions`) — across every kind. */
 const CODE_FILTER = 'CODE';
@@ -104,7 +108,7 @@ function sortRows(list: HistoryRow[], sort: SortKey): HistoryRow[] {
 }
 
 /**
- * ME-01 lists every exam with an attempt (course exams, practice, personal quizzes, material quizzes),
+ * ME-01 lists every exam with an attempt (course exams, practice exams — random or AI-built —, material quizzes),
  * newest attempt first. PQ-02 and MQ-06 add what only they know (practiceId / jobId).
  * Also returns the enrolled courses (MC-01, without CANCELLED) for the quiz builders.
  */
@@ -152,7 +156,7 @@ async function loadHistory(): Promise<{ rows: HistoryRow[]; courses: MyCourse[] 
 
 /**
  * Exam History — every exam the student has taken at least once: course exams (ME-01), practice
- * exams (PQ-02), personal quizzes (AI-01) and quizzes generated from a material (MQ-06), with a
+ * exams (PQ-02), AI-built practice exams (AI-01) and quizzes generated from a material (MQ-06), with a
  * type filter. Lists are loaded whole and searched, filtered and sorted here.
  * `?type=PRACTICE` (etc.) preselects the type filter.
  */
@@ -172,6 +176,7 @@ export function MyExamsPage() {
   const [course, setCourse] = useState(ALL);
   const [kind, setKind] = useState(() => {
     const type = searchParams.get('type') ?? '';
+    if (type === 'SMART_PRACTICE') return 'PRACTICE';
     return type in KIND_LABEL || type === CODE_FILTER ? type : ALL;
   });
   const [sort, setSort] = useState<SortKey>('recent');
@@ -217,7 +222,8 @@ export function MyExamsPage() {
         rows.filter(
           r =>
             (course === ALL || String(r.courseId) === course) &&
-            (kind === ALL || (kind === CODE_FILTER ? r.hasCode === true : r.kind === kind)) &&
+            (kind === ALL ||
+              (kind === CODE_FILTER ? r.hasCode === true : kind === 'PRACTICE' ? isPractice(r.kind) : r.kind === kind)) &&
             (!term || r.title.toLowerCase().includes(term) || (r.documentTitle ?? '').toLowerCase().includes(term)),
         ),
         sort,
@@ -438,7 +444,7 @@ export function MyExamsPage() {
         action={
           <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
             <Button variant="outline" icon={<AiSparkle />} onClick={() => setQuizModal('personal')}>
-              Create personal quiz
+              Create practice exam
             </Button>
             <Button variant="outline" icon={<Icon.Brain className="w-4 h-4" />} onClick={() => setQuizModal('material')}>
               Material to Quiz Creator
@@ -499,7 +505,7 @@ export function MyExamsPage() {
           <EmptyState
             icon={<Icon.ClipboardList className="w-7 h-7" />}
             title="No exams taken yet"
-            message="Open one of your courses to start an exam, or create a personal quiz above."
+            message="Open one of your courses to start an exam, or create a practice exam above."
             action={<Button onClick={() => navigate(ROUTES.studentCourses)}>Go to My Courses</Button>}
           />
         </div>

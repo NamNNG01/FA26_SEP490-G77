@@ -60,7 +60,7 @@ const limitsOf = (mode: SmartPracticeMode) =>
   mode === 'AI' ? { questions: SMART_QUESTIONS, minutes: SMART_MINUTES } : { questions: PRACTICE_QUESTIONS, minutes: PRACTICE_MINUTES };
 
 /**
- * Create Personal Quiz — a practice exam the student builds for one course. Two ways to pick the questions:
+ * Create Practice Exam — a practice exam the student builds for one course. Two ways to pick the questions:
  *
  *  - AI (AI-01 + AI-02): the AI picks questions from the student's weak modules. The modal shows the
  *    analysis from the 202 response, polls the job, and offers "Start practice" when the exam is ready.
@@ -88,7 +88,7 @@ export function SmartPracticeModal({
   const navigate = useNavigate();
   const [mode, setMode] = useState<SmartPracticeMode>(initialMode);
   const [courseId, setCourseId] = useState('');
-  const [questionCount, setQuestionCount] = useState(String(SMART_QUESTIONS.default));
+  const [questionCount, setQuestionCount] = useState('');
   const [touched, setTouched] = useState(false);
   // AI only
   const [aiContext, setAiContext] = useState('');
@@ -118,8 +118,8 @@ export function SmartPracticeModal({
   };
 
   const resetCounts = (m: SmartPracticeMode) => {
-    const limits = limitsOf(m);
-    setQuestionCount(String(limits.questions.default));
+    // Both tabs start empty: the student types the count, "Max …" is only the placeholder.
+    setQuestionCount('');
   };
 
   // Fresh form each time the modal opens; stop polling when it closes.
@@ -197,7 +197,7 @@ export function SmartPracticeModal({
       })
       .catch(err => {
         if (activeJob.current !== jobId) return;
-        setError(getAiError(err, 'Lost track of the personal quiz job.'));
+        setError(getAiError(err, 'Lost track of the practice exam job.'));
         setPhase('failed');
       });
   };
@@ -208,10 +208,13 @@ export function SmartPracticeModal({
   const minutesNum = limits.minutes.max;
   const errors = {
     course: courseId ? undefined : 'Select a course.',
-    count:
-      Number.isInteger(countNum) && countNum >= limits.questions.min && countNum <= limits.questions.max
+    count: !questionCount.trim()
+      ? 'Enter the number of questions.'
+      : Number.isInteger(countNum) && countNum >= limits.questions.min && countNum <= limits.questions.max
         ? undefined
-        : `Enter ${limits.questions.min} – ${limits.questions.max} questions.`,
+        : mode === 'RANDOM'
+          ? `Enter at most ${limits.questions.max} questions.`
+          : `Enter ${limits.questions.min} – ${limits.questions.max} questions.`,
   };
   const invalid = Boolean(errors.course || errors.count);
 
@@ -230,7 +233,7 @@ export function SmartPracticeModal({
       activeJob.current = job.jobId;
       poll(job.jobId);
     } catch (err) {
-      setError(getAiError(err, 'Failed to start the personal quiz.'));
+      setError(getAiError(err, 'Failed to start the practice exam.'));
     } finally {
       setBusy(false);
     }
@@ -298,7 +301,7 @@ export function SmartPracticeModal({
     ) : null;
 
   return (
-    <Modal open={open} onClose={() => !busy && onClose()} title="Create Personal Quiz" size="lg" footer={footer}>
+    <Modal open={open} onClose={() => !busy && onClose()} title="Create Practice Exam" size="lg" footer={footer}>
       <div className="space-y-5">
         {phase === 'form' && (
           <>
@@ -311,7 +314,7 @@ export function SmartPracticeModal({
                 : 'Random questions from the course question bank. Narrow them down by module and difficulty if you like. Practice exams do not count towards your course progress.'}
             </p>
             {courses.length === 0 ? (
-              <p className="text-sm text-content-soft">Enroll in a course first to create a personal quiz.</p>
+              <p className="text-sm text-content-soft">Enroll in a course first to create a practice exam.</p>
             ) : (
               <div className="grid gap-x-6 gap-y-5 sm:grid-cols-2">
                 {!lockCourse && (
@@ -334,7 +337,8 @@ export function SmartPracticeModal({
                     max={limits.questions.max}
                     value={questionCount}
                     onChange={e => setQuestionCount(e.target.value)}
-                    hint={`${limits.questions.min} – ${limits.questions.max}`}
+                    // The maximum is shown as the placeholder rather than a hint.
+                    placeholder={`Max ${limits.questions.max}`}
                     error={touched ? errors.count : undefined}
                   />
                 </div>

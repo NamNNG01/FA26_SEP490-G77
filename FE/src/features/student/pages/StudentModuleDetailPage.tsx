@@ -8,10 +8,16 @@ import { Progress } from '@/components/ui/Progress';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/Card';
 import { Icon } from '@/assets/icons';
-import { ROUTES, studentCoursePath } from '@/app/routes';
+import { ROUTES, studentCoursePath, studentModulePracticePath } from '@/app/routes';
 import { getApiErrorMessage } from '@/utils/apiError';
 import { studentCourseService, type StudentCourseDetail } from '@/services/studentCourse.service';
-import { modulePracticeService, practicePercent, type ModulePracticeOverview } from '@/services/modulePractice.service';
+import {
+  accuracyPercent,
+  modulePracticeService,
+  practicePercent,
+  type ModulePracticeOverview,
+} from '@/services/modulePractice.service';
+import { ResetPracticeButton } from '../components/ResetPracticeButton';
 import { CardGridSkeleton, LoadError, STUDENT_PAGE_CLASS } from '../components/studentUi';
 import {
   ContentItemCard,
@@ -151,6 +157,7 @@ function ModuleContent({
   title: string;
   description?: string | null;
 }) {
+  const navigate = useNavigate();
   const { byModule, general, loading, error, retry } = useCourseContent(course);
   const openItem = useOpenContent(course);
   const [search, setSearch] = useState('');
@@ -206,9 +213,9 @@ function ModuleContent({
               <>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   <Stat label="Practiced" value={`${practice.practicedQuestions}/${practice.totalQuestions}`} />
-                  <Stat label="Accuracy" value={practice.totalAttempts > 0 ? `${Math.round(practice.accuracyRate)}%` : '—'} />
-                  <Stat label="Ever correct" value={String(practice.questionsEverCorrect)} />
-                  <Stat label="Need review" value={String(practice.questionsNeedReview)} tone={practice.questionsNeedReview > 0 ? 'danger' : undefined} />
+                  <Stat label="Accuracy" value={practice.gradedAttempts > 0 ? `${accuracyPercent(practice.accuracyRate)}%` : '—'} />
+                  <Stat label="Ever correct" value={String(practice.everCorrectQuestions)} />
+                  <Stat label="Need review" value={String(practice.questionsNeedingReview)} tone={practice.questionsNeedingReview > 0 ? 'danger' : undefined} />
                 </div>
                 <Progress value={practicePercent(practice)} label="Practice progress" />
               </>
@@ -216,12 +223,20 @@ function ModuleContent({
               <p className="text-sm text-content-subtle">Practice progress could not be loaded.</p>
             )}
             <div className="flex flex-wrap items-center gap-3">
-              <Button icon={<Icon.Play className="w-4 h-4" />} onClick={() => setPracticing(true)}>
+              <Button
+                icon={<Icon.Play className="w-4 h-4" />}
+                onClick={() => (active ? navigate(studentModulePracticePath(active.sessionId)) : setPracticing(true))}
+              >
                 {active ? 'Continue practice' : 'Practice'}
               </Button>
               {active && (
                 <span className="text-sm text-content-soft">
                   Session in progress · {active.answeredCount}/{active.questionCount} answered
+                </span>
+              )}
+              {practice && practice.totalAttempts > 0 && (
+                <span className="ml-auto">
+                  <ResetPracticeButton moduleId={moduleId} moduleTitle={title} onReset={() => setRefresh(r => r + 1)} />
                 </span>
               )}
             </div>
@@ -285,10 +300,7 @@ function ModuleContent({
       {moduleId != null && (
         <ModulePracticeModal
           open={practicing}
-          onClose={() => {
-            setPracticing(false);
-            setRefresh(r => r + 1);
-          }}
+          onClose={() => setPracticing(false)}
           moduleId={moduleId}
           moduleTitle={title}
           overview={practice}
