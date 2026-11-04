@@ -30,6 +30,7 @@ import { QUESTION_TYPE_LABEL, QuestionAnswerInput, QuestionText, isAnswered } fr
 import { PracticeCheck, checkProgress } from '../components/PracticeCheck';
 import { studentCodeExamService, type CodeLanguageInfo, type CodeQuestion } from '@/services/studentCodeExam.service';
 import { CodeQuestionWorkspace, currentCodeAnswer } from '../components/code/CodeQuestionWorkspace';
+import { ModulePracticeRunner } from '../components/ModulePracticeRunner';
 
 /** Unsaved answers are pushed to SA-03 this often. */
 const AUTOSAVE_MS = 4000;
@@ -60,8 +61,16 @@ type SaveState = 'saved' | 'dirty' | 'saving' | 'error';
  *    The checks are kept per attempt in sessionStorage so a reload keeps them.
  *    Practice is untimed: no timer, no auto-submit, and the result shows no score.
  *    Its Submit is called Finish and needs no confirmation (it still closes the attempt with SA-04).
+ *  - `?practiceSessionId=` runs a Module Practice session instead (MP-03…MP-07) — same screen,
+ *    its own flow: see ModulePracticeRunner.
  */
 export function StudentTakeExamPage() {
+  const [searchParams] = useSearchParams();
+  const practiceSessionId = searchParams.get('practiceSessionId');
+  return practiceSessionId ? <ModulePracticeRunner sessionId={practiceSessionId} /> : <ExamAttemptScreen />;
+}
+
+function ExamAttemptScreen() {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();

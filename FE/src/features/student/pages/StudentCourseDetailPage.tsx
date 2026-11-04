@@ -15,7 +15,7 @@ import {
   type CourseModuleSummary,
   type StudentCourseDetail,
 } from '@/services/studentCourse.service';
-import { modulePracticeService, practicePercent, type ModulePracticeOverview } from '@/services/modulePractice.service';
+import { accuracyPercent, modulePracticeService, practicePercent, type ModulePracticeOverview } from '@/services/modulePractice.service';
 import { CardGridSkeleton, CourseThumb, LoadError, STUDENT_PAGE_CLASS } from '../components/studentUi';
 import { GENERAL_MODULE, countItems, sortedModules, useCourseContent } from '../components/courseContent';
 import { ModulePracticeModal } from '../components/ModulePracticeModal';
@@ -367,7 +367,7 @@ function PracticeProgress({ overview }: { overview: OverviewState }) {
       <Progress value={practicePercent(overview)} label="Practice progress" size="sm" />
       <p className="text-2xs text-content-subtle">
         {overview.practicedQuestions}/{overview.totalQuestions} questions practiced
-        {overview.totalAttempts > 0 && ` · ${Math.round(overview.accuracyRate)}% accuracy`}
+        {overview.gradedAttempts > 0 && ` · ${accuracyPercent(overview.accuracyRate)}% accuracy`}
       </p>
     </div>
   );

@@ -36,6 +36,7 @@ import {
   StudentExamDetailPage,
   StudentTakeExamPage,
   StudentExamResultPage,
+  StudentPracticeResultPage,
   StudentLearningActivityPage,
   StudentQuestionNotebookPage,
   StudentContestsPage,
@@ -277,6 +278,7 @@ function AppRoutes() {
           <Route path={ROUTES.studentPublicExamDetail} element={<PublicExamDetailPage />} />
           <Route path={ROUTES.studentExamDetail} element={<StudentExamDetailPage />} />
           <Route path={ROUTES.studentExamResult} element={<StudentExamResultPage />} />
+          <Route path={ROUTES.studentPracticeResult} element={<StudentPracticeResultPage />} />
         </Route>
       </Route>
 
