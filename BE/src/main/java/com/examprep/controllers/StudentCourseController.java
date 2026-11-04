@@ -1,6 +1,7 @@
 package com.examprep.controllers;
 
 import com.examprep.dto.ApiResponse;
+import com.examprep.dto.CategoryResponse;
 import com.examprep.dto.PageResponse;
 import com.examprep.dto.student.*;
 import com.examprep.security.UserPrincipal;
@@ -36,6 +37,12 @@ public class StudentCourseController {
         Long userId = currentUser != null ? currentUser.getId() : null;
         Page<CourseCardDto> p = studentCourseService.listCourses(categoryId, keyword, sort, page, size, userId);
         return ResponseEntity.ok(ApiResponse.success(PageResponse.of(p)));
+    }
+
+    @GetMapping("/categories")
+    @Operation(summary = "CL-01: Active categories for the course catalog filter")
+    public ResponseEntity<ApiResponse<List<CategoryResponse>>> listCategories() {
+        return ResponseEntity.ok(ApiResponse.success(studentCourseService.listCategories()));
     }
 
     @GetMapping("/courses/{courseId}")

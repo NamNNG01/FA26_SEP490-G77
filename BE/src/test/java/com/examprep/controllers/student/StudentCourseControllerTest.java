@@ -2,6 +2,7 @@ package com.examprep.controllers.student;
 
 import com.examprep.config.SecurityConfig;
 import com.examprep.controllers.StudentCourseController;
+import com.examprep.dto.CategoryResponse;
 import com.examprep.dto.student.*;
 import com.examprep.security.JwtTokenProvider;
 import com.examprep.security.RestAccessDeniedHandler;
@@ -92,5 +93,23 @@ class StudentCourseControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.content[0].progress").value(50));
+    }
+
+    @Test
+    void listCategories_ReturnsActiveOptions() throws Exception {
+        when(studentCourseService.listCategories()).thenReturn(List.of(
+                new CategoryResponse(1L, "Programming", "programming-1", "Intro to programming"),
+                new CategoryResponse(2L, "English", "english-2", null)
+        ));
+
+        mockMvc.perform(get("/api/v1/student/categories"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.length()").value(2))
+                .andExpect(jsonPath("$.data[0].categoryId").value(1))
+                .andExpect(jsonPath("$.data[0].name").value("Programming"))
+                .andExpect(jsonPath("$.data[0].slug").value("programming-1"))
+                .andExpect(jsonPath("$.data[1].categoryId").value(2))
+                .andExpect(jsonPath("$.data[1].name").value("English"));
     }
 }

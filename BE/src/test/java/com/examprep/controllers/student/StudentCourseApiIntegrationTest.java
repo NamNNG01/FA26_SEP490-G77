@@ -19,6 +19,8 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
+import static org.hamcrest.Matchers.hasItem;
+import static org.hamcrest.Matchers.not;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -174,5 +176,34 @@ class StudentCourseApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data[0].title").value("Java Flashcards"));
+    }
+
+    @Test
+    void listCategories_ReturnsOnlyActiveForStudents() throws Exception {
+        Category visible = Category.builder().name("Visible Filter").slug("visible-filter-" + UUID.randomUUID())
+                .code("VISIBLE-" + UUID.randomUUID()).build();
+        Category inactive = Category.builder().name("Inactive Filter").slug("inactive-filter-" + UUID.randomUUID())
+                .code("INACTIVE-" + UUID.randomUUID()).isActive(false).build();
+        Category deleted = Category.builder().name("Deleted Filter").slug("deleted-filter-" + UUID.randomUUID())
+                .code("DELETED-" + UUID.randomUUID()).isDeleted(true).build();
+        em.persist(visible);
+        em.persist(inactive);
+        em.persist(deleted);
+        em.flush();
+
+        mvc.perform(get("/api/v1/student/categories").with(user(UserPrincipal.create(student))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data[*].categoryId", hasItem(visible.getCategoryId().intValue())))
+                .andExpect(jsonPath("$.data[*].name", hasItem("Visible Filter")))
+                .andExpect(jsonPath("$.data[*].name", not(hasItem("Inactive Filter"))))
+                .andExpect(jsonPath("$.data[*].name", not(hasItem("Deleted Filter"))));
+    }
+
+    @Test
+    void listCategories_AnonymousCatalogAccess_ReturnsOk() throws Exception {
+        mvc.perform(get("/api/v1/student/categories"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
     }
 }

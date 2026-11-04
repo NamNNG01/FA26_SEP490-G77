@@ -1,5 +1,6 @@
 package com.examprep.services.student;
 
+import com.examprep.dto.CategoryResponse;
 import com.examprep.dto.student.*;
 import com.examprep.entities.*;
 import com.examprep.entities.Module;
@@ -7,6 +8,7 @@ import com.examprep.exceptions.BadRequestException;
 import com.examprep.exceptions.ForbiddenException;
 import com.examprep.exceptions.ResourceNotFoundException;
 import com.examprep.repositories.*;
+import com.examprep.services.CategoryService;
 import com.examprep.util.QuestionTypeUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -35,12 +37,18 @@ public class StudentCourseServiceImpl implements StudentCourseService {
     private final DeckRepository deckRepository;
     private final FlashcardRepository flashcardRepository;
     private final UserCardProgressRepository userCardProgressRepository;
+    private final CategoryService categoryService;
 
     @Override
     public Page<CourseCardDto> listCourses(Long categoryId, String keyword, String sort, int page, int size, Long userId) {
         Pageable pageable = createPageable(page, size, sort, "createdAt");
         String search = sanitizeSearch(keyword);
         return courseRepository.findPublishedCourses(categoryId, search, userId, pageable);
+    }
+
+    @Override
+    public List<CategoryResponse> listCategories() {
+        return categoryService.list();
     }
 
     @Override
