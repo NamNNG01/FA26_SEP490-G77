@@ -23,6 +23,10 @@ const SESSION_TYPES = [
   { label: 'Bookmarked questions', value: 'bookmarked' },
   { label: 'All saved questions', value: 'all' },
 ];
+const SESSION_EXAM_TYPES = [
+  { label: 'Quiz', value: 'QUIZ' },
+  { label: 'Essay', value: 'ESSAY' },
+];
 
 export function StudentQuestionNotebookPage() {
   const navigate = useNavigate();
@@ -33,7 +37,8 @@ export function StudentQuestionNotebookPage() {
   const [categoryId, setCategoryId] = useState('');
   const [page, setPage] = useState(0);
   const [sessionType, setSessionType] = useState<'wrong' | 'bookmarked' | 'all'>('wrong');
-  const [sessionSize, setSessionSize] = useState(10);
+  const [sessionExamType, setSessionExamType] = useState<'QUIZ' | 'ESSAY'>('QUIZ');
+  const [sessionSize, setSessionSize] = useState('10');
   const [reload, setReload] = useState(0);
   const [rows, setRows] = useState<SavedQuestion[]>([]);
   const [total, setTotal] = useState(0);
@@ -61,9 +66,14 @@ export function StudentQuestionNotebookPage() {
 
   const startSession = async () => {
     setActionError(null);
+    const size = Number(sessionSize);
+    if (!Number.isInteger(size) || size < 1 || size > 50) {
+      setActionError('Question count must be a whole number between 1 and 50.');
+      return;
+    }
     setStarting(true);
     try {
-      const session = await studentProgressService.startReviewSession({ type: sessionType, size: sessionSize });
+      const session = await studentProgressService.startReviewSession({ type: sessionType, examType: sessionExamType, size });
       navigate(`${ROUTES.studentExam}?attemptId=${encodeURIComponent(String(session.attemptId))}`);
     } catch (err) {
       setActionError(getApiErrorMessage(err, 'Could not start a review session.'));
@@ -104,9 +114,10 @@ export function StudentQuestionNotebookPage() {
     <section className="card p-4 space-y-3">
       <h2 className="font-semibold text-content">Start a review session</h2>
       <div className="flex flex-wrap items-end gap-3">
-        <Select aria-label="Questions to practice" className="w-full sm:w-56" value={sessionType} options={SESSION_TYPES} onChange={v => setSessionType(v as typeof sessionType)} />
+        <Select label="Questions to practice" className="w-full sm:w-56" value={sessionType} options={SESSION_TYPES} onChange={v => setSessionType(v as typeof sessionType)} />
+        <Select label="Exam type" className="w-full sm:w-44" value={sessionExamType} options={SESSION_EXAM_TYPES} onChange={v => setSessionExamType(v as typeof sessionExamType)} />
         <label className="flex flex-col gap-1.5 text-sm font-medium text-content-secondary">Question count
-          <input type="number" min={1} max={50} value={sessionSize} onChange={e => setSessionSize(Math.min(50, Math.max(1, Number(e.target.value) || 1)))} className="h-9 w-28 rounded-[10px] border border-line bg-surface px-3 text-content" />
+          <input type="number" min={1} max={50} step={1} value={sessionSize} onChange={e => setSessionSize(e.target.value)} aria-invalid={!Number.isInteger(Number(sessionSize)) || Number(sessionSize) < 1 || Number(sessionSize) > 50} className="h-9 w-28 rounded-[10px] border border-line bg-surface px-3 text-content" />
         </label>
         <Button onClick={startSession} disabled={starting}>{starting ? 'Starting…' : 'Practice now'}</Button>
       </div>
