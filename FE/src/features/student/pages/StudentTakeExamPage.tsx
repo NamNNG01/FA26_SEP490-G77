@@ -8,7 +8,6 @@ import { TimerDisplay } from '@/components/common/TimerDisplay';
 import { PALETTE_RESULT_TONE, QuestionPalette } from '@/components/common/QuestionPalette';
 import { Icon } from '@/assets/icons';
 import { ROUTES, studentExamPath, studentExamResultPath } from '@/app/routes';
-import { studentProgressService } from '@/services/studentProgress.service';
 import { getApiErrorMessage } from '@/utils/apiError';
 import { useToast } from '@/components/ui/ToastHost';
 import {
@@ -31,6 +30,7 @@ import { PracticeCheck, checkProgress } from '../components/PracticeCheck';
 import { studentCodeExamService, type CodeLanguageInfo, type CodeQuestion } from '@/services/studentCodeExam.service';
 import { CodeQuestionWorkspace, currentCodeAnswer } from '../components/code/CodeQuestionWorkspace';
 import { ModulePracticeRunner } from '../components/ModulePracticeRunner';
+import { ReportQuestionIssueButton } from '../components/ReportQuestionIssueDialog';
 
 /** Unsaved answers are pushed to SA-03 this often. */
 const AUTOSAVE_MS = 4000;
@@ -89,8 +89,6 @@ function ExamAttemptScreen() {
   const [answers, setAnswers] = useState<Record<number, AnswerResponse | null>>({});
   const [current, setCurrent] = useState(0);
   const [flagged, setFlagged] = useState<Set<number>>(() => new Set());
-  const [bookmarkedQuestions, setBookmarkedQuestions] = useState<Set<number>>(() => new Set());
-  const [bookmarkBusy, setBookmarkBusy] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>('saved');
   const [remaining, setRemaining] = useState<number | null>(null);
 
@@ -149,7 +147,6 @@ function ExamAttemptScreen() {
         seqRef.current = seqs;
         dirtyRef.current = new Set();
         setAnswers(initial);
-        setBookmarkedQuestions(new Set());
         setSession({ ...s, deadlineAt: contestEndsAt ?? s.deadlineAt, questions: [...s.questions].sort((a, b) => a.orderIndex - b.orderIndex) });
         setCurrent(0);
         setSaveState('saved');
@@ -409,23 +406,6 @@ function ExamAttemptScreen() {
       else next.add(current + 1);
       return next;
     });
-  const toggleQuestionBookmark = async () => {
-    if (!q || bookmarkBusy) return;
-    setBookmarkBusy(true);
-    setActionError(null);
-    try {
-      const result = await studentProgressService.toggleBookmark(q.questionId);
-      setBookmarkedQuestions(current => {
-        const next = new Set(current);
-        if (result.isBookmarked) next.add(q.questionId);
-        else next.delete(q.questionId);
-        return next;
-      });
-    } catch (err) {
-      setActionError(getApiErrorMessage(err, 'Could not update the bookmark.'));
-    } finally { setBookmarkBusy(false); }
-  };
-
   const check = checks[q.questionId];
   const checkable = practice && CHECKABLE_TYPES.has(q.questionType);
   const progress = checkProgress(q, answers[q.questionId]);
@@ -552,12 +532,10 @@ function ExamAttemptScreen() {
               <h2 className="text-sm font-semibold text-content uppercase tracking-wide">Question {current + 1}</h2>
               <Badge variant="info">{QUESTION_TYPE_LABEL[q.questionType] ?? q.questionType}</Badge>
               {q.maxPoints != null && <span className="text-xs text-content-subtle">{Number(q.maxPoints)} pts</span>}
-              <Button size="sm" variant="ghost" className="ml-auto" disabled={bookmarkBusy} aria-pressed={bookmarkedQuestions.has(q.questionId)} aria-label={bookmarkedQuestions.has(q.questionId) ? 'Remove bookmark' : 'Bookmark question'} title={bookmarkedQuestions.has(q.questionId) ? 'Remove bookmark' : 'Bookmark question'} onClick={toggleQuestionBookmark}>
-                <Icon.Star className={`w-4 h-4 ${bookmarkedQuestions.has(q.questionId) ? 'fill-current text-warning' : ''}`} />
-              </Button>
               <span className="text-xs text-content-subtle">
                 {current + 1} / {questions.length}
               </span>
+              <ReportQuestionIssueButton className="ml-auto" questionId={q.questionId} />
             </div>
 
             {isCode ? (

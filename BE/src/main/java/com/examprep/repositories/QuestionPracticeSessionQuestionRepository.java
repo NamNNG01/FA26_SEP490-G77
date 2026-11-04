@@ -50,6 +50,27 @@ public interface QuestionPracticeSessionQuestionRepository
             + "WHERE sq.session.sessionId = :sessionId AND sq.latestIsCorrect = TRUE")
     long countLatestCorrect(@Param("sessionId") Long sessionId);
 
+    /** Aggregate query returning [answeredCount, latestCorrectCount] in a single round-trip. */
+    @Query("SELECT "
+            + "COALESCE(SUM(CASE WHEN sq.attemptCount > 0 THEN 1 ELSE 0 END), 0), "
+            + "COALESCE(SUM(CASE WHEN sq.latestIsCorrect = TRUE THEN 1 ELSE 0 END), 0) "
+            + "FROM QuestionPracticeSessionQuestion sq "
+            + "WHERE sq.session.sessionId = :sessionId")
+    List<Object[]> countAnsweredAndCorrect(@Param("sessionId") Long sessionId);
+
+    public interface UnansweredSummary {
+        Long getSessionQuestionId();
+        Integer getOrderIndex();
+    }
+
+    /** Lightweight projection query for next unanswered question (avoids loading display/key jsonb). */
+    @Query("SELECT sq.sessionQuestionId as sessionQuestionId, sq.orderIndex as orderIndex "
+            + "FROM QuestionPracticeSessionQuestion sq "
+            + "WHERE sq.session.sessionId = :sessionId AND sq.attemptCount = 0 "
+            + "ORDER BY sq.orderIndex")
+    List<UnansweredSummary> findNextUnanswered(@Param("sessionId") Long sessionId,
+                                               org.springframework.data.domain.Pageable pageable);
+
     /** MP-03: the first unanswered question of the persisted order, if any is left. */
     @Query("SELECT sq FROM QuestionPracticeSessionQuestion sq "
             + "WHERE sq.session.sessionId = :sessionId AND sq.attemptCount = 0 "

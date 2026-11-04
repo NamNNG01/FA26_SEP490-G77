@@ -54,6 +54,8 @@ import { QuestionBankPage, QuestionDetailPage, QuestionFormPage } from '@/featur
 import { CourseListPage, CourseDetailPage, CourseFormPage } from '@/features/course';
 import { FlashcardManagementPage, FlashcardDeckDetailPage } from '@/features/flashcard';
 import { ManagerReviewPage } from '@/features/content-manager/pages/ManagerReviewPage';
+import { ManagerQuestionIssuesPage } from '@/features/content-manager/pages/ManagerQuestionIssuesPage';
+import { StudentQuestionIssuesPage } from '@/features/student/pages/StudentQuestionIssuesPage';
 import { PublicCoursesPage, PublicCourseDetailPage } from '@/features/catalog';
 import {
   AdminDashboard,
@@ -272,6 +274,7 @@ function AppRoutes() {
           <Route path={ROUTES.studentContributions} element={<StudentContributionsPage />} />
           <Route path={ROUTES.studentContributionDetail} element={<StudentContributionsPage />} />
           <Route path={ROUTES.studentNotifications} element={<StudentNotificationsPage />} />
+          <Route path={ROUTES.studentQuestionIssues} element={<StudentQuestionIssuesPage />} />
           <Route path={ROUTES.studentFlashcards} element={<StudentFlashcardsPage />} />
           <Route path={ROUTES.studentFlashcardDeck} element={<StudentDeckStudyPage />} />
           <Route path={ROUTES.studentPublicExam} element={<PublicExamsPage />} />
@@ -297,6 +300,7 @@ function AppRoutes() {
             administrators have full system access. */}
         <Route element={<RequireRole roles={ROLE_MANAGER} />}>
           <Route path={ROUTES.managerReviews} element={<ManagerReviewPage />} />
+          <Route path={ROUTES.managerQuestionIssues} element={<ManagerQuestionIssuesPage />} />
           <Route path={ROUTES.profile} element={<ProfilePage />} />
           <Route path={ROUTES.managerDashboard} element={<CMDashboard />} />
           <Route path={ROUTES.managerCourses} element={<CourseListPage />} />

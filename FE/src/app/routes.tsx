@@ -53,6 +53,7 @@ export const ROUTES = {
   studentContributionDetail: '/student/contributions/:contributionId',
   /** Inbox (NT-01..NT-03); the header bell opens the newest few. */
   studentNotifications: '/student/notifications',
+  studentQuestionIssues: '/student/question-issues',
   /** Route pattern — render with studentExamPath(id). */
   studentExamDetail: '/student/exams/:examId',
   studentFlashcards: '/student/flashcards',
@@ -75,6 +76,7 @@ export const ROUTES = {
   managerCourseDetail: '/manager/courses/:courseId',
   managerQuestions: '/manager/question-bank',
   managerReviews: '/manager/reviews',
+  managerQuestionIssues: '/manager/question-issues',
   managerQuestionCreate: '/manager/question-bank/new',
   /** Route pattern — render with managerQuestionEditPath(id). */
   managerQuestionEdit: '/manager/question-bank/:questionId',
@@ -288,6 +290,7 @@ export const menuByRole: Record<string, MenuItem[]> = {
     { id: 'manager-courses', title: 'Courses', icon: <Icon.Book className="w-4 h-4" />, path: ROUTES.managerCourses },
     { id: 'manager-questions', title: 'Question Bank', icon: <Icon.Database className="w-4 h-4" />, path: ROUTES.managerQuestions },
     { id: 'manager-reviews', title: 'Content review', icon: <Icon.CheckCircle className="w-4 h-4" />, path: ROUTES.managerReviews },
+    { id: 'manager-question-issues', title: 'Question issues', icon: <Icon.ClipboardList className="w-4 h-4" />, path: ROUTES.managerQuestionIssues },
     { id: 'manager-exams', title: 'Exams', icon: <Icon.ClipboardList className="w-4 h-4" />, path: ROUTES.managerExams },
     { id: 'manager-flashcards', title: 'Flashcards', icon: <Icon.Layers className="w-4 h-4" />, path: ROUTES.managerFlashcards },
     { id: 'manager-contests', title: 'Contests', icon: <Icon.Trophy className="w-4 h-4" />, path: ROUTES.managerContests },

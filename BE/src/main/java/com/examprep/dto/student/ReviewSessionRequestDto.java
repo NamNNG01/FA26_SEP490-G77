@@ -16,4 +16,5 @@ public class ReviewSessionRequestDto {
     @Min(1)
     @Max(50)
     private Integer size;
+    private String examType; // QUIZ or ESSAY
 }

@@ -104,6 +104,9 @@ public interface QuestionRepository extends JpaRepository<Question, Long>, JpaSp
             @Param("groupIds") Collection<Long> groupIds
     );
     List<Question> findAllByQuestionIdIn(Collection<Long> ids);
+
+    @Query("SELECT q FROM Question q LEFT JOIN FETCH q.group WHERE q.questionId IN :ids")
+    List<Question> findAllWithGroupByQuestionIdIn(@Param("ids") Collection<Long> ids);
     @Query("""
     SELECT DISTINCT q
     FROM Question q
@@ -257,6 +260,23 @@ public interface QuestionRepository extends JpaRepository<Question, Long>, JpaSp
     ORDER BY q.questionId
     """)
     List<Long> findPracticeDrawableIds(@Param("moduleId") Long moduleId);
+
+    @Query("""
+    SELECT q.questionId
+    FROM Question q
+    WHERE q.deletedAt IS NULL
+      AND q.status = 'ACTIVE'
+      AND q.approvalStatus = 'APPROVED'
+      AND q.sourceDocumentId IS NULL
+      AND q.module.moduleId = :moduleId
+      AND (:difficulty IS NULL OR q.difficulty = :difficulty)
+      AND (:hasTypes = false OR q.questionType IN :questionTypes)
+    ORDER BY q.questionId
+    """)
+    List<Long> findTargetDrawableIds(@Param("moduleId") Long moduleId,
+                                     @Param("difficulty") String difficulty,
+                                     @Param("hasTypes") boolean hasTypes,
+                                     @Param("questionTypes") Collection<String> questionTypes);
 
     /** MP-01: how many questions of one module the student may practise, without loading them. */
     @Query("""

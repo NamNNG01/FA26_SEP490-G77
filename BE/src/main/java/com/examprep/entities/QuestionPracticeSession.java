@@ -29,6 +29,10 @@ public class QuestionPracticeSession implements Serializable {
 
     public static final String MODE_ALL = "ALL";
     public static final String MODE_REVIEW = "REVIEW";
+    public static final String MODE_WRONG = "WRONG";
+    public static final String MODE_BOOKMARKED = "BOOKMARKED";
+    public static final String MODE_RANDOM = "RANDOM";
+    public static final String MODE_TARGET = "TARGET";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

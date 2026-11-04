@@ -92,4 +92,14 @@ public interface QuestionPracticeAnswerRepository extends JpaRepository<Question
                                                   @Param("moduleId") Long moduleId,
                                                   @Param("questionId") Long questionId,
                                                   Pageable pageable);
+
+    /** Loads attempts for progress computation in a single query (replaces summarizeProgress + findFinalizedResultsNewestFirst). */
+    @Query("SELECT a FROM QuestionPracticeAnswer a "
+            + "WHERE a.sessionQuestion.question.questionId = :questionId "
+            + "AND a.sessionQuestion.session.user.userId = :userId "
+            + "AND a.sessionQuestion.session.module.moduleId = :moduleId "
+            + "ORDER BY a.answeredAt DESC, a.practiceAnswerId DESC")
+    List<QuestionPracticeAnswer> findAttemptsForProgress(@Param("userId") Long userId,
+                                                         @Param("moduleId") Long moduleId,
+                                                         @Param("questionId") Long questionId);
 }

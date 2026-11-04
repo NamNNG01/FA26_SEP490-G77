@@ -123,4 +123,14 @@ public class StudentAttemptController {
         return ResponseEntity.ok(
                 ApiResponse.success(attempts.cancel(currentUser.getId(), attemptId), "Attempt cancelled"));
     }
+
+    @PostMapping("/attempts/{attemptId}/review-acknowledged")
+    @Operation(summary = "SA-08: Acknowledge review result and delete review attempt",
+            description = "Cleans up the review session attempt and its answers after the student views the result.")
+    public ResponseEntity<ApiResponse<Void>> acknowledgeReview(
+            @AuthenticationPrincipal UserPrincipal currentUser,
+            @PathVariable Long attemptId) {
+        attempts.acknowledgeReview(currentUser.getId(), attemptId);
+        return ResponseEntity.ok(ApiResponse.success(null, "Review session cleaned up"));
+    }
 }

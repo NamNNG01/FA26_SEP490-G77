@@ -10,14 +10,17 @@ import com.examprep.entities.Question;
 import com.examprep.entities.QuestionPracticeProgress;
 import com.examprep.entities.QuestionPracticeSession;
 import com.examprep.entities.QuestionPracticeSessionQuestion;
+import com.examprep.entities.QuestionMedia;
 import com.examprep.entities.User;
 import com.examprep.exceptions.BaseException;
 import com.examprep.exceptions.ResourceNotFoundException;
+import com.examprep.repositories.QuestionMediaRepository;
 import com.examprep.repositories.QuestionPracticeAnswerRepository;
 import com.examprep.repositories.QuestionPracticeProgressRepository;
 import com.examprep.repositories.QuestionPracticeSessionQuestionRepository;
 import com.examprep.repositories.QuestionPracticeSessionRepository;
 import com.examprep.repositories.QuestionRepository;
+import com.examprep.repositories.StudentQuestionReviewRepository;
 import com.examprep.repositories.UserRepository;
 import com.examprep.services.AttemptPaperFactory;
 import com.examprep.util.attempt.AttemptShuffler;
@@ -41,6 +44,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * MP-01 … MP-04, MP-07, MP-08, MP-11, MP-12.
@@ -71,6 +75,8 @@ public class ModulePracticeServiceImpl implements ModulePracticeService {
     private final QuestionPracticeAnswerRepository answers;
     private final QuestionPracticeProgressRepository progress;
     private final QuestionRepository questions;
+    private final QuestionMediaRepository media;
+    private final StudentQuestionReviewRepository reviewRepository;
     private final UserRepository users;
     private final AttemptPaperFactory paperFactory;
     private final PlatformTransactionManager transactionManager;
@@ -153,8 +159,10 @@ public class ModulePracticeServiceImpl implements ModulePracticeService {
         String mode = request != null && request.mode() != null
                 ? request.mode() : QuestionPracticeSession.MODE_ALL;
         Integer requested = request == null ? null : request.questionCount();
+        String difficulty = request == null ? null : request.difficulty();
+        List<String> questionTypes = request == null ? null : request.questionTypes();
         try {
-            return create(userId, moduleId, mode, requested);
+            return create(userId, moduleId, mode, difficulty, questionTypes, requested);
         } catch (DataIntegrityViolationException concurrentStart) {
             // Another request created the open session first (or a unique paper row raced): adopt it.
             ModulePracticeResponses.SessionDetail adopted = inReadTransaction(() -> {
@@ -175,7 +183,9 @@ public class ModulePracticeServiceImpl implements ModulePracticeService {
         return tx.execute(status -> work.get());
     }
 
-    private ModulePracticeResponses.SessionDetail create(Long userId, Long moduleId, String mode, Integer requested) {
+    private ModulePracticeResponses.SessionDetail create(Long userId, Long moduleId, String mode,
+                                                         String difficulty, List<String> questionTypes,
+                                                         Integer requested) {
         TransactionTemplate tx = new TransactionTemplate(transactionManager);
         ModulePracticeResponses.SessionDetail created = tx.execute(status -> {
             Module module = support.requireModule(userId, moduleId);
@@ -184,14 +194,31 @@ public class ModulePracticeServiceImpl implements ModulePracticeService {
                 return support.detailOf(openSession(userId, moduleId).orElseThrow(), true);
             }
 
-            List<Long> pool = QuestionPracticeSession.MODE_REVIEW.equals(mode)
-                    ? reviewPool(userId, moduleId)
-                    : questions.findPracticeDrawableIds(moduleId);
-            if (pool.isEmpty()) {
-                throw new BaseException(ResponseCode.PRACTICE_NO_QUESTIONS,
-                        QuestionPracticeSession.MODE_REVIEW.equals(mode)
-                                ? "No question of this module is waiting for review"
-                                : "This module has no question available for practice");
+            List<Long> pool;
+            if (QuestionPracticeSession.MODE_REVIEW.equals(mode) || QuestionPracticeSession.MODE_WRONG.equals(mode)) {
+                pool = reviewPool(userId, moduleId);
+                if (pool.isEmpty()) {
+                    throw new BaseException(ResponseCode.PRACTICE_NO_QUESTIONS,
+                            "No question of this module is waiting for review");
+                }
+            } else if (QuestionPracticeSession.MODE_BOOKMARKED.equals(mode)) {
+                pool = bookmarkedPool(userId, moduleId);
+                if (pool.isEmpty()) {
+                    throw new BaseException(ResponseCode.PRACTICE_NO_QUESTIONS,
+                            "No bookmarked question available for practice in this module");
+                }
+            } else if (QuestionPracticeSession.MODE_TARGET.equals(mode)) {
+                pool = targetPool(moduleId, difficulty, questionTypes);
+                if (pool.isEmpty()) {
+                    throw new BaseException(ResponseCode.PRACTICE_NO_QUESTIONS,
+                            "No question matches the specified criteria in this module");
+                }
+            } else {
+                pool = questions.findPracticeDrawableIds(moduleId);
+                if (pool.isEmpty()) {
+                    throw new BaseException(ResponseCode.PRACTICE_NO_QUESTIONS,
+                            "This module has no question available for practice");
+                }
             }
 
             AttemptShuffler shuffler = new AttemptShuffler(AttemptShuffler.newSeed());
@@ -220,10 +247,16 @@ public class ModulePracticeServiceImpl implements ModulePracticeService {
                     .build());
 
             Map<Long, Question> byId = new HashMap<>();
-            for (Question question : questions.findAllByQuestionIdIn(chosen)) {
+            // Eager fetch question group to eliminate lazy-loading N+1 queries
+            for (Question question : questions.findAllWithGroupByQuestionIdIn(chosen)) {
                 byId.put(question.getQuestionId(), question);
             }
             Map<Long, List<AnswerOption>> options = paperFactory.optionsOf(new ArrayList<>(byId.values()));
+
+            // Batch load all media in a single query
+            List<QuestionMedia> allMedia = media.findByQuestion_QuestionIdIn(chosen);
+            Map<Long, List<QuestionMedia>> mediaByQuestionId = allMedia.stream()
+                    .collect(Collectors.groupingBy(m -> m.getQuestion().getQuestionId()));
 
             List<QuestionPracticeSessionQuestion> paper = new ArrayList<>(count);
             // order_index counts the rows actually written, so it stays gap-free even when the bank
@@ -244,7 +277,8 @@ public class ModulePracticeServiceImpl implements ModulePracticeService {
                         .orderIndex(position++)
                         .questionLockVersion(question.getLockVersion() == null ? 0L : question.getLockVersion())
                         .scoringVersion(question.getScoringVersion() == null ? 1 : question.getScoringVersion())
-                        .displaySnapshot(support.freezeDisplay(question, display))
+                        .displaySnapshot(support.freezeDisplay(question, display,
+                                mediaByQuestionId.getOrDefault(question.getQuestionId(), List.of())))
                         .keySnapshot(paperFactory.write(key))
                         .attemptCount(0)
                         .gradingStatus(QuestionPracticeSessionQuestion.GRADING_UNANSWERED)
@@ -259,6 +293,16 @@ public class ModulePracticeServiceImpl implements ModulePracticeService {
             return support.detailOf(session, false);
         });
         return created;
+    }
+
+    private List<Long> bookmarkedPool(Long userId, Long moduleId) {
+        return reviewRepository.findBookmarkedQuestionIds(userId, moduleId);
+    }
+
+    private List<Long> targetPool(Long moduleId, String difficulty, List<String> questionTypes) {
+        String diff = (difficulty != null && !difficulty.isBlank()) ? difficulty.trim() : null;
+        boolean hasTypes = questionTypes != null && !questionTypes.isEmpty();
+        return questions.findTargetDrawableIds(moduleId, diff, hasTypes, hasTypes ? questionTypes : List.of(""));
     }
 
     /**
@@ -304,7 +348,9 @@ public class ModulePracticeServiceImpl implements ModulePracticeService {
                 .orElseThrow(() -> new ResourceNotFoundException("Question is not part of this practice session"));
         List<com.examprep.entities.QuestionPracticeAnswer> attempts =
                 answers.findBySessionQuestion_SessionQuestionIdOrderByAttemptNumberAsc(sessionQuestionId);
-        return support.questionViewOf(sessionQuestion, session.getQuestionCount(), session.getAnsweredCount(), attempts);
+        boolean isBookmarked = reviewRepository.existsByStudent_UserIdAndQuestion_QuestionIdAndBookmarkTrue(
+                userId, sessionQuestion.getQuestion().getQuestionId());
+        return support.questionViewOf(sessionQuestion, session.getQuestionCount(), session.getAnsweredCount(), attempts, isBookmarked);
     }
 
     // ------------------------------------------------------------------ MP-07

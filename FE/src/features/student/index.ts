@@ -17,3 +17,4 @@ export { StudentCommunityPage } from './pages/StudentCommunityPage';
 export { StudentContributionsPage } from './pages/StudentContributionsPage';
 export { StudentWeaknessReportPage } from './pages/StudentWeaknessReportPage';
 export { StudentNotificationsPage } from './pages/StudentNotificationsPage';
+export { StudentQuestionIssuesPage } from './pages/StudentQuestionIssuesPage';

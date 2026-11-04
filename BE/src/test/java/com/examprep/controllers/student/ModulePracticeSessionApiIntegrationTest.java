@@ -162,6 +162,45 @@ class ModulePracticeSessionApiIntegrationTest extends ModulePracticeTestBase {
                 .andExpect(status().isUnprocessableEntity());
     }
 
+    @Test
+    void bookmarkedModeUsesOnlyTheQuestionsTheStudentBookmarked() throws Exception {
+        JsonNode session = data(startSession(student, moduleA.getModuleId(), "{\"mode\":\"BOOKMARKED\"}")
+                .andExpect(status().isCreated()));
+        assertEquals("BOOKMARKED", session.path("mode").asText());
+        assertEquals(1, session.path("questionCount").asInt());
+        assertEquals(single.getQuestionId(), session.path("questions").get(0).path("questionId").asLong());
+
+        // Module B has no bookmarked questions
+        startSession(student, moduleB.getModuleId(), "{\"mode\":\"BOOKMARKED\"}")
+                .andExpect(status().isUnprocessableEntity());
+    }
+
+    @Test
+    void targetModeFiltersByDifficultyAndQuestionTypes() throws Exception {
+        JsonNode session = data(startSession(student, moduleA.getModuleId(),
+                "{\"mode\":\"TARGET\",\"questionTypes\":[\"ESSAY\"]}")
+                .andExpect(status().isCreated()));
+        assertEquals("TARGET", session.path("mode").asText());
+        assertEquals(1, session.path("questionCount").asInt());
+        assertEquals(essay.getQuestionId(), session.path("questions").get(0).path("questionId").asLong());
+    }
+
+    @Test
+    void wrongModeIsAcceptedAsReviewSynonym() throws Exception {
+        JsonNode session = sessionOf(student, moduleB.getModuleId());
+        long sessionId = session.path("sessionId").asLong();
+        long sessionQuestionId = sessionQuestionIdOf(session, moduleBQuestions.get(0).getQuestionId());
+
+        JsonNode view = data(questionView(student, sessionId, sessionQuestionId).andExpect(status().isOk()));
+        answer(student, sessionId, sessionQuestionId, wrongAnswer(view));
+        complete(student, sessionId).andExpect(status().isOk());
+
+        JsonNode wrongSession = data(startSession(student, moduleB.getModuleId(), "{\"mode\":\"WRONG\"}")
+                .andExpect(status().isCreated()));
+        assertEquals("WRONG", wrongSession.path("mode").asText());
+        assertEquals(1, wrongSession.path("questionCount").asInt());
+    }
+
     // ------------------------------------------------------------------ MP-03 / MP-04
 
     @Test
@@ -187,9 +226,11 @@ class ModulePracticeSessionApiIntegrationTest extends ModulePracticeTestBase {
         assertEquals(ELIGIBLE_IN_MODULE_A, singleView.path("questionsTotal").asInt());
         assertEquals(0, singleView.path("questionsAnswered").asInt());
         assertEquals("UNANSWERED", singleView.path("gradingStatus").asText());
+        assertTrue(singleView.path("isBookmarked").asBoolean(), "single question was bookmarked in notebook");
 
         JsonNode essayView = data(questionView(student, sessionId,
                 sessionQuestionIdOf(session, essay.getQuestionId())).andExpect(status().isOk()));
+        assertFalse(essayView.path("isBookmarked").asBoolean(), "essay question was not bookmarked");
         assertEquals("Read the passage about heap generations first.",
                 essayView.path("group").path("passageText").asText());
         assertEquals("Garbage collection", essayView.path("group").path("title").asText());

@@ -184,7 +184,7 @@ function DiscussionDetail({ discussionId }: { discussionId: string }) {
     try {
       const created = await studentCommunityService.addComment(discussionId, { content: comment.trim(), isAnonymous: anonymous });
       setItem(current => current ? { ...current, comments: [...(current.comments ?? []), created].slice(-20), commentCount: current.commentCount + 1, lastCommentAt: created.createdAt } : current);
-      setComment(''); setAnonymous(false);
+      setComment('');
     } catch (err) { setActionError(getApiErrorMessage(err, 'Could not post your comment.')); }
     finally { setBusy(false); }
   };
