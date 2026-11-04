@@ -1,0 +1,34 @@
+import { apiClient } from './axios';
+
+export const ISSUE_TYPES = ['WRONG_CONTENT', 'WRONG_ANSWER', 'WRONG_EXPLANATION', 'AI_EXPLANATION_ERROR', 'MISSING_MEDIA', 'OTHER'] as const;
+export const ISSUE_STATUSES = ['PENDING', 'IN_PROGRESS', 'RESOLVED', 'REJECTED', 'DUPLICATE'] as const;
+export type IssueType = typeof ISSUE_TYPES[number];
+export type IssueStatus = typeof ISSUE_STATUSES[number];
+
+function unwrap<T>(response: any): T {
+  const body = response?.data;
+  if (body?.success === false) throw new Error(body.message || 'Request failed.');
+  return body?.data ?? body;
+}
+
+export const questionIssueService = {
+  studentList: async (params: Record<string, string | number> = {}) => unwrap<any>((await apiClient.get('/student/question-issues', { params })).data),
+  studentDetail: async (id: string | number) => unwrap<any>((await apiClient.get(`/student/question-issues/${id}`)).data),
+  report: async (payload: { questionId: number; issueType: IssueType; description: string; attachmentUrl?: string }) =>
+    unwrap<any>((await apiClient.post('/student/question-issues', payload)).data),
+  managerList: async (params: Record<string, string | number> = {}) => unwrap<any>((await apiClient.get('/manager/question-issues', { params })).data),
+  managerDetail: async (id: string | number) => unwrap<any>((await apiClient.get(`/manager/question-issues/${id}`)).data),
+  assign: async (id: string | number, assignedTo: number | null) => unwrap<any>((await apiClient.patch(`/manager/question-issues/${id}/assign`, { assignedTo })).data),
+  status: async (id: string | number, status: IssueStatus, note = '') => unwrap<any>((await apiClient.patch(`/manager/question-issues/${id}/status`, { status, note })).data),
+  duplicate: async (id: string | number, duplicateOfIssueId: number, note: string) => unwrap<any>((await apiClient.post(`/manager/question-issues/${id}/duplicate`, { duplicateOfIssueId, note })).data),
+  resolve: async (id: string | number, payload: any) => unwrap<any>((await apiClient.post(`/manager/question-issues/${id}/resolve`, payload)).data),
+  history: async (id: string | number) => unwrap<any>((await apiClient.get(`/manager/question-issues/${id}/history`)).data),
+  jobs: async (id: string | number) => unwrap<any>((await apiClient.get(`/manager/question-issues/${id}/regrade-jobs`)).data),
+  confirmRegrade: async (id: string | number, jobId: number, confirmed: boolean, reason: string) =>
+    unwrap<any>((await apiClient.post(`/manager/question-issues/${id}/regrade/confirm`, { jobId, confirmed, reason })).data),
+  retryJob: async (jobId: number) => unwrap<any>((await apiClient.post(`/manager/question-issues/regrade-jobs/${jobId}/retry`)).data),
+};
+
+export function issueLabel(value?: string) {
+  return (value || '').toLowerCase().split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+}
