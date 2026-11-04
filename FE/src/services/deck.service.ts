@@ -1,6 +1,7 @@
 import { api } from './api';
 import type { ApiResponse } from '@/auth/authContext';
 import type { PageResponse } from './course.service';
+import { downloadFile } from '@/utils/downloadFile';
 
 /**
  * DeckService — flashcard decks a Course Manager administers.
@@ -12,6 +13,7 @@ import type { PageResponse } from './course.service';
  *   PUT    /api/v1/manager/decks/{id}  (F-04) — only the supplied fields change
  *   DELETE /api/v1/manager/decks/{id}  (F-05) — also deletes the deck's cards and progress
  *   POST   /api/v1/manager/decks/{id}/cards  (F-06) — appends a card
+ *   GET    /api/v1/manager/decks/{id}/export?format=pdf — the deck as a PDF download
  *   PUT    /api/v1/manager/cards/{cardId}    (F-07) — only non-blank faces change
  *   DELETE /api/v1/manager/cards/{cardId}    (F-08) — also deletes the card's progress
  */
@@ -122,6 +124,11 @@ export const deckService = {
 
   async deleteDeck(id: number | string): Promise<void> {
     await api.request<ApiResponse<null>>({ method: 'delete', url: `/manager/decks/${id}` });
+  },
+
+  /** The deck and its cards as a PDF, saved through the browser's download. */
+  async exportPdf(id: number | string, fallbackName = 'flashcards.pdf'): Promise<void> {
+    await downloadFile(`/manager/decks/${id}/export?format=pdf`, fallbackName);
   },
 
   async createCard(deckId: number | string, payload: CardRequest): Promise<CardResponse> {

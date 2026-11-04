@@ -2,6 +2,7 @@ import { api } from './api';
 import { apiClient } from './axios';
 import type { ApiResponse } from '@/auth/authContext';
 import type { PageResponse } from './course.service';
+import { downloadFile } from '@/utils/downloadFile';
 
 /**
  * StudentDeckService — a student's own flashcard decks and study progress.
@@ -27,6 +28,7 @@ import type { PageResponse } from './course.service';
  *   GET    /api/v1/student/decks?scope=MINE|COURSE            (FC-13)
  *   GET    /api/v1/student/decks/{deckId}                     (FC-14)
  *   POST   /api/v1/student/decks/{deckId}/withdraw-review     (FC-15)
+ *   GET    /api/v1/student/decks/{deckId}/export?format=pdf   — the caller's own deck as a PDF download
  */
 
 export type DeckMode = 'FLASHCARD' | 'CODE_SNIPPET' | 'CODE_OUTPUT';
@@ -292,6 +294,11 @@ export function isEndpointMissing(err: unknown): boolean {
 // ------------------------------------------------------------- calls
 
 export const studentDeckService = {
+  /** Owner only: the deck and its cards as a PDF, saved through the browser's download. */
+  async exportPdf(deckId: number | string, fallbackName = 'flashcards.pdf'): Promise<void> {
+    await downloadFile(`/student/decks/${deckId}/export?format=pdf`, fallbackName);
+  },
+
   /** FC-13 (older BEs answer 405 — see isEndpointMissing). */
   async listDecks(params: DeckListParams): Promise<PageResponse<DeckListItem>> {
     const query = new URLSearchParams();
