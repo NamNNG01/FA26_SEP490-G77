@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { Spinner } from '@/components/ui/Spinner';
-import { PALETTE_RESULT_TONE, QuestionPalette } from '@/components/common/QuestionPalette';
+import { QuestionPalette } from '@/components/common/QuestionPalette';
 import { Icon } from '@/assets/icons';
 import { ROUTES, studentModulePath, studentPracticeResultPath } from '@/app/routes';
 import { getApiErrorMessage } from '@/utils/apiError';
@@ -25,7 +25,7 @@ import {
 import { QUESTION_TYPE_LABEL, QuestionAnswerInput, QuestionText } from './QuestionAnswerInput';
 import { checkProgress } from './PracticeCheck';
 import { PracticeExplanation } from './PracticeExplanation';
-import { PracticeVerdict, summaryOutcome } from './PracticeVerdict';
+import { PracticeVerdict, SCORE_ONLY_TYPES } from './PracticeVerdict';
 import { GroupPassageSplit } from './GroupPassageSplit';
 
 /** A rubric attempt still being graded by AI is asked about again this often. */
@@ -195,14 +195,6 @@ export function ModulePracticeRunner({ sessionId }: { sessionId: string }) {
     questions.forEach((q, i) => q.answered && s.add(i + 1));
     return s;
   }, [questions]);
-  const results = useMemo(() => {
-    const m = new Map<number, keyof typeof PALETTE_RESULT_TONE>();
-    questions.forEach((q, i) => {
-      const o = summaryOutcome(q);
-      if (o) m.set(i + 1, o);
-    });
-    return m;
-  }, [questions]);
   const unanswered = questions.length - answeredSet.size;
 
   function patchSummary(id: number, patch: Partial<SessionQuestionSummary>) {
@@ -343,6 +335,11 @@ export function ModulePracticeRunner({ sessionId }: { sessionId: string }) {
   const editing = latest == null;
   const value = editing ? (drafts[summary.sessionQuestionId] ?? null) : (latest?.response ?? null);
   const progress = question ? checkProgress(question, value) : null;
+  // The verdict of a submitted, graded answer — never for essay / diagram, which only get a score.
+  const answerVerdict =
+    !editing && latest && !SCORE_ONLY_TYPES.has(summary.questionType) && !AWAITING_GRADE.has(latest.gradingStatus) && latest.gradingStatus !== 'FAILED'
+      ? latest.isCorrect
+      : null;
   const busy = submitting === summary.sessionQuestionId;
   const questionMedia = view?.media?.filter(m => m.optionId == null && m.mediaType?.toUpperCase().startsWith('IMAGE')) ?? [];
 
@@ -479,7 +476,15 @@ export function ModulePracticeRunner({ sessionId }: { sessionId: string }) {
 
                 {/* A submitted answer is shown read-only. */}
                 <fieldset disabled={!editing || busy} className="min-w-0">
-                  <QuestionAnswerInput key={summary.sessionQuestionId} question={question} value={value} onChange={changeAnswer} roomy={isRubric} practice />
+                  <QuestionAnswerInput
+                    key={summary.sessionQuestionId}
+                    question={question}
+                    value={value}
+                    onChange={changeAnswer}
+                    roomy={isRubric}
+                    practice
+                    verdict={answerVerdict}
+                  />
                 </fieldset>
 
                 {submitButton}
@@ -495,7 +500,8 @@ export function ModulePracticeRunner({ sessionId }: { sessionId: string }) {
                   </div>
                 )}
 
-                {!editing && latest && <PracticeVerdict attempt={latest} />}
+                {/* Right / wrong sits on the answer; the box below is left for scores, grading and failures. */}
+                {!editing && latest && answerVerdict == null && <PracticeVerdict attempt={latest} questionType={summary.questionType} />}
 
                 {!editing && latest && !awaiting && (
                   <PracticeExplanation
@@ -523,24 +529,8 @@ export function ModulePracticeRunner({ sessionId }: { sessionId: string }) {
 
         <aside className="md:w-72 max-h-[35vh] md:max-h-none bg-surface border-t md:border-t-0 md:border-l border-line-soft p-5 overflow-y-auto flex-shrink-0">
           <h2 className="text-base font-semibold text-content mb-4">Question navigator</h2>
-          <QuestionPalette total={questions.length} current={current + 1} answered={answeredSet} flagged={NO_FLAGS} results={results} onSelect={n => goTo(n - 1)} />
-          <div className="mt-4 space-y-2 pt-4 border-t border-line-soft">
-            {[
-              { swatch: PALETTE_RESULT_TONE.correct, label: 'Correct', count: countOf(results, 'correct') },
-              { swatch: PALETTE_RESULT_TONE.partial, label: 'Scored by AI', count: countOf(results, 'partial') },
-              { swatch: PALETTE_RESULT_TONE.wrong, label: 'Wrong', count: countOf(results, 'wrong') },
-              { swatch: 'bg-success-light border-success-line', label: 'Answered, not graded yet', count: answeredSet.size - results.size },
-              { swatch: 'bg-surface-alt border-line', label: 'Unanswered', count: unanswered },
-            ].map(s => (
-              <div key={s.label} className="flex items-center justify-between text-xs">
-                <div className="flex items-center gap-2">
-                  <div className={`w-4 h-4 rounded-[4px] border ${s.swatch}`} />
-                  <span className="text-content-soft">{s.label}</span>
-                </div>
-                <span className="font-semibold text-content-secondary">{s.count}</span>
-              </div>
-            ))}
-          </div>
+          {/* Right / wrong is shown on the answer itself: the palette only tracks what is answered. */}
+          <QuestionPalette total={questions.length} current={current + 1} answered={answeredSet} flagged={NO_FLAGS} onSelect={n => goTo(n - 1)} />
         </aside>
       </div>
 
@@ -579,14 +569,6 @@ function newRequestKey(): string {
   } catch {
     return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   }
-}
-
-function countOf(results: Map<number, string>, outcome: string): number {
-  let n = 0;
-  results.forEach(o => {
-    if (o === outcome) n++;
-  });
-  return n;
 }
 
 function FullScreenMessage({ children }: { children: React.ReactNode }) {

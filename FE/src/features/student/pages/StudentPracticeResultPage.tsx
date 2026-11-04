@@ -251,7 +251,7 @@ function ResultRow({
               <QuestionText content={view.content} className="text-sm text-content leading-relaxed" />
               {latest ? (
                 <>
-                  <PracticeVerdict attempt={latest} />
+                  <PracticeVerdict attempt={latest} questionType={q.questionType} />
                   {!AWAITING_GRADE.has(latest.gradingStatus) && (
                     <PracticeExplanation
                       questionId={q.questionId}
@@ -281,7 +281,7 @@ function OutcomeBadge({ question: q }: { question: ResultQuestion }) {
         Not graded
       </Badge>
     );
-  const outcome = summaryOutcome({ answered: true, latestIsCorrect: q.latestIsCorrect, gradingStatus: q.gradingStatus });
+  const outcome = summaryOutcome({ answered: true, latestIsCorrect: q.latestIsCorrect, gradingStatus: q.gradingStatus, questionType: q.questionType });
   if (outcome === 'correct')
     return (
       <Badge size="sm" variant="success">

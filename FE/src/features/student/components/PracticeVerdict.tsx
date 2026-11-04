@@ -9,14 +9,18 @@ interface Criterion {
   feedback?: string;
 }
 
+/** Essay and diagram answers are only ever scored: they are never shown as right or wrong. */
+export const SCORE_ONLY_TYPES: ReadonlySet<string> = new Set(['ESSAY', 'DIAGRAM']);
+
 /**
  * Palette tone of one practice question: correct / wrong from the verdict; `partial` for a rubric
  * answer the AI scored (it has a score, not a right/wrong); nothing while ungraded or failed.
  */
 export function summaryOutcome(
-  q: Pick<SessionQuestionSummary, 'answered' | 'latestIsCorrect' | 'gradingStatus'>,
+  q: Pick<SessionQuestionSummary, 'answered' | 'latestIsCorrect' | 'gradingStatus' | 'questionType'>,
 ): 'correct' | 'wrong' | 'partial' | null {
   if (!q.answered) return null;
+  if (SCORE_ONLY_TYPES.has(q.questionType)) return q.gradingStatus === 'AI_GRADED' || q.gradingStatus === 'AUTO' ? 'partial' : null;
   if (q.latestIsCorrect === true) return 'correct';
   if (q.latestIsCorrect === false) return 'wrong';
   return q.gradingStatus === 'AI_GRADED' ? 'partial' : null;
@@ -31,7 +35,8 @@ export function scorePercent(score: number | null | undefined): number {
  * The outcome of the latest attempt of a practice question. The BE never reveals the right answer
  * here: a wrong one points to the explanation; a rubric one shows the AI score and its feedback.
  */
-export function PracticeVerdict({ attempt }: { attempt: PracticeAttempt }) {
+export function PracticeVerdict({ attempt, questionType }: { attempt: PracticeAttempt; questionType: string }) {
+  const scoreOnly = SCORE_ONLY_TYPES.has(questionType);
   if (AWAITING_GRADE.has(attempt.gradingStatus)) {
     return (
       <Box tone="neutral" icon={<Icon.RefreshCw className="w-4 h-4 animate-spin" />}>
@@ -48,7 +53,7 @@ export function PracticeVerdict({ attempt }: { attempt: PracticeAttempt }) {
     );
   }
 
-  if (attempt.isCorrect === true) {
+  if (!scoreOnly && attempt.isCorrect === true) {
     return (
       <Box tone="success" icon={<Icon.CheckCircle className="w-4 h-4" />}>
         <span className="flex-1">Correct!</span>
@@ -56,7 +61,7 @@ export function PracticeVerdict({ attempt }: { attempt: PracticeAttempt }) {
     );
   }
 
-  if (attempt.isCorrect === false) {
+  if (!scoreOnly && attempt.isCorrect === false) {
     return (
       <Box tone="danger" icon={<Icon.XCircle className="w-4 h-4" />}>
         <span className="flex-1">Not quite. Ask for an explanation below to see why.</span>
