@@ -152,6 +152,7 @@ export interface PracticeQuestionView {
   answerSpace: { maxLength: number | null } | null;
   media: { mediaId: number; optionId: number | null; mediaType: string; url: string; altText: string | null }[] | null;
   group: { groupId: number; questionType: string; title: string | null; passageText: string | null } | null;
+  isBookmarked: boolean;
   attemptCount: number;
   latestIsCorrect: boolean | null;
   latestScore: number | null;

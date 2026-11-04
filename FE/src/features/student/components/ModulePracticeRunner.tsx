@@ -57,7 +57,8 @@ export function ModulePracticeRunner({ sessionId }: { sessionId: string }) {
   const [drafts, setDrafts] = useState<Record<number, AnswerResponse | null>>({});
   const [submitting, setSubmitting] = useState<number | null>(null);
   const submittingRef = useRef(false);
-  const [bookmarked, setBookmarked] = useState<Set<number>>(() => new Set());
+  /** Bookmarks toggled here (MP-10), by questionId; otherwise MP-04's isBookmarked holds. */
+  const [bookmarkOverrides, setBookmarkOverrides] = useState<Record<number, boolean>>({});
   const [bookmarkBusy, setBookmarkBusy] = useState(false);
   const [confirmFinish, setConfirmFinish] = useState(false);
   const [finishing, setFinishing] = useState(false);
@@ -351,18 +352,15 @@ export function ModulePracticeRunner({ sessionId }: { sessionId: string }) {
     if (INSTANT_CHECK_TYPES.has(summary.questionType)) void submitAnswer(response);
   };
 
+  const isBookmarked = bookmarkOverrides[summary.questionId] ?? view?.isBookmarked ?? false;
+
   const toggleBookmark = async () => {
     if (bookmarkBusy) return;
     setBookmarkBusy(true);
     setActionError(null);
     try {
       const res = await studentProgressService.toggleBookmark(summary.questionId);
-      setBookmarked(prev => {
-        const next = new Set(prev);
-        if (res.isBookmarked) next.add(summary.questionId);
-        else next.delete(summary.questionId);
-        return next;
-      });
+      setBookmarkOverrides(prev => ({ ...prev, [summary.questionId]: res.isBookmarked }));
     } catch (err) {
       setActionError(getApiErrorMessage(err, 'Could not update the bookmark.'));
     } finally {
@@ -440,12 +438,12 @@ export function ModulePracticeRunner({ sessionId }: { sessionId: string }) {
                 variant="ghost"
                 className="ml-auto"
                 disabled={bookmarkBusy}
-                aria-pressed={bookmarked.has(summary.questionId)}
-                aria-label={bookmarked.has(summary.questionId) ? 'Remove bookmark' : 'Bookmark question'}
-                title={bookmarked.has(summary.questionId) ? 'Remove bookmark' : 'Bookmark question'}
+                aria-pressed={isBookmarked}
+                aria-label={isBookmarked ? 'Remove bookmark' : 'Bookmark question'}
+                title={isBookmarked ? 'Remove bookmark' : 'Bookmark question'}
                 onClick={toggleBookmark}
               >
-                <Icon.Star className={`w-4 h-4 ${bookmarked.has(summary.questionId) ? 'fill-current text-warning' : ''}`} />
+                <Icon.Star className={`w-4 h-4 ${isBookmarked ? 'fill-current text-warning' : ''}`} />
               </Button>
               <span className="text-xs text-content-subtle">
                 {current + 1} / {questions.length}
