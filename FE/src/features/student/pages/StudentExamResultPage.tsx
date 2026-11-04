@@ -52,7 +52,7 @@ type Outcome = 'correct' | 'incorrect' | 'graded' | 'unanswered' | 'pending';
 const OUTCOME: Record<Outcome, { label: string; badge: 'success' | 'danger' | 'info' | 'default' | 'warning'; icon: React.ReactNode }> = {
   correct: { label: 'Correct', badge: 'success', icon: <Icon.CheckCircle className="w-5 h-5 text-success" /> },
   incorrect: { label: 'Incorrect', badge: 'danger', icon: <Icon.XCircle className="w-5 h-5 text-danger" /> },
-  graded: { label: 'Graded', badge: 'info', icon: <Icon.Award className="w-5 h-5 text-primary" /> },
+  graded: { label: 'Scored', badge: 'info', icon: <Icon.Award className="w-5 h-5 text-primary" /> },
   unanswered: { label: 'Unanswered', badge: 'default', icon: <Icon.HelpCircle className="w-5 h-5 text-content-subtle" /> },
   pending: { label: 'Not graded', badge: 'warning', icon: <Icon.Clock className="w-5 h-5 text-warning" /> },
 };
@@ -1072,12 +1072,17 @@ function ResultQuestionCard({
             <Badge variant="danger" size="sm">
               Grading failed
             </Badge>
+          ) : outcome === 'graded' ? (
+            // Essay / code / diagram: only the score, never right or wrong (practice included).
+            <Badge variant={OUTCOME.graded.badge} size="sm">
+              {num(q.scoreEarned)} / {num(q.maxPoints)} pts
+            </Badge>
           ) : (
             <Badge variant={OUTCOME[outcome].badge} size="sm">
               {OUTCOME[outcome].label}
             </Badge>
           )}
-          {!practice && (
+          {!practice && outcome !== 'graded' && (
             <span className="text-xs text-content-subtle">
               {/* Ungraded written answer: only its worth, not a "0 / 100". */}
               {outcome === 'pending' || q.gradingStatus === GRADING_FAILED
