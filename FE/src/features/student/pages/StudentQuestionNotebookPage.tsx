@@ -3,11 +3,13 @@ import { useNavigate } from 'react-router';
 import { Button } from '@/components/ui/Button';
 import { Pagination } from '@/components/ui/Pagination';
 import { Select } from '@/components/ui/Select';
+import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { EmptyState } from '@/components/ui/Card';
 import { SearchInput } from '@/components/common/SearchInput';
 import { Icon } from '@/assets/icons';
 import { ROUTES } from '@/app/routes';
 import { studentProgressService, type SavedQuestion } from '@/services/studentProgress.service';
+import { studentCourseService, type MyCourse } from '@/services/studentCourse.service';
 import { getApiErrorMessage } from '@/utils/apiError';
 import { LoadError, PageTitle, STUDENT_PAGE_CLASS } from '../components/studentUi';
 import { ReportQuestionIssueButton } from '../components/ReportQuestionIssueDialog';
@@ -23,17 +25,23 @@ const SESSION_TYPES = [
   { label: 'Bookmarked questions', value: 'bookmarked' },
   { label: 'All saved questions', value: 'all' },
 ];
+const SESSION_EXAM_TYPES = [
+  { label: 'Quiz', value: 'QUIZ' },
+  { label: 'Essay', value: 'ESSAY' },
+];
 
 export function StudentQuestionNotebookPage() {
   const navigate = useNavigate();
   const [filter, setFilter] = useState<'all' | 'wrong' | 'bookmarked'>('all');
   const [weakOnly, setWeakOnly] = useState(false);
   const [search, setSearch] = useState('');
-  const [examType, setExamType] = useState('');
-  const [categoryId, setCategoryId] = useState('');
+  const [examType, setExamType] = useState<'' | 'QUIZ' | 'EXAM'>('');
+  const [courseId, setCourseId] = useState('');
+  const [courses, setCourses] = useState<MyCourse[]>([]);
   const [page, setPage] = useState(0);
   const [sessionType, setSessionType] = useState<'wrong' | 'bookmarked' | 'all'>('wrong');
-  const [sessionSize, setSessionSize] = useState(10);
+  const [sessionExamType, setSessionExamType] = useState<'QUIZ' | 'ESSAY'>('QUIZ');
+  const [sessionSize, setSessionSize] = useState('10');
   const [reload, setReload] = useState(0);
   const [rows, setRows] = useState<SavedQuestion[]>([]);
   const [total, setTotal] = useState(0);
@@ -45,11 +53,19 @@ export function StudentQuestionNotebookPage() {
 
   useEffect(() => {
     let cancelled = false;
+    studentCourseService.getMyCourses({ status: 'ACTIVE', page: 0, size: 100 })
+      .then(result => { if (!cancelled) setCourses(result.content); })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
     setLoading(true);
     setError(null);
     const request = weakOnly
       ? studentProgressService.getWeakSpots(20).then(items => ({ content: items, totalElements: items.length, totalPages: 1, page: 0, size: items.length, first: true, last: true }))
-      : studentProgressService.getSavedQuestions({ page, size: SIZE, type: filter, search: search.trim() || undefined, examType: examType || undefined, categoryId: categoryId ? Number(categoryId) : undefined });
+      : studentProgressService.getSavedQuestions({ page, size: SIZE, type: filter, search: search.trim() || undefined, examType: examType || undefined, courseId: courseId ? Number(courseId) : undefined });
     request.then(result => {
       if (cancelled) return;
       setRows(result.content);
@@ -57,13 +73,18 @@ export function StudentQuestionNotebookPage() {
     }).catch(err => { if (!cancelled) setError(getApiErrorMessage(err, 'Failed to load the question notebook.')); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [page, filter, weakOnly, search, examType, categoryId, reload]);
+  }, [page, filter, weakOnly, search, examType, courseId, reload]);
 
   const startSession = async () => {
     setActionError(null);
+    const size = Number(sessionSize);
+    if (!Number.isInteger(size) || size < 1 || size > 50) {
+      setActionError('Question count must be a whole number between 1 and 50.');
+      return;
+    }
     setStarting(true);
     try {
-      const session = await studentProgressService.startReviewSession({ type: sessionType, size: sessionSize });
+      const session = await studentProgressService.startReviewSession({ type: sessionType, examType: sessionExamType, size });
       navigate(`${ROUTES.studentExam}?attemptId=${encodeURIComponent(String(session.attemptId))}`);
     } catch (err) {
       setActionError(getApiErrorMessage(err, 'Could not start a review session.'));
@@ -104,9 +125,10 @@ export function StudentQuestionNotebookPage() {
     <section className="card p-4 space-y-3">
       <h2 className="font-semibold text-content">Start a review session</h2>
       <div className="flex flex-wrap items-end gap-3">
-        <Select aria-label="Questions to practice" className="w-full sm:w-56" value={sessionType} options={SESSION_TYPES} onChange={v => setSessionType(v as typeof sessionType)} />
+        <Select label="Questions to practice" className="w-full sm:w-56" value={sessionType} options={SESSION_TYPES} onChange={v => setSessionType(v as typeof sessionType)} />
+        <Select label="Exam type" className="w-full sm:w-44" value={sessionExamType} options={SESSION_EXAM_TYPES} onChange={v => setSessionExamType(v as typeof sessionExamType)} />
         <label className="flex flex-col gap-1.5 text-sm font-medium text-content-secondary">Question count
-          <input type="number" min={1} max={50} value={sessionSize} onChange={e => setSessionSize(Math.min(50, Math.max(1, Number(e.target.value) || 1)))} className="h-9 w-28 rounded-[10px] border border-line bg-surface px-3 text-content" />
+          <input type="number" min={1} max={50} step={1} value={sessionSize} onChange={e => setSessionSize(e.target.value)} aria-invalid={!Number.isInteger(Number(sessionSize)) || Number(sessionSize) < 1 || Number(sessionSize) > 50} className="h-9 w-28 rounded-[10px] border border-line bg-surface px-3 text-content" />
         </label>
         <Button onClick={startSession} disabled={starting}>{starting ? 'Starting…' : 'Practice now'}</Button>
       </div>
@@ -120,10 +142,8 @@ export function StudentQuestionNotebookPage() {
       </div>
       {!weakOnly && <div className="card p-4 flex flex-wrap gap-3">
         <Select aria-label="Question filter" className="w-full sm:w-56" value={filter} options={FILTERS} onChange={updateFilter} />
-        <Select aria-label="Filter by exam type" className="w-full sm:w-44" value={examType} options={[{ label: 'All exam types', value: '' }, { label: 'Midterm', value: 'MIDTERM' }, { label: 'Final', value: 'FINAL' }, { label: 'Mock', value: 'MOCK' }]} onChange={v => { setExamType(v); setPage(0); }} />
-        <label className="flex h-9 items-center gap-2 rounded-[10px] border border-line bg-surface px-3 text-sm text-content-secondary">Category ID
-          <input type="number" min={1} value={categoryId} onChange={e => { setCategoryId(e.target.value); setPage(0); }} className="w-20 bg-transparent text-content outline-none" />
-        </label>
+        <Select aria-label="Filter by exam type" className="w-full sm:w-44" value={examType} options={[{ label: 'All exam types', value: '' }, { label: 'Quiz', value: 'QUIZ' }, { label: 'Exam', value: 'EXAM' }]} onChange={v => { setExamType(v as typeof examType); setPage(0); }} />
+        <SearchableSelect label="Course" showLabel={false} className="w-full sm:w-64" value={courseId} options={[{ label: 'All courses', value: '' }, ...courses.map(course => ({ label: course.title, value: String(course.courseId) }))]} onChange={value => { setCourseId(value); setPage(0); }} placeholder="All courses" searchPlaceholder="Search courses…" emptyText="No courses found" />
         <SearchInput className="w-full sm:w-72" placeholder="Search questions…" aria-label="Search saved questions" value={search} onChange={e => { setSearch(e.target.value); setPage(0); }} />
       </div>}
       {error ? <LoadError message={error} onRetry={() => setReload(v => v + 1)} /> : loading ? <div className="card p-8 text-sm text-content-subtle">Loading questions…</div> : rows.length === 0 ?

@@ -39,6 +39,22 @@ export interface SavedQuestion {
   lastPracticedAt: string | null;
 }
 
+export interface ReviewSessionRequest {
+  type: 'wrong' | 'bookmarked' | 'all';
+  examType: 'QUIZ' | 'ESSAY';
+  size: number;
+}
+
+export interface ReviewSessionResponse {
+  examId: number;
+  attemptId: number;
+  examType: 'QUIZ' | 'ESSAY';
+  title: string;
+  maxScore: number;
+  durationMinutes: number;
+  questions: unknown[];
+}
+
 function query(params: Record<string, string | number | undefined | null>) {
   const qs = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
@@ -59,7 +75,7 @@ export const studentProgressService = {
   },
 
   async getSavedQuestions(params: {
-    page?: number; size?: number; type?: 'all' | 'wrong' | 'bookmarked'; examType?: string; categoryId?: number; search?: string;
+    page?: number; size?: number; type?: 'all' | 'wrong' | 'bookmarked'; examType?: 'QUIZ' | 'EXAM'; courseId?: number; search?: string;
   }) {
     const res = await api.get<ApiResponse<StudentPage<SavedQuestion>>>(`/student/questions/saved?${query(params)}`);
     return res.data;
@@ -79,8 +95,8 @@ export const studentProgressService = {
     await api.request({ method: 'delete', url: `/student/questions/saved/${reviewId}` });
   },
 
-  async startReviewSession(params: { type: 'wrong' | 'bookmarked' | 'all'; size: number }) {
-    const res = await api.post<ApiResponse<{ attemptId: number; questions: unknown[] }>>('/student/questions/review-session', params);
+  async startReviewSession(params: ReviewSessionRequest) {
+    const res = await api.post<ApiResponse<ReviewSessionResponse>>('/student/questions/review-session', params);
     return res.data;
   },
 };
