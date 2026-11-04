@@ -27,6 +27,7 @@ import { SaveToFlashcardsModal } from '../components/flashcards/SaveToFlashcards
 import { RetryWrongQuestionsModal } from '../components/RetryWrongQuestionsModal';
 import { studentCodeExamService, type CodeLanguageInfo, type CodeSubmission } from '@/services/studentCodeExam.service';
 import { CodeSubmissionHistory, CodeTestCaseStatus, latestSubmissionBefore } from '../components/code/CodeSubmissionHistory';
+import { studentProgressService } from '@/services/studentProgress.service';
 
 /** FC-12 needs the attempt submitted (or completed). */
 const SAVABLE_ATTEMPT_STATUSES: ReadonlySet<string> = new Set(['SUBMITTED', 'COMPLETED']);
@@ -170,6 +171,9 @@ export function StudentExamResultPage() {
   const [error, setError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
   const [open, setOpen] = useState<Set<number>>(() => new Set());
+  const [bookmarkedQuestions, setBookmarkedQuestions] = useState<Set<number>>(() => new Set());
+  const [bookmarkBusy, setBookmarkBusy] = useState<Set<number>>(() => new Set());
+  const [bookmarkError, setBookmarkError] = useState<string | null>(null);
   /** Explanations asked from the AI in this visit, by questionId. */
   const [explanations, setExplanations] = useState<Record<number, ExplanationState>>({});
   const explanationsRef = useRef(explanations);
@@ -181,6 +185,35 @@ export function StudentExamResultPage() {
   /** Previous / Next of the question on screen, for the ← → keys (set every render). */
   const navRef = useRef<{ prev?: () => void; next?: () => void }>({});
   const questionRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    setBookmarkedQuestions(new Set());
+    setBookmarkBusy(new Set());
+    setBookmarkError(null);
+  }, [attemptId]);
+
+  const toggleQuestionBookmark = async (questionId: number) => {
+    if (bookmarkBusy.has(questionId)) return;
+    setBookmarkBusy(current => new Set(current).add(questionId));
+    setBookmarkError(null);
+    try {
+      const updated = await studentProgressService.toggleBookmark(questionId);
+      setBookmarkedQuestions(current => {
+        const next = new Set(current);
+        if (updated.isBookmarked) next.add(questionId);
+        else next.delete(questionId);
+        return next;
+      });
+    } catch (err) {
+      setBookmarkError(getApiErrorMessage(err, 'Could not update the bookmark.'));
+    } finally {
+      setBookmarkBusy(current => {
+        const next = new Set(current);
+        next.delete(questionId);
+        return next;
+      });
+    }
+  };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -558,6 +591,11 @@ export function StudentExamResultPage() {
                 explanationOpen={open.has(q.questionId)}
                 onToggleExplanation={() => toggle(q.questionId)}
                 onRetryExplanation={() => loadExplanations([q.questionId])}
+                bookmarkAction={
+                  <Button size="sm" variant={bookmarkedQuestions.has(q.questionId) ? 'primary' : 'outline'} disabled={bookmarkBusy.has(q.questionId)} aria-pressed={bookmarkedQuestions.has(q.questionId)} aria-label={bookmarkedQuestions.has(q.questionId) ? 'Remove bookmark' : 'Bookmark question'} icon={<Icon.Star className={`w-4 h-4 ${bookmarkedQuestions.has(q.questionId) ? 'fill-current' : ''}`} />} onClick={() => toggleQuestionBookmark(q.questionId)}>
+                    {bookmarkedQuestions.has(q.questionId) ? 'Bookmarked' : 'Bookmark'}
+                  </Button>
+                }
                 saveAction={
                   savableIds.includes(q.questionId) ? (
                     savedIds.has(q.questionId) ? (
@@ -572,6 +610,7 @@ export function StudentExamResultPage() {
                   ) : undefined
                 }
               />
+              {bookmarkError && <p role="alert" className="text-sm text-danger">{bookmarkError}</p>}
               {q.questionType === 'CODE' && codeSubs && (() => {
                 const sub = latestSubmissionBefore(codeSubs, q.questionId, result.submittedAt);
                 return sub ? (
@@ -994,6 +1033,7 @@ function ResultQuestionCard({
   onRetryExplanation,
   nav,
   saveAction,
+  bookmarkAction,
 }: {
   question: ResultQuestion;
   index: number;
@@ -1008,6 +1048,7 @@ function ResultQuestionCard({
   nav?: React.ReactNode;
   /** "Save to flashcards" button, under the answer. */
   saveAction?: React.ReactNode;
+  bookmarkAction?: React.ReactNode;
 }) {
   return (
     <article className="card overflow-hidden">
@@ -1045,6 +1086,8 @@ function ResultQuestionCard({
           )}
         </div>
       </header>
+
+      {bookmarkAction && <div className="flex justify-end border-t border-line px-4 py-3">{bookmarkAction}</div>}
 
       {RUBRIC_TYPES.has(q.questionType) ? (
         // Written answer beside its grade once the card is wide enough (container query, not viewport:
