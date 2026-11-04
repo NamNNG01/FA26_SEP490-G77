@@ -143,6 +143,7 @@ public abstract class ModulePracticeTestBase {
     protected Question code;
     protected AnswerOption singleRight;
     protected AnswerOption singleWrong;
+    protected AnswerOption trueFalseRight;
     protected AnswerOption multiRightOne;
     protected AnswerOption multiRightTwo;
     protected AnswerOption multiWrong;
@@ -204,7 +205,7 @@ public abstract class ModulePracticeTestBase {
         multiWrong = option(multi, "String", false, 2);
 
         trueFalse = question(moduleA, "TRUE_FALSE", "A String is immutable.");
-        option(trueFalse, "True", true, 0);
+        trueFalseRight = option(trueFalse, "True", true, 0);
         option(trueFalse, "False", false, 1);
 
         fillBlank = question(moduleA, "FILL_BLANK", "____ {{1}} runs on the {{2}} platform.",

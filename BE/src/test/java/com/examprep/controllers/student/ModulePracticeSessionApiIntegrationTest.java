@@ -204,7 +204,7 @@ class ModulePracticeSessionApiIntegrationTest extends ModulePracticeTestBase {
     // ------------------------------------------------------------------ MP-03 / MP-04
 
     @Test
-    void aQuestionViewCarriesContentMediaAndPassageButNeverTheAnswerKey() throws Exception {
+    void aQuestionViewCarriesContentMediaAndTheFrozenPassage() throws Exception {
         JsonNode session = sessionOf(student, moduleA.getModuleId());
         long sessionId = session.path("sessionId").asLong();
 
@@ -235,11 +235,126 @@ class ModulePracticeSessionApiIntegrationTest extends ModulePracticeTestBase {
                 essayView.path("group").path("passageText").asText());
         assertEquals("Garbage collection", essayView.path("group").path("title").asText());
         assertEquals(10_000, essayView.path("answerSpace").path("maxLength").asInt());
+    }
+
+    /**
+     * The client judges a practice answer in place, so MP-04 sends the frozen key of every
+     * auto-graded type. The key is what {@code AttemptGrader} grades against; the raw snapshot
+     * document itself still never leaves the service layer.
+     */
+    @Test
+    void aQuestionViewCarriesTheFrozenChoiceKey() throws Exception {
+        JsonNode session = sessionOf(student, moduleA.getModuleId());
+        long sessionId = session.path("sessionId").asLong();
+
+        var singleRequest = questionView(student, sessionId, sessionQuestionIdOf(session, single.getQuestionId()));
+        singleRequest.andExpect(status().isOk());
+        JsonNode singleKey = data(singleRequest).path("correctAnswer");
+        assertEquals(1, singleKey.path("correctOptionIds").size());
+        assertEquals(singleRight.getOptionId(), singleKey.path("correctOptionIds").get(0).asLong());
+        assertTrue(singleKey.path("blanks").isNull(), "a choice question has no blanks");
+        assertTrue(singleKey.path("pairs").isNull(), "a choice question has no pairs");
+        assertTrue(singleKey.path("correctOrder").isNull(), "a choice question has no order");
+
+        JsonNode multiKey = data(questionView(student, sessionId,
+                sessionQuestionIdOf(session, multi.getQuestionId())).andExpect(status().isOk()))
+                .path("correctAnswer");
+        Set<Long> multiIds = new HashSet<>();
+        for (JsonNode id : multiKey.path("correctOptionIds")) {
+            multiIds.add(id.asLong());
+        }
+        assertEquals(Set.of(multiRightOne.getOptionId(), multiRightTwo.getOptionId()), multiIds,
+                "every correct option is sent, and only the correct ones");
+
+        JsonNode trueFalseKey = data(questionView(student, sessionId,
+                sessionQuestionIdOf(session, trueFalse.getQuestionId())).andExpect(status().isOk()))
+                .path("correctAnswer");
+        assertEquals(1, trueFalseKey.path("correctOptionIds").size());
+        assertEquals(trueFalseRight.getOptionId(), trueFalseKey.path("correctOptionIds").get(0).asLong());
 
         String raw = rawBody(singleRequest);
-        assertFalse(raw.contains("correctOptionIds"), "the answer key leaked into a question view");
-        assertFalse(raw.contains("keySnapshot"));
+        assertFalse(raw.contains("keySnapshot"), "the raw key snapshot document never leaves the service");
         assertFalse(raw.contains("key_snapshot"));
+    }
+
+    @Test
+    void aQuestionViewCarriesTheFrozenFillBlankMatchingAndOrderingKey() throws Exception {
+        JsonNode session = sessionOf(student, moduleA.getModuleId());
+        long sessionId = session.path("sessionId").asLong();
+
+        JsonNode fillKey = data(questionView(student, sessionId,
+                sessionQuestionIdOf(session, fillBlank.getQuestionId())).andExpect(status().isOk()))
+                .path("correctAnswer");
+        JsonNode blanks = fillKey.path("blanks");
+        assertEquals(2, blanks.size(), "one entry per blank of the question");
+        assertEquals(1, blanks.get(0).path("index").asInt());
+        assertEquals(List.of("Java"), texts(blanks.get(0).path("accepted")));
+        assertFalse(blanks.get(0).path("caseSensitive").asBoolean(), "blank 1 ignores case");
+        assertEquals(2, blanks.get(1).path("index").asInt());
+        assertEquals(List.of("Java", "JVM"), texts(blanks.get(1).path("accepted")));
+        assertTrue(blanks.get(1).path("caseSensitive").asBoolean(), "blank 2 is case sensitive");
+        assertTrue(fillKey.path("correctOptionIds").isNull(), "a fill-blank question has no options");
+        assertTrue(fillKey.path("pairs").isNull());
+        assertTrue(fillKey.path("correctOrder").isNull());
+
+        JsonNode matchingKey = data(questionView(student, sessionId,
+                sessionQuestionIdOf(session, matching.getQuestionId())).andExpect(status().isOk()))
+                .path("correctAnswer");
+        JsonNode pairs = matchingKey.path("pairs");
+        assertEquals(2, pairs.size());
+        assertEquals("@Override", pairs.get(0).path("left").asText());
+        assertEquals("Overrides a method", pairs.get(0).path("right").asText());
+        assertEquals("@Deprecated", pairs.get(1).path("left").asText());
+        assertEquals("Marks old API", pairs.get(1).path("right").asText());
+        assertTrue(matchingKey.path("correctOptionIds").isNull());
+        assertTrue(matchingKey.path("blanks").isNull());
+        assertTrue(matchingKey.path("correctOrder").isNull());
+
+        JsonNode orderingKey = data(questionView(student, sessionId,
+                sessionQuestionIdOf(session, ordering.getQuestionId())).andExpect(status().isOk()))
+                .path("correctAnswer");
+        assertEquals(List.of(orderingFirst.getOptionId(), orderingSecond.getOptionId(), orderingThird.getOptionId()),
+                longs(orderingKey.path("correctOrder")), "the expected position of every option");
+        assertTrue(orderingKey.path("correctOptionIds").isNull());
+        assertTrue(orderingKey.path("blanks").isNull());
+        assertTrue(orderingKey.path("pairs").isNull());
+    }
+
+    @Test
+    void rubricQuestionsCarryNoAnswerKeyInAQuestionView() throws Exception {
+        JsonNode session = sessionOf(student, moduleA.getModuleId());
+        long sessionId = session.path("sessionId").asLong();
+
+        for (var rubricQuestion : List.of(essay, diagram, code)) {
+            JsonNode view = data(questionView(student, sessionId,
+                    sessionQuestionIdOf(session, rubricQuestion.getQuestionId())).andExpect(status().isOk()));
+            assertTrue(view.has("correctAnswer"), "every question view carries the field");
+            assertTrue(view.path("correctAnswer").isNull(),
+                    "a rubric question is scored by AI and has no right/wrong key");
+        }
+
+        // The raw documents never leak either: no rubric and no sample diagram in a question view.
+        var diagramRequest = questionView(student, sessionId, sessionQuestionIdOf(session, diagram.getQuestionId()));
+        diagramRequest.andExpect(status().isOk());
+        String raw = rawBody(diagramRequest);
+        assertFalse(raw.contains("drawioXml"), "the sample diagram never leaks through a question view");
+        assertFalse(raw.contains("rubric"), "the rubric never leaks through a question view");
+    }
+
+    private static List<String> texts(JsonNode array) {
+        List<String> values = new ArrayList<>();
+        for (JsonNode item : array) {
+            values.add(item.asText());
+        }
+        return values;
+    }
+
+    private static List<Long> longs(JsonNode array) {
+        List<Long> values = new ArrayList<>();
+        for (JsonNode item : array) {
+            values.add(item.asLong());
+        }
+        return values;
     }
 
     @Test

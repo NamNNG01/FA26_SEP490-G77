@@ -10,8 +10,10 @@ import java.util.List;
 /**
  * Response bodies of the Module Practice APIs (MP-01 … MP-12).
  *
- * <p>None of these records can carry {@code key_snapshot}: the frozen answer key never leaves the
- * service layer. Question content, options and media are always read from the session's
+ * <p>The raw {@code key_snapshot} document never leaves the service layer, and a rubric or a sample
+ * diagram never does at all. MP-04 does expose the frozen grading key of an auto-graded question
+ * ({@link QuestionView#correctAnswer()}) so the client can judge an answer in place with exactly the
+ * rule the server grades by. Question content, options and media are always read from the session's
  * {@code display_snapshot}, so a question edited mid-session cannot change a running practice.</p>
  */
 public final class ModulePracticeResponses {
@@ -99,7 +101,10 @@ public final class ModulePracticeResponses {
 
     // ------------------------------------------------------------------ MP-04 one question
 
-    /** MP-04: what the student is shown plus their own attempts. Never {@code key_snapshot}. */
+    /**
+     * MP-04: what the student is shown, the frozen key of an auto-graded question (so the answer can
+     * be judged in place) and their own attempts. Never the raw {@code key_snapshot} document.
+     */
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record QuestionView(
             Long sessionId,
@@ -115,6 +120,7 @@ public final class ModulePracticeResponses {
             AnswerSpaceView answerSpace,
             List<MediaView> media,
             GroupView group,
+            CorrectAnswerView correctAnswer,
             boolean isBookmarked,
             int attemptCount,
             Boolean latestIsCorrect,
@@ -146,6 +152,30 @@ public final class ModulePracticeResponses {
     /** The shared passage a grouped question belongs to. */
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record GroupView(Long groupId, String questionType, String title, String passageText) {
+    }
+
+    /**
+     * MP-04: the frozen grading key of an auto-graded question, read from the session question's
+     * {@code key_snapshot}. Only the field matching the question type is set; the others stay
+     * {@code null}. Rubric types (ESSAY, DIAGRAM, CODE) carry a {@code null} answer entirely — they
+     * are scored by the AI worker, not against a key.
+     */
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record CorrectAnswerView(
+            List<Long> correctOptionIds,
+            List<BlankView> blanks,
+            List<MatchPairView> pairs,
+            List<Long> correctOrder) {
+    }
+
+    /** FILL_BLANK: one placeholder with the spellings it accepts and its case rule. */
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record BlankView(Integer index, List<String> accepted, Boolean caseSensitive) {
+    }
+
+    /** MATCHING: the original left/right pairing, independent of the shuffled display. */
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record MatchPairView(String left, String right) {
     }
 
     // ------------------------------------------------------------------ MP-05 / MP-06 answers

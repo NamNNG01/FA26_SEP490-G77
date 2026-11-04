@@ -106,6 +106,27 @@ class ModulePracticeAnswerApiIntegrationTest extends ModulePracticeTestBase {
         assertFalse(missing.path("isCorrect").asBoolean(), "every blank must be filled");
     }
 
+    /**
+     * Trim and case rules apply to the verdict only: the attempt keeps the typed answer exactly as
+     * sent, so MP-06 returns it verbatim and the client can show it back unchanged.
+     */
+    @Test
+    void fillBlankKeepsTheTypedAnswerVerbatim() throws Exception {
+        JsonNode session = sessionOf(student, moduleA.getModuleId());
+        long sessionId = session.path("sessionId").asLong();
+        long sessionQuestionId = sessionQuestionIdOf(session, fillBlank.getQuestionId());
+
+        JsonNode submitted = answer(student, sessionId, sessionQuestionId,
+                "{\"response\":{\"blanks\":{\"1\":\"  java  \",\"2\":\"Java\"}}}");
+        assertTrue(submitted.path("isCorrect").asBoolean(), "blank 1 is trimmed and compared ignoring case");
+
+        JsonNode history = data(history(student, sessionId, sessionQuestionId).andExpect(status().isOk()));
+        JsonNode stored = history.path("attempts").get(0).path("response").path("blanks");
+        assertEquals("  java  ", stored.path("1").asText(),
+                "the typed answer is stored exactly as sent, never normalised");
+        assertEquals("Java", stored.path("2").asText());
+    }
+
     @Test
     void orderingComparesTheExactSequence() throws Exception {
         JsonNode session = sessionOf(student, moduleA.getModuleId());
@@ -433,6 +454,27 @@ class ModulePracticeAnswerApiIntegrationTest extends ModulePracticeTestBase {
         assertEquals("Read the passage about heap generations first.",
                 essayView.path("group").path("passageText").asText(),
                 "the passage frozen into the paper is what is shown");
+
+        // The key shown by MP-04 stays the one frozen at session start too, so an in-place check
+        // judges with the same answer the server grades with.
+        JsonNode frozenKey = after.path("correctAnswer");
+        assertEquals(1, frozenKey.path("correctOptionIds").size(), "one correct option stays one");
+        assertEquals(singleRight.getOptionId(), frozenKey.path("correctOptionIds").get(0).asLong(),
+                "the key shown is the one frozen at session start, not the re-keyed bank row");
+
+        // A live re-key of a fill-blank question cannot reach the frozen paper either.
+        long fillBlankId = sessionQuestionIdOf(session, fillBlank.getQuestionId());
+        JsonNode fillBefore = data(questionView(student, sessionId, fillBlankId).andExpect(status().isOk()));
+        assertEquals(1, fillBefore.path("correctAnswer").path("blanks").get(0).path("index").asInt());
+        assertEquals("Java", fillBefore.path("correctAnswer").path("blanks").get(0)
+                .path("accepted").get(0).asText());
+        fillBlank.setAnswerKey("{\"blanks\":[{\"index\":1,\"accepted\":[\"REKEYED\"],\"caseSensitive\":false},"
+                + "{\"index\":2,\"accepted\":[\"REKEYED\"],\"caseSensitive\":false}]}");
+        em.flush();
+        JsonNode fillAfter = data(questionView(student, sessionId, fillBlankId).andExpect(status().isOk()));
+        assertEquals("Java", fillAfter.path("correctAnswer").path("blanks").get(0)
+                        .path("accepted").get(0).asText(),
+                "the fill-blank key stays the one frozen at session start");
 
         // Grading still uses the frozen key: the option that was correct at session start stays correct.
         JsonNode stillRight = answer(student, sessionId, sessionQuestionId,

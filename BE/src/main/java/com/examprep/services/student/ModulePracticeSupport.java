@@ -19,6 +19,7 @@ import com.examprep.repositories.QuestionPracticeProgressRepository;
 import com.examprep.repositories.QuestionPracticeSessionQuestionRepository;
 import com.examprep.repositories.QuestionRepository;
 import com.examprep.services.AttemptPaperFactory;
+import com.examprep.util.attempt.AttemptGrader;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -438,7 +439,9 @@ public class ModulePracticeSupport {
 
     /**
      * MP-04: what the student is shown for one question. Content, options, matching columns, media and
-     * passage all come from the frozen display document; the answer key is never read here.
+     * passage all come from the frozen display document; {@code correctAnswer} comes from the frozen
+     * key document of the auto-graded types, so the client can judge an answer in place with exactly
+     * the rule {@link AttemptGrader} grades by.
      */
     public ModulePracticeResponses.QuestionView questionViewOf(QuestionPracticeSessionQuestion sessionQuestion,
                                                                int questionsTotal,
@@ -486,12 +489,58 @@ public class ModulePracticeSupport {
                 answerSpace,
                 mediaOf(sessionQuestion),
                 groupOf(sessionQuestion),
+                correctAnswerOf(sessionQuestion, questionType),
                 isBookmarked,
                 sessionQuestion.getAttemptCount(),
                 sessionQuestion.getLatestIsCorrect(),
                 sessionQuestion.getLatestScore(),
                 sessionQuestion.getGradingStatus(),
                 submitted);
+    }
+
+    /**
+     * MP-04: the frozen key of an auto-graded question — the exact values {@link AttemptGrader} grades
+     * against — so the client can judge an answer in place. Only the field matching the question type
+     * is set. Rubric types (ESSAY, DIAGRAM, CODE) have no right/wrong key and stay {@code null}.
+     */
+    private ModulePracticeResponses.CorrectAnswerView correctAnswerOf(
+            QuestionPracticeSessionQuestion sessionQuestion, String questionType) {
+        if (!AttemptGrader.isAutoGraded(questionType)) {
+            return null;
+        }
+        Snapshots.KeySnapshot key = keyOf(sessionQuestion);
+        if (key == null) {
+            return null;
+        }
+        switch (questionType == null ? "" : questionType) {
+            case "SINGLE_CHOICE", "TRUE_FALSE", "MULTIPLE_CHOICE":
+                return key.correctOptionIds() == null || key.correctOptionIds().isEmpty() ? null
+                        : new ModulePracticeResponses.CorrectAnswerView(key.correctOptionIds(), null, null, null);
+            case "FILL_BLANK":
+                if (key.blanks() == null || key.blanks().isEmpty()) {
+                    return null;
+                }
+                List<ModulePracticeResponses.BlankView> blanks = new ArrayList<>();
+                for (Snapshots.Blank blank : key.blanks()) {
+                    blanks.add(new ModulePracticeResponses.BlankView(
+                            blank.index(), blank.accepted(), blank.caseSensitive()));
+                }
+                return new ModulePracticeResponses.CorrectAnswerView(null, blanks, null, null);
+            case "MATCHING":
+                if (key.pairs() == null || key.pairs().isEmpty()) {
+                    return null;
+                }
+                List<ModulePracticeResponses.MatchPairView> pairs = new ArrayList<>();
+                for (Snapshots.Pair pair : key.pairs()) {
+                    pairs.add(new ModulePracticeResponses.MatchPairView(pair.left(), pair.right()));
+                }
+                return new ModulePracticeResponses.CorrectAnswerView(null, null, pairs, null);
+            case "ORDERING":
+                return key.correctOrder() == null || key.correctOrder().isEmpty() ? null
+                        : new ModulePracticeResponses.CorrectAnswerView(null, null, null, key.correctOrder());
+            default:
+                return null;
+        }
     }
 
     /**

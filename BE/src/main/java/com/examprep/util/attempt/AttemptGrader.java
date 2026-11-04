@@ -25,12 +25,21 @@ public final class AttemptGrader {
     /** Questions whose rubric the AI worker scores. */
     private static final Set<String> RUBRIC_TYPES = Set.of("ESSAY", "DIAGRAM", "CODE");
 
+    /** The six types scored here against the frozen key; everything else waits for the AI worker. */
+    private static final Set<String> AUTO_GRADED_TYPES = Set.of(
+            "SINGLE_CHOICE", "TRUE_FALSE", "MULTIPLE_CHOICE", "FILL_BLANK", "MATCHING", "ORDERING");
+
     private AttemptGrader() {
     }
 
     /** True for ESSAY/DIAGRAM/CODE: these wait for the AI worker instead of being scored here. */
     public static boolean isRubricType(String questionType) {
         return questionType != null && RUBRIC_TYPES.contains(questionType);
+    }
+
+    /** True for the six types {@link #grade} scores against a key. */
+    public static boolean isAutoGraded(String questionType) {
+        return questionType != null && AUTO_GRADED_TYPES.contains(questionType);
     }
 
     /** Result of an auto-grade: {@code correct} is {@code null} for questions without one right answer. */

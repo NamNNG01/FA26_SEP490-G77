@@ -102,7 +102,7 @@
           "host": ["{{baseUrl}}"],
           "path": ["api", "v1", "student", "practice", "sessions", "{{sessionId}}", "questions", "{{sessionQuestionId}}"]
         },
-        "description": "Content, shuffled options or matching columns, media and passage, plus the student's own attempts. Never the answer key."
+        "description": "Content, shuffled options or matching columns, media and passage, the frozen grading key of auto-graded types (`correctAnswer`), plus the student's own attempts. Never the raw key_snapshot document; a rubric question (ESSAY, DIAGRAM, CODE) carries correctAnswer = null."
       },
       "event": [
         {
@@ -110,8 +110,10 @@
           "script": {
             "exec": [
               "pm.test('200', () => pm.response.to.have.status(200));",
-              "const raw = pm.response.text();",
-              "pm.test('no answer key', () => !raw.includes('correctOptionIds') && !raw.includes('keySnapshot'));"
+              "const d = pm.response.json().data;",
+              "const autoGraded = ['SINGLE_CHOICE', 'TRUE_FALSE', 'MULTIPLE_CHOICE', 'FILL_BLANK', 'MATCHING', 'ORDERING'];",
+              "pm.test('key field present for every type', () => { if (autoGraded.includes(d.questionType)) { pm.expect(d.correctAnswer === null || typeof d.correctAnswer === 'object').to.be.true; } else { pm.expect(d.correctAnswer).to.be.null; } });",
+              "pm.test('no raw snapshot document', () => !pm.response.text().includes('keySnapshot') && !pm.response.text().includes('key_snapshot'));"
             ]
           }
         }
