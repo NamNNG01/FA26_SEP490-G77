@@ -26,6 +26,7 @@ import { QUESTION_TYPE_LABEL, QuestionAnswerInput, QuestionText } from './Questi
 import { checkProgress } from './PracticeCheck';
 import { PracticeExplanation } from './PracticeExplanation';
 import { PracticeVerdict, summaryOutcome } from './PracticeVerdict';
+import { GroupPassageSplit } from './GroupPassageSplit';
 
 /** A rubric attempt still being graded by AI is asked about again this often. */
 const POLL_MS = 4000;
@@ -423,7 +424,8 @@ export function ModulePracticeRunner({ sessionId }: { sessionId: string }) {
       )}
 
       <div className="flex flex-1 overflow-hidden flex-col md:flex-row">
-        <main className={`flex-1 overflow-y-auto ${isRubric ? 'p-[30px]' : 'p-[clamp(1rem,2.5vw,1.5rem)]'}`}>
+        {/* A question of a group: its passage in a column of its own (left), the question on the right. */}
+        <GroupPassageSplit group={view?.group} mainClassName={isRubric ? 'p-[30px]' : 'p-[clamp(1rem,2.5vw,1.5rem)]'}>
           <div className={isRubric ? 'w-full space-y-3' : 'max-w-3xl mx-auto space-y-5'}>
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-sm font-semibold text-content uppercase tracking-wide">Question {current + 1}</h2>
@@ -465,12 +467,6 @@ export function ModulePracticeRunner({ sessionId }: { sessionId: string }) {
               )
             ) : (
               <>
-                {view.group?.passageText && (
-                  <div className="card p-[clamp(1rem,2.5vw,1.5rem)] max-h-[30vh] overflow-y-auto">
-                    {view.group.title && <p className="text-sm font-semibold text-content mb-2">{view.group.title}</p>}
-                    <QuestionText content={view.group.passageText} className="text-sm text-content-secondary leading-relaxed" />
-                  </div>
-                )}
                 <div className={`card ${isRubric ? 'px-3 py-2 max-h-[18vh] overflow-y-auto' : 'p-[clamp(1rem,2.5vw,1.5rem)]'}`}>
                   <QuestionText
                     content={view.content}
@@ -523,7 +519,7 @@ export function ModulePracticeRunner({ sessionId }: { sessionId: string }) {
               )}
             </div>
           </div>
-        </main>
+        </GroupPassageSplit>
 
         <aside className="md:w-72 max-h-[35vh] md:max-h-none bg-surface border-t md:border-t-0 md:border-l border-line-soft p-5 overflow-y-auto flex-shrink-0">
           <h2 className="text-base font-semibold text-content mb-4">Question navigator</h2>

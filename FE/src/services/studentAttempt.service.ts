@@ -65,6 +65,8 @@ export interface AttemptQuestion {
   matching: { lefts: string[]; rights: string[] } | null;
   maxPoints: number | null;
   answerSpace: { maxLength: number | null } | null;
+  /** The question group (reading passage). Not sent by SA-01 / SA-02 yet: see docs/notes. */
+  group?: { groupId: number; title: string | null; passageText: string | null } | null;
 }
 
 /** SA-01 / SA-02 */

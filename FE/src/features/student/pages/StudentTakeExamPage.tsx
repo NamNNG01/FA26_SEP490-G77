@@ -31,6 +31,7 @@ import { studentCodeExamService, type CodeLanguageInfo, type CodeQuestion } from
 import { CodeQuestionWorkspace, currentCodeAnswer } from '../components/code/CodeQuestionWorkspace';
 import { ModulePracticeRunner } from '../components/ModulePracticeRunner';
 import { ReportQuestionIssueButton } from '../components/ReportQuestionIssueDialog';
+import { GroupPassageSplit } from '../components/GroupPassageSplit';
 
 /** Unsaved answers are pushed to SA-03 this often. */
 const AUTOSAVE_MS = 4000;
@@ -524,7 +525,11 @@ function ExamAttemptScreen() {
 
       <div className="flex flex-1 overflow-hidden flex-col md:flex-row">
         {/* Essay / diagram papers use the full width (30px gutters): draw.io and long answers need the room. */}
-        <main className={`flex-1 overflow-y-auto ${isCode ? 'p-[clamp(0.75rem,1.5vw,1.25rem)]' : isEssay ? 'p-[30px]' : 'p-[clamp(1rem,2.5vw,1.5rem)]'}`}>
+        {/* A question of a group: its passage in a column of its own (left), the question on the right. */}
+        <GroupPassageSplit
+          group={isCode ? null : q?.group}
+          mainClassName={isCode ? 'p-[clamp(0.75rem,1.5vw,1.25rem)]' : isEssay ? 'p-[30px]' : 'p-[clamp(1rem,2.5vw,1.5rem)]'}
+        >
           {/* CODE: the workspace fills the height between the question header and the nav buttons. */}
           <div className={isCode ? 'w-full space-y-3 md:h-full md:flex md:flex-col' : isEssay ? 'w-full space-y-3' : 'max-w-3xl mx-auto space-y-5'}>
             {/* Question header: number, type and points — the card below holds only the question text. */}
@@ -624,7 +629,7 @@ function ExamAttemptScreen() {
               </div>
             </div>
           </div>
-        </main>
+        </GroupPassageSplit>
 
         <aside className="md:w-72 max-h-[35vh] md:max-h-none bg-surface border-t md:border-t-0 md:border-l border-line-soft p-5 overflow-y-auto flex-shrink-0">
           <h2 className="text-base font-semibold text-content mb-4">Question navigator</h2>
