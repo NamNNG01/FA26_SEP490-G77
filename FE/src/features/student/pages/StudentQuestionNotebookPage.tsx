@@ -10,6 +10,7 @@ import { ROUTES } from '@/app/routes';
 import { studentProgressService, type SavedQuestion } from '@/services/studentProgress.service';
 import { getApiErrorMessage } from '@/utils/apiError';
 import { LoadError, PageTitle, STUDENT_PAGE_CLASS } from '../components/studentUi';
+import { ReportQuestionIssueButton } from '../components/ReportQuestionIssueDialog';
 
 const SIZE = 20;
 const FILTERS = [
@@ -155,7 +156,7 @@ function QuestionCard({ question, busy, onBookmark, onRemove }: { question: Save
     </li>)}</ul>}
     <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3">
       <p className="text-xs text-content-subtle">{question.lastPracticedAt ? `Last practiced ${new Date(question.lastPracticedAt).toLocaleString()}` : 'Not practiced yet'}{question.lastWrongChoice ? ` · Last answer: ${question.lastWrongChoice}` : ''}</p>
-      <Button size="sm" variant="outline" disabled={busy} icon={<Icon.Trash className="w-4 h-4" />} onClick={onRemove}>Remove</Button>
+      <div className="flex flex-wrap gap-2"><ReportQuestionIssueButton questionId={question.questionId} /><Button size="sm" variant="outline" disabled={busy} icon={<Icon.Trash className="w-4 h-4" />} onClick={onRemove}>Remove</Button></div>
     </div>
   </article>;
 }

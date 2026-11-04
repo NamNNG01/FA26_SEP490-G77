@@ -28,6 +28,7 @@ import { RetryWrongQuestionsModal } from '../components/RetryWrongQuestionsModal
 import { studentCodeExamService, type CodeLanguageInfo, type CodeSubmission } from '@/services/studentCodeExam.service';
 import { CodeSubmissionHistory, CodeTestCaseStatus, latestSubmissionBefore } from '../components/code/CodeSubmissionHistory';
 import { studentProgressService } from '@/services/studentProgress.service';
+import { ReportQuestionIssueButton } from '../components/ReportQuestionIssueDialog';
 
 /** FC-12 needs the attempt submitted (or completed). */
 const SAVABLE_ATTEMPT_STATUSES: ReadonlySet<string> = new Set(['SUBMITTED', 'COMPLETED']);
@@ -592,9 +593,9 @@ export function StudentExamResultPage() {
                 onToggleExplanation={() => toggle(q.questionId)}
                 onRetryExplanation={() => loadExplanations([q.questionId])}
                 bookmarkAction={
-                  <Button size="sm" variant={bookmarkedQuestions.has(q.questionId) ? 'primary' : 'outline'} disabled={bookmarkBusy.has(q.questionId)} aria-pressed={bookmarkedQuestions.has(q.questionId)} aria-label={bookmarkedQuestions.has(q.questionId) ? 'Remove bookmark' : 'Bookmark question'} icon={<Icon.Star className={`w-4 h-4 ${bookmarkedQuestions.has(q.questionId) ? 'fill-current' : ''}`} />} onClick={() => toggleQuestionBookmark(q.questionId)}>
+                  <div className="flex flex-wrap gap-2"><Button size="sm" variant={bookmarkedQuestions.has(q.questionId) ? 'primary' : 'outline'} disabled={bookmarkBusy.has(q.questionId)} aria-pressed={bookmarkedQuestions.has(q.questionId)} aria-label={bookmarkedQuestions.has(q.questionId) ? 'Remove bookmark' : 'Bookmark question'} icon={<Icon.Star className={`w-4 h-4 ${bookmarkedQuestions.has(q.questionId) ? 'fill-current' : ''}`} />} onClick={() => toggleQuestionBookmark(q.questionId)}>
                     {bookmarkedQuestions.has(q.questionId) ? 'Bookmarked' : 'Bookmark'}
-                  </Button>
+                  </Button><ReportQuestionIssueButton questionId={q.questionId} /></div>
                 }
                 saveAction={
                   savableIds.includes(q.questionId) ? (

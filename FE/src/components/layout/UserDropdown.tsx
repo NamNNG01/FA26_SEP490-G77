@@ -184,6 +184,16 @@ export function UserDropdown({ avatarOnly = false }: { avatarOnly?: boolean }) {
                 type="button"
                 role="menuitem"
                 data-menu-item
+                onClick={() => handleNavigate(ROUTES.studentQuestionIssues)}
+                className={menuItemClass}
+              >
+                <Icon.ClipboardList className="w-4 h-4 text-muted-foreground" />
+                My Question Reports
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                data-menu-item
                 onClick={() => handleNavigate(ROUTES.studentDiscussions)}
                 className={menuItemClass}
               >
