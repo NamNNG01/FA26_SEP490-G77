@@ -98,7 +98,9 @@ public class ModulePracticeAnswerServiceImpl implements ModulePracticeAnswerServ
         }
 
         Instant now = Instant.now();
-        int attemptNumber = answers.maxAttemptNumber(sessionQuestionId) + 1;
+        boolean wasAnsweredBefore = sessionQuestion.isAnswered();
+        Boolean previousIsCorrect = sessionQuestion.getLatestIsCorrect();
+        int attemptNumber = (sessionQuestion.getAttemptCount() == null ? 0 : sessionQuestion.getAttemptCount()) + 1;
         boolean rubric = AttemptGrader.isRubricType(questionType);
         QuestionPracticeAnswer answer = QuestionPracticeAnswer.builder()
                 .sessionQuestion(sessionQuestion)
@@ -117,11 +119,11 @@ public class ModulePracticeAnswerServiceImpl implements ModulePracticeAnswerServ
             answer.setScoreEarned(AttemptScoring.output(grade.score()));
             answer.setGradedAt(now);
         }
-        answers.saveAndFlush(answer);
+        answers.save(answer);
 
-        support.applyLatestAnswer(sessionQuestion);
+        support.applyAnswer(sessionQuestion, answer);
         sessionQuestions.save(sessionQuestion);
-        support.refreshCounters(session, now);
+        support.updateCounters(session, previousIsCorrect, wasAnsweredBefore, answer, now);
         sessions.save(session);
         support.refreshProgress(sessionQuestion);
         if (rubric) {

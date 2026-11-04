@@ -48,6 +48,8 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class ModulePracticeSupport {
 
+    public static final BigDecimal RUBRIC_PASSING_THRESHOLD = new BigDecimal("0.50");
+
     private final ModuleRepository modules;
     private final EnrollmentRepository enrollments;
     private final QuestionRepository questions;
@@ -78,9 +80,17 @@ public class ModulePracticeSupport {
         return module;
     }
 
-    /** The module of an already loaded session, re-validated against the caller's access. */
+    /** The module of an already loaded session, re-validated against the caller's access without extra queries. */
     public void requireModuleAccess(Long userId, QuestionPracticeSession session) {
-        requireModule(userId, session.getModule().getModuleId());
+        Module module = session.getModule();
+        if (module == null || module.isHidden()) {
+            throw new ResourceNotFoundException("Module not found");
+        }
+        Long courseId = session.getCourse().getCourseId();
+        if (!enrollments.existsByCourse_CourseIdAndUser_UserIdAndStatus(
+                courseId, userId, Enrollment.STATUS_ACTIVE)) {
+            throw new ForbiddenException("Student is not actively enrolled in this course");
+        }
     }
 
     /** The frozen display document of one paper row. */
@@ -109,16 +119,25 @@ public class ModulePracticeSupport {
      * validation and grading keep reading the same document they always did.
      */
     public String freezeDisplay(com.examprep.entities.Question question, Snapshots.DisplayQuestion display) {
+        return freezeDisplay(question, display, media.findByQuestion_QuestionId(question.getQuestionId()));
+    }
+
+    /** Overload accepting preloaded media to eliminate N+1 queries during session creation. */
+    public String freezeDisplay(com.examprep.entities.Question question,
+                                Snapshots.DisplayQuestion display,
+                                List<QuestionMedia> questionMedia) {
         ObjectNode frozen = objectMapper.valueToTree(display);
         ArrayNode mediaRows = frozen.putArray("media");
-        for (QuestionMedia asset : media.findByQuestion_QuestionId(question.getQuestionId())) {
-            mediaRows.addObject()
-                    .put("mediaId", asset.getMediaId())
-                    // Reading the id of a lazy proxy does not initialise it, so this stays one query.
-                    .put("optionId", asset.getOption() == null ? null : asset.getOption().getOptionId())
-                    .put("mediaType", asset.getMediaType())
-                    .put("url", asset.getUrl())
-                    .put("altText", asset.getAltText());
+        if (questionMedia != null) {
+            for (QuestionMedia asset : questionMedia) {
+                mediaRows.addObject()
+                        .put("mediaId", asset.getMediaId())
+                        // Reading the id of a lazy proxy does not initialise it, so this stays one query.
+                        .put("optionId", asset.getOption() == null ? null : asset.getOption().getOptionId())
+                        .put("mediaType", asset.getMediaType())
+                        .put("url", asset.getUrl())
+                        .put("altText", asset.getAltText());
+            }
         }
         if (question.getGroup() != null) {
             frozen.putObject("group")
@@ -174,6 +193,42 @@ public class ModulePracticeSupport {
     // ------------------------------------------------------------------ paper row projection
 
     /**
+     * In-memory projection of the paper row directly from the freshly created answer (zero queries).
+     */
+    public void applyAnswer(QuestionPracticeSessionQuestion sessionQuestion, QuestionPracticeAnswer latest) {
+        sessionQuestion.setAttemptCount(latest.getAttemptNumber());
+        sessionQuestion.setLatestIsCorrect(latest.getIsCorrect());
+        sessionQuestion.setLatestScore(latest.getScoreEarned());
+        sessionQuestion.setGradingStatus(latest.getGradingStatus());
+        if (sessionQuestion.getFirstAnsweredAt() == null) {
+            sessionQuestion.setFirstAnsweredAt(latest.getAnsweredAt());
+        }
+        sessionQuestion.setLastAnsweredAt(latest.getAnsweredAt());
+    }
+
+    /**
+     * In-memory incremental counter update for the locked session during submit (zero queries).
+     */
+    public void updateCounters(QuestionPracticeSession session,
+                               Boolean previousIsCorrect,
+                               boolean wasAnsweredBefore,
+                               QuestionPracticeAnswer newAnswer,
+                               Instant now) {
+        if (!wasAnsweredBefore) {
+            session.setAnsweredCount(session.getAnsweredCount() + 1);
+        }
+        Boolean newIsCorrect = newAnswer.getIsCorrect();
+        if (Boolean.TRUE.equals(previousIsCorrect) && !Boolean.TRUE.equals(newIsCorrect)) {
+            session.setCorrectCount(Math.max(0, session.getCorrectCount() - 1));
+        } else if (!Boolean.TRUE.equals(previousIsCorrect) && Boolean.TRUE.equals(newIsCorrect)) {
+            session.setCorrectCount(session.getCorrectCount() + 1);
+        }
+        session.setLastActivityAt(now);
+        session.setDurationSeconds((int) Math.max(0,
+                Duration.between(session.getStartedAt(), now).getSeconds()));
+    }
+
+    /**
      * Projects the paper row from that question's newest attempt. Called after a submit and after an
      * AI grade lands, so the row a student sees always describes the attempt they last made — an
      * older grading result that arrives late cannot overwrite a newer answer.
@@ -223,16 +278,62 @@ public class ModulePracticeSupport {
                     userId, moduleId, questionId);
         }
 
-        Object[] summary = answers.summarizeProgress(userId, moduleId, questionId).get(0);
-        int total = (int) number(summary[0]);
-        int graded = (int) number(summary[1]);
-        int correct = (int) number(summary[2]);
-        int wrong = (int) number(summary[3]);
-        // The newest finalized attempt may legitimately carry a null verdict (a graded rubric answer),
-        // so the single value is read by index: Stream#findFirst would reject a null element.
-        List<Boolean> newestVerdict = answers.findFinalizedResultsNewestFirst(
-                userId, moduleId, questionId, PageRequest.of(0, 1));
-        Boolean lastIsCorrect = newestVerdict.isEmpty() ? null : newestVerdict.get(0);
+        // Single query replaces summarizeProgress + findFinalizedResultsNewestFirst
+        List<QuestionPracticeAnswer> history = answers.findAttemptsForProgress(userId, moduleId, questionId);
+        int total = history.size();
+        int graded = 0;
+        int correct = 0;
+        int wrong = 0;
+        BigDecimal bestScore = null;
+        Boolean lastIsCorrect = null;
+        BigDecimal latestScore = null;
+        Instant firstAnsweredAt = null;
+        Instant lastAnsweredAt = null;
+
+        if (!history.isEmpty()) {
+            lastAnsweredAt = history.get(0).getAnsweredAt();
+            firstAnsweredAt = history.get(history.size() - 1).getAnsweredAt();
+        }
+
+        boolean foundNewestFinalized = false;
+        for (QuestionPracticeAnswer a : history) {
+            String status = a.getGradingStatus();
+            if ("AUTO".equals(status) || "AI_GRADED".equals(status)) {
+                graded++;
+                if (Boolean.TRUE.equals(a.getIsCorrect())) {
+                    correct++;
+                } else if (Boolean.FALSE.equals(a.getIsCorrect())) {
+                    wrong++;
+                }
+                if (a.getScoreEarned() != null) {
+                    if (bestScore == null || a.getScoreEarned().compareTo(bestScore) > 0) {
+                        bestScore = a.getScoreEarned();
+                    }
+                }
+                if (!foundNewestFinalized) {
+                    foundNewestFinalized = true;
+                    lastIsCorrect = a.getIsCorrect();
+                    latestScore = a.getScoreEarned();
+                }
+            }
+        }
+
+        String masteryStatus;
+        if (graded == 0) {
+            masteryStatus = QuestionPracticeProgress.MASTERY_NEW;
+        } else if (Boolean.TRUE.equals(lastIsCorrect)) {
+            masteryStatus = QuestionPracticeProgress.MASTERY_MASTERED;
+        } else if (Boolean.FALSE.equals(lastIsCorrect)) {
+            masteryStatus = QuestionPracticeProgress.MASTERY_LEARNING;
+        } else {
+            // Rubric question (lastIsCorrect is null, score-based):
+            // Threshold >= 0.50 means mastered, < 0.50 means learning / needs review
+            if (latestScore != null && latestScore.compareTo(RUBRIC_PASSING_THRESHOLD) >= 0) {
+                masteryStatus = QuestionPracticeProgress.MASTERY_MASTERED;
+            } else {
+                masteryStatus = QuestionPracticeProgress.MASTERY_LEARNING;
+            }
+        }
 
         QuestionPracticeProgress row = locked.orElseGet(() -> QuestionPracticeProgress.builder()
                 .user(session.getUser())
@@ -245,36 +346,40 @@ public class ModulePracticeSupport {
         row.setCorrectAttempts(correct);
         row.setWrongAttempts(wrong);
         row.setLastIsCorrect(lastIsCorrect);
-        row.setBestScore(decimal(summary[4]));
-        row.setFirstAnsweredAt(instant(summary[5]));
-        row.setLastAnsweredAt(instant(summary[6]));
-        row.setMasteryStatus(graded == 0
-                ? QuestionPracticeProgress.MASTERY_NEW
-                : Boolean.TRUE.equals(lastIsCorrect)
-                        ? QuestionPracticeProgress.MASTERY_MASTERED
-                        : QuestionPracticeProgress.MASTERY_LEARNING);
+        row.setBestScore(bestScore);
+        row.setFirstAnsweredAt(firstAnsweredAt);
+        row.setLastAnsweredAt(lastAnsweredAt);
+        row.setMasteryStatus(masteryStatus);
         return progress.save(row);
     }
 
-    /** Recomputes the session counters from the paper rows; both are a single aggregate query. */
+    /** Recomputes the session counters from the paper rows in a single aggregated query. */
     public void refreshCounters(QuestionPracticeSession session, Instant now) {
         Long sessionId = session.getSessionId();
-        session.setAnsweredCount((int) sessionQuestions.countAnswered(sessionId));
-        session.setCorrectCount((int) sessionQuestions.countLatestCorrect(sessionId));
+        List<Object[]> counts = sessionQuestions.countAnsweredAndCorrect(sessionId);
+        if (!counts.isEmpty()) {
+            Object[] row = counts.get(0);
+            session.setAnsweredCount((int) number(row[0]));
+            session.setCorrectCount((int) number(row[1]));
+        } else {
+            session.setAnsweredCount(0);
+            session.setCorrectCount(0);
+        }
         session.setLastActivityAt(now);
         session.setDurationSeconds((int) Math.max(0,
                 Duration.between(session.getStartedAt(), now).getSeconds()));
     }
 
     public ModulePracticeResponses.SessionProgress progressOf(QuestionPracticeSession session) {
-        Optional<QuestionPracticeSessionQuestion> next = nextUnanswered(session.getSessionId());
+        List<QuestionPracticeSessionQuestionRepository.UnansweredSummary> next =
+                sessionQuestions.findNextUnanswered(session.getSessionId(), PageRequest.of(0, 1));
         return new ModulePracticeResponses.SessionProgress(
                 session.getQuestionCount(),
                 session.getAnsweredCount(),
                 session.getCorrectCount(),
                 session.getStatus(),
-                next.map(QuestionPracticeSessionQuestion::getSessionQuestionId).orElse(null),
-                next.map(QuestionPracticeSessionQuestion::getOrderIndex).orElse(null));
+                next.isEmpty() ? null : next.get(0).getSessionQuestionId(),
+                next.isEmpty() ? null : next.get(0).getOrderIndex());
     }
 
     /** MP-03: the first question still unanswered in the persisted order. */
@@ -293,7 +398,10 @@ public class ModulePracticeSupport {
         for (QuestionPracticeSessionQuestion sessionQuestion : paper) {
             questions.add(summaryOf(sessionQuestion));
         }
-        Optional<QuestionPracticeSessionQuestion> next = nextUnanswered(sessionId);
+        List<QuestionPracticeSessionQuestionRepository.UnansweredSummary> next =
+                sessionQuestions.findNextUnanswered(sessionId, PageRequest.of(0, 1));
+        Long nextId = next.isEmpty() ? null : next.get(0).getSessionQuestionId();
+        Integer nextOrder = next.isEmpty() ? null : next.get(0).getOrderIndex();
         return new ModulePracticeResponses.SessionDetail(
                 sessionId,
                 session.getModule().getModuleId(),
@@ -310,8 +418,8 @@ public class ModulePracticeSupport {
                 session.getCompletedAt(),
                 session.getDurationSeconds(),
                 resumed,
-                next.map(QuestionPracticeSessionQuestion::getSessionQuestionId).orElse(null),
-                next.map(QuestionPracticeSessionQuestion::getOrderIndex).orElse(null),
+                nextId,
+                nextOrder,
                 questions);
     }
 
@@ -335,7 +443,8 @@ public class ModulePracticeSupport {
     public ModulePracticeResponses.QuestionView questionViewOf(QuestionPracticeSessionQuestion sessionQuestion,
                                                                int questionsTotal,
                                                                int questionsAnswered,
-                                                               List<QuestionPracticeAnswer> attempts) {
+                                                               List<QuestionPracticeAnswer> attempts,
+                                                               boolean isBookmarked) {
         Snapshots.DisplayQuestion display = displayOf(sessionQuestion);
         List<ModulePracticeResponses.OptionView> options = null;
         ModulePracticeResponses.MatchingView matching = null;
@@ -377,6 +486,7 @@ public class ModulePracticeSupport {
                 answerSpace,
                 mediaOf(sessionQuestion),
                 groupOf(sessionQuestion),
+                isBookmarked,
                 sessionQuestion.getAttemptCount(),
                 sessionQuestion.getLatestIsCorrect(),
                 sessionQuestion.getLatestScore(),

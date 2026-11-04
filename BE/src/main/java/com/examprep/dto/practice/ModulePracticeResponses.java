@@ -115,6 +115,7 @@ public final class ModulePracticeResponses {
             AnswerSpaceView answerSpace,
             List<MediaView> media,
             GroupView group,
+            boolean isBookmarked,
             int attemptCount,
             Boolean latestIsCorrect,
             BigDecimal latestScore,

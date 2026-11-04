@@ -25,13 +25,21 @@ public final class ModulePracticeRequests {
     public static final int MAX_TIME_SPENT_SECONDS = 24 * 3600;
 
     /**
-     * MP-02. Both fields are optional: no {@code questionCount} means "every eligible question of
+     * MP-02. questionCount and mode are optional: no {@code questionCount} means "every eligible question of
      * the module"; no {@code mode} means {@code ALL}.
+     * Modes: ALL, REVIEW, WRONG, BOOKMARKED, RANDOM, TARGET.
+     * TARGET mode accepts optional difficulty and questionTypes.
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record StartSession(
             @Min(1) @Max(MAX_QUESTION_COUNT) Integer questionCount,
-            @Pattern(regexp = "ALL|REVIEW", message = "mode must be ALL or REVIEW") String mode) {
+            @Pattern(regexp = "ALL|REVIEW|WRONG|BOOKMARKED|RANDOM|TARGET",
+                     message = "mode must be ALL, REVIEW, WRONG, BOOKMARKED, RANDOM, or TARGET")
+            String mode,
+            @Pattern(regexp = "EASY|MEDIUM|HARD",
+                     message = "difficulty must be EASY, MEDIUM, or HARD")
+            String difficulty,
+            java.util.List<String> questionTypes) {
     }
 
     /**

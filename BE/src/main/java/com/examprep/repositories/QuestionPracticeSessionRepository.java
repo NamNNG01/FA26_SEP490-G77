@@ -18,7 +18,11 @@ public interface QuestionPracticeSessionRepository extends JpaRepository<Questio
      * MP-02 … MP-08: the session as the student owns it. A session of another student is
      * indistinguishable from a missing one, so ownership is never leaked.
      */
-    @Query("SELECT s FROM QuestionPracticeSession s WHERE s.sessionId = :sessionId AND s.user.userId = :userId")
+    @Query("SELECT s FROM QuestionPracticeSession s "
+            + "JOIN FETCH s.module m "
+            + "JOIN FETCH s.course c "
+            + "JOIN FETCH s.user u "
+            + "WHERE s.sessionId = :sessionId AND s.user.userId = :userId")
     Optional<QuestionPracticeSession> findOwned(@Param("sessionId") Long sessionId, @Param("userId") Long userId);
 
     /**
@@ -26,7 +30,11 @@ public interface QuestionPracticeSessionRepository extends JpaRepository<Questio
      * never interleave their counter updates.
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("SELECT s FROM QuestionPracticeSession s WHERE s.sessionId = :sessionId AND s.user.userId = :userId")
+    @Query("SELECT s FROM QuestionPracticeSession s "
+            + "JOIN FETCH s.module m "
+            + "JOIN FETCH s.course c "
+            + "JOIN FETCH s.user u "
+            + "WHERE s.sessionId = :sessionId AND s.user.userId = :userId")
     Optional<QuestionPracticeSession> lockOwned(@Param("sessionId") Long sessionId, @Param("userId") Long userId);
 
     /** The AI grading worker refreshes the counters of the session that owns the answer. */
