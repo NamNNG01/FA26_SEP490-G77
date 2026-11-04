@@ -34,7 +34,7 @@ function matchesSearch(course: MyCourse, term: string) {
  *  - search box:                 filters the enrolled courses only (title,
  *                                category, manager) — not the public catalog.
  *  - Material to Quiz Creator:   AI quiz generated from a file the student uploads (MaterialQuizModal, MQ-01..MQ-05).
- *  - Create Personal Quiz:       opened from a recommendation only; its button lives on the course detail page.
+ *  - Create Practice Exam:       opened from a recommendation only; its button lives on the course detail page.
  *  - Recommended for you:        AI-03 card for one picked course (called on demand).
  */
 export function MyCoursesPage() {

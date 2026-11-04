@@ -60,7 +60,7 @@ const limitsOf = (mode: SmartPracticeMode) =>
   mode === 'AI' ? { questions: SMART_QUESTIONS, minutes: SMART_MINUTES } : { questions: PRACTICE_QUESTIONS, minutes: PRACTICE_MINUTES };
 
 /**
- * Create Personal Quiz — a practice exam the student builds for one course. Two ways to pick the questions:
+ * Create Practice Exam — a practice exam the student builds for one course. Two ways to pick the questions:
  *
  *  - AI (AI-01 + AI-02): the AI picks questions from the student's weak modules. The modal shows the
  *    analysis from the 202 response, polls the job, and offers "Start practice" when the exam is ready.
@@ -197,7 +197,7 @@ export function SmartPracticeModal({
       })
       .catch(err => {
         if (activeJob.current !== jobId) return;
-        setError(getAiError(err, 'Lost track of the personal quiz job.'));
+        setError(getAiError(err, 'Lost track of the practice exam job.'));
         setPhase('failed');
       });
   };
@@ -233,7 +233,7 @@ export function SmartPracticeModal({
       activeJob.current = job.jobId;
       poll(job.jobId);
     } catch (err) {
-      setError(getAiError(err, 'Failed to start the personal quiz.'));
+      setError(getAiError(err, 'Failed to start the practice exam.'));
     } finally {
       setBusy(false);
     }
@@ -301,7 +301,7 @@ export function SmartPracticeModal({
     ) : null;
 
   return (
-    <Modal open={open} onClose={() => !busy && onClose()} title="Create Personal Quiz" size="lg" footer={footer}>
+    <Modal open={open} onClose={() => !busy && onClose()} title="Create Practice Exam" size="lg" footer={footer}>
       <div className="space-y-5">
         {phase === 'form' && (
           <>
@@ -314,7 +314,7 @@ export function SmartPracticeModal({
                 : 'Random questions from the course question bank. Narrow them down by module and difficulty if you like. Practice exams do not count towards your course progress.'}
             </p>
             {courses.length === 0 ? (
-              <p className="text-sm text-content-soft">Enroll in a course first to create a personal quiz.</p>
+              <p className="text-sm text-content-soft">Enroll in a course first to create a practice exam.</p>
             ) : (
               <div className="grid gap-x-6 gap-y-5 sm:grid-cols-2">
                 {!lockCourse && (

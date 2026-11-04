@@ -28,7 +28,7 @@ import { studentProgressService, type CourseProgress } from '@/services/studentP
  * Each card shows the module's exams (MC-02) and decks (MC-03), its practice progress and a
  * Practice button; clicking it opens the module page. Exams and decks not filed under a module sit
  * on a "General" card. MC-02/03 only answer for an ACTIVE enrollment, so other states only list the
- * modules. An enrolled student can create a personal quiz for the course from the info card
+ * modules. An enrolled student can create a practice exam for the course from the info card
  * (AI-01 / PQ-01, course fixed).
  */
 export function StudentCourseDetailPage() {
@@ -112,7 +112,7 @@ export function StudentCourseDetailPage() {
             )}
             {isActive && (
               <Button variant="outline" size="sm" className="ml-auto" icon={<AiSparkle />} onClick={() => setPersonalQuiz(true)}>
-                Create personal quiz
+                Create practice exam
               </Button>
             )}
           </div>
