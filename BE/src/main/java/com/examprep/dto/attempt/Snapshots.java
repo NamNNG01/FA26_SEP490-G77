@@ -45,7 +45,8 @@ public final class Snapshots {
             String content,
             List<DisplayOption> options,
             Matching matching,
-            AnswerSpace answerSpace) {
+            AnswerSpace answerSpace,
+            DisplayGroup group) {
     }
 
     /** A shuffled option: id and text only, never {@code is_correct}. */
@@ -61,6 +62,15 @@ public final class Snapshots {
     /** ESSAY/CODE only. */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record AnswerSpace(Integer maxLength) {
+    }
+
+    /**
+     * The shared reading passage of a grouped question, frozen with the attempt so a manager editing
+     * the group mid-attempt cannot change what the student is reading. {@code null} for a standalone
+     * question.
+     */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record DisplayGroup(Long groupId, String title, String passageText) {
     }
 
     /** The answer key of one question, as far as grading and review need it. */

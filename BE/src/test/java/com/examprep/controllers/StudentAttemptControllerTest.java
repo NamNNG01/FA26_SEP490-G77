@@ -12,6 +12,7 @@ import com.examprep.entities.ExamConfig;
 import com.examprep.entities.ExamQuestion;
 import com.examprep.entities.Module;
 import com.examprep.entities.Question;
+import com.examprep.entities.QuestionGroup;
 import com.examprep.entities.User;
 import com.examprep.security.UserPrincipal;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -193,6 +194,25 @@ class StudentAttemptControllerTest {
     }
 
     @Test
+    void startsAnAttemptFreezesTheGroupPassageOnItsQuestions() throws Exception {
+        QuestionGroup group = QuestionGroup.builder().course(course).module(module).questionType("ESSAY")
+                .title("Garbage collection").passageText("Read the passage about heap generations first.").build();
+        em.persist(group);
+        essay.setGroup(group);
+
+        JsonNode data = data(call(student, post(startUrl(mainExam))).andExpect(status().isCreated()));
+
+        JsonNode grouped = question(data, essay.getQuestionId());
+        assertEquals(group.getGroupId(), grouped.path("group").path("groupId").asLong());
+        assertEquals("Garbage collection", grouped.path("group").path("title").asText());
+        assertEquals("Read the passage about heap generations first.",
+                grouped.path("group").path("passageText").asText());
+
+        JsonNode ungrouped = question(data, single.getQuestionId());
+        assertTrue(ungrouped.path("group").isNull(), "an ungrouped question carries an explicit null group");
+    }
+
+    @Test
     void startRequiresAStudentToken() throws Exception {
         mvc.perform(post(startUrl(mainExam))).andExpect(status().isUnauthorized());
         call(manager, post(startUrl(mainExam))).andExpect(status().isForbidden());
@@ -352,6 +372,81 @@ class StudentAttemptControllerTest {
         JsonNode untouched = answerOf(reloaded, essay.getQuestionId());
         assertEquals(-1, untouched.path("draftSeq").asInt());
         assertTrue(untouched.path("response").isNull() || untouched.path("response").isMissingNode());
+    }
+
+    @Test
+    void reloadKeepsTheFrozenGroupPassageWhenTheLiveGroupChanges() throws Exception {
+        QuestionGroup group = QuestionGroup.builder().course(course).module(module).questionType("ESSAY")
+                .title("Garbage collection").passageText("Read the passage about heap generations first.").build();
+        em.persist(group);
+        essay.setGroup(group);
+
+        long attemptId = data(call(student, post(startUrl(mainExam))).andExpect(status().isCreated()))
+                .path("attemptId").asLong();
+
+        group.setTitle("REWRITTEN TITLE");
+        group.setPassageText("REWRITTEN WHILE THE STUDENT WAS TAKING THE EXAM");
+        em.flush();
+
+        JsonNode reloaded = data(call(student, get(attemptUrl(attemptId))).andExpect(status().isOk()));
+        JsonNode frozen = question(reloaded, essay.getQuestionId());
+        assertEquals("Garbage collection", frozen.path("group").path("title").asText(),
+                "the title of the group is frozen with the attempt");
+        assertEquals("Read the passage about heap generations first.",
+                frozen.path("group").path("passageText").asText(),
+                "the passage of the group is frozen with the attempt");
+    }
+
+    @Test
+    void reloadNeverInventsAGroupForASnapshotThatHasNone() throws Exception {
+        QuestionGroup group = QuestionGroup.builder().course(course).module(module).questionType("ESSAY")
+                .title("Garbage collection").passageText("Read the passage about heap generations first.").build();
+        em.persist(group);
+        essay.setGroup(group);
+        long attemptId = data(call(student, post(startUrl(mainExam))).andExpect(status().isCreated()))
+                .path("attemptId").asLong();
+
+        // A pre-change snapshot: the same document, frozen before group ever existed.
+        answer(attemptId, essay.getQuestionId())
+                .setDisplaySnapshot("{\"questionId\":" + essay.getQuestionId() + ",\"orderIndex\":2,"
+                        + "\"questionType\":\"ESSAY\",\"content\":\"Explain garbage collection.\"}");
+        em.flush();
+        JsonNode legacy = question(data(call(student, get(attemptUrl(attemptId))).andExpect(status().isOk())),
+                essay.getQuestionId());
+        assertTrue(legacy.path("group").isNull(),
+                "an attempt frozen without a group answers null, never the live group");
+
+        // An unreadable snapshot falls back to the live question, but must not invent the group.
+        answer(attemptId, essay.getQuestionId()).setDisplaySnapshot("[]");
+        em.flush();
+        JsonNode corrupted = question(data(call(student, get(attemptUrl(attemptId))).andExpect(status().isOk())),
+                essay.getQuestionId());
+        assertEquals("Explain garbage collection.", corrupted.path("content").asText(),
+                "an unreadable snapshot renders the live question");
+        assertTrue(corrupted.path("group").isNull(), "the fallback still never reads the live group");
+    }
+
+    @Test
+    void anIdempotencyKeyReplaysTheFrozenGroupPassage() throws Exception {
+        QuestionGroup group = QuestionGroup.builder().course(course).module(module).questionType("ESSAY")
+                .title("Garbage collection").passageText("Read the passage about heap generations first.").build();
+        em.persist(group);
+        essay.setGroup(group);
+        String key = UUID.randomUUID().toString();
+
+        JsonNode first = data(call(student, post(startUrl(mainExam)).header("Idempotency-Key", key))
+                .andExpect(status().isCreated()));
+        JsonNode replay = data(call(student, post(startUrl(mainExam)).header("Idempotency-Key", key))
+                .andExpect(status().isCreated()));
+
+        assertEquals(first.path("attemptId").asLong(), replay.path("attemptId").asLong());
+        JsonNode replayed = question(replay, essay.getQuestionId());
+        assertEquals("Garbage collection", replayed.path("group").path("title").asText(),
+                "the replay returns the paper the attempt originally froze");
+        assertEquals("Read the passage about heap generations first.",
+                replayed.path("group").path("passageText").asText());
+        assertTrue(question(replay, single.getQuestionId()).path("group").isNull(),
+                "an ungrouped question replays with an explicit null group");
     }
 
     @Test

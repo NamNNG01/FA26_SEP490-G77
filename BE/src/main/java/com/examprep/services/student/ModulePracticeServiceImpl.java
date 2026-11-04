@@ -270,7 +270,7 @@ public class ModulePracticeServiceImpl implements ModulePracticeService {
                 List<AnswerOption> questionOptions = options.get(question.getQuestionId());
                 Snapshots.KeySnapshot key = paperFactory.key(question, questionOptions);
                 Snapshots.DisplayQuestion display =
-                        paperFactory.display(question, key, questionOptions, position, shuffler);
+                        paperFactory.display(question, key, questionOptions, position, shuffler, question.getGroup());
                 paper.add(QuestionPracticeSessionQuestion.builder()
                         .session(session)
                         .question(question)

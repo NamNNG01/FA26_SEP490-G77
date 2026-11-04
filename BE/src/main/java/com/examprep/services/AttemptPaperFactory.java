@@ -9,11 +9,13 @@ import com.examprep.entities.ExamConfig;
 import com.examprep.entities.ExamGroup;
 import com.examprep.entities.ExamQuestion;
 import com.examprep.entities.Question;
+import com.examprep.entities.QuestionGroup;
 import com.examprep.exceptions.BaseException;
 import com.examprep.repositories.AnswerOptionRepository;
 import com.examprep.repositories.ExamConfigRepository;
 import com.examprep.repositories.ExamGroupRepository;
 import com.examprep.repositories.ExamQuestionRepository;
+import com.examprep.repositories.QuestionGroupRepository;
 import com.examprep.repositories.QuestionRepository;
 import com.examprep.util.attempt.AnswerResponseValidator;
 import com.examprep.util.attempt.AttemptShuffler;
@@ -50,6 +52,7 @@ public class AttemptPaperFactory {
     private final ExamConfigRepository examConfigs;
     private final QuestionRepository questions;
     private final AnswerOptionRepository answerOptions;
+    private final QuestionGroupRepository questionGroups;
     private final ObjectMapper objectMapper;
 
     /** One row of the paper: a question as the bank holds it and its {@code weight_snapshot}. */
@@ -197,6 +200,37 @@ public class AttemptPaperFactory {
         return byQuestion;
     }
 
+    /**
+     * Loads every group of the paper in one query, so {@link #display} never lazy-loads one group per
+     * question (spec 0.3 rule 9). Reading the id of a lazy proxy does not initialise it; a question
+     * without a group is simply left out of the map.
+     */
+    public Map<Long, QuestionGroup> groupsOf(Collection<Question> paperQuestions) {
+        Map<Long, QuestionGroup> byId = new HashMap<>();
+        if (paperQuestions == null || paperQuestions.isEmpty()) {
+            return byId;
+        }
+        Set<Long> ids = new HashSet<>();
+        for (Question question : paperQuestions) {
+            if (question != null && question.getGroup() != null) {
+                ids.add(question.getGroup().getGroupId());
+            }
+        }
+        if (ids.isEmpty()) {
+            return byId;
+        }
+        for (QuestionGroup group : questionGroups.findAllById(ids)) {
+            byId.put(group.getGroupId(), group);
+        }
+        return byId;
+    }
+
+    /** The preloaded group of one paper question; only the id of the lazy proxy is read here. */
+    public QuestionGroup groupFor(Question question, Map<Long, QuestionGroup> groups) {
+        QuestionGroup group = question.getGroup();
+        return group == null ? null : groups.get(group.getGroupId());
+    }
+
     /** Everything needed to grade and to review, frozen at start. Never returned before submit. */
     public Snapshots.KeySnapshot key(Question question, List<AnswerOption> options) {
         String type = question.getQuestionType();
@@ -244,14 +278,17 @@ public class AttemptPaperFactory {
                 correctOptionIds, correctOrder, blanks, pairs, rubric, drawioXml);
     }
     /**
-     * What the student sees for one question: content, shuffled options or matching columns and
-     * the answer space. Never the answer (spec 0.3 rule 4).
+     * What the student sees for one question: content, shuffled options or matching columns, the
+     * answer space and the reading passage of its group. Never the answer (spec 0.3 rule 4). The
+     * caller passes a preloaded group (batch query with {@link #groupsOf}, or a fetch-joined
+     * question) so no group is lazy-loaded here.
      */
     public Snapshots.DisplayQuestion display(Question question,
                                              Snapshots.KeySnapshot key,
                                              List<AnswerOption> options,
                                              int orderIndex,
-                                             AttemptShuffler shuffler) {
+                                             AttemptShuffler shuffler,
+                                             QuestionGroup group) {
         String type = question.getQuestionType();
         List<Snapshots.DisplayOption> displayOptions = null;
         Snapshots.Matching matching = null;
@@ -275,6 +312,9 @@ public class AttemptPaperFactory {
             answerSpace = new Snapshots.AnswerSpace(AnswerResponseValidator.ESSAY_MAX_CHARS);
         }
 
+        Snapshots.DisplayGroup displayGroup = group == null ? null
+                : new Snapshots.DisplayGroup(group.getGroupId(), group.getTitle(), group.getPassageText());
+
         return new Snapshots.DisplayQuestion(
                 question.getQuestionId(),
                 orderIndex,
@@ -282,7 +322,8 @@ public class AttemptPaperFactory {
                 question.getContent(),
                 displayOptions,
                 matching,
-                answerSpace);
+                answerSpace,
+                displayGroup);
     }
 
     /** Serializes a snapshot for its {@code jsonb} column. */

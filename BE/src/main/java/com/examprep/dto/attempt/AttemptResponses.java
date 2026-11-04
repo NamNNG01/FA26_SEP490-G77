@@ -1,5 +1,6 @@
 package com.examprep.dto.attempt;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.JsonNode;
 
 import java.math.BigDecimal;
@@ -39,7 +40,9 @@ public final class AttemptResponses {
             List<Option> options,
             Matching matching,
             BigDecimal maxPoints,
-            AnswerSpace answerSpace) {}
+            AnswerSpace answerSpace,
+            // Always present, even for a standalone question: the spec promises group: {...} | null.
+            @JsonInclude(JsonInclude.Include.ALWAYS) Group group) {}
 
     public record Option(Long optionId, String optionText, Boolean isCorrectAnswer) {}
 
@@ -47,6 +50,9 @@ public final class AttemptResponses {
     public record Matching(List<String> lefts, List<String> rights) {}
 
     public record AnswerSpace(Integer maxLength) {}
+
+    /** The reading-passage group of the question, exactly as the attempt froze it; null for a standalone question. */
+    public record Group(Long groupId, String title, String passageText) {}
 
     public record Answer(Long questionId, Integer draftSeq, JsonNode response) {}
 

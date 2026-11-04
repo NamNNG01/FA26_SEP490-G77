@@ -12,6 +12,7 @@ import com.examprep.entities.Enrollment;
 import com.examprep.entities.Exam;
 import com.examprep.entities.ExamAttempt;
 import com.examprep.entities.Question;
+import com.examprep.entities.QuestionGroup;
 import com.examprep.entities.QuizGenerationJob;
 import com.examprep.entities.User;
 import com.examprep.exceptions.BadRequestException;
@@ -164,6 +165,7 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
             paperQuestions.add(item.question());
         }
         Map<Long, List<AnswerOption>> options = paperFactory.optionsOf(paperQuestions);
+        Map<Long, QuestionGroup> groups = paperFactory.groupsOf(paperQuestions);
 
         ExamAttempt attempt = ExamAttempt.builder()
                 .exam(exam)
@@ -186,8 +188,8 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
             Question question = item.question();
             List<AnswerOption> questionOptions = options.getOrDefault(question.getQuestionId(), List.of());
             Snapshots.KeySnapshot keySnapshot = paperFactory.key(question, questionOptions);
-            Snapshots.DisplayQuestion display =
-                    paperFactory.display(question, keySnapshot, questionOptions, order++, shuffler);
+            Snapshots.DisplayQuestion display = paperFactory.display(
+                    question, keySnapshot, questionOptions, order++, shuffler, paperFactory.groupFor(question, groups));
             rows.add(AttemptAnswer.builder()
                     .attempt(attempt)
                     .question(question)
@@ -515,7 +517,8 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
                     AttemptScoring.output(
                             AttemptScoring.questionMaxPoints(row.getWeightSnapshot(), totalWeight, maxScore)),
                     display.answerSpace() == null ? null
-                            : new AttemptResponses.AnswerSpace(display.answerSpace().maxLength())));
+                            : new AttemptResponses.AnswerSpace(display.answerSpace().maxLength()),
+                    group(display)));
             if (withAnswers) {
                 drafts.add(new AttemptResponses.Answer(
                         display.questionId(), row.getDraftSeq(), paperFactory.readResponse(row.getResponse())));
@@ -588,7 +591,14 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
             throw new BaseException(ResponseCode.INTERNAL_SERVER_ERROR, "Attempt answer has no display snapshot");
         }
         return new Snapshots.DisplayQuestion(question.getQuestionId(), position, question.getQuestionType(),
-                question.getContent(), null, null, null);
+                question.getContent(), null, null, null, null);
+    }
+
+    /** The group passage exactly as the attempt froze it; null for a standalone question. */
+    private AttemptResponses.Group group(Snapshots.DisplayQuestion display) {
+        Snapshots.DisplayGroup group = display.group();
+        return group == null ? null
+                : new AttemptResponses.Group(group.groupId(), group.title(), group.passageText());
     }
 
     private List<AttemptResponses.Option> options(Snapshots.DisplayQuestion display) {

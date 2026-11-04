@@ -154,6 +154,6 @@ class AnswerResponseValidatorTest {
                                                       String content,
                                                       List<Snapshots.DisplayOption> options,
                                                       Snapshots.Matching matching) {
-        return new Snapshots.DisplayQuestion(1L, 1, type, content, options, matching, null);
+        return new Snapshots.DisplayQuestion(1L, 1, type, content, options, matching, null, null);
     }
 }

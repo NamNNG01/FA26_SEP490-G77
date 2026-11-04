@@ -167,7 +167,7 @@ class StudentNotebookServiceTest {
 
         AttemptResponses.Session mockSession = new AttemptResponses.Session(
                 456L, 500L, "Review Practice", "IN_PROGRESS", Instant.now(), Instant.now().plusSeconds(7200),
-                Instant.now(), BigDecimal.ONE, List.of(new AttemptResponses.Question(1L, 1, "SINGLE_CHOICE", "What is Java?", List.of(), null, BigDecimal.ONE, null)),
+                Instant.now(), BigDecimal.ONE, List.of(new AttemptResponses.Question(1L, 1, "SINGLE_CHOICE", "What is Java?", List.of(), null, BigDecimal.ONE, null, null)),
                 null, "REVIEW", null
         );
         when(studentAttemptService.start(eq(100L), eq(500L), isNull())).thenReturn(mockSession);

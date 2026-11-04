@@ -271,6 +271,7 @@ public class StudentContestServiceImpl implements StudentContestService {
         AttemptPaperFactory.Paper paper = attemptPaperFactory.resolve(exam, shuffler, seed);
         List<Question> questions = paper.items().stream().map(AttemptPaperFactory.Item::question).toList();
         Map<Long, List<AnswerOption>> optionsMap = attemptPaperFactory.optionsOf(questions);
+        Map<Long, QuestionGroup> groups = attemptPaperFactory.groupsOf(questions);
 
         attempt.setExamSnapshot(attemptPaperFactory.write(new Snapshots.ExamSnapshot(
                 exam.getExamId(), exam.getTitle(), exam.getMaxScore(), exam.getDurationMinutes(), seed, paper.items().size())));
@@ -282,7 +283,8 @@ public class StudentContestServiceImpl implements StudentContestService {
             Question question = item.question();
             List<AnswerOption> questionOptions = optionsMap.getOrDefault(question.getQuestionId(), List.of());
             Snapshots.KeySnapshot key = attemptPaperFactory.key(question, questionOptions);
-            Snapshots.DisplayQuestion display = attemptPaperFactory.display(question, key, questionOptions, order++, shuffler);
+            Snapshots.DisplayQuestion display = attemptPaperFactory.display(
+                    question, key, questionOptions, order++, shuffler, attemptPaperFactory.groupFor(question, groups));
             rows.add(AttemptAnswer.builder()
                     .attempt(attempt)
                     .question(question)
