@@ -9,7 +9,7 @@ const GAP = 4;
  * narrow the list, ↑/↓ to move, Enter to pick, Escape to close. The menu is
  * portalled to <body> (like <MultiSelect>) so scroll containers don't clip it.
  */
-export function SearchableSelect({ label, options, value, onChange, placeholder = 'Select…', searchPlaceholder = 'Search…', emptyText = 'No matches', disabled, className = '', 'aria-label': ariaLabel }: {
+export function SearchableSelect({ label, options, value, onChange, placeholder = 'Select…', searchPlaceholder = 'Search…', emptyText = 'No matches', disabled, className = '', showLabel = true, 'aria-label': ariaLabel }: {
   label?: string;
   options: { label: string; value: string }[];
   value: string;
@@ -19,6 +19,8 @@ export function SearchableSelect({ label, options, value, onChange, placeholder 
   emptyText?: string;
   disabled?: boolean;
   className?: string;
+  /** Whether to show the visible title above the dropdown (defaults to true). */
+  showLabel?: boolean;
   'aria-label'?: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -95,13 +97,13 @@ export function SearchableSelect({ label, options, value, onChange, placeholder 
 
   return (
     <div className={`flex flex-col gap-1.5 ${className}`}>
-      {label && <label htmlFor={id} className="text-sm font-medium text-content-secondary">{label}</label>}
+      {label && showLabel && <label htmlFor={id} className="text-sm font-medium text-content-secondary">{label}</label>}
       <button
         id={id}
         ref={triggerRef}
         type="button"
         disabled={disabled}
-        aria-label={label ? undefined : ariaLabel}
+        aria-label={label && showLabel ? undefined : label ?? ariaLabel}
         aria-haspopup="listbox"
         aria-expanded={open}
         onClick={() => setOpen(o => !o)}
