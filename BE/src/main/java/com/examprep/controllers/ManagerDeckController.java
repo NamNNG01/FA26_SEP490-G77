@@ -3,11 +3,14 @@ package com.examprep.controllers;
 import com.examprep.dto.*;
 import com.examprep.security.UserPrincipal;
 import com.examprep.services.DeckService;
+import com.examprep.services.contest.ContestRules;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -67,5 +70,18 @@ public class ManagerDeckController {
             @PathVariable Long id, @Valid @RequestBody DeckRequests.CardCreate request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(service.addCard(user, id, request), ResponseCode.CREATED.getMessage()));
+    }
+
+    @GetMapping("/{id}/export")
+    @Operation(summary = "Export a managed deck's flashcards as PDF")
+    public ResponseEntity<byte[]> export(@AuthenticationPrincipal UserPrincipal user, @PathVariable Long id,
+            @RequestParam(defaultValue = "pdf") String format) {
+        if (!"pdf".equalsIgnoreCase(format)) {
+            throw ContestRules.error(ResponseCode.BAD_REQUEST, "INVALID_FORMAT", "Invalid export format. Supported: pdf");
+        }
+        com.examprep.util.FlashcardPdfWriter.RenderedPdf pdf = service.exportPdf(user, id);
+        return ResponseEntity.ok().contentType(MediaType.APPLICATION_PDF)
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + pdf.fileName() + "\"")
+                .body(pdf.content());
     }
 }

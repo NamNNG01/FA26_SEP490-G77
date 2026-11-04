@@ -16,6 +16,7 @@ import type { PageResponse } from './course.service';
  *   POST   /api/v1/student/decks/{deckId}/cards/import        (FC-07) — multipart, runs in the background
  *   PUT    /api/v1/student/cards/{cardId}/progress            (FC-08)
  *   PUT    /api/v1/student/decks/{deckId}/learn-all           (FC-09)
+ *   PUT    /api/v1/student/decks/{deckId}/progress/reset      (not on the BE yet — see docs/notes)
  *   POST   /api/v1/student/decks/{deckId}/publish-request     (FC-10)
  *   GET    /api/v1/student/decks/{deckId}/imports/{importId}  (FC-11)
  *   POST   /api/v1/student/decks/{deckId}/cards/from-question (FC-12)
@@ -384,6 +385,12 @@ export const studentDeckService = {
 
   async learnAll(deckId: number | string): Promise<DeckLearnedView> {
     const res = await api.request<ApiResponse<DeckLearnedView>>({ method: 'put', url: `/student/decks/${deckId}/learn-all` });
+    return res.data;
+  },
+
+  /** Clears the caller's progress on every card of the deck (learned back to 0, stars kept). Pending BE. */
+  async resetProgress(deckId: number | string): Promise<DeckLearnedView> {
+    const res = await api.request<ApiResponse<DeckLearnedView>>({ method: 'put', url: `/student/decks/${deckId}/progress/reset` });
     return res.data;
   },
 

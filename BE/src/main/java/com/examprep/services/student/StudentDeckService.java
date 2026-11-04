@@ -13,6 +13,7 @@ import com.examprep.exceptions.ResourceConflictException;
 import com.examprep.exceptions.ResourceNotFoundException;
 import com.examprep.repositories.*;
 import com.examprep.util.attempt.AnswerText;
+import com.examprep.util.FlashcardPdfWriter;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -49,6 +50,7 @@ public class StudentDeckService {
     private final ExamAttemptRepository attempts;
     private final AttemptAnswerRepository answers;
     private final ObjectMapper json;
+    private final FlashcardPdfWriter pdfWriter;
 
     // ------------------------------------------------------------------ FC-01..03
 
@@ -119,6 +121,26 @@ public class StudentDeckService {
 
     private static Map<Long, Long> byDeck(List<IdCount> counts) {
         return counts.stream().collect(Collectors.toMap(IdCount::id, IdCount::total));
+    }
+
+    // ------------------------------------------------------------------ PDF export
+
+    /**
+     * The caller's own deck as a downloadable PDF. Owner-only, checked via a plain read —
+     * the FOR UPDATE lock in {@link #ownedDeck} is not allowed inside a read-only transaction.
+     */
+    @Transactional(readOnly = true)
+    public FlashcardPdfWriter.RenderedPdf exportDeckPdf(Long userId, Long deckId) {
+        Deck deck = decks.findDetail(deckId).orElseThrow(() -> new ResourceNotFoundException("Deck not found."));
+        if (!deck.getUser().getUserId().equals(userId)) {
+            throw new ForbiddenException("Only the owner can export this deck.");
+        }
+        List<Flashcard> content = cards.findByDeckDeckIdOrderByPositionAscCardIdAsc(deckId);
+        return pdfWriter.write(new FlashcardPdfWriter.DeckData(deck.getTitle(),
+                deck.getCourse() == null ? null : deck.getCourse().getTitle(), deck.getUser().getFullName(),
+                deck.getMode(), deck.getVisibility(), deck.getDescription(),
+                content.stream().map(c -> new FlashcardPdfWriter.CardData(c.getFrontText(), c.getBackText(),
+                        c.getCodeLanguage(), c.getCodeBody())).toList()));
     }
 
     // ------------------------------------------------------------------ FC-14

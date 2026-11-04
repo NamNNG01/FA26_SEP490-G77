@@ -2,9 +2,11 @@ package com.examprep.repositories;
 
 import com.examprep.entities.Question;
 import com.examprep.dto.IdCount;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -30,6 +32,15 @@ public interface QuestionRepository extends JpaRepository<Question, Long>, JpaSp
       AND q.approvalStatus = 'APPROVED'
     """)
     Optional<Question> findDeliverableById(@Param("id") Long id);
+
+    /**
+     * MP-03: locks one question row. Module Practice uses it as the serialisation point when a brand
+     * new {@code question_practice_progress} row has to be created, so two writers of the same
+     * (student, module, question) cannot both insert and collide on the unique constraint.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT q FROM Question q WHERE q.questionId = :id")
+    Optional<Question> lockById(@Param("id") Long id);
 
     @Query("SELECT COUNT(o) FROM AnswerOption o WHERE o.question.questionId = :questionId")
     long countOptionsByQuestionId(@Param("questionId") Long questionId);
@@ -93,6 +104,9 @@ public interface QuestionRepository extends JpaRepository<Question, Long>, JpaSp
             @Param("groupIds") Collection<Long> groupIds
     );
     List<Question> findAllByQuestionIdIn(Collection<Long> ids);
+
+    @Query("SELECT q FROM Question q LEFT JOIN FETCH q.group WHERE q.questionId IN :ids")
+    List<Question> findAllWithGroupByQuestionIdIn(@Param("ids") Collection<Long> ids);
     @Query("""
     SELECT DISTINCT q
     FROM Question q
@@ -228,6 +242,53 @@ public interface QuestionRepository extends JpaRepository<Question, Long>, JpaSp
             @Param("courseId") Long courseId,
             @Param("contentHashes") Collection<String> contentHashes
     );
+
+    /**
+     * MP-02 draws a Module Practice paper from the questions that belong to the module and that a
+     * student may be given: publishable (active, approved), not soft-deleted and never a private
+     * question generated from another student's material. Ordered so the persisted order is stable
+     * before it is shuffled.
+     */
+    @Query("""
+    SELECT q.questionId
+    FROM Question q
+    WHERE q.deletedAt IS NULL
+      AND q.status = 'ACTIVE'
+      AND q.approvalStatus = 'APPROVED'
+      AND q.sourceDocumentId IS NULL
+      AND q.module.moduleId = :moduleId
+    ORDER BY q.questionId
+    """)
+    List<Long> findPracticeDrawableIds(@Param("moduleId") Long moduleId);
+
+    @Query("""
+    SELECT q.questionId
+    FROM Question q
+    WHERE q.deletedAt IS NULL
+      AND q.status = 'ACTIVE'
+      AND q.approvalStatus = 'APPROVED'
+      AND q.sourceDocumentId IS NULL
+      AND q.module.moduleId = :moduleId
+      AND (:difficulty IS NULL OR q.difficulty = :difficulty)
+      AND (:hasTypes = false OR q.questionType IN :questionTypes)
+    ORDER BY q.questionId
+    """)
+    List<Long> findTargetDrawableIds(@Param("moduleId") Long moduleId,
+                                     @Param("difficulty") String difficulty,
+                                     @Param("hasTypes") boolean hasTypes,
+                                     @Param("questionTypes") Collection<String> questionTypes);
+
+    /** MP-01: how many questions of one module the student may practise, without loading them. */
+    @Query("""
+    SELECT COUNT(q)
+    FROM Question q
+    WHERE q.deletedAt IS NULL
+      AND q.status = 'ACTIVE'
+      AND q.approvalStatus = 'APPROVED'
+      AND q.sourceDocumentId IS NULL
+      AND q.module.moduleId = :moduleId
+    """)
+    long countPracticeDrawable(@Param("moduleId") Long moduleId);
 
     // SE-01 cache write: never overwrites a manager explanation or a current AI one, and only for the version explained.
     @Modifying

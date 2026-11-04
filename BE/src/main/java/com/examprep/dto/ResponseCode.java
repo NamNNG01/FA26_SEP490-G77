@@ -61,6 +61,11 @@ public enum ResponseCode {
     /** API 32: the generation does not exist or belongs to another user (existence is not leaked). */
     FLASHCARD_GENERATION_NOT_FOUND(HttpStatus.NOT_FOUND, "GENERATION_NOT_FOUND", "Generation not found"),
 
+    /** MP-01..MP-12: the practice session does not exist or belongs to another student. */
+    PRACTICE_SESSION_NOT_FOUND(HttpStatus.NOT_FOUND, "PRACTICE_SESSION_NOT_FOUND", "Practice session not found"),
+    /** MP-02: the module holds no question the student may practise, so no session can be started. */
+    PRACTICE_NO_QUESTIONS(HttpStatus.UNPROCESSABLE_ENTITY, "NO_PRACTICE_QUESTIONS", "This module has no question available for practice"),
+
     // Domain Specific Errors
     EXAM_NOT_FOUND(HttpStatus.NOT_FOUND, "EXAM_NOT_FOUND", "Exam with the specified ID does not exist"),
     EXAM_ALREADY_SUBMITTED(HttpStatus.BAD_REQUEST, "EXAM_ALREADY_SUBMITTED", "This exam attempt has already been submitted"),

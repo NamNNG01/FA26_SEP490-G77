@@ -9,7 +9,7 @@ import { Select } from '@/components/ui/Select';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Spinner } from '@/components/ui/Spinner';
 import { Icon } from '@/assets/icons';
-import { ROUTES, studentExamPath, studentTakeExamPath } from '@/app/routes';
+import { ROUTES, studentExamPath, studentTakeExamPath, studentTakePracticePath } from '@/app/routes';
 import { getApiErrorMessage } from '@/utils/apiError';
 import {
   RUBRIC_TYPES,
@@ -27,6 +27,7 @@ import { SaveToFlashcardsModal } from '../components/flashcards/SaveToFlashcards
 import { RetryWrongQuestionsModal } from '../components/RetryWrongQuestionsModal';
 import { studentCodeExamService, type CodeLanguageInfo, type CodeSubmission } from '@/services/studentCodeExam.service';
 import { CodeSubmissionHistory, CodeTestCaseStatus, latestSubmissionBefore } from '../components/code/CodeSubmissionHistory';
+import { studentProgressService } from '@/services/studentProgress.service';
 
 /** FC-12 needs the attempt submitted (or completed). */
 const SAVABLE_ATTEMPT_STATUSES: ReadonlySet<string> = new Set(['SUBMITTED', 'COMPLETED']);
@@ -150,12 +151,18 @@ function num(v: number | null | undefined): string {
  * Essay / code / diagram answers: the attempt lands here SUBMITTED with its
  * rubric answers ungraded. "Grade with AI" asks the AI (SE-02) and opens a
  * "grading" modal, polling until every answer is scored.
+ * `&practice=1` (a practice exam): no score anywhere — only right / wrong; Re-attempt
+ * reopens it in practice mode and Back leads to Exam History (it has no exam page).
  */
 export function StudentExamResultPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const attemptId = searchParams.get('attemptId');
   const examId = searchParams.get('examId');
+  const practice = searchParams.get('practice') === '1';
+  /** Kept on every URL swap, or the score would come back. */
+  const practiceParam: Record<string, string> = practice ? { practice: '1' } : {};
+  const practiceHistoryPath = `${ROUTES.studentExams}?type=PRACTICE`;
   /** SA-06 answered 403: the course was left (EN-04), so none of its attempts are shown. */
   const [notEnrolled, setNotEnrolled] = useState(false);
 
@@ -164,6 +171,9 @@ export function StudentExamResultPage() {
   const [error, setError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
   const [open, setOpen] = useState<Set<number>>(() => new Set());
+  const [bookmarkedQuestions, setBookmarkedQuestions] = useState<Set<number>>(() => new Set());
+  const [bookmarkBusy, setBookmarkBusy] = useState<Set<number>>(() => new Set());
+  const [bookmarkError, setBookmarkError] = useState<string | null>(null);
   /** Explanations asked from the AI in this visit, by questionId. */
   const [explanations, setExplanations] = useState<Record<number, ExplanationState>>({});
   const explanationsRef = useRef(explanations);
@@ -175,6 +185,35 @@ export function StudentExamResultPage() {
   /** Previous / Next of the question on screen, for the ← → keys (set every render). */
   const navRef = useRef<{ prev?: () => void; next?: () => void }>({});
   const questionRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    setBookmarkedQuestions(new Set());
+    setBookmarkBusy(new Set());
+    setBookmarkError(null);
+  }, [attemptId]);
+
+  const toggleQuestionBookmark = async (questionId: number) => {
+    if (bookmarkBusy.has(questionId)) return;
+    setBookmarkBusy(current => new Set(current).add(questionId));
+    setBookmarkError(null);
+    try {
+      const updated = await studentProgressService.toggleBookmark(questionId);
+      setBookmarkedQuestions(current => {
+        const next = new Set(current);
+        if (updated.isBookmarked) next.add(questionId);
+        else next.delete(questionId);
+        return next;
+      });
+    } catch (err) {
+      setBookmarkError(getApiErrorMessage(err, 'Could not update the bookmark.'));
+    } finally {
+      setBookmarkBusy(current => {
+        const next = new Set(current);
+        next.delete(questionId);
+        return next;
+      });
+    }
+  };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -200,7 +239,7 @@ export function StudentExamResultPage() {
         const submitted = items.filter(a => a.status !== 'IN_PROGRESS');
         setAttempts(submitted);
         if (!attemptId) {
-          if (submitted.length > 0) setSearchParams({ examId, attemptId: String(submitted[0].attemptId) }, { replace: true });
+          if (submitted.length > 0) setSearchParams({ examId, attemptId: String(submitted[0].attemptId), ...practiceParam }, { replace: true });
           else {
             setError('You have no submitted attempt for this exam yet.');
             setLoading(false);
@@ -390,8 +429,8 @@ export function StudentExamResultPage() {
   const breadcrumb = (
     <Breadcrumb
       items={[
-        { label: 'My Exams', onClick: () => navigate(ROUTES.studentExams) },
-        ...(examId && !notEnrolled ? [{ label: result?.examTitle ?? 'Exam', onClick: () => navigate(studentExamPath(examId)) }] : []),
+        { label: 'My Exams', onClick: () => navigate(practice ? practiceHistoryPath : ROUTES.studentExams) },
+        ...(examId && !notEnrolled && !practice ? [{ label: result?.examTitle ?? 'Exam', onClick: () => navigate(studentExamPath(examId)) }] : []),
         { label: 'Attempts' },
       ]}
     />
@@ -490,6 +529,7 @@ export function StudentExamResultPage() {
       {/* The score is the headline: a full-width header above the question and its navigator. */}
       <ScoreCard
             result={result}
+            practice={practice}
             counts={counts}
             modules={modules}
             onOpenModule={goTo}
@@ -506,19 +546,25 @@ export function StudentExamResultPage() {
                   options={attempts.map((a, i) => ({
                     value: String(a.attemptId),
                     // Written answers still ungraded: a "0/100" would read as a real score.
-                    label: `#${attempts.length - i} · ${formatDateTime(a.submittedAt ?? a.startTime)} · ${
-                      Number(a.pendingPoints ?? 0) > 0 ? 'Not graded' : `${num(a.totalScore)}/${num(a.maxScore)}`
+                    label: `#${attempts.length - i} · ${formatDateTime(a.submittedAt ?? a.startTime)}${
+                      practice ? '' : ` · ${Number(a.pendingPoints ?? 0) > 0 ? 'Not graded' : `${num(a.totalScore)}/${num(a.maxScore)}`}`
                     }`,
                   }))}
                   value={String(result.attemptId)}
-                  onChange={v => examId && setSearchParams({ examId, attemptId: v })}
+                  onChange={v => examId && setSearchParams({ examId, attemptId: v, ...practiceParam })}
                 />
               ) : undefined
             }
             onSaveAll={savableIds.length > 0 ? () => setSaveQuestions(savableIds) : undefined}
             onRetryWrong={canSave && hasWrong ? () => setRetrying(true) : undefined}
-            onReattempt={examId ? () => navigate(studentTakeExamPath(examId)) : undefined}
-            onBack={examId ? () => navigate(studentExamPath(examId)) : () => navigate(ROUTES.studentExams)}
+            onReattempt={examId ? () => navigate(practice ? studentTakePracticePath(examId) : studentTakeExamPath(examId)) : undefined}
+            onBack={
+              practice
+                ? () => navigate(practiceHistoryPath)
+                : examId
+                  ? () => navigate(studentExamPath(examId))
+                  : () => navigate(ROUTES.studentExams)
+            }
           />
 
       <div className="grid lg:grid-cols-[minmax(0,1fr)_300px] gap-[clamp(1rem,2vw,1.5rem)] items-start">
@@ -539,11 +585,17 @@ export function StudentExamResultPage() {
                 nav={<QuestionNav current={current} total={total} onPrev={navRef.current.prev} onNext={navRef.current.next} />}
                 question={q}
                 index={current}
+                practice={practice}
                 outcome={outcomes[current]}
                 explanation={explanations[q.questionId]}
                 explanationOpen={open.has(q.questionId)}
                 onToggleExplanation={() => toggle(q.questionId)}
                 onRetryExplanation={() => loadExplanations([q.questionId])}
+                bookmarkAction={
+                  <Button size="sm" variant={bookmarkedQuestions.has(q.questionId) ? 'primary' : 'outline'} disabled={bookmarkBusy.has(q.questionId)} aria-pressed={bookmarkedQuestions.has(q.questionId)} aria-label={bookmarkedQuestions.has(q.questionId) ? 'Remove bookmark' : 'Bookmark question'} icon={<Icon.Star className={`w-4 h-4 ${bookmarkedQuestions.has(q.questionId) ? 'fill-current' : ''}`} />} onClick={() => toggleQuestionBookmark(q.questionId)}>
+                    {bookmarkedQuestions.has(q.questionId) ? 'Bookmarked' : 'Bookmark'}
+                  </Button>
+                }
                 saveAction={
                   savableIds.includes(q.questionId) ? (
                     savedIds.has(q.questionId) ? (
@@ -558,6 +610,7 @@ export function StudentExamResultPage() {
                   ) : undefined
                 }
               />
+              {bookmarkError && <p role="alert" className="text-sm text-danger">{bookmarkError}</p>}
               {q.questionType === 'CODE' && codeSubs && (() => {
                 const sub = latestSubmissionBefore(codeSubs, q.questionId, result.submittedAt);
                 return sub ? (
@@ -785,6 +838,7 @@ function GradingScreen({
 
 function ScoreCard({
   result,
+  practice,
   counts,
   modules,
   onOpenModule,
@@ -800,6 +854,8 @@ function ScoreCard({
   onBack,
 }: {
   result: AttemptResult;
+  /** Practice: right / wrong counts instead of the score, no module breakdown. */
+  practice: boolean;
   counts: Record<Outcome, number>;
   /** Score per module; empty hides the breakdown. */
   modules: ModuleScore[];
@@ -842,7 +898,21 @@ function ScoreCard({
         </div>
 
         {/* No score until the written answers are graded — "0 / 100" would read as a real result. */}
-        {showScore ? (
+        {showScore && practice ? (
+          // Practice has no score: how many were right, wrong and left out.
+          <dl className="grid grid-cols-3 gap-2 text-center md:min-w-[18rem]">
+            {[
+              { label: 'Correct', value: counts.correct, tone: 'text-success' },
+              { label: 'Wrong', value: counts.incorrect, tone: 'text-danger' },
+              { label: 'Unanswered', value: counts.unanswered, tone: 'text-content' },
+            ].map(s => (
+              <div key={s.label} className="flex flex-col-reverse rounded-[10px] border border-line py-3">
+                <dt className="text-xs text-content-soft">{s.label}</dt>
+                <dd className={`text-2xl font-bold ${s.tone}`}>{s.value}</dd>
+              </div>
+            ))}
+          </dl>
+        ) : showScore ? (
           // As tall as the Re-attempt / Back pair beside it (~80px): label, one score line, bar.
           <div className="text-center space-y-1.5 md:min-w-[16rem]">
             <p className="text-xs font-semibold text-content-subtle uppercase tracking-wide leading-4">Your score</p>
@@ -889,7 +959,7 @@ function ScoreCard({
             </Button>
           )}
           <Button variant="outline" icon={<Icon.ChevronLeft className="w-4 h-4" />} onClick={onBack}>
-            Back to exam
+            {practice ? 'Back to Exam History' : 'Back to exam'}
           </Button>
         </div>
       </div>
@@ -913,7 +983,7 @@ function ScoreCard({
         </div>
       )}
 
-      {showScore && modules.length > 0 && (
+      {showScore && !practice && modules.length > 0 && (
         <div className="border-t border-line pt-4 min-w-0">
           <p className="text-xs font-semibold text-content-subtle uppercase tracking-wide mb-2">Score by module</p>
           <ul className="grid gap-x-6 gap-y-1 sm:grid-cols-2 xl:grid-cols-3">
@@ -955,6 +1025,7 @@ function ScoreCard({
 function ResultQuestionCard({
   question: q,
   index,
+  practice = false,
   outcome,
   explanation,
   explanationOpen,
@@ -962,9 +1033,12 @@ function ResultQuestionCard({
   onRetryExplanation,
   nav,
   saveAction,
+  bookmarkAction,
 }: {
   question: ResultQuestion;
   index: number;
+  /** Practice: the outcome only, no points. */
+  practice?: boolean;
   outcome: Outcome;
   explanation: ExplanationState | undefined;
   explanationOpen: boolean;
@@ -974,6 +1048,7 @@ function ResultQuestionCard({
   nav?: React.ReactNode;
   /** "Save to flashcards" button, under the answer. */
   saveAction?: React.ReactNode;
+  bookmarkAction?: React.ReactNode;
 }) {
   return (
     <article className="card overflow-hidden">
@@ -1001,14 +1076,18 @@ function ResultQuestionCard({
               {OUTCOME[outcome].label}
             </Badge>
           )}
-          <span className="text-xs text-content-subtle">
-            {/* Ungraded written answer: only its worth, not a "0 / 100". */}
-            {outcome === 'pending' || q.gradingStatus === GRADING_FAILED
-              ? `${num(q.maxPoints)} pts`
-              : `${num(q.scoreEarned)} / ${num(q.maxPoints)} pts`}
-          </span>
+          {!practice && (
+            <span className="text-xs text-content-subtle">
+              {/* Ungraded written answer: only its worth, not a "0 / 100". */}
+              {outcome === 'pending' || q.gradingStatus === GRADING_FAILED
+                ? `${num(q.maxPoints)} pts`
+                : `${num(q.scoreEarned)} / ${num(q.maxPoints)} pts`}
+            </span>
+          )}
         </div>
       </header>
+
+      {bookmarkAction && <div className="flex justify-end border-t border-line px-4 py-3">{bookmarkAction}</div>}
 
       {RUBRIC_TYPES.has(q.questionType) ? (
         // Written answer beside its grade once the card is wide enough (container query, not viewport:

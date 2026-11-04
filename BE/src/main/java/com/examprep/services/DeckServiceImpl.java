@@ -34,6 +34,7 @@ public class DeckServiceImpl implements DeckService {
     private final CourseManagerRepository assignments;
     private final UserRepository users;
     private final ModuleRepository modules;
+    private final com.examprep.util.FlashcardPdfWriter pdfWriter;
 
     @Override
     public PageResponse<DeckResponse> list(UserPrincipal user, String search, Long courseId, Boolean isPublic, int page, int size) {
@@ -57,6 +58,19 @@ public class DeckServiceImpl implements DeckService {
         Deck deck = decks.findDetail(id).orElseThrow(() -> new ResourceNotFoundException("Deck not found."));
         checkAccess(user, deck);
         return detailResponse(deck);
+    }
+
+    @Override
+    public com.examprep.util.FlashcardPdfWriter.RenderedPdf exportPdf(UserPrincipal user, Long id) {
+        positiveId(id);
+        Deck deck = decks.findDetail(id).orElseThrow(() -> new ResourceNotFoundException("Deck not found."));
+        checkAccess(user, deck);
+        List<Flashcard> content = cards.findByDeckDeckIdOrderByPositionAscCardIdAsc(id);
+        return pdfWriter.write(new com.examprep.util.FlashcardPdfWriter.DeckData(deck.getTitle(),
+                deck.getCourse() == null ? null : deck.getCourse().getTitle(), deck.getUser().getFullName(),
+                deck.getMode(), Boolean.TRUE.equals(deck.getIsPublic()) ? "PUBLIC" : "PRIVATE", deck.getDescription(),
+                content.stream().map(c -> new com.examprep.util.FlashcardPdfWriter.CardData(c.getFrontText(), c.getBackText(),
+                        c.getCodeLanguage(), c.getCodeBody())).toList()));
     }
 
     @Override

@@ -9,6 +9,10 @@ import com.examprep.security.UserPrincipal;
 public interface DeckService {
     PageResponse<DeckResponse> list(UserPrincipal user, String search, Long courseId, Boolean isPublic, int page, int size);
     DeckResponse detail(UserPrincipal user, Long id);
+
+    /** Export the deck's cards as a PDF; access rules match F-03. */
+    com.examprep.util.FlashcardPdfWriter.RenderedPdf exportPdf(UserPrincipal user, Long id);
+
     DeckResponse create(UserPrincipal user, DeckRequests.Create request);
     DeckResponse update(UserPrincipal user, Long id, DeckRequests.Update request);
     void delete(UserPrincipal user, Long id);

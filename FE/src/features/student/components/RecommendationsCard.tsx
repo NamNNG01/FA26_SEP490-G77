@@ -48,7 +48,7 @@ function saveCourse(id: number) {
  * "Get recommendations" since an uncached call spends quota. Results stay per course while on the page.
  *
  * Clicks: FLASHCARD_DECK → deck study (FP-01), EXAM → exam detail (EX-01),
- * REVIEW_SESSION / WEAK_TOPIC → Smart Practice modal (the FE has no Mistake Notebook / MN-04 yet).
+ * REVIEW_SESSION / WEAK_TOPIC → Create Personal Quiz modal (the FE has no Mistake Notebook / MN-04 yet).
  */
 export function RecommendationsCard({
   courses,
