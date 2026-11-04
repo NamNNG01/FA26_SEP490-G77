@@ -29,6 +29,7 @@ import { QUESTION_TYPE_LABEL, QuestionAnswerInput, QuestionText, isAnswered } fr
 import { PracticeCheck, checkProgress } from '../components/PracticeCheck';
 import { studentCodeExamService, type CodeLanguageInfo, type CodeQuestion } from '@/services/studentCodeExam.service';
 import { CodeQuestionWorkspace, currentCodeAnswer } from '../components/code/CodeQuestionWorkspace';
+import { ReportQuestionIssueButton } from '../components/ReportQuestionIssueDialog';
 
 /** Unsaved answers are pushed to SA-03 this often. */
 const AUTOSAVE_MS = 4000;
@@ -525,6 +526,7 @@ export function StudentTakeExamPage() {
               <span className="text-xs text-content-subtle">
                 {current + 1} / {questions.length}
               </span>
+              <ReportQuestionIssueButton className="ml-auto" questionId={q.questionId} />
             </div>
 
             {isCode ? (
