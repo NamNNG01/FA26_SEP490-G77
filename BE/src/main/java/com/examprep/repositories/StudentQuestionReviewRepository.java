@@ -52,6 +52,18 @@ public interface StudentQuestionReviewRepository extends JpaRepository<StudentQu
     );
 
     @Query("SELECT r FROM StudentQuestionReview r JOIN FETCH r.question q " +
+           "WHERE r.student.userId = :studentId " +
+           "AND (:type = 'all' OR (:type = 'wrong' AND r.status = 'WRONG_BOOKMARKED') OR (:type = 'bookmarked' AND r.bookmark = true)) " +
+           "AND (:examType = 'ESSAY' AND q.questionType IN ('ESSAY', 'DIAGRAM') OR :examType = 'QUIZ' AND q.questionType NOT IN ('ESSAY', 'DIAGRAM')) " +
+           "ORDER BY r.wrongCount DESC, r.lastPracticedAt DESC")
+    List<StudentQuestionReview> findReviewCandidatesForExamType(
+            @Param("studentId") Long studentId,
+            @Param("type") String type,
+            @Param("examType") String examType,
+            Pageable pageable
+    );
+
+    @Query("SELECT r FROM StudentQuestionReview r JOIN FETCH r.question q " +
            "WHERE r.student.userId = :studentId AND r.status = 'WRONG_BOOKMARKED' " +
            "ORDER BY r.wrongCount DESC, r.lastPracticedAt ASC")
     List<StudentQuestionReview> findWeakSpots(@Param("studentId") Long studentId, Pageable pageable);

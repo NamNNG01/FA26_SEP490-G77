@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 @Data
@@ -12,7 +13,12 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ReviewSessionResponseDto {
+    private Long examId;
     private Long attemptId;
+    private String examType;
+    private String title;
+    private BigDecimal maxScore;
+    private Integer durationMinutes;
     private List<ReviewQuestionDto> questions;
 
     @Data
@@ -25,6 +31,7 @@ public class ReviewSessionResponseDto {
         private String questionType;
         private String content;
         private List<OptionDto> options;
+        private BigDecimal maxPoints;
     }
 
     @Data

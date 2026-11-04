@@ -1,12 +1,15 @@
 package com.examprep.services.student;
 
+import com.examprep.dto.attempt.AttemptResponses;
 import com.examprep.dto.student.QuestionReviewItemDto;
 import com.examprep.dto.student.ReviewSessionRequestDto;
 import com.examprep.dto.student.ReviewSessionResponseDto;
 import com.examprep.entities.*;
+import com.examprep.exceptions.BadRequestException;
 import com.examprep.exceptions.BaseException;
 import com.examprep.exceptions.ResourceNotFoundException;
 import com.examprep.repositories.*;
+import com.examprep.services.StudentAttemptService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -17,6 +20,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -38,7 +42,11 @@ class StudentNotebookServiceTest {
     @Mock
     private AnswerOptionRepository answerOptionRepository;
     @Mock
-    private ExamAttemptRepository examAttemptRepository;
+    private ExamRepository examRepository;
+    @Mock
+    private ExamQuestionRepository examQuestionRepository;
+    @Mock
+    private StudentAttemptService studentAttemptService;
 
     @InjectMocks
     private StudentNotebookServiceImpl notebookService;
@@ -124,12 +132,23 @@ class StudentNotebookServiceTest {
     }
 
     @Test
+    void startReviewSession_invalidExamType_throws() {
+        ReviewSessionRequestDto req = new ReviewSessionRequestDto();
+        req.setSize(1);
+        req.setType("wrong");
+        req.setExamType("INVALID");
+
+        assertThrows(BadRequestException.class, () -> notebookService.startReviewSession(req, 100L));
+    }
+
+    @Test
     void startReviewSession_noCandidates_throws() {
         ReviewSessionRequestDto req = new ReviewSessionRequestDto();
         req.setSize(10);
         req.setType("wrong");
+        req.setExamType("QUIZ");
 
-        when(reviewRepository.findReviewCandidates(eq(100L), eq("wrong"), any())).thenReturn(List.of());
+        when(reviewRepository.findReviewCandidatesForExamType(eq(100L), eq("wrong"), eq("QUIZ"), any())).thenReturn(List.of());
 
         assertThrows(BaseException.class, () -> notebookService.startReviewSession(req, 100L));
     }
@@ -137,19 +156,30 @@ class StudentNotebookServiceTest {
     @Test
     void startReviewSession_success() {
         ReviewSessionRequestDto req = new ReviewSessionRequestDto();
-        req.setSize(10);
+        req.setSize(1);
         req.setType("wrong");
+        req.setExamType("QUIZ");
 
-        when(reviewRepository.findReviewCandidates(eq(100L), eq("wrong"), any())).thenReturn(List.of(review1));
+        when(reviewRepository.findReviewCandidatesForExamType(eq(100L), eq("wrong"), eq("QUIZ"), any())).thenReturn(List.of(review1));
         when(userRepository.findById(100L)).thenReturn(Optional.of(student));
-        AnswerOption opt = AnswerOption.builder().optionId(11L).question(question1).optionText("A programming language").isCorrect(true).build();
-        when(answerOptionRepository.findByQuestionIds(List.of(1L))).thenReturn(List.of(opt));
+        Exam mockExam = Exam.builder().examId(500L).title("Review Practice").maxScore(BigDecimal.ONE).durationMinutes(120).build();
+        when(examRepository.save(any(Exam.class))).thenReturn(mockExam);
+
+        AttemptResponses.Session mockSession = new AttemptResponses.Session(
+                456L, 500L, "Review Practice", "IN_PROGRESS", Instant.now(), Instant.now().plusSeconds(7200),
+                Instant.now(), BigDecimal.ONE, List.of(new AttemptResponses.Question(1L, 1, "SINGLE_CHOICE", "What is Java?", List.of(), null, BigDecimal.ONE, null)),
+                null, "REVIEW", null
+        );
+        when(studentAttemptService.start(eq(100L), eq(500L), isNull())).thenReturn(mockSession);
 
         ReviewSessionResponseDto res = notebookService.startReviewSession(req, 100L);
 
         assertNotNull(res);
+        assertEquals(500L, res.getExamId());
+        assertEquals(456L, res.getAttemptId());
         assertEquals(1, res.getQuestions().size());
         assertEquals(1L, res.getQuestions().get(0).getQuestionId());
-        verify(examAttemptRepository).save(any(ExamAttempt.class));
+        verify(examRepository).save(any(Exam.class));
+        verify(studentAttemptService).start(eq(100L), eq(500L), isNull());
     }
 }

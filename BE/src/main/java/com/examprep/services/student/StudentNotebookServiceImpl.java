@@ -1,11 +1,15 @@
 package com.examprep.services.student;
 
 import com.examprep.dto.ResponseCode;
+import com.examprep.dto.attempt.AttemptResponses;
 import com.examprep.dto.student.QuestionReviewItemDto;
 import com.examprep.dto.student.ReviewSessionRequestDto;
 import com.examprep.dto.student.ReviewSessionResponseDto;
 import com.examprep.entities.AnswerOption;
+import com.examprep.entities.Course;
+import com.examprep.entities.Exam;
 import com.examprep.entities.ExamAttempt;
+import com.examprep.entities.ExamQuestion;
 import com.examprep.entities.Question;
 import com.examprep.entities.StudentQuestionReview;
 import com.examprep.entities.User;
@@ -14,9 +18,12 @@ import com.examprep.exceptions.BaseException;
 import com.examprep.exceptions.ResourceNotFoundException;
 import com.examprep.repositories.AnswerOptionRepository;
 import com.examprep.repositories.ExamAttemptRepository;
+import com.examprep.repositories.ExamQuestionRepository;
+import com.examprep.repositories.ExamRepository;
 import com.examprep.repositories.QuestionRepository;
 import com.examprep.repositories.StudentQuestionReviewRepository;
 import com.examprep.repositories.UserRepository;
+import com.examprep.services.StudentAttemptService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -53,6 +60,9 @@ public class StudentNotebookServiceImpl implements StudentNotebookService {
     private final AttemptAnswerRepository answerRepository;
     private final AttemptStartKeyRepository startKeyRepository;
     private final AttemptPaperFactory paperFactory;
+    private final ExamRepository examRepository;
+    private final ExamQuestionRepository examQuestionRepository;
+    private final StudentAttemptService studentAttemptService;
 
     @Override
     @Transactional(readOnly = true)
@@ -157,8 +167,13 @@ public class StudentNotebookServiceImpl implements StudentNotebookService {
             throw new BadRequestException("Size must be between 1 and 50");
         }
         String type = request.getType() != null ? request.getType() : "wrong";
+        String examType = request.getExamType() != null ? request.getExamType().toUpperCase() : "QUIZ";
+        if (!"QUIZ".equals(examType) && !"ESSAY".equals(examType)) {
+            throw new BadRequestException(ResponseCode.VALIDATION_ERROR, "examType must be QUIZ or ESSAY");
+        }
 
-        List<StudentQuestionReview> candidates = reviewRepository.findReviewCandidates(userId, type, PageRequest.of(0, 100));
+        List<StudentQuestionReview> candidates = reviewRepository.findReviewCandidatesForExamType(
+                userId, type, examType, PageRequest.of(0, 100));
         if (candidates.size() < size) {
             throw new BaseException(ResponseCode.VALIDATION_ERROR,
                     "Not enough questions available for review. Available: " + candidates.size() + ", required: " + size);
@@ -171,69 +186,64 @@ public class StudentNotebookServiceImpl implements StudentNotebookService {
         Collections.shuffle(shuffled);
         List<StudentQuestionReview> selected = shuffled.stream().limit(size).toList();
 
-        long seed = AttemptShuffler.newSeed();
-        AttemptShuffler shuffler = new AttemptShuffler(seed);
+        List<Question> questions = selected.stream().map(StudentQuestionReview::getQuestion).toList();
+        Course course = questions.get(0).getCourse();
+        if (course == null && questions.get(0).getModule() != null) {
+            course = questions.get(0).getModule().getCourse();
+        }
 
-        Snapshots.ExamSnapshot examSnapshot = new Snapshots.ExamSnapshot(
-                null, "Review Practice", BigDecimal.valueOf(size), 120, seed, size);
+        String title = "Review Practice - " + ("ESSAY".equals(examType) ? "Tự luận" : "Trắc nghiệm");
+        Exam exam = examRepository.save(Exam.builder()
+                .course(course)
+                .createdBy(student)
+                .title(title)
+                .description("Review practice exam for student mistake notebook")
+                .durationMinutes(120)
+                .isPractice(true)
+                .generationType("MANUAL")
+                .maxScore(BigDecimal.valueOf(size))
+                .status("PUBLISHED")
+                .publishedAt(Instant.now())
+                .mode("PRACTICE")
+                .build());
 
-        ExamAttempt attempt = ExamAttempt.builder()
-                .user(student)
-                .exam(null)
-                .mode("REVIEW")
-                .status("IN_PROGRESS")
-                .startTime(Instant.now())
-                .deadlineAt(Instant.now().plusSeconds(7200))
-                .autoSubmitted(false)
-                .examSnapshot(paperFactory.write(examSnapshot))
-                .build();
-        examAttemptRepository.save(attempt);
-        examAttemptRepository.flush();
+        List<ExamQuestion> examQuestions = new ArrayList<>();
+        int order = 1;
+        for (Question q : questions) {
+            examQuestions.add(ExamQuestion.builder()
+                    .exam(exam)
+                    .question(q)
+                    .orderIndex(order++)
+                    .weight(BigDecimal.ONE)
+                    .build());
+        }
+        examQuestionRepository.saveAll(examQuestions);
+        examQuestionRepository.flush();
 
-        List<Long> questionIds = selected.stream()
-                .map(r -> r.getQuestion().getQuestionId())
-                .distinct()
+        AttemptResponses.Session session = studentAttemptService.start(userId, exam.getExamId(), null);
+
+        List<ReviewSessionResponseDto.ReviewQuestionDto> questionDtos = session.questions().stream()
+                .map(q -> new ReviewSessionResponseDto.ReviewQuestionDto(
+                        q.questionId(),
+                        q.orderIndex(),
+                        q.questionType(),
+                        q.content(),
+                        q.options() == null ? null : q.options().stream()
+                                .map(o -> new ReviewSessionResponseDto.OptionDto(o.optionId(), o.optionText()))
+                                .toList(),
+                        q.maxPoints()
+                ))
                 .toList();
 
-        Map<Long, List<AnswerOption>> optionsByQuestionId = questionIds.isEmpty() ? Collections.emptyMap() :
-                answerOptionRepository.findByQuestionIds(questionIds).stream()
-                        .collect(Collectors.groupingBy(o -> o.getQuestion().getQuestionId()));
-
-        List<AttemptAnswer> rows = new ArrayList<>();
-        List<ReviewSessionResponseDto.ReviewQuestionDto> questionDtos = new ArrayList<>();
-        int index = 1;
-        for (StudentQuestionReview r : selected) {
-            Question q = r.getQuestion();
-            List<AnswerOption> options = optionsByQuestionId.getOrDefault(q.getQuestionId(), Collections.emptyList());
-            Snapshots.KeySnapshot keySnapshot = paperFactory.key(q, options);
-            Snapshots.DisplayQuestion display =
-                    paperFactory.display(q, keySnapshot, options, index++, shuffler);
-
-            rows.add(AttemptAnswer.builder()
-                    .attempt(attempt)
-                    .question(q)
-                    .displaySnapshot(paperFactory.write(display))
-                    .keySnapshot(paperFactory.write(keySnapshot))
-                    .draftSeq(-1)
-                    .weightSnapshot(BigDecimal.ONE)
-                    .questionVersion(q.getScoringVersion() == null ? 1 : q.getScoringVersion())
-                    .gradingStatus("AUTO")
-                    .build());
-
-            List<ReviewSessionResponseDto.OptionDto> optDtos = options.stream()
-                    .map(o -> new ReviewSessionResponseDto.OptionDto(o.getOptionId(), o.getOptionText()))
-                    .toList();
-            questionDtos.add(new ReviewSessionResponseDto.ReviewQuestionDto(
-                    q.getQuestionId(),
-                    display.orderIndex(),
-                    q.getQuestionType(),
-                    q.getContent(),
-                    optDtos
-            ));
-        }
-        answerRepository.saveAll(rows);
-
-        return new ReviewSessionResponseDto(attempt.getAttemptId(), questionDtos);
+        return new ReviewSessionResponseDto(
+                exam.getExamId(),
+                session.attemptId(),
+                examType,
+                title,
+                session.maxScore(),
+                exam.getDurationMinutes(),
+                questionDtos
+        );
     }
 
     @Override
