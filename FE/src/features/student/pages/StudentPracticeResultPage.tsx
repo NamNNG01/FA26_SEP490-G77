@@ -10,6 +10,7 @@ import { ROUTES, studentCoursePath, studentModulePath, studentModulePracticePath
 import { getApiErrorMessage } from '@/utils/apiError';
 import {
   AWAITING_GRADE,
+  PRACTICE_MODE_LABEL,
   accuracyPercent,
   modulePracticeService,
   type PracticeQuestionView,
@@ -121,7 +122,7 @@ export function StudentPracticeResultPage() {
           <div className="flex-1 min-w-0">
             <h1 className="text-[clamp(1.25rem,1.1rem+0.6vw,1.5rem)] font-bold text-content">{result.moduleTitle}</h1>
             <p className="text-sm text-content-soft mt-1">
-              {session.mode === 'REVIEW' ? 'Review mistakes' : 'Practice'} · {formatDuration(result.durationSeconds)}
+              {PRACTICE_MODE_LABEL[session.mode] ?? 'Practice'} · {formatDuration(result.durationSeconds)}
               {result.completedAt && ` · finished ${new Date(result.completedAt).toLocaleString()}`}
             </p>
           </div>

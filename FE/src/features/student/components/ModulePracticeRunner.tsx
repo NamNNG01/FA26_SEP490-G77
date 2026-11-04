@@ -14,6 +14,7 @@ import { RUBRIC_TYPES, type AnswerResponse } from '@/services/studentAttempt.ser
 import { INSTANT_CHECK_TYPES } from '@/services/studentPracticeExam.service';
 import {
   AWAITING_GRADE,
+  PRACTICE_MODE_LABEL,
   modulePracticeService,
   toAttemptQuestion,
   type PracticeAttempt,
@@ -401,7 +402,7 @@ export function ModulePracticeRunner({ sessionId }: { sessionId: string }) {
           <Icon.Logo className="w-7 h-7 flex-shrink-0 text-brand-ink" aria-hidden="true" />
           <span className="text-base font-bold text-content truncate">{session.moduleTitle}</span>
           <Badge variant="info" size="sm">
-            {session.mode === 'REVIEW' ? 'Review mistakes' : 'Practice'}
+            {PRACTICE_MODE_LABEL[session.mode] ?? 'Practice'}
           </Badge>
         </div>
         <div className="flex items-center gap-3 flex-wrap">

@@ -20,8 +20,22 @@ import type { AnswerResponse, AttemptQuestion, QuestionType } from './studentAtt
  * MP-10 (bookmark) is the notebook's POST /api/v1/student/questions/{questionId}/bookmark.
  */
 
-/** ALL = the module's whole pool; REVIEW = only the questions whose latest attempt is wrong. */
-export type PracticeMode = 'ALL' | 'REVIEW';
+/**
+ * ALL = the module's whole pool; REVIEW = only the questions still to review (latest attempt wrong,
+ * or a rubric score under 0.50); BOOKMARKED = the bookmarked ones; TARGET = filtered by difficulty
+ * and question type. The BE also takes WRONG (= REVIEW) and RANDOM (= ALL), which the FE does not offer.
+ */
+export type PracticeMode = 'ALL' | 'REVIEW' | 'WRONG' | 'BOOKMARKED' | 'RANDOM' | 'TARGET';
+export type PracticeDifficulty = 'EASY' | 'MEDIUM' | 'HARD';
+
+export const PRACTICE_MODE_LABEL: Record<PracticeMode, string> = {
+  ALL: 'Practice',
+  REVIEW: 'Review mistakes',
+  WRONG: 'Review mistakes',
+  BOOKMARKED: 'Bookmarked questions',
+  RANDOM: 'Practice',
+  TARGET: 'Targeted practice',
+};
 export type PracticeSessionStatus = 'IN_PROGRESS' | 'COMPLETED';
 export type PracticeGradingStatus = 'UNANSWERED' | 'AUTO' | 'PENDING_AI' | 'QUEUED' | 'GRADING' | 'AI_GRADED' | 'FAILED';
 export type MasteryStatus = 'NEW' | 'LEARNING' | 'MASTERED';
@@ -70,6 +84,10 @@ export interface StartPracticeRequest {
   /** null = the whole module. */
   questionCount: number | null;
   mode: PracticeMode;
+  /** TARGET only; none = any difficulty. */
+  difficulty?: PracticeDifficulty | null;
+  /** TARGET only; empty = any type. */
+  questionTypes?: QuestionType[];
 }
 
 export interface SessionQuestionSummary {
@@ -294,6 +312,8 @@ export const modulePracticeService = {
     const res = await api.post<ApiResponse<PracticeSession>>(`/student/modules/${moduleId}/practice/sessions`, {
       mode: body.mode,
       ...(body.questionCount != null ? { questionCount: body.questionCount } : {}),
+      ...(body.mode === 'TARGET' && body.difficulty ? { difficulty: body.difficulty } : {}),
+      ...(body.mode === 'TARGET' && body.questionTypes?.length ? { questionTypes: body.questionTypes } : {}),
     });
     return res.data;
   },
