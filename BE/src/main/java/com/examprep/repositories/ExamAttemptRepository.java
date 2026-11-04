@@ -23,28 +23,28 @@ public interface ExamAttemptRepository extends JpaRepository<ExamAttempt, Long> 
     @Query("SELECT a FROM ExamAttempt a WHERE a.attemptId = :id")
     Optional<ExamAttempt> lockById(@Param("id") Long id);
 
-    @Query("SELECT a FROM ExamAttempt a JOIN FETCH a.exam e JOIN FETCH e.course WHERE a.attemptId = :id")
+    @Query("SELECT a FROM ExamAttempt a LEFT JOIN FETCH a.exam e LEFT JOIN FETCH e.course WHERE a.attemptId = :id")
     Optional<ExamAttempt> findWithExamById(@Param("id") Long id);
 
-    @Query("SELECT COUNT(a) FROM ExamAttempt a WHERE a.user.userId = :userId")
+    @Query("SELECT COUNT(a) FROM ExamAttempt a WHERE a.user.userId = :userId AND (a.mode IS NULL OR a.mode <> 'REVIEW')")
     long countByUserId(@Param("userId") Long userId);
 
-    @Query("SELECT AVG(a.totalScore) FROM ExamAttempt a WHERE a.user.userId = :userId AND a.totalScore IS NOT NULL")
+    @Query("SELECT AVG(a.totalScore) FROM ExamAttempt a WHERE a.user.userId = :userId AND a.totalScore IS NOT NULL AND (a.mode IS NULL OR a.mode <> 'REVIEW')")
     Number averageScoreByUserId(@Param("userId") Long userId);
 
     @Query("SELECT new com.examprep.dto.StudentRecentAttempt(a.attemptId, a.exam.examId, a.exam.title, a.totalScore, a.status, a.submitTime) " +
             "FROM ExamAttempt a " +
-            "WHERE a.user.userId = :userId AND a.submitTime IS NOT NULL " +
+            "WHERE a.user.userId = :userId AND a.submitTime IS NOT NULL AND (a.mode IS NULL OR a.mode <> 'REVIEW') " +
             "ORDER BY a.submitTime DESC")
     List<StudentRecentAttempt> findRecentAttemptsByUserId(@Param("userId") Long userId, Pageable pageable);
 
-    @Query("SELECT COUNT(DISTINCT a.exam.examId) FROM ExamAttempt a WHERE a.user.userId = :userId AND a.exam.course.courseId = :courseId AND a.status = 'COMPLETED'")
+    @Query("SELECT COUNT(DISTINCT a.exam.examId) FROM ExamAttempt a WHERE a.user.userId = :userId AND a.exam.course.courseId = :courseId AND a.status = 'COMPLETED' AND (a.mode IS NULL OR a.mode <> 'REVIEW')")
     long countCompletedExamsByUserAndCourse(@Param("userId") Long userId, @Param("courseId") Long courseId);
 
-    @Query("SELECT AVG(a.totalScore * 10.0 / a.exam.maxScore) FROM ExamAttempt a WHERE a.user.userId = :userId AND a.exam.course.courseId = :courseId AND a.status = 'COMPLETED' AND a.totalScore IS NOT NULL AND a.exam.maxScore > 0")
+    @Query("SELECT AVG(a.totalScore * 10.0 / a.exam.maxScore) FROM ExamAttempt a WHERE a.user.userId = :userId AND a.exam.course.courseId = :courseId AND a.status = 'COMPLETED' AND a.totalScore IS NOT NULL AND a.exam.maxScore > 0 AND (a.mode IS NULL OR a.mode <> 'REVIEW')")
     Double averageScoreByUserAndCourse(@Param("userId") Long userId, @Param("courseId") Long courseId);
 
-    @Query("SELECT a FROM ExamAttempt a JOIN FETCH a.exam e WHERE a.user.userId = :userId AND e.course.courseId = :courseId AND a.submitTime IS NOT NULL ORDER BY a.submitTime DESC")
+    @Query("SELECT a FROM ExamAttempt a JOIN FETCH a.exam e WHERE a.user.userId = :userId AND e.course.courseId = :courseId AND a.submitTime IS NOT NULL AND (a.mode IS NULL OR a.mode <> 'REVIEW') ORDER BY a.submitTime DESC")
     List<ExamAttempt> findRecentAttemptsByUserAndCourse(@Param("userId") Long userId, @Param("courseId") Long courseId, Pageable pageable);
 
     @Query(value = "SELECT a FROM ExamAttempt a LEFT JOIN FETCH a.exam e " +
@@ -83,7 +83,7 @@ public interface ExamAttemptRepository extends JpaRepository<ExamAttempt, Long> 
     FROM ExamAttempt att
     JOIN att.exam ex
     LEFT JOIN ex.course c
-    WHERE att.user.userId = :userId
+    WHERE att.user.userId = :userId AND (att.mode IS NULL OR att.mode <> 'REVIEW')
     GROUP BY ex.examId, ex.title, c.courseId, c.title, ex.maxScore, ex.mode
     ORDER BY MAX(att.startTime) DESC
     """)

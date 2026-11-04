@@ -423,7 +423,7 @@ class AdminUserApiIntegrationTest {
 
     private Exam exam(String title) {
         Exam value = Exam.builder().createdBy(admin).title(title).durationMinutes(30)
-                .isPractice(true).generationType("MANUAL").build();
+                .isPractice(true).generationType("MANUAL").maxScore(BigDecimal.TEN).build();
         em.persist(value);
         return value;
     }

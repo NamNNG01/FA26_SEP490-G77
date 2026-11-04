@@ -63,8 +63,7 @@ public class AttemptAutoSubmitter {
         Snapshots.ExamSnapshot exam = paperFactory.read(attempt.getExamSnapshot(), Snapshots.ExamSnapshot.class);
         BigDecimal maxScore = exam != null && exam.maxScore() != null
                 ? exam.maxScore()
-                // Only a legacy attempt without a frozen paper falls back to its live exam.
-                : attempt.getExam().getMaxScore() != null ? attempt.getExam().getMaxScore() : BigDecimal.ZERO;
+                : (attempt.getExam() != null && attempt.getExam().getMaxScore() != null ? attempt.getExam().getMaxScore() : BigDecimal.valueOf(rows.size()));
 
         List<BigDecimal> weights = rows.stream().map(AttemptAnswer::getWeightSnapshot).toList();
         BigDecimal totalWeight = AttemptScoring.totalWeight(weights);

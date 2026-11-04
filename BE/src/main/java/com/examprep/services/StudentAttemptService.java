@@ -31,4 +31,7 @@ public interface StudentAttemptService {
 
     /** SA-07: discards an attempt still in progress, keeping nothing of it. */
     AttemptResponses.Cancelled cancel(Long userId, Long attemptId);
+
+    /** SA-08: acknowledges review result and deletes review attempt data. */
+    void acknowledgeReview(Long userId, Long attemptId);
 }

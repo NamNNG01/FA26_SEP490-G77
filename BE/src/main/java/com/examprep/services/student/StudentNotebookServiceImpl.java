@@ -24,7 +24,16 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.examprep.dto.attempt.Snapshots;
+import com.examprep.entities.AttemptAnswer;
+import com.examprep.repositories.AttemptAnswerRepository;
+import com.examprep.repositories.AttemptStartKeyRepository;
+import com.examprep.services.AttemptPaperFactory;
+import com.examprep.util.attempt.AttemptShuffler;
 import java.time.Instant;
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.Objects;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -41,6 +50,9 @@ public class StudentNotebookServiceImpl implements StudentNotebookService {
     private final UserRepository userRepository;
     private final AnswerOptionRepository answerOptionRepository;
     private final ExamAttemptRepository examAttemptRepository;
+    private final AttemptAnswerRepository answerRepository;
+    private final AttemptStartKeyRepository startKeyRepository;
+    private final AttemptPaperFactory paperFactory;
 
     @Override
     @Transactional(readOnly = true)
@@ -146,13 +158,24 @@ public class StudentNotebookServiceImpl implements StudentNotebookService {
         }
         String type = request.getType() != null ? request.getType() : "wrong";
 
-        List<StudentQuestionReview> candidates = reviewRepository.findReviewCandidates(userId, type, PageRequest.of(0, size));
-        if (candidates.isEmpty()) {
-            throw new BaseException(ResponseCode.VALIDATION_ERROR, "No questions match the filter");
+        List<StudentQuestionReview> candidates = reviewRepository.findReviewCandidates(userId, type, PageRequest.of(0, 100));
+        if (candidates.size() < size) {
+            throw new BaseException(ResponseCode.VALIDATION_ERROR,
+                    "Not enough questions available for review. Available: " + candidates.size() + ", required: " + size);
         }
 
         User student = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        List<StudentQuestionReview> shuffled = new ArrayList<>(candidates);
+        Collections.shuffle(shuffled);
+        List<StudentQuestionReview> selected = shuffled.stream().limit(size).toList();
+
+        long seed = AttemptShuffler.newSeed();
+        AttemptShuffler shuffler = new AttemptShuffler(seed);
+
+        Snapshots.ExamSnapshot examSnapshot = new Snapshots.ExamSnapshot(
+                null, "Review Practice", BigDecimal.valueOf(size), 120, seed, size);
 
         ExamAttempt attempt = ExamAttempt.builder()
                 .user(student)
@@ -162,10 +185,12 @@ public class StudentNotebookServiceImpl implements StudentNotebookService {
                 .startTime(Instant.now())
                 .deadlineAt(Instant.now().plusSeconds(7200))
                 .autoSubmitted(false)
+                .examSnapshot(paperFactory.write(examSnapshot))
                 .build();
         examAttemptRepository.save(attempt);
+        examAttemptRepository.flush();
 
-        List<Long> questionIds = candidates.stream()
+        List<Long> questionIds = selected.stream()
                 .map(r -> r.getQuestion().getQuestionId())
                 .distinct()
                 .toList();
@@ -174,22 +199,39 @@ public class StudentNotebookServiceImpl implements StudentNotebookService {
                 answerOptionRepository.findByQuestionIds(questionIds).stream()
                         .collect(Collectors.groupingBy(o -> o.getQuestion().getQuestionId()));
 
-        List<ReviewSessionResponseDto.ReviewQuestionDto> questionDtos = new java.util.ArrayList<>();
+        List<AttemptAnswer> rows = new ArrayList<>();
+        List<ReviewSessionResponseDto.ReviewQuestionDto> questionDtos = new ArrayList<>();
         int index = 1;
-        for (StudentQuestionReview r : candidates) {
+        for (StudentQuestionReview r : selected) {
             Question q = r.getQuestion();
             List<AnswerOption> options = optionsByQuestionId.getOrDefault(q.getQuestionId(), Collections.emptyList());
+            Snapshots.KeySnapshot keySnapshot = paperFactory.key(q, options);
+            Snapshots.DisplayQuestion display =
+                    paperFactory.display(q, keySnapshot, options, index++, shuffler);
+
+            rows.add(AttemptAnswer.builder()
+                    .attempt(attempt)
+                    .question(q)
+                    .displaySnapshot(paperFactory.write(display))
+                    .keySnapshot(paperFactory.write(keySnapshot))
+                    .draftSeq(-1)
+                    .weightSnapshot(BigDecimal.ONE)
+                    .questionVersion(q.getScoringVersion() == null ? 1 : q.getScoringVersion())
+                    .gradingStatus("AUTO")
+                    .build());
+
             List<ReviewSessionResponseDto.OptionDto> optDtos = options.stream()
                     .map(o -> new ReviewSessionResponseDto.OptionDto(o.getOptionId(), o.getOptionText()))
                     .toList();
             questionDtos.add(new ReviewSessionResponseDto.ReviewQuestionDto(
                     q.getQuestionId(),
-                    index++,
+                    display.orderIndex(),
                     q.getQuestionType(),
                     q.getContent(),
                     optDtos
             ));
         }
+        answerRepository.saveAll(rows);
 
         return new ReviewSessionResponseDto(attempt.getAttemptId(), questionDtos);
     }

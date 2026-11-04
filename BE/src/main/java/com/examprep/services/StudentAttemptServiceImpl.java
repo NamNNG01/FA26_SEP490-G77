@@ -287,8 +287,8 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
 
         Snapshots.ExamSnapshot exam = paperFactory.read(attempt.getExamSnapshot(), Snapshots.ExamSnapshot.class);
         BigDecimal maxScore = exam != null && exam.maxScore() != null
-                ? exam.maxScore() : attempt.getExam().getMaxScore();
-        String title = exam != null && exam.title() != null ? exam.title() : attempt.getExam().getTitle();
+                ? exam.maxScore() : (attempt.getExam() != null ? attempt.getExam().getMaxScore() : BigDecimal.valueOf(rows.size()));
+        String title = exam != null && exam.title() != null ? exam.title() : (attempt.getExam() != null ? attempt.getExam().getTitle() : "Review Practice");
 
         BigDecimal totalWeight = AttemptScoring.totalWeight(weights(rows));
         BigDecimal pendingWeight = BigDecimal.ZERO;
@@ -417,7 +417,7 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
             throw new ResourceConflictException("Attempt has already been submitted");
         }
 
-        Long examId = attempt.getExam().getExamId();
+        Long examId = attempt.getExam() != null ? attempt.getExam().getExamId() : null;
         // Children first: nothing of this attempt survives, neither answer nor start key. Each
         // flush makes sure the rows are really gone before the parent attempt is deleted.
         answers.deleteAll(answers.findByAttempt_AttemptId(attemptId));
@@ -426,6 +426,28 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
         startKeys.flush();
         attempts.delete(attempt);
         return new AttemptResponses.Cancelled(attemptId, examId);
+    }
+
+    @Override
+    @Transactional
+    public void acknowledgeReview(Long userId, Long attemptId) {
+        ExamAttempt attempt = attempts.lockById(attemptId)
+                .orElseThrow(() -> new ResourceNotFoundException("Attempt not found"));
+        if (!Objects.equals(attempt.getUser().getUserId(), userId)) {
+            throw new ForbiddenException("Attempt belongs to another student");
+        }
+        if (!"REVIEW".equals(attempt.getMode())) {
+            throw new BadRequestException("Attempt is not a review session");
+        }
+        if (!"COMPLETED".equals(attempt.getStatus()) && !"SUBMITTED".equals(attempt.getStatus())) {
+            throw new ResourceConflictException("Review session has not been completed or submitted yet");
+        }
+
+        answers.deleteAll(answers.findByAttempt_AttemptId(attemptId));
+        answers.flush();
+        startKeys.deleteAll(startKeys.findByAttempt_AttemptId(attemptId));
+        startKeys.flush();
+        attempts.delete(attempt);
     }
 
     // ---------------------------------------------------------------------------------
@@ -471,8 +493,9 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
     private AttemptResponses.Session sessionView(ExamAttempt attempt, List<AttemptAnswer> rows, boolean withAnswers) {
         Snapshots.ExamSnapshot exam = paperFactory.read(attempt.getExamSnapshot(), Snapshots.ExamSnapshot.class);
         BigDecimal maxScore = exam != null && exam.maxScore() != null
-                ? exam.maxScore() : attempt.getExam().getMaxScore();
-        String title = exam != null && exam.title() != null ? exam.title() : attempt.getExam().getTitle();
+                ? exam.maxScore() : (attempt.getExam() != null ? attempt.getExam().getMaxScore() : BigDecimal.valueOf(rows.size()));
+        String title = exam != null && exam.title() != null ? exam.title() : (attempt.getExam() != null ? attempt.getExam().getTitle() : "Review Practice");
+        Long examId = attempt.getExam() != null ? attempt.getExam().getExamId() : null;
 
         Map<Long, Question> live = liveQuestions(rows);
         BigDecimal totalWeight = AttemptScoring.totalWeight(weights(rows));
@@ -501,7 +524,7 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
 
         return new AttemptResponses.Session(
                 attempt.getAttemptId(),
-                attempt.getExam().getExamId(),
+                examId,
                 title,
                 attempt.getStatus(),
                 attempt.getStartTime(),
