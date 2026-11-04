@@ -88,7 +88,7 @@ export function SmartPracticeModal({
   const navigate = useNavigate();
   const [mode, setMode] = useState<SmartPracticeMode>(initialMode);
   const [courseId, setCourseId] = useState('');
-  const [questionCount, setQuestionCount] = useState(String(SMART_QUESTIONS.default));
+  const [questionCount, setQuestionCount] = useState('');
   const [touched, setTouched] = useState(false);
   // AI only
   const [aiContext, setAiContext] = useState('');
@@ -118,8 +118,8 @@ export function SmartPracticeModal({
   };
 
   const resetCounts = (m: SmartPracticeMode) => {
-    const limits = limitsOf(m);
-    setQuestionCount(String(limits.questions.default));
+    // Both tabs start empty: the student types the count, "Max …" is only the placeholder.
+    setQuestionCount('');
   };
 
   // Fresh form each time the modal opens; stop polling when it closes.
@@ -208,10 +208,13 @@ export function SmartPracticeModal({
   const minutesNum = limits.minutes.max;
   const errors = {
     course: courseId ? undefined : 'Select a course.',
-    count:
-      Number.isInteger(countNum) && countNum >= limits.questions.min && countNum <= limits.questions.max
+    count: !questionCount.trim()
+      ? 'Enter the number of questions.'
+      : Number.isInteger(countNum) && countNum >= limits.questions.min && countNum <= limits.questions.max
         ? undefined
-        : `Enter ${limits.questions.min} – ${limits.questions.max} questions.`,
+        : mode === 'RANDOM'
+          ? `Enter at most ${limits.questions.max} questions.`
+          : `Enter ${limits.questions.min} – ${limits.questions.max} questions.`,
   };
   const invalid = Boolean(errors.course || errors.count);
 
@@ -334,7 +337,8 @@ export function SmartPracticeModal({
                     max={limits.questions.max}
                     value={questionCount}
                     onChange={e => setQuestionCount(e.target.value)}
-                    hint={`${limits.questions.min} – ${limits.questions.max}`}
+                    // The maximum is shown as the placeholder rather than a hint.
+                    placeholder={`Max ${limits.questions.max}`}
                     error={touched ? errors.count : undefined}
                   />
                 </div>

@@ -17,7 +17,8 @@ import type { AnswerResponse, AttemptQuestion, ResultQuestion } from './studentA
  * "Category" in these bodies is a module of the course.
  */
 
-export const PRACTICE_QUESTIONS = { min: 5, max: 100, default: 20 };
+/** Only the maximum is enforced; BE still asks for 5 or more (see docs/notes). */
+export const PRACTICE_QUESTIONS = { min: 1, max: 100, default: 20 };
 export const PRACTICE_MINUTES = { min: 1, max: 180, default: 30 };
 
 export type PracticeExamType = 'QUIZ' | 'ESSAY';
