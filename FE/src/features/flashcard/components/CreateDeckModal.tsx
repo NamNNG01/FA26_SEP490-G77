@@ -11,6 +11,7 @@ import {
   DUPLICATE_TITLE_MESSAGE,
   DeckInfoFields,
   NO_COURSE,
+  NO_MODULE,
   cardErrorMessage,
   errorMessage,
   hasDuplicateTitle,
@@ -22,7 +23,7 @@ import {
   type EditableCard,
 } from './DeckEditor';
 
-const BLANK: DeckInfo = { title: '', courseId: NO_COURSE, isPublic: false, description: '' };
+const BLANK: DeckInfo = { title: '', courseId: NO_COURSE, moduleId: NO_MODULE, isPublic: false, description: '' };
 
 /** Outcome of creating the deck's cards after the deck itself was created. */
 export interface CreatedDeck {
@@ -60,7 +61,7 @@ export function CreateDeckModal({ onClose, onCreated, defaultCourseId }: {
   });
 
   const touched = info.title.trim() !== '' || info.description.trim() !== '' || info.isPublic
-    || info.courseId !== (defaultCourseId ?? NO_COURSE) || cards.length > 0 || editor.hasInput;
+    || info.courseId !== (defaultCourseId ?? NO_COURSE) || info.moduleId !== NO_MODULE || cards.length > 0 || editor.hasInput;
 
   const update = (patch: Partial<DeckInfo>) => {
     setInfo(prev => ({ ...prev, ...patch }));
@@ -100,6 +101,7 @@ export function CreateDeckModal({ onClose, onCreated, defaultCourseId }: {
         courseId: Number(info.courseId),
         isPublic: info.isPublic,
         description: info.description.trim() || undefined,
+        moduleId: info.moduleId === NO_MODULE ? undefined : Number(info.moduleId),
       });
     } catch (err) {
       setSaveError(errorMessage(err, 'Could not create the deck. Please try again.'));

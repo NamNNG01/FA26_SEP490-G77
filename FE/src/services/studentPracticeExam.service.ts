@@ -31,6 +31,8 @@ export interface PracticeExamRequest {
   examType?: PracticeExamType;
   categoryIds?: number[];
   difficulty?: PracticeDifficulty;
+  /** Name the student gives the practice exam. Ignored until the BE reads it (see docs/notes). */
+  title?: string;
 }
 
 /** PQ-01 */

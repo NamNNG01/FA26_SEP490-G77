@@ -7,7 +7,8 @@ import { downloadFile } from '@/utils/downloadFile';
  * DeckService — flashcard decks a Course Manager administers.
  *
  * Endpoints (ManagerDeckController):
- *   GET    /api/v1/manager/decks       (F-01) — only decks in the caller's courses or owned by them
+ *   GET    /api/v1/manager/decks       (F-01) — only decks in the caller's courses or owned by them;
+ *                                               filters: search, courseId, moduleId, isPublic
  *   POST   /api/v1/manager/decks       (F-02)
  *   GET    /api/v1/manager/decks/{id}  (F-03) — includes cards
  *   PUT    /api/v1/manager/decks/{id}  (F-04) — only the supplied fields change
@@ -33,6 +34,9 @@ export interface Deck {
   title: string;
   courseId: number | null;
   courseName: string | null;
+  /** The module of its course the deck is filed under; absent = none. */
+  moduleId?: number | null;
+  moduleTitle?: string | null;
   ownerId: number;
   ownerName: string;
   isPublic: boolean;
@@ -44,6 +48,8 @@ export interface Deck {
 export interface DeckListParams {
   search?: string;
   courseId?: number;
+  /** A module of courseId. */
+  moduleId?: number;
   isPublic?: boolean;
   /** 0-based. */
   page?: number;
@@ -57,6 +63,8 @@ export interface DeckCreateRequest {
   courseId?: number;
   isPublic: boolean;
   description?: string;
+  /** A module of courseId; omit for none. */
+  moduleId?: number;
 }
 
 /**
@@ -68,6 +76,8 @@ export interface DeckUpdateRequest {
   courseId?: number;
   isPublic?: boolean;
   description?: string;
+  /** Omitted = unchanged (but a new courseId clears it), 0 = no module, otherwise a module of the deck's course. */
+  moduleId?: number;
 }
 
 /** DeckRequests.CardCreate / CardUpdate — body of createCard / updateCard. */

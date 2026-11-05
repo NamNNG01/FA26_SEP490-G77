@@ -190,7 +190,7 @@ export function studentExamAttemptsPath(examId: number | string, practice = fals
 
 /**
  * Result of one submitted attempt — e.g. '/student/exam-result?attemptId=7&examId=12'.
- * `examId` is optional: SA-05 does not return it, and the result page needs it for "Re-attempt".
+ * `examId` is optional: SA-05 does not return it, and the result page needs it for "Retake".
  * `practice` adds `&practice=1`, as for studentExamAttemptsPath.
  */
 export function studentExamResultPath(attemptId: number | string, examId?: number | string, practice = false): string {

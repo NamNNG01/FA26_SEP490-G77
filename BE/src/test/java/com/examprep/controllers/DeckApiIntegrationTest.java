@@ -132,6 +132,23 @@ class DeckApiIntegrationTest {
     }
 
     @Test
+    void listFiltersByModuleAndReturnsTheModuleOfEachDeck() throws Exception {
+        com.examprep.entities.Module grammar = com.examprep.entities.Module.builder().course(course).title("Grammar").orderIndex(1).build();
+        em.persist(grammar);
+        Deck filed = deck(manager, course, "Tenses", false);
+        filed.setModule(grammar);
+        call(manager, get(BASE).param("courseId", course.getCourseId().toString()).param("moduleId", grammar.getModuleId().toString()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.totalElements").value(1))
+                .andExpect(jsonPath("$.data.content[0].deckId").value(filed.getDeckId()))
+                .andExpect(jsonPath("$.data.content[0].moduleId").value(grammar.getModuleId()))
+                .andExpect(jsonPath("$.data.content[0].moduleTitle").value("Grammar"));
+        // Without moduleId the deck that has no module is listed too.
+        call(manager, get(BASE).param("courseId", course.getCourseId().toString()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.totalElements").value(2));
+        call(manager, get(BASE).param("moduleId", "0")).andExpect(status().isBadRequest());
+    }
+
+    @Test
     void createsOwnedDeckWithOptionalManagedCourseAndEmptyCards() throws Exception {
         call(collaborator, post(BASE).contentType(MediaType.APPLICATION_JSON).content(createBody(course.getCourseId())))
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.data.ownerId").value(collaborator.getUserId()))

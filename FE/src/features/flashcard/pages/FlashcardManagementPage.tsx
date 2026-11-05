@@ -15,7 +15,7 @@ import { useDebounce } from '@/hooks';
 import { flashcardDeckPath } from '@/app/routes';
 import type { PageResponse } from '@/services/course.service';
 import { deckService, type Deck, type DeckListParams } from '@/services/deck.service';
-import { VisibilityBadge, errorMessage, useManagedCourses } from '../components/DeckEditor';
+import { NO_COURSE, VisibilityBadge, errorMessage, useCourseModules, useManagedCourses } from '../components/DeckEditor';
 import { CreateDeckModal } from '../components/CreateDeckModal';
 import { downloadDecksXlsx, fileSlug, type XlsxDeck } from '@/utils/flashcardXlsx';
 import { getApiErrorMessage } from '@/utils/apiError';
@@ -60,9 +60,12 @@ export function FlashcardManagementPage() {
 
   const [query, setQuery] = useState('');
   const [course, setCourse] = useState(ALL);
+  /** A module of the filtered course; ALL until a course is picked. */
+  const [module, setModule] = useState(ALL);
   const [visibility, setVisibility] = useState(ALL);
   const [page, setPage] = useState(1);
   const debouncedQuery = useDebounce(query.trim(), 400);
+  const { modules } = useCourseModules(course === ALL ? NO_COURSE : course);
 
   const [result, setResult] = useState<PageResponse<Deck> | null>(null);
   const [loading, setLoading] = useState(true);
@@ -78,6 +81,7 @@ export function FlashcardManagementPage() {
   const filters: Omit<DeckListParams, 'page' | 'size'> = {
     search: debouncedQuery || undefined,
     courseId: course === ALL ? undefined : Number(course),
+    moduleId: course === ALL || module === ALL ? undefined : Number(module),
     isPublic: visibility === ALL ? undefined : visibility === 'public',
   };
 
@@ -96,7 +100,7 @@ export function FlashcardManagementPage() {
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `filters` is derived from these values
-  }, [debouncedQuery, course, visibility, page, reloadKey]);
+  }, [debouncedQuery, course, module, visibility, page, reloadKey]);
 
   const reload = () => setReloadKey(k => k + 1);
 
@@ -170,7 +174,7 @@ export function FlashcardManagementPage() {
     {
       key: 'title',
       label: 'Deck',
-      width: '36%',
+      width: '30%',
       render: r => {
         const d = asDeck(r);
         return (
@@ -186,8 +190,19 @@ export function FlashcardManagementPage() {
       label: 'Course',
       render: r => {
         const name = asDeck(r).courseName;
+        // The whole name, wrapping onto more lines when long.
         return name
-          ? <span title={name}><Badge variant="info" className="max-w-[220px] truncate">{name}</Badge></span>
+          ? <Badge variant="info" className="max-w-[240px] whitespace-normal break-words !rounded-lg text-left leading-snug">{name}</Badge>
+          : <span className="text-content-subtle">—</span>;
+      },
+    },
+    {
+      key: 'moduleTitle',
+      label: 'Module',
+      render: r => {
+        const title = asDeck(r).moduleTitle;
+        return title
+          ? <span className="block text-sm text-content-soft line-clamp-2 whitespace-normal" title={title}>{title}</span>
           : <span className="text-content-subtle">—</span>;
       },
     },
@@ -233,10 +248,11 @@ export function FlashcardManagementPage() {
   ];
 
   const decks = result?.content ?? [];
-  const filtersActive = query !== '' || course !== ALL || visibility !== ALL;
+  const filtersActive = query !== '' || course !== ALL || module !== ALL || visibility !== ALL;
   const clearFilters = () => {
     setQuery('');
     setCourse(ALL);
+    setModule(ALL);
     setVisibility(ALL);
     setPage(1);
   };
@@ -270,8 +286,12 @@ export function FlashcardManagementPage() {
           onChange={e => { setQuery(e.target.value); setPage(1); }}
           aria-label="Search flashcard decks"
         />
-        <Select aria-label="Filter by course" value={course} onChange={filterSetter(setCourse)}
+        {/* A module filter only makes sense within one course: changing the course clears it. */}
+        <Select aria-label="Filter by course" value={course} onChange={filterSetter(v => { setCourse(v); setModule(ALL); })}
           options={[{ label: 'All Courses', value: ALL }, ...courses.map(c => ({ label: c.title, value: String(c.courseId) }))]}
+          className="w-full sm:w-48 lg:w-auto lg:min-w-0 lg:flex-[1.25]" />
+        <Select aria-label="Filter by module" value={module} onChange={filterSetter(setModule)} disabled={course === ALL}
+          options={[{ label: course === ALL ? 'All Modules (pick a course)' : 'All Modules', value: ALL }, ...modules.map(m => ({ label: m.title, value: String(m.moduleId) }))]}
           className="w-full sm:w-48 lg:w-auto lg:min-w-0 lg:flex-[1.25]" />
         <Select aria-label="Filter by visibility" value={visibility} onChange={filterSetter(setVisibility)}
           options={[{ label: 'All Visibility', value: ALL }, { label: 'Public', value: 'public' }, { label: 'Private', value: 'private' }]}

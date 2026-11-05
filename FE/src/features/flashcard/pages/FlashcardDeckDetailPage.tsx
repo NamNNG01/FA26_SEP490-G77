@@ -23,6 +23,7 @@ import {
   errorMessage,
   useManagedCourses,
   validateDeckInfo,
+  NO_MODULE,
   type DeckInfo,
   type DeckInfoErrors,
 } from '../components/DeckEditor';
@@ -30,6 +31,7 @@ import {
 const toInfo = (d: Deck): DeckInfo => ({
   title: d.title,
   courseId: d.courseId == null ? NO_COURSE : String(d.courseId),
+  moduleId: d.moduleId == null ? NO_MODULE : String(d.moduleId),
   isPublic: d.isPublic,
   description: d.description ?? '',
 });
@@ -39,6 +41,8 @@ function diff(saved: DeckInfo, draft: DeckInfo): DeckUpdateRequest {
   const patch: DeckUpdateRequest = {};
   if (draft.title.trim() !== saved.title) patch.title = draft.title.trim();
   if (draft.courseId !== saved.courseId && draft.courseId !== NO_COURSE) patch.courseId = Number(draft.courseId);
+  // 0 = no module. F-04 clears the module on a course change, so a module picked with the new course is sent too.
+  if (draft.moduleId !== saved.moduleId) patch.moduleId = draft.moduleId === NO_MODULE ? 0 : Number(draft.moduleId);
   if (draft.isPublic !== saved.isPublic) patch.isPublic = draft.isPublic;
   if (draft.description.trim() !== saved.description) patch.description = draft.description.trim();
   return patch;

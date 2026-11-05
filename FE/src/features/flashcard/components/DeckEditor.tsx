@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { useToast } from '@/components/ui/ToastHost';
 import { Icon } from '@/assets/icons';
-import { courseService, type CourseSummaryItem } from '@/services/course.service';
+import { courseService, type CourseModuleResponse, type CourseSummaryItem } from '@/services/course.service';
 import { deckService, type DeckCard } from '@/services/deck.service';
 
 /**
@@ -48,12 +48,35 @@ export function useManagedCourses() {
   return { courses, loading };
 }
 
+/** Select value for "no module" — the deck sits under its course only. */
+export const NO_MODULE = '';
+
+/** The modules of one course (GET /manager/courses/{courseId}/modules), in course order; none for NO_COURSE. */
+export function useCourseModules(courseId: string) {
+  const [modules, setModules] = useState<CourseModuleResponse[]>([]);
+  const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    setModules([]);
+    if (courseId === NO_COURSE) return;
+    let cancelled = false;
+    setLoading(true);
+    courseService.getCourseModules(courseId)
+      .then(list => { if (!cancelled) setModules([...list].sort((a, b) => a.orderIndex - b.orderIndex)); })
+      .catch(() => { if (!cancelled) setModules([]); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [courseId]);
+  return { modules, loading };
+}
+
 // ── Deck info ────────────────────────────────────────────────────────────────
 
 export interface DeckInfo {
   title: string;
   /** Course id as a select value; NO_COURSE for a personal deck. */
   courseId: string;
+  /** Module id (of courseId) as a select value; NO_MODULE for none. */
+  moduleId: string;
   isPublic: boolean;
   description: string;
 }
@@ -104,16 +127,30 @@ export function DeckInfoFields({ value, onChange, errors = {}, courses, coursesL
       : value.courseId === NO_COURSE ? [{ label: 'Select a course', value: NO_COURSE }] : []),
     ...courses.map(c => ({ label: c.title, value: c.id })),
   ];
+  const { modules, loading: modulesLoading } = useCourseModules(value.courseId);
+  const noCourse = value.courseId === NO_COURSE;
+  const moduleOptions = noCourse
+    ? [{ label: 'Pick a course first', value: NO_MODULE }]
+    : modulesLoading
+      ? [{ label: 'Loading modules…', value: value.moduleId }]
+      : [
+          { label: modules.length > 0 ? 'No module' : 'This course has no module', value: NO_MODULE },
+          ...modules.map(m => ({ label: m.status === 'HIDDEN' ? `${m.title} (hidden)` : m.title, value: String(m.moduleId) })),
+        ];
   return (
     <div className="space-y-4">
       <Input label="Deck name *" placeholder="e.g. Gradient Descent Essentials" value={value.title} maxLength={NAME_MAX}
         error={errors.title} onChange={e => onChange({ title: e.target.value })} />
-      <div className="grid gap-4 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+      <div className="grid gap-4 sm:grid-cols-2">
         <div>
-          <Select label={allowNoCourse ? 'Course' : 'Course *'} value={value.courseId} onChange={v => onChange({ courseId: v })} disabled={coursesLoading}
+          {/* A module belongs to one course: changing the course clears it. */}
+          <Select label={allowNoCourse ? 'Course' : 'Course *'} value={value.courseId}
+            onChange={v => onChange(v === value.courseId ? { courseId: v } : { courseId: v, moduleId: NO_MODULE })} disabled={coursesLoading}
             options={coursesLoading ? [{ label: 'Loading courses…', value: value.courseId }] : courseOptions} />
           {errors.courseId && <p className="text-xs text-danger mt-1">{errors.courseId}</p>}
         </div>
+        <Select label="Module" value={value.moduleId} onChange={v => onChange({ moduleId: v })}
+          disabled={noCourse || modulesLoading || modules.length === 0} options={moduleOptions} />
         <Select label="Visibility" value={value.isPublic ? 'public' : 'private'} onChange={v => onChange({ isPublic: v === 'public' })}
           options={[{ label: 'Private', value: 'private' }, { label: 'Public', value: 'public' }]} />
       </div>

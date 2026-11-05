@@ -37,13 +37,14 @@ public class DeckServiceImpl implements DeckService {
     private final com.examprep.util.FlashcardPdfWriter pdfWriter;
 
     @Override
-    public PageResponse<DeckResponse> list(UserPrincipal user, String search, Long courseId, Boolean isPublic, int page, int size) {
+    public PageResponse<DeckResponse> list(UserPrincipal user, String search, Long courseId, Long moduleId, Boolean isPublic, int page, int size) {
         if (courseId != null) positiveId(courseId);
+        if (moduleId != null) positiveId(moduleId);
         if (page < 0 || size < 1 || size > 100 || (long) page * size > Integer.MAX_VALUE)
             throw new BadRequestException("Page must be nonnegative, size must be 1-100, and offset must fit a 32-bit integer.");
         String text = search == null ? "" : search.strip().toLowerCase(Locale.ROOT);
         String pattern = "%" + text.replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%";
-        Page<Deck> result = decks.findManagedDecks(admin(user) ? null : user.getId(), courseId, isPublic, pattern,
+        Page<Deck> result = decks.findManagedDecks(admin(user) ? null : user.getId(), courseId, moduleId, isPublic, pattern,
                 PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "deckId")));
         List<Long> ids = result.getContent().stream().map(Deck::getDeckId).toList();
         if (ids.isEmpty()) return PageResponse.of(result, List.of());
