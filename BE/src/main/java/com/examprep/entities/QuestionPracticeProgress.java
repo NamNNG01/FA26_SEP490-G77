@@ -44,8 +44,9 @@ public class QuestionPracticeProgress implements Serializable {
     @JoinColumn(name = "course_id", nullable = false)
     private Course course;
 
+    /** Null for the course's General pool; such a row is unique per (student, course, question). */
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "module_id", nullable = false)
+    @JoinColumn(name = "module_id")
     private Module module;
 
     @ManyToOne(fetch = FetchType.LAZY)

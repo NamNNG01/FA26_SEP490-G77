@@ -13,7 +13,8 @@ public final class PersonalizationDtos {
 
     public record SmartRequest(@NotNull @Positive Long courseId,
                                @Min(10) @Max(30) Integer questionCount,
-                               @Min(10) @Max(60) Integer durationMinutes) {}
+                               @Min(10) @Max(60) Integer durationMinutes,
+                               @Size(max = 2000) String context) {}
 
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record CategoryAccuracy(Long categoryId, String name, int accuracy, int questionCount) {}

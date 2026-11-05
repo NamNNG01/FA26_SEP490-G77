@@ -1,11 +1,12 @@
 import { api } from './api';
 import type { ApiResponse } from '@/auth/authContext';
 import type { PageResponse } from './course.service';
-import type { AnswerResponse, AttemptQuestion, QuestionType } from './studentAttempt.service';
+import type { AnswerResponse, AttemptQuestion, QuestionType, ResultQuestion as ReviewQuestion } from './studentAttempt.service';
 
 /**
  * Module Practice — a student practices the question bank of one module, one question at a time.
- * Every question can be answered again; the BE never sends the answer key, only the verdict.
+ * Every question can be answered again. MP-04 carries the frozen key of an auto-graded question
+ * (`correctAnswer`) for the result review; rubric types (essay / code / diagram) have none.
  *   GET    /api/v1/student/modules/{moduleId}/practice/overview                               (MP-01)
  *   POST   /api/v1/student/modules/{moduleId}/practice/sessions                               (MP-02) — resumes the open one
  *   GET    /api/v1/student/practice/sessions/{sessionId}                                      (MP-03)
@@ -18,6 +19,10 @@ import type { AnswerResponse, AttemptQuestion, QuestionType } from './studentAtt
  *   GET    /api/v1/student/modules/{moduleId}/practice/review-questions                       (MP-11)
  *   DELETE /api/v1/student/modules/{moduleId}/practice/progress                               (MP-12)
  * MP-10 (bookmark) is the notebook's POST /api/v1/student/questions/{questionId}/bookmark.
+ *
+ * The course's General pool (questions of the exams not filed under any module) has the same four
+ * scope endpoints under /api/v1/student/courses/{courseId}/general/practice/... (overview, sessions,
+ * review-questions, progress); its sessions, results and review items carry `moduleId: null`.
  */
 
 /**
@@ -61,8 +66,12 @@ export interface ActivePracticeSession {
   nextQuestionOrderIndex: number | null;
 }
 
+/** What a practice covers: one module, or the General pool of a course. */
+export type PracticeScope = { moduleId: number } | { courseId: number };
+
 export interface ModulePracticeOverview {
-  moduleId: number;
+  /** null = the course's General pool. */
+  moduleId: number | null;
   moduleTitle: string;
   courseId: number;
   courseTitle: string;
@@ -104,7 +113,8 @@ export interface SessionQuestionSummary {
 
 export interface PracticeSession {
   sessionId: number;
-  moduleId: number;
+  /** null = the course's General pool. */
+  moduleId: number | null;
   moduleTitle: string;
   courseId: number;
   courseTitle: string;
@@ -152,12 +162,22 @@ export interface PracticeQuestionView {
   answerSpace: { maxLength: number | null } | null;
   media: { mediaId: number; optionId: number | null; mediaType: string; url: string; altText: string | null }[] | null;
   group: { groupId: number; questionType: string; title: string | null; passageText: string | null } | null;
+  /** Key of an auto-graded question (only the field of its type is set); null for rubric types. */
+  correctAnswer: PracticeCorrectAnswer | null;
   isBookmarked: boolean;
   attemptCount: number;
   latestIsCorrect: boolean | null;
   latestScore: number | null;
   gradingStatus: PracticeGradingStatus;
   attempts: PracticeAttempt[];
+}
+
+export interface PracticeCorrectAnswer {
+  /** SINGLE_CHOICE / TRUE_FALSE / MULTIPLE_CHOICE. */
+  correctOptionIds: number[] | null;
+  blanks: { index: number; accepted: string[] | null; caseSensitive: boolean | null }[] | null;
+  pairs: { left: string; right: string }[] | null;
+  correctOrder: number[] | null;
 }
 
 export interface SessionProgress {
@@ -210,7 +230,7 @@ export interface ResultQuestion {
 
 export interface PracticeResult {
   sessionId: number;
-  moduleId: number;
+  moduleId: number | null;
   moduleTitle: string;
   status: PracticeSessionStatus;
   totalQuestions: number;
@@ -236,7 +256,7 @@ export interface PracticeResult {
 export interface ReviewItem {
   progressId: number;
   questionId: number;
-  moduleId: number;
+  moduleId: number | null;
   questionType: QuestionType;
   content: string;
   totalAttempts: number;
@@ -250,7 +270,7 @@ export interface ReviewItem {
 }
 
 export interface ResetResult {
-  moduleId: number;
+  moduleId: number | null;
   deletedSessions: number;
   deletedProgressRecords: number;
 }
@@ -299,18 +319,50 @@ export function toAttemptQuestion(q: PracticeQuestionView): AttemptQuestion {
   };
 }
 
+/** MP-04 with one of its attempts, in the shape the exam result's answer review reads. */
+export function toReviewQuestion(q: PracticeQuestionView, attempt: PracticeAttempt | null): ReviewQuestion {
+  const key = q.correctAnswer;
+  const correctIds = key?.correctOptionIds ? new Set(key.correctOptionIds) : null;
+  return {
+    questionId: q.questionId,
+    orderIndex: q.orderIndex,
+    questionType: q.questionType,
+    content: q.content,
+    options: q.options?.map(o => ({ ...o, isCorrectAnswer: correctIds ? correctIds.has(o.optionId) : null })) ?? null,
+    yourResponse: attempt?.response ?? null,
+    isCorrect: attempt?.isCorrect ?? null,
+    maxPoints: null,
+    scoreEarned: attempt?.scoreEarned ?? null,
+    weight: null,
+    gradingStatus: attempt?.gradingStatus ?? null,
+    gradingError: null,
+    criteria: null,
+    overallFeedback: null,
+    explanation: null,
+    correctAnswer: key
+      ? {
+          orderedOptionIds: key.correctOrder,
+          pairs: key.pairs,
+          blanks: key.blanks ? Object.fromEntries(key.blanks.map(b => [String(b.index), b.accepted ?? []])) : null,
+        }
+      : null,
+  };
+}
+
+const scopePath = (scope: PracticeScope) =>
+  'moduleId' in scope ? `/student/modules/${scope.moduleId}/practice` : `/student/courses/${scope.courseId}/general/practice`;
 const sessionPath = (sessionId: number | string) => `/student/practice/sessions/${sessionId}`;
 const questionPath = (sessionId: number | string, sessionQuestionId: number | string) =>
   `${sessionPath(sessionId)}/questions/${sessionQuestionId}`;
 
 export const modulePracticeService = {
-  async getOverview(moduleId: number | string): Promise<ModulePracticeOverview> {
-    const res = await api.get<ApiResponse<ModulePracticeOverview>>(`/student/modules/${moduleId}/practice/overview`);
+  async getOverview(scope: PracticeScope): Promise<ModulePracticeOverview> {
+    const res = await api.get<ApiResponse<ModulePracticeOverview>>(`${scopePath(scope)}/overview`);
     return res.data;
   },
 
-  async startSession(moduleId: number | string, body: StartPracticeRequest): Promise<PracticeSession> {
-    const res = await api.post<ApiResponse<PracticeSession>>(`/student/modules/${moduleId}/practice/sessions`, {
+  async startSession(scope: PracticeScope, body: StartPracticeRequest): Promise<PracticeSession> {
+    const res = await api.post<ApiResponse<PracticeSession>>(`${scopePath(scope)}/sessions`, {
       mode: body.mode,
       ...(body.questionCount != null ? { questionCount: body.questionCount } : {}),
       ...(body.mode === 'TARGET' && body.difficulty ? { difficulty: body.difficulty } : {}),
@@ -366,15 +418,15 @@ export const modulePracticeService = {
     return res.data;
   },
 
-  async getReviewQuestions(moduleId: number | string, page = 0, size = 20): Promise<PageResponse<ReviewItem>> {
+  async getReviewQuestions(scope: PracticeScope, page = 0, size = 20): Promise<PageResponse<ReviewItem>> {
     const res = await api.get<ApiResponse<PageResponse<ReviewItem>>>(
-      `/student/modules/${moduleId}/practice/review-questions?page=${page}&size=${size}`,
+      `${scopePath(scope)}/review-questions?page=${page}&size=${size}`,
     );
     return res.data;
   },
 
-  async resetProgress(moduleId: number | string): Promise<ResetResult> {
-    const res = await api.request<ApiResponse<ResetResult>>({ method: 'delete', url: `/student/modules/${moduleId}/practice/progress` });
+  async resetProgress(scope: PracticeScope): Promise<ResetResult> {
+    const res = await api.request<ApiResponse<ResetResult>>({ method: 'delete', url: `${scopePath(scope)}/progress` });
     return res.data;
   },
 };

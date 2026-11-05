@@ -102,4 +102,18 @@ public interface QuestionPracticeAnswerRepository extends JpaRepository<Question
     List<QuestionPracticeAnswer> findAttemptsForProgress(@Param("userId") Long userId,
                                                          @Param("moduleId") Long moduleId,
                                                          @Param("questionId") Long questionId);
+
+    /**
+     * The same history for a General run: every attempt of one question that was practised through a
+     * session with no module, so a module session of the same course never leaks into it.
+     */
+    @Query("SELECT a FROM QuestionPracticeAnswer a "
+            + "WHERE a.sessionQuestion.question.questionId = :questionId "
+            + "AND a.sessionQuestion.session.user.userId = :userId "
+            + "AND a.sessionQuestion.session.course.courseId = :courseId "
+            + "AND a.sessionQuestion.session.module IS NULL "
+            + "ORDER BY a.answeredAt DESC, a.practiceAnswerId DESC")
+    List<QuestionPracticeAnswer> findGeneralAttemptsForProgress(@Param("userId") Long userId,
+                                                                @Param("courseId") Long courseId,
+                                                                @Param("questionId") Long questionId);
 }

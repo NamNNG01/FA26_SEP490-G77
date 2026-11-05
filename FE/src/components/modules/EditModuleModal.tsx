@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { Switch } from '@/components/ui/Switch';
 import { Alert } from '@/components/ui/Alert';
 import { Icon } from '@/assets/icons';
 import { courseService, type CourseModuleResponse } from '@/services/course.service';
@@ -31,17 +32,17 @@ export function EditModuleModal({
   onSaved: (module: EditableModule | CourseModuleResponse) => void;
 }) {
   const [title, setTitle] = useState('');
-  const [orderIndex, setOrderIndex] = useState('');
   const [description, setDescription] = useState('');
-  const [errors, setErrors] = useState<{ title?: string; orderIndex?: string }>({});
+  const [visible, setVisible] = useState(true);
+  const [errors, setErrors] = useState<{ title?: string }>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (open && module) {
       setTitle(module.title ?? '');
-      setOrderIndex(module.orderIndex !== undefined ? String(module.orderIndex) : '');
       setDescription(module.description ?? '');
+      setVisible(module.status !== 'HIDDEN');
       setErrors({});
       setSubmitError(null);
       setSubmitting(false);
@@ -55,11 +56,8 @@ export function EditModuleModal({
   const handleSubmit = async () => {
     if (submitting || !module) return;
 
-    const nextErrors: { title?: string; orderIndex?: string } = {};
+    const nextErrors: { title?: string } = {};
     if (!title.trim()) nextErrors.title = 'Module title is required.';
-    if (orderIndex.trim() && (Number.isNaN(Number(orderIndex)) || Number(orderIndex) < 1)) {
-      nextErrors.orderIndex = 'Order index must be a number of 1 or greater.';
-    }
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
 
@@ -70,11 +68,14 @@ export function EditModuleModal({
       if (!targetId) {
         throw new Error('Module identifier is missing.');
       }
-      const updated = await courseService.updateModule(targetId, {
+      let updated = await courseService.updateModule(targetId, {
         title: title.trim(),
         description: description.trim() || undefined,
-        orderIndex: orderIndex.trim() ? Number(orderIndex) : undefined,
       });
+      const nextStatus = visible ? 'VISIBLE' : 'HIDDEN';
+      if (module.status !== nextStatus) {
+        updated = await courseService.updateModuleStatus(targetId, nextStatus);
+      }
       onSaved(updated);
       onClose();
     } catch (err: unknown) {
@@ -122,16 +123,6 @@ export function EditModuleModal({
           placeholder="e.g. Supervised Learning"
         />
 
-        <Input
-          label="Display Order"
-          type="number"
-          min={1}
-          value={orderIndex}
-          onChange={e => setOrderIndex(e.target.value)}
-          error={errors.orderIndex}
-          hint="Position in course curriculum"
-        />
-
         <div>
           <label className="text-sm font-medium text-content-secondary block mb-1.5">
             Module Description <span className="text-content-subtle font-normal">(optional)</span>
@@ -141,6 +132,21 @@ export function EditModuleModal({
             value={description}
             onChange={e => setDescription(e.target.value)}
             placeholder="Summarize what this module covers…"
+          />
+        </div>
+
+        <div className="flex items-center justify-between rounded-[10px] border border-line px-3.5 py-3">
+          <div>
+            <p className="text-sm font-medium text-content-secondary">Module visibility</p>
+            <p className="text-xs text-content-subtle mt-0.5">
+              {visible ? 'Students can see this module.' : 'This module is hidden from students.'}
+            </p>
+          </div>
+          <Switch
+            checked={visible}
+            onChange={setVisible}
+            label={visible ? 'Visible' : 'Hidden'}
+            disabled={submitting}
           />
         </div>
 

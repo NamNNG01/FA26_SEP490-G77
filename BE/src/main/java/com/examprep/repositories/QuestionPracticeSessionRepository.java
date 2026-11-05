@@ -19,7 +19,7 @@ public interface QuestionPracticeSessionRepository extends JpaRepository<Questio
      * indistinguishable from a missing one, so ownership is never leaked.
      */
     @Query("SELECT s FROM QuestionPracticeSession s "
-            + "JOIN FETCH s.module m "
+            + "LEFT JOIN FETCH s.module m "
             + "JOIN FETCH s.course c "
             + "JOIN FETCH s.user u "
             + "WHERE s.sessionId = :sessionId AND s.user.userId = :userId")
@@ -31,7 +31,7 @@ public interface QuestionPracticeSessionRepository extends JpaRepository<Questio
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT s FROM QuestionPracticeSession s "
-            + "JOIN FETCH s.module m "
+            + "LEFT JOIN FETCH s.module m "
             + "JOIN FETCH s.course c "
             + "JOIN FETCH s.user u "
             + "WHERE s.sessionId = :sessionId AND s.user.userId = :userId")
@@ -46,6 +46,10 @@ public interface QuestionPracticeSessionRepository extends JpaRepository<Questio
     Optional<QuestionPracticeSession> findFirstByUser_UserIdAndModule_ModuleIdAndStatusOrderBySessionIdDesc(
             Long userId, Long moduleId, String status);
 
+    /** The single open General run of one student in one course (uq_qps_one_active_general backs this). */
+    Optional<QuestionPracticeSession> findFirstByUser_UserIdAndCourse_CourseIdAndModuleIsNullAndStatusOrderBySessionIdDesc(
+            Long userId, Long courseId, String status);
+
     /**
      * MP-12: the reset removes every practice session of one student on one module. The database
      * cascades into {@code question_practice_session_questions} and {@code question_practice_answers};
@@ -55,4 +59,14 @@ public interface QuestionPracticeSessionRepository extends JpaRepository<Questio
     @Query("DELETE FROM QuestionPracticeSession s "
             + "WHERE s.user.userId = :userId AND s.module.moduleId = :moduleId")
     int deleteByUserIdAndModuleId(@Param("userId") Long userId, @Param("moduleId") Long moduleId);
+
+    /**
+     * MP-12 (General): the reset removes every General session of one student in one course. Module
+     * runs of the same course are untouched, and the database cascades into the frozen paper and
+     * every stored attempt of the deleted sessions.
+     */
+    @Modifying
+    @Query("DELETE FROM QuestionPracticeSession s "
+            + "WHERE s.user.userId = :userId AND s.course.courseId = :courseId AND s.module IS NULL")
+    int deleteGeneralByUserIdAndCourseId(@Param("userId") Long userId, @Param("courseId") Long courseId);
 }

@@ -1,7 +1,9 @@
 package com.examprep.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import java.util.List;
 
@@ -16,12 +18,15 @@ public final class FlashcardImportDtos {
 
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record PreviewCardDto(
+            /** 1-based card order, excluding the header and ignored rows. */
             int rowIndex,
             String frontText,
             String backText,
             boolean valid,
             boolean duplicate,
-            List<ValidationError> errors
+            List<ValidationError> errors,
+            /** Original 1-based table row (or PDF text line) for diagnostics. */
+            int sourceRowIndex
     ) {}
 
     @JsonInclude(JsonInclude.Include.ALWAYS)
@@ -47,7 +52,8 @@ public final class FlashcardImportDtos {
             @NotBlank @Size(max = 255) String title,
             String description,
             Boolean isPublic,
-            Long courseId
+            @Positive Long courseId,
+            @Positive Long moduleId
     ) {}
 
     public record CardInput(
@@ -57,7 +63,7 @@ public final class FlashcardImportDtos {
 
     public record BulkSaveRequest(
             Long deckId,
-            NewDeckRequest newDeck,
+            @Valid NewDeckRequest newDeck,
             @NotBlank String source, // IMPORT or AI
             Long aiGenerationId,
             Boolean skipDuplicates, // default true

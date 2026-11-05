@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -8,11 +8,13 @@ import { Spinner } from '@/components/ui/Spinner';
 import { Icon } from '@/assets/icons';
 import { ROUTES, studentCoursePath, studentModulePath, studentModulePracticePath } from '@/app/routes';
 import { getApiErrorMessage } from '@/utils/apiError';
+import { RUBRIC_TYPES } from '@/services/studentAttempt.service';
+import { studentProgressService } from '@/services/studentProgress.service';
 import {
   AWAITING_GRADE,
   PRACTICE_MODE_LABEL,
-  accuracyPercent,
   modulePracticeService,
+  toReviewQuestion,
   type PracticeQuestionView,
   type PracticeResult,
   type PracticeSession,
@@ -22,26 +24,67 @@ import { LoadError, STUDENT_PAGE_CLASS } from '../components/studentUi';
 import { QUESTION_TYPE_LABEL, QuestionText } from '../components/QuestionAnswerInput';
 import { PracticeVerdict, scorePercent, summaryOutcome } from '../components/PracticeVerdict';
 import { PracticeExplanation } from '../components/PracticeExplanation';
+import { ReportQuestionIssueButton } from '../components/ReportQuestionIssueDialog';
+import { AnswerReview } from '../components/result/AnswerReview';
+import { QuestionNav, ResultPalette, useArrowKeyNav, type OutcomeMeta } from '../components/result/ResultNavigator';
 
 const POLL_MS = 5000;
 const POLL_LIMIT_MS = 3 * 60_000;
 
 const sortQuestions = (r: PracticeResult): PracticeResult => ({ ...r, questions: [...r.questions].sort((a, b) => a.orderIndex - b.orderIndex) });
 
+type Outcome = 'correct' | 'incorrect' | 'graded' | 'unanswered' | 'pending' | 'failed';
+
+const OUTCOME: Record<Outcome, { label: string; badge: 'success' | 'danger' | 'purple' | 'default' | 'warning'; icon: React.ReactNode }> = {
+  correct: { label: 'Correct', badge: 'success', icon: <Icon.CheckCircle className="w-5 h-5 text-success" /> },
+  incorrect: { label: 'Incorrect', badge: 'danger', icon: <Icon.XCircle className="w-5 h-5 text-danger" /> },
+  graded: { label: 'AI scored', badge: 'purple', icon: <Icon.Award className="w-5 h-5 text-primary" /> },
+  unanswered: { label: 'Unanswered', badge: 'default', icon: <Icon.HelpCircle className="w-5 h-5 text-content-subtle" /> },
+  pending: { label: 'Grading', badge: 'warning', icon: <Icon.Clock className="w-5 h-5 text-warning" /> },
+  failed: { label: 'Not graded', badge: 'warning', icon: <Icon.AlertCircle className="w-5 h-5 text-warning" /> },
+};
+
+/** Same fills as the exam result's palette. */
+const PALETTE: OutcomeMeta<Outcome> = {
+  correct: { label: OUTCOME.correct.label, cell: 'bg-success-solid text-white' },
+  incorrect: { label: OUTCOME.incorrect.label, cell: 'bg-danger-solid text-white' },
+  graded: { label: OUTCOME.graded.label, cell: 'bg-brand-600 text-white' },
+  unanswered: { label: OUTCOME.unanswered.label, cell: 'bg-content-subtle text-white' },
+  pending: { label: OUTCOME.pending.label, cell: 'bg-highlight text-brand-950' },
+  failed: { label: OUTCOME.failed.label, cell: 'bg-warning-strong text-white' },
+};
+
+function outcomeOf(q: ResultQuestion): Outcome {
+  if (q.attemptCount === 0) return 'unanswered';
+  if (AWAITING_GRADE.has(q.gradingStatus)) return 'pending';
+  if (q.gradingStatus === 'FAILED') return 'failed';
+  const o = summaryOutcome({ answered: true, latestIsCorrect: q.latestIsCorrect, gradingStatus: q.gradingStatus, questionType: q.questionType });
+  return o === 'correct' ? 'correct' : o === 'wrong' ? 'incorrect' : o === 'partial' ? 'graded' : 'pending';
+}
+
+/** MP-04 depends on the latest attempt and its grading: a new one of either is another read. */
+const viewKey = (q: ResultQuestion) => `${q.sessionQuestionId}:${q.attemptCount}:${q.gradingStatus}`;
+
 /**
- * Result of one Module Practice session (MP-08): question statistics kept apart from attempt
- * statistics, then every question with its latest outcome. A row opens the question (MP-04) with
- * its last attempt and an "Explain" (MP-09). While AI grading is still running the page re-reads
- * the result every few seconds. Also readable while the session is still open.
+ * Result of one Module Practice session (MP-08), laid out like the exam result: a header with the
+ * module and the way on, then one question at a time (`?q=` 1-based) with its latest answer set
+ * against the key (MP-04 `correctAnswer`) and an "Explain" (MP-09); Previous / Next and ← → move
+ * through it. Beside it, a palette of every question coloured by its latest outcome. While AI
+ * grading is still running the page re-reads the result every few seconds. Also readable while
+ * the session is still open.
  */
 export function StudentPracticeResultPage() {
   const { sessionId = '' } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [result, setResult] = useState<PracticeResult | null>(null);
   const [session, setSession] = useState<PracticeSession | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
-  const [open, setOpen] = useState<number | null>(null);
+  /** Previous / Next of the question on screen, for the ← → keys (set every render). */
+  const navRef = useRef<{ prev?: () => void; next?: () => void }>({});
+  const questionRef = useRef<HTMLElement>(null);
+  useArrowKeyNav(navRef);
 
   useEffect(() => {
     let cancelled = false;
@@ -76,6 +119,8 @@ export function StudentPracticeResultPage() {
     return () => window.clearInterval(id);
   }, [awaiting, sessionId]);
 
+  const outcomes = useMemo(() => (result?.questions ?? []).map(outcomeOf), [result]);
+
   const breadcrumb = (
     <Breadcrumb
       items={[
@@ -104,59 +149,111 @@ export function StudentPracticeResultPage() {
     return (
       <div className={`${STUDENT_PAGE_CLASS} space-y-6`}>
         {breadcrumb}
-        <Skeleton className="h-32 w-full" />
-        <Skeleton className="h-64 w-full" />
+        <Skeleton className="h-28 w-full" />
+        <div className="grid lg:grid-cols-[minmax(0,1fr)_300px] gap-6">
+          <Skeleton className="h-80 w-full" />
+          <Skeleton className="h-56 w-full" />
+        </div>
       </div>
     );
   }
 
-  const inProgress = result.status === 'IN_PROGRESS';
-  const modulePath = studentModulePath(session.courseId, session.moduleId);
+  const total = result.questions.length;
+  const qParam = Number(searchParams.get('q'));
+  const current = total === 0 ? 0 : Number.isInteger(qParam) && qParam >= 1 ? Math.min(qParam, total) - 1 : 0;
+  const prevIndex = current > 0 ? current - 1 : undefined;
+  const nextIndex = current < total - 1 ? current + 1 : undefined;
+
+  const goTo = (index: number) => {
+    // replace: walking through the questions must not fill the Back button's history.
+    setSearchParams(
+      prev => {
+        const next = new URLSearchParams(prev);
+        next.set('q', String(index + 1));
+        return next;
+      },
+      { replace: true },
+    );
+    // From the bottom of a long answer, bring the next question's top into view.
+    const top = questionRef.current?.getBoundingClientRect().top;
+    if (top != null && top < 0) questionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+  navRef.current = {
+    prev: prevIndex != null ? () => goTo(prevIndex) : undefined,
+    next: nextIndex != null ? () => goTo(nextIndex) : undefined,
+  };
+
+  const q = result.questions[current];
 
   return (
     <div className={`${STUDENT_PAGE_CLASS} space-y-[clamp(1.25rem,2.5vw,1.75rem)]`}>
       {breadcrumb}
 
-      <section className="card p-[clamp(1rem,2vw,1.25rem)] space-y-5">
-        <div className="flex flex-wrap items-start gap-3">
-          <div className="flex-1 min-w-0">
-            <h1 className="text-[clamp(1.25rem,1.1rem+0.6vw,1.5rem)] font-bold text-content">{result.moduleTitle}</h1>
-            <p className="text-sm text-content-soft mt-1">
-              {PRACTICE_MODE_LABEL[session.mode] ?? 'Practice'} · {formatDuration(result.durationSeconds)}
-              {result.completedAt && ` · finished ${new Date(result.completedAt).toLocaleString()}`}
-            </p>
-          </div>
-          <Badge variant={inProgress ? 'warning' : 'success'}>{inProgress ? 'In progress' : 'Completed'}</Badge>
-        </div>
+      <ResultHeader result={result} session={session} />
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <Stat label="Answered" value={`${result.answeredQuestions}/${result.totalQuestions}`} />
-          <Stat label="Correct" value={String(result.questionsLatestCorrect)} tone="success" />
-          <Stat label="Wrong" value={String(result.questionsLatestWrong)} tone={result.questionsLatestWrong > 0 ? 'danger' : undefined} />
-          <Stat label="Accuracy" value={result.gradedAttempts > 0 ? `${accuracyPercent(result.accuracyRate)}%` : '—'} />
-        </div>
+      <div className="grid lg:grid-cols-[minmax(0,1fr)_300px] gap-[clamp(1rem,2vw,1.5rem)] items-start">
+        {/* Navigator above the question on small screens (folded); beside it, top-aligned, from lg. */}
+        {total > 0 && (
+          <aside className="lg:order-2 min-w-0">
+            <ResultPalette outcomes={outcomes} meta={PALETTE} current={current} onSelect={goTo} />
+          </aside>
+        )}
 
-        <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm text-content-soft">
-          <span>
-            {result.totalAttempts} attempt{result.totalAttempts === 1 ? '' : 's'} · {result.correctAttempts} correct · {result.wrongAttempts} wrong
-          </span>
-          {result.questionsGradedWithoutVerdict > 0 && <span>{result.questionsGradedWithoutVerdict} scored by AI</span>}
-          {result.questionsAwaitingGrade > 0 && (
-            <span className="inline-flex items-center gap-1.5">
-              <Icon.RefreshCw className="w-3.5 h-3.5 animate-spin" /> {result.questionsAwaitingGrade} being graded by AI
-            </span>
+        <section ref={questionRef} className="lg:order-1 space-y-3 min-w-0 scroll-mt-[85px]" aria-label="Question">
+          {!q ? (
+            <div className="card px-5 py-10 text-center text-sm text-content-soft">This practice has no question.</div>
+          ) : (
+            <>
+              <PracticeQuestionCard
+                key={viewKey(q)}
+                question={q}
+                index={current}
+                outcome={outcomes[current]}
+                sessionId={result.sessionId}
+                nav={<QuestionNav current={current} total={total} onPrev={navRef.current.prev} onNext={navRef.current.next} />}
+              />
+              <div className="flex items-center justify-between gap-3">
+                <Button variant="outline" icon={<Icon.ChevronLeft className="w-4 h-4" />} disabled={!navRef.current.prev} onClick={navRef.current.prev}>
+                  Previous
+                </Button>
+                <Button disabled={!navRef.current.next} onClick={navRef.current.next}>
+                  Next
+                  <Icon.ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
+            </>
           )}
-          {result.questionsFailedGrade > 0 && <span className="text-danger">{result.questionsFailedGrade} could not be graded</span>}
-          {result.unansweredQuestions > 0 && <span>{result.unansweredQuestions} not answered</span>}
-        </div>
+        </section>
+      </div>
+    </div>
+  );
+}
 
-        <div className="flex flex-wrap gap-2">
+/** The module, mode and time on the left; Continue / Practice again and Back on the right; AI grading notes below. */
+function ResultHeader({ result, session }: { result: PracticeResult; session: PracticeSession }) {
+  const navigate = useNavigate();
+  const inProgress = result.status === 'IN_PROGRESS';
+  const modulePath = studentModulePath(session.courseId, session.moduleId);
+  return (
+    <div className="card p-5 min-w-0 space-y-4">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center">
+        <div className="flex-1 min-w-0 space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-[clamp(1.25rem,1.1rem+0.6vw,1.5rem)] font-bold text-content">{result.moduleTitle}</h1>
+            <Badge variant={inProgress ? 'warning' : 'success'}>{inProgress ? 'In progress' : 'Completed'}</Badge>
+          </div>
+          <p className="text-sm text-content-soft">
+            {PRACTICE_MODE_LABEL[session.mode] ?? 'Practice'} · {formatDuration(result.durationSeconds)}
+            {result.completedAt && ` · finished ${new Date(result.completedAt).toLocaleString()}`}
+          </p>
+        </div>
+        <div className="flex flex-wrap md:flex-col gap-2">
           {inProgress ? (
             <Button icon={<Icon.Play className="w-4 h-4" />} onClick={() => navigate(studentModulePracticePath(result.sessionId))}>
               Continue practice
             </Button>
           ) : (
-            <Button icon={<Icon.Play className="w-4 h-4" />} onClick={() => navigate(modulePath)}>
+            <Button icon={<Icon.RefreshCw className="w-4 h-4" />} onClick={() => navigate(modulePath)}>
               Practice again
             </Button>
           )}
@@ -164,53 +261,61 @@ export function StudentPracticeResultPage() {
             Back to module
           </Button>
         </div>
-      </section>
+      </div>
 
-      <section className="card overflow-hidden" aria-label="Questions">
-        <h2 className="px-4 py-3 border-b border-line text-base font-semibold text-content">Questions</h2>
-        <ul className="divide-y divide-line">
-          {result.questions.map((q, i) => (
-            <ResultRow
-              key={q.sessionQuestionId}
-              number={i + 1}
-              question={q}
-              sessionId={result.sessionId}
-              expanded={open === q.sessionQuestionId}
-              onToggle={() => setOpen(o => (o === q.sessionQuestionId ? null : q.sessionQuestionId))}
-            />
-          ))}
-        </ul>
-      </section>
+      {result.questionsAwaitingGrade > 0 && (
+        <p className="flex items-start gap-2 text-xs text-warning">
+          <Icon.Clock className="w-4 h-4 flex-shrink-0" />
+          {result.questionsAwaitingGrade} question{result.questionsAwaitingGrade === 1 ? ' is' : 's are'} still being graded by AI. This page
+          refreshes on its own.
+        </p>
+      )}
+      {result.questionsFailedGrade > 0 && (
+        <p className="flex items-start gap-2 rounded-[10px] border border-danger-solid bg-danger-light p-3 text-xs text-danger">
+          <Icon.AlertCircle className="w-4 h-4 flex-shrink-0" />
+          AI grading failed for {result.questionsFailedGrade} question{result.questionsFailedGrade === 1 ? '' : 's'}. Answer {result.questionsFailedGrade === 1 ? 'it' : 'them'}{' '}
+          again in a new practice to get a grade.
+        </p>
+      )}
     </div>
   );
 }
 
-function ResultRow({
-  number,
+/**
+ * One question as on the exam result: outcome icon, number and type, the text and the outcome badge;
+ * Bookmark / Report; then the latest answer against the key with "Explain", or — for an essay / code /
+ * diagram answer — the answer beside its AI score and feedback. Reads MP-04 on mount (the page keys
+ * it by the latest attempt and its grading, so a regrade reads it again).
+ */
+function PracticeQuestionCard({
   question: q,
+  index,
+  outcome,
   sessionId,
-  expanded,
-  onToggle,
+  nav,
 }: {
-  number: number;
   question: ResultQuestion;
+  index: number;
+  outcome: Outcome;
   sessionId: number;
-  expanded: boolean;
-  onToggle: () => void;
+  nav: React.ReactNode;
 }) {
   const [view, setView] = useState<PracticeQuestionView | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const answered = q.attemptCount > 0;
+  const [reload, setReload] = useState(0);
+  const [bookmarked, setBookmarked] = useState(false);
+  const [bookmarkBusy, setBookmarkBusy] = useState(false);
+  const [bookmarkError, setBookmarkError] = useState<string | null>(null);
 
-  // Re-read when the grading of the latest attempt changed (the page polls the result).
   useEffect(() => {
-    if (!expanded) return;
     let cancelled = false;
     setError(null);
     modulePracticeService
       .getQuestion(sessionId, q.sessionQuestionId)
       .then(v => {
-        if (!cancelled) setView(v);
+        if (cancelled) return;
+        setView(v);
+        setBookmarked(v.isBookmarked);
       })
       .catch(err => {
         if (!cancelled) setError(getApiErrorMessage(err, 'Failed to load this question.'));
@@ -218,97 +323,106 @@ function ResultRow({
     return () => {
       cancelled = true;
     };
-  }, [expanded, sessionId, q.sessionQuestionId, q.gradingStatus, q.attemptCount]);
+  }, [sessionId, q.sessionQuestionId, reload]);
+
+  const toggleBookmark = async () => {
+    setBookmarkBusy(true);
+    setBookmarkError(null);
+    try {
+      setBookmarked((await studentProgressService.toggleBookmark(q.questionId)).isBookmarked);
+    } catch (err) {
+      setBookmarkError(getApiErrorMessage(err, 'Could not update the bookmark.'));
+    } finally {
+      setBookmarkBusy(false);
+    }
+  };
 
   const latest = view?.attempts.length ? view.attempts[view.attempts.length - 1] : null;
+  const rubric = RUBRIC_TYPES.has(q.questionType);
+  const graded = latest != null && !AWAITING_GRADE.has(latest.gradingStatus);
 
   return (
-    <li>
-      <button
-        type="button"
-        aria-expanded={expanded}
-        onClick={onToggle}
-        className="w-full flex flex-wrap items-center gap-3 px-4 py-3 text-left hover:bg-surface-hover focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
-      >
-        <span className="w-8 text-sm font-semibold text-content-secondary">{number}</span>
-        <Badge size="sm" variant="info">
-          {QUESTION_TYPE_LABEL[q.questionType] ?? q.questionType}
-        </Badge>
-        <OutcomeBadge question={q} />
-        <span className="ml-auto text-xs text-content-subtle">
-          {answered ? `${q.attemptCount} attempt${q.attemptCount === 1 ? '' : 's'}` : 'Not answered'}
-        </span>
-        <Icon.ChevronDown className={`w-4 h-4 text-content-subtle transition-transform ${expanded ? 'rotate-180' : ''}`} />
-      </button>
-      {expanded && (
-        <div className="px-4 pb-4 pl-[3.25rem] space-y-3">
-          {error ? (
-            <p className="text-sm text-danger">{error}</p>
-          ) : !view ? (
-            <Spinner />
-          ) : (
-            <>
-              <QuestionText content={view.content} className="text-sm text-content leading-relaxed" />
-              {latest ? (
-                <>
-                  <PracticeVerdict attempt={latest} questionType={q.questionType} />
-                  {!AWAITING_GRADE.has(latest.gradingStatus) && (
-                    <PracticeExplanation
-                      questionId={q.questionId}
-                      sessionId={sessionId}
-                      sessionQuestionId={q.sessionQuestionId}
-                      practiceAnswerId={latest.practiceAnswerId}
-                    />
-                  )}
-                </>
-              ) : (
-                <p className="text-sm text-content-subtle">You did not answer this question.</p>
-              )}
-            </>
-          )}
+    <>
+      <article className="card overflow-hidden">
+        <div className="border-b border-line bg-surface-alt px-4 py-2.5">{nav}</div>
+        <header className="flex items-start gap-3 px-4 py-3.5">
+          <span className="mt-0.5 flex-shrink-0">{OUTCOME[outcome].icon}</span>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs text-content-subtle">
+              Question {index + 1} · {QUESTION_TYPE_LABEL[q.questionType] ?? q.questionType}
+              {q.attemptCount > 1 && ` · ${q.attemptCount} attempts`}
+            </p>
+            {view && <QuestionText content={view.content} className="text-sm text-content mt-0.5" />}
+          </div>
+          <Badge variant={OUTCOME[outcome].badge} size="sm" className="flex-shrink-0">
+            {outcome === 'graded' ? `AI score ${scorePercent(q.latestScore)}%` : OUTCOME[outcome].label}
+          </Badge>
+        </header>
+
+        <div className="flex justify-end border-t border-line px-4 py-3">
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant={bookmarked ? 'primary' : 'outline'}
+              disabled={bookmarkBusy || !view}
+              aria-pressed={bookmarked}
+              aria-label={bookmarked ? 'Remove bookmark' : 'Bookmark question'}
+              icon={<Icon.Star className={`w-4 h-4 ${bookmarked ? 'fill-current' : ''}`} />}
+              onClick={toggleBookmark}
+            >
+              {bookmarked ? 'Bookmarked' : 'Bookmark'}
+            </Button>
+            <ReportQuestionIssueButton questionId={q.questionId} />
+          </div>
         </div>
+
+        {error ? (
+          <div className="flex flex-wrap items-center gap-3 border-t border-line px-4 py-4">
+            <p className="text-sm text-danger">{error}</p>
+            <Button size="sm" variant="outline" icon={<Icon.RefreshCw className="w-4 h-4" />} onClick={() => setReload(r => r + 1)}>
+              Try again
+            </Button>
+          </div>
+        ) : !view ? (
+          <div className="border-t border-line px-4 py-8 flex justify-center">
+            <Spinner />
+          </div>
+        ) : rubric ? (
+          // Written answer beside its AI score once the card is wide enough, so the feedback stays in view.
+          <div className="@container border-t border-line px-4 py-4">
+            <div className="grid gap-4 @3xl:grid-cols-[minmax(0,1fr)_minmax(15rem,20rem)] @3xl:items-start">
+              <div className="min-w-0">
+                <AnswerReview question={toReviewQuestion(view, latest)} />
+              </div>
+              {latest && (
+                <div className="@3xl:sticky @3xl:top-[85px] min-w-0">
+                  <PracticeVerdict attempt={latest} questionType={q.questionType} />
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="border-t border-line px-4 py-4 space-y-4">
+            <AnswerReview question={toReviewQuestion(view, latest)} />
+            {/* Only the "being graded" / "could not be graded" notes: the badge already says right or wrong. */}
+            {latest && (outcome === 'pending' || outcome === 'failed') && <PracticeVerdict attempt={latest} questionType={q.questionType} />}
+            {graded && (
+              <PracticeExplanation
+                questionId={q.questionId}
+                sessionId={sessionId}
+                sessionQuestionId={q.sessionQuestionId}
+                practiceAnswerId={latest.practiceAnswerId}
+              />
+            )}
+          </div>
+        )}
+      </article>
+      {bookmarkError && (
+        <p role="alert" className="text-sm text-danger">
+          {bookmarkError}
+        </p>
       )}
-    </li>
-  );
-}
-
-function OutcomeBadge({ question: q }: { question: ResultQuestion }) {
-  if (q.attemptCount === 0) return null;
-  if (AWAITING_GRADE.has(q.gradingStatus)) return <Badge size="sm">Grading…</Badge>;
-  if (q.gradingStatus === 'FAILED')
-    return (
-      <Badge size="sm" variant="warning">
-        Not graded
-      </Badge>
-    );
-  const outcome = summaryOutcome({ answered: true, latestIsCorrect: q.latestIsCorrect, gradingStatus: q.gradingStatus, questionType: q.questionType });
-  if (outcome === 'correct')
-    return (
-      <Badge size="sm" variant="success">
-        Correct
-      </Badge>
-    );
-  if (outcome === 'wrong')
-    return (
-      <Badge size="sm" variant="danger">
-        Wrong
-      </Badge>
-    );
-  if (outcome === 'partial')
-    return (
-      <Badge size="sm" variant="purple">
-        AI score {scorePercent(q.latestScore)}%
-      </Badge>
-    );
-  return null;
-}
-
-function Stat({ label, value, tone }: { label: string; value: string; tone?: 'danger' | 'success' }) {
-  return (
-    <div className="rounded-[10px] bg-accent px-3 py-2.5">
-      <p className="text-xs text-content-subtle">{label}</p>
-      <p className={`text-lg font-bold ${tone === 'danger' ? 'text-danger' : tone === 'success' ? 'text-success' : 'text-content'}`}>{value}</p>
-    </div>
+    </>
   );
 }
 

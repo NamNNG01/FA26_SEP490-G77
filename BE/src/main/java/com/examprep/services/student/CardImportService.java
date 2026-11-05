@@ -7,6 +7,7 @@ import com.examprep.entities.CardImport;
 import com.examprep.entities.Course;
 import com.examprep.entities.Deck;
 import com.examprep.entities.Flashcard;
+import com.examprep.entities.Module;
 import com.examprep.entities.User;
 import com.examprep.exceptions.BadRequestException;
 import com.examprep.exceptions.BaseException;
@@ -18,6 +19,8 @@ import com.examprep.repositories.CourseManagerRepository;
 import com.examprep.repositories.CourseRepository;
 import com.examprep.repositories.DeckRepository;
 import com.examprep.repositories.FlashcardRepository;
+import com.examprep.repositories.ModuleRepository;
+import com.examprep.repositories.UserRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.*;
@@ -71,6 +74,8 @@ public class CardImportService {
     private final CourseRepository courseRepository;
     private final CourseManagerRepository courseManagerRepository;
     private final AiUsageLogRepository aiUsageLogRepository;
+    private final ModuleRepository moduleRepository;
+    private final UserRepository userRepository;
 
     private final Map<Long, List<Row>> pending = new ConcurrentHashMap<>();
     private final ExecutorService worker = Executors.newFixedThreadPool(2, task -> {
@@ -82,7 +87,8 @@ public class CardImportService {
     public CardImportService(StudentDeckService decks, DeckRepository deckRepository, FlashcardRepository cards,
                              CardImportRepository imports, ObjectMapper json, PlatformTransactionManager transactionManager,
                              CourseRepository courseRepository, CourseManagerRepository courseManagerRepository,
-                             AiUsageLogRepository aiUsageLogRepository) {
+                             AiUsageLogRepository aiUsageLogRepository, ModuleRepository moduleRepository,
+                             UserRepository userRepository) {
         this.decks = decks;
         this.deckRepository = deckRepository;
         this.cards = cards;
@@ -92,6 +98,8 @@ public class CardImportService {
         this.courseRepository = courseRepository;
         this.courseManagerRepository = courseManagerRepository;
         this.aiUsageLogRepository = aiUsageLogRepository;
+        this.moduleRepository = moduleRepository;
+        this.userRepository = userRepository;
     }
 
     public record Started(Long importId, String status, int totalRows) { }
@@ -287,7 +295,7 @@ public class CardImportService {
             if (valid) validCount++;
             else invalidCount++;
 
-            cardList.add(new PreviewCardDto(r.rowIndex, r.front, r.back, valid, duplicate, errors));
+            cardList.add(new PreviewCardDto(cardList.size() + 1, r.front, r.back, valid, duplicate, errors, r.rowIndex));
         }
 
         return new PreviewResponse(
@@ -303,6 +311,7 @@ public class CardImportService {
         );
     }
 
+    @Transactional
     public BulkSaveResponse bulk(Long userId, BulkSaveRequest req) {
         Deck deck = null;
         if (req.deckId() != null) {
@@ -316,16 +325,33 @@ public class CardImportService {
             }
         } else if (req.newDeck() != null) {
             var nd = req.newDeck();
+            if (nd.moduleId() != null && nd.courseId() == null) {
+                throw new BaseException(ResponseCode.BAD_REQUEST, "A module requires a course", Map.of("code", "COURSE_REQUIRED"));
+            }
+            User owner = userRepository.findById(userId)
+                    .orElseThrow(() -> new ResourceNotFoundException("User not found."));
+            Course course = null;
             if (nd.courseId() != null) {
-                boolean isManager = courseManagerRepository.existsByCourse_CourseIdAndUser_UserId(nd.courseId(), userId);
-                if (!isManager) {
+                course = courseRepository.findById(nd.courseId())
+                        .orElseThrow(() -> new BaseException(ResponseCode.RESOURCE_NOT_FOUND, "Course not found", Map.of("code", "COURSE_NOT_FOUND")));
+                boolean isAdmin = User.ROLE_ADMIN.equals(owner.getRoleName());
+                boolean isManager = User.ROLE_COURSE_MANAGER.equals(owner.getRoleName())
+                        && (course.getManager().getUserId().equals(userId)
+                        || courseManagerRepository.existsByCourse_CourseIdAndUser_UserId(nd.courseId(), userId));
+                if (!isAdmin && !isManager) {
                     throw new BaseException(ResponseCode.FORBIDDEN, "Not manager", Map.of("code", "FORBIDDEN_COURSE"));
                 }
-                Course c = courseRepository.findById(nd.courseId()).orElseThrow(() -> new BaseException(ResponseCode.RESOURCE_NOT_FOUND, "Course not found", Map.of("code", "COURSE_NOT_FOUND")));
-                deck = Deck.builder().user(User.builder().userId(userId).build()).course(c).title(nd.title()).description(nd.description()).isPublic(Boolean.TRUE.equals(nd.isPublic())).build();
-            } else {
-                deck = Deck.builder().user(User.builder().userId(userId).build()).title(nd.title()).description(nd.description()).isPublic(Boolean.TRUE.equals(nd.isPublic())).build();
             }
+            Module module = null;
+            if (nd.moduleId() != null) {
+                module = moduleRepository.findById(nd.moduleId())
+                        .orElseThrow(() -> new BaseException(ResponseCode.RESOURCE_NOT_FOUND, "Module not found", Map.of("code", "MODULE_NOT_FOUND")));
+                if (!module.getCourse().getCourseId().equals(course.getCourseId())) {
+                    throw new BaseException(ResponseCode.BAD_REQUEST, "The module does not belong to the deck's course", Map.of("code", "MODULE_COURSE_MISMATCH"));
+                }
+            }
+            deck = Deck.builder().user(owner).course(course).module(module).title(nd.title().strip())
+                    .description(nd.description()).isPublic(Boolean.TRUE.equals(nd.isPublic())).build();
             deck = deckRepository.save(deck);
         } else {
             throw new BaseException(ResponseCode.BAD_REQUEST, "deckId or newDeck required", Map.of("code", "VALIDATION_FAILED"));
@@ -453,13 +479,14 @@ public class CardImportService {
             }
             String[] lines = text.split("\\r?\\n");
             int ignored = 0;
-            int idx = 1;
+            int idx = 0;
             for (String line : lines) {
+                idx++;
                 String trimmed = line.trim();
                 if (trimmed.isEmpty()) { ignored++; continue; }
                 String[] parts = trimmed.split("\\t|\\s{2,}");
                 if (parts.length >= 2) {
-                    rows.add(new ParsedRow(++idx, parts[0], parts[1]));
+                    rows.add(new ParsedRow(idx, parts[0], parts[1]));
                 }
             }
         } catch (IOException e) {

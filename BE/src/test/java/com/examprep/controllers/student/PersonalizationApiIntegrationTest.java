@@ -125,7 +125,8 @@ class PersonalizationApiIntegrationTest {
 
     @Test void smartPracticeCompletesWithOnlyCandidateIds() throws Exception {
         history(student, 5, Instant.now());
-        JsonNode started = data(smart(student, "{\"courseId\":" + course.getCourseId() + ",\"questionCount\":10}")
+        JsonNode started = data(smart(student, "{\"courseId\":" + course.getCourseId()
+                        + ",\"questionCount\":10,\"context\":\"Focus on interfaces\"}")
                 .andExpect(status().isAccepted()).andExpect(jsonPath("$.message").value("Generating smart practice")));
         String jobId = started.path("jobId").asText();
         assertTrue(jobId.startsWith("sp-"));
@@ -161,6 +162,8 @@ class PersonalizationApiIntegrationTest {
         assertEquals("SUCCESS", log.getStatus());
         assertEquals(0, log.getReservedTokens());
         assertFalse(REQUESTS.get(0).contains(student.getEmail()));
+        assertTrue(REQUESTS.get(0).contains("Focus on interfaces"), "student context reaches the AI");
+        assertTrue(REQUESTS.get(0).contains(course.getTitle()), "course title reaches the AI");
     }
 
     @Test void insufficientData422() throws Exception {
@@ -222,6 +225,7 @@ class PersonalizationApiIntegrationTest {
         smart(student, "{" + c + ",\"durationMinutes\":9}").andExpect(status().isBadRequest());
         smart(student, "{" + c + ",\"durationMinutes\":61}").andExpect(status().isBadRequest());
         smart(student, "{}").andExpect(status().isBadRequest());
+        smart(student, "{" + c + ",\"context\":\"" + "x".repeat(2001) + "\"}").andExpect(status().isBadRequest());
         User outsider = f.account(User.ROLE_STUDENT);
         smart(outsider, "{" + c + "}").andExpect(status().isForbidden());
     }

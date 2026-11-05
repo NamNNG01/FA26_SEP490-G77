@@ -6,7 +6,8 @@ import org.springframework.data.domain.Page;
 
 /**
  * Module Practice student APIs MP-01 … MP-04, MP-07, MP-08, MP-11 and MP-12: the session lifecycle,
- * the frozen paper, the session result, the review list and the practice-only reset.
+ * the frozen paper, the session result, the review list and the practice-only reset — for one module
+ * and for a course's General pool (its questions that are filed under no module).
  *
  * <p>Answer submission and answer history live in {@link ModulePracticeAnswerService}; the AI
  * explanation lives in {@link ModulePracticeAiService}.</p>
@@ -16,6 +17,9 @@ public interface ModulePracticeService {
     /** MP-01: practice situation of one module for the authenticated student. */
     ModulePracticeResponses.Overview overview(Long userId, Long moduleId);
 
+    /** MP-01 (General): the same overview, scoped to the course's questions without a module. */
+    ModulePracticeResponses.Overview generalOverview(Long userId, Long courseId);
+
     /**
      * MP-02: starts a practice run, or returns the one already open on that module. Idempotent for
      * concurrent calls: the partial unique index on (user, module) WHERE status = 'IN_PROGRESS'
@@ -23,6 +27,13 @@ public interface ModulePracticeService {
      */
     ModulePracticeResponses.SessionDetail startOrResume(Long userId, Long moduleId,
                                                         ModulePracticeRequests.StartSession request);
+
+    /**
+     * MP-02 (General): starts or resumes the caller's open General run of that course. A module run of
+     * the same course is a different scope and never counts as the open General session.
+     */
+    ModulePracticeResponses.SessionDetail generalStartOrResume(Long userId, Long courseId,
+                                                               ModulePracticeRequests.StartSession request);
 
     /** MP-03: the session with its persisted question order and current progress. */
     ModulePracticeResponses.SessionDetail session(Long userId, Long sessionId);
@@ -39,6 +50,12 @@ public interface ModulePracticeService {
     /** MP-11: paged questions of one module whose latest finalized attempt is wrong. */
     Page<ModulePracticeResponses.ReviewItem> reviewQuestions(Long userId, Long moduleId, int page, int size);
 
+    /** MP-11 (General): the same list for the course's questions without a module. */
+    Page<ModulePracticeResponses.ReviewItem> generalReviewQuestions(Long userId, Long courseId, int page, int size);
+
     /** MP-12: deletes only this student's Module Practice data of this module. */
     ModulePracticeResponses.ResetResult resetProgress(Long userId, Long moduleId);
+
+    /** MP-12 (General): deletes only the General sessions and progress of this student and course. */
+    ModulePracticeResponses.ResetResult generalResetProgress(Long userId, Long courseId);
 }

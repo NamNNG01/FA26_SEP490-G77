@@ -99,6 +99,39 @@ class DeckApiIntegrationTest {
     }
 
     @Test
+    void listAndDetailReturnFullCourseTitle() throws Exception {
+        String title = "Java Programming Masterclass Course - From Fundamentals to Advanced Concepts";
+        course.setTitle(title);
+        call(manager, get(BASE)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content[0].courseName").value(title));
+        call(manager, get(path(deck))).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.courseName").value(title));
+    }
+
+    @Test
+    void moduleCanBeSelectedChangedAndClearedThroughManagerApi() throws Exception {
+        var first = com.examprep.entities.Module.builder().course(course).title("First module").orderIndex(1).build();
+        var second = com.examprep.entities.Module.builder().course(course).title("Second module").orderIndex(2).build();
+        em.persist(first);
+        em.persist(second);
+        call(manager, get("/api/v1/manager/courses/{id}/modules", course.getCourseId()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data[0].moduleId").value(first.getModuleId()))
+                .andExpect(jsonPath("$.data[1].moduleId").value(second.getModuleId()));
+        String body = json.writeValueAsString(Map.of("title", "Module deck", "courseId", course.getCourseId(),
+                "moduleId", first.getModuleId(), "isPublic", false));
+        String response = call(manager, post(BASE).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.data.moduleId").value(first.getModuleId()))
+                .andExpect(jsonPath("$.data.moduleTitle").value("First module"))
+                .andReturn().getResponse().getContentAsString();
+        long deckId = json.readTree(response).path("data").path("deckId").asLong();
+        call(manager, put(BASE + "/" + deckId).contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("moduleId", second.getModuleId()))))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.moduleId").value(second.getModuleId()));
+        call(manager, put(BASE + "/" + deckId).contentType(MediaType.APPLICATION_JSON).content("{\"moduleId\":0}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.moduleId").doesNotExist());
+    }
+
+    @Test
     void createsOwnedDeckWithOptionalManagedCourseAndEmptyCards() throws Exception {
         call(collaborator, post(BASE).contentType(MediaType.APPLICATION_JSON).content(createBody(course.getCourseId())))
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.data.ownerId").value(collaborator.getUserId()))

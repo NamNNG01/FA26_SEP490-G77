@@ -2,6 +2,7 @@ package com.examprep.services.student;
 
 import com.examprep.dto.attempt.Snapshots;
 import com.examprep.dto.practice.ModulePracticeResponses;
+import com.examprep.entities.Course;
 import com.examprep.entities.Enrollment;
 import com.examprep.entities.Module;
 import com.examprep.entities.QuestionMedia;
@@ -11,6 +12,7 @@ import com.examprep.entities.QuestionPracticeSession;
 import com.examprep.entities.QuestionPracticeSessionQuestion;
 import com.examprep.exceptions.ForbiddenException;
 import com.examprep.exceptions.ResourceNotFoundException;
+import com.examprep.repositories.CourseRepository;
 import com.examprep.repositories.EnrollmentRepository;
 import com.examprep.repositories.ModuleRepository;
 import com.examprep.repositories.QuestionMediaRepository;
@@ -52,6 +54,7 @@ public class ModulePracticeSupport {
     public static final BigDecimal RUBRIC_PASSING_THRESHOLD = new BigDecimal("0.50");
 
     private final ModuleRepository modules;
+    private final CourseRepository courses;
     private final EnrollmentRepository enrollments;
     private final QuestionRepository questions;
     private final QuestionPracticeSessionQuestionRepository sessionQuestions;
@@ -81,17 +84,58 @@ public class ModulePracticeSupport {
         return module;
     }
 
-    /** The module of an already loaded session, re-validated against the caller's access without extra queries. */
-    public void requireModuleAccess(Long userId, QuestionPracticeSession session) {
-        Module module = session.getModule();
-        if (module == null || module.isHidden()) {
-            throw new ResourceNotFoundException("Module not found");
-        }
-        Long courseId = session.getCourse().getCourseId();
+    /**
+     * Resolves the General scope of a course: it must exist (otherwise 404, the same answer an
+     * unknown id gets) and the student must be actively enrolled in it (otherwise 403, the convention
+     * the other student services use for a visible course the caller is not enrolled in).
+     */
+    public Course requireCourse(Long userId, Long courseId) {
+        Course course = courses.findById(courseId)
+                .orElseThrow(() -> new ResourceNotFoundException("Course not found"));
+        requireActiveEnrollment(userId, courseId);
+        return course;
+    }
+
+    /** The scope of one module, resolved through {@link #requireModule}. */
+    public PracticeScope requireModuleScope(Long userId, Long moduleId) {
+        return PracticeScope.ofModule(requireModule(userId, moduleId));
+    }
+
+    /** The General scope of one course: its questions that carry no module. */
+    public PracticeScope requireGeneralScope(Long userId, Long courseId) {
+        return PracticeScope.general(requireCourse(userId, courseId));
+    }
+
+    private void requireActiveEnrollment(Long userId, Long courseId) {
         if (!enrollments.existsByCourse_CourseIdAndUser_UserIdAndStatus(
                 courseId, userId, Enrollment.STATUS_ACTIVE)) {
             throw new ForbiddenException("Student is not actively enrolled in this course");
         }
+    }
+
+    /**
+     * The access rule of an already loaded session, without extra queries: a module session must still
+     * point at a visible module, a General session needs no module, and both need an ACTIVE enrolment
+     * in the session's course.
+     */
+    public void requireSessionAccess(Long userId, QuestionPracticeSession session) {
+        Module module = session.getModule();
+        if (module != null && module.isHidden()) {
+            throw new ResourceNotFoundException("Module not found");
+        }
+        requireActiveEnrollment(userId, session.getCourse().getCourseId());
+    }
+
+    /** The module a session belongs to, or {@code null} for a General run. */
+    public Long moduleIdOf(QuestionPracticeSession session) {
+        return session.getModule() == null ? null : session.getModule().getModuleId();
+    }
+
+    /** "General" for a session of a course's module-less pool. */
+    public String moduleTitleOf(QuestionPracticeSession session) {
+        return session.getModule() == null
+                ? PracticeScope.GENERAL_TITLE
+                : session.getModule().getTitle();
     }
 
     /** The frozen display document of one paper row. */
@@ -267,20 +311,29 @@ public class ModulePracticeSupport {
     public QuestionPracticeProgress refreshProgress(QuestionPracticeSessionQuestion sessionQuestion) {
         QuestionPracticeSession session = sessionQuestion.getSession();
         Long userId = session.getUser().getUserId();
-        Long moduleId = session.getModule().getModuleId();
+        Long courseId = session.getCourse().getCourseId();
+        Long moduleId = session.getModule() == null ? null : session.getModule().getModuleId();
+        // A General run keeps its own row per (student, course, question); a module run per
+        // (student, module, question).
+        boolean general = moduleId == null;
         Long questionId = sessionQuestion.getQuestion().getQuestionId();
 
-        Optional<QuestionPracticeProgress> locked =
-                progress.lockByUserModuleQuestion(userId, moduleId, questionId);
+        Optional<QuestionPracticeProgress> locked = general
+                ? progress.lockByUserCourseQuestion(userId, courseId, questionId)
+                : progress.lockByUserModuleQuestion(userId, moduleId, questionId);
         if (locked.isEmpty()) {
             // No row yet: serialise the creation on the question row, then re-read under that lock.
             questions.lockById(questionId);
-            locked = progress.findByUser_UserIdAndModule_ModuleIdAndQuestion_QuestionId(
-                    userId, moduleId, questionId);
+            locked = general
+                    ? progress.findGeneralByUserCourseQuestion(userId, courseId, questionId)
+                    : progress.findByUser_UserIdAndModule_ModuleIdAndQuestion_QuestionId(
+                            userId, moduleId, questionId);
         }
 
         // Single query replaces summarizeProgress + findFinalizedResultsNewestFirst
-        List<QuestionPracticeAnswer> history = answers.findAttemptsForProgress(userId, moduleId, questionId);
+        List<QuestionPracticeAnswer> history = general
+                ? answers.findGeneralAttemptsForProgress(userId, courseId, questionId)
+                : answers.findAttemptsForProgress(userId, moduleId, questionId);
         int total = history.size();
         int graded = 0;
         int correct = 0;
@@ -405,8 +458,8 @@ public class ModulePracticeSupport {
         Integer nextOrder = next.isEmpty() ? null : next.get(0).getOrderIndex();
         return new ModulePracticeResponses.SessionDetail(
                 sessionId,
-                session.getModule().getModuleId(),
-                session.getModule().getTitle(),
+                moduleIdOf(session),
+                moduleTitleOf(session),
                 session.getCourse().getCourseId(),
                 session.getCourse().getTitle(),
                 session.getMode(),

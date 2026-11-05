@@ -18,16 +18,14 @@ export function AddModuleModal({
   onCreated: (module: CourseModuleResponse) => void;
 }) {
   const [title, setTitle] = useState('');
-  const [orderIndex, setOrderIndex] = useState('');
   const [description, setDescription] = useState('');
-  const [errors, setErrors] = useState<{ title?: string; orderIndex?: string }>({});
+  const [errors, setErrors] = useState<{ title?: string }>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (open) {
       setTitle('');
-      setOrderIndex('');
       setDescription('');
       setErrors({});
       setSubmitError(null);
@@ -41,14 +39,10 @@ export function AddModuleModal({
 
   const handleSubmit = async () => {
     if (submitting) return;
-    const nextErrors: { title?: string; orderIndex?: string } = {};
+    const nextErrors: { title?: string } = {};
 
     if (!title.trim()) {
       nextErrors.title = 'Module title is required.';
-    }
-
-    if (orderIndex.trim() && (Number.isNaN(Number(orderIndex)) || Number(orderIndex) < 1)) {
-      nextErrors.orderIndex = 'Order index must be a positive number.';
     }
 
     setErrors(nextErrors);
@@ -60,7 +54,6 @@ export function AddModuleModal({
       const created = await courseService.createModule(courseId, {
         title: title.trim(),
         description: description.trim() || undefined,
-        orderIndex: orderIndex.trim() ? Number(orderIndex) : undefined,
       });
       onCreated(created);
       onClose();
@@ -106,17 +99,6 @@ export function AddModuleModal({
           onChange={e => setTitle(e.target.value)}
           error={errors.title}
           placeholder="e.g. Python Basics"
-        />
-
-        <Input
-          label="Display Order"
-          type="number"
-          min={1}
-          value={orderIndex}
-          onChange={e => setOrderIndex(e.target.value)}
-          error={errors.orderIndex}
-          placeholder="Leave blank to append at end"
-          hint="Optional: defaults to next available order"
         />
 
         <div>

@@ -4,13 +4,13 @@ import { Modal } from '@/components/ui/Modal';
 import { useToast } from '@/components/ui/ToastHost';
 import { Icon } from '@/assets/icons';
 import { getApiErrorMessage } from '@/utils/apiError';
-import { modulePracticeService } from '@/services/modulePractice.service';
+import { modulePracticeService, type PracticeScope } from '@/services/modulePractice.service';
 
 /**
- * MP-12: deletes this module's practice sessions, attempts and progress — never the notebook,
- * bookmarks, exams or flashcards. Asks once before.
+ * MP-12: deletes this module's (or the General pool's) practice sessions, attempts and progress —
+ * never the notebook, bookmarks, exams or flashcards. Asks once before.
  */
-export function ResetPracticeButton({ moduleId, moduleTitle, onReset }: { moduleId: number; moduleTitle: string; onReset: () => void }) {
+export function ResetPracticeButton({ scope, moduleTitle, onReset }: { scope: PracticeScope; moduleTitle: string; onReset: () => void }) {
   const toast = useToast();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -20,7 +20,7 @@ export function ResetPracticeButton({ moduleId, moduleTitle, onReset }: { module
     setBusy(true);
     setError(null);
     try {
-      await modulePracticeService.resetProgress(moduleId);
+      await modulePracticeService.resetProgress(scope);
       toast.success('Practice progress reset.');
       setOpen(false);
       onReset();
