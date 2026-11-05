@@ -58,7 +58,7 @@ const CODE_OPTION = { label: 'Coding exam', value: CODE_FILTER };
 
 const toKind = (mode: string | null | undefined): ExamKind => (mode && mode in KIND_LABEL ? (mode as ExamKind) : 'EXAM');
 
-/** Taken in practice mode (checked answer by answer): no time limit and no score. */
+/** Taken in practice mode (checked answer by answer): no time limit. */
 const isPractice = (kind: ExamKind) => kind === 'PRACTICE' || kind === 'SMART_PRACTICE';
 
 /** One exam of the history, whatever produced it. */
@@ -93,8 +93,8 @@ const SORT_OPTIONS: { label: string; value: SortKey }[] = [
   { label: 'Most attempts', value: 'attempts' },
 ];
 
-/** Best score as a share of the max, so exams with different max scores compare fairly; untaken or practice = -1. */
-const ratio = (e: HistoryRow) => (isPractice(e.kind) || e.bestScore == null || !e.maxScore ? -1 : Number(e.bestScore) / Number(e.maxScore));
+/** Best score as a share of the max, so exams with different max scores compare fairly; no score = -1. */
+const ratio = (e: HistoryRow) => (e.bestScore == null || !e.maxScore ? -1 : Number(e.bestScore) / Number(e.maxScore));
 
 function sortRows(list: HistoryRow[], sort: SortKey): HistoryRow[] {
   // mergeHistory already puts the most recent first.
@@ -138,7 +138,8 @@ async function loadHistory(): Promise<{ rows: HistoryRow[]; courses: MyCourse[] 
       courseTitle: e.courseTitle ?? null,
       maxScore: e.maxScore,
       attemptCount: e.attemptCount,
-      bestScore: e.bestScore,
+      // PQ-02 also knows the best score of a practice exam, in case ME-01 leaves it out.
+      bestScore: e.bestScore ?? practice?.bestScore ?? null,
       practiceId: practice?.practiceId ?? null,
       jobId: material?.jobId ?? null,
       documentTitle: material?.documentTitle ?? null,
@@ -296,15 +297,14 @@ export function MyExamsPage() {
     if (canViewAttempts(row)) {
       items.push({ label: 'View attempts', icon: <Icon.Eye />, onClick: () => navigate(studentExamAttemptsPath(row.examId, isPractice(row.kind))) });
     }
-    if (canRetake(row)) {
-      const starting = row.jobId != null && startingJob === row.jobId;
-      items.push({
-        label: starting ? 'Starting…' : row.attemptCount > 0 ? 'Retake' : 'Start',
-        icon: <Icon.RefreshCw />,
-        disabled: startingJob != null,
-        onClick: () => void retake(row),
-      });
-    }
+    // Shown for every type; disabled when the exam can no longer be taken (course left, practice exam deleted, …).
+    const starting = row.jobId != null && startingJob === row.jobId;
+    items.push({
+      label: starting ? 'Starting…' : 'Retake',
+      icon: <Icon.RefreshCw />,
+      disabled: startingJob != null || !canRetake(row),
+      onClick: () => void retake(row),
+    });
     if (row.practiceId != null) {
       items.push({
         label: 'Delete',
@@ -410,8 +410,6 @@ export function MyExamsPage() {
       width: '120px',
       render: r => {
         const row = asRow(r);
-        // Practice has no score.
-        if (isPractice(row.kind)) return <span className="text-content-subtle">—</span>;
         return <span className="whitespace-nowrap font-medium text-content">{formatScore(row.bestScore, row.maxScore)}</span>;
       },
     },

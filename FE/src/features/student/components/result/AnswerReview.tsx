@@ -11,8 +11,13 @@ import { isAnswered, optionLetter } from '../QuestionAnswerInput';
  * and the module practice result (MP-08): picked options filled green / red with the right one
  * outlined, ordering / matching / blank rows each with their own verdict, a written answer for
  * reading, or the submitted diagram.
+ * `hideVerdict` (an exam, not a practice): only what the student answered — no green / red, no key.
  */
-export function AnswerReview({ question: q }: { question: ResultQuestion }) {
+export function AnswerReview({ question, hideVerdict = false }: { question: ResultQuestion; hideVerdict?: boolean }) {
+  // Without the key every row below renders unmarked.
+  const q: ResultQuestion = hideVerdict
+    ? { ...question, correctAnswer: null, isCorrect: null, options: question.options?.map(o => ({ ...o, isCorrectAnswer: false })) ?? null }
+    : question;
   const r = q.yourResponse;
   const answered = isAnswered(r);
 
@@ -26,20 +31,24 @@ export function AnswerReview({ question: q }: { question: ResultQuestion }) {
         {!answered && (
           <p role="note" className="flex items-start gap-2 rounded-[10px] border border-warning-line bg-warning-light px-3 py-2 text-sm text-warning">
             <Icon.AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
-            You didn't answer this question — the correct answer is marked below.
+            {hideVerdict ? "You didn't answer this question." : "You didn't answer this question — the correct answer is marked below."}
           </p>
         )}
         <ul className="space-y-2">
           {q.options.map((opt, i) => {
             const mine = picked.has(opt.optionId);
             const right = opt.isCorrectAnswer === true;
-            const cls = mine
-              ? right
-                ? 'border-success-solid bg-success-light'
-                : 'border-danger-solid bg-danger-light'
-              : right
-                ? 'border-dashed border-success-solid bg-surface'
-                : 'border-line bg-surface';
+            const cls = hideVerdict
+              ? mine
+                ? 'border-content-secondary bg-surface-alt'
+                : 'border-line bg-surface'
+              : mine
+                ? right
+                  ? 'border-success-solid bg-success-light'
+                  : 'border-danger-solid bg-danger-light'
+                : right
+                  ? 'border-dashed border-success-solid bg-surface'
+                  : 'border-line bg-surface';
             return (
               <li key={opt.optionId} className={`flex items-start gap-3 p-3 rounded-[10px] border ${cls}`}>
                 <SelectionMark multi={multi} checked={mine} />
@@ -49,7 +58,11 @@ export function AnswerReview({ question: q }: { question: ResultQuestion }) {
                 <span className="flex-1 text-sm text-content-secondary break-words">{opt.optionText}</span>
                 <span className="flex flex-wrap justify-end gap-1 flex-shrink-0">
                   {mine &&
-                    (right ? (
+                    (hideVerdict ? (
+                      <Badge size="sm" variant="default">
+                        Your answer
+                      </Badge>
+                    ) : right ? (
                       <Badge size="sm" variant="success">
                         <Icon.Check className="w-3 h-3" /> Your answer
                       </Badge>

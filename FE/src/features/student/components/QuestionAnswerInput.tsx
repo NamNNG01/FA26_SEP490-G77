@@ -62,7 +62,7 @@ interface InputProps {
   reveal?: AnswerReveal | null;
   /** Enter in the last fill-blank field (practice: checks the answer). */
   onEnter?: () => void;
-  /** Practice: an ordering is confirmed with the check button, so no "Keep this order" link. */
+  /** Taken in practice mode (each answer is checked on its own). */
   practice?: boolean;
   /**
    * Module practice: the verdict of the whole answer, without its key. A choice question colours
@@ -92,7 +92,7 @@ export function QuestionAnswerInput(props: InputProps) {
 
 const CHOICE_TYPES: ReadonlySet<string> = new Set(['SINGLE_CHOICE', 'TRUE_FALSE', 'MULTIPLE_CHOICE']);
 
-function AnswerControl({ question, value, onChange, roomy, reveal, onEnter, practice, verdict }: InputProps) {
+function AnswerControl({ question, value, onChange, roomy, reveal, onEnter, verdict }: InputProps) {
   switch (question.questionType) {
     case 'SINGLE_CHOICE':
     case 'TRUE_FALSE':
@@ -103,7 +103,7 @@ function AnswerControl({ question, value, onChange, roomy, reveal, onEnter, prac
     case 'MATCHING':
       return <MatchingInput question={question} value={value} onChange={onChange} reveal={reveal} />;
     case 'ORDERING':
-      return <OrderingInput question={question} value={value} onChange={onChange} reveal={reveal} practice={practice} />;
+      return <OrderingInput question={question} value={value} onChange={onChange} reveal={reveal} />;
     case 'ESSAY':
     case 'CODE':
       return <TextInput question={question} value={value} onChange={onChange} roomy={roomy} />;
@@ -321,188 +321,291 @@ function MatchingInput({ question, value, onChange, reveal }: InputProps) {
   );
 }
 
-function OrderingInput({ question, value, onChange, reveal, practice }: InputProps) {
+/**
+ * Ordering: the items start in a pool; the student drags them into numbered slots (1, 2, 3 …).
+ * A click on a pool item drops it into the next free slot; × (or dragging it back) returns it to the pool.
+ * The slots fill from the top with no gap, so the answer is just the placed items in order.
+ * Drag works with mouse, touch and pen (pointer events); the arrows reorder for keyboard users.
+ */
+function OrderingInput({ question, value, onChange, reveal }: InputProps) {
   const options = question.options ?? [];
   const byId = new Map(options.map(o => [o.optionId, o]));
-  const order = value?.orderedOptionIds?.length ? value.orderedOptionIds : options.map(o => o.optionId);
-  const touched = Boolean(value?.orderedOptionIds?.length);
   const key = reveal?.correctAnswer?.orderedOptionIds ?? null;
-  const [showKey, setShowKey] = React.useState(false);
-  /** Item just moved with an arrow: briefly highlighted so the swap is easy to follow. */
-  const [moved, setMoved] = React.useState<number | null>(null);
-  const movedTimer = React.useRef<number | undefined>(undefined);
-  React.useEffect(() => () => window.clearTimeout(movedTimer.current), []);
-  const move = (from: number, to: number) => {
-    if (to < 0 || to >= order.length) return;
-    const next = [...order];
-    [next[from], next[to]] = [next[to], next[from]];
-    onChange({ orderedOptionIds: next });
-    setMoved(order[from]);
-    window.clearTimeout(movedTimer.current);
-    movedTimer.current = window.setTimeout(() => setMoved(null), 700);
-  };
+  const placed = (value?.orderedOptionIds ?? []).filter(id => byId.has(id));
+  if (key) return <OrderingReveal byId={byId} placed={placed} keyOrder={key} />;
 
-  /* Drag and drop (pointer events: mouse, touch and pen). The list reorders live while
-     dragging; the new order is stored on release. The arrows stay for keyboard users. */
-  const listRef = React.useRef<HTMLOListElement>(null);
-  const [drag, setDrag] = React.useState<{ id: number; order: number[] } | null>(null);
+  const pool = options.filter(o => !placed.includes(o.optionId));
+  return <OrderingBoard byId={byId} placed={placed} pool={pool.map(o => o.optionId)} onChange={ids => onChange({ orderedOptionIds: ids })} />;
+}
+
+/** Where a dragged item would land: a slot (0-based) or back in the pool. */
+type OrderingTarget = number | 'pool' | null;
+
+interface OrderingDrag {
+  id: number;
+  x: number;
+  y: number;
+  width: number;
+  over: OrderingTarget;
+}
+
+/** Pixels the pointer has to travel before a press becomes a drag (a shorter press is a click). */
+const DRAG_THRESHOLD = 4;
+
+function OrderingBoard({
+  byId,
+  placed,
+  pool,
+  onChange,
+}: {
+  byId: Map<number, { optionId: number; optionText: string }>;
+  placed: number[];
+  pool: number[];
+  onChange: (ids: number[]) => void;
+}) {
+  const [drag, setDrag] = React.useState<OrderingDrag | null>(null);
   const dragRef = React.useRef(drag);
   dragRef.current = drag;
-  const shown = drag?.order ?? order;
-  const locked = Boolean(key);
+  /** Set once a press turned into a drag, so the click that follows does not also place the item. */
+  const draggedRef = React.useRef(false);
+  const total = placed.length + pool.length;
 
-  // FLIP: when the order changes, each item slides from its old place to the new one
-  // (the dragged item follows the pointer, so it jumps). Skipped for reduced motion.
-  const tops = React.useRef(new Map<number, number>());
-  const shownKey = shown.join(',');
-  React.useLayoutEffect(() => {
-    const list = listRef.current;
-    if (!list) return;
-    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-    const next = new Map<number, number>();
-    list.querySelectorAll<HTMLElement>('[data-order-id]').forEach(el => {
-      const id = Number(el.dataset.orderId);
-      const top = el.offsetTop;
-      next.set(id, top);
-      const prev = tops.current.get(id);
-      if (reduce || prev == null || prev === top || id === dragRef.current?.id) return;
-      el.animate([{ transform: `translateY(${prev - top}px)` }, { transform: 'translateY(0)' }], {
-        duration: 240,
-        easing: 'cubic-bezier(0.2, 0, 0, 1)',
-      });
-    });
-    tops.current = next;
-  }, [shownKey]);
+  /** Put `id` at slot `slot` (or at the end), taking it out of wherever it was. */
+  const place = (id: number, slot?: number) => {
+    const rest = placed.filter(x => x !== id);
+    const at = slot == null ? rest.length : Math.min(slot, rest.length);
+    onChange([...rest.slice(0, at), id, ...rest.slice(at)]);
+  };
+  const unplace = (id: number) => onChange(placed.filter(x => x !== id));
+  const move = (from: number, to: number) => {
+    if (to < 0 || to >= placed.length) return;
+    const next = [...placed];
+    [next[from], next[to]] = [next[to], next[from]];
+    onChange(next);
+  };
 
-  const startDrag = (e: React.PointerEvent<HTMLLIElement>, id: number) => {
-    if (locked || e.button !== 0) return;
-    const target = e.target as HTMLElement;
-    if (target.closest('button')) return;
-    // Touch drags only from the grip, so a swipe on the text still scrolls the page.
-    if (e.pointerType !== 'mouse' && !target.closest('[data-grip]')) return;
-    e.preventDefault();
-    const startOrder = order;
-    setDrag({ id, order: startOrder });
+  const targetAt = (x: number, y: number): OrderingTarget => {
+    const el = document.elementFromPoint(x, y) as HTMLElement | null;
+    const slot = el?.closest<HTMLElement>('[data-order-slot]');
+    if (slot) return Number(slot.dataset.orderSlot);
+    return el?.closest('[data-order-pool]') ? 'pool' : null;
+  };
+
+  const startPress = (e: React.PointerEvent<HTMLElement>, id: number) => {
+    if (e.button !== 0 || (e.target as HTMLElement).closest('button[data-order-action]')) return;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const width = e.currentTarget.getBoundingClientRect().width;
+    draggedRef.current = false;
 
     const onMove = (ev: PointerEvent) => {
-      const current = dragRef.current;
-      if (!current || !listRef.current) return;
-      // New slot = how many other items sit above the pointer.
-      const others = [...listRef.current.querySelectorAll<HTMLElement>('[data-order-id]')].filter(
-        el => Number(el.dataset.orderId) !== current.id,
-      );
-      const slot = others.filter(el => {
-        const r = el.getBoundingClientRect();
-        return r.top + r.height / 2 < ev.clientY;
-      }).length;
-      const rest = current.order.filter(x => x !== current.id);
-      const next = [...rest.slice(0, slot), current.id, ...rest.slice(slot)];
-      if (next.some((x, i) => x !== current.order[i])) setDrag({ id: current.id, order: next });
+      if (!dragRef.current && Math.hypot(ev.clientX - startX, ev.clientY - startY) < DRAG_THRESHOLD) return;
+      draggedRef.current = true;
+      ev.preventDefault();
+      const next = { id, x: ev.clientX, y: ev.clientY, width, over: targetAt(ev.clientX, ev.clientY) };
+      dragRef.current = next;
+      setDrag(next);
     };
-    const onUp = () => {
+    const onUp = (ev: PointerEvent) => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
       window.removeEventListener('pointercancel', onUp);
       const done = dragRef.current;
+      dragRef.current = null;
       setDrag(null);
-      if (done && done.order.some((x, i) => x !== startOrder[i])) onChange({ orderedOptionIds: done.order });
+      // The click that follows this release (same task) is still skipped; later clicks and keys work again.
+      window.setTimeout(() => {
+        draggedRef.current = false;
+      }, 0);
+      if (!done) return;
+      // Where the pointer is let go, not the last move: a fast drag may send few moves. A cancel drops nothing.
+      const over = ev.type === 'pointerup' ? targetAt(ev.clientX, ev.clientY) : null;
+      if (over === 'pool') unplace(done.id);
+      else if (typeof over === 'number') place(done.id, over);
     };
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
     window.addEventListener('pointercancel', onUp);
   };
 
+  const textOf = (id: number) => byId.get(id)?.optionText ?? `#${id}`;
+  /** Slot the dragged item would fill: a drop past the last filled slot lands right after it. */
+  const overSlot = typeof drag?.over === 'number' ? Math.min(drag.over, placed.filter(x => x !== drag.id).length) : null;
+
+  return (
+    <div className={`space-y-4 ${drag ? 'select-none cursor-grabbing' : ''}`}>
+      <div>
+        <p className="text-xs font-semibold text-content-subtle uppercase tracking-wide mb-2">Items</p>
+        <div
+          data-order-pool
+          className={`min-h-[3.25rem] flex flex-wrap gap-2 rounded-[10px] border-2 border-dashed p-2.5 transition-colors ${
+            drag?.over === 'pool' ? 'border-brand-600 bg-primary-light' : 'border-line bg-surface-alt'
+          }`}
+        >
+          {pool.length === 0 ? (
+            <p className="self-center px-1 text-xs text-content-subtle">Every item is placed. Drag one back here to take it out.</p>
+          ) : (
+            pool.map(id => (
+              <button
+                key={id}
+                type="button"
+                onPointerDown={e => startPress(e, id)}
+                onDragStart={e => e.preventDefault()}
+                onClick={() => {
+                  if (draggedRef.current) return;
+                  place(id);
+                }}
+                aria-label={`Place "${textOf(id)}" in slot ${placed.length + 1}`}
+                className={`touch-none select-none max-w-full inline-flex items-center gap-2 rounded-[8px] border border-line bg-surface px-3 py-2 text-left text-sm text-content shadow-sm cursor-grab hover:border-brand-600 transition-opacity ${
+                  drag?.id === id ? 'opacity-40' : ''
+                }`}
+              >
+                <Icon.GripVertical className="w-4 h-4 flex-shrink-0 text-content-subtle" aria-hidden="true" />
+                <span className="break-words">{textOf(id)}</span>
+              </button>
+            ))
+          )}
+        </div>
+      </div>
+
+      <div>
+        <p className="text-xs font-semibold text-content-subtle uppercase tracking-wide mb-2">
+          Order ({placed.length}/{total})
+        </p>
+        <ol className="space-y-2">
+          {Array.from({ length: total }, (_, i) => {
+            const id = placed[i];
+            const highlight = overSlot === i;
+            return (
+              <li key={i} data-order-slot={i} className="flex items-center gap-3">
+                <span className="w-7 h-7 rounded-full bg-surface-muted text-sm font-semibold text-content-secondary flex items-center justify-center flex-shrink-0">
+                  {i + 1}
+                </span>
+                {id != null ? (
+                  <div
+                    onPointerDown={e => startPress(e, id)}
+                    onDragStart={e => e.preventDefault()}
+                    className={`touch-none select-none flex-1 min-w-0 flex items-center gap-2 rounded-[10px] border px-3 py-2.5 cursor-grab transition-colors ${
+                      highlight ? 'border-brand-600 bg-primary-light' : 'border-line bg-surface hover:border-brand-600'
+                    } ${drag?.id === id ? 'opacity-40' : ''}`}
+                  >
+                    <Icon.GripVertical className="w-4 h-4 flex-shrink-0 text-content-subtle" aria-hidden="true" />
+                    <span className="flex-1 min-w-0 text-sm text-content break-words">{textOf(id)}</span>
+                    <button
+                      type="button"
+                      data-order-action
+                      aria-label="Move up"
+                      disabled={i === 0}
+                      onClick={() => move(i, i - 1)}
+                      className="p-1.5 rounded-[6px] hover:bg-accent disabled:opacity-30"
+                    >
+                      <Icon.ArrowUp className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      data-order-action
+                      aria-label="Move down"
+                      disabled={i === placed.length - 1}
+                      onClick={() => move(i, i + 1)}
+                      className="p-1.5 rounded-[6px] hover:bg-accent disabled:opacity-30"
+                    >
+                      <Icon.ArrowDown className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      data-order-action
+                      aria-label={`Return "${textOf(id)}" to the items`}
+                      onClick={() => unplace(id)}
+                      className="p-1.5 rounded-[6px] text-content-subtle hover:bg-accent hover:text-danger"
+                    >
+                      <Icon.X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <div
+                    className={`flex-1 min-w-0 rounded-[10px] border-2 border-dashed px-3 py-2.5 text-sm transition-colors ${
+                      highlight ? 'border-brand-600 bg-primary-light text-brand-ink' : 'border-line text-content-subtle'
+                    }`}
+                  >
+                    Drop an item here
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ol>
+      </div>
+
+      {drag && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none fixed z-50 flex items-center gap-2 rounded-[10px] border border-brand-600 bg-surface px-3 py-2.5 text-sm text-content shadow-lg ring-2 ring-brand-600/20"
+          style={{ left: drag.x, top: drag.y, width: Math.min(drag.width, 420), transform: 'translate(-24px, -50%)' }}
+        >
+          <Icon.GripVertical className="w-4 h-4 flex-shrink-0 text-content-subtle" />
+          <span className="truncate">{textOf(drag.id)}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** A checked practice ordering: each slot marked right / wrong, with the correct order on demand. */
+function OrderingReveal({
+  byId,
+  placed,
+  keyOrder,
+}: {
+  byId: Map<number, { optionId: number; optionText: string }>;
+  placed: number[];
+  keyOrder: number[];
+}) {
+  const [showKey, setShowKey] = React.useState(false);
+  const rows = Math.max(placed.length, keyOrder.length);
   return (
     <div className="space-y-2.5">
-      {!key && <p className="text-xs text-content-subtle">Drag the items into the right order (or use the arrows).</p>}
-      <ol ref={listRef} className={`space-y-2 ${drag ? 'select-none cursor-grabbing' : ''}`}>
-        {shown.map((id, i) => {
-          const ok = key ? key[i] === id : null;
-          const rightPlace = key ? key.indexOf(id) + 1 : 0;
-          const dragging = drag?.id === id;
+      <ol className="space-y-2">
+        {Array.from({ length: rows }, (_, i) => {
+          const id = placed[i];
+          const ok = id != null && keyOrder[i] === id;
+          const rightPlace = id != null ? keyOrder.indexOf(id) + 1 : 0;
           return (
-            <li
-              key={id}
-              data-order-id={id}
-              onPointerDown={e => startDrag(e, id)}
-              className={`flex items-center gap-3 p-3 rounded-[10px] border transition-[box-shadow,background-color,border-color] duration-300 ${partTone(ok)} ${
-                locked ? '' : drag ? '' : 'cursor-grab hover:border-brand-600'
-              } ${moved === id && !drag ? 'relative z-10 !border-brand-600 !bg-primary-light shadow-md' : ''} ${dragging ? 'relative z-10 !border-brand-600 !bg-primary-light shadow-lg ring-2 ring-brand-600/20' : ''}`}
-            >
-              {!locked && (
-                <span
-                  data-grip
-                  aria-hidden="true"
-                  className="-ml-1 p-1 rounded-[6px] text-content-subtle touch-none cursor-grab flex-shrink-0"
-                >
-                  <Icon.GripVertical className="w-4 h-4" />
-                </span>
-              )}
+            <li key={i} className={`flex items-center gap-3 p-3 rounded-[10px] border ${partTone(ok)}`}>
               <span className="w-7 h-7 rounded-full bg-surface-muted text-sm font-semibold text-content-secondary flex items-center justify-center flex-shrink-0">
                 {i + 1}
               </span>
-              <span className="flex-1 text-sm text-content break-words">{byId.get(id)?.optionText}</span>
-              {ok == null ? (
-                <>
-                  <button
-                    type="button"
-                    aria-label="Move up"
-                    disabled={i === 0}
-                    onClick={() => move(i, i - 1)}
-                    className="p-1.5 rounded-[6px] hover:bg-accent disabled:opacity-30"
-                  >
-                    <Icon.ArrowUp className="w-4 h-4" />
-                  </button>
-                  <button
-                    type="button"
-                    aria-label="Move down"
-                    disabled={i === shown.length - 1}
-                    onClick={() => move(i, i + 1)}
-                    className="p-1.5 rounded-[6px] hover:bg-accent disabled:opacity-30"
-                  >
-                    <Icon.ArrowDown className="w-4 h-4" />
-                  </button>
-                </>
-              ) : (
-                <>
-                  {!ok && rightPlace > 0 && (
-                    <span className="text-xs font-semibold text-danger-strong whitespace-nowrap">Belongs at #{rightPlace}</span>
-                  )}
-                  <PartMark ok={ok} />
-                </>
+              <span className="flex-1 text-sm text-content break-words">
+                {id != null ? byId.get(id)?.optionText : <span className="italic text-content-subtle">Empty</span>}
+              </span>
+              {!ok && rightPlace > 0 && (
+                <span className="text-xs font-semibold text-danger-strong whitespace-nowrap">Belongs at #{rightPlace}</span>
               )}
+              <PartMark ok={ok} />
             </li>
           );
         })}
       </ol>
-      {!practice && !touched && order.length > 0 && (
-        <button type="button" onClick={() => onChange({ orderedOptionIds: order })} className="text-sm text-brand-ink hover:underline">
-          Keep this order as my answer
+      <div>
+        <button
+          type="button"
+          aria-expanded={showKey}
+          onClick={() => setShowKey(s => !s)}
+          className="inline-flex items-center gap-1 text-sm font-medium text-brand-ink hover:underline"
+        >
+          <Icon.ChevronDown className={`w-4 h-4 transition-transform ${showKey ? 'rotate-180' : ''}`} />
+          {showKey ? 'Hide the correct order' : 'Show the correct order'}
         </button>
-      )}
-      {key && (
-        <div>
-          <button
-            type="button"
-            aria-expanded={showKey}
-            onClick={() => setShowKey(s => !s)}
-            className="inline-flex items-center gap-1 text-sm font-medium text-brand-ink hover:underline"
-          >
-            <Icon.ChevronDown className={`w-4 h-4 transition-transform ${showKey ? 'rotate-180' : ''}`} />
-            {showKey ? 'Hide the correct order' : 'Show the correct order'}
-          </button>
-          {showKey && (
-            <ol className="mt-2 space-y-1.5 rounded-[10px] border border-success-line bg-success-light p-3">
-              {key.map((id, i) => (
-                <li key={id} className="flex items-start gap-2 text-sm text-success-strong">
-                  <span className="font-semibold w-5 flex-shrink-0">{i + 1}.</span>
-                  <span className="break-words">{byId.get(id)?.optionText}</span>
-                </li>
-              ))}
-            </ol>
-          )}
-        </div>
-      )}
+        {showKey && (
+          <ol className="mt-2 space-y-1.5 rounded-[10px] border border-success-line bg-success-light p-3">
+            {keyOrder.map((id, i) => (
+              <li key={id} className="flex items-start gap-2 text-sm text-success-strong">
+                <span className="font-semibold w-5 flex-shrink-0">{i + 1}.</span>
+                <span className="break-words">{byId.get(id)?.optionText}</span>
+              </li>
+            ))}
+          </ol>
+        )}
+      </div>
     </div>
   );
 }

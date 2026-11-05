@@ -38,6 +38,8 @@ export interface SmartPracticeRequest {
   durationMinutes?: number;
   /** Free-text guidance for the AI (focus topics, weak points, question style). Ignored until the BE reads it. */
   context?: string;
+  /** Name the student gives the practice exam. Ignored until the BE reads it (see docs/notes). */
+  title?: string;
 }
 
 export interface CategoryAccuracy {

@@ -58,11 +58,12 @@ const OUTCOME: Record<Outcome, { label: string; badge: 'success' | 'danger' | 'i
   pending: { label: 'Not graded', badge: 'warning', icon: <Icon.Clock className="w-5 h-5 text-warning" /> },
 };
 
-function outcomeOf(q: ResultQuestion): Outcome {
+/** `scoreOnly` (an exam, not a practice): every answer gets its points, never a right / wrong verdict. */
+function outcomeOf(q: ResultQuestion, scoreOnly: boolean): Outcome {
   if (isGradingOpen(q)) return 'pending';
   if (!isAnswered(q.yourResponse)) return 'unanswered';
   // Essay / code / diagram answers carry rubric points, not a right/wrong verdict.
-  if (RUBRIC_TYPES.has(q.questionType)) return 'graded';
+  if (scoreOnly || RUBRIC_TYPES.has(q.questionType)) return 'graded';
   if (q.isCorrect != null) return q.isCorrect ? 'correct' : 'incorrect';
   if (q.scoreEarned != null && q.maxPoints != null) return Number(q.scoreEarned) >= Number(q.maxPoints) ? 'correct' : 'incorrect';
   return 'incorrect';
@@ -136,7 +137,7 @@ function num(v: number | null | undefined): string {
  * Attempt review (SA-05) — reached from My Exams and right after submitting.
  * A header with a dropdown of my submitted attempts of this exam
  * (SA-06, with their date), the score (per module when the exam spans
- * several), "Re-attempt" and "Back"; below it two columns:
+ * several), "Retake" and "Back"; below it two columns:
  *  - left: one question at a time (`?q=` 1-based, so a refresh or a shared
  *    link keeps it) with its outcome, my answer, the correct answer and rubric
  *    feedback; Previous / Next and ← → move through it. Only the explanation
@@ -149,7 +150,9 @@ function num(v: number | null | undefined): string {
  * Essay / code / diagram answers: the attempt lands here SUBMITTED with its
  * rubric answers ungraded. "Grade with AI" asks the AI (SE-02) and opens a
  * "grading" modal, polling until every answer is scored.
- * `&practice=1` (a practice exam): no score anywhere — only right / wrong; Re-attempt
+ * An exam shows only scores: no right / wrong, no answer key, no explanation, no "Retry wrong questions".
+ * `&practice=1` (a practice exam): a quiz shows right / wrong instead of the score, an essay / diagram
+ * paper only its score; Retake
  * reopens it in practice mode and Back leads to Exam History (it has no exam page).
  */
 export function StudentExamResultPage() {
@@ -313,7 +316,7 @@ export function StudentExamResultPage() {
     };
   }, [attemptId, reload]);
 
-  const outcomes = useMemo(() => (result?.questions ?? []).map(outcomeOf), [result]);
+  const outcomes = useMemo(() => (result?.questions ?? []).map(x => outcomeOf(x, !practice)), [result, practice]);
   const counts = useMemo(() => {
     const c: Record<Outcome, number> = { correct: 0, incorrect: 0, graded: 0, unanswered: 0, pending: 0 };
     outcomes.forEach(o => c[o]++);
@@ -500,6 +503,9 @@ export function StudentExamResultPage() {
   };
 
   const modules = moduleScores(result.questions, outcomes);
+  // A practice essay / diagram paper has no right / wrong to count: it shows its score like an exam.
+  const rubricOnly = total > 0 && result.questions.every(x => RUBRIC_TYPES.has(x.questionType));
+  const practiceCounts = practice && !rubricOnly;
   const q = result.questions[current];
   const canSave = SAVABLE_ATTEMPT_STATUSES.has(result.status);
   const savableIds = canSave ? result.questions.filter(x => SAVABLE_QUESTION_TYPES.has(x.questionType)).map(x => x.questionId) : [];
@@ -516,6 +522,7 @@ export function StudentExamResultPage() {
       <ScoreCard
             result={result}
             practice={practice}
+            showCounts={practiceCounts}
             counts={counts}
             modules={modules}
             onOpenModule={goTo}
@@ -533,7 +540,7 @@ export function StudentExamResultPage() {
                     value: String(a.attemptId),
                     // Written answers still ungraded: a "0/100" would read as a real score.
                     label: `#${attempts.length - i} · ${formatDateTime(a.submittedAt ?? a.startTime)}${
-                      practice ? '' : ` · ${Number(a.pendingPoints ?? 0) > 0 ? 'Not graded' : `${num(a.totalScore)}/${num(a.maxScore)}`}`
+                      practiceCounts ? '' : ` ·${Number(a.pendingPoints ?? 0) > 0 ? 'Not graded' : `${num(a.totalScore)}/${num(a.maxScore)}`}`
                     }`,
                   }))}
                   value={String(result.attemptId)}
@@ -542,8 +549,9 @@ export function StudentExamResultPage() {
               ) : undefined
             }
             onSaveAll={savableIds.length > 0 ? () => setSaveQuestions(savableIds) : undefined}
-            onRetryWrong={canSave && hasWrong ? () => setRetrying(true) : undefined}
-            onReattempt={examId ? () => navigate(practice ? studentTakePracticePath(examId) : studentTakeExamPath(examId)) : undefined}
+            // An exam never tells which answers were wrong, so it has no "Retry wrong questions".
+            onRetryWrong={practice && canSave && hasWrong ? () => setRetrying(true) : undefined}
+            onRetake={examId ? () => navigate(practice ? studentTakePracticePath(examId) : studentTakeExamPath(examId)) : undefined}
             onBack={
               practice
                 ? () => navigate(practiceHistoryPath)
@@ -722,6 +730,7 @@ function GradingScreen({
 function ScoreCard({
   result,
   practice,
+  showCounts,
   counts,
   modules,
   onOpenModule,
@@ -733,12 +742,14 @@ function ScoreCard({
   onRequestGrading,
   onSaveAll,
   onRetryWrong,
-  onReattempt,
+  onRetake,
   onBack,
 }: {
   result: AttemptResult;
-  /** Practice: right / wrong counts instead of the score, no module breakdown. */
+  /** Practice: no module breakdown, Back leads to Exam History. */
   practice: boolean;
+  /** Practice quiz: right / wrong counts instead of the score. */
+  showCounts: boolean;
   counts: Record<Outcome, number>;
   /** Score per module; empty hides the breakdown. */
   modules: ModuleScore[];
@@ -758,7 +769,7 @@ function ScoreCard({
   onSaveAll?: () => void;
   /** Answers the wrong questions again (PQ-04); absent when there are none or the attempt isn't submitted. */
   onRetryWrong?: () => void;
-  onReattempt?: () => void;
+  onRetake?: () => void;
   onBack: () => void;
 }) {
   const max = result.maxScore != null ? Number(result.maxScore) : null;
@@ -781,8 +792,8 @@ function ScoreCard({
         </div>
 
         {/* No score until the written answers are graded — "0 / 100" would read as a real result. */}
-        {showScore && practice ? (
-          // Practice has no score: how many were right, wrong and left out.
+        {showScore && showCounts ? (
+          // Practice quiz has no score: how many were right, wrong and left out.
           <dl className="grid grid-cols-3 gap-2 text-center md:min-w-[18rem]">
             {[
               { label: 'Correct', value: counts.correct, tone: 'text-success' },
@@ -796,7 +807,7 @@ function ScoreCard({
             ))}
           </dl>
         ) : showScore ? (
-          // As tall as the Re-attempt / Back pair beside it (~80px): label, one score line, bar.
+          // As tall as the Retake / Back pair beside it (~80px): label, one score line, bar.
           <div className="text-center space-y-1.5 md:min-w-[16rem]">
             <p className="text-xs font-semibold text-content-subtle uppercase tracking-wide leading-4">Your score</p>
             <p className={`flex flex-wrap items-baseline justify-center gap-x-1.5 leading-none ${tone}`}>
@@ -826,9 +837,9 @@ function ScoreCard({
         )}
 
         <div className="flex flex-wrap md:flex-col gap-2 md:justify-self-end">
-          {onReattempt && (
-            <Button icon={<Icon.RefreshCw className="w-4 h-4" />} onClick={onReattempt}>
-              Re-attempt
+          {onRetake && (
+            <Button icon={<Icon.RefreshCw className="w-4 h-4" />} onClick={onRetake}>
+              Retake
             </Button>
           )}
           {onRetryWrong && (
@@ -983,7 +994,7 @@ function ResultQuestionCard({
         <div className="@container border-t border-line px-4 py-4">
           <div className="grid gap-4 @3xl:grid-cols-[minmax(0,1fr)_minmax(15rem,20rem)] @3xl:items-start">
           <div className="min-w-0">
-            <AnswerReview question={q} />
+            <AnswerReview question={q} hideVerdict={!practice} />
           </div>
           <div className="@3xl:sticky @3xl:top-[85px] min-w-0">
             <RubricGrade question={q} outcome={outcome} />
@@ -993,9 +1004,10 @@ function ResultQuestionCard({
       ) : (
       /* Answers are always shown; only the explanation is collapsible. */
       <div className="border-t border-line px-4 py-4 space-y-4">
-        <AnswerReview question={q} />
+        <AnswerReview question={q} hideVerdict={!practice} />
         {q.gradingError && <p className="text-sm text-danger">Grading failed: {q.gradingError}</p>}
-        {hasExplanation(q) && (
+        {/* An exam shows only the score: the explanation would give the answer away. */}
+        {practice && hasExplanation(q) && (
           <ExplanationBox
             question={q}
             state={explanation}

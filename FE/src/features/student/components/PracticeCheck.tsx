@@ -39,8 +39,16 @@ export function checkProgress(q: AttemptQuestion, response: AnswerResponse | nul
         hint: ready ? 'Press Enter in the last blank to check.' : keys.length > 1 ? 'Fill every blank to check.' : 'Type your answer to check.',
       };
     }
-    case 'ORDERING':
-      return { label: 'Lock in order', ready: true, hint: 'Put the items in order, then lock it in.' };
+    case 'ORDERING': {
+      const total = q.options?.length ?? 0;
+      const n = response?.orderedOptionIds?.length ?? 0;
+      const ready = total > 0 && n === total;
+      return {
+        label: `Check answer (${n}/${total} placed)`,
+        ready,
+        hint: ready ? null : 'Drag every item into a slot to check.',
+      };
+    }
     default:
       return { label: 'Check answer', ready: isAnswered(response), hint: null };
   }

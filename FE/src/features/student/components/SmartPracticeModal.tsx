@@ -55,6 +55,8 @@ const DIFFICULTY_OPTIONS: { value: '' | PracticeDifficulty; label: string }[] = 
 
 /** Free-text guidance the student gives the AI (sent as `context`). */
 const AI_CONTEXT_MAX = 500;
+/** Length of the practice exam name — the `title` column is VARCHAR(255). */
+const TITLE_MAX = 255;
 
 const limitsOf = (mode: SmartPracticeMode) =>
   mode === 'AI' ? { questions: SMART_QUESTIONS, minutes: SMART_MINUTES } : { questions: PRACTICE_QUESTIONS, minutes: PRACTICE_MINUTES };
@@ -88,6 +90,7 @@ export function SmartPracticeModal({
   const navigate = useNavigate();
   const [mode, setMode] = useState<SmartPracticeMode>(initialMode);
   const [courseId, setCourseId] = useState('');
+  const [title, setTitle] = useState('');
   const [questionCount, setQuestionCount] = useState('');
   const [touched, setTouched] = useState(false);
   // AI only
@@ -131,6 +134,7 @@ export function SmartPracticeModal({
     const preset = initialCourseId != null && courses.some(c => c.courseId === initialCourseId) ? initialCourseId : courses[0]?.courseId;
     setCourseId(preset != null ? String(preset) : '');
     setMode(initialMode);
+    setTitle('');
     resetCounts(initialMode);
     setExamType('QUIZ');
     setDifficulty('');
@@ -207,6 +211,7 @@ export function SmartPracticeModal({
   // Practice is untimed: the student sets no limit, the BE (which still wants one) gets the longest it allows.
   const minutesNum = limits.minutes.max;
   const errors = {
+    title: title.trim() ? undefined : 'Enter a name for the practice exam.',
     course: courseId ? undefined : 'Select a course.',
     count: !questionCount.trim()
       ? 'Enter the number of questions.'
@@ -216,7 +221,7 @@ export function SmartPracticeModal({
           ? `Enter at most ${limits.questions.max} questions.`
           : `Enter ${limits.questions.min} – ${limits.questions.max} questions.`,
   };
-  const invalid = Boolean(errors.course || errors.count);
+  const invalid = Boolean(errors.title || errors.course || errors.count);
 
   const generateAi = async () => {
     setBusy(true);
@@ -227,6 +232,7 @@ export function SmartPracticeModal({
         questionCount: countNum,
         durationMinutes: minutesNum,
         context: aiContext.trim() || undefined,
+        title: title.trim(),
       });
       setStarted(job);
       setPhase('processing');
@@ -250,6 +256,7 @@ export function SmartPracticeModal({
         examType,
         categoryIds: moduleIds.length > 0 ? moduleIds.map(Number) : undefined,
         difficulty: difficulty || undefined,
+        title: title.trim(),
       });
       onClose();
       navigate(studentTakePracticePath(created.examId));
@@ -317,6 +324,17 @@ export function SmartPracticeModal({
               <p className="text-sm text-content-soft">Enroll in a course first to create a practice exam.</p>
             ) : (
               <div className="grid gap-x-6 gap-y-5 sm:grid-cols-2">
+                <div className="min-w-0 sm:col-span-2">
+                  <Input
+                    label="Name"
+                    required
+                    maxLength={TITLE_MAX}
+                    value={title}
+                    onChange={e => setTitle(e.target.value)}
+                    placeholder="e.g. Chapter 3 review"
+                    error={touched ? errors.title : undefined}
+                  />
+                </div>
                 {!lockCourse && (
                   <div className="min-w-0 sm:col-span-2">
                     <Select
