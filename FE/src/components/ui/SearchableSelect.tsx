@@ -114,7 +114,7 @@ export function SearchableSelect({ label, options, value, onChange, placeholder 
         } ${disabled ? 'cursor-not-allowed bg-surface-alt text-content-subtle' : 'cursor-pointer'}`}
       >
         {selected?.label ?? placeholder}
-        <Icon.ChevronDown className={`absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-content-subtle pointer-events-none transition-transform ${open ? 'rotate-180' : ''}`} />
+        <Icon.ChevronDown className={`absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-content-subtle pointer-events-none transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
 
       {open && createPortal(

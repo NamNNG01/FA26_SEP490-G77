@@ -107,7 +107,8 @@ class PracticeExamApiIntegrationTest {
 
     @Test void boundsValidation400() throws Exception {
         String c = "\"courseId\":" + course.getCourseId();
-        create(student, "{" + c + ",\"questionCount\":4,\"durationMinutes\":30}").andExpect(status().isBadRequest());
+        create(student, "{" + c + ",\"questionCount\":0,\"durationMinutes\":30}").andExpect(status().isBadRequest());
+        create(student, "{" + c + ",\"questionCount\":1,\"durationMinutes\":30}").andExpect(status().isCreated());
         create(student, "{" + c + ",\"questionCount\":101,\"durationMinutes\":30}").andExpect(status().isBadRequest());
         create(student, "{" + c + ",\"questionCount\":5,\"durationMinutes\":0}").andExpect(status().isBadRequest());
         create(student, "{" + c + ",\"questionCount\":5,\"durationMinutes\":181}").andExpect(status().isBadRequest());

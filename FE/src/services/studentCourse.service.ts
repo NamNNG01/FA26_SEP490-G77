@@ -190,6 +190,12 @@ export const studentCourseService = {
     return res.data;
   },
 
+  /** Active categories available for the public student course catalog filter. */
+  async getCategories(): Promise<CategoryRef[]> {
+    const res = await api.get<ApiResponse<CategoryRef[]>>('/student/categories');
+    return res.data;
+  },
+
   /** CL-02 */
   async getCourseDetail(courseId: number | string): Promise<StudentCourseDetail> {
     const res = await api.get<ApiResponse<StudentCourseDetail>>(`/student/courses/${courseId}`);
