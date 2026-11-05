@@ -190,7 +190,7 @@ public class ModulePracticeAiServiceImpl implements ModulePracticeAiService {
             throw new ResourceNotFoundException("Question is not part of this practice session");
         }
         // A session of a hidden module or of a course the student has left explains nothing.
-        support.requireModuleAccess(userId, session);
+        support.requireSessionAccess(userId, session);
         QuestionPracticeAnswer answer = ownedAnswer(sessionQuestion, request);
         if (answer == null) {
             // The same gate SE-01 applies to an exam: answer the question first, so the explanation

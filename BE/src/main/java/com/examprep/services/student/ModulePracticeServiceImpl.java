@@ -5,7 +5,6 @@ import com.examprep.dto.attempt.Snapshots;
 import com.examprep.dto.practice.ModulePracticeRequests;
 import com.examprep.dto.practice.ModulePracticeResponses;
 import com.examprep.entities.AnswerOption;
-import com.examprep.entities.Module;
 import com.examprep.entities.Question;
 import com.examprep.entities.QuestionPracticeProgress;
 import com.examprep.entities.QuestionPracticeSession;
@@ -44,15 +43,18 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 /**
- * MP-01 … MP-04, MP-07, MP-08, MP-11, MP-12.
+ * MP-01 … MP-04, MP-07, MP-08, MP-11, MP-12 — for one module and for a course's General pool.
  *
- * <p>The module-scoped endpoints resolve the module through
- * {@link ModulePracticeSupport#requireModule} first; the session-scoped ones resolve the session by
- * ownership first (a foreign session is a 404) and then re-check the module and the enrolment through
- * {@link ModulePracticeSupport#requireModuleAccess}. A session therefore stops being reachable the
+ * <p>Every rule is written once against a {@link PracticeScope}: the module-scoped endpoints resolve
+ * the module through {@link ModulePracticeSupport#requireModule}, the General ones resolve the course
+ * through {@link ModulePracticeSupport#requireCourse}, and both then run the same code. The
+ * session-scoped endpoints resolve the session by ownership first (a foreign session is a 404) and
+ * then re-check its scope and the enrolment through
+ * {@link ModulePracticeSupport#requireSessionAccess}. A session therefore stops being reachable the
  * moment its module is hidden or the enrolment lapses — including the MP-02 resume branch, which
  * validates before it answers "resumed". The authenticated user id always comes from the caller (the
  * JWT principal), never from the request.</p>
@@ -86,9 +88,20 @@ public class ModulePracticeServiceImpl implements ModulePracticeService {
     @Override
     @Transactional(readOnly = true)
     public ModulePracticeResponses.Overview overview(Long userId, Long moduleId) {
-        Module module = support.requireModule(userId, moduleId);
-        long total = questions.countPracticeDrawable(moduleId);
-        Object[] summary = progress.summarizeModule(userId, moduleId).get(0);
+        return overviewOf(userId, support.requireModuleScope(userId, moduleId));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ModulePracticeResponses.Overview generalOverview(Long userId, Long courseId) {
+        return overviewOf(userId, support.requireGeneralScope(userId, courseId));
+    }
+
+    private ModulePracticeResponses.Overview overviewOf(Long userId, PracticeScope scope) {
+        long total = drawableCount(scope);
+        Object[] summary = (scope.isGeneral()
+                ? progress.summarizeCourse(userId, scope.courseId())
+                : progress.summarizeModule(userId, scope.moduleId())).get(0);
         long practiced = number(summary[0]);
         long totalAttempts = number(summary[1]);
         long gradedAttempts = number(summary[2]);
@@ -98,7 +111,7 @@ public class ModulePracticeServiceImpl implements ModulePracticeService {
         long needingReview = number(summary[6]);
 
         ModulePracticeResponses.ActiveSessionInfo active = null;
-        Optional<QuestionPracticeSession> open = openSession(userId, moduleId);
+        Optional<QuestionPracticeSession> open = openSession(userId, scope);
         if (open.isPresent()) {
             QuestionPracticeSession session = open.get();
             Optional<QuestionPracticeSessionQuestion> next = support.nextUnanswered(session.getSessionId());
@@ -115,10 +128,10 @@ public class ModulePracticeServiceImpl implements ModulePracticeService {
                     next.map(QuestionPracticeSessionQuestion::getOrderIndex).orElse(null));
         }
         return new ModulePracticeResponses.Overview(
-                module.getModuleId(),
-                module.getTitle(),
-                module.getCourse().getCourseId(),
-                module.getCourse().getTitle(),
+                scope.moduleId(),
+                scope.moduleTitle(),
+                scope.courseId(),
+                scope.courseTitle(),
                 total,
                 practiced,
                 Math.max(0, total - practiced),
@@ -134,6 +147,18 @@ public class ModulePracticeServiceImpl implements ModulePracticeService {
 
     // ------------------------------------------------------------------ MP-02
 
+    @Override
+    public ModulePracticeResponses.SessionDetail startOrResume(Long userId, Long moduleId,
+                                                               ModulePracticeRequests.StartSession request) {
+        return startOrResumeOf(userId, () -> support.requireModuleScope(userId, moduleId), request);
+    }
+
+    @Override
+    public ModulePracticeResponses.SessionDetail generalStartOrResume(Long userId, Long courseId,
+                                                                      ModulePracticeRequests.StartSession request) {
+        return startOrResumeOf(userId, () -> support.requireGeneralScope(userId, courseId), request);
+    }
+
     /**
      * Not transactional as a whole on purpose: the attempt to insert the session must fail on its own
      * so the partial unique index can decide between two concurrent starts. The loser then re-reads
@@ -144,14 +169,13 @@ public class ModulePracticeServiceImpl implements ModulePracticeService {
      * repository call would depend on Open-Entity-Manager-In-View — and would break the moment this
      * method is called outside a web request.</p>
      */
-    @Override
-    public ModulePracticeResponses.SessionDetail startOrResume(Long userId, Long moduleId,
-                                                               ModulePracticeRequests.StartSession request) {
+    private ModulePracticeResponses.SessionDetail startOrResumeOf(
+            Long userId, Supplier<PracticeScope> access, ModulePracticeRequests.StartSession request) {
         // The access rule runs before the resume answer, so a session whose module became hidden or
         // whose enrolment lapsed is refused here exactly like a new start would be.
         ModulePracticeResponses.SessionDetail open = inReadTransaction(() -> {
-            support.requireModule(userId, moduleId);
-            return openSession(userId, moduleId).map(session -> support.detailOf(session, true)).orElse(null);
+            PracticeScope scope = access.get();
+            return openSession(userId, scope).map(session -> support.detailOf(session, true)).orElse(null);
         });
         if (open != null) {
             return open;
@@ -162,12 +186,12 @@ public class ModulePracticeServiceImpl implements ModulePracticeService {
         String difficulty = request == null ? null : request.difficulty();
         List<String> questionTypes = request == null ? null : request.questionTypes();
         try {
-            return create(userId, moduleId, mode, difficulty, questionTypes, requested);
+            return create(userId, access, mode, difficulty, questionTypes, requested);
         } catch (DataIntegrityViolationException concurrentStart) {
             // Another request created the open session first (or a unique paper row raced): adopt it.
             ModulePracticeResponses.SessionDetail adopted = inReadTransaction(() -> {
-                support.requireModule(userId, moduleId);
-                return openSession(userId, moduleId).map(session -> support.detailOf(session, true)).orElse(null);
+                PracticeScope scope = access.get();
+                return openSession(userId, scope).map(session -> support.detailOf(session, true)).orElse(null);
             });
             if (adopted != null) {
                 return adopted;
@@ -183,43 +207,18 @@ public class ModulePracticeServiceImpl implements ModulePracticeService {
         return tx.execute(status -> work.get());
     }
 
-    private ModulePracticeResponses.SessionDetail create(Long userId, Long moduleId, String mode,
-                                                         String difficulty, List<String> questionTypes,
-                                                         Integer requested) {
+    private ModulePracticeResponses.SessionDetail create(Long userId, Supplier<PracticeScope> access,
+                                                         String mode, String difficulty,
+                                                         List<String> questionTypes, Integer requested) {
         TransactionTemplate tx = new TransactionTemplate(transactionManager);
         ModulePracticeResponses.SessionDetail created = tx.execute(status -> {
-            Module module = support.requireModule(userId, moduleId);
-            if (openSession(userId, moduleId).isPresent()) {
+            PracticeScope scope = access.get();
+            if (openSession(userId, scope).isPresent()) {
                 // A session appeared between the pre-check and this transaction: resume it.
-                return support.detailOf(openSession(userId, moduleId).orElseThrow(), true);
+                return support.detailOf(openSession(userId, scope).orElseThrow(), true);
             }
 
-            List<Long> pool;
-            if (QuestionPracticeSession.MODE_REVIEW.equals(mode) || QuestionPracticeSession.MODE_WRONG.equals(mode)) {
-                pool = reviewPool(userId, moduleId);
-                if (pool.isEmpty()) {
-                    throw new BaseException(ResponseCode.PRACTICE_NO_QUESTIONS,
-                            "No question of this module is waiting for review");
-                }
-            } else if (QuestionPracticeSession.MODE_BOOKMARKED.equals(mode)) {
-                pool = bookmarkedPool(userId, moduleId);
-                if (pool.isEmpty()) {
-                    throw new BaseException(ResponseCode.PRACTICE_NO_QUESTIONS,
-                            "No bookmarked question available for practice in this module");
-                }
-            } else if (QuestionPracticeSession.MODE_TARGET.equals(mode)) {
-                pool = targetPool(moduleId, difficulty, questionTypes);
-                if (pool.isEmpty()) {
-                    throw new BaseException(ResponseCode.PRACTICE_NO_QUESTIONS,
-                            "No question matches the specified criteria in this module");
-                }
-            } else {
-                pool = questions.findPracticeDrawableIds(moduleId);
-                if (pool.isEmpty()) {
-                    throw new BaseException(ResponseCode.PRACTICE_NO_QUESTIONS,
-                            "This module has no question available for practice");
-                }
-            }
+            List<Long> pool = poolOf(userId, scope, mode, difficulty, questionTypes);
 
             AttemptShuffler shuffler = new AttemptShuffler(AttemptShuffler.newSeed());
             List<Long> shuffled = shuffler.shuffle(new ArrayList<>(new LinkedHashSet<>(pool)));
@@ -234,8 +233,9 @@ public class ModulePracticeServiceImpl implements ModulePracticeService {
             Instant now = Instant.now();
             QuestionPracticeSession session = sessions.saveAndFlush(QuestionPracticeSession.builder()
                     .user(student)
-                    .course(module.getCourse())
-                    .module(module)
+                    .course(scope.course())
+                    // null for the General pool: the run is scoped by its course alone.
+                    .module(scope.module())
                     .mode(mode)
                     .questionCount(count)
                     .answeredCount(0)
@@ -285,8 +285,7 @@ public class ModulePracticeServiceImpl implements ModulePracticeService {
                         .build());
             }
             if (paper.isEmpty()) {
-                throw new BaseException(ResponseCode.PRACTICE_NO_QUESTIONS,
-                        "This module has no question available for practice");
+                throw new BaseException(ResponseCode.PRACTICE_NO_QUESTIONS, noQuestionsMessage(scope));
             }
             session.setQuestionCount(paper.size());
             sessionQuestions.saveAll(paper);
@@ -295,14 +294,75 @@ public class ModulePracticeServiceImpl implements ModulePracticeService {
         return created;
     }
 
-    private List<Long> bookmarkedPool(Long userId, Long moduleId) {
-        return reviewRepository.findBookmarkedQuestionIds(userId, moduleId);
+    /** The eligible ids of the requested mode, refusing an empty pool with the documented error. */
+    private List<Long> poolOf(Long userId, PracticeScope scope, String mode, String difficulty,
+                              List<String> questionTypes) {
+        if (QuestionPracticeSession.MODE_REVIEW.equals(mode) || QuestionPracticeSession.MODE_WRONG.equals(mode)) {
+            List<Long> pool = reviewPool(userId, scope);
+            if (pool.isEmpty()) {
+                throw new BaseException(ResponseCode.PRACTICE_NO_QUESTIONS, scope.isGeneral()
+                        ? "No question of this course's General pool is waiting for review"
+                        : "No question of this module is waiting for review");
+            }
+            return pool;
+        }
+        if (QuestionPracticeSession.MODE_BOOKMARKED.equals(mode)) {
+            List<Long> pool = bookmarkedPool(userId, scope);
+            if (pool.isEmpty()) {
+                throw new BaseException(ResponseCode.PRACTICE_NO_QUESTIONS, scope.isGeneral()
+                        ? "No bookmarked question available for practice in this course's General pool"
+                        : "No bookmarked question available for practice in this module");
+            }
+            return pool;
+        }
+        if (QuestionPracticeSession.MODE_TARGET.equals(mode)) {
+            List<Long> pool = targetPool(scope, difficulty, questionTypes);
+            if (pool.isEmpty()) {
+                throw new BaseException(ResponseCode.PRACTICE_NO_QUESTIONS, scope.isGeneral()
+                        ? "No question matches the specified criteria in this course's General pool"
+                        : "No question matches the specified criteria in this module");
+            }
+            return pool;
+        }
+        List<Long> pool = drawableIds(scope);
+        if (pool.isEmpty()) {
+            throw new BaseException(ResponseCode.PRACTICE_NO_QUESTIONS, noQuestionsMessage(scope));
+        }
+        return pool;
     }
 
-    private List<Long> targetPool(Long moduleId, String difficulty, List<String> questionTypes) {
+    /** Scope-appropriate wording, so a General refusal never claims to be about a module. */
+    private static String noQuestionsMessage(PracticeScope scope) {
+        return scope.isGeneral()
+                ? "This course's General pool has no question available for practice"
+                : "This module has no question available for practice";
+    }
+
+    private List<Long> drawableIds(PracticeScope scope) {
+        return scope.isGeneral()
+                ? questions.findGeneralPracticeDrawableIds(scope.courseId())
+                : questions.findPracticeDrawableIds(scope.moduleId());
+    }
+
+    private long drawableCount(PracticeScope scope) {
+        return scope.isGeneral()
+                ? questions.countGeneralPracticeDrawable(scope.courseId())
+                : questions.countPracticeDrawable(scope.moduleId());
+    }
+
+    private List<Long> bookmarkedPool(Long userId, PracticeScope scope) {
+        return scope.isGeneral()
+                ? reviewRepository.findGeneralBookmarkedQuestionIds(userId, scope.courseId())
+                : reviewRepository.findBookmarkedQuestionIds(userId, scope.moduleId());
+    }
+
+    private List<Long> targetPool(PracticeScope scope, String difficulty, List<String> questionTypes) {
         String diff = (difficulty != null && !difficulty.isBlank()) ? difficulty.trim() : null;
         boolean hasTypes = questionTypes != null && !questionTypes.isEmpty();
-        return questions.findTargetDrawableIds(moduleId, diff, hasTypes, hasTypes ? questionTypes : List.of(""));
+        List<String> types = hasTypes ? questionTypes : List.of("");
+        return scope.isGeneral()
+                ? questions.findGeneralTargetDrawableIds(scope.courseId(), diff, hasTypes, types)
+                : questions.findTargetDrawableIds(scope.moduleId(), diff, hasTypes, types);
     }
 
     /**
@@ -310,10 +370,13 @@ public class ModulePracticeServiceImpl implements ModulePracticeService {
      * list rather than by mutating the repository's result, so the method does not depend on how the
      * provider materialised it.
      */
-    private List<Long> reviewPool(Long userId, Long moduleId) {
-        Set<Long> stillEligible = new HashSet<>(questions.findPracticeDrawableIds(moduleId));
+    private List<Long> reviewPool(Long userId, PracticeScope scope) {
+        Set<Long> stillEligible = new HashSet<>(drawableIds(scope));
+        List<Long> reviewIds = scope.isGeneral()
+                ? progress.findReviewQuestionIdsGeneral(userId, scope.courseId())
+                : progress.findReviewQuestionIds(userId, scope.moduleId());
         List<Long> pool = new ArrayList<>();
-        for (Long questionId : progress.findReviewQuestionIds(userId, moduleId)) {
+        for (Long questionId : reviewIds) {
             if (stillEligible.contains(questionId)) {
                 pool.add(questionId);
             }
@@ -321,9 +384,12 @@ public class ModulePracticeServiceImpl implements ModulePracticeService {
         return pool;
     }
 
-    private Optional<QuestionPracticeSession> openSession(Long userId, Long moduleId) {
-        return sessions.findFirstByUser_UserIdAndModule_ModuleIdAndStatusOrderBySessionIdDesc(
-                userId, moduleId, QuestionPracticeSession.STATUS_IN_PROGRESS);
+    private Optional<QuestionPracticeSession> openSession(Long userId, PracticeScope scope) {
+        return scope.isGeneral()
+                ? sessions.findFirstByUser_UserIdAndCourse_CourseIdAndModuleIsNullAndStatusOrderBySessionIdDesc(
+                        userId, scope.courseId(), QuestionPracticeSession.STATUS_IN_PROGRESS)
+                : sessions.findFirstByUser_UserIdAndModule_ModuleIdAndStatusOrderBySessionIdDesc(
+                        userId, scope.moduleId(), QuestionPracticeSession.STATUS_IN_PROGRESS);
     }
 
     // ------------------------------------------------------------------ MP-03
@@ -332,7 +398,7 @@ public class ModulePracticeServiceImpl implements ModulePracticeService {
     @Transactional(readOnly = true)
     public ModulePracticeResponses.SessionDetail session(Long userId, Long sessionId) {
         QuestionPracticeSession session = owned(userId, sessionId);
-        support.requireModuleAccess(userId, session);
+        support.requireSessionAccess(userId, session);
         return support.detailOf(session, false);
     }
 
@@ -342,7 +408,7 @@ public class ModulePracticeServiceImpl implements ModulePracticeService {
     @Transactional(readOnly = true)
     public ModulePracticeResponses.QuestionView question(Long userId, Long sessionId, Long sessionQuestionId) {
         QuestionPracticeSession session = owned(userId, sessionId);
-        support.requireModuleAccess(userId, session);
+        support.requireSessionAccess(userId, session);
         QuestionPracticeSessionQuestion sessionQuestion = sessionQuestions
                 .findInSession(sessionId, sessionQuestionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Question is not part of this practice session"));
@@ -361,7 +427,7 @@ public class ModulePracticeServiceImpl implements ModulePracticeService {
         QuestionPracticeSession session = sessions.lockOwned(sessionId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException(ResponseCode.PRACTICE_SESSION_NOT_FOUND,
                         "Practice session not found"));
-        support.requireModuleAccess(userId, session);
+        support.requireSessionAccess(userId, session);
         Instant now = Instant.now();
         if (session.isInProgress()) {
             session.setStatus(QuestionPracticeSession.STATUS_COMPLETED);
@@ -379,7 +445,7 @@ public class ModulePracticeServiceImpl implements ModulePracticeService {
     @Transactional(readOnly = true)
     public ModulePracticeResponses.Result result(Long userId, Long sessionId) {
         QuestionPracticeSession session = owned(userId, sessionId);
-        support.requireModuleAccess(userId, session);
+        support.requireSessionAccess(userId, session);
         List<QuestionPracticeSessionQuestion> paper = sessionQuestions.findPaperBySessionId(sessionId);
 
         int answered = 0;
@@ -427,8 +493,8 @@ public class ModulePracticeServiceImpl implements ModulePracticeService {
 
         return new ModulePracticeResponses.Result(
                 session.getSessionId(),
-                session.getModule().getModuleId(),
-                session.getModule().getTitle(),
+                support.moduleIdOf(session),
+                support.moduleTitleOf(session),
                 session.getStatus(),
                 paper.size(),
                 answered,
@@ -455,14 +521,28 @@ public class ModulePracticeServiceImpl implements ModulePracticeService {
     @Transactional(readOnly = true)
     public Page<ModulePracticeResponses.ReviewItem> reviewQuestions(Long userId, Long moduleId,
                                                                     int page, int size) {
-        Module module = support.requireModule(userId, moduleId);
+        return reviewQuestionsOf(userId, support.requireModuleScope(userId, moduleId), page, size);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<ModulePracticeResponses.ReviewItem> generalReviewQuestions(Long userId, Long courseId,
+                                                                          int page, int size) {
+        return reviewQuestionsOf(userId, support.requireGeneralScope(userId, courseId), page, size);
+    }
+
+    private Page<ModulePracticeResponses.ReviewItem> reviewQuestionsOf(Long userId, PracticeScope scope,
+                                                                       int page, int size) {
         int pageSize = Math.min(Math.max(size, 1), MAX_REVIEW_PAGE_SIZE);
-        Page<QuestionPracticeProgress> found =
-                progress.findReviewQuestions(userId, moduleId, PageRequest.of(Math.max(page, 0), pageSize));
+        PageRequest paging = PageRequest.of(Math.max(page, 0), pageSize);
+        Page<QuestionPracticeProgress> found = scope.isGeneral()
+                ? progress.findGeneralReviewQuestions(userId, scope.courseId(), paging)
+                : progress.findReviewQuestions(userId, scope.moduleId(), paging);
         return found.map(item -> new ModulePracticeResponses.ReviewItem(
                 item.getProgressId(),
                 item.getQuestion().getQuestionId(),
-                module.getModuleId(),
+                scope.moduleId(),
+                scope.moduleTitle(),
                 item.getQuestion().getQuestionType(),
                 item.getQuestion().getContent(),
                 item.getTotalAttempts(),
@@ -477,21 +557,38 @@ public class ModulePracticeServiceImpl implements ModulePracticeService {
 
     // ------------------------------------------------------------------ MP-12
 
+    @Override
+    @Transactional
+    public ModulePracticeResponses.ResetResult resetProgress(Long userId, Long moduleId) {
+        return resetProgressOf(userId, support.requireModuleScope(userId, moduleId));
+    }
+
+    @Override
+    @Transactional
+    public ModulePracticeResponses.ResetResult generalResetProgress(Long userId, Long courseId) {
+        return resetProgressOf(userId, support.requireGeneralScope(userId, courseId));
+    }
+
     /**
      * Strictly PRACTICE_ONLY: sessions (and, through the schema's cascades, their frozen paper and
-     * every stored attempt) plus the aggregated practice progress of this student and module.
+     * every stored attempt) plus the aggregated practice progress of this student and scope.
+     *
+     * <p>A General reset deletes only sessions and progress rows whose {@code module_id} is NULL, so
+     * the module runs of the same course survive, and vice versa.</p>
      *
      * <p>Untouched by construction: {@code question_review} (the mistake notebook and its bookmarks),
      * exams, attempts, flashcards, study sessions, enrolments, other modules, other students and
      * {@code ai_usage_logs}.</p>
      */
-    @Override
-    @Transactional
-    public ModulePracticeResponses.ResetResult resetProgress(Long userId, Long moduleId) {
-        Module module = support.requireModule(userId, moduleId);
-        int deletedSessions = sessions.deleteByUserIdAndModuleId(userId, moduleId);
-        int deletedProgress = progress.deleteByUserIdAndModuleId(userId, moduleId);
-        return new ModulePracticeResponses.ResetResult(module.getModuleId(), deletedSessions, deletedProgress);
+    private ModulePracticeResponses.ResetResult resetProgressOf(Long userId, PracticeScope scope) {
+        int deletedSessions = scope.isGeneral()
+                ? sessions.deleteGeneralByUserIdAndCourseId(userId, scope.courseId())
+                : sessions.deleteByUserIdAndModuleId(userId, scope.moduleId());
+        int deletedProgress = scope.isGeneral()
+                ? progress.deleteGeneralByUserIdAndCourseId(userId, scope.courseId())
+                : progress.deleteByUserIdAndModuleId(userId, scope.moduleId());
+        return new ModulePracticeResponses.ResetResult(
+                scope.moduleId(), scope.moduleTitle(), deletedSessions, deletedProgress);
     }
 
     // ------------------------------------------------------------------ helpers

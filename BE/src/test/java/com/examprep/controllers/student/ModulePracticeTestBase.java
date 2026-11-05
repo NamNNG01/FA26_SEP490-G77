@@ -8,7 +8,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpServer;
 import jakarta.persistence.EntityManager;
-import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -104,10 +103,16 @@ public abstract class ModulePracticeTestBase {
         registry.add("app.student-ai.free-daily-tokens", () -> 20_000);
     }
 
-    @AfterAll
-    static void stopProvider() {
-        PROVIDER.stop(0);
-        WORKERS.shutdownNow();
+    /**
+     * The stub provider lives as long as the test JVM: Spring caches the application context (and the
+     * app.ai.base-url bound to this server port) across test classes, so stopping it after one class
+     * would leave every later AI test without a provider.
+     */
+    static {
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            PROVIDER.stop(0);
+            WORKERS.shutdownNow();
+        }, "fake-ai-provider-shutdown"));
     }
 
     /** H2 stand-in for Postgres' pg_advisory_xact_lock. */

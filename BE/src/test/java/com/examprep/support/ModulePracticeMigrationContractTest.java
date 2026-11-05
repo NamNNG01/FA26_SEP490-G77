@@ -197,8 +197,8 @@ class ModulePracticeMigrationContractTest {
         String newest = versions.stream()
                 .max((left, right) -> Integer.compare(version(left), version(right)))
                 .orElseThrow();
-        assertTrue(newest.startsWith("V68__") || newest.startsWith("V69__"),
-                "V68/V69 is no longer the newest migration (newest is " + newest + ")");
+        assertTrue(newest.startsWith("V70__"),
+                "V70__general_practice.sql is no longer the newest migration (newest is " + newest + ")");
     }
 
     private static int version(String fileName) {

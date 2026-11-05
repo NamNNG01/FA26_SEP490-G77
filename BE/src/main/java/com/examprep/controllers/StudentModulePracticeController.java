@@ -35,11 +35,16 @@ import org.springframework.web.util.UriComponentsBuilder;
  *
  * <p>MP-10 (bookmark a question) has no route here on purpose: it is the existing notebook API
  * {@code POST /api/v1/student/questions/{questionId}/bookmark}.</p>
+ *
+ * <p>The four {@code /courses/{courseId}/general/...} routes are the same feature for a course's
+ * General pool — its questions that are filed under no module. Their bodies are identical to the
+ * module ones; only {@code moduleId} / {@code moduleTitle} report {@code null} / "General". The
+ * session-scoped routes (MP-03 … MP-09) serve General sessions unchanged.</p>
  */
 @RestController
 @RequestMapping("/api/v1/student")
 @RequiredArgsConstructor
-@Tag(name = "Module Practice", description = "Practice one module: overview, sessions, attempts, result, review and reset")
+@Tag(name = "Module Practice", description = "Practice one module or a course's General pool: overview, sessions, attempts, result, review and reset")
 public class StudentModulePracticeController {
 
     private final ModulePracticeService practice;
@@ -205,5 +210,63 @@ public class StudentModulePracticeController {
             @PathVariable Long moduleId) {
         return ResponseEntity.ok(ApiResponse.success(
                 practice.resetProgress(currentUser.getId(), moduleId), "Practice progress reset"));
+    }
+
+    // ------------------------------------------------------------------ General pool (no module)
+
+    @GetMapping("/courses/{courseId}/general/practice/overview")
+    @Operation(summary = "MP-01 (General): Practice overview of a course's questions without a module",
+            description = "The module overview's body for the course's General pool: moduleId is null and "
+                    + "moduleTitle is \"General\", while courseId and courseTitle stay filled.")
+    public ResponseEntity<ApiResponse<ModulePracticeResponses.Overview>> generalOverview(
+            @AuthenticationPrincipal UserPrincipal currentUser,
+            @PathVariable Long courseId) {
+        return ResponseEntity.ok(ApiResponse.success(
+                practice.generalOverview(currentUser.getId(), courseId)));
+    }
+
+    @PostMapping("/courses/{courseId}/general/practice/sessions")
+    @Operation(summary = "MP-02 (General): Start or resume a General practice session",
+            description = "Creates or resumes the caller's open General run of this course. Module runs of "
+                    + "the same course are a different scope and never count as the open session.")
+    public ResponseEntity<ApiResponse<ModulePracticeResponses.SessionDetail>> generalStart(
+            @AuthenticationPrincipal UserPrincipal currentUser,
+            @PathVariable Long courseId,
+            @Valid @RequestBody(required = false) ModulePracticeRequests.StartSession body) {
+        ModulePracticeResponses.SessionDetail session =
+                practice.generalStartOrResume(currentUser.getId(), courseId, body);
+        if (session.resumed()) {
+            return ResponseEntity.ok(ApiResponse.success(session, "Practice session resumed"));
+        }
+        URI location = UriComponentsBuilder
+                .fromPath("/api/v1/student/practice/sessions/{sessionId}")
+                .buildAndExpand(session.sessionId())
+                .toUri();
+        return ResponseEntity.created(location)
+                .body(ApiResponse.success(session, "Practice session started"));
+    }
+
+    @GetMapping("/courses/{courseId}/general/practice/review-questions")
+    @Operation(summary = "MP-11 (General): Questions of a course's General pool to practise again",
+            description = "Paged module-less questions of the course whose latest finalized attempt is wrong.")
+    public ResponseEntity<ApiResponse<PageResponse<ModulePracticeResponses.ReviewItem>>> generalReviewQuestions(
+            @AuthenticationPrincipal UserPrincipal currentUser,
+            @PathVariable Long courseId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(ApiResponse.success(
+                PageResponse.of(practice.generalReviewQuestions(currentUser.getId(), courseId, page, size))));
+    }
+
+    @DeleteMapping("/courses/{courseId}/general/practice/progress")
+    @Operation(summary = "MP-12 (General): Reset the practice progress of a course's General pool",
+            description = "Deletes only this student's General sessions, their frozen questions, every stored "
+                    + "attempt and the aggregated progress of that course. Module runs of the same course, "
+                    + "the mistake notebook, its bookmarks, exams, flashcards and AI usage history are untouched.")
+    public ResponseEntity<ApiResponse<ModulePracticeResponses.ResetResult>> generalResetProgress(
+            @AuthenticationPrincipal UserPrincipal currentUser,
+            @PathVariable Long courseId) {
+        return ResponseEntity.ok(ApiResponse.success(
+                practice.generalResetProgress(currentUser.getId(), courseId), "Practice progress reset"));
     }
 }

@@ -23,7 +23,10 @@ public final class ModulePracticeResponses {
 
     // ------------------------------------------------------------------ MP-01 overview
 
-    /** MP-01: one module's practice situation for the authenticated student. */
+    /**
+     * MP-01: one module's practice situation for the authenticated student. For a course's General
+     * pool {@code moduleId} is {@code null} and {@code moduleTitle} is "General"; the course stays filled.
+     */
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record Overview(
             Long moduleId,
@@ -300,6 +303,8 @@ public final class ModulePracticeResponses {
             Long progressId,
             Long questionId,
             Long moduleId,
+            /** "General" for the course's module-less pool. */
+            String moduleTitle,
             String questionType,
             String content,
             int totalAttempts,
@@ -316,7 +321,8 @@ public final class ModulePracticeResponses {
 
     /** MP-12: what the reset actually removed. Nothing outside Module Practice is counted. */
     @JsonInclude(JsonInclude.Include.ALWAYS)
-    public record ResetResult(Long moduleId, int deletedSessions, int deletedProgressRecords) {
+    public record ResetResult(Long moduleId, String moduleTitle, int deletedSessions,
+                              int deletedProgressRecords) {
     }
 
     // ------------------------------------------------------------------ MP-09 explanation
