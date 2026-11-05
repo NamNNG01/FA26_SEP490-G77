@@ -13,7 +13,7 @@ public final class PracticeDtos {
 
     /** examType QUIZ (default, auto-graded types) or ESSAY (graded later through SE-02). categoryIds are module ids of the course (a course has one category; modules are its topics). */
     public record Create(@NotNull @Positive Long courseId,
-                         @NotNull @Min(5) @Max(100) Integer questionCount,
+                         @NotNull @Min(1) @Max(100) Integer questionCount,
                          @NotNull @Min(1) @Max(180) Integer durationMinutes,
                          @Pattern(regexp = "QUIZ|ESSAY") String examType,
                          @Size(max = 50) List<@NotNull @Positive Long> categoryIds,
