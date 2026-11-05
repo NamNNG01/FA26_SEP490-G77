@@ -90,7 +90,7 @@ export function MultiSelect<T extends string>({ label, options, value, onChange,
         } ${selected.length ? 'text-content' : 'text-content-subtle'} ${disabled ? 'cursor-not-allowed bg-surface-alt text-content-subtle' : 'cursor-pointer'}`}
       >
         {summary}
-        <Icon.ChevronDown className={`absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-content-subtle pointer-events-none transition-transform ${open ? 'rotate-180' : ''}`} />
+        <Icon.ChevronDown className={`absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-content-subtle pointer-events-none transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {error && <p className="text-xs text-danger">{error}</p>}
 

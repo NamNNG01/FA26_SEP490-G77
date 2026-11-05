@@ -7,6 +7,7 @@ import { useDebounce } from '@/hooks';
 import { formatPrice } from '@/features/catalog/components/CourseLogo';
 import { useAuth } from '@/auth/authContext';
 import { Role } from '@/utils/permissions';
+import { Select } from '@/components/ui/Select';
 
 const PAGE_SIZE = 9;
 
@@ -21,10 +22,22 @@ export function StudentCourseCatalog() {
   const [keyword, setKeyword] = useState('');
   const debouncedKeyword = useDebounce(keyword, 250);
   const [sort, setSort] = useState<'newest' | 'title'>('newest');
+  const [categoryId, setCategoryId] = useState('');
+  const [categories, setCategories] = useState<{ categoryId: number; name: string }[]>([]);
   const [pageIndex, setPageIndex] = useState(0);
   const [refresh, setRefresh] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    studentCourseService.getCategories().then((result) => {
+      if (active) setCategories(result);
+    }).catch(() => {
+      // Keep the catalog usable if category options cannot be loaded.
+    });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -35,6 +48,7 @@ export function StudentCourseCatalog() {
       size: PAGE_SIZE,
       keyword: debouncedKeyword,
       sort,
+      categoryId: categoryId ? Number(categoryId) : undefined,
     }).then((result) => {
       if (active) setPage(result);
     }).catch((reason: unknown) => {
@@ -43,11 +57,12 @@ export function StudentCourseCatalog() {
       if (active) setLoading(false);
     });
     return () => { active = false; };
-  }, [pageIndex, debouncedKeyword, sort, refresh]);
+  }, [pageIndex, debouncedKeyword, sort, categoryId, refresh]);
 
   function resetFilters() {
     setKeyword('');
     setSort('newest');
+    setCategoryId('');
     setPageIndex(0);
   }
 
@@ -63,11 +78,22 @@ export function StudentCourseCatalog() {
               <Icon.Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-content-subtle" />
               <input value={keyword} onChange={(event) => { setKeyword(event.target.value.slice(0, 100)); setPageIndex(0); }} placeholder="Search courses" aria-label="Search courses" className="h-12 w-full rounded-xl border border-line bg-surface pl-10 pr-4 text-sm text-content outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-100" />
             </label>
-            <label className="sr-only" htmlFor="course-sort">Sort courses</label>
-            <select id="course-sort" value={sort} onChange={(event) => { setSort(event.target.value as 'newest' | 'title'); setPageIndex(0); }} className="h-12 rounded-xl border border-line bg-surface px-4 text-sm text-content outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-100">
-              <option value="newest">Recently added</option>
-              <option value="title">Course name</option>
-            </select>
+            <Select
+              aria-label="Filter by category"
+              value={categoryId}
+              onChange={(value) => { setCategoryId(value); setPageIndex(0); }}
+              className="w-full sm:w-56"
+              triggerClassName="h-12 w-full rounded-xl pl-4 pr-12 text-sm"
+              options={[{ label: 'All categories', value: '' }, ...categories.map((category) => ({ label: category.name, value: String(category.categoryId) }))]}
+            />
+            <Select
+              aria-label="Sort courses"
+              value={sort}
+              onChange={(value) => { setSort(value as 'newest' | 'title'); setPageIndex(0); }}
+              className="w-full sm:w-auto"
+              triggerClassName="h-12 w-full rounded-xl pl-4 pr-12 text-sm sm:w-auto"
+              options={[{ label: 'Recently added', value: 'newest' }, { label: 'Course name', value: 'title' }]}
+            />
           </div>
         </Shell>
       </section>
