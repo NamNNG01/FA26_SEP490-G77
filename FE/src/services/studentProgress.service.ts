@@ -81,11 +81,6 @@ export const studentProgressService = {
     return res.data;
   },
 
-  async getWeakSpots(limit = 5) {
-    const res = await api.get<ApiResponse<SavedQuestion[]>>(`/student/questions/weak-spots?${query({ limit })}`);
-    return res.data;
-  },
-
   async toggleBookmark(questionId: number) {
     const res = await api.post<ApiResponse<{ questionId: number; isBookmarked: boolean }>>(`/student/questions/${questionId}/bookmark`);
     return res.data;
