@@ -590,7 +590,7 @@ export function ExamListPage() {
 
           <div className="flex-1" />
           <Badge variant="default" className="font-semibold text-xs">
-            {totalElements} active exams
+            {totalElements} exams
           </Badge>
         </div>
 
