@@ -25,6 +25,15 @@ public interface StudentQuestionReviewRepository extends JpaRepository<StudentQu
             + "AND r.question.approvalStatus = 'APPROVED' AND r.question.sourceDocumentId IS NULL")
     List<Long> findBookmarkedQuestionIds(@Param("studentId") Long studentId, @Param("moduleId") Long moduleId);
 
+    /** MP-02 (General, BOOKMARKED mode): the same bookmarks, for the course's questions without a module. */
+    @Query("SELECT r.question.questionId FROM StudentQuestionReview r "
+            + "WHERE r.student.userId = :studentId AND r.bookmark = true "
+            + "AND r.question.course.courseId = :courseId AND r.question.module IS NULL "
+            + "AND r.question.deletedAt IS NULL AND r.question.status = 'ACTIVE' "
+            + "AND r.question.approvalStatus = 'APPROVED' AND r.question.sourceDocumentId IS NULL")
+    List<Long> findGeneralBookmarkedQuestionIds(@Param("studentId") Long studentId,
+                                                @Param("courseId") Long courseId);
+
     @Query(value = "SELECT r FROM StudentQuestionReview r JOIN FETCH r.question q " +
            "WHERE r.student.userId = :studentId " +
            "AND (:type = 'all' OR (:type = 'wrong' AND r.status = 'WRONG_BOOKMARKED') OR (:type = 'bookmarked' AND r.bookmark = true)) " +

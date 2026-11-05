@@ -65,7 +65,7 @@ public class ModulePracticeAnswerServiceImpl implements ModulePracticeAnswerServ
                 .orElseThrow(() -> new ResourceNotFoundException(ResponseCode.PRACTICE_SESSION_NOT_FOUND,
                         "Practice session not found"));
         // A session of a hidden module or of a course the student has left stops accepting answers.
-        support.requireModuleAccess(userId, session);
+        support.requireSessionAccess(userId, session);
         if (!session.isInProgress()) {
             throw new ResourceConflictException("Practice session is already completed");
         }
@@ -175,7 +175,7 @@ public class ModulePracticeAnswerServiceImpl implements ModulePracticeAnswerServ
         QuestionPracticeSession session = sessions.findOwned(sessionId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException(ResponseCode.PRACTICE_SESSION_NOT_FOUND,
                         "Practice session not found"));
-        support.requireModuleAccess(userId, session);
+        support.requireSessionAccess(userId, session);
         QuestionPracticeSessionQuestion sessionQuestion = sessionQuestions.findInSession(sessionId, sessionQuestionId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Question is not part of this practice session"));

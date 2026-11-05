@@ -290,6 +290,58 @@ public interface QuestionRepository extends JpaRepository<Question, Long>, JpaSp
     """)
     long countPracticeDrawable(@Param("moduleId") Long moduleId);
 
+    // ------------------------------------------------------------------ General pool (no module)
+    // A course's General pool is exactly its questions that are filed under no module; the rest of
+    // the eligibility rule is identical to the module queries above.
+
+    /**
+     * MP-02 (General) draws a paper from the course's questions that carry no module and that a
+     * student may be given: publishable, not soft-deleted and never a private material question.
+     */
+    @Query("""
+    SELECT q.questionId
+    FROM Question q
+    WHERE q.deletedAt IS NULL
+      AND q.status = 'ACTIVE'
+      AND q.approvalStatus = 'APPROVED'
+      AND q.sourceDocumentId IS NULL
+      AND q.course.courseId = :courseId
+      AND q.module IS NULL
+    ORDER BY q.questionId
+    """)
+    List<Long> findGeneralPracticeDrawableIds(@Param("courseId") Long courseId);
+
+    @Query("""
+    SELECT q.questionId
+    FROM Question q
+    WHERE q.deletedAt IS NULL
+      AND q.status = 'ACTIVE'
+      AND q.approvalStatus = 'APPROVED'
+      AND q.sourceDocumentId IS NULL
+      AND q.course.courseId = :courseId
+      AND q.module IS NULL
+      AND (:difficulty IS NULL OR q.difficulty = :difficulty)
+      AND (:hasTypes = false OR q.questionType IN :questionTypes)
+    ORDER BY q.questionId
+    """)
+    List<Long> findGeneralTargetDrawableIds(@Param("courseId") Long courseId,
+                                            @Param("difficulty") String difficulty,
+                                            @Param("hasTypes") boolean hasTypes,
+                                            @Param("questionTypes") Collection<String> questionTypes);
+
+    /** MP-01 (General): how many module-less questions of one course the student may practise. */
+    @Query("""
+    SELECT COUNT(q)
+    FROM Question q
+    WHERE q.deletedAt IS NULL
+      AND q.status = 'ACTIVE'
+      AND q.approvalStatus = 'APPROVED'
+      AND q.sourceDocumentId IS NULL
+      AND q.course.courseId = :courseId
+      AND q.module IS NULL
+    """)
+    long countGeneralPracticeDrawable(@Param("courseId") Long courseId);
+
     // SE-01 cache write: never overwrites a manager explanation or a current AI one, and only for the version explained.
     @Modifying
     @Query("""
