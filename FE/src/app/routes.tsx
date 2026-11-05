@@ -130,9 +130,12 @@ export function studentWeaknessReportPath(courseId: number | string): string {
   return `${studentCoursePath(courseId)}/weakness-report`;
 }
 
-/** Module of a course — e.g. studentModulePath(6, 3) → '/student/courses/6/modules/3'. */
-export function studentModulePath(courseId: number | string, moduleId: number | string): string {
-  return `${studentCoursePath(courseId)}/modules/${moduleId}`;
+/**
+ * Module of a course — e.g. studentModulePath(6, 3) → '/student/courses/6/modules/3'.
+ * null (a General practice session) → '/student/courses/6/modules/general'.
+ */
+export function studentModulePath(courseId: number | string, moduleId: number | string | null): string {
+  return `${studentCoursePath(courseId)}/modules/${moduleId ?? 'general'}`;
 }
 
 export function studentDeckPath(id: number | string): string {

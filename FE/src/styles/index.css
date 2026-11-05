@@ -232,6 +232,13 @@
   box-sizing: border-box;
 }
 
+/* Edge adds its own reveal/clear buttons to inputs; password fields already
+   have the app's show/hide toggle, so the browser ones would double up. */
+input::-ms-reveal,
+input::-ms-clear {
+  display: none;
+}
+
 html, body, #root {
   height: 100%;
   overflow: hidden;
