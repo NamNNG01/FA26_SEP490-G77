@@ -13,6 +13,7 @@ import {
   type ModulePracticeOverview,
   type PracticeDifficulty,
   type PracticeMode,
+  type PracticeScope,
 } from '@/services/modulePractice.service';
 import type { QuestionType } from '@/services/studentAttempt.service';
 import { QUESTION_TYPE_LABEL } from './QuestionAnswerInput';
@@ -81,20 +82,20 @@ const chipTone = (selected: boolean) =>
   selected ? 'border-primary bg-primary-light text-primary' : 'border-line text-content-secondary hover:bg-surface-hover';
 
 /**
- * Picks a practice mode and a session size for one module, then starts the session (MP-02) and
- * opens it on the take-exam screen. A session already open on the module is resumed instead.
+ * Picks a practice mode and a session size for one module (or a course's General pool), then starts
+ * the session (MP-02) and opens it on the take-exam screen. A session already open on the module is resumed instead.
  * `overview` is optional: without it nothing is disabled and no session in progress is shown.
  */
 export function ModulePracticeModal({
   open,
   onClose,
-  moduleId,
+  scope,
   moduleTitle,
   overview,
 }: {
   open: boolean;
   onClose: () => void;
-  moduleId: number;
+  scope: PracticeScope;
   moduleTitle: string;
   overview?: ModulePracticeOverview | null;
 }) {
@@ -105,6 +106,7 @@ export function ModulePracticeModal({
   const [questionTypes, setQuestionTypes] = useState<QuestionType[]>([]);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const scopeKey = 'moduleId' in scope ? `module-${scope.moduleId}` : `general-${scope.courseId}`;
 
   useEffect(() => {
     if (!open) return;
@@ -113,7 +115,7 @@ export function ModulePracticeModal({
     setDifficulty(null);
     setQuestionTypes([]);
     setError(null);
-  }, [open, moduleId]);
+  }, [open, scopeKey]);
 
   const toggleType = (t: QuestionType) =>
     setQuestionTypes(prev => (prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t]));
@@ -126,7 +128,7 @@ export function ModulePracticeModal({
     setStarting(true);
     setError(null);
     try {
-      const sessionId = active ? active.sessionId : (await modulePracticeService.startSession(moduleId, { questionCount: size, mode, difficulty, questionTypes })).sessionId;
+      const sessionId = active ? active.sessionId : (await modulePracticeService.startSession(scope, { questionCount: size, mode, difficulty, questionTypes })).sessionId;
       navigate(studentModulePracticePath(sessionId));
     } catch (err) {
       setError(getApiErrorMessage(err, 'Could not start the practice session.'));

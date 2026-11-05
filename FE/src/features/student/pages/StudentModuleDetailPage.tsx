@@ -16,6 +16,7 @@ import {
   modulePracticeService,
   practicePercent,
   type ModulePracticeOverview,
+  type PracticeScope,
 } from '@/services/modulePractice.service';
 import { ResetPracticeButton } from '../components/ResetPracticeButton';
 import { CardGridSkeleton, LoadError, STUDENT_PAGE_CLASS } from '../components/studentUi';
@@ -41,7 +42,7 @@ const KIND_FILTERS: { value: KindFilter; label: string }[] = [
 /**
  * One module of a course: its practice overview and Practice button, then its exams (MC-02) and
  * flashcard decks (MC-03) with a search box and a type filter. `moduleId = general` lists the
- * content not filed under any module, without practice.
+ * content not filed under any module, practised as the course's General pool.
  */
 export function StudentModuleDetailPage() {
   const { courseId = '', moduleId: moduleParam = '' } = useParams<{ courseId: string; moduleId: string }>();
@@ -166,12 +167,13 @@ function ModuleContent({
   const [practicing, setPracticing] = useState(false);
   const [refresh, setRefresh] = useState(0);
 
+  const scope: PracticeScope = moduleId == null ? { courseId: course.courseId } : { moduleId };
+
   useEffect(() => {
-    if (moduleId == null) return;
     let cancelled = false;
     setOverview(undefined);
     modulePracticeService
-      .getOverview(moduleId)
+      .getOverview(moduleId == null ? { courseId: course.courseId } : { moduleId })
       .then(o => {
         if (!cancelled) setOverview(o);
       })
@@ -181,7 +183,7 @@ function ModuleContent({
     return () => {
       cancelled = true;
     };
-  }, [moduleId, refresh]);
+  }, [course.courseId, moduleId, refresh]);
 
   const items = useMemo(() => (moduleId == null ? general : byModule.get(moduleId) ?? []), [moduleId, general, byModule]);
   const counts = countItems(items);
@@ -205,43 +207,41 @@ function ModuleContent({
           </span>
         </div>
 
-        {moduleId != null && (
-          <div className="border-t border-line pt-4 space-y-4">
-            {overview === undefined ? (
-              <Skeleton className="h-16 w-full" />
-            ) : practice ? (
-              <>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <Stat label="Practiced" value={`${practice.practicedQuestions}/${practice.totalQuestions}`} />
-                  <Stat label="Accuracy" value={practice.gradedAttempts > 0 ? `${accuracyPercent(practice.accuracyRate)}%` : '—'} />
-                  <Stat label="Ever correct" value={String(practice.everCorrectQuestions)} />
-                  <Stat label="Need review" value={String(practice.questionsNeedingReview)} tone={practice.questionsNeedingReview > 0 ? 'danger' : undefined} />
-                </div>
-                <Progress value={practicePercent(practice)} label="Practice progress" />
-              </>
-            ) : (
-              <p className="text-sm text-content-subtle">Practice progress could not be loaded.</p>
+        <div className="border-t border-line pt-4 space-y-4">
+          {overview === undefined ? (
+            <Skeleton className="h-16 w-full" />
+          ) : practice ? (
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <Stat label="Practiced" value={`${practice.practicedQuestions}/${practice.totalQuestions}`} />
+                <Stat label="Accuracy" value={practice.gradedAttempts > 0 ? `${accuracyPercent(practice.accuracyRate)}%` : '—'} />
+                <Stat label="Ever correct" value={String(practice.everCorrectQuestions)} />
+                <Stat label="Need review" value={String(practice.questionsNeedingReview)} tone={practice.questionsNeedingReview > 0 ? 'danger' : undefined} />
+              </div>
+              <Progress value={practicePercent(practice)} label="Practice progress" />
+            </>
+          ) : (
+            <p className="text-sm text-content-subtle">Practice progress could not be loaded.</p>
+          )}
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              icon={<Icon.Play className="w-4 h-4" />}
+              onClick={() => (active ? navigate(studentModulePracticePath(active.sessionId)) : setPracticing(true))}
+            >
+              {active ? 'Continue practice' : 'Practice'}
+            </Button>
+            {active && (
+              <span className="text-sm text-content-soft">
+                Session in progress · {active.answeredCount}/{active.questionCount} answered
+              </span>
             )}
-            <div className="flex flex-wrap items-center gap-3">
-              <Button
-                icon={<Icon.Play className="w-4 h-4" />}
-                onClick={() => (active ? navigate(studentModulePracticePath(active.sessionId)) : setPracticing(true))}
-              >
-                {active ? 'Continue practice' : 'Practice'}
-              </Button>
-              {active && (
-                <span className="text-sm text-content-soft">
-                  Session in progress · {active.answeredCount}/{active.questionCount} answered
-                </span>
-              )}
-              {practice && practice.totalAttempts > 0 && (
-                <span className="ml-auto">
-                  <ResetPracticeButton moduleId={moduleId} moduleTitle={title} onReset={() => setRefresh(r => r + 1)} />
-                </span>
-              )}
-            </div>
+            {practice && practice.totalAttempts > 0 && (
+              <span className="ml-auto">
+                <ResetPracticeButton scope={scope} moduleTitle={title} onReset={() => setRefresh(r => r + 1)} />
+              </span>
+            )}
           </div>
-        )}
+        </div>
       </ModuleHeader>
 
       <section className="space-y-4" aria-label="Module content">
@@ -297,15 +297,13 @@ function ModuleContent({
         )}
       </section>
 
-      {moduleId != null && (
-        <ModulePracticeModal
-          open={practicing}
-          onClose={() => setPracticing(false)}
-          moduleId={moduleId}
-          moduleTitle={title}
-          overview={practice}
-        />
-      )}
+      <ModulePracticeModal
+        open={practicing}
+        onClose={() => setPracticing(false)}
+        scope={scope}
+        moduleTitle={title}
+        overview={practice}
+      />
     </>
   );
 }

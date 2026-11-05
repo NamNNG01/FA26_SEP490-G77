@@ -18,6 +18,10 @@ import type { AnswerResponse, AttemptQuestion, QuestionType } from './studentAtt
  *   GET    /api/v1/student/modules/{moduleId}/practice/review-questions                       (MP-11)
  *   DELETE /api/v1/student/modules/{moduleId}/practice/progress                               (MP-12)
  * MP-10 (bookmark) is the notebook's POST /api/v1/student/questions/{questionId}/bookmark.
+ *
+ * The course's General pool (questions of the exams not filed under any module) has the same four
+ * scope endpoints under /api/v1/student/courses/{courseId}/general/practice/... (overview, sessions,
+ * review-questions, progress); its sessions, results and review items carry `moduleId: null`.
  */
 
 /**
@@ -61,8 +65,12 @@ export interface ActivePracticeSession {
   nextQuestionOrderIndex: number | null;
 }
 
+/** What a practice covers: one module, or the General pool of a course. */
+export type PracticeScope = { moduleId: number } | { courseId: number };
+
 export interface ModulePracticeOverview {
-  moduleId: number;
+  /** null = the course's General pool. */
+  moduleId: number | null;
   moduleTitle: string;
   courseId: number;
   courseTitle: string;
@@ -104,7 +112,8 @@ export interface SessionQuestionSummary {
 
 export interface PracticeSession {
   sessionId: number;
-  moduleId: number;
+  /** null = the course's General pool. */
+  moduleId: number | null;
   moduleTitle: string;
   courseId: number;
   courseTitle: string;
@@ -210,7 +219,7 @@ export interface ResultQuestion {
 
 export interface PracticeResult {
   sessionId: number;
-  moduleId: number;
+  moduleId: number | null;
   moduleTitle: string;
   status: PracticeSessionStatus;
   totalQuestions: number;
@@ -236,7 +245,7 @@ export interface PracticeResult {
 export interface ReviewItem {
   progressId: number;
   questionId: number;
-  moduleId: number;
+  moduleId: number | null;
   questionType: QuestionType;
   content: string;
   totalAttempts: number;
@@ -250,7 +259,7 @@ export interface ReviewItem {
 }
 
 export interface ResetResult {
-  moduleId: number;
+  moduleId: number | null;
   deletedSessions: number;
   deletedProgressRecords: number;
 }
@@ -299,18 +308,20 @@ export function toAttemptQuestion(q: PracticeQuestionView): AttemptQuestion {
   };
 }
 
+const scopePath = (scope: PracticeScope) =>
+  'moduleId' in scope ? `/student/modules/${scope.moduleId}/practice` : `/student/courses/${scope.courseId}/general/practice`;
 const sessionPath = (sessionId: number | string) => `/student/practice/sessions/${sessionId}`;
 const questionPath = (sessionId: number | string, sessionQuestionId: number | string) =>
   `${sessionPath(sessionId)}/questions/${sessionQuestionId}`;
 
 export const modulePracticeService = {
-  async getOverview(moduleId: number | string): Promise<ModulePracticeOverview> {
-    const res = await api.get<ApiResponse<ModulePracticeOverview>>(`/student/modules/${moduleId}/practice/overview`);
+  async getOverview(scope: PracticeScope): Promise<ModulePracticeOverview> {
+    const res = await api.get<ApiResponse<ModulePracticeOverview>>(`${scopePath(scope)}/overview`);
     return res.data;
   },
 
-  async startSession(moduleId: number | string, body: StartPracticeRequest): Promise<PracticeSession> {
-    const res = await api.post<ApiResponse<PracticeSession>>(`/student/modules/${moduleId}/practice/sessions`, {
+  async startSession(scope: PracticeScope, body: StartPracticeRequest): Promise<PracticeSession> {
+    const res = await api.post<ApiResponse<PracticeSession>>(`${scopePath(scope)}/sessions`, {
       mode: body.mode,
       ...(body.questionCount != null ? { questionCount: body.questionCount } : {}),
       ...(body.mode === 'TARGET' && body.difficulty ? { difficulty: body.difficulty } : {}),
@@ -366,15 +377,15 @@ export const modulePracticeService = {
     return res.data;
   },
 
-  async getReviewQuestions(moduleId: number | string, page = 0, size = 20): Promise<PageResponse<ReviewItem>> {
+  async getReviewQuestions(scope: PracticeScope, page = 0, size = 20): Promise<PageResponse<ReviewItem>> {
     const res = await api.get<ApiResponse<PageResponse<ReviewItem>>>(
-      `/student/modules/${moduleId}/practice/review-questions?page=${page}&size=${size}`,
+      `${scopePath(scope)}/review-questions?page=${page}&size=${size}`,
     );
     return res.data;
   },
 
-  async resetProgress(moduleId: number | string): Promise<ResetResult> {
-    const res = await api.request<ApiResponse<ResetResult>>({ method: 'delete', url: `/student/modules/${moduleId}/practice/progress` });
+  async resetProgress(scope: PracticeScope): Promise<ResetResult> {
+    const res = await api.request<ApiResponse<ResetResult>>({ method: 'delete', url: `${scopePath(scope)}/progress` });
     return res.data;
   },
 };
