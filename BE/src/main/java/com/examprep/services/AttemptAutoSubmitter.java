@@ -3,6 +3,10 @@ package com.examprep.services;
 import com.examprep.dto.attempt.Snapshots;
 import com.examprep.entities.AttemptAnswer;
 import com.examprep.entities.ExamAttempt;
+import com.examprep.entities.StudentQuestionReview;
+import com.examprep.entities.User;
+import com.examprep.repositories.StudentQuestionReviewRepository;
+import com.examprep.repositories.UserRepository;
 import com.examprep.util.attempt.AnswerResponseValidator;
 import com.examprep.util.attempt.AttemptGrader;
 import com.examprep.util.attempt.AttemptScoring;
@@ -14,6 +18,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Grades and closes an attempt (spec 6.4 rules 3-5, 6.3 "410 ATTEMPT_EXPIRED").
@@ -36,6 +41,8 @@ public class AttemptAutoSubmitter {
     private static final String GRADING_PENDING_AI = "PENDING_AI";
 
     private final AttemptPaperFactory paperFactory;
+    private final StudentQuestionReviewRepository reviewRepository;
+    private final UserRepository userRepository;
 
     /** True past {@code deadlineAt + 5s}: from then on the server refuses further saves. */
     public boolean isExpired(ExamAttempt attempt, Instant now) {
@@ -102,6 +109,9 @@ public class AttemptAutoSubmitter {
                 row.setIsCorrect(grade.correct());
                 row.setGradingStatus(GRADING_AUTO);
             }
+            if (Boolean.FALSE.equals(row.getIsCorrect())) {
+                recordWrongAnswer(attempt.getUser().getUserId(), row.getQuestion(), row.getResponse());
+            }
             if (row.getScoreEarned() != null) {
                 scores.add(row.getScoreEarned());
             }
@@ -112,5 +122,40 @@ public class AttemptAutoSubmitter {
         attempt.setSubmitTime(now);
         attempt.setAutoSubmitted(attempt.getDeadlineAt() != null && now.isAfter(attempt.getDeadlineAt()));
         attempt.setStatus(waitingForAi ? STATUS_SUBMITTED : STATUS_COMPLETED);
+    }
+
+    private void recordWrongAnswer(Long userId, com.examprep.entities.Question question, String response) {
+        if (userId == null || question == null) {
+            return;
+        }
+        Optional<StudentQuestionReview> existing = reviewRepository.findByStudent_UserIdAndQuestion_QuestionId(userId, question.getQuestionId());
+        Instant now = Instant.now();
+        String shortResp = response;
+        if (shortResp != null && shortResp.length() > 50) {
+            shortResp = shortResp.substring(0, 50);
+        }
+        if (existing.isPresent()) {
+            StudentQuestionReview r = existing.get();
+            r.setStatus("WRONG_BOOKMARKED");
+            r.setWrongCount(r.getWrongCount() != null ? r.getWrongCount() + 1 : 1);
+            if (shortResp != null) {
+                r.setLastWrongChoice(shortResp);
+            }
+            r.setLastPracticedAt(now);
+            reviewRepository.save(r);
+        } else {
+            User student = userRepository.getReferenceById(userId);
+            StudentQuestionReview r = StudentQuestionReview.builder()
+                    .student(student)
+                    .question(question)
+                    .status("WRONG_BOOKMARKED")
+                    .bookmark(false)
+                    .wrongCount(1)
+                    .lastWrongChoice(shortResp)
+                    .firstWrongAt(now)
+                    .lastPracticedAt(now)
+                    .build();
+            reviewRepository.save(r);
+        }
     }
 }

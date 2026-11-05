@@ -51,8 +51,9 @@ public class Exam implements Serializable {
     @Column(name = "generation_type", nullable = false, length = 50)
     private String generationType;
 
+    @Builder.Default
     @Column(name = "max_score", nullable = false, precision = 7, scale = 2)
-    private BigDecimal maxScore;
+    private BigDecimal maxScore = BigDecimal.TEN;
 
     @Builder.Default
     @Column(name = "status", nullable = false, length = 20)

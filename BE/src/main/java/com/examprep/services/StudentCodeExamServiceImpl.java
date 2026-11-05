@@ -30,6 +30,7 @@ import com.examprep.repositories.ExamQuestionRepository;
 import com.examprep.repositories.ExamRepository;
 import com.examprep.repositories.QuestionRepository;
 import com.examprep.repositories.UserRepository;
+import com.examprep.services.student.StudentNotebookService;
 import com.examprep.util.attempt.AttemptScoring;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -87,6 +88,7 @@ public class StudentCodeExamServiceImpl implements StudentCodeExamService {
     private final ObjectMapper json;
     private final AttemptAutoSubmitter autoSubmitter;
     private final PlatformTransactionManager transactionManager;
+    private final StudentNotebookService studentNotebookService;
 
     private record PlannedAnswer(Long questionId, String language, String sourceCode,
                                  List<PistonClient.CaseInput> cases, BigDecimal maxPoints,
@@ -332,6 +334,10 @@ public class StudentCodeExamServiceImpl implements StudentCodeExamService {
             row.setGradedAt(now);
             row.setGradingError(null);
             answers.save(row);
+
+            if (!allPassed) {
+                studentNotebookService.recordWrongAnswer(plan.userId(), row.getQuestion(), row.getResponse());
+            }
 
             results.add(new CodeExamResponses.CaseResult(planned.questionId(),
                     allPassed ? CodeSubmission.PASSED : CodeSubmission.FAILED,

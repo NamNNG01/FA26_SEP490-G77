@@ -74,12 +74,12 @@ class StudentNotebookServiceTest {
     @Test
     void listSavedQuestions_successWithBatchOptions() {
         Page<StudentQuestionReview> page = new PageImpl<>(List.of(review1));
-        when(reviewRepository.findSavedQuestions(eq(100L), eq("all"), eq(""), any())).thenReturn(page);
+        when(reviewRepository.findSavedQuestions(eq(100L), eq("all"), isNull(), isNull(), isNull(), eq(""), any())).thenReturn(page);
 
         AnswerOption opt = AnswerOption.builder().optionId(11L).question(question1).optionText("A programming language").isCorrect(true).build();
         when(answerOptionRepository.findByQuestionIds(List.of(1L))).thenReturn(List.of(opt));
 
-        Page<QuestionReviewItemDto> result = notebookService.listSavedQuestions("all", null, null, null, 0, 20, 100L);
+        Page<QuestionReviewItemDto> result = notebookService.listSavedQuestions("all", null, null, null, null, 0, 20, 100L);
 
         assertNotNull(result);
         assertEquals(1, result.getTotalElements());
@@ -181,5 +181,31 @@ class StudentNotebookServiceTest {
         assertEquals(1L, res.getQuestions().get(0).getQuestionId());
         verify(examRepository).save(any(Exam.class));
         verify(studentAttemptService).start(eq(100L), eq(500L), isNull());
+    }
+
+    @Test
+    void listSavedQuestions_invalidExamType_throws() {
+        assertThrows(BadRequestException.class, () -> notebookService.listSavedQuestions("all", "INVALID", null, null, null, 0, 20, 100L));
+    }
+
+    @Test
+    void recordWrongAnswer_new() {
+        when(reviewRepository.findByStudent_UserIdAndQuestion_QuestionId(100L, 1L)).thenReturn(Optional.empty());
+        when(userRepository.getReferenceById(100L)).thenReturn(student);
+
+        notebookService.recordWrongAnswer(100L, question1, "wrong answer");
+
+        verify(reviewRepository).save(any(StudentQuestionReview.class));
+    }
+
+    @Test
+    void recordWrongAnswer_existing() {
+        when(reviewRepository.findByStudent_UserIdAndQuestion_QuestionId(100L, 1L)).thenReturn(Optional.of(review1));
+
+        notebookService.recordWrongAnswer(100L, question1, "wrong answer 2");
+
+        assertEquals(4, review1.getWrongCount());
+        assertEquals("wrong answer 2", review1.getLastWrongChoice());
+        verify(reviewRepository).save(review1);
     }
 }

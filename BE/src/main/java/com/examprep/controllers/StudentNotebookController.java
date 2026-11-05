@@ -32,13 +32,14 @@ public class StudentNotebookController {
     public ResponseEntity<ApiResponse<PageResponse<QuestionReviewItemDto>>> listSavedQuestions(
             @RequestParam(defaultValue = "all") String type,
             @RequestParam(required = false) String examType,
+            @RequestParam(required = false) Long courseId,
             @RequestParam(required = false) Long categoryId,
             @RequestParam(required = false) String search,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @AuthenticationPrincipal UserPrincipal currentUser
     ) {
-        Page<QuestionReviewItemDto> p = notebookService.listSavedQuestions(type, examType, categoryId, search, page, size, currentUser.getId());
+        Page<QuestionReviewItemDto> p = notebookService.listSavedQuestions(type, examType, courseId, categoryId, search, page, size, currentUser.getId());
         return ResponseEntity.ok(ApiResponse.success(PageResponse.of(p)));
     }
 
