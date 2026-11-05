@@ -12,10 +12,9 @@ import { ROUTES, studentModulePath } from '@/app/routes';
 import { getApiErrorMessage } from '@/utils/apiError';
 import {
   studentCourseService,
-  type CourseModuleSummary,
   type StudentCourseDetail,
 } from '@/services/studentCourse.service';
-import { accuracyPercent, modulePracticeService, practicePercent, type ModulePracticeOverview } from '@/services/modulePractice.service';
+import { accuracyPercent, modulePracticeService, practicePercent, type ModulePracticeOverview, type PracticeScope } from '@/services/modulePractice.service';
 import { CardGridSkeleton, CourseThumb, LoadError, STUDENT_PAGE_CLASS } from '../components/studentUi';
 import { GENERAL_MODULE, countItems, sortedModules, useCourseContent } from '../components/courseContent';
 import { ModulePracticeModal } from '../components/ModulePracticeModal';
@@ -27,8 +26,8 @@ import { studentProgressService, type CourseProgress } from '@/services/studentP
  * Student course detail — course info (CL-02), then the course content as a grid of module cards.
  * Each card shows the module's exams (MC-02) and decks (MC-03), its practice progress and a
  * Practice button; clicking it opens the module page. Exams and decks not filed under a module sit
- * on a "General" card. MC-02/03 only answer for an ACTIVE enrollment, so other states only list the
- * modules. An enrolled student can create a practice exam for the course from the info card
+ * on a "General" card, practised as the course's General pool. MC-02/03 only answer for an ACTIVE
+ * enrollment, so other states only list the modules. An enrolled student can create a practice exam for the course from the info card
  * (AI-01 / PQ-01, course fixed).
  */
 export function StudentCourseDetailPage() {
@@ -211,32 +210,50 @@ type OverviewState = ModulePracticeOverview | 'error' | undefined;
 
 /**
  * The course content as a grid of module cards — practice progress, counts and a Practice button
- * each — plus a "General" card for the exams and decks not filed under any module.
+ * each — plus a "General" card, built the same way, for the content not filed under any module.
  */
 function ModuleGrid({ course }: { course: StudentCourseDetail }) {
   const navigate = useNavigate();
   const { byModule, general, loading, error, retry } = useCourseContent(course);
-  const [overviews, setOverviews] = useState<Record<number, OverviewState>>({});
-  const [practicing, setPracticing] = useState<CourseModuleSummary | null>(null);
+  // Keyed by moduleId, plus GENERAL_MODULE for the course's General pool.
+  const [overviews, setOverviews] = useState<Record<string, OverviewState>>({});
+  const [practicing, setPracticing] = useState<{ key: string; scope: PracticeScope; title: string } | null>(null);
   const modules = useMemo(() => sortedModules(course), [course]);
+  const hasGeneral = general.length > 0;
 
   useEffect(() => {
     let cancelled = false;
-    setOverviews({});
-    modules.forEach(m => {
+    const load = (key: string, scope: PracticeScope) =>
       modulePracticeService
-        .getOverview(m.moduleId)
+        .getOverview(scope)
         .then(o => {
-          if (!cancelled) setOverviews(prev => ({ ...prev, [m.moduleId]: o }));
+          if (!cancelled) setOverviews(prev => ({ ...prev, [key]: o }));
         })
         .catch(() => {
-          if (!cancelled) setOverviews(prev => ({ ...prev, [m.moduleId]: 'error' }));
+          if (!cancelled) setOverviews(prev => ({ ...prev, [key]: 'error' }));
         });
-    });
+    modules.forEach(m => void load(String(m.moduleId), { moduleId: m.moduleId }));
     return () => {
       cancelled = true;
     };
   }, [modules]);
+
+  // The General card only appears once the course content says there is unfiled content.
+  useEffect(() => {
+    if (!hasGeneral) return;
+    let cancelled = false;
+    modulePracticeService
+      .getOverview({ courseId: course.courseId })
+      .then(o => {
+        if (!cancelled) setOverviews(prev => ({ ...prev, [GENERAL_MODULE]: o }));
+      })
+      .catch(() => {
+        if (!cancelled) setOverviews(prev => ({ ...prev, [GENERAL_MODULE]: 'error' }));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [hasGeneral, course.courseId]);
 
   if (loading) return <CardGridSkeleton count={Math.min(Math.max(modules.length, 3), 6)} />;
   if (error) return <LoadError message={error} onRetry={retry} />;
@@ -253,7 +270,7 @@ function ModuleGrid({ course }: { course: StudentCourseDetail }) {
     );
   }
 
-  const practicingOverview = practicing ? overviews[practicing.moduleId] : undefined;
+  const practicingOverview = practicing ? overviews[practicing.key] : undefined;
 
   return (
     <section className="space-y-3" aria-label="Course content">
@@ -268,15 +285,17 @@ function ModuleGrid({ course }: { course: StudentCourseDetail }) {
             counts={countItems(byModule.get(m.moduleId) ?? [])}
             overview={overviews[m.moduleId]}
             onOpen={() => navigate(studentModulePath(course.courseId, m.moduleId))}
-            onPractice={() => setPracticing(m)}
+            onPractice={() => setPracticing({ key: String(m.moduleId), scope: { moduleId: m.moduleId }, title: m.title })}
           />
         ))}
-        {general.length > 0 && (
+        {hasGeneral && (
           <ModuleCard
             title="General"
             description="Exams and flashcard decks not filed under a module."
             counts={countItems(general)}
+            overview={overviews[GENERAL_MODULE]}
             onOpen={() => navigate(studentModulePath(course.courseId, GENERAL_MODULE))}
+            onPractice={() => setPracticing({ key: GENERAL_MODULE, scope: { courseId: course.courseId }, title: 'General' })}
           />
         )}
       </div>
@@ -285,7 +304,7 @@ function ModuleGrid({ course }: { course: StudentCourseDetail }) {
         <ModulePracticeModal
           open
           onClose={() => setPracticing(null)}
-          moduleId={practicing.moduleId}
+          scope={practicing.scope}
           moduleTitle={practicing.title}
           overview={practicingOverview === 'error' ? null : practicingOverview}
         />
@@ -296,7 +315,7 @@ function ModuleGrid({ course }: { course: StudentCourseDetail }) {
 
 /**
  * The card body opens the module; the Practice button sits outside it (a button can't nest in a
- * button). No `onPractice` = the General card: no practice, no progress bar.
+ * button). No `index` = the General card, shown with a folder icon.
  */
 function ModuleCard({
   index,

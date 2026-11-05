@@ -201,10 +201,7 @@ export function PaymentCheckoutModal({
       <Button onClick={handleCheckout} loading={submitting} disabled={checkingCode}>Continue to payment</Button>
     </>
   ) : status === 'PENDING' ? (
-    <>
-      <Button variant="ghost" onClick={handleCancelPayment} loading={cancelling}>Cancel payment</Button>
-      <Button variant="outline" onClick={onClose}>Pay later</Button>
-    </>
+    <Button variant="ghost" onClick={handleCancelPayment} loading={cancelling}>Cancel payment</Button>
   ) : status === 'SUCCEEDED' ? (
     <Button onClick={onClose}>Done</Button>
   ) : (
