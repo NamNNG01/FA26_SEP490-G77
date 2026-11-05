@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Badge } from "@/components/ui/Badge";
-import { Switch } from "@/components/ui/Switch";
 import { Table } from "@/components/ui/Table";
 import { Tabs } from "@/components/ui/Tabs";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
@@ -155,9 +154,9 @@ export function CourseDetailPage({
   const [moduleToDelete, setModuleToDelete] =
     useState<CourseModuleResponse | null>(null);
   const [deletingModule, setDeletingModule] = useState(false);
-  const [updatingModuleStatusId, setUpdatingModuleStatusId] = useState<
-    number | null
-  >(null);
+  const [reorderingModuleId, setReorderingModuleId] = useState<number | null>(
+    null,
+  );
 
   const [isDeleteCourseOpen, setIsDeleteCourseOpen] = useState(false);
   const [deletingCourse, setDeletingCourse] = useState(false);
@@ -264,7 +263,9 @@ export function CourseDetailPage({
       setCategoryId(String(data.categoryId));
       setIsPublished(data.isPublished);
       setPrice(String(data.price ?? 0));
-      setModules(data.modules ?? []);
+      setModules(
+        [...(data.modules ?? [])].sort((a, b) => a.orderIndex - b.orderIndex),
+      );
       setSelectedManagerIds(
         (data.managers?.length
           ? data.managers.map((manager) => manager.userId)
@@ -487,6 +488,58 @@ export function CourseDetailPage({
       });
   };
 
+  const handleMoveModule = async (moduleId: number, direction: -1 | 1) => {
+    if (reorderingModuleId !== null) return;
+    const orderedModules = [...modules].sort(
+      (a, b) => a.orderIndex - b.orderIndex,
+    );
+    const currentIndex = orderedModules.findIndex(
+      (module) => module.moduleId === moduleId,
+    );
+    const targetIndex = currentIndex + direction;
+    if (currentIndex < 0 || targetIndex < 0 || targetIndex >= orderedModules.length) return;
+
+    const currentModule = orderedModules[currentIndex];
+    const targetModule = orderedModules[targetIndex];
+    setReorderingModuleId(moduleId);
+    try {
+      await Promise.all([
+        courseService.updateModule(currentModule.moduleId, {
+          orderIndex: targetModule.orderIndex,
+        }),
+        courseService.updateModule(targetModule.moduleId, {
+          orderIndex: currentModule.orderIndex,
+        }),
+      ]);
+      const refreshedModules = await courseService.getCourseModules(courseId);
+      setModules(
+        [...refreshedModules].sort((a, b) => a.orderIndex - b.orderIndex),
+      );
+      setToast({
+        type: "success",
+        message: `Moved "${currentModule.title}" ${direction === -1 ? "up" : "down"}.`,
+      });
+    } catch (err: unknown) {
+      try {
+        const refreshedModules = await courseService.getCourseModules(courseId);
+        setModules(
+          [...refreshedModules].sort((a, b) => a.orderIndex - b.orderIndex),
+        );
+      } catch {
+        // Keep the current list if refreshing after a failed reorder also fails.
+      }
+      setToast({
+        type: "error",
+        message: getApiErrorMessage(
+          err,
+          "Could not reorder modules. Please try again.",
+        ),
+      });
+    } finally {
+      setReorderingModuleId(null);
+    }
+  };
+
   const handleRemoveModule = async () => {
     if (!moduleToDelete) return;
     setDeletingModule(true);
@@ -506,34 +559,6 @@ export function CourseDetailPage({
       setToast({ type: "error", message: msg });
     } finally {
       setDeletingModule(false);
-    }
-  };
-
-  const handleModuleStatusChange = async (module: CourseModuleResponse) => {
-    if (updatingModuleStatusId !== null) return;
-    const nextStatus = module.status === "VISIBLE" ? "HIDDEN" : "VISIBLE";
-    setUpdatingModuleStatusId(module.moduleId);
-    try {
-      const updated = await courseService.updateModuleStatus(
-        module.moduleId,
-        nextStatus,
-      );
-      setModules((prev) =>
-        prev.map((item) =>
-          item.moduleId === updated.moduleId ? updated : item,
-        ),
-      );
-      setToast({
-        type: "success",
-        message: `Module "${updated.title}" is now ${updated.status.toLowerCase()}.`,
-      });
-    } catch (err: unknown) {
-      setToast({
-        type: "error",
-        message: getApiErrorMessage(err, "Failed to update module status."),
-      });
-    } finally {
-      setUpdatingModuleStatusId(null);
     }
   };
 
@@ -872,15 +897,44 @@ export function CourseDetailPage({
                   )}
                 </div>
 
-                {modules.map((mod) => (
+                {[...modules]
+                  .sort((a, b) => a.orderIndex - b.orderIndex)
+                  .map((mod, index, orderedModules) => (
                   <div
                     key={mod.moduleId}
                     className="grid grid-cols-1 sm:grid-cols-12 gap-2 sm:gap-4 px-6 py-3.5 items-center hover:bg-surface-alt transition-colors"
                   >
-                    <div className="col-span-1 flex items-center gap-1.5">
+                    <div className="col-span-1 flex items-center gap-1">
                       <span className="w-6 h-6 rounded-full bg-primary-light text-brand-ink text-xs font-bold flex items-center justify-center">
                         {mod.orderIndex}
                       </span>
+                      {canCreateModule && (
+                        <div className="flex flex-col -my-1">
+                          <button
+                            type="button"
+                            aria-label={`Move ${mod.title} up`}
+                            title="Move up"
+                            disabled={index === 0 || reorderingModuleId !== null}
+                            onClick={() => void handleMoveModule(mod.moduleId, -1)}
+                            className="rounded p-0.5 text-content-soft hover:bg-accent disabled:opacity-30 disabled:cursor-not-allowed"
+                          >
+                            <Icon.ArrowUp className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            aria-label={`Move ${mod.title} down`}
+                            title="Move down"
+                            disabled={
+                              index === orderedModules.length - 1 ||
+                              reorderingModuleId !== null
+                            }
+                            onClick={() => void handleMoveModule(mod.moduleId, 1)}
+                            className="rounded p-0.5 text-content-soft hover:bg-accent disabled:opacity-30 disabled:cursor-not-allowed"
+                          >
+                            <Icon.ArrowDown className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      )}
                     </div>
 
                     <div
@@ -931,13 +985,6 @@ export function CourseDetailPage({
 
                     {canCreateModule && (
                       <div className="col-span-3 flex items-center justify-end gap-1">
-                        <Switch
-                          size="sm"
-                          checked={mod.status === "VISIBLE"}
-                          onChange={() => void handleModuleStatusChange(mod)}
-                          disabled={updatingModuleStatusId !== null}
-                          label={mod.status === "VISIBLE" ? "Shown" : "Hidden"}
-                        />
                         <Button
                           variant="ghost"
                           size="sm"
@@ -960,7 +1007,7 @@ export function CourseDetailPage({
                       </div>
                     )}
                   </div>
-                ))}
+                  ))}
               </div>
             )}
           </div>
