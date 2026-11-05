@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.Map;
 
 public interface StudentNotebookService {
-    Page<QuestionReviewItemDto> listSavedQuestions(String type, String examType, Long categoryId, String search, int page, int size, Long userId);
+    Page<QuestionReviewItemDto> listSavedQuestions(String type, String examType, Long courseId, Long categoryId, String search, int page, int size, Long userId);
     Map<String, Object> toggleBookmark(Long questionId, Long userId);
     void deleteSavedQuestion(Long reviewId, Long userId);
     ReviewSessionResponseDto startReviewSession(ReviewSessionRequestDto request, Long userId);

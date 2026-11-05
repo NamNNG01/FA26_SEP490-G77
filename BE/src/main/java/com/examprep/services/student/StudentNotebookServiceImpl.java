@@ -66,17 +66,32 @@ public class StudentNotebookServiceImpl implements StudentNotebookService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<QuestionReviewItemDto> listSavedQuestions(String type, String examType, Long categoryId, String search, int page, int size, Long userId) {
+    public Page<QuestionReviewItemDto> listSavedQuestions(String type, String examType, Long courseId, Long categoryId, String search, int page, int size, Long userId) {
         if (type == null || type.isBlank()) {
             type = "all";
         }
+        String normalizedExamType = null;
+        if (examType != null && !examType.isBlank()) {
+            String upper = examType.strip().toUpperCase(java.util.Locale.ROOT);
+            if ("QUIZ".equals(upper)) {
+                normalizedExamType = "QUIZ";
+            } else if ("ESSAY".equals(upper)) {
+                normalizedExamType = "ESSAY";
+            } else if ("ALL".equals(upper)) {
+                normalizedExamType = null;
+            } else {
+                throw new BadRequestException(ResponseCode.VALIDATION_ERROR, "Invalid examType. Must be QUIZ or ESSAY.");
+            }
+        }
+
         Pageable pageable = PageRequest.of(page, size);
         String searchTerm = (search != null && !search.isBlank()) ? search.trim() : "";
         if (searchTerm.length() > 100) {
             searchTerm = searchTerm.substring(0, 100);
         }
 
-        Page<StudentQuestionReview> reviews = reviewRepository.findSavedQuestions(userId, type, searchTerm, pageable);
+        Page<StudentQuestionReview> reviews = reviewRepository.findSavedQuestions(
+                userId, type, normalizedExamType, courseId, categoryId, searchTerm, pageable);
 
         List<Long> questionIds = reviews.getContent().stream()
                 .map(r -> r.getQuestion().getQuestionId())

@@ -26,17 +26,33 @@ public interface StudentQuestionReviewRepository extends JpaRepository<StudentQu
     List<Long> findBookmarkedQuestionIds(@Param("studentId") Long studentId, @Param("moduleId") Long moduleId);
 
     @Query(value = "SELECT r FROM StudentQuestionReview r JOIN FETCH r.question q " +
+           "LEFT JOIN q.course qc " +
+           "LEFT JOIN q.module m LEFT JOIN m.course mc " +
+           "LEFT JOIN q.group g LEFT JOIN g.course gc LEFT JOIN g.module gm LEFT JOIN gm.course gmc " +
            "WHERE r.student.userId = :studentId " +
            "AND (:type = 'all' OR (:type = 'wrong' AND r.status = 'WRONG_BOOKMARKED') OR (:type = 'bookmarked' AND r.bookmark = true)) " +
+           "AND (:examType IS NULL OR (:examType = 'QUIZ' AND q.questionType IN ('SINGLE_CHOICE', 'MULTIPLE_CHOICE', 'TRUE_FALSE', 'FILL_BLANK', 'MATCHING', 'ORDERING')) OR (:examType = 'ESSAY' AND q.questionType IN ('ESSAY', 'DIAGRAM', 'CODE'))) " +
+           "AND (:courseId IS NULL OR qc.courseId = :courseId OR mc.courseId = :courseId OR gc.courseId = :courseId OR gmc.courseId = :courseId) " +
+           "AND (:categoryId IS NULL OR qc.categoryId = :categoryId OR mc.categoryId = :categoryId OR gc.categoryId = :categoryId OR gmc.categoryId = :categoryId) " +
            "AND (:search = '' OR LOWER(q.content) LIKE LOWER(CONCAT('%', :search, '%'))) " +
            "ORDER BY r.lastPracticedAt DESC",
            countQuery = "SELECT COUNT(r) FROM StudentQuestionReview r " +
+           "JOIN r.question q " +
+           "LEFT JOIN q.course qc " +
+           "LEFT JOIN q.module m LEFT JOIN m.course mc " +
+           "LEFT JOIN q.group g LEFT JOIN g.course gc LEFT JOIN g.module gm LEFT JOIN gm.course gmc " +
            "WHERE r.student.userId = :studentId " +
            "AND (:type = 'all' OR (:type = 'wrong' AND r.status = 'WRONG_BOOKMARKED') OR (:type = 'bookmarked' AND r.bookmark = true)) " +
+           "AND (:examType IS NULL OR (:examType = 'QUIZ' AND q.questionType IN ('SINGLE_CHOICE', 'MULTIPLE_CHOICE', 'TRUE_FALSE', 'FILL_BLANK', 'MATCHING', 'ORDERING')) OR (:examType = 'ESSAY' AND q.questionType IN ('ESSAY', 'DIAGRAM', 'CODE'))) " +
+           "AND (:courseId IS NULL OR qc.courseId = :courseId OR mc.courseId = :courseId OR gc.courseId = :courseId OR gmc.courseId = :courseId) " +
+           "AND (:categoryId IS NULL OR qc.categoryId = :categoryId OR mc.categoryId = :categoryId OR gc.categoryId = :categoryId OR gmc.categoryId = :categoryId) " +
            "AND (:search = '' OR LOWER(r.question.content) LIKE LOWER(CONCAT('%', :search, '%')))")
     Page<StudentQuestionReview> findSavedQuestions(
             @Param("studentId") Long studentId,
             @Param("type") String type,
+            @Param("examType") String examType,
+            @Param("courseId") Long courseId,
+            @Param("categoryId") Long categoryId,
             @Param("search") String search,
             Pageable pageable
     );
