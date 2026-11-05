@@ -356,16 +356,12 @@ export function StudySession({ study, mode }: { study: DeckStudy; mode: DeckMode
           className="grid w-full rounded-[14px] text-center transition-transform duration-500 ease-out motion-reduce:transition-none [transform-style:preserve-3d] focus-visible:outline-2 focus-visible:outline-primary"
           style={{ transform: flipped ? 'rotateY(180deg)' : 'rotateY(0deg)' }}
         >
-          {/* Both faces share one grid cell, so the card is as tall as the taller face. */}
+          {/* Both faces share one grid cell, so the card is as tall as the taller face. Only the text is
+              shown: the face's colour tells question from answer, the keys line below says how to flip. */}
           <div aria-hidden={flipped} className={`${FACE_CLASS} border-line-strong bg-surface`}>
-            <span className="rounded-full border border-line-strong px-2.5 py-0.5 text-2xs font-semibold uppercase tracking-wide text-content-soft">
-              Front
-            </span>
             <CardFace card={card} mode={mode} side="front" />
-            <span className="text-xs text-content-subtle">Click or press Space to flip</span>
           </div>
           <div aria-hidden={!flipped} className={`${FACE_CLASS} border-primary bg-primary-light [transform:rotateY(180deg)]`}>
-            <span className="rounded-full bg-primary px-2.5 py-0.5 text-2xs font-semibold uppercase tracking-wide text-white">Back</span>
             <CardFace card={card} mode={mode} side="back" />
           </div>
         </button>

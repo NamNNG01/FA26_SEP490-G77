@@ -28,9 +28,10 @@ public class ManagerDeckController {
     @Operation(summary = "F-01: List managed decks")
     public ResponseEntity<ApiResponse<PageResponse<DeckResponse>>> list(@AuthenticationPrincipal UserPrincipal user,
             @RequestParam(required = false) String search, @RequestParam(required = false) Long courseId,
+            @RequestParam(required = false) Long moduleId,
             @RequestParam(required = false) Boolean isPublic, @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return ResponseEntity.ok(ApiResponse.success(service.list(user, search, courseId, isPublic, page, size)));
+        return ResponseEntity.ok(ApiResponse.success(service.list(user, search, courseId, moduleId, isPublic, page, size)));
     }
 
     @PostMapping
