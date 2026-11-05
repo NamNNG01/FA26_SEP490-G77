@@ -1,11 +1,12 @@
 import { api } from './api';
 import type { ApiResponse } from '@/auth/authContext';
 import type { PageResponse } from './course.service';
-import type { AnswerResponse, AttemptQuestion, QuestionType } from './studentAttempt.service';
+import type { AnswerResponse, AttemptQuestion, QuestionType, ResultQuestion as ReviewQuestion } from './studentAttempt.service';
 
 /**
  * Module Practice — a student practices the question bank of one module, one question at a time.
- * Every question can be answered again; the BE never sends the answer key, only the verdict.
+ * Every question can be answered again. MP-04 carries the frozen key of an auto-graded question
+ * (`correctAnswer`) for the result review; rubric types (essay / code / diagram) have none.
  *   GET    /api/v1/student/modules/{moduleId}/practice/overview                               (MP-01)
  *   POST   /api/v1/student/modules/{moduleId}/practice/sessions                               (MP-02) — resumes the open one
  *   GET    /api/v1/student/practice/sessions/{sessionId}                                      (MP-03)
@@ -161,12 +162,22 @@ export interface PracticeQuestionView {
   answerSpace: { maxLength: number | null } | null;
   media: { mediaId: number; optionId: number | null; mediaType: string; url: string; altText: string | null }[] | null;
   group: { groupId: number; questionType: string; title: string | null; passageText: string | null } | null;
+  /** Key of an auto-graded question (only the field of its type is set); null for rubric types. */
+  correctAnswer: PracticeCorrectAnswer | null;
   isBookmarked: boolean;
   attemptCount: number;
   latestIsCorrect: boolean | null;
   latestScore: number | null;
   gradingStatus: PracticeGradingStatus;
   attempts: PracticeAttempt[];
+}
+
+export interface PracticeCorrectAnswer {
+  /** SINGLE_CHOICE / TRUE_FALSE / MULTIPLE_CHOICE. */
+  correctOptionIds: number[] | null;
+  blanks: { index: number; accepted: string[] | null; caseSensitive: boolean | null }[] | null;
+  pairs: { left: string; right: string }[] | null;
+  correctOrder: number[] | null;
 }
 
 export interface SessionProgress {
@@ -305,6 +316,36 @@ export function toAttemptQuestion(q: PracticeQuestionView): AttemptQuestion {
     matching: q.matching,
     maxPoints: null,
     answerSpace: q.answerSpace,
+  };
+}
+
+/** MP-04 with one of its attempts, in the shape the exam result's answer review reads. */
+export function toReviewQuestion(q: PracticeQuestionView, attempt: PracticeAttempt | null): ReviewQuestion {
+  const key = q.correctAnswer;
+  const correctIds = key?.correctOptionIds ? new Set(key.correctOptionIds) : null;
+  return {
+    questionId: q.questionId,
+    orderIndex: q.orderIndex,
+    questionType: q.questionType,
+    content: q.content,
+    options: q.options?.map(o => ({ ...o, isCorrectAnswer: correctIds ? correctIds.has(o.optionId) : null })) ?? null,
+    yourResponse: attempt?.response ?? null,
+    isCorrect: attempt?.isCorrect ?? null,
+    maxPoints: null,
+    scoreEarned: attempt?.scoreEarned ?? null,
+    weight: null,
+    gradingStatus: attempt?.gradingStatus ?? null,
+    gradingError: null,
+    criteria: null,
+    overallFeedback: null,
+    explanation: null,
+    correctAnswer: key
+      ? {
+          orderedOptionIds: key.correctOrder,
+          pairs: key.pairs,
+          blanks: key.blanks ? Object.fromEntries(key.blanks.map(b => [String(b.index), b.accepted ?? []])) : null,
+        }
+      : null,
   };
 }
 
