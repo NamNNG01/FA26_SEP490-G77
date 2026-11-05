@@ -21,6 +21,7 @@ import {
 import { getApiErrorMessage } from '@/utils/apiError';
 import { studentCourseService, type MyCourse } from '@/services/studentCourse.service';
 import { studentPracticeExamService } from '@/services/studentPracticeExam.service';
+import { studentAttemptService } from '@/services/studentAttempt.service';
 import { materialService } from '@/services/studentMaterial.service';
 import { ListSkeleton, LoadError, PageTitle, STUDENT_PAGE_CLASS, formatScore } from '../components/studentUi';
 import { SmartPracticeModal } from '../components/SmartPracticeModal';
@@ -81,6 +82,8 @@ interface HistoryRow {
   hasCode?: boolean;
   /** Its course was left (EN-04): listed, but neither its attempts nor a retake open. */
   courseLeft?: boolean;
+  /** An attempt saved and left unfinished (EX-01 `actions.activeAttemptId`): "Continue" instead of "Retake". */
+  activeAttemptId?: number | null;
 }
 
 type SortKey = 'recent' | 'title' | 'bestScoreDesc' | 'bestScoreAsc' | 'attempts';
@@ -149,8 +152,17 @@ async function loadHistory(): Promise<{ rows: HistoryRow[]; courses: MyCourse[] 
   });
   // Only exams taken at least once: a practice exam or material quiz that was generated but never
   // started stays out (material quizzes are still listed on My Materials).
+  const rows = taken.filter(r => r.attemptCount > 0);
+  // ME-01 does not say which exam has an unfinished attempt; EX-01 does, one exam per call (see docs/notes).
+  // A failed call just leaves that row on "Retake" (which resumes anyway: SA-01 answers with the active attempt).
+  const details = await Promise.allSettled(
+    rows.map(r => (r.courseLeft ? Promise.reject() : studentAttemptService.getExamDetail(r.examId))),
+  );
+  details.forEach((d, i) => {
+    if (d.status === 'fulfilled') rows[i].activeAttemptId = d.value.actions?.activeAttemptId ?? null;
+  });
   return {
-    rows: taken.filter(r => r.attemptCount > 0),
+    rows,
     courses: (myCourses?.content ?? []).filter(c => c.status !== 'CANCELLED'),
   };
 }
@@ -250,6 +262,12 @@ export function MyExamsPage() {
 
   /** A material quiz gets a fresh attempt from MQ-05; the rest start with SA-01. */
   const retake = async (row: HistoryRow) => {
+    // An unfinished attempt is reopened where it was left.
+    if (row.activeAttemptId != null) {
+      const path = studentResumeAttemptPath(row.activeAttemptId);
+      navigate(isPractice(row.kind) ? `${path}&practice=1` : path);
+      return;
+    }
     if (isPractice(row.kind)) {
       navigate(studentTakePracticePath(row.examId));
       return;
@@ -300,8 +318,8 @@ export function MyExamsPage() {
     // Shown for every type; disabled when the exam can no longer be taken (course left, practice exam deleted, …).
     const starting = row.jobId != null && startingJob === row.jobId;
     items.push({
-      label: starting ? 'Starting…' : 'Retake',
-      icon: <Icon.RefreshCw />,
+      label: starting ? 'Starting…' : row.activeAttemptId != null ? 'Continue' : 'Retake',
+      icon: row.activeAttemptId != null ? <Icon.ChevronRight /> : <Icon.RefreshCw />,
       disabled: startingJob != null || !canRetake(row),
       onClick: () => void retake(row),
     });
