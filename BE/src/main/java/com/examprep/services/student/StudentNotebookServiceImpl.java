@@ -294,4 +294,41 @@ public class StudentNotebookServiceImpl implements StudentNotebookService {
             );
         }).toList();
     }
+
+    @Override
+    @Transactional
+    public void recordWrongAnswer(Long userId, Question question, String response) {
+        if (userId == null || question == null) {
+            return;
+        }
+        Optional<StudentQuestionReview> existing = reviewRepository.findByStudent_UserIdAndQuestion_QuestionId(userId, question.getQuestionId());
+        Instant now = Instant.now();
+        String shortResp = response;
+        if (shortResp != null && shortResp.length() > 50) {
+            shortResp = shortResp.substring(0, 50);
+        }
+        if (existing.isPresent()) {
+            StudentQuestionReview r = existing.get();
+            r.setStatus("WRONG_BOOKMARKED");
+            r.setWrongCount(r.getWrongCount() != null ? r.getWrongCount() + 1 : 1);
+            if (shortResp != null) {
+                r.setLastWrongChoice(shortResp);
+            }
+            r.setLastPracticedAt(now);
+            reviewRepository.save(r);
+        } else {
+            User student = userRepository.getReferenceById(userId);
+            StudentQuestionReview r = StudentQuestionReview.builder()
+                    .student(student)
+                    .question(question)
+                    .status("WRONG_BOOKMARKED")
+                    .bookmark(false)
+                    .wrongCount(1)
+                    .lastWrongChoice(shortResp)
+                    .firstWrongAt(now)
+                    .lastPracticedAt(now)
+                    .build();
+            reviewRepository.save(r);
+        }
+    }
 }

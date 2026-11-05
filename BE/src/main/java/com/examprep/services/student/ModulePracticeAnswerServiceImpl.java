@@ -54,6 +54,7 @@ public class ModulePracticeAnswerServiceImpl implements ModulePracticeAnswerServ
     private final QuestionPracticeSessionQuestionRepository sessionQuestions;
     private final QuestionPracticeAnswerRepository answers;
     private final ModulePracticeGradingWorker gradingWorker;
+    private final StudentNotebookService studentNotebookService;
 
     // ------------------------------------------------------------------ MP-05
 
@@ -120,6 +121,10 @@ public class ModulePracticeAnswerServiceImpl implements ModulePracticeAnswerServ
             answer.setGradedAt(now);
         }
         answers.save(answer);
+
+        if (Boolean.FALSE.equals(answer.getIsCorrect())) {
+            studentNotebookService.recordWrongAnswer(userId, sessionQuestion.getQuestion(), answer.getResponse());
+        }
 
         support.applyAnswer(sessionQuestion, answer);
         sessionQuestions.save(sessionQuestion);

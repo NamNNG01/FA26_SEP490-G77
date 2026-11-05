@@ -182,4 +182,25 @@ class StudentNotebookServiceTest {
         verify(examRepository).save(any(Exam.class));
         verify(studentAttemptService).start(eq(100L), eq(500L), isNull());
     }
+
+    @Test
+    void recordWrongAnswer_new() {
+        when(reviewRepository.findByStudent_UserIdAndQuestion_QuestionId(100L, 1L)).thenReturn(Optional.empty());
+        when(userRepository.getReferenceById(100L)).thenReturn(student);
+
+        notebookService.recordWrongAnswer(100L, question1, "wrong answer");
+
+        verify(reviewRepository).save(any(StudentQuestionReview.class));
+    }
+
+    @Test
+    void recordWrongAnswer_existing() {
+        when(reviewRepository.findByStudent_UserIdAndQuestion_QuestionId(100L, 1L)).thenReturn(Optional.of(review1));
+
+        notebookService.recordWrongAnswer(100L, question1, "wrong answer 2");
+
+        assertEquals(4, review1.getWrongCount());
+        assertEquals("wrong answer 2", review1.getLastWrongChoice());
+        verify(reviewRepository).save(review1);
+    }
 }
