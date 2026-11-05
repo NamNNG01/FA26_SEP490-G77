@@ -78,7 +78,12 @@ public class StudentCourseServiceImpl implements StudentCourseService {
         EnrollmentSummaryDto enrollmentSummary;
         if (userId != null) {
             java.util.Optional<Enrollment> enOpt = enrollmentRepository.findByUser_UserIdAndCourse_CourseId(userId, courseId);
-            enrollmentSummary = enOpt.map(en -> new EnrollmentSummaryDto(true, en.getStatus(), en.getProgress()))
+            // isEnrolled mirrors EN-03 ownership: ACTIVE and COMPLETED rows are owned, CANCELLED is
+            // not — otherwise the public course page would still show "Enrolled"/"Go to course"
+            // after the student cancelled their enrollment.
+            enrollmentSummary = enOpt
+                    .filter(en -> !Enrollment.STATUS_CANCELLED.equals(en.getStatus()))
+                    .map(en -> new EnrollmentSummaryDto(true, en.getStatus(), en.getProgress()))
                     .orElseGet(() -> new EnrollmentSummaryDto(false, null, null));
         } else {
             enrollmentSummary = new EnrollmentSummaryDto(false, null, null);
