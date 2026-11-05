@@ -24,7 +24,7 @@ import {
 } from "../components/studentUi";
 import { ReportQuestionIssueButton } from "../components/ReportQuestionIssueDialog";
 
-const SIZE = 1;
+const SIZE = 10;
 const FILTERS = [
   { label: "All saved questions", value: "all" },
   { label: "Incorrect answers", value: "wrong" },
