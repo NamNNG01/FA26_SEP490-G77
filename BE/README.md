@@ -113,6 +113,58 @@ Once the application is running locally:
 - **OpenAPI 3.0 Spec JSON:** [http://localhost:8080/v3/api-docs](http://localhost:8080/v3/api-docs)
 - **Health Check Endpoint:** `GET http://localhost:8080/api/v1/health`
 
+### Flashcard import and course modules
+
+`POST /api/v1/flashcards/import/preview` returns `cards[].rowIndex` as the
+1-based card order, excluding the header and ignored empty rows. A file with
+30 cards returns indexes 1 through 30. Invalid and duplicate cards retain
+their place in the sequence. `cards[].sourceRowIndex` preserves the original
+1-based table row (DOCX/XLSX) or extracted text line (PDF) for diagnostics.
+The asynchronous CSV/XLSX import API still uses original file-row numbers in
+`errorRows[].row`.
+
+For choosing a course module:
+
+- `GET /api/v1/manager/courses/{courseId}/modules` lists the course modules.
+- `POST /api/v1/manager/decks` accepts optional `courseId` and `moduleId`.
+- `PUT /api/v1/manager/decks/{deckId}` accepts `moduleId`: omit to retain the
+  current module, use `0` to clear it, or a positive ID to select a module of
+  the deck's course. Moving courses clears the previous module unless a
+  module of the destination course is supplied.
+- Manager deck list/detail responses include `moduleId` and `moduleTitle`
+  when assigned.
+
+`POST /api/v1/flashcards/bulk` also accepts `newDeck.moduleId` for imported
+or AI-generated cards:
+
+```json
+{
+  "newDeck": {
+    "title": "Java foundations",
+    "isPublic": false,
+    "courseId": 12,
+    "moduleId": 34
+  },
+  "source": "IMPORT",
+  "skipDuplicates": true,
+  "cards": [
+    { "frontText": "What is JVM?", "backText": "Java Virtual Machine." }
+  ]
+}
+```
+
+`moduleId` is optional and must be positive, requires `courseId`, and must
+belong to that course. Primary/assigned course managers and admins may
+create course decks. Personal decks still work with both fields omitted.
+Importing into an existing `deckId` preserves its course and module.
+Validation errors use `data.code`: `COURSE_REQUIRED` (400),
+`MODULE_COURSE_MISMATCH` (400), `MODULE_NOT_FOUND` (404), or
+`FORBIDDEN_COURSE` (403) for unauthorized course access.
+
+Manager responses return the full course title in `courseName`. Course
+badge clipping, "FRONT"/"BACK" labels and flip instructions are frontend
+presentation and must be changed there.
+
 ---
 
 ## 🧪 Testing & Verification
