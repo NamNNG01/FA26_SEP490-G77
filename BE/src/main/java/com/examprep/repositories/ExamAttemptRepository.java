@@ -38,13 +38,13 @@ public interface ExamAttemptRepository extends JpaRepository<ExamAttempt, Long> 
             "ORDER BY a.submitTime DESC")
     List<StudentRecentAttempt> findRecentAttemptsByUserId(@Param("userId") Long userId, Pageable pageable);
 
-    @Query("SELECT COUNT(DISTINCT a.exam.examId) FROM ExamAttempt a WHERE a.user.userId = :userId AND a.exam.course.courseId = :courseId AND a.status = 'COMPLETED' AND (a.mode IS NULL OR a.mode <> 'REVIEW')")
+    @Query("SELECT COUNT(DISTINCT a.exam.examId) FROM ExamAttempt a WHERE a.user.userId = :userId AND a.exam.course.courseId = :courseId AND a.status = 'COMPLETED' AND a.exam.mode = 'EXAM'")
     long countCompletedExamsByUserAndCourse(@Param("userId") Long userId, @Param("courseId") Long courseId);
 
-    @Query("SELECT AVG(a.totalScore * 10.0 / a.exam.maxScore) FROM ExamAttempt a WHERE a.user.userId = :userId AND a.exam.course.courseId = :courseId AND a.status = 'COMPLETED' AND a.totalScore IS NOT NULL AND a.exam.maxScore > 0 AND (a.mode IS NULL OR a.mode <> 'REVIEW')")
+    @Query("SELECT AVG(a.totalScore * 10.0 / a.exam.maxScore) FROM ExamAttempt a WHERE a.user.userId = :userId AND a.exam.course.courseId = :courseId AND a.status = 'COMPLETED' AND a.totalScore IS NOT NULL AND a.exam.maxScore > 0 AND a.exam.mode = 'EXAM'")
     Double averageScoreByUserAndCourse(@Param("userId") Long userId, @Param("courseId") Long courseId);
 
-    @Query("SELECT a FROM ExamAttempt a JOIN FETCH a.exam e WHERE a.user.userId = :userId AND e.course.courseId = :courseId AND a.submitTime IS NOT NULL AND (a.mode IS NULL OR a.mode <> 'REVIEW') ORDER BY a.submitTime DESC")
+    @Query("SELECT a FROM ExamAttempt a JOIN FETCH a.exam e WHERE a.user.userId = :userId AND e.course.courseId = :courseId AND a.submitTime IS NOT NULL AND e.mode = 'EXAM' ORDER BY a.submitTime DESC")
     List<ExamAttempt> findRecentAttemptsByUserAndCourse(@Param("userId") Long userId, @Param("courseId") Long courseId, Pageable pageable);
 
     @Query(value = "SELECT a FROM ExamAttempt a LEFT JOIN FETCH a.exam e " +
