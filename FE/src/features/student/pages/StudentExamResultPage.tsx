@@ -9,7 +9,7 @@ import { Select } from '@/components/ui/Select';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Spinner } from '@/components/ui/Spinner';
 import { Icon } from '@/assets/icons';
-import { ROUTES, studentExamPath, studentTakeExamPath, studentTakePracticePath } from '@/app/routes';
+import { ROUTES, studentExamPath, studentResumeAttemptPath, studentTakeExamPath, studentTakePracticePath } from '@/app/routes';
 import { getApiErrorMessage } from '@/utils/apiError';
 import {
   RUBRIC_TYPES,
@@ -218,6 +218,36 @@ export function StudentExamResultPage() {
 
   useArrowKeyNav(navRef);
 
+  /** An attempt of this exam saved and left unfinished (EX-01 + SA-02): offered back with Continue. */
+  const [unfinished, setUnfinished] = useState<UnfinishedAttempt | null>(null);
+  /** No submitted attempt at all: the page then holds only the unfinished one, if any. */
+  const [noSubmitted, setNoSubmitted] = useState(false);
+  const [unfinishedReload, setUnfinishedReload] = useState(0);
+  useEffect(() => {
+    if (!examId) return;
+    let cancelled = false;
+    studentAttemptService
+      .getExamDetail(examId)
+      .then(async detail => {
+        const id = detail.actions?.activeAttemptId;
+        if (id == null) return null;
+        const s = await studentAttemptService.get(id);
+        if (s.status !== 'IN_PROGRESS') return null;
+        const answered = (s.answers ?? []).filter(a => isAnswered(a.response)).length;
+        return { attemptId: s.attemptId, answered, total: s.questions.length };
+      })
+      .then(u => {
+        if (!cancelled) setUnfinished(u);
+      })
+      // Not knowing just hides the banner; Retake still resumes it (SA-01 answers with the active attempt).
+      .catch(() => {
+        if (!cancelled) setUnfinished(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [examId, unfinishedReload]);
+
   useEffect(() => {
     if (!examId) return;
     let cancelled = false;
@@ -227,12 +257,10 @@ export function StudentExamResultPage() {
         if (cancelled) return;
         const submitted = items.filter(a => a.status !== 'IN_PROGRESS');
         setAttempts(submitted);
+        setNoSubmitted(submitted.length === 0);
         if (!attemptId) {
           if (submitted.length > 0) setSearchParams({ examId, attemptId: String(submitted[0].attemptId), ...practiceParam }, { replace: true });
-          else {
-            setError('You have no submitted attempt for this exam yet.');
-            setLoading(false);
-          }
+          else setLoading(false);
         }
       })
       .catch(err => {
@@ -455,6 +483,36 @@ export function StudentExamResultPage() {
     );
   }
 
+  const resumePath = (id: number) => `${studentResumeAttemptPath(id)}${practice ? '&practice=1' : ''}`;
+  const unfinishedBanner = unfinished && examId && (
+    <UnfinishedAttemptBanner
+      attempt={unfinished}
+      onContinue={() => navigate(resumePath(unfinished.attemptId))}
+      onDiscarded={() => {
+        // Nothing left to show here: back to Exam History.
+        if (noSubmitted) navigate(practice ? practiceHistoryPath : ROUTES.studentExams, { replace: true });
+        else setUnfinishedReload(r => r + 1);
+      }}
+    />
+  );
+
+  // Only an unfinished attempt so far: the banner is all there is.
+  if (!attemptId && noSubmitted && !error) {
+    return (
+      <div className={`${STUDENT_PAGE_CLASS} space-y-6`}>
+        {breadcrumb}
+        {unfinishedBanner}
+        <div className="card">
+          <EmptyState
+            icon={<Icon.FileText className="w-7 h-7" />}
+            title="No submitted attempt yet"
+            message={unfinished ? 'Finish your attempt to see its result here.' : 'You have no submitted attempt for this exam yet.'}
+          />
+        </div>
+      </div>
+    );
+  }
+
   if (error || !result) {
     return (
       <div className={`${STUDENT_PAGE_CLASS} space-y-6`}>
@@ -517,6 +575,7 @@ export function StudentExamResultPage() {
   return (
     <div className={`${STUDENT_PAGE_CLASS} space-y-[clamp(1.25rem,2.5vw,1.75rem)]`}>
       {breadcrumb}
+      {unfinishedBanner}
 
       {/* The score is the headline: a full-width header above the question and its navigator. */}
       <ScoreCard
@@ -551,7 +610,8 @@ export function StudentExamResultPage() {
             onSaveAll={savableIds.length > 0 ? () => setSaveQuestions(savableIds) : undefined}
             // An exam never tells which answers were wrong, so it has no "Retry wrong questions".
             onRetryWrong={practice && canSave && hasWrong ? () => setRetrying(true) : undefined}
-            onRetake={examId ? () => navigate(practice ? studentTakePracticePath(examId) : studentTakeExamPath(examId)) : undefined}
+            // While an attempt is unfinished SA-01 cannot open a new one: the banner's Continue replaces Retake.
+            onRetake={examId && !unfinished ? () => navigate(practice ? studentTakePracticePath(examId) : studentTakeExamPath(examId)) : undefined}
             onBack={
               practice
                 ? () => navigate(practiceHistoryPath)
@@ -1164,4 +1224,82 @@ function ExplanationBox({
 function truncate(text: string, max: number): string {
   const line = text.replace(/\s+/g, ' ').trim();
   return line.length > max ? `${line.slice(0, max - 1)}…` : line;
+}
+
+interface UnfinishedAttempt {
+  attemptId: number;
+  answered: number;
+  total: number;
+}
+
+/** An attempt saved with "Save and exit": Continue reopens it, Discard deletes it (SA-07) after a confirm. */
+function UnfinishedAttemptBanner({
+  attempt,
+  onContinue,
+  onDiscarded,
+}: {
+  attempt: UnfinishedAttempt;
+  onContinue: () => void;
+  onDiscarded: () => void;
+}) {
+  const [confirming, setConfirming] = useState(false);
+  const [discarding, setDiscarding] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const discard = async () => {
+    setDiscarding(true);
+    setError(null);
+    try {
+      await studentAttemptService.deleteAttempt(attempt.attemptId);
+      setConfirming(false);
+      onDiscarded();
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Failed to discard this attempt. Please try again.'));
+    } finally {
+      setDiscarding(false);
+    }
+  };
+
+  return (
+    <div role="status" className="card flex flex-wrap items-center gap-3 border-warning-line bg-warning-light px-4 py-3">
+      <Icon.Clock className="w-5 h-5 flex-shrink-0 text-warning" />
+      <div className="flex-1 min-w-[12rem]">
+        <p className="text-sm font-semibold text-content">You have an unfinished attempt</p>
+        <p className="text-xs text-content-soft">
+          {attempt.answered} of {attempt.total} question{attempt.total === 1 ? '' : 's'} answered. Continue where you left off.
+        </p>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <Button size="sm" variant="outline" disabled={discarding} onClick={() => setConfirming(true)}>
+          Discard
+        </Button>
+        <Button size="sm" iconRight={<Icon.ChevronRight className="w-4 h-4" />} onClick={onContinue}>
+          Continue
+        </Button>
+      </div>
+
+      <Modal
+        open={confirming}
+        onClose={() => !discarding && setConfirming(false)}
+        title="Discard this attempt?"
+        size="sm"
+        footer={
+          <>
+            <Button variant="outline" disabled={discarding} onClick={() => setConfirming(false)}>
+              Keep it
+            </Button>
+            <Button variant="danger" loading={discarding} disabled={discarding} onClick={discard}>
+              Discard
+            </Button>
+          </>
+        }
+      >
+        <p className="text-base text-content-secondary leading-relaxed">
+          The attempt and its {attempt.answered} answer{attempt.answered === 1 ? '' : 's'} are deleted — it will not count in
+          your history. This cannot be undone.
+        </p>
+        {error && <p className="mt-3 text-sm text-danger">{error}</p>}
+      </Modal>
+    </div>
+  );
 }

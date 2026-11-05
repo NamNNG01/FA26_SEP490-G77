@@ -7,7 +7,7 @@ import { Spinner } from '@/components/ui/Spinner';
 import { TimerDisplay } from '@/components/common/TimerDisplay';
 import { QuestionPalette } from '@/components/common/QuestionPalette';
 import { Icon } from '@/assets/icons';
-import { ROUTES, studentExamPath, studentExamResultPath } from '@/app/routes';
+import { ROUTES, studentExamAttemptsPath, studentExamPath, studentExamResultPath } from '@/app/routes';
 import { getApiErrorMessage } from '@/utils/apiError';
 import { useToast } from '@/components/ui/ToastHost';
 import {
@@ -298,8 +298,27 @@ function ExamAttemptScreen() {
     [session, flush, navigate, codeMeta, codeLanguages, contestId, toast, practice],
   );
 
-  /** Where Cancel leads: a practice exam has no course exam page — it is listed in Exam History. */
-  const exitPath = (examId: number) => (practice ? `${ROUTES.studentExams}?type=PRACTICE` : studentExamPath(examId));
+  /**
+   * Where leaving the attempt leads. A course exam has its own page, a contest its contest page; every other
+   * kind (practice exam, material quiz) has none, so its Attempts screen — which offers Continue — instead.
+   */
+  const mode = session?.examMode ?? (practice ? 'PRACTICE' : 'EXAM');
+  const isContest = contestId != null || mode === 'CONTEST';
+  const historyPath = `${ROUTES.studentExams}${mode === 'EXAM' || isContest ? '' : `?type=${practice ? 'PRACTICE' : mode}`}`;
+  const exitPath = (examId: number) =>
+    isContest
+      ? contestId != null
+        ? `${ROUTES.studentContests}/${contestId}`
+        : ROUTES.studentContests
+      : mode === 'EXAM'
+        ? studentExamPath(examId)
+        : studentExamAttemptsPath(examId, practice);
+  /** After a discard: the Attempts screen only while the exam still has a submitted attempt to show. */
+  const exitAfterDiscard = async (examId: number) => {
+    if (isContest || mode === 'EXAM') return exitPath(examId);
+    const left = await studentAttemptService.getAllHistory(examId).catch(() => []);
+    return left.some(a => a.status !== 'IN_PROGRESS') ? exitPath(examId) : historyPath;
+  };
 
   /**
    * Cancel → "Save and exit": the drafts are flushed and the attempt stays IN_PROGRESS — starting the exam
@@ -330,7 +349,7 @@ function ExamAttemptScreen() {
     try {
       await studentAttemptService.deleteAttempt(session.attemptId);
       clearChecks(session.attemptId);
-      navigate(exitPath(session.examId), { replace: true });
+      navigate(await exitAfterDiscard(session.examId), { replace: true });
     } catch (err) {
       finishedRef.current = false;
       setActionError(getApiErrorMessage(err, 'Failed to cancel this attempt. Please try again.'));
