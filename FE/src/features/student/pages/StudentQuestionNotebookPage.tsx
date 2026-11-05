@@ -411,9 +411,6 @@ function QuestionCard({
           {question.lastPracticedAt
             ? `Last practiced ${new Date(question.lastPracticedAt).toLocaleString()}`
             : "Not practiced yet"}
-          {question.lastWrongChoice
-            ? ` · Last answer: ${question.lastWrongChoice}`
-            : ""}
         </p>
         <div className="flex flex-wrap gap-2">
           <ReportQuestionIssueButton questionId={question.questionId} />

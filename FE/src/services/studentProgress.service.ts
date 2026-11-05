@@ -33,7 +33,6 @@ export interface SavedQuestion {
   questionType: string;
   options: { optionId: number; optionText: string }[];
   correctOptionIds: number[];
-  lastWrongChoice: string | null;
   wrongCount: number;
   firstWrongAt: string | null;
   lastPracticedAt: string | null;
