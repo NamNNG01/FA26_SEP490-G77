@@ -9,7 +9,10 @@ export interface FlashcardImportError {
 }
 
 export interface FlashcardImportCard {
+  /** 1-based card order, excluding the header and ignored empty rows. */
   rowIndex: number;
+  /** Original 1-based table row (DOCX/XLSX) or extracted text line (PDF), for diagnostics. */
+  sourceRowIndex: number;
   frontText: string;
   backText: string;
   valid: boolean;
@@ -31,7 +34,7 @@ export interface FlashcardImportPreview {
 
 export interface FlashcardBulkRequest {
   deckId?: number;
-  newDeck?: { title: string; description?: string; isPublic: boolean; courseId: number | null };
+  newDeck?: { title: string; description?: string; isPublic: boolean; courseId: number | null; /** A module of courseId; omit for none. */ moduleId?: number };
   source: 'IMPORT' | 'AI';
   /** Required when source = AI (the API 31 generationId). */
   aiGenerationId: number | null;

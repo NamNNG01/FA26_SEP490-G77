@@ -171,7 +171,7 @@ export function DeckInfoFields({ value, onChange, errors = {}, courses, coursesL
 
 // ── Card editor state ────────────────────────────────────────────────────────
 
-const SIDE_MAX = 500;
+export const SIDE_MAX = 500;
 
 /** A card as the editor sees it — saved cards use their cardId, drafts a temporary id. */
 export interface EditableCard {
@@ -316,16 +316,21 @@ export function useCardEditor(cards: EditableCard[], actions: CardActions, optio
 
 // ── Card list ────────────────────────────────────────────────────────────────
 
-export function CardList({ cards, editor, emptyHint = 'Use the card editor to add the first one.' }: {
+export function CardList({ cards, editor, emptyHint = 'Use the card editor to add the first one.', actions }: {
   cards: EditableCard[];
   editor: CardEditor;
   emptyHint?: string;
+  /** Extra controls beside the card count, e.g. Import from file. */
+  actions?: React.ReactNode;
 }) {
   return (
     <section aria-label="Flashcards in this deck" className="space-y-3">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-lg font-semibold text-content">Flashcards in this Deck</h3>
-        <span className="text-sm text-content-soft">{cards.length} card{cards.length === 1 ? '' : 's'}</span>
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-content-soft">{cards.length} card{cards.length === 1 ? '' : 's'}</span>
+          {actions}
+        </div>
       </div>
 
       {cards.length === 0 ? (
