@@ -5,6 +5,8 @@ import { Alert } from '@/components/ui/Alert';
 import { useToast } from '@/components/ui/ToastHost';
 import { Icon } from '@/assets/icons';
 import { deckService, type Deck } from '@/services/deck.service';
+import { FLASHCARD_IMPORT_MAX_ROWS, flashcardImportService, type FlashcardImportPreview } from '@/services/flashcardImport.service';
+import { ImportFileModal, importableCards } from './ImportDeckFile';
 import {
   CardEditorPanel,
   CardList,
@@ -35,8 +37,8 @@ export interface CreatedDeck {
 
 /**
  * New Flashcard Deck — deck info plus a draft card list built with the card
- * editor. Create Deck creates the deck (F-02), then each card through the
- * card API. Mount it only while open so each opening starts from a blank draft.
+ * editor or imported from a file. Create Deck creates the deck (F-02), then
+ * saves the cards in order with POST /flashcards/bulk. Mount it only while open so each opening starts from a blank draft.
  */
 export function CreateDeckModal({ onClose, onCreated, defaultCourseId }: {
   onClose: () => void;
@@ -52,6 +54,7 @@ export function CreateDeckModal({ onClose, onCreated, defaultCourseId }: {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const [pickingFile, setPickingFile] = useState(false);
 
   // Draft cards live here until the deck is created.
   const editor = useCardEditor(cards, {
@@ -70,6 +73,17 @@ export function CreateDeckModal({ onClose, onCreated, defaultCourseId }: {
       (Object.keys(patch) as (keyof DeckInfoErrors)[]).forEach(k => delete next[k]);
       return next;
     });
+  };
+
+  /** Valid cards from the file go straight into the draft; the rest are skipped and reported. */
+  const addImported = (preview: FlashcardImportPreview) => {
+    setPickingFile(false);
+    const { cards: imported, skipped } = importableCards(preview, cards);
+    const batch = Date.now();
+    setCards(prev => [...prev, ...imported.map((c, i) => ({ id: `import-${batch}-${i}`, ...c }))]);
+    const added = `Added ${imported.length} card${imported.length === 1 ? '' : 's'} from ${preview.fileName}.`;
+    if (skipped.length === 0) toast.success(added);
+    else toast.warning(`${added} Skipped ${skipped.length}: ${skipped.slice(0, 5).map(r => `row ${r.rowIndex} (${r.reason})`).join(', ')}${skipped.length > 5 ? ', …' : ''}.`);
   };
 
   const requestClose = () => {
@@ -108,13 +122,19 @@ export function CreateDeckModal({ onClose, onCreated, defaultCourseId }: {
       setSaving(false);
       return;
     }
-    // Sequential so cards keep the order they were written in.
+    // In batches of the bulk limit, sequential so cards keep their order.
     let cardsCreated = 0;
     let cardError: string | undefined;
-    for (const card of cards) {
+    for (let start = 0; start < cards.length; start += FLASHCARD_IMPORT_MAX_ROWS) {
       try {
-        await deckService.createCard(deck.deckId, { frontText: card.frontText, backText: card.backText });
-        cardsCreated++;
+        const saved = await flashcardImportService.save({
+          deckId: deck.deckId,
+          source: 'IMPORT',
+          aiGenerationId: null,
+          skipDuplicates: true,
+          cards: cards.slice(start, start + FLASHCARD_IMPORT_MAX_ROWS).map(({ frontText, backText }) => ({ frontText, backText })),
+        });
+        cardsCreated += saved.createdCount;
       } catch (err) {
         cardError = cardErrorMessage(err, 'Some cards could not be created.');
         break;
@@ -126,7 +146,8 @@ export function CreateDeckModal({ onClose, onCreated, defaultCourseId }: {
 
   return (
     <>
-    <Modal open onClose={requestClose} title="New Flashcard Deck" size="2xl"
+    {/* Not dismissible under a dialog of its own, so Escape there closes only that dialog. */}
+    <Modal open onClose={requestClose} title="New Flashcard Deck" size="2xl" dismissible={!pickingFile && !confirmDiscard}
       footer={
         <>
           <Button variant="outline" onClick={requestClose} disabled={saving}>Cancel</Button>
@@ -143,12 +164,18 @@ export function CreateDeckModal({ onClose, onCreated, defaultCourseId }: {
             <DeckInfoFields idPrefix="new-deck" value={info} errors={errors} onChange={update} allowNoCourse={false}
               courses={courses.map(c => ({ id: String(c.courseId), title: c.title }))} coursesLoading={coursesLoading} />
           </section>
-          <CardList cards={cards} editor={editor} emptyHint="Add cards with the card editor — or create the deck now and add them later." />
+          <CardList cards={cards} editor={editor} emptyHint="Add cards with the card editor or import them from a file — or create the deck now and add them later."
+            actions={<Button size="sm" variant="outline" icon={<Icon.Upload className="w-3.5 h-3.5" />} onClick={() => setPickingFile(true)} disabled={saving}>Import from file</Button>} />
         </div>
         <CardEditorPanel editor={editor} idPrefix="new-card" className="lg:sticky lg:top-0"
           footnote={<>Cards are added to the list and created with the deck on <span className="font-medium text-content-soft">Create Deck</span>.</>} />
       </div>
     </Modal>
+
+    {pickingFile && (
+      <ImportFileModal onClose={() => setPickingFile(false)}
+        onRead={addImported} />
+    )}
 
     {/* Its own dialog over the form, so the form's buttons never change under the cursor. */}
     <Modal open={confirmDiscard} onClose={() => setConfirmDiscard(false)} title="Discard this new deck?" size="sm"

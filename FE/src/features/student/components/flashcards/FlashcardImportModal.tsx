@@ -60,9 +60,8 @@ export function FlashcardImportModal({ deckId, deckTitle, onClose, onImported }:
       setFileError(`This file is ${(candidate.size / 1024 / 1024).toFixed(2)} MB — the limit is 10 MB.`);
       return;
     }
-    setFile(candidate);
-    setPreview(null);
-    setCards([]);
+    // Read straight away: the cards open in the editable table, no separate preview step.
+    void readFile(candidate);
   };
 
   const downloadTemplate = async (format: FlashcardImportFormat) => {
@@ -81,16 +80,17 @@ export function FlashcardImportModal({ deckId, deckTitle, onClose, onImported }:
     } finally { setBusy(false); }
   };
 
-  const runPreview = async () => {
-    if (!file) return;
+  const readFile = async (candidate: File) => {
+    setFile(candidate);
     setBusy(true);
     setError(null);
     try {
-      const data = await flashcardImportService.preview(file, deckId);
+      const data = await flashcardImportService.preview(candidate, deckId);
       setPreview(data);
       setCards(data.cards);
       if (data.cards.length > FLASHCARD_IMPORT_MAX_ROWS) setError(`The preview has more than ${FLASHCARD_IMPORT_MAX_ROWS} cards.`);
     } catch (err) {
+      setFile(null);
       setError(getApiErrorMessage(err, 'Could not read this file. Check the template and try again.'));
     } finally { setBusy(false); }
   };
@@ -151,11 +151,10 @@ export function FlashcardImportModal({ deckId, deckTitle, onClose, onImported }:
   const dropCard = (rowIndex: number) => setCards(current => current.filter(card => card.rowIndex !== rowIndex));
   const countInvalid = cards.length - validCards.length;
 
-  return <Modal open onClose={onClose} title={result ? 'Import complete' : preview ? 'Review imported flashcards' : 'Import Flashcards from Word, Excel or PDF'} size={preview ? '2xl' : 'md'}
+  return <Modal open onClose={onClose} title={result ? 'Import complete' : preview ? 'Edit imported flashcards' : 'Import Flashcards from Word, Excel or PDF'} size={preview ? '2xl' : 'md'}
     footer={result ? <Button onClick={onClose}>Done</Button> : <>
-      <Button variant="outline" onClick={preview ? () => { setPreview(null); setCards([]); setError(null); } : onClose} disabled={busy}>{preview ? 'Choose another file' : 'Cancel'}</Button>
-      {!preview ? <Button icon={<Icon.Scan className="h-4 w-4" />} onClick={() => void runPreview()} disabled={!file || busy} loading={busy}>Preview file</Button>
-        : <Button icon={<Icon.Check className="h-4 w-4" />} onClick={() => void save()} disabled={busy || validCards.length === 0 || cards.length > FLASHCARD_IMPORT_MAX_ROWS || (destination === 'new' && !newDeckTitle.trim())} loading={busy}>Save {validCards.length} valid cards</Button>}
+      <Button variant="outline" onClick={preview ? () => { setPreview(null); setCards([]); setFile(null); setError(null); } : onClose} disabled={busy}>{preview ? 'Choose another file' : 'Cancel'}</Button>
+      {preview && <Button icon={<Icon.Check className="h-4 w-4" />} onClick={() => void save()} disabled={busy || validCards.length === 0 || cards.length > FLASHCARD_IMPORT_MAX_ROWS || (destination === 'new' && !newDeckTitle.trim())} loading={busy}>Save {validCards.length} valid cards</Button>}
     </>}>
     {result ? <div className="space-y-3">
       <p className="text-sm text-content-secondary">Saved {result.createdCount} flashcards to {destination === 'new' ? `the new deck “${newDeckTitle.trim()}”` : `“${deckTitle}”`}.</p>
@@ -183,7 +182,7 @@ export function FlashcardImportModal({ deckId, deckTitle, onClose, onImported }:
       {file && <div className="flex items-center gap-3 rounded-[10px] bg-surface-alt p-3">
         <Icon.FileText className="h-5 w-5 flex-shrink-0 text-brand-ink" />
         <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium text-content-secondary">{file.name}</p><p className="text-2xs text-content-subtle">{(file.size / 1024 / 1024).toFixed(2)} MB</p></div>
-        <button type="button" onClick={event => { event.stopPropagation(); setFile(null); setFileError(null); }} disabled={busy} aria-label="Remove file" className="p-1 text-content-subtle hover:text-danger disabled:opacity-50"><Icon.X className="h-4 w-4" /></button>
+        {busy && <span className="flex items-center gap-2 text-xs text-content-soft"><span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full spinner" /> Reading file…</span>}
       </div>}
       {error && <Alert type="error" title="Import failed" message={error} />}
     </div> : <div className="space-y-4">
@@ -205,12 +204,12 @@ export function FlashcardImportModal({ deckId, deckTitle, onClose, onImported }:
       <div className="max-h-[45vh] overflow-auto rounded-lg border border-line">
         <table className="w-full min-w-[720px] border-collapse text-left text-sm">
           <thead className="sticky top-0 z-10 bg-surface-alt text-xs uppercase tracking-wide text-content-soft"><tr><th className="w-14 px-3 py-2">#</th><th className="px-3 py-2">Front</th><th className="px-3 py-2">Back</th><th className="w-24 px-3 py-2">Actions</th></tr></thead>
-          {/* Numbered 1…N in card order (rowIndex is the file row, counting the header). */}
-          <tbody>{cards.map((card, i) => <tr key={card.rowIndex} className={`border-t border-line-faint align-top ${!card.valid ? 'bg-danger-light/30' : card.duplicate ? 'bg-warning-light/30' : ''}`}>
-            <td className="px-3 py-3 text-xs text-content-soft">{i + 1}</td>
-            <td className="px-3 py-3"><textarea aria-label={`Front text, card ${i + 1}`} maxLength={FLASHCARD_TEXT_MAX} value={card.frontText} onChange={event => updateCard(card.rowIndex, 'frontText', event.target.value)} className="min-h-16 w-full resize-y rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-content focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/20" />
+          {/* rowIndex is the card's 1-based order in the file, so numbers stay put when a card is removed. */}
+          <tbody>{cards.map(card => <tr key={card.rowIndex} className={`border-t border-line-faint align-top ${!card.valid ? 'bg-danger-light/30' : card.duplicate ? 'bg-warning-light/30' : ''}`}>
+            <td className="px-3 py-3 text-xs text-content-soft">{card.rowIndex}</td>
+            <td className="px-3 py-3"><textarea aria-label={`Front text, card ${card.rowIndex}`} maxLength={FLASHCARD_TEXT_MAX} value={card.frontText} onChange={event => updateCard(card.rowIndex, 'frontText', event.target.value)} className="min-h-16 w-full resize-y rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-content focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/20" />
               {card.errors.some(e => e.code.startsWith('FRONT')) && <p className="mt-1 text-xs text-danger">{card.errors.filter(e => e.code.startsWith('FRONT')).map(e => e.message).join(' ')}</p>}</td>
-            <td className="px-3 py-3"><textarea aria-label={`Back text, card ${i + 1}`} maxLength={FLASHCARD_TEXT_MAX} value={card.backText} onChange={event => updateCard(card.rowIndex, 'backText', event.target.value)} className="min-h-16 w-full resize-y rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-content focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/20" />
+            <td className="px-3 py-3"><textarea aria-label={`Back text, card ${card.rowIndex}`} maxLength={FLASHCARD_TEXT_MAX} value={card.backText} onChange={event => updateCard(card.rowIndex, 'backText', event.target.value)} className="min-h-16 w-full resize-y rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-content focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/20" />
               {card.errors.some(e => e.code.startsWith('BACK')) && <p className="mt-1 text-xs text-danger">{card.errors.filter(e => e.code.startsWith('BACK')).map(e => e.message).join(' ')}</p>}</td>
             <td className="px-3 py-3"><div className="flex flex-col items-start gap-1">{!card.valid && <Badge variant="danger">Invalid</Badge>}{card.duplicate && <Badge variant="warning">Duplicate</Badge>}<button type="button" onClick={() => dropCard(card.rowIndex)} className="inline-flex items-center gap-1 text-xs text-danger hover:underline"><Icon.Trash className="h-3.5 w-3.5" /> Remove</button></div></td>
           </tr>)}</tbody>
