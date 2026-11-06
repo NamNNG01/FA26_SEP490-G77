@@ -15,13 +15,41 @@ import java.util.List;
 @AllArgsConstructor
 public class CourseProgressDto {
     private Long courseId;
+    private int progress;
+    private ItemCount questions;
+    private ItemCount exams;
+    private ItemCount decks;
+    private List<ModuleProgressDto> modules;
+    private BigDecimal averageScore;
+    private List<RecentAttemptItem> recentAttempts;
+
+    // Backward compatibility fields
     private long totalExams;
     private long completedExams;
     private long totalDecks;
     private long learnedDecks;
-    private BigDecimal averageScore;
-    private int progress;
-    private List<RecentAttemptItem> recentAttempts;
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class ItemCount {
+        private long done;
+        private long total;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class ModuleProgressDto {
+        private Long moduleId;
+        private String title;
+        private Integer progress;
+        private ItemCount questions;
+        private ItemCount exams;
+        private ItemCount decks;
+    }
 
     @Data
     @Builder

@@ -115,4 +115,14 @@ public interface DeckRepository extends JpaRepository<Deck, Long> {
             "AND (d.user.roleName <> 'STUDENT' OR d.user.userId = :userId OR d.visibility = 'PUBLIC') " +
             "GROUP BY d.module.moduleId")
     List<com.examprep.dto.IdCount> countCourseDecksByModule(@Param("courseId") Long courseId, @Param("userId") Long userId);
+
+    @Query("""
+    SELECT d.deckId, m.moduleId,
+           (SELECT COUNT(f) FROM Flashcard f WHERE f.deck = d),
+           (SELECT COUNT(p) FROM UserCardProgress p JOIN p.card f WHERE f.deck = d AND p.user.userId = :userId AND p.status = 'KNOWN')
+    FROM Deck d LEFT JOIN d.module m
+    WHERE d.course.courseId = :courseId
+      AND (d.user.roleName <> 'STUDENT' OR d.user.userId = :userId OR d.visibility = 'PUBLIC')
+    """)
+    List<Object[]> findCourseDeckStatsWithModule(@Param("courseId") Long courseId, @Param("userId") Long userId);
 }

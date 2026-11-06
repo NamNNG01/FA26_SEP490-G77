@@ -38,6 +38,7 @@ public class StudentCourseServiceImpl implements StudentCourseService {
     private final FlashcardRepository flashcardRepository;
     private final UserCardProgressRepository userCardProgressRepository;
     private final CategoryService categoryService;
+    private final StudentProgressService studentProgressService;
 
     @Override
     public Page<CourseCardDto> listCourses(Long categoryId, String keyword, String sort, int page, int size, Long userId) {
@@ -105,11 +106,16 @@ public class StudentCourseServiceImpl implements StudentCourseService {
     }
 
     @Override
+    @Transactional
     public Page<MyCourseDto> listMyCourses(String status, int page, int size, Long userId) {
         if (status != null && !status.equals("ACTIVE") && !status.equals("COMPLETED")) {
             throw new BadRequestException("Invalid enrollment status");
         }
         Pageable pageable = createPageable(page, size, "newest", "enrolledAt");
+        Page<MyCourseDto> courses = enrollmentRepository.findMyCourses(userId, status, pageable);
+        for (MyCourseDto course : courses.getContent()) {
+            studentProgressService.liveProgressPercent(userId, course.courseId());
+        }
         return enrollmentRepository.findMyCourses(userId, status, pageable);
     }
 

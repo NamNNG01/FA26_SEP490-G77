@@ -126,7 +126,7 @@ class StudentCourseApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.content[0].courseId").value(publishedCourse.getCourseId()))
-                .andExpect(jsonPath("$.data.content[0].progress").value(25));
+                .andExpect(jsonPath("$.data.content[0].progress").value(0));
     }
 
     @Test
