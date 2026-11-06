@@ -82,8 +82,8 @@ const chipTone = (selected: boolean) =>
   selected ? 'border-primary bg-primary-light text-primary' : 'border-line text-content-secondary hover:bg-surface-hover';
 
 /**
- * Picks a practice mode and a session size for one module (or a course's General pool), then starts
- * the session (MP-02) and opens it on the take-exam screen. A session already open on the module is resumed instead.
+ * Picks a practice mode for one module (or a course's General pool) — only Targeted practice also picks a
+ * session size, every other mode takes all its questions — then starts the session (MP-02) and opens it on the take-exam screen. A session already open on the module is resumed instead.
  * `overview` is optional: without it nothing is disabled and no session in progress is shown.
  */
 export function ModulePracticeModal({
@@ -128,7 +128,7 @@ export function ModulePracticeModal({
     setStarting(true);
     setError(null);
     try {
-      const sessionId = active ? active.sessionId : (await modulePracticeService.startSession(scope, { questionCount: size, mode, difficulty, questionTypes })).sessionId;
+      const sessionId = active ? active.sessionId : (await modulePracticeService.startSession(scope, { questionCount: mode === 'TARGET' ? size : null, mode, difficulty, questionTypes })).sessionId;
       navigate(studentModulePracticePath(sessionId));
     } catch (err) {
       setError(getApiErrorMessage(err, 'Could not start the practice session.'));
@@ -232,31 +232,26 @@ export function ModulePracticeModal({
                     ))}
                   </div>
                 </div>
+                {/* Only Targeted practice picks a size; every other mode takes all its questions. */}
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-content">Number of questions</p>
+                  <div role="radiogroup" aria-label="Number of questions" className="flex flex-wrap gap-2">
+                    {PRACTICE_SIZES.map(n => (
+                      <button
+                        key={n ?? 'all'}
+                        type="button"
+                        role="radio"
+                        aria-checked={size === n}
+                        onClick={() => setSize(n)}
+                        className={`${CHIP} min-w-16 ${chipTone(size === n)}`}
+                      >
+                        {n ?? `All${overview ? ` (${overview.totalQuestions})` : ''}`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             )}
-
-            <div className="space-y-2">
-              <p className="text-sm font-medium text-content">Number of questions</p>
-              <div role="radiogroup" aria-label="Number of questions" className="flex flex-wrap gap-2">
-                {PRACTICE_SIZES.map(n => {
-                  const selected = size === n;
-                  return (
-                    <button
-                      key={n ?? 'all'}
-                      type="button"
-                      role="radio"
-                      aria-checked={selected}
-                      onClick={() => setSize(n)}
-                      className={`min-w-16 px-4 py-2 rounded-[8px] border text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-primary ${
-                        selected ? 'border-primary bg-primary-light text-primary' : 'border-line text-content-secondary hover:bg-surface-hover'
-                      }`}
-                    >
-                      {n ?? `All${overview ? ` (${overview.totalQuestions})` : ''}`}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
           </>
         )}
 

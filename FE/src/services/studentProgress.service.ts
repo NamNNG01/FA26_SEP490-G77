@@ -33,7 +33,6 @@ export interface SavedQuestion {
   questionType: string;
   options: { optionId: number; optionText: string }[];
   correctOptionIds: number[];
-  lastWrongChoice: string | null;
   wrongCount: number;
   firstWrongAt: string | null;
   lastPracticedAt: string | null;
@@ -78,11 +77,6 @@ export const studentProgressService = {
     page?: number; size?: number; type?: 'all' | 'wrong' | 'bookmarked'; examType?: 'QUIZ' | 'EXAM'; courseId?: number; search?: string;
   }) {
     const res = await api.get<ApiResponse<StudentPage<SavedQuestion>>>(`/student/questions/saved?${query(params)}`);
-    return res.data;
-  },
-
-  async getWeakSpots(limit = 5) {
-    const res = await api.get<ApiResponse<SavedQuestion[]>>(`/student/questions/weak-spots?${query({ limit })}`);
     return res.data;
   },
 

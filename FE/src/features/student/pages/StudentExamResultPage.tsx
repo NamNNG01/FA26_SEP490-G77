@@ -9,7 +9,7 @@ import { Select } from '@/components/ui/Select';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Spinner } from '@/components/ui/Spinner';
 import { Icon } from '@/assets/icons';
-import { ROUTES, studentExamPath, studentTakeExamPath, studentTakePracticePath } from '@/app/routes';
+import { ROUTES, studentExamPath, studentResumeAttemptPath, studentTakeExamPath, studentTakePracticePath } from '@/app/routes';
 import { getApiErrorMessage } from '@/utils/apiError';
 import {
   RUBRIC_TYPES,
@@ -58,11 +58,12 @@ const OUTCOME: Record<Outcome, { label: string; badge: 'success' | 'danger' | 'i
   pending: { label: 'Not graded', badge: 'warning', icon: <Icon.Clock className="w-5 h-5 text-warning" /> },
 };
 
-function outcomeOf(q: ResultQuestion): Outcome {
+/** `scoreOnly` (an exam, not a practice): every answer gets its points, never a right / wrong verdict. */
+function outcomeOf(q: ResultQuestion, scoreOnly: boolean): Outcome {
   if (isGradingOpen(q)) return 'pending';
   if (!isAnswered(q.yourResponse)) return 'unanswered';
   // Essay / code / diagram answers carry rubric points, not a right/wrong verdict.
-  if (RUBRIC_TYPES.has(q.questionType)) return 'graded';
+  if (scoreOnly || RUBRIC_TYPES.has(q.questionType)) return 'graded';
   if (q.isCorrect != null) return q.isCorrect ? 'correct' : 'incorrect';
   if (q.scoreEarned != null && q.maxPoints != null) return Number(q.scoreEarned) >= Number(q.maxPoints) ? 'correct' : 'incorrect';
   return 'incorrect';
@@ -136,7 +137,7 @@ function num(v: number | null | undefined): string {
  * Attempt review (SA-05) — reached from My Exams and right after submitting.
  * A header with a dropdown of my submitted attempts of this exam
  * (SA-06, with their date), the score (per module when the exam spans
- * several), "Re-attempt" and "Back"; below it two columns:
+ * several), "Retake" and "Back"; below it two columns:
  *  - left: one question at a time (`?q=` 1-based, so a refresh or a shared
  *    link keeps it) with its outcome, my answer, the correct answer and rubric
  *    feedback; Previous / Next and ← → move through it. Only the explanation
@@ -149,7 +150,9 @@ function num(v: number | null | undefined): string {
  * Essay / code / diagram answers: the attempt lands here SUBMITTED with its
  * rubric answers ungraded. "Grade with AI" asks the AI (SE-02) and opens a
  * "grading" modal, polling until every answer is scored.
- * `&practice=1` (a practice exam): no score anywhere — only right / wrong; Re-attempt
+ * An exam shows only scores: no right / wrong, no answer key, no explanation, no "Retry wrong questions".
+ * `&practice=1` (a practice exam): a quiz shows right / wrong instead of the score, an essay / diagram
+ * paper only its score; Retake
  * reopens it in practice mode and Back leads to Exam History (it has no exam page).
  */
 export function StudentExamResultPage() {
@@ -215,6 +218,36 @@ export function StudentExamResultPage() {
 
   useArrowKeyNav(navRef);
 
+  /** An attempt of this exam saved and left unfinished (EX-01 + SA-02): offered back with Continue. */
+  const [unfinished, setUnfinished] = useState<UnfinishedAttempt | null>(null);
+  /** No submitted attempt at all: the page then holds only the unfinished one, if any. */
+  const [noSubmitted, setNoSubmitted] = useState(false);
+  const [unfinishedReload, setUnfinishedReload] = useState(0);
+  useEffect(() => {
+    if (!examId) return;
+    let cancelled = false;
+    studentAttemptService
+      .getExamDetail(examId)
+      .then(async detail => {
+        const id = detail.actions?.activeAttemptId;
+        if (id == null) return null;
+        const s = await studentAttemptService.get(id);
+        if (s.status !== 'IN_PROGRESS') return null;
+        const answered = (s.answers ?? []).filter(a => isAnswered(a.response)).length;
+        return { attemptId: s.attemptId, answered, total: s.questions.length };
+      })
+      .then(u => {
+        if (!cancelled) setUnfinished(u);
+      })
+      // Not knowing just hides the banner; Retake still resumes it (SA-01 answers with the active attempt).
+      .catch(() => {
+        if (!cancelled) setUnfinished(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [examId, unfinishedReload]);
+
   useEffect(() => {
     if (!examId) return;
     let cancelled = false;
@@ -224,12 +257,10 @@ export function StudentExamResultPage() {
         if (cancelled) return;
         const submitted = items.filter(a => a.status !== 'IN_PROGRESS');
         setAttempts(submitted);
+        setNoSubmitted(submitted.length === 0);
         if (!attemptId) {
           if (submitted.length > 0) setSearchParams({ examId, attemptId: String(submitted[0].attemptId), ...practiceParam }, { replace: true });
-          else {
-            setError('You have no submitted attempt for this exam yet.');
-            setLoading(false);
-          }
+          else setLoading(false);
         }
       })
       .catch(err => {
@@ -313,7 +344,7 @@ export function StudentExamResultPage() {
     };
   }, [attemptId, reload]);
 
-  const outcomes = useMemo(() => (result?.questions ?? []).map(outcomeOf), [result]);
+  const outcomes = useMemo(() => (result?.questions ?? []).map(x => outcomeOf(x, !practice)), [result, practice]);
   const counts = useMemo(() => {
     const c: Record<Outcome, number> = { correct: 0, incorrect: 0, graded: 0, unanswered: 0, pending: 0 };
     outcomes.forEach(o => c[o]++);
@@ -452,6 +483,36 @@ export function StudentExamResultPage() {
     );
   }
 
+  const resumePath = (id: number) => `${studentResumeAttemptPath(id)}${practice ? '&practice=1' : ''}`;
+  const unfinishedBanner = unfinished && examId && (
+    <UnfinishedAttemptBanner
+      attempt={unfinished}
+      onContinue={() => navigate(resumePath(unfinished.attemptId))}
+      onDiscarded={() => {
+        // Nothing left to show here: back to Exam History.
+        if (noSubmitted) navigate(practice ? practiceHistoryPath : ROUTES.studentExams, { replace: true });
+        else setUnfinishedReload(r => r + 1);
+      }}
+    />
+  );
+
+  // Only an unfinished attempt so far: the banner is all there is.
+  if (!attemptId && noSubmitted && !error) {
+    return (
+      <div className={`${STUDENT_PAGE_CLASS} space-y-6`}>
+        {breadcrumb}
+        {unfinishedBanner}
+        <div className="card">
+          <EmptyState
+            icon={<Icon.FileText className="w-7 h-7" />}
+            title="No submitted attempt yet"
+            message={unfinished ? 'Finish your attempt to see its result here.' : 'You have no submitted attempt for this exam yet.'}
+          />
+        </div>
+      </div>
+    );
+  }
+
   if (error || !result) {
     return (
       <div className={`${STUDENT_PAGE_CLASS} space-y-6`}>
@@ -500,6 +561,9 @@ export function StudentExamResultPage() {
   };
 
   const modules = moduleScores(result.questions, outcomes);
+  // A practice essay / diagram paper has no right / wrong to count: it shows its score like an exam.
+  const rubricOnly = total > 0 && result.questions.every(x => RUBRIC_TYPES.has(x.questionType));
+  const practiceCounts = practice && !rubricOnly;
   const q = result.questions[current];
   const canSave = SAVABLE_ATTEMPT_STATUSES.has(result.status);
   const savableIds = canSave ? result.questions.filter(x => SAVABLE_QUESTION_TYPES.has(x.questionType)).map(x => x.questionId) : [];
@@ -511,11 +575,13 @@ export function StudentExamResultPage() {
   return (
     <div className={`${STUDENT_PAGE_CLASS} space-y-[clamp(1.25rem,2.5vw,1.75rem)]`}>
       {breadcrumb}
+      {unfinishedBanner}
 
       {/* The score is the headline: a full-width header above the question and its navigator. */}
       <ScoreCard
             result={result}
             practice={practice}
+            showCounts={practiceCounts}
             counts={counts}
             modules={modules}
             onOpenModule={goTo}
@@ -533,7 +599,7 @@ export function StudentExamResultPage() {
                     value: String(a.attemptId),
                     // Written answers still ungraded: a "0/100" would read as a real score.
                     label: `#${attempts.length - i} · ${formatDateTime(a.submittedAt ?? a.startTime)}${
-                      practice ? '' : ` · ${Number(a.pendingPoints ?? 0) > 0 ? 'Not graded' : `${num(a.totalScore)}/${num(a.maxScore)}`}`
+                      practiceCounts ? '' : ` ·${Number(a.pendingPoints ?? 0) > 0 ? 'Not graded' : `${num(a.totalScore)}/${num(a.maxScore)}`}`
                     }`,
                   }))}
                   value={String(result.attemptId)}
@@ -542,8 +608,10 @@ export function StudentExamResultPage() {
               ) : undefined
             }
             onSaveAll={savableIds.length > 0 ? () => setSaveQuestions(savableIds) : undefined}
-            onRetryWrong={canSave && hasWrong ? () => setRetrying(true) : undefined}
-            onReattempt={examId ? () => navigate(practice ? studentTakePracticePath(examId) : studentTakeExamPath(examId)) : undefined}
+            // An exam never tells which answers were wrong, so it has no "Retry wrong questions".
+            onRetryWrong={practice && canSave && hasWrong ? () => setRetrying(true) : undefined}
+            // While an attempt is unfinished SA-01 cannot open a new one: the banner's Continue replaces Retake.
+            onRetake={examId && !unfinished ? () => navigate(practice ? studentTakePracticePath(examId) : studentTakeExamPath(examId)) : undefined}
             onBack={
               practice
                 ? () => navigate(practiceHistoryPath)
@@ -722,6 +790,7 @@ function GradingScreen({
 function ScoreCard({
   result,
   practice,
+  showCounts,
   counts,
   modules,
   onOpenModule,
@@ -733,12 +802,14 @@ function ScoreCard({
   onRequestGrading,
   onSaveAll,
   onRetryWrong,
-  onReattempt,
+  onRetake,
   onBack,
 }: {
   result: AttemptResult;
-  /** Practice: right / wrong counts instead of the score, no module breakdown. */
+  /** Practice: no module breakdown, Back leads to Exam History. */
   practice: boolean;
+  /** Practice quiz: right / wrong counts instead of the score. */
+  showCounts: boolean;
   counts: Record<Outcome, number>;
   /** Score per module; empty hides the breakdown. */
   modules: ModuleScore[];
@@ -758,7 +829,7 @@ function ScoreCard({
   onSaveAll?: () => void;
   /** Answers the wrong questions again (PQ-04); absent when there are none or the attempt isn't submitted. */
   onRetryWrong?: () => void;
-  onReattempt?: () => void;
+  onRetake?: () => void;
   onBack: () => void;
 }) {
   const max = result.maxScore != null ? Number(result.maxScore) : null;
@@ -781,8 +852,8 @@ function ScoreCard({
         </div>
 
         {/* No score until the written answers are graded — "0 / 100" would read as a real result. */}
-        {showScore && practice ? (
-          // Practice has no score: how many were right, wrong and left out.
+        {showScore && showCounts ? (
+          // Practice quiz has no score: how many were right, wrong and left out.
           <dl className="grid grid-cols-3 gap-2 text-center md:min-w-[18rem]">
             {[
               { label: 'Correct', value: counts.correct, tone: 'text-success' },
@@ -796,7 +867,7 @@ function ScoreCard({
             ))}
           </dl>
         ) : showScore ? (
-          // As tall as the Re-attempt / Back pair beside it (~80px): label, one score line, bar.
+          // As tall as the Retake / Back pair beside it (~80px): label, one score line, bar.
           <div className="text-center space-y-1.5 md:min-w-[16rem]">
             <p className="text-xs font-semibold text-content-subtle uppercase tracking-wide leading-4">Your score</p>
             <p className={`flex flex-wrap items-baseline justify-center gap-x-1.5 leading-none ${tone}`}>
@@ -826,9 +897,9 @@ function ScoreCard({
         )}
 
         <div className="flex flex-wrap md:flex-col gap-2 md:justify-self-end">
-          {onReattempt && (
-            <Button icon={<Icon.RefreshCw className="w-4 h-4" />} onClick={onReattempt}>
-              Re-attempt
+          {onRetake && (
+            <Button icon={<Icon.RefreshCw className="w-4 h-4" />} onClick={onRetake}>
+              Retake
             </Button>
           )}
           {onRetryWrong && (
@@ -983,7 +1054,7 @@ function ResultQuestionCard({
         <div className="@container border-t border-line px-4 py-4">
           <div className="grid gap-4 @3xl:grid-cols-[minmax(0,1fr)_minmax(15rem,20rem)] @3xl:items-start">
           <div className="min-w-0">
-            <AnswerReview question={q} />
+            <AnswerReview question={q} hideVerdict={!practice} />
           </div>
           <div className="@3xl:sticky @3xl:top-[85px] min-w-0">
             <RubricGrade question={q} outcome={outcome} />
@@ -993,9 +1064,10 @@ function ResultQuestionCard({
       ) : (
       /* Answers are always shown; only the explanation is collapsible. */
       <div className="border-t border-line px-4 py-4 space-y-4">
-        <AnswerReview question={q} />
+        <AnswerReview question={q} hideVerdict={!practice} />
         {q.gradingError && <p className="text-sm text-danger">Grading failed: {q.gradingError}</p>}
-        {hasExplanation(q) && (
+        {/* An exam shows only the score: the explanation would give the answer away. */}
+        {practice && hasExplanation(q) && (
           <ExplanationBox
             question={q}
             state={explanation}
@@ -1152,4 +1224,82 @@ function ExplanationBox({
 function truncate(text: string, max: number): string {
   const line = text.replace(/\s+/g, ' ').trim();
   return line.length > max ? `${line.slice(0, max - 1)}…` : line;
+}
+
+interface UnfinishedAttempt {
+  attemptId: number;
+  answered: number;
+  total: number;
+}
+
+/** An attempt saved with "Save and exit": Continue reopens it, Discard deletes it (SA-07) after a confirm. */
+function UnfinishedAttemptBanner({
+  attempt,
+  onContinue,
+  onDiscarded,
+}: {
+  attempt: UnfinishedAttempt;
+  onContinue: () => void;
+  onDiscarded: () => void;
+}) {
+  const [confirming, setConfirming] = useState(false);
+  const [discarding, setDiscarding] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const discard = async () => {
+    setDiscarding(true);
+    setError(null);
+    try {
+      await studentAttemptService.deleteAttempt(attempt.attemptId);
+      setConfirming(false);
+      onDiscarded();
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Failed to discard this attempt. Please try again.'));
+    } finally {
+      setDiscarding(false);
+    }
+  };
+
+  return (
+    <div role="status" className="card flex flex-wrap items-center gap-3 border-warning-line bg-warning-light px-4 py-3">
+      <Icon.Clock className="w-5 h-5 flex-shrink-0 text-warning" />
+      <div className="flex-1 min-w-[12rem]">
+        <p className="text-sm font-semibold text-content">You have an unfinished attempt</p>
+        <p className="text-xs text-content-soft">
+          {attempt.answered} of {attempt.total} question{attempt.total === 1 ? '' : 's'} answered. Continue where you left off.
+        </p>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <Button size="sm" variant="outline" disabled={discarding} onClick={() => setConfirming(true)}>
+          Discard
+        </Button>
+        <Button size="sm" iconRight={<Icon.ChevronRight className="w-4 h-4" />} onClick={onContinue}>
+          Continue
+        </Button>
+      </div>
+
+      <Modal
+        open={confirming}
+        onClose={() => !discarding && setConfirming(false)}
+        title="Discard this attempt?"
+        size="sm"
+        footer={
+          <>
+            <Button variant="outline" disabled={discarding} onClick={() => setConfirming(false)}>
+              Keep it
+            </Button>
+            <Button variant="danger" loading={discarding} disabled={discarding} onClick={discard}>
+              Discard
+            </Button>
+          </>
+        }
+      >
+        <p className="text-base text-content-secondary leading-relaxed">
+          The attempt and its {attempt.answered} answer{attempt.answered === 1 ? '' : 's'} are deleted — it will not count in
+          your history. This cannot be undone.
+        </p>
+        {error && <p className="mt-3 text-sm text-danger">{error}</p>}
+      </Modal>
+    </div>
+  );
 }

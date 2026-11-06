@@ -22,9 +22,11 @@ public interface DeckRepository extends JpaRepository<Deck, Long> {
             "OR c.manager.userId = :managerId " +
             "OR EXISTS (SELECT cm.courseManagerId FROM CourseManager cm WHERE cm.course = c AND cm.user.userId = :managerId)) " +
             "AND (:courseId IS NULL OR c.courseId = :courseId) " +
+            "AND (:moduleId IS NULL OR d.module.moduleId = :moduleId) " +
             "AND (:isPublic IS NULL OR d.isPublic = :isPublic) AND LOWER(d.title) LIKE :search ESCAPE '!'")
     Page<Deck> findManagedDecks(@Param("managerId") Long managerId, @Param("courseId") Long courseId,
-                               @Param("isPublic") Boolean isPublic, @Param("search") String search, Pageable pageable);
+                               @Param("moduleId") Long moduleId, @Param("isPublic") Boolean isPublic,
+                               @Param("search") String search, Pageable pageable);
 
     @EntityGraph(attributePaths = {"course", "user", "module"})
     @Query(value = "SELECT d FROM Deck d JOIN d.course c WHERE d.course IS NOT NULL AND d.submittedAt IS NOT NULL " +

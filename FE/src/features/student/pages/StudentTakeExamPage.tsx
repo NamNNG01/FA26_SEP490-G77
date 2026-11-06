@@ -5,9 +5,9 @@ import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { Spinner } from '@/components/ui/Spinner';
 import { TimerDisplay } from '@/components/common/TimerDisplay';
-import { PALETTE_RESULT_TONE, QuestionPalette } from '@/components/common/QuestionPalette';
+import { QuestionPalette } from '@/components/common/QuestionPalette';
 import { Icon } from '@/assets/icons';
-import { ROUTES, studentExamPath, studentExamResultPath } from '@/app/routes';
+import { ROUTES, studentExamAttemptsPath, studentExamPath, studentExamResultPath } from '@/app/routes';
 import { getApiErrorMessage } from '@/utils/apiError';
 import { useToast } from '@/components/ui/ToastHost';
 import {
@@ -47,9 +47,10 @@ type SaveState = 'saved' | 'dirty' | 'saving' | 'error';
  *  - Answers are kept locally and saved as drafts (SA-03) every few seconds,
  *    when moving between questions, and before leaving.
  *  - Submit asks for confirmation, flushes the drafts and submits (SA-04).
- *  - Cancel asks once, then deletes the attempt and its drafts (SA-07) and
- *    leaves — nothing of it is kept. The deadline is the server's: when it passes,
- *    the screen submits on its own (and the BE auto-submits if the tab is gone).
+ *  - Cancel offers "Save and exit" (drafts flushed, the attempt stays IN_PROGRESS and
+ *    SA-01 resumes it) or "Discard" (the attempt and its drafts are deleted, SA-07).
+ *    The deadline is the server's: when it passes, the screen submits on its own
+ *    (and the BE auto-submits if the tab is gone).
  *  - Only questions made entirely of essay / code / diagram get the "Essay"
  *    layout (wider, taller editor); every other paper is a quiz.
  *  - CODE questions get a 20/80 workspace (question | VS Code–style editor with Run, CD-04).
@@ -59,7 +60,7 @@ type SaveState = 'saved' | 'dirty' | 'saving' | 'error';
  *    Single choice / true-false are checked on the pick; multiple choice, matching,
  *    ordering and fill-blank have a check button that shows how far the answer is.
  *    Keys: 1–9 / A–Z pick an option, Enter checks or goes to the next question.
- *    The checks are kept per attempt in sessionStorage so a reload keeps them.
+ *    The checks are kept per attempt in localStorage so a reload or a later resume keeps them.
  *    Practice is untimed: no timer, no auto-submit, and the result shows no score.
  *    Its Submit is called Finish and needs no confirmation (it still closes the attempt with SA-04).
  *  - `?practiceSessionId=` runs a Module Practice session instead (MP-03…MP-07) — same screen,
@@ -94,7 +95,7 @@ function ExamAttemptScreen() {
   const [remaining, setRemaining] = useState<number | null>(null);
 
   const [confirm, setConfirm] = useState<'submit' | 'cancel' | null>(null);
-  const [busy, setBusy] = useState<'submit' | 'cancel' | null>(null);
+  const [busy, setBusy] = useState<'submit' | 'save' | 'cancel' | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [checks, setChecks] = useState<Record<number, AnswerCheck>>({});
   const [checking, setChecking] = useState<number | null>(null);
@@ -282,6 +283,7 @@ function ExamAttemptScreen() {
         }
         await studentAttemptService.submit(session.attemptId);
         finishedRef.current = true;
+        clearChecks(session.attemptId);
         if (contestId != null || session.examMode === 'CONTEST') {
           toast.info('You can take this contest again, but your result will not change.', { title: 'Contest submitted', duration: 10_000 });
         }
@@ -296,10 +298,48 @@ function ExamAttemptScreen() {
     [session, flush, navigate, codeMeta, codeLanguages, contestId, toast, practice],
   );
 
-  /** Where Cancel leads: a practice exam has no course exam page — it is listed in Exam History. */
-  const exitPath = (examId: number) => (practice ? `${ROUTES.studentExams}?type=PRACTICE` : studentExamPath(examId));
+  /**
+   * Where leaving the attempt leads. A course exam has its own page, a contest its contest page; every other
+   * kind (practice exam, material quiz) has none, so its Attempts screen — which offers Continue — instead.
+   */
+  const mode = session?.examMode ?? (practice ? 'PRACTICE' : 'EXAM');
+  const isContest = contestId != null || mode === 'CONTEST';
+  const historyPath = `${ROUTES.studentExams}${mode === 'EXAM' || isContest ? '' : `?type=${practice ? 'PRACTICE' : mode}`}`;
+  const exitPath = (examId: number) =>
+    isContest
+      ? contestId != null
+        ? `${ROUTES.studentContests}/${contestId}`
+        : ROUTES.studentContests
+      : mode === 'EXAM'
+        ? studentExamPath(examId)
+        : studentExamAttemptsPath(examId, practice);
+  /** After a discard: the Attempts screen only while the exam still has a submitted attempt to show. */
+  const exitAfterDiscard = async (examId: number) => {
+    if (isContest || mode === 'EXAM') return exitPath(examId);
+    const left = await studentAttemptService.getAllHistory(examId).catch(() => []);
+    return left.some(a => a.status !== 'IN_PROGRESS') ? exitPath(examId) : historyPath;
+  };
 
-  /** Cancel: the attempt is thrown away (SA-07), never kept to continue later. */
+  /**
+   * Cancel → "Save and exit": the drafts are flushed and the attempt stays IN_PROGRESS — starting the exam
+   * again (SA-01) resumes it. An exam still runs on the server clock and is auto-submitted at its deadline;
+   * a practice exam is untimed and waits until the student comes back.
+   */
+  const saveAndExit = async () => {
+    if (!session) return;
+    setBusy('save');
+    setActionError(null);
+    try {
+      await flush();
+      finishedRef.current = true;
+      navigate(exitPath(session.examId), { replace: true });
+    } catch (err) {
+      setActionError(getApiErrorMessage(err, 'Failed to save your answers. Please try again.'));
+      setBusy(null);
+    }
+  };
+
+  /** Cancel → "Discard": the attempt and its drafts are deleted (SA-07). */
   const cancelAttempt = async () => {
     if (!session) return;
     setBusy('cancel');
@@ -308,7 +348,8 @@ function ExamAttemptScreen() {
     finishedRef.current = true;
     try {
       await studentAttemptService.deleteAttempt(session.attemptId);
-      navigate(exitPath(session.examId), { replace: true });
+      clearChecks(session.attemptId);
+      navigate(await exitAfterDiscard(session.examId), { replace: true });
     } catch (err) {
       finishedRef.current = false;
       setActionError(getApiErrorMessage(err, 'Failed to cancel this attempt. Please try again.'));
@@ -417,10 +458,6 @@ function ExamAttemptScreen() {
   const checkAnswer = async () => {
     if (checking != null || check) return;
     const questionId = q.questionId;
-    // An untouched ordering is checked as shown: store that order as the answer first.
-    if (q.questionType === 'ORDERING' && !answersRef.current[questionId]?.orderedOptionIds?.length) {
-      setAnswer(questionId, { orderedOptionIds: (q.options ?? []).map(o => o.optionId) });
-    }
     setChecking(questionId);
     setActionError(null);
     try {
@@ -498,7 +535,7 @@ function ExamAttemptScreen() {
             size="sm"
             variant="outline"
             disabled={busy != null}
-            loading={busy === 'cancel'}
+            loading={busy === 'cancel' || busy === 'save'}
             onClick={() => setConfirm('cancel')}
           >
             Cancel
@@ -641,28 +678,6 @@ function ExamAttemptScreen() {
             results={practice ? results : undefined}
             onSelect={n => goTo(n - 1)}
           />
-          <div className="mt-4 space-y-2 pt-4 border-t border-line-soft">
-            {[
-              ...(practice
-                ? [
-                    { swatch: PALETTE_RESULT_TONE.correct, label: 'Correct', count: countOutcome(results, 'correct') },
-                    { swatch: PALETTE_RESULT_TONE.partial, label: 'Partly correct', count: countOutcome(results, 'partial') },
-                    { swatch: PALETTE_RESULT_TONE.wrong, label: 'Wrong', count: countOutcome(results, 'wrong') },
-                  ]
-                : []),
-              { swatch: 'bg-success-light border-success-line', label: practice ? 'Answered, not checked' : 'Answered', count: practice ? answeredSet.size - results.size : answeredSet.size },
-              { swatch: 'bg-warning-light border-warning-line', label: 'Flagged', count: flagged.size },
-              { swatch: 'bg-surface-alt border-line', label: 'Unanswered', count: unanswered },
-            ].map(s => (
-              <div key={s.label} className="flex items-center justify-between text-xs">
-                <div className="flex items-center gap-2">
-                  <div className={`w-4 h-4 rounded-[4px] border ${s.swatch}`} />
-                  <span className="text-content-soft">{s.label}</span>
-                </div>
-                <span className="font-semibold text-content-secondary">{s.count}</span>
-              </div>
-            ))}
-          </div>
         </aside>
       </div>
 
@@ -720,17 +735,31 @@ function ExamAttemptScreen() {
         onClose={() => busy == null && setConfirm(null)}
         title="Exit this attempt?"
         size="sm"
-        // Only one way out: closing the dialog (×, backdrop) keeps working.
+        // Closing the dialog (×, backdrop) keeps working.
         footer={
-          <Button variant="danger" loading={busy === 'cancel'} disabled={busy != null} onClick={cancelAttempt}>
-            Exit
-          </Button>
+          <>
+            <Button variant="danger" loading={busy === 'cancel'} disabled={busy != null} onClick={cancelAttempt}>
+              Discard
+            </Button>
+            <Button loading={busy === 'save'} disabled={busy != null} onClick={saveAndExit}>
+              Save and exit
+            </Button>
+          </>
         }
       >
-        <p className="text-base text-content-secondary leading-relaxed">
-          Exiting discards this attempt and all {answeredSet.size} answer{answeredSet.size === 1 ? '' : 's'} in it — nothing is
-          saved and it will not count in your history. This cannot be undone.
-        </p>
+        <div className="space-y-2 text-base text-content-secondary leading-relaxed">
+          <p>
+            <span className="font-semibold text-content">Save and exit</span> keeps your {answeredSet.size} answer
+            {answeredSet.size === 1 ? '' : 's'} so you can continue later.{' '}
+            {practice
+              ? 'This practice exam has no time limit — it stays open until you come back.'
+              : 'The timer keeps running: when time is up, the exam is submitted automatically.'}
+          </p>
+          <p>
+            <span className="font-semibold text-content">Discard</span> deletes this attempt and its answers — it will not count
+            in your history. This cannot be undone.
+          </p>
+        </div>
         {actionError && <p className="mt-3 text-sm text-danger">{actionError}</p>}
       </Modal>
     </div>
@@ -739,9 +768,10 @@ function ExamAttemptScreen() {
 
 const CHECKS_PREFIX = 'practice-checks:';
 
+// localStorage, not sessionStorage: a saved practice attempt is resumed later, often in another tab.
 function loadChecks(attemptId: number): Record<number, AnswerCheck> {
   try {
-    const raw = sessionStorage.getItem(CHECKS_PREFIX + attemptId);
+    const raw = localStorage.getItem(CHECKS_PREFIX + attemptId);
     return raw ? (JSON.parse(raw) as Record<number, AnswerCheck>) : {};
   } catch {
     return {};
@@ -750,21 +780,22 @@ function loadChecks(attemptId: number): Record<number, AnswerCheck> {
 
 function saveChecks(attemptId: number, checks: Record<number, AnswerCheck>) {
   try {
-    sessionStorage.setItem(CHECKS_PREFIX + attemptId, JSON.stringify(checks));
+    localStorage.setItem(CHECKS_PREFIX + attemptId, JSON.stringify(checks));
   } catch {
     // Storage blocked: the checks still hold until a reload.
   }
 }
 
-const CHOICE_TYPES: ReadonlySet<string> = new Set(['SINGLE_CHOICE', 'MULTIPLE_CHOICE', 'TRUE_FALSE']);
-
-function countOutcome(results: Map<number, CheckOutcome>, outcome: CheckOutcome): number {
-  let n = 0;
-  results.forEach(o => {
-    if (o === outcome) n++;
-  });
-  return n;
+/** The attempt is closed (submitted or discarded): its checks are no longer needed. */
+function clearChecks(attemptId: number) {
+  try {
+    localStorage.removeItem(CHECKS_PREFIX + attemptId);
+  } catch {
+    // Storage blocked: nothing was stored.
+  }
 }
+
+const CHOICE_TYPES: ReadonlySet<string> = new Set(['SINGLE_CHOICE', 'MULTIPLE_CHOICE', 'TRUE_FALSE']);
 
 function FullScreenMessage({ children }: { children: React.ReactNode }) {
   return <div className="h-[100dvh] flex flex-col items-center justify-center gap-4 bg-surface-alt px-6">{children}</div>;

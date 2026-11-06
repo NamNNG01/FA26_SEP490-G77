@@ -374,13 +374,7 @@ export function ModulePracticeRunner({ sessionId }: { sessionId: string }) {
           icon={<Icon.CheckCircle className="w-4 h-4" />}
           loading={busy}
           disabled={busy || !progress?.ready}
-          onClick={() => {
-            // An untouched ordering is submitted as shown.
-            if (summary.questionType === 'ORDERING' && !value?.orderedOptionIds?.length) {
-              return void submitAnswer({ orderedOptionIds: (question.options ?? []).map(o => o.optionId) });
-            }
-            void submitAnswer(value);
-          }}
+          onClick={() => void submitAnswer(value)}
         >
           {isRubric ? 'Submit for AI grading' : (progress?.label ?? 'Check answer')}
         </Button>

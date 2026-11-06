@@ -43,7 +43,6 @@ const SESSION_EXAM_TYPES = [
 export function StudentQuestionNotebookPage() {
   const navigate = useNavigate();
   const [filter, setFilter] = useState<"all" | "wrong" | "bookmarked">("all");
-  const [weakOnly, setWeakOnly] = useState(false);
   const [search, setSearch] = useState("");
   const [examType, setExamType] = useState<"" | "QUIZ" | "EXAM">("");
   const [courseId, setCourseId] = useState("");
@@ -82,25 +81,14 @@ export function StudentQuestionNotebookPage() {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    const request = weakOnly
-      ? studentProgressService.getWeakSpots(20).then((items) => ({
-          content: items,
-          totalElements: items.length,
-          totalPages: 1,
-          page: 0,
-          size: items.length,
-          first: true,
-          last: true,
-        }))
-      : studentProgressService.getSavedQuestions({
-          page,
-          size: SIZE,
-          type: filter,
-          search: search.trim() || undefined,
-          examType: examType || undefined,
-          courseId: courseId ? Number(courseId) : undefined,
-        });
-    request
+    studentProgressService.getSavedQuestions({
+      page,
+      size: SIZE,
+      type: filter,
+      search: search.trim() || undefined,
+      examType: examType || undefined,
+      courseId: courseId ? Number(courseId) : undefined,
+    })
       .then((result) => {
         if (cancelled) return;
         setRows(result.content);
@@ -118,7 +106,7 @@ export function StudentQuestionNotebookPage() {
     return () => {
       cancelled = true;
     };
-  }, [page, filter, weakOnly, search, examType, courseId, reload]);
+  }, [page, filter, search, examType, courseId, reload]);
 
   const startSession = async () => {
     setActionError(null);
@@ -153,15 +141,7 @@ export function StudentQuestionNotebookPage() {
       const updated = await studentProgressService.toggleBookmark(
         question.questionId,
       );
-      if (weakOnly)
-        setRows((rowsNow) =>
-          rowsNow.map((row) =>
-            row.questionId === question.questionId
-              ? { ...row, isBookmarked: updated.isBookmarked }
-              : row,
-          ),
-        );
-      else if (filter === "bookmarked" && !updated.isBookmarked) {
+      if (filter === "bookmarked" && !updated.isBookmarked) {
         setRows((rowsNow) =>
           rowsNow.filter((row) => row.reviewId !== question.reviewId),
         );
@@ -190,7 +170,7 @@ export function StudentQuestionNotebookPage() {
       const lastPage = Math.max(0, Math.ceil(nextTotal / SIZE) - 1);
       setLoading(true);
       setTotal(nextTotal);
-      if (!weakOnly && page > lastPage) setPage(lastPage);
+      if (page > lastPage) setPage(lastPage);
       else setReload((value) => value + 1);
     } catch (err) {
       setActionError(getApiErrorMessage(err, "Could not remove the question."));
@@ -201,11 +181,6 @@ export function StudentQuestionNotebookPage() {
 
   const updateFilter = (value: string) => {
     setFilter(value as typeof filter);
-    setWeakOnly(false);
-    setPage(0);
-  };
-  const setWeak = () => {
-    setWeakOnly((value) => !value);
     setPage(0);
   };
 
@@ -274,70 +249,60 @@ export function StudentQuestionNotebookPage() {
           <h2 className="text-base font-semibold text-content">
             Saved questions
           </h2>
-          <Button
-            size="sm"
-            variant={weakOnly ? "primary" : "outline"}
-            icon={<Icon.Activity className="w-4 h-4" />}
-            onClick={setWeak}
-          >
-            {weakOnly ? "Show all saved" : "Weak spots"}
-          </Button>
         </div>
-        {!weakOnly && (
-          <div className="card p-4 flex flex-wrap gap-3">
-            <Select
-              aria-label="Question filter"
-              className="w-full sm:w-56"
-              value={filter}
-              options={FILTERS}
-              onChange={updateFilter}
-            />
-            <Select
-              aria-label="Filter by exam type"
-              className="w-full sm:w-44"
-              value={examType}
-              options={[
-                { label: "All exam types", value: "" },
-                { label: "Quiz", value: "QUIZ" },
-                { label: "Essay", value: "ESSAY" },
-              ]}
-              onChange={(v) => {
-                setExamType(v as typeof examType);
-                setPage(0);
-              }}
-            />
-            <SearchableSelect
-              label="Course"
-              showLabel={false}
-              className="w-full sm:w-64"
-              value={courseId}
-              options={[
-                { label: "All courses", value: "" },
-                ...courses.map((course) => ({
-                  label: course.title,
-                  value: String(course.courseId),
-                })),
-              ]}
-              onChange={(value) => {
-                setCourseId(value);
-                setPage(0);
-              }}
-              placeholder="All courses"
-              searchPlaceholder="Search courses…"
-              emptyText="No courses found"
-            />
-            <SearchInput
-              className="w-full sm:w-72"
-              placeholder="Search questions…"
-              aria-label="Search saved questions"
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setPage(0);
-              }}
-            />
-          </div>
-        )}
+        <div className="card p-4 flex flex-wrap gap-3">
+          <Select
+            aria-label="Question filter"
+            className="w-full sm:w-56"
+            value={filter}
+            options={FILTERS}
+            onChange={updateFilter}
+          />
+          <Select
+            aria-label="Filter by exam type"
+            className="w-full sm:w-44"
+            value={examType}
+            options={[
+              { label: "All exam types", value: "" },
+              { label: "Quiz", value: "QUIZ" },
+              { label: "Essay", value: "ESSAY" },
+            ]}
+            onChange={(v) => {
+              setExamType(v as typeof examType);
+              setPage(0);
+            }}
+          />
+          <SearchableSelect
+            label="Course"
+            showLabel={false}
+            className="w-full sm:w-64"
+            value={courseId}
+            options={[
+              { label: "All courses", value: "" },
+              ...courses.map((course) => ({
+                label: course.title,
+                value: String(course.courseId),
+              })),
+            ]}
+            onChange={(value) => {
+              setCourseId(value);
+              setPage(0);
+            }}
+            placeholder="All courses"
+            searchPlaceholder="Search courses…"
+            emptyText="No courses found"
+          />
+          <SearchInput
+            className="w-full sm:w-72"
+            placeholder="Search questions…"
+            aria-label="Search saved questions"
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(0);
+            }}
+          />
+        </div>
         {error ? (
           <LoadError message={error} onRetry={() => setReload((v) => v + 1)} />
         ) : loading ? (
@@ -348,12 +313,8 @@ export function StudentQuestionNotebookPage() {
           <div className="card">
             <EmptyState
               icon={<Icon.Book className="w-7 h-7" />}
-              title={weakOnly ? "No weak spots yet" : "No saved questions"}
-              message={
-                weakOnly
-                  ? "Questions you miss repeatedly will show up here."
-                  : "Bookmark a question or complete an exam to build your notebook."
-              }
+              title="No saved questions"
+              message="Bookmark a question or complete an exam to build your notebook."
             />
           </div>
         ) : (
@@ -367,17 +328,15 @@ export function StudentQuestionNotebookPage() {
                 onRemove={() => removeQuestion(question.reviewId)}
               />
             ))}
-            {!weakOnly && (
-              <div className="card">
-                <Pagination
-                  page={page + 1}
-                  total={total}
-                  perPage={SIZE}
-                  onChange={(p) => setPage(p - 1)}
-                  unit="questions"
-                />
-              </div>
-            )}
+            <div className="card">
+              <Pagination
+                page={page + 1}
+                total={total}
+                perPage={SIZE}
+                onChange={(p) => setPage(p - 1)}
+                unit="questions"
+              />
+            </div>
           </div>
         )}
       </section>
@@ -452,9 +411,6 @@ function QuestionCard({
           {question.lastPracticedAt
             ? `Last practiced ${new Date(question.lastPracticedAt).toLocaleString()}`
             : "Not practiced yet"}
-          {question.lastWrongChoice
-            ? ` · Last answer: ${question.lastWrongChoice}`
-            : ""}
         </p>
         <div className="flex flex-wrap gap-2">
           <ReportQuestionIssueButton questionId={question.questionId} />
