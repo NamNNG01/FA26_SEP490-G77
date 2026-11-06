@@ -31,17 +31,6 @@ export interface LearningProgress {
   parts: ProgressPart[];
 }
 
-const PART_LABEL: Record<ProgressPartKey, (p: ProgressPart) => string> = {
-  questions: p => `${p.done}/${p.total} questions correct`,
-  exams: p => `${p.done}/${p.total} exam${p.total === 1 ? '' : 's'} done`,
-  decks: p => `${p.done}/${p.total} deck${p.total === 1 ? '' : 's'} learned`,
-};
-
-/** "12/40 questions correct · 1/3 exams done". */
-export function progressSummary(parts: ProgressPart[]): string {
-  return parts.map(p => PART_LABEL[p.key](p)).join(' · ');
-}
-
 /** MC-02 counts the attempt still open; at most one is, so anything beyond it was submitted. */
 const examDone = (item: ContentItem) => item.kind === 'exam' && item.exam.myAttemptCount > (item.exam.hasActiveAttempt ? 1 : 0);
 const deckDone = (item: ContentItem) => item.kind === 'deck' && item.deck.cardCount > 0 && item.deck.learnedCount >= item.deck.cardCount;
