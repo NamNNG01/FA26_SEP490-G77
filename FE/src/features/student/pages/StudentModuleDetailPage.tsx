@@ -14,7 +14,6 @@ import { studentCourseService, type StudentCourseDetail } from '@/services/stude
 import {
   accuracyPercent,
   modulePracticeService,
-  practicePercent,
   type ModulePracticeOverview,
   type PracticeScope,
 } from '@/services/modulePractice.service';
@@ -30,6 +29,7 @@ import {
   useOpenContent,
 } from '../components/courseContent';
 import { ModulePracticeModal } from '../components/ModulePracticeModal';
+import { moduleProgress, progressSummary } from '../components/courseProgress';
 
 type KindFilter = 'all' | 'exam' | 'deck';
 
@@ -193,6 +193,8 @@ function ModuleContent({
   }, [items, kind, search]);
 
   const practice = overview != null && overview !== 'error' ? overview : null;
+  // Same numbers as this module's card on the course page; the items must be in first.
+  const progress = practice && !loading && !error ? moduleProgress(practice, items) : null;
   const active = practice?.activeSession?.status === 'IN_PROGRESS' ? practice.activeSession : null;
 
   return (
@@ -208,7 +210,7 @@ function ModuleContent({
         </div>
 
         <div className="border-t border-line pt-4 space-y-4">
-          {overview === undefined ? (
+          {overview === undefined || (practice && loading) ? (
             <Skeleton className="h-16 w-full" />
           ) : practice ? (
             <>
@@ -218,10 +220,17 @@ function ModuleContent({
                 <Stat label="Ever correct" value={String(practice.everCorrectQuestions)} />
                 <Stat label="Need review" value={String(practice.questionsNeedingReview)} tone={practice.questionsNeedingReview > 0 ? 'danger' : undefined} />
               </div>
-              <Progress value={practicePercent(practice)} label="Practice progress" />
+              {progress && (
+                <div className="space-y-1.5">
+                  <Progress value={progress.percent ?? 0} label="Module progress" />
+                  <p className="text-xs text-content-subtle">
+                    {progress.parts.length > 0 ? progressSummary(progress.parts) : 'Nothing to track yet.'}
+                  </p>
+                </div>
+              )}
             </>
           ) : (
-            <p className="text-sm text-content-subtle">Practice progress could not be loaded.</p>
+            <p className="text-sm text-content-subtle">Module progress could not be loaded.</p>
           )}
           <div className="flex flex-wrap items-center gap-3">
             <Button

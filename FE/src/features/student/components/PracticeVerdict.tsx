@@ -40,7 +40,7 @@ export function PracticeVerdict({ attempt, questionType }: { attempt: PracticeAt
   if (AWAITING_GRADE.has(attempt.gradingStatus)) {
     return (
       <Box tone="neutral" icon={<Icon.RefreshCw className="w-4 h-4 animate-spin" />}>
-        <span className="flex-1">AI is grading your answer… You can move on and come back later.</span>
+        <span className="flex-1">AI is grading your answer… Your answer is saved; the score shows here once it is ready.</span>
       </Box>
     );
   }

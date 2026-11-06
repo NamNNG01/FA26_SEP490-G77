@@ -11,6 +11,7 @@ import type { AnswerResponse, AttemptQuestion, QuestionType, ResultQuestion as R
  *   POST   /api/v1/student/modules/{moduleId}/practice/sessions                               (MP-02) — resumes the open one
  *   GET    /api/v1/student/practice/sessions/{sessionId}                                      (MP-03)
  *   GET    /api/v1/student/practice/sessions/{sessionId}/questions/{sessionQuestionId}         (MP-04)
+ *   GET    /api/v1/student/practice/sessions/{sessionId}/questions?ids=1,2,…                  (MP-04 batch, ≤ 20 ids)
  *   POST   /api/v1/student/practice/sessions/{sessionId}/questions/{sessionQuestionId}/answers (MP-05)
  *   GET    /api/v1/student/practice/sessions/{sessionId}/questions/{sessionQuestionId}/answers (MP-06)
  *   POST   /api/v1/student/practice/sessions/{sessionId}/complete                             (MP-07)
@@ -319,6 +320,20 @@ export function toAttemptQuestion(q: PracticeQuestionView): AttemptQuestion {
   };
 }
 
+/** MP-04's key in the shape the answer inputs reveal it (`reveal`); null for rubric types. */
+export function toAnswerReveal(q: PracticeQuestionView): { correctOptionIds: number[]; correctAnswer: NonNullable<ReviewQuestion['correctAnswer']> } | null {
+  const key = q.correctAnswer;
+  if (!key) return null;
+  return {
+    correctOptionIds: key.correctOptionIds ?? [],
+    correctAnswer: {
+      orderedOptionIds: key.correctOrder,
+      pairs: key.pairs,
+      blanks: key.blanks ? Object.fromEntries(key.blanks.map(b => [String(b.index), b.accepted ?? []])) : null,
+    },
+  };
+}
+
 /** MP-04 with one of its attempts, in the shape the exam result's answer review reads. */
 export function toReviewQuestion(q: PracticeQuestionView, attempt: PracticeAttempt | null): ReviewQuestion {
   const key = q.correctAnswer;
@@ -347,6 +362,52 @@ export function toReviewQuestion(q: PracticeQuestionView, attempt: PracticeAttem
         }
       : null,
   };
+}
+
+/** MP-04 batch ceiling of the BE. */
+export const MAX_BATCH_QUESTIONS = 20;
+
+const sameIds = (a: readonly number[], b: readonly number[]) => a.length === b.length && a.every((id, i) => id === b[i]);
+
+/** Fill-blank spellings are compared trimmed, with single spaces; case only when the key asks for it. */
+const blankText = (text: string | null | undefined, caseSensitive: boolean) => {
+  const t = (text ?? '').trim().replace(/\s+/g, ' ');
+  return caseSensitive ? t : t.toLowerCase();
+};
+
+/**
+ * Right / wrong of an answer against MP-04's `correctAnswer`, so the verdict shows the moment the
+ * student answers. null when there is no key (rubric types) — MP-05's verdict is then the only one,
+ * and it always wins over this once it arrives.
+ */
+export function gradeLocally(q: PracticeQuestionView, response: AnswerResponse | null): boolean | null {
+  const key = q.correctAnswer;
+  if (!key || !response) return null;
+  switch (q.questionType) {
+    case 'SINGLE_CHOICE':
+    case 'TRUE_FALSE':
+    case 'MULTIPLE_CHOICE': {
+      if (!key.correctOptionIds) return null;
+      const sort = (ids: readonly number[]) => [...new Set(ids)].sort((a, b) => a - b);
+      return sameIds(sort(response.selectedOptionIds ?? []), sort(key.correctOptionIds));
+    }
+    case 'MATCHING': {
+      if (!key.pairs) return null;
+      const given = new Map((response.matches ?? []).map(m => [m.left, m.right]));
+      return given.size === key.pairs.length && key.pairs.every(p => given.get(p.left) === p.right);
+    }
+    case 'ORDERING':
+      return key.correctOrder ? sameIds(response.orderedOptionIds ?? [], key.correctOrder) : null;
+    case 'FILL_BLANK': {
+      if (!key.blanks?.length) return null;
+      return key.blanks.every(b => {
+        const typed = blankText(response.blanks?.[String(b.index)], Boolean(b.caseSensitive));
+        return (b.accepted ?? []).some(a => blankText(a, Boolean(b.caseSensitive)) === typed);
+      });
+    }
+    default:
+      return null;
+  }
 }
 
 const scopePath = (scope: PracticeScope) =>
@@ -378,6 +439,14 @@ export const modulePracticeService = {
 
   async getQuestion(sessionId: number | string, sessionQuestionId: number | string): Promise<PracticeQuestionView> {
     const res = await api.get<ApiResponse<PracticeQuestionView>>(questionPath(sessionId, sessionQuestionId));
+    return res.data;
+  },
+
+  /** MP-04 batch: up to MAX_BATCH_QUESTIONS questions in one call, in the paper's order. */
+  async getQuestions(sessionId: number | string, sessionQuestionIds: number[]): Promise<PracticeQuestionView[]> {
+    const res = await api.get<ApiResponse<PracticeQuestionView[]>>(
+      `${sessionPath(sessionId)}/questions?ids=${sessionQuestionIds.join(',')}`,
+    );
     return res.data;
   },
 

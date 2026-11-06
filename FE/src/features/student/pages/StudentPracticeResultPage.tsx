@@ -12,6 +12,7 @@ import { RUBRIC_TYPES } from '@/services/studentAttempt.service';
 import { studentProgressService } from '@/services/studentProgress.service';
 import {
   AWAITING_GRADE,
+  MAX_BATCH_QUESTIONS,
   PRACTICE_MODE_LABEL,
   modulePracticeService,
   toReviewQuestion,
@@ -119,6 +120,86 @@ export function StudentPracticeResultPage() {
     return () => window.clearInterval(id);
   }, [awaiting, sessionId]);
 
+  /* ── MP-04 of every question, in batches, kept for the visit ─────────────── */
+  const [views, setViews] = useState<Record<number, PracticeQuestionView>>({});
+  /** Questions whose batch failed; "Try again" asks them again. */
+  const [failed, setFailed] = useState<ReadonlySet<number>>(() => new Set());
+  const [viewReload, setViewReload] = useState(0);
+  /** viewKey each question was last asked under (in flight or loaded), by sessionQuestionId. */
+  const askedRef = useRef(new Map<number, string>());
+  const sessionRef = useRef(sessionId);
+  sessionRef.current = sessionId;
+  /** Question on screen, so its batch goes first. */
+  const currentRef = useRef(0);
+
+  // Another session on the same page: start over (not on mount, or StrictMode would ask twice).
+  const viewsForRef = useRef(sessionId);
+  useEffect(() => {
+    if (viewsForRef.current === sessionId) return;
+    viewsForRef.current = sessionId;
+    askedRef.current = new Map();
+    setViews({});
+    setFailed(new Set());
+  }, [sessionId]);
+
+  useEffect(() => {
+    if (!result) return;
+    const forSession = String(result.sessionId);
+    // Only the questions never asked, or with a new attempt / grading since (the poll re-reads MP-08).
+    const stale = result.questions.filter(q => askedRef.current.get(q.sessionQuestionId) !== viewKey(q));
+    if (stale.length === 0) return;
+    const keys = new Map(stale.map(q => [q.sessionQuestionId, viewKey(q)]));
+    keys.forEach((key, id) => askedRef.current.set(id, key));
+    setFailed(prev => (prev.size === 0 ? prev : new Set([...prev].filter(id => !keys.has(id)))));
+
+    // The batch holding the question on screen first, the rest right after.
+    const onScreen = result.questions[currentRef.current]?.sessionQuestionId;
+    const ids = [...keys.keys()];
+    const chunks: number[][] = [];
+    for (let i = 0; i < ids.length; i += MAX_BATCH_QUESTIONS) chunks.push(ids.slice(i, i + MAX_BATCH_QUESTIONS));
+    const first = Math.max(0, Math.floor(ids.indexOf(onScreen ?? -1) / MAX_BATCH_QUESTIONS));
+    chunks.unshift(...chunks.splice(first, 1));
+
+    // A later ask of the same question (newer key) wins over an older answer still on its way.
+    const current = (id: number) => sessionRef.current === forSession && askedRef.current.get(id) === keys.get(id);
+    chunks.forEach(chunk => {
+      modulePracticeService
+        .getQuestions(forSession, chunk)
+        .then(list => {
+          const fresh = list.filter(v => current(v.sessionQuestionId));
+          if (fresh.length > 0) setViews(prev => ({ ...prev, ...Object.fromEntries(fresh.map(v => [v.sessionQuestionId, v])) }));
+        })
+        .catch(() => {
+          const lost = chunk.filter(current);
+          if (lost.length === 0) return;
+          lost.forEach(id => askedRef.current.delete(id));
+          setFailed(prev => new Set([...prev, ...lost]));
+        });
+    });
+  }, [result, viewReload]);
+
+  /* ── Bookmarks: MP-04 gives the first value, a toggle here overrides it ──── */
+  const [bookmarks, setBookmarks] = useState<Record<number, boolean>>({});
+  const [bookmarkBusy, setBookmarkBusy] = useState<ReadonlySet<number>>(() => new Set());
+  const [bookmarkError, setBookmarkError] = useState<string | null>(null);
+  const toggleBookmark = async (questionId: number) => {
+    if (bookmarkBusy.has(questionId)) return;
+    setBookmarkBusy(prev => new Set(prev).add(questionId));
+    setBookmarkError(null);
+    try {
+      const { isBookmarked } = await studentProgressService.toggleBookmark(questionId);
+      setBookmarks(prev => ({ ...prev, [questionId]: isBookmarked }));
+    } catch (err) {
+      setBookmarkError(getApiErrorMessage(err, 'Could not update the bookmark.'));
+    } finally {
+      setBookmarkBusy(prev => {
+        const next = new Set(prev);
+        next.delete(questionId);
+        return next;
+      });
+    }
+  };
+
   const outcomes = useMemo(() => (result?.questions ?? []).map(outcomeOf), [result]);
 
   const breadcrumb = (
@@ -161,6 +242,7 @@ export function StudentPracticeResultPage() {
   const total = result.questions.length;
   const qParam = Number(searchParams.get('q'));
   const current = total === 0 ? 0 : Number.isInteger(qParam) && qParam >= 1 ? Math.min(qParam, total) - 1 : 0;
+  currentRef.current = current;
   const prevIndex = current > 0 ? current - 1 : undefined;
   const nextIndex = current < total - 1 ? current + 1 : undefined;
 
@@ -174,6 +256,7 @@ export function StudentPracticeResultPage() {
       },
       { replace: true },
     );
+    setBookmarkError(null);
     // From the bottom of a long answer, bring the next question's top into view.
     const top = questionRef.current?.getBoundingClientRect().top;
     if (top != null && top < 0) questionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -205,13 +288,24 @@ export function StudentPracticeResultPage() {
           ) : (
             <>
               <PracticeQuestionCard
-                key={viewKey(q)}
+                key={q.sessionQuestionId}
                 question={q}
                 index={current}
                 outcome={outcomes[current]}
                 sessionId={result.sessionId}
+                view={views[q.sessionQuestionId] ?? null}
+                failed={failed.has(q.sessionQuestionId)}
+                onRetry={() => setViewReload(r => r + 1)}
+                bookmarked={bookmarks[q.questionId] ?? views[q.sessionQuestionId]?.isBookmarked ?? false}
+                bookmarkBusy={bookmarkBusy.has(q.questionId)}
+                onToggleBookmark={() => toggleBookmark(q.questionId)}
                 nav={<QuestionNav current={current} total={total} onPrev={navRef.current.prev} onNext={navRef.current.next} />}
               />
+              {bookmarkError && (
+                <p role="alert" className="text-sm text-danger">
+                  {bookmarkError}
+                </p>
+              )}
               <div className="flex items-center justify-between gap-3">
                 <Button variant="outline" icon={<Icon.ChevronLeft className="w-4 h-4" />} disabled={!navRef.current.prev} onClick={navRef.current.prev}>
                   Previous
@@ -284,145 +378,115 @@ function ResultHeader({ result, session }: { result: PracticeResult; session: Pr
 /**
  * One question as on the exam result: outcome icon, number and type, the text and the outcome badge;
  * Bookmark / Report; then the latest answer against the key with "Explain", or — for an essay / code /
- * diagram answer — the answer beside its AI score and feedback. Reads MP-04 on mount (the page keys
- * it by the latest attempt and its grading, so a regrade reads it again).
+ * diagram answer — the answer beside its AI score and feedback. The page reads MP-04 for every
+ * question in batches and hands the view down; it is null until its batch is back.
  */
 function PracticeQuestionCard({
   question: q,
   index,
   outcome,
   sessionId,
+  view,
+  failed,
+  onRetry,
+  bookmarked,
+  bookmarkBusy,
+  onToggleBookmark,
   nav,
 }: {
   question: ResultQuestion;
   index: number;
   outcome: Outcome;
   sessionId: number;
+  view: PracticeQuestionView | null;
+  /** Its MP-04 batch failed and nothing was loaded before. */
+  failed: boolean;
+  onRetry: () => void;
+  bookmarked: boolean;
+  bookmarkBusy: boolean;
+  onToggleBookmark: () => void;
   nav: React.ReactNode;
 }) {
-  const [view, setView] = useState<PracticeQuestionView | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [reload, setReload] = useState(0);
-  const [bookmarked, setBookmarked] = useState(false);
-  const [bookmarkBusy, setBookmarkBusy] = useState(false);
-  const [bookmarkError, setBookmarkError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    setError(null);
-    modulePracticeService
-      .getQuestion(sessionId, q.sessionQuestionId)
-      .then(v => {
-        if (cancelled) return;
-        setView(v);
-        setBookmarked(v.isBookmarked);
-      })
-      .catch(err => {
-        if (!cancelled) setError(getApiErrorMessage(err, 'Failed to load this question.'));
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [sessionId, q.sessionQuestionId, reload]);
-
-  const toggleBookmark = async () => {
-    setBookmarkBusy(true);
-    setBookmarkError(null);
-    try {
-      setBookmarked((await studentProgressService.toggleBookmark(q.questionId)).isBookmarked);
-    } catch (err) {
-      setBookmarkError(getApiErrorMessage(err, 'Could not update the bookmark.'));
-    } finally {
-      setBookmarkBusy(false);
-    }
-  };
-
   const latest = view?.attempts.length ? view.attempts[view.attempts.length - 1] : null;
   const rubric = RUBRIC_TYPES.has(q.questionType);
   const graded = latest != null && !AWAITING_GRADE.has(latest.gradingStatus);
 
   return (
-    <>
-      <article className="card overflow-hidden">
-        <div className="border-b border-line bg-surface-alt px-4 py-2.5">{nav}</div>
-        <header className="flex items-start gap-3 px-4 py-3.5">
-          <span className="mt-0.5 flex-shrink-0">{OUTCOME[outcome].icon}</span>
-          <div className="flex-1 min-w-0">
-            <p className="text-xs text-content-subtle">
-              Question {index + 1} · {QUESTION_TYPE_LABEL[q.questionType] ?? q.questionType}
-              {q.attemptCount > 1 && ` · ${q.attemptCount} attempts`}
-            </p>
-            {view && <QuestionText content={view.content} className="text-sm text-content mt-0.5" />}
-          </div>
-          <Badge variant={OUTCOME[outcome].badge} size="sm" className="flex-shrink-0">
-            {outcome === 'graded' ? `AI score ${scorePercent(q.latestScore)}%` : OUTCOME[outcome].label}
-          </Badge>
-        </header>
-
-        <div className="flex justify-end border-t border-line px-4 py-3">
-          <div className="flex flex-wrap gap-2">
-            <Button
-              size="sm"
-              variant={bookmarked ? 'primary' : 'outline'}
-              disabled={bookmarkBusy || !view}
-              aria-pressed={bookmarked}
-              aria-label={bookmarked ? 'Remove bookmark' : 'Bookmark question'}
-              icon={<Icon.Star className={`w-4 h-4 ${bookmarked ? 'fill-current' : ''}`} />}
-              onClick={toggleBookmark}
-            >
-              {bookmarked ? 'Bookmarked' : 'Bookmark'}
-            </Button>
-            <ReportQuestionIssueButton questionId={q.questionId} />
-          </div>
+    <article className="card overflow-hidden">
+      <div className="border-b border-line bg-surface-alt px-4 py-2.5">{nav}</div>
+      <header className="flex items-start gap-3 px-4 py-3.5">
+        <span className="mt-0.5 flex-shrink-0">{OUTCOME[outcome].icon}</span>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs text-content-subtle">
+            Question {index + 1} · {QUESTION_TYPE_LABEL[q.questionType] ?? q.questionType}
+            {q.attemptCount > 1 && ` · ${q.attemptCount} attempts`}
+          </p>
+          {view && <QuestionText content={view.content} className="text-sm text-content mt-0.5" />}
         </div>
+        <Badge variant={OUTCOME[outcome].badge} size="sm" className="flex-shrink-0">
+          {outcome === 'graded' ? `AI score ${scorePercent(q.latestScore)}%` : OUTCOME[outcome].label}
+        </Badge>
+      </header>
 
-        {error ? (
-          <div className="flex flex-wrap items-center gap-3 border-t border-line px-4 py-4">
-            <p className="text-sm text-danger">{error}</p>
-            <Button size="sm" variant="outline" icon={<Icon.RefreshCw className="w-4 h-4" />} onClick={() => setReload(r => r + 1)}>
-              Try again
-            </Button>
-          </div>
-        ) : !view ? (
-          <div className="border-t border-line px-4 py-8 flex justify-center">
-            <Spinner />
-          </div>
-        ) : rubric ? (
-          // Written answer beside its AI score once the card is wide enough, so the feedback stays in view.
-          <div className="@container border-t border-line px-4 py-4">
-            <div className="grid gap-4 @3xl:grid-cols-[minmax(0,1fr)_minmax(15rem,20rem)] @3xl:items-start">
-              <div className="min-w-0">
-                <AnswerReview question={toReviewQuestion(view, latest)} />
-              </div>
-              {latest && (
-                <div className="@3xl:sticky @3xl:top-[85px] min-w-0">
-                  <PracticeVerdict attempt={latest} questionType={q.questionType} />
-                </div>
-              )}
+      <div className="flex justify-end border-t border-line px-4 py-3">
+        <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            variant={bookmarked ? 'primary' : 'outline'}
+            disabled={bookmarkBusy || !view}
+            aria-pressed={bookmarked}
+            aria-label={bookmarked ? 'Remove bookmark' : 'Bookmark question'}
+            icon={<Icon.Star className={`w-4 h-4 ${bookmarked ? 'fill-current' : ''}`} />}
+            onClick={onToggleBookmark}
+          >
+            {bookmarked ? 'Bookmarked' : 'Bookmark'}
+          </Button>
+          <ReportQuestionIssueButton questionId={q.questionId} />
+        </div>
+      </div>
+
+      {/* A failed re-read after a regrade keeps the view already on screen. */}
+      {!view && failed ? (
+        <div className="flex flex-wrap items-center gap-3 border-t border-line px-4 py-4">
+          <p className="text-sm text-danger">Failed to load this question.</p>
+          <Button size="sm" variant="outline" icon={<Icon.RefreshCw className="w-4 h-4" />} onClick={onRetry}>
+            Try again
+          </Button>
+        </div>
+      ) : !view ? (
+        <div className="border-t border-line px-4 py-8 flex justify-center">
+          <Spinner />
+        </div>
+      ) : rubric ? (
+        // Written answer beside its AI score once the card is wide enough, so the feedback stays in view.
+        <div className="@container border-t border-line px-4 py-4">
+          <div className="grid gap-4 @3xl:grid-cols-[minmax(0,1fr)_minmax(15rem,20rem)] @3xl:items-start">
+            <div className="min-w-0">
+              <AnswerReview question={toReviewQuestion(view, latest)} />
             </div>
-          </div>
-        ) : (
-          <div className="border-t border-line px-4 py-4 space-y-4">
-            <AnswerReview question={toReviewQuestion(view, latest)} />
-            {/* Only the "being graded" / "could not be graded" notes: the badge already says right or wrong. */}
-            {latest && (outcome === 'pending' || outcome === 'failed') && <PracticeVerdict attempt={latest} questionType={q.questionType} />}
-            {graded && (
-              <PracticeExplanation
-                questionId={q.questionId}
-                sessionId={sessionId}
-                sessionQuestionId={q.sessionQuestionId}
-                practiceAnswerId={latest.practiceAnswerId}
-              />
+            {latest && (
+              <div className="@3xl:sticky @3xl:top-[85px] min-w-0">
+                <PracticeVerdict attempt={latest} questionType={q.questionType} />
+              </div>
             )}
           </div>
-        )}
-      </article>
-      {bookmarkError && (
-        <p role="alert" className="text-sm text-danger">
-          {bookmarkError}
-        </p>
+        </div>
+      ) : (
+        <div className="border-t border-line px-4 py-4 space-y-4">
+          <AnswerReview question={toReviewQuestion(view, latest)} />
+          {/* Only the "being graded" / "could not be graded" notes: the badge already says right or wrong. */}
+          {latest && (outcome === 'pending' || outcome === 'failed') && <PracticeVerdict attempt={latest} questionType={q.questionType} />}
+          {graded && (
+            <PracticeExplanation
+              questionId={q.questionId}
+              sessionId={sessionId}
+              sessionQuestionId={q.sessionQuestionId}
+              practiceAnswerId={latest.practiceAnswerId}
+            />
+          )}
+        </div>
       )}
-    </>
+    </article>
   );
 }
 

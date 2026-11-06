@@ -18,6 +18,16 @@ public interface StudentQuestionReviewRepository extends JpaRepository<StudentQu
 
     boolean existsByStudent_UserIdAndQuestion_QuestionIdAndBookmarkTrue(Long studentId, Long questionId);
 
+    /**
+     * MP-04 (batch): the ids among these questions the student has bookmarked, in one query instead
+     * of one {@code existsBy…} per question.
+     */
+    @Query("SELECT r.question.questionId FROM StudentQuestionReview r "
+            + "WHERE r.student.userId = :studentId AND r.bookmark = true "
+            + "AND r.question.questionId IN :questionIds")
+    List<Long> findBookmarkedQuestionIdsIn(@Param("studentId") Long studentId,
+                                           @Param("questionIds") List<Long> questionIds);
+
     @Query("SELECT r.question.questionId FROM StudentQuestionReview r "
             + "WHERE r.student.userId = :studentId AND r.bookmark = true "
             + "AND r.question.module.moduleId = :moduleId "

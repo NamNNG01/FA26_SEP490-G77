@@ -11,11 +11,13 @@ import { ROUTES, studentCoursePath, studentWeaknessReportPath } from '@/app/rout
 import { useDashboard } from '@/hooks/useDashboard';
 import type { StudentRecentAttempt } from '@/services/dashboard.service';
 import { getApiErrorMessage } from '@/utils/apiError';
-import { studentCourseService, type MyCourse } from '@/services/studentCourse.service';
+import { studentCourseService, type MyCourse, type StudentCourseDetail } from '@/services/studentCourse.service';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { CardGridSkeleton, CourseThumb, LoadError, PageTitle, STUDENT_PAGE_CLASS, formatDate } from '../components/studentUi';
 import { MaterialQuizModal } from '../components/MaterialQuizModal';
 import { SmartPracticeModal } from '../components/SmartPracticeModal';
 import { RecommendationsCard } from '../components/RecommendationsCard';
+import { progressSummary, useCourseProgress } from '../components/courseProgress';
 
 const PAGE_SIZE = 12;
 /** MC-01 caps `size` at 100 and has no keyword filter, so the list is loaded once and searched client-side. */
@@ -218,7 +220,11 @@ function MyCourseCard({ course, onOpen }: { course: MyCourse; onOpen: () => void
               <Icon.Calendar className="w-3.5 h-3.5" /> {formatDate(course.enrolledAt)}
             </span>
           </div>
-          {course.status !== 'CANCELLED' && <Progress value={course.progress ?? 0} label="Progress" size="sm" />}
+          {course.status === 'ACTIVE' ? (
+            <LiveCourseProgress courseId={course.courseId} />
+          ) : (
+            course.status !== 'CANCELLED' && <Progress value={course.progress ?? 0} label="Progress" size="sm" />
+          )}
           {course.nextExam && (
             <p className="mt-auto pt-2 border-t border-line text-xs text-content-soft truncate">
               Next exam: <span className="font-medium text-content-secondary">{course.nextExam.title}</span>
@@ -233,6 +239,40 @@ function MyCourseCard({ course, onOpen }: { course: MyCourse; onOpen: () => void
         <Icon.BarChart className="w-3.5 h-3.5" /> View weakness report
         <Icon.ChevronRight className="w-3.5 h-3.5 ml-auto" />
       </Link>
+    </div>
+  );
+}
+
+/**
+ * The course's progress worked out like on its course page (useCourseProgress), so both show the
+ * same number. MC-01's stored `progress` leaves out practice and is only refreshed when the
+ * course page is opened (docs/notes/student-course-progress-be-gap.md).
+ */
+function LiveCourseProgress({ courseId }: { courseId: number }) {
+  const [detail, setDetail] = useState<StudentCourseDetail | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    studentCourseService
+      .getCourseDetail(courseId)
+      .then(d => {
+        if (!cancelled) setDetail(d);
+      })
+      .catch(() => {
+        if (!cancelled) setFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [courseId]);
+  const { course: progress, error } = useCourseProgress(detail);
+
+  if (failed || error) return <p className="text-xs text-content-subtle">Progress —</p>;
+  if (!progress) return <Skeleton className="h-6 w-full" />;
+  return (
+    <div className="space-y-1.5">
+      <Progress value={progress.percent ?? 0} label="Progress" size="sm" />
+      {progress.parts.length > 0 && <p className="text-2xs text-content-subtle">{progressSummary(progress.parts)}</p>}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { Badge } from '@/components/ui/Badge';
 import { Alert } from '@/components/ui/Alert';
@@ -14,9 +14,10 @@ import {
   studentCourseService,
   type StudentCourseDetail,
 } from '@/services/studentCourse.service';
-import { accuracyPercent, modulePracticeService, practicePercent, type ModulePracticeOverview, type PracticeScope } from '@/services/modulePractice.service';
+import type { PracticeScope } from '@/services/modulePractice.service';
 import { CardGridSkeleton, CourseThumb, LoadError, STUDENT_PAGE_CLASS } from '../components/studentUi';
-import { GENERAL_MODULE, countItems, sortedModules, useCourseContent } from '../components/courseContent';
+import { GENERAL_MODULE, countItems, sortedModules } from '../components/courseContent';
+import { progressSummary, useCourseProgress, type LearningProgress, type OverviewState, type ProgressState } from '../components/courseProgress';
 import { ModulePracticeModal } from '../components/ModulePracticeModal';
 import { SmartPracticeModal } from '../components/SmartPracticeModal';
 import { AiSparkle } from '../components/aiUi';
@@ -39,6 +40,9 @@ export function StudentCourseDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
   const [personalQuiz, setPersonalQuiz] = useState(false);
+  // MC-02/03 and MP-01 only answer for an ACTIVE enrollment.
+  const activeCourse = course?.enrollment?.isEnrolled && course.enrollment.status === 'ACTIVE' ? course : null;
+  const content = useCourseProgress(activeCourse);
 
   useEffect(() => {
     let cancelled = false;
@@ -93,7 +97,8 @@ export function StudentCourseDetailPage() {
 
   const enrollment = course.enrollment;
   const isActive = Boolean(enrollment?.isEnrolled && enrollment.status === 'ACTIVE');
-  const moduleCount = course.modules.length;
+  // General counts once it holds anything; until the content is in, only the course's own modules.
+  const moduleCount = isActive ? content.moduleCount : course.modules.length;
 
   return (
     <div className={`${STUDENT_PAGE_CLASS} space-y-[clamp(1.25rem,2.5vw,1.75rem)]`}>
@@ -149,10 +154,7 @@ export function StudentCourseDetailPage() {
       )}
 
       {isActive ? (
-        <>
-          <CourseProgressPanel courseId={course.courseId} />
-          <ModuleGrid course={course} />
-        </>
+        <ModuleGrid course={course} content={content} />
       ) : (
         <LockedModules course={course} />
       )}
@@ -170,95 +172,79 @@ export function StudentCourseDetailPage() {
   );
 }
 
-function CourseProgressPanel({ courseId }: { courseId: number }) {
-  const [progress, setProgress] = useState<CourseProgress | null>(null);
-  const [error, setError] = useState(false);
-  const [reload, setReload] = useState(0);
+/**
+ * The course's progress: the average of its modules (courseProgress), with the questions / exams /
+ * decks behind it. LP-01 still gives the average score and the latest attempts.
+ * `progress` undefined = some module is still loading; `partial` = some module could not be read.
+ */
+function CourseProgressPanel({ courseId, progress, partial }: { courseId: number; progress?: LearningProgress; partial: boolean }) {
+  const [stats, setStats] = useState<CourseProgress | null>(null);
   useEffect(() => {
     let cancelled = false;
-    studentProgressService.getCourseProgress(courseId)
-      .then(data => { if (!cancelled) { setProgress(data); setError(false); } })
-      .catch(() => { if (!cancelled) setError(true); });
-    return () => { cancelled = true; };
-  }, [courseId, reload]);
+    studentProgressService
+      .getCourseProgress(courseId)
+      .then(data => {
+        if (!cancelled) setStats(data);
+      })
+      // Only the score line depends on it: without it the panel just leaves that line out.
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [courseId]);
 
-  if (error) return <div className="card flex flex-wrap items-center justify-between gap-3 p-4">
-    <p className="text-sm text-content-soft">Course progress could not be loaded.</p>
-    <button type="button" className="text-sm font-medium text-primary hover:underline" onClick={() => setReload(v => v + 1)}>Try again</button>
-  </div>;
-  if (!progress) return <div className="card p-4 text-sm text-content-subtle">Loading course progress…</div>;
+  if (!progress) return <Skeleton className="h-28 w-full" />;
 
-  return <section className="card p-4 sm:p-5 space-y-4" aria-label="Course progress">
-    <div className="flex flex-wrap items-start justify-between gap-3">
-      <div>
-        <h2 className="font-semibold text-content">Your progress</h2>
-        <p className="mt-1 text-xs text-content-subtle">{progress.completedExams} of {progress.totalExams} exams completed · {progress.learnedDecks} of {progress.totalDecks} decks learned</p>
+  return (
+    <section className="card p-4 sm:p-5 space-y-4" aria-label="Course progress">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="font-semibold text-content">Your progress</h2>
+          <p className="mt-1 text-xs text-content-subtle">
+            {progress.parts.length > 0 ? progressSummary(progress.parts) : 'Nothing to track yet.'}
+            {partial && ' · some modules could not be loaded'}
+          </p>
+        </div>
+        <div className="text-right">
+          <p className="text-xl font-bold text-primary">{progress.percent ?? 0}%</p>
+          <p className="text-xs text-content-subtle">average of modules</p>
+        </div>
       </div>
-      <div className="text-right"><p className="text-xl font-bold text-primary">{progress.progress}%</p><p className="text-xs text-content-subtle">overall</p></div>
-    </div>
-    <Progress value={progress.progress} />
-    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3">
-      <p className="text-sm text-content-secondary">Average score <span className="font-semibold text-content">{progress.averageScore == null ? '—' : progress.averageScore.toFixed(2)}</span></p>
-      {progress.recentAttempts.length > 0 && <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-content-subtle">
-        {progress.recentAttempts.slice(0, 3).map(attempt => <li key={attempt.attemptId}>{attempt.examTitle}: <span className="font-medium text-content-secondary">{attempt.totalScore}/{attempt.maxScore}</span></li>)}
-      </ul>}
-    </div>
-  </section>;
+      <Progress value={progress.percent ?? 0} />
+      {stats && (
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3">
+          <p className="text-sm text-content-secondary">
+            Average score <span className="font-semibold text-content">{stats.averageScore == null ? '—' : stats.averageScore.toFixed(2)}</span>
+          </p>
+          {stats.recentAttempts.length > 0 && (
+            <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-content-subtle">
+              {stats.recentAttempts.slice(0, 3).map(attempt => (
+                <li key={attempt.attemptId}>
+                  {attempt.examTitle}: <span className="font-medium text-content-secondary">{attempt.totalScore}/{attempt.maxScore}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </section>
+  );
 }
 
-type OverviewState = ModulePracticeOverview | 'error' | undefined;
-
 /**
- * The course content as a grid of module cards — practice progress, counts and a Practice button
+ * The course content as a grid of module cards — learning progress, counts and a Practice button
  * each — plus a "General" card, built the same way, for the content not filed under any module.
+ * The course progress panel above it is the average of these cards (useCourseProgress).
  */
-function ModuleGrid({ course }: { course: StudentCourseDetail }) {
+function ModuleGrid({ course, content }: { course: StudentCourseDetail; content: ReturnType<typeof useCourseProgress> }) {
   const navigate = useNavigate();
-  const { byModule, general, loading, error, retry } = useCourseContent(course);
-  // Keyed by moduleId, plus GENERAL_MODULE for the course's General pool.
-  const [overviews, setOverviews] = useState<Record<string, OverviewState>>({});
+  const { byModule, general, loading, error, retry, modules, overviews, hasGeneral, byKey, course: overall, partial } = content;
   const [practicing, setPracticing] = useState<{ key: string; scope: PracticeScope; title: string } | null>(null);
-  const modules = useMemo(() => sortedModules(course), [course]);
-  const hasGeneral = general.length > 0;
-
-  useEffect(() => {
-    let cancelled = false;
-    const load = (key: string, scope: PracticeScope) =>
-      modulePracticeService
-        .getOverview(scope)
-        .then(o => {
-          if (!cancelled) setOverviews(prev => ({ ...prev, [key]: o }));
-        })
-        .catch(() => {
-          if (!cancelled) setOverviews(prev => ({ ...prev, [key]: 'error' }));
-        });
-    modules.forEach(m => void load(String(m.moduleId), { moduleId: m.moduleId }));
-    return () => {
-      cancelled = true;
-    };
-  }, [modules]);
-
-  // The General card only appears once the course content says there is unfiled content.
-  useEffect(() => {
-    if (!hasGeneral) return;
-    let cancelled = false;
-    modulePracticeService
-      .getOverview({ courseId: course.courseId })
-      .then(o => {
-        if (!cancelled) setOverviews(prev => ({ ...prev, [GENERAL_MODULE]: o }));
-      })
-      .catch(() => {
-        if (!cancelled) setOverviews(prev => ({ ...prev, [GENERAL_MODULE]: 'error' }));
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [hasGeneral, course.courseId]);
 
   if (loading) return <CardGridSkeleton count={Math.min(Math.max(modules.length, 3), 6)} />;
   if (error) return <LoadError message={error} onRetry={retry} />;
 
-  if (modules.length === 0 && general.length === 0) {
+  if (modules.length === 0 && !hasGeneral) {
     return (
       <div className="card">
         <EmptyState
@@ -273,6 +259,8 @@ function ModuleGrid({ course }: { course: StudentCourseDetail }) {
   const practicingOverview = practicing ? overviews[practicing.key] : undefined;
 
   return (
+    <>
+    <CourseProgressPanel courseId={course.courseId} progress={overall} partial={partial} />
     <section className="space-y-3" aria-label="Course content">
       <h2 className="text-base font-semibold text-content">Modules</h2>
       <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,280px),1fr))] gap-[clamp(1rem,2vw,1.25rem)]">
@@ -284,6 +272,7 @@ function ModuleGrid({ course }: { course: StudentCourseDetail }) {
             description={m.description}
             counts={countItems(byModule.get(m.moduleId) ?? [])}
             overview={overviews[m.moduleId]}
+            progress={byKey[m.moduleId]}
             onOpen={() => navigate(studentModulePath(course.courseId, m.moduleId))}
             onPractice={() => setPracticing({ key: String(m.moduleId), scope: { moduleId: m.moduleId }, title: m.title })}
           />
@@ -291,9 +280,10 @@ function ModuleGrid({ course }: { course: StudentCourseDetail }) {
         {hasGeneral && (
           <ModuleCard
             title="General"
-            description="Exams and flashcard decks not filed under a module."
+            description="Practice questions, exams and flashcard decks not filed under a module."
             counts={countItems(general)}
             overview={overviews[GENERAL_MODULE]}
+            progress={byKey[GENERAL_MODULE]}
             onOpen={() => navigate(studentModulePath(course.courseId, GENERAL_MODULE))}
             onPractice={() => setPracticing({ key: GENERAL_MODULE, scope: { courseId: course.courseId }, title: 'General' })}
           />
@@ -310,6 +300,7 @@ function ModuleGrid({ course }: { course: StudentCourseDetail }) {
         />
       )}
     </section>
+    </>
   );
 }
 
@@ -323,6 +314,7 @@ function ModuleCard({
   description,
   counts,
   overview,
+  progress,
   onOpen,
   onPractice,
 }: {
@@ -331,6 +323,7 @@ function ModuleCard({
   description?: string | null;
   counts: { exams: number; decks: number };
   overview?: OverviewState;
+  progress?: ProgressState;
   onOpen: () => void;
   onPractice?: () => void;
 }) {
@@ -360,7 +353,7 @@ function ModuleCard({
             <Icon.Layers className="w-3.5 h-3.5" /> {counts.decks} deck{counts.decks === 1 ? '' : 's'}
           </span>
         </div>
-        {onPractice && <PracticeProgress overview={overview} />}
+        <ModuleProgress progress={progress} />
       </button>
       {onPractice && (
         <button
@@ -377,17 +370,14 @@ function ModuleCard({
   );
 }
 
-/** Practiced questions of a module; a dash when the overview could not be read. */
-function PracticeProgress({ overview }: { overview: OverviewState }) {
-  if (overview === undefined) return <Skeleton className="mt-auto h-6 w-full" />;
-  if (overview === 'error') return <p className="mt-auto text-xs text-content-subtle">Practice progress —</p>;
+/** The module's learning progress (moduleProgress) with what it is made of; a dash when MP-01 could not be read. */
+function ModuleProgress({ progress }: { progress: ProgressState }) {
+  if (progress === undefined) return <Skeleton className="mt-auto h-6 w-full" />;
+  if (progress === 'error') return <p className="mt-auto text-xs text-content-subtle">Progress —</p>;
   return (
     <div className="mt-auto w-full space-y-1.5">
-      <Progress value={practicePercent(overview)} label="Practice progress" size="sm" />
-      <p className="text-2xs text-content-subtle">
-        {overview.practicedQuestions}/{overview.totalQuestions} questions practiced
-        {overview.gradedAttempts > 0 && ` · ${accuracyPercent(overview.accuracyRate)}% accuracy`}
-      </p>
+      <Progress value={progress.percent ?? 0} label="Progress" size="sm" />
+      <p className="text-2xs text-content-subtle">{progress.parts.length > 0 ? progressSummary(progress.parts) : 'Nothing to track yet.'}</p>
     </div>
   );
 }
