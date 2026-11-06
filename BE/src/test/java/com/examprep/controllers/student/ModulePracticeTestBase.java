@@ -439,6 +439,24 @@ public abstract class ModulePracticeTestBase {
                 .with(user(principal(who))));
     }
 
+    /** MP-04 (batch): several questions of one session in one call. */
+    protected ResultActions questions(User who, long sessionId, String ids) throws Exception {
+        org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder request =
+                get("/api/v1/student/practice/sessions/{sessionId}/questions", sessionId)
+                        .with(user(principal(who)));
+        if (ids != null) {
+            request = request.param("ids", ids);
+        }
+        return mvc.perform(request);
+    }
+
+    /** MP-08 with {@code ?includeQuestions=true}: the result with every MP-04 body attached. */
+    protected ResultActions resultIncludingQuestions(User who, long sessionId) throws Exception {
+        return mvc.perform(get("/api/v1/student/practice/sessions/{sessionId}/result", sessionId)
+                .with(user(principal(who)))
+                .param("includeQuestions", "true"));
+    }
+
     /** Submits an answer and returns the {@code data} object. */
     protected JsonNode answer(User who, long sessionId, long sessionQuestionId, String body) throws Exception {
         String content = submit(who, sessionId, sessionQuestionId, body)

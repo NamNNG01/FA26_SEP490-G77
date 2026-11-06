@@ -66,6 +66,11 @@ public class ModulePracticeServiceImpl implements ModulePracticeService {
     /** Accuracy is reported with four decimals; the FE renders the percentage. */
     private static final int ACCURACY_SCALE = 4;
     private static final int MAX_REVIEW_PAGE_SIZE = 50;
+    /**
+     * MP-04 (batch) ceiling: enough to open a screen of the paper, small enough that one call can
+     * never ask the server to map a whole 500-question paper.
+     */
+    private static final int MAX_BATCH_QUESTION_IDS = 20;
     /** Latest attempt grading states that still wait for the AI rubric worker. */
     private static final Set<String> AWAITING_GRADE = Set.of("PENDING_AI", "QUEUED", "GRADING");
     /** Latest attempt grading states that are finalized. */
@@ -419,6 +424,76 @@ public class ModulePracticeServiceImpl implements ModulePracticeService {
         return support.questionViewOf(sessionQuestion, session.getQuestionCount(), session.getAnsweredCount(), attempts, isBookmarked);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<ModulePracticeResponses.QuestionView> questions(Long userId, Long sessionId,
+                                                               List<Long> sessionQuestionIds) {
+        QuestionPracticeSession session = owned(userId, sessionId);
+        support.requireSessionAccess(userId, session);
+        Set<Long> ids = new LinkedHashSet<>();
+        if (sessionQuestionIds != null) {
+            for (Long id : sessionQuestionIds) {
+                if (id != null) {
+                    ids.add(id);
+                }
+            }
+        }
+        if (ids.isEmpty()) {
+            throw new BaseException(ResponseCode.VALIDATION_ERROR,
+                    "ids must name at least one question of this practice session");
+        }
+        if (ids.size() > MAX_BATCH_QUESTION_IDS) {
+            throw new BaseException(ResponseCode.VALIDATION_ERROR,
+                    "At most " + MAX_BATCH_QUESTION_IDS + " question ids can be read in one call");
+        }
+        return questionViewsOf(userId, session, new ArrayList<>(ids));
+    }
+
+    /**
+     * MP-04 for several questions of one session, read in a fixed number of queries whatever the
+     * batch size: the paper rows (with their questions), their attempts and their bookmarks. Media
+     * and the shared passage are already frozen into each row's display snapshot, so they cost no
+     * query at all. Every row is projected exactly like MP-04 projects a single one.
+     */
+    private List<ModulePracticeResponses.QuestionView> questionViewsOf(
+            Long userId, QuestionPracticeSession session, List<Long> sessionQuestionIds) {
+        if (sessionQuestionIds.isEmpty()) {
+            return List.of();
+        }
+        List<QuestionPracticeSessionQuestion> paper =
+                sessionQuestions.findInSessionByIds(session.getSessionId(), sessionQuestionIds);
+        if (paper.size() != sessionQuestionIds.size()) {
+            throw new ResourceNotFoundException("Question is not part of this practice session");
+        }
+
+        Map<Long, List<com.examprep.entities.QuestionPracticeAnswer>> attemptsByQuestion = new HashMap<>();
+        for (com.examprep.entities.QuestionPracticeAnswer attempt
+                : answers.findBySessionQuestionIds(sessionQuestionIds)) {
+            // Reading the id of a lazy proxy does not initialise it: this stays one query.
+            attemptsByQuestion
+                    .computeIfAbsent(attempt.getSessionQuestion().getSessionQuestionId(), key -> new ArrayList<>())
+                    .add(attempt);
+        }
+
+        List<Long> questionIds = new ArrayList<>(paper.size());
+        for (QuestionPracticeSessionQuestion row : paper) {
+            questionIds.add(row.getQuestion().getQuestionId());
+        }
+        Set<Long> bookmarked = new HashSet<>(
+                reviewRepository.findBookmarkedQuestionIdsIn(userId, questionIds));
+
+        List<ModulePracticeResponses.QuestionView> views = new ArrayList<>(paper.size());
+        for (QuestionPracticeSessionQuestion row : paper) {
+            views.add(support.questionViewOf(
+                    row,
+                    session.getQuestionCount(),
+                    session.getAnsweredCount(),
+                    attemptsByQuestion.getOrDefault(row.getSessionQuestionId(), List.of()),
+                    bookmarked.contains(row.getQuestion().getQuestionId())));
+        }
+        return views;
+    }
+
     // ------------------------------------------------------------------ MP-07
 
     @Override
@@ -444,9 +519,27 @@ public class ModulePracticeServiceImpl implements ModulePracticeService {
     @Override
     @Transactional(readOnly = true)
     public ModulePracticeResponses.Result result(Long userId, Long sessionId) {
+        return result(userId, sessionId, false);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ModulePracticeResponses.Result result(Long userId, Long sessionId, boolean includeQuestions) {
         QuestionPracticeSession session = owned(userId, sessionId);
         support.requireSessionAccess(userId, session);
         List<QuestionPracticeSessionQuestion> paper = sessionQuestions.findPaperBySessionId(sessionId);
+
+        // Opt-in: only then is the whole MP-04 body of the paper read (one query per relation).
+        Map<Long, ModulePracticeResponses.QuestionView> views = new HashMap<>();
+        if (includeQuestions && !paper.isEmpty()) {
+            List<Long> paperIds = new ArrayList<>(paper.size());
+            for (QuestionPracticeSessionQuestion row : paper) {
+                paperIds.add(row.getSessionQuestionId());
+            }
+            for (ModulePracticeResponses.QuestionView view : questionViewsOf(userId, session, paperIds)) {
+                views.put(view.sessionQuestionId(), view);
+            }
+        }
 
         int answered = 0;
         int latestCorrect = 0;
@@ -482,7 +575,8 @@ public class ModulePracticeServiceImpl implements ModulePracticeService {
                     row.getLatestScore(),
                     row.getGradingStatus(),
                     row.getFirstAnsweredAt(),
-                    row.getLastAnsweredAt()));
+                    row.getLastAnsweredAt(),
+                    views.get(row.getSessionQuestionId())));
         }
 
         Object[] attemptStats = answers.summarizeSession(sessionId).get(0);

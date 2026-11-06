@@ -17,6 +17,16 @@ public interface QuestionPracticeAnswerRepository extends JpaRepository<Question
     List<QuestionPracticeAnswer> findBySessionQuestion_SessionQuestionIdOrderByAttemptNumberAsc(Long sessionQuestionId);
 
     /**
+     * MP-04 (batch): the attempts of several paper rows in one query, each row's attempts oldest
+     * first — so the caller can group them in memory instead of issuing a query per question.
+     */
+    @Query("SELECT a FROM QuestionPracticeAnswer a "
+            + "WHERE a.sessionQuestion.sessionQuestionId IN :sessionQuestionIds "
+            + "ORDER BY a.sessionQuestion.sessionQuestionId, a.attemptNumber")
+    List<QuestionPracticeAnswer> findBySessionQuestionIds(
+            @Param("sessionQuestionIds") List<Long> sessionQuestionIds);
+
+    /**
      * MP-05/MP-06: the newest attempt of one question. The paper row is always projected from this
      * answer, so a late grading result can never contradict the attempt shown to the student.
      */

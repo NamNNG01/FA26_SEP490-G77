@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -25,6 +26,17 @@ public interface QuestionPracticeSessionQuestionRepository
             + "WHERE sq.sessionQuestionId = :sessionQuestionId AND sq.session.sessionId = :sessionId")
     Optional<QuestionPracticeSessionQuestion> findInSession(@Param("sessionId") Long sessionId,
                                                             @Param("sessionQuestionId") Long sessionQuestionId);
+
+    /**
+     * MP-04 (batch): several paper rows of one session in one query, in the persisted order so the
+     * caller always answers in the order the student's own paper holds them.
+     */
+    @Query("SELECT sq FROM QuestionPracticeSessionQuestion sq JOIN FETCH sq.question "
+            + "WHERE sq.session.sessionId = :sessionId AND sq.sessionQuestionId IN :sessionQuestionIds "
+            + "ORDER BY sq.orderIndex")
+    List<QuestionPracticeSessionQuestion> findInSessionByIds(
+            @Param("sessionId") Long sessionId,
+            @Param("sessionQuestionIds") Collection<Long> sessionQuestionIds);
 
     /**
      * MP-05: locking the paper row before an attempt allocates the next {@code attempt_number} keeps

@@ -292,7 +292,12 @@ public final class ModulePracticeResponses {
             BigDecimal latestScore,
             String gradingStatus,
             Instant firstAnsweredAt,
-            Instant lastAnsweredAt) {
+            Instant lastAnsweredAt,
+            /**
+             * MP-08 with {@code ?includeQuestions=true}: the whole MP-04 body of this row, so the
+             * result page needs one request. {@code null} on a plain MP-08 call.
+             */
+            QuestionView question) {
     }
 
     // ------------------------------------------------------------------ MP-11 review questions

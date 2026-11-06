@@ -41,11 +41,25 @@ public interface ModulePracticeService {
     /** MP-04: one question of the session with the student's own attempts. */
     ModulePracticeResponses.QuestionView question(Long userId, Long sessionId, Long sessionQuestionId);
 
+    /**
+     * MP-04 (batch): up to 20 questions of the session in one call, each with exactly the body of
+     * {@link #question}. An id that is not part of the session is a 404, like MP-04; an empty or
+     * oversized id list is a 400. The items come back in the session's persisted order.
+     */
+    java.util.List<ModulePracticeResponses.QuestionView> questions(Long userId, Long sessionId,
+                                                                  java.util.List<Long> sessionQuestionIds);
+
     /** MP-07: closes the session, keeping unanswered questions unanswered. Idempotent. */
     ModulePracticeResponses.SessionDetail complete(Long userId, Long sessionId);
 
     /** MP-08: unique-question statistics beside attempt statistics. */
     ModulePracticeResponses.Result result(Long userId, Long sessionId);
+
+    /**
+     * MP-08 with {@code ?includeQuestions=true}: the same result, every question row additionally
+     * carrying its whole MP-04 body, so the result page needs a single request.
+     */
+    ModulePracticeResponses.Result result(Long userId, Long sessionId, boolean includeQuestions);
 
     /** MP-11: paged questions of one module whose latest finalized attempt is wrong. */
     Page<ModulePracticeResponses.ReviewItem> reviewQuestions(Long userId, Long moduleId, int page, int size);

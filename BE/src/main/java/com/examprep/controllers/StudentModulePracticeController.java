@@ -114,6 +114,20 @@ public class StudentModulePracticeController {
                 practice.question(currentUser.getId(), sessionId, sessionQuestionId)));
     }
 
+    @GetMapping("/practice/sessions/{sessionId}/questions")
+    @Operation(summary = "MP-04 (batch): several questions of a practice session",
+            description = "Up to 20 ids in one call, each item exactly MP-04's body (content, options, "
+                    + "matching, media, passage, correctAnswer, isBookmarked and the student's own attempts). "
+                    + "Reads the frozen paper in batch, so opening a 100-question paper is one request "
+                    + "instead of a hundred.")
+    public ResponseEntity<ApiResponse<java.util.List<ModulePracticeResponses.QuestionView>>> questions(
+            @AuthenticationPrincipal UserPrincipal currentUser,
+            @PathVariable Long sessionId,
+            @RequestParam(required = false) java.util.List<Long> ids) {
+        return ResponseEntity.ok(ApiResponse.success(
+                practice.questions(currentUser.getId(), sessionId, ids)));
+    }
+
     // ------------------------------------------------------------------ MP-05 / MP-06
 
     @PostMapping("/practice/sessions/{sessionId}/questions/{sessionQuestionId}/answers")
@@ -160,12 +174,14 @@ public class StudentModulePracticeController {
     @GetMapping("/practice/sessions/{sessionId}/result")
     @Operation(summary = "MP-08: Result of one practice session",
             description = "Unique-question statistics kept apart from attempt statistics, with the latest "
-                    + "outcome of every question. Available while the session is still open.")
+                    + "outcome of every question. Available while the session is still open. With "
+                    + "includeQuestions=true every question row also carries its MP-04 body.")
     public ResponseEntity<ApiResponse<ModulePracticeResponses.Result>> result(
             @AuthenticationPrincipal UserPrincipal currentUser,
-            @PathVariable Long sessionId) {
+            @PathVariable Long sessionId,
+            @RequestParam(defaultValue = "false") boolean includeQuestions) {
         return ResponseEntity.ok(ApiResponse.success(
-                practice.result(currentUser.getId(), sessionId)));
+                practice.result(currentUser.getId(), sessionId, includeQuestions)));
     }
 
     // ------------------------------------------------------------------ MP-09
