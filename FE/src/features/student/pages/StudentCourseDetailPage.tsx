@@ -17,7 +17,7 @@ import {
 import type { PracticeScope } from '@/services/modulePractice.service';
 import { CardGridSkeleton, CourseThumb, LoadError, STUDENT_PAGE_CLASS } from '../components/studentUi';
 import { GENERAL_MODULE, countItems, sortedModules } from '../components/courseContent';
-import { progressSummary, useCourseProgress, type LearningProgress, type OverviewState, type ProgressState } from '../components/courseProgress';
+import { progressSummary, useCourseProgress, type LearningProgress, type OverviewState } from '../components/courseProgress';
 import { ModulePracticeModal } from '../components/ModulePracticeModal';
 import { SmartPracticeModal } from '../components/SmartPracticeModal';
 import { AiSparkle } from '../components/aiUi';
@@ -174,7 +174,7 @@ export function StudentCourseDetailPage() {
 
 /**
  * The course's progress: the average of its modules (courseProgress), with the questions / exams /
- * decks behind it. LP-01 still gives the average score and the latest attempts.
+ * decks behind it. LP-01 still gives the latest attempts.
  * `progress` undefined = some module is still loading; `partial` = some module could not be read.
  */
 function CourseProgressPanel({ courseId, progress, partial }: { courseId: number; progress?: LearningProgress; partial: boolean }) {
@@ -186,7 +186,7 @@ function CourseProgressPanel({ courseId, progress, partial }: { courseId: number
       .then(data => {
         if (!cancelled) setStats(data);
       })
-      // Only the score line depends on it: without it the panel just leaves that line out.
+      // Only the latest attempts depend on it: without it the panel just leaves them out.
       .catch(() => undefined);
     return () => {
       cancelled = true;
@@ -211,34 +211,28 @@ function CourseProgressPanel({ courseId, progress, partial }: { courseId: number
         </div>
       </div>
       <Progress value={progress.percent ?? 0} />
-      {stats && (
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3">
-          <p className="text-sm text-content-secondary">
-            Average score <span className="font-semibold text-content">{stats.averageScore == null ? '—' : stats.averageScore.toFixed(2)}</span>
-          </p>
-          {stats.recentAttempts.length > 0 && (
-            <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-content-subtle">
-              {stats.recentAttempts.slice(0, 3).map(attempt => (
-                <li key={attempt.attemptId}>
-                  {attempt.examTitle}: <span className="font-medium text-content-secondary">{attempt.totalScore}/{attempt.maxScore}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+      {stats && stats.recentAttempts.length > 0 && (
+        <ul className="flex flex-wrap gap-x-4 gap-y-1 border-t border-line pt-3 text-xs text-content-subtle">
+          {stats.recentAttempts.slice(0, 3).map(attempt => (
+            <li key={attempt.attemptId}>
+              {attempt.examTitle}: <span className="font-medium text-content-secondary">{attempt.totalScore}/{attempt.maxScore}</span>
+            </li>
+          ))}
+        </ul>
       )}
     </section>
   );
 }
 
 /**
- * The course content as a grid of module cards — learning progress, counts and a Practice button
- * each — plus a "General" card, built the same way, for the content not filed under any module.
- * The course progress panel above it is the average of these cards (useCourseProgress).
+ * The course content as a grid of module cards — counts and a Practice button each — plus a
+ * "General" card, built the same way, for the content not filed under any module. The course
+ * progress panel above it is the average of the modules (useCourseProgress); each module's own
+ * progress is shown on its detail page.
  */
 function ModuleGrid({ course, content }: { course: StudentCourseDetail; content: ReturnType<typeof useCourseProgress> }) {
   const navigate = useNavigate();
-  const { byModule, general, loading, error, retry, modules, overviews, hasGeneral, byKey, course: overall, partial } = content;
+  const { byModule, general, loading, error, retry, modules, overviews, hasGeneral, course: overall, partial } = content;
   const [practicing, setPracticing] = useState<{ key: string; scope: PracticeScope; title: string } | null>(null);
 
   if (loading) return <CardGridSkeleton count={Math.min(Math.max(modules.length, 3), 6)} />;
@@ -272,7 +266,6 @@ function ModuleGrid({ course, content }: { course: StudentCourseDetail; content:
             description={m.description}
             counts={countItems(byModule.get(m.moduleId) ?? [])}
             overview={overviews[m.moduleId]}
-            progress={byKey[m.moduleId]}
             onOpen={() => navigate(studentModulePath(course.courseId, m.moduleId))}
             onPractice={() => setPracticing({ key: String(m.moduleId), scope: { moduleId: m.moduleId }, title: m.title })}
           />
@@ -283,7 +276,6 @@ function ModuleGrid({ course, content }: { course: StudentCourseDetail; content:
             description="Practice questions, exams and flashcard decks not filed under a module."
             counts={countItems(general)}
             overview={overviews[GENERAL_MODULE]}
-            progress={byKey[GENERAL_MODULE]}
             onOpen={() => navigate(studentModulePath(course.courseId, GENERAL_MODULE))}
             onPractice={() => setPracticing({ key: GENERAL_MODULE, scope: { courseId: course.courseId }, title: 'General' })}
           />
@@ -314,7 +306,6 @@ function ModuleCard({
   description,
   counts,
   overview,
-  progress,
   onOpen,
   onPractice,
 }: {
@@ -323,7 +314,6 @@ function ModuleCard({
   description?: string | null;
   counts: { exams: number; decks: number };
   overview?: OverviewState;
-  progress?: ProgressState;
   onOpen: () => void;
   onPractice?: () => void;
 }) {
@@ -353,7 +343,6 @@ function ModuleCard({
             <Icon.Layers className="w-3.5 h-3.5" /> {counts.decks} deck{counts.decks === 1 ? '' : 's'}
           </span>
         </div>
-        <ModuleProgress progress={progress} />
       </button>
       {onPractice && (
         <button
@@ -370,17 +359,6 @@ function ModuleCard({
   );
 }
 
-/** The module's learning progress (moduleProgress) with what it is made of; a dash when MP-01 could not be read. */
-function ModuleProgress({ progress }: { progress: ProgressState }) {
-  if (progress === undefined) return <Skeleton className="mt-auto h-6 w-full" />;
-  if (progress === 'error') return <p className="mt-auto text-xs text-content-subtle">Progress —</p>;
-  return (
-    <div className="mt-auto w-full space-y-1.5">
-      <Progress value={progress.percent ?? 0} label="Progress" size="sm" />
-      <p className="text-2xs text-content-subtle">{progress.parts.length > 0 ? progressSummary(progress.parts) : 'Nothing to track yet.'}</p>
-    </div>
-  );
-}
 
 /** Not enrolled / completed: MC-02/03 refuse, so only the module names are shown. */
 function LockedModules({ course }: { course: StudentCourseDetail }) {
