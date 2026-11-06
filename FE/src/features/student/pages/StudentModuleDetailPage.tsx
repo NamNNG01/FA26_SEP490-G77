@@ -4,7 +4,6 @@ import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { Button } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Alert';
 import { Input } from '@/components/ui/Input';
-import { Progress } from '@/components/ui/Progress';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/Card';
 import { Icon } from '@/assets/icons';
@@ -12,7 +11,6 @@ import { ROUTES, studentCoursePath, studentModulePracticePath } from '@/app/rout
 import { getApiErrorMessage } from '@/utils/apiError';
 import { studentCourseService, type StudentCourseDetail } from '@/services/studentCourse.service';
 import {
-  accuracyPercent,
   modulePracticeService,
   type ModulePracticeOverview,
   type PracticeScope,
@@ -29,7 +27,7 @@ import {
   useOpenContent,
 } from '../components/courseContent';
 import { ModulePracticeModal } from '../components/ModulePracticeModal';
-import { moduleProgress, progressSummary } from '../components/courseProgress';
+import { moduleProgress, type ProgressPart, type ProgressPartKey } from '../components/courseProgress';
 
 type KindFilter = 'all' | 'exam' | 'deck';
 
@@ -38,6 +36,36 @@ const KIND_FILTERS: { value: KindFilter; label: string }[] = [
   { value: 'exam', label: 'Exams' },
   { value: 'deck', label: 'Flashcards' },
 ];
+
+const PART_CARD: Record<ProgressPartKey, { title: string; icon: ReactNode; unit: string }> = {
+  questions: { title: 'Questions', icon: <Icon.HelpCircle className="w-4 h-4" />, unit: 'correct' },
+  exams: { title: 'Exams', icon: <Icon.ClipboardList className="w-4 h-4" />, unit: 'done' },
+  decks: { title: 'Flashcards', icon: <Icon.Layers className="w-4 h-4" />, unit: 'decks learned' },
+};
+
+/** One card per part the module has: "Questions · 30/40 correct". */
+function ProgressCards({ parts }: { parts: ProgressPart[] }) {
+  return (
+    <div className="grid gap-3 grid-cols-1 sm:grid-cols-3">
+      {parts.map(p => {
+        const card = PART_CARD[p.key];
+        return (
+          <div key={p.key} className="rounded-lg border border-line px-4 py-3">
+            <p className="inline-flex items-center gap-1.5 text-sm text-content-soft">
+              {card.icon} {card.title}
+            </p>
+            <p className="mt-1 text-content">
+              <span className="text-xl font-bold">
+                {p.done}/{p.total}
+              </span>{' '}
+              <span className="text-sm text-content-subtle">{card.unit}</span>
+            </p>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 /**
  * One module of a course: its practice overview and Practice button, then its exams (MC-02) and
@@ -200,34 +228,17 @@ function ModuleContent({
   return (
     <>
       <ModuleHeader title={title} description={description}>
-        <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm text-content-soft">
-          <span className="inline-flex items-center gap-1.5">
-            <Icon.ClipboardList className="w-4 h-4" /> {counts.exams} exam{counts.exams === 1 ? '' : 's'}
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <Icon.Layers className="w-4 h-4" /> {counts.decks} deck{counts.decks === 1 ? '' : 's'}
-          </span>
-        </div>
-
-        <div className="border-t border-line pt-4 space-y-4">
+        <div className="space-y-4">
           {overview === undefined || (practice && loading) ? (
             <Skeleton className="h-16 w-full" />
           ) : practice ? (
             <>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <Stat label="Practiced" value={`${practice.practicedQuestions}/${practice.totalQuestions}`} />
-                <Stat label="Accuracy" value={practice.gradedAttempts > 0 ? `${accuracyPercent(practice.accuracyRate)}%` : '—'} />
-                <Stat label="Ever correct" value={String(practice.everCorrectQuestions)} />
-                <Stat label="Need review" value={String(practice.questionsNeedingReview)} tone={practice.questionsNeedingReview > 0 ? 'danger' : undefined} />
-              </div>
-              {progress && (
-                <div className="space-y-1.5">
-                  <Progress value={progress.percent ?? 0} label="Module progress" />
-                  <p className="text-xs text-content-subtle">
-                    {progress.parts.length > 0 ? progressSummary(progress.parts) : 'Nothing to track yet.'}
-                  </p>
-                </div>
-              )}
+              {progress &&
+                (progress.parts.length > 0 ? (
+                  <ProgressCards parts={progress.parts} />
+                ) : (
+                  <p className="text-sm text-content-subtle">Nothing to track yet.</p>
+                ))}
             </>
           ) : (
             <p className="text-sm text-content-subtle">Module progress could not be loaded.</p>
@@ -239,11 +250,6 @@ function ModuleContent({
             >
               {active ? 'Continue practice' : 'Practice'}
             </Button>
-            {active && (
-              <span className="text-sm text-content-soft">
-                Session in progress · {active.answeredCount}/{active.questionCount} answered
-              </span>
-            )}
             {practice && practice.totalAttempts > 0 && (
               <span className="ml-auto">
                 <ResetPracticeButton scope={scope} moduleTitle={title} onReset={() => setRefresh(r => r + 1)} />
@@ -314,14 +320,5 @@ function ModuleContent({
         overview={practice}
       />
     </>
-  );
-}
-
-function Stat({ label, value, tone }: { label: string; value: string; tone?: 'danger' }) {
-  return (
-    <div className="rounded-[10px] bg-accent px-3 py-2.5">
-      <p className="text-xs text-content-subtle">{label}</p>
-      <p className={`text-lg font-bold ${tone === 'danger' ? 'text-danger' : 'text-content'}`}>{value}</p>
-    </div>
   );
 }

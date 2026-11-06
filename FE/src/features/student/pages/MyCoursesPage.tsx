@@ -17,7 +17,7 @@ import { CardGridSkeleton, CourseThumb, LoadError, PageTitle, STUDENT_PAGE_CLASS
 import { MaterialQuizModal } from '../components/MaterialQuizModal';
 import { SmartPracticeModal } from '../components/SmartPracticeModal';
 import { RecommendationsCard } from '../components/RecommendationsCard';
-import { progressSummary, useCourseProgress } from '../components/courseProgress';
+import { useCourseProgress } from '../components/courseProgress';
 
 const PAGE_SIZE = 12;
 /** MC-01 caps `size` at 100 and has no keyword filter, so the list is loaded once and searched client-side. */
@@ -269,10 +269,5 @@ function LiveCourseProgress({ courseId }: { courseId: number }) {
 
   if (failed || error) return <p className="text-xs text-content-subtle">Progress —</p>;
   if (!progress) return <Skeleton className="h-6 w-full" />;
-  return (
-    <div className="space-y-1.5">
-      <Progress value={progress.percent ?? 0} label="Progress" size="sm" />
-      {progress.parts.length > 0 && <p className="text-2xs text-content-subtle">{progressSummary(progress.parts)}</p>}
-    </div>
-  );
+  return <Progress value={progress.percent ?? 0} label="Progress" size="sm" />;
 }

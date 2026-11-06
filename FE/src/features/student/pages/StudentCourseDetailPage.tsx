@@ -17,11 +17,10 @@ import {
 import type { PracticeScope } from '@/services/modulePractice.service';
 import { CardGridSkeleton, CourseThumb, LoadError, STUDENT_PAGE_CLASS } from '../components/studentUi';
 import { GENERAL_MODULE, countItems, sortedModules } from '../components/courseContent';
-import { progressSummary, useCourseProgress, type LearningProgress, type OverviewState } from '../components/courseProgress';
+import { useCourseProgress, type LearningProgress, type OverviewState } from '../components/courseProgress';
 import { ModulePracticeModal } from '../components/ModulePracticeModal';
 import { SmartPracticeModal } from '../components/SmartPracticeModal';
 import { AiSparkle } from '../components/aiUi';
-import { studentProgressService, type CourseProgress } from '@/services/studentProgress.service';
 
 /**
  * Student course detail — course info (CL-02), then the course content as a grid of module cards.
@@ -173,53 +172,22 @@ export function StudentCourseDetailPage() {
 }
 
 /**
- * The course's progress: the average of its modules (courseProgress), with the questions / exams /
- * decks behind it. LP-01 still gives the latest attempts.
+ * The course's progress: the average of its modules (courseProgress).
  * `progress` undefined = some module is still loading; `partial` = some module could not be read.
  */
-function CourseProgressPanel({ courseId, progress, partial }: { courseId: number; progress?: LearningProgress; partial: boolean }) {
-  const [stats, setStats] = useState<CourseProgress | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    studentProgressService
-      .getCourseProgress(courseId)
-      .then(data => {
-        if (!cancelled) setStats(data);
-      })
-      // Only the latest attempts depend on it: without it the panel just leaves them out.
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [courseId]);
-
-  if (!progress) return <Skeleton className="h-28 w-full" />;
+function CourseProgressPanel({ progress, partial }: { progress?: LearningProgress; partial: boolean }) {
+  if (!progress) return <Skeleton className="h-20 w-full" />;
 
   return (
     <section className="card p-4 sm:p-5 space-y-4" aria-label="Course progress">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="font-semibold text-content">Your progress</h2>
-          <p className="mt-1 text-xs text-content-subtle">
-            {progress.parts.length > 0 ? progressSummary(progress.parts) : 'Nothing to track yet.'}
-            {partial && ' · some modules could not be loaded'}
-          </p>
+          {partial && <p className="mt-1 text-xs text-content-subtle">Some modules could not be loaded.</p>}
         </div>
-        <div className="text-right">
-          <p className="text-xl font-bold text-primary">{progress.percent ?? 0}%</p>
-          <p className="text-xs text-content-subtle">average of modules</p>
-        </div>
+        <p className="text-xl font-bold text-primary">{progress.percent ?? 0}%</p>
       </div>
       <Progress value={progress.percent ?? 0} />
-      {stats && stats.recentAttempts.length > 0 && (
-        <ul className="flex flex-wrap gap-x-4 gap-y-1 border-t border-line pt-3 text-xs text-content-subtle">
-          {stats.recentAttempts.slice(0, 3).map(attempt => (
-            <li key={attempt.attemptId}>
-              {attempt.examTitle}: <span className="font-medium text-content-secondary">{attempt.totalScore}/{attempt.maxScore}</span>
-            </li>
-          ))}
-        </ul>
-      )}
     </section>
   );
 }
@@ -254,7 +222,7 @@ function ModuleGrid({ course, content }: { course: StudentCourseDetail; content:
 
   return (
     <>
-    <CourseProgressPanel courseId={course.courseId} progress={overall} partial={partial} />
+    <CourseProgressPanel progress={overall} partial={partial} />
     <section className="space-y-3" aria-label="Course content">
       <h2 className="text-base font-semibold text-content">Modules</h2>
       <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,280px),1fr))] gap-[clamp(1rem,2vw,1.25rem)]">
