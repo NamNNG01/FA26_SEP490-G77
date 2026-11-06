@@ -82,13 +82,14 @@ export function MyMaterialsPage() {
     // Background refreshes keep the list on screen.
     if (!loadedOnce.current) setLoading(true);
     setError(null);
+    // Refreshes (polling, after an upload or a delete) only reload MQ-02: the enrolled courses do not change here.
     Promise.all([
-      studentCourseService.getMyCourses({ page: 0, size: MY_COURSES_FETCH_SIZE }),
+      loadedOnce.current ? null : studentCourseService.getMyCourses({ page: 0, size: MY_COURSES_FETCH_SIZE }),
       materialService.listAll(null),
     ])
       .then(([res, list]) => {
         if (cancelled) return;
-        setCourses(res.content);
+        if (res) setCourses(res.content);
         setRows(list);
         loadedOnce.current = true;
       })

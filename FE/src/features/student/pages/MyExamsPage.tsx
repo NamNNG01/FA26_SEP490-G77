@@ -96,19 +96,14 @@ function sortRows(list: HistoryRow[], sort: SortKey): HistoryRow[] {
 /**
  * ME-01 lists every exam with an attempt (course exams, practice exams — random or AI-built —, material quizzes),
  * newest attempt first. PQ-02 and MQ-06 help tell the type, the best score and the source material.
- * Also returns the enrolled courses (MC-01, without CANCELLED) for the quiz builders.
+ * Rows come without `courseLeft`: MC-01 loads on its own (see MyExamsPage) so it does not hold the table back.
  */
-async function loadHistory(): Promise<{ rows: HistoryRow[]; courses: MyCourse[] }> {
-  const [exams, practices, materials, myCourses] = await Promise.all([
+async function loadHistory(): Promise<HistoryRow[]> {
+  const [exams, practices, materials] = await Promise.all([
     studentCourseService.getAllMyExams(),
     studentPracticeExamService.listAll(),
     materialService.allHistory(),
-    // MC-01 tells which courses were left; without it no row is locked (SA-01 still refuses).
-    studentCourseService.getMyCourses({ page: 0, size: 100 }).catch(() => null),
   ]);
-  const leftCourses = new Set(
-    (myCourses?.content ?? []).filter(c => c.status === 'CANCELLED').map(c => c.courseId),
-  );
   const practiceByExam = new Map(practices.map(p => [p.examId, p]));
   const materialByQuiz = new Map(materials.filter(m => m.quizId != null).map(m => [m.quizId as number, m]));
 
@@ -128,16 +123,11 @@ async function loadHistory(): Promise<{ rows: HistoryRow[]; courses: MyCourse[] 
       bestScore: e.bestScore ?? practice?.bestScore ?? null,
       documentTitle: material?.documentTitle ?? null,
       hasCode: e.hasCodeQuestions === true,
-      courseLeft: e.courseId != null && leftCourses.has(e.courseId),
     };
   });
   // Only exams taken at least once: a practice exam or material quiz that was generated but never
   // started stays out (material quizzes are still listed on My Materials).
-  const rows = taken.filter(r => r.attemptCount > 0);
-  return {
-    rows,
-    courses: (myCourses?.content ?? []).filter(c => c.status !== 'CANCELLED'),
-  };
+  return taken.filter(r => r.attemptCount > 0);
 }
 
 /**
@@ -151,8 +141,9 @@ export function MyExamsPage() {
   const [searchParams] = useSearchParams();
   const [page, setPage] = useState(1);
   const [reload, setReload] = useState(0);
-  const [rows, setRows] = useState<HistoryRow[]>([]);
-  const [myCourses, setMyCourses] = useState<MyCourse[]>([]);
+  const [history, setHistory] = useState<HistoryRow[]>([]);
+  /** MC-01 enrollments: the left (CANCELLED) ones lock their rows, the others feed the quiz builders. */
+  const [enrollments, setEnrollments] = useState<MyCourse[]>([]);
   const [quizModal, setQuizModal] = useState<'material' | 'personal' | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -173,9 +164,7 @@ export function MyExamsPage() {
     setError(null);
     loadHistory()
       .then(res => {
-        if (cancelled) return;
-        setRows(res.rows);
-        setMyCourses(res.courses);
+        if (!cancelled) setHistory(res);
       })
       .catch(err => {
         if (!cancelled) setError(getApiErrorMessage(err, 'Failed to load your exams.'));
@@ -187,6 +176,27 @@ export function MyExamsPage() {
       cancelled = true;
     };
   }, [reload]);
+
+  // MC-01 is the slowest of the lists, so it loads beside the history instead of before it.
+  // Without it no row is locked (SA-01 still refuses).
+  useEffect(() => {
+    let cancelled = false;
+    studentCourseService
+      .getMyCourses({ page: 0, size: 100 })
+      .then(res => {
+        if (!cancelled) setEnrollments(res.content);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [reload]);
+
+  const myCourses = useMemo(() => enrollments.filter(c => c.status !== 'CANCELLED'), [enrollments]);
+  const rows = useMemo(() => {
+    const left = new Set(enrollments.filter(c => c.status === 'CANCELLED').map(c => c.courseId));
+    return left.size === 0 ? history : history.map(r => ({ ...r, courseLeft: r.courseId != null && left.has(r.courseId) }));
+  }, [history, enrollments]);
 
   const courseOptions = useMemo(() => {
     const byId = new Map(rows.filter(r => r.courseId != null).map(r => [r.courseId as number, r.courseTitle ?? 'Untitled course']));
