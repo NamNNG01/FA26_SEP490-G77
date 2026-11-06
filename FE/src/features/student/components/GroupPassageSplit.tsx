@@ -9,18 +9,21 @@ export interface GroupPassage {
 }
 
 /**
- * A question of a question group (reading passage): the passage on the left (40%) and the
- * question on the right (60%), each scrolling on its own — like the CODE workspace.
+ * A question of a question group (reading passage): the passage on the left (40%, or 30% when
+ * `narrow`) and the question on the right (60% / 70%), each scrolling on its own — like the CODE workspace.
  * Below `md` they stack: the passage on top, at most 40% of the screen, and it can be collapsed.
  * Without a passage only `children` is rendered, inside the same scrolling `main`.
  */
 export function GroupPassageSplit({
   group,
   mainClassName = '',
+  narrow = false,
   children,
 }: {
   group: GroupPassage | null | undefined;
   mainClassName?: string;
+  /** Passage 30% / question 70% instead of 40 / 60 (Module Practice). */
+  narrow?: boolean;
   children: ReactNode;
 }) {
   const passage = group?.passageText?.trim() ? group : null;
@@ -35,7 +38,7 @@ export function GroupPassageSplit({
     <div className="flex-1 min-h-0 flex flex-col md:flex-row overflow-hidden">
       <section
         aria-label="Reading passage"
-        className="flex-shrink-0 md:w-2/5 md:min-h-0 md:flex md:flex-col bg-surface border-b md:border-b-0 md:border-r border-line-soft"
+        className={`flex-shrink-0 ${narrow ? 'md:w-[30%]' : 'md:w-2/5'} md:min-h-0 md:flex md:flex-col bg-surface border-b md:border-b-0 md:border-r border-line-soft`}
       >
         <button
           type="button"
