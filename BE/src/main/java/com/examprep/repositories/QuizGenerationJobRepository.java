@@ -1,6 +1,7 @@
 package com.examprep.repositories;
 
 import com.examprep.entities.QuizGenerationJob;
+import com.examprep.dto.student.MaterialResponses.QuizSummary;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -18,6 +19,15 @@ import java.util.Optional;
 
 @Repository
 public interface QuizGenerationJobRepository extends JpaRepository<QuizGenerationJob, Long> {
+    @Query("""
+        SELECT new com.examprep.dto.student.MaterialResponses$QuizSummary(
+          j.jobId, d.docId, d.title, j.questionCount, j.createdAt, e.examId, c.courseId)
+        FROM QuizGenerationJob j JOIN j.document d LEFT JOIN j.resultExam e LEFT JOIN j.course c
+        WHERE j.user.userId = :userId AND j.status = 'COMPLETED'
+        ORDER BY j.createdAt DESC, j.jobId DESC
+        """)
+    Page<QuizSummary> findHistorySummaries(@Param("userId") Long userId, Pageable pageable);
+
 
     Optional<QuizGenerationJob> findByJobIdAndUserUserId(Long jobId, Long userId);
 

@@ -106,17 +106,20 @@ public class StudentCourseServiceImpl implements StudentCourseService {
     }
 
     @Override
-    @Transactional
     public Page<MyCourseDto> listMyCourses(String status, int page, int size, Long userId) {
         if (status != null && !status.equals("ACTIVE") && !status.equals("COMPLETED")) {
             throw new BadRequestException("Invalid enrollment status");
         }
         Pageable pageable = createPageable(page, size, "newest", "enrolledAt");
         Page<MyCourseDto> courses = enrollmentRepository.findMyCourses(userId, status, pageable);
-        for (MyCourseDto course : courses.getContent()) {
-            studentProgressService.liveProgressPercent(userId, course.courseId());
-        }
-        return enrollmentRepository.findMyCourses(userId, status, pageable);
+        Map<Long, Integer> progress = studentProgressService.liveProgressPercents(userId,
+                courses.getContent().stream().map(MyCourseDto::courseId).toList());
+        return courses.map(course -> {
+            int percent = progress.getOrDefault(course.courseId(), -1);
+            return new MyCourseDto(course.courseId(), course.title(), course.slug(), course.thumbnailUrl(),
+                    course.price(), course.category(), course.manager(), course.enrolledAt(), course.status(),
+                    percent < 0 ? course.progress() : percent, course.publishedExamCount(), course.deckCount(), course.nextExam());
+        });
     }
 
     @Override

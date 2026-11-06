@@ -21,6 +21,13 @@ public final class MaterialResponses {
     public record DocumentItem(Long documentId, String title, String fileName, Integer pageCount,
                                Instant uploadedAt, List<JobBrief> jobs, List<CourseLink> courses) {}
 
+    /** Repository projections keep extracted file text out of list/history reads. */
+    public record DocumentSummary(Long documentId, String title, String fileName, Integer pageCount,
+                                  Instant uploadedAt) {}
+    public record DocumentCourse(Long documentId, Long courseId, String title) {}
+    public record QuizSummary(Long jobId, Long documentId, String documentTitle, Integer questionCount,
+                              Instant createdAt, Long quizId, Long courseId) {}
+
     /** MQ-03 (202) */
     public record JobAccepted(Long jobId, String status, Integer questionCount) {}
 

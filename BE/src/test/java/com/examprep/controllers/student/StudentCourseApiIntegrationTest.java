@@ -18,6 +18,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
+import java.util.List;
+import org.hibernate.SessionFactory;
+import com.examprep.services.student.StudentCourseService;
+import com.examprep.services.student.StudentProgressService;
+import static org.junit.jupiter.api.Assertions.*;
 
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.not;
@@ -39,6 +44,9 @@ class StudentCourseApiIntegrationTest {
 
     @Autowired
     private EntityManager em;
+
+    @Autowired private StudentCourseService courseService;
+    @Autowired private StudentProgressService progressService;
 
     private User student;
     private User manager;
@@ -127,6 +135,72 @@ class StudentCourseApiIntegrationTest {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.content[0].courseId").value(publishedCourse.getCourseId()))
                 .andExpect(jsonPath("$.data.content[0].progress").value(0));
+    }
+
+    @Test
+    void courseListProgressUsesFixedQueryCountAndDoesNotWriteEnrollments() {
+        var statistics = em.getEntityManagerFactory().unwrap(SessionFactory.class).getStatistics();
+        statistics.setStatisticsEnabled(true);
+        try {
+            em.clear();
+            statistics.clear();
+            courseService.listMyCourses(null, 0, 100, student.getUserId());
+            long oneCourseQueries = statistics.getPrepareStatementCount();
+
+            for (int i = 0; i < 8; i++) {
+                Course extra = Course.builder().categoryId(publishedCourse.getCategoryId()).manager(manager)
+                        .title("Extra " + i).slug(UUID.randomUUID().toString()).isPublished(true).build();
+                em.persist(extra);
+                em.persist(Enrollment.builder().course(extra).user(student).enrolledAt(Instant.now())
+                        .status("ACTIVE").progress(17).build());
+                for (int j = 0; j < 3; j++) {
+                    em.persist(Module.builder().course(extra).title("Module " + j).status("VISIBLE").orderIndex(j).build());
+                }
+            }
+            em.flush();
+            em.clear();
+            statistics.clear();
+            var page = courseService.listMyCourses(null, 0, 100, student.getUserId());
+            assertEquals(9, page.getNumberOfElements());
+            assertEquals(oneCourseQueries, statistics.getPrepareStatementCount());
+            assertTrue(oneCourseQueries <= 7, "Page should need only list/count plus five progress summaries");
+            assertEquals(0, statistics.getEntityUpdateCount());
+            assertEquals(17, page.getContent().stream().filter(c -> c.title().startsWith("Extra")).findFirst().orElseThrow().progress());
+        } finally {
+            statistics.setStatisticsEnabled(false);
+        }
+    }
+
+    @Test
+    void batchedProgressMatchesDetailForGeneralModulesAndCompletedContent() {
+        Module visible = em.createQuery("from Module m where m.course = :course", Module.class)
+                .setParameter("course", publishedCourse).getSingleResult();
+        Module hidden = Module.builder().course(publishedCourse).title("Hidden").status("HIDDEN").orderIndex(2).build();
+        em.persist(hidden);
+        for (Module scope : new Module[]{null, visible, hidden}) {
+            for (int i = 0; i < 2; i++) {
+                Question question = Question.builder().course(publishedCourse).module(scope)
+                        .questionType("SINGLE_CHOICE").content("Practice " + i).status("ACTIVE").build();
+                em.persist(question);
+                if (i == 0) em.persist(QuestionPracticeProgress.builder().course(publishedCourse).module(scope)
+                        .user(student).question(question).totalAttempts(1).gradedAttempts(1).correctAttempts(1).build());
+            }
+        }
+        Exam exam = em.createQuery("from Exam e where e.course = :course", Exam.class)
+                .setParameter("course", publishedCourse).getSingleResult();
+        // Multiple submissions still count as one completed exam.
+        for (int i = 0; i < 2; i++) em.persist(ExamAttempt.builder().exam(exam).user(student)
+                .status("COMPLETED").startTime(Instant.now()).deadlineAt(Instant.now().plusSeconds(60))
+                .submitTime(Instant.now()).totalScore(BigDecimal.TEN).build());
+        Flashcard card = em.createQuery("from Flashcard f where f.deck.course = :course", Flashcard.class)
+                .setParameter("course", publishedCourse).getSingleResult();
+        em.persist(UserCardProgress.builder().user(student).card(card).isStarred(false).status("KNOWN").build());
+        em.flush();
+        em.clear();
+        int batch = progressService.liveProgressPercents(student.getUserId(), List.of(publishedCourse.getCourseId()))
+                .get(publishedCourse.getCourseId());
+        assertEquals(67, batch); // General: (50 + 100 + 100)/3 = 83; module: 50; course: 67.
+        assertEquals(progressService.liveProgressPercent(student.getUserId(), publishedCourse.getCourseId()), batch);
     }
 
     @Test

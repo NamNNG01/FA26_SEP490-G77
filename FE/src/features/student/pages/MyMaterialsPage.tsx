@@ -51,7 +51,7 @@ function quizCountLabel(row: MaterialItem): string {
 /**
  * My Materials — files the student uploaded for the Material to Quiz Creator (MQ-02), the courses
  * each one is attached to and the quizzes generated from it. One file is one material, whatever the
- * number of courses (see materialService.listWithCourses for the current BE). "Generate quiz" opens
+ * number of courses. MQ-02 includes those course links. "Generate quiz" opens
  * the creator with the material picked. The quizzes of a file are not listed inline: the file name (or its quiz
  * count) opens a modal with them, where a ready quiz starts with MQ-05. The list refreshes itself while a quiz is being generated.
  * An account keeps up to MATERIAL_MAX_FILES files; "Delete" removes one from every course (not while a quiz is being generated).
@@ -82,10 +82,11 @@ export function MyMaterialsPage() {
     // Background refreshes keep the list on screen.
     if (!loadedOnce.current) setLoading(true);
     setError(null);
-    studentCourseService
-      .getMyCourses({ page: 0, size: MY_COURSES_FETCH_SIZE })
-      .then(async res => {
-        const { items: list } = await materialService.listWithCourses(res.content.map(c => ({ courseId: c.courseId, title: c.title })));
+    Promise.all([
+      studentCourseService.getMyCourses({ page: 0, size: MY_COURSES_FETCH_SIZE }),
+      materialService.listAll(null),
+    ])
+      .then(([res, list]) => {
         if (cancelled) return;
         setCourses(res.content);
         setRows(list);
