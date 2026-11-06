@@ -2,26 +2,15 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { Button } from '@/components/ui/Button';
 import { Table, type TableColumn } from '@/components/ui/Table';
-import { Dropdown, type DropdownItem } from '@/components/ui/Dropdown';
 import { EmptyState } from '@/components/ui/Card';
 import { Select } from '@/components/ui/Select';
 import { Badge, type BadgeVariant } from '@/components/ui/Badge';
-import { Modal } from '@/components/ui/Modal';
-import { useToast } from '@/components/ui/ToastHost';
 import { SearchInput } from '@/components/common/SearchInput';
 import { Icon } from '@/assets/icons';
-import {
-  ROUTES,
-  studentCoursePath,
-  studentExamAttemptsPath,
-  studentResumeAttemptPath,
-  studentTakeExamPath,
-  studentTakePracticePath,
-} from '@/app/routes';
+import { ROUTES, studentCoursePath, studentExamAttemptsPath } from '@/app/routes';
 import { getApiErrorMessage } from '@/utils/apiError';
 import { studentCourseService, type MyCourse } from '@/services/studentCourse.service';
 import { studentPracticeExamService } from '@/services/studentPracticeExam.service';
-import { studentAttemptService } from '@/services/studentAttempt.service';
 import { materialService } from '@/services/studentMaterial.service';
 import { ListSkeleton, LoadError, PageTitle, STUDENT_PAGE_CLASS, formatScore } from '../components/studentUi';
 import { SmartPracticeModal } from '../components/SmartPracticeModal';
@@ -72,18 +61,12 @@ interface HistoryRow {
   maxScore: number | null;
   attemptCount: number;
   bestScore: number | null;
-  /** PQ-02 entry — retake and delete need it. */
-  practiceId: number | null;
-  /** MQ-06 job — a material quiz is retaken with MQ-05. */
-  jobId: number | null;
   /** Material the quiz was generated from. */
   documentTitle: string | null;
   /** Has a CODE question (ME-01 only). */
   hasCode?: boolean;
-  /** Its course was left (EN-04): listed, but neither its attempts nor a retake open. */
+  /** Its course was left (EN-04): listed, but its attempts do not open. */
   courseLeft?: boolean;
-  /** An attempt saved and left unfinished (EX-01 `actions.activeAttemptId`): "Continue" instead of "Retake". */
-  activeAttemptId?: number | null;
 }
 
 type SortKey = 'recent' | 'title' | 'bestScoreDesc' | 'bestScoreAsc' | 'attempts';
@@ -112,7 +95,7 @@ function sortRows(list: HistoryRow[], sort: SortKey): HistoryRow[] {
 
 /**
  * ME-01 lists every exam with an attempt (course exams, practice exams — random or AI-built —, material quizzes),
- * newest attempt first. PQ-02 and MQ-06 add what only they know (practiceId / jobId).
+ * newest attempt first. PQ-02 and MQ-06 help tell the type, the best score and the source material.
  * Also returns the enrolled courses (MC-01, without CANCELLED) for the quiz builders.
  */
 async function loadHistory(): Promise<{ rows: HistoryRow[]; courses: MyCourse[] }> {
@@ -143,8 +126,6 @@ async function loadHistory(): Promise<{ rows: HistoryRow[]; courses: MyCourse[] 
       attemptCount: e.attemptCount,
       // PQ-02 also knows the best score of a practice exam, in case ME-01 leaves it out.
       bestScore: e.bestScore ?? practice?.bestScore ?? null,
-      practiceId: practice?.practiceId ?? null,
-      jobId: material?.jobId ?? null,
       documentTitle: material?.documentTitle ?? null,
       hasCode: e.hasCodeQuestions === true,
       courseLeft: e.courseId != null && leftCourses.has(e.courseId),
@@ -153,14 +134,6 @@ async function loadHistory(): Promise<{ rows: HistoryRow[]; courses: MyCourse[] 
   // Only exams taken at least once: a practice exam or material quiz that was generated but never
   // started stays out (material quizzes are still listed on My Materials).
   const rows = taken.filter(r => r.attemptCount > 0);
-  // ME-01 does not say which exam has an unfinished attempt; EX-01 does, one exam per call (see docs/notes).
-  // A failed call just leaves that row on "Retake" (which resumes anyway: SA-01 answers with the active attempt).
-  const details = await Promise.allSettled(
-    rows.map(r => (r.courseLeft ? Promise.reject() : studentAttemptService.getExamDetail(r.examId))),
-  );
-  details.forEach((d, i) => {
-    if (d.status === 'fulfilled') rows[i].activeAttemptId = d.value.actions?.activeAttemptId ?? null;
-  });
   return {
     rows,
     courses: (myCourses?.content ?? []).filter(c => c.status !== 'CANCELLED'),
@@ -175,7 +148,6 @@ async function loadHistory(): Promise<{ rows: HistoryRow[]; courses: MyCourse[] 
  */
 export function MyExamsPage() {
   const navigate = useNavigate();
-  const toast = useToast();
   const [searchParams] = useSearchParams();
   const [page, setPage] = useState(1);
   const [reload, setReload] = useState(0);
@@ -194,10 +166,6 @@ export function MyExamsPage() {
   });
   const [sort, setSort] = useState<SortKey>('recent');
 
-  const [startingJob, setStartingJob] = useState<number | null>(null);
-  const [toDelete, setToDelete] = useState<HistoryRow | null>(null);
-  const [deleting, setDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -260,82 +228,8 @@ export function MyExamsPage() {
     setPage(1);
   };
 
-  /** A material quiz gets a fresh attempt from MQ-05; the rest start with SA-01. */
-  const retake = async (row: HistoryRow) => {
-    // An unfinished attempt is reopened where it was left.
-    if (row.activeAttemptId != null) {
-      const path = studentResumeAttemptPath(row.activeAttemptId);
-      navigate(isPractice(row.kind) ? `${path}&practice=1` : path);
-      return;
-    }
-    if (isPractice(row.kind)) {
-      navigate(studentTakePracticePath(row.examId));
-      return;
-    }
-    if (row.kind === 'MATERIAL_QUIZ' && row.jobId != null) {
-      setStartingJob(row.jobId);
-      try {
-        const started = await materialService.start(row.jobId);
-        navigate(studentResumeAttemptPath(started.attemptId));
-      } catch (err) {
-        toast.error(getApiErrorMessage(err, 'Failed to start the quiz.'));
-        setStartingJob(null);
-      }
-      return;
-    }
-    navigate(studentTakeExamPath(row.examId));
-  };
-
-  /** A deleted practice exam is archived on the BE: its attempts stay, it cannot be taken again. */
-  const canRetake = (row: HistoryRow) =>
-    !row.courseLeft && (row.kind === 'PRACTICE' ? row.practiceId != null : row.kind !== 'MATERIAL_QUIZ' || row.jobId != null);
-
   /** Attempts of a left course are closed to the student. */
   const canViewAttempts = (row: HistoryRow) => row.attemptCount > 0 && !row.courseLeft;
-
-  const confirmDelete = async () => {
-    if (toDelete?.practiceId == null) return;
-    setDeleting(true);
-    setDeleteError(null);
-    try {
-      await studentPracticeExamService.remove(toDelete.practiceId);
-      toast.success(`Deleted "${toDelete.title}".`);
-      setToDelete(null);
-      setReload(r => r + 1);
-    } catch (err) {
-      setDeleteError(getApiErrorMessage(err, 'Failed to delete the practice exam.'));
-    } finally {
-      setDeleting(false);
-    }
-  };
-
-  /** Row actions for the "…" menu — only the ones that apply to this exam. */
-  const rowActions = (row: HistoryRow): DropdownItem[] => {
-    const items: DropdownItem[] = [];
-    if (canViewAttempts(row)) {
-      items.push({ label: 'View attempts', icon: <Icon.Eye />, onClick: () => navigate(studentExamAttemptsPath(row.examId, isPractice(row.kind))) });
-    }
-    // Shown for every type; disabled when the exam can no longer be taken (course left, practice exam deleted, …).
-    const starting = row.jobId != null && startingJob === row.jobId;
-    items.push({
-      label: starting ? 'Starting…' : row.activeAttemptId != null ? 'Continue' : 'Retake',
-      icon: row.activeAttemptId != null ? <Icon.ChevronRight /> : <Icon.RefreshCw />,
-      disabled: startingJob != null || !canRetake(row),
-      onClick: () => void retake(row),
-    });
-    if (row.practiceId != null) {
-      items.push({
-        label: 'Delete',
-        icon: <Icon.Trash />,
-        danger: true,
-        onClick: () => {
-          setDeleteError(null);
-          setToDelete(row);
-        },
-      });
-    }
-    return items;
-  };
 
   const asRow = (r: Record<string, unknown>) => r as unknown as HistoryRow;
 
@@ -429,25 +323,6 @@ export function MyExamsPage() {
       render: r => {
         const row = asRow(r);
         return <span className="whitespace-nowrap font-medium text-content">{formatScore(row.bestScore, row.maxScore)}</span>;
-      },
-    },
-    {
-      key: 'actions',
-      label: '',
-      width: '56px',
-      render: r => {
-        const row = asRow(r);
-        const items = rowActions(row);
-        return items.length === 0 ? null : (
-          <Dropdown
-            trigger={
-              <button type="button" aria-label={`Actions for ${row.title}`} className="p-1.5 hover:bg-accent rounded-[6px]">
-                <Icon.MoreHorizontal className="w-4 h-4 text-content-soft" />
-              </button>
-            }
-            items={items}
-          />
-        );
       },
     },
   ];
@@ -553,28 +428,6 @@ export function MyExamsPage() {
       <SmartPracticeModal open={quizModal === 'personal'} onClose={() => setQuizModal(null)} courses={myCourses} />
       <MaterialQuizModal open={quizModal === 'material'} onClose={() => setQuizModal(null)} courses={myCourses} />
 
-      <Modal
-        open={toDelete != null}
-        onClose={() => !deleting && setToDelete(null)}
-        title="Delete this practice exam?"
-        size="sm"
-        footer={
-          <>
-            <Button variant="outline" disabled={deleting} onClick={() => setToDelete(null)}>
-              Cancel
-            </Button>
-            <Button variant="danger" loading={deleting} disabled={deleting} icon={<Icon.Trash className="w-4 h-4" />} onClick={confirmDelete}>
-              Delete
-            </Button>
-          </>
-        }
-      >
-        <p className="text-base text-content-secondary leading-relaxed">
-          <span className="font-semibold text-content">{toDelete?.title}</span> can no longer be taken. Attempts you already took
-          stay in your history.
-        </p>
-        {deleteError && <p className="mt-3 text-sm text-danger">{deleteError}</p>}
-      </Modal>
     </div>
   );
 }
