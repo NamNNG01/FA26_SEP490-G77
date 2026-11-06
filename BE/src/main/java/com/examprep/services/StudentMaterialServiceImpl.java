@@ -7,6 +7,8 @@ import com.examprep.dto.student.MaterialRequests;
 import com.examprep.dto.student.MaterialResponses;
 import com.examprep.dto.student.MaterialResponses.CourseLink;
 import com.examprep.dto.student.MaterialResponses.DocumentItem;
+import com.examprep.dto.student.MaterialResponses.DocumentSummary;
+import com.examprep.dto.student.MaterialResponses.QuizSummary;
 import com.examprep.dto.student.MaterialResponses.HistoryItem;
 import com.examprep.dto.student.MaterialResponses.JobAccepted;
 import com.examprep.dto.student.MaterialResponses.JobBrief;
@@ -240,11 +242,12 @@ public class StudentMaterialServiceImpl implements StudentMaterialService {
     @Transactional(readOnly = true)
     public PageResponse<DocumentItem> list(Long userId, Long courseId, int page, int size) {
         validatePage(page, size);
-        Page<Document> result = courseId == null
-                ? documents.findByUserUserIdOrderByCreatedAtDesc(userId, PageRequest.of(page, size))
-                : documents.findByUserUserIdAndCoursesCourseIdOrderByCreatedAtDesc(userId, courseId,
-                        PageRequest.of(page, size));
-        List<Long> docIds = result.getContent().stream().map(Document::getDocId).toList();
+        Page<DocumentSummary> result = documents.findSummaries(userId, courseId, PageRequest.of(page, size));
+        List<Long> docIds = result.getContent().stream().map(DocumentSummary::documentId).toList();
+        Map<Long, List<CourseLink>> linksByDoc = docIds.isEmpty() ? Map.of()
+                : documents.findCourseLinks(userId, docIds).stream().collect(Collectors.groupingBy(
+                        MaterialResponses.DocumentCourse::documentId,
+                        Collectors.mapping(link -> new CourseLink(link.courseId(), link.title()), Collectors.toList())));
         Map<Long, List<JobBrief>> jobsByDoc = docIds.isEmpty() ? Map.of()
                 : jobs.findByUserUserIdAndDocumentDocIdInOrderByCreatedAtDesc(userId, docIds).stream()
                 .collect(Collectors.groupingBy(
@@ -253,10 +256,10 @@ public class StudentMaterialServiceImpl implements StudentMaterialService {
                                 job.getStatus(), job.getCourse() == null ? null : job.getCourse().getCourseId()),
                                 Collectors.toList())));
         List<DocumentItem> items = result.getContent().stream()
-                .map(document -> new DocumentItem(document.getDocId(), document.getTitle(),
-                        document.getFileName(), document.getPageCount(), document.getCreatedAt(),
-                        jobsByDoc.getOrDefault(document.getDocId(), List.of()),
-                        courseLinks(document)))
+                .map(document -> new DocumentItem(document.documentId(), document.title(),
+                        document.fileName(), document.pageCount(), document.uploadedAt(),
+                        jobsByDoc.getOrDefault(document.documentId(), List.of()),
+                        linksByDoc.getOrDefault(document.documentId(), List.of())))
                 .toList();
         return PageResponse.of(result, items);
     }
@@ -504,23 +507,19 @@ public class StudentMaterialServiceImpl implements StudentMaterialService {
     @Transactional(readOnly = true)
     public PageResponse<HistoryItem> history(Long userId, int page, int size) {
         validatePage(page, size);
-        Page<QuizGenerationJob> result = jobs.findByUserUserIdAndStatusOrderByCreatedAtDesc(userId,
-                QuizGenerationWorker.STATUS_COMPLETED, PageRequest.of(page, size));
+        Page<QuizSummary> result = jobs.findHistorySummaries(userId, PageRequest.of(page, size));
         List<Long> examIds = result.getContent().stream()
-                .filter(job -> job.getResultExam() != null)
-                .map(job -> job.getResultExam().getExamId())
+                .map(QuizSummary::quizId).filter(java.util.Objects::nonNull)
                 .toList();
         Map<Long, Object[]> stats = examIds.isEmpty() ? Map.of()
                 : jobs.statsByExams(userId, examIds).stream()
                 .collect(Collectors.toMap(row -> (Long) row[0], row -> row));
         List<HistoryItem> items = result.getContent().stream().map(job -> {
-            Object[] row = job.getResultExam() == null ? null : stats.get(job.getResultExam().getExamId());
+            Object[] row = job.quizId() == null ? null : stats.get(job.quizId());
             BigDecimal best = row == null || row[2] == null ? null : new BigDecimal(row[2].toString());
             int attemptCount = row == null ? 0 : ((Number) row[1]).intValue();
-            return new HistoryItem(job.getJobId(), job.getDocument().getDocId(),
-                    job.getDocument().getTitle(), job.getQuestionCount(), best, attemptCount,
-                    job.getCreatedAt(), job.getResultExam() == null ? null : job.getResultExam().getExamId(),
-                    job.getCourse() == null ? null : job.getCourse().getCourseId());
+            return new HistoryItem(job.jobId(), job.documentId(), job.documentTitle(), job.questionCount(),
+                    best, attemptCount, job.createdAt(), job.quizId(), job.courseId());
         }).toList();
         return PageResponse.of(result, items);
     }

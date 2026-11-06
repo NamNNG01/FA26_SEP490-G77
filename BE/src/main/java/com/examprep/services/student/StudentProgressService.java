@@ -3,6 +3,8 @@ package com.examprep.services.student;
 import com.examprep.dto.student.CourseProgressDto;
 import com.examprep.dto.student.StudentActivityDto;
 import org.springframework.data.domain.Page;
+import java.util.List;
+import java.util.Map;
 
 public interface StudentProgressService {
     CourseProgressDto getCourseProgress(Long courseId, Long userId);
@@ -14,4 +16,7 @@ public interface StudentProgressService {
      * enrollment, so EN-03 can keep the persisted enrollment progress in sync.
      */
     int liveProgressPercent(Long userId, Long courseId);
+
+    /** Live percentages for a page, using a fixed number of summary queries. Empty courses return -1. */
+    Map<Long, Integer> liveProgressPercents(Long userId, List<Long> courseIds);
 }

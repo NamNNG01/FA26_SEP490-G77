@@ -939,7 +939,8 @@ public class StudentMaterialApiIntegrationTest {
         int order = 1;
         for (int i = 1; i <= questions; i++) {
             Question question = Question.builder().course(ownerCourse).createdBy(creator)
-                    .questionType("SINGLE_CHOICE").difficulty("EASY").content(title + " question " + i).build();
+                    .questionType("SINGLE_CHOICE").difficulty("EASY").status("ACTIVE")
+                    .content(title + " question " + i).build();
             em.persist(question);
             for (int option = 1; option <= 4; option++) {
                 em.persist(AnswerOption.builder().question(question).optionText("Option " + option)

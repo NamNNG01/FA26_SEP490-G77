@@ -34,6 +34,54 @@ public class StudentProgressServiceImpl implements StudentProgressService {
     private final ModuleRepository moduleRepository;
     private final QuestionRepository questionRepository;
     private final QuestionPracticeProgressRepository progressRepository;
+    private final CourseProgressSummaryRepository summaryRepository;
+
+    private record Scope(Long courseId, Long moduleId) {}
+
+    @Override
+    public Map<Long, Integer> liveProgressPercents(Long userId, List<Long> courseIds) {
+        if (courseIds.isEmpty()) return Map.of();
+        // Each scope has question, exam and deck [done, total] pairs. All five queries
+        // cover the whole page, independent of its number of courses or modules.
+        Map<Scope, long[]> scopes = new HashMap<>();
+        addSummary(scopes, summaryRepository.questionTotals(courseIds), 1);
+        addSummary(scopes, summaryRepository.questionCompletions(courseIds, userId), 0);
+        addSummary(scopes, summaryRepository.examTotals(courseIds), 3);
+        addSummary(scopes, summaryRepository.examCompletions(courseIds, userId), 2);
+        for (Object[] row : summaryRepository.deckStats(courseIds, userId)) {
+            long[] counts = scopes.computeIfAbsent(new Scope((Long) row[0], (Long) row[1]), k -> new long[6]);
+            counts[5]++;
+            if (number(row[2]) > 0 && number(row[3]) >= number(row[2])) counts[4]++;
+        }
+        Map<Long, List<Integer>> percentages = new HashMap<>();
+        scopes.forEach((scope, counts) -> {
+            double sum = 0;
+            int parts = 0;
+            for (int i = 0; i < counts.length; i += 2) {
+                if (counts[i + 1] > 0) {
+                    sum += (double) counts[i] / counts[i + 1];
+                    parts++;
+                }
+            }
+            if (parts > 0) {
+                int percent = Math.min(100, Math.max(0, (int) Math.round(sum * 100 / parts)));
+                percentages.computeIfAbsent(scope.courseId(), k -> new ArrayList<>()).add(percent);
+            }
+        });
+        Map<Long, Integer> result = new HashMap<>();
+        for (Long id : courseIds) {
+            List<Integer> values = percentages.getOrDefault(id, List.of());
+            result.put(id, values.isEmpty() ? -1 : (int) Math.round(
+                    values.stream().mapToInt(Integer::intValue).average().orElse(0)));
+        }
+        return result;
+    }
+
+    private static void addSummary(Map<Scope, long[]> scopes, List<Object[]> rows, int index) {
+        for (Object[] row : rows) {
+            scopes.computeIfAbsent(new Scope((Long) row[0], (Long) row[1]), k -> new long[6])[index] = number(row[2]);
+        }
+    }
 
     private record DeckStat(Long deckId, long cardCount, long learnedCount) {}
 
