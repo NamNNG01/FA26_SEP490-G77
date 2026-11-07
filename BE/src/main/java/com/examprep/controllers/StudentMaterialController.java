@@ -34,11 +34,12 @@ public class StudentMaterialController {
     private final StudentMaterialService service;
 
     @PostMapping
-    @Operation(summary = "MQ-01: Upload a material (PDF/DOCX, max 20 MB)")
+    @Operation(summary = "MQ-01: Upload a material (PDF/DOCX, max 20 MB)",
+            description = "courseId is optional: without it the material belongs to no course.")
     public ResponseEntity<ApiResponse<MaterialResponses.Uploaded>> upload(
             @AuthenticationPrincipal UserPrincipal user,
             @RequestParam MultipartFile file,
-            @RequestParam Long courseId,
+            @RequestParam(required = false) Long courseId,
             @RequestParam(required = false) String title) {
         byte[] bytes;
         try {

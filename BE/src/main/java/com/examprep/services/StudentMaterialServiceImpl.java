@@ -123,7 +123,10 @@ public class StudentMaterialServiceImpl implements StudentMaterialService {
             throw new BaseException(ResponseCode.FILE_TOO_LARGE, "Material must not exceed 20MB");
         }
         // Checked before the file is read or stored: an unknown course is a 404, another course a 403.
-        requireEnrolledCourse(userId, courseId);
+        // No courseId: the material belongs to no course.
+        if (courseId != null) {
+            requireEnrolledCourse(userId, courseId);
+        }
         String sha256 = sha256(bytes);
         Uploaded existing = attachExisting(userId, sha256, courseId);
         if (existing != null) {
@@ -151,20 +154,22 @@ public class StudentMaterialServiceImpl implements StudentMaterialService {
         Uploaded uploaded;
         try {
             uploaded = new TransactionTemplate(transactionManager).execute(status -> {
-                Course course = requireEnrolledCourse(userId, courseId);
+                Course course = courseId == null ? null : requireEnrolledCourse(userId, courseId);
                 // Two uploads of the same file may race past the check above; the unique index decides.
                 Optional<Document> concurrent = documents.findByUserUserIdAndSha256(userId, sha256);
                 if (concurrent.isPresent()) {
                     Document document = concurrent.get();
-                    document.getCourses().add(course);
-                    documents.save(document);
+                    if (course != null) {
+                        document.getCourses().add(course);
+                        documents.save(document);
+                    }
                     return uploadedView(document, true);
                 }
                 User student = users.findById(userId)
                         .orElseThrow(() -> new ResourceNotFoundException("User not found"));
                 Document document = Document.builder()
                         .user(student)
-                        .courses(new LinkedHashSet<>(Set.of(course)))
+                        .courses(course == null ? new LinkedHashSet<>() : new LinkedHashSet<>(Set.of(course)))
                         .generationType("MATERIAL")
                         .extractedContent(text)
                         .status("UPLOADED")
@@ -203,7 +208,10 @@ public class StudentMaterialServiceImpl implements StudentMaterialService {
         return uploaded;
     }
 
-    /** Attaches the course to a material with the same content, or returns null when none exists. */
+    /**
+     * Attaches the course to a material with the same content, or returns null when none exists.
+     * Without a course the existing material is reused as it is.
+     */
     private Uploaded attachExisting(Long userId, String sha256, Long courseId) {
         TransactionTemplate tx = new TransactionTemplate(transactionManager);
         try {
@@ -212,9 +220,11 @@ public class StudentMaterialServiceImpl implements StudentMaterialService {
                 if (document == null) {
                     return null;
                 }
-                Course course = requireEnrolledCourse(userId, courseId);
-                document.getCourses().add(course);
-                documents.save(document);
+                if (courseId != null) {
+                    Course course = requireEnrolledCourse(userId, courseId);
+                    document.getCourses().add(course);
+                    documents.save(document);
+                }
                 return uploadedView(document, true);
             });
         } catch (DataIntegrityViolationException ex) {
@@ -373,7 +383,7 @@ public class StudentMaterialServiceImpl implements StudentMaterialService {
         }
         Course quizCourse = quizCourse(document, request.courseId(), userId);
         if (request.sourceLessonId() != null
-                && !lessonBelongsToCourse(request.sourceLessonId(), quizCourse)) {
+                && (quizCourse == null || !lessonBelongsToCourse(request.sourceLessonId(), quizCourse))) {
             throw new BadRequestException("sourceLessonId does not belong to the course of this material");
         }
         long estimated = AiQuotaService.estimate(content.length(), OUTPUT_BUDGET);
@@ -415,17 +425,12 @@ public class StudentMaterialServiceImpl implements StudentMaterialService {
         return new JobAccepted(job.getJobId(), QuizGenerationWorker.STATUS_PROCESSING, job.getQuestionCount());
     }
 
-    /** The requested course of the material, or its first course when the body omits one. */
+    /** The requested course of the material, or null (a quiz of no course) when the body omits one. */
     private Course quizCourse(Document document, Long requestedCourseId, Long userId) {
-        List<Course> linked = document.getCourses().stream()
-                .sorted(Comparator.comparing(Course::getCourseId))
-                .toList();
-        if (linked.isEmpty()) {
-            throw new BadRequestException("Material is not attached to a course");
+        if (requestedCourseId == null) {
+            return null;
         }
-        Course course = requestedCourseId == null
-                ? linked.get(0)
-                : linked.stream()
+        Course course = document.getCourses().stream()
                 .filter(candidate -> candidate.getCourseId().equals(requestedCourseId))
                 .findFirst()
                 .orElseThrow(() -> new BadRequestException("courseId is not one of the material's courses"));

@@ -36,6 +36,9 @@ const QUIZ_TITLE_MAX = 255;
 /** Free-text guidance the student gives the AI (sent as `context`). */
 const AI_CONTEXT_MAX = 500;
 
+/** Value of the "No course selected" entry: the quiz belongs to no course. */
+const NO_COURSE = '';
+
 /** Value of the "+ Upload new file" entry in the material dropdown. */
 const UPLOAD_NEW = '';
 
@@ -120,15 +123,17 @@ export function MaterialQuizModal({
       stopPolling();
       return;
     }
-    const preset = initialCourseId != null && courses.some(c => c.courseId === initialCourseId) ? initialCourseId : courses[0]?.courseId;
-    setCourseId(preset != null ? String(preset) : '');
+    // No course by default; a material picked on My Materials keeps its course.
+    const preset = initialCourseId != null && courses.some(c => c.courseId === initialCourseId) ? initialCourseId : null;
+    setCourseId(preset != null ? String(preset) : NO_COURSE);
     setFile(null);
     setFileError(null);
     setTitle('');
     setReused(false);
     setCheckingFile(false);
     pickedFile.current = null;
-    setDocumentId(preset === initialCourseId ? initialDocumentId : null);
+    // A material picked on My Materials stays picked, with its course or (none given) with no course.
+    setDocumentId(initialCourseId == null || preset != null ? initialDocumentId : null);
     setQuestionCount(String(MATERIAL_QUESTIONS.default));
     setDifficulty('MEDIUM');
     setQuizTitle('');
@@ -256,27 +261,32 @@ export function MaterialQuizModal({
   const countNum = Number(questionCount);
   const errors = {
     quizTitle: quizTitle.trim() ? undefined : 'Enter a name for the quiz.',
-    course: courseId ? undefined : 'Select a course.',
     material: documentId != null || file ? undefined : 'Upload a PDF or DOCX file, or pick one of your materials.',
     count:
       Number.isInteger(countNum) && countNum >= MATERIAL_QUESTIONS.min && countNum <= MATERIAL_QUESTIONS.max
         ? undefined
         : `Enter ${MATERIAL_QUESTIONS.min} – ${MATERIAL_QUESTIONS.max} questions.`,
   };
-  const invalid = Boolean(errors.quizTitle || errors.course || errors.material || errors.count);
+  const invalid = Boolean(errors.quizTitle || errors.material || errors.count);
 
+  const hasCourse = courseId !== NO_COURSE;
   const selected = materials.find(m => m.documentId === documentId) ?? null;
-  // Materials of the course first; with linked courses the others follow and get added on Generate.
-  const pickable = linked ? [...materials.filter(inCourse), ...materials.filter(m => !inCourse(m))] : materials.filter(inCourse);
+  // No course: every material. Otherwise materials of the course first; with linked courses the others
+  // follow and get added on Generate.
+  const pickable = !hasCourse
+    ? materials
+    : linked
+      ? [...materials.filter(inCourse), ...materials.filter(m => !inCourse(m))]
+      : materials.filter(inCourse);
   const materialOptions = [
     { value: UPLOAD_NEW, label: '+ Upload new file' },
     ...pickable.map(m => {
-      const where = inCourse(m) ? '' : ` · in ${(m.courses ?? []).map(c => c.title).join(', ')}`;
+      const where = hasCourse && inCourse(m) ? '' : (m.courses ?? []).length > 0 ? ` · in ${(m.courses ?? []).map(c => c.title).join(', ')}` : '';
       const running = m.jobs.some(j => isJobRunning(j.status)) ? ' (generating…)' : '';
       return { value: String(m.documentId), label: `${m.title}${where}${running}` };
     }),
   ];
-  const needsAttach = linked && selected != null && !inCourse(selected);
+  const needsAttach = hasCourse && linked && selected != null && !inCourse(selected);
   const runningJob = selected?.jobs.find(j => isJobRunning(j.status)) ?? null;
 
   const generate = async () => {
@@ -291,7 +301,7 @@ export function MaterialQuizModal({
     let docId = documentId;
     try {
       if (docId == null && file) {
-        const uploaded = await materialService.upload(file, Number(courseId), title);
+        const uploaded = await materialService.upload(file, hasCourse ? Number(courseId) : undefined, title);
         docId = uploaded.documentId;
         if (uploaded.duplicate) setReused(true);
         // A retry after this point reuses the uploaded material instead of uploading again.
@@ -308,7 +318,7 @@ export function MaterialQuizModal({
       const accepted = await materialService.generateQuiz(docId, {
         questionCount: countNum,
         difficulty,
-        courseId: Number(courseId),
+        courseId: hasCourse ? Number(courseId) : undefined,
         title: quizTitle.trim(),
         context: aiContext.trim() || undefined,
       });
@@ -430,10 +440,12 @@ export function MaterialQuizModal({
 
                 <Select
                   label="Course"
-                  options={courses.map(c => ({ value: String(c.courseId), label: c.title }))}
+                  options={[
+                    { value: NO_COURSE, label: 'No course selected' },
+                    ...courses.map(c => ({ value: String(c.courseId), label: c.title })),
+                  ]}
                   value={courseId}
                   onChange={changeCourse}
-                  error={touched ? errors.course : undefined}
                 />
 
                 <div className="space-y-3">
