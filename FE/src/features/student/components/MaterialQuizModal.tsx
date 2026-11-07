@@ -12,6 +12,8 @@ import { ROUTES, studentResumeAttemptPath } from '@/app/routes';
 import { getApiErrorMessage } from '@/utils/apiError';
 import type { MyCourse } from '@/services/studentCourse.service';
 import { getAiError, type AiError } from '@/services/studentAi.service';
+import { rememberTakeAs, takeAsOf, type TakeAs } from '../examModes';
+import { TakeModePicker } from './TakeModeModal';
 import {
   MATERIAL_ACCEPT,
   MATERIAL_MAX_BYTES,
@@ -88,6 +90,8 @@ export function MaterialQuizModal({
   const [difficulty, setDifficulty] = useState<MaterialDifficulty>('MEDIUM');
   const [quizTitle, setQuizTitle] = useState('');
   const [aiContext, setAiContext] = useState('');
+  /** Take the quiz as an Exam (timed by the BE: max(10, question count) minutes) or as Practice. */
+  const [takeAs, setTakeAs] = useState<TakeAs>('PRACTICE');
   const [touched, setTouched] = useState(false);
 
   const [materials, setMaterials] = useState<MaterialItem[]>([]);
@@ -138,6 +142,8 @@ export function MaterialQuizModal({
     setDifficulty('MEDIUM');
     setQuizTitle('');
     setAiContext('');
+    setTakeAs('PRACTICE');
+    setTakeAs('PRACTICE');
     setTouched(false);
     setPhase('form');
     setBusy(false);
@@ -363,6 +369,9 @@ export function MaterialQuizModal({
     setError(null);
     try {
       const started = await materialService.start(job.jobId);
+      // The take screen opens by attempt id here, so the choice is kept for that attempt first
+      // (a resumed attempt keeps the choice it was started with).
+      if (!takeAsOf(started.attemptId)) rememberTakeAs(started.attemptId, takeAs);
       onClose();
       navigate(studentResumeAttemptPath(started.attemptId));
     } catch (err) {
@@ -601,6 +610,17 @@ export function MaterialQuizModal({
                     value={difficulty}
                     onChange={v => setDifficulty(v as MaterialDifficulty)}
                   />
+                </div>
+
+                <div className="space-y-1.5">
+                  <span className="block text-sm font-medium text-content-secondary">Take as</span>
+                  <TakeModePicker value={takeAs} onChange={setTakeAs} />
+                  {takeAs === 'EXAM' && (
+                    // The BE times a material quiz at one minute a question, ten at least.
+                    <p className="text-xs text-content-subtle">
+                      Time limit: {Math.max(10, Number(questionCount) || 0)} minutes.
+                    </p>
+                  )}
                 </div>
 
                 <label className="flex flex-col gap-1.5">

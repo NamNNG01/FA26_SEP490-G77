@@ -22,6 +22,8 @@ import {
 } from '@/services/studentMaterial.service';
 import { ListSkeleton, LoadError, PageTitle, STUDENT_PAGE_CLASS, formatDate } from '../components/studentUi';
 import { MaterialQuizModal } from '../components/MaterialQuizModal';
+import { TakeModeModal } from '../components/TakeModeModal';
+import { rememberTakeAs, takeAsOf, type TakeAs } from '../examModes';
 
 const PAGE_SIZE = 10;
 const ALL = '';
@@ -71,6 +73,8 @@ export function MyMaterialsPage() {
 
   const [modal, setModal] = useState<{ courseId: number | null; documentId: number | null } | null>(null);
   const [startingJob, setStartingJob] = useState<number | null>(null);
+  /** Quiz whose Start asks Exam or Practice first. */
+  const [choosingJob, setChoosingJob] = useState<number | null>(null);
   /** Material whose quizzes are shown in the modal (read from `rows`, so refreshes update it). */
   const [viewing, setViewing] = useState<number | null>(null);
   const [deleting, setDeleting] = useState<MaterialItem | null>(null);
@@ -136,10 +140,12 @@ export function MyMaterialsPage() {
     setPage(1);
   };
 
-  const startQuiz = async (jobId: number) => {
+  const startQuiz = async (jobId: number, takeAs: TakeAs) => {
     setStartingJob(jobId);
     try {
       const started = await materialService.start(jobId);
+      // Opened by attempt id: the choice is kept for that attempt (a resumed one keeps its own).
+      if (!takeAsOf(started.attemptId)) rememberTakeAs(started.attemptId, takeAs);
       navigate(studentResumeAttemptPath(started.attemptId));
     } catch (err) {
       toast.error(getApiErrorMessage(err, 'Failed to start the quiz.'));
@@ -414,7 +420,7 @@ export function MyMaterialsPage() {
                       loading={startingJob === job.jobId}
                       disabled={startingJob != null}
                       icon={<Icon.ChevronRight className="w-4 h-4" />}
-                      onClick={() => startQuiz(job.jobId)}
+                      onClick={() => setChoosingJob(job.jobId)}
                     >
                       Start
                     </Button>
@@ -452,6 +458,20 @@ export function MyMaterialsPage() {
           </div>
         )}
       </Modal>
+
+      {/* Last: it opens over the "Quizzes from …" modal (same z-index, so DOM order decides). */}
+      {choosingJob != null && (
+        <TakeModeModal
+          open
+          title="Start quiz as"
+          onClose={() => setChoosingJob(null)}
+          onStart={takeAs => {
+            const jobId = choosingJob;
+            setChoosingJob(null);
+            void startQuiz(jobId, takeAs);
+          }}
+        />
+      )}
     </div>
   );
 }
