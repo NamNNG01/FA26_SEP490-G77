@@ -60,7 +60,7 @@ function ContributionList() {
   const saved = () => { setForm(null); setReload(value => value + 1); };
   return <div className={`${STUDENT_PAGE_CLASS} space-y-6`}>
     <PageTitle title="My Contributions" subtitle="Track review progress and share questions or learning tips." action={<div className="flex flex-wrap gap-2"><Button variant="outline" icon={<Icon.Lightbulb className="h-4 w-4" />} onClick={() => setForm('tip')}>Share a tip</Button><Button icon={<Icon.Plus className="h-4 w-4" />} onClick={() => setForm('question')}>Contribute a question</Button></div>} />
-    <Tabs tabs={['All', 'Question', 'Tip', 'Document']} active={tab} onChange={updateTab} variant="underline" />
+    <Tabs tabs={['All', 'Question', 'Tip']} active={tab} onChange={updateTab} variant="underline" />
     <div className="card flex flex-wrap items-center gap-3 p-4">
       <Select aria-label="Filter by review status" className="w-full sm:w-52" value={status} options={[{ label: 'All statuses', value: '' }, ...STATUSES.map(value => ({ label: titleCase(value), value }))]} onChange={value => { setStatus(value); setPage(0); }} />
       <p className="text-sm text-content-subtle">{total} contribution{total === 1 ? '' : 's'}</p>
