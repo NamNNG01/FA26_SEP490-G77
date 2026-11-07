@@ -713,17 +713,11 @@ function ResultCard({
   return (
     <section className="card space-y-4 p-4">
       <h2 className="font-semibold text-content">Your result</h2>
-      <div className="grid grid-cols-3 gap-2 text-center">
+      <div className="grid grid-cols-2 gap-2 text-center">
         <div className="rounded-xl bg-surface-muted/60 p-3">
           <p className="text-xs text-content-subtle">Rank</p>
           <p className="mt-1 text-xl font-bold tabular-nums text-content">
             {result.rank != null ? `#${result.rank}` : "—"}
-          </p>
-        </div>
-        <div className="rounded-xl bg-surface-muted/60 p-3">
-          <p className="text-xs text-content-subtle">Score</p>
-          <p className="mt-1 text-xl font-bold tabular-nums text-content">
-            {result.score ?? "—"}
           </p>
         </div>
         <div className="rounded-xl bg-surface-muted/60 p-3">
@@ -787,6 +781,7 @@ function ContestDetail({ contestId }: { contestId: string }) {
     null,
   );
   const [result, setResult] = useState<ContestResult | null>(null);
+  const [attemptScore, setAttemptScore] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<"register" | "start" | number | null>(null);
@@ -807,6 +802,9 @@ function ContestDetail({ contestId }: { contestId: string }) {
           current.isRegistered ||
             historyRows?.some((item) => String(item.contestId) === contestId),
         );
+        const ownHistory = historyRows?.find(
+          (item) => String(item.contestId) === contestId,
+        );
         const next = { ...current, isRegistered: joined };
         const [leaderboardData, resultData] = await Promise.all([
           studentContestService.getLeaderboard(contestId).catch(() => null),
@@ -817,6 +815,7 @@ function ContestDetail({ contestId }: { contestId: string }) {
         setContest(next);
         setLeaderboard(leaderboardData);
         setResult(resultData);
+        setAttemptScore(ownHistory?.score ?? resultData?.score ?? null);
       } catch (err) {
         if (!silent) {
           const message = getApiErrorMessage(
@@ -953,6 +952,7 @@ function ContestDetail({ contestId }: { contestId: string }) {
     (contest.status === "UPCOMING" || contest.status === "ONGOING") &&
     prizes.length > 0;
   const reward = ownReward(result);
+  const score = attemptScore ?? result?.score ?? null;
   const certificate =
     result?.certificateUrl ??
     result?.rewards.find((r) => r.rewardType === "CERTIFICATE")
@@ -969,94 +969,93 @@ function ContestDetail({ contestId }: { contestId: string }) {
   const isFull = hasLimit && contest.registeredCount >= contest.maxParticipants!;
 
   return (
-    <div className={`${STUDENT_PAGE_CLASS} space-y-6`}>
-      <Button variant="ghost" onClick={() => navigate(ROUTES.studentContests)}>
-        ← Contests
-      </Button>
-      <section className="card overflow-hidden">
-        <div className={`h-1 w-full ${STATUS_ACCENT[contest.status] ?? "bg-line"}`} aria-hidden="true" />
-        {contest.bannerUrl ? (
-          <img
-            src={contest.bannerUrl}
-            alt=""
-            className="h-48 w-full object-cover sm:h-60"
+    <div className="space-y-7 pb-8">
+      <section className="relative isolate overflow-hidden border-b border-line-soft bg-gradient-to-br from-primary-light via-surface-alt to-surface-alt">
+        <div aria-hidden="true" className="pointer-events-none absolute inset-0">
+          <div className="absolute inset-0 bg-[url('/images/exam_taking.png')] bg-cover bg-center opacity-50" />
+          {contest.bannerUrl && (
+            <div
+              className="absolute inset-0 bg-cover bg-center opacity-25"
+              style={{ backgroundImage: `url("${contest.bannerUrl}")` }}
+            />
+          )}
+          <div className="absolute inset-0 bg-gradient-to-r from-surface-alt via-surface-alt/75 to-transparent" />
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                "radial-gradient(ellipse at 18% 85%, rgba(13, 124, 108, 0.12), transparent 62%)",
+            }}
           />
-        ) : (
-          <div className="flex h-28 items-center justify-center bg-gradient-to-br from-primary-light to-surface-muted text-primary">
-            <span className="flex h-14 w-14 items-center justify-center rounded-full bg-surface shadow-sm">
-              <Icon.Trophy className="h-7 w-7" />
-            </span>
-          </div>
-        )}
-        <div className="space-y-5 p-5 sm:p-6">
-          <div className="space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <StatusBadge status={contest.status} />
-              {contest.isRegistered && (
-                <Badge variant="success">
-                  <Icon.Check className="mr-1 inline h-3 w-3" />
-                  Registered
-                </Badge>
+        </div>
+        <div className={`${STUDENT_PAGE_CLASS} relative py-8 sm:py-10`}>
+          <button
+            type="button"
+            onClick={() => navigate(ROUTES.studentContests)}
+            className="inline-flex items-center gap-2 text-sm font-medium text-content-soft hover:text-brand-ink"
+          >
+            <Icon.ChevronLeft className="h-4 w-4" /> Contests
+          </button>
+          <div className="mt-6 grid gap-7 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-center">
+            <div className="max-w-3xl py-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <StatusBadge status={contest.status} />
+                {contest.isRegistered && (
+                  <Badge variant="success">
+                    <Icon.Check className="mr-1 inline h-3 w-3" /> Registered
+                  </Badge>
+                )}
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-brand-ink/10 bg-surface/70 px-3 py-1.5 text-xs font-bold uppercase tracking-[0.14em] text-brand-ink shadow-sm backdrop-blur-sm">
+                  <Icon.Trophy className="h-4 w-4" /> Student contest
+                </span>
+              </div>
+              <h1 className="mt-4 text-4xl font-bold tracking-tight text-content sm:text-5xl sm:leading-[1.1]">
+                {contest.title}
+              </h1>
+              {contest.course && (
+                <p className="mt-3 text-sm font-medium text-primary">
+                  {contest.course.title}
+                </p>
               )}
-            </div>
-            <h1 className="text-2xl font-bold leading-tight text-content sm:text-3xl">
-              {contest.title}
-            </h1>
-            {contest.course && (
-              <p className="text-sm font-medium text-primary">
-                {contest.course.title}
+              <p className="mt-4 max-w-2xl whitespace-pre-line text-base leading-relaxed text-content-secondary sm:text-lg">
+                {contest.description || "Take on the challenge, put your knowledge to work, and see where you place."}
               </p>
-            )}
-            {contest.description && (
-              <p className="max-w-prose whitespace-pre-line pt-1 text-sm leading-6 text-content-soft">
-                {contest.description}
-              </p>
-            )}
-          </div>
-
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <Stat icon={<Icon.Calendar className="h-3.5 w-3.5" />} label={startLabel(contest.status)}>
-              {formatDate(contest.startTime)}
-            </Stat>
-            <Stat icon={<Icon.Clock className="h-3.5 w-3.5" />} label="Duration">
-              <span className="tabular-nums">{contest.durationMinutes} minutes</span>
-            </Stat>
-            <Stat icon={<Icon.Zap className="h-3.5 w-3.5" />} label="Questions">
-              <span className="tabular-nums">{contest.questionCount}</span>
-            </Stat>
-            <Stat icon={<Icon.Trophy className="h-3.5 w-3.5" />} label={hasLimit ? "Spots filled" : "Participants"}>
-              <span className={`tabular-nums ${isFull ? "text-danger" : ""}`}>
-                {hasLimit
-                  ? `${contest.registeredCount} / ${contest.maxParticipants}${isFull ? " · Full" : ""}`
-                  : contest.registeredCount}
-              </span>
-              {hasLimit && (
-                <div
-                  className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-line-soft"
-                  role="progressbar"
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                  aria-valuenow={fillPct}
-                  aria-label="Registration capacity"
-                >
-                  <div
-                    className={`h-full rounded-full transition-[width] duration-300 ${isFull ? "bg-danger" : "bg-primary"}`}
-                    style={{ width: `${fillPct}%` }}
-                  />
+              {score !== null && (
+                <div className="mt-6 inline-flex items-center gap-4 rounded-2xl border border-line-soft bg-surface/90 px-5 py-3 shadow-sm backdrop-blur-sm">
+                  <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary-light text-brand-ink">
+                    <Icon.Trophy className="h-5 w-5" />
+                  </span>
+                  <div>
+                    <p className="text-xs font-medium text-content-subtle">Your attempt score</p>
+                    <p className="mt-0.5 text-2xl font-bold tabular-nums text-brand-ink">{score}</p>
+                  </div>
+                  {result?.rank != null && (
+                    <div className="ml-2 border-l border-line pl-4">
+                      <p className="text-xs text-content-subtle">Placement</p>
+                      <p className="mt-0.5 text-xl font-bold tabular-nums text-content">#{result.rank}</p>
+                    </div>
+                  )}
                 </div>
               )}
-            </Stat>
+            </div>
+            <ActionPanel contest={contest} busy={busy} onRegister={register} onStart={start} />
           </div>
         </div>
       </section>
+      <div className={`${STUDENT_PAGE_CLASS} space-y-6`}>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <Fact icon={<Icon.Calendar className="h-5 w-5" />} value={formatDate(contest.startTime)} label={startLabel(contest.status)} />
+          <Fact icon={<Icon.Clock className="h-5 w-5" />} value={`${contest.durationMinutes} min`} label="Time limit" />
+          <Fact icon={<Icon.ClipboardList className="h-5 w-5" />} value={String(contest.questionCount)} label="Questions" />
+          <Fact icon={<Icon.Users className="h-5 w-5" />} value={hasLimit ? `${contest.registeredCount} / ${contest.maxParticipants}` : String(contest.registeredCount)} label={hasLimit ? "Spots filled" : "Participants"} />
+        </div>
+        {hasLimit && (
+          <div className="-mt-3 h-1.5 overflow-hidden rounded-full bg-line-soft" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={fillPct} aria-label="Registration capacity">
+            <div className={`h-full rounded-full transition-[width] duration-300 ${isFull ? "bg-danger" : "bg-primary"}`} style={{ width: `${fillPct}%` }} />
+          </div>
+        )}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
         <aside className="space-y-4 lg:order-2 lg:sticky lg:top-6">
-          <ActionPanel
-            contest={contest}
-            busy={busy}
-            onRegister={register}
-            onStart={start}
-          />
           {result && (
             <ResultCard
               result={result}
@@ -1079,6 +1078,27 @@ function ContestDetail({ contestId }: { contestId: string }) {
           />
         </div>
       </div>
+      </div>
+    </div>
+  );
+}
+
+function Fact({
+  icon,
+  value,
+  label,
+}: {
+  icon: React.ReactNode;
+  value: string;
+  label: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-line-soft bg-surface p-5 shadow-sm">
+      <span className="text-brand-ink">{icon}</span>
+      <p className="mt-3 truncate text-xl font-bold text-content" title={value}>
+        {value}
+      </p>
+      <p className="mt-1 text-xs text-content-subtle">{label}</p>
     </div>
   );
 }
