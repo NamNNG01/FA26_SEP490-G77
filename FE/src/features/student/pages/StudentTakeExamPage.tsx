@@ -20,6 +20,7 @@ import {
 import {
   CHECKABLE_TYPES,
   INSTANT_CHECK_TYPES,
+  checkFromKey,
   checkParts,
   studentPracticeExamService,
   type AnswerCheck,
@@ -32,6 +33,15 @@ import { CodeQuestionWorkspace, currentCodeAnswer } from '../components/code/Cod
 import { ModulePracticeRunner } from '../components/ModulePracticeRunner';
 import { ReportQuestionIssueButton } from '../components/ReportQuestionIssueDialog';
 import { GroupPassageSplit } from '../components/GroupPassageSplit';
+import {
+  canChooseTakeMode,
+  forgetTakeAs,
+  parseTakeAs,
+  rememberTakeAs,
+  takeAsOf,
+  takeExamBehavior,
+  type TakeAs,
+} from '../examModes';
 
 /** Unsaved answers are pushed to SA-03 this often. */
 const AUTOSAVE_MS = 4000;
@@ -55,14 +65,15 @@ type SaveState = 'saved' | 'dirty' | 'saving' | 'error';
  *    layout (wider, taller editor); every other paper is a quiz.
  *  - CODE questions get a 20/80 workspace (question | VS Code–style editor with Run, CD-04).
  *    Submit grades them on every test case first (CD-05), then submits the attempt.
- *  - `&practice=1` (a practice exam, PQ-01 / AI-01): each answer is checked at
- *    once — the correct answer and the explanation show and the question locks.
+ *  - The attempt's examMode picks the behaviour (see examModes.ts): an EXAM kind (EXAM, CONTEST) is
+ *    timed and shows nothing until it is submitted. A PRACTICE kind (PRACTICE, PRACTICE_EXAM, SMART_PRACTICE,
+ *    MATERIAL_QUIZ) is untimed and checks each answer at once — the correct answer and the
+ *    explanation show and the question locks. A self-made exam opened with `?as=exam` (TakeModeModal)
+ *    runs like an exam instead: timed, submitted with a confirm, nothing checked before the end.
  *    Single choice / true-false are checked on the pick; multiple choice, matching,
  *    ordering and fill-blank have a check button that shows how far the answer is.
  *    Keys: 1–9 / A–Z pick an option, Enter checks or goes to the next question.
  *    The checks are kept per attempt in localStorage so a reload or a later resume keeps them.
- *    Practice is untimed: no timer, no auto-submit, and the result shows no score.
- *    Material quizzes are untimed too: only course exams and contests show the timer.
  *    Its Submit is called Finish and needs no confirmation (it still closes the attempt with SA-04).
  *  - `?practiceSessionId=` runs a Module Practice session instead (MP-03…MP-07) — same screen,
  *    its own flow: see ModulePracticeRunner.
@@ -83,9 +94,16 @@ function ExamAttemptScreen() {
   const toast = useToast();
   const examIdParam = searchParams.get('examId');
   const attemptIdParam = searchParams.get('attemptId');
-  const practice = searchParams.get('practice') === '1';
+  const takeAsParam = searchParams.get('as');
 
   const [session, setSession] = useState<AttemptSession | null>(null);
+  /** Self-made exam: how the student chose to take it (`?as=`, then kept per attempt). */
+  const [takeAs, setTakeAs] = useState<TakeAs | null>(null);
+  const isContest = contestId != null || session?.examMode === 'CONTEST';
+  /** From the exam's mode in the DB (and the Exam / Practice choice): timer, instant check and where leaving leads. */
+  const behavior = takeExamBehavior(isContest ? 'CONTEST' : session?.examMode, takeAs);
+  const practice = behavior.kind === 'PRACTICE';
+  const instantCheck = behavior.instantCheck;
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
 
@@ -138,7 +156,7 @@ function ExamAttemptScreen() {
       .then(s => {
         if (cancelled) return;
         if (s.status !== 'IN_PROGRESS') {
-          navigate(studentExamResultPath(s.attemptId, s.examId, practice), { replace: true });
+          navigate(studentExamResultPath(s.attemptId, s.examId), { replace: true });
           return;
         }
         const initial: Record<number, AnswerResponse | null> = {};
@@ -153,8 +171,11 @@ function ExamAttemptScreen() {
         setSession({ ...s, deadlineAt: contestEndsAt ?? s.deadlineAt, questions: [...s.questions].sort((a, b) => a.orderIndex - b.orderIndex) });
         setCurrent(0);
         setSaveState('saved');
-        setChecks(practice ? loadChecks(s.attemptId) : {});
-        if (!attemptIdParam) setSearchParams({ attemptId: String(s.attemptId), ...(practice ? { practice: '1' } : {}) }, { replace: true });
+        const chosen = canChooseTakeMode(s.examMode) ? (takeAsOf(s.attemptId) ?? parseTakeAs(takeAsParam)) : null;
+        if (chosen) rememberTakeAs(s.attemptId, chosen);
+        setTakeAs(chosen);
+        setChecks(takeExamBehavior(s.examMode, chosen).instantCheck ? restoreChecks(s) : {});
+        if (!attemptIdParam) setSearchParams({ attemptId: String(s.attemptId) }, { replace: true });
       })
       .catch(err => {
         if (!cancelled) setLoadError(getApiErrorMessage(err, 'Failed to open the exam.'));
@@ -285,40 +306,38 @@ function ExamAttemptScreen() {
         await studentAttemptService.submit(session.attemptId);
         finishedRef.current = true;
         clearChecks(session.attemptId);
+        forgetTakeAs(session.attemptId);
         if (contestId != null || session.examMode === 'CONTEST') {
           toast.info('You can take this contest again, but your result will not change.', { title: 'Contest submitted', duration: 10_000 });
         }
-        navigate(studentExamResultPath(session.attemptId, session.examId, practice), { replace: true });
+        navigate(studentExamResultPath(session.attemptId, session.examId), { replace: true });
       } catch (err) {
-        setActionError(getApiErrorMessage(err, practice ? 'Failed to finish. Please try again.' : 'Failed to submit. Please try again.'));
+        setActionError(getApiErrorMessage(err, instantCheck ? 'Failed to finish. Please try again.' : 'Failed to submit. Please try again.'));
         setBusy(null);
       } finally {
         submittingRef.current = false;
       }
     },
-    [session, flush, navigate, codeMeta, codeLanguages, contestId, toast, practice],
+    [session, flush, navigate, codeMeta, codeLanguages, contestId, toast, instantCheck],
   );
 
   /**
    * Where leaving the attempt leads. A course exam has its own page, a contest its contest page; every other
-   * kind (practice exam, material quiz) has none, so its Attempts screen — which offers Continue — instead.
+   * PRACTICE kind (practice exam, material quiz) has none, so its Attempts screen — which offers Continue — instead.
    */
-  const mode = session?.examMode ?? (practice ? 'PRACTICE' : 'EXAM');
-  const isContest = contestId != null || mode === 'CONTEST';
-  /** Only course exams and contests run against the clock; practice exams and material quizzes are untimed. */
-  const timed = !practice && (isContest || mode === 'EXAM');
-  const historyPath = `${ROUTES.studentExams}${mode === 'EXAM' || isContest ? '' : `?type=${practice ? 'PRACTICE' : mode}`}`;
+  const timed = behavior.timed;
+  const historyPath = `${ROUTES.studentExams}${behavior.historyType ? `?type=${behavior.historyType}` : ''}`;
   const exitPath = (examId: number) =>
     isContest
       ? contestId != null
         ? `${ROUTES.studentContests}/${contestId}`
         : ROUTES.studentContests
-      : mode === 'EXAM'
-        ? studentExamPath(examId)
-        : studentExamAttemptsPath(examId, practice);
+      : practice
+        ? studentExamAttemptsPath(examId)
+        : studentExamPath(examId);
   /** After a discard: the Attempts screen only while the exam still has a submitted attempt to show. */
   const exitAfterDiscard = async (examId: number) => {
-    if (isContest || mode === 'EXAM') return exitPath(examId);
+    if (!practice) return exitPath(examId);
     const left = await studentAttemptService.getAllHistory(examId).catch(() => []);
     return left.some(a => a.status !== 'IN_PROGRESS') ? exitPath(examId) : historyPath;
   };
@@ -352,6 +371,7 @@ function ExamAttemptScreen() {
     try {
       await studentAttemptService.deleteAttempt(session.attemptId);
       clearChecks(session.attemptId);
+      forgetTakeAs(session.attemptId);
       navigate(await exitAfterDiscard(session.examId), { replace: true });
     } catch (err) {
       finishedRef.current = false;
@@ -455,7 +475,7 @@ function ExamAttemptScreen() {
       return next;
     });
   const check = checks[q.questionId];
-  const checkable = practice && CHECKABLE_TYPES.has(q.questionType);
+  const checkable = instantCheck && CHECKABLE_TYPES.has(q.questionType);
   const progress = checkProgress(q, answers[q.questionId]);
   const isLast = current === questions.length - 1;
   const isCode = q.questionType === 'CODE';
@@ -464,19 +484,29 @@ function ExamAttemptScreen() {
   const checkAnswer = async () => {
     if (checking != null || check) return;
     const questionId = q.questionId;
-    setChecking(questionId);
-    setActionError(null);
-    try {
-      // Saved alongside, not before: the check carries the answer itself, and waiting for the
-      // draft save (and any autosave in flight) delayed every check. Submit flushes anyway.
-      if (dirtyRef.current.has(questionId)) flush().catch(() => undefined);
-      const res = await studentPracticeExamService.checkAnswer(session.attemptId, q, answersRef.current[questionId] ?? null);
+    const response = answersRef.current[questionId] ?? null;
+    const store = (res: AnswerCheck) =>
       setChecks(prev => {
         const next = { ...prev, [questionId]: res };
         saveChecks(session.attemptId, next);
         return next;
       });
+    // The paper carries the key of a practice question: reveal it now, SA-09 confirms it below.
+    const local = checkFromKey(q, response);
+    if (local) {
+      store(local);
       setJustChecked(questionId);
+    }
+    setChecking(local ? null : questionId);
+    setActionError(null);
+    try {
+      // Saved alongside, not before: the check carries the answer itself, and waiting for the
+      // draft save (and any autosave in flight) delayed every check. Submit flushes anyway.
+      if (dirtyRef.current.has(questionId)) flush().catch(() => undefined);
+      // Stores and locks the answer; the server verdict wins over the local one.
+      const res = await studentPracticeExamService.checkAnswer(session.attemptId, q, response);
+      store(res);
+      if (!local) setJustChecked(questionId);
     } catch (err) {
       setActionError(getApiErrorMessage(err, 'Could not check this answer.'));
     } finally {
@@ -487,11 +517,11 @@ function ExamAttemptScreen() {
   /** Practice single choice / true-false: picking an option is the answer, check it at once. */
   const changeAnswer = (response: AnswerResponse) => {
     setAnswer(q.questionId, response);
-    if (practice && !check && INSTANT_CHECK_TYPES.has(q.questionType)) void checkAnswer();
+    if (instantCheck && !check && INSTANT_CHECK_TYPES.has(q.questionType)) void checkAnswer();
   };
 
   keyHandlerRef.current = e => {
-    if (!practice || confirm || e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (!instantCheck || confirm || e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return;
     const target = e.target as HTMLElement | null;
     if (target?.closest('input, textarea, select, [contenteditable="true"], [role="dialog"]')) return;
     if (e.key === 'Enter') {
@@ -528,9 +558,10 @@ function ExamAttemptScreen() {
           <span className="hidden sm:inline-flex flex-shrink-0 rounded-[6px] border border-line px-2 py-0.5 text-2xs font-medium text-content-soft">
             {isEssay ? 'Essay' : 'Quiz'}
           </span>
+          {/* A self-made exam taken as an exam says so; a course exam needs no badge. */}
           {practice && (
-            <Badge variant="info" size="sm">
-              Practice
+            <Badge variant={instantCheck ? 'info' : 'warning'} size="sm">
+              {instantCheck ? 'Practice' : 'Exam'}
             </Badge>
           )}
         </div>
@@ -553,9 +584,9 @@ function ExamAttemptScreen() {
             size="sm"
             disabled={busy != null}
             loading={busy === 'submit'}
-            onClick={() => (practice ? void submit(false, codeGradeFailed) : setConfirm('submit'))}
+            onClick={() => (instantCheck ? void submit(false, codeGradeFailed) : setConfirm('submit'))}
           >
-            {practice ? (codeGradeFailed ? 'Finish anyway' : 'Finish') : 'Submit'}
+            {instantCheck ? (codeGradeFailed ? 'Finish anyway' : 'Finish') : 'Submit'}
           </Button>
         </div>
       </header>
@@ -617,7 +648,7 @@ function ExamAttemptScreen() {
                     value={answers[q.questionId] ?? null}
                     onChange={changeAnswer}
                     roomy={isEssay}
-                    practice={practice}
+                    practice={instantCheck}
                     reveal={check?.supported ? check : null}
                     onEnter={checkable && !check && progress.ready ? () => void checkAnswer() : undefined}
                   />
@@ -625,7 +656,7 @@ function ExamAttemptScreen() {
               </>
             )}
 
-            {practice && !RUBRIC_TYPES.has(q.questionType) && (
+            {instantCheck && !RUBRIC_TYPES.has(q.questionType) && (
               <PracticeCheck
                 key={q.questionId}
                 question={q}
@@ -663,7 +694,7 @@ function ExamAttemptScreen() {
                   </Button>
                 ) : (
                   // Practice finishes from the header only.
-                  !practice && (
+                  !instantCheck && (
                     <Button data-next-question icon={<Icon.Check className="w-4 h-4" />} onClick={goNext}>
                       Finish
                     </Button>
@@ -681,7 +712,7 @@ function ExamAttemptScreen() {
             current={current + 1}
             answered={answeredSet}
             flagged={flagged}
-            results={practice ? results : undefined}
+            results={instantCheck ? results : undefined}
             onSelect={n => goTo(n - 1)}
           />
         </aside>
@@ -758,7 +789,7 @@ function ExamAttemptScreen() {
             <span className="font-semibold text-content">Save and exit</span> keeps your {answeredSet.size} answer
             {answeredSet.size === 1 ? '' : 's'} so you can continue later.{' '}
             {!timed
-              ? `This ${practice ? 'practice exam' : 'quiz'} has no time limit — it stays open until you come back.`
+              ? 'This practice has no time limit — it stays open until you come back.'
               : 'The timer keeps running: when time is up, the exam is submitted automatically.'}
           </p>
           <p>
@@ -782,6 +813,18 @@ function loadChecks(attemptId: number): Record<number, AnswerCheck> {
   } catch {
     return {};
   }
+}
+
+/**
+ * Checks of a resumed practice attempt: the ones kept in this browser, overridden by every verdict SA-02
+ * reports as stored on the server (the answer is locked) — so another device shows them too.
+ */
+function restoreChecks(session: AttemptSession): Record<number, AnswerCheck> {
+  const checks = loadChecks(session.attemptId);
+  for (const a of session.answers ?? []) {
+    if (a.check) checks[a.questionId] = a.check;
+  }
+  return checks;
 }
 
 function saveChecks(attemptId: number, checks: Record<number, AnswerCheck>) {

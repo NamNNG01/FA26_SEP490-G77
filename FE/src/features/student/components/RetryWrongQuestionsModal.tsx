@@ -30,12 +30,12 @@ function keyOf(result: AttemptResult, q: AttemptQuestion): Omit<AnswerCheck, 'is
   const explanation = rq.explanation?.text ?? null;
   if (CHOICE_TYPES.has(q.questionType)) {
     const correctOptionIds = (rq.options ?? []).filter(o => o.isCorrectAnswer === true).map(o => o.optionId);
-    return correctOptionIds.length > 0 ? { supported: true, correctOptionIds, correctAnswer: null, explanation, demo: false } : null;
+    return correctOptionIds.length > 0 ? { supported: true, correctOptionIds, correctAnswer: null, explanation } : null;
   }
   const key = rq.correctAnswer;
   const has =
     q.questionType === 'ORDERING' ? key?.orderedOptionIds?.length : q.questionType === 'MATCHING' ? key?.pairs?.length : key?.blanks && Object.keys(key.blanks).length;
-  return has ? { supported: true, correctOptionIds: [], correctAnswer: key, explanation, demo: false } : null;
+  return has ? { supported: true, correctOptionIds: [], correctAnswer: key, explanation } : null;
 }
 
 /**

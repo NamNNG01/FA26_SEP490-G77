@@ -159,7 +159,7 @@ export interface MyExam {
   maxScore: number | null;
   attemptCount: number;
   bestScore: number | null;
-  /** Exam.mode — EXAM (course exam), PRACTICE (PQ-01), SMART_PRACTICE (AI-01), MATERIAL_QUIZ (MQ-03), CONTEST. */
+  /** Exam.mode — EXAM (course exam), PRACTICE (notebook review), PRACTICE_EXAM (PQ-01), SMART_PRACTICE (AI-01), MATERIAL_QUIZ (MQ-03), CONTEST. */
   mode?: string | null;
   /** The exam has a CODE question — not sent by the BE yet (docs/notes/student-code-exam-be-gap.md). */
   hasCodeQuestions?: boolean | null;
