@@ -423,7 +423,7 @@ class ModulePracticeAiApiIntegrationTest extends ModulePracticeTestBase {
     }
 
     /**
-     * Fills the whole daily FREE allowance so the next reservation cannot be funded. Any AI purpose
+     * Fills the whole monthly FREE allowance so the next reservation cannot be funded. Any AI purpose
      * charges the same FREE bucket, so this does not disturb the per-purpose assertions.
      */
     private void consumeFreeQuota(com.examprep.entities.User who) {

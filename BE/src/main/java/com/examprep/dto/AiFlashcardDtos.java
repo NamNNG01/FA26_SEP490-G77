@@ -46,8 +46,8 @@ public final class AiFlashcardDtos {
     ) {}
 
     /**
-     * API 33 response: the quota window currently enforced. FREE_QUOTA is the daily allowance
-     * ({@code [00:00, 24:00)} Asia/Ho_Chi_Minh); SUBSCRIPTION is PLAN (kỳ hạn của subscription đang
+     * API 33 response: the quota window currently enforced. FREE_QUOTA is the calendar-month allowance
+     * (Asia/Ho_Chi_Minh); SUBSCRIPTION is PLAN (kỳ hạn của subscription đang
      * chạy: {@code [startDate, endDate]} của gói {@code durationDays} ngày).
      */
     @JsonInclude(JsonInclude.Include.ALWAYS)

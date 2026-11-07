@@ -23,7 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AiUsageController {
     private final AiFlashcardService service;
 
-    /** The caller's own quota: the ACTIVE plan pool when there is one, the daily FREE window otherwise. */
+    /** The caller's own quota: the ACTIVE plan pool when there is one, the monthly FREE window otherwise. */
     @GetMapping("/api/v1/ai/usage/me")
     @PreAuthorize("hasAnyRole('STUDENT','COURSE_MANAGER')")
     @Operation(summary = "API 33: Get My AI Usage")

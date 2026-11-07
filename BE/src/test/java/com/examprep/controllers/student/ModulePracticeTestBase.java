@@ -100,7 +100,7 @@ public abstract class ModulePracticeTestBase {
         registry.add("app.ai.base-url", () -> "http://127.0.0.1:" + PROVIDER.getAddress().getPort() + "/v1beta");
         registry.add("app.student-ai.grading-threads", () -> 0);
         registry.add("app.student-ai.sweep-ms", () -> 3_600_000);
-        registry.add("app.student-ai.free-daily-tokens", () -> 20_000);
+        registry.add("app.student-ai.free-monthly-tokens", () -> 10_000);
     }
 
     /**

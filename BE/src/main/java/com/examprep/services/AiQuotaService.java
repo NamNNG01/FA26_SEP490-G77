@@ -12,13 +12,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.time.LocalDate;
+import java.time.YearMonth;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Student AI quota (spec section 9): a daily FREE allowance first, then the active PLAN.
+ * Student AI quota: a monthly FREE allowance first, then the active PLAN.
  * Remaining = limit - settled usage - open reservations. Callers reserve inside a transaction holding {@link #lock}.
  */
 @Service
@@ -31,7 +31,7 @@ public class AiQuotaService {
     private final AiUsageLogRepository logs;
     private final UserSubscriptionRepository subscriptions;
     private final EntityManager entityManager;
-    @Value("${app.student-ai.free-daily-tokens:20000}") private long freeDailyTokens;
+    @Value("${app.student-ai.free-monthly-tokens:10000}") private long freeMonthlyTokens;
 
     /** planName is null when the student has no active plan. */
     public record Snapshot(long freeLimit, long freeUsed, long freeReserved, Instant freeResetAt,
@@ -44,16 +44,16 @@ public class AiQuotaService {
 
     @Transactional(readOnly = true)
     public Snapshot snapshot(Long userId) {
-        LocalDate today = LocalDate.now(ZONE);
-        Instant dayStart = today.atStartOfDay(ZONE).toInstant();
-        Instant nextDay = today.plusDays(1).atStartOfDay(ZONE).toInstant();
-        long[] free = usage(userId, FREE, dayStart, nextDay);
+        YearMonth month = YearMonth.now(ZONE);
+        Instant monthStart = month.atDay(1).atStartOfDay(ZONE).toInstant();
+        Instant nextMonth = month.plusMonths(1).atDay(1).atStartOfDay(ZONE).toInstant();
+        long[] free = usage(userId, FREE, monthStart, nextMonth);
         UserSubscription plan = subscriptions.findActiveSubscriptionByUser(userId, Instant.now()).orElse(null);
         // A plan's end date is inclusive.
         long[] paid = plan == null ? new long[2] : usage(userId, PLAN, plan.getStartDate(), plan.getEndDate().plusSeconds(1));
         return plan == null
-                ? new Snapshot(freeDailyTokens, free[0], free[1], nextDay, null, 0, null, null, 0, 0)
-                : new Snapshot(freeDailyTokens, free[0], free[1], nextDay, plan.getPlan().getPlanName(),
+                ? new Snapshot(freeMonthlyTokens, free[0], free[1], nextMonth, null, 0, null, null, 0, 0)
+                : new Snapshot(freeMonthlyTokens, free[0], free[1], nextMonth, plan.getPlan().getPlanName(),
                         plan.getPlan().getAiTokenLimit(), plan.getStartDate(), plan.getEndDate(), paid[0], paid[1]);
     }
 

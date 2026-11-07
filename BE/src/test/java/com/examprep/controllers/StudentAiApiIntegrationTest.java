@@ -85,7 +85,7 @@ public class StudentAiApiIntegrationTest {
         registry.add("app.ai.base-url", () -> "http://127.0.0.1:" + PROVIDER.getAddress().getPort() + "/v1beta");
         registry.add("app.student-ai.grading-threads", () -> 0); // tests drive the worker by hand
         registry.add("app.student-ai.sweep-ms", () -> 3_600_000);
-        registry.add("app.student-ai.free-daily-tokens", () -> 20_000);
+        registry.add("app.student-ai.free-monthly-tokens", () -> 10_000);
     }
 
     @AfterAll static void stopProvider() { PROVIDER.stop(0); WORKERS.shutdownNow(); }
@@ -163,7 +163,7 @@ public class StudentAiApiIntegrationTest {
                 .andExpect(jsonPath("$.data.summary.requested").value(3))
                 .andExpect(jsonPath("$.data.summary.returned").value(2))
                 .andExpect(jsonPath("$.data.duplicatesIgnored[0]").value(choice.getQuestionId()))
-                .andExpect(jsonPath("$.data.quota.freeRemaining").value(20_000 - 230)); // thinking tokens are billed too
+                .andExpect(jsonPath("$.data.quota.freeRemaining").value(10_000 - 230)); // thinking tokens are billed too
         // The AI only sees the question and the correct answer, never wrong options or the student's choice.
         String sent = REQUESTS.get(0);
         assertTrue(sent.contains("extends"));
@@ -293,7 +293,7 @@ public class StudentAiApiIntegrationTest {
     }
 
     @Test void gradingIsAllOrNothingOnQuotaAndOversizeAnswersNeverReachTheAi() throws Exception {
-        spend("FREE", 19_000);
+        spend("FREE", 9_000);
         grade(student, null).andExpect(status().isPaymentRequired())
                 .andExpect(jsonPath("$.data.availableTokens").value(1000))
                 .andExpect(jsonPath("$.data.requiredTokens").isNumber());
@@ -364,9 +364,9 @@ public class StudentAiApiIntegrationTest {
         em.persist(other);
         quota(student).andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.timezone").value("Asia/Ho_Chi_Minh"))
-                .andExpect(jsonPath("$.data.free.dailyLimit").value(20_000))
-                .andExpect(jsonPath("$.data.free.usedToday").value(4_000))
-                .andExpect(jsonPath("$.data.free.remaining").value(15_000))
+                .andExpect(jsonPath("$.data.free.monthlyLimit").value(10_000))
+                .andExpect(jsonPath("$.data.free.usedThisMonth").value(4_000))
+                .andExpect(jsonPath("$.data.free.remaining").value(5_000))
                 .andExpect(jsonPath("$.data.free.resetAt").value(containsString("T00:00:00+07:00")))
                 .andExpect(jsonPath("$.data.reservedPending").value(1_000))
                 .andExpect(jsonPath("$.data.plan").doesNotExist())

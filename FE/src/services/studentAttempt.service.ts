@@ -221,10 +221,10 @@ export interface ExplanationBatch {
   items: { questionId: number; explanation: string | null; source: string | null; reason: string | null }[];
 }
 
-/** SQ-01 — AI token quota (free daily allowance + an active plan's balance). */
+/** SQ-01 — AI token quota (free monthly allowance + an active plan's balance). */
 export interface AiQuota {
   timezone: string;
-  free: { dailyLimit: number; usedToday: number; remaining: number; resetAt: string };
+  free: { monthlyLimit: number; usedThisMonth: number; remaining: number; resetAt: string };
   plan: { planName: string; tokenLimit: number; tokenUsed: number; remaining: number; startDate: string; endDate: string } | null;
   expiredPlan: { planName: string; endDate: string } | null;
   reservedPending: number;

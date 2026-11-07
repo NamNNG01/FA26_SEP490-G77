@@ -35,7 +35,7 @@ public final class StudentAiResponse {
     // SQ-01
     public record Quota(String timezone, Free free, Plan plan, ExpiredPlan expiredPlan, long reservedPending) { }
 
-    public record Free(long dailyLimit, long usedToday, long remaining, OffsetDateTime resetAt) { }
+    public record Free(long monthlyLimit, long usedThisMonth, long remaining, OffsetDateTime resetAt) { }
 
     public record Plan(String planName, long tokenLimit, long tokenUsed, long remaining,
                        OffsetDateTime startDate, OffsetDateTime endDate) { }

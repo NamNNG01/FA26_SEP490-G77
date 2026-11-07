@@ -30,7 +30,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -201,14 +200,15 @@ public class AiFlashcardServiceImpl implements AiFlashcardService {
      * Spec 8 (line 1016): used = Σ(input+output) + Σ(reserved_tokens) of RUNNING jobs. The shared
      * {@code snapshot()} counts reserved tokens of PENDING jobs only (house-wide, unchanged), so this
      * scoped copy adds the PROCESSING reservations of each bucket's own window — the exact windows
-     * {@link AiQuotaService#snapshot} computes: the current house day for FREE, the subscription
+     * {@link AiQuotaService#snapshot} computes: the current house month for FREE, the subscription
      * window (end date inclusive) for PLAN — and rebuilds the record without touching the shared
      * service.
      */
     private AiQuotaService.Snapshot snapshotWithRunningJobs(Long userId) {
         AiQuotaService.Snapshot snapshot = quota.snapshot(userId);
         long freeReserved = snapshot.freeReserved() + processingReserved(userId, AiQuotaService.FREE,
-                snapshot.freeResetAt().minus(Duration.ofDays(1)), snapshot.freeResetAt());
+                snapshot.freeResetAt().atZone(AiQuotaService.ZONE).toLocalDate().minusMonths(1).withDayOfMonth(1)
+                        .atStartOfDay(AiQuotaService.ZONE).toInstant(), snapshot.freeResetAt());
         long planReserved = snapshot.planName() == null ? snapshot.planReserved()
                 : snapshot.planReserved() + processingReserved(userId, AiQuotaService.PLAN,
                         snapshot.planStart(), snapshot.planEnd().plusSeconds(1));
@@ -289,11 +289,9 @@ public class AiFlashcardServiceImpl implements AiFlashcardService {
 
     /**
      * API 33: one quota window, the one currently enforced. A student with an ACTIVE plan is billed
-     * against the plan pool (period = the subscription window); everybody else against the daily FREE
-     * allowance. Reserved tokens include RUNNING (PROCESSING) jobs, per spec 8 line 1016. The daily
-     * window is derived from the snapshot's own {@code freeResetAt} (the next-day
-     * start in the house zone), so periodStart/periodEnd can never straddle two clocks at midnight
-     * (deviation log #2). The DB keeps FREE/PLAN (D1); only this DTO renames them to FREE_QUOTA/SUBSCRIPTION.
+     * against the plan pool (period = the subscription window); everybody else against the monthly FREE
+     * allowance. Reserved tokens include RUNNING (PROCESSING) jobs, per spec 8 line 1016. The DB keeps
+     * FREE/PLAN (D1); only this DTO renames them to FREE_QUOTA/SUBSCRIPTION.
      */
     @Override
     public UsageInfo usage(Long userId) {
@@ -302,9 +300,8 @@ public class AiFlashcardServiceImpl implements AiFlashcardService {
             return new UsageInfo("SUBSCRIPTION", snapshot.planName(), snapshot.planLimit(), snapshot.planUsed(),
                     snapshot.planReserved(), snapshot.planRemaining(), snapshot.planStart(), snapshot.planEnd());
         }
-        // freeResetAt is the start of the next day in ZONE, so one day back is the start of the window the
-        // reservation actually enforced: [freeResetAt - 1 day, freeResetAt).
-        Instant periodStart = snapshot.freeResetAt().minus(Duration.ofDays(1));
+        Instant periodStart = snapshot.freeResetAt().atZone(AiQuotaService.ZONE).toLocalDate().minusMonths(1)
+                .withDayOfMonth(1).atStartOfDay(AiQuotaService.ZONE).toInstant();
         return new UsageInfo("FREE_QUOTA", null, snapshot.freeLimit(), snapshot.freeUsed(), snapshot.freeReserved(),
                 snapshot.freeRemaining(), periodStart, snapshot.freeResetAt());
     }

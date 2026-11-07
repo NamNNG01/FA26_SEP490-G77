@@ -42,6 +42,7 @@ import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
@@ -103,7 +104,7 @@ public class AiFlashcardApiTest {
     @Autowired UserSubscriptionRepository subscriptions;
     @MockBean AiClient aiClient;
 
-    @Value("${app.student-ai.free-daily-tokens:20000}") long freeDailyTokens;
+    @Value("${app.student-ai.free-monthly-tokens:10000}") long freeMonthlyTokens;
     @Value("${app.ai.flashcard.output-budget-per-card:120}") int outputBudgetPerCard;
 
     Fixtures f;
@@ -172,7 +173,7 @@ public class AiFlashcardApiTest {
         assertEquals("c2", data.path("cards").get(1).path("tempId").asText());
         assertEquals(120, data.path("usage").path("inputTokens").asInt());
         assertEquals(30, data.path("usage").path("outputTokens").asInt());
-        assertEquals(freeDailyTokens - 150, data.path("usage").path("remainingTokens").asLong());
+        assertEquals(freeMonthlyTokens - 150, data.path("usage").path("remainingTokens").asLong());
         assertFalse(data.path("saved").asBoolean());
         assertNull(data.path("errorCode").textValue());
 
@@ -315,7 +316,7 @@ public class AiFlashcardApiTest {
                 .andExpect(jsonPath("$.data.cards[1].tempId").value("c2"))
                 .andExpect(jsonPath("$.data.usage.inputTokens").value(40))
                 .andExpect(jsonPath("$.data.usage.outputTokens").value(10))
-                .andExpect(jsonPath("$.data.usage.remainingTokens").value(freeDailyTokens - 50))
+                .andExpect(jsonPath("$.data.usage.remainingTokens").value(freeMonthlyTokens - 50))
                 .andExpect(jsonPath("$.data.saved").value(false))
                 .andExpect(jsonPath("$.data.errorCode").doesNotExist());
 
@@ -450,9 +451,9 @@ public class AiFlashcardApiTest {
     @Test
     void generateReturns402WhenQuotaExhausted() throws Exception {
         User student = f.account(User.ROLE_STUDENT);
-        // A PENDING reservation counts against the daily FREE allowance even before it is settled.
+        // A PENDING reservation counts against the monthly FREE allowance even before it is settled.
         em.persist(AiUsageLog.builder().user(student).purpose("EXPLANATION").status("PENDING")
-                .billingSource("FREE").reservedTokens((int) freeDailyTokens).build());
+                .billingSource("FREE").reservedTokens((int) freeMonthlyTokens).build());
         em.flush();
 
         mvc.perform(multipart(URL).param("text", CONTENT).param("numberOfCards", "1").with(as(student)))
@@ -490,7 +491,7 @@ public class AiFlashcardApiTest {
             statement.setLong(1, student.getUserId());
             try (var rows = statement.executeQuery()) {
                 assertTrue(rows.next());
-                assertEquals(0, rows.getLong(1), "the daily FREE bucket must stay untouched for a subscriber");
+                assertEquals(0, rows.getLong(1), "the FREE bucket must stay untouched for a subscriber");
             }
         }
 
@@ -512,7 +513,7 @@ public class AiFlashcardApiTest {
         em.flush();
 
         // The 20-card estimate (~2951 tokens) exceeds the 500-token plan pool: the PLAN bucket alone
-        // must reject — the daily FREE allowance is no fallback for a subscriber (spec §8 line 1014).
+        // must reject — the FREE allowance is no fallback for a subscriber (spec §8 line 1014).
         MvcResult result = mvc.perform(multipart(URL).param("text", CONTENT).param("numberOfCards", "20").with(as(student)))
                 .andExpect(status().isPaymentRequired())
                 .andReturn();
@@ -529,7 +530,7 @@ public class AiFlashcardApiTest {
         // A RUNNING (PROCESSING) job still holds its reservation (spec §8 line 1016); the shared
         // snapshot() alone only counts PENDING ones, so without the fix this request would be 202.
         em.persist(AiUsageLog.builder().user(student).purpose("EXPLANATION").status("PROCESSING")
-                .billingSource("FREE").reservedTokens((int) (freeDailyTokens - estimate + 1)).build());
+                .billingSource("FREE").reservedTokens((int) (freeMonthlyTokens - estimate + 1)).build());
         em.flush();
 
         MvcResult result = mvc.perform(multipart(URL).param("text", CONTENT).param("numberOfCards", "1").with(as(student)))
@@ -565,24 +566,20 @@ public class AiFlashcardApiTest {
 
         assertEquals("FREE_QUOTA", data.path("billingSource").asText());
         assertTrue(data.path("planName").isNull(), data.toString());
-        assertEquals(freeDailyTokens, data.path("tokenLimit").asLong());
+        assertEquals(freeMonthlyTokens, data.path("tokenLimit").asLong());
         // The window is self-consistent: nothing is counted twice and nothing disappears.
-        assertEquals(freeDailyTokens, data.path("tokenUsed").asLong() + data.path("tokenReserved").asLong()
+        assertEquals(freeMonthlyTokens, data.path("tokenUsed").asLong() + data.path("tokenReserved").asLong()
                 + data.path("tokenRemaining").asLong(), data.toString());
 
-        // Deviation log #2: the FREE period is the enforced daily window, not a calendar month.
-        LocalDate today = LocalDate.now(AiQuotaService.ZONE);
-        Instant dayStart = today.atStartOfDay(AiQuotaService.ZONE).toInstant();
-        Instant dayEnd = today.plusDays(1).atStartOfDay(AiQuotaService.ZONE).toInstant();
+        YearMonth month = YearMonth.now(AiQuotaService.ZONE);
+        Instant monthStart = month.atDay(1).atStartOfDay(AiQuotaService.ZONE).toInstant();
+        Instant monthEnd = month.plusMonths(1).atDay(1).atStartOfDay(AiQuotaService.ZONE).toInstant();
         assertNotNull(data.path("periodStart").textValue(), data.toString());
         assertNotNull(data.path("periodEnd").textValue(), data.toString());
-        assertInstant(dayStart, Instant.parse(data.path("periodStart").asText()));
-        assertInstant(dayEnd, Instant.parse(data.path("periodEnd").asText()));
+        assertInstant(monthStart, Instant.parse(data.path("periodStart").asText()));
+        assertInstant(monthEnd, Instant.parse(data.path("periodEnd").asText()));
         assertTrue(Instant.parse(data.path("periodEnd").asText())
                 .isAfter(Instant.parse(data.path("periodStart").asText())));
-        // Single clock: the period is exactly one house-zone day derived from the snapshot's reset instant.
-        assertEquals(Instant.parse(data.path("periodEnd").asText()),
-                Instant.parse(data.path("periodStart").asText()).plus(1, ChronoUnit.DAYS));
     }
 
     @Test
@@ -614,7 +611,7 @@ public class AiFlashcardApiTest {
         assertEquals(600_000, data.path("tokenLimit").asLong());
         assertEquals(600_000, data.path("tokenUsed").asLong() + data.path("tokenReserved").asLong()
                 + data.path("tokenRemaining").asLong(), data.toString());
-        // The period is the subscription window, not the daily FREE window.
+        // The period is the subscription window, not the monthly FREE window.
         assertInstant(start, Instant.parse(data.path("periodStart").asText()));
         assertInstant(end, Instant.parse(data.path("periodEnd").asText()));
     }
@@ -629,7 +626,7 @@ public class AiFlashcardApiTest {
 
         JsonNode before = usage(student);
         assertEquals(0, before.path("tokenUsed").asLong());
-        assertEquals(freeDailyTokens, before.path("tokenRemaining").asLong());
+        assertEquals(freeMonthlyTokens, before.path("tokenRemaining").asLong());
 
         long id = generate(student);
         await(student, id, "COMPLETED");
@@ -638,7 +635,7 @@ public class AiFlashcardApiTest {
         // The worker settled the reservation on the real token count (120 in + 30 out).
         assertEquals(150, after.path("tokenUsed").asLong(), after.toString());
         assertTrue(after.path("tokenUsed").asLong() > before.path("tokenUsed").asLong());
-        assertEquals(freeDailyTokens - 150, after.path("tokenRemaining").asLong());
+        assertEquals(freeMonthlyTokens - 150, after.path("tokenRemaining").asLong());
     }
 
     // ------------------------------------------------------------------ saved flag E2E (group D)

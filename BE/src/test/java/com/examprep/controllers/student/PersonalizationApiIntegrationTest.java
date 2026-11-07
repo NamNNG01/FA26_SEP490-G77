@@ -74,7 +74,7 @@ class PersonalizationApiIntegrationTest {
         registry.add("app.ai.base-url", () -> "http://127.0.0.1:" + PROVIDER.getAddress().getPort() + "/v1beta");
         registry.add("app.student-ai.grading-threads", () -> 0);
         registry.add("app.student-ai.sweep-ms", () -> 3_600_000);
-        registry.add("app.student-ai.free-daily-tokens", () -> 20_000);
+        registry.add("app.student-ai.free-monthly-tokens", () -> 10_000);
         registry.add("app.personalization.sweep-ms", () -> 3_600_000);
         registry.add("app.personalization.weakness-timeout-ms", () -> 1_500);
     }
@@ -174,7 +174,7 @@ class PersonalizationApiIntegrationTest {
 
     @Test void quotaExceeded429() throws Exception {
         history(student, 5, Instant.now());
-        em.persist(AiUsageLog.builder().user(student).purpose("EXPLANATION").status("SUCCESS").inputTokens(19_990).outputTokens(0)
+        em.persist(AiUsageLog.builder().user(student).purpose("EXPLANATION").status("SUCCESS").inputTokens(9_990).outputTokens(0)
                 .billingSource("FREE").build());
         em.flush();
         smart(student, "{\"courseId\":" + course.getCourseId() + "}")
