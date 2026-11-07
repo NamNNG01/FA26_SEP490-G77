@@ -1025,6 +1025,8 @@ class StudentAttemptControllerTest {
                 "SA-05 is missing from the OpenAPI document");
         assertTrue(paths.path("/api/v1/student/attempts/{attemptId}").has("delete"),
                 "SA-07 is missing from the OpenAPI document");
+        assertTrue(paths.path("/api/v1/student/attempts/{attemptId}/questions/{questionId}/check").has("post"),
+                "SA-Practice check is missing from the OpenAPI document");
     }
 
     // =================================================================================

@@ -132,6 +132,11 @@ public class AttemptWriter {
                         "Coding answers are final once judged");
                 continue;
             }
+            if (Boolean.TRUE.equals(row.getIsLocked())) {
+                reject(rejectedOut, entry.questionId(), AttemptResponses.REASON_LOCKED,
+                        "Question answer is locked");
+                continue;
+            }
             Snapshots.DisplayQuestion display =
                     paperFactory.read(row.getDisplaySnapshot(), Snapshots.DisplayQuestion.class);
             Optional<String> error = AnswerResponseValidator.validate(

@@ -31,7 +31,9 @@ import com.examprep.repositories.UserRepository;
 import com.examprep.util.attempt.AttemptGrader;
 import com.examprep.util.attempt.AttemptScoring;
 import com.examprep.util.attempt.AttemptShuffler;
+import com.examprep.util.attempt.AnswerResponseValidator;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -76,6 +78,9 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
     private static final int IDEMPOTENCY_KEY_MAX = 128;
     private static final int MAX_PAGE_SIZE = 100;
 
+    private static final Set<String> PRACTICE_MODES = Set.of(
+            "PRACTICE", "PRACTICE_EXAM", "SMART_PRACTICE", "MATERIAL_QUIZ");
+
     private final ExamRepository exams;
     private final UserRepository users;
     private final EnrollmentRepository enrollments;
@@ -87,6 +92,7 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
     private final AttemptPaperFactory paperFactory;
     private final AttemptAutoSubmitter autoSubmitter;
     private final AttemptWriter writer;
+    private final ObjectMapper objectMapper;
 
     // ---------------------------------------------------------------------------------
     // SA-01
@@ -456,6 +462,112 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
     }
 
     // ---------------------------------------------------------------------------------
+    // SA-Practice: Instant answer check
+    // ---------------------------------------------------------------------------------
+
+    /**
+     * SA-Practice: checks a single question's answer immediately on a practice attempt and locks it.
+     */
+    @Override
+    @Transactional
+    public AttemptResponses.CheckResult checkAnswer(Long userId, Long attemptId, Long questionId, AttemptRequests.Check body) {
+        ExamAttempt attempt = attempts.lockById(attemptId)
+                .orElseThrow(() -> new ResourceNotFoundException("Attempt not found"));
+        if (!Objects.equals(attempt.getUser().getUserId(), userId)) {
+            throw new ForbiddenException("Attempt belongs to another student");
+        }
+        if (!STATUS_IN_PROGRESS.equals(attempt.getStatus())) {
+            throw new BaseException(ResponseCode.ATTEMPT_NOT_IN_PROGRESS, "Attempt is not in progress");
+        }
+        Instant now = Instant.now();
+        if (autoSubmitter.isExpired(attempt, now)) {
+            autoSubmitter.gradeAndClose(attempt, answers.findByAttemptIdOrdered(attemptId), now);
+            throw new BaseException(ResponseCode.ATTEMPT_NOT_IN_PROGRESS, "Attempt is not in progress");
+        }
+        if (attempt.getMode() == null || !PRACTICE_MODES.contains(attempt.getMode())) {
+            throw new BaseException(ResponseCode.NOT_A_PRACTICE_EXAM, "This endpoint is only available for practice exams");
+        }
+
+        AttemptAnswer row = answers.findByAttemptIdAndQuestionId(attemptId, questionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Question is not part of this attempt"));
+
+        // Idempotency: if already locked and cached, return cached verdict unchanged
+        if (Boolean.TRUE.equals(row.getIsLocked()) && row.getCheckResult() != null && !row.getCheckResult().isBlank()) {
+            try {
+                return objectMapper.readValue(row.getCheckResult(), AttemptResponses.CheckResult.class);
+            } catch (Exception e) {
+                // fall through to recalculate if corrupted
+            }
+        }
+
+        Snapshots.DisplayQuestion display =
+                paperFactory.read(row.getDisplaySnapshot(), Snapshots.DisplayQuestion.class);
+        String questionType = display != null ? display.questionType() : row.getQuestion().getQuestionType();
+
+        JsonNode responseNode;
+        if (body != null && body.response() != null) {
+            Optional<String> error = AnswerResponseValidator.validate(questionType, body.response(), display);
+            if (error.isPresent()) {
+                throw new BadRequestException(error.get());
+            }
+            responseNode = body.response();
+            row.setResponse(storeResponse(responseNode));
+        } else if (row.getResponse() != null) {
+            responseNode = paperFactory.readResponse(row.getResponse());
+            Optional<String> error = AnswerResponseValidator.validate(questionType, responseNode, display);
+            if (error.isPresent()) {
+                throw new BadRequestException(error.get());
+            }
+        } else {
+            responseNode = null;
+        }
+
+        boolean supported = AttemptGrader.isAutoGraded(questionType);
+        AttemptResponses.CheckResult result;
+        if (!supported) {
+            result = new AttemptResponses.CheckResult(false, null, List.of(), null, null);
+        } else {
+            Snapshots.KeySnapshot key = paperFactory.read(row.getKeySnapshot(), Snapshots.KeySnapshot.class);
+            AttemptGrader.Grade grade = AttemptGrader.grade(questionType, responseNode, key, row.getWeightSnapshot());
+            List<Long> correctOptionIds = isChoice(questionType) && key != null && key.correctOptionIds() != null
+                    ? key.correctOptionIds()
+                    : List.of();
+            AttemptResponses.CorrectAnswer correctAnswer = correctAnswer(questionType, key);
+            if (correctAnswer == null && isChoice(questionType)) {
+                correctAnswer = new AttemptResponses.CorrectAnswer(null, null, null);
+            }
+            String explanation = row.getQuestion() != null && row.getQuestion().getAiExplanation() != null
+                    && !row.getQuestion().getAiExplanation().isBlank()
+                    ? row.getQuestion().getAiExplanation()
+                    : null;
+            result = new AttemptResponses.CheckResult(true, grade.correct(), correctOptionIds, correctAnswer, explanation);
+        }
+
+        row.setIsLocked(true);
+        try {
+            row.setCheckResult(objectMapper.writeValueAsString(result));
+        } catch (Exception e) {
+            throw new BaseException(ResponseCode.INTERNAL_SERVER_ERROR, "Failed to serialize check result");
+        }
+        answers.save(row);
+
+        return result;
+    }
+
+    private String storeResponse(JsonNode response) {
+        if (AnswerResponseValidator.isEmpty(response)) {
+            return null;
+        }
+        return paperFactory.writeResponse(response);
+    }
+
+    private boolean isChoice(String questionType) {
+        return "SINGLE_CHOICE".equals(questionType)
+                || "MULTIPLE_CHOICE".equals(questionType)
+                || "TRUE_FALSE".equals(questionType);
+    }
+
+    // ---------------------------------------------------------------------------------
     // shared helpers
     // ---------------------------------------------------------------------------------
 
@@ -528,8 +640,16 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
                             : new AttemptResponses.AnswerSpace(display.answerSpace().maxLength()),
                     group(display)));
             if (withAnswers) {
+                AttemptResponses.CheckResult check = null;
+                if (row.getCheckResult() != null && !row.getCheckResult().isBlank()) {
+                    try {
+                        check = objectMapper.readValue(row.getCheckResult(), AttemptResponses.CheckResult.class);
+                    } catch (Exception e) {
+                        // ignore deserialization failure
+                    }
+                }
                 drafts.add(new AttemptResponses.Answer(
-                        display.questionId(), row.getDraftSeq(), paperFactory.readResponse(row.getResponse())));
+                        display.questionId(), row.getDraftSeq(), paperFactory.readResponse(row.getResponse()), check));
             }
         }
 

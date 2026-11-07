@@ -5,13 +5,12 @@ import org.springframework.http.HttpStatus;
 
 @Getter
 public enum ResponseCode {
-
-    // 2xx Success
-    SUCCESS(HttpStatus.OK, "SUCCESS", "Operation completed successfully"),
+    SUCCESS(HttpStatus.OK, "SUCCESS", "Request processed successfully"),
     CREATED(HttpStatus.CREATED, "CREATED", "Resource created successfully"),
+    NO_CONTENT(HttpStatus.NO_CONTENT, "NO_CONTENT", "No content to return"),
 
     // 4xx Client Errors
-    BAD_REQUEST(HttpStatus.BAD_REQUEST, "BAD_REQUEST", "Invalid request parameters"),
+    BAD_REQUEST(HttpStatus.BAD_REQUEST, "BAD_REQUEST", "Bad request"),
     UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", "Authentication required or invalid token"),
     FORBIDDEN(HttpStatus.FORBIDDEN, "FORBIDDEN", "Access denied."),
     RESOURCE_NOT_FOUND(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", "Requested resource was not found"),
@@ -22,6 +21,10 @@ public enum ResponseCode {
     UNPROCESSABLE_VALIDATION_ERROR(HttpStatus.UNPROCESSABLE_ENTITY, "VALIDATION_ERROR", "Request payload validation failed"),
     /** SA-01: student already owns an IN_PROGRESS attempt of this exam. {@code data} carries {@code activeAttemptId} and {@code deadlineAt}. */
     ATTEMPT_IN_PROGRESS(HttpStatus.CONFLICT, "ATTEMPT_IN_PROGRESS", "An attempt is already in progress for this exam"),
+    /** SA-Practice: attempt is not in progress when checking answer. */
+    ATTEMPT_NOT_IN_PROGRESS(HttpStatus.CONFLICT, "ATTEMPT_NOT_IN_PROGRESS", "Attempt is not in progress"),
+    /** SA-Practice: attempt exam is not a practice exam. */
+    NOT_A_PRACTICE_EXAM(HttpStatus.FORBIDDEN, "NOT_A_PRACTICE_EXAM", "This endpoint is only available for practice exams"),
     /** SA-01: the exam links questions that are no longer ACTIVE/APPROVED (or were deleted). */
     EXAM_INVALID_QUESTIONS(HttpStatus.CONFLICT, "EXAM_INVALID_QUESTIONS", "Some questions of this exam are no longer valid"),
     /** SA-05: the attempt has not been submitted yet, so no result exists. */

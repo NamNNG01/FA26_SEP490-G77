@@ -9,7 +9,7 @@ import jakarta.validation.constraints.Size;
 import java.util.List;
 
 /**
- * Request bodies of the student attempt APIs (spec 6.3 SA-03, 6.4 SA-04).
+ * Request bodies of the student attempt APIs (spec 6.3 SA-03, 6.4 SA-04, SA-Practice check).
  */
 public final class AttemptRequests {
     private AttemptRequests() {}
@@ -37,4 +37,8 @@ public final class AttemptRequests {
                 Integer seq,
                 JsonNode response) {}
     }
+
+    /** SA-Practice instant answer check body: optional response payload. */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record Check(JsonNode response) {}
 }

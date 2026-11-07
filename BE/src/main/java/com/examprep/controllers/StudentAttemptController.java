@@ -27,7 +27,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 import java.net.URI;
 
 /**
- * Student exam-taking APIs (spec 6.1-6.5, 5.2): SA-01 … SA-07.
+ * Student exam-taking APIs (spec 6.1-6.5, 5.2, SA-Practice): SA-01 … SA-07, check.
  *
  * <p>Every route lives under {@code /api/v1/student/**}, which {@code SecurityConfig} already
  * restricts to the STUDENT role (admin included for support).</p>
@@ -35,7 +35,7 @@ import java.net.URI;
 @RestController
 @RequestMapping("/api/v1/student")
 @RequiredArgsConstructor
-@Tag(name = "Student Attempt", description = "Taking an exam: start, reload, save drafts, submit, result, history, cancel")
+@Tag(name = "Student Attempt", description = "Taking an exam: start, reload, save drafts, submit, result, history, cancel, check")
 public class StudentAttemptController {
 
     private final StudentAttemptService attempts;
@@ -109,7 +109,8 @@ public class StudentAttemptController {
             @AuthenticationPrincipal UserPrincipal currentUser,
             @PathVariable Long examId,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {        return ResponseEntity.ok(ApiResponse.success(attempts.history(currentUser.getId(), examId, page, size)));
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(ApiResponse.success(attempts.history(currentUser.getId(), examId, page, size)));
     }
 
     @DeleteMapping("/attempts/{attemptId}")
@@ -132,5 +133,17 @@ public class StudentAttemptController {
             @PathVariable Long attemptId) {
         attempts.acknowledgeReview(currentUser.getId(), attemptId);
         return ResponseEntity.ok(ApiResponse.success(null, "Review session cleaned up"));
+    }
+
+    @PostMapping("/attempts/{attemptId}/questions/{questionId}/check")
+    @Operation(summary = "SA-Practice: Check answer instantly",
+            description = "Checks a single question's answer immediately on a practice attempt and locks it from subsequent draft saves.")
+    public ResponseEntity<ApiResponse<AttemptResponses.CheckResult>> checkAnswer(
+            @AuthenticationPrincipal UserPrincipal currentUser,
+            @PathVariable Long attemptId,
+            @PathVariable Long questionId,
+            @RequestBody(required = false) AttemptRequests.Check body) {
+        return ResponseEntity.ok(ApiResponse.success(
+                attempts.checkAnswer(currentUser.getId(), attemptId, questionId, body), "Answer checked"));
     }
 }

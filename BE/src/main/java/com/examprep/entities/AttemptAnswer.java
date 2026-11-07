@@ -94,4 +94,12 @@ public class AttemptAnswer implements Serializable {
 
     @Column(name = "score_earned", precision = 5, scale = 2)
     private BigDecimal scoreEarned;
+
+    @Builder.Default
+    @Column(name = "is_locked", nullable = false)
+    private Boolean isLocked = false;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "check_result", columnDefinition = "jsonb")
+    private String checkResult;
 }

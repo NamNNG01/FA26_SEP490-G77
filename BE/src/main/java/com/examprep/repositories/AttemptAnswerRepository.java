@@ -41,6 +41,9 @@ public interface AttemptAnswerRepository extends JpaRepository<AttemptAnswer, Lo
     @Query("SELECT aa FROM AttemptAnswer aa WHERE aa.attempt.attemptId = :attemptId ORDER BY aa.attemptAnswerId")
     List<AttemptAnswer> findByAttemptIdOrdered(@Param("attemptId") Long attemptId);
 
+    @Query("SELECT aa FROM AttemptAnswer aa JOIN FETCH aa.question WHERE aa.attempt.attemptId = :attemptId AND aa.question.questionId = :questionId")
+    Optional<AttemptAnswer> findByAttemptIdAndQuestionId(@Param("attemptId") Long attemptId, @Param("questionId") Long questionId);
+
     /**
      * SA-06: W = Σ weight_snapshot of every question, for a whole page of attempts in one
      * grouped query (spec 0.3 rule 9). Rows come back as {@code [attemptId, sum]}.

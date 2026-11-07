@@ -5,9 +5,9 @@ import com.examprep.dto.attempt.AttemptRequests;
 import com.examprep.dto.attempt.AttemptResponses;
 
 /**
- * The seven student attempt APIs (spec 6.1-6.5, 5.2):
+ * The student attempt APIs (spec 6.1-6.5, 5.2, SA-Practice):
  * SA-01 start, SA-02 reload, SA-03 save drafts, SA-04 submit, SA-05 result, SA-06 history,
- * SA-07 cancel.
+ * SA-07 cancel, SA-Practice check answer.
  */
 public interface StudentAttemptService {
 
@@ -34,4 +34,9 @@ public interface StudentAttemptService {
 
     /** SA-08: acknowledges review result and deletes review attempt data. */
     void acknowledgeReview(Long userId, Long attemptId);
+
+    /**
+     * SA-Practice: checks a single question's answer immediately on a practice attempt and locks it.
+     */
+    AttemptResponses.CheckResult checkAnswer(Long userId, Long attemptId, Long questionId, AttemptRequests.Check body);
 }

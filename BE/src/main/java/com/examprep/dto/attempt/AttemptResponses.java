@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Response bodies of the student attempt APIs (spec 6.1 SA-01 … 6.5 SA-05, 5.2 SA-06).
+ * Response bodies of the student attempt APIs (spec 6.1 SA-01 – 6.5 SA-05, 5.2 SA-06, SA-Practice check).
  *
  * <p>Nothing here ever carries {@code key_snapshot}, {@code answer_key}, the original rubric or a
  * sample drawio file: those stay server-side until the attempt is graded (spec 0.3 rules 4-5).</p>
@@ -54,7 +54,15 @@ public final class AttemptResponses {
     /** The reading-passage group of the question, exactly as the attempt froze it; null for a standalone question. */
     public record Group(Long groupId, String title, String passageText) {}
 
-    public record Answer(Long questionId, Integer draftSeq, JsonNode response) {}
+    public record Answer(
+            Long questionId,
+            Integer draftSeq,
+            JsonNode response,
+            @JsonInclude(JsonInclude.Include.NON_NULL) CheckResult check) {
+        public Answer(Long questionId, Integer draftSeq, JsonNode response) {
+            this(questionId, draftSeq, response, null);
+        }
+    }
 
     /** SA-03 */
     public record DraftSaved(List<Saved> saved, List<Rejected> rejected, Instant deadlineAt) {}
@@ -66,6 +74,7 @@ public final class AttemptResponses {
     public static final String REASON_NOT_IN_ATTEMPT = "NOT_IN_ATTEMPT";
     public static final String REASON_INVALID_RESPONSE = "INVALID_RESPONSE";
     public static final String REASON_ALREADY_GRADED = "ALREADY_GRADED";
+    public static final String REASON_LOCKED = "LOCKED";
 
     /** SA-04 */
     public record Submitted(
@@ -144,6 +153,14 @@ public final class AttemptResponses {
 
     /** SA-07: the attempt was discarded, nothing of it stays in the database. */
     public record Cancelled(Long attemptId, Long examId) {}
+
+    /** SA-Practice: Instant answer check result */
+    public record CheckResult(
+            boolean supported,
+            Boolean isCorrect,
+            List<Long> correctOptionIds,
+            CorrectAnswer correctAnswer,
+            String explanation) {}
 
     /** {@code data} of 409 ATTEMPT_IN_PROGRESS (SA-01). */
     public record AttemptInProgress(Long activeAttemptId, Instant deadlineAt) {}
