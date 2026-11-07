@@ -344,7 +344,7 @@ class StudentPaymentApiIntegrationTest {
         call(other, post(checkoutUrl(paidCourse)).contentType(MediaType.APPLICATION_JSON)
                 .content(json.writeValueAsString(Map.of("discountCode", "SAVE10"))))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("Discount is expired, used or does not apply"));
+                .andExpect(jsonPath("$.message").value("Discount usage limit reached or discount is inactive/expired"));
     }
 
     @Test

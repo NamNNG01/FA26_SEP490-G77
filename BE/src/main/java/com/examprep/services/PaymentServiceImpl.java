@@ -273,13 +273,26 @@ public class PaymentServiceImpl implements PaymentService {
         Discount discount = discounts.findByCodeIgnoreCaseAndDeletedAtIsNull(code.strip())
                 .orElseThrow(() -> new BaseException(ResponseCode.INVALID_DISCOUNT_CODE, "Discount code does not exist"));
         Instant now = Instant.now();
-        if (!Boolean.TRUE.equals(discount.getIsActive()) || discount.getStartAt() != null && discount.getStartAt().isAfter(now)
-                || discount.getExpiresAt() != null && discount.getExpiresAt().isBefore(now)
-                || discount.getUsedCount() >= discount.getUsageLimit()
-                || discount.getMinOrderAmount() != null && price.compareTo(discount.getMinOrderAmount()) < 0
-                || !"ALL".equalsIgnoreCase(discount.getAppliesTo()) && !type.equalsIgnoreCase(discount.getAppliesTo())
-                || userDiscounts.existsByUserUserIdAndDiscountDiscountIdAndIsUsedTrue(userId, discount.getDiscountId())) {
-            throw new BaseException(ResponseCode.INVALID_DISCOUNT_CODE, "Discount is expired, used or does not apply");
+        if (!Boolean.TRUE.equals(discount.getIsActive())) {
+            throw new BaseException(ResponseCode.INVALID_DISCOUNT_CODE, "Discount is inactive");
+        }
+        if (discount.getStartAt() != null && discount.getStartAt().isAfter(now)) {
+            throw new BaseException(ResponseCode.INVALID_DISCOUNT_CODE, "Discount has not started yet");
+        }
+        if (discount.getExpiresAt() != null && discount.getExpiresAt().isBefore(now)) {
+            throw new BaseException(ResponseCode.INVALID_DISCOUNT_CODE, "Discount is expired");
+        }
+        if (discount.getUsedCount() >= discount.getUsageLimit()) {
+            throw new BaseException(ResponseCode.INVALID_DISCOUNT_CODE, "Discount usage limit reached");
+        }
+        if (discount.getMinOrderAmount() != null && price.compareTo(discount.getMinOrderAmount()) < 0) {
+            throw new BaseException(ResponseCode.INVALID_DISCOUNT_CODE, "Order amount is below minimum discount requirement (" + discount.getMinOrderAmount() + ")");
+        }
+        if (!"ALL".equalsIgnoreCase(discount.getAppliesTo()) && !type.equalsIgnoreCase(discount.getAppliesTo())) {
+            throw new BaseException(ResponseCode.INVALID_DISCOUNT_CODE, "Discount does not apply to this item type (" + discount.getAppliesTo() + ")");
+        }
+        if (userDiscounts.existsByUserUserIdAndDiscountDiscountIdAndIsUsedTrue(userId, discount.getDiscountId())) {
+            throw new BaseException(ResponseCode.INVALID_DISCOUNT_CODE, "Discount has already been used by user");
         }
         return discount;
     }

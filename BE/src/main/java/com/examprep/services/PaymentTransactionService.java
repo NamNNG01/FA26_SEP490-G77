@@ -44,7 +44,7 @@ public class PaymentTransactionService {
                 throw new ResourceConflictException("Discount is already used or reserved by another checkout");
             }
             if (discounts.reserveUsage(discountId) == 0) {
-                throw new BaseException(ResponseCode.INVALID_DISCOUNT_CODE, "Discount is expired, used or does not apply");
+                throw new BaseException(ResponseCode.INVALID_DISCOUNT_CODE, "Discount usage limit reached or discount is inactive/expired");
             }
             reserved = true;
         }

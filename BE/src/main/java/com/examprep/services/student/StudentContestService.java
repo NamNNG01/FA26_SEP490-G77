@@ -15,4 +15,5 @@ public interface StudentContestService {
     ContestResultDto getContestResult(Long contestId, Long userId);
     Page<ContestHistoryItemDto> listContestHistory(Long courseId, Instant from, Instant to, int page, int size, Long userId);
     ClaimRewardResponseDto claimReward(Long contestId, Long rewardId, Long userId);
+    ContestDetailDto getContestDetail(Long contestId, Long userId);
 }

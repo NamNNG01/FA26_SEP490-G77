@@ -41,6 +41,17 @@ public class StudentContestController {
         return ResponseEntity.ok(ApiResponse.success(PageResponse.of(p)));
     }
 
+    @GetMapping("/{contestId}")
+    @Operation(summary = "CT-08: Get Contest Detail")
+    public ResponseEntity<ApiResponse<ContestDetailDto>> getContestDetail(
+            @PathVariable Long contestId,
+            @AuthenticationPrincipal UserPrincipal currentUser
+    ) {
+        Long userId = currentUser != null ? currentUser.getId() : null;
+        ContestDetailDto dto = contestService.getContestDetail(contestId, userId);
+        return ResponseEntity.ok(ApiResponse.success(dto));
+    }
+
     @PostMapping("/{contestId}/register")
     @Operation(summary = "CT-02: Register for Contest")
     public ResponseEntity<ApiResponse<Map<String, Object>>> registerContest(

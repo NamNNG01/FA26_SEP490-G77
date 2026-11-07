@@ -524,4 +524,101 @@ public class StudentContestServiceImpl implements StudentContestService {
                 now
         );
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ContestDetailDto getContestDetail(Long contestId, Long userId) {
+        Contest c = contestRepository.findById(contestId)
+                .orElseThrow(() -> new ResourceNotFoundException("Contest not found"));
+        if (c.getDeletedAt() != null) {
+            throw new ResourceNotFoundException("Contest not found");
+        }
+        Instant now = Instant.now();
+        String status = ContestRules.status(c, now);
+        long registeredCount = participantRepository.countByContest_ContestId(contestId);
+
+        ContestDetailDto.CourseRef courseRef = c.getCourse() != null
+                ? new ContestDetailDto.CourseRef(c.getCourse().getCourseId(), c.getCourse().getTitle())
+                : null;
+
+        List<ContestReward> rewards = rewardRepository.findByContest_ContestId(contestId);
+        List<ContestDetailDto.RewardItem> rewardItems = rewards.stream().map(r -> {
+            Discount d = r.getDiscount();
+            BigDecimal val = d != null ? (d.getValue() != null ? d.getValue() : d.getPercent()) : null;
+            return new ContestDetailDto.RewardItem(
+                    r.getRankPosition(),
+                    d != null ? d.getCode() : null,
+                    d != null ? d.getDiscountType() : r.getRewardType(),
+                    val,
+                    r.getName()
+            );
+        }).toList();
+
+        Optional<ContestParticipant> cpOpt = userId != null
+                ? participantRepository.findByContest_ContestIdAndUser_UserId(contestId, userId)
+                : Optional.empty();
+
+        boolean isRegistered = cpOpt.isPresent();
+        String participationStatus = cpOpt.map(p -> p.getRank() != null ? "FINISHED" : (p.getAttemptId() != null ? "IN_PROGRESS" : "REGISTERED")).orElse(null);
+        boolean hasStarted = cpOpt.isPresent() && cpOpt.get().getAttemptId() != null;
+        boolean hasSubmitted = cpOpt.isPresent() && cpOpt.get().getFinishedAt() != null;
+        BigDecimal score = cpOpt.map(ContestParticipant::getScore).orElse(null);
+        Integer rank = cpOpt.map(ContestParticipant::getRank).orElse(null);
+
+        ContestDetailDto.StudentRewardInfo rewardInfo = null;
+        if (cpOpt.isPresent() && cpOpt.get().getRank() != null) {
+            ContestParticipant p = cpOpt.get();
+            for (ContestReward r : rewards) {
+                if (Objects.equals(r.getRankPosition(), p.getRank())) {
+                    boolean isRewarded = "REWARDED".equals(c.getStatus());
+                    boolean granted = p.getRewardGrantedAt() != null;
+                    boolean claimed = Boolean.TRUE.equals(r.getClaimed()) || Boolean.TRUE.equals(p.getRewardClaimed());
+                    boolean claimable = isRewarded && granted && !claimed;
+
+                    String valText = "";
+                    if (r.getDiscount() != null) {
+                        BigDecimal v = ContestRules.value(r.getDiscount());
+                        valText = (v != null ? v.toPlainString() : "") + ("PERCENT".equals(r.getDiscount().getDiscountType()) ? "%" : "đ");
+                    } else if (r.getName() != null) {
+                        valText = r.getName();
+                    }
+
+                    rewardInfo = new ContestDetailDto.StudentRewardInfo(
+                            r.getRewardId(),
+                            r.getRewardType(),
+                            valText,
+                            r.getName(),
+                            claimed,
+                            r.getRankPosition(),
+                            claimable
+                    );
+                }
+            }
+        }
+
+        int questionCount = c.getExam() != null ? examQuestionRepository.findByExamExamIdOrderByOrderIndexAscExamQuestionIdAsc(c.getExam().getExamId()).size() : 0;
+
+        return ContestDetailDto.builder()
+                .contestId(c.getContestId())
+                .title(c.getTitle())
+                .description(c.getDescription())
+                .bannerUrl(c.getBannerUrl())
+                .startTime(c.getStartTime())
+                .endTime(c.getEndTime())
+                .durationMinutes(c.getDurationMinutes())
+                .questionCount(questionCount)
+                .maxParticipants(c.getMaxParticipants())
+                .registeredCount(registeredCount)
+                .status(status)
+                .course(courseRef)
+                .rewards(rewardItems)
+                .isRegistered(isRegistered)
+                .participationStatus(participationStatus)
+                .hasStarted(hasStarted)
+                .hasSubmitted(hasSubmitted)
+                .score(score)
+                .rank(rank)
+                .rewardInfo(rewardInfo)
+                .build();
+    }
 }
