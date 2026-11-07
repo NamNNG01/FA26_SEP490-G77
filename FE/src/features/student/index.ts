@@ -13,6 +13,7 @@ export { StudentPracticeResultPage } from './pages/StudentPracticeResultPage';
 export { StudentLearningActivityPage } from './pages/StudentLearningActivityPage';
 export { StudentQuestionNotebookPage } from './pages/StudentQuestionNotebookPage';
 export { StudentContestsPage } from './pages/StudentContestsPage';
+export { StudentDiscountsPage } from './pages/StudentDiscountsPage';
 export { StudentCommunityPage } from './pages/StudentCommunityPage';
 export { StudentContributionsPage } from './pages/StudentContributionsPage';
 export { StudentWeaknessReportPage } from './pages/StudentWeaknessReportPage';

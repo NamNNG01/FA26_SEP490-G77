@@ -8,6 +8,7 @@ import { Icon } from '@/assets/icons';
 import { getApiErrorMessage } from '@/utils/apiError';
 import {
   PAYMENT_POLL_MS,
+  formatDiscountErrorMessage,
   forgetPendingPayment,
   formatVnd,
   isPaymentFinal,
@@ -129,11 +130,11 @@ export function PaymentCheckoutModal({
     try {
       const res = await paymentService.validateDiscount(trimmed, item.target);
       setDiscount({ ...res, code: trimmed });
-      if (!res.valid) setCodeError(res.reason || 'This discount code is not valid.');
+      if (!res.valid) setCodeError(formatDiscountErrorMessage(res.reason || 'This discount code is not valid.'));
       return res.valid;
     } catch (err) {
       setDiscount(null);
-      setCodeError(getApiErrorMessage(err, 'Could not check the discount code.'));
+      setCodeError(formatDiscountErrorMessage(getApiErrorMessage(err, 'Could not check the discount code.')));
       return false;
     } finally {
       setCheckingCode(false);
@@ -154,7 +155,7 @@ export function PaymentCheckoutModal({
     } catch (err) {
       const statusCode = httpStatus(err);
       if (statusCode === 400 && trimmed) {
-        setCodeError(getApiErrorMessage(err, 'This discount code is not valid.'));
+        setCodeError(formatDiscountErrorMessage(getApiErrorMessage(err, 'This discount code is not valid.')));
       } else if (statusCode === 404) {
         setError(`This ${item.type === 'COURSE' ? 'course' : 'plan'} is no longer available.`);
       } else {

@@ -40,6 +40,7 @@ import {
   StudentLearningActivityPage,
   StudentQuestionNotebookPage,
   StudentContestsPage,
+  StudentDiscountsPage,
   StudentCommunityPage,
   StudentContributionsPage,
   StudentWeaknessReportPage,
@@ -253,6 +254,8 @@ function AppRoutes() {
           <Route path={ROUTES.courseDetail} element={<PublicCourseDetailPage />} />
           <Route path={ROUTES.studentMaterials} element={<MyMaterialsPage />} />
           <Route path={ROUTES.studentSubscription} element={<StudentSubscriptionPage />} />
+          <Route path={ROUTES.studentDiscounts} element={<StudentDiscountsPage />} />
+          <Route path={ROUTES.studentDiscountDetail} element={<StudentDiscountsPage />} />
           <Route path={ROUTES.studentPayments} element={<PaymentHistoryPage />} />
           <Route path={ROUTES.paymentReturn} element={<PaymentReturnPage />} />
           <Route path={ROUTES.paymentCancel} element={<PaymentReturnPage cancelled />} />
