@@ -245,8 +245,15 @@ class PersonalizationApiIntegrationTest {
                 + "{\"type\":\"REVIEW_SESSION\",\"refId\":null,\"title\":\"Again\",\"reason\":\"r\",\"priority\":\"MEDIUM\"}]}";
     }
 
+    /** A still-wrong notebook row of the student, last practised {@code daysAgo} days ago. */
+    void notebookWrong(Question q, int daysAgo) {
+        em.persist(StudentQuestionReview.builder().student(student).question(q).status("WRONG_BOOKMARKED").bookmark(false).wrongCount(2)
+                .firstWrongAt(Instant.now().minus(daysAgo + 1, ChronoUnit.DAYS)).lastPracticedAt(Instant.now().minus(daysAgo, ChronoUnit.DAYS)).build());
+    }
+
     @Test void recommendationsDropUnknownRefIdsAndCapAtFive() throws Exception {
         history(student, 5, Instant.now().minusSeconds(60));
+        notebookWrong(weakQs.get(0), 8);
         Deck deck = Deck.builder().user(manager).course(course).title("OOP words").isPublic(false).build();
         em.persist(deck);
         Exam exam = f.exam(course, weak, manager, "EXAM");
@@ -333,7 +340,8 @@ class PersonalizationApiIntegrationTest {
         assertEquals("Bạn yếu Polymorphism.", data.path("summary").asText());
         JsonNode first = data.path("categoryBreakdown").get(0);
         assertEquals(weak.getModuleId(), first.path("categoryId").asLong());
-        assertEquals(24, first.path("totalQuestions").asInt());
+        assertEquals(8, first.path("totalQuestions").asInt()); // distinct questions, not 24 answers
+        assertTrue(first.path("enoughData").asBoolean());
         assertEquals(0, first.path("accuracy").asInt());
         assertEquals(3, first.path("commonMistakes").size());
         assertEquals(1, first.path("commonMistakes").get(1).path("frequency").asInt());
@@ -341,6 +349,8 @@ class PersonalizationApiIntegrationTest {
         assertEquals(5, data.path("actionPlan").size());
         assertEquals("SINGLE_CHOICE", data.path("questionTypeBreakdown").get(0).path("questionType").asText());
         assertTrue(REQUESTS.get(0).contains(weakQs.get(0).getContent()));
+        assertTrue(REQUESTS.get(0).contains("studentAnswer") && REQUESTS.get(0).contains("correctAnswer"), "the AI sees both answers");
+        assertTrue(data.path("difficultyBreakdown").isArray());
 
         REPLIES.add(weaknessReply());
         weakness(student, "{\"courseId\":" + course.getCourseId() + ",\"period\":\"ALL_TIME\"}").andExpect(jsonPath("$.data.source").value("GENERATED"));
@@ -371,6 +381,50 @@ class PersonalizationApiIntegrationTest {
         REPLIES.add("{\"summary\":\"s\",\"categories\":[],\"actionPlan\":[\"only one\"]}");
         weakness(student, "{\"courseId\":" + course.getCourseId() + "}").andExpect(status().isBadGateway());
         assertEquals("FAILED", onlyLog("WEAKNESS_REPORT").getStatus());
+    }
+
+    @Test void recommendationsSkipMasteredExamsAndEmptyReviews() throws Exception {
+        history(student, 5, Instant.now().minusSeconds(60));
+        Exam mastered = f.exam(course, weak, manager, "EXAM"), fresh = f.exam(course, weak, manager, "EXAM");
+        f.finishedAttempt(mastered, student, Instant.now().minusSeconds(30), "9.5");
+        Module untouched = f.module(course, "Generics");
+        f.question(course, untouched, "EASY");
+        em.flush();
+        REPLIES.add("{\"recommendations\":["
+                + "{\"type\":\"EXAM\",\"refId\":" + mastered.getExamId() + ",\"title\":\"x\",\"reason\":\"r\",\"priority\":\"HIGH\"},"
+                + "{\"type\":\"EXAM\",\"refId\":" + fresh.getExamId() + ",\"title\":\"x\",\"reason\":\"r\",\"priority\":\"HIGH\"},"
+                + "{\"type\":\"REVIEW_SESSION\",\"refId\":null,\"title\":\"Redo\",\"reason\":\"r\",\"priority\":\"HIGH\"},"
+                + "{\"type\":\"WEAK_TOPIC\",\"refId\":" + untouched.getModuleId() + ",\"title\":\"t\",\"reason\":\"r\",\"priority\":\"LOW\"}]}");
+        JsonNode items = data(recommend(student).andExpect(status().isOk())).path("recommendations");
+        assertEquals(2, items.size(), items.toString()); // mastered exam and review without stale notebook rows dropped
+        assertEquals(fresh.getExamId(), items.get(0).path("refId").asLong());
+        assertEquals("Generics", items.get(1).path("title").asText()); // a not-practised module is a valid topic
+        assertTrue(REQUESTS.get(0).contains("notPracticedModules") && REQUESTS.get(0).contains("bestScore"));
+    }
+
+    @Test void weaknessMistakesCountCitedQuestionsAndResolveRefs() throws Exception {
+        wrongHistory(6);
+        Module untouched = f.module(course, "Generics");
+        f.question(course, untouched, "EASY");
+        Exam exam = f.exam(course, weak, manager, "EXAM");
+        em.flush();
+        long a = weakQs.get(0).getQuestionId(), b = weakQs.get(1).getQuestionId();
+        REPLIES.add("{\"summary\":\"s\",\"categories\":[{\"categoryId\":" + weak.getModuleId() + ",\"commonMistakes\":["
+                + "{\"pattern\":\"p\",\"questionIds\":[" + a + "," + b + "," + a + "," + strongQs.get(0).getQuestionId() + "," + Long.MAX_VALUE + "],"
+                + "\"frequency\":40,\"suggestion\":\"s\",\"refType\":\"EXAM\",\"refId\":" + exam.getExamId() + "},"
+                + "{\"pattern\":\"q\",\"frequency\":40,\"suggestion\":\"s\",\"refType\":\"DECK\",\"refId\":" + Long.MAX_VALUE + "}]}],"
+                + "\"actionPlan\":[\"1\",\"2\",\"3\"]}");
+        JsonNode data = data(weakness(student, "{\"courseId\":" + course.getCourseId() + "}").andExpect(status().isOk()));
+        JsonNode mistakes = data.path("categoryBreakdown").get(0).path("commonMistakes");
+        assertEquals(2, mistakes.get(0).path("frequency").asInt()); // only a and b were in this module's sample
+        assertEquals(List.of(a, b), json.convertValue(mistakes.get(0).path("questionIds"), new com.fasterxml.jackson.core.type.TypeReference<List<Long>>() {}));
+        assertEquals("EXAM", mistakes.get(0).path("refType").asText());
+        assertEquals(exam.getTitle(), mistakes.get(0).path("refTitle").asText());
+        assertEquals(8, mistakes.get(1).path("frequency").asInt()); // no citation: the AI's 40 capped at the 8 sampled questions
+        assertTrue(mistakes.get(1).path("refType").isNull()); // unknown deck dropped
+        assertEquals("Generics", data.path("notPracticedCategories").get(0).path("name").asText());
+        int sampled = REQUESTS.get(0).split("timesWrong").length - 1;
+        assertEquals(8, sampled, "24 wrong answers on 8 questions are sent once per question");
     }
 
     ResultActions recommend(User actor) throws Exception {

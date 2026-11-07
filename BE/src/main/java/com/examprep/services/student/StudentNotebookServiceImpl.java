@@ -240,6 +240,8 @@ public class StudentNotebookServiceImpl implements StudentNotebookService {
         examQuestionRepository.flush();
 
         AttemptResponses.Session session = studentAttemptService.start(userId, exam.getExamId(), null);
+        // MN-04: a hidden REVIEW attempt, kept out of ME-01 history and dashboards (they exclude mode REVIEW).
+        examAttemptRepository.findById(session.attemptId()).ifPresent(attempt -> attempt.setMode("REVIEW"));
 
         List<ReviewSessionResponseDto.ReviewQuestionDto> questionDtos = session.questions().stream()
                 .map(q -> new ReviewSessionResponseDto.ReviewQuestionDto(
@@ -267,11 +269,11 @@ public class StudentNotebookServiceImpl implements StudentNotebookService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<QuestionReviewItemDto> getWeakSpots(int limit, Long userId) {
+    public List<QuestionReviewItemDto> getWeakSpots(int limit, Long courseId, Long userId) {
         if (limit < 1 || limit > 20) {
             limit = 5;
         }
-        List<StudentQuestionReview> weakSpots = reviewRepository.findWeakSpots(userId, PageRequest.of(0, limit));
+        List<StudentQuestionReview> weakSpots = reviewRepository.findWeakSpots(userId, courseId, PageRequest.of(0, limit));
 
         List<Long> questionIds = weakSpots.stream()
                 .map(r -> r.getQuestion().getQuestionId())
@@ -312,42 +314,5 @@ public class StudentNotebookServiceImpl implements StudentNotebookService {
                     r.getLastPracticedAt()
             );
         }).toList();
-    }
-
-    @Override
-    @Transactional
-    public void recordWrongAnswer(Long userId, Question question, String response) {
-        if (userId == null || question == null) {
-            return;
-        }
-        Optional<StudentQuestionReview> existing = reviewRepository.findByStudent_UserIdAndQuestion_QuestionId(userId, question.getQuestionId());
-        Instant now = Instant.now();
-        String shortResp = response;
-        if (shortResp != null && shortResp.length() > 50) {
-            shortResp = shortResp.substring(0, 50);
-        }
-        if (existing.isPresent()) {
-            StudentQuestionReview r = existing.get();
-            r.setStatus("WRONG_BOOKMARKED");
-            r.setWrongCount(r.getWrongCount() != null ? r.getWrongCount() + 1 : 1);
-            if (shortResp != null) {
-                r.setLastWrongChoice(shortResp);
-            }
-            r.setLastPracticedAt(now);
-            reviewRepository.save(r);
-        } else {
-            User student = userRepository.getReferenceById(userId);
-            StudentQuestionReview r = StudentQuestionReview.builder()
-                    .student(student)
-                    .question(question)
-                    .status("WRONG_BOOKMARKED")
-                    .bookmark(false)
-                    .wrongCount(1)
-                    .lastWrongChoice(shortResp)
-                    .firstWrongAt(now)
-                    .lastPracticedAt(now)
-                    .build();
-            reviewRepository.save(r);
-        }
     }
 }

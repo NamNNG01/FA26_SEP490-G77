@@ -77,9 +77,10 @@ public class StudentNotebookController {
     @Operation(summary = "MN-05: Weak Spots")
     public ResponseEntity<ApiResponse<List<QuestionReviewItemDto>>> getWeakSpots(
             @RequestParam(defaultValue = "5") int limit,
+            @RequestParam(required = false) Long courseId,
             @AuthenticationPrincipal UserPrincipal currentUser
     ) {
-        List<QuestionReviewItemDto> list = notebookService.getWeakSpots(limit, currentUser.getId());
+        List<QuestionReviewItemDto> list = notebookService.getWeakSpots(limit, courseId, currentUser.getId());
         return ResponseEntity.ok(ApiResponse.success(list));
     }
 }

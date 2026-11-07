@@ -47,6 +47,8 @@ class StudentNotebookServiceTest {
     private ExamQuestionRepository examQuestionRepository;
     @Mock
     private StudentAttemptService studentAttemptService;
+    @Mock
+    private com.examprep.repositories.ExamAttemptRepository examAttemptRepository;
 
     @InjectMocks
     private StudentNotebookServiceImpl notebookService;
@@ -96,11 +98,11 @@ class StudentNotebookServiceTest {
 
     @Test
     void getWeakSpots_successWithBatchOptions() {
-        when(reviewRepository.findWeakSpots(eq(100L), any())).thenReturn(List.of(review1));
+        when(reviewRepository.findWeakSpots(eq(100L), isNull(), any())).thenReturn(List.of(review1));
         AnswerOption opt = AnswerOption.builder().optionId(11L).question(question1).optionText("A programming language").isCorrect(true).build();
         when(answerOptionRepository.findByQuestionIds(List.of(1L))).thenReturn(List.of(opt));
 
-        List<QuestionReviewItemDto> list = notebookService.getWeakSpots(5, 100L);
+        List<QuestionReviewItemDto> list = notebookService.getWeakSpots(5, null, 100L);
 
         assertNotNull(list);
         assertEquals(1, list.size());
@@ -172,7 +174,10 @@ class StudentNotebookServiceTest {
         );
         when(studentAttemptService.start(eq(100L), eq(500L), isNull())).thenReturn(mockSession);
 
+        com.examprep.entities.ExamAttempt attempt = com.examprep.entities.ExamAttempt.builder().mode("PRACTICE").build();
+        when(examAttemptRepository.findById(any())).thenReturn(Optional.of(attempt));
         ReviewSessionResponseDto res = notebookService.startReviewSession(req, 100L);
+        assertEquals("REVIEW", attempt.getMode()); // MN-04: hidden review attempt
 
         assertNotNull(res);
         assertEquals(500L, res.getExamId());
@@ -186,26 +191,5 @@ class StudentNotebookServiceTest {
     @Test
     void listSavedQuestions_invalidExamType_throws() {
         assertThrows(BadRequestException.class, () -> notebookService.listSavedQuestions("all", "INVALID", null, null, null, 0, 20, 100L));
-    }
-
-    @Test
-    void recordWrongAnswer_new() {
-        when(reviewRepository.findByStudent_UserIdAndQuestion_QuestionId(100L, 1L)).thenReturn(Optional.empty());
-        when(userRepository.getReferenceById(100L)).thenReturn(student);
-
-        notebookService.recordWrongAnswer(100L, question1, "wrong answer");
-
-        verify(reviewRepository).save(any(StudentQuestionReview.class));
-    }
-
-    @Test
-    void recordWrongAnswer_existing() {
-        when(reviewRepository.findByStudent_UserIdAndQuestion_QuestionId(100L, 1L)).thenReturn(Optional.of(review1));
-
-        notebookService.recordWrongAnswer(100L, question1, "wrong answer 2");
-
-        assertEquals(4, review1.getWrongCount());
-        assertEquals("wrong answer 2", review1.getLastWrongChoice());
-        verify(reviewRepository).save(review1);
     }
 }

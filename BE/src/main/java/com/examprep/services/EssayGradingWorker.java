@@ -5,6 +5,7 @@ import com.examprep.ai.AiClient;
 import com.examprep.ai.AiRequest;
 import com.examprep.ai.AiResponse;
 import com.examprep.entities.*;
+import com.examprep.services.student.QuestionReviewRecorder;
 import com.examprep.repositories.*;
 import com.examprep.util.diagram.DrawioNormalizer;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -85,6 +86,7 @@ public class EssayGradingWorker {
     private final UserNotificationRepository userNotifications;
     private final AiQuotaService quota;
     private final AiClient aiClient;
+    private final QuestionReviewRecorder reviews;
     private final ObjectMapper json;
     private final TransactionTemplate tx;
     private final int threads;
@@ -95,7 +97,7 @@ public class EssayGradingWorker {
 
     public EssayGradingWorker(AttemptAnswerRepository answers, ExamAttemptRepository attempts, AiUsageLogRepository logs,
             NotificationRepository notifications, UserNotificationRepository userNotifications, AiQuotaService quota,
-            AiClient aiClient, ObjectMapper json, PlatformTransactionManager transactionManager,
+            AiClient aiClient, ObjectMapper json, PlatformTransactionManager transactionManager, QuestionReviewRecorder reviews,
             @Value("${app.student-ai.grading-threads:2}") int threads,
             @Value("${app.student-ai.grading-timeout-ms:60000}") long timeoutMillis) {
         this.answers = answers;
@@ -106,6 +108,7 @@ public class EssayGradingWorker {
         this.quota = quota;
         this.aiClient = aiClient;
         this.json = json;
+        this.reviews = reviews;
         this.tx = new TransactionTemplate(transactionManager);
         this.threads = threads;
         this.timeoutMillis = timeoutMillis;
@@ -336,6 +339,11 @@ public class EssayGradingWorker {
             answer.setGradingStatus(AI_GRADED);
             answer.setGradingError(null);
             answer.setGradedAt(Instant.now());
+            // Learning stats and the mistake notebook read a verdict: half the question's points or more is right.
+            boolean passed = QuestionReviewRecorder.rubricPassed(outcome.score(), questionMaxPoints(answer.getWeightSnapshot(),
+                    answers.sumWeightByAttemptId(attempt.getAttemptId()), examMaxScore(attempt)));
+            answer.setIsCorrect(passed);
+            reviews.record(attempt.getUser().getUserId(), answer.getQuestion(), passed, answer.getResponse());
         } else {
             answer.setGradingStatus(FAILED);
             answer.setGradingError(outcome.error());

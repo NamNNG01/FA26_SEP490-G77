@@ -16,6 +16,7 @@ import com.examprep.repositories.QuestionPracticeSessionQuestionRepository;
 import com.examprep.repositories.QuestionPracticeSessionRepository;
 import com.examprep.repositories.UserRepository;
 import com.examprep.services.student.ModulePracticeSupport;
+import com.examprep.services.student.QuestionReviewRecorder;
 import com.examprep.util.diagram.DrawioNormalizer;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -121,6 +122,7 @@ public class ModulePracticeGradingWorker {
     private final AiClient aiClient;
     private final ObjectMapper json;
     private final ModulePracticeSupport support;
+    private final QuestionReviewRecorder reviews;
     private final TransactionTemplate tx;
     private final int threads;
     private final long timeoutMillis;
@@ -139,6 +141,7 @@ public class ModulePracticeGradingWorker {
                                        AiClient aiClient,
                                        ObjectMapper json,
                                        ModulePracticeSupport support,
+                                       QuestionReviewRecorder reviews,
                                        PlatformTransactionManager transactionManager,
                                        @Value("${app.student-ai.grading-threads:2}") int threads,
                                        @Value("${app.student-ai.grading-timeout-ms:60000}") long timeoutMillis,
@@ -146,6 +149,7 @@ public class ModulePracticeGradingWorker {
         this.answers = answers;
         this.sessionQuestions = sessionQuestions;
         this.sessions = sessions;
+        this.reviews = reviews;
         this.logs = logs;
         this.users = users;
         this.courses = courses;
@@ -518,7 +522,10 @@ public class ModulePracticeGradingWorker {
             answer.setGradingStatus(AI_GRADED);
             answer.setGradingError(null);
             answer.setGradedAt(Instant.now());
-            // A rubric answer carries a score but no right/wrong verdict, exactly as in an exam.
+            // The answer keeps no right/wrong verdict (Module Practice counters rely on that); the notebook still
+            // learns whether half its points were reached.
+            reviews.record(session.getUser().getUserId(), sessionQuestion.getQuestion(),
+                    QuestionReviewRecorder.rubricPassed(outcome.score(), job.prepared().maxPoints()), answer.getResponse());
         } else {
             answer.setGradingStatus(FAILED);
             answer.setGradingError(outcome.error());

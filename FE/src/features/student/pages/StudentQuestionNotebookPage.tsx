@@ -44,7 +44,7 @@ export function StudentQuestionNotebookPage() {
   const navigate = useNavigate();
   const [filter, setFilter] = useState<"all" | "wrong" | "bookmarked">("all");
   const [search, setSearch] = useState("");
-  const [examType, setExamType] = useState<"" | "QUIZ" | "EXAM">("");
+  const [examType, setExamType] = useState<"" | "QUIZ" | "ESSAY">("");
   const [courseId, setCourseId] = useState("");
   const [courses, setCourses] = useState<MyCourse[]>([]);
   const [page, setPage] = useState(0);

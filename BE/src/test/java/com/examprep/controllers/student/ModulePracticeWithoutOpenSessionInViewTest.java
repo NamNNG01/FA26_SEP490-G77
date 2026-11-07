@@ -116,6 +116,9 @@ class ModulePracticeWithoutOpenSessionInViewTest {
                     .setParameter("m", moduleId).executeUpdate();
             em.createQuery("DELETE FROM QuestionPracticeProgress x WHERE x.module.moduleId = :m")
                     .setParameter("m", moduleId).executeUpdate();
+            // graded answers reach the mistake notebook
+            em.createQuery("DELETE FROM StudentQuestionReview r WHERE r.question.module.moduleId = :m")
+                    .setParameter("m", moduleId).executeUpdate();
             em.createQuery("DELETE FROM AnswerOption o WHERE o.question.module.moduleId = :m")
                     .setParameter("m", moduleId).executeUpdate();
             em.createQuery("DELETE FROM Question q WHERE q.module.moduleId = :m")

@@ -20,6 +20,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.examprep.util.attempt.AttemptScoring;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.*;
@@ -132,8 +133,12 @@ public class    PracticeExamService {
             throw new BaseException(ResponseCode.ATTEMPT_NOT_SUBMITTED, "Submit the attempt first.", Map.of("code", "ATTEMPT_NOT_SUBMITTED"));
         }
         List<JsonNode> items = new ArrayList<>();
-        for (AttemptAnswer answer : answers.findByAttemptIdOrdered(attemptId)) {
-            if (!wrong(answer)) continue;
+        List<AttemptAnswer> rows = answers.findByAttemptIdOrdered(attemptId);
+        BigDecimal totalWeight = rows.stream().map(AttemptAnswer::getWeightSnapshot).filter(java.util.Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal maxScore = attempt.getExam() == null ? null : attempt.getExam().getMaxScore();
+        for (AttemptAnswer answer : rows) {
+            if (!wrong(answer, totalWeight, maxScore)) continue;
             ObjectNode item = display(answer.getDisplaySnapshot());
             item.put("questionId", answer.getQuestion().getQuestionId());
             items.add(item);
@@ -141,10 +146,11 @@ public class    PracticeExamService {
         return items;
     }
 
-    private static boolean wrong(AttemptAnswer answer) {
+    /** A verdict wins; a rubric answer graded before verdicts were stored is wrong below half of its points. */
+    private static boolean wrong(AttemptAnswer answer, BigDecimal totalWeight, BigDecimal maxScore) {
         if (answer.getIsCorrect() != null) return !answer.getIsCorrect();
-        return answer.getScoreEarned() != null && answer.getWeightSnapshot() != null
-                && answer.getScoreEarned().compareTo(answer.getWeightSnapshot()) < 0;
+        return answer.getScoreEarned() != null && !QuestionReviewRecorder.rubricPassed(answer.getScoreEarned(),
+                AttemptScoring.questionMaxPoints(answer.getWeightSnapshot(), totalWeight, maxScore));
     }
 
     // ------------------------------------------------------------------ helpers

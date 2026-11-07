@@ -235,7 +235,7 @@ public class StudentAiApiIntegrationTest {
 
         // Criterion maxima: 3.3333 x 60% = 2.00 and x 40% = 1.33.
         REPLIES.add(grading(2.0, 1.33));
-        REPLIES.add(grading(1.5, 1.0));
+        REPLIES.add(grading(0.5, 0.5)); // diagram: 1.00 of 3.33, under half
         assertTrue(worker.gradeNext());
         em.flush();
         String sent = REQUESTS.get(0);
@@ -245,6 +245,7 @@ public class StudentAiApiIntegrationTest {
         AttemptAnswer graded = reload(essayAnswer);
         assertEquals("AI_GRADED", graded.getGradingStatus());
         assertEquals(0, new BigDecimal("3.33").compareTo(graded.getScoreEarned()));
+        assertEquals(Boolean.TRUE, graded.getIsCorrect()); // half the points or more is a right answer for stats/notebook
         JsonNode criteria = json.readTree(graded.getAiCriteriaScores());
         assertEquals("Memory", criteria.get(0).path("name").asText());
         JsonNode feedback = json.readTree(graded.getAiFeedbackJson());
@@ -261,7 +262,13 @@ public class StudentAiApiIntegrationTest {
         assertFalse(worker.gradeNext());
         ExamAttempt done = reload(attempt);
         assertEquals("COMPLETED", done.getStatus());
-        assertEquals(0, new BigDecimal("7.50").compareTo(done.getTotalScore())); // 1.67 + 3.33 + 2.50
+        assertEquals(0, new BigDecimal("6.00").compareTo(done.getTotalScore())); // 1.67 + 3.33 + 1.00
+        assertEquals(Boolean.FALSE, reload(diagramAnswer).getIsCorrect());
+        StudentQuestionReview row = em.createQuery("select r from StudentQuestionReview r where r.student = :u", StudentQuestionReview.class)
+                .setParameter("u", student).getSingleResult(); // the right essay opens no row, the weak diagram does
+        assertEquals(diagram.getQuestionId(), row.getQuestion().getQuestionId());
+        assertEquals("WRONG_BOOKMARKED", row.getStatus());
+        assertEquals("(bản vẽ)", row.getLastWrongChoice());
         assertEquals(1L, em.createQuery("select count(n) from UserNotification n where n.user = :u", Long.class)
                 .setParameter("u", student).getSingleResult());
         em.createQuery("select l from AiUsageLog l where l.purpose = 'ESSAY_GRADING'", AiUsageLog.class).getResultList()

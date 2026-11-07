@@ -12,21 +12,27 @@ import java.util.List;
 /** Read-only learning statistics of one student in one course (AI-01, AI-03, AI-04). Finished = SUBMITTED or COMPLETED. */
 public interface LearningStatsRepository extends Repository<AttemptAnswer, Long> {
 
-    /** [moduleId, moduleTitle, answered, correct] over graded answers; moduleId is null for questions without a module. */
-    @Query("SELECT m.moduleId, m.title, COUNT(aa), SUM(CASE WHEN aa.isCorrect = true THEN 1 ELSE 0 END) " +
+    /**
+     * [questionId, moduleId, moduleTitle, questionType, difficulty, isCorrect, submittedAt] of every graded answer since :from,
+     * oldest first; moduleId is null for questions without a module.
+     */
+    @Query("SELECT q.questionId, m.moduleId, m.title, q.questionType, q.difficulty, aa.isCorrect, a.submittedAt " +
             "FROM AttemptAnswer aa JOIN aa.attempt a JOIN aa.question q LEFT JOIN q.module m " +
             "WHERE a.user.userId = :userId AND a.exam.course.courseId = :courseId AND a.status IN ('SUBMITTED', 'COMPLETED') " +
-            "AND aa.isCorrect IS NOT NULL AND a.submittedAt >= :from AND a.submittedAt < :to GROUP BY m.moduleId, m.title")
-    List<Object[]> moduleTotals(@Param("userId") Long userId, @Param("courseId") Long courseId,
-                                @Param("from") Instant from, @Param("to") Instant to);
+            "AND aa.isCorrect IS NOT NULL AND a.submittedAt >= :from ORDER BY a.submittedAt ASC, aa.attemptAnswerId ASC")
+    List<Object[]> verdicts(@Param("userId") Long userId, @Param("courseId") Long courseId, @Param("from") Instant from);
 
-    /** [questionType, answered, correct]. */
-    @Query("SELECT q.questionType, COUNT(aa), SUM(CASE WHEN aa.isCorrect = true THEN 1 ELSE 0 END) " +
-            "FROM AttemptAnswer aa JOIN aa.attempt a JOIN aa.question q " +
-            "WHERE a.user.userId = :userId AND a.exam.course.courseId = :courseId AND a.status IN ('SUBMITTED', 'COMPLETED') " +
-            "AND aa.isCorrect IS NOT NULL AND a.submittedAt >= :from AND a.submittedAt < :to GROUP BY q.questionType")
-    List<Object[]> typeTotals(@Param("userId") Long userId, @Param("courseId") Long courseId,
-                              @Param("from") Instant from, @Param("to") Instant to);
+    /** [moduleId, title] of the course's visible modules that have live questions, in course order. */
+    @Query("SELECT m.moduleId, m.title FROM Module m WHERE m.course.courseId = :courseId AND m.status <> 'HIDDEN' " +
+            "AND EXISTS (SELECT q FROM Question q WHERE q.module = m AND q.deletedAt IS NULL AND q.status = 'ACTIVE') " +
+            "ORDER BY m.orderIndex, m.moduleId")
+    List<Object[]> practicableModules(@Param("courseId") Long courseId);
+
+    /** [examId, best score out of 10, finished attempts] of the student on the given exams. */
+    @Query("SELECT a.exam.examId, MAX(a.totalScore * 10.0 / a.exam.maxScore), COUNT(a) FROM ExamAttempt a " +
+            "WHERE a.user.userId = :userId AND a.exam.examId IN :examIds AND a.status IN ('SUBMITTED', 'COMPLETED') " +
+            "AND a.totalScore IS NOT NULL AND a.exam.maxScore > 0 GROUP BY a.exam.examId")
+    List<Object[]> bestScores(@Param("userId") Long userId, @Param("examIds") java.util.Collection<Long> examIds);
 
     @Query("SELECT COUNT(a) FROM ExamAttempt a WHERE a.user.userId = :userId AND a.exam.course.courseId = :courseId " +
             "AND a.status IN ('SUBMITTED', 'COMPLETED') AND a.submittedAt >= :from")
@@ -36,7 +42,7 @@ public interface LearningStatsRepository extends Repository<AttemptAnswer, Long>
             "AND a.status IN ('SUBMITTED', 'COMPLETED')")
     Instant lastSubmission(@Param("userId") Long userId, @Param("courseId") Long courseId);
 
-    /** Newest wrong answers first, with question and module. */
+    /** Newest wrong answers first, with question and module (AI-04 dedupes and balances them per module). */
     @Query("SELECT aa FROM AttemptAnswer aa JOIN FETCH aa.attempt a JOIN FETCH aa.question q LEFT JOIN FETCH q.module " +
             "WHERE a.user.userId = :userId AND a.exam.course.courseId = :courseId AND a.status IN ('SUBMITTED', 'COMPLETED') " +
             "AND aa.isCorrect = false AND a.submittedAt >= :from ORDER BY a.submittedAt DESC, aa.attemptAnswerId DESC")

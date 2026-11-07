@@ -49,7 +49,7 @@ public interface StudentQuestionReviewRepository extends JpaRepository<StudentQu
            "LEFT JOIN q.module m LEFT JOIN m.course mc " +
            "LEFT JOIN q.group g LEFT JOIN g.course gc LEFT JOIN g.module gm LEFT JOIN gm.course gmc " +
            "WHERE r.student.userId = :studentId " +
-           "AND (:type = 'all' OR (:type = 'wrong' AND r.status = 'WRONG_BOOKMARKED') OR (:type = 'bookmarked' AND r.bookmark = true)) " +
+           "AND ((:type = 'all' AND (r.status = 'WRONG_BOOKMARKED' OR r.bookmark = true)) OR (:type = 'wrong' AND r.status = 'WRONG_BOOKMARKED') OR (:type = 'bookmarked' AND r.bookmark = true)) " +
            "AND (:examType IS NULL OR (:examType = 'QUIZ' AND q.questionType IN ('SINGLE_CHOICE', 'MULTIPLE_CHOICE', 'TRUE_FALSE', 'FILL_BLANK', 'MATCHING', 'ORDERING')) OR (:examType = 'ESSAY' AND q.questionType IN ('ESSAY', 'DIAGRAM', 'CODE'))) " +
            "AND (:courseId IS NULL OR qc.courseId = :courseId OR mc.courseId = :courseId OR gc.courseId = :courseId OR gmc.courseId = :courseId) " +
            "AND (:categoryId IS NULL OR qc.categoryId = :categoryId OR mc.categoryId = :categoryId OR gc.categoryId = :categoryId OR gmc.categoryId = :categoryId) " +
@@ -61,7 +61,7 @@ public interface StudentQuestionReviewRepository extends JpaRepository<StudentQu
            "LEFT JOIN q.module m LEFT JOIN m.course mc " +
            "LEFT JOIN q.group g LEFT JOIN g.course gc LEFT JOIN g.module gm LEFT JOIN gm.course gmc " +
            "WHERE r.student.userId = :studentId " +
-           "AND (:type = 'all' OR (:type = 'wrong' AND r.status = 'WRONG_BOOKMARKED') OR (:type = 'bookmarked' AND r.bookmark = true)) " +
+           "AND ((:type = 'all' AND (r.status = 'WRONG_BOOKMARKED' OR r.bookmark = true)) OR (:type = 'wrong' AND r.status = 'WRONG_BOOKMARKED') OR (:type = 'bookmarked' AND r.bookmark = true)) " +
            "AND (:examType IS NULL OR (:examType = 'QUIZ' AND q.questionType IN ('SINGLE_CHOICE', 'MULTIPLE_CHOICE', 'TRUE_FALSE', 'FILL_BLANK', 'MATCHING', 'ORDERING')) OR (:examType = 'ESSAY' AND q.questionType IN ('ESSAY', 'DIAGRAM', 'CODE'))) " +
            "AND (:courseId IS NULL OR qc.courseId = :courseId OR mc.courseId = :courseId OR gc.courseId = :courseId OR gmc.courseId = :courseId) " +
            "AND (:categoryId IS NULL OR qc.categoryId = :categoryId OR mc.categoryId = :categoryId OR gc.categoryId = :categoryId OR gmc.categoryId = :categoryId) " +
@@ -78,7 +78,8 @@ public interface StudentQuestionReviewRepository extends JpaRepository<StudentQu
 
     @Query("SELECT r FROM StudentQuestionReview r JOIN FETCH r.question q " +
            "WHERE r.student.userId = :studentId " +
-           "AND (:type = 'all' OR (:type = 'wrong' AND r.status = 'WRONG_BOOKMARKED') OR (:type = 'bookmarked' AND r.bookmark = true)) " +
+           "AND ((:type = 'all' AND (r.status = 'WRONG_BOOKMARKED' OR r.bookmark = true)) OR (:type = 'wrong' AND r.status = 'WRONG_BOOKMARKED') OR (:type = 'bookmarked' AND r.bookmark = true)) " +
+           "AND q.deletedAt IS NULL AND q.status = 'ACTIVE' " +
            "ORDER BY r.wrongCount DESC, r.lastPracticedAt DESC")
     List<StudentQuestionReview> findReviewCandidates(
             @Param("studentId") Long studentId,
@@ -88,8 +89,9 @@ public interface StudentQuestionReviewRepository extends JpaRepository<StudentQu
 
     @Query("SELECT r FROM StudentQuestionReview r JOIN FETCH r.question q " +
            "WHERE r.student.userId = :studentId " +
-           "AND (:type = 'all' OR (:type = 'wrong' AND r.status = 'WRONG_BOOKMARKED') OR (:type = 'bookmarked' AND r.bookmark = true)) " +
+           "AND ((:type = 'all' AND (r.status = 'WRONG_BOOKMARKED' OR r.bookmark = true)) OR (:type = 'wrong' AND r.status = 'WRONG_BOOKMARKED') OR (:type = 'bookmarked' AND r.bookmark = true)) " +
            "AND (:examType = 'ESSAY' AND q.questionType IN ('ESSAY', 'DIAGRAM') OR :examType = 'QUIZ' AND q.questionType NOT IN ('ESSAY', 'DIAGRAM')) " +
+           "AND q.deletedAt IS NULL AND q.status = 'ACTIVE' " +
            "ORDER BY r.wrongCount DESC, r.lastPracticedAt DESC")
     List<StudentQuestionReview> findReviewCandidatesForExamType(
             @Param("studentId") Long studentId,
@@ -98,8 +100,19 @@ public interface StudentQuestionReviewRepository extends JpaRepository<StudentQu
             Pageable pageable
     );
 
+    /** MN-05: still-wrong live questions, most often wrong first, least recently practised first; courseId optional. */
     @Query("SELECT r FROM StudentQuestionReview r JOIN FETCH r.question q " +
+           "LEFT JOIN q.course qc LEFT JOIN q.module m LEFT JOIN m.course mc " +
+           "LEFT JOIN q.group g LEFT JOIN g.course gc LEFT JOIN g.module gm LEFT JOIN gm.course gmc " +
            "WHERE r.student.userId = :studentId AND r.status = 'WRONG_BOOKMARKED' " +
+           "AND q.deletedAt IS NULL AND q.status = 'ACTIVE' " +
+           "AND (:courseId IS NULL OR qc.courseId = :courseId OR mc.courseId = :courseId OR gc.courseId = :courseId OR gmc.courseId = :courseId) " +
            "ORDER BY r.wrongCount DESC, r.lastPracticedAt ASC")
-    List<StudentQuestionReview> findWeakSpots(@Param("studentId") Long studentId, Pageable pageable);
+    List<StudentQuestionReview> findWeakSpots(@Param("studentId") Long studentId, @Param("courseId") Long courseId, Pageable pageable);
+
+    /** AI-03: still-wrong live questions of a course not practised since :before. */
+    @Query("SELECT COUNT(r) FROM StudentQuestionReview r JOIN r.question q LEFT JOIN q.course qc LEFT JOIN q.module m LEFT JOIN m.course mc " +
+           "WHERE r.student.userId = :studentId AND r.status = 'WRONG_BOOKMARKED' AND q.deletedAt IS NULL AND q.status = 'ACTIVE' " +
+           "AND (qc.courseId = :courseId OR mc.courseId = :courseId) AND r.lastPracticedAt < :before")
+    long countStaleWrong(@Param("studentId") Long studentId, @Param("courseId") Long courseId, @Param("before") java.time.Instant before);
 }

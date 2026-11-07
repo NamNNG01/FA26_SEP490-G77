@@ -3,7 +3,6 @@ package com.examprep.services.student;
 import com.examprep.dto.student.QuestionReviewItemDto;
 import com.examprep.dto.student.ReviewSessionRequestDto;
 import com.examprep.dto.student.ReviewSessionResponseDto;
-import com.examprep.entities.Question;
 import org.springframework.data.domain.Page;
 
 import java.util.List;
@@ -14,6 +13,5 @@ public interface StudentNotebookService {
     Map<String, Object> toggleBookmark(Long questionId, Long userId);
     void deleteSavedQuestion(Long reviewId, Long userId);
     ReviewSessionResponseDto startReviewSession(ReviewSessionRequestDto request, Long userId);
-    List<QuestionReviewItemDto> getWeakSpots(int limit, Long userId);
-    void recordWrongAnswer(Long userId, Question question, String response);
+    List<QuestionReviewItemDto> getWeakSpots(int limit, Long courseId, Long userId);
 }

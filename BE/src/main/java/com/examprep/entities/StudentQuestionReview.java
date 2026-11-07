@@ -40,8 +40,14 @@ public class StudentQuestionReview implements Serializable {
     @Column(name = "wrong_count", nullable = false)
     private Integer wrongCount;
 
-    @Column(name = "last_wrong_choice", length = 50)
+    /** What the student last answered wrong, readable (option texts, blanks, essay text), at most 500 chars. */
+    @Column(name = "last_wrong_choice", length = 500)
     private String lastWrongChoice;
+
+    /** Right answers in a row since the last wrong one; QuestionReviewRecorder.RESOLVE_AFTER of them resolve the row. */
+    @Builder.Default
+    @Column(name = "correct_streak", nullable = false)
+    private Integer correctStreak = 0;
 
     @CreatedDate
     @Column(name = "first_wrong_at", nullable = false, updatable = false)

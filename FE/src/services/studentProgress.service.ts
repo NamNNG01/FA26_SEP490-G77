@@ -74,7 +74,7 @@ export const studentProgressService = {
   },
 
   async getSavedQuestions(params: {
-    page?: number; size?: number; type?: 'all' | 'wrong' | 'bookmarked'; examType?: 'QUIZ' | 'EXAM'; courseId?: number; search?: string;
+    page?: number; size?: number; type?: 'all' | 'wrong' | 'bookmarked'; examType?: 'QUIZ' | 'ESSAY'; courseId?: number; search?: string;
   }) {
     const res = await api.get<ApiResponse<StudentPage<SavedQuestion>>>(`/student/questions/saved?${query(params)}`);
     return res.data;
