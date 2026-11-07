@@ -561,6 +561,27 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
         return paperFactory.writeResponse(response);
     }
 
+    /**
+     * Key of one practice question, built like the check verdict so the client's instant reveal and
+     * the stored check agree; null for the rubric types, graded only after submitting.
+     */
+    private AttemptResponses.PracticeKey practiceKey(AttemptAnswer row, String questionType, Question live) {
+        if (!AttemptGrader.isAutoGraded(questionType)) {
+            return null;
+        }
+        Snapshots.KeySnapshot key = paperFactory.read(row.getKeySnapshot(), Snapshots.KeySnapshot.class);
+        if (key == null) {
+            return null;
+        }
+        List<Long> correctOptionIds = isChoice(questionType) && key.correctOptionIds() != null
+                ? key.correctOptionIds()
+                : List.of();
+        String explanation = live != null && live.getAiExplanation() != null && !live.getAiExplanation().isBlank()
+                ? live.getAiExplanation()
+                : null;
+        return new AttemptResponses.PracticeKey(correctOptionIds, correctAnswer(questionType, key), explanation);
+    }
+
     private boolean isChoice(String questionType) {
         return "SINGLE_CHOICE".equals(questionType)
                 || "MULTIPLE_CHOICE".equals(questionType)
@@ -621,6 +642,8 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
 
         Map<Long, Question> live = liveQuestions(rows);
         BigDecimal totalWeight = AttemptScoring.totalWeight(weights(rows));
+        // Practice reveals each answer at once, so its paper carries the key; an exam never does.
+        boolean practice = attempt.getMode() != null && PRACTICE_MODES.contains(attempt.getMode());
 
         List<AttemptResponses.Question> questions = new ArrayList<>();
         List<AttemptResponses.Answer> drafts = withAnswers ? new ArrayList<>() : null;
@@ -638,7 +661,8 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
                             AttemptScoring.questionMaxPoints(row.getWeightSnapshot(), totalWeight, maxScore)),
                     display.answerSpace() == null ? null
                             : new AttemptResponses.AnswerSpace(display.answerSpace().maxLength()),
-                    group(display)));
+                    group(display),
+                    practice ? practiceKey(row, display.questionType(), live.get(display.questionId())) : null));
             if (withAnswers) {
                 AttemptResponses.CheckResult check = null;
                 if (row.getCheckResult() != null && !row.getCheckResult().isBlank()) {
