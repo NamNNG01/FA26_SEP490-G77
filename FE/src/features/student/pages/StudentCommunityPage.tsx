@@ -12,7 +12,7 @@ import { Tabs } from '@/components/ui/Tabs';
 import { Icon } from '@/assets/icons';
 import { ROUTES } from '@/app/routes';
 import { studentCourseService, type MyCourse } from '@/services/studentCourse.service';
-import { studentCommunityService, type DiscussionItem, type DiscussionSort } from '@/services/studentCommunity.service';
+import { studentCommunityService, type DiscussionDetail as DiscussionDetailItem, type DiscussionItem, type DiscussionSort } from '@/services/studentCommunity.service';
 import { getApiErrorMessage } from '@/utils/apiError';
 import { LoadError, PageTitle, STUDENT_PAGE_CLASS } from '../components/studentUi';
 
@@ -144,7 +144,7 @@ function CreateDiscussionModal({ open, courses, defaultTag, onClose, onCreated }
 
 function DiscussionDetail({ discussionId }: { discussionId: string }) {
   const navigate = useNavigate();
-  const [item, setItem] = useState<DiscussionItem | null>(null);
+  const [item, setItem] = useState<DiscussionDetailItem | null>(null);
   const [comment, setComment] = useState('');
   const [anonymous, setAnonymous] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -183,7 +183,7 @@ function DiscussionDetail({ discussionId }: { discussionId: string }) {
     setBusy(true); setActionError(null);
     try {
       const created = await studentCommunityService.addComment(discussionId, { content: comment.trim(), isAnonymous: anonymous });
-      setItem(current => current ? { ...current, comments: [...(current.comments ?? []), created].slice(-20), commentCount: current.commentCount + 1, lastCommentAt: created.createdAt } : current);
+      setItem(current => current ? { ...current, comments: [...(current.comments ?? []), created].slice(-20), commentCount: current.commentCount + 1 } : current);
       setComment('');
     } catch (err) { setActionError(getApiErrorMessage(err, 'Could not post your comment.')); }
     finally { setBusy(false); }
@@ -196,8 +196,8 @@ function DiscussionDetail({ discussionId }: { discussionId: string }) {
     <article className="card space-y-4 p-5 sm:p-6">
       <div className="flex flex-wrap items-center gap-2"><Badge variant={item.tag === 'tip' ? 'success' : 'info'}>{item.tag === 'tip' ? 'Tip' : 'Question'}</Badge>{item.isPinned && <Badge variant="warning">Pinned</Badge>}{item.isClosed && <Badge>Closed</Badge>}</div>
       <h1 className="text-2xl font-bold text-content">{item.title}</h1>
-      <p className="text-sm text-content-subtle">{item.author.displayName} · {formatDate(item.createdAt)}{item.course ? ` · ${item.course.title}` : ''}</p>
-      <div className="whitespace-pre-wrap border-t border-line pt-4 text-sm leading-6 text-content-secondary">{item.content ?? item.excerpt}</div>
+      <p className="text-sm text-content-subtle">{item.author.displayName} · {formatDate(item.createdAt)}</p>
+      <div className="whitespace-pre-wrap border-t border-line pt-4 text-sm leading-6 text-content-secondary">{item.content}</div>
       <div className="flex flex-wrap gap-2 border-t border-line pt-4">
         <Button size="sm" variant={item.isUpvoted ? 'primary' : 'outline'} disabled={busy} icon={<Icon.Star className="h-4 w-4" />} onClick={() => update('upvote')}>{item.isUpvoted ? 'Upvoted' : 'Upvote'} · {item.upvoteCount}</Button>
         <Button size="sm" variant={item.isBookmarked ? 'primary' : 'outline'} disabled={busy} icon={<Icon.Book className="h-4 w-4" />} onClick={() => update('bookmark')}>{item.isBookmarked ? 'Saved' : 'Save'}</Button>

@@ -78,6 +78,14 @@ export function formatVnd(amount: number | null | undefined): string {
   return `${Number(amount).toLocaleString('vi-VN')} ₫`;
 }
 
+/** Formats the backend's minimum-order discount message with the same VND style as checkout totals. */
+export function formatDiscountErrorMessage(message: string): string {
+  return message.replace(
+    /(Order amount is below minimum discount requirement\s*\()([+-]?\d+(?:\.\d+)?)(\))/i,
+    (_match, before: string, amount: string, after: string) => `${before}${formatVnd(Number(amount))}${after}`,
+  );
+}
+
 const targetQuery = (target: PaymentTarget) =>
   'courseId' in target ? `courseId=${target.courseId}` : `planId=${target.planId}`;
 

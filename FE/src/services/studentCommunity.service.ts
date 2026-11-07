@@ -19,6 +19,11 @@ export interface DiscussionComment {
   createdAt: string;
 }
 
+export interface DiscussionDetailComment extends DiscussionComment {
+  isAccepted: boolean;
+  isAnonymous: boolean;
+}
+
 export interface DiscussionItem {
   discussionId: number;
   title: string;
@@ -40,6 +45,25 @@ export interface DiscussionItem {
   comments?: DiscussionComment[];
 }
 
+/** DI-02 detail response; intentionally separate from the smaller list DTO. */
+export interface DiscussionDetail {
+  discussionId: number;
+  title: string;
+  content: string;
+  tag: DiscussionTag;
+  author: DiscussionAuthor;
+  upvoteCount: number;
+  commentCount: number;
+  isPinned: boolean;
+  isUpvoted: boolean;
+  isBookmarked: boolean;
+  isAuthor: boolean;
+  isClosed: boolean;
+  createdAt: string;
+  updatedAt: string;
+  comments: DiscussionDetailComment[];
+}
+
 function query(params: Record<string, string | number | undefined | null>) {
   const qs = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
@@ -59,8 +83,8 @@ export const studentCommunityService = {
     return res.data;
   },
 
-  async getDiscussion(id: number | string) {
-    const res = await api.get<ApiResponse<DiscussionItem>>(`/student/discussions/${id}`);
+  async getDiscussion(id: number | string): Promise<DiscussionDetail> {
+    const res = await api.get<ApiResponse<DiscussionDetail>>(`/student/discussions/${id}`);
     return res.data;
   },
 
@@ -70,7 +94,7 @@ export const studentCommunityService = {
   },
 
   async addComment(id: number | string, body: { content: string; isAnonymous: boolean }) {
-    const res = await api.post<ApiResponse<DiscussionComment>>(`/student/discussions/${id}/comments`, body);
+    const res = await api.post<ApiResponse<DiscussionDetailComment>>(`/student/discussions/${id}/comments`, body);
     return res.data;
   },
 

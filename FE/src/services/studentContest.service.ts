@@ -2,7 +2,7 @@ import { api } from './api';
 import type { ApiResponse } from '@/auth/authContext';
 import type { StudentPage } from './studentLearning.service';
 
-export type ContestStatus = 'UPCOMING' | 'ONGOING' | 'ENDED' | 'CANCELLED';
+export type ContestStatus = 'UPCOMING' | 'ONGOING' | 'ENDED' | 'REWARDED' | 'CANCELLED';
 
 /**
  * Prize of one rank. CT-01 / CT-04 do not send prizes yet (docs/notes/contest-be-gaps-2026-10-31.md):
@@ -10,7 +10,8 @@ export type ContestStatus = 'UPCOMING' | 'ONGOING' | 'ENDED' | 'CANCELLED';
  */
 export interface ContestPrize {
   rankPosition: number;
-  discountCode: string;
+  discountCode?: string | null;
+  name?: string | null;
   discountType?: string;
   value?: number | null;
 }
@@ -32,6 +33,20 @@ export interface StudentContest {
   course?: { courseId: number; title: string } | null;
   /** Not sent by CT-01 yet. */
   rewards?: ContestPrize[];
+  participationStatus?: 'REGISTERED' | 'IN_PROGRESS' | 'FINISHED' | null;
+  hasStarted?: boolean;
+  hasSubmitted?: boolean;
+  score?: number | null;
+  rank?: number | null;
+  rewardInfo?: {
+    rewardId: number;
+    rewardType: string;
+    valueText: string;
+    name: string;
+    claimed: boolean;
+    rankPosition: number;
+    claimable: boolean;
+  } | null;
 }
 
 export interface ContestLeaderboard {
@@ -91,6 +106,11 @@ function query(params: Record<string, string | number | undefined | null>) {
 export const studentContestService = {
   async getContests(params: { status?: ContestStatus; page?: number; size?: number } = {}) {
     const res = await api.get<ApiResponse<StudentPage<StudentContest>>>(`/student/contests?${query(params)}`);
+    return res.data;
+  },
+
+  async getContestDetail(contestId: number | string): Promise<StudentContest> {
+    const res = await api.get<ApiResponse<StudentContest>>(`/student/contests/${contestId}`);
     return res.data;
   },
 

@@ -38,11 +38,12 @@ const STATUS_LABEL: Record<ContestStatus, string> = {
   UPCOMING: "Upcoming",
   ONGOING: "Live now",
   ENDED: "Ended",
+  REWARDED: "Rewards available",
   CANCELLED: "Cancelled",
 };
 const STATUS_OPTIONS = [
   { label: "Any status", value: "" },
-  ...(["UPCOMING", "ONGOING", "ENDED", "CANCELLED"] as ContestStatus[]).map(
+  ...(["UPCOMING", "ONGOING", "ENDED", "REWARDED", "CANCELLED"] as ContestStatus[]).map(
     (s) => ({ label: STATUS_LABEL[s], value: s }),
   ),
 ];
@@ -357,6 +358,7 @@ const STATUS_ACCENT: Record<ContestStatus, string> = {
   UPCOMING: "bg-primary",
   ONGOING: "bg-success",
   ENDED: "bg-line",
+  REWARDED: "bg-warning",
   CANCELLED: "bg-danger",
 };
 
@@ -525,7 +527,8 @@ function ownReward(result: ContestResult | null): ContestReward | null {
 
 function prizeText(prize: ContestPrize | null | undefined) {
   if (!prize) return null;
-  if (prize.value == null) return prize.discountCode;
+  if (prize.value == null) return prize.discountCode || prize.name || null;
+  if (!prize.discountCode) return prize.name || `${prize.value}${prize.discountType === "PERCENT" ? "% off" : " off"}`;
   return `${prize.discountCode} · ${prize.discountType === "PERCENT" ? `${prize.value}% off` : `${formatVnd(prize.value)} off`}`;
 }
 
@@ -790,32 +793,17 @@ function ContestDetail({ contestId }: { contestId: string }) {
     async (silent = false) => {
       if (!silent) setError(null);
       try {
-        const [contestRows, historyRows] = await Promise.all([
-          studentContestService.getAllContests(),
-          studentContestService.getAllHistory().catch(() => null),
-        ]);
-        const current = contestRows.find(
-          (item) => String(item.contestId) === contestId,
-        );
-        if (!current) throw new Error("Contest not found.");
-        const joined = Boolean(
-          current.isRegistered ||
-            historyRows?.some((item) => String(item.contestId) === contestId),
-        );
-        const ownHistory = historyRows?.find(
-          (item) => String(item.contestId) === contestId,
-        );
-        const next = { ...current, isRegistered: joined };
+        const next = await studentContestService.getContestDetail(contestId);
         const [leaderboardData, resultData] = await Promise.all([
           studentContestService.getLeaderboard(contestId).catch(() => null),
-          next.status === "ENDED" && joined
+          (next.status === "ENDED" || next.status === "REWARDED") && next.isRegistered
             ? studentContestService.getResult(contestId).catch(() => null)
             : Promise.resolve(null),
         ]);
         setContest(next);
         setLeaderboard(leaderboardData);
         setResult(resultData);
-        setAttemptScore(ownHistory?.score ?? resultData?.score ?? null);
+        setAttemptScore(next.score ?? resultData?.score ?? null);
       } catch (err) {
         if (!silent) {
           const message = getApiErrorMessage(
@@ -899,6 +887,9 @@ function ContestDetail({ contestId }: { contestId: string }) {
             }
           : current,
       );
+      setContest((current) => current?.rewardInfo
+        ? { ...current, rewardInfo: { ...current.rewardInfo, claimed: true, claimable: false } }
+        : current);
       toast.success("Reward claimed.");
     } catch (err) {
       toast.error(getApiErrorMessage(err, "Could not claim this reward."));
@@ -951,7 +942,18 @@ function ContestDetail({ contestId }: { contestId: string }) {
   const showPrizes =
     (contest.status === "UPCOMING" || contest.status === "ONGOING") &&
     prizes.length > 0;
-  const reward = ownReward(result);
+  const resultReward = ownReward(result);
+  const reward = resultReward && contest.rewardInfo
+    ? { ...resultReward, claimed: contest.rewardInfo.claimed, claimable: contest.rewardInfo.claimable }
+    : resultReward ?? (contest.rewardInfo ? {
+        rewardId: contest.rewardInfo.rewardId,
+        rewardType: contest.rewardInfo.rewardType,
+        value: contest.rewardInfo.valueText,
+        description: contest.rewardInfo.name,
+        claimed: contest.rewardInfo.claimed,
+        rankPosition: contest.rewardInfo.rankPosition,
+        claimable: contest.rewardInfo.claimable,
+      } : null);
   const score = attemptScore ?? result?.score ?? null;
   const certificate =
     result?.certificateUrl ??
@@ -1064,6 +1066,16 @@ function ContestDetail({ contestId }: { contestId: string }) {
               onClaim={claim}
               certificate={certificate}
             />
+          )}
+          {contest.rewardInfo && !result && (
+            <section className="card space-y-3 p-4">
+              <h2 className="font-semibold text-content">Your reward</h2>
+              <p className="text-sm text-content-secondary">{contest.rewardInfo.name || contest.rewardInfo.valueText}</p>
+              <p className="text-xs text-content-subtle">Rank #{contest.rewardInfo.rankPosition}{contest.rewardInfo.valueText ? ` · ${contest.rewardInfo.valueText}` : ""}</p>
+              {contest.rewardInfo.claimed ? <Badge variant="success">Claimed</Badge> : contest.rewardInfo.claimable ? (
+                <Button className="w-full" onClick={() => claim(contest.rewardInfo!.rewardId)} loading={busy === contest.rewardInfo.rewardId} disabled={busy !== null}>Claim reward</Button>
+              ) : <p className="text-xs text-content-soft">Your reward will be available after the contest is finalized.</p>}
+            </section>
           )}
           {showPrizes && <PrizesCard prizes={prizes} ownRank={result?.rank} />}
         </aside>
@@ -1256,6 +1268,8 @@ function StatusBadge({ status }: { status: ContestStatus }) {
         ? "success"
         : status === "CANCELLED"
           ? "danger"
+        : status === "REWARDED"
+          ? "purple"
           : "default";
   return <Badge variant={variant}>{STATUS_LABEL[status] ?? status}</Badge>;
 }
