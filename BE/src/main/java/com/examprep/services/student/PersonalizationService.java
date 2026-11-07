@@ -198,6 +198,9 @@ public class PersonalizationService {
                 Exam exam = practice.createGeneratedExam(work.userId(), work.courseId(), work.title(), "SMART_PRACTICE",
                         work.durationMinutes(), chosen.stream().map(QuestionCandidate::questionId).toList());
                 exam.setAiJobId(jobId);
+                ObjectNode practiceConfig = json.createObjectNode().put("examType", "QUIZ").put("questionCount", chosen.size()).put("difficulty", estimatedDifficulty(chosen));
+                practiceConfig.putArray("moduleIds");
+                exam.setPracticeConfig(practiceConfig.toString());
                 ObjectNode state = (ObjectNode) tree(job.getAnalysisJson());
                 state.put("questionCount", chosen.size());
                 state.set("focusAreas", json.valueToTree(focusAreas(chosen)));

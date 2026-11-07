@@ -26,5 +26,11 @@ public final class PracticeDtos {
 
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record Item(Long practiceId, Long examId, String title, Integer questionCount, Integer durationMinutes,
-                       BigDecimal bestScore, Long attemptCount, Instant createdAt) {}
+                       BigDecimal bestScore, Long attemptCount, Instant createdAt,
+                       String examType, String difficulty, List<Long> moduleIds) {
+        public Item(Long practiceId, Long examId, String title, Integer questionCount, Integer durationMinutes,
+                    BigDecimal bestScore, Long attemptCount, Instant createdAt) {
+            this(practiceId, examId, title, questionCount, durationMinutes, bestScore, attemptCount, createdAt, null, null, null);
+        }
+    }
 }

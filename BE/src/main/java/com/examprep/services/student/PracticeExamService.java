@@ -16,6 +16,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,12 +31,11 @@ import java.util.*;
 @Service
 @RequiredArgsConstructor
 @Transactional
-public class    PracticeExamService {
+public class PracticeExamService {
     /** Types SA-04 grades without AI, so a practice exam has a score as soon as it is submitted. */
     public static final List<String> AUTO_GRADED = List.of("SINGLE_CHOICE", "MULTIPLE_CHOICE", "TRUE_FALSE", "FILL_BLANK", "ORDERING", "MATCHING");
     public static final BigDecimal MAX_SCORE = BigDecimal.TEN;
 
-    private final PracticeExamRepository practices;
     private final ExamRepository exams;
     private final ExamQuestionRepository examQuestions;
     private final ExamAttemptRepository attempts;
@@ -59,7 +60,7 @@ public class    PracticeExamService {
             }
         }
         boolean essay = "ESSAY".equals(request.examType());
-        List<QuestionCandidate> pool = practices.findCandidates(courseId, essay ? List.of("ESSAY") : AUTO_GRADED,
+        List<QuestionCandidate> pool = findCandidates(courseId, essay ? List.of("ESSAY") : AUTO_GRADED,
                 moduleIds.isEmpty(), moduleIds.isEmpty() ? List.of(-1L) : moduleIds, request.difficulty());
         int count = request.questionCount();
         if (pool.size() < count) throw notEnough(pool.size());
@@ -67,15 +68,18 @@ public class    PracticeExamService {
         Collections.shuffle(drawn);
         drawn = drawn.subList(0, count);
 
+        String examType = essay ? "ESSAY" : "QUIZ";
         String title = titleOr(request.title(), "Đề luyện tùy chọn - " + (essay ? "Tự luận" : "Trắc nghiệm"));
-        PracticeExam practice = practices.save(PracticeExam.builder().userId(userId).courseId(courseId).title(title)
-                .questionCount(count).durationMinutes(request.durationMinutes()).difficulty(request.difficulty())
-                .categoryIds(moduleIds.isEmpty() ? null : write(moduleIds)).build());
-        Exam exam = createGeneratedExam(userId, courseId, title, "PRACTICE", request.durationMinutes(),
+
+        // Build practice_config JSON
+        String practiceConfig = writePracticeConfig(examType, count, request.difficulty(),
+                moduleIds.isEmpty() ? List.of() : new ArrayList<>(moduleIds));
+
+        Exam exam = createGeneratedExam(userId, courseId, title, Exam.MODE_PRACTICE_EXAM, request.durationMinutes(),
                 drawn.stream().map(QuestionCandidate::questionId).toList());
-        exam.setPracticeExamId(practice.getPracticeExamId());
-        practice.setExamId(exam.getExamId());
-        return new PracticeDtos.Created(practice.getPracticeExamId(), title, count, request.durationMinutes(), exam.getExamId());
+        exam.setPracticeConfig(practiceConfig);
+
+        return new PracticeDtos.Created(exam.getExamId(), title, count, request.durationMinutes(), exam.getExamId());
     }
 
     /** The student's exam name, or the fallback when it is blank. */
@@ -86,13 +90,13 @@ public class    PracticeExamService {
     /** Eligible questions of a course; empty moduleIds means every module. */
     @Transactional(readOnly = true)
     public List<QuestionCandidate> candidates(Long courseId, Collection<Long> moduleIds, String difficulty) {
-        return practices.findCandidates(courseId, AUTO_GRADED, moduleIds.isEmpty(), moduleIds.isEmpty() ? List.of(-1L) : moduleIds, difficulty);
+        return findCandidates(courseId, AUTO_GRADED, moduleIds.isEmpty(), moduleIds.isEmpty() ? List.of(-1L) : moduleIds, difficulty);
     }
 
-    /** A student's own published exam (PRACTICE or SMART_PRACTICE), one point-equal link per question, max score 10. */
+    /** A student's own published exam (PRACTICE_EXAM / PRACTICE / SMART_PRACTICE), one point-equal link per question, max score 10. */
     public Exam createGeneratedExam(Long userId, Long courseId, String title, String mode, int durationMinutes, List<Long> questionIds) {
         Exam exam = exams.save(Exam.builder().course(courses.getReferenceById(courseId)).createdBy(users.getReferenceById(userId))
-                .title(title).durationMinutes(durationMinutes).isPractice(true).generationType("MANUAL").maxScore(MAX_SCORE)
+                .title(title).durationMinutes(durationMinutes).generationType("MANUAL").maxScore(MAX_SCORE)
                 .status("PUBLISHED").publishedAt(Instant.now()).mode(mode).build());
         List<ExamQuestion> links = new ArrayList<>();
         int order = 1;
@@ -108,18 +112,57 @@ public class    PracticeExamService {
     @Transactional(readOnly = true)
     public PageResponse<PracticeDtos.Item> list(Long userId, int page, int size) {
         if (page < 0 || size < 1 || size > 100) throw new BadRequestException("page must be >= 0 and size 1-100.");
-        return PageResponse.of(practices.findMine(userId, PageRequest.of(page, size)));
+        Page<Exam> examPage = exams.findPracticeExams(userId, PageRequest.of(page, size));
+        if (examPage.isEmpty()) {
+            return PageResponse.of(new PageImpl<>(List.of(), PageRequest.of(page, size), 0));
+        }
+
+        List<Long> examIds = examPage.getContent().stream().map(Exam::getExamId).toList();
+        Map<Long, BigDecimal> bestScores = new HashMap<>();
+        Map<Long, Long> attemptCounts = new HashMap<>();
+        for (Object[] row : attempts.findAttemptStatsByExamIds(examIds, userId)) {
+            Long eId = (Long) row[0];
+            bestScores.put(eId, (BigDecimal) row[1]);
+            attemptCounts.put(eId, ((Number) row[2]).longValue());
+        }
+
+        List<PracticeDtos.Item> items = examPage.getContent().stream().map(exam -> {
+            JsonNode config = parseConfig(exam.getPracticeConfig());
+            String examType = config != null && config.hasNonNull("examType") ? config.get("examType").asText() : null;
+            Integer questionCount = config != null && config.hasNonNull("questionCount") ? config.get("questionCount").asInt() : null;
+            String difficulty = config != null && config.hasNonNull("difficulty") ? config.get("difficulty").asText() : null;
+            List<Long> moduleIds = new ArrayList<>();
+            if (config != null && config.has("moduleIds") && config.get("moduleIds").isArray()) {
+                for (JsonNode m : config.get("moduleIds")) {
+                    if (m.isNumber()) moduleIds.add(m.asLong());
+                }
+            }
+            return new PracticeDtos.Item(
+                    exam.getExamId(),
+                    exam.getExamId(),
+                    exam.getTitle(),
+                    questionCount,
+                    exam.getDurationMinutes(),
+                    bestScores.get(exam.getExamId()),
+                    attemptCounts.getOrDefault(exam.getExamId(), 0L),
+                    exam.getCreatedAt(),
+                    examType,
+                    difficulty,
+                    moduleIds
+            );
+        }).toList();
+
+        return PageResponse.of(new PageImpl<>(items, PageRequest.of(page, size), examPage.getTotalElements()));
     }
 
-    /** Removes the practice entry; the exam is archived so existing attempts keep their paper. */
+    /** Soft-deletes the exam (ARCHIVED) so existing attempts keep their paper. */
     public void delete(Long userId, Long practiceId) {
-        PracticeExam practice = practices.findById(practiceId).orElseThrow(() -> new ResourceNotFoundException("Practice exam not found."));
-        if (!practice.getUserId().equals(userId)) throw new ForbiddenException("This practice exam belongs to another student.");
-        if (practice.getExamId() != null) exams.findById(practice.getExamId()).ifPresent(exam -> {
-            exam.setStatus("ARCHIVED");
-            exam.setPracticeExamId(null);
-        });
-        practices.delete(practice);
+        Exam exam = exams.findById(practiceId).orElseThrow(() -> new ResourceNotFoundException("Practice exam not found."));
+        if (!exam.getCreatedBy().getUserId().equals(userId)) throw new ForbiddenException("This practice exam belongs to another student.");
+        if (!Exam.MODE_PRACTICE_EXAM.equals(exam.getMode()) || "ARCHIVED".equals(exam.getStatus())) {
+            throw new ResourceNotFoundException("Practice exam not found.");
+        }
+        exam.setStatus("ARCHIVED");
     }
 
     // ------------------------------------------------------------------ PQ-04
@@ -167,20 +210,40 @@ public class    PracticeExamService {
                 Map.of("code", "NOT_ENOUGH_QUESTIONS", "available", available));
     }
 
+    /** findCandidates moved from PracticeExamRepository (which is now deleted). */
+    List<QuestionCandidate> findCandidates(Long courseId, Collection<String> types, boolean allModules,
+                                            Collection<Long> moduleIds, String difficulty) {
+        return questions.findPracticeCandidates(courseId, types, allModules, moduleIds, difficulty);
+    }
+
+    String writePracticeConfig(String examType, int questionCount, String difficulty, List<Long> moduleIds) {
+        try {
+            Map<String, Object> config = new LinkedHashMap<>();
+            config.put("examType", examType);
+            config.put("questionCount", questionCount);
+            config.put("difficulty", difficulty);
+            config.put("moduleIds", moduleIds);
+            return json.writeValueAsString(config);
+        } catch (JsonProcessingException ex) {
+            throw new IllegalStateException(ex);
+        }
+    }
+
+    private JsonNode parseConfig(String practiceConfig) {
+        if (practiceConfig == null || practiceConfig.isBlank()) return null;
+        try {
+            return json.readTree(practiceConfig);
+        } catch (JsonProcessingException ex) {
+            return null;
+        }
+    }
+
     private ObjectNode display(String snapshot) {
         try {
             JsonNode node = snapshot == null ? null : json.readTree(snapshot);
             return node instanceof ObjectNode object ? object : json.createObjectNode();
         } catch (JsonProcessingException ex) {
             return json.createObjectNode();
-        }
-    }
-
-    private String write(Object value) {
-        try {
-            return json.writeValueAsString(value);
-        } catch (JsonProcessingException ex) {
-            throw new IllegalStateException(ex);
         }
     }
 }

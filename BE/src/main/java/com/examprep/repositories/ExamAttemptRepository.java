@@ -12,6 +12,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -95,14 +97,16 @@ public interface ExamAttemptRepository extends JpaRepository<ExamAttempt, Long> 
     @Query(value = "SELECT a FROM ExamAttempt a LEFT JOIN FETCH a.exam e " +
             "WHERE a.user.userId = :userId AND a.submitTime IS NOT NULL AND a.mode <> 'REVIEW' " +
             "AND (:mode IS NULL OR " +
-            "     (:mode = 'EXAM' AND a.mode IN ('EXAM', 'CONTEST', 'PRACTICE')) OR " +
+            "     (:mode = 'EXAM' AND a.mode IN ('EXAM', 'CONTEST', 'PRACTICE', 'PRACTICE_EXAM')) OR " +
+            "     (:mode = 'PRACTICE' AND a.mode IN ('PRACTICE', 'PRACTICE_EXAM')) OR " +
             "     (:mode = 'QUIZ' AND a.mode = 'QUIZ') OR " +
             "     (:mode = a.mode)) " +
             "ORDER BY a.submitTime DESC",
             countQuery = "SELECT COUNT(a) FROM ExamAttempt a " +
             "WHERE a.user.userId = :userId AND a.submitTime IS NOT NULL AND a.mode <> 'REVIEW' " +
             "AND (:mode IS NULL OR " +
-            "     (:mode = 'EXAM' AND a.mode IN ('EXAM', 'CONTEST', 'PRACTICE')) OR " +
+            "     (:mode = 'EXAM' AND a.mode IN ('EXAM', 'CONTEST', 'PRACTICE', 'PRACTICE_EXAM')) OR " +
+            "     (:mode = 'PRACTICE' AND a.mode IN ('PRACTICE', 'PRACTICE_EXAM')) OR " +
             "     (:mode = 'QUIZ' AND a.mode = 'QUIZ') OR " +
             "     (:mode = a.mode))")
     Page<ExamAttempt> findActivityAttemptsByUserAndMode(@Param("userId") Long userId, @Param("mode") String mode, Pageable pageable);
@@ -153,4 +157,7 @@ public interface ExamAttemptRepository extends JpaRepository<ExamAttempt, Long> 
 
     List<ExamAttempt> findByUser_UserIdAndExam_ExamIdAndStatusAndMode(
             Long userId, Long examId, String status, String mode);
+
+    @Query("SELECT a.exam.examId, MAX(a.totalScore), COUNT(a) FROM ExamAttempt a WHERE a.exam.examId IN :examIds AND a.user.userId = :userId GROUP BY a.exam.examId")
+    List<Object[]> findAttemptStatsByExamIds(@Param("examIds") Collection<Long> examIds, @Param("userId") Long userId);
 }

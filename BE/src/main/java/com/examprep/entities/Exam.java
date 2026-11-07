@@ -2,6 +2,8 @@ package com.examprep.entities;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
@@ -45,9 +47,6 @@ public class Exam implements Serializable {
     @Column(name = "duration_minutes", nullable = false)
     private Integer durationMinutes;
 
-    @Column(name = "is_practice", nullable = false)
-    private Boolean isPractice;
-
     @Column(name = "generation_type", nullable = false, length = 50)
     private String generationType;
 
@@ -62,7 +61,6 @@ public class Exam implements Serializable {
     @Column(name = "published_at")
     private Instant publishedAt;
 
-
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -74,15 +72,34 @@ public class Exam implements Serializable {
     public static final String MODE_MATERIAL_QUIZ = "MATERIAL_QUIZ";
     /** A course exam reserved for contests: hidden from students' course exams, taken only through its contest. */
     public static final String MODE_CONTEST = "CONTEST";
+    public static final String MODE_PRACTICE_EXAM = "PRACTICE_EXAM";
 
-    /** EXAM/CONTEST for course exams (manager picks); PRACTICE (PQ-01) and SMART_PRACTICE (AI-01) are a student's own generated exams. */
+    /** EXAM/CONTEST for course exams; PRACTICE_EXAM (PQ-01) and SMART_PRACTICE (AI-01) are a student's own generated exams. PRACTICE is review-from-notebook only. */
     @Builder.Default
     @Column(name = "mode", nullable = false, length = 30)
     private String mode = MODE_EXAM;
 
-    @Column(name = "practice_exam_id")
-    private Long practiceExamId;
-
     @Column(name = "ai_job_id")
     private Long aiJobId;
+
+    /** PQ-01 / AI-01 config stored at creation time: examType, questionCount, difficulty, moduleIds. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "practice_config", columnDefinition = "jsonb")
+    private String practiceConfig;
+
+    /** Computed: true when mode is not EXAM (backward compat for manager ExamResponse). */
+    public boolean getIsPractice() {
+        return !MODE_EXAM.equals(mode);
+    }
+
+    public void setIsPractice(Boolean isPractice) {
+        // no-op for backward compatibility
+    }
+
+    public static class ExamBuilder {
+        public ExamBuilder isPractice(Boolean isPractice) {
+            // no-op for backward compatibility with existing builders
+            return this;
+        }
+    }
 }

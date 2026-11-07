@@ -133,4 +133,8 @@ public interface ExamRepository extends JpaRepository<Exam, Long>, JpaSpecificat
            "WHERE eq.exam.examId = :examId AND q.status = 'ACTIVE' AND q.approvalStatus = 'APPROVED' AND q.deletedAt IS NULL " +
            "GROUP BY q.questionType, eq.weight")
     List<com.examprep.dto.student.QuestionTypeCountDto> getExamQuestionTypeSummaries(@Param("examId") Long examId);
+
+    /** PQ-02: list custom practice exams owned by this user, newest first. */
+    @Query("SELECT e FROM Exam e WHERE e.createdBy.userId = :userId AND e.mode = 'PRACTICE_EXAM' AND e.status <> 'ARCHIVED' ORDER BY e.createdAt DESC, e.examId DESC")
+    Page<Exam> findPracticeExams(@Param("userId") Long userId, Pageable pageable);
 }

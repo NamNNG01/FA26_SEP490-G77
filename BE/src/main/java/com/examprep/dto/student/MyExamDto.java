@@ -10,6 +10,6 @@ public record MyExamDto(
         BigDecimal maxScore,
         Long attemptCount,
         BigDecimal bestScore,
-        /** Exam.mode: EXAM, PRACTICE, SMART_PRACTICE or MATERIAL_QUIZ. */
+        /** Exam.mode: EXAM, PRACTICE, PRACTICE_EXAM, SMART_PRACTICE, MATERIAL_QUIZ. */
         String mode
 ) {}

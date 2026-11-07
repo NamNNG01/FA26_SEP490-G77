@@ -71,10 +71,10 @@ class PracticeExamApiIntegrationTest {
         assertEquals(30, data.path("durationMinutes").asInt());
         assertTrue(data.path("title").asText().contains("Trắc nghiệm"));
         Exam exam = em.find(Exam.class, data.path("examId").asLong());
-        assertEquals("PRACTICE", exam.getMode());
+        assertEquals("PRACTICE_EXAM", exam.getMode());
         assertEquals("PUBLISHED", exam.getStatus());
         assertEquals(student.getUserId(), exam.getCreatedBy().getUserId());
-        assertEquals(data.path("practiceId").asLong(), exam.getPracticeExamId());
+        assertEquals(data.path("practiceId").asLong(), exam.getExamId());
         Set<Long> drawn = new HashSet<>(em.createQuery("select eq.question.questionId from ExamQuestion eq where eq.exam = :e", Long.class)
                 .setParameter("e", exam).getResultList());
         assertEquals(easyOop, drawn);

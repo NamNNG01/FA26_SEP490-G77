@@ -351,4 +351,19 @@ public interface QuestionRepository extends JpaRepository<Question, Long>, JpaSp
                    OR (q.aiExplanationSource = 'AI' AND (q.aiExplanationVersion IS NULL OR q.aiExplanationVersion <> :version)))""")
     int cacheAiExplanation(@Param("id") Long id, @Param("version") Integer version, @Param("text") String text);
 
+    /**
+     * PQ-01 candidate questions: moved from the deleted PracticeExamRepository.
+     * Active, approved, not deleted, not inside a passage group, of the requested types,
+     * in a visible module (or none). moduleIds is ignored when allModules is true.
+     */
+    @Query("SELECT new com.examprep.dto.student.QuestionCandidate(q.questionId, m.moduleId, m.title, q.difficulty, q.questionType, q.content) " +
+            "FROM Question q LEFT JOIN q.module m " +
+            "WHERE q.course.courseId = :courseId AND q.status = 'ACTIVE' AND q.approvalStatus = 'APPROVED' " +
+            "AND q.deletedAt IS NULL AND q.group IS NULL AND q.questionType IN :types " +
+            "AND (m IS NULL OR m.status <> 'HIDDEN') " +
+            "AND (:allModules = true OR m.moduleId IN :moduleIds) " +
+            "AND (:difficulty IS NULL OR q.difficulty = :difficulty)")
+    List<com.examprep.dto.student.QuestionCandidate> findPracticeCandidates(@Param("courseId") Long courseId, @Param("types") Collection<String> types,
+                                           @Param("allModules") boolean allModules, @Param("moduleIds") Collection<Long> moduleIds,
+                                           @Param("difficulty") String difficulty);
 }

@@ -453,7 +453,6 @@ public class ManagerExamServiceImpl implements ManagerExamService {
                 .title(r.getTitle().strip())
                 .description(r.getDescription())
                 .durationMinutes(r.getDurationMinutes())
-                .isPractice(r.getIsPractice())
                 .mode(mode)
                 .generationType(r.getGenerationType())
                 .maxScore(maxScore)
@@ -553,7 +552,7 @@ public class ManagerExamServiceImpl implements ManagerExamService {
     @Override @Transactional
     public ExamResponse update(UserPrincipal user,Long id,ExamRequests.Update r) {
         Exam e=write(user,id);
-        boolean structural=r.getTitle()!=null || r.getCourseId()!=null || r.getModuleId()!=null || r.getDurationMinutes()!=null || r.getIsPractice()!=null || r.getMode()!=null
+        boolean structural=r.getTitle()!=null || r.getCourseId()!=null || r.getModuleId()!=null || r.getDurationMinutes()!=null || r.getMode()!=null
                 || r.getGenerationType()!=null || r.getMaxScore()!=null || r.getConfigs()!=null;
         if(structural) editable(e);
         if(r.getIsPractice()!=null || r.getMode()!=null)
@@ -567,7 +566,6 @@ public class ManagerExamServiceImpl implements ManagerExamService {
         if(r.getTitle()!=null) e.setTitle(r.getTitle().strip());
         if(r.getDescription()!=null) e.setDescription(r.getDescription());
         if(r.getDurationMinutes()!=null) e.setDurationMinutes(r.getDurationMinutes());
-        if(r.getIsPractice()!=null) e.setIsPractice(r.getIsPractice());
         if(r.getMode()!=null) e.setMode(r.getMode());
         if(r.getMaxScore()!=null) e.setMaxScore(maxScore(r.getMaxScore()));
         if(r.getGenerationType()!=null) e.setGenerationType(r.getGenerationType());
