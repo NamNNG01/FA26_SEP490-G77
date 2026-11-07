@@ -62,6 +62,7 @@ type SaveState = 'saved' | 'dirty' | 'saving' | 'error';
  *    Keys: 1–9 / A–Z pick an option, Enter checks or goes to the next question.
  *    The checks are kept per attempt in localStorage so a reload or a later resume keeps them.
  *    Practice is untimed: no timer, no auto-submit, and the result shows no score.
+ *    Material quizzes are untimed too: only course exams and contests show the timer.
  *    Its Submit is called Finish and needs no confirmation (it still closes the attempt with SA-04).
  *  - `?practiceSessionId=` runs a Module Practice session instead (MP-03…MP-07) — same screen,
  *    its own flow: see ModulePracticeRunner.
@@ -304,6 +305,8 @@ function ExamAttemptScreen() {
    */
   const mode = session?.examMode ?? (practice ? 'PRACTICE' : 'EXAM');
   const isContest = contestId != null || mode === 'CONTEST';
+  /** Only course exams and contests run against the clock; practice exams and material quizzes are untimed. */
+  const timed = !practice && (isContest || mode === 'EXAM');
   const historyPath = `${ROUTES.studentExams}${mode === 'EXAM' || isContest ? '' : `?type=${practice ? 'PRACTICE' : mode}`}`;
   const exitPath = (examId: number) =>
     isContest
@@ -358,9 +361,12 @@ function ExamAttemptScreen() {
   };
 
   /* ── Timer (server clock) ─────────────────────────────────────────────── */
-  // Practice is untimed: no countdown and no auto-submit.
+  // Untimed (practice exam, material quiz): no countdown and no auto-submit.
   useEffect(() => {
-    if (!session || practice) return;
+    if (!session || !timed) {
+      setRemaining(null);
+      return;
+    }
     const offset = Date.parse(session.serverTime) - Date.now();
     const deadline = Date.parse(session.deadlineAt);
     const tick = () => {
@@ -371,7 +377,7 @@ function ExamAttemptScreen() {
     tick();
     const id = window.setInterval(tick, 1000);
     return () => window.clearInterval(id);
-  }, [session, submit, practice]);
+  }, [session, submit, timed]);
 
   /* ── Derived ──────────────────────────────────────────────────────────── */
   const questions = session?.questions ?? [];
@@ -751,8 +757,8 @@ function ExamAttemptScreen() {
           <p>
             <span className="font-semibold text-content">Save and exit</span> keeps your {answeredSet.size} answer
             {answeredSet.size === 1 ? '' : 's'} so you can continue later.{' '}
-            {practice
-              ? 'This practice exam has no time limit — it stays open until you come back.'
+            {!timed
+              ? `This ${practice ? 'practice exam' : 'quiz'} has no time limit — it stays open until you come back.`
               : 'The timer keeps running: when time is up, the exam is submitted automatically.'}
           </p>
           <p>

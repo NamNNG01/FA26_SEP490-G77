@@ -86,6 +86,10 @@ export interface GenerateQuizRequest {
   courseId?: number;
   difficulty?: MaterialDifficulty;
   sourceLessonId?: number;
+  /** Name the student gives the quiz. Ignored until the BE reads it (see docs/notes). */
+  title?: string;
+  /** Free-text guidance for the AI. Ignored until the BE reads it (see docs/notes). */
+  context?: string;
 }
 
 /** MQ-03 (202) */
