@@ -15,32 +15,44 @@ export interface ContributionItem {
 }
 
 export interface ContributionOption {
+  key?: string;
   optionText: string;
-  isCorrect: boolean;
+  isCorrect?: boolean | null;
+  orderIndex?: number;
 }
+
+export type ContributionQuestionType = 'SINGLE_CHOICE' | 'MULTIPLE_CHOICE' | 'TRUE_FALSE' | 'MATCHING' | 'FILL_BLANK' | 'ESSAY' | 'DIAGRAM' | 'ORDERING';
 
 export interface ContributionDetail extends ContributionItem {
   courseId?: number;
   categoryIds?: number[];
+  moduleId?: number | null;
+  questionType?: ContributionQuestionType;
   difficulty?: 'EASY' | 'MEDIUM' | 'HARD';
+  content?: string;
   questionText?: string;
   options?: ContributionOption[];
+  answerKey?: unknown;
+  questionMetadata?: Record<string, unknown> | null;
+  essayGradingRubric?: unknown;
   explanation?: string;
   sourceReference?: string | null;
   title?: string;
-  content?: string;
   reviewNote?: string | null;
   resubmissionCount?: number;
 }
 
 export interface QuestionContributionBody {
   courseId: number;
-  categoryIds: number[];
+  questionType: ContributionQuestionType;
   difficulty: 'EASY' | 'MEDIUM' | 'HARD';
-  questionText: string;
+  content: string;
   options: ContributionOption[];
+  answerKey?: unknown;
+  correctOrder?: unknown[];
+  questionMetadata?: Record<string, unknown> | null;
+  essayGradingRubric?: unknown;
   explanation: string;
-  sourceReference?: string | null;
 }
 
 function query(params: Record<string, string | number | undefined | null>) {
@@ -51,15 +63,29 @@ function query(params: Record<string, string | number | undefined | null>) {
   return qs.toString();
 }
 
+function normalizeContributionType(value: string): ContributionType {
+  const normalized = value.toLowerCase();
+  return normalized === 'tip' || normalized === 'document' ? normalized : 'question';
+}
+
+function normalizeContributionItem(item: ContributionItem): ContributionItem {
+  return { ...item, type: normalizeContributionType(String(item.type ?? 'question')) };
+}
+
 export const studentContributionService = {
   async getMine(params: { type?: ContributionType; status?: ContributionStatus; page?: number; size?: number }) {
     const res = await api.get<ApiResponse<StudentPage<ContributionItem>>>(`/student/contributions?${query(params)}`);
-    return res.data;
+    return { ...res.data, content: (res.data.content ?? []).map(normalizeContributionItem) };
   },
 
   async getDetail(id: number | string) {
     const res = await api.get<ApiResponse<ContributionDetail>>(`/student/contributions/${id}`);
-    return res.data;
+    const detail = res.data;
+    return {
+      ...detail,
+      ...normalizeContributionItem(detail),
+      questionText: detail.questionText ?? detail.content,
+    };
   },
 
   async createQuestion(body: QuestionContributionBody) {
