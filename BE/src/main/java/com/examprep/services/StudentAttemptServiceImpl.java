@@ -461,6 +461,11 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
         Long courseId = exam.getCourse() != null ? exam.getCourse().getCourseId()
                 : exam.getModule() != null && exam.getModule().getCourse() != null
                 ? exam.getModule().getCourse().getCourseId() : null;
+        // A material quiz of no course: only the student who generated it takes it.
+        if (courseId == null && Exam.MODE_MATERIAL_QUIZ.equals(exam.getMode())
+                && exam.getCreatedBy() != null && Objects.equals(exam.getCreatedBy().getUserId(), userId)) {
+            return;
+        }
         if (courseId == null
                 || !enrollments.existsByCourse_CourseIdAndUser_UserIdAndStatus(courseId, userId, Enrollment.STATUS_ACTIVE)) {
             throw new ForbiddenException("You are not enrolled in the course of this exam");

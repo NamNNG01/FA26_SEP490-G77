@@ -166,7 +166,9 @@ public class StudentAiServiceImpl implements StudentAiService {
         List<Long> foreign = ids.stream().filter(id -> !byQuestion.containsKey(id)).toList();
         if (!foreign.isEmpty()) throw invalid("Questions " + foreign + " are not part of this attempt.");
 
-        ObjectNode course = json.createObjectNode().put("course", attempt.getExam().getCourse().getTitle());
+        // A material quiz may belong to no course.
+        Course examCourse = attempt.getExam().getCourse();
+        ObjectNode course = json.createObjectNode().put("course", examCourse == null ? "" : examCourse.getTitle());
         Map<Long, ExplanationItem> done = new HashMap<>();
         List<Pending> pending = new ArrayList<>();
         for (Long id : ids) {
@@ -198,7 +200,7 @@ public class StudentAiServiceImpl implements StudentAiService {
                         version, Objects.equals(version, question.getScoringVersion())));
             }
         }
-        return new ExplanationWork(attempt.getExam().getCourse().getCourseId(), course, done, pending);
+        return new ExplanationWork(examCourse == null ? null : examCourse.getCourseId(), course, done, pending);
     }
 
     /** Correct answer in words, from the attempt's own snapshots (spec: the AI never sees wrong options or the student's answer). */
@@ -214,7 +216,7 @@ public class StudentAiServiceImpl implements StudentAiService {
             if (source == null) return null;
             return logs.save(AiUsageLog.builder()
                     .user(users.getReferenceById(userId))
-                    .course(courses.getReferenceById(courseId))
+                    .course(courseId == null ? null : courses.getReferenceById(courseId))
                     .attempt(attempts.getReferenceById(attemptId))
                     .purpose("EXPLANATION")
                     .status("PENDING")

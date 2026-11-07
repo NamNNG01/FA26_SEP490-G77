@@ -196,6 +196,20 @@ public class StudentMaterialApiIntegrationTest {
     }
 
     @Test
+    void uploadWithoutCourseStoresAMaterialOfNoCourse() throws Exception {
+        MockMultipartFile file = new MockMultipartFile("file", "free.pdf", "application/pdf",
+                "FREEDATA".getBytes(StandardCharsets.UTF_8));
+
+        JsonNode data = data(call(student, multipart("/api/v1/student/materials").file(file))
+                .andExpect(status().isCreated()));
+
+        Document saved = em.find(Document.class, data.path("documentId").asLong());
+        assertNotNull(saved);
+        assertTrue(saved.getCourses().isEmpty());
+        assertEquals(0, data.path("courseIds").size());
+    }
+
+    @Test
     void uploadRejectsOversizedFilesAndStorageFailures() throws Exception {
         byte[] huge = new byte[20 * 1024 * 1024 + 1];
         MockMultipartFile oversized = new MockMultipartFile("file", "huge.pdf", "application/pdf", huge);
@@ -468,7 +482,7 @@ public class StudentMaterialApiIntegrationTest {
 
         JsonNode data = data(call(student, post("/api/v1/student/materials/" + subject.getDocId() + "/generate-quiz")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(json.writeValueAsString(Map.of("questionCount", 10))))
+                .content(json.writeValueAsString(Map.of("questionCount", 10, "courseId", course.getCourseId()))))
                 .andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.message").value("Accepted"))
                 .andExpect(jsonPath("$.data.status").value("PROCESSING"))
@@ -572,15 +586,15 @@ public class StudentMaterialApiIntegrationTest {
 
         String url = "/api/v1/student/materials/" + subject.getDocId() + "/generate-quiz";
         call(student, post(url).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"questionCount\":10,\"sourceLessonId\":9002}"))
+                .content("{\"questionCount\":10,\"courseId\":" + course.getCourseId() + ",\"sourceLessonId\":9002}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("sourceLessonId does not belong to the course of this material"));
         call(student, post(url).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"questionCount\":10,\"sourceLessonId\":9003}"))
+                .content("{\"questionCount\":10,\"courseId\":" + course.getCourseId() + ",\"sourceLessonId\":9003}"))
                 .andExpect(status().isBadRequest());
 
         JsonNode data = data(call(student, post(url).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"questionCount\":10,\"sourceLessonId\":9001}"))
+                .content("{\"questionCount\":10,\"courseId\":" + course.getCourseId() + ",\"sourceLessonId\":9001}"))
                 .andExpect(status().isAccepted()));
         assertEquals(9001L, em.find(QuizGenerationJob.class, data.path("jobId").asLong()).getSourceLessonId());
     }
@@ -622,12 +636,11 @@ public class StudentMaterialApiIntegrationTest {
                 .content("{\"questionCount\":10,\"courseId\":" + unenrolled.getCourseId() + "}"))
                 .andExpect(status().isForbidden());
 
-        // Omitting courseId picks the first course of the material.
+        // Omitting courseId makes a quiz of no course.
         JsonNode defaults = data(call(student, post("/api/v1/student/materials/" + single.getDocId() + "/generate-quiz")
                 .contentType(MediaType.APPLICATION_JSON).content("{\"questionCount\":10}"))
                 .andExpect(status().isAccepted()));
-        assertEquals(course.getCourseId(), em.find(QuizGenerationJob.class, defaults.path("jobId").asLong())
-                .getCourse().getCourseId());
+        assertNull(em.find(QuizGenerationJob.class, defaults.path("jobId").asLong()).getCourse());
     }
 
     @Test

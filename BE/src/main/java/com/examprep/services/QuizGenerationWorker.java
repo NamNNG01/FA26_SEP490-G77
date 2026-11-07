@@ -190,10 +190,11 @@ public class QuizGenerationWorker {
                 return null;
             }
             Document document = job.getDocument();
+            // No course: the quiz belongs to no course (MQ-03 without courseId).
             Course course = job.getCourse();
-            if (course == null || document == null || document.getExtractedContent() == null) {
+            if (document == null || document.getExtractedContent() == null) {
                 job.setStatus(STATUS_FAILED);
-                job.setErrorMessage("Material has no course or no readable content");
+                job.setErrorMessage("Material has no readable content");
                 job.setCompletedAt(Instant.now());
                 job.setUpdatedAt(Instant.now());
                 jobs.save(job);
@@ -204,7 +205,7 @@ public class QuizGenerationWorker {
             job.setProgress(10);
             job.setUpdatedAt(Instant.now());
             jobs.save(job);
-            return new Claimed(job.getJobId(), job.getUser().getUserId(), course.getCourseId(),
+            return new Claimed(job.getJobId(), job.getUser().getUserId(), course == null ? null : course.getCourseId(),
                     document.getDocId(), document.getTitle(), document.getExtractedContent(),
                     job.getQuestionCount(), job.getDifficulty(),
                     job.getAiUsageLog() == null ? null : job.getAiUsageLog().getLogId(),
@@ -320,10 +321,10 @@ public class QuizGenerationWorker {
         if (job == null || !STATUS_PROCESSING.equals(job.getStatus())) {
             return;
         }
-        Course course = courses.findById(claimed.courseId()).orElseThrow();
+        Course course = claimed.courseId() == null ? null : courses.findById(claimed.courseId()).orElseThrow();
         User student = users.findById(claimed.userId()).orElseThrow();
         // MQ-03's sourceLessonId anchors the generated quiz to that lesson's module.
-        Module module = claimed.sourceLessonId() == null ? null
+        Module module = claimed.sourceLessonId() == null || claimed.courseId() == null ? null
                 : modules.findModuleIdByLessonAndCourse(claimed.sourceLessonId(), claimed.courseId())
                 .flatMap(modules::findById)
                 .orElse(null);

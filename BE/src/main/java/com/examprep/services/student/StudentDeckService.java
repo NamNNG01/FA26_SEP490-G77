@@ -230,8 +230,9 @@ public class StudentDeckService {
         if (!Set.of("SUBMITTED", "COMPLETED").contains(attempt.getStatus())) {
             throw coded(ResponseCode.ATTEMPT_NOT_SUBMITTED, "ATTEMPT_NOT_SUBMITTED", "Submit the attempt first.");
         }
-        Long courseId = attempt.getExam().getCourse().getCourseId();
-        if (!enrollments.existsByCourse_CourseIdAndUser_UserIdAndStatus(courseId, userId, Enrollment.STATUS_ACTIVE)) {
+        // A material quiz of no course: the attempt being the student's own is enough.
+        Long courseId = attempt.getExam().getCourse() == null ? null : attempt.getExam().getCourse().getCourseId();
+        if (courseId != null && !enrollments.existsByCourse_CourseIdAndUser_UserIdAndStatus(courseId, userId, Enrollment.STATUS_ACTIVE)) {
             throw new ForbiddenException("You are not enrolled in this course.");
         }
         AttemptAnswer answer = answers.findWithQuestionByAttemptId(attempt.getAttemptId()).stream()

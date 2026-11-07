@@ -82,7 +82,7 @@ export interface MaterialLookup {
 /** MQ-03 body */
 export interface GenerateQuizRequest {
   questionCount: number;
-  /** Course of the quiz (one of the material's courses). */
+  /** Course of the quiz (one of the material's courses); left out, the quiz belongs to no course. */
   courseId?: number;
   difficulty?: MaterialDifficulty;
   sourceLessonId?: number;
@@ -134,10 +134,11 @@ export const isJobRunning = (status: MaterialJobStatus) => status === 'PENDING' 
 
 export const materialService = {
   /** MQ-01 */
-  async upload(file: File, courseId: number, title?: string): Promise<UploadedMaterial> {
+  async upload(file: File, courseId?: number, title?: string): Promise<UploadedMaterial> {
     const form = new FormData();
     form.append('file', file);
-    form.append('courseId', String(courseId));
+    // No course: the material belongs to none.
+    if (courseId != null) form.append('courseId', String(courseId));
     if (title?.trim()) form.append('title', title.trim());
     const res = await apiClient.post<ApiResponse<UploadedMaterial>>('/student/materials', form, {
       headers: { 'Content-Type': 'multipart/form-data' },
