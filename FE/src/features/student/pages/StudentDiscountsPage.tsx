@@ -353,7 +353,7 @@ function sourceLabel(source: string | null) {
     ? "Contest reward"
     : source
       ? source
-          .replaceAll("_", " ")
+          .replace(/_/g, " ")
           .toLowerCase()
           .replace(/\b\w/g, (char) => char.toUpperCase())
       : "Assigned discount";
