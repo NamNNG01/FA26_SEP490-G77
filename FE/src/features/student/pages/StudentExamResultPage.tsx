@@ -251,6 +251,11 @@ export function StudentExamResultPage() {
   useEffect(() => {
     if (!examId) return;
     let cancelled = false;
+    // Retry with no attempt picked yet: the list is what failed, so it is what loads again.
+    if (!attemptId) {
+      setError(null);
+      setLoading(true);
+    }
     studentAttemptService
       .getAllHistory(examId)
       .then(items => {
@@ -279,9 +284,9 @@ export function StudentExamResultPage() {
     return () => {
       cancelled = true;
     };
-    // The list only depends on the exam; picking an attempt must not refetch it.
+    // The list only depends on the exam (and Retry); picking an attempt must not refetch it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [examId]);
+  }, [examId, reload]);
 
   /** CD-07 of the exam (every attempt) and CD-06; null until loaded, or when the exam has no CODE question / they failed. */
   const [codeSubs, setCodeSubs] = useState<CodeSubmission[] | null>(null);

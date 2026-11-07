@@ -31,6 +31,10 @@ import { formatDate } from './studentUi';
 const DEFAULT_POLL_MS = 2000;
 const FILE_LIMIT_MESSAGE = `You already have ${MATERIAL_MAX_FILES} files. Delete one in My Materials to upload a new file — files you uploaded before can still be used.`;
 const EXTENSIONS = MATERIAL_ACCEPT.split(',');
+/** Name of the quiz — the exam `title` column is VARCHAR(255). */
+const QUIZ_TITLE_MAX = 255;
+/** Free-text guidance the student gives the AI (sent as `context`). */
+const AI_CONTEXT_MAX = 500;
 
 /** Value of the "+ Upload new file" entry in the material dropdown. */
 const UPLOAD_NEW = '';
@@ -79,6 +83,8 @@ export function MaterialQuizModal({
   const [documentId, setDocumentId] = useState<number | null>(null);
   const [questionCount, setQuestionCount] = useState(String(MATERIAL_QUESTIONS.default));
   const [difficulty, setDifficulty] = useState<MaterialDifficulty>('MEDIUM');
+  const [quizTitle, setQuizTitle] = useState('');
+  const [aiContext, setAiContext] = useState('');
   const [touched, setTouched] = useState(false);
 
   const [materials, setMaterials] = useState<MaterialItem[]>([]);
@@ -125,6 +131,8 @@ export function MaterialQuizModal({
     setDocumentId(preset === initialCourseId ? initialDocumentId : null);
     setQuestionCount(String(MATERIAL_QUESTIONS.default));
     setDifficulty('MEDIUM');
+    setQuizTitle('');
+    setAiContext('');
     setTouched(false);
     setPhase('form');
     setBusy(false);
@@ -247,6 +255,7 @@ export function MaterialQuizModal({
 
   const countNum = Number(questionCount);
   const errors = {
+    quizTitle: quizTitle.trim() ? undefined : 'Enter a name for the quiz.',
     course: courseId ? undefined : 'Select a course.',
     material: documentId != null || file ? undefined : 'Upload a PDF or DOCX file, or pick one of your materials.',
     count:
@@ -254,7 +263,7 @@ export function MaterialQuizModal({
         ? undefined
         : `Enter ${MATERIAL_QUESTIONS.min} – ${MATERIAL_QUESTIONS.max} questions.`,
   };
-  const invalid = Boolean(errors.course || errors.material || errors.count);
+  const invalid = Boolean(errors.quizTitle || errors.course || errors.material || errors.count);
 
   const selected = materials.find(m => m.documentId === documentId) ?? null;
   // Materials of the course first; with linked courses the others follow and get added on Generate.
@@ -300,6 +309,8 @@ export function MaterialQuizModal({
         questionCount: countNum,
         difficulty,
         courseId: Number(courseId),
+        title: quizTitle.trim(),
+        context: aiContext.trim() || undefined,
       });
       track(accepted.jobId, accepted.questionCount);
     } catch (err) {
@@ -407,6 +418,16 @@ export function MaterialQuizModal({
               <p className="text-sm text-content-soft">Enroll in a course first to create a quiz from your materials.</p>
             ) : (
               <>
+                <Input
+                  label="Quiz name"
+                  required
+                  maxLength={QUIZ_TITLE_MAX}
+                  value={quizTitle}
+                  onChange={e => setQuizTitle(e.target.value)}
+                  placeholder="e.g. Chapter 3 lecture quiz"
+                  error={touched ? errors.quizTitle : undefined}
+                />
+
                 <Select
                   label="Course"
                   options={courses.map(c => ({ value: String(c.courseId), label: c.title }))}
@@ -507,7 +528,7 @@ export function MaterialQuizModal({
                       {fileError && <p className="text-xs text-danger">{fileError}</p>}
                       {touched && !fileError && errors.material && <p className="text-xs text-danger">{errors.material}</p>}
                       <Input
-                        label="Title (optional)"
+                        label="Material title (optional)"
                         placeholder={file ? file.name.replace(/\.[^.]+$/, '') : 'Defaults to the file name'}
                         value={title}
                         onChange={e => setTitle(e.target.value)}
@@ -569,6 +590,24 @@ export function MaterialQuizModal({
                     onChange={v => setDifficulty(v as MaterialDifficulty)}
                   />
                 </div>
+
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-sm font-medium text-content-secondary">Context for the AI (optional)</span>
+                  <textarea
+                    rows={3}
+                    maxLength={AI_CONTEXT_MAX}
+                    value={aiContext}
+                    onChange={e => setAiContext(e.target.value)}
+                    placeholder="e.g. Focus on the definitions in section 2. More scenario-based questions please."
+                    className="w-full rounded-[10px] border border-line bg-surface p-3 text-sm text-content placeholder:text-content-subtle focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/20"
+                  />
+                  <span className="flex justify-between gap-2 text-xs text-content-subtle">
+                    <span>Tell the AI which parts of the material to focus on or the kind of questions you want.</span>
+                    <span className="flex-shrink-0">
+                      {aiContext.length}/{AI_CONTEXT_MAX}
+                    </span>
+                  </span>
+                </label>
 
                 {runningJob && (
                   <Button variant="outline" icon={<Icon.Eye className="w-4 h-4" />} onClick={() => track(runningJob.jobId, runningJob.questionCount)}>
