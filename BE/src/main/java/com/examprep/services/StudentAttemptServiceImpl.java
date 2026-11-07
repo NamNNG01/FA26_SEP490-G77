@@ -104,6 +104,9 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
         Exam exam = exams.findById(examId)
                 .orElseThrow(() -> new ResourceNotFoundException("Exam not found"));
         requireEnrollment(exam, userId);
+        if (Exam.MODE_CONTEST.equals(exam.getMode())) {
+            throw new ForbiddenException("Contest exams can only be taken through their contest");
+        }
         // PQ-01 / AI-01 exams belong to the student who generated them.
         if (!Exam.MODE_EXAM.equals(exam.getMode()) && !exam.getCreatedBy().getUserId().equals(userId)) {
             throw new ForbiddenException("This practice exam belongs to another student");

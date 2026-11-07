@@ -161,6 +161,9 @@ public final class ExamRequests {
         private Integer durationMinutes;
         @NotNull
         private Boolean isPractice;
+        /** EXAM (default) or CONTEST; the other exam modes are system-generated. */
+        @Pattern(regexp="EXAM|CONTEST")
+        private String mode;
         @NotNull @Pattern(regexp="STATIC|RANDOM|MIXED")
         private String generationType;
         @NotNull @DecimalMin(value="0", inclusive=false) @DecimalMax("10000") @Digits(integer=5, fraction=2)
@@ -202,6 +205,8 @@ public final class ExamRequests {
         @Min(1) @Max(600)
         private Integer durationMinutes;
         private Boolean isPractice;
+        @Pattern(regexp="EXAM|CONTEST")
+        private String mode;
         @Pattern(regexp="STATIC|RANDOM|MIXED")
         private String generationType;
         @DecimalMin(value="0", inclusive=false) @DecimalMax("10000") @Digits(integer=5, fraction=2)

@@ -219,7 +219,7 @@ public class ManagerExamServiceImpl implements ManagerExamService {
 
             List<Predicate> where = new ArrayList<>();
             // Students' own generated exams (PQ-01, AI-01) are not course exams.
-            where.add(cb.equal(root.get("mode"), Exam.MODE_EXAM));
+            where.add(root.get("mode").in(Exam.MODE_EXAM, Exam.MODE_CONTEST));
 
             if (!admin(user)) {
                 where.add(cb.or(
@@ -439,6 +439,8 @@ public class ManagerExamServiceImpl implements ManagerExamService {
         }
 
         validateConfigs(r.getConfigs(), courseId);
+        String mode = r.getMode() == null ? Exam.MODE_EXAM : r.getMode();
+        validateExamMode(mode, r.getIsPractice());
         if (!list(r.getImportedQuestions()).isEmpty() && module == null) {
             throw bad("Select a module for this exam before importing questions.");
         }
@@ -452,6 +454,7 @@ public class ManagerExamServiceImpl implements ManagerExamService {
                 .description(r.getDescription())
                 .durationMinutes(r.getDurationMinutes())
                 .isPractice(r.getIsPractice())
+                .mode(mode)
                 .generationType(r.getGenerationType())
                 .maxScore(maxScore)
                 .status("DRAFT")
@@ -550,9 +553,11 @@ public class ManagerExamServiceImpl implements ManagerExamService {
     @Override @Transactional
     public ExamResponse update(UserPrincipal user,Long id,ExamRequests.Update r) {
         Exam e=write(user,id);
-        boolean structural=r.getTitle()!=null || r.getCourseId()!=null || r.getModuleId()!=null || r.getDurationMinutes()!=null || r.getIsPractice()!=null
+        boolean structural=r.getTitle()!=null || r.getCourseId()!=null || r.getModuleId()!=null || r.getDurationMinutes()!=null || r.getIsPractice()!=null || r.getMode()!=null
                 || r.getGenerationType()!=null || r.getMaxScore()!=null || r.getConfigs()!=null;
         if(structural) editable(e);
+        if(r.getIsPractice()!=null || r.getMode()!=null)
+            validateExamMode(r.getMode()==null?e.getMode():r.getMode(), r.getIsPractice()==null?e.getIsPractice():r.getIsPractice());
         Long courseId=r.getCourseId()==null?courseId(e):r.getCourseId();
         Module module=r.getModuleId()==null?e.getModule():module(r.getModuleId());
         if(module!=null && !module.getCourse().getCourseId().equals(courseId)) throw bad("Module must belong to the selected course.");
@@ -563,6 +568,7 @@ public class ManagerExamServiceImpl implements ManagerExamService {
         if(r.getDescription()!=null) e.setDescription(r.getDescription());
         if(r.getDurationMinutes()!=null) e.setDurationMinutes(r.getDurationMinutes());
         if(r.getIsPractice()!=null) e.setIsPractice(r.getIsPractice());
+        if(r.getMode()!=null) e.setMode(r.getMode());
         if(r.getMaxScore()!=null) e.setMaxScore(maxScore(r.getMaxScore()));
         if(r.getGenerationType()!=null) e.setGenerationType(r.getGenerationType());
         if(r.getConfigs()!=null) { validateConfigs(r.getConfigs(),courseId); configs.deleteByExamExamId(id); configs.flush(); saveConfigs(e,r.getConfigs()); }
@@ -830,6 +836,9 @@ public class ManagerExamServiceImpl implements ManagerExamService {
         if(!Set.of("STATIC","RANDOM","MIXED").contains(mode) || (mode.equals("STATIC") && (fixed==0 || random>0)) || (mode.equals("RANDOM") && (random==0 || fixed>0)) || (mode.equals("MIXED") && (fixed==0 || random==0)))
             throw bad("STATIC requires fixed questions, RANDOM requires configs, MIXED requires both.");
     }
+    private void validateExamMode(String mode,Boolean isPractice) {
+        if(Exam.MODE_CONTEST.equals(mode) && Boolean.TRUE.equals(isPractice)) throw bad("A contest exam cannot be a practice exam.");
+    }
     private void editable(Exam e) {
         if(!"DRAFT".equals(e.getStatus()) || attempts.existsByExamExamId(e.getExamId())) throw conflict("Only draft exams with no attempts allow content changes. Archive exams with attempts.");
     }
@@ -936,6 +945,7 @@ public class ManagerExamServiceImpl implements ManagerExamService {
                 e.getStatus(),
                 e.getGenerationType(),
                 e.getIsPractice(),
+                e.getMode(),
                 e.getCreatedAt(),
                 detail
                         ? configured.stream()

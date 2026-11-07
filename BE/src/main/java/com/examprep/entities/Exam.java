@@ -72,8 +72,10 @@ public class Exam implements Serializable {
 
     public static final String MODE_EXAM = "EXAM";
     public static final String MODE_MATERIAL_QUIZ = "MATERIAL_QUIZ";
+    /** A course exam reserved for contests: hidden from students' course exams, taken only through its contest. */
+    public static final String MODE_CONTEST = "CONTEST";
 
-    /** EXAM for course exams; PRACTICE (PQ-01) and SMART_PRACTICE (AI-01) are a student's own generated exams. */
+    /** EXAM/CONTEST for course exams (manager picks); PRACTICE (PQ-01) and SMART_PRACTICE (AI-01) are a student's own generated exams. */
     @Builder.Default
     @Column(name = "mode", nullable = false, length = 30)
     private String mode = MODE_EXAM;

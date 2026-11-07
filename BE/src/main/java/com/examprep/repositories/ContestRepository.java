@@ -34,14 +34,14 @@ public interface ContestRepository extends JpaRepository<Contest, Long>, JpaSpec
             "AND c.status NOT IN ('CANCELLED', 'REWARDED') AND c.contestId <> :excludeId")
     long countActiveForExam(@Param("examId") Long examId, @Param("excludeId") Long excludeId);
 
-    /** API 11: exams of the course that may start a contest (spec rules 2 and 3, plus quiz-only: no ESSAY/CODE/DIAGRAM). */
+    /** API 11: CONTEST-mode exams of the course that may start a contest (spec rules 2 and 3, plus quiz-only: no ESSAY/CODE/DIAGRAM). */
     @Query(value = "SELECT e FROM Exam e WHERE e.course.courseId = :courseId AND e.status = 'PUBLISHED' AND e.isPractice = false " +
-            "AND e.mode = 'EXAM' AND LOWER(e.title) LIKE :keyword ESCAPE '!' AND NOT EXISTS (SELECT c FROM Contest c WHERE c.exam = e " +
+            "AND e.mode = 'CONTEST' AND LOWER(e.title) LIKE :keyword ESCAPE '!' AND NOT EXISTS (SELECT c FROM Contest c WHERE c.exam = e " +
             "AND c.deletedAt IS NULL AND c.status NOT IN ('CANCELLED', 'REWARDED')) " +
             "AND NOT EXISTS (SELECT eq FROM ExamQuestion eq WHERE eq.exam = e AND eq.question.questionType IN ('ESSAY', 'CODE', 'DIAGRAM')) " +
             "AND NOT EXISTS (SELECT ec FROM ExamConfig ec WHERE ec.exam = e AND ec.questionType IN ('ESSAY', 'CODE', 'DIAGRAM')) ORDER BY e.publishedAt DESC, e.examId DESC",
             countQuery = "SELECT COUNT(e) FROM Exam e WHERE e.course.courseId = :courseId AND e.status = 'PUBLISHED' AND e.isPractice = false " +
-            "AND e.mode = 'EXAM' AND LOWER(e.title) LIKE :keyword ESCAPE '!' AND NOT EXISTS (SELECT c FROM Contest c WHERE c.exam = e " +
+            "AND e.mode = 'CONTEST' AND LOWER(e.title) LIKE :keyword ESCAPE '!' AND NOT EXISTS (SELECT c FROM Contest c WHERE c.exam = e " +
             "AND c.deletedAt IS NULL AND c.status NOT IN ('CANCELLED', 'REWARDED')) " +
             "AND NOT EXISTS (SELECT eq FROM ExamQuestion eq WHERE eq.exam = e AND eq.question.questionType IN ('ESSAY', 'CODE', 'DIAGRAM')) " +
             "AND NOT EXISTS (SELECT ec FROM ExamConfig ec WHERE ec.exam = e AND ec.questionType IN ('ESSAY', 'CODE', 'DIAGRAM'))")

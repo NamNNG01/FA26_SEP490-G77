@@ -46,7 +46,7 @@ class ContestRankingIntegrationTest {
         manager = f.account(User.ROLE_COURSE_MANAGER);
         course = f.course(manager);
         Module module = f.module(course, "M");
-        exam = f.exam(course, module, manager, "EXAM");
+        exam = f.exam(course, module, manager, "CONTEST");
         contest = Contest.builder().exam(exam).course(course).createdBy(manager).title("Weekly").durationMinutes(30)
                 .startTime(end.minus(2, ChronoUnit.HOURS)).endTime(end).status("PUBLISHED").build();
         em.persist(contest);

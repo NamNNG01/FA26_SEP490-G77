@@ -18,6 +18,7 @@ import {
   type ExamGroup,
   type GenerationType,
   type ExamStatus,
+  type ExamMode,
   type BankQuestionItem,
   type QuestionGroupItem,
 } from "@/services/exam.service";
@@ -49,6 +50,13 @@ import {
   type QuestionDetail,
 } from "@/services/question.service";
 import { getApiErrorMessage } from "@/utils/apiError";
+
+// One picker for isPractice + exams.mode; a contest exam is never a practice exam.
+const MODE_OPTIONS = [
+  { label: "Real Exam", value: "EXAM" },
+  { label: "Practice", value: "PRACTICE" },
+  { label: "Contest", value: "CONTEST" },
+];
 
 export function ExamFormPage({
   formKind: propFormKind,
@@ -90,6 +98,7 @@ export function ExamFormPage({
   const [durationMinutes, setDurationMinutes] = useState<number>(60);
   const [maxScore, setMaxScore] = useState<number>(100);
   const [isPractice, setIsPractice] = useState<boolean>(false);
+  const [mode, setMode] = useState<ExamMode>("EXAM");
   const [generationType, setGenerationType] =
     useState<GenerationType>("STATIC");
   const [status, setStatus] = useState<ExamStatus>("DRAFT");
@@ -137,6 +146,8 @@ export function ExamFormPage({
   const isPublished = status === "PUBLISHED";
   const isArchived = status === "ARCHIVED";
   const isReadOnly = isPublished || isArchived;
+  const modeChoice =
+    mode === "CONTEST" ? "CONTEST" : isPractice ? "PRACTICE" : "EXAM";
   // Published exams keep their configuration locked, but managers may still
   // maintain the attached question set. Archived exams remain fully read-only.
   const areQuestionsReadOnly = isArchived;
@@ -299,6 +310,7 @@ export function ExamFormPage({
       setDurationMinutes(data.durationMinutes || 60);
       setMaxScore(data.maxScore || 100);
       setIsPractice(!!data.isPractice);
+      setMode(data.mode === "CONTEST" ? "CONTEST" : "EXAM");
       setGenerationType(
         data.generationType === "MIXED"
           ? "STATIC"
@@ -568,6 +580,7 @@ export function ExamFormPage({
           durationMinutes,
           maxScore,
           isPractice,
+          mode,
           generationType,
           questionIds: payloadQuestionIds,
           importedQuestions,
@@ -595,6 +608,7 @@ export function ExamFormPage({
           moduleId: moduleId ? Number(moduleId) : undefined,
           durationMinutes,
           isPractice,
+          mode,
           generationType,
           maxScore,
           configs:
@@ -642,6 +656,7 @@ export function ExamFormPage({
         moduleId: moduleId ? Number(moduleId) : undefined,
         durationMinutes,
         isPractice,
+        mode,
         generationType,
         maxScore,
         questionIds: questions
@@ -1291,7 +1306,7 @@ export function ExamFormPage({
                   </p>
                 )}
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                   <div>
                     <label className="text-xs font-medium text-content-secondary block mb-1">
                       Duration (min) *
@@ -1363,6 +1378,18 @@ export function ExamFormPage({
                       { label: "STATIC", value: "STATIC" },
                       { label: "RANDOM", value: "RANDOM" },
                     ]}
+                  />
+
+                  <Select
+                    label="Mode"
+                    value={modeChoice}
+                    disabled={isReadOnly}
+                    onChange={(v) => {
+                      setIsPractice(v === "PRACTICE");
+                      setMode(v === "CONTEST" ? "CONTEST" : "EXAM");
+                      setIsDirty(true);
+                    }}
+                    options={MODE_OPTIONS}
                   />
                 </div>
               </div>
@@ -2049,7 +2076,7 @@ export function ExamFormPage({
               <div className="flex items-center justify-between">
                 <span className="text-content-subtle">Mode:</span>
                 <span className="font-semibold text-content">
-                  {isPractice ? "Practice" : "Real Exam"}
+                  {MODE_OPTIONS.find((o) => o.value === modeChoice)?.label}
                 </span>
               </div>
               <div className="flex items-center justify-between">

@@ -58,7 +58,7 @@ public final class Fixtures {
 
     public Exam exam(Course course, Module module, User author, String mode) {
         Exam exam = Exam.builder().course(course).module(module).createdBy(author).title("Exam " + mode).durationMinutes(30)
-                .isPractice(!"EXAM".equals(mode)).generationType("MANUAL").maxScore(new BigDecimal("10")).status("PUBLISHED")
+                .isPractice(!"EXAM".equals(mode) && !"CONTEST".equals(mode)).generationType("MANUAL").maxScore(new BigDecimal("10")).status("PUBLISHED")
                 .mode(mode).publishedAt(Instant.now()).build();
         em.persist(exam);
         return exam;

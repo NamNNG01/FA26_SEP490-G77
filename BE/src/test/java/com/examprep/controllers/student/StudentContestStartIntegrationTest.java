@@ -44,7 +44,7 @@ class StudentContestStartIntegrationTest {
         Course course = f.course(manager);
         f.enroll(student, course);
         Module module = f.module(course, "M1");
-        Exam exam = f.exam(course, module, manager, "EXAM");
+        Exam exam = f.exam(course, module, manager, "CONTEST");
         for (int i = 1; i <= 2; i++) {
             em.persist(ExamQuestion.builder().exam(exam).question(f.question(course, module, "EASY"))
                     .orderIndex(i).weight(BigDecimal.ONE).build());
@@ -64,6 +64,11 @@ class StudentContestStartIntegrationTest {
         assertEquals("CONTEST", session.path("examMode").asText());
         assertEquals(2, session.path("questions").size());
         assertEquals(2, session.path("answers").size());
+    }
+
+    @Test void contestExamCannotBeStartedAsANormalExam() throws Exception {
+        mvc.perform(post("/api/v1/student/exams/" + contest.getExam().getExamId() + "/attempts").with(as(student)))
+                .andExpect(status().isForbidden());
     }
 
     @Test void startingAgainReturnsTheSameFrozenPaper() throws Exception {

@@ -54,8 +54,8 @@ public class ManagerContestApiIntegrationTest {
         course = f.course(manager);
         foreignCourse = f.course(otherManager);
         module = f.module(course, "M1");
-        exam = f.exam(course, module, manager, "EXAM");
-        exam2 = f.exam(course, module, manager, "EXAM");
+        exam = f.exam(course, module, manager, "CONTEST");
+        exam2 = f.exam(course, module, manager, "CONTEST");
         top1 = discount("TOP1-50", 10);
         top2 = discount("TOP2-30", 10);
         em.flush();
@@ -283,24 +283,28 @@ public class ManagerContestApiIntegrationTest {
 
     @Test void examOptionsOnlyEligible() throws Exception {
         create(body(exam, inHours(1), inHours(3), "[]"));
-        Exam draft = f.exam(course, module, manager, "EXAM");
+        Exam draft = f.exam(course, module, manager, "CONTEST");
         draft.setStatus("DRAFT");
         Question quiz = Question.builder().course(course).module(module).questionType("SINGLE_CHOICE").difficulty("EASY").content("q").build();
         Question essay = Question.builder().course(course).module(module).questionType("ESSAY").difficulty("EASY").content("e").build();
         em.persist(quiz);
         em.persist(essay);
         em.persist(ExamQuestion.builder().exam(exam2).question(quiz).orderIndex(1).build());
-        Exam essayExam = f.exam(course, module, manager, "EXAM");
+        Exam essayExam = f.exam(course, module, manager, "CONTEST");
         em.persist(ExamQuestion.builder().exam(essayExam).question(quiz).orderIndex(1).build());
         em.persist(ExamQuestion.builder().exam(essayExam).question(essay).orderIndex(2).build());
-        Exam codeRule = f.exam(course, module, manager, "EXAM");
+        Exam codeRule = f.exam(course, module, manager, "CONTEST");
         em.persist(ExamConfig.builder().exam(codeRule).questionType("CODE").numberOfQuestions(2).build());
+        Exam plainExam = f.exam(course, module, manager, "EXAM"); // quiz, but not marked CONTEST
+        em.persist(ExamQuestion.builder().exam(plainExam).question(quiz).orderIndex(1).build());
         em.flush();
         mvc.perform(get("/api/v1/manager/contest-options/exams").param("courseId", course.getCourseId().toString()).with(as(manager)))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.totalElements").value(1))
                 .andExpect(jsonPath("$.data.content[0].examId").value(exam2.getExamId()))
                 .andExpect(jsonPath("$.data.content[0].hasEssayQuestions").value(false))
                 .andExpect(jsonPath("$.data.content[0].questionCount").value(1));
+        send(post("/api/v1/manager/contests"), manager, body(plainExam, inHours(5), inHours(7), "[]"))
+                .andExpect(status().isUnprocessableEntity()).andExpect(jsonPath("$.data.code").value("EXAM_NOT_ELIGIBLE"));
         for (Exam notQuiz : new Exam[]{essayExam, codeRule}) {
             send(post("/api/v1/manager/contests"), manager, body(notQuiz, inHours(5), inHours(7), "[]"))
                     .andExpect(status().isUnprocessableEntity()).andExpect(jsonPath("$.data.code").value("EXAM_NOT_ELIGIBLE"))
@@ -354,7 +358,7 @@ public class ManagerContestApiIntegrationTest {
     }
 
     Contest contest(String title, String status, Instant start, Instant end) {
-        Contest c = Contest.builder().exam(f.exam(course, module, manager, "EXAM")).course(course).createdBy(manager).title(title)
+        Contest c = Contest.builder().exam(f.exam(course, module, manager, "CONTEST")).course(course).createdBy(manager).title(title)
                 .durationMinutes(30).startTime(start).endTime(end).status(status).build();
         em.persist(c);
         return c;

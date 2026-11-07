@@ -27,8 +27,12 @@ export interface ExamListItem {
   status: ExamStatus;
   generationType: GenerationType;
   isPractice: boolean;
+  /** EXAM for normal course exams; CONTEST exams are only offered to contests and hidden from students' exam list. */
+  mode?: ExamMode;
   createdAt: string;
 }
+
+export type ExamMode = 'EXAM' | 'CONTEST';
 
 export interface ExamConfig {
   configId?: number;
@@ -80,6 +84,7 @@ export interface ExamDetail {
   status?: ExamStatus;
   generationType?: GenerationType;
   isPractice?: boolean;
+  mode?: ExamMode;
   createdAt?: string;
   configs: ExamConfig[];
   questions: ExamQuestion[];
@@ -94,6 +99,7 @@ export interface CreateExamRequest {
   moduleId?: number;
   durationMinutes: number;
   isPractice: boolean;
+  mode?: ExamMode;
   generationType: GenerationType;
   maxScore: number;
   status?: ExamStatus;
@@ -111,6 +117,7 @@ export interface UpdateExamRequest {
   moduleId?: number;
   durationMinutes?: number;
   isPractice?: boolean;
+  mode?: ExamMode;
   generationType?: GenerationType;
   maxScore?: number;
   configs?: ExamConfig[];

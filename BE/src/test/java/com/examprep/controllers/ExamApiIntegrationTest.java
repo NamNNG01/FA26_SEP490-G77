@@ -458,6 +458,26 @@ class ExamApiIntegrationTest {
                 .andExpect(jsonPath("$.data.maxAttempts").doesNotExist());
     }
 
+    @Test void contestModeIsSavedListedAndCannotBePractice() throws Exception {
+        Map<String,Object> payload = create();
+        payload.put("mode", "CONTEST");
+        payload.put("isPractice", true);
+        submit(payload).andExpect(status().isBadRequest());
+        payload.put("mode", "PRACTICE");
+        payload.put("isPractice", false);
+        submit(payload).andExpect(status().isBadRequest());
+
+        payload.put("mode", "CONTEST");
+        long id = data(submit(payload).andExpect(status().isCreated()).andExpect(jsonPath("$.data.mode").value("CONTEST"))).path("examId").asLong();
+        call(manager, put("/api/v1/manager/exams/" + id).contentType(MediaType.APPLICATION_JSON).content("{\"isPractice\":true}"))
+                .andExpect(status().isBadRequest());
+        call(manager, get("/api/v1/manager/exams")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content[?(@.examId == " + id + ")].mode").value("CONTEST"));
+        call(manager, put("/api/v1/manager/exams/" + id).contentType(MediaType.APPLICATION_JSON).content("{\"mode\":\"EXAM\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.mode").value("EXAM"));
+        submit(create()).andExpect(status().isCreated()).andExpect(jsonPath("$.data.mode").value("EXAM"));
+    }
+
     private Map<String,Object> random(String type) {
         Map<String,Object> payload = create();
         payload.remove("moduleId");
@@ -519,7 +539,7 @@ class ExamApiIntegrationTest {
     private User account(String role) { User result=User.builder().email(UUID.randomUUID()+"@example.com").fullName(role).passwordHash("test").roleName(role).build(); em.persist(result); return result; }
     private Course course(User owner, Category category) { Course result=Course.builder().manager(owner).category(category).categoryId(category.getCategoryId()).title("Course").slug(UUID.randomUUID().toString()).isPublished(false).build(); em.persist(result); return result; }
     private Module module(Course parent) { Module result=Module.builder().course(parent).title("Module").orderIndex(1).build(); em.persist(result); return result; }
-    private Question question(Module parent, String type, String content) { Question result=Question.builder().module(parent).questionType(type).content(content).build(); em.persist(result); return result; }
+    private Question question(Module parent, String type, String content) { Question result=Question.builder().module(parent).questionType(type).content(content).status("ACTIVE").build(); em.persist(result); return result; }
     private Exam exam(Course parent, Module mod) { Exam result=Exam.builder().course(parent).module(mod).createdBy(manager).title("Exam").durationMinutes(60).generationType("STATIC").isPractice(false).maxScore(BigDecimal.TEN).build(); em.persist(result); return result; }
     private ExamQuestion attach(Exam exam, Question question) { ExamQuestion result=ExamQuestion.builder().exam(exam).question(question).weight(BigDecimal.ONE).build(); em.persist(result); return result; }
 }

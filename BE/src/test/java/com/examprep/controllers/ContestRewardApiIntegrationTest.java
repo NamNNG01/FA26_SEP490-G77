@@ -76,7 +76,7 @@ class ContestRewardApiIntegrationTest {
 
     Contest contest(String title, int minutesAgo) {
         Instant end = Instant.now().minus(minutesAgo, ChronoUnit.MINUTES);
-        Contest c = Contest.builder().exam(f.exam(course, module, manager, "EXAM")).course(course).createdBy(manager).title(title)
+        Contest c = Contest.builder().exam(f.exam(course, module, manager, "CONTEST")).course(course).createdBy(manager).title(title)
                 .durationMinutes(30).startTime(end.minus(1, ChronoUnit.HOURS)).endTime(end).status("PUBLISHED").build();
         em.persist(c);
         return c;

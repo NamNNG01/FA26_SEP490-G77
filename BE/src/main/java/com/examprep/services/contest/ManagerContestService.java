@@ -269,9 +269,9 @@ public class ManagerContestService {
         Plan fields = fields(body);
         Exam exam = exams.findForUpdate(body.examId()).orElse(null); // lock: two contests racing for one exam
         if (exam == null || exam.getCourse() == null || !manages(user, exam.getCourse()) || !"PUBLISHED".equals(exam.getStatus())
-                || Boolean.TRUE.equals(exam.getIsPractice()) || !Exam.MODE_EXAM.equals(exam.getMode())) {
+                || Boolean.TRUE.equals(exam.getIsPractice()) || !Exam.MODE_CONTEST.equals(exam.getMode())) {
             throw error(ResponseCode.UNPROCESSABLE_VALIDATION_ERROR, "EXAM_NOT_ELIGIBLE",
-                    "The exam must be a published, non-practice exam of a course you manage.");
+                    "The exam must be a published contest exam of a course you manage.");
         }
         if (!examsWithTypes(List.of(exam.getExamId()), NON_QUIZ_TYPES).isEmpty()) {
             throw error(ResponseCode.UNPROCESSABLE_VALIDATION_ERROR, "EXAM_NOT_ELIGIBLE", "Contests can only use quiz exams.");
