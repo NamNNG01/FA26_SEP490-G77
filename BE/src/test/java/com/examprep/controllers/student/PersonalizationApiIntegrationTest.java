@@ -126,7 +126,7 @@ class PersonalizationApiIntegrationTest {
     @Test void smartPracticeCompletesWithOnlyCandidateIds() throws Exception {
         history(student, 5, Instant.now());
         JsonNode started = data(smart(student, "{\"courseId\":" + course.getCourseId()
-                        + ",\"questionCount\":10,\"context\":\"Focus on interfaces\"}")
+                        + ",\"questionCount\":10,\"context\":\"Focus on interfaces\",\"title\":\"  Ôn OOP tuần 3 \"}")
                 .andExpect(status().isAccepted()).andExpect(jsonPath("$.message").value("Generating smart practice")));
         String jobId = started.path("jobId").asText();
         assertTrue(jobId.startsWith("sp-"));
@@ -151,6 +151,7 @@ class PersonalizationApiIntegrationTest {
         assertFalse(done.path("estimatedDifficulty").asText().isBlank());
         Exam exam = em.find(Exam.class, done.path("examId").asLong());
         assertEquals("SMART_PRACTICE", exam.getMode());
+        assertEquals("Ôn OOP tuần 3", exam.getTitle());
         List<Long> drawn = em.createQuery("select eq.question.questionId from ExamQuestion eq where eq.exam = :e", Long.class)
                 .setParameter("e", exam).getResultList();
         assertEquals(10, new HashSet<>(drawn).size());

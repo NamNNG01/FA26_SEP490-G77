@@ -85,7 +85,7 @@ public class PersonalizationService {
 
     /** Prompt and candidates waiting for the background step (ponytail: lost on restart; the sweep fails and refunds them). */
     private record SmartWork(String prompt, Map<Long, QuestionCandidate> candidates, Map<Long, Integer> moduleAccuracy,
-                             int questionCount, int durationMinutes, Long courseId, Long userId, Long logId) { }
+                             int questionCount, int durationMinutes, Long courseId, Long userId, Long logId, String title) { }
 
     private final Map<Long, SmartWork> pending = new ConcurrentHashMap<>();
     private final ExecutorService worker = Executors.newFixedThreadPool(2, task -> {
@@ -147,7 +147,8 @@ public class PersonalizationService {
             Long jobId = job.getJobId();
             pending.put(jobId, new SmartWork(prompt, prepared.offered().stream()
                     .collect(Collectors.toMap(QuestionCandidate::questionId, c -> c, (a, b) -> a, LinkedHashMap::new)),
-                    accuracy, count, duration, courseId, userId, logId));
+                    accuracy, count, duration, courseId, userId, logId,
+                    PracticeExamService.titleOr(request.title(), "Đề luyện thông minh")));
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override public void afterCommit() { worker.execute(() -> runSmartPractice(jobId)); }
                 @Override public void afterCompletion(int status) { if (status != STATUS_COMMITTED) pending.remove(jobId); }
@@ -188,7 +189,7 @@ public class PersonalizationService {
             tx.executeWithoutResult(s -> {
                 AiPersonalizationJob job = jobs.findById(jobId).orElse(null);
                 if (job == null || !"PROCESSING".equals(job.getStatus())) return; // swept meanwhile: already refunded
-                Exam exam = practice.createGeneratedExam(work.userId(), work.courseId(), "Đề luyện thông minh", "SMART_PRACTICE",
+                Exam exam = practice.createGeneratedExam(work.userId(), work.courseId(), work.title(), "SMART_PRACTICE",
                         work.durationMinutes(), chosen.stream().map(QuestionCandidate::questionId).toList());
                 exam.setAiJobId(jobId);
                 ObjectNode state = (ObjectNode) tree(job.getAnalysisJson());

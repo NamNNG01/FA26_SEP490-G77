@@ -515,9 +515,19 @@ public class StudentMaterialApiIntegrationTest {
         em.flush();
         JsonNode hard = data(call(student, post("/api/v1/student/materials/" + second.getDocId() + "/generate-quiz")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"questionCount\":5,\"difficulty\":\"HARD\"}"))
+                .content("{\"questionCount\":5,\"difficulty\":\"HARD\",\"title\":\"  Ôn chương 3 \",\"context\":\" Focus on loops \"}"))
                 .andExpect(status().isAccepted()));
-        assertEquals("HARD", em.find(QuizGenerationJob.class, hard.path("jobId").asLong()).getDifficulty());
+        QuizGenerationJob hardJob = em.find(QuizGenerationJob.class, hard.path("jobId").asLong());
+        assertEquals("HARD", hardJob.getDifficulty());
+        // the student's quiz name and AI guidance wait on the job for the worker; blank means the default name
+        assertEquals("Ôn chương 3", hardJob.getTitle());
+        assertEquals("Focus on loops", hardJob.getContext());
+        assertNull(queued.getTitle());
+        assertNull(queued.getContext());
+        call(student, post("/api/v1/student/materials/" + second.getDocId() + "/generate-quiz")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"questionCount\":5,\"title\":\"" + "x".repeat(256) + "\"}"))
+                .andExpect(status().isBadRequest());
     }
 
     @Test

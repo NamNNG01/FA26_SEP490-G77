@@ -17,7 +17,9 @@ public final class PracticeDtos {
                          @NotNull @Min(1) @Max(180) Integer durationMinutes,
                          @Pattern(regexp = "QUIZ|ESSAY") String examType,
                          @Size(max = 50) List<@NotNull @Positive Long> categoryIds,
-                         @Pattern(regexp = "EASY|MEDIUM|HARD") String difficulty) {}
+                         @Pattern(regexp = "EASY|MEDIUM|HARD") String difficulty,
+                         /** Name the student gives the exam; blank falls back to "Đề luyện tùy chọn - <type>". */
+                         @Size(max = 255) String title) {}
 
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record Created(Long practiceId, String title, int questionCount, int durationMinutes, Long examId) {}

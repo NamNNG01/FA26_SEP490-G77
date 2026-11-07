@@ -36,9 +36,9 @@ export interface SmartPracticeRequest {
   courseId: number;
   questionCount?: number;
   durationMinutes?: number;
-  /** Free-text guidance for the AI (focus topics, weak points, question style). Ignored until the BE reads it. */
+  /** Free-text guidance for the AI (focus topics, weak points, question style). */
   context?: string;
-  /** Name the student gives the practice exam. Ignored until the BE reads it (see docs/notes). */
+  /** Name the student gives the practice exam; blank falls back to "Đề luyện thông minh". */
   title?: string;
 }
 

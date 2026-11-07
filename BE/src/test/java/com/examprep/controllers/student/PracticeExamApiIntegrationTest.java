@@ -81,6 +81,15 @@ class PracticeExamApiIntegrationTest {
         mvc.perform(post("/api/v1/student/exams/" + exam.getExamId() + "/attempts").with(as(student))).andExpect(status().isCreated());
     }
 
+    @Test void createUsesTheStudentsTitleOrFallsBack() throws Exception {
+        String body = "{\"courseId\":" + course.getCourseId() + ",\"questionCount\":5,\"durationMinutes\":30,\"title\":";
+        JsonNode named = data(create(student, body + "\"  Giữa kỳ OOP \"}").andExpect(status().isCreated()));
+        assertEquals("Giữa kỳ OOP", named.path("title").asText());
+        assertEquals("Giữa kỳ OOP", em.find(Exam.class, named.path("examId").asLong()).getTitle());
+        assertEquals("Đề luyện tùy chọn - Trắc nghiệm", data(create(student, body + "\" \"}").andExpect(status().isCreated())).path("title").asText());
+        create(student, body + "\"" + "x".repeat(256) + "\"}").andExpect(status().isBadRequest());
+    }
+
     @Test void essayTypeDrawsOnlyEssays() throws Exception {
         Set<Long> essays = new HashSet<>();
         for (int i = 0; i < 4; i++) {

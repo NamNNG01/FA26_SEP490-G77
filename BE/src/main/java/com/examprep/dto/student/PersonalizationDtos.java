@@ -14,7 +14,9 @@ public final class PersonalizationDtos {
     public record SmartRequest(@NotNull @Positive Long courseId,
                                @Min(10) @Max(30) Integer questionCount,
                                @Min(10) @Max(60) Integer durationMinutes,
-                               @Size(max = 2000) String context) {}
+                               @Size(max = 2000) String context,
+                               /** Name the student gives the exam; blank falls back to "Đề luyện thông minh". */
+                               @Size(max = 255) String title) {}
 
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record CategoryAccuracy(Long categoryId, String name, int accuracy, int questionCount) {}

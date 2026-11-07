@@ -207,7 +207,11 @@ public class StudentNotebookServiceImpl implements StudentNotebookService {
             course = questions.get(0).getModule().getCourse();
         }
 
-        String title = "Review Practice - " + ("ESSAY".equals(examType) ? "Tự luận" : "Trắc nghiệm");
+        String title = switch (type) {
+            case "bookmarked" -> "Ôn câu đã lưu";
+            case "all" -> "Ôn tập sổ lỗi";
+            default -> "Ôn câu sai";
+        } + " - " + ("ESSAY".equals(examType) ? "Tự luận" : "Trắc nghiệm");
         Exam exam = examRepository.save(Exam.builder()
                 .course(course)
                 .createdBy(student)

@@ -66,7 +66,7 @@ public class    PracticeExamService {
         Collections.shuffle(drawn);
         drawn = drawn.subList(0, count);
 
-        String title = "Đề luyện tùy chọn - " + (essay ? "Tự luận" : "Trắc nghiệm");
+        String title = titleOr(request.title(), "Đề luyện tùy chọn - " + (essay ? "Tự luận" : "Trắc nghiệm"));
         PracticeExam practice = practices.save(PracticeExam.builder().userId(userId).courseId(courseId).title(title)
                 .questionCount(count).durationMinutes(request.durationMinutes()).difficulty(request.difficulty())
                 .categoryIds(moduleIds.isEmpty() ? null : write(moduleIds)).build());
@@ -75,6 +75,11 @@ public class    PracticeExamService {
         exam.setPracticeExamId(practice.getPracticeExamId());
         practice.setExamId(exam.getExamId());
         return new PracticeDtos.Created(practice.getPracticeExamId(), title, count, request.durationMinutes(), exam.getExamId());
+    }
+
+    /** The student's exam name, or the fallback when it is blank. */
+    public static String titleOr(String title, String fallback) {
+        return title == null || title.isBlank() ? fallback : title.strip();
     }
 
     /** Eligible questions of a course; empty moduleIds means every module. */

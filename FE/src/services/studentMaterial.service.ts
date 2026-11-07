@@ -86,9 +86,9 @@ export interface GenerateQuizRequest {
   courseId?: number;
   difficulty?: MaterialDifficulty;
   sourceLessonId?: number;
-  /** Name the student gives the quiz. Ignored until the BE reads it (see docs/notes). */
+  /** Name the student gives the quiz; blank falls back to "Quiz từ tài liệu <material>". */
   title?: string;
-  /** Free-text guidance for the AI. Ignored until the BE reads it (see docs/notes). */
+  /** Free-text guidance for the AI (sent as studentContext). */
   context?: string;
 }
 

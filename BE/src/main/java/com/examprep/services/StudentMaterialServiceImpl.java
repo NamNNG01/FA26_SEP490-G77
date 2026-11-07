@@ -415,6 +415,8 @@ public class StudentMaterialServiceImpl implements StudentMaterialService {
                 .questionCount(request.questionCount())
                 .difficulty(request.difficulty())
                 .sourceLessonId(request.sourceLessonId())
+                .title(request.title() == null || request.title().isBlank() ? null : request.title().strip())
+                .context(request.context() == null || request.context().isBlank() ? null : request.context().strip())
                 .status(QuizGenerationWorker.STATUS_PENDING)
                 .progress(0)
                 .estimatedTokens((int) estimated)

@@ -40,6 +40,12 @@ public class QuizGenerationJob implements Serializable {
     @Column(name = "source_lesson_id")
     private Long sourceLessonId;
 
+    @Column(name = "title", length = 255)
+    private String title;
+
+    @Column(name = "context", length = 2000)
+    private String context;
+
     @Column(name = "status", nullable = false, length = 20)
     private String status;
 
