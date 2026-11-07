@@ -3,6 +3,9 @@ import { Icon } from '@/assets/icons';
 
 const FOCUSABLE_SELECTOR = 'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
+/** Open modals, newest last: only the top one handles Escape / Tab, and the page scrolls again once none is open. */
+const openModals: object[] = [];
+
 /**
  * `dismissible={false}` hides the close button and ignores Escape / backdrop clicks — for a step
  * that must finish first (an upload, a running job).
@@ -21,11 +24,15 @@ export function Modal({ open, isOpen, onClose, title, children, footer, size = '
     if (!isVisible) return;
     const panel = panelRef.current;
     const previouslyFocused = document.activeElement as HTMLElement | null;
+    const self = {};
+    openModals.push(self);
 
     document.body.style.overflow = 'hidden';
     panel?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR)?.focus();
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      // A modal opened over this one owns the keyboard.
+      if (openModals[openModals.length - 1] !== self) return;
       if (e.key === 'Escape') {
         e.stopPropagation();
         onCloseRef.current();
@@ -47,7 +54,8 @@ export function Modal({ open, isOpen, onClose, title, children, footer, size = '
 
     document.addEventListener('keydown', handleKeyDown);
     return () => {
-      document.body.style.overflow = '';
+      openModals.splice(openModals.indexOf(self), 1);
+      if (openModals.length === 0) document.body.style.overflow = '';
       document.removeEventListener('keydown', handleKeyDown);
       previouslyFocused?.focus?.();
     };
