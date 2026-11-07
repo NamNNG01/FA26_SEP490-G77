@@ -69,8 +69,6 @@ export interface AnswerCheck {
   correctAnswer?: CorrectAnswer | null;
   /** The question's explanation, if it has one. */
   explanation?: string | null;
-  /** True while the check is mocked on the FE. */
-  demo: boolean;
 }
 
 /** Question types "Check answer" can grade (the others are shown after submitting). */
@@ -156,6 +154,23 @@ export function checkParts(
   return { correct, total, outcome: correct === total ? 'correct' : correct > 0 ? 'partial' : 'wrong' };
 }
 
+/**
+ * The check of a practice answer from the key sent with the paper (`AttemptQuestion.key`), so it shows
+ * at once; SA-09 then stores, locks and confirms it. Null when the question has no key.
+ */
+export function checkFromKey(question: AttemptQuestion, response: AnswerResponse | null | undefined): AnswerCheck | null {
+  const key = question.key;
+  if (!key) return null;
+  const check: AnswerCheck = {
+    supported: true,
+    isCorrect: null,
+    correctOptionIds: key.correctOptionIds ?? [],
+    correctAnswer: key.correctAnswer ?? null,
+    explanation: key.explanation,
+  };
+  return { ...check, isCorrect: checkParts(question, response, check).outcome === 'correct' };
+}
+
 /** PQ-04 item: the question as the student saw it (no key, no answer). */
 interface WrongQuestionItem {
   questionId: number;
@@ -181,57 +196,6 @@ export function getPracticeError(error: unknown, fallback: string): string {
   if (res.status === 403) return body?.message?.trim() || 'You are not enrolled in this course.';
   return body?.message?.trim() || fallback;
 }
-
-/** Stable pseudo-random 0..1 from a seed, so a question always gets the same demo key. */
-function seeded(seed: number): number {
-  const x = Math.sin(seed * 9301 + 49297) * 233280;
-  return x - Math.floor(x);
-}
-
-/** Demo answer key of a choice question — fixed per questionId. */
-function mockCorrectOptions(q: AttemptQuestion): number[] {
-  const options = q.options ?? [];
-  if (options.length === 0) return [];
-  if (q.questionType === 'MULTIPLE_CHOICE') {
-    const picked = options.filter((o, i) => seeded(q.questionId * 31 + i) < 0.45).map(o => o.optionId);
-    return picked.length > 0 ? picked : [options[Math.floor(seeded(q.questionId) * options.length)].optionId];
-  }
-  return [options[Math.floor(seeded(q.questionId) * options.length)].optionId];
-}
-
-/** Stable shuffle, seeded by the question. */
-function mockShuffle<T>(items: T[], seed: number): T[] {
-  return items
-    .map((item, i) => ({ item, k: seeded(seed * 17 + i) }))
-    .sort((a, b) => a.k - b.k)
-    .map(x => x.item);
-}
-
-/** Demo key of an ORDERING / MATCHING / FILL_BLANK question — fixed per questionId. */
-function mockCorrectAnswer(q: AttemptQuestion, response: AnswerResponse | null): CorrectAnswer | null {
-  switch (q.questionType) {
-    case 'ORDERING':
-      return { orderedOptionIds: mockShuffle((q.options ?? []).map(o => o.optionId), q.questionId) };
-    case 'MATCHING': {
-      const rights = mockShuffle(q.matching?.rights ?? [], q.questionId);
-      if (rights.length === 0) return { pairs: [] };
-      return { pairs: (q.matching?.lefts ?? []).map((left, i) => ({ left, right: rights[i % rights.length] })) };
-    }
-    case 'FILL_BLANK': {
-      // No key on the FE: some blanks accept what was typed, the others a placeholder word.
-      const blanks: Record<string, string[]> = {};
-      for (const n of blankKeys(q)) {
-        const typed = response?.blanks?.[n]?.trim();
-        blanks[n] = [typed && seeded(q.questionId * 7 + Number(n)) < 0.6 ? typed : `answer ${n}`];
-      }
-      return { blanks };
-    }
-    default:
-      return null;
-  }
-}
-
-const MOCK_EXPLANATION = 'Demo explanation — the real explanation of this question shows here once the check API returns it.';
 
 export const studentPracticeExamService = {
   /** PQ-01 */
@@ -275,30 +239,16 @@ export const studentPracticeExamService = {
   },
 
   /**
-   * Instant check of one answer in a practice attempt (all six auto-graded types; the
-   * response carries `correctAnswer` and `explanation` too). MOCK until the BE adds
-   * `POST /student/attempts/{attemptId}/questions/{questionId}/check` for PRACTICE / SMART_PRACTICE
-   * exams (docs/notes/student-practice-check-answer-be-gap.md); then replace the body with:
-   *   const res = await api.post<ApiResponse<AnswerCheck>>(
-   *     `/student/attempts/${attemptId}/questions/${question.questionId}/check`, { response });
-   *   return res.data;
+   * SA-09 — checks one answer of a running practice attempt (PRACTICE, PRACTICE_EXAM, SMART_PRACTICE, MATERIAL_QUIZ):
+   *   POST /student/attempts/{attemptId}/questions/{questionId}/check { response }
+   * The BE stores and locks the answer and grades it with the same rule as submitting.
+   * Rubric types come back `supported: false` (graded after submitting).
    */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async checkAnswer(attemptId: number, question: AttemptQuestion, response: AnswerResponse | null): Promise<AnswerCheck> {
-    if (!CHECKABLE_TYPES.has(question.questionType)) {
-      return { supported: false, isCorrect: null, correctOptionIds: [], demo: true };
-    }
-    const isChoice = ['SINGLE_CHOICE', 'MULTIPLE_CHOICE', 'TRUE_FALSE'].includes(question.questionType);
-    const check: AnswerCheck = {
-      supported: true,
-      isCorrect: null,
-      correctOptionIds: isChoice ? mockCorrectOptions(question) : [],
-      correctAnswer: isChoice ? null : mockCorrectAnswer(question, response),
-      explanation: MOCK_EXPLANATION,
-      demo: true,
-    };
-    const parts = checkParts(question, response, check);
-    const extraPicks = isChoice && (response?.selectedOptionIds ?? []).some(id => !check.correctOptionIds.includes(id));
-    return { ...check, isCorrect: parts.correct === parts.total && !extraPicks };
+    const res = await api.post<ApiResponse<AnswerCheck>>(
+      `/student/attempts/${attemptId}/questions/${question.questionId}/check`,
+      { response },
+    );
+    return res.data;
   },
 };

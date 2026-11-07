@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/assets/icons';
 import type { AnswerResponse, AttemptQuestion } from '@/services/studentAttempt.service';
@@ -135,11 +134,6 @@ export function PracticeCheck({
       >
         <Icon.Lightbulb className="w-4 h-4 flex-shrink-0" />
         {showExplanation ? 'Hide explanation' : 'Show explanation'}
-        {check.demo && (
-          <Badge variant="warning" size="sm">
-            Demo
-          </Badge>
-        )}
         <Icon.ChevronDown className={`w-4 h-4 ml-auto transition-transform ${showExplanation ? 'rotate-180' : ''}`} />
       </button>
       {showExplanation && (

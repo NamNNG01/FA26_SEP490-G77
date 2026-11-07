@@ -20,7 +20,6 @@ import { GENERAL_MODULE, countItems, sortedModules } from '../components/courseC
 import { useCourseProgress, type LearningProgress, type OverviewState } from '../components/courseProgress';
 import { ModulePracticeModal } from '../components/ModulePracticeModal';
 import { SmartPracticeModal } from '../components/SmartPracticeModal';
-import { AiSparkle } from '../components/aiUi';
 
 /**
  * Student course detail — course info (CL-02), then the course content as a grid of module cards.
@@ -114,7 +113,7 @@ export function StudentCourseDetailPage() {
               </Badge>
             )}
             {isActive && (
-              <Button variant="outline" size="sm" className="ml-auto" icon={<AiSparkle />} onClick={() => setPersonalQuiz(true)}>
+              <Button variant="outline" size="sm" className="ml-auto" icon={<Icon.Zap className="w-4 h-4" />} onClick={() => setPersonalQuiz(true)}>
                 Create practice exam
               </Button>
             )}

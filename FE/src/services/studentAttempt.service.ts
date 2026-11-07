@@ -65,7 +65,16 @@ export interface AttemptQuestion {
   matching: { lefts: string[]; rights: string[] } | null;
   maxPoints: number | null;
   answerSpace: { maxLength: number | null } | null;
-  /** The question group (reading passage). Not sent by SA-01 / SA-02 yet: see docs/notes. */
+  /**
+   * Practice attempts only (PRACTICE, PRACTICE_EXAM, SMART_PRACTICE, MATERIAL_QUIZ), auto-graded types only: the answer,
+   * revealed as soon as the student answers. Never sent for an exam.
+   */
+  key?: {
+    correctOptionIds: number[];
+    correctAnswer: ResultQuestion['correctAnswer'];
+    explanation: string | null;
+  } | null;
+  /** The question group (reading passage); null for a standalone question. */
   group?: { groupId: number; title: string | null; passageText: string | null } | null;
 }
 
@@ -80,10 +89,22 @@ export interface AttemptSession {
   serverTime: string;
   maxScore: number | null;
   questions: AttemptQuestion[];
-  /** Exam.mode of the attempt — EXAM, PRACTICE, SMART_PRACTICE, MATERIAL_QUIZ, CONTEST. */
+  /** Exam.mode of the attempt — EXAM, PRACTICE, PRACTICE_EXAM, SMART_PRACTICE, MATERIAL_QUIZ, CONTEST. */
   examMode?: string | null;
   /** SA-02 only. */
-  answers: { questionId: number; draftSeq: number | null; response: AnswerResponse | null }[] | null;
+  answers: {
+    questionId: number;
+    draftSeq: number | null;
+    response: AnswerResponse | null;
+    /** Practice: the stored verdict once the answer was checked (SA-09) and locked; absent otherwise. */
+    check?: {
+      supported: boolean;
+      isCorrect: boolean | null;
+      correctOptionIds: number[];
+      correctAnswer: ResultQuestion['correctAnswer'];
+      explanation: string | null;
+    } | null;
+  }[] | null;
 }
 
 export interface DraftEntry {
@@ -163,6 +184,8 @@ export interface AttemptResult {
   submittedAt: string | null;
   autoSubmitted: boolean | null;
   questions: ResultQuestion[];
+  /** Exam.mode of the attempt, as in AttemptSession. */
+  examMode?: string | null;
 }
 
 /** SA-06 */
@@ -202,20 +225,6 @@ export interface StudentExamDetail {
   } | null;
 }
 
-/**
- * One question of the exam, as the student may see it before starting — no
- * correct answer, no key. Shape of the proposed EX-03 (not in the BE yet).
- */
-export interface ExamQuestionPreview {
-  questionId: number;
-  orderIndex: number;
-  questionType: QuestionType;
-  content: string;
-  maxPoints: number | null;
-  options: { optionId: number; optionText: string }[] | null;
-  matching: { lefts: string[]; rights: string[] } | null;
-}
-
 /** SE-01 */
 export interface ExplanationBatch {
   items: { questionId: number; explanation: string | null; source: string | null; reason: string | null }[];
@@ -240,20 +249,6 @@ export const studentAttemptService = {
   async getExamDetail(examId: number | string): Promise<StudentExamDetail> {
     const res = await api.get<ApiResponse<StudentExamDetail>>(`/student/exams/${examId}`);
     return res.data;
-  },
-
-  /**
-   * EX-03 (proposed) — the questions of an exam without answers, for the
-   * read-only detail page. MOCK until the BE adds
-   * `GET /student/exams/{examId}/questions` (docs/notes/student-exam-question-preview-be-gap.md);
-   * then replace the body with:
-   *   const res = await api.get<ApiResponse<ExamQuestionPreview[]>>(`/student/exams/${examId}/questions`);
-   *   return res.data;
-   */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async getExamQuestions(examId: number | string, questionCount: number): Promise<ExamQuestionPreview[]> {
-    const { mockExamQuestions } = await import('@/features/student/data/mockExamQuestions');
-    return mockExamQuestions(questionCount);
   },
 
   /**

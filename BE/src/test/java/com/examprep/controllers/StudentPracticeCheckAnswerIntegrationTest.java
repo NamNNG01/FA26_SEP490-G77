@@ -192,6 +192,39 @@ class StudentPracticeCheckAnswerIntegrationTest {
     }
 
     @Test
+    void practicePaper_carriesKeyOfAutoGradedQuestions_examPaperNever() throws Exception {
+        String res = call(student, post("/api/v1/student/exams/" + practiceExam.getExamId() + "/attempts"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        JsonNode practiceQuestions = json.readTree(res).path("data").path("questions");
+        for (JsonNode q : practiceQuestions) {
+            if (q.path("questionId").asLong() == singleChoice.getQuestionId()) {
+                assertEquals(correctOption.getOptionId(), q.path("key").path("correctOptionIds").path(0).asLong());
+                assertEquals("1+1 equals 2 in standard arithmetic", q.path("key").path("explanation").asText());
+            } else {
+                assertFalse(q.has("key"), "an essay is graded after submitting: no key");
+            }
+        }
+
+        // The reload (SA-02) carries the key as well
+        long attemptId = json.readTree(res).path("data").path("attemptId").asLong();
+        String reload = call(student, get("/api/v1/student/attempts/" + attemptId))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        boolean keyed = false;
+        for (JsonNode q : json.readTree(reload).path("data").path("questions")) {
+            keyed |= q.has("key");
+        }
+        assertTrue(keyed);
+
+        String examRes = call(student, post("/api/v1/student/exams/" + standardExam.getExamId() + "/attempts"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        for (JsonNode q : json.readTree(examRes).path("data").path("questions")) {
+            assertFalse(q.has("key"), "an exam paper never carries the key");
+        }
+    }
+
+    @Test
     void checkAnswer_incorrectChoice_returnsSupportedTrueAndIsCorrectFalse() throws Exception {
         long attemptId = startAttempt(practiceExam, student);
         Long questionId = singleChoice.getQuestionId();
