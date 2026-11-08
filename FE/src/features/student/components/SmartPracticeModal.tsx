@@ -274,6 +274,7 @@ export function SmartPracticeModal({
         categoryIds: moduleIds.length > 0 ? moduleIds.map(Number) : undefined,
         difficulty: difficulty || undefined,
         title: title.trim(),
+        mode: takeAs,
       });
       onClose();
       navigate(studentTakeExamPath(created.examId, takeAs));

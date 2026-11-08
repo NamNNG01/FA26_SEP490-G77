@@ -19,7 +19,9 @@ public final class PracticeDtos {
                          @Size(max = 50) List<@NotNull @Positive Long> categoryIds,
                          @Pattern(regexp = "EASY|MEDIUM|HARD") String difficulty,
                          /** Name the student gives the exam; blank falls back to "Đề luyện tùy chọn - <type>". */
-                         @Size(max = 255) String title) {}
+                         @Size(max = 255) String title,
+                         /** How the student takes it: EXAM (default, saved as PRACTICE_EXAM) or PRACTICE (saved as PRACTICE). */
+                         @Pattern(regexp = "EXAM|PRACTICE") String mode) {}
 
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record Created(Long practiceId, String title, int questionCount, int durationMinutes, Long examId) {}

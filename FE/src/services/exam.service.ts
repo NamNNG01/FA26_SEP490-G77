@@ -34,6 +34,12 @@ export interface ExamListItem {
 
 export type ExamMode = 'EXAM' | 'CONTEST';
 
+/** Manager's Mode picker: a course exam (EXAM) or a contest-only exam (CONTEST). Practice is a student's own mode. */
+export const EXAM_MODE_OPTIONS: { label: string; value: ExamMode }[] = [
+  { label: 'Course', value: 'EXAM' },
+  { label: 'Contest', value: 'CONTEST' },
+];
+
 export interface ExamConfig {
   configId?: number;
   questionType: string;
@@ -98,7 +104,6 @@ export interface CreateExamRequest {
   courseId?: number;
   moduleId?: number;
   durationMinutes: number;
-  isPractice: boolean;
   mode?: ExamMode;
   generationType: GenerationType;
   maxScore: number;
@@ -116,7 +121,6 @@ export interface UpdateExamRequest {
   courseId?: number;
   moduleId?: number;
   durationMinutes?: number;
-  isPractice?: boolean;
   mode?: ExamMode;
   generationType?: GenerationType;
   maxScore?: number;

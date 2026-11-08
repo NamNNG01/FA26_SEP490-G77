@@ -75,9 +75,10 @@ public class PracticeExamService {
         String practiceConfig = writePracticeConfig(examType, count, request.difficulty(),
                 moduleIds.isEmpty() ? List.of() : new ArrayList<>(moduleIds));
 
-        Exam exam = createGeneratedExam(userId, courseId, title, Exam.MODE_PRACTICE_EXAM, request.durationMinutes(),
-                drawn.stream().map(QuestionCandidate::questionId).toList());
-        exam.setPracticeConfig(practiceConfig);
+        String mode = "PRACTICE".equals(request.mode()) ? Exam.MODE_PRACTICE : Exam.MODE_PRACTICE_EXAM;
+        // The config goes in with the INSERT: chk_practice_exam_config rejects a PRACTICE_EXAM row without one.
+        Exam exam = createGeneratedExam(userId, courseId, title, mode, request.durationMinutes(),
+                drawn.stream().map(QuestionCandidate::questionId).toList(), practiceConfig);
 
         return new PracticeDtos.Created(exam.getExamId(), title, count, request.durationMinutes(), exam.getExamId());
     }
@@ -94,10 +95,10 @@ public class PracticeExamService {
     }
 
     /** A student's own published exam (PRACTICE_EXAM / PRACTICE / SMART_PRACTICE), one point-equal link per question, max score 10. */
-    public Exam createGeneratedExam(Long userId, Long courseId, String title, String mode, int durationMinutes, List<Long> questionIds) {
+    public Exam createGeneratedExam(Long userId, Long courseId, String title, String mode, int durationMinutes, List<Long> questionIds, String practiceConfig) {
         Exam exam = exams.save(Exam.builder().course(courses.getReferenceById(courseId)).createdBy(users.getReferenceById(userId))
                 .title(title).durationMinutes(durationMinutes).generationType("MANUAL").maxScore(MAX_SCORE)
-                .status("PUBLISHED").publishedAt(Instant.now()).mode(mode).build());
+                .status("PUBLISHED").publishedAt(Instant.now()).mode(mode).practiceConfig(practiceConfig).build());
         List<ExamQuestion> links = new ArrayList<>();
         int order = 1;
         for (Long id : questionIds) {
@@ -159,7 +160,7 @@ public class PracticeExamService {
     public void delete(Long userId, Long practiceId) {
         Exam exam = exams.findById(practiceId).orElseThrow(() -> new ResourceNotFoundException("Practice exam not found."));
         if (!exam.getCreatedBy().getUserId().equals(userId)) throw new ForbiddenException("This practice exam belongs to another student.");
-        if (!Exam.MODE_PRACTICE_EXAM.equals(exam.getMode()) || "ARCHIVED".equals(exam.getStatus())) {
+        if (!exam.isPq01() || "ARCHIVED".equals(exam.getStatus())) {
             throw new ResourceNotFoundException("Practice exam not found.");
         }
         exam.setStatus("ARCHIVED");

@@ -33,6 +33,8 @@ export interface PracticeExamRequest {
   difficulty?: PracticeDifficulty;
   /** Name the student gives the practice exam; blank falls back to the BE default name. */
   title?: string;
+  /** How it is taken: EXAM is saved as PRACTICE_EXAM, PRACTICE as PRACTICE (BE default EXAM). */
+  mode?: 'EXAM' | 'PRACTICE';
 }
 
 /** PQ-01 */

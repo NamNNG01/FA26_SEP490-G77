@@ -26,12 +26,14 @@ export interface ExamModeBehavior {
 
 const EXAM: ExamModeBehavior = { kind: 'EXAM', timed: true, instantCheck: false, historyType: null };
 const PRACTICE: ExamModeBehavior = { kind: 'PRACTICE', timed: false, instantCheck: true, historyType: 'PRACTICE' };
+/** A self-made (PQ-01) exam the student chose to take as an exam: on the clock, scored at the end. */
+const SELF_MADE_EXAM: ExamModeBehavior = { ...PRACTICE, timed: true, instantCheck: false };
 
 export const EXAM_MODES: Readonly<Record<string, ExamModeBehavior>> = {
   EXAM,
   CONTEST: EXAM,
   PRACTICE,
-  PRACTICE_EXAM: PRACTICE,
+  PRACTICE_EXAM: SELF_MADE_EXAM,
   SMART_PRACTICE: PRACTICE,
   MATERIAL_QUIZ: PRACTICE,
 };
@@ -99,6 +101,6 @@ export function forgetTakeAs(attemptId: number) {
  */
 export function takeExamBehavior(mode: string | null | undefined, takeAs: TakeAs | null): ExamModeBehavior {
   const behavior = examModeBehavior(mode);
-  if (takeAs === 'EXAM' && canChooseTakeMode(mode)) return { ...behavior, timed: true, instantCheck: false };
-  return behavior;
+  if (!takeAs || !canChooseTakeMode(mode)) return behavior;
+  return takeAs === 'EXAM' ? { ...behavior, timed: true, instantCheck: false } : { ...behavior, timed: false, instantCheck: true };
 }

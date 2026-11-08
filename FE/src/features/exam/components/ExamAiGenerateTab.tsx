@@ -8,6 +8,8 @@ import { Icon } from "@/assets/icons";
 import { useToast } from "@/components/ui/ToastHost";
 import {
   examService,
+  EXAM_MODE_OPTIONS,
+  type ExamMode,
   type AiExamDraftResponse,
   type AiQuestionDraft,
   type AiRubricCriterion,
@@ -87,6 +89,7 @@ export function ExamAiGenerateTab({
   const [title, setTitle] = useState("");
   const [durationMinutes, setDurationMinutes] = useState<number>(45);
   const [maxScore, setMaxScore] = useState<number>(100);
+  const [mode, setMode] = useState<ExamMode>("EXAM");
   const [language, setLanguage] = useState<"en" | "vi">("en");
   const [context, setContext] = useState("");
 
@@ -477,7 +480,7 @@ export function ExamAiGenerateTab({
         courseId: Number(courseId),
         moduleId: moduleId ? Number(moduleId) : undefined,
         durationMinutes: draft.durationMinutes || durationMinutes || 45,
-        isPractice: false,
+        mode,
         generationType: "STATIC",
         questionIds: finalQuestionIds.map((qid, idx) => ({
           questionId: qid,
@@ -623,6 +626,13 @@ export function ExamAiGenerateTab({
                 />
               </div>
             </div>
+
+            <Select
+              label="Mode"
+              value={mode}
+              onChange={(v) => setMode(v as ExamMode)}
+              options={EXAM_MODE_OPTIONS}
+            />
 
             <Select
               label="Language"

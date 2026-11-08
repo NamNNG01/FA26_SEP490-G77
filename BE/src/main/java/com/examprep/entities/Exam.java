@@ -73,6 +73,7 @@ public class Exam implements Serializable {
     /** A course exam reserved for contests: hidden from students' course exams, taken only through its contest. */
     public static final String MODE_CONTEST = "CONTEST";
     public static final String MODE_PRACTICE_EXAM = "PRACTICE_EXAM";
+    public static final String MODE_PRACTICE = "PRACTICE";
 
     /** EXAM/CONTEST for course exams; PRACTICE_EXAM (PQ-01) and SMART_PRACTICE (AI-01) are a student's own generated exams. PRACTICE is review-from-notebook only. */
     @Builder.Default
@@ -86,6 +87,11 @@ public class Exam implements Serializable {
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "practice_config", columnDefinition = "jsonb")
     private String practiceConfig;
+
+    /** PQ-01 exam: PRACTICE_EXAM (taken as an exam) or PRACTICE with a practice_config (taken as practice; notebook reviews have none). */
+    public boolean isPq01() {
+        return MODE_PRACTICE_EXAM.equals(mode) || (MODE_PRACTICE.equals(mode) && practiceConfig != null);
+    }
 
     /** Computed: true when mode is not EXAM (backward compat for manager ExamResponse). */
     public boolean getIsPractice() {
