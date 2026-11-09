@@ -98,6 +98,7 @@ export function EditModuleModal({
       open={open}
       onClose={handleClose}
       title="Edit Module"
+      description={<>Editing <span className="font-medium text-content-secondary">{module?.title}</span></>}
       size="lg"
       error={submitError && <Alert type="error" title="Something went wrong" message={submitError} />}
       footer={
@@ -117,10 +118,6 @@ export function EditModuleModal({
       }
     >
       <div className="space-y-4">
-        <p className="text-sm text-content-soft">
-          Editing <span className="font-medium text-content-secondary">{module?.title}</span>
-        </p>
-
         <Input
           label="Module Name"
           required

@@ -443,14 +443,11 @@ export function MaterialQuizModal({
 
   return (
     <Modal open={open} onClose={onClose} dismissible={!locked} title="Material to Quiz Creator" size="lg" footer={footer}
+      description={phase === 'form' && 'Upload your lecture notes or slides as PDF / DOCX and the AI writes multiple-choice questions from them. Longer files use more of your AI quota.'}
       error={(phase === 'form' || phase === 'completed') && error && <AiErrorAlert error={error} />}>
       <div className="space-y-5">
         {phase === 'form' && (
           <>
-            <p className="text-sm text-content-soft">
-              Upload your lecture notes or slides as PDF / DOCX and the AI writes multiple-choice questions from them. Longer files
-              use more of your AI quota.
-            </p>
             {courses.length === 0 ? (
               <p className="text-sm text-content-soft">Enroll in a course first to create a quiz from your materials.</p>
             ) : (

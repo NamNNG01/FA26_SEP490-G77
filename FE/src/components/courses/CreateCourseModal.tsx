@@ -205,6 +205,7 @@ export function CreateCourseModal({
       open={open}
       onClose={handleClose}
       title="Create New Course"
+      description="Enter course details to set up a new course catalog entry. Newly created courses start as drafts."
       size="lg"
       error={submitError && <Alert type="error" title="Course creation failed" message={submitError} />}
       footer={
@@ -224,10 +225,6 @@ export function CreateCourseModal({
       }
     >
       <div className="space-y-4">
-        <p className="text-[13px] text-[#6B7280]">
-          Enter course details to set up a new course catalog entry. Newly created courses start as drafts.
-        </p>
-
         {categoryLoadError && (
           <Alert type="error" title="Could not load categories" message={categoryLoadError} />
         )}

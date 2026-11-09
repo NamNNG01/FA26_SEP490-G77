@@ -77,6 +77,7 @@ export function AddModuleModal({
       open={open}
       onClose={handleClose}
       title="Add Module"
+      description="Add a new module to organize questions and exams within this course."
       error={submitError && <Alert type="error" title="Something went wrong" message={submitError} />}
       footer={
         <>
@@ -95,10 +96,6 @@ export function AddModuleModal({
       }
     >
       <div className="space-y-4">
-        <p className="text-sm text-content-soft">
-          Add a new module to organize questions and exams within this course.
-        </p>
-
         <Input
           label="Module Name"
           required

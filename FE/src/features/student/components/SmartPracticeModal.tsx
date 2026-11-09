@@ -327,6 +327,9 @@ export function SmartPracticeModal({
 
   return (
     <Modal open={open} onClose={() => !busy && onClose()} title="Create Practice Exam" size="lg" footer={footer}
+      description={phase === 'form' && (mode === 'AI'
+        ? 'The AI looks at the questions you got wrong in a course and builds a practice exam focused on your weak modules (about 70 % weak, 20 % medium, 10 % strong). You need at least 5 finished exams in the course.'
+        : 'Random questions from the course question bank. Narrow them down by module and difficulty if you like. Practice exams do not count towards your course progress.')}
       error={mode === 'RANDOM' ? randomError && <Alert type="error" message={randomError} /> : error && <AiErrorAlert error={error} />}>
       <div className="space-y-5">
         {phase === 'form' && (
@@ -336,11 +339,6 @@ export function SmartPracticeModal({
                 <Tabs tabs={Object.values(MODE_TABS)} active={MODE_TABS[mode]} onChange={t => changeMode(MODE_BY_TAB[t])} />
               </div>
             )}
-            <p className="text-sm text-content-soft">
-              {mode === 'AI'
-                ? 'The AI looks at the questions you got wrong in a course and builds a practice exam focused on your weak modules (about 70 % weak, 20 % medium, 10 % strong). You need at least 5 finished exams in the course.'
-                : 'Random questions from the course question bank. Narrow them down by module and difficulty if you like. Practice exams do not count towards your course progress.'}
-            </p>
             {courses.length === 0 ? (
               <p className="text-sm text-content-soft">Enroll in a course first to create a practice exam.</p>
             ) : (
