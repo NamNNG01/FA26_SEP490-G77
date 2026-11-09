@@ -46,7 +46,7 @@ public class MaterialStorage {
     private final String apiSecret;
     private final RestClient cloudinary;
 
-    public MaterialStorage(@Value("${app.storage.provider:local}") String provider,
+    public MaterialStorage(@Value("${app.storage.provider:cloudinary}") String provider,
                            @Value("${app.storage.local-dir:data/materials}") String localDir,
                            @Value("${app.cloudinary.cloud-name:}") String cloudName,
                            @Value("${app.cloudinary.api-key:}") String apiKey,
