@@ -34,6 +34,9 @@ public class QuizGenerationJob implements Serializable {
     @Column(name = "question_count", nullable = false)
     private Integer questionCount;
 
+    @Column(name = "duration_minutes")
+    private Integer durationMinutes;
+
     @Column(name = "difficulty", nullable = false, length = 20)
     private String difficulty;
 

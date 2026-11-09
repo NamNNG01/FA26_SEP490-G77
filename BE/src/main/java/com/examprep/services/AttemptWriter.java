@@ -228,6 +228,7 @@ public class AttemptWriter {
                 pendingPoints,
                 AttemptScoring.output(maxScore),
                 attempt.getAutoSubmitted(),
-                attempt.getSubmittedAt());
+                attempt.getSubmittedAt(),
+                attempt.getTakeAs());
     }
 }

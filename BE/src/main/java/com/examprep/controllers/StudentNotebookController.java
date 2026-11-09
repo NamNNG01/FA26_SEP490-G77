@@ -12,6 +12,9 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import com.examprep.exceptions.BadRequestException;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -82,5 +85,44 @@ public class StudentNotebookController {
     ) {
         List<QuestionReviewItemDto> list = notebookService.getWeakSpots(limit, courseId, currentUser.getId());
         return ResponseEntity.ok(ApiResponse.success(list));
+    }
+
+    @DeleteMapping("/bookmarks")
+    @Operation(summary = "Clear all bookmarks")
+    public ResponseEntity<ApiResponse<Void>> deleteAllBookmarks(@AuthenticationPrincipal UserPrincipal currentUser) {
+        notebookService.deleteAllBookmarks(currentUser.getId());
+        return ResponseEntity.ok(ApiResponse.success(null, "All bookmarks removed"));
+    }
+
+    @PostMapping("/bookmarks/all")
+    @Operation(summary = "Bookmark all saved questions")
+    public ResponseEntity<ApiResponse<Void>> bookmarkAll(@AuthenticationPrincipal UserPrincipal currentUser) {
+        notebookService.bookmarkAll(currentUser.getId());
+        return ResponseEntity.ok(ApiResponse.success(null, "All questions bookmarked"));
+    }
+
+    @DeleteMapping("/saved")
+    @Operation(summary = "Delete all saved questions in notebook")
+    public ResponseEntity<ApiResponse<Void>> deleteAllSavedQuestions(@AuthenticationPrincipal UserPrincipal currentUser) {
+        notebookService.deleteAllSavedQuestions(currentUser.getId());
+        return ResponseEntity.ok(ApiResponse.success(null, "All saved questions deleted"));
+    }
+
+    @GetMapping({"/saved/export", "/saved/export/pdf"})
+    @Operation(summary = "Export question notebook as PDF")
+    public ResponseEntity<byte[]> exportSavedQuestions(
+            @AuthenticationPrincipal UserPrincipal currentUser,
+            @RequestParam(required = false) Long courseId,
+            @RequestParam(defaultValue = "all") String type,
+            @RequestParam(required = false) String examType,
+            @RequestParam(defaultValue = "pdf") String format
+    ) {
+        if (!"pdf".equalsIgnoreCase(format)) {
+            throw new BadRequestException("Invalid export format. Supported: pdf");
+        }
+        com.examprep.util.QuestionNotebookPdfWriter.RenderedPdf pdf = notebookService.exportSavedQuestionsPdf(currentUser.getId(), courseId, type, examType);
+        return ResponseEntity.ok().contentType(MediaType.APPLICATION_PDF)
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + pdf.fileName() + "\"")
+                .body(pdf.content());
     }
 }

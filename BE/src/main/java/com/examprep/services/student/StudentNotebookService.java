@@ -14,4 +14,8 @@ public interface StudentNotebookService {
     void deleteSavedQuestion(Long reviewId, Long userId);
     ReviewSessionResponseDto startReviewSession(ReviewSessionRequestDto request, Long userId);
     List<QuestionReviewItemDto> getWeakSpots(int limit, Long courseId, Long userId);
+    void deleteAllBookmarks(Long userId);
+    void bookmarkAll(Long userId);
+    void deleteAllSavedQuestions(Long userId);
+    com.examprep.util.QuestionNotebookPdfWriter.RenderedPdf exportSavedQuestionsPdf(Long userId, Long courseId, String type, String examType);
 }

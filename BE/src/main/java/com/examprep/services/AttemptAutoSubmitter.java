@@ -48,7 +48,9 @@ public class AttemptAutoSubmitter {
         }
         String mode = attempt.getMode();
         if (Set.of("PRACTICE", "SMART_PRACTICE", "MATERIAL_QUIZ", "REVIEW").contains(mode)) {
-            return false;
+            if (!"MATERIAL_QUIZ".equals(mode) || !"EXAM".equals(attempt.getTakeAs())) {
+                return false;
+            }
         }
         Exam exam = attempt.getExam();
         if (exam != null && exam.getDurationMinutes() == null) {

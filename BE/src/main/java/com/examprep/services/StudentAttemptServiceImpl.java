@@ -484,6 +484,9 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
             autoSubmitter.gradeAndClose(attempt, answers.findByAttemptIdOrdered(attemptId), now);
             throw new BaseException(ResponseCode.ATTEMPT_NOT_IN_PROGRESS, "Attempt is not in progress");
         }
+        if ("MATERIAL_QUIZ".equals(attempt.getMode()) && "EXAM".equals(attempt.getTakeAs())) {
+            throw new ForbiddenException("Check answer is not available when taking as exam");
+        }
         if (attempt.getMode() == null || !PRACTICE_MODES.contains(attempt.getMode())) {
             throw new BaseException(ResponseCode.NOT_A_PRACTICE_EXAM, "This endpoint is only available for practice exams");
         }
@@ -644,6 +647,9 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
         BigDecimal totalWeight = AttemptScoring.totalWeight(weights(rows));
         // Practice reveals each answer at once, so its paper carries the key; an exam never does.
         boolean practice = attempt.getMode() != null && PRACTICE_MODES.contains(attempt.getMode());
+        if ("MATERIAL_QUIZ".equals(attempt.getMode()) && "EXAM".equals(attempt.getTakeAs())) {
+            practice = false;
+        }
 
         List<AttemptResponses.Question> questions = new ArrayList<>();
         List<AttemptResponses.Answer> drafts = withAnswers ? new ArrayList<>() : null;
@@ -689,7 +695,8 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
                 questions,
                 drafts == null ? null : List.copyOf(drafts),
                 attempt.getMode(),
-                quizJobId(attempt));
+                quizJobId(attempt),
+                attempt.getTakeAs());
     }
 
     /**

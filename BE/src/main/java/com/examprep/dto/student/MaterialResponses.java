@@ -33,7 +33,7 @@ public final class MaterialResponses {
 
     /** MQ-04 */
     public record JobState(Long jobId, String status, Integer progress, Integer questionCount,
-                           String errorMessage, Long quizId) {}
+                           String errorMessage, Long quizId, Integer durationMinutes) {}
 
     /** GET /lookup and POST /{documentId}/courses. */
     public record Lookup(Long documentId, String title, String fileName, List<CourseLink> courses) {}
@@ -44,7 +44,7 @@ public final class MaterialResponses {
     public record StartedQuestion(Long questionId, Integer orderIndex, String questionType,
                                   String content, List<StartedOption> options) {}
 
-    public record Started(Long attemptId, List<StartedQuestion> questions) {}
+    public record Started(Long attemptId, List<StartedQuestion> questions, String takeAs) {}
 
     /** MQ-06 */
     public record HistoryItem(Long jobId, Long documentId, String documentTitle, Integer questionCount,

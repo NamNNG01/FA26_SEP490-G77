@@ -27,6 +27,7 @@ import com.examprep.repositories.QuestionRepository;
 import com.examprep.repositories.StudentQuestionReviewRepository;
 import com.examprep.repositories.UserRepository;
 import com.examprep.services.StudentAttemptService;
+import com.examprep.util.QuestionNotebookPdfWriter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -67,6 +68,7 @@ public class StudentNotebookServiceImpl implements StudentNotebookService {
     private final ExamQuestionRepository examQuestionRepository;
     private final StudentAttemptService studentAttemptService;
     private final com.examprep.repositories.CourseRepository courseRepository;
+    private final com.examprep.util.QuestionNotebookPdfWriter questionNotebookPdfWriter;
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
 
     @Override
@@ -337,5 +339,30 @@ public class StudentNotebookServiceImpl implements StudentNotebookService {
                     r.getLastPracticedAt()
             );
         }).toList();
+    }
+
+    @Override
+    @Transactional
+    public void deleteAllBookmarks(Long userId) {
+        reviewRepository.unbookmarkAllByStudentUserId(userId);
+    }
+
+    @Override
+    @Transactional
+    public void bookmarkAll(Long userId) {
+        reviewRepository.bookmarkAllByStudentUserId(userId);
+    }
+
+    @Override
+    @Transactional
+    public void deleteAllSavedQuestions(Long userId) {
+        reviewRepository.deleteAllByStudentUserId(userId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public QuestionNotebookPdfWriter.RenderedPdf exportSavedQuestionsPdf(Long userId, Long courseId, String type, String examType) {
+        Page<QuestionReviewItemDto> page = listSavedQuestions(type, examType, courseId, null, null, 0, 1000, userId);
+        return questionNotebookPdfWriter.write(page.getContent());
     }
 }

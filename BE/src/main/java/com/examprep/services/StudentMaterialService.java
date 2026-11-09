@@ -33,7 +33,7 @@ public interface StudentMaterialService {
     MaterialResponses.JobState job(Long userId, Long jobId);
 
     /** MQ-05: starts (or resumes) the attempt of a completed generated quiz. */
-    MaterialResponses.Started start(Long userId, Long jobId);
+    MaterialResponses.Started start(Long userId, Long jobId, MaterialRequests.StartQuiz request);
 
     /** MQ-06: history of generated quizzes with best score and attempt count. */
     PageResponse<MaterialResponses.HistoryItem> history(Long userId, int page, int size);

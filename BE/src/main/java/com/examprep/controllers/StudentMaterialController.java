@@ -109,8 +109,9 @@ public class StudentMaterialController {
     @PostMapping("/quiz-jobs/{jobId}/start")
     @Operation(summary = "MQ-05: Start a completed generated quiz")
     public ResponseEntity<ApiResponse<MaterialResponses.Started>> start(
-            @AuthenticationPrincipal UserPrincipal user, @PathVariable Long jobId) {
-        return ResponseEntity.ok(ApiResponse.success(service.start(user.getId(), jobId), "Quiz started"));
+            @AuthenticationPrincipal UserPrincipal user, @PathVariable Long jobId,
+            @RequestBody(required = false) MaterialRequests.StartQuiz request) {
+        return ResponseEntity.ok(ApiResponse.success(service.start(user.getId(), jobId, request), "Quiz started"));
     }
 
     @GetMapping("/quiz-history")

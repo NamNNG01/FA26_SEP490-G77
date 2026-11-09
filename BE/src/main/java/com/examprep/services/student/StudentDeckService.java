@@ -47,6 +47,7 @@ public class StudentDeckService {
     private final CourseRepository courses;
     private final EnrollmentRepository enrollments;
     private final UserRepository users;
+    private final ModuleRepository modules;
     private final ExamAttemptRepository attempts;
     private final AttemptAnswerRepository answers;
     private final ObjectMapper json;
@@ -56,7 +57,8 @@ public class StudentDeckService {
 
     public DeckView create(Long userId, DeckCreate request) {
         Course course = request.courseId() == null ? null : enrolledCourse(userId, request.courseId());
-        Deck deck = decks.saveAndFlush(Deck.builder().user(users.getReferenceById(userId)).course(course)
+        com.examprep.entities.Module module = deckModule(course, request.moduleId());
+        Deck deck = decks.saveAndFlush(Deck.builder().user(users.getReferenceById(userId)).course(course).module(module)
                 .title(request.title().strip()).description(optionalText(request.description())).mode(request.mode())
                 .isPublic(false).build());
         return view(deck, 0);
@@ -68,12 +70,27 @@ public class StudentDeckService {
         if (request.mode() != null && !request.mode().equals(deck.getMode()) && count > 0) {
             throw new ResourceConflictException("A deck with cards cannot change its mode.");
         }
-        if (request.courseId() != null) deck.setCourse(enrolledCourse(userId, request.courseId()));
+        Course destination = request.courseId() == null ? null : enrolledCourse(userId, request.courseId());
+        Course effectiveCourse = destination != null ? destination : deck.getCourse();
+        if (request.courseId() != null) deck.setCourse(destination);
         if (request.title() != null) deck.setTitle(request.title().strip());
         if (request.description() != null) deck.setDescription(optionalText(request.description()));
         if (request.mode() != null) deck.setMode(request.mode());
+        if (request.moduleId() != null) {
+            deck.setModule(request.moduleId() == 0 ? null : deckModule(effectiveCourse, request.moduleId()));
+        }
         decks.flush();
         return view(deck, count);
+    }
+
+    private com.examprep.entities.Module deckModule(Course course, Long moduleId) {
+        if (moduleId == null || moduleId == 0) return null;
+        if (course == null) throw new BadRequestException("A deck with a module must belong to a course.");
+        com.examprep.entities.Module module = modules.findById(moduleId).orElseThrow(() -> new ResourceNotFoundException("Module not found."));
+        if (!module.getCourse().getCourseId().equals(course.getCourseId()) || module.isHidden()) {
+            throw new BadRequestException("Module must be a visible module of the selected course.");
+        }
+        return module;
     }
 
     /** A deck waiting for review may be deleted; a public one may not (other students study it). */
@@ -116,7 +133,9 @@ public class StudentDeckService {
                 d.getDescription(), d.getMode(), d.getCourse() == null ? null : d.getCourse().getCourseId(),
                 d.getCourse() == null ? null : d.getCourse().getTitle(), d.getUser().getUserId(), d.getUser().getFullName(),
                 cardCounts.getOrDefault(d.getDeckId(), 0L), known.getOrDefault(d.getDeckId(), 0L),
-                starred.getOrDefault(d.getDeckId(), 0L), d.getVisibility(), d.getReviewStatus(), d.getCreatedAt())).toList());
+                starred.getOrDefault(d.getDeckId(), 0L), d.getVisibility(), d.getReviewStatus(), d.getCreatedAt(),
+                d.getModule() == null ? null : d.getModule().getModuleId(),
+                d.getModule() == null ? null : d.getModule().getTitle())).toList());
     }
 
     private static Map<Long, Long> byDeck(List<IdCount> counts) {
@@ -156,7 +175,9 @@ public class StudentDeckService {
                 deck.getUser().getFullName(), owner, cards.countByDeckDeckId(deckId),
                 byDeck(progress.countKnownByDecks(userId, id)).getOrDefault(deckId, 0L),
                 byDeck(progress.countStarredByDecks(userId, id)).getOrDefault(deckId, 0L), deck.getVisibility(),
-                deck.getReviewStatus(), owner ? deck.getReviewNote() : null, deck.getSubmittedAt(), deck.getCreatedAt());
+                deck.getReviewStatus(), owner ? deck.getReviewNote() : null, deck.getSubmittedAt(), deck.getCreatedAt(),
+                deck.getModule() == null ? null : deck.getModule().getModuleId(),
+                deck.getModule() == null ? null : deck.getModule().getTitle());
     }
 
     // ------------------------------------------------------------------ FC-04..06
@@ -379,7 +400,9 @@ public class StudentDeckService {
         return new DeckView(deck.getDeckId(), deck.getTitle(), deck.getDescription(), deck.getMode(),
                 deck.getCourse() == null ? null : deck.getCourse().getCourseId(),
                 deck.getCourse() == null ? null : deck.getCourse().getTitle(), cardCount, deck.getVisibility(),
-                deck.getReviewStatus(), deck.getReviewNote(), deck.getCreatedAt());
+                deck.getReviewStatus(), deck.getReviewNote(), deck.getCreatedAt(),
+                deck.getModule() == null ? null : deck.getModule().getModuleId(),
+                deck.getModule() == null ? null : deck.getModule().getTitle());
     }
 
     static CardView cardView(Flashcard card) {

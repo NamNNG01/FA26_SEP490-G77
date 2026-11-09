@@ -178,7 +178,7 @@ class StudentNotebookServiceTest {
         AttemptResponses.Session mockSession = new AttemptResponses.Session(
                 456L, 500L, "Review Practice", "IN_PROGRESS", Instant.now(), null,
                 Instant.now(), BigDecimal.ONE, List.of(new AttemptResponses.Question(1L, 1, "SINGLE_CHOICE", "What is Java?", List.of(), null, BigDecimal.ONE, null, null)),
-                null, Exam.MODE_PRACTICE_EXAM, null
+                null, Exam.MODE_PRACTICE_EXAM, null, null
         );
         when(studentAttemptService.start(eq(100L), eq(500L), isNull())).thenReturn(mockSession);
 
@@ -199,5 +199,23 @@ class StudentNotebookServiceTest {
     @Test
     void listSavedQuestions_invalidExamType_throws() {
         assertThrows(BadRequestException.class, () -> notebookService.listSavedQuestions("all", "INVALID", null, null, null, 0, 20, 100L));
+    }
+
+    @Test
+    void deleteAllBookmarks_callsRepo() {
+        notebookService.deleteAllBookmarks(100L);
+        verify(reviewRepository).unbookmarkAllByStudentUserId(100L);
+    }
+
+    @Test
+    void bookmarkAll_callsRepo() {
+        notebookService.bookmarkAll(100L);
+        verify(reviewRepository).bookmarkAllByStudentUserId(100L);
+    }
+
+    @Test
+    void deleteAllSavedQuestions_callsRepo() {
+        notebookService.deleteAllSavedQuestions(100L);
+        verify(reviewRepository).deleteAllByStudentUserId(100L);
     }
 }

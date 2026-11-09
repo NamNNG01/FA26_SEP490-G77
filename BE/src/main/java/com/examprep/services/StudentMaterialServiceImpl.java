@@ -417,6 +417,7 @@ public class StudentMaterialServiceImpl implements StudentMaterialService {
                 .sourceLessonId(request.sourceLessonId())
                 .title(request.title() == null || request.title().isBlank() ? null : request.title().strip())
                 .context(request.context() == null || request.context().isBlank() ? null : request.context().strip())
+                .durationMinutes(request.durationMinutes())
                 .status(QuizGenerationWorker.STATUS_PENDING)
                 .progress(0)
                 .estimatedTokens((int) estimated)
@@ -451,7 +452,8 @@ public class StudentMaterialServiceImpl implements StudentMaterialService {
                 .orElseThrow(() -> new ResourceNotFoundException("Quiz job not found"));
         return new JobState(row.getJobId(), row.getStatus(), row.getProgress(), row.getQuestionCount(),
                 row.getErrorMessage(),
-                row.getResultExam() == null ? null : row.getResultExam().getExamId());
+                row.getResultExam() == null ? null : row.getResultExam().getExamId(),
+                row.getDurationMinutes());
     }
 
     // ----------------------------------------------------------------------------------
@@ -459,13 +461,14 @@ public class StudentMaterialServiceImpl implements StudentMaterialService {
     // ----------------------------------------------------------------------------------
 
     @Override
-    public Started start(Long userId, Long jobId) {
+    public Started start(Long userId, Long jobId, MaterialRequests.StartQuiz request) {
         QuizGenerationJob job = jobs.findByJobIdAndUserUserId(jobId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Quiz job not found"));
         if (!QuizGenerationWorker.STATUS_COMPLETED.equals(job.getStatus()) || job.getResultExam() == null) {
             throw new ResourceConflictException("Quiz generation has not completed yet");
         }
         Long examId = job.getResultExam().getExamId();
+        String takeAs = request != null && request.takeAs() != null ? request.takeAs() : "PRACTICE";
         AttemptResponses.Session session;
         try {
             session = attemptService.start(userId, examId, null);
@@ -477,10 +480,11 @@ public class StudentMaterialServiceImpl implements StudentMaterialService {
             ExamAttempt active = attempts.findActiveAttempt(examId, userId, STATUS_IN_PROGRESS)
                     .orElseThrow(() -> ex);
             session = attemptService.get(userId, active.getAttemptId());
+            takeAs = active.getTakeAs() != null ? active.getTakeAs() : takeAs;
         }
         // No surrounding transaction here: catching ATTEMPT_IN_PROGRESS from the transactional
         // attempt service would otherwise mark this transaction rollback-only and fail at commit.
-        markMaterialQuiz(session.attemptId());
+        updateAttemptTakeAsAndMode(session.attemptId(), takeAs);
         List<StartedQuestion> questions = session.questions().stream()
                 .map(question -> new StartedQuestion(
                         question.questionId(),
@@ -492,15 +496,22 @@ public class StudentMaterialServiceImpl implements StudentMaterialService {
                                 .map(option -> new StartedOption(option.optionId(), option.optionText()))
                                 .toList()))
                 .toList();
-        return new Started(session.attemptId(), questions);
+        return new Started(session.attemptId(), questions, takeAs);
     }
 
-    /** Marks the (already committed) attempt as a material quiz in its own short transaction. */
-    private void markMaterialQuiz(Long attemptId) {
+    /** Marks the (already committed) attempt as a material quiz and updates takeAs in its own short transaction. */
+    private void updateAttemptTakeAsAndMode(Long attemptId, String takeAs) {
         new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
             ExamAttempt attempt = attempts.findById(attemptId).orElse(null);
-            if (attempt != null && !MODE_MATERIAL_QUIZ.equals(attempt.getMode())) {
-                attempt.setMode(MODE_MATERIAL_QUIZ);
+            if (attempt != null) {
+                if (!MODE_MATERIAL_QUIZ.equals(attempt.getMode())) {
+                    attempt.setMode(MODE_MATERIAL_QUIZ);
+                }
+                attempt.setTakeAs(takeAs);
+                if ("EXAM".equals(takeAs) && attempt.getExam() != null && attempt.getExam().getDurationMinutes() != null) {
+                    Instant deadline = attempt.getStartTime().plus(attempt.getExam().getDurationMinutes(), java.time.temporal.ChronoUnit.MINUTES);
+                    attempt.setDeadlineAt(deadline);
+                }
                 attempts.save(attempt);
             }
         });

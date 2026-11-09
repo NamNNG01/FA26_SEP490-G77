@@ -4,6 +4,7 @@ import com.examprep.entities.StudentQuestionReview;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -119,4 +120,16 @@ public interface StudentQuestionReviewRepository extends JpaRepository<StudentQu
            "WHERE r.student.userId = :studentId AND r.status = 'WRONG_BOOKMARKED' AND q.deletedAt IS NULL AND q.status = 'ACTIVE' " +
            "AND (qc.courseId = :courseId OR mc.courseId = :courseId) AND r.lastPracticedAt < :before")
     long countStaleWrong(@Param("studentId") Long studentId, @Param("courseId") Long courseId, @Param("before") java.time.Instant before);
+
+    @Modifying
+    @Query("DELETE FROM StudentQuestionReview r WHERE r.student.userId = :studentId")
+    void deleteAllByStudentUserId(@Param("studentId") Long studentId);
+
+    @Modifying
+    @Query("UPDATE StudentQuestionReview r SET r.bookmark = false WHERE r.student.userId = :studentId")
+    void unbookmarkAllByStudentUserId(@Param("studentId") Long studentId);
+
+    @Modifying
+    @Query("UPDATE StudentQuestionReview r SET r.bookmark = true WHERE r.student.userId = :studentId")
+    void bookmarkAllByStudentUserId(@Param("studentId") Long studentId);
 }

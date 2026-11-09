@@ -32,7 +32,8 @@ public final class AttemptResponses {
             List<Question> questions,
             List<Answer> answers,
             String examMode,
-            Long quizJobId) {}
+            Long quizJobId,
+            String takeAs) {}
 
     public record Question(
             Long questionId,
@@ -104,7 +105,8 @@ public final class AttemptResponses {
             BigDecimal pendingPoints,
             BigDecimal maxScore,
             Boolean autoSubmitted,
-            Instant submittedAt) {}
+            Instant submittedAt,
+            String takeAs) {}
 
     /** SA-05 */
     public record Result(
