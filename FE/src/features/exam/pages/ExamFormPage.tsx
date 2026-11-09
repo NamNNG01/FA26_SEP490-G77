@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
+import { Alert } from "@/components/ui/Alert";
 import { Icon } from "@/assets/icons";
 import { useToast } from "@/components/ui/ToastHost";
 import { ROUTES } from "@/app/routes";
@@ -51,6 +52,7 @@ import {
   type QuestionDetail,
 } from "@/services/question.service";
 import { getApiErrorMessage } from "@/utils/apiError";
+import { focusFirstInvalidAfter } from "@/utils/focusFirstInvalid";
 
 export function ExamFormPage({
   formKind: propFormKind,
@@ -186,9 +188,12 @@ export function ExamFormPage({
 
   const handleSaveQuestionEdit = async () => {
     if (!questionEditTarget || !questionEditDraft || questionEditSaving) return;
-    setQuestionEditSubmitted(true);
     setQuestionEditError("");
-    if (!isDraftValid(questionEditDraft)) return;
+    if (!isDraftValid(questionEditDraft)) {
+      focusFirstInvalidAfter(() => setQuestionEditSubmitted(true));
+      return;
+    }
+    setQuestionEditSubmitted(true);
     setQuestionEditSaving(true);
     try {
       const detail = await questionService.getQuestionById(
@@ -2145,6 +2150,7 @@ export function ExamFormPage({
         onClose={() => !questionEditSaving && setQuestionEditTarget(null)}
         title="Edit Question"
         size="2xl"
+        error={questionEditError && questionEditDraft && <Alert type="error" message={questionEditError} />}
         footer={
           <div className="flex w-full flex-wrap items-center justify-end gap-2">
             <Button
@@ -2174,14 +2180,6 @@ export function ExamFormPage({
           </div>
         ) : questionEditDraft ? (
           <div className="space-y-3">
-            {questionEditError && (
-              <div
-                role="alert"
-                className="rounded border border-danger-line bg-danger-light p-3 text-sm text-danger"
-              >
-                {questionEditError}
-              </div>
-            )}
             <QuestionForm
               q={questionEditDraft}
               index={0}

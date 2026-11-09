@@ -4,6 +4,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Alert } from '@/components/ui/Alert';
 import { useToast } from '@/components/ui/ToastHost';
 import { Icon } from '@/assets/icons';
+import { focusFirstInvalidAfter } from '@/utils/focusFirstInvalid';
 import { deckService, type Deck } from '@/services/deck.service';
 import { FLASHCARD_IMPORT_MAX_ROWS, flashcardImportService, type FlashcardImportPreview } from '@/services/flashcardImport.service';
 import { ImportFileModal, importableCards } from './ImportDeckFile';
@@ -94,8 +95,12 @@ export function CreateDeckModal({ onClose, onCreated, defaultCourseId }: {
 
   const submit = async () => {
     const found = validateDeckInfo(info, { requireCourse: true });
-    setErrors(found);
-    if (Object.keys(found).length > 0) return;
+    setSaveError(null);
+    if (Object.keys(found).length > 0) {
+      focusFirstInvalidAfter(() => setErrors(found));
+      return;
+    }
+    setErrors({});
     if (editor.hasInput) {
       toast.warning(editor.editingId ? 'Update or clear the card in the editor first.' : 'Add or clear the card in the editor first.');
       editor.frontRef.current?.focus();
@@ -104,7 +109,7 @@ export function CreateDeckModal({ onClose, onCreated, defaultCourseId }: {
     setSaving(true);
     setSaveError(null);
     if (await hasDuplicateTitle(info.title, info.courseId)) {
-      setErrors({ title: DUPLICATE_TITLE_MESSAGE });
+      focusFirstInvalidAfter(() => setErrors({ title: DUPLICATE_TITLE_MESSAGE }));
       setSaving(false);
       return;
     }
@@ -148,6 +153,7 @@ export function CreateDeckModal({ onClose, onCreated, defaultCourseId }: {
     <>
     {/* Not dismissible under a dialog of its own, so Escape there closes only that dialog. */}
     <Modal open onClose={requestClose} title="New Flashcard Deck" size="2xl" dismissible={!pickingFile && !confirmDiscard}
+      error={saveError && <Alert type="error" message={saveError} />}
       footer={
         <>
           <Button variant="outline" onClick={requestClose} disabled={saving}>Cancel</Button>
@@ -160,7 +166,6 @@ export function CreateDeckModal({ onClose, onCreated, defaultCourseId }: {
         <div className="space-y-5 min-w-0">
           <section className="card p-5 space-y-4" aria-label="Deck information">
             <h3 className="text-lg font-semibold text-content">Deck Information</h3>
-            {saveError && <Alert type="error" message={saveError} />}
             <DeckInfoFields idPrefix="new-deck" value={info} errors={errors} onChange={update} allowNoCourse={false}
               courses={courses.map(c => ({ id: String(c.courseId), title: c.title }))} coursesLoading={coursesLoading} />
           </section>

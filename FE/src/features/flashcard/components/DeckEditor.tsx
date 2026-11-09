@@ -145,7 +145,7 @@ export function DeckInfoFields({ value, onChange, errors = {}, courses, coursesL
         <div>
           {/* A module belongs to one course: changing the course clears it. */}
           <Select label={allowNoCourse ? 'Course' : 'Course *'} value={value.courseId}
-            onChange={v => onChange(v === value.courseId ? { courseId: v } : { courseId: v, moduleId: NO_MODULE })} disabled={coursesLoading}
+            onChange={v => onChange(v === value.courseId ? { courseId: v } : { courseId: v, moduleId: NO_MODULE })} disabled={coursesLoading} invalid={Boolean(errors.courseId)}
             options={coursesLoading ? [{ label: 'Loading courses…', value: value.courseId }] : courseOptions} />
           {errors.courseId && <p className="text-xs text-danger mt-1">{errors.courseId}</p>}
         </div>
@@ -157,7 +157,7 @@ export function DeckInfoFields({ value, onChange, errors = {}, courses, coursesL
       <div>
         <label htmlFor={`${idPrefix}-description`} className="block text-sm font-medium text-content-secondary mb-1.5">Description</label>
         <textarea id={`${idPrefix}-description`} rows={3} maxLength={DESCRIPTION_MAX} value={value.description}
-          onChange={e => onChange({ description: e.target.value })}
+          onChange={e => onChange({ description: e.target.value })} aria-invalid={errors.description ? true : undefined}
           placeholder="What does this deck cover?"
           className={`${textareaClass} ${errors.description ? 'border-danger-solid' : 'border-line'}`} />
         <div className="mt-1 flex justify-between gap-2 text-2xs">

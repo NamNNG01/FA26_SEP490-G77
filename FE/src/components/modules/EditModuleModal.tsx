@@ -5,6 +5,8 @@ import { Input } from '@/components/ui/Input';
 import { Switch } from '@/components/ui/Switch';
 import { Alert } from '@/components/ui/Alert';
 import { Icon } from '@/assets/icons';
+import { apiFieldErrors } from '@/utils/apiError';
+import { focusFirstInvalidAfter } from '@/utils/focusFirstInvalid';
 import { courseService, type CourseModuleResponse } from '@/services/course.service';
 
 export interface EditableModule {
@@ -58,10 +60,13 @@ export function EditModuleModal({
 
     const nextErrors: { title?: string } = {};
     if (!title.trim()) nextErrors.title = 'Module title is required.';
-    setErrors(nextErrors);
-    if (Object.keys(nextErrors).length > 0) return;
-
     setSubmitError(null);
+    if (Object.keys(nextErrors).length > 0) {
+      focusFirstInvalidAfter(() => setErrors(nextErrors));
+      return;
+    }
+    setErrors({});
+
     setSubmitting(true);
     try {
       const targetId = module.moduleId ?? module.id;
@@ -81,6 +86,8 @@ export function EditModuleModal({
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to update module. Please try again.';
       setSubmitError(message);
+      const fields = apiFieldErrors(err);
+      if (fields.title) focusFirstInvalidAfter(() => setErrors({ title: fields.title }));
     } finally {
       setSubmitting(false);
     }
@@ -91,7 +98,9 @@ export function EditModuleModal({
       open={open}
       onClose={handleClose}
       title="Edit Module"
+      description={<>Editing <span className="font-medium text-content-secondary">{module?.title}</span></>}
       size="lg"
+      error={submitError && <Alert type="error" title="Something went wrong" message={submitError} />}
       footer={
         <>
           <Button variant="outline" onClick={handleClose} disabled={submitting}>
@@ -109,16 +118,12 @@ export function EditModuleModal({
       }
     >
       <div className="space-y-4">
-        <p className="text-sm text-content-soft">
-          Editing <span className="font-medium text-content-secondary">{module?.title}</span>
-        </p>
-
         <Input
           label="Module Name"
           required
           autoFocus
           value={title}
-          onChange={e => setTitle(e.target.value)}
+          onChange={e => { setTitle(e.target.value); setErrors({}); }}
           error={errors.title}
           placeholder="e.g. Supervised Learning"
         />
@@ -149,8 +154,6 @@ export function EditModuleModal({
             disabled={submitting}
           />
         </div>
-
-        {submitError && <Alert type="error" title="Something went wrong" message={submitError} />}
       </div>
     </Modal>
   );

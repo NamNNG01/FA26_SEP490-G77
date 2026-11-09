@@ -29,6 +29,7 @@ import {
   type MaterialJobState,
 } from '@/services/studentMaterial.service';
 import { AiErrorAlert } from './aiUi';
+import { focusFirstInvalidAfter } from '@/utils/focusFirstInvalid';
 import { formatDate } from './studentUi';
 
 const DEFAULT_POLL_MS = 2000;
@@ -307,8 +308,12 @@ export function MaterialQuizModal({
   const runningJob = selected?.jobs.find(j => isJobRunning(j.status)) ?? null;
 
   const generate = async () => {
+    if (invalid) {
+      focusFirstInvalidAfter(() => setTouched(true));
+      return;
+    }
     setTouched(true);
-    if (invalid || checkingFile) return;
+    if (checkingFile) return;
     if (documentId == null && file && atFileLimit) {
       setFileError(FILE_LIMIT_MESSAGE);
       return;
@@ -437,14 +442,12 @@ export function MaterialQuizModal({
   const locked = busy || starting || phase === 'processing';
 
   return (
-    <Modal open={open} onClose={onClose} dismissible={!locked} title="Material to Quiz Creator" size="lg" footer={footer}>
+    <Modal open={open} onClose={onClose} dismissible={!locked} title="Material to Quiz Creator" size="lg" footer={footer}
+      description={phase === 'form' && 'Upload your lecture notes or slides as PDF / DOCX and the AI writes multiple-choice questions from them. Longer files use more of your AI quota.'}
+      error={(phase === 'form' || phase === 'completed') && error && <AiErrorAlert error={error} />}>
       <div className="space-y-5">
         {phase === 'form' && (
           <>
-            <p className="text-sm text-content-soft">
-              Upload your lecture notes or slides as PDF / DOCX and the AI writes multiple-choice questions from them. Longer files
-              use more of your AI quota.
-            </p>
             {courses.length === 0 ? (
               <p className="text-sm text-content-soft">Enroll in a course first to create a quiz from your materials.</p>
             ) : (
@@ -510,6 +513,7 @@ export function MaterialQuizModal({
                           setDragOver(false);
                           pickFile(e.dataTransfer.files?.[0]);
                         }}
+                        aria-invalid={touched && errors.material ? true : undefined}
                         className={`rounded-[12px] border-2 border-dashed px-4 py-5 text-center transition-colors ${
                           dragOver ? 'border-brand-600 bg-primary-light' : touched && errors.material ? 'border-danger-solid' : 'border-line'
                         }`}
@@ -665,7 +669,6 @@ export function MaterialQuizModal({
                 )}
               </>
             )}
-            {error && <AiErrorAlert error={error} />}
           </>
         )}
 
@@ -692,7 +695,6 @@ export function MaterialQuizModal({
             <p className="text-sm text-content-soft">
               Answers are checked when you submit. You can take the quiz again any time from My Materials or Exam History.
             </p>
-            {error && <AiErrorAlert error={error} />}
           </div>
         )}
 
