@@ -266,25 +266,28 @@ class StudentDeckApiIntegrationTest {
                 .andExpect(jsonPath("$.data.content[0].deckId").value(code));
     }
 
-    @Test void listCourseShowsManagerAndPublicDecksButNotOwn() throws Exception {
+    @Test void listCourseShowsOnlyDecksWithLearnedCountAtLeastOne() throws Exception {
         f.enroll(other, course);
         Deck managerDeck = Deck.builder().user(manager).course(course).title("Course deck").isPublic(false).build();
         em.persist(managerDeck);
+        Flashcard card1 = Flashcard.builder().deck(managerDeck).frontText("f").backText("b").position(1).build();
+        em.persist(card1);
         em.flush();
-        String body = send(post("/api/v1/student/decks"), other, "{\"title\":\"Classmate\",\"mode\":\"FLASHCARD\",\"courseId\":" + course.getCourseId() + "}")
-                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
-        long classmate = json.readTree(body).path("data").path("deckId").asLong();
-        send(post("/api/v1/student/decks"), student, "{\"title\":\"Mine\",\"mode\":\"FLASHCARD\",\"courseId\":" + course.getCourseId() + "}")
-                .andExpect(status().isCreated());
+
+        // Before learning any cards, scope=COURSE returns 0 elements
+        mvc.perform(get("/api/v1/student/decks?scope=COURSE").with(as(student)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalElements").value(0));
+
+        // Mark card1 as KNOWN (learnedCount >= 1)
+        em.persist(UserCardProgress.builder().user(student).card(card1).isStarred(false).status("KNOWN").build());
+        em.flush();
+
+        // Now scope=COURSE returns managerDeck
         mvc.perform(get("/api/v1/student/decks?scope=COURSE").with(as(student)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.totalElements").value(1))
-                .andExpect(jsonPath("$.data.content[0].deckId").value(managerDeck.getDeckId()))
-                .andExpect(jsonPath("$.data.content[0].courseTitle").value(course.getTitle()));
-        em.find(Deck.class, classmate).setVisibility("PUBLIC");
-        em.flush();
-        mvc.perform(get("/api/v1/student/decks?scope=COURSE&courseId=" + course.getCourseId()).with(as(student)))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.data.totalElements").value(2));
+                .andExpect(jsonPath("$.data.content[0].deckId").value(managerDeck.getDeckId()));
     }
 
     @Test void listRejectsBadParams() throws Exception {

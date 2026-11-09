@@ -119,13 +119,13 @@ class ManagerReviewIntegrationTest {
 
         Map<String, Object> result = contributionReviewService.approve(manager, savedContrib.getContributionId(), 0L, "Good question");
         assertNotNull(result);
-        assertEquals("APPROVED", result.get("status"));
+        assertEquals("ACCEPTED", result.get("status"));
         assertNotNull(result.get("acceptedQuestionId"));
 
         Long qId = (Long) result.get("acceptedQuestionId");
         Question q = questionRepository.findById(qId).orElseThrow();
         assertEquals("What is 2+2?", q.getContent());
-        assertEquals("APPROVED", q.getApprovalStatus());
+        assertEquals("ACCEPTED", q.getApprovalStatus());
         assertEquals("ACTIVE", q.getStatus());
         assertEquals("STUDENT_CONTRIBUTION", q.getSource());
     }

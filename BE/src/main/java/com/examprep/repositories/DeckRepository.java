@@ -79,7 +79,8 @@ public interface DeckRepository extends JpaRepository<Deck, Long> {
             "AND e.status = 'ACTIVE') AND d.user.userId <> :userId " +
             "AND (d.user.roleName <> 'STUDENT' OR d.visibility = 'PUBLIC') " +
             "AND (:courseId IS NULL OR c.courseId = :courseId) AND (:mode = '' OR d.mode = :mode) " +
-            "AND LOWER(d.title) LIKE :search ESCAPE '!'";
+            "AND LOWER(d.title) LIKE :search ESCAPE '!' " +
+            "AND EXISTS (SELECT p.progressId FROM UserCardProgress p WHERE p.card.deck = d AND p.user.userId = :userId AND p.status = 'KNOWN')";
 
     @EntityGraph(attributePaths = {"course", "user", "module"})
     @Query("SELECT d FROM Deck d WHERE d.deckId = :id")

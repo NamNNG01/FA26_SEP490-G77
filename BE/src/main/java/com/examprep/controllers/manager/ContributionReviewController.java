@@ -56,7 +56,7 @@ public class ContributionReviewController {
             @RequestParam(required = false) Instant submittedTo,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
-            @RequestParam(defaultValue = "submittedAt,asc") String sort) {
+            @RequestParam(defaultValue = "submittedAt,desc") String sort) {
         if (size > 100) {
             size = 100;
         }
@@ -127,6 +127,7 @@ public class ContributionReviewController {
         Map<String, Object> data = new HashMap<>();
         data.put("contributionId", c.getContributionId());
         data.put("courseId", c.getCourseId());
+        data.put("contributorId", c.getUserId());
         data.put("type", c.getType());
         data.put("status", c.getStatus());
         data.put("title", c.getTitle() != null ? c.getTitle() : "");
