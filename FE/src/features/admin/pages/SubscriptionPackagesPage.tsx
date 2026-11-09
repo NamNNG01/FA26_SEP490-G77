@@ -11,6 +11,8 @@ import { Dropdown } from '@/components/ui/Dropdown';
 import { Icon } from '@/assets/icons';
 import { useToast } from '@/components/ui/ToastHost';
 import { getApiErrorMessage } from '@/utils/apiError';
+import { focusFirstInvalidAfter } from '@/utils/focusFirstInvalid';
+import { Alert } from '@/components/ui/Alert';
 import type { Page } from '@/services/adminDiscount.service';
 import {
   PLAN_FEATURES_MAX,
@@ -27,6 +29,7 @@ import { formatInteger, formatVnd } from '../utils/dashboardFormat';
 const PAGE_SIZE = 10;
 const EMPTY_PAGE: Page<AdminSubscriptionPlan> = { content: [], page: 0, size: PAGE_SIZE, totalElements: 0, totalPages: 0, first: true, last: true };
 
+type PlanFieldErrors = Partial<Record<'planName' | 'price' | 'durationDays' | 'aiTokenLimit' | 'features', string>>;
 type FormState = {
   planName: string; description: string; price: string; durationDays: string;
   aiTokenLimit: string; features: string[]; isActive: boolean; sortOrder: string;
@@ -59,7 +62,8 @@ export function SubscriptionPackagesPage() {
   const [editing, setEditing] = useState<AdminSubscriptionPlan | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState<FormState>(blankForm);
-  const [nameError, setNameError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<PlanFieldErrors>({});
+  const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [detail, setDetail] = useState<AdminSubscriptionPlanDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -79,9 +83,9 @@ export function SubscriptionPackagesPage() {
   }, [activeFilter, keyword, pageIndex, toast]);
   useEffect(() => { void load(); }, [load]);
 
-  const openCreate = () => { setEditing(null); setForm(blankForm(page.totalElements)); setNameError(null); setFormOpen(true); };
+  const openCreate = () => { setEditing(null); setForm(blankForm(page.totalElements)); setFieldErrors({}); setFormError(null); setFormOpen(true); };
   const openEdit = async (plan: AdminSubscriptionPlan) => {
-    try { const full = await adminSubscriptionPlanService.get(plan.planId); setEditing(full); setForm(formFromPlan(full)); setNameError(null); setFormOpen(true); }
+    try { const full = await adminSubscriptionPlanService.get(plan.planId); setEditing(full); setForm(formFromPlan(full)); setFieldErrors({}); setFormError(null); setFormOpen(true); }
     catch (error) { toast.error(getApiErrorMessage(error, 'Could not load plan details.')); }
   };
   const openDetail = async (plan: AdminSubscriptionPlan) => {
@@ -91,31 +95,39 @@ export function SubscriptionPackagesPage() {
     finally { setDetailLoading(false); }
   };
   const updateForm = <K extends keyof FormState>(key: K, value: FormState[K]) => setForm(prev => ({ ...prev, [key]: value }));
-  const setFeature = (index: number, value: string) => updateForm('features', form.features.map((f, i) => (i === index ? value : f)));
+  const setFeature = (index: number, value: string) => { updateForm('features', form.features.map((f, i) => (i === index ? value : f))); clearFieldError('features'); };
   const addFeature = () => { if (form.features.length < PLAN_FEATURES_MAX) updateForm('features', [...form.features, '']); };
   const removeFeature = (index: number) => updateForm('features', form.features.length === 1 ? [''] : form.features.filter((_, i) => i !== index));
 
   const save = async (event: React.FormEvent) => {
     event.preventDefault();
     const payload = toPayload(form);
-    if (!payload.planName) { setNameError('Plan name is required.'); return; }
-    if (payload.planName.length > PLAN_NAME_MAX) { setNameError(`Plan name must be ${PLAN_NAME_MAX} characters or fewer.`); return; }
-    if (!Number.isFinite(payload.price) || payload.price < 0) { toast.error('Price must be 0 or more (0 = free plan).'); return; }
-    if (payload.price > PLAN_PRICE_MAX) { toast.error('Price must not exceed 99,999,999.99 VND.'); return; }
-    if (!/^\d+(\.\d{1,2})?$/.test(form.price.trim())) { toast.error('Price can have at most 2 decimal places.'); return; }
-    if (!Number.isInteger(payload.durationDays) || payload.durationDays < 1) { toast.error('Duration must be at least 1 day.'); return; }
-    if (!Number.isInteger(payload.aiTokenLimit) || payload.aiTokenLimit < 0) { toast.error('AI token limit must be 0 or more.'); return; }
-    if (payload.features.length > PLAN_FEATURES_MAX) { toast.error(`A plan can list at most ${PLAN_FEATURES_MAX} features.`); return; }
-    if (payload.features.some(f => f.length > PLAN_FEATURE_TEXT_MAX)) { toast.error(`Each feature must be ${PLAN_FEATURE_TEXT_MAX} characters or fewer.`); return; }
+    const errors: PlanFieldErrors = {};
+    if (!payload.planName) errors.planName = 'Plan name is required.';
+    else if (payload.planName.length > PLAN_NAME_MAX) errors.planName = `Plan name must be ${PLAN_NAME_MAX} characters or fewer.`;
+    if (!Number.isFinite(payload.price) || payload.price < 0) errors.price = 'Price must be 0 or more (0 = free plan).';
+    else if (payload.price > PLAN_PRICE_MAX) errors.price = 'Price must not exceed 99,999,999.99 VND.';
+    else if (!/^\d+(\.\d{1,2})?$/.test(form.price.trim())) errors.price = 'Price can have at most 2 decimal places.';
+    if (!Number.isInteger(payload.durationDays) || payload.durationDays < 1) errors.durationDays = 'Duration must be at least 1 day.';
+    if (!Number.isInteger(payload.aiTokenLimit) || payload.aiTokenLimit < 0) errors.aiTokenLimit = 'AI token limit must be 0 or more.';
+    if (payload.features.length > PLAN_FEATURES_MAX) errors.features = `A plan can list at most ${PLAN_FEATURES_MAX} features.`;
+    else if (payload.features.some(f => f.length > PLAN_FEATURE_TEXT_MAX)) errors.features = `Each feature must be ${PLAN_FEATURE_TEXT_MAX} characters or fewer.`;
+    setFormError(null);
+    if (Object.keys(errors).length) {
+      if (!focusFirstInvalidAfter(() => setFieldErrors(errors))) setFormError(Object.values(errors).join(' '));
+      return;
+    }
+    setFieldErrors({});
     setSaving(true);
     try {
       if (editing) await adminSubscriptionPlanService.update(editing.planId, payload); else await adminSubscriptionPlanService.create(payload);
       toast.success(editing ? 'Plan updated.' : 'Plan created.'); setFormOpen(false); await load();
     } catch (error) {
-      if (errorCode(error) === 'PLAN_NAME_EXISTS') setNameError('Another plan already uses this name.');
-      else toast.error(getApiErrorMessage(error, 'Could not save the plan.'));
+      if (errorCode(error) === 'PLAN_NAME_EXISTS') focusFirstInvalidAfter(() => setFieldErrors({ planName: 'Another plan already uses this name.' }));
+      else setFormError(getApiErrorMessage(error, 'Could not save the plan.'));
     } finally { setSaving(false); }
   };
+  const clearFieldError = (key: keyof PlanFieldErrors) => setFieldErrors(prev => ({ ...prev, [key]: undefined }));
   const confirmStatus = async () => {
     if (!changingStatus) return;
     setWorking(true);
@@ -203,14 +215,14 @@ export function SubscriptionPackagesPage() {
       />
     </div>
 
-    <Modal open={formOpen} onClose={() => setFormOpen(false)} title={editing ? `Edit ${editing.planName}` : 'Create plan'} size="xl" footer={<><Button variant="outline" disabled={saving} onClick={() => setFormOpen(false)}>Cancel</Button><Button loading={saving} disabled={saving} onClick={() => document.getElementById('plan-form-submit')?.click()}>{editing ? 'Save changes' : 'Create plan'}</Button></>}>
+    <Modal open={formOpen} onClose={() => setFormOpen(false)} title={editing ? `Edit ${editing.planName}` : 'Create plan'} size="xl" error={formError && <Alert type="error" message={formError} />} footer={<><Button variant="outline" disabled={saving} onClick={() => setFormOpen(false)}>Cancel</Button><Button loading={saving} disabled={saving} onClick={() => document.getElementById('plan-form-submit')?.click()}>{editing ? 'Save changes' : 'Create plan'}</Button></>}>
       <form onSubmit={save} className="space-y-4">
         {editing && editing.activeSubscribers > 0 && <p className="rounded-[10px] bg-warning-light/40 px-3 py-2 text-xs text-content-secondary">{formatInteger(editing.activeSubscribers)} students are on this plan. A new price only applies to future purchases; a new AI token limit applies to them right away.</p>}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Input label="Plan name" required maxLength={PLAN_NAME_MAX} value={form.planName} error={nameError ?? undefined} onChange={e => { updateForm('planName', e.target.value); setNameError(null); }} />
-          <Input label="Price (VND)" type="number" min={0} max={PLAN_PRICE_MAX} step={1000} required value={form.price} onChange={e => updateForm('price', e.target.value)} hint="0 = free plan" />
-          <Input label="Duration (days)" type="number" min={1} required value={form.durationDays} onChange={e => updateForm('durationDays', e.target.value)} />
-          <Input label="AI token limit" type="number" min={0} step={1000} required value={form.aiTokenLimit} onChange={e => updateForm('aiTokenLimit', e.target.value)} hint="Total tokens for the whole plan period." />
+          <Input label="Plan name" required maxLength={PLAN_NAME_MAX} value={form.planName} error={fieldErrors.planName} onChange={e => { updateForm('planName', e.target.value); clearFieldError('planName'); }} />
+          <Input label="Price (VND)" type="number" min={0} max={PLAN_PRICE_MAX} step={1000} required value={form.price} error={fieldErrors.price} onChange={e => { updateForm('price', e.target.value); clearFieldError('price'); }} hint="0 = free plan" />
+          <Input label="Duration (days)" type="number" min={1} required value={form.durationDays} error={fieldErrors.durationDays} onChange={e => { updateForm('durationDays', e.target.value); clearFieldError('durationDays'); }} />
+          <Input label="AI token limit" type="number" min={0} step={1000} required value={form.aiTokenLimit} error={fieldErrors.aiTokenLimit} onChange={e => { updateForm('aiTokenLimit', e.target.value); clearFieldError('aiTokenLimit'); }} hint="Total tokens for the whole plan period." />
         </div>
         <label className="flex flex-col gap-1.5 text-sm font-medium text-content-secondary">Description<textarea className="min-h-20 rounded-[10px] border border-line bg-surface px-3 py-2 text-sm font-normal text-content focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/20" maxLength={1000} value={form.description} onChange={e => updateForm('description', e.target.value)} /></label>
         <div className="space-y-2">
@@ -220,6 +232,7 @@ export function SubscriptionPackagesPage() {
             <Input aria-label={`Feature ${index + 1}`} className="flex-1" maxLength={PLAN_FEATURE_TEXT_MAX} placeholder="e.g. Unlimited decks" value={feature} onChange={e => setFeature(index, e.target.value)} />
             <button type="button" aria-label={`Remove feature ${index + 1}`} onClick={() => removeFeature(index)} className="p-1.5 text-content-subtle hover:text-danger"><Icon.Trash className="h-4 w-4" /></button>
           </div>)}
+          {fieldErrors.features && <p className="text-xs text-danger">{fieldErrors.features}</p>}
         </div>
         <label className="flex items-center gap-2 text-sm text-content-secondary"><input type="checkbox" checked={form.isActive} onChange={e => updateForm('isActive', e.target.checked)} /> On sale (shown on the purchase page)</label>
         <button id="plan-form-submit" className="hidden" type="submit" />
