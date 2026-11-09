@@ -137,8 +137,22 @@ export interface StudentDeck {
   cardCount: number;
   learnedCount: number;
   starredCount: number;
-  /** Not sent by MC-03 yet (decks belong to the course, not a module) — such decks sit at the course root. */
-  moduleId?: number | null;
+  /** Module the deck belongs to; null means it is in General. */
+  moduleId: number | null;
+}
+
+/** Module descriptor returned with the content scoped to a module or General. */
+export interface StudentModuleDescriptor {
+  moduleId: number | null;
+  title: string;
+  description: string | null;
+}
+
+/** GET /student/courses/{courseId}/modules/{moduleId}/content */
+export interface StudentModuleContent {
+  module: StudentModuleDescriptor;
+  exams: CourseExam[];
+  decks: StudentDeck[];
 }
 
 /** MC-04 CardDto — `status` / `isStarred` are the caller's own progress. */
@@ -236,6 +250,17 @@ export const studentCourseService = {
   /** MC-03 — not paged. */
   async getCourseDecks(courseId: number | string): Promise<StudentDeck[]> {
     const res = await api.get<ApiResponse<StudentDeck[]>>(`/student/courses/${courseId}/decks`);
+    return res.data;
+  },
+
+  /** Fetch summaries already scoped to one module; use `general` for unassigned content. */
+  async getModuleContent(courseId: number | string, moduleId: number | 'general'): Promise<StudentModuleContent> {
+    const res = await api.get<ApiResponse<StudentModuleContent>>(
+      `/student/courses/${courseId}/modules/${moduleId}/content`,
+    );
+    if (!res.data || !Array.isArray(res.data.exams) || !Array.isArray(res.data.decks)) {
+      throw new Error('Module content response is invalid.');
+    }
     return res.data;
   },
 

@@ -106,7 +106,7 @@ export function Select({ label, options, value, onChange, className = '', trigge
     }
   };
 
-  const sizeCls = triggerClassName ?? 'w-full h-9 pl-3 pr-9 rounded-[10px] text-base';
+  const sizeCls = triggerClassName ?? 'w-full h-9 pl-3 pr-10 rounded-[10px] text-base';
 
   return (
     <div className={`flex flex-col gap-1.5 ${className}`}>
@@ -130,7 +130,7 @@ export function Select({ label, options, value, onChange, className = '', trigge
         } ${disabled ? 'cursor-not-allowed bg-surface-alt text-content-subtle' : `cursor-pointer ${selected ? 'text-content' : 'text-content-subtle'}`}`}
       >
         {selected?.label ?? options[0]?.label ?? ''}
-        <Icon.ChevronDown className={`absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-content-subtle pointer-events-none transition-transform ${open ? 'rotate-180' : ''}`} />
+        <Icon.ChevronDown className={`absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-content-subtle pointer-events-none transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {error && <p className="text-xs text-danger">{error}</p>}
 

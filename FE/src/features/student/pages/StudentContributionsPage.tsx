@@ -12,6 +12,7 @@ import { Select } from "@/components/ui/Select";
 import { Tabs } from "@/components/ui/Tabs";
 import { Icon } from "@/assets/icons";
 import { ROUTES } from "@/app/routes";
+import { DiagramAnswer } from "@/features/question/components/DiagramAnswer";
 import { QuestionForm } from "@/features/question/components/QuestionForm";
 import {
   emptyDraft,
@@ -323,13 +324,10 @@ function ContributionDetail({ contributionId }: { contributionId: string }) {
           </div>
           <StatusBadge status={item.status} />
         </div>
-        <div className="grid gap-2 text-sm text-content-subtle sm:grid-cols-2">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-content-subtle">
           <p>Submitted {formatDate(item.createdAt)}</p>
-          <p>
-            {item.reviewedAt
-              ? `Reviewed ${formatDate(item.reviewedAt)}`
-              : "Awaiting review"}
-          </p>
+          <span aria-hidden="true" className="text-content-subtle/60">·</span>
+          <p>{item.reviewedAt ? `Reviewed ${formatDate(item.reviewedAt)}` : "Awaiting review"}</p>
         </div>
         {item.reviewNote && (
           <div className="rounded-xl border border-warning-line bg-warning-light p-4">
@@ -379,6 +377,7 @@ function ContributionDetail({ contributionId }: { contributionId: string }) {
 
 function QuestionPreview({ item }: { item: ContributionDetail }) {
   const questionType = item.questionType ?? "SINGLE_CHOICE";
+  const draft = contributionQuestionDraft(item);
   const answerKey = item.answerKey as {
     pairs?: { left: string; right: string }[];
     blanks?: { index: number; accepted: string[] }[];
@@ -387,7 +386,7 @@ function QuestionPreview({ item }: { item: ContributionDetail }) {
   return (
     <div className="space-y-3 border-t border-line pt-4">
       <p className="text-xs font-semibold uppercase tracking-wide text-content-subtle">
-        {titleCase(questionType.replace(/_/g, " "))}
+        {titleCase(questionType.replace(/_/g, " "))} · {titleCase(item.difficulty ?? "MEDIUM")}
       </p>
       <p className="whitespace-pre-wrap text-sm font-medium text-content">
         {item.content ?? item.questionText ?? item.summary}
@@ -414,9 +413,7 @@ function QuestionPreview({ item }: { item: ContributionDetail }) {
         </div>
       )}
       {questionType === "DIAGRAM" && (
-        <p className="text-sm text-content-subtle">
-          Diagram question attached.
-        </p>
+        <DiagramAnswer q={draft} set={() => undefined} readOnly />
       )}
       {["SINGLE_CHOICE", "MULTIPLE_CHOICE", "TRUE_FALSE"].includes(
         questionType,
@@ -433,6 +430,9 @@ function QuestionPreview({ item }: { item: ContributionDetail }) {
               {option.optionText}
               {option.isCorrect && (
                 <span className="ml-2 text-xs font-semibold">Correct</span>
+              )}
+              {option.explanation && (
+                <p className="mt-1 text-xs opacity-80">{option.explanation}</p>
               )}
             </li>
           ))}
@@ -452,10 +452,8 @@ function QuestionPreview({ item }: { item: ContributionDetail }) {
           ))}
         </ol>
       )}
-      {questionType === "ESSAY" && Boolean(item.essayGradingRubric) && (
-        <p className="text-sm text-content-secondary">
-          Grading rubric provided.
-        </p>
+      {(questionType === "ESSAY" || questionType === "DIAGRAM") && (
+        <RubricPreview criteria={draft.rubric} notes={draft.rubricNotes} questionType={questionType} />
       )}
       {item.explanation && (
         <p className="rounded-lg bg-surface-muted p-3 text-sm text-content-secondary">
@@ -469,6 +467,40 @@ function QuestionPreview({ item }: { item: ContributionDetail }) {
         </p>
       )}
     </div>
+  );
+}
+
+function RubricPreview({
+  criteria,
+  notes,
+  questionType,
+}: {
+  criteria: QuestionDraft["rubric"];
+  notes: string;
+  questionType: string;
+}) {
+  return (
+    <section className="space-y-2 rounded-lg border border-line p-3">
+      <h2 className="text-sm font-semibold text-content">Grading rubric</h2>
+      {criteria.length ? (
+        <ol className="space-y-2">
+          {criteria.map((criterion, index) => (
+            <li key={criterion.key} className="rounded-md bg-surface-muted px-3 py-2 text-sm">
+              <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                <span className="font-medium text-content">{index + 1}. {criterion.name || `Criterion ${index + 1}`}</span>
+                {criterion.weight && <span className="text-xs font-medium text-content-secondary">{criterion.weight} points</span>}
+              </div>
+              {criterion.descriptors && <p className="mt-1 whitespace-pre-wrap text-content-secondary">{criterion.descriptors}</p>}
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p className="text-sm text-content-secondary">
+          {questionType === "DIAGRAM" ? "This diagram is graded without custom rubric criteria." : "No grading rubric details were included."}
+        </p>
+      )}
+      {notes && <p className="whitespace-pre-wrap border-t border-line pt-2 text-sm text-content-secondary"><span className="font-medium text-content">Notes: </span>{notes}</p>}
+    </section>
   );
 }
 
