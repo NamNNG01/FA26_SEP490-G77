@@ -4,6 +4,7 @@ import type { ApiResponse } from '@/auth/authContext';
 export type DiscountType = 'PERCENT' | 'FIXED_AMOUNT';
 export type DiscountValidity = 'ACTIVE' | 'UPCOMING' | 'EXPIRED' | 'EXHAUSTED' | 'INACTIVE';
 export type AppliesTo = 'COURSE' | 'SUBSCRIPTION' | 'ALL';
+export type DiscountAccessType = 'PUBLIC' | 'CLAIM_REQUIRED';
 
 export interface Discount {
   discountId: number;
@@ -15,6 +16,7 @@ export interface Discount {
   maxDiscountAmount?: number | null;
   minOrderAmount?: number | null;
   appliesTo: AppliesTo;
+  accessType: DiscountAccessType;
   usageLimit: number;
   usedCount: number;
   remaining: number;
@@ -37,6 +39,7 @@ export interface DiscountPayload {
   maxDiscountAmount: number | null;
   minOrderAmount: number | null;
   appliesTo: AppliesTo;
+  accessType: DiscountAccessType;
   usageLimit: number;
   startAt: string | null;
   expiredAt: string | null;
@@ -71,7 +74,7 @@ function query(params: Record<string, string | number | boolean | undefined>) {
 }
 
 export const adminDiscountService = {
-  async list(params: { keyword?: string; discountType?: string; isActive?: string; validity?: string; page: number; size: number }) {
+  async list(params: { keyword?: string; discountType?: string; isActive?: string; validity?: string; accessType?: DiscountAccessType | ''; page: number; size: number }) {
     const res = await api.get<ApiResponse<Page<Discount>>>(`/admin/discounts?${query({ ...params, sort: 'createdAt,desc' })}`);
     return res.data;
   },
