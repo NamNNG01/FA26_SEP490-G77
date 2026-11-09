@@ -40,4 +40,5 @@ export const uploadService = {
   uploadCourseThumbnail: (courseId: number | string, file: File) =>
     upload<CourseDetailResponse>(`/manager/courses/${courseId}/thumbnail`, file),
   uploadMedia: (file: File) => upload<UploadedImage>('/manager/uploads', file),
+  uploadStudentAttachment: (file: File) => upload<UploadedImage>('/student/uploads', file),
 };
