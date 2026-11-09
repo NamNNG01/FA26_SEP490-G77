@@ -10,8 +10,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { Spinner } from '@/components/ui/Spinner';
 import { Icon } from '@/assets/icons';
 import { ROUTES, studentExamPath, studentResumeAttemptPath, studentTakeExamPath } from '@/app/routes';
-import { canChooseTakeMode, examModeBehavior } from '../examModes';
-import { TakeModeModal } from '../components/TakeModeModal';
+import { canChooseTakeMode, examModeBehavior, takeAsOf } from '../examModes';
 import { getApiErrorMessage } from '@/utils/apiError';
 import {
   RUBRIC_TYPES,
@@ -313,8 +312,6 @@ export function StudentExamResultPage() {
   const [savedIds, setSavedIds] = useState<Set<number>>(() => new Set());
   /** "Retry wrong questions" (PQ-04) open. */
   const [retrying, setRetrying] = useState(false);
-  /** Retake of a self-made exam: the Exam / Practice choice is open. */
-  const [choosingMode, setChoosingMode] = useState(false);
 
   // Switching attempt: show the skeleton instead of the previous attempt's answers.
   useEffect(() => {
@@ -620,12 +617,12 @@ export function StudentExamResultPage() {
             // "Retry wrong questions" (PQ-04) takes self-made exams only.
             onRetryWrong={practice && canSave && hasWrong ? () => setRetrying(true) : undefined}
             // While an attempt is unfinished SA-01 cannot open a new one: the banner's Continue replaces Retake.
-            // A self-made exam asks how to take it again (Exam or Practice); a course exam just starts.
+            // A self-made exam is taken again the way this attempt was (Exam or Practice); with that choice
+            // unknown (or a course exam) it starts in the exam's own mode.
             onRetake={
               examId && !unfinished
-                ? canChooseTakeMode(result.examMode)
-                  ? () => setChoosingMode(true)
-                  : () => navigate(studentTakeExamPath(examId))
+                ? () =>
+                    navigate(studentTakeExamPath(examId, canChooseTakeMode(result.examMode) ? (takeAsOf(result.attemptId) ?? undefined) : undefined))
                 : undefined
             }
             onBack={
@@ -727,13 +724,6 @@ export function StudentExamResultPage() {
       )}
 
       {retrying && <RetryWrongQuestionsModal result={result} onClose={() => setRetrying(false)} />}
-      {choosingMode && examId && (
-        <TakeModeModal
-          open
-          onClose={() => setChoosingMode(false)}
-          onStart={takeAs => navigate(studentTakeExamPath(examId, takeAs))}
-        />
-      )}
 
       <Modal open={showGrading} onClose={() => setDismissed(true)} title="AI grading" size="sm">
         <GradingScreen
