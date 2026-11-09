@@ -32,10 +32,11 @@ public class AdminDiscountService {
     private final ContestRules contestRules;
 
     @Transactional(readOnly = true)
-    public Page<DiscountItem> list(String keyword, String discountType, Boolean isActive, String validity, int page, int size, String sort) {
+    public Page<DiscountItem> list(String keyword, String discountType, Boolean isActive, String validity, String accessType, int page, int size, String sort) {
         String kw = (keyword != null && !keyword.isBlank()) ? "%" + keyword.trim().toLowerCase() + "%" : null;
         String dt = (discountType != null && !discountType.isBlank()) ? discountType.trim().toUpperCase() : null;
         String val = (validity != null && !validity.isBlank()) ? validity.trim().toUpperCase() : null;
+        String at = (accessType != null && !accessType.isBlank()) ? accessType.trim().toUpperCase() : null;
 
         String[] parts = sort.split(",");
         Sort.Direction dir = parts.length > 1 && "asc".equalsIgnoreCase(parts[1]) ? Sort.Direction.ASC : Sort.Direction.DESC;
@@ -59,6 +60,9 @@ public class AdminDiscountService {
             }
             if (isActive != null) {
                 p = cb.and(p, cb.equal(root.get("isActive"), isActive));
+            }
+            if (at != null) {
+                p = cb.and(p, cb.equal(root.get("accessType"), at));
             }
             return p;
         }, pageable);

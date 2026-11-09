@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
+import { Alert } from '@/components/ui/Alert';
 import { Spinner } from '@/components/ui/Spinner';
 import { Icon } from '@/assets/icons';
 import { ROUTES, studentModulePath, studentPracticeResultPath } from '@/app/routes';
@@ -702,6 +703,7 @@ export function ModulePracticeRunner({ sessionId }: { sessionId: string }) {
       )}
 
       <Modal
+        error={actionError && <Alert type="error" message={actionError} />}
         open={confirmFinish}
         onClose={() => !finishing && setConfirmFinish(false)}
         title="Finish this practice?"
@@ -721,7 +723,6 @@ export function ModulePracticeRunner({ sessionId }: { sessionId: string }) {
           {unanswered} question{unanswered === 1 ? ' is' : 's are'} still unanswered. They are not counted as wrong — you can practice
           them in a new session.
         </p>
-        {actionError && <p className="mt-3 text-sm text-danger">{actionError}</p>}
       </Modal>
     </div>
   );

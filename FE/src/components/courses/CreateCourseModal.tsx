@@ -7,7 +7,8 @@ import { Alert } from '@/components/ui/Alert';
 import { useToast } from '@/components/ui/ToastHost';
 import { Icon } from '@/assets/icons';
 import { api } from '@/services/api';
-import { getApiErrorMessage } from '@/utils/apiError';
+import { apiFieldErrors, getApiErrorMessage } from '@/utils/apiError';
+import { focusFirstInvalidAfter } from '@/utils/focusFirstInvalid';
 import { CourseThumbnailField } from './CourseThumbnailField';
 import { uploadService } from '@/services/upload.service';
 import { useObjectUrl } from '@/utils/useObjectUrl';
@@ -144,10 +145,13 @@ export function CreateCourseModal({
       nextErrors.managerIds = 'Please select at least one course manager.';
     }
 
-    setErrors(nextErrors);
-    if (Object.keys(nextErrors).length > 0) return;
-
     setSubmitError(null);
+    if (Object.keys(nextErrors).length > 0) {
+      focusFirstInvalidAfter(() => setErrors(nextErrors));
+      return;
+    }
+    setErrors({});
+
     setSubmitting(true);
     try {
       const created = await courseService.createCourse({
@@ -172,7 +176,12 @@ export function CreateCourseModal({
     } catch (err: unknown) {
       const message = getApiErrorMessage(err, 'Failed to create course. Please try again.');
       setSubmitError(message);
-      toast.error(message, { title: 'Course creation failed', duration: null });
+      const fields = apiFieldErrors(err);
+      const next: typeof errors = {};
+      for (const key of ['title', 'categoryId', 'price', 'managerIds'] as const) {
+        if (fields[key]) next[key] = fields[key];
+      }
+      if (Object.keys(next).length) focusFirstInvalidAfter(() => setErrors(next));
     } finally {
       setSubmitting(false);
     }
@@ -196,7 +205,9 @@ export function CreateCourseModal({
       open={open}
       onClose={handleClose}
       title="Create New Course"
+      description="Enter course details to set up a new course catalog entry. Newly created courses start as drafts."
       size="lg"
+      error={submitError && <Alert type="error" title="Course creation failed" message={submitError} />}
       footer={
         <>
           <Button variant="outline" onClick={handleClose} disabled={submitting}>
@@ -214,10 +225,6 @@ export function CreateCourseModal({
       }
     >
       <div className="space-y-4">
-        <p className="text-[13px] text-[#6B7280]">
-          Enter course details to set up a new course catalog entry. Newly created courses start as drafts.
-        </p>
-
         {categoryLoadError && (
           <Alert type="error" title="Could not load categories" message={categoryLoadError} />
         )}
@@ -230,7 +237,7 @@ export function CreateCourseModal({
           required
           autoFocus
           value={title}
-          onChange={(e) => setTitle(e.target.value)}
+          onChange={(e) => { setTitle(e.target.value); setErrors((prev) => ({ ...prev, title: undefined })); }}
           error={errors.title}
           placeholder="e.g. Python for Data Science"
         />
@@ -254,6 +261,7 @@ export function CreateCourseModal({
                 <button
                   type="button"
                   disabled={loadingCategories || submitting}
+                  aria-invalid={errors.categoryId ? true : undefined}
                   className={`w-full flex items-center justify-between px-3 py-2 rounded-[10px] border bg-surface text-sm text-left transition-colors ${
                     errors.categoryId
                       ? 'border-red-500 ring-1 ring-red-500'
@@ -283,7 +291,7 @@ export function CreateCourseModal({
             type="number"
             min={0}
             value={price}
-            onChange={(e) => setPrice(e.target.value)}
+            onChange={(e) => { setPrice(e.target.value); setErrors((prev) => ({ ...prev, price: undefined })); }}
             error={errors.price}
             hint="Set 0 for free course"
           />
@@ -306,6 +314,7 @@ export function CreateCourseModal({
               <button
                 type="button"
                 disabled={loadingManagers || submitting}
+                aria-invalid={errors.managerIds ? true : undefined}
                 className={`w-full flex items-center justify-between px-3 py-2 rounded-[10px] border bg-surface text-sm text-left transition-colors ${
                   errors.managerIds
                     ? 'border-red-500 ring-1 ring-red-500'
@@ -372,8 +381,6 @@ export function CreateCourseModal({
             placeholder="Describe the course curriculum, goals, and intended audience…"
           />
         </div>
-
-        {submitError && <p className="text-xs text-content-subtle">Creation failed. See the notification for details.</p>}
       </div>
     </Modal>
   );

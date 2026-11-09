@@ -2,6 +2,7 @@ import { api } from './api';
 import type { ApiResponse } from '@/auth/authContext';
 import type { PageResponse } from './course.service';
 import { examService } from './exam.service';
+import { apiFieldErrors } from '@/utils/apiError';
 
 /**
  * ManagerContestService — contests of the courses the caller manages (Deadline 2, APIs 1-12).
@@ -243,9 +244,7 @@ export function contestErrorIssues(err: unknown): PrizeIssue[] {
 
 /** VALIDATION_FAILED field errors, keyed by field name. */
 export function contestFieldErrors(err: unknown): Record<string, string> {
-  const out: Record<string, string> = {};
-  (errorData(err)?.errors ?? []).forEach(e => { if (e?.field && !out[e.field]) out[e.field] = e.message; });
-  return out;
+  return apiFieldErrors(err);
 }
 
 // ------------------------------------------------------------- calls

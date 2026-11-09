@@ -108,6 +108,22 @@ class DiscountAccessTypeApiTest {
                 .andExpect(jsonPath("$.data.accessType").value("CLAIM_REQUIRED"));
     }
 
+    @Test void testListDiscountsFilterByAccessType() throws Exception {
+        mvc.perform(get("/api/v1/admin/discounts")
+                .param("accessType", "CLAIM_REQUIRED")
+                .with(as(admin)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content").isArray())
+                .andExpect(jsonPath("$.data.content[0].accessType").value("CLAIM_REQUIRED"));
+
+        mvc.perform(get("/api/v1/admin/discounts")
+                .param("accessType", "PUBLIC")
+                .with(as(admin)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content").isArray())
+                .andExpect(jsonPath("$.data.content[0].accessType").value("PUBLIC"));
+    }
+
     @Test void testCreateDiscountWithInvalidAccessTypeFails() throws Exception {
         DiscountWriteRequest req = new DiscountWriteRequest(
                 "BADTYPE", "Bad Type", "Desc", "PERCENT",

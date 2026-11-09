@@ -28,6 +28,9 @@ public interface QuestionService {
 
     QuestionDetailDto updateQuestion(Long id, QuestionUpdateRequest request, User currentUser);
 
+    /** Same rules as {@link #updateQuestion} but also on an ACTIVE / ARCHIVED question: a reported-issue fix. */
+    QuestionDetailDto correctQuestion(Long id, QuestionUpdateRequest request);
+
     void deleteQuestion(Long id, User currentUser);
 
     QuestionDetailDto duplicateQuestion(Long id, User currentUser);

@@ -8,6 +8,8 @@ import { Input } from '@/components/ui/Input';
 import { Alert } from '@/components/ui/Alert';
 import { useToast } from '@/components/ui/ToastHost';
 import { Icon } from '@/assets/icons';
+import { apiFieldErrors } from '@/utils/apiError';
+import { focusFirstInvalidAfter } from '@/utils/focusFirstInvalid';
 import { passwordService, PASSWORD_MIN_LENGTH, PASSWORD_TOO_LONG_MESSAGE, isPasswordTooLong } from '@/services/password.service';
 
 const PASSWORD_TIPS = [
@@ -76,8 +78,12 @@ export function ChangePasswordModal({ open, onClose }: { open: boolean; onClose:
     } else if (confirmPassword !== newPassword) {
       next.confirmPassword = 'Passwords do not match';
     }
-    setErrors(next);
-    return Object.keys(next).length === 0;
+    if (Object.keys(next).length === 0) {
+      setErrors({});
+      return true;
+    }
+    focusFirstInvalidAfter(() => setErrors(next));
+    return false;
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -101,7 +107,12 @@ export function ChangePasswordModal({ open, onClose }: { open: boolean; onClose:
           ? err.message
           : 'Unable to change password. Please try again.';
       setSubmitError(message);
-      toast.error(`Password not changed: ${message}`);
+      const fields = apiFieldErrors(err);
+      const next: FieldErrors = {};
+      for (const key of ['currentPassword', 'newPassword', 'confirmPassword'] as const) {
+        if (fields[key]) next[key] = fields[key];
+      }
+      if (Object.keys(next).length) focusFirstInvalidAfter(() => setErrors(next));
     } finally {
       setSaving(false);
     }
@@ -151,7 +162,7 @@ export function ChangePasswordModal({ open, onClose }: { open: boolean; onClose:
             autoComplete="current-password"
             placeholder="Enter your current password"
             value={currentPassword}
-            onChange={(e) => setCurrentPassword(e.target.value)}
+            onChange={(e) => { setCurrentPassword(e.target.value); setErrors((p) => ({ ...p, currentPassword: undefined })); }}
             error={errors.currentPassword}
             hint="We need your current password to confirm it's really you."
             icon={<Icon.Lock className="w-4 h-4" />}
@@ -163,7 +174,7 @@ export function ChangePasswordModal({ open, onClose }: { open: boolean; onClose:
             autoComplete="new-password"
             placeholder="Enter a new password"
             value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
+            onChange={(e) => { setNewPassword(e.target.value); setErrors((p) => ({ ...p, newPassword: undefined })); }}
             error={errors.newPassword}
             icon={<Icon.Lock className="w-4 h-4" />}
           />
@@ -173,7 +184,7 @@ export function ChangePasswordModal({ open, onClose }: { open: boolean; onClose:
             autoComplete="new-password"
             placeholder="Re-enter the new password"
             value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
+            onChange={(e) => { setConfirmPassword(e.target.value); setErrors((p) => ({ ...p, confirmPassword: undefined })); }}
             error={errors.confirmPassword}
             icon={<Icon.Lock className="w-4 h-4" />}
           />

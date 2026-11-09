@@ -141,7 +141,8 @@ export function ImportPdfModal({ open, onClose, onImported, courseId: pageCourse
   );
 
   return (
-    <Modal open={open} onClose={close} title="Import Questions from PDF or Word" size="md" footer={footer}>
+    <Modal open={open} onClose={close} title="Import Questions from PDF or Word" size="md" footer={footer}
+      error={error && <Alert type="error" title="Import failed" message={error} />}>
       <div className="space-y-4">
         {lockLocation ? (
           <p className="text-xs text-content-subtle">Imported questions will use the exam’s selected course and module.</p>
@@ -215,8 +216,6 @@ export function ImportPdfModal({ open, onClose, onImported, courseId: pageCourse
           disabled={uploading}
         />
         <p className="-mt-2 text-xs text-content-subtle">Used for questions without a DIFFICULTY line.</p>
-
-        {error && <Alert type="error" title="Import failed" message={error} />}
       </div>
     </Modal>
   );

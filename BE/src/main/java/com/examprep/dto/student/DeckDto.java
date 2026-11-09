@@ -7,5 +7,6 @@ public record DeckDto(
         Boolean isPublic,
         Long cardCount,
         Long learnedCount,
-        Long starredCount
+        Long starredCount,
+        Long moduleId
 ) {}

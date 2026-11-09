@@ -29,10 +29,11 @@ public class AdminDiscountController {
             @RequestParam(required = false) String discountType,
             @RequestParam(required = false) Boolean isActive,
             @RequestParam(required = false) String validity,
+            @RequestParam(required = false) String accessType,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(defaultValue = "createdAt,desc") String sort) {
-        return ResponseEntity.ok(ApiResponse.success(PageResponse.of(service.list(keyword, discountType, isActive, validity, page, size, sort))));
+        return ResponseEntity.ok(ApiResponse.success(PageResponse.of(service.list(keyword, discountType, isActive, validity, accessType, page, size, sort))));
     }
 
     @GetMapping("/{id}")

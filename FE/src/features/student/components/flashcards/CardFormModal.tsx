@@ -3,7 +3,9 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { useToast } from '@/components/ui/ToastHost';
+import { Alert } from '@/components/ui/Alert';
 import { getApiErrorMessage } from '@/utils/apiError';
+import { focusFirstInvalidAfter } from '@/utils/focusFirstInvalid';
 import {
   CARD_CODE_MAX,
   CARD_TEXT_MAX,
@@ -60,6 +62,7 @@ export function CardFormModal({
       : blank,
   );
   const [errors, setErrors] = useState<Partial<Record<Field, string>>>({});
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const fields = FIELDS[mode];
 
@@ -73,8 +76,12 @@ export function CardFormModal({
     fields.forEach(f => {
       if (f.required && !values[f.field].trim()) next[f.field] = f.field === 'codeLanguage' ? 'Pick a language.' : 'Required.';
     });
-    setErrors(next);
-    if (Object.keys(next).length > 0) return;
+    setSaveError(null);
+    if (Object.keys(next).length > 0) {
+      focusFirstInvalidAfter(() => setErrors(next));
+      return;
+    }
+    setErrors({});
 
     const payload: CardWriteRequest = {};
     fields.forEach(f => {
@@ -96,7 +103,7 @@ export function CardFormModal({
       onSaved(saved, addAnother);
       if (addAnother) setValues(v => ({ ...blank, codeLanguage: v.codeLanguage }));
     } catch (err) {
-      toast.error(getApiErrorMessage(err, card ? 'Could not update the card.' : 'Could not add the card.'));
+      setSaveError(getApiErrorMessage(err, card ? 'Could not update the card.' : 'Could not add the card.'));
     } finally {
       setSaving(false);
     }
@@ -108,6 +115,7 @@ export function CardFormModal({
       size="lg"
       onClose={saving ? () => {} : onClose}
       title={card ? 'Edit card' : 'Add card'}
+      error={saveError && <Alert type="error" message={saveError} />}
       footer={
         <>
           <Button variant="outline" onClick={onClose} disabled={saving}>
@@ -149,6 +157,7 @@ export function CardFormModal({
                   f.field === 'codeBody' ? 'h-48' : 'h-24'
                 } resize-y ${errors[f.field] ? 'border-danger-solid' : ''}`}
                 value={values[f.field]}
+                aria-invalid={errors[f.field] ? true : undefined}
                 maxLength={f.field === 'codeBody' ? CARD_CODE_MAX : CARD_TEXT_MAX}
                 spellCheck={f.field !== 'codeBody'}
                 onChange={e => set(f.field, e.target.value)}

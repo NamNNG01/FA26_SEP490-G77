@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
+import { Alert } from "@/components/ui/Alert";
+import { focusFirstInvalidAfter } from "@/utils/focusFirstInvalid";
 import { Pagination } from "@/components/ui/Pagination";
 import { Select } from "@/components/ui/Select";
 import { Tabs } from "@/components/ui/Tabs";
@@ -574,7 +576,7 @@ function QuestionContributionModal({
       return;
     }
     if (!isDraftValid(question)) {
-      setShowErrors(true);
+      focusFirstInvalidAfter(() => setShowErrors(true));
       return;
     }
     if (question.type === "DIAGRAM" && question.rubric.length === 0) {
@@ -609,6 +611,7 @@ function QuestionContributionModal({
     <Modal
       open={open}
       onClose={onClose}
+      error={error && <Alert type="error" message={error} />}
       title={
         contributionId ? "Edit and resubmit question" : "Contribute a question"
       }
@@ -653,11 +656,6 @@ function QuestionContributionModal({
         {!courses.length && (
           <p className="text-sm text-warning">
             An active course enrollment is needed to contribute a question.
-          </p>
-        )}
-        {error && (
-          <p role="alert" className="text-sm text-danger">
-            {error}
           </p>
         )}
       </form>
@@ -723,6 +721,7 @@ function TipContributionModal({
       open={open}
       onClose={onClose}
       title="Share a learning tip"
+      error={error && <Alert type="error" message={error} />}
       size="lg"
       footer={
         <>
@@ -774,11 +773,6 @@ function TipContributionModal({
         {!courses.length && (
           <p className="text-sm text-warning">
             An active course enrollment is needed to share a tip.
-          </p>
-        )}
-        {error && (
-          <p role="alert" className="text-sm text-danger">
-            {error}
           </p>
         )}
       </form>
