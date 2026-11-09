@@ -350,7 +350,18 @@ public class QuestionServiceImpl implements QuestionService {
         if ("ACTIVE".equalsIgnoreCase(q.getStatus()) || "ARCHIVED".equalsIgnoreCase(q.getStatus())) {
             throw new ResourceConflictException("Cannot update question when status is ACTIVE or ARCHIVED");
         }
+        return applyUpdate(q, req);
+    }
 
+    @Override
+    @Transactional
+    public QuestionDetailDto correctQuestion(Long id, QuestionUpdateRequest req) {
+        Question q = questionRepository.findActiveById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Question not found"));
+        return applyUpdate(q, req);
+    }
+
+    private QuestionDetailDto applyUpdate(Question q, QuestionUpdateRequest req) {
         if (req.getModuleId() != null) {
             com.examprep.entities.Module module = moduleRepository.findById(req.getModuleId())
                     .orElseThrow(() -> new ResourceNotFoundException("Module not found"));
@@ -577,7 +588,7 @@ public class QuestionServiceImpl implements QuestionService {
             updatedOptions = existingOptions;
         }
 
-        if (isOrdering) {
+        if (isOrdering && req.getOptions() != null) {
             Map<String, Long> keyToIdMap = new HashMap<>();
             for (int i = 0; i < req.getOptions().size(); i++) {
                 AnswerOptionDto dto = req.getOptions().get(i);
