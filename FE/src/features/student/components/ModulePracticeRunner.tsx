@@ -50,7 +50,7 @@ const SAVE_RETRY_MS = 1000;
  * answered (a rubric answer still grading, or whose grading failed, counts as answered), then
  * "Continue" opens the next one. Every question is answered once (MP-05) and locked.
  * Answers are saved in the background with retries: auto-graded questions are checked at once
- * against MP-04's `correctAnswer`, and MP-05's verdict wins when it arrives; an answer that cannot be
+ * against MP-04's `correctAnswer`, whose key shows beside the answer at once, and MP-05's verdict wins when it arrives; an answer that cannot be
  * saved is reopened with a toast. "Explain" (MP-09) is only offered in a part's results.
  * Single choice / true-false are submitted on the pick. Essay, code and diagram answers are graded
  * by AI in the background; the screen polls MP-06 until they are.
@@ -486,6 +486,8 @@ export function ModulePracticeRunner({ sessionId }: { sessionId: string }) {
   const value = editing ? (drafts[summary.sessionQuestionId] ?? null) : (latest?.response ?? null);
   const progress = question ? checkProgress(question, value) : null;
   const answerVerdict = verdictOf(summary.questionType, latest);
+  // Practice: once answered, the key shows beside the answer (rubric types have none).
+  const reveal = !editing && view ? toAnswerReveal(view) : null;
   // Only an answer with no key to check against waits on MP-05; every other one is saved behind the scenes.
   const busy = checking.has(summary.sessionQuestionId);
   const questionMedia = imagesOf(view);
@@ -641,8 +643,9 @@ export function ModulePracticeRunner({ sessionId }: { sessionId: string }) {
                   ))}
                 </div>
 
-                {/* A submitted answer is shown read-only. */}
-                <fieldset disabled={!editing || busy} className="min-w-0">
+                {/* A submitted answer is shown read-only: a revealed input locks itself (its "Show the
+                    correct order" stays clickable), any other one is disabled by the fieldset. */}
+                <fieldset disabled={(!editing && !reveal) || busy} className="min-w-0">
                   <QuestionAnswerInput
                     key={summary.sessionQuestionId}
                     question={question}
@@ -651,6 +654,7 @@ export function ModulePracticeRunner({ sessionId }: { sessionId: string }) {
                     roomy={isRubric}
                     practice
                     verdict={answerVerdict}
+                    reveal={reveal}
                   />
                 </fieldset>
 
@@ -666,7 +670,7 @@ export function ModulePracticeRunner({ sessionId }: { sessionId: string }) {
                   </div>
                 )}
 
-                {/* Right / wrong sits on the answer; the box below is left for scores, grading and failures.
+                {/* Right / wrong and the key sit on the answer; the box below is left for scores, grading and failures.
                     The explanation waits for the part's results. */}
                 {!editing && latest && answerVerdict == null && <PracticeVerdict attempt={latest} questionType={summary.questionType} />}
               </>
