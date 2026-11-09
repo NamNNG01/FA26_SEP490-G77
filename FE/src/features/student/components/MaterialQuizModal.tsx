@@ -12,6 +12,7 @@ import { ROUTES, studentResumeAttemptPath } from '@/app/routes';
 import { getApiErrorMessage } from '@/utils/apiError';
 import type { MyCourse } from '@/services/studentCourse.service';
 import { getAiError, type AiError } from '@/services/studentAi.service';
+import { PRACTICE_MINUTES } from '@/services/studentPracticeExam.service';
 import { rememberTakeAs, takeAsOf, type TakeAs } from '../examModes';
 import { TakeModePicker } from './TakeModeModal';
 import {
@@ -86,12 +87,14 @@ export function MaterialQuizModal({
   const [dragOver, setDragOver] = useState(false);
   const [title, setTitle] = useState('');
   const [documentId, setDocumentId] = useState<number | null>(null);
-  const [questionCount, setQuestionCount] = useState(String(MATERIAL_QUESTIONS.default));
+  const [questionCount, setQuestionCount] = useState('');
   const [difficulty, setDifficulty] = useState<MaterialDifficulty>('MEDIUM');
   const [quizTitle, setQuizTitle] = useState('');
   const [aiContext, setAiContext] = useState('');
-  /** Take the quiz as an Exam (timed by the BE: max(10, question count) minutes) or as Practice. */
+  /** Take the quiz as an Exam (timed) or as Practice. */
   const [takeAs, setTakeAs] = useState<TakeAs>('PRACTICE');
+  /** Exam only: the time limit typed in; null follows the question count (the BE's own default). */
+  const [minutes, setMinutes] = useState<string | null>(null);
   const [touched, setTouched] = useState(false);
 
   const [materials, setMaterials] = useState<MaterialItem[]>([]);
@@ -138,12 +141,12 @@ export function MaterialQuizModal({
     pickedFile.current = null;
     // A material picked on My Materials stays picked, with its course or (none given) with no course.
     setDocumentId(initialCourseId == null || preset != null ? initialDocumentId : null);
-    setQuestionCount(String(MATERIAL_QUESTIONS.default));
+    setQuestionCount('');
     setDifficulty('MEDIUM');
     setQuizTitle('');
     setAiContext('');
     setTakeAs('PRACTICE');
-    setTakeAs('PRACTICE');
+    setMinutes(null);
     setTouched(false);
     setPhase('form');
     setBusy(false);
@@ -265,6 +268,9 @@ export function MaterialQuizModal({
   };
 
   const countNum = Number(questionCount);
+  // Until edited, the time limit follows the question count: one minute a question, ten at least.
+  const minutesValue = minutes ?? String(Math.max(10, Number.isInteger(countNum) ? countNum : 0));
+  const minutesNum = Number(minutesValue);
   const errors = {
     quizTitle: quizTitle.trim() ? undefined : 'Enter a name for the quiz.',
     material: documentId != null || file ? undefined : 'Upload a PDF or DOCX file, or pick one of your materials.',
@@ -272,8 +278,13 @@ export function MaterialQuizModal({
       Number.isInteger(countNum) && countNum >= MATERIAL_QUESTIONS.min && countNum <= MATERIAL_QUESTIONS.max
         ? undefined
         : `Enter ${MATERIAL_QUESTIONS.min} – ${MATERIAL_QUESTIONS.max} questions.`,
+    minutes:
+      takeAs !== 'EXAM' ||
+      (Number.isInteger(minutesNum) && minutesNum >= PRACTICE_MINUTES.min && minutesNum <= PRACTICE_MINUTES.max)
+        ? undefined
+        : `Enter ${PRACTICE_MINUTES.min} – ${PRACTICE_MINUTES.max} minutes.`,
   };
-  const invalid = Boolean(errors.quizTitle || errors.material || errors.count);
+  const invalid = Boolean(errors.quizTitle || errors.material || errors.count || errors.minutes);
 
   const hasCourse = courseId !== NO_COURSE;
   const selected = materials.find(m => m.documentId === documentId) ?? null;
@@ -327,6 +338,7 @@ export function MaterialQuizModal({
         courseId: hasCourse ? Number(courseId) : undefined,
         title: quizTitle.trim(),
         context: aiContext.trim() || undefined,
+        durationMinutes: takeAs === 'EXAM' ? minutesNum : undefined,
       });
       track(accepted.jobId, accepted.questionCount);
     } catch (err) {
@@ -601,7 +613,6 @@ export function MaterialQuizModal({
                     max={MATERIAL_QUESTIONS.max}
                     value={questionCount}
                     onChange={e => setQuestionCount(e.target.value)}
-                    hint={`${MATERIAL_QUESTIONS.min} – ${MATERIAL_QUESTIONS.max} multiple-choice questions`}
                     error={touched ? errors.count : undefined}
                   />
                   <Select
@@ -616,10 +627,16 @@ export function MaterialQuizModal({
                   <span className="block text-sm font-medium text-content-secondary">Take as</span>
                   <TakeModePicker value={takeAs} onChange={setTakeAs} />
                   {takeAs === 'EXAM' && (
-                    // The BE times a material quiz at one minute a question, ten at least.
-                    <p className="text-xs text-content-subtle">
-                      Time limit: {Math.max(10, Number(questionCount) || 0)} minutes.
-                    </p>
+                    <Input
+                      label="Duration (minutes)"
+                      type="number"
+                      inputMode="numeric"
+                      min={PRACTICE_MINUTES.min}
+                      max={PRACTICE_MINUTES.max}
+                      value={minutesValue}
+                      onChange={e => setMinutes(e.target.value)}
+                      error={touched ? errors.minutes : undefined}
+                    />
                   )}
                 </div>
 
