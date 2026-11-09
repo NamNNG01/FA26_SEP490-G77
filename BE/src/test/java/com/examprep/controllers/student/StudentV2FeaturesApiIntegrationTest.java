@@ -103,7 +103,7 @@ class StudentV2FeaturesApiIntegrationTest {
         Long attemptId = json.readTree(mvc.perform(post("/api/v1/student/questions/review-session")
                 .with(as(student))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"type\":\"bookmarked\",\"size\":1}"))
+                .content("{\"courseId\":" + course.getCourseId() + ",\"type\":\"bookmarked\",\"size\":1}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.attemptId").exists())
                 .andReturn().getResponse().getContentAsString()).path("data").path("attemptId").asLong();
@@ -111,7 +111,7 @@ class StudentV2FeaturesApiIntegrationTest {
         mvc.perform(get("/api/v1/student/attempts/" + attemptId)
                 .with(as(student)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.examMode").value("REVIEW"));
+                .andExpect(jsonPath("$.data.examMode").value("PRACTICE_EXAM"));
 
         mvc.perform(post("/api/v1/student/attempts/" + attemptId + "/submit")
                 .with(as(student)))
@@ -121,7 +121,7 @@ class StudentV2FeaturesApiIntegrationTest {
         mvc.perform(get("/api/v1/student/attempts/" + attemptId + "/result")
                 .with(as(student)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.examMode").value("REVIEW"));
+                .andExpect(jsonPath("$.data.examMode").value("PRACTICE_EXAM"));
 
         mvc.perform(post("/api/v1/student/attempts/" + attemptId + "/review-acknowledged")
                 .with(as(student)))

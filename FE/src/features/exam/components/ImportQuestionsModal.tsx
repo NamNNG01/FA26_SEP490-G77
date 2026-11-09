@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
+import { Alert } from '@/components/ui/Alert';
 import { Icon } from '@/assets/icons';
 import { useToast } from '@/components/ui/ToastHost';
 import { examService, type ImportExamResponse } from '@/services/exam.service';
@@ -97,11 +98,11 @@ export function ImportQuestionsModal({
     } catch (err: unknown) {
       const errorObj = err as { response?: { status?: number; data?: { message?: string } } };
       if (errorObj?.response?.status === 409) {
-        toast.error('The exam is currently published. Please unpublish the exam first before importing questions.', { title: 'Could not import questions', duration: null });
+        setErrorMsg('The exam is currently published. Please unpublish the exam first before importing questions.');
       } else if (errorObj?.response?.status === 400) {
-        toast.error(errorObj.response.data?.message || MSG12, { title: 'Could not import questions', duration: null });
+        setErrorMsg(errorObj.response.data?.message || MSG12);
       } else {
-        toast.error(errorObj?.response?.data?.message || 'Failed to import questions.', { title: 'Could not import questions', duration: null });
+        setErrorMsg(errorObj?.response?.data?.message || 'Failed to import questions.');
       }
     } finally {
       setUploading(false);
@@ -114,6 +115,7 @@ export function ImportQuestionsModal({
       onClose={handleClose}
       title="Import Questions from Document"
       size="md"
+      error={!result && errorMsg && <Alert type="error" title="Could not import questions" message={errorMsg} />}
       footer={
         <div className="flex items-center justify-end gap-2 w-full">
           {result ? (
@@ -163,12 +165,6 @@ export function ImportQuestionsModal({
           </div>
         ) : (
           <>
-            {errorMsg && (
-              <div className="p-3 text-xs text-danger bg-danger-light border border-danger-line rounded-[8px]">
-                {errorMsg}
-              </div>
-            )}
-
             <div
               onClick={() => fileInputRef.current?.click()}
               className="border-2 border-dashed border-line hover:border-brand-ink rounded-[12px] p-6 text-center cursor-pointer transition-colors bg-surface-muted/30 hover:bg-primary-light/10"

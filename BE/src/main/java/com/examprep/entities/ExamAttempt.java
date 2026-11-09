@@ -60,4 +60,7 @@ public class ExamAttempt implements Serializable {
     @Builder.Default
     @Column(name = "mode", length = 30)
     private String mode = "EXAM";
+
+    @Column(name = "take_as", length = 20)
+    private String takeAs;
 }

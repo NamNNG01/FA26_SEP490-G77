@@ -159,9 +159,7 @@ public final class ExamRequests {
         private Long moduleId;
         @NotNull @Min(1) @Max(600)
         private Integer durationMinutes;
-        @NotNull
-        private Boolean isPractice;
-        /** EXAM (default) or CONTEST; the other exam modes are system-generated. */
+        /** EXAM (course exam, default) or CONTEST; the other exam modes are students' own exams. */
         @Pattern(regexp="EXAM|CONTEST")
         private String mode;
         @NotNull @Pattern(regexp="STATIC|RANDOM|MIXED")
@@ -204,7 +202,6 @@ public final class ExamRequests {
         private Long moduleId;
         @Min(1) @Max(600)
         private Integer durationMinutes;
-        private Boolean isPractice;
         @Pattern(regexp="EXAM|CONTEST")
         private String mode;
         @Pattern(regexp="STATIC|RANDOM|MIXED")

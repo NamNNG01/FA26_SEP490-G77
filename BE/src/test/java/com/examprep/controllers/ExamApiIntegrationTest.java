@@ -458,19 +458,15 @@ class ExamApiIntegrationTest {
                 .andExpect(jsonPath("$.data.maxAttempts").doesNotExist());
     }
 
-    @Test void contestModeIsSavedListedAndCannotBePractice() throws Exception {
+    @Test void contestModeIsSavedAndListed() throws Exception {
         Map<String,Object> payload = create();
-        payload.put("mode", "CONTEST");
-        payload.put("isPractice", true);
-        submit(payload).andExpect(status().isBadRequest());
         payload.put("mode", "PRACTICE");
-        payload.put("isPractice", false);
         submit(payload).andExpect(status().isBadRequest());
 
         payload.put("mode", "CONTEST");
         long id = data(submit(payload).andExpect(status().isCreated()).andExpect(jsonPath("$.data.mode").value("CONTEST"))).path("examId").asLong();
-        call(manager, put("/api/v1/manager/exams/" + id).contentType(MediaType.APPLICATION_JSON).content("{\"isPractice\":true}"))
-                .andExpect(status().isBadRequest());
+        em.flush(); em.clear();
+        assertEquals("CONTEST", em.find(Exam.class, id).getMode());
         call(manager, get("/api/v1/manager/exams")).andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.content[?(@.examId == " + id + ")].mode").value("CONTEST"));
         call(manager, put("/api/v1/manager/exams/" + id).contentType(MediaType.APPLICATION_JSON).content("{\"mode\":\"EXAM\"}"))

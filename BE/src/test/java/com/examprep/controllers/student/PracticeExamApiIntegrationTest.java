@@ -128,10 +128,28 @@ class PracticeExamApiIntegrationTest {
         Module foreignModule = f.module(foreign, "Other");
         create(student, "{" + c + ",\"questionCount\":5,\"durationMinutes\":10,\"categoryIds\":[" + foreignModule.getModuleId() + "]}")
                 .andExpect(status().isBadRequest());
+        // EXAM mode (default) without durationMinutes → 400
+        create(student, "{" + c + ",\"questionCount\":5}").andExpect(status().isBadRequest());
+        create(student, "{" + c + ",\"questionCount\":5,\"mode\":\"EXAM\"}").andExpect(status().isBadRequest());
+        // PRACTICE mode without durationMinutes → 201 (duration is optional)
+        create(student, "{" + c + ",\"questionCount\":5,\"mode\":\"PRACTICE\"}").andExpect(status().isCreated());
     }
 
     @Test void notEnrolled403() throws Exception {
         create(other, "{\"courseId\":" + course.getCourseId() + ",\"questionCount\":5,\"durationMinutes\":10}").andExpect(status().isForbidden());
+    }
+
+    @Test void takeModeIsSavedAsTheExamMode() throws Exception {
+        String body = "{\"courseId\":" + course.getCourseId() + ",\"questionCount\":5,\"durationMinutes\":30,\"mode\":";
+        long asExam = data(create(student, body + "\"EXAM\"}").andExpect(status().isCreated())).path("examId").asLong();
+        long asPractice = data(create(student, body + "\"PRACTICE\"}").andExpect(status().isCreated())).path("examId").asLong();
+        create(student, body + "\"PRACTICE_EXAM\"}").andExpect(status().isBadRequest());
+        assertEquals("PRACTICE_EXAM", em.find(Exam.class, asExam).getMode());
+        Exam practice = em.find(Exam.class, asPractice);
+        assertEquals("PRACTICE", practice.getMode());
+        assertNotNull(practice.getPracticeConfig());
+        mvc.perform(get("/api/v1/student/practice-exams").with(as(student))).andExpect(jsonPath("$.data.totalElements").value(2));
+        mvc.perform(delete("/api/v1/student/practice-exams/" + asPractice).with(as(student))).andExpect(status().isOk());
     }
 
     @Test void listShowsBestScoreAndCountAndDeleteKeepsAttempts() throws Exception {

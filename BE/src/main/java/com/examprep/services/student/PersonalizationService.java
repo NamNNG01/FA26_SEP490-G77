@@ -196,7 +196,7 @@ public class PersonalizationService {
                 AiPersonalizationJob job = jobs.findById(jobId).orElse(null);
                 if (job == null || !"PROCESSING".equals(job.getStatus())) return; // swept meanwhile: already refunded
                 Exam exam = practice.createGeneratedExam(work.userId(), work.courseId(), work.title(), "SMART_PRACTICE",
-                        work.durationMinutes(), chosen.stream().map(QuestionCandidate::questionId).toList());
+                        work.durationMinutes(), chosen.stream().map(QuestionCandidate::questionId).toList(), null);
                 exam.setAiJobId(jobId);
                 ObjectNode practiceConfig = json.createObjectNode().put("examType", "QUIZ").put("questionCount", chosen.size()).put("difficulty", estimatedDifficulty(chosen));
                 practiceConfig.putArray("moduleIds");

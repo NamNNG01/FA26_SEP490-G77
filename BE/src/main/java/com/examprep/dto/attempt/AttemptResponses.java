@@ -12,7 +12,9 @@ import java.util.Map;
  * Response bodies of the student attempt APIs (spec 6.1 SA-01 – 6.5 SA-05, 5.2 SA-06, SA-Practice check).
  *
  * <p>Nothing here ever carries {@code key_snapshot}, {@code answer_key}, the original rubric or a
- * sample drawio file: those stay server-side until the attempt is graded (spec 0.3 rules 4-5).</p>
+ * sample drawio file: those stay server-side until the attempt is graded (spec 0.3 rules 4-5).
+ * Exception: a practice attempt's paper carries the key of its auto-graded questions
+ * ({@link PracticeKey}), since practice reveals each answer as soon as it is given.</p>
  */
 public final class AttemptResponses {
     private AttemptResponses() {}
@@ -30,7 +32,8 @@ public final class AttemptResponses {
             List<Question> questions,
             List<Answer> answers,
             String examMode,
-            Long quizJobId) {}
+            Long quizJobId,
+            String takeAs) {}
 
     public record Question(
             Long questionId,
@@ -42,7 +45,25 @@ public final class AttemptResponses {
             BigDecimal maxPoints,
             AnswerSpace answerSpace,
             // Always present, even for a standalone question: the spec promises group: {...} | null.
-            @JsonInclude(JsonInclude.Include.ALWAYS) Group group) {}
+            @JsonInclude(JsonInclude.Include.ALWAYS) Group group,
+            /** Practice modes only, auto-graded types only: the answer, so the client reveals it at once. */
+            @JsonInclude(JsonInclude.Include.NON_NULL) PracticeKey key) {
+        public Question(Long questionId, Integer orderIndex, String questionType, String content,
+                        List<Option> options, Matching matching, BigDecimal maxPoints,
+                        AnswerSpace answerSpace, Group group) {
+            this(questionId, orderIndex, questionType, content, options, matching, maxPoints, answerSpace, group, null);
+        }
+    }
+
+    /**
+     * The answer of a practice question, sent with the paper so the client shows the check without
+     * waiting for SA-Practice check (which still stores and locks it). Same fields as {@link CheckResult}.
+     * Never sent for EXAM or CONTEST attempts.
+     */
+    public record PracticeKey(
+            List<Long> correctOptionIds,
+            CorrectAnswer correctAnswer,
+            String explanation) {}
 
     public record Option(Long optionId, String optionText, Boolean isCorrectAnswer) {}
 
@@ -84,7 +105,8 @@ public final class AttemptResponses {
             BigDecimal pendingPoints,
             BigDecimal maxScore,
             Boolean autoSubmitted,
-            Instant submittedAt) {}
+            Instant submittedAt,
+            String takeAs) {}
 
     /** SA-05 */
     public record Result(

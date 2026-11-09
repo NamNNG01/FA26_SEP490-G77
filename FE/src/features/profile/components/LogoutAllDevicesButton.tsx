@@ -70,6 +70,7 @@ export function LogoutAllDevicesButton({ className = '' }: { className?: string 
         onClose={closeConfirm}
         title="Logout from All Devices"
         size="sm"
+        error={error && <Alert type="error" title="Action failed" message={error} />}
         footer={
           <>
             <Button variant="outline" onClick={closeConfirm} disabled={loading}>
@@ -85,11 +86,6 @@ export function LogoutAllDevicesButton({ className = '' }: { className?: string 
           This will immediately sign you out from every device where you are currently logged in,
           including this one.
         </p>
-        {error && (
-          <div className="mt-4">
-            <Alert type="error" title="Action failed" message={error} />
-          </div>
-        )}
       </Modal>
     </>
   );

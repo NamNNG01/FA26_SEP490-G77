@@ -17,6 +17,7 @@ public final class AdminDiscountDtos {
             String discountType,
             BigDecimal value,
             String appliesTo,
+            String accessType,
             Integer usageLimit,
             Integer usedCount,
             Long remaining,
@@ -54,6 +55,7 @@ public final class AdminDiscountDtos {
             BigDecimal minOrderAmount,
             BigDecimal maxDiscountAmount,
             String appliesTo,
+            String accessType,
             Integer usageLimit,
             Integer usedCount,
             Long remaining,
@@ -76,11 +78,29 @@ public final class AdminDiscountDtos {
             @DecimalMin("0.01") BigDecimal maxDiscountAmount,
             @DecimalMin("0.00") BigDecimal minOrderAmount,
             @NotBlank String appliesTo, // COURSE, SUBSCRIPTION, ALL
+            String accessType, // PUBLIC, CLAIM_REQUIRED
             @NotNull @Min(1) Integer usageLimit,
             Instant startAt,
             Instant expiredAt,
             @NotNull Boolean isActive
-    ) {}
+    ) {
+        public DiscountWriteRequest(
+                String code,
+                String name,
+                String description,
+                String discountType,
+                BigDecimal value,
+                BigDecimal maxDiscountAmount,
+                BigDecimal minOrderAmount,
+                String appliesTo,
+                Integer usageLimit,
+                Instant startAt,
+                Instant expiredAt,
+                Boolean isActive
+        ) {
+            this(code, name, description, discountType, value, maxDiscountAmount, minOrderAmount, appliesTo, "PUBLIC", usageLimit, startAt, expiredAt, isActive);
+        }
+    }
 
     public record StatusUpdateRequest(
             @NotNull Boolean isActive

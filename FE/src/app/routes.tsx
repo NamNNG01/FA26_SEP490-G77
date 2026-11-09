@@ -153,17 +153,13 @@ export function studentExamPath(examId: number | string): string {
   return `${ROUTES.studentExams}/${examId}`;
 }
 
-/** Take-exam screen, starting (or resuming) an attempt — e.g. '/student/exam?examId=12'. */
-export function studentTakeExamPath(examId: number | string): string {
-  return `${ROUTES.studentExam}?examId=${encodeURIComponent(String(examId))}`;
-}
-
 /**
- * Take-exam screen for a practice exam (PQ-01 / AI-01) — e.g. '/student/exam?examId=12&practice=1'.
- * `practice=1` turns on "Check answer" per question.
+ * Take-exam screen, starting (or resuming) an attempt — e.g. '/student/exam?examId=12'.
+ * `takeAs` (self-made exams only, see examModes.ts) → '&as=exam' or '&as=practice'.
  */
-export function studentTakePracticePath(examId: number | string): string {
-  return `${studentTakeExamPath(examId)}&practice=1`;
+export function studentTakeExamPath(examId: number | string, takeAs?: "EXAM" | "PRACTICE"): string {
+  const as = takeAs ? `&as=${takeAs.toLowerCase()}` : "";
+  return `${ROUTES.studentExam}?examId=${encodeURIComponent(String(examId))}${as}`;
 }
 
 /**
@@ -194,28 +190,22 @@ export function studentResumeAttemptPath(attemptId: number | string): string {
 
 /**
  * Attempt review of an exam, newest submitted attempt preselected — e.g. '/student/exam-result?examId=12'.
- * `practice` adds `&practice=1`: the result then shows no score (SA-05 does not tell the exam mode).
+ * Exam or practice is read from the attempt's examMode, not from the URL.
  */
-export function studentExamAttemptsPath(
-  examId: number | string,
-  practice = false,
-): string {
-  return `${ROUTES.studentExamResult}?examId=${encodeURIComponent(String(examId))}${practice ? "&practice=1" : ""}`;
+export function studentExamAttemptsPath(examId: number | string): string {
+  return `${ROUTES.studentExamResult}?examId=${encodeURIComponent(String(examId))}`;
 }
 
 /**
  * Result of one submitted attempt — e.g. '/student/exam-result?attemptId=7&examId=12'.
  * `examId` is optional: SA-05 does not return it, and the result page needs it for "Retake".
- * `practice` adds `&practice=1`, as for studentExamAttemptsPath.
  */
 export function studentExamResultPath(
   attemptId: number | string,
   examId?: number | string,
-  practice = false,
 ): string {
   const qs = new URLSearchParams({ attemptId: String(attemptId) });
   if (examId != null) qs.set("examId", String(examId));
-  if (practice) qs.set("practice", "1");
   return `${ROUTES.studentExamResult}?${qs}`;
 }
 

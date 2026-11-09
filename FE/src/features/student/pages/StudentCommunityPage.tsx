@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router';
+import { Alert } from '@/components/ui/Alert';
+import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Checkbox } from '@/components/ui/Checkbox';
@@ -37,6 +39,8 @@ function DiscussionList() {
   const [error, setError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
   const [createOpen, setCreateOpen] = useState(false);
+  const [votingIds, setVotingIds] = useState<Set<number>>(new Set());
+  const [voteError, setVoteError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -63,6 +67,21 @@ function DiscussionList() {
 
   const courseOptions = useMemo(() => [{ label: 'All courses', value: '' }, ...courses.map(course => ({ label: course.title, value: String(course.courseId) }))], [courses]);
   const chooseTab = (value: string) => { setTab(value); setPage(0); };
+  const toggleUpvote = async (discussionId: number) => {
+    if (votingIds.has(discussionId)) return;
+    setVotingIds(current => new Set(current).add(discussionId));
+    setVoteError(null);
+    try {
+      const result = await studentCommunityService.toggleUpvote(discussionId);
+      setItems(current => current.map(item => item.discussionId === discussionId
+        ? { ...item, upvoteCount: result.upvoteCount, isUpvoted: result.isUpvoted }
+        : item));
+    } catch (err) {
+      setVoteError(getApiErrorMessage(err, 'Could not update this upvote.'));
+    } finally {
+      setVotingIds(current => { const next = new Set(current); next.delete(discussionId); return next; });
+    }
+  };
 
   return <div className={`${STUDENT_PAGE_CLASS} space-y-6`}>
     <PageTitle title="Community" subtitle="Ask questions, share tips, and learn with your course community." action={<Button icon={<Icon.Plus className="h-4 w-4" />} onClick={() => setCreateOpen(true)}>Create post</Button>} />
@@ -76,14 +95,14 @@ function DiscussionList() {
     </div>
     {error ? <LoadError message={error} onRetry={() => setReload(value => value + 1)} /> : loading ? <div className="card p-8 text-sm text-content-subtle">Loading posts…</div> : items.length === 0 ?
       <div className="card"><EmptyState icon={tab === 'Tips' ? <Icon.Lightbulb className="h-7 w-7" /> : <Icon.Book className="h-7 w-7" />} title={tab === 'Tips' ? 'No tips yet' : 'No discussions found'} message={tab === 'Tips' ? 'Helpful tips from students will appear here.' : 'Start a discussion with your course community.'} action={<Button onClick={() => setCreateOpen(true)}>Create post</Button>} /></div> :
-      <div className="space-y-3">{items.map(item => <DiscussionCard key={item.discussionId} item={item} onOpen={() => navigate(`${ROUTES.studentDiscussions}/${item.discussionId}`)} />)}
+      <div className="space-y-3">{voteError && <Alert type="error" message={voteError} />}{items.map(item => <DiscussionCard key={item.discussionId} item={item} voting={votingIds.has(item.discussionId)} onUpvote={() => void toggleUpvote(item.discussionId)} onOpen={() => navigate(`${ROUTES.studentDiscussions}/${item.discussionId}`)} />)}
         <div className="card"><Pagination page={page + 1} total={total} perPage={PAGE_SIZE} onChange={value => setPage(value - 1)} unit={tab.toLowerCase()} /></div>
       </div>}
     <CreateDiscussionModal open={createOpen} courses={courses} defaultTag={tab === 'Tips' ? 'tip' : 'question'} onClose={() => setCreateOpen(false)} onCreated={item => { setCreateOpen(false); navigate(`${ROUTES.studentDiscussions}/${item.discussionId}`); }} />
   </div>;
 }
 
-function DiscussionCard({ item, onOpen }: { item: DiscussionItem; onOpen: () => void }) {
+function DiscussionCard({ item, onOpen, onUpvote, voting }: { item: DiscussionItem; onOpen: () => void; onUpvote: () => void; voting: boolean }) {
   return <article className="card p-4 sm:p-5">
     <div className="flex flex-wrap items-start gap-3">
       <div className="min-w-0 flex-1">
@@ -95,12 +114,17 @@ function DiscussionCard({ item, onOpen }: { item: DiscussionItem; onOpen: () => 
         </div>
         <button type="button" onClick={onOpen} className="text-left text-base font-semibold leading-snug text-content hover:text-primary hover:underline">{item.title}</button>
         <p className="mt-1 line-clamp-2 whitespace-pre-line text-sm text-content-soft">{item.excerpt}</p>
-        <p className="mt-3 text-xs text-content-subtle">{item.author.displayName} · {formatDate(item.createdAt)}</p>
+        <div className="mt-3 flex items-center gap-2.5">
+          <Avatar name={item.author.displayName} src={authorAvatar(item.author)} size="sm" />
+          <p className="text-xs text-content-subtle">{item.author.displayName} · {formatDate(item.createdAt)}</p>
+        </div>
       </div>
       <Button variant="outline" size="sm" onClick={onOpen}>Open</Button>
     </div>
     <div className="mt-4 flex flex-wrap gap-4 border-t border-line pt-3 text-xs text-content-secondary">
-      <span className="inline-flex items-center gap-1.5"><Icon.Star className="h-4 w-4" />{item.upvoteCount} upvotes</span>
+      <button type="button" aria-pressed={item.isUpvoted} aria-label={`${item.isUpvoted ? 'Remove upvote' : 'Upvote'} this discussion. ${item.upvoteCount} upvotes`} disabled={voting} onClick={onUpvote} className={`inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 transition-colors disabled:cursor-wait disabled:opacity-60 ${item.isUpvoted ? 'font-medium text-amber-600 hover:bg-amber-50' : 'text-content-secondary hover:bg-surface-hover hover:text-amber-600'}`}>
+        <Icon.Star className={`h-4 w-4 ${item.isUpvoted ? 'fill-current' : 'fill-none'}`} />{item.upvoteCount} upvotes
+      </button>
       <span className="inline-flex items-center gap-1.5"><Icon.Users className="h-4 w-4" />{item.commentCount} comments</span>
       {item.lastCommentAt && <span className="ml-auto">Last reply {formatDate(item.lastCommentAt)}</span>}
     </div>
@@ -126,7 +150,7 @@ function CreateDiscussionModal({ open, courses, defaultTag, onClose, onCreated }
     } catch (err) { setError(getApiErrorMessage(err, 'Could not create this post.')); }
     finally { setBusy(false); }
   };
-  return <Modal open={open} onClose={onClose} title="Create a community post" size="lg" footer={<><Button variant="outline" onClick={onClose}>Cancel</Button><Button form="create-discussion-form" type="submit" loading={busy}>Publish</Button></>}>
+  return <Modal open={open} onClose={onClose} title="Create a community post" size="lg" error={error && <Alert type="error" message={error} />} footer={<><Button variant="outline" onClick={onClose}>Cancel</Button><Button form="create-discussion-form" type="submit" loading={busy}>Publish</Button></>}>
     <form id="create-discussion-form" onSubmit={submit} className="space-y-4">
       <Select label="Course" value={courseId} options={[{ label: 'Choose an enrolled course', value: '' }, ...courses.map(course => ({ label: course.title, value: String(course.courseId) }))]} onChange={setCourseId} />
       <Select label="Post type" value={tag} options={[{ label: 'Question', value: 'question' }, { label: 'Tip', value: 'tip' }]} onChange={value => setTag(value as 'question' | 'tip')} />
@@ -137,7 +161,6 @@ function CreateDiscussionModal({ open, courses, defaultTag, onClose, onCreated }
       </label>
       <Checkbox checked={anonymous} onChange={setAnonymous} label="Post anonymously" />
       {!courses.length && <p className="text-sm text-warning">Enroll in an active course to create a post.</p>}
-      {error && <p role="alert" className="text-sm text-danger">{error}</p>}
     </form>
   </Modal>;
 }
@@ -196,10 +219,13 @@ function DiscussionDetail({ discussionId }: { discussionId: string }) {
     <article className="card space-y-4 p-5 sm:p-6">
       <div className="flex flex-wrap items-center gap-2"><Badge variant={item.tag === 'tip' ? 'success' : 'info'}>{item.tag === 'tip' ? 'Tip' : 'Question'}</Badge>{item.isPinned && <Badge variant="warning">Pinned</Badge>}{item.isClosed && <Badge>Closed</Badge>}</div>
       <h1 className="text-2xl font-bold text-content">{item.title}</h1>
-      <p className="text-sm text-content-subtle">{item.author.displayName} · {formatDate(item.createdAt)}</p>
+      <div className="flex items-center gap-3">
+        <Avatar name={item.author.displayName} src={authorAvatar(item.author)} size="md" />
+        <p className="text-sm text-content-subtle">{item.author.displayName} · {formatDate(item.createdAt)}</p>
+      </div>
       <div className="whitespace-pre-wrap border-t border-line pt-4 text-sm leading-6 text-content-secondary">{item.content}</div>
       <div className="flex flex-wrap gap-2 border-t border-line pt-4">
-        <Button size="sm" variant={item.isUpvoted ? 'primary' : 'outline'} disabled={busy} icon={<Icon.Star className="h-4 w-4" />} onClick={() => update('upvote')}>{item.isUpvoted ? 'Upvoted' : 'Upvote'} · {item.upvoteCount}</Button>
+        <Button size="sm" variant={item.isUpvoted ? 'primary' : 'outline'} disabled={busy} icon={<Icon.Star className={`h-4 w-4 ${item.isUpvoted ? 'fill-current' : 'fill-none'}`} />} onClick={() => update('upvote')}>{item.isUpvoted ? 'Upvoted' : 'Upvote'} · {item.upvoteCount}</Button>
         <Button size="sm" variant={item.isBookmarked ? 'primary' : 'outline'} disabled={busy} icon={<Icon.Book className="h-4 w-4" />} onClick={() => update('bookmark')}>{item.isBookmarked ? 'Saved' : 'Save'}</Button>
         {item.isAuthor && <Button size="sm" variant="outline" disabled={busy} icon={<Icon.Lock className="h-4 w-4" />} onClick={() => update('close')}>{item.isClosed ? 'Reopen discussion' : 'Close discussion'}</Button>}
       </div>
@@ -207,7 +233,10 @@ function DiscussionDetail({ discussionId }: { discussionId: string }) {
 
     <section className="card p-5 sm:p-6">
       <h2 className="text-lg font-semibold text-content">Replies <span className="text-sm font-normal text-content-subtle">({item.commentCount})</span></h2>
-      <div className="mt-4 divide-y divide-line">{(item.comments ?? []).map(reply => <article key={reply.commentId} className="py-4 first:pt-0 last:pb-0"><p className="text-xs text-content-subtle">{reply.author.displayName} · {formatDate(reply.createdAt)}</p><p className="mt-2 whitespace-pre-wrap text-sm text-content-secondary">{reply.content}</p></article>)}</div>
+      <div className="mt-4 divide-y divide-line">{(item.comments ?? []).map(reply => <article key={reply.commentId} className="flex gap-3 py-4 first:pt-0 last:pb-0">
+        <Avatar name={reply.author.displayName} src={authorAvatar(reply.author, reply.isAnonymous)} size="sm" />
+        <div className="min-w-0 flex-1"><p className="text-xs text-content-subtle">{reply.author.displayName} · {formatDate(reply.createdAt)}</p><p className="mt-2 whitespace-pre-wrap text-sm text-content-secondary">{reply.content}</p></div>
+      </article>)}</div>
       {item.comments?.length === 0 && <p className="py-4 text-sm text-content-subtle">No replies yet.</p>}
       {item.isClosed ? <p className="mt-4 rounded-lg bg-surface-muted p-3 text-sm text-content-soft">This discussion is closed to new replies.</p> : <form onSubmit={postComment} className="mt-5 space-y-3 border-t border-line pt-4">
         <label className="flex flex-col gap-1.5 text-sm font-medium text-content-secondary">Add a reply<textarea required maxLength={10000} rows={3} value={comment} onChange={event => setComment(event.target.value)} className="w-full rounded-[10px] border border-line bg-surface p-3 text-sm text-content focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/20" placeholder="Write a helpful reply…" /></label>
@@ -220,4 +249,9 @@ function DiscussionDetail({ discussionId }: { discussionId: string }) {
 
 function formatDate(value: string | null) {
   return value ? new Date(value).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '—';
+}
+
+function authorAvatar(author: DiscussionItem['author'], isAnonymous = false) {
+  const anonymousName = author.displayName.toLowerCase().includes('ẩn danh') || author.displayName.toLowerCase().includes('anonymous');
+  return isAnonymous || anonymousName ? '/images/anonymous_student.png' : author.avatarUrl || undefined;
 }

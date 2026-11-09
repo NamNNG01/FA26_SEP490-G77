@@ -5,6 +5,9 @@ import com.examprep.dto.attempt.AttemptResponses;
 import com.examprep.dto.student.QuestionReviewItemDto;
 import com.examprep.dto.student.ReviewSessionRequestDto;
 import com.examprep.dto.student.ReviewSessionResponseDto;
+import com.examprep.repositories.CourseRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.examprep.entities.AnswerOption;
 import com.examprep.entities.Course;
 import com.examprep.entities.Exam;
@@ -24,6 +27,7 @@ import com.examprep.repositories.QuestionRepository;
 import com.examprep.repositories.StudentQuestionReviewRepository;
 import com.examprep.repositories.UserRepository;
 import com.examprep.services.StudentAttemptService;
+import com.examprep.util.QuestionNotebookPdfWriter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -63,6 +67,9 @@ public class StudentNotebookServiceImpl implements StudentNotebookService {
     private final ExamRepository examRepository;
     private final ExamQuestionRepository examQuestionRepository;
     private final StudentAttemptService studentAttemptService;
+    private final com.examprep.repositories.CourseRepository courseRepository;
+    private final com.examprep.util.QuestionNotebookPdfWriter questionNotebookPdfWriter;
+    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
 
     @Override
     @Transactional(readOnly = true)
@@ -186,9 +193,13 @@ public class StudentNotebookServiceImpl implements StudentNotebookService {
         if (!"QUIZ".equals(examType) && !"ESSAY".equals(examType)) {
             throw new BadRequestException(ResponseCode.VALIDATION_ERROR, "examType must be QUIZ or ESSAY");
         }
+        Long courseId = request.getCourseId();
+        if (courseId != null && !courseRepository.existsById(courseId)) {
+            throw new ResourceNotFoundException("Course not found");
+        }
 
-        List<StudentQuestionReview> candidates = reviewRepository.findReviewCandidatesForExamType(
-                userId, type, examType, PageRequest.of(0, 100));
+        List<StudentQuestionReview> candidates = reviewRepository.findReviewCandidatesForCourseAndExamType(
+                userId, type, examType, courseId, PageRequest.of(0, 100));
         if (candidates.size() < size) {
             throw new BaseException(ResponseCode.VALIDATION_ERROR,
                     "Not enough questions available for review. Available: " + candidates.size() + ", required: " + size);
@@ -202,7 +213,7 @@ public class StudentNotebookServiceImpl implements StudentNotebookService {
         List<StudentQuestionReview> selected = shuffled.stream().limit(size).toList();
 
         List<Question> questions = selected.stream().map(StudentQuestionReview::getQuestion).toList();
-        Course course = questions.get(0).getCourse();
+        Course course = courseId != null ? courseRepository.getReferenceById(courseId) : questions.get(0).getCourse();
         if (course == null && questions.get(0).getModule() != null) {
             course = questions.get(0).getModule().getCourse();
         }
@@ -212,17 +223,20 @@ public class StudentNotebookServiceImpl implements StudentNotebookService {
             case "all" -> "Ôn tập sổ lỗi";
             default -> "Ôn câu sai";
         } + " - " + ("ESSAY".equals(examType) ? "Tự luận" : "Trắc nghiệm");
+
+        String practiceConfig = writePracticeConfig(examType, size, null, List.of());
+
         Exam exam = examRepository.save(Exam.builder()
                 .course(course)
                 .createdBy(student)
                 .title(title)
                 .description("Review practice exam for student mistake notebook")
-                .durationMinutes(120)
                 .generationType("MANUAL")
                 .maxScore(BigDecimal.valueOf(size))
                 .status("PUBLISHED")
                 .publishedAt(Instant.now())
-                .mode("PRACTICE")
+                .mode(Exam.MODE_PRACTICE_EXAM)
+                .practiceConfig(practiceConfig)
                 .build());
 
         List<ExamQuestion> examQuestions = new ArrayList<>();
@@ -239,8 +253,7 @@ public class StudentNotebookServiceImpl implements StudentNotebookService {
         examQuestionRepository.flush();
 
         AttemptResponses.Session session = studentAttemptService.start(userId, exam.getExamId(), null);
-        // MN-04: a hidden REVIEW attempt, kept out of ME-01 history and dashboards (they exclude mode REVIEW).
-        examAttemptRepository.findById(session.attemptId()).ifPresent(attempt -> attempt.setMode("REVIEW"));
+        examAttemptRepository.findById(session.attemptId()).ifPresent(attempt -> attempt.setMode(Exam.MODE_PRACTICE_EXAM));
 
         List<ReviewSessionResponseDto.ReviewQuestionDto> questionDtos = session.questions().stream()
                 .map(q -> new ReviewSessionResponseDto.ReviewQuestionDto(
@@ -264,6 +277,19 @@ public class StudentNotebookServiceImpl implements StudentNotebookService {
                 exam.getDurationMinutes(),
                 questionDtos
         );
+    }
+
+    private String writePracticeConfig(String examType, int questionCount, String difficulty, List<Long> moduleIds) {
+        try {
+            Map<String, Object> config = new java.util.LinkedHashMap<>();
+            config.put("examType", examType);
+            config.put("questionCount", questionCount);
+            config.put("difficulty", difficulty);
+            config.put("moduleIds", moduleIds);
+            return objectMapper.writeValueAsString(config);
+        } catch (JsonProcessingException ex) {
+            throw new IllegalStateException(ex);
+        }
     }
 
     @Override
@@ -313,5 +339,30 @@ public class StudentNotebookServiceImpl implements StudentNotebookService {
                     r.getLastPracticedAt()
             );
         }).toList();
+    }
+
+    @Override
+    @Transactional
+    public void deleteAllBookmarks(Long userId) {
+        reviewRepository.unbookmarkAllByStudentUserId(userId);
+    }
+
+    @Override
+    @Transactional
+    public void bookmarkAll(Long userId) {
+        reviewRepository.bookmarkAllByStudentUserId(userId);
+    }
+
+    @Override
+    @Transactional
+    public void deleteAllSavedQuestions(Long userId) {
+        reviewRepository.deleteAllByStudentUserId(userId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public QuestionNotebookPdfWriter.RenderedPdf exportSavedQuestionsPdf(Long userId, Long courseId, String type, String examType) {
+        Page<QuestionReviewItemDto> page = listSavedQuestions(type, examType, courseId, null, null, 0, 1000, userId);
+        return questionNotebookPdfWriter.write(page.getContent());
     }
 }

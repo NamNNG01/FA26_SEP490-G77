@@ -82,7 +82,8 @@ export function ImportFileModal({ onClose, onRead }: {
 
   return (
     <Modal open onClose={() => { if (!busy) onClose(); }} title="Import Flashcards from Word, Excel or PDF" size="md"
-      footer={<Button variant="outline" onClick={onClose} disabled={busy}>Cancel</Button>}>
+      footer={<Button variant="outline" onClick={onClose} disabled={busy}>Cancel</Button>}
+      error={error && <Alert type="error" title="Import failed" message={error} />}>
       <div className="space-y-4">
         <div className="flex flex-wrap items-center gap-2 rounded-[10px] border border-line px-3 py-2.5">
           <Icon.FileText className="h-4 w-4 flex-shrink-0 text-brand-ink" />
@@ -113,7 +114,6 @@ export function ImportFileModal({ onClose, onRead }: {
             {busy && <span className="flex items-center gap-2 text-xs text-content-soft"><span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full spinner" /> Reading file…</span>}
           </div>
         )}
-        {error && <Alert type="error" title="Import failed" message={error} />}
       </div>
     </Modal>
   );

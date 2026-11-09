@@ -244,7 +244,8 @@ export function AiFlashcardGenerateModal({ onClose, onSaved }: {
       <Button icon={<Icon.Zap className="h-4 w-4" />} onClick={() => void generate()} disabled={!canGenerate} loading={busy}>Generate</Button>
     </>;
 
-  return <Modal open onClose={onClose} title={title} size={step === 'review' ? '2xl' : 'lg'} footer={footer} dismissible={!busy}>
+  return <Modal open onClose={onClose} title={title} size={step === 'review' ? '2xl' : 'lg'} footer={footer} dismissible={!busy}
+    error={error && step !== 'done' && <Alert type="error" title={step === 'review' ? 'Could not save' : 'Could not generate'} message={error} />}>
     {step === 'done' && result ? <div className="space-y-2">
       <p className="text-sm text-content-secondary">Saved {result.createdCount} flashcards to “{result.deckTitle}”.</p>
       {result.skippedDuplicateCount > 0 && <p className="text-sm text-content-soft">Skipped {result.skippedDuplicateCount} duplicate {result.skippedDuplicateCount === 1 ? 'card' : 'cards'} already in the deck.</p>}
@@ -345,7 +346,6 @@ export function AiFlashcardGenerateModal({ onClose, onSaved }: {
       </div>
     </div>}
 
-    {error && step !== 'done' && <div className="mt-4"><Alert type="error" title={step === 'review' ? 'Could not save' : 'Could not generate'} message={error} /></div>}
   </Modal>;
 }
 

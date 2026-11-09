@@ -13,5 +13,6 @@ public interface StudentCourseService {
     Page<MyCourseDto> listMyCourses(String status, int page, int size, Long userId);
     Page<CourseExamDto> listCourseExams(Long courseId, String sort, int page, int size, Long userId);
     List<DeckDto> listCourseDecks(Long courseId, Long userId);
+    ModuleContentDto getModuleContent(Long courseId, String moduleIdStr, Long userId);
     Page<CardDto> listDeckCards(Long deckId, int page, int size, Long userId);
 }

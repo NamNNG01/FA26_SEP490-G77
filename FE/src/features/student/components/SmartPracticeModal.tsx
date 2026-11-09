@@ -9,7 +9,7 @@ import { Tabs } from '@/components/ui/Tabs';
 import { Badge } from '@/components/ui/Badge';
 import { Alert } from '@/components/ui/Alert';
 import { Icon } from '@/assets/icons';
-import { studentTakePracticePath } from '@/app/routes';
+import { studentTakeExamPath } from '@/app/routes';
 import { getApiErrorMessage } from '@/utils/apiError';
 import { studentCourseService, type MyCourse } from '@/services/studentCourse.service';
 import {
@@ -31,8 +31,13 @@ import {
   type PracticeExamType,
 } from '@/services/studentPracticeExam.service';
 import { AiErrorAlert, AiSparkle, accuracyTone } from './aiUi';
+import { TakeModePicker } from './TakeModeModal';
+import type { TakeAs } from '../examModes';
 
 const DEFAULT_POLL_MS = 2000;
+
+/** The AI tab is hidden for now: the modal opens on Random whatever `initialMode` asks. Flip to bring it back. */
+const AI_ENABLED = false;
 
 export type SmartPracticeMode = 'AI' | 'RANDOM';
 
@@ -88,7 +93,11 @@ export function SmartPracticeModal({
   lockCourse?: boolean;
 }) {
   const navigate = useNavigate();
-  const [mode, setMode] = useState<SmartPracticeMode>(initialMode);
+  const startMode: SmartPracticeMode = AI_ENABLED ? initialMode : 'RANDOM';
+  const [mode, setMode] = useState<SmartPracticeMode>(startMode);
+  /** Random: take the new exam as an Exam (timed) or as Practice (each answer checked at once). */
+  const [takeAs, setTakeAs] = useState<TakeAs>('PRACTICE');
+  const [minutes, setMinutes] = useState(String(PRACTICE_MINUTES.default));
   const [courseId, setCourseId] = useState('');
   const [title, setTitle] = useState('');
   const [questionCount, setQuestionCount] = useState('');
@@ -133,9 +142,11 @@ export function SmartPracticeModal({
     }
     const preset = initialCourseId != null && courses.some(c => c.courseId === initialCourseId) ? initialCourseId : courses[0]?.courseId;
     setCourseId(preset != null ? String(preset) : '');
-    setMode(initialMode);
+    setMode(startMode);
+    setTakeAs('PRACTICE');
+    setMinutes(String(PRACTICE_MINUTES.default));
     setTitle('');
-    resetCounts(initialMode);
+    resetCounts(startMode);
     setExamType('QUIZ');
     setDifficulty('');
     setModuleIds([]);
@@ -147,7 +158,7 @@ export function SmartPracticeModal({
     setRandomError(null);
     setStarted(null);
     setResult(null);
-  }, [open, initialCourseId, initialMode, courses]);
+  }, [open, initialCourseId, startMode, courses]);
 
   useEffect(() => stopPolling, []);
 
@@ -209,8 +220,14 @@ export function SmartPracticeModal({
   const limits = limitsOf(mode);
   const countNum = Number(questionCount);
   // Practice is untimed: the student sets no limit, the BE (which still wants one) gets the longest it allows.
-  const minutesNum = limits.minutes.max;
+  // Taken as an exam, the student's duration is the timer.
+  const timedRandom = mode === 'RANDOM' && takeAs === 'EXAM';
+  const minutesNum = timedRandom ? Number(minutes) : limits.minutes.max;
   const errors = {
+    minutes:
+      !timedRandom || (Number.isInteger(minutesNum) && minutesNum >= limits.minutes.min && minutesNum <= limits.minutes.max)
+        ? undefined
+        : `Enter ${limits.minutes.min} – ${limits.minutes.max} minutes.`,
     title: title.trim() ? undefined : 'Enter a name for the practice exam.',
     course: courseId ? undefined : 'Select a course.',
     count: !questionCount.trim()
@@ -221,7 +238,7 @@ export function SmartPracticeModal({
           ? `Enter at most ${limits.questions.max} questions.`
           : `Enter ${limits.questions.min} – ${limits.questions.max} questions.`,
   };
-  const invalid = Boolean(errors.title || errors.course || errors.count);
+  const invalid = Boolean(errors.title || errors.course || errors.count || errors.minutes);
 
   const generateAi = async () => {
     setBusy(true);
@@ -257,9 +274,10 @@ export function SmartPracticeModal({
         categoryIds: moduleIds.length > 0 ? moduleIds.map(Number) : undefined,
         difficulty: difficulty || undefined,
         title: title.trim(),
+        mode: takeAs,
       });
       onClose();
-      navigate(studentTakePracticePath(created.examId));
+      navigate(studentTakeExamPath(created.examId, takeAs));
     } catch (err) {
       setRandomError(getPracticeError(err, 'Failed to create the practice exam.'));
       setBusy(false);
@@ -284,7 +302,7 @@ export function SmartPracticeModal({
   const startPractice = () => {
     if (result?.examId == null) return;
     onClose();
-    navigate(studentTakePracticePath(result.examId));
+    navigate(studentTakeExamPath(result.examId));
   };
 
   const footer =
@@ -308,18 +326,19 @@ export function SmartPracticeModal({
     ) : null;
 
   return (
-    <Modal open={open} onClose={() => !busy && onClose()} title="Create Practice Exam" size="lg" footer={footer}>
+    <Modal open={open} onClose={() => !busy && onClose()} title="Create Practice Exam" size="lg" footer={footer}
+      description={phase === 'form' && (mode === 'AI'
+        ? 'The AI looks at the questions you got wrong in a course and builds a practice exam focused on your weak modules (about 70 % weak, 20 % medium, 10 % strong). You need at least 5 finished exams in the course.'
+        : 'Random questions from the course question bank. Narrow them down by module and difficulty if you like. Practice exams do not count towards your course progress.')}
+      error={mode === 'RANDOM' ? randomError && <Alert type="error" message={randomError} /> : error && <AiErrorAlert error={error} />}>
       <div className="space-y-5">
         {phase === 'form' && (
           <>
-            <div className="flex flex-wrap items-center gap-3">
-              <Tabs tabs={Object.values(MODE_TABS)} active={MODE_TABS[mode]} onChange={t => changeMode(MODE_BY_TAB[t])} />
-            </div>
-            <p className="text-sm text-content-soft">
-              {mode === 'AI'
-                ? 'The AI looks at the questions you got wrong in a course and builds a practice exam focused on your weak modules (about 70 % weak, 20 % medium, 10 % strong). You need at least 5 finished exams in the course.'
-                : 'Random questions from the course question bank. Narrow them down by module and difficulty if you like. Practice exams do not count towards your course progress.'}
-            </p>
+            {AI_ENABLED && (
+              <div className="flex flex-wrap items-center gap-3">
+                <Tabs tabs={Object.values(MODE_TABS)} active={MODE_TABS[mode]} onChange={t => changeMode(MODE_BY_TAB[t])} />
+              </div>
+            )}
             {courses.length === 0 ? (
               <p className="text-sm text-content-soft">Enroll in a course first to create a practice exam.</p>
             ) : (
@@ -381,6 +400,24 @@ export function SmartPracticeModal({
                 )}
                 {mode === 'RANDOM' && (
                   <>
+                    <div className="min-w-0 space-y-1.5 sm:col-span-2">
+                      <span className="block text-sm font-medium text-content-secondary">Take as</span>
+                      <TakeModePicker value={takeAs} onChange={setTakeAs} />
+                    </div>
+                    {takeAs === 'EXAM' && (
+                      <div className="min-w-0 sm:col-span-2">
+                        <Input
+                          label="Duration (minutes)"
+                          type="number"
+                          inputMode="numeric"
+                          min={limits.minutes.min}
+                          max={limits.minutes.max}
+                          value={minutes}
+                          onChange={e => setMinutes(e.target.value)}
+                          error={touched ? errors.minutes : undefined}
+                        />
+                      </div>
+                    )}
                     <Select
                       label="Exam Type"
                       options={EXAM_TYPE_OPTIONS}
@@ -412,7 +449,6 @@ export function SmartPracticeModal({
                 )}
               </div>
             )}
-            {mode === 'RANDOM' && randomError && <Alert type="error" message={randomError} />}
           </>
         )}
 
@@ -450,7 +486,6 @@ export function SmartPracticeModal({
           <Alert type="error" message="The AI could not build the practice exam. Your tokens were refunded — please try again." />
         )}
 
-        {mode === 'AI' && error && <AiErrorAlert error={error} />}
       </div>
     </Modal>
   );

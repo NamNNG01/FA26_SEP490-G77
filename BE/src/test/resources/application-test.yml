@@ -43,3 +43,6 @@ app:
     # The flashcard worker sweep would race the tests that drive it by hand.
     flashcard:
       sweep-ms: 3600000
+  # Material uploads stay on disk in tests: no Cloudinary credentials, no network.
+  storage:
+    provider: local

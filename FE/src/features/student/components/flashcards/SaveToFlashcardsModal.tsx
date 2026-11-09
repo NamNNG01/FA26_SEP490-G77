@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Progress } from '@/components/ui/Progress';
+import { Alert } from '@/components/ui/Alert';
 import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { useToast } from '@/components/ui/ToastHost';
 import { Icon } from '@/assets/icons';
@@ -67,6 +68,7 @@ export function SaveToFlashcardsModal({
   const [courseId, setCourseId] = useState<number | null>(null);
   const [creating, setCreating] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [done, setDone] = useState(0);
   const [outcome, setOutcome] = useState<{ target: Target; result: Outcome } | null>(null);
   const cancelled = useRef(false);
@@ -101,6 +103,7 @@ export function SaveToFlashcardsModal({
   }, [examId]);
 
   const save = async (target: Target) => {
+    setSaveError(null);
     setSaving(true);
     setDone(0);
     cancelled.current = false;
@@ -132,7 +135,7 @@ export function SaveToFlashcardsModal({
     if (!bulk) {
       if (result.added) toast.success(`Saved to "${target.title}".`);
       else if (result.skipped) toast.info(`This question is already in "${target.title}".`);
-      else toast.error(result.failed[0]?.reason ?? 'Could not save the question.');
+      else setSaveError(result.failed[0]?.reason ?? 'Could not save the question.');
       if (result.added || result.skipped) onClose();
       return;
     }
@@ -223,6 +226,7 @@ export function SaveToFlashcardsModal({
       open
       onClose={saving ? () => (cancelled.current = true) : onClose}
       title={bulk ? `Save ${plural(total, 'question')} to flashcards` : 'Save question to flashcards'}
+      error={saveError && <Alert type="error" message={saveError} />}
       footer={
         saving ? (
           bulk ? (

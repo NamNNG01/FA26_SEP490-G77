@@ -447,7 +447,7 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
         if (!Objects.equals(attempt.getUser().getUserId(), userId)) {
             throw new ForbiddenException("Attempt belongs to another student");
         }
-        if (!"REVIEW".equals(attempt.getMode())) {
+        if (!"REVIEW".equals(attempt.getMode()) && !Exam.MODE_PRACTICE_EXAM.equals(attempt.getMode())) {
             throw new BadRequestException("Attempt is not a review session");
         }
         if (!"COMPLETED".equals(attempt.getStatus()) && !"SUBMITTED".equals(attempt.getStatus())) {
@@ -483,6 +483,9 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
         if (autoSubmitter.isExpired(attempt, now)) {
             autoSubmitter.gradeAndClose(attempt, answers.findByAttemptIdOrdered(attemptId), now);
             throw new BaseException(ResponseCode.ATTEMPT_NOT_IN_PROGRESS, "Attempt is not in progress");
+        }
+        if ("MATERIAL_QUIZ".equals(attempt.getMode()) && "EXAM".equals(attempt.getTakeAs())) {
+            throw new ForbiddenException("Check answer is not available when taking as exam");
         }
         if (attempt.getMode() == null || !PRACTICE_MODES.contains(attempt.getMode())) {
             throw new BaseException(ResponseCode.NOT_A_PRACTICE_EXAM, "This endpoint is only available for practice exams");
@@ -561,6 +564,27 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
         return paperFactory.writeResponse(response);
     }
 
+    /**
+     * Key of one practice question, built like the check verdict so the client's instant reveal and
+     * the stored check agree; null for the rubric types, graded only after submitting.
+     */
+    private AttemptResponses.PracticeKey practiceKey(AttemptAnswer row, String questionType, Question live) {
+        if (!AttemptGrader.isAutoGraded(questionType)) {
+            return null;
+        }
+        Snapshots.KeySnapshot key = paperFactory.read(row.getKeySnapshot(), Snapshots.KeySnapshot.class);
+        if (key == null) {
+            return null;
+        }
+        List<Long> correctOptionIds = isChoice(questionType) && key.correctOptionIds() != null
+                ? key.correctOptionIds()
+                : List.of();
+        String explanation = live != null && live.getAiExplanation() != null && !live.getAiExplanation().isBlank()
+                ? live.getAiExplanation()
+                : null;
+        return new AttemptResponses.PracticeKey(correctOptionIds, correctAnswer(questionType, key), explanation);
+    }
+
     private boolean isChoice(String questionType) {
         return "SINGLE_CHOICE".equals(questionType)
                 || "MULTIPLE_CHOICE".equals(questionType)
@@ -621,6 +645,11 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
 
         Map<Long, Question> live = liveQuestions(rows);
         BigDecimal totalWeight = AttemptScoring.totalWeight(weights(rows));
+        // Practice reveals each answer at once, so its paper carries the key; an exam never does.
+        boolean practice = attempt.getMode() != null && PRACTICE_MODES.contains(attempt.getMode());
+        if ("MATERIAL_QUIZ".equals(attempt.getMode()) && "EXAM".equals(attempt.getTakeAs())) {
+            practice = false;
+        }
 
         List<AttemptResponses.Question> questions = new ArrayList<>();
         List<AttemptResponses.Answer> drafts = withAnswers ? new ArrayList<>() : null;
@@ -638,7 +667,8 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
                             AttemptScoring.questionMaxPoints(row.getWeightSnapshot(), totalWeight, maxScore)),
                     display.answerSpace() == null ? null
                             : new AttemptResponses.AnswerSpace(display.answerSpace().maxLength()),
-                    group(display)));
+                    group(display),
+                    practice ? practiceKey(row, display.questionType(), live.get(display.questionId())) : null));
             if (withAnswers) {
                 AttemptResponses.CheckResult check = null;
                 if (row.getCheckResult() != null && !row.getCheckResult().isBlank()) {
@@ -665,7 +695,8 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
                 questions,
                 drafts == null ? null : List.copyOf(drafts),
                 attempt.getMode(),
-                quizJobId(attempt));
+                quizJobId(attempt),
+                attempt.getTakeAs());
     }
 
     /**

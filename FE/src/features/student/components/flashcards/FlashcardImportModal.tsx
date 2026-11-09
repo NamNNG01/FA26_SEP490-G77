@@ -151,7 +151,7 @@ export function FlashcardImportModal({ deckId, deckTitle, onClose, onImported }:
   const dropCard = (rowIndex: number) => setCards(current => current.filter(card => card.rowIndex !== rowIndex));
   const countInvalid = cards.length - validCards.length;
 
-  return <Modal open onClose={onClose} title={result ? 'Import complete' : preview ? 'Edit imported flashcards' : 'Import Flashcards from Word, Excel or PDF'} size={preview ? '2xl' : 'md'}
+  return <Modal open onClose={onClose} error={!result && error && <Alert type="error" title="Import failed" message={error} />} title={result ? 'Import complete' : preview ? 'Edit imported flashcards' : 'Import Flashcards from Word, Excel or PDF'} size={preview ? '2xl' : 'md'}
     footer={result ? <Button onClick={onClose}>Done</Button> : <>
       <Button variant="outline" onClick={preview ? () => { setPreview(null); setCards([]); setFile(null); setError(null); } : onClose} disabled={busy}>{preview ? 'Choose another file' : 'Cancel'}</Button>
       {preview && <Button icon={<Icon.Check className="h-4 w-4" />} onClick={() => void save()} disabled={busy || validCards.length === 0 || cards.length > FLASHCARD_IMPORT_MAX_ROWS || (destination === 'new' && !newDeckTitle.trim())} loading={busy}>Save {validCards.length} valid cards</Button>}
@@ -184,7 +184,6 @@ export function FlashcardImportModal({ deckId, deckTitle, onClose, onImported }:
         <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium text-content-secondary">{file.name}</p><p className="text-2xs text-content-subtle">{(file.size / 1024 / 1024).toFixed(2)} MB</p></div>
         {busy && <span className="flex items-center gap-2 text-xs text-content-soft"><span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full spinner" /> Reading file…</span>}
       </div>}
-      {error && <Alert type="error" title="Import failed" message={error} />}
     </div> : <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2 text-sm text-content-secondary">
         <span className="font-medium">{preview.fileName}</span><Badge variant="info">{preview.fileType}</Badge>
@@ -217,6 +216,5 @@ export function FlashcardImportModal({ deckId, deckTitle, onClose, onImported }:
       </div>
       <p className="text-xs text-content-soft">Only valid rows are sent. Duplicate cards are skipped during save.</p>
     </div>}
-    {preview && error && <Alert type="error" title="Import failed" message={error} />}
   </Modal>;
 }

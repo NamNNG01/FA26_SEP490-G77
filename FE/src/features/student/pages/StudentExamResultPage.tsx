@@ -5,11 +5,13 @@ import { Button } from '@/components/ui/Button';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { Progress } from '@/components/ui/Progress';
 import { Modal } from '@/components/ui/Modal';
+import { Alert } from '@/components/ui/Alert';
 import { Select } from '@/components/ui/Select';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Spinner } from '@/components/ui/Spinner';
 import { Icon } from '@/assets/icons';
-import { ROUTES, studentExamPath, studentResumeAttemptPath, studentTakeExamPath, studentTakePracticePath } from '@/app/routes';
+import { ROUTES, studentExamPath, studentResumeAttemptPath, studentTakeExamPath } from '@/app/routes';
+import { canChooseTakeMode, examModeBehavior, takeAsOf } from '../examModes';
 import { getApiErrorMessage } from '@/utils/apiError';
 import {
   RUBRIC_TYPES,
@@ -58,12 +60,12 @@ const OUTCOME: Record<Outcome, { label: string; badge: 'success' | 'danger' | 'i
   pending: { label: 'Not graded', badge: 'warning', icon: <Icon.Clock className="w-5 h-5 text-warning" /> },
 };
 
-/** `scoreOnly` (an exam, not a practice): every answer gets its points, never a right / wrong verdict. */
-function outcomeOf(q: ResultQuestion, scoreOnly: boolean): Outcome {
+/** Right / wrong of one answer — an exam shows it too once submitted; rubric answers only get their points. */
+function outcomeOf(q: ResultQuestion): Outcome {
   if (isGradingOpen(q)) return 'pending';
   if (!isAnswered(q.yourResponse)) return 'unanswered';
   // Essay / code / diagram answers carry rubric points, not a right/wrong verdict.
-  if (scoreOnly || RUBRIC_TYPES.has(q.questionType)) return 'graded';
+  if (RUBRIC_TYPES.has(q.questionType)) return 'graded';
   if (q.isCorrect != null) return q.isCorrect ? 'correct' : 'incorrect';
   if (q.scoreEarned != null && q.maxPoints != null) return Number(q.scoreEarned) >= Number(q.maxPoints) ? 'correct' : 'incorrect';
   return 'incorrect';
@@ -151,19 +153,14 @@ function num(v: number | null | undefined): string {
  * rubric answers ungraded. "Grade with AI" asks the AI (SE-02) and opens a
  * "grading" modal, polling until every answer is scored.
  * An exam shows only scores: no right / wrong, no answer key, no explanation, no "Retry wrong questions".
- * `&practice=1` (a practice exam): a quiz shows right / wrong instead of the score, an essay / diagram
- * paper only its score; Retake
- * reopens it in practice mode and Back leads to Exam History (it has no exam page).
+ * A PRACTICE kind (examMode, see examModes.ts): a quiz shows right / wrong instead of the score, an essay /
+ * diagram paper only its score; Back leads to Exam History (it has no exam page).
  */
 export function StudentExamResultPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const attemptId = searchParams.get('attemptId');
   const examId = searchParams.get('examId');
-  const practice = searchParams.get('practice') === '1';
-  /** Kept on every URL swap, or the score would come back. */
-  const practiceParam: Record<string, string> = practice ? { practice: '1' } : {};
-  const practiceHistoryPath = `${ROUTES.studentExams}?type=PRACTICE`;
   /** SA-06 answered 403: the course was left (EN-04), so none of its attempts are shown. */
   const [notEnrolled, setNotEnrolled] = useState(false);
 
@@ -223,6 +220,11 @@ export function StudentExamResultPage() {
   /** No submitted attempt at all: the page then holds only the unfinished one, if any. */
   const [noSubmitted, setNoSubmitted] = useState(false);
   const [unfinishedReload, setUnfinishedReload] = useState(0);
+  /** From the exam's mode in the DB; with no submitted attempt yet, the unfinished one tells it. */
+  const behavior = examModeBehavior(result?.examMode ?? unfinished?.examMode);
+  /** A self-made exam (practice kind): its home is Exam History, it offers "Retry wrong questions" and counts right answers. */
+  const practice = behavior.kind === 'PRACTICE';
+  const historyPath = `${ROUTES.studentExams}${behavior.historyType ? `?type=${behavior.historyType}` : ''}`;
   useEffect(() => {
     if (!examId) return;
     let cancelled = false;
@@ -234,7 +236,7 @@ export function StudentExamResultPage() {
         const s = await studentAttemptService.get(id);
         if (s.status !== 'IN_PROGRESS') return null;
         const answered = (s.answers ?? []).filter(a => isAnswered(a.response)).length;
-        return { attemptId: s.attemptId, answered, total: s.questions.length };
+        return { attemptId: s.attemptId, answered, total: s.questions.length, examMode: s.examMode ?? null };
       })
       .then(u => {
         if (!cancelled) setUnfinished(u);
@@ -264,7 +266,7 @@ export function StudentExamResultPage() {
         setAttempts(submitted);
         setNoSubmitted(submitted.length === 0);
         if (!attemptId) {
-          if (submitted.length > 0) setSearchParams({ examId, attemptId: String(submitted[0].attemptId), ...practiceParam }, { replace: true });
+          if (submitted.length > 0) setSearchParams({ examId, attemptId: String(submitted[0].attemptId) }, { replace: true });
           else setLoading(false);
         }
       })
@@ -349,7 +351,7 @@ export function StudentExamResultPage() {
     };
   }, [attemptId, reload]);
 
-  const outcomes = useMemo(() => (result?.questions ?? []).map(x => outcomeOf(x, !practice)), [result, practice]);
+  const outcomes = useMemo(() => (result?.questions ?? []).map(x => outcomeOf(x)), [result]);
   const counts = useMemo(() => {
     const c: Record<Outcome, number> = { correct: 0, incorrect: 0, graded: 0, unanswered: 0, pending: 0 };
     outcomes.forEach(o => c[o]++);
@@ -451,7 +453,7 @@ export function StudentExamResultPage() {
   const breadcrumb = (
     <Breadcrumb
       items={[
-        { label: 'My Exams', onClick: () => navigate(practice ? practiceHistoryPath : ROUTES.studentExams) },
+        { label: 'My Exams', onClick: () => navigate(historyPath) },
         ...(examId && !notEnrolled && !practice ? [{ label: result?.examTitle ?? 'Exam', onClick: () => navigate(studentExamPath(examId)) }] : []),
         { label: 'Attempts' },
       ]}
@@ -488,14 +490,14 @@ export function StudentExamResultPage() {
     );
   }
 
-  const resumePath = (id: number) => `${studentResumeAttemptPath(id)}${practice ? '&practice=1' : ''}`;
+  const resumePath = studentResumeAttemptPath;
   const unfinishedBanner = unfinished && examId && (
     <UnfinishedAttemptBanner
       attempt={unfinished}
       onContinue={() => navigate(resumePath(unfinished.attemptId))}
       onDiscarded={() => {
         // Nothing left to show here: back to Exam History.
-        if (noSubmitted) navigate(practice ? practiceHistoryPath : ROUTES.studentExams, { replace: true });
+        if (noSubmitted) navigate(historyPath, { replace: true });
         else setUnfinishedReload(r => r + 1);
       }}
     />
@@ -608,18 +610,25 @@ export function StudentExamResultPage() {
                     }`,
                   }))}
                   value={String(result.attemptId)}
-                  onChange={v => examId && setSearchParams({ examId, attemptId: v, ...practiceParam })}
+                  onChange={v => examId && setSearchParams({ examId, attemptId: v })}
                 />
               ) : undefined
             }
             onSaveAll={savableIds.length > 0 ? () => setSaveQuestions(savableIds) : undefined}
-            // An exam never tells which answers were wrong, so it has no "Retry wrong questions".
+            // "Retry wrong questions" (PQ-04) takes self-made exams only.
             onRetryWrong={practice && canSave && hasWrong ? () => setRetrying(true) : undefined}
             // While an attempt is unfinished SA-01 cannot open a new one: the banner's Continue replaces Retake.
-            onRetake={examId && !unfinished ? () => navigate(practice ? studentTakePracticePath(examId) : studentTakeExamPath(examId)) : undefined}
+            // A self-made exam is taken again the way this attempt was (Exam or Practice); with that choice
+            // unknown (or a course exam) it starts in the exam's own mode.
+            onRetake={
+              examId && !unfinished
+                ? () =>
+                    navigate(studentTakeExamPath(examId, canChooseTakeMode(result.examMode) ? (takeAsOf(result.attemptId) ?? undefined) : undefined))
+                : undefined
+            }
             onBack={
               practice
-                ? () => navigate(practiceHistoryPath)
+                ? () => navigate(historyPath)
                 : examId
                   ? () => navigate(studentExamPath(examId))
                   : () => navigate(ROUTES.studentExams)
@@ -1059,7 +1068,7 @@ function ResultQuestionCard({
         <div className="@container border-t border-line px-4 py-4">
           <div className="grid gap-4 @3xl:grid-cols-[minmax(0,1fr)_minmax(15rem,20rem)] @3xl:items-start">
           <div className="min-w-0">
-            <AnswerReview question={q} hideVerdict={!practice} />
+            <AnswerReview question={q} />
           </div>
           <div className="@3xl:sticky @3xl:top-[85px] min-w-0">
             <RubricGrade question={q} outcome={outcome} />
@@ -1069,10 +1078,10 @@ function ResultQuestionCard({
       ) : (
       /* Answers are always shown; only the explanation is collapsible. */
       <div className="border-t border-line px-4 py-4 space-y-4">
-        <AnswerReview question={q} hideVerdict={!practice} />
+        <AnswerReview question={q} />
         {q.gradingError && <p className="text-sm text-danger">Grading failed: {q.gradingError}</p>}
-        {/* An exam shows only the score: the explanation would give the answer away. */}
-        {practice && hasExplanation(q) && (
+        {/* Exams and practice alike: the explanation shows once the attempt is submitted. */}
+        {hasExplanation(q) && (
           <ExplanationBox
             question={q}
             state={explanation}
@@ -1235,6 +1244,7 @@ interface UnfinishedAttempt {
   attemptId: number;
   answered: number;
   total: number;
+  examMode: string | null;
 }
 
 /** An attempt saved with "Save and exit": Continue reopens it, Discard deletes it (SA-07) after a confirm. */
@@ -1284,6 +1294,7 @@ function UnfinishedAttemptBanner({
       </div>
 
       <Modal
+        error={error && <Alert type="error" message={error} />}
         open={confirming}
         onClose={() => !discarding && setConfirming(false)}
         title="Discard this attempt?"
@@ -1303,7 +1314,6 @@ function UnfinishedAttemptBanner({
           The attempt and its {attempt.answered} answer{attempt.answered === 1 ? '' : 's'} are deleted — it will not count in
           your history. This cannot be undone.
         </p>
-        {error && <p className="mt-3 text-sm text-danger">{error}</p>}
       </Modal>
     </div>
   );

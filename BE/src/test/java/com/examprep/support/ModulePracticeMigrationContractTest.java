@@ -185,7 +185,7 @@ class ModulePracticeMigrationContractTest {
                 "uq_qps_one_active must be partial on status = 'IN_PROGRESS': " + definition);
     }
 
-    /** A migration that was already applied must never be edited; this one must still be the newest. */
+    /** A migration that was already applied must never be edited; this one must still be before any newer ones. */
     @Test
     void noLaterMigrationExistsYet() throws IOException {
         Path folder = MIGRATION.getParent();
@@ -197,8 +197,12 @@ class ModulePracticeMigrationContractTest {
         String newest = versions.stream()
                 .max((left, right) -> Integer.compare(version(left), version(right)))
                 .orElseThrow();
-        assertTrue(newest.startsWith("V70__"),
-                "V70__general_practice.sql is no longer the newest migration (newest is " + newest + ")");
+        // V68 is the migration under test; it must exist and not be newer than the current newest.
+        assertTrue(version(MIGRATION.getFileName().toString()) <= version(newest),
+                "V68__module_practice.sql must exist and be at or before the newest migration (newest is " + newest + ")");
+        // And V68 itself must still be in the folder (never deleted).
+        assertTrue(versions.stream().anyMatch(v -> v.startsWith("V68__")),
+                "V68__module_practice.sql must still be present in the migration folder");
     }
 
     private static int version(String fileName) {

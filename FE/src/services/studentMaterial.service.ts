@@ -90,6 +90,8 @@ export interface GenerateQuizRequest {
   title?: string;
   /** Free-text guidance for the AI (sent as studentContext). */
   context?: string;
+  /** Time limit when the quiz is taken as an Exam; left out, the BE times it at max(10, questionCount) minutes. */
+  durationMinutes?: number;
 }
 
 /** MQ-03 (202) */

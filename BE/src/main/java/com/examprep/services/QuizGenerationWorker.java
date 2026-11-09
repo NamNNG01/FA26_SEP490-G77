@@ -131,7 +131,7 @@ public class QuizGenerationWorker {
 
     private record Claimed(Long jobId, Long userId, Long courseId, Long docId, String docTitle,
                            String content, int questionCount, String difficulty, Long logId,
-                           Long sourceLessonId, String title, String context) {}
+                           Long sourceLessonId, String title, String context, Integer durationMinutes) {}
 
     /** Queues one job; called by the service right after its transaction commits. */
     public void dispatch(Long jobId) {
@@ -211,7 +211,7 @@ public class QuizGenerationWorker {
                     document.getDocId(), document.getTitle(), document.getExtractedContent(),
                     job.getQuestionCount(), job.getDifficulty(),
                     job.getAiUsageLog() == null ? null : job.getAiUsageLog().getLogId(),
-                    job.getSourceLessonId(), job.getTitle(), job.getContext());
+                    job.getSourceLessonId(), job.getTitle(), job.getContext(), job.getDurationMinutes());
         });
     }
 
@@ -340,13 +340,14 @@ public class QuizGenerationWorker {
         if (title.length() > 250) {
             title = title.substring(0, 250);
         }
+        int examDuration = claimed.durationMinutes() != null ? claimed.durationMinutes() : Math.max(10, count);
         Exam exam = exams.save(Exam.builder()
                 .course(course)
                 .module(module)
                 .createdBy(student)
                 .title(title)
                 .description("Đề trích từ tài liệu: " + (claimed.docTitle() == null ? "" : claimed.docTitle()))
-                .durationMinutes(Math.max(10, count))
+                .durationMinutes(examDuration)
                 .mode(Exam.MODE_MATERIAL_QUIZ)
                 .generationType("STATIC")
                 .maxScore(BigDecimal.valueOf(count))

@@ -15,13 +15,15 @@ public final class StudentDeckDtos {
     public record DeckCreate(@NotBlank @Size(max = 150) String title,
                              @Size(max = 500) String description,
                              @NotNull @Pattern(regexp = MODES) String mode,
-                             @Positive Long courseId) {}
+                             @Positive Long courseId,
+                             @Positive Long moduleId) {}
 
     /** Partial update: null leaves a field unchanged. */
     public record DeckUpdate(@Size(max = 150) @Pattern(regexp = "(?sU).*\\S.*", message = "must not be blank") String title,
                              @Size(max = 500) String description,
                              @Pattern(regexp = MODES) String mode,
-                             @Positive Long courseId) {}
+                             @Positive Long courseId,
+                             @PositiveOrZero Long moduleId) {}
 
     /** FC-04 / FC-05; which fields are required depends on the deck mode. */
     public record CardWrite(@Size(max = 5000) String frontText,
@@ -31,7 +33,8 @@ public final class StudentDeckDtos {
 
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record DeckView(Long deckId, String title, String description, String mode, Long courseId, String courseTitle,
-                           long cardCount, String visibility, String reviewStatus, String reviewNote, Instant createdAt) {}
+                           long cardCount, String visibility, String reviewStatus, String reviewNote, Instant createdAt,
+                           Long moduleId, String moduleTitle) {}
 
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record CardView(Long cardId, Long deckId, String frontText, String backText, String codeLanguage, String codeBody,
@@ -83,7 +86,8 @@ public final class StudentDeckDtos {
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record DeckListItem(Long deckId, String title, String description, String mode, Long courseId, String courseTitle,
                                Long ownerId, String ownerName, long cardCount, long learnedCount, long starredCount,
-                               String visibility, String reviewStatus, Instant createdAt) {}
+                               String visibility, String reviewStatus, Instant createdAt,
+                               Long moduleId, String moduleTitle) {}
 
     // ------------------------------------------------------------- FC-14
 
@@ -92,7 +96,8 @@ public final class StudentDeckDtos {
     public record DeckDetail(Long deckId, String title, String description, String mode, Long courseId, String courseTitle,
                              Long ownerId, String ownerName, boolean isOwner, long cardCount, long learnedCount,
                              long starredCount, String visibility, String reviewStatus, String reviewNote,
-                             Instant submittedAt, Instant createdAt) {}
+                             Instant submittedAt, Instant createdAt,
+                             Long moduleId, String moduleTitle) {}
 
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record CardFromQuestionView(Long cardId, Long deckId, String frontText, String backText, int position,

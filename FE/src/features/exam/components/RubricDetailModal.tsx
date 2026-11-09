@@ -6,6 +6,8 @@ import { Icon } from "@/assets/icons";
 import { useToast } from "@/components/ui/ToastHost";
 import { examService, type RubricCriterion } from "@/services/exam.service";
 import { getApiErrorMessage } from "@/utils/apiError";
+import { focusFirstInvalidAfter } from "@/utils/focusFirstInvalid";
+import { Alert } from "@/components/ui/Alert";
 
 interface RubricDetailModalProps {
   open: boolean;
@@ -34,11 +36,14 @@ export function RubricDetailModal({
   const [errorMsg, setErrorMsg] = useState("");
   const [loadFailed, setLoadFailed] = useState(false);
   const [invalidRowIdx, setInvalidRowIdx] = useState<number | null>(null);
+  const [invalidField, setInvalidField] = useState<"name" | "weight" | null>(null);
+  const [saveError, setSaveError] = useState("");
 
   useEffect(() => {
     if (!open || !questionId) return;
     setLoading(true);
     setErrorMsg("");
+    setSaveError("");
     setLoadFailed(false);
     setInvalidRowIdx(null);
     examService
@@ -110,20 +115,20 @@ export function RubricDetailModal({
     if (!questionId) return;
     for (let i = 0; i < criteria.length; i++) {
       const c = criteria[i];
-      if (!c.name.trim()) {
-        setInvalidRowIdx(i);
-        setErrorMsg(`Criterion #${i + 1} name is required.`);
-        return;
-      }
-      if (!Number.isFinite(Number(c.weight)) || Number(c.weight) <= 0) {
-        setInvalidRowIdx(i);
-        setErrorMsg(`Criterion #${i + 1} weight must be greater than 0.`);
+      const field = !c.name.trim() ? "name" : !Number.isFinite(Number(c.weight)) || Number(c.weight) <= 0 ? "weight" : null;
+      if (field) {
+        focusFirstInvalidAfter(() => {
+          setInvalidRowIdx(i);
+          setInvalidField(field);
+          setErrorMsg(field === "name" ? `Criterion #${i + 1} name is required.` : `Criterion #${i + 1} weight must be greater than 0.`);
+        });
         return;
       }
     }
 
     setSaving(true);
     setErrorMsg("");
+    setSaveError("");
     try {
       await examService.updateRubric(questionId, {
         criteria: criteria.map(({ name, weight, descriptors }) => ({
@@ -136,10 +141,7 @@ export function RubricDetailModal({
       onSaved(questionId);
       onClose();
     } catch (err: unknown) {
-      toast.error(getApiErrorMessage(err, "Failed to save grading rubric."), {
-        title: "Could not save grading rubric",
-        duration: null,
-      });
+      setSaveError(getApiErrorMessage(err, "Failed to save grading rubric."));
     } finally {
       setSaving(false);
     }
@@ -151,6 +153,7 @@ export function RubricDetailModal({
       onClose={onClose}
       title="Essay Grading Rubric Detail"
       size="xl"
+      error={saveError && <Alert type="error" title="Could not save grading rubric" message={saveError} />}
       footer={
         <div className="flex items-center justify-end w-full">
           <div className="flex items-center gap-2">
@@ -188,12 +191,6 @@ export function RubricDetailModal({
           it affects all exams referencing this question.
         </div>
 
-        {errorMsg && (
-          <div className="p-3 text-xs text-danger bg-danger-light border border-danger-line rounded-[8px]">
-            {errorMsg}
-          </div>
-        )}
-
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <h4 className="text-sm font-semibold text-content">
@@ -225,6 +222,7 @@ export function RubricDetailModal({
                       label={`Criterion #${idx + 1} Name *`}
                       placeholder="e.g. Content Relevance & Argumentation"
                       value={c.name}
+                      error={invalidRowIdx === idx && invalidField === "name" ? errorMsg : undefined}
                       onChange={(e) =>
                         updateCriterion(idx, "name", e.target.value)
                       }
@@ -238,7 +236,10 @@ export function RubricDetailModal({
                       type="number"
                       min={0.01}
                       step="any"
-                      className="w-full px-2.5 py-1.5 text-sm rounded-[8px] border border-line bg-surface focus:outline-none focus:ring-1 focus:ring-brand-ink"
+                      aria-invalid={invalidRowIdx === idx && invalidField === "weight" ? true : undefined}
+                      className={`w-full px-2.5 py-1.5 text-sm rounded-[8px] border bg-surface focus:outline-none focus:ring-1 focus:ring-brand-ink ${
+                        invalidRowIdx === idx && invalidField === "weight" ? "border-danger-solid" : "border-line"
+                      }`}
                       value={c.weight ?? ""}
                       onChange={(e) =>
                         updateCriterion(
@@ -272,6 +273,9 @@ export function RubricDetailModal({
                     </button>
                   </div>
                 </div>
+                {invalidRowIdx === idx && invalidField === "weight" && (
+                  <p className="text-xs text-danger">{errorMsg}</p>
+                )}
 
                 <div>
                   <label className="text-xs font-medium text-content-secondary block mb-1">

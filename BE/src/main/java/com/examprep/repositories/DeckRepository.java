@@ -1,6 +1,7 @@
 package com.examprep.repositories;
 
 import com.examprep.entities.Deck;
+import com.examprep.dto.student.DeckDto;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -79,7 +80,8 @@ public interface DeckRepository extends JpaRepository<Deck, Long> {
             "AND e.status = 'ACTIVE') AND d.user.userId <> :userId " +
             "AND (d.user.roleName <> 'STUDENT' OR d.visibility = 'PUBLIC') " +
             "AND (:courseId IS NULL OR c.courseId = :courseId) AND (:mode = '' OR d.mode = :mode) " +
-            "AND LOWER(d.title) LIKE :search ESCAPE '!'";
+            "AND LOWER(d.title) LIKE :search ESCAPE '!' " +
+            "AND EXISTS (SELECT p.progressId FROM UserCardProgress p WHERE p.card.deck = d AND p.user.userId = :userId AND p.status = 'KNOWN')";
 
     @EntityGraph(attributePaths = {"course", "user", "module"})
     @Query("SELECT d FROM Deck d WHERE d.deckId = :id")
@@ -103,11 +105,29 @@ public interface DeckRepository extends JpaRepository<Deck, Long> {
             "d.deckId, d.title, d.description, d.isPublic, " +
             "(SELECT COUNT(f) FROM Flashcard f WHERE f.deck = d), " +
             "(SELECT COUNT(p) FROM UserCardProgress p JOIN p.card f WHERE f.deck = d AND p.user.userId = :userId AND p.status = 'KNOWN'), " +
-            "(SELECT COUNT(p) FROM UserCardProgress p JOIN p.card f WHERE f.deck = d AND p.user.userId = :userId AND p.isStarred = true)) " +
+            "(SELECT COUNT(p) FROM UserCardProgress p JOIN p.card f WHERE f.deck = d AND p.user.userId = :userId AND p.isStarred = true), " +
+            "d.module.moduleId) " +
             "FROM Deck d WHERE d.course.courseId = :courseId " +
             // Students' own decks attached to the course stay private (FC-01, spec 9.6).
             "AND (d.user.roleName <> 'STUDENT' OR d.user.userId = :userId OR d.visibility = 'PUBLIC')")
     List<com.examprep.dto.student.DeckDto> findCourseDecksWithStats(@Param("courseId") Long courseId, @Param("userId") Long userId);
+
+    @Query("SELECT new com.examprep.dto.student.DeckDto(" +
+            "d.deckId, d.title, d.description, d.isPublic, " +
+            "(SELECT COUNT(f) FROM Flashcard f WHERE f.deck = d), " +
+            "(SELECT COUNT(p) FROM UserCardProgress p JOIN p.card f WHERE f.deck = d AND p.user.userId = :userId AND p.status = 'KNOWN'), " +
+            "(SELECT COUNT(p) FROM UserCardProgress p JOIN p.card f WHERE f.deck = d AND p.user.userId = :userId AND p.isStarred = true), " +
+            "d.module.moduleId) " +
+            "FROM Deck d LEFT JOIN d.module m " +
+            "WHERE d.course.courseId = :courseId " +
+            "AND ((:moduleId IS NULL AND d.module IS NULL) OR (m.moduleId = :moduleId)) " +
+            "AND (d.user.roleName <> 'STUDENT' OR d.user.userId = :userId OR d.visibility = 'PUBLIC') " +
+            "ORDER BY d.title ASC, d.deckId ASC")
+    List<DeckDto> findDecksByModuleOrGeneral(
+            @Param("courseId") Long courseId,
+            @Param("moduleId") Long moduleId,
+            @Param("userId") Long userId
+    );
 
     /** [moduleId, deck count] of the course decks this user can see (same rule as above) — CL-02 module summary. */
     @Query("SELECT new com.examprep.dto.IdCount(d.module.moduleId, COUNT(d)) " +

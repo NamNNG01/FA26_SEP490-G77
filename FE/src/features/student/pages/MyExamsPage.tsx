@@ -15,31 +15,34 @@ import { materialService } from '@/services/studentMaterial.service';
 import { ListSkeleton, LoadError, PageTitle, STUDENT_PAGE_CLASS, formatScore } from '../components/studentUi';
 import { SmartPracticeModal } from '../components/SmartPracticeModal';
 import { MaterialQuizModal } from '../components/MaterialQuizModal';
-import { AiSparkle } from '../components/aiUi';
 const PAGE_SIZE = 10;
 const ALL = '';
 
 /** Exam.mode of a row (ME-01 `mode`). */
-type ExamKind = 'EXAM' | 'PRACTICE' | 'SMART_PRACTICE' | 'MATERIAL_QUIZ' | 'CONTEST';
+type ExamKind = 'EXAM' | 'PRACTICE' | 'PRACTICE_EXAM' | 'SMART_PRACTICE' | 'MATERIAL_QUIZ' | 'CONTEST';
+
+/** Kinds shown, and filtered, under PRACTICE: PQ-01 practice exams, AI-built practice exams, material quizzes. */
+const PRACTICE_ALIASES: readonly ExamKind[] = ['PRACTICE_EXAM', 'SMART_PRACTICE', 'MATERIAL_QUIZ'];
 
 const KIND_LABEL: Record<ExamKind, string> = {
   EXAM: 'Course exam',
   PRACTICE: 'Practice exam',
-  // AI-built practice exams are shown, and filtered, as practice exams.
+  PRACTICE_EXAM: 'Practice exam',
   SMART_PRACTICE: 'Practice exam',
-  MATERIAL_QUIZ: 'Material quiz',
+  MATERIAL_QUIZ: 'Practice exam',
   CONTEST: 'Contest',
 };
 const KIND_BADGE: Record<ExamKind, BadgeVariant> = {
   EXAM: 'default',
   PRACTICE: 'info',
+  PRACTICE_EXAM: 'info',
   SMART_PRACTICE: 'info',
-  MATERIAL_QUIZ: 'success',
+  MATERIAL_QUIZ: 'info',
   CONTEST: 'warning',
 };
 const KIND_OPTIONS = [
   { label: 'All types', value: ALL },
-  ...(Object.keys(KIND_LABEL) as ExamKind[]).filter(k => k !== 'SMART_PRACTICE').map(k => ({ label: KIND_LABEL[k], value: k })),
+  ...(Object.keys(KIND_LABEL) as ExamKind[]).filter(k => !PRACTICE_ALIASES.includes(k)).map(k => ({ label: KIND_LABEL[k], value: k })),
 ];
 
 /** Type filter value for exams with a CODE question (ME-01 `hasCodeQuestions`) — across every kind. */
@@ -49,7 +52,7 @@ const CODE_OPTION = { label: 'Coding exam', value: CODE_FILTER };
 const toKind = (mode: string | null | undefined): ExamKind => (mode && mode in KIND_LABEL ? (mode as ExamKind) : 'EXAM');
 
 /** Taken in practice mode (checked answer by answer): no time limit. */
-const isPractice = (kind: ExamKind) => kind === 'PRACTICE' || kind === 'SMART_PRACTICE';
+const isPractice = (kind: ExamKind) => kind === 'PRACTICE' || PRACTICE_ALIASES.includes(kind);
 
 /** One exam of the history, whatever produced it. */
 interface HistoryRow {
@@ -114,7 +117,7 @@ async function loadHistory(): Promise<HistoryRow[]> {
       examId: e.examId,
       title: e.title,
       // Without `mode` (older BE) the PQ-02 / MQ-06 match still tells the type.
-      kind: e.mode ? toKind(e.mode) : practice ? 'PRACTICE' : material ? 'MATERIAL_QUIZ' : 'EXAM',
+      kind: e.mode ? toKind(e.mode) : practice ? 'PRACTICE_EXAM' : material ? 'MATERIAL_QUIZ' : 'EXAM',
       courseId: e.courseId ?? null,
       courseTitle: e.courseTitle ?? null,
       maxScore: e.maxScore,
@@ -152,7 +155,7 @@ export function MyExamsPage() {
   const [course, setCourse] = useState(ALL);
   const [kind, setKind] = useState(() => {
     const type = searchParams.get('type') ?? '';
-    if (type === 'SMART_PRACTICE') return 'PRACTICE';
+    if ((PRACTICE_ALIASES as readonly string[]).includes(type)) return 'PRACTICE';
     return type in KIND_LABEL || type === CODE_FILTER ? type : ALL;
   });
   const [sort, setSort] = useState<SortKey>('recent');
@@ -256,7 +259,7 @@ export function MyExamsPage() {
               {canViewAttempts(row) ? (
                 <button
                   type="button"
-                  onClick={() => navigate(studentExamAttemptsPath(row.examId, isPractice(row.kind)))}
+                  onClick={() => navigate(studentExamAttemptsPath(row.examId))}
                   className="truncate text-sm font-semibold text-content text-left hover:text-primary hover:underline"
                   title={row.title}
                 >
@@ -344,7 +347,7 @@ export function MyExamsPage() {
         subtitle="Course exams, practice exams and quizzes from your materials — with your best score on each."
         action={
           <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-            <Button variant="outline" icon={<AiSparkle />} onClick={() => setQuizModal('personal')}>
+            <Button variant="outline" icon={<Icon.Zap className="w-4 h-4" />} onClick={() => setQuizModal('personal')}>
               Create practice exam
             </Button>
             <Button variant="outline" icon={<Icon.Brain className="w-4 h-4" />} onClick={() => setQuizModal('material')}>

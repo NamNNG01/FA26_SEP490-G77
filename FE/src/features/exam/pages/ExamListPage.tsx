@@ -286,7 +286,6 @@ export function ExamListPage() {
       "Duration (min)",
       "Status",
       "Generation Type",
-      "Practice",
       "Mode",
       "Created At",
     ];
@@ -302,7 +301,6 @@ export function ExamListPage() {
       e.durationMinutes,
       e.status,
       e.generationType,
-      e.isPractice ? "Yes" : "No",
       e.mode ?? "EXAM",
       `"${new Date(e.createdAt).toLocaleString()}"`,
     ]);

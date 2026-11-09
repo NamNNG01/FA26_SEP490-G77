@@ -213,10 +213,9 @@ export function PaymentCheckoutModal({
   );
 
   return (
-    <Modal open onClose={onClose} title={item.type === 'COURSE' ? 'Buy course' : `Upgrade to ${item.title}`} footer={footer}>
+    <Modal open onClose={onClose} title={item.type === 'COURSE' ? 'Buy course' : `Upgrade to ${item.title}`} footer={footer}
+      error={error && <Alert type="error" message={error} />}>
       <div className="space-y-4">
-        {error && <Alert type="error" message={error} />}
-
         {!paying && (
           <>
             <div className="rounded-[12px] border border-line p-4 flex items-baseline justify-between gap-3">

@@ -4,6 +4,7 @@ import com.examprep.entities.StudentQuestionReview;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -88,15 +89,19 @@ public interface StudentQuestionReviewRepository extends JpaRepository<StudentQu
     );
 
     @Query("SELECT r FROM StudentQuestionReview r JOIN FETCH r.question q " +
+           "LEFT JOIN q.course qc LEFT JOIN q.module m LEFT JOIN m.course mc " +
+           "LEFT JOIN q.group g LEFT JOIN q.course gc LEFT JOIN q.module gm LEFT JOIN gm.course gmc " +
            "WHERE r.student.userId = :studentId " +
            "AND ((:type = 'all' AND (r.status = 'WRONG_BOOKMARKED' OR r.bookmark = true)) OR (:type = 'wrong' AND r.status = 'WRONG_BOOKMARKED') OR (:type = 'bookmarked' AND r.bookmark = true)) " +
            "AND (:examType = 'ESSAY' AND q.questionType IN ('ESSAY', 'DIAGRAM') OR :examType = 'QUIZ' AND q.questionType NOT IN ('ESSAY', 'DIAGRAM')) " +
+           "AND (:courseId IS NULL OR qc.courseId = :courseId OR mc.courseId = :courseId OR gc.courseId = :courseId OR gmc.courseId = :courseId) " +
            "AND q.deletedAt IS NULL AND q.status = 'ACTIVE' " +
            "ORDER BY r.wrongCount DESC, r.lastPracticedAt DESC")
-    List<StudentQuestionReview> findReviewCandidatesForExamType(
+    List<StudentQuestionReview> findReviewCandidatesForCourseAndExamType(
             @Param("studentId") Long studentId,
             @Param("type") String type,
             @Param("examType") String examType,
+            @Param("courseId") Long courseId,
             Pageable pageable
     );
 
@@ -115,4 +120,16 @@ public interface StudentQuestionReviewRepository extends JpaRepository<StudentQu
            "WHERE r.student.userId = :studentId AND r.status = 'WRONG_BOOKMARKED' AND q.deletedAt IS NULL AND q.status = 'ACTIVE' " +
            "AND (qc.courseId = :courseId OR mc.courseId = :courseId) AND r.lastPracticedAt < :before")
     long countStaleWrong(@Param("studentId") Long studentId, @Param("courseId") Long courseId, @Param("before") java.time.Instant before);
+
+    @Modifying
+    @Query("DELETE FROM StudentQuestionReview r WHERE r.student.userId = :studentId")
+    void deleteAllByStudentUserId(@Param("studentId") Long studentId);
+
+    @Modifying
+    @Query("UPDATE StudentQuestionReview r SET r.bookmark = false WHERE r.student.userId = :studentId")
+    void unbookmarkAllByStudentUserId(@Param("studentId") Long studentId);
+
+    @Modifying
+    @Query("UPDATE StudentQuestionReview r SET r.bookmark = true WHERE r.student.userId = :studentId")
+    void bookmarkAllByStudentUserId(@Param("studentId") Long studentId);
 }

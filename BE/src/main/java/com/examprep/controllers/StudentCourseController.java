@@ -91,6 +91,17 @@ public class StudentCourseController {
         return ResponseEntity.ok(ApiResponse.success(list));
     }
 
+    @GetMapping("/courses/{courseId}/modules/{moduleId}/content")
+    @Operation(summary = "Module Content: Exams and Decks for specific module or general")
+    public ResponseEntity<ApiResponse<ModuleContentDto>> getModuleContent(
+            @PathVariable Long courseId,
+            @PathVariable String moduleId,
+            @AuthenticationPrincipal UserPrincipal currentUser
+    ) {
+        ModuleContentDto dto = studentCourseService.getModuleContent(courseId, moduleId, currentUser.getId());
+        return ResponseEntity.ok(ApiResponse.success(dto));
+    }
+
     @GetMapping("/decks/{deckId}/cards")
     @Operation(summary = "MC-04: Deck Cards List")
     public ResponseEntity<ApiResponse<PageResponse<CardDto>>> listDeckCards(

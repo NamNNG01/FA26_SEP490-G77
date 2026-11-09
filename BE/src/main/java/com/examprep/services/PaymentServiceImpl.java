@@ -291,8 +291,21 @@ public class PaymentServiceImpl implements PaymentService {
         if (!"ALL".equalsIgnoreCase(discount.getAppliesTo()) && !type.equalsIgnoreCase(discount.getAppliesTo())) {
             throw new BaseException(ResponseCode.INVALID_DISCOUNT_CODE, "Discount does not apply to this item type (" + discount.getAppliesTo() + ")");
         }
-        if (userDiscounts.existsByUserUserIdAndDiscountDiscountIdAndIsUsedTrue(userId, discount.getDiscountId())) {
-            throw new BaseException(ResponseCode.INVALID_DISCOUNT_CODE, "Discount has already been used by user");
+        String accessType = discount.getAccessType() != null ? discount.getAccessType() : "PUBLIC";
+        if ("CLAIM_REQUIRED".equalsIgnoreCase(accessType)) {
+            UserDiscount ud = userDiscounts.findFirstByUserUserIdAndDiscountDiscountIdAndIsUsedFalse(userId, discount.getDiscountId())
+                    .orElse(null);
+            if (ud == null) {
+                if (userDiscounts.existsByUserUserIdAndDiscountDiscountIdAndIsUsedTrue(userId, discount.getDiscountId())) {
+                    throw new BaseException(ResponseCode.INVALID_DISCOUNT_CODE, "Discount has already been used by user");
+                } else {
+                    throw new BaseException(ResponseCode.INVALID_DISCOUNT_CODE, "Discount code requires claim");
+                }
+            }
+        } else {
+            if (userDiscounts.existsByUserUserIdAndDiscountDiscountIdAndIsUsedTrue(userId, discount.getDiscountId())) {
+                throw new BaseException(ResponseCode.INVALID_DISCOUNT_CODE, "Discount has already been used by user");
+            }
         }
         return discount;
     }

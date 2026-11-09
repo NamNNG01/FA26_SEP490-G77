@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
+import { Alert } from "@/components/ui/Alert";
 import { Icon } from "@/assets/icons";
 import { useToast } from "@/components/ui/ToastHost";
 import { ROUTES } from "@/app/routes";
@@ -19,6 +20,7 @@ import {
   type GenerationType,
   type ExamStatus,
   type ExamMode,
+  EXAM_MODE_OPTIONS,
   type BankQuestionItem,
   type QuestionGroupItem,
 } from "@/services/exam.service";
@@ -50,13 +52,7 @@ import {
   type QuestionDetail,
 } from "@/services/question.service";
 import { getApiErrorMessage } from "@/utils/apiError";
-
-// One picker for isPractice + exams.mode; a contest exam is never a practice exam.
-const MODE_OPTIONS = [
-  { label: "Real Exam", value: "EXAM" },
-  { label: "Practice", value: "PRACTICE" },
-  { label: "Contest", value: "CONTEST" },
-];
+import { focusFirstInvalidAfter } from "@/utils/focusFirstInvalid";
 
 export function ExamFormPage({
   formKind: propFormKind,
@@ -97,7 +93,6 @@ export function ExamFormPage({
   const [moduleId, setModuleId] = useState<string>("");
   const [durationMinutes, setDurationMinutes] = useState<number>(60);
   const [maxScore, setMaxScore] = useState<number>(100);
-  const [isPractice, setIsPractice] = useState<boolean>(false);
   const [mode, setMode] = useState<ExamMode>("EXAM");
   const [generationType, setGenerationType] =
     useState<GenerationType>("STATIC");
@@ -146,8 +141,6 @@ export function ExamFormPage({
   const isPublished = status === "PUBLISHED";
   const isArchived = status === "ARCHIVED";
   const isReadOnly = isPublished || isArchived;
-  const modeChoice =
-    mode === "CONTEST" ? "CONTEST" : isPractice ? "PRACTICE" : "EXAM";
   // Published exams keep their configuration locked, but managers may still
   // maintain the attached question set. Archived exams remain fully read-only.
   const areQuestionsReadOnly = isArchived;
@@ -195,9 +188,12 @@ export function ExamFormPage({
 
   const handleSaveQuestionEdit = async () => {
     if (!questionEditTarget || !questionEditDraft || questionEditSaving) return;
-    setQuestionEditSubmitted(true);
     setQuestionEditError("");
-    if (!isDraftValid(questionEditDraft)) return;
+    if (!isDraftValid(questionEditDraft)) {
+      focusFirstInvalidAfter(() => setQuestionEditSubmitted(true));
+      return;
+    }
+    setQuestionEditSubmitted(true);
     setQuestionEditSaving(true);
     try {
       const detail = await questionService.getQuestionById(
@@ -309,7 +305,6 @@ export function ExamFormPage({
       setModuleId(data.moduleId ? String(data.moduleId) : "");
       setDurationMinutes(data.durationMinutes || 60);
       setMaxScore(data.maxScore || 100);
-      setIsPractice(!!data.isPractice);
       setMode(data.mode === "CONTEST" ? "CONTEST" : "EXAM");
       setGenerationType(
         data.generationType === "MIXED"
@@ -579,7 +574,6 @@ export function ExamFormPage({
           moduleId: moduleId ? Number(moduleId) : undefined,
           durationMinutes,
           maxScore,
-          isPractice,
           mode,
           generationType,
           questionIds: payloadQuestionIds,
@@ -607,7 +601,6 @@ export function ExamFormPage({
           courseId: courseId ? Number(courseId) : undefined,
           moduleId: moduleId ? Number(moduleId) : undefined,
           durationMinutes,
-          isPractice,
           mode,
           generationType,
           maxScore,
@@ -655,7 +648,6 @@ export function ExamFormPage({
         courseId: courseId ? Number(courseId) : undefined,
         moduleId: moduleId ? Number(moduleId) : undefined,
         durationMinutes,
-        isPractice,
         mode,
         generationType,
         maxScore,
@@ -1382,14 +1374,13 @@ export function ExamFormPage({
 
                   <Select
                     label="Mode"
-                    value={modeChoice}
+                    value={mode}
                     disabled={isReadOnly}
                     onChange={(v) => {
-                      setIsPractice(v === "PRACTICE");
-                      setMode(v === "CONTEST" ? "CONTEST" : "EXAM");
+                      setMode(v as ExamMode);
                       setIsDirty(true);
                     }}
-                    options={MODE_OPTIONS}
+                    options={EXAM_MODE_OPTIONS}
                   />
                 </div>
               </div>
@@ -2076,7 +2067,7 @@ export function ExamFormPage({
               <div className="flex items-center justify-between">
                 <span className="text-content-subtle">Mode:</span>
                 <span className="font-semibold text-content">
-                  {MODE_OPTIONS.find((o) => o.value === modeChoice)?.label}
+                  {EXAM_MODE_OPTIONS.find((o) => o.value === mode)?.label}
                 </span>
               </div>
               <div className="flex items-center justify-between">
@@ -2159,6 +2150,7 @@ export function ExamFormPage({
         onClose={() => !questionEditSaving && setQuestionEditTarget(null)}
         title="Edit Question"
         size="2xl"
+        error={questionEditError && questionEditDraft && <Alert type="error" message={questionEditError} />}
         footer={
           <div className="flex w-full flex-wrap items-center justify-end gap-2">
             <Button
@@ -2188,14 +2180,6 @@ export function ExamFormPage({
           </div>
         ) : questionEditDraft ? (
           <div className="space-y-3">
-            {questionEditError && (
-              <div
-                role="alert"
-                className="rounded border border-danger-line bg-danger-light p-3 text-sm text-danger"
-              >
-                {questionEditError}
-              </div>
-            )}
             <QuestionForm
               q={questionEditDraft}
               index={0}

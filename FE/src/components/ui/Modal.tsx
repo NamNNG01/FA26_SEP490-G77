@@ -1,31 +1,67 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from '@/assets/icons';
+import { AlertBannerContext } from './Alert';
 
 const FOCUSABLE_SELECTOR = 'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+/** Callback ref that reports the element's height while it is mounted, and 0 once it is gone. */
+function useHeightRef(onHeight: (height: number) => void) {
+  const observer = useRef<ResizeObserver | null>(null);
+  return useCallback((el: HTMLElement | null) => {
+    observer.current?.disconnect();
+    observer.current = null;
+    if (!el) { onHeight(0); return; }
+    onHeight(el.offsetHeight);
+    observer.current = new ResizeObserver(() => onHeight(el.offsetHeight));
+    observer.current.observe(el);
+  }, [onHeight]);
+}
+
+/** Open modals, newest last: only the top one handles Escape / Tab, and the page scrolls again once none is open. */
+const openModals: object[] = [];
 
 /**
  * `dismissible={false}` hides the close button and ignores Escape / backdrop clicks — for a step
  * that must finish first (an upload, a running job).
+ * `error` (an Alert) is laid over the top of the body, outside its scroll area, so a failed submit
+ * is visible wherever the body is scrolled. Its ✕ hides it until the error is cleared or a footer
+ * button is pressed again. It may cover the `description` line(s) at the top of the body, but never
+ * the content: when it is taller than the description, the content is pushed down by the difference.
  */
-export function Modal({ open, isOpen, onClose, title, children, footer, size = 'md', dismissible = true }: {
-  open?: boolean; isOpen?: boolean; onClose: () => void; title?: string; children: React.ReactNode;
-  footer?: React.ReactNode; size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | 'full' | 'screen'; dismissible?: boolean;
+export function Modal({ open, isOpen, onClose, title, description, children, footer, error, size = 'md', dismissible = true }: {
+  open?: boolean; isOpen?: boolean; onClose: () => void; title?: string; description?: React.ReactNode; children: React.ReactNode;
+  footer?: React.ReactNode; error?: React.ReactNode; size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | 'full' | 'screen'; dismissible?: boolean;
 }) {
   const isVisible = Boolean(open ?? isOpen);
   const panelRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
   // Read at call time, so toggling `dismissible` needs no re-subscription.
   onCloseRef.current = dismissible ? onClose : () => {};
+  const [errorHidden, setErrorHidden] = useState(false);
+  const hasError = Boolean(error);
+  useEffect(() => { if (!hasError) setErrorHidden(false); }, [hasError]);
+  const banner = useMemo(() => ({ onDismiss: () => setErrorHidden(true) }), []);
+  const [bannerHeight, setBannerHeight] = useState(0);
+  const [descriptionHeight, setDescriptionHeight] = useState(0);
+  const bannerRef = useHeightRef(setBannerHeight);
+  const descriptionRef = useHeightRef(setDescriptionHeight);
+  const showError = hasError && !errorHidden;
+  // Space the banner takes beyond the description, so it never sits on the content at scroll top.
+  const reserve = showError ? Math.max(0, bannerHeight - descriptionHeight) : 0;
 
   useEffect(() => {
     if (!isVisible) return;
     const panel = panelRef.current;
     const previouslyFocused = document.activeElement as HTMLElement | null;
+    const self = {};
+    openModals.push(self);
 
     document.body.style.overflow = 'hidden';
     panel?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR)?.focus();
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      // A modal opened over this one owns the keyboard.
+      if (openModals[openModals.length - 1] !== self) return;
       if (e.key === 'Escape') {
         e.stopPropagation();
         onCloseRef.current();
@@ -47,7 +83,8 @@ export function Modal({ open, isOpen, onClose, title, children, footer, size = '
 
     document.addEventListener('keydown', handleKeyDown);
     return () => {
-      document.body.style.overflow = '';
+      openModals.splice(openModals.indexOf(self), 1);
+      if (openModals.length === 0) document.body.style.overflow = '';
       document.removeEventListener('keydown', handleKeyDown);
       previouslyFocused?.focus?.();
     };
@@ -65,8 +102,18 @@ export function Modal({ open, isOpen, onClose, title, children, footer, size = '
             {dismissible && <button onClick={onClose} aria-label="Close" className="text-content-subtle hover:text-content-secondary transition-colors"><Icon.X className="w-5 h-5" /></button>}
           </div>
         )}
-        <div className="min-w-0 px-6 py-4 overflow-y-auto flex-1 min-h-0">{children}</div>
-        {footer && <div className="min-w-0 px-4 sm:px-6 py-4 border-t border-line-soft flex flex-wrap items-center justify-end gap-2">{footer}</div>}
+        <div className="relative min-w-0 flex-1 min-h-0 flex flex-col">
+          <div className="min-w-0 px-6 pb-4 overflow-y-auto flex-1 min-h-0" style={{ paddingTop: 16 + reserve }}>
+            {description && <div ref={descriptionRef} className="pb-4 text-sm text-content-soft">{description}</div>}
+            {children}
+          </div>
+          {showError && (
+            <div ref={bannerRef} className="absolute inset-x-0 top-0 z-10">
+              <AlertBannerContext.Provider value={banner}>{error}</AlertBannerContext.Provider>
+            </div>
+          )}
+        </div>
+        {footer && <div onClickCapture={() => setErrorHidden(false)} className="min-w-0 px-4 sm:px-6 py-4 border-t border-line-soft flex flex-wrap items-center justify-end gap-2">{footer}</div>}
       </div>
     </div>
   );
