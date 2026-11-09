@@ -22,4 +22,7 @@ public class ReviewSessionRequestDto {
     @NotNull
     @Positive
     private Long courseId;
+    @NotNull
+    @Positive
+    private Integer durationMinutes;
 }
