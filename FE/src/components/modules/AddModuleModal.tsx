@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Alert } from '@/components/ui/Alert';
 import { Icon } from '@/assets/icons';
+import { apiFieldErrors } from '@/utils/apiError';
+import { focusFirstInvalidAfter } from '@/utils/focusFirstInvalid';
 import { courseService, type CourseModuleResponse } from '@/services/course.service';
 
 export function AddModuleModal({
@@ -45,10 +47,13 @@ export function AddModuleModal({
       nextErrors.title = 'Module title is required.';
     }
 
-    setErrors(nextErrors);
-    if (Object.keys(nextErrors).length > 0) return;
-
     setSubmitError(null);
+    if (Object.keys(nextErrors).length > 0) {
+      focusFirstInvalidAfter(() => setErrors(nextErrors));
+      return;
+    }
+    setErrors({});
+
     setSubmitting(true);
     try {
       const created = await courseService.createModule(courseId, {
@@ -60,6 +65,8 @@ export function AddModuleModal({
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to create module. Please try again.';
       setSubmitError(message);
+      const fields = apiFieldErrors(err);
+      if (fields.title) focusFirstInvalidAfter(() => setErrors({ title: fields.title }));
     } finally {
       setSubmitting(false);
     }
@@ -97,7 +104,7 @@ export function AddModuleModal({
           required
           autoFocus
           value={title}
-          onChange={e => setTitle(e.target.value)}
+          onChange={e => { setTitle(e.target.value); setErrors({}); }}
           error={errors.title}
           placeholder="e.g. Python Basics"
         />
