@@ -211,7 +211,8 @@ public class StudentAiApiIntegrationTest {
         explain(student, choice.getQuestionId()).andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.items[0].source").value("FAILED"))
                 .andExpect(jsonPath("$.data.items[0].reason").value("AI_UPSTREAM_ERROR"))
-                .andExpect(jsonPath("$.data.quota.planRemaining").value(600_000));
+                .andExpect(jsonPath("$.data.quota.planRemaining").value(600_000))
+                .andExpect(jsonPath("$.data.quota.freeRemaining").value(0)); // a subscriber has no FREE allowance
         AiUsageLog log = onlyLog("EXPLANATION");
         assertEquals("FAILED", log.getStatus());
         assertEquals("PLAN", log.getBillingSource());
@@ -388,6 +389,9 @@ public class StudentAiApiIntegrationTest {
                 .andExpect(jsonPath("$.data.plan.tokenLimit").value(600_000))
                 .andExpect(jsonPath("$.data.plan.tokenUsed").value(50_000))
                 .andExpect(jsonPath("$.data.plan.remaining").value(550_000))
+                // The FREE allowance is not part of a subscriber's quota.
+                .andExpect(jsonPath("$.data.free.monthlyLimit").value(0))
+                .andExpect(jsonPath("$.data.free.remaining").value(0))
                 .andExpect(jsonPath("$.data.expiredPlan").doesNotExist());
     }
 

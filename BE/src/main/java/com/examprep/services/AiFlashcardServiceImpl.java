@@ -143,30 +143,17 @@ public class AiFlashcardServiceImpl implements AiFlashcardService {
             quota.lock(userId);
             AiQuotaService.Snapshot snapshot = snapshotWithRunningJobs(userId);
             long estimate = AiQuotaService.estimate(content.length(), cards * outputBudgetPerCard + 500);
-            String billingSource;
-            if (snapshot.planName() != null) {
-                // Spec 8 (line 1014): an ACTIVE plan bills the shared PLAN pool only — the FREE
-                // allowance is never a fallback for a subscriber (allocate() prefers FREE house-wide
-                // and is therefore only used on the plan-less path below).
-                if (snapshot.planRemaining() < estimate) {
-                    throw new BaseException(ResponseCode.FLASHCARD_QUOTA_EXCEEDED, "Not enough AI quota", Map.of(
-                            "code", "AI_QUOTA_EXCEEDED",
-                            "estimatedTokens", estimate,
-                            "tokenRemaining", snapshot.planRemaining(),
-                            "tokenLimit", snapshot.planLimit()));
-                }
-                billingSource = AiQuotaService.PLAN;
-            } else {
-                List<String> source = quota.allocate(snapshot, List.of(estimate));
-                if (source == null) {
-                    throw new BaseException(ResponseCode.FLASHCARD_QUOTA_EXCEEDED, "Not enough AI quota", Map.of(
-                            "code", "AI_QUOTA_EXCEEDED",
-                            "estimatedTokens", estimate,
-                            "tokenRemaining", snapshot.available(),
-                            "tokenLimit", snapshot.planName() != null ? snapshot.planLimit() : snapshot.freeLimit()));
-                }
-                billingSource = source.get(0);
+            // Spec 8 (line 1014): an ACTIVE plan bills the PLAN pool only, a plan-less student bills FREE.
+            // snapshot() reports no FREE balance for a subscriber, so allocate() can only pick PLAN there.
+            List<String> source = quota.allocate(snapshot, List.of(estimate));
+            if (source == null) {
+                throw new BaseException(ResponseCode.FLASHCARD_QUOTA_EXCEEDED, "Not enough AI quota", Map.of(
+                        "code", "AI_QUOTA_EXCEEDED",
+                        "estimatedTokens", estimate,
+                        "tokenRemaining", snapshot.available(),
+                        "tokenLimit", snapshot.planName() != null ? snapshot.planLimit() : snapshot.freeLimit()));
             }
+            String billingSource = source.get(0);
             User owner = users.getReferenceById(userId);
             Document document = documents.save(Document.builder()
                     .user(owner)

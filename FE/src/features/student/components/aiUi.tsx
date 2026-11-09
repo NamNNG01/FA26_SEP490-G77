@@ -67,11 +67,11 @@ export function SourceBadge({ source }: { source: string | null | undefined }) {
 
 export function QuotaLine({ quota }: { quota: AiQuotaLeft | null | undefined }) {
   if (!quota) return null;
-  return (
-    <p className="text-2xs text-content-subtle">
-      AI tokens left: {quota.freeRemaining.toLocaleString()} free · {quota.planRemaining.toLocaleString()} plan
-    </p>
-  );
+  // A plan end date means a subscriber: the plan is their only balance, there is no FREE allowance.
+  const left = quota.planEndDate
+    ? `${quota.planRemaining.toLocaleString()} plan`
+    : `${quota.freeRemaining.toLocaleString()} free`;
+  return <p className="text-2xs text-content-subtle">AI tokens left: {left}</p>;
 }
 
 /** 429 → the token numbers, 422 → "do more exams", anything else → the message. */

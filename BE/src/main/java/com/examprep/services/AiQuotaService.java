@@ -18,8 +18,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Student AI quota: a monthly FREE allowance first, then the active PLAN.
- * Remaining = limit - settled usage - open reservations. Callers reserve inside a transaction holding {@link #lock}.
+ * Student AI quota: an active PLAN is the only balance a subscriber has; the monthly FREE allowance
+ * belongs to students without a plan. Remaining = limit - settled usage - open reservations.
+ * Callers reserve inside a transaction holding {@link #lock}.
  */
 @Service
 @RequiredArgsConstructor
@@ -47,14 +48,16 @@ public class AiQuotaService {
         YearMonth month = YearMonth.now(ZONE);
         Instant monthStart = month.atDay(1).atStartOfDay(ZONE).toInstant();
         Instant nextMonth = month.plusMonths(1).atDay(1).atStartOfDay(ZONE).toInstant();
-        long[] free = usage(userId, FREE, monthStart, nextMonth);
         UserSubscription plan = subscriptions.findActiveSubscriptionByUser(userId, Instant.now()).orElse(null);
-        // A plan's end date is inclusive.
-        long[] paid = plan == null ? new long[2] : usage(userId, PLAN, plan.getStartDate(), plan.getEndDate().plusSeconds(1));
-        return plan == null
-                ? new Snapshot(freeMonthlyTokens, free[0], free[1], nextMonth, null, 0, null, null, 0, 0)
-                : new Snapshot(freeMonthlyTokens, free[0], free[1], nextMonth, plan.getPlan().getPlanName(),
-                        plan.getPlan().getAiTokenLimit(), plan.getStartDate(), plan.getEndDate(), paid[0], paid[1]);
+        if (plan != null) {
+            // A plan's end date is inclusive.
+            long[] paid = usage(userId, PLAN, plan.getStartDate(), plan.getEndDate().plusSeconds(1));
+            // A subscriber pays for the plan: it is their only balance, the FREE allowance does not apply to them.
+            return new Snapshot(0, 0, 0, nextMonth, plan.getPlan().getPlanName(), plan.getPlan().getAiTokenLimit(),
+                    plan.getStartDate(), plan.getEndDate(), paid[0], paid[1]);
+        }
+        long[] free = usage(userId, FREE, monthStart, nextMonth);
+        return new Snapshot(freeMonthlyTokens, free[0], free[1], nextMonth, null, 0, null, null, 0, 0);
     }
 
     /** Serialises quota decisions of one user until the surrounding transaction ends. */
@@ -62,7 +65,10 @@ public class AiQuotaService {
         entityManager.createNativeQuery("SELECT pg_advisory_xact_lock(:userId)").setParameter("userId", userId).getResultList();
     }
 
-    /** FREE or PLAN for each estimate, in order; null when any of them does not fit (nothing is partially funded). */
+    /**
+     * FREE or PLAN for each estimate, in order; null when any of them does not fit (nothing is partially funded).
+     * A subscriber's snapshot reports no FREE balance, so their estimates can only land on PLAN.
+     */
     public List<String> allocate(Snapshot snapshot, List<Long> estimates) {
         long free = snapshot.freeRemaining();
         long plan = snapshot.planRemaining();
