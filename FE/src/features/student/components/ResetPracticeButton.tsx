@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
+import { Alert } from '@/components/ui/Alert';
 import { useToast } from '@/components/ui/ToastHost';
 import { Icon } from '@/assets/icons';
 import { getApiErrorMessage } from '@/utils/apiError';
@@ -47,6 +48,7 @@ export function ResetPracticeButton({ scope, moduleTitle, onReset }: { scope: Pr
         open={open}
         onClose={() => !busy && setOpen(false)}
         title="Reset practice progress?"
+        error={error && <Alert type="error" message={error} />}
         size="sm"
         footer={
           <>
@@ -63,7 +65,6 @@ export function ResetPracticeButton({ scope, moduleTitle, onReset }: { scope: Pr
           Every practice session, answer and statistic of <strong>{moduleTitle}</strong> will be deleted, including a session in
           progress. Your mistake notebook, bookmarks, exams and flashcards are not affected. This cannot be undone.
         </p>
-        {error && <p className="mt-3 text-sm text-danger">{error}</p>}
       </Modal>
     </>
   );

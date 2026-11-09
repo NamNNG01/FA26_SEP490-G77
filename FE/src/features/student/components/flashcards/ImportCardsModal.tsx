@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Progress } from '@/components/ui/Progress';
+import { Alert } from '@/components/ui/Alert';
 import { Icon } from '@/assets/icons';
 import { getApiErrorMessage } from '@/utils/apiError';
 import {
@@ -138,6 +139,7 @@ function LegacyImportCardsModal({
       size="lg"
       onClose={onClose}
       title="Import cards"
+      error={error && <Alert type="error" message={error} />}
       footer={
         done ? (
           <Button onClick={onClose}>Done</Button>
@@ -188,7 +190,6 @@ function LegacyImportCardsModal({
             <input type="file" accept={ACCEPT} className="sr-only" onChange={e => pick(e.target.files?.[0] ?? null)} />
           </label>
           {fileError && <p className="text-xs text-danger">{fileError}</p>}
-          {error && <p className="text-sm text-danger">{error}</p>}
         </div>
       ) : (
         <div className="space-y-4">
@@ -232,7 +233,6 @@ function LegacyImportCardsModal({
               </table>
             </div>
           )}
-          {error && <p className="text-sm text-danger">{error}</p>}
         </div>
       )}
     </Modal>

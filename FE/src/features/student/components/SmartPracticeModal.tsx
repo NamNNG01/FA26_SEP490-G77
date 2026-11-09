@@ -326,7 +326,8 @@ export function SmartPracticeModal({
     ) : null;
 
   return (
-    <Modal open={open} onClose={() => !busy && onClose()} title="Create Practice Exam" size="lg" footer={footer}>
+    <Modal open={open} onClose={() => !busy && onClose()} title="Create Practice Exam" size="lg" footer={footer}
+      error={mode === 'RANDOM' ? randomError && <Alert type="error" message={randomError} /> : error && <AiErrorAlert error={error} />}>
       <div className="space-y-5">
         {phase === 'form' && (
           <>
@@ -450,7 +451,6 @@ export function SmartPracticeModal({
                 )}
               </div>
             )}
-            {mode === 'RANDOM' && randomError && <Alert type="error" message={randomError} />}
           </>
         )}
 
@@ -488,7 +488,6 @@ export function SmartPracticeModal({
           <Alert type="error" message="The AI could not build the practice exam. Your tokens were refunded — please try again." />
         )}
 
-        {mode === 'AI' && error && <AiErrorAlert error={error} />}
       </div>
     </Modal>
   );

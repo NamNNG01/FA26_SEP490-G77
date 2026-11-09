@@ -141,6 +141,7 @@ export function ModulePracticeModal({
       open={open}
       onClose={() => !starting && onClose()}
       title={`Practice · ${moduleTitle}`}
+      error={error && <Alert type="error" message={error} />}
       size="md"
       footer={
         <>
@@ -255,7 +256,6 @@ export function ModulePracticeModal({
           </>
         )}
 
-        {error && <p className="text-sm text-danger">{error}</p>}
       </div>
     </Modal>
   );
