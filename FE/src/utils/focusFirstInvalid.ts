@@ -2,11 +2,12 @@ import { flushSync } from 'react-dom';
 
 /**
  * Scrolls to and focuses the first visible `[aria-invalid="true"]` control, so a field error is
- * never left below the fold of a long modal. `root` defaults to the top-most open dialog, else the
+ * never left below the fold of a long modal. `root` defaults to the top-most open modal dialog, else the
  * page. Returns false when no invalid control is on screen (e.g. it sits on another step or tab).
  */
 export function focusFirstInvalid(root?: ParentNode): boolean {
-  const dialogs = document.querySelectorAll('[role="dialog"]');
+  // aria-modal skips popovers that also use role="dialog" (notification bell, type picker).
+  const dialogs = document.querySelectorAll('[role="dialog"][aria-modal="true"]');
   const scope = root ?? dialogs[dialogs.length - 1] ?? document;
   const target = Array.from(scope.querySelectorAll<HTMLElement>('[aria-invalid="true"]'))
     .find(el => el.offsetParent !== null);
