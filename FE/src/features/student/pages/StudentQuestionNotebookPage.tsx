@@ -51,6 +51,7 @@ export function StudentQuestionNotebookPage() {
   const [sessionType, setSessionType] = useState<
     "wrong" | "bookmarked" | "all"
   >("wrong");
+  const [sessionCourseId, setSessionCourseId] = useState("");
   const [sessionExamType, setSessionExamType] = useState<"QUIZ" | "ESSAY">(
     "QUIZ",
   );
@@ -115,12 +116,17 @@ export function StudentQuestionNotebookPage() {
       setActionError("Question count must be a whole number between 1 and 50.");
       return;
     }
+    if (!sessionCourseId) {
+      setActionError("Choose a course for this review session.");
+      return;
+    }
     setStarting(true);
     try {
       const session = await studentProgressService.startReviewSession({
         type: sessionType,
         examType: sessionExamType,
         size,
+        courseId: Number(sessionCourseId),
       });
       navigate(
         `${ROUTES.studentExam}?attemptId=${encodeURIComponent(String(session.attemptId))}`,
@@ -202,6 +208,19 @@ export function StudentQuestionNotebookPage() {
       <section className="card p-4 space-y-3">
         <h2 className="font-semibold text-content">Start a review session</h2>
         <div className="flex flex-wrap items-end gap-3">
+          <SearchableSelect
+            label="Course"
+            className="w-full sm:w-64"
+            value={sessionCourseId}
+            options={courses.map((course) => ({
+              label: course.title,
+              value: String(course.courseId),
+            }))}
+            onChange={setSessionCourseId}
+            placeholder="Choose a course"
+            searchPlaceholder="Search courses…"
+            emptyText="No active courses found"
+          />
           <Select
             label="Questions to practice"
             className="w-full sm:w-56"

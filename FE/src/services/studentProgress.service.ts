@@ -42,6 +42,7 @@ export interface ReviewSessionRequest {
   type: 'wrong' | 'bookmarked' | 'all';
   examType: 'QUIZ' | 'ESSAY';
   size: number;
+  courseId: number;
 }
 
 export interface ReviewSessionResponse {
