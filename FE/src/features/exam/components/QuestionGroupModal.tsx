@@ -3,6 +3,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
+import { Alert } from '@/components/ui/Alert';
 import { SearchInput } from '@/components/common/SearchInput';
 import { Icon } from '@/assets/icons';
 import { useToast } from '@/components/ui/ToastHost';
@@ -101,7 +102,7 @@ export function QuestionGroupModal({
       });
       onSelectGroup(created);
     } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Failed to create question group.'), { title: 'Could not create question group', duration: null });
+      setErrorMsg(getApiErrorMessage(err, 'Failed to create question group.'));
     } finally {
       setCreating(false);
     }
@@ -118,6 +119,7 @@ export function QuestionGroupModal({
       onClose={onClose}
       title="Add Reading Passage Group"
       size="lg"
+      error={errorMsg && <Alert type="error" title="Could not create question group" message={errorMsg} />}
       footer={
         <div className="flex items-center justify-end w-full">
           <div className="flex items-center gap-2">
@@ -148,7 +150,6 @@ export function QuestionGroupModal({
       }
     >
       <div className="space-y-4">
-        {errorMsg && <p className="text-sm text-danger font-medium">{errorMsg}</p>}
         <div className="flex border-b border-line">
           <button
             type="button"
