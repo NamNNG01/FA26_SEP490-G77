@@ -23,7 +23,7 @@ import {
   contentKey,
   contentTitle,
   countItems,
-  useCourseContent,
+  type ContentItem,
   useOpenContent,
 } from '../components/courseContent';
 import { ModulePracticeModal } from '../components/ModulePracticeModal';
@@ -187,8 +187,11 @@ function ModuleContent({
   description?: string | null;
 }) {
   const navigate = useNavigate();
-  const { byModule, general, loading, error, retry } = useCourseContent(course);
   const openItem = useOpenContent(course);
+  const [items, setItems] = useState<ContentItem[]>([]);
+  const [contentLoading, setContentLoading] = useState(true);
+  const [contentError, setContentError] = useState<string | null>(null);
+  const [contentReload, setContentReload] = useState(0);
   const [search, setSearch] = useState('');
   const [kind, setKind] = useState<KindFilter>('all');
   const [overview, setOverview] = useState<ModulePracticeOverview | 'error' | undefined>(undefined);
@@ -196,6 +199,31 @@ function ModuleContent({
   const [refresh, setRefresh] = useState(0);
 
   const scope: PracticeScope = moduleId == null ? { courseId: course.courseId } : { moduleId };
+
+  useEffect(() => {
+    let cancelled = false;
+    setContentLoading(true);
+    setContentError(null);
+    setItems([]);
+    studentCourseService
+      .getModuleContent(course.courseId, moduleId ?? GENERAL_MODULE)
+      .then(content => {
+        if (cancelled) return;
+        setItems([
+          ...content.exams.map(exam => ({ kind: 'exam' as const, exam })),
+          ...content.decks.map(deck => ({ kind: 'deck' as const, deck })),
+        ]);
+      })
+      .catch(err => {
+        if (!cancelled) setContentError(getApiErrorMessage(err, 'Failed to load module content.'));
+      })
+      .finally(() => {
+        if (!cancelled) setContentLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [course.courseId, moduleId, contentReload]);
 
   useEffect(() => {
     let cancelled = false;
@@ -213,7 +241,6 @@ function ModuleContent({
     };
   }, [course.courseId, moduleId, refresh]);
 
-  const items = useMemo(() => (moduleId == null ? general : byModule.get(moduleId) ?? []), [moduleId, general, byModule]);
   const counts = countItems(items);
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -222,14 +249,14 @@ function ModuleContent({
 
   const practice = overview != null && overview !== 'error' ? overview : null;
   // Same numbers as this module's card on the course page; the items must be in first.
-  const progress = practice && !loading && !error ? moduleProgress(practice, items) : null;
+  const progress = practice && !contentLoading && !contentError ? moduleProgress(practice, items) : null;
   const active = practice?.activeSession?.status === 'IN_PROGRESS' ? practice.activeSession : null;
 
   return (
     <>
       <ModuleHeader title={title} description={description}>
         <div className="space-y-4">
-          {overview === undefined || (practice && loading) ? (
+          {overview === undefined || (practice && contentLoading) ? (
             <Skeleton className="h-16 w-full" />
           ) : practice ? (
             <>
@@ -291,10 +318,10 @@ function ModuleContent({
           </div>
         </div>
 
-        {loading ? (
+        {contentLoading ? (
           <CardGridSkeleton count={6} />
-        ) : error ? (
-          <LoadError message={error} onRetry={retry} />
+        ) : contentError ? (
+          <LoadError message={contentError} onRetry={() => setContentReload(r => r + 1)} />
         ) : visible.length === 0 ? (
           <div className="card">
             <EmptyState
