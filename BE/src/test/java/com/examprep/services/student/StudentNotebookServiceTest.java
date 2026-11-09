@@ -10,6 +10,7 @@ import com.examprep.exceptions.BaseException;
 import com.examprep.exceptions.ResourceNotFoundException;
 import com.examprep.repositories.*;
 import com.examprep.services.StudentAttemptService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -35,6 +36,9 @@ class StudentNotebookServiceTest {
 
     @Mock
     private StudentQuestionReviewRepository reviewRepository;
+    @Mock
+    private CourseRepository courseRepository;
+    private ObjectMapper objectMapper = new ObjectMapper();
     @Mock
     private QuestionRepository questionRepository;
     @Mock
@@ -149,8 +153,10 @@ class StudentNotebookServiceTest {
         req.setSize(10);
         req.setType("wrong");
         req.setExamType("QUIZ");
+        req.setCourseId(1L);
 
-        when(reviewRepository.findReviewCandidatesForExamType(eq(100L), eq("wrong"), eq("QUIZ"), any())).thenReturn(List.of());
+        when(courseRepository.existsById(1L)).thenReturn(true);
+        when(reviewRepository.findReviewCandidatesForCourseAndExamType(eq(100L), eq("wrong"), eq("QUIZ"), eq(1L), any())).thenReturn(List.of());
 
         assertThrows(BaseException.class, () -> notebookService.startReviewSession(req, 100L));
     }
@@ -161,23 +167,25 @@ class StudentNotebookServiceTest {
         req.setSize(1);
         req.setType("wrong");
         req.setExamType("QUIZ");
+        req.setCourseId(1L);
 
-        when(reviewRepository.findReviewCandidatesForExamType(eq(100L), eq("wrong"), eq("QUIZ"), any())).thenReturn(List.of(review1));
+        when(courseRepository.existsById(1L)).thenReturn(true);
+        when(reviewRepository.findReviewCandidatesForCourseAndExamType(eq(100L), eq("wrong"), eq("QUIZ"), eq(1L), any())).thenReturn(List.of(review1));
         when(userRepository.findById(100L)).thenReturn(Optional.of(student));
-        Exam mockExam = Exam.builder().examId(500L).title("Review Practice").maxScore(BigDecimal.ONE).durationMinutes(120).build();
+        Exam mockExam = Exam.builder().examId(500L).title("Review Practice").maxScore(BigDecimal.ONE).durationMinutes(null).build();
         when(examRepository.save(any(Exam.class))).thenReturn(mockExam);
 
         AttemptResponses.Session mockSession = new AttemptResponses.Session(
-                456L, 500L, "Review Practice", "IN_PROGRESS", Instant.now(), Instant.now().plusSeconds(7200),
+                456L, 500L, "Review Practice", "IN_PROGRESS", Instant.now(), null,
                 Instant.now(), BigDecimal.ONE, List.of(new AttemptResponses.Question(1L, 1, "SINGLE_CHOICE", "What is Java?", List.of(), null, BigDecimal.ONE, null, null)),
-                null, "REVIEW", null
+                null, Exam.MODE_PRACTICE_EXAM, null
         );
         when(studentAttemptService.start(eq(100L), eq(500L), isNull())).thenReturn(mockSession);
 
-        com.examprep.entities.ExamAttempt attempt = com.examprep.entities.ExamAttempt.builder().mode("PRACTICE").build();
+        com.examprep.entities.ExamAttempt attempt = com.examprep.entities.ExamAttempt.builder().mode(Exam.MODE_PRACTICE_EXAM).build();
         when(examAttemptRepository.findById(any())).thenReturn(Optional.of(attempt));
         ReviewSessionResponseDto res = notebookService.startReviewSession(req, 100L);
-        assertEquals("REVIEW", attempt.getMode()); // MN-04: hidden review attempt
+        assertEquals(Exam.MODE_PRACTICE_EXAM, attempt.getMode());
 
         assertNotNull(res);
         assertEquals(500L, res.getExamId());

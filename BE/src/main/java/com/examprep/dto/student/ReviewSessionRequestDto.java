@@ -2,6 +2,8 @@ package com.examprep.dto.student;
 
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -17,4 +19,7 @@ public class ReviewSessionRequestDto {
     @Max(50)
     private Integer size;
     private String examType; // QUIZ or ESSAY
+    @NotNull
+    @Positive
+    private Long courseId;
 }

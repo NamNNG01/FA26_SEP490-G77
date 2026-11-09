@@ -11,10 +11,12 @@ import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+import com.examprep.entities.Exam;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Grades and closes an attempt (spec 6.4 rules 3-5, 6.3 "410 ATTEMPT_EXPIRED").
@@ -41,8 +43,18 @@ public class AttemptAutoSubmitter {
 
     /** True past {@code deadlineAt + 5s}: from then on the server refuses further saves. */
     public boolean isExpired(ExamAttempt attempt, Instant now) {
-        return attempt != null
-                && attempt.getDeadlineAt() != null
+        if (attempt == null) {
+            return false;
+        }
+        String mode = attempt.getMode();
+        if (Set.of("PRACTICE", "SMART_PRACTICE", "MATERIAL_QUIZ", "REVIEW").contains(mode)) {
+            return false;
+        }
+        Exam exam = attempt.getExam();
+        if (exam != null && exam.getDurationMinutes() == null) {
+            return false;
+        }
+        return attempt.getDeadlineAt() != null
                 && now.isAfter(attempt.getDeadlineAt().plusSeconds(EXPIRY_GRACE_SECONDS));
     }
 

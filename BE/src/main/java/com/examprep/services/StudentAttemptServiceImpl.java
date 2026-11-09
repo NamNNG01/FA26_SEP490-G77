@@ -447,7 +447,7 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
         if (!Objects.equals(attempt.getUser().getUserId(), userId)) {
             throw new ForbiddenException("Attempt belongs to another student");
         }
-        if (!"REVIEW".equals(attempt.getMode())) {
+        if (!"REVIEW".equals(attempt.getMode()) && !Exam.MODE_PRACTICE_EXAM.equals(attempt.getMode())) {
             throw new BadRequestException("Attempt is not a review session");
         }
         if (!"COMPLETED".equals(attempt.getStatus()) && !"SUBMITTED".equals(attempt.getStatus())) {
