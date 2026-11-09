@@ -50,13 +50,13 @@ export function TakeModePicker({ value, onChange }: { value: TakeAs; onChange: (
   );
 }
 
-/** Start (or retake) a self-made exam: pick Exam or Practice, then start. */
+/** Start a self-made exam: pick Exam or Practice, then start (a retake keeps the attempt's choice). */
 export function TakeModeModal({
   open,
   onClose,
   onStart,
   initial = 'PRACTICE',
-  title = 'Retake as',
+  title = 'Start as',
 }: {
   open: boolean;
   onClose: () => void;
