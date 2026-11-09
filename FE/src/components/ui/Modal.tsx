@@ -1,5 +1,6 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from '@/assets/icons';
+import { AlertBannerContext } from './Alert';
 
 const FOCUSABLE_SELECTOR = 'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
@@ -9,8 +10,9 @@ const openModals: object[] = [];
 /**
  * `dismissible={false}` hides the close button and ignores Escape / backdrop clicks — for a step
  * that must finish first (an upload, a running job).
- * `error` is pinned between the body and the footer, outside the scroll area, so a failed submit
- * is visible wherever the body is scrolled.
+ * `error` (an Alert) is laid over the top of the body, outside its scroll area, so a failed submit
+ * is visible wherever the body is scrolled. Its ✕ hides it until the error is cleared or a footer
+ * button is pressed again.
  */
 export function Modal({ open, isOpen, onClose, title, children, footer, error, size = 'md', dismissible = true }: {
   open?: boolean; isOpen?: boolean; onClose: () => void; title?: string; children: React.ReactNode;
@@ -21,6 +23,10 @@ export function Modal({ open, isOpen, onClose, title, children, footer, error, s
   const onCloseRef = useRef(onClose);
   // Read at call time, so toggling `dismissible` needs no re-subscription.
   onCloseRef.current = dismissible ? onClose : () => {};
+  const [errorHidden, setErrorHidden] = useState(false);
+  const hasError = Boolean(error);
+  useEffect(() => { if (!hasError) setErrorHidden(false); }, [hasError]);
+  const banner = useMemo(() => ({ onDismiss: () => setErrorHidden(true) }), []);
 
   useEffect(() => {
     if (!isVisible) return;
@@ -75,9 +81,15 @@ export function Modal({ open, isOpen, onClose, title, children, footer, error, s
             {dismissible && <button onClick={onClose} aria-label="Close" className="text-content-subtle hover:text-content-secondary transition-colors"><Icon.X className="w-5 h-5" /></button>}
           </div>
         )}
-        <div className="min-w-0 px-6 py-4 overflow-y-auto flex-1 min-h-0">{children}</div>
-        {error && <div className="min-w-0 px-4 sm:px-6 pt-3 pb-1 max-h-32 overflow-y-auto">{error}</div>}
-        {footer && <div className="min-w-0 px-4 sm:px-6 py-4 border-t border-line-soft flex flex-wrap items-center justify-end gap-2">{footer}</div>}
+        <div className="relative min-w-0 flex-1 min-h-0 flex flex-col">
+          <div className="min-w-0 px-6 py-4 overflow-y-auto flex-1 min-h-0">{children}</div>
+          {hasError && !errorHidden && (
+            <div className="absolute inset-x-0 top-0 z-10">
+              <AlertBannerContext.Provider value={banner}>{error}</AlertBannerContext.Provider>
+            </div>
+          )}
+        </div>
+        {footer && <div onClickCapture={() => setErrorHidden(false)} className="min-w-0 px-4 sm:px-6 py-4 border-t border-line-soft flex flex-wrap items-center justify-end gap-2">{footer}</div>}
       </div>
     </div>
   );
