@@ -70,6 +70,7 @@ export function AddModuleModal({
       open={open}
       onClose={handleClose}
       title="Add Module"
+      error={submitError && <Alert type="error" title="Something went wrong" message={submitError} />}
       footer={
         <>
           <Button variant="outline" onClick={handleClose} disabled={submitting}>
@@ -112,8 +113,6 @@ export function AddModuleModal({
             placeholder="Summarize what this module covers…"
           />
         </div>
-
-        {submitError && <Alert type="error" title="Something went wrong" message={submitError} />}
       </div>
     </Modal>
   );

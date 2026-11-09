@@ -9,10 +9,12 @@ const openModals: object[] = [];
 /**
  * `dismissible={false}` hides the close button and ignores Escape / backdrop clicks — for a step
  * that must finish first (an upload, a running job).
+ * `error` is pinned between the body and the footer, outside the scroll area, so a failed submit
+ * is visible wherever the body is scrolled.
  */
-export function Modal({ open, isOpen, onClose, title, children, footer, size = 'md', dismissible = true }: {
+export function Modal({ open, isOpen, onClose, title, children, footer, error, size = 'md', dismissible = true }: {
   open?: boolean; isOpen?: boolean; onClose: () => void; title?: string; children: React.ReactNode;
-  footer?: React.ReactNode; size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | 'full' | 'screen'; dismissible?: boolean;
+  footer?: React.ReactNode; error?: React.ReactNode; size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | 'full' | 'screen'; dismissible?: boolean;
 }) {
   const isVisible = Boolean(open ?? isOpen);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -74,6 +76,7 @@ export function Modal({ open, isOpen, onClose, title, children, footer, size = '
           </div>
         )}
         <div className="min-w-0 px-6 py-4 overflow-y-auto flex-1 min-h-0">{children}</div>
+        {error && <div className="min-w-0 px-4 sm:px-6 pt-3 pb-1 max-h-32 overflow-y-auto">{error}</div>}
         {footer && <div className="min-w-0 px-4 sm:px-6 py-4 border-t border-line-soft flex flex-wrap items-center justify-end gap-2">{footer}</div>}
       </div>
     </div>

@@ -25,7 +25,7 @@ export function Alert({ type = 'info', title, message }: { type?: 'success' | 'e
     info: { icon: <Icon.Info className="w-5 h-5 text-brand-ink" />, bg: 'bg-primary-light border-brand-line text-brand-ink-strong' },
   }[type];
   return (
-    <div className={`flex gap-3 p-4 rounded-[10px] border ${cfg.bg}`}>
+    <div role={type === 'error' ? 'alert' : undefined} className={`flex gap-3 p-4 rounded-[10px] border ${cfg.bg}`}>
       <div className="flex-shrink-0">{cfg.icon}</div>
       <div>
         {title && <p className="text-sm font-semibold mb-0.5">{title}</p>}
