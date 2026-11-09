@@ -44,7 +44,7 @@ public class Exam implements Serializable {
     @Column(name = "description")
     private String description;
 
-    @Column(name = "duration_minutes", nullable = false)
+    @Column(name = "duration_minutes")
     private Integer durationMinutes;
 
     @Column(name = "generation_type", nullable = false, length = 50)

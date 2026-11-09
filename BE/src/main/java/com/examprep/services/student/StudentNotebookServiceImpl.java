@@ -217,7 +217,6 @@ public class StudentNotebookServiceImpl implements StudentNotebookService {
                 .createdBy(student)
                 .title(title)
                 .description("Review practice exam for student mistake notebook")
-                .durationMinutes(120)
                 .generationType("MANUAL")
                 .maxScore(BigDecimal.valueOf(size))
                 .status("PUBLISHED")

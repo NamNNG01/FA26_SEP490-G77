@@ -128,6 +128,11 @@ class PracticeExamApiIntegrationTest {
         Module foreignModule = f.module(foreign, "Other");
         create(student, "{" + c + ",\"questionCount\":5,\"durationMinutes\":10,\"categoryIds\":[" + foreignModule.getModuleId() + "]}")
                 .andExpect(status().isBadRequest());
+        // EXAM mode (default) without durationMinutes → 400
+        create(student, "{" + c + ",\"questionCount\":5}").andExpect(status().isBadRequest());
+        create(student, "{" + c + ",\"questionCount\":5,\"mode\":\"EXAM\"}").andExpect(status().isBadRequest());
+        // PRACTICE mode without durationMinutes → 201 (duration is optional)
+        create(student, "{" + c + ",\"questionCount\":5,\"mode\":\"PRACTICE\"}").andExpect(status().isCreated());
     }
 
     @Test void notEnrolled403() throws Exception {

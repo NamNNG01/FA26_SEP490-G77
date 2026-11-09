@@ -76,11 +76,17 @@ public class PracticeExamService {
                 moduleIds.isEmpty() ? List.of() : new ArrayList<>(moduleIds));
 
         String mode = "PRACTICE".equals(request.mode()) ? Exam.MODE_PRACTICE : Exam.MODE_PRACTICE_EXAM;
+        boolean isPracticeMode = Exam.MODE_PRACTICE.equals(mode);
+        // durationMinutes is required for EXAM mode (default); PRACTICE mode may omit it.
+        if (!isPracticeMode && request.durationMinutes() == null) {
+            throw new BadRequestException("durationMinutes is required for EXAM mode.");
+        }
+        Integer duration = isPracticeMode ? null : request.durationMinutes();
         // The config goes in with the INSERT: chk_practice_exam_config rejects a PRACTICE_EXAM row without one.
-        Exam exam = createGeneratedExam(userId, courseId, title, mode, request.durationMinutes(),
+        Exam exam = createGeneratedExam(userId, courseId, title, mode, duration,
                 drawn.stream().map(QuestionCandidate::questionId).toList(), practiceConfig);
 
-        return new PracticeDtos.Created(exam.getExamId(), title, count, request.durationMinutes(), exam.getExamId());
+        return new PracticeDtos.Created(exam.getExamId(), title, count, duration, exam.getExamId());
     }
 
     /** The student's exam name, or the fallback when it is blank. */
@@ -95,7 +101,7 @@ public class PracticeExamService {
     }
 
     /** A student's own published exam (PRACTICE_EXAM / PRACTICE / SMART_PRACTICE), one point-equal link per question, max score 10. */
-    public Exam createGeneratedExam(Long userId, Long courseId, String title, String mode, int durationMinutes, List<Long> questionIds, String practiceConfig) {
+    public Exam createGeneratedExam(Long userId, Long courseId, String title, String mode, Integer durationMinutes, List<Long> questionIds, String practiceConfig) {
         Exam exam = exams.save(Exam.builder().course(courses.getReferenceById(courseId)).createdBy(users.getReferenceById(userId))
                 .title(title).durationMinutes(durationMinutes).generationType("MANUAL").maxScore(MAX_SCORE)
                 .status("PUBLISHED").publishedAt(Instant.now()).mode(mode).practiceConfig(practiceConfig).build());
