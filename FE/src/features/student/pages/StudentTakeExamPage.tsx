@@ -3,6 +3,7 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
+import { Alert } from '@/components/ui/Alert';
 import { Spinner } from '@/components/ui/Spinner';
 import { TimerDisplay } from '@/components/common/TimerDisplay';
 import { QuestionPalette } from '@/components/common/QuestionPalette';
@@ -719,6 +720,7 @@ function ExamAttemptScreen() {
       </div>
 
       <Modal
+        error={actionError && <Alert type="error" message={actionError} />}
         open={confirm === 'submit'}
         onClose={() => {
           if (busy != null) return;
@@ -764,11 +766,11 @@ function ExamAttemptScreen() {
             {unanswered} question{unanswered === 1 ? ' is' : 's are'} still unanswered.
           </p>
         )}
-        {actionError && <p className="mt-3 text-sm text-danger">{actionError}</p>}
       </Modal>
 
       <Modal
         open={confirm === 'cancel'}
+        error={actionError && <Alert type="error" message={actionError} />}
         onClose={() => busy == null && setConfirm(null)}
         title="Exit this attempt?"
         size="sm"
@@ -797,7 +799,6 @@ function ExamAttemptScreen() {
             in your history. This cannot be undone.
           </p>
         </div>
-        {actionError && <p className="mt-3 text-sm text-danger">{actionError}</p>}
       </Modal>
     </div>
   );

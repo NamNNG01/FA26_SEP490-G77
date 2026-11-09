@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/Button';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { Progress } from '@/components/ui/Progress';
 import { Modal } from '@/components/ui/Modal';
+import { Alert } from '@/components/ui/Alert';
 import { Select } from '@/components/ui/Select';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Spinner } from '@/components/ui/Spinner';
@@ -1293,6 +1294,7 @@ function UnfinishedAttemptBanner({
       </div>
 
       <Modal
+        error={error && <Alert type="error" message={error} />}
         open={confirming}
         onClose={() => !discarding && setConfirming(false)}
         title="Discard this attempt?"
@@ -1312,7 +1314,6 @@ function UnfinishedAttemptBanner({
           The attempt and its {attempt.answered} answer{attempt.answered === 1 ? '' : 's'} are deleted — it will not count in
           your history. This cannot be undone.
         </p>
-        {error && <p className="mt-3 text-sm text-danger">{error}</p>}
       </Modal>
     </div>
   );

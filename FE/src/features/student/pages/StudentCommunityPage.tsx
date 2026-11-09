@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router';
+import { Alert } from '@/components/ui/Alert';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Checkbox } from '@/components/ui/Checkbox';
@@ -126,7 +127,7 @@ function CreateDiscussionModal({ open, courses, defaultTag, onClose, onCreated }
     } catch (err) { setError(getApiErrorMessage(err, 'Could not create this post.')); }
     finally { setBusy(false); }
   };
-  return <Modal open={open} onClose={onClose} title="Create a community post" size="lg" footer={<><Button variant="outline" onClick={onClose}>Cancel</Button><Button form="create-discussion-form" type="submit" loading={busy}>Publish</Button></>}>
+  return <Modal open={open} onClose={onClose} title="Create a community post" size="lg" error={error && <Alert type="error" message={error} />} footer={<><Button variant="outline" onClick={onClose}>Cancel</Button><Button form="create-discussion-form" type="submit" loading={busy}>Publish</Button></>}>
     <form id="create-discussion-form" onSubmit={submit} className="space-y-4">
       <Select label="Course" value={courseId} options={[{ label: 'Choose an enrolled course', value: '' }, ...courses.map(course => ({ label: course.title, value: String(course.courseId) }))]} onChange={setCourseId} />
       <Select label="Post type" value={tag} options={[{ label: 'Question', value: 'question' }, { label: 'Tip', value: 'tip' }]} onChange={value => setTag(value as 'question' | 'tip')} />
@@ -137,7 +138,6 @@ function CreateDiscussionModal({ open, courses, defaultTag, onClose, onCreated }
       </label>
       <Checkbox checked={anonymous} onChange={setAnonymous} label="Post anonymously" />
       {!courses.length && <p className="text-sm text-warning">Enroll in an active course to create a post.</p>}
-      {error && <p role="alert" className="text-sm text-danger">{error}</p>}
     </form>
   </Modal>;
 }
