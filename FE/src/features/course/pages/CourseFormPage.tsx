@@ -252,9 +252,10 @@ export function CourseFormPage({
               }
             />
             <Input
-              label="Price ($)"
+              label="Price (VND)"
               type="number"
               min={0}
+              step="0.01"
               value={price}
               onChange={(e) => {
                 const nextPrice = e.target.value;
