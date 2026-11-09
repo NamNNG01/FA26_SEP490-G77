@@ -1,6 +1,7 @@
 import { api } from './api';
 import type { ApiResponse } from '@/auth/authContext';
 import type { StudentPage } from './studentLearning.service';
+import { downloadFile } from '@/utils/downloadFile';
 
 export interface CourseProgress {
   courseId: number;
@@ -43,6 +44,12 @@ export interface ReviewSessionRequest {
   examType: 'QUIZ' | 'ESSAY';
   size: number;
   courseId: number;
+}
+
+export interface SavedQuestionExportParams {
+  type?: 'all' | 'wrong' | 'bookmarked';
+  examType?: 'QUIZ' | 'ESSAY';
+  courseId?: number;
 }
 
 export interface ReviewSessionResponse {
@@ -88,6 +95,23 @@ export const studentProgressService = {
 
   async removeSavedQuestion(reviewId: number) {
     await api.request({ method: 'delete', url: `/student/questions/saved/${reviewId}` });
+  },
+
+  async bookmarkAllSavedQuestions() {
+    await api.post<ApiResponse<null>>('/student/questions/bookmarks/all');
+  },
+
+  async clearAllBookmarks() {
+    await api.request<ApiResponse<null>>({ method: 'delete', url: '/student/questions/bookmarks' });
+  },
+
+  async deleteAllSavedQuestions() {
+    await api.request<ApiResponse<null>>({ method: 'delete', url: '/student/questions/saved' });
+  },
+
+  async exportSavedQuestionsPdf(params: SavedQuestionExportParams = {}) {
+    const qs = query(params);
+    await downloadFile(`/student/questions/saved/export/pdf${qs ? `?${qs}` : ''}`, 'question-notebook.pdf');
   },
 
   async startReviewSession(params: ReviewSessionRequest) {

@@ -6,8 +6,10 @@ import { Select } from "@/components/ui/Select";
 import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import { EmptyState } from "@/components/ui/Card";
 import { SearchInput } from "@/components/common/SearchInput";
+import { Modal } from "@/components/ui/Modal";
 import { Icon } from "@/assets/icons";
 import { ROUTES } from "@/app/routes";
+import { useToast } from "@/components/ui/ToastHost";
 import {
   studentProgressService,
   type SavedQuestion,
@@ -42,6 +44,7 @@ const SESSION_EXAM_TYPES = [
 
 export function StudentQuestionNotebookPage() {
   const navigate = useNavigate();
+  const toast = useToast();
   const [filter, setFilter] = useState<"all" | "wrong" | "bookmarked">("all");
   const [search, setSearch] = useState("");
   const [examType, setExamType] = useState<"" | "QUIZ" | "ESSAY">("");
@@ -64,6 +67,9 @@ export function StudentQuestionNotebookPage() {
   const [busyId, setBusyId] = useState<number | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
+  const [bulkAction, setBulkAction] = useState<"bookmark" | "clear-bookmarks" | "delete" | null>(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -137,6 +143,48 @@ export function StudentQuestionNotebookPage() {
       );
     } finally {
       setStarting(false);
+    }
+  };
+
+  const runBulkAction = async () => {
+    if (!bulkAction) return;
+    setBulkBusy(true);
+    try {
+      if (bulkAction === "bookmark") {
+        await studentProgressService.bookmarkAllSavedQuestions();
+        toast.success("All saved questions bookmarked.");
+      } else if (bulkAction === "clear-bookmarks") {
+        await studentProgressService.clearAllBookmarks();
+        toast.success("All bookmarks removed.");
+      } else {
+        await studentProgressService.deleteAllSavedQuestions();
+        toast.success("All saved questions deleted.");
+        setPage(0);
+      }
+      setBulkAction(null);
+      setReload((value) => value + 1);
+    } catch (err) {
+      toast.error(
+        getApiErrorMessage(err, "Could not update the saved questions."),
+      );
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const exportNotebookPdf = async () => {
+    setExportingPdf(true);
+    try {
+      await studentProgressService.exportSavedQuestionsPdf({
+        type: filter,
+        examType: examType || undefined,
+        courseId: courseId ? Number(courseId) : undefined,
+      });
+      toast.success("Question notebook downloaded as PDF.");
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, "Could not export the notebook as PDF."));
+    } finally {
+      setExportingPdf(false);
     }
   };
 
@@ -268,6 +316,41 @@ export function StudentQuestionNotebookPage() {
           <h2 className="text-base font-semibold text-content">
             Saved questions
           </h2>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              icon={<Icon.Download className="h-4 w-4" />}
+              onClick={exportNotebookPdf}
+              loading={exportingPdf}
+              disabled={exportingPdf}
+            >
+              Export PDF
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              icon={<Icon.Star className="h-4 w-4" />}
+              onClick={() => setBulkAction("bookmark")}
+            >
+              Bookmark all
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setBulkAction("clear-bookmarks")}
+            >
+              Clear bookmarks
+            </Button>
+            <Button
+              size="sm"
+              variant="danger"
+              icon={<Icon.Trash className="h-4 w-4" />}
+              onClick={() => setBulkAction("delete")}
+            >
+              Delete all
+            </Button>
+          </div>
         </div>
         <div className="card p-4 flex flex-wrap gap-3">
           <Select
@@ -359,6 +442,50 @@ export function StudentQuestionNotebookPage() {
           </div>
         )}
       </section>
+
+      <Modal
+        open={bulkAction !== null}
+        onClose={() => !bulkBusy && setBulkAction(null)}
+        title={
+          bulkAction === "bookmark"
+            ? "Bookmark all saved questions?"
+            : bulkAction === "clear-bookmarks"
+              ? "Clear all bookmarks?"
+              : "Delete all saved questions?"
+        }
+        size="sm"
+        footer={
+          <>
+            <Button
+              variant="outline"
+              onClick={() => setBulkAction(null)}
+              disabled={bulkBusy}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant={bulkAction === "delete" ? "danger" : "primary"}
+              onClick={runBulkAction}
+              loading={bulkBusy}
+              disabled={bulkBusy}
+            >
+              {bulkAction === "bookmark"
+                ? "Bookmark all"
+                : bulkAction === "clear-bookmarks"
+                  ? "Clear bookmarks"
+                  : "Delete all"}
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-content-secondary">
+          {bulkAction === "bookmark"
+            ? "Bookmark every question saved in your notebook."
+            : bulkAction === "clear-bookmarks"
+              ? "Remove bookmarks from every question in your notebook. The questions themselves will stay saved."
+              : "Permanently delete every saved question in your notebook. This action cannot be undone."}
+        </p>
+      </Modal>
     </div>
   );
 }
