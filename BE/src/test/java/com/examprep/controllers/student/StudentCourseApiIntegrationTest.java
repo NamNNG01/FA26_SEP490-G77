@@ -280,4 +280,61 @@ class StudentCourseApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
     }
+
+    @Test
+    void getModuleContent_General_ReturnsOk() throws Exception {
+        Exam exam = em.createQuery("from Exam e where e.course = :course", Exam.class)
+                .setParameter("course", publishedCourse).getSingleResult();
+        exam.setModule(null);
+        Deck deck = em.createQuery("from Deck d where d.course = :course", Deck.class)
+                .setParameter("course", publishedCourse).getSingleResult();
+        deck.setModule(null);
+        em.flush();
+
+        mvc.perform(get("/api/v1/student/courses/" + publishedCourse.getCourseId() + "/modules/general/content")
+                        .with(user(UserPrincipal.create(student))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.module.moduleId").isEmpty())
+                .andExpect(jsonPath("$.data.module.title").value("General"))
+                .andExpect(jsonPath("$.data.exams[0].title").value("Java Quiz"))
+                .andExpect(jsonPath("$.data.decks[0].title").value("Java Flashcards"));
+    }
+
+    @Test
+    void getModuleContent_NumericModule_ReturnsOk() throws Exception {
+        Module module = em.createQuery("from Module m where m.course = :course", Module.class)
+                .setParameter("course", publishedCourse).getSingleResult();
+        Exam exam = em.createQuery("from Exam e where e.course = :course", Exam.class)
+                .setParameter("course", publishedCourse).getSingleResult();
+        exam.setModule(module);
+        Deck deck = em.createQuery("from Deck d where d.course = :course", Deck.class)
+                .setParameter("course", publishedCourse).getSingleResult();
+        deck.setModule(module);
+        em.flush();
+
+        mvc.perform(get("/api/v1/student/courses/" + publishedCourse.getCourseId() + "/modules/" + module.getModuleId() + "/content")
+                        .with(user(UserPrincipal.create(student))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.module.moduleId").value(module.getModuleId()))
+                .andExpect(jsonPath("$.data.module.title").value("Intro"))
+                .andExpect(jsonPath("$.data.exams[0].title").value("Java Quiz"))
+                .andExpect(jsonPath("$.data.decks[0].title").value("Java Flashcards"));
+    }
+
+    @Test
+    void getModuleContent_InvalidOrHiddenModule_ReturnsNotFound() throws Exception {
+        Module hidden = Module.builder().course(publishedCourse).title("Hidden").orderIndex(2).status("HIDDEN").build();
+        em.persist(hidden);
+        em.flush();
+
+        mvc.perform(get("/api/v1/student/courses/" + publishedCourse.getCourseId() + "/modules/" + hidden.getModuleId() + "/content")
+                        .with(user(UserPrincipal.create(student))))
+                .andExpect(status().isNotFound());
+
+        mvc.perform(get("/api/v1/student/courses/" + publishedCourse.getCourseId() + "/modules/999999/content")
+                        .with(user(UserPrincipal.create(student))))
+                .andExpect(status().isNotFound());
+    }
 }

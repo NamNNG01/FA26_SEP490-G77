@@ -137,4 +137,38 @@ public interface ExamRepository extends JpaRepository<Exam, Long>, JpaSpecificat
     /** PQ-02: list custom practice exams owned by this user, newest first. */
     @Query("SELECT e FROM Exam e WHERE e.createdBy.userId = :userId AND (e.mode = 'PRACTICE_EXAM' OR (e.mode = 'PRACTICE' AND e.practiceConfig IS NOT NULL)) AND e.status <> 'ARCHIVED' ORDER BY e.createdAt DESC, e.examId DESC")
     Page<Exam> findPracticeExams(@Param("userId") Long userId, Pageable pageable);
+
+    @Query(
+            value = """
+        SELECT new com.examprep.dto.student.CourseExamDto(
+            ex.examId, ex.title, ex.durationMinutes, ex.maxScore,
+            (SELECT COUNT(eq) FROM ExamQuestion eq WHERE eq.exam = ex),
+            (SELECT COUNT(att) FROM ExamAttempt att WHERE att.exam = ex AND att.user.userId = :userId),
+            (SELECT MAX(att.totalScore) FROM ExamAttempt att WHERE att.exam = ex AND att.user.userId = :userId),
+            (SELECT latest.status FROM ExamAttempt latest
+             WHERE latest.exam = ex AND latest.user.userId = :userId
+               AND NOT EXISTS (
+                   SELECT newer.attemptId FROM ExamAttempt newer
+                   WHERE newer.exam = ex AND newer.user.userId = :userId
+                     AND (newer.startTime > latest.startTime
+                       OR (newer.startTime = latest.startTime AND newer.attemptId > latest.attemptId))
+               )),
+            CASE WHEN (SELECT COUNT(active) FROM ExamAttempt active
+                       WHERE active.exam = ex AND active.user.userId = :userId
+                         AND active.status = 'IN_PROGRESS') > 0
+                 THEN true ELSE false END,
+            m.moduleId,
+            CAST(NULL AS String)
+        )
+        FROM Exam ex LEFT JOIN ex.module m
+        WHERE ex.course.courseId = :courseId AND ex.status = 'PUBLISHED' AND ex.mode = 'EXAM'
+          AND ((:moduleId IS NULL AND m IS NULL) OR (m.moduleId = :moduleId))
+        ORDER BY ex.publishedAt DESC, ex.examId DESC
+        """
+    )
+    List<CourseExamDto> findExamsByModuleOrGeneral(
+            @Param("courseId") Long courseId,
+            @Param("moduleId") Long moduleId,
+            @Param("userId") Long userId
+    );
 }

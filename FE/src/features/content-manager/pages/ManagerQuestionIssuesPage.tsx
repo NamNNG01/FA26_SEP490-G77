@@ -7,6 +7,15 @@ import { useAuth } from '@/auth/authContext';
 const RESOLUTION_TYPES = ['CONTENT_CORRECTED', 'EXPLANATION_CORRECTED', 'AI_EXPLANATION_CORRECTED', 'ANSWER_CORRECTED', 'RUBRIC_CORRECTED', 'QUESTION_VOIDED', 'OTHER_CORRECTION'];
 function Status({ value = '' }: { value?: string }) { const color = value === 'RESOLVED' ? 'bg-emerald-50 text-emerald-700' : value === 'REJECTED' ? 'bg-red-50 text-red-700' : value === 'IN_PROGRESS' ? 'bg-blue-50 text-blue-700' : value === 'DUPLICATE' ? 'bg-slate-100 text-slate-600' : 'bg-amber-50 text-amber-800'; return <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${color}`}>{issueLabel(value)}</span>; }
 function unwrapList(v: any) { return Array.isArray(v) ? v : v?.content ?? v?.items ?? []; }
+/** Current editable fields, so the manager edits them instead of typing the JSON shape from scratch. */
+function editableQuestion(q: any) {
+  if (!q) return {};
+  const out: any = { content: q.content };
+  if (q.explanation) out.explanation = q.explanation;
+  if (q.options?.length) out.options = q.options.map(({ optionId, optionText, isCorrect, orderIndex }: any) => ({ optionId, optionText, isCorrect, orderIndex }));
+  if (q.answerKey) out.answerKey = q.answerKey;
+  return out;
+}
 
 export function ManagerQuestionIssuesPage() {
   const { user } = useAuth();
@@ -36,7 +45,7 @@ export function ManagerQuestionIssuesPage() {
   useEffect(() => { void load(); }, [page]);
   async function open(row: any) {
     setError(''); setDetail(null); setJobs([]); setHistory([]);
-    try { const d = await questionIssueService.managerDetail(row.issueId); setDetail(d); setResolutionNote(''); setResolutionType('CONTENT_CORRECTED'); setChangesJson(JSON.stringify(d.question ? {} : {}, null, 2)); setDuplicateId(''); setDuplicateNote('');
+    try { const d = await questionIssueService.managerDetail(row.issueId); setDetail(d); setResolutionNote(''); setResolutionType('CONTENT_CORRECTED'); setChangesJson(JSON.stringify(editableQuestion(d.question), null, 2)); setDuplicateId(''); setDuplicateNote('');
       const [h, j] = await Promise.allSettled([questionIssueService.history(row.issueId), questionIssueService.jobs(row.issueId)]);
       if (h.status === 'fulfilled') setHistory(unwrapList(h.value)); if (j.status === 'fulfilled') setJobs(unwrapList(j.value));
     } catch (e) { setError(getApiErrorMessage(e, 'Could not load this ticket.')); }

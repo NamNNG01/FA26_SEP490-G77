@@ -130,7 +130,55 @@ public class StudentCourseServiceImpl implements StudentCourseService {
         if (exams.isEmpty()) {
             return exams;
         }
-        List<Long> ids = exams.getContent().stream().map(CourseExamDto::examId).toList();
+        List<CourseExamDto> enriched = enrichExamKinds(exams.getContent());
+        return new org.springframework.data.domain.PageImpl<>(enriched, pageable, exams.getTotalElements());
+    }
+
+    @Override
+    public List<DeckDto> listCourseDecks(Long courseId, Long userId) {
+        validateActiveEnrollment(courseId, userId);
+        return deckRepository.findCourseDecksWithStats(courseId, userId);
+    }
+
+    @Override
+    public ModuleContentDto getModuleContent(Long courseId, String moduleIdStr, Long userId) {
+        validateActiveEnrollment(courseId, userId);
+
+        ModuleDescriptorDto moduleDto;
+        Long modIdParam = null;
+
+        if ("general".equalsIgnoreCase(moduleIdStr)) {
+            moduleDto = new ModuleDescriptorDto(null, "General", null);
+            modIdParam = null;
+        } else {
+            long modId;
+            try {
+                modId = Long.parseLong(moduleIdStr);
+            } catch (NumberFormatException ex) {
+                throw new ResourceNotFoundException("Module not found");
+            }
+            Module module = moduleRepository.findById(modId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Module not found"));
+            if (module.getCourse() == null || !module.getCourse().getCourseId().equals(courseId) || module.isHidden()) {
+                throw new ResourceNotFoundException("Module not found");
+            }
+            moduleDto = new ModuleDescriptorDto(module.getModuleId(), module.getTitle(), module.getDescription());
+            modIdParam = module.getModuleId();
+        }
+
+        List<CourseExamDto> exams = examRepository.findExamsByModuleOrGeneral(courseId, modIdParam, userId);
+        exams = enrichExamKinds(exams);
+
+        List<DeckDto> decks = deckRepository.findDecksByModuleOrGeneral(courseId, modIdParam, userId);
+
+        return new ModuleContentDto(moduleDto, exams, decks);
+    }
+
+    private List<CourseExamDto> enrichExamKinds(List<CourseExamDto> examList) {
+        if (examList.isEmpty()) {
+            return examList;
+        }
+        List<Long> ids = examList.stream().map(CourseExamDto::examId).toList();
         Map<Long, Set<String>> kinds = new HashMap<>();
         for (List<Object[]> rows : List.of(examRepository.findQuestionTypesByExamIds(ids),
                 examRepository.findConfigTypesByExamIds(ids))) {
@@ -141,16 +189,10 @@ public class StudentCourseServiceImpl implements StudentCourseService {
                 }
             }
         }
-        return exams.map(e -> {
+        return examList.stream().map(e -> {
             Set<String> found = kinds.getOrDefault(e.examId(), Set.of());
             return e.withExamKind(found.isEmpty() ? null : found.size() > 1 ? "MIXED" : found.iterator().next());
-        });
-    }
-
-    @Override
-    public List<DeckDto> listCourseDecks(Long courseId, Long userId) {
-        validateActiveEnrollment(courseId, userId);
-        return deckRepository.findCourseDecksWithStats(courseId, userId);
+        }).toList();
     }
 
     @Override

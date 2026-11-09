@@ -32,10 +32,11 @@ public class AdminDiscountService {
     private final ContestRules contestRules;
 
     @Transactional(readOnly = true)
-    public Page<DiscountItem> list(String keyword, String discountType, Boolean isActive, String validity, int page, int size, String sort) {
+    public Page<DiscountItem> list(String keyword, String discountType, Boolean isActive, String validity, String accessType, int page, int size, String sort) {
         String kw = (keyword != null && !keyword.isBlank()) ? "%" + keyword.trim().toLowerCase() + "%" : null;
         String dt = (discountType != null && !discountType.isBlank()) ? discountType.trim().toUpperCase() : null;
         String val = (validity != null && !validity.isBlank()) ? validity.trim().toUpperCase() : null;
+        String at = (accessType != null && !accessType.isBlank()) ? accessType.trim().toUpperCase() : null;
 
         String[] parts = sort.split(",");
         Sort.Direction dir = parts.length > 1 && "asc".equalsIgnoreCase(parts[1]) ? Sort.Direction.ASC : Sort.Direction.DESC;
@@ -60,6 +61,9 @@ public class AdminDiscountService {
             if (isActive != null) {
                 p = cb.and(p, cb.equal(root.get("isActive"), isActive));
             }
+            if (at != null) {
+                p = cb.and(p, cb.equal(root.get("accessType"), at));
+            }
             return p;
         }, pageable);
 
@@ -80,6 +84,7 @@ public class AdminDiscountService {
                     d.getDiscountType(),
                     ContestRules.value(d),
                     d.getAppliesTo(),
+                    d.getAccessType(),
                     d.getUsageLimit(),
                     d.getUsedCount(),
                     rem,
@@ -121,6 +126,7 @@ public class AdminDiscountService {
                 d.getMinOrderAmount(),
                 d.getMaxDiscountAmount(),
                 d.getAppliesTo(),
+                d.getAccessType(),
                 d.getUsageLimit(),
                 d.getUsedCount(),
                 rem,
@@ -142,6 +148,7 @@ public class AdminDiscountService {
             throw ContestRules.error(ResponseCode.CONFLICT, "DISCOUNT_CODE_EXISTS", "Discount code already exists");
         }
 
+        String accessType = (req.accessType() != null && !req.accessType().isBlank()) ? req.accessType().toUpperCase() : "PUBLIC";
         BigDecimal val = req.value();
         BigDecimal percent = "PERCENT".equalsIgnoreCase(req.discountType()) ? val : null;
         BigDecimal amount = "PERCENT".equalsIgnoreCase(req.discountType()) ? null : val;
@@ -157,6 +164,7 @@ public class AdminDiscountService {
                 .minOrderAmount(req.minOrderAmount())
                 .maxDiscountAmount(req.maxDiscountAmount())
                 .appliesTo(req.appliesTo().toUpperCase())
+                .accessType(accessType)
                 .startAt(req.startAt())
                 .expiresAt(req.expiredAt())
                 .isActive(req.isActive() != null ? req.isActive() : true)
@@ -192,6 +200,7 @@ public class AdminDiscountService {
             }
         }
 
+        String accessType = (req.accessType() != null && !req.accessType().isBlank()) ? req.accessType().toUpperCase() : "PUBLIC";
         BigDecimal val = req.value();
         BigDecimal percent = "PERCENT".equalsIgnoreCase(req.discountType()) ? val : null;
         BigDecimal amount = "PERCENT".equalsIgnoreCase(req.discountType()) ? null : val;
@@ -206,6 +215,7 @@ public class AdminDiscountService {
         d.setMinOrderAmount(req.minOrderAmount());
         d.setMaxDiscountAmount(req.maxDiscountAmount());
         d.setAppliesTo(req.appliesTo().toUpperCase());
+        d.setAccessType(accessType);
         d.setStartAt(req.startAt());
         d.setExpiresAt(req.expiredAt());
         if (req.isActive() != null) d.setIsActive(req.isActive());
@@ -303,6 +313,13 @@ public class AdminDiscountService {
     }
 
     private void validateRequest(DiscountWriteRequest req, Discount existing) {
+        if (req.accessType() != null && !req.accessType().isBlank()) {
+            String at = req.accessType().toUpperCase();
+            if (!at.equals("PUBLIC") && !at.equals("CLAIM_REQUIRED")) {
+                throw ContestRules.invalid("accessType", "accessType must be PUBLIC or CLAIM_REQUIRED");
+            }
+        }
+
         if ("PERCENT".equalsIgnoreCase(req.discountType())) {
             if (req.value().compareTo(BigDecimal.ONE) < 0 || req.value().compareTo(BigDecimal.valueOf(100)) > 0) {
                 throw ContestRules.invalid("value", "PERCENT discount value must be between 1 and 100");

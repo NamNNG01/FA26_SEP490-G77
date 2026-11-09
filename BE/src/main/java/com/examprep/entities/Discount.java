@@ -69,6 +69,10 @@ public class Discount implements Serializable {
     @Column(name = "max_discount_amount", precision = 12, scale = 2)
     private BigDecimal maxDiscountAmount;
 
+    @Builder.Default
+    @Column(name = "access_type", nullable = false, length = 30)
+    private String accessType = "PUBLIC";
+
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 
