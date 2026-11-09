@@ -22,9 +22,10 @@ type View = PaymentStatus | 'UNKNOWN' | 'TIMEOUT';
 /**
  * Where PayOS sends the student back (BE `app.payos.return-url` / `cancel-url`).
  *
- * PayOS adds its own numeric orderCode and a `status`, but access is only granted by the verified
- * webhook, so the query is not trusted: the order comes from the one remembered when the checkout was
- * created, and its state from PY-04 (polled every 3 s). `/payment/cancel` closes the order with PY-02.
+ * PayOS adds its own numeric orderCode and a `status`, but the query is not trusted: the order comes from
+ * the one remembered when the checkout was created, and its state from PY-04 (polled every 3 s), which
+ * grants access through the verified webhook or by reconciling with PayOS. `/payment/cancel` closes the
+ * order with PY-02.
  */
 export function PaymentReturnPage({ cancelled = false }: { cancelled?: boolean }) {
   const navigate = useNavigate();

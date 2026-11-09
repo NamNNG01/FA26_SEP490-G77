@@ -54,7 +54,8 @@ function formatTime(iso: string | null | undefined): string {
  * Buys a course or a plan with PayOS:
  *   1. optional discount code, checked with PY-05 ("Apply") before anything is created;
  *   2. PY-01 creates the order, the QR stays on screen and PY-04 is polled every 3 s;
- *   3. `onPaid` fires when PY-04 reports SUCCEEDED — access only comes from the verified webhook.
+ *   3. `onPaid` fires when PY-04 reports SUCCEEDED — from the verified webhook, or from PY-04 reconciling
+ *      with PayOS when the webhook cannot reach the BE.
  * Closing the modal leaves the order payable (PY-01 hands the same order back later); "Cancel payment"
  * closes it with PY-02. The order is remembered for /payment/return in case the student pays on the
  * PayOS page instead of scanning.

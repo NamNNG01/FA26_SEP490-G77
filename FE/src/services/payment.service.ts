@@ -11,8 +11,8 @@ import type { PageResponse } from './course.service';
  *   GET    /api/v1/student/discounts/validate?code=&courseId=|planId=   (PY-05) — valid=false + reason
  *   GET    /api/v1/student/payments/history?page=&size=          (PY-06) — newest first
  *
- * Access is only granted by the verified PayOS webhook (PY-03, GB-07): the FE never trusts the PayOS
- * return-URL query, it asks PY-04.
+ * Access is granted by the verified PayOS webhook (PY-03, GB-07) or, when a webhook cannot reach the BE
+ * (e.g. localhost), by PY-04 reconciling with PayOS: the FE never trusts the PayOS return-URL query.
  *
  * Errors: PY-01 400 VALIDATION_ERROR / INVALID_DISCOUNT_CODE, 404 course or plan, 409 free item,
  * already owned or a checkout still in progress.

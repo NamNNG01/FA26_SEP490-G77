@@ -167,6 +167,38 @@ class PayosClientTest {
     }
 
     // =================================================================================
+    // status lookup (PY-04 reconciliation)
+    // =================================================================================
+
+    @Test
+    void fetchReadsTheProviderStatusAndAmountPaid() {
+        createReply = """
+                {"code":"00","desc":"success","data":{"orderCode":1001,"amount":50000,
+                 "amountPaid":50000,"status":"PAID"}}""";
+        PayosClient client = client("client-1", "api-key-1", CHECKSUM_KEY);
+
+        PayosClient.RemotePayment remote = client.fetch(1001L);
+
+        assertEquals("PAID", remote.status());
+        assertEquals(50_000, remote.amountPaid());
+        CapturedRequest request = REQUESTS.get(REQUESTS.size() - 1);
+        assertEquals("/v2/payment-requests/1001", request.uri());
+        assertEquals("client-1", request.clientId());
+        assertEquals("api-key-1", request.apiKey());
+    }
+
+    @Test
+    void fetchFallsBackToTheOrderAmountAndRejectsAnUnusableBody() {
+        createReply = """
+                {"code":"00","data":{"orderCode":7,"amount":12000,"status":"PENDING"}}""";
+        assertEquals(12_000, client("cid", "api-key", CHECKSUM_KEY).fetch(7L).amountPaid());
+
+        createReply = "{\"code\":\"99\",\"desc\":\"error\"}";
+        assertNull(client("cid", "api-key", CHECKSUM_KEY).fetch(7L));
+        assertThrows(IllegalStateException.class, () -> client("", "", "").fetch(7L));
+    }
+
+    // =================================================================================
     // helpers
     // =================================================================================
 

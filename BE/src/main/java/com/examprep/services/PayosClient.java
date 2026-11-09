@@ -47,6 +47,9 @@ public class PayosClient {
 
     public record Link(String checkoutUrl, String qrCode, String paymentLinkId) {}
 
+    /** What PayOS itself reports for a link — the fallback when its webhook never reaches this deployment. */
+    public record RemotePayment(String status, long amountPaid, String raw) {}
+
     public Link create(long payosOrderCode, int amountVnd, String description) {
         requireCredentials();
         String safeDescription = description.length() > 25 ? description.substring(0, 25) : description;
@@ -65,6 +68,21 @@ public class PayosClient {
         }
         return new Link(data.path("checkoutUrl").asText(), data.path("qrCode").asText(null),
                 data.path("paymentLinkId").asText(null));
+    }
+
+    /**
+     * GET /v2/payment-requests/{orderCode}: PayOS's own view of the link. Polling it lets a transfer PayOS
+     * already captured still grant access when the webhook is undeliverable (localhost, closed firewall).
+     */
+    public RemotePayment fetch(long payosOrderCode) {
+        requireCredentials();
+        JsonNode response = client.get().uri("/v2/payment-requests/{orderCode}", payosOrderCode)
+                .header("x-client-id", clientId).header("x-api-key", apiKey)
+                .retrieve().body(JsonNode.class);
+        JsonNode data = response == null ? null : response.path("data");
+        if (data == null || !data.hasNonNull("status")) return null;
+        long paid = data.hasNonNull("amountPaid") ? data.path("amountPaid").asLong() : data.path("amount").asLong(0);
+        return new RemotePayment(data.path("status").asText(), paid, data.toString());
     }
 
     public void cancel(long payosOrderCode) {

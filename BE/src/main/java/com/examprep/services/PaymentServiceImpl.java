@@ -216,11 +216,32 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public PaymentResponses.PaymentState status(Long userId, String orderCode) {
         Payment payment = payments.findByOrderCodeAndUserUserId(orderCode, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Payment not found"));
+        if (Payment.PENDING.equals(payment.getStatus()) && payment.getPayosOrderCode() != null) {
+            // PY-04 self-heals a missed webhook: PayOS is asked directly while the student waits.
+            reconcileWithProvider(payment);
+        }
         return new PaymentResponses.PaymentState(payment.getOrderCode(), payment.getStatus(), payment.getPaidAt(), payment.getExpiresAt());
+    }
+
+    /**
+     * A transfer PayOS already captured grants access even when its webhook could not reach this deployment
+     * (localhost development, closed firewall, lost delivery). A provider hiccup leaves the local state alone;
+     * the next poll retries.
+     */
+    private void reconcileWithProvider(Payment payment) {
+        try {
+            PayosClient.RemotePayment remote = payos.fetch(payment.getPayosOrderCode());
+            if (remote != null && "PAID".equalsIgnoreCase(remote.status())
+                    && transactions.reconcilePaid(payment.getOrderCode(), remote.amountPaid(), remote.raw())) {
+                log.info("Payment {} confirmed through the PayOS status API (missing webhook)", payment.getPaymentId());
+            }
+        } catch (RuntimeException ex) {
+            log.debug("PayOS status lookup failed for payment {}", payment.getPaymentId(), ex);
+        }
     }
 
     @Override

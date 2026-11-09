@@ -109,20 +109,41 @@ public class PaymentTransactionService {
             // The money was still captured: keep the purchase, but leave a trace for reconciliation.
             log.warn("Payment {} was confirmed after its checkout expiry; granting access", locked.getPaymentId());
         }
-        locked.setStatus(Payment.SUCCEEDED);
-        locked.setPaidAt(now);
-        locked.setUpdatedAt(now);
+        String raw;
         try {
-            locked.setPayosRaw(json.writeValueAsString(webhook));
+            raw = json.writeValueAsString(webhook);
         } catch (Exception ex) {
             throw new IllegalStateException("Could not store verified payment webhook", ex);
         }
+        markPaid(locked, now, raw);
+        return true;
+    }
+
+    /**
+     * PY-04 fallback for a transfer PayOS captured but whose webhook never reached us (localhost, closed
+     * firewall, lost delivery). Idempotent with the webhook, and an underpaid link is left for a human.
+     */
+    @Transactional
+    public boolean reconcilePaid(String orderCode, long amountPaid, String raw) {
+        Payment locked = payments.lockByOrderCode(orderCode).orElse(null);
+        if (locked == null || Payment.SUCCEEDED.equals(locked.getStatus())) return false;
+        if (!Payment.PENDING.equals(locked.getStatus()) && !Payment.EXPIRED.equals(locked.getStatus())) return false;
+        if (amountPaid < locked.getAmount().longValueExact()) return false;
+        markPaid(locked, Instant.now(), raw);
+        return true;
+    }
+
+    /** The one place a payment becomes SUCCEEDED and access is granted (webhook and status reconciliation). */
+    private void markPaid(Payment locked, Instant now, String raw) {
+        locked.setStatus(Payment.SUCCEEDED);
+        locked.setPaidAt(now);
+        locked.setUpdatedAt(now);
+        if (raw != null) locked.setPayosRaw(raw);
         if (Payment.COURSE.equals(locked.getType())) {
             grantCourse(locked, now);
         } else if (Payment.SUBSCRIPTION.equals(locked.getType())) {
             grantSubscription(locked, now);
         }
-        return true;
     }
 
     private void grantCourse(Payment payment, Instant now) {

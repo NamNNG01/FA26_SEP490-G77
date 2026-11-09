@@ -667,6 +667,60 @@ class StudentPaymentApiIntegrationTest {
         call(student, get("/api/v1/student/payments/UNKNOWN/status")).andExpect(status().isNotFound());
     }
 
+    @Test
+    void statusConfirmsAPaymentWhoseWebhookNeverArrived() throws Exception {
+        String orderCode = checkoutOrderCode(paidCourse, null);
+        Payment pending = payment(orderCode);
+        // PayOS captured the transfer, but its webhook cannot reach this deployment (localhost).
+        when(payos.fetch(pending.getPayosOrderCode()))
+                .thenReturn(new PayosClient.RemotePayment("PAID", pending.getAmount().longValueExact(),
+                        "{\"status\":\"PAID\"}"));
+
+        JsonNode data = data(call(student, get("/api/v1/student/payments/" + orderCode + "/status"))
+                .andExpect(status().isOk()));
+        assertEquals(Payment.SUCCEEDED, data.path("status").asText());
+        assertNotNull(data.path("paidAt").textValue());
+        assertEquals(Payment.SUCCEEDED, payment(orderCode).getStatus());
+        List<Enrollment> granted = enrollments(paidCourse, student);
+        assertEquals(1, granted.size());
+        assertEquals(Enrollment.STATUS_ACTIVE, granted.get(0).getStatus());
+
+        // Polling again stays idempotent: still one enrollment and the same order.
+        JsonNode again = data(call(student, get("/api/v1/student/payments/" + orderCode + "/status"))
+                .andExpect(status().isOk()));
+        assertEquals(Payment.SUCCEEDED, again.path("status").asText());
+        assertEquals(1, enrollments(paidCourse, student).size());
+    }
+
+    @Test
+    void statusKeepsThePaymentPendingUntilPayosHasTheFullAmount() throws Exception {
+        String orderCode = checkoutOrderCode(paidCourse, null);
+        Payment pending = payment(orderCode);
+
+        when(payos.fetch(pending.getPayosOrderCode()))
+                .thenReturn(new PayosClient.RemotePayment("PENDING", 0, "{\"status\":\"PENDING\"}"));
+        call(student, get("/api/v1/student/payments/" + orderCode + "/status"))
+                .andExpect(jsonPath("$.data.status").value(Payment.PENDING));
+        assertEquals(0, enrollments(paidCourse, student).size());
+
+        // An underpaid link grants nothing: it is left for reconciliation, not auto-approved.
+        when(payos.fetch(pending.getPayosOrderCode()))
+                .thenReturn(new PayosClient.RemotePayment("PAID", 1_000, "{}"));
+        call(student, get("/api/v1/student/payments/" + orderCode + "/status"))
+                .andExpect(jsonPath("$.data.status").value(Payment.PENDING));
+        assertEquals(0, enrollments(paidCourse, student).size());
+    }
+
+    @Test
+    void statusStillAnswersWhenThePayosLookupFails() throws Exception {
+        String orderCode = checkoutOrderCode(paidCourse, null);
+        when(payos.fetch(anyLong())).thenThrow(new IllegalStateException("PayOS down"));
+
+        call(student, get("/api/v1/student/payments/" + orderCode + "/status"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value(Payment.PENDING));
+    }
+
     // =================================================================================
     // PY-05
     // =================================================================================
