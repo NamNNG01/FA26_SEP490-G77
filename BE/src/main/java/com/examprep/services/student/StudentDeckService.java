@@ -145,15 +145,13 @@ public class StudentDeckService {
     // ------------------------------------------------------------------ PDF export
 
     /**
-     * The caller's own deck as a downloadable PDF. Owner-only, checked via a plain read —
-     * the FOR UPDATE lock in {@link #ownedDeck} is not allowed inside a read-only transaction.
+     * Any readable deck (owner, approved public student deck, or an actively enrolled course deck) as a
+     * downloadable PDF, checked via {@link #readableDeck} — a plain read, since the FOR UPDATE lock in
+     * {@link #ownedDeck} is not allowed inside a read-only transaction.
      */
     @Transactional(readOnly = true)
     public FlashcardPdfWriter.RenderedPdf exportDeckPdf(Long userId, Long deckId) {
-        Deck deck = decks.findDetail(deckId).orElseThrow(() -> new ResourceNotFoundException("Deck not found."));
-        if (!deck.getUser().getUserId().equals(userId)) {
-            throw new ForbiddenException("Only the owner can export this deck.");
-        }
+        Deck deck = readableDeck(userId, deckId);
         List<Flashcard> content = cards.findByDeckDeckIdOrderByPositionAscCardIdAsc(deckId);
         return pdfWriter.write(new FlashcardPdfWriter.DeckData(deck.getTitle(),
                 deck.getCourse() == null ? null : deck.getCourse().getTitle(), deck.getUser().getFullName(),
