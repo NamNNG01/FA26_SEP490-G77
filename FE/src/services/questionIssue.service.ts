@@ -1,3 +1,4 @@
+import { useEffect, useSyncExternalStore } from 'react';
 import { apiClient } from './axios';
 
 export const ISSUE_TYPES = ['WRONG_CONTENT', 'WRONG_ANSWER', 'WRONG_EXPLANATION', 'AI_EXPLANATION_ERROR', 'MISSING_MEDIA', 'OTHER'] as const;
@@ -28,6 +29,40 @@ export const questionIssueService = {
     unwrap<any>((await apiClient.post(`/manager/question-issues/${id}/regrade/confirm`, { jobId, confirmed, reason })).data),
   retryJob: async (jobId: number) => unwrap<any>((await apiClient.post(`/manager/question-issues/regrade-jobs/${jobId}/retry`)).data),
 };
+
+/*
+ * PENDING tickets for the manager sidebar badge. Polled every 30 s while the tab is visible;
+ * the issues page calls refreshPendingIssueCount() after each reload so the badge follows its actions.
+ */
+let pendingCount = 0;
+const pendingListeners = new Set<() => void>();
+
+export function refreshPendingIssueCount(): void {
+  questionIssueService
+    .managerList({ status: 'PENDING', page: 0, size: 1 })
+    .then(res => {
+      const next = Number(res?.totalElements ?? 0);
+      if (next !== pendingCount) { pendingCount = next; pendingListeners.forEach(l => l()); }
+    })
+    .catch(() => {}); // keep the last badge; the next tick retries
+}
+
+/** `enabled = false` for roles without the issue queue. */
+export function usePendingIssueCount(enabled: boolean): number {
+  const count = useSyncExternalStore(
+    cb => { pendingListeners.add(cb); return () => { pendingListeners.delete(cb); }; },
+    () => pendingCount,
+  );
+  useEffect(() => {
+    if (!enabled) return;
+    refreshPendingIssueCount();
+    const tick = () => { if (document.visibilityState === 'visible') refreshPendingIssueCount(); };
+    const timer = setInterval(tick, 30_000);
+    document.addEventListener('visibilitychange', tick);
+    return () => { clearInterval(timer); document.removeEventListener('visibilitychange', tick); };
+  }, [enabled]);
+  return enabled ? count : 0;
+}
 
 export function issueLabel(value?: string) {
   return (value || '').toLowerCase().split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
