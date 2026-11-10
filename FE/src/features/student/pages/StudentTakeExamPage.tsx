@@ -80,6 +80,26 @@ type SaveState = 'saved' | 'dirty' | 'saving' | 'error';
  *  - `?practiceSessionId=` runs a Module Practice session instead (MP-03…MP-07) — same screen,
  *    its own flow: see ModulePracticeRunner.
  */
+const currentQuestionKey = (attemptId: number) => `examprep.currentQuestion.${attemptId}`;
+
+/** Index of the question the student was on in this attempt (this tab), 0 when unknown. */
+function readCurrentQuestion(attemptId: number): number {
+  try {
+    const n = Number(sessionStorage.getItem(currentQuestionKey(attemptId)));
+    return Number.isInteger(n) && n > 0 ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function rememberCurrentQuestion(attemptId: number, index: number) {
+  try {
+    sessionStorage.setItem(currentQuestionKey(attemptId), String(index));
+  } catch {
+    /* a reload just starts at the first question */
+  }
+}
+
 export function StudentTakeExamPage() {
   const [searchParams] = useSearchParams();
   const practiceSessionId = searchParams.get('practiceSessionId');
@@ -171,7 +191,8 @@ function ExamAttemptScreen() {
         dirtyRef.current = new Set();
         setAnswers(initial);
         setSession({ ...s, deadlineAt: contestEndsAt ?? s.deadlineAt, questions: [...s.questions].sort((a, b) => a.orderIndex - b.orderIndex) });
-        setCurrent(0);
+        // A reload reopens the question the student was on (remembered per attempt in this tab).
+        setCurrent(Math.min(readCurrentQuestion(s.attemptId), Math.max(0, s.questions.length - 1)));
         setSaveState('saved');
         const chosen = canChooseTakeMode(s.examMode) ? (takeAsOf(s.attemptId) ?? parseTakeAs(takeAsParam)) : null;
         if (chosen) rememberTakeAs(s.attemptId, chosen);
@@ -187,6 +208,11 @@ function ExamAttemptScreen() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [attemptIdParam, examIdParam, reload]);
+
+  const sessionAttemptId = session?.attemptId;
+  useEffect(() => {
+    if (sessionAttemptId != null) rememberCurrentQuestion(sessionAttemptId, current);
+  }, [sessionAttemptId, current]);
 
   // CODE questions: languages, template and sample I/O. A failure leaves the editor usable without them.
   const sessionExamId = session?.examId;
