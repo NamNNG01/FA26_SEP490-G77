@@ -597,8 +597,13 @@ export function ModulePracticeRunner({ sessionId }: { sessionId: string }) {
       ) : (
       <div className="flex flex-1 overflow-hidden flex-col md:flex-row">
         {/* A question of a group: its passage in a column of its own (left), the question on the right. */}
-        <GroupPassageSplit group={view?.group} narrow mainClassName={isRubric ? 'p-[30px]' : 'p-[clamp(1rem,2.5vw,1.5rem)]'}>
-          <div className={fillEssay ? 'w-full flex flex-col gap-3 md:h-full' : isRubric ? 'w-full space-y-3' : 'max-w-3xl mx-auto space-y-5'}>
+        {/* Every type sits in the middle (md+): ~15% of the column free left, right and below; the top keeps its gutter. */}
+        <GroupPassageSplit
+          group={view?.group}
+          narrow
+          mainClassName={`${isRubric ? 'p-[30px]' : 'p-[clamp(1rem,2.5vw,1.5rem)]'} md:px-[15%] md:pb-[15vh]`}
+        >
+          <div className={fillEssay ? 'w-full flex flex-col gap-3 md:h-full' : isRubric ? 'w-full space-y-3' : 'w-full space-y-5'}>
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-sm font-semibold text-content uppercase tracking-wide">Question {current + 1}</h2>
               <Badge variant="info">{QUESTION_TYPE_LABEL[summary.questionType] ?? summary.questionType}</Badge>
