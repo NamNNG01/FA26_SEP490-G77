@@ -21,7 +21,7 @@ import {
 import type { QuestionDifficulty } from "@/services/question.service";
 import { DiagramAnswer } from "./DiagramAnswer";
 import { CodeAnswer } from "./CodeAnswer";
-import { InsertImageButton, QuestionContent, hasQuestionImage } from "@/components/common/QuestionContent";
+import { InsertImageButton, QuestionImagePreview, splitQuestionImage, withQuestionImage } from "@/components/common/QuestionContent";
 
 const MAX_OPTIONS = 10;
 
@@ -102,12 +102,16 @@ export function QuestionForm({
 
   const set = (patch: Partial<QuestionDraft>) => onChange({ ...q, ...patch });
 
+  // The textarea holds only the text; the image stays at the end of the stored content.
+  const { text, images } = splitQuestionImage(q.content);
+  const setText = (next: string) => set({ content: withQuestionImage(next, images[0]?.url ?? null) });
+
   const insertBlank = () => {
     const marker = `{{${nextBlankIndex(q.content)}}}`;
     const el = textRef.current;
-    const start = el?.selectionStart ?? q.content.length;
-    const end = el?.selectionEnd ?? q.content.length;
-    set({ content: q.content.slice(0, start) + marker + q.content.slice(end) });
+    const start = el?.selectionStart ?? text.length;
+    const end = el?.selectionEnd ?? text.length;
+    setText(text.slice(0, start) + marker + text.slice(end));
     requestAnimationFrame(() => {
       el?.focus();
       el?.setSelectionRange(start + marker.length, start + marker.length);
@@ -256,7 +260,7 @@ export function QuestionForm({
             Question Text *
           </label>
           <div className="flex items-center gap-2">
-          <InsertImageButton textarea={textRef} value={q.content} onChange={(content) => set({ content })} />
+          <InsertImageButton value={q.content} onChange={(content) => set({ content })} />
           {q.type === "FILL_BLANK" && (
             <button
               type="button"
@@ -271,8 +275,8 @@ export function QuestionForm({
         <textarea
           id={`${q.key}-content`}
           ref={textRef}
-          value={q.content}
-          onChange={(e) => set({ content: e.target.value })}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
           aria-invalid={Boolean(contentError)}
           className={`w-full h-[96px] px-3 py-2 rounded-[10px] border text-base text-content bg-surface resize-y focus:outline-none focus:ring-2 transition-all ${
             contentError
@@ -285,14 +289,7 @@ export function QuestionForm({
               : "Enter the question…"
           }
         />
-        {hasQuestionImage(q.content) && (
-          <div className="mt-2 rounded-[10px] border border-line-faint bg-surface-alt p-3">
-            <p className="text-2xs font-semibold uppercase text-content-subtle mb-1">Preview</p>
-            <p className="text-sm text-content whitespace-pre-line break-words">
-              <QuestionContent text={q.content} />
-            </p>
-          </div>
-        )}
+        <QuestionImagePreview value={q.content} onChange={(content) => set({ content })} disabled={readOnly} />
         {contentError && (
           <p className="text-xs text-danger mt-1">{contentError}</p>
         )}
