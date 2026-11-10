@@ -441,7 +441,7 @@ function PracticeQuestionCard({
           >
             {bookmarked ? 'Bookmarked' : 'Bookmark'}
           </Button>
-          <ReportQuestionIssueButton questionId={q.questionId} />
+          <ReportQuestionIssueButton questionId={q.questionId} practiceSessionId={sessionId} options={view?.options ?? []} />
         </div>
       </div>
 

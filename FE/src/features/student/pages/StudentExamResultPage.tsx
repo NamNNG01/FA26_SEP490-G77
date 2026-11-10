@@ -662,7 +662,7 @@ export function StudentExamResultPage() {
                 bookmarkAction={
                   <div className="flex flex-wrap gap-2"><Button size="sm" variant={bookmarkedQuestions.has(q.questionId) ? 'primary' : 'outline'} disabled={bookmarkBusy.has(q.questionId)} aria-pressed={bookmarkedQuestions.has(q.questionId)} aria-label={bookmarkedQuestions.has(q.questionId) ? 'Remove bookmark' : 'Bookmark question'} icon={<Icon.Star className={`w-4 h-4 ${bookmarkedQuestions.has(q.questionId) ? 'fill-current' : ''}`} />} onClick={() => toggleQuestionBookmark(q.questionId)}>
                     {bookmarkedQuestions.has(q.questionId) ? 'Bookmarked' : 'Bookmark'}
-                  </Button><ReportQuestionIssueButton questionId={q.questionId} /></div>
+                  </Button><ReportQuestionIssueButton questionId={q.questionId} attemptId={result.attemptId} options={q.options ?? []} /></div>
                 }
                 saveAction={
                   savableIds.includes(q.questionId) ? (

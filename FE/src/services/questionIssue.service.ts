@@ -1,7 +1,7 @@
 import { apiClient } from './axios';
 
 export const ISSUE_TYPES = ['WRONG_CONTENT', 'WRONG_ANSWER', 'WRONG_EXPLANATION', 'AI_EXPLANATION_ERROR', 'MISSING_MEDIA', 'OTHER'] as const;
-export const ISSUE_STATUSES = ['PENDING', 'IN_PROGRESS', 'RESOLVED', 'REJECTED', 'DUPLICATE'] as const;
+export const ISSUE_STATUSES = ['PENDING', 'IN_PROGRESS', 'RESOLVED', 'REJECTED', 'DUPLICATE', 'WITHDRAWN'] as const;
 export type IssueType = typeof ISSUE_TYPES[number];
 export type IssueStatus = typeof ISSUE_STATUSES[number];
 
@@ -14,8 +14,9 @@ function unwrap<T>(response: any): T {
 export const questionIssueService = {
   studentList: async (params: Record<string, string | number> = {}) => unwrap<any>((await apiClient.get('/student/question-issues', { params })).data),
   studentDetail: async (id: string | number) => unwrap<any>((await apiClient.get(`/student/question-issues/${id}`)).data),
-  report: async (payload: { questionId: number; issueType: IssueType; description: string; attachmentUrl?: string }) =>
+  report: async (payload: { questionId: number; issueType: IssueType; description: string; attachmentUrl?: string; attemptId?: number; practiceSessionId?: number; source?: 'NOTEBOOK' | 'OTHER'; suggestedOptionIds?: number[]; suggestedAnswer?: string }) =>
     unwrap<any>((await apiClient.post('/student/question-issues', payload)).data),
+  withdraw: async (id: string | number) => unwrap<any>((await apiClient.delete(`/student/question-issues/${id}`)).data),
   managerList: async (params: Record<string, string | number> = {}) => unwrap<any>((await apiClient.get('/manager/question-issues', { params })).data),
   managerDetail: async (id: string | number) => unwrap<any>((await apiClient.get(`/manager/question-issues/${id}`)).data),
   assign: async (id: string | number, assignedTo: number | null) => unwrap<any>((await apiClient.patch(`/manager/question-issues/${id}/assign`, { assignedTo })).data),
