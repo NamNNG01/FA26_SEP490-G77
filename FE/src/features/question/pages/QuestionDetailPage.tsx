@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { InsertImageButton, QuestionContent, hasQuestionImage } from '@/components/common/QuestionContent';
+import { InsertImageButton, QuestionImagePreview, splitQuestionImage, withQuestionImage } from '@/components/common/QuestionContent';
 import { useNavigate, useParams } from 'react-router';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { Alert } from '@/components/ui/Alert';
@@ -249,6 +249,8 @@ export function QuestionDetailPage() {
   const locked = saving || busy;
   /** The backend won't save an archived question, so it's shown read-only (it can still be deleted). */
   const archived = savedStatus === 'ARCHIVED';
+  // The textarea holds only the text; the image stays at the end of the stored content.
+  const contentParts = splitQuestionImage(q.content);
 
   return (
     <div ref={scrollRef} className={`${pageCls} scroll-mt-5`}>
@@ -279,7 +281,7 @@ export function QuestionDetailPage() {
                   </h3>
                 </div>
                 <div className="flex items-center gap-1.5 flex-shrink-0">
-                  <InsertImageButton textarea={contentRef} value={q.content} onChange={content => update({ content })} disabled={locked || archived} />
+                  <InsertImageButton value={q.content} onChange={content => update({ content })} disabled={locked || archived} />
                   <Badge variant={STATUS_VARIANT[savedStatus] ?? 'default'}>{QUESTION_STATUS_LABELS[savedStatus] ?? savedStatus}</Badge>
                   <Badge variant={TYPE_VARIANT[q.type] ?? 'info'}>{typeLabel(q.type)}</Badge>
                 </div>
@@ -287,19 +289,14 @@ export function QuestionDetailPage() {
               <textarea
                 id="question-content"
                 ref={contentRef}
-                value={q.content}
-                onChange={e => update({ content: e.target.value })}
+                value={contentParts.text}
+                onChange={e => update({ content: withQuestionImage(e.target.value, contentParts.images[0]?.url ?? null) })}
                 aria-invalid={Boolean(errors.content)}
                 disabled={locked || archived}
                 className={`${textareaCls(Boolean(errors.content))} h-[120px]`}
                 placeholder={q.type === 'FILL_BLANK' ? 'e.g. The capital of France is {{1}}.' : 'Enter the question…'}
               />
-              {hasQuestionImage(q.content) && (
-                <div className="mt-2 rounded-[10px] border border-line-faint bg-surface-alt p-3">
-                  <p className="text-2xs font-semibold uppercase text-content-subtle mb-1">Preview</p>
-                  <p className="text-sm text-content whitespace-pre-line break-words"><QuestionContent text={q.content} /></p>
-                </div>
-              )}
+              <QuestionImagePreview value={q.content} onChange={content => update({ content })} disabled={locked || archived} />
               {errors.content && <p className="text-xs text-danger mt-1">{errors.content}</p>}
             </div>
 

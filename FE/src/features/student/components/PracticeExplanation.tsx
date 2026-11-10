@@ -80,7 +80,7 @@ export function PracticeExplanation({
         )}
         {result.quota && (
           <span className="ml-auto normal-case font-normal tracking-normal text-content-subtle">
-            {result.quota.totalRemaining} AI request{result.quota.totalRemaining === 1 ? '' : 's'} left
+            AI tokens left: {result.quota.totalRemaining.toLocaleString()}
           </span>
         )}
       </div>
