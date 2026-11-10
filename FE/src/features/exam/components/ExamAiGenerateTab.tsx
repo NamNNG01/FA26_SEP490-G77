@@ -131,6 +131,7 @@ export function ExamAiGenerateTab({
   const [draft, setDraft] = useState<AiExamDraftResponse | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [savedQuestionIds, setSavedQuestionIds] = useState<number[]>([]);
+  const [questionsPublished, setQuestionsPublished] = useState(false);
   const [rubricEditor, setRubricEditor] = useState<{
     questionIndex: number;
     rubric: NonNullable<AiQuestionDraft["essayGradingRubric"]>;
@@ -245,6 +246,7 @@ export function ExamAiGenerateTab({
       );
       setDraft(result);
       setSavedQuestionIds([]);
+      setQuestionsPublished(false);
       if (result.warnings?.length) {
         toast.warning(result.warnings.join(" "), {
           title: "AI draft warnings",
@@ -448,41 +450,50 @@ export function ExamAiGenerateTab({
   };
 
   const handleSaveAndPublish = async () => {
-    if (!draft || savedQuestionIds.length > 0) return;
-    if (!validateDraftForSave()) return;
+    if (!draft || questionsPublished) return;
+    if (savedQuestionIds.length === 0 && !validateDraftForSave()) return;
 
     setSaving(true);
+    let questionIds = [...savedQuestionIds];
     try {
-      const questionsToSave = draft.questions.map(
-        ({
-          plantUmlSource: _plantUmlPreview,
-          diagramSvg: _diagramPreview,
-          ...q
-        }) => ({
-          ...q,
-          courseId: Number(courseId),
-          moduleId: moduleId ? Number(moduleId) : null,
-          // AI generated questions are saved as active, making them available
-          // in the Question Bank before the exam is created.
-          status: "ACTIVE",
-        }),
-      ) as QuestionCreateRequest[];
+      if (questionIds.length === 0) {
+        const questionsToSave = draft.questions.map(
+          ({
+            plantUmlSource: _plantUmlPreview,
+            diagramSvg: _diagramPreview,
+            ...q
+          }) => ({
+            ...q,
+            courseId: Number(courseId),
+            moduleId: moduleId ? Number(moduleId) : null,
+          }),
+        ) as QuestionCreateRequest[];
 
-      const batchRes = await questionService.createQuestionsBatch(
-        Number(courseId),
-        moduleId ? Number(moduleId) : null,
-        questionsToSave,
-      );
-      const questionIds = batchRes.map((r) => r.questionId);
-      if (questionIds.length !== draft.questions.length) {
-        throw new Error("Not all generated questions were saved.");
+        const batchRes = await questionService.createQuestionsBatch(
+          Number(courseId),
+          moduleId ? Number(moduleId) : null,
+          questionsToSave,
+        );
+        questionIds = batchRes.map((r) => r.questionId);
+        if (questionIds.length !== draft.questions.length) {
+          throw new Error("Not all generated questions were saved.");
+        }
+        // Retain IDs before activation so a retry will not duplicate the batch.
+        setSavedQuestionIds(questionIds);
       }
-      setSavedQuestionIds(questionIds);
+
+      await questionService.batchUpdateStatus(questionIds, "ACTIVE");
+      setQuestionsPublished(true);
       toast.success("Generated questions saved and published to the Question Bank.");
     } catch (err: unknown) {
       toast.error(
-        getApiErrorMessage(err, "Failed to save and publish generated questions."),
-        { title: "Could not save questions", duration: null },
+        getApiErrorMessage(
+          err,
+          questionIds.length > 0
+            ? "Questions were saved, but could not be published. Retry to publish them."
+            : "Failed to save and publish generated questions.",
+        ),
+        { title: questionIds.length > 0 ? "Could not publish questions" : "Could not save questions", duration: null },
       );
     } finally {
       setSaving(false);
@@ -490,7 +501,11 @@ export function ExamAiGenerateTab({
   };
 
   const handleCreateExam = async () => {
-    if (!draft || savedQuestionIds.length !== draft.questions.length) return;
+    if (
+      !draft ||
+      !questionsPublished ||
+      savedQuestionIds.length !== draft.questions.length
+    ) return;
 
     setSaving(true);
     try {
@@ -839,7 +854,7 @@ export function ExamAiGenerateTab({
               >
                 Back
               </Button>
-              {savedQuestionIds.length === draft.questions.length && draft.questions.length > 0 ? (
+              {questionsPublished && savedQuestionIds.length === draft.questions.length && draft.questions.length > 0 ? (
                 <Button
                   icon={<Icon.Check className="w-4 h-4" />}
                   loading={saving}
@@ -855,16 +870,17 @@ export function ExamAiGenerateTab({
                   disabled={saving || draft.questions.length === 0}
                   onClick={handleSaveAndPublish}
                 >
-                  Save and Publish Questions
+                  {savedQuestionIds.length > 0 ? "Publish Saved Questions" : "Save and Publish Questions"}
                 </Button>
               )}
             </div>
           </div>
 
-          {savedQuestionIds.length === draft.questions.length && draft.questions.length > 0 && (
+          {savedQuestionIds.length > 0 && (
             <div className="p-3 rounded-[8px] border border-success-line bg-success-light/40 text-sm text-content-secondary">
-              Questions are saved and published. Create the exam when you’re ready.
-              The saved question content is locked to keep it in sync with the Question Bank.
+              {questionsPublished
+                ? "Questions are saved and published. Create the exam when you’re ready."
+                : "Questions are saved but still inactive. Publish them before creating the exam."} The saved question content is locked to keep it in sync with the Question Bank.
             </div>
           )}
 
