@@ -70,7 +70,7 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
 
   /** Create mode: unsaved work from before a reload, read once. */
   const [restored] = useState<CreateDraftSnapshot | null>(() => (isEdit || duplicateOf ? null : loadCreateDraft()));
-  const [questions, setQuestions] = useState<QuestionDraft[]>(() => (isEdit ? [] : restored?.questions.length ? restored.questions : [emptyDraft()]));
+  const [questions, setQuestions] = useState<QuestionDraft[]>(() => (isEdit ? [] : restored?.questions ?? []));
   const [courseId, setCourseId] = useState(restored?.courseId ?? '');
   const [moduleId, setModuleId] = useState(restored?.moduleId ?? '');
   const [status, setStatus] = useState<QuestionStatus>('INACTIVE');
@@ -254,10 +254,15 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
   /** Manual mode holds work that would be lost by switching to AI. */
   const manualBusy = !isEdit && dirty && kept > 0;
   const aiBusy = aiPending > 0;
+  /**
+   * Edit mode: any change. Create mode: only questions actually written — a picked course, module or
+   * group, or a blank question, is nothing to lose (picking them used to hold the publish redirect).
+   */
+  const unsaved = isEdit ? dirty : manualBusy;
 
   // Unsaved edits, or AI suggestions not saved yet, hold any navigation away for confirmation.
   // Reloading only prompts for what the stored draft can't bring back.
-  const { blocker, leave } = useUnsavedChangesGuard(dirty || aiBusy, (dirty && (isEdit || !draftStored)) || aiBusy);
+  const { blocker, leave } = useUnsavedChangesGuard(unsaved || aiBusy, (unsaved && (isEdit || !draftStored)) || aiBusy);
 
   /**
    * Leaving without saving was confirmed — the draft goes with it. Done in the
@@ -270,10 +275,10 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
     clearCreateDraft();
   };
 
-  /** Back to one blank question; the location and group context stay. */
+  /** Back to an empty list; the location and group context stay. */
   const resetManual = () => {
     clearCreateDraft();
-    setQuestions([newDraft()]);
+    setQuestions([]);
     setTouched(new Set());
     setSubmitted(false);
     setInBank(new Set());
@@ -282,7 +287,6 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
 
   const discardRestored = () => {
     resetManual();
-    setQuestions([emptyDraft()]);
     setCourseId('');
     setModuleId('');
     setGroupCtx(emptyGroupContext());
@@ -310,7 +314,7 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
     });
 
   const unsavedDetails = [
-    ...(dirty ? [isEdit ? 'Your changes to this question' : `${questions.length} question${questions.length === 1 ? '' : 's'} not saved yet`] : []),
+    ...(unsaved ? [isEdit ? 'Your changes to this question' : `${kept} question${kept === 1 ? '' : 's'} not saved yet`] : []),
     ...(aiPending > 0 ? [`${aiPending} AI suggestion${aiPending === 1 ? '' : 's'} not saved yet`] : []),
   ];
 
@@ -497,6 +501,10 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
   };
 
   const saveManual = async () => {
+    if (!isEdit && questions.length === 0) {
+      toast.warning('Add a question or import a file first.');
+      return;
+    }
     setSubmitted(true);
     const firstInvalid = questions.find(q => !isDraftValid(q) || kindError(q) || inBank.has(q.key));
     if (firstInvalid) {
@@ -520,7 +528,6 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
       await createBatch(questions);
       // The saved questions stay on the page (read-only) to be published; "Add Question" starts the next one.
       resetManual();
-      setQuestions([]);
     } catch (err) {
       const error = describeSaveError(err, 'Could not save. Please try again.');
       showSaveError(error);
