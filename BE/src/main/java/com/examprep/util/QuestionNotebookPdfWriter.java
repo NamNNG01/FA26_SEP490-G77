@@ -61,17 +61,23 @@ public class QuestionNotebookPdfWriter {
             cs.newLineAtOffset(40, y);
             cs.showText("Question Notebook Export");
             cs.endText();
-            y -= 30;
+            y -= 35;
 
             for (int i = 0; i < questions.size(); i++) {
                 QuestionReviewItemDto q = questions.get(i);
-                if (y < 80) {
+
+                // Estimate required space for question header, text, and options
+                int optionCount = q.getOptions() != null ? q.getOptions().size() : 0;
+                float estimatedHeight = 40f + (optionCount * 15f);
+                if (y < estimatedHeight || y < 80f) {
                     cs.close();
                     page = new PDPage(PDRectangle.A4);
                     doc.addPage(page);
                     cs = new PDPageContentStream(doc, page);
                     y = 750f;
                 }
+
+                // Question Header
                 cs.beginText();
                 cs.setFont(bold, 10);
                 cs.newLineAtOffset(40, y);
@@ -83,14 +89,39 @@ public class QuestionNotebookPdfWriter {
                 cs.endText();
                 y -= 15;
 
+                // Question Text
                 cs.beginText();
                 cs.setFont(regular, 9);
                 cs.newLineAtOffset(50, y);
                 String text = q.getQuestionText() != null ? q.getQuestionText().replaceAll("\\r?\\n", " ") : "";
-                if (text.length() > 110) text = text.substring(0, 110) + "...";
+                if (text.length() > 105) text = text.substring(0, 105) + "...";
                 cs.showText(text);
                 cs.endText();
-                y -= 25;
+                y -= 18;
+
+                // Options and Correct Answer indicator
+                if (q.getOptions() != null && !q.getOptions().isEmpty()) {
+                    char optionLabel = 'A';
+                    for (QuestionReviewItemDto.OptionDto opt : q.getOptions()) {
+                        boolean isCorrect = q.getCorrectOptionIds() != null && q.getCorrectOptionIds().contains(opt.getOptionId());
+
+                        cs.beginText();
+                        cs.setFont(isCorrect ? bold : regular, 9);
+                        cs.newLineAtOffset(60, y);
+                        String optPrefix = (optionLabel++) + ". ";
+                        String optText = opt.getOptionText() != null ? opt.getOptionText().replaceAll("\\r?\\n", " ") : "";
+                        if (optText.length() > 95) optText = optText.substring(0, 95) + "...";
+
+                        String line = optPrefix + optText;
+                        if (isCorrect) {
+                            line += " [CORRECT]";
+                        }
+                        cs.showText(line);
+                        cs.endText();
+                        y -= 14;
+                    }
+                }
+                y -= 12; // spacing between questions
             }
             cs.close();
 

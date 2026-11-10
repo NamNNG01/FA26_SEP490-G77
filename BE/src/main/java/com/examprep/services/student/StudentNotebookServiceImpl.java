@@ -232,6 +232,7 @@ public class StudentNotebookServiceImpl implements StudentNotebookService {
                 .title(title)
                 .description("Review practice exam for student mistake notebook")
                 .generationType("MANUAL")
+                .durationMinutes(request.getDurationMinutes())
                 .maxScore(BigDecimal.valueOf(size))
                 .status("PUBLISHED")
                 .publishedAt(Instant.now())

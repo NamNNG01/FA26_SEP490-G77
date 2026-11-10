@@ -103,7 +103,7 @@ class StudentV2FeaturesApiIntegrationTest {
         Long attemptId = json.readTree(mvc.perform(post("/api/v1/student/questions/review-session")
                 .with(as(student))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"courseId\":" + course.getCourseId() + ",\"type\":\"bookmarked\",\"size\":1}"))
+                .content("{\"courseId\":" + course.getCourseId() + ",\"type\":\"bookmarked\",\"size\":1,\"durationMinutes\":15}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.attemptId").exists())
                 .andReturn().getResponse().getContentAsString()).path("data").path("attemptId").asLong();
@@ -130,7 +130,7 @@ class StudentV2FeaturesApiIntegrationTest {
         mvc.perform(post("/api/v1/student/questions/review-session")
                 .with(as(student))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"type\":\"bookmarked\",\"size\":100}"))
+                .content("{\"type\":\"bookmarked\",\"size\":100,\"durationMinutes\":15}"))
                 .andExpect(status().isBadRequest());
 
         // Other student delete returns 404 (not found / not owner security pattern)
