@@ -194,7 +194,7 @@ export function StudentDeckStudyPage() {
     }
   };
 
-  /** Rendered by the BE (owner only). */
+  /** Rendered by the BE — the student's own decks and the course decks they can open. */
   const exportDeckPdf = async () => {
     if (!deck) return;
     setExporting('pdf');
@@ -340,34 +340,34 @@ export function StudentDeckStudyPage() {
 
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-base font-semibold text-content">All cards ({cards.length})</h2>
-            {(editable || (isOwner && cards.length > 0)) && (
+            {(editable || cards.length > 0) && (
               <div className="flex flex-wrap gap-2">
-                {/* Only the student's own decks: course decks are course content. */}
+                {/* The Excel file is for re-importing, so only the student's own decks; any deck, course ones too, prints as PDF. */}
                 {isOwner && cards.length > 0 && (
-                  <>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      icon={<Icon.Download className="w-4 h-4" />}
-                      onClick={exportDeck}
-                      loading={exporting === 'xlsx'}
-                      disabled={exporting != null}
-                      title="Download this deck with all its cards as an Excel file"
-                    >
-                      Export (.xlsx)
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      icon={<Icon.FileText className="w-4 h-4" />}
-                      onClick={exportDeckPdf}
-                      loading={exporting === 'pdf'}
-                      disabled={exporting != null}
-                      title="Download this deck with all its cards as a printable PDF"
-                    >
-                      Export (.pdf)
-                    </Button>
-                  </>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    icon={<Icon.Download className="w-4 h-4" />}
+                    onClick={exportDeck}
+                    loading={exporting === 'xlsx'}
+                    disabled={exporting != null}
+                    title="Download this deck with all its cards as an Excel file"
+                  >
+                    Export (.xlsx)
+                  </Button>
+                )}
+                {cards.length > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    icon={<Icon.FileText className="w-4 h-4" />}
+                    onClick={exportDeckPdf}
+                    loading={exporting === 'pdf'}
+                    disabled={exporting != null}
+                    title="Download this deck with all its cards as a printable PDF"
+                  >
+                    Export (.pdf)
+                  </Button>
                 )}
                 {editable && (
                   <>
