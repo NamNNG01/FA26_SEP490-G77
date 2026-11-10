@@ -675,6 +675,7 @@ export function ModulePracticeRunner({ sessionId }: { sessionId: string }) {
                     onChange={changeAnswer}
                     roomy={isRubric}
                     fill={fillEssay}
+                    readOnly={!editing}
                     practice
                     verdict={answerVerdict}
                     reveal={reveal}
@@ -1074,6 +1075,7 @@ function ReviewAnswer({
           value={latest?.response ?? null}
           onChange={NO_CHANGE}
           practice
+          readOnly
           verdict={verdict}
           reveal={reveal}
         />

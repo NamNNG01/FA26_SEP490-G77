@@ -3,6 +3,7 @@ import { Icon } from '@/assets/icons';
 import type { AnswerResponse, AttemptQuestion } from '@/services/studentAttempt.service';
 import { normalizeBlank, type CorrectAnswer } from '@/services/studentPracticeExam.service';
 import { DiagramAnswerInput } from './DiagramAnswerInput';
+import { DiagramReview } from './result/DiagramReview';
 import { QuestionContent } from '@/components/common/QuestionContent';
 
 /** ESSAY / CODE text limit when the paper sets none (BE AnswerResponseValidator). */
@@ -57,6 +58,8 @@ interface InputProps {
   roomy?: boolean;
   /** Essay screen (md+): the editor fills the height its flex-column parent leaves free. */
   fill?: boolean;
+  /** A sent answer: a DIAGRAM shows as a picture instead of the draw.io editor (which a fieldset can't disable). */
+  readOnly?: boolean;
   /**
    * Practice "Check answer": the key of the question. When set the answer is read-only —
    * every right part turns green, every wrong part red with the right one beside it.
@@ -94,7 +97,7 @@ export function QuestionAnswerInput(props: InputProps) {
 
 const CHOICE_TYPES: ReadonlySet<string> = new Set(['SINGLE_CHOICE', 'TRUE_FALSE', 'MULTIPLE_CHOICE']);
 
-function AnswerControl({ question, value, onChange, roomy, fill, reveal, onEnter, verdict }: InputProps) {
+function AnswerControl({ question, value, onChange, roomy, fill, readOnly, reveal, onEnter, verdict }: InputProps) {
   switch (question.questionType) {
     case 'SINGLE_CHOICE':
     case 'TRUE_FALSE':
@@ -110,6 +113,7 @@ function AnswerControl({ question, value, onChange, roomy, fill, reveal, onEnter
     case 'CODE':
       return <TextInput question={question} value={value} onChange={onChange} roomy={roomy} fill={fill} />;
     case 'DIAGRAM':
+      if (readOnly) return <DiagramReview xml={value?.drawioXml ?? ''} />;
       return <DiagramAnswerInput value={value} onChange={onChange} roomy={roomy} />;
     default:
       return <p className="text-sm text-content-soft">This question type can't be answered here.</p>;
