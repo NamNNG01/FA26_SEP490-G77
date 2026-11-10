@@ -30,6 +30,8 @@ export interface PracticeExamRequest {
   durationMinutes: number;
   examType?: PracticeExamType;
   categoryIds?: number[];
+  /** How many questions to draw from each picked module; their sum equals questionCount. */
+  moduleQuestionCounts?: { categoryId: number; questionCount: number }[];
   difficulty?: PracticeDifficulty;
   /** Name the student gives the practice exam; blank falls back to the BE default name. */
   title?: string;
