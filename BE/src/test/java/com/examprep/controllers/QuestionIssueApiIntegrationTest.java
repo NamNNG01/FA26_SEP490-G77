@@ -69,7 +69,7 @@ class QuestionIssueApiIntegrationTest {
         right = opts.get(1);
         attempt = f.finishedAttempt(exam, taker, Instant.now(), "0");
         answer = AttemptAnswer.builder().attempt(attempt).question(question).weightSnapshot(BigDecimal.ONE)
-                .displaySnapshot("{\"questionId\":" + question.getQuestionId() + ",\"questionType\":\"SINGLE_CHOICE\",\"content\":\"x\"}")
+                .displaySnapshot("{\"questionId\":" + question.getQuestionId() + ",\"orderIndex\":3,\"questionType\":\"SINGLE_CHOICE\",\"content\":\"x\"}")
                 .keySnapshot("{\"correctOptionIds\":[" + right.getOptionId() + "]}")
                 .response("{\"selectedOptionIds\":[" + wrong.getOptionId() + "]}")
                 .gradingStatus("AUTO").isCorrect(false).scoreEarned(BigDecimal.ZERO).questionVersion(1).build();
@@ -228,6 +228,119 @@ class QuestionIssueApiIntegrationTest {
         assertTrue(resolved.path("regradeJob").isMissingNode() || resolved.path("regradeJob").isNull());
         assertEquals("Fixed wording of the question", f.reload(question).getContent());
         assertEquals(1, question.getScoringVersion());
+    }
+
+    String contextBody(String extra) {
+        return "{\"questionId\":" + question.getQuestionId() + ",\"issueType\":\"WRONG_ANSWER\",\"description\":\"The marked answer looks wrong to me\"," + extra + "}";
+    }
+
+    @Test void reportFromAnAttemptRecordsWhereAndWhatTheStudentAnswered() throws Exception {
+        send(post("/api/v1/student/question-issues"), enrolled, contextBody("\"attemptId\":" + attempt.getAttemptId()))
+                .andExpect(status().isBadRequest());
+        send(post("/api/v1/student/question-issues"), taker, contextBody("\"suggestedOptionIds\":[999999]"))
+                .andExpect(status().isBadRequest());
+        send(post("/api/v1/student/question-issues"), taker, contextBody("\"source\":\"PRACTICE\""))
+                .andExpect(status().isBadRequest());
+        long id = data(send(post("/api/v1/student/question-issues"), taker, contextBody("\"attemptId\":" + attempt.getAttemptId()
+                + ",\"suggestedOptionIds\":[" + right.getOptionId() + "],\"suggestedAnswer\":\"B is the right one\""))
+                .andExpect(status().isCreated())).path("issueId").asLong();
+        send(post("/api/v1/student/question-issues"), enrolled, contextBody("\"source\":\"NOTEBOOK\",\"suggestedOptionIds\":[" + right.getOptionId() + "]"))
+                .andExpect(status().isCreated());
+
+        JsonNode detail = data(mvc.perform(get(BASE + "/" + id).with(as(manager))).andExpect(status().isOk()));
+        JsonNode first = detail.path("reports").get(0);
+        assertEquals("EXAM_RESULT", first.path("source").asText());
+        assertEquals(attempt.getAttemptId(), first.path("attemptId").asLong());
+        assertEquals(3, first.path("questionNumber").asInt());
+        assertFalse(first.path("outdated").asBoolean());
+        assertEquals("x", first.path("context").path("contextTitle").asText());
+        assertEquals(wrong.getOptionId(), first.path("context").path("selectedOptions").get(0).path("optionId").asLong());
+        assertFalse(first.path("context").path("isCorrect").asBoolean());
+        assertEquals(right.getOptionId(), first.path("suggestedOptions").get(0).path("optionId").asLong());
+        assertEquals("NOTEBOOK", detail.path("reports").get(1).path("source").asText());
+
+        assertEquals("M1", detail.path("location").path("moduleTitle").asText());
+        JsonNode insights = detail.path("insights");
+        assertEquals(2, insights.path("reports").path("suggestedOptions").get(0).path("count").asLong());
+        assertEquals("WRONG_ANSWER", insights.path("reports").path("byType").get(0).path("key").asText());
+        assertEquals(1, insights.path("answers").path("examAnswers").asLong());
+        assertEquals(0.0, insights.path("answers").path("examCorrectRate").asDouble());
+        JsonNode wrongPick = insights.path("answers").path("optionPicks").get(0);
+        assertEquals(wrong.getOptionId(), wrongPick.path("optionId").asLong());
+        assertEquals(1, wrongPick.path("examPicks").asLong());
+        assertEquals(100.0, wrongPick.path("pickRate").asDouble());
+        assertEquals(exam.getExamId(), insights.path("exams").get(0).path("examId").asLong());
+        assertEquals(1, insights.path("exams").get(0).path("attempts").asLong());
+        assertEquals(1, insights.path("regradeImpact").path("finishedAnswers").asLong());
+        assertTrue(insights.path("regradeImpact").path("answerCorrectionRegrades").asBoolean());
+        // 2 reports (20) + 1 finished answer (1) + a WRONG_ANSWER report (15)
+        assertEquals(36, detail.path("priorityScore").asInt());
+        assertEquals("MEDIUM", detail.path("priority").asText());
+        mvc.perform(get(BASE).param("sort", "priority,desc").with(as(manager))).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content[0].priority").value("MEDIUM"))
+                .andExpect(jsonPath("$.data.content[0].moduleTitle").value("M1"));
+    }
+
+    @Test void reportFromPracticeTakesTheLatestTry() throws Exception {
+        QuestionPracticeSession session = QuestionPracticeSession.builder().user(enrolled).course(course).module(module).build();
+        em.persist(session);
+        QuestionPracticeSessionQuestion row = QuestionPracticeSessionQuestion.builder().session(session).question(question).orderIndex(4)
+                .displaySnapshot("{}").keySnapshot("{}").build();
+        em.persist(row);
+        em.persist(QuestionPracticeAnswer.builder().sessionQuestion(row).attemptNumber(1)
+                .response("{\"selectedOptionIds\":[" + right.getOptionId() + "]}").isCorrect(true).scoreEarned(BigDecimal.ONE).build());
+        em.persist(QuestionPracticeAnswer.builder().sessionQuestion(row).attemptNumber(2)
+                .response("{\"selectedOptionIds\":[" + wrong.getOptionId() + "]}").isCorrect(false).scoreEarned(BigDecimal.ZERO).build());
+        em.flush();
+        send(post("/api/v1/student/question-issues"), taker, contextBody("\"practiceSessionId\":" + session.getSessionId()))
+                .andExpect(status().isBadRequest());
+        long id = data(send(post("/api/v1/student/question-issues"), enrolled, contextBody("\"practiceSessionId\":" + session.getSessionId()))
+                .andExpect(status().isCreated())).path("issueId").asLong();
+        JsonNode detail = data(mvc.perform(get(BASE + "/" + id).with(as(manager))));
+        JsonNode r = detail.path("reports").get(0);
+        assertEquals("PRACTICE", r.path("source").asText());
+        assertEquals(5, r.path("questionNumber").asInt());
+        assertEquals("M1", r.path("context").path("contextTitle").asText());
+        assertEquals(wrong.getOptionId(), r.path("context").path("selectedOptions").get(0).path("optionId").asLong());
+        assertEquals(2, detail.path("insights").path("answers").path("practiceAnswers").asLong());
+        assertEquals(50.0, detail.path("insights").path("answers").path("practiceCorrectRate").asDouble());
+    }
+
+    @Test void withdrawWhilePendingClosesAnEmptyTicket() throws Exception {
+        long id = report(taker);
+        report(enrolled);
+        mvc.perform(get("/api/v1/student/question-issues/" + id).with(as(taker))).andExpect(jsonPath("$.data.canWithdraw").value(true));
+        mvc.perform(delete("/api/v1/student/question-issues/" + id).with(as(stranger))).andExpect(status().isNotFound());
+        mvc.perform(delete("/api/v1/student/question-issues/" + id).with(as(enrolled))).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("PENDING")).andExpect(jsonPath("$.data.reportCount").value(1));
+        mvc.perform(get("/api/v1/student/question-issues/" + id).with(as(enrolled))).andExpect(status().isNotFound());
+        mvc.perform(delete("/api/v1/student/question-issues/" + id).with(as(taker))).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("WITHDRAWN"));
+        mvc.perform(get(BASE).param("status", "WITHDRAWN").with(as(manager))).andExpect(jsonPath("$.data.content.length()").value(1));
+
+        long next = report(taker);
+        assertNotEquals(id, next);
+        send(patch(BASE + "/" + next + "/status"), manager, "{\"status\":\"IN_PROGRESS\"}").andExpect(status().isOk());
+        mvc.perform(delete("/api/v1/student/question-issues/" + next).with(as(taker)))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.data.code").value("ISSUE_NOT_WITHDRAWABLE"));
+        JsonNode detail = data(mvc.perform(get(BASE + "/" + next).with(as(manager))));
+        assertEquals(id, detail.path("insights").path("relatedIssues").get(0).path("issueId").asLong());
+        assertEquals("WITHDRAWN", detail.path("insights").path("relatedIssues").get(0).path("status").asText());
+    }
+
+    @Test void reporterSeesTheirScoreChangeAfterRegrade() throws Exception {
+        long id = report(taker);
+        long jobId = data(send(post(BASE + "/" + id + "/resolve"), manager, "{\"resolutionType\":\"QUESTION_VOIDED\",\"resolutionNote\":\"Ambiguous\"}"))
+                .path("regradeJob").path("jobId").asLong();
+        send(post(BASE + "/" + id + "/regrade/confirm"), manager, "{\"jobId\":" + jobId + ",\"confirmed\":true,\"reason\":\"Everyone gets it\"}")
+                .andExpect(status().isOk());
+        JsonNode mine = data(mvc.perform(get("/api/v1/student/question-issues/" + id).with(as(taker))));
+        assertFalse(mine.path("canWithdraw").asBoolean());
+        JsonNode change = mine.path("regradeResults").get(0);
+        assertEquals(attempt.getAttemptId(), change.path("attemptId").asLong());
+        assertEquals(0, BigDecimal.ZERO.compareTo(change.path("oldScore").decimalValue()));
+        assertEquals(0, new BigDecimal("10").compareTo(change.path("newScore").decimalValue()));
+        assertEquals(0, new BigDecimal("10").compareTo(change.path("attemptMaxScore").decimalValue()));
     }
 
     long notifications(User u) {

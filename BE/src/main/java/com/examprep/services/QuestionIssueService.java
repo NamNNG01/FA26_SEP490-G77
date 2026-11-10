@@ -3,6 +3,7 @@ package com.examprep.services;
 import com.examprep.dto.PageResponse;
 import com.examprep.dto.QuestionIssueDtos.*;
 import com.examprep.dto.ResponseCode;
+import com.examprep.dto.attempt.Snapshots;
 import com.examprep.dto.question.QuestionUpdateRequest;
 import com.examprep.entities.*;
 import com.examprep.exceptions.BaseException;
@@ -33,7 +34,8 @@ import java.util.*;
 public class QuestionIssueService {
     private static final Set<String> EDITABLE = Set.of("content", "explanation", "difficulty", "options", "answerKey",
             "correctOrder", "questionMetadata", "essayGradingRubric");
-    private static final Map<String, String> SORTS = Map.of("createdAt", "createdAt", "updatedAt", "updatedAt");
+    private static final Map<String, String> SORTS = Map.of("createdAt", "createdAt", "updatedAt", "updatedAt",
+            "priority", "priorityScore", "lastReportedAt", "lastReportedAt");
 
     private final QuestionIssueRepository issues;
     private final QuestionIssueReportRepository reports;
@@ -47,6 +49,10 @@ public class QuestionIssueService {
     private final UserNotificationRepository userNotifications;
     private final QuestionService questionService;
     private final QuestionRegrader regrader;
+    private final QuestionIssueInsights insights;
+    private final AttemptAnswerRepository attemptAnswers;
+    private final QuestionPracticeSessionQuestionRepository sessionQuestions;
+    private final QuestionPracticeAnswerRepository practiceAnswers;
     private final ObjectMapper objectMapper;
 
     // ------------------------------------------------------------------ student
@@ -60,7 +66,10 @@ public class QuestionIssueService {
         Question question = issues.lockQuestion(body.questionId())
                 .filter(q -> q.getDeletedAt() == null)
                 .orElseThrow(() -> error(ResponseCode.RESOURCE_NOT_FOUND, "QUESTION_NOT_FOUND", "Question not found"));
-        if (!canReport(me, question)) {
+        List<AnswerOption> questionOptions = options.findByQuestion_QuestionId(question.getQuestionId());
+        Context context = context(me, question, body, questionOptions);
+        List<Long> suggested = suggestedOptions(body.suggestedOptionIds(), questionOptions);
+        if (context.attempt() == null && context.session() == null && !canReport(me, question)) {
             throw error(ResponseCode.FORBIDDEN, "QUESTION_NOT_ACCESSIBLE", "You can only report questions you have practised or that belong to your courses");
         }
         QuestionIssue issue = issues.findFirstByQuestion_QuestionIdAndStatusIn(question.getQuestionId(), QuestionIssue.OPEN).orElse(null);
@@ -74,9 +83,15 @@ public class QuestionIssueService {
         }
         User student = users.getReferenceById(me.getId());
         QuestionIssueReport report = reports.save(QuestionIssueReport.builder().issue(issue).user(student).issueType(type)
-                .description(body.description().strip()).attachmentUrl(url).build());
-        log(issue, student, "REPORTED", null, issue.getStatus(), type);
+                .description(body.description().strip()).attachmentUrl(url)
+                .source(context.source()).attempt(context.attempt()).practiceSession(context.session())
+                .questionNumber(context.number()).questionLockVersion(question.getLockVersion()).contextSnapshot(context.snapshot())
+                .suggestedOptionIds(suggested.isEmpty() ? null : write(suggested)).suggestedAnswer(blankToNull(body.suggestedAnswer()))
+                .build());
+        log(issue, student, "REPORTED", null, issue.getStatus(), type + (context.source() == null ? "" : " from " + context.source()));
+        issue.setLastReportedAt(Instant.now());
         issue.setUpdatedAt(Instant.now());
+        refreshPriority(issue);
         return new ReportResult(issue.getIssueId(), report.getReportId(), issue.getStatus(),
                 reports.countByIssue_IssueId(issue.getIssueId()), joined);
     }
@@ -94,10 +109,46 @@ public class QuestionIssueService {
         QuestionIssue issue = issues.findById(issueId).orElseThrow(QuestionIssueService::notFound);
         List<QuestionIssueReport> mine = reports.findByIssue_IssueIdAndUser_UserIdOrderByCreatedAtAscReportIdAsc(issueId, me.getId());
         if (mine.isEmpty()) throw notFound();
+        Map<Long, AnswerOption> optionsById = optionsById(issue.getQuestion());
+        List<RegradeResult> regrades = issues.regradesOf(issueId, me.getId()).stream().map(l -> {
+            ExamAttempt attempt = l.getAttemptAnswer().getAttempt();
+            Snapshots.ExamSnapshot exam = readAs(attempt.getExamSnapshot(), Snapshots.ExamSnapshot.class);
+            return new RegradeResult(attempt.getAttemptId(), examTitle(attempt, exam), l.getOldScore(), l.getNewScore(),
+                    attempt.getTotalScore(), exam != null && exam.maxScore() != null ? exam.maxScore()
+                    : attempt.getExam() == null ? null : attempt.getExam().getMaxScore(), l.getCreatedAt());
+        }).toList();
         return new StudentDetail(issue.getIssueId(), issue.getQuestion().getQuestionId(), issue.getQuestion().getContent(),
                 issue.getIssueType(), issue.getStatus(), duplicateOfId(issue), issue.getResolutionType(), issue.getResolutionNote(),
                 issue.getResolvedAt(), issue.getCreatedAt(), issue.getUpdatedAt(), reports.countByIssue_IssueId(issueId),
-                mine.stream().map(r -> reportView(r, null)).toList());
+                QuestionIssue.PENDING.equals(issue.getStatus()),
+                mine.stream().map(r -> reportView(r, null, issue.getQuestion().getLockVersion(), optionsById)).toList(), regrades);
+    }
+
+    /**
+     * The student takes their report back while nobody has started on the ticket. A ticket left with no report
+     * closes as WITHDRAWN; otherwise it stays open for the others.
+     */
+    public WithdrawResult withdraw(UserPrincipal me, Long issueId) {
+        QuestionIssue issue = issues.lockById(issueId).orElseThrow(QuestionIssueService::notFound);
+        List<QuestionIssueReport> mine = reports.findByIssue_IssueIdAndUser_UserIdOrderByCreatedAtAscReportIdAsc(issueId, me.getId());
+        if (mine.isEmpty()) throw notFound();
+        if (!QuestionIssue.PENDING.equals(issue.getStatus())) {
+            throw conflict("ISSUE_NOT_WITHDRAWABLE", "A report can only be withdrawn before review starts; this ticket is " + issue.getStatus());
+        }
+        reports.deleteAll(mine);
+        reports.flush();
+        User student = actor(me);
+        long left = reports.countByIssue_IssueId(issueId);
+        if (left == 0) {
+            issue.setStatus(QuestionIssue.WITHDRAWN);
+            issue.setResolvedAt(Instant.now());
+            log(issue, student, "WITHDRAWN", QuestionIssue.PENDING, QuestionIssue.WITHDRAWN, "Last report withdrawn");
+        } else {
+            log(issue, student, "REPORT_WITHDRAWN", QuestionIssue.PENDING, QuestionIssue.PENDING, left + " report(s) left");
+            refreshPriority(issue);
+        }
+        issue.setUpdatedAt(Instant.now());
+        return new WithdrawResult(issueId, issue.getStatus(), left);
     }
 
     // ------------------------------------------------------------------ manager queue
@@ -170,6 +221,9 @@ public class QuestionIssueService {
                 .orElseThrow(() -> invalid("duplicateOfIssueId", "Primary ticket not found"));
         if (QuestionIssue.DUPLICATE.equals(primary.getStatus())) {
             throw invalid("duplicateOfIssueId", "The primary ticket is itself a duplicate of #" + duplicateOfId(primary));
+        }
+        if (QuestionIssue.WITHDRAWN.equals(primary.getStatus())) {
+            throw invalid("duplicateOfIssueId", "The primary ticket was withdrawn by its reporters");
         }
         String from = issue.getStatus();
         User actor = actor(me);
@@ -366,33 +420,156 @@ public class QuestionIssueService {
             issues.countReports(found.map(QuestionIssue::getIssueId).getContent())
                     .forEach(r -> counts.put((Long) r[0], ((Number) r[1]).longValue()));
         }
-        return PageResponse.of(found, found.getContent().stream().map(i -> new ListItem(i.getIssueId(),
-                i.getQuestion().getQuestionId(), i.getQuestion().getContent(), i.getIssueType(), i.getStatus(),
-                i.getCourse() == null ? null : i.getCourse().getCourseId(), i.getCourse() == null ? null : i.getCourse().getTitle(),
-                counts.getOrDefault(i.getIssueId(), 0L), userRef(i.getAssignedTo()), i.getCreatedAt(), i.getUpdatedAt())).toList());
+        return PageResponse.of(found, found.getContent().stream().map(i -> {
+            Question q = i.getQuestion();
+            return new ListItem(i.getIssueId(), q.getQuestionId(), q.getContent(), q.getQuestionType(), i.getIssueType(), i.getStatus(),
+                    i.getCourse() == null ? null : i.getCourse().getCourseId(), i.getCourse() == null ? null : i.getCourse().getTitle(),
+                    q.getModule() == null ? null : q.getModule().getModuleId(), q.getModule() == null ? null : q.getModule().getTitle(),
+                    counts.getOrDefault(i.getIssueId(), 0L), QuestionIssueInsights.level(i.getPriorityScore()), priority(i),
+                    userRef(i.getAssignedTo()), i.getCreatedAt(), i.getLastReportedAt(), i.getUpdatedAt());
+        }).toList());
     }
 
     private ManagerDetail detail(QuestionIssue issue) {
         Question q = issue.getQuestion();
-        List<OptionView> optionViews = options.findByQuestion_QuestionId(q.getQuestionId()).stream()
+        List<AnswerOption> questionOptions = options.findByQuestion_QuestionId(q.getQuestionId());
+        Map<Long, AnswerOption> optionsById = new HashMap<>();
+        questionOptions.forEach(o -> optionsById.put(o.getOptionId(), o));
+        List<OptionView> optionViews = questionOptions.stream()
                 .sorted(Comparator.comparing(AnswerOption::getOrderIndex, Comparator.nullsLast(Comparator.naturalOrder())))
                 .map(o -> new OptionView(o.getOptionId(), o.getOptionText(), o.getIsCorrect(), o.getExplanation(), o.getOrderIndex()))
                 .toList();
-        QuestionView question = new QuestionView(q.getQuestionId(), q.getQuestionType(), q.getContent(), q.getAiExplanation(),
+        QuestionView question = new QuestionView(q.getQuestionId(), q.getQuestionType(), q.getDifficulty(), q.getContent(), q.getAiExplanation(),
                 q.getStatus(), q.getLockVersion(), q.getScoringVersion(), optionViews, json(q.getAnswerKey()),
                 json(q.getQuestionMetadata()), json(q.getEssayGradingRubric()));
-        List<ReportView> reportViews = reports.findByIssue_IssueIdOrderByCreatedAtAscReportIdAsc(issue.getIssueId()).stream()
-                .map(r -> reportView(r, r.getUser().getFullName())).toList();
+        List<QuestionIssueReport> issueReports = reports.findByIssue_IssueIdOrderByCreatedAtAscReportIdAsc(issue.getIssueId());
+        List<ReportView> reportViews = issueReports.stream()
+                .map(r -> reportView(r, r.getUser().getFullName(), q.getLockVersion(), optionsById)).toList();
         Course course = issue.getCourse();
+        Location location = new Location(course == null ? null : course.getCourseId(), course == null ? null : course.getTitle(),
+                q.getModule() == null ? null : q.getModule().getModuleId(), q.getModule() == null ? null : q.getModule().getTitle(),
+                q.getGroup() == null ? null : q.getGroup().getGroupId(), q.getGroup() == null ? null : q.getGroup().getTitle());
         return new ManagerDetail(issue.getIssueId(), q.getQuestionId(), issue.getIssueType(), issue.getStatus(),
-                course == null ? null : course.getCourseId(), course == null ? null : course.getTitle(), userRef(issue.getAssignedTo()),
+                course == null ? null : course.getCourseId(), course == null ? null : course.getTitle(), location,
+                QuestionIssueInsights.level(issue.getPriorityScore()), priority(issue), userRef(issue.getAssignedTo()),
                 duplicateOfId(issue), issue.getResolutionType(), issue.getResolutionNote(), userRef(issue.getResolvedBy()),
-                issue.getResolvedAt(), issue.getCreatedAt(), issue.getUpdatedAt(), reportViews.size(), question, reportViews);
+                issue.getResolvedAt(), issue.getCreatedAt(), issue.getLastReportedAt(), issue.getUpdatedAt(), reportViews.size(),
+                question, reportViews, insights.build(issue, issueReports, questionOptions));
     }
 
-    private static ReportView reportView(QuestionIssueReport r, String studentName) {
+    private ReportView reportView(QuestionIssueReport r, String studentName, Long lockVersion, Map<Long, AnswerOption> optionsById) {
+        List<OptionRef> suggested = insights.optionIds(r.getSuggestedOptionIds()).stream().map(id -> {
+            AnswerOption o = optionsById.get(id);
+            return new OptionRef(id, o == null ? null : o.getOptionText());
+        }).toList();
         return new ReportView(r.getReportId(), r.getUser().getUserId(), studentName, r.getIssueType(), r.getDescription(),
-                r.getAttachmentUrl(), r.getCreatedAt());
+                r.getAttachmentUrl(), r.getSource(), r.getAttempt() == null ? null : r.getAttempt().getAttemptId(),
+                r.getPracticeSession() == null ? null : r.getPracticeSession().getSessionId(), r.getQuestionNumber(),
+                r.getQuestionLockVersion(), QuestionIssueInsights.outdated(r, lockVersion),
+                readAs(r.getContextSnapshot(), ContextSnapshot.class), suggested, r.getSuggestedAnswer(), r.getCreatedAt());
+    }
+
+    // ------------------------------------------------------------------ report context
+
+    private record Context(String source, ExamAttempt attempt, QuestionPracticeSession session, Integer number, String snapshot) { }
+
+    /** Checks the attempt / practice session belongs to the student and holds the question, then freezes their answer. */
+    private Context context(UserPrincipal me, Question question, ReportRequest body, List<AnswerOption> questionOptions) {
+        if (body.attemptId() != null && body.practiceSessionId() != null) {
+            throw invalid("attemptId", "Send attemptId or practiceSessionId, not both");
+        }
+        Long questionId = question.getQuestionId();
+        if (body.attemptId() != null) {
+            AttemptAnswer answer = attemptAnswers.findByAttemptIdAndQuestionId(body.attemptId(), questionId)
+                    .filter(a -> a.getAttempt().getUser().getUserId().equals(me.getId()))
+                    .orElseThrow(() -> invalid("attemptId", "This question is not in one of your exam attempts"));
+            ExamAttempt attempt = answer.getAttempt();
+            boolean running = !QuestionRegrader.FINISHED.contains(attempt.getStatus());
+            Snapshots.DisplayQuestion display = readAs(answer.getDisplaySnapshot(), Snapshots.DisplayQuestion.class);
+            ContextSnapshot snapshot = new ContextSnapshot(examTitle(attempt, readAs(attempt.getExamSnapshot(), Snapshots.ExamSnapshot.class)),
+                    attempt.getStatus(), json(answer.getResponse()), picked(answer.getResponse(), questionOptions),
+                    running ? null : answer.getIsCorrect(), running ? null : answer.getScoreEarned(),
+                    running ? null : answer.getGradingStatus(), answer.getGradedAt());
+            return new Context(running ? "EXAM" : "EXAM_RESULT", attempt, null, display == null ? null : display.orderIndex(), write(snapshot));
+        }
+        if (body.practiceSessionId() != null) {
+            QuestionPracticeSessionQuestion row = sessionQuestions.findBySession_SessionIdAndQuestion_QuestionId(body.practiceSessionId(), questionId)
+                    .filter(r -> r.getSession().getUser().getUserId().equals(me.getId()))
+                    .orElseThrow(() -> invalid("practiceSessionId", "This question is not in one of your practice sessions"));
+            QuestionPracticeSession session = row.getSession();
+            QuestionPracticeAnswer last = practiceAnswers
+                    .findFirstBySessionQuestion_SessionQuestionIdOrderByAttemptNumberDesc(row.getSessionQuestionId()).orElse(null);
+            String title = session.getModule() != null ? session.getModule().getTitle() : session.getCourse().getTitle();
+            ContextSnapshot snapshot = last == null
+                    ? new ContextSnapshot(title, session.getStatus(), null, List.of(), null, null, null, null)
+                    : new ContextSnapshot(title, session.getStatus(), json(last.getResponse()), picked(last.getResponse(), questionOptions),
+                            last.getIsCorrect(), last.getScoreEarned(), last.getGradingStatus(), last.getAnsweredAt());
+            return new Context("PRACTICE", null, session, row.getOrderIndex() == null ? null : row.getOrderIndex() + 1, write(snapshot));
+        }
+        String source = blankToNull(body.source()) == null ? null : upper(body.source());
+        if (source != null && !Set.of("NOTEBOOK", "OTHER").contains(source)) {
+            throw invalid("source", QuestionIssueReport.SOURCES.contains(source)
+                    ? source + " needs attemptId or practiceSessionId" : "source must be one of " + new TreeSet<>(QuestionIssueReport.SOURCES));
+        }
+        return new Context(source, null, null, null, null);
+    }
+
+    /** The options the student chose (choice) or ordered (ordering), with their text. */
+    private List<OptionRef> picked(String response, List<AnswerOption> questionOptions) {
+        JsonNode node = insights.read(response);
+        JsonNode ids = node.has("selectedOptionIds") ? node.get("selectedOptionIds") : node.path("orderedOptionIds");
+        if (!ids.isArray()) return List.of();
+        Map<Long, String> text = new HashMap<>();
+        questionOptions.forEach(o -> text.put(o.getOptionId(), o.getOptionText()));
+        List<OptionRef> out = new ArrayList<>();
+        ids.forEach(id -> out.add(new OptionRef(id.asLong(), text.get(id.asLong()))));
+        return out;
+    }
+
+    private static List<Long> suggestedOptions(List<Long> ids, List<AnswerOption> questionOptions) {
+        if (ids == null || ids.isEmpty()) return List.of();
+        Set<Long> valid = new HashSet<>();
+        questionOptions.forEach(o -> valid.add(o.getOptionId()));
+        List<Long> out = ids.stream().filter(Objects::nonNull).distinct().toList();
+        if (!valid.containsAll(out)) throw invalid("suggestedOptionIds", "suggestedOptionIds must be options of this question");
+        return out;
+    }
+
+    private static String examTitle(ExamAttempt attempt, Snapshots.ExamSnapshot exam) {
+        if (exam != null && exam.title() != null) return exam.title();
+        return attempt.getExam() == null ? null : attempt.getExam().getTitle();
+    }
+
+    private void refreshPriority(QuestionIssue issue) {
+        issue.setPriorityScore(insights.priorityScore(issue.getQuestion(),
+                reports.findByIssue_IssueIdOrderByCreatedAtAscReportIdAsc(issue.getIssueId())));
+    }
+
+    private static int priority(QuestionIssue issue) {
+        return issue.getPriorityScore() == null ? 0 : issue.getPriorityScore();
+    }
+
+    private Map<Long, AnswerOption> optionsById(Question q) {
+        Map<Long, AnswerOption> out = new HashMap<>();
+        options.findByQuestion_QuestionId(q.getQuestionId()).forEach(o -> out.put(o.getOptionId(), o));
+        return out;
+    }
+
+    private <T> T readAs(String text, Class<T> type) {
+        if (text == null || text.isBlank()) return null;
+        try {
+            return objectMapper.readValue(text, type);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private String write(Object value) {
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (Exception e) {
+            throw new IllegalStateException("Could not serialise the report context", e);
+        }
     }
 
     private static JobView jobView(QuestionRegradeJob j) {

@@ -88,7 +88,7 @@ public class QuestionRegrader {
             BigDecimal totalWeight = AttemptScoring.totalWeight(rows.stream().map(AttemptAnswer::getWeightSnapshot).toList());
             for (AttemptAnswer row : entry.getValue()) {
                 try {
-                    regrade(row, question, key, keyJson, to, totalWeight, maxScore, now);
+                    regrade(job, row, question, key, keyJson, to, totalWeight, maxScore, now);
                     done++;
                 } catch (RuntimeException e) {
                     log.warn("Regrade job {} failed on attempt answer {}", job.getJobId(), row.getAttemptAnswerId(), e);
@@ -113,7 +113,7 @@ public class QuestionRegrader {
     }
 
     /** {@code key} null = the question is voided. */
-    private void regrade(AttemptAnswer row, Question question, Snapshots.KeySnapshot key, String keyJson, int to,
+    private void regrade(QuestionRegradeJob job, AttemptAnswer row, Question question, Snapshots.KeySnapshot key, String keyJson, int to,
                          BigDecimal totalWeight, BigDecimal maxScore, Instant now) {
         BigDecimal oldScore = row.getScoreEarned();
         Integer from = row.getQuestionVersion();
@@ -140,7 +140,7 @@ public class QuestionRegrader {
         }
         row.setQuestionVersion(to);
         row.setGradedAt(now);
-        logs.save(AnswerRegradeLog.builder().attemptAnswer(row).oldScore(oldScore).newScore(row.getScoreEarned())
+        logs.save(AnswerRegradeLog.builder().regradeJob(job).attemptAnswer(row).oldScore(oldScore).newScore(row.getScoreEarned())
                 .questionVersionFrom(from).questionVersionTo(to).build());
     }
 

@@ -42,4 +42,10 @@ public class StudentQuestionIssueController {
     public ResponseEntity<ApiResponse<StudentDetail>> detail(@AuthenticationPrincipal UserPrincipal me, @PathVariable Long issueId) {
         return ResponseEntity.ok(ApiResponse.success(service.studentDetail(me, issueId)));
     }
+
+    @DeleteMapping("/{issueId}")
+    @Operation(summary = "Withdraw my report while the ticket is still pending (the ticket closes as WITHDRAWN when no report is left)")
+    public ResponseEntity<ApiResponse<WithdrawResult>> withdraw(@AuthenticationPrincipal UserPrincipal me, @PathVariable Long issueId) {
+        return ResponseEntity.ok(ApiResponse.success(service.withdraw(me, issueId), "Report withdrawn"));
+    }
 }

@@ -23,7 +23,7 @@ public class ManagerQuestionIssueController {
     private final QuestionIssueService service;
 
     @GetMapping
-    @Operation(summary = "Ticket queue of the caller's courses")
+    @Operation(summary = "Ticket queue of the caller's courses", description = "sort: createdAt | updatedAt | lastReportedAt | priority, then ,asc or ,desc (default createdAt,desc)")
     public ResponseEntity<ApiResponse<PageResponse<ListItem>>> list(@AuthenticationPrincipal UserPrincipal me,
                                                                     @RequestParam(required = false) String status,
                                                                     @RequestParam(required = false) String issueType,

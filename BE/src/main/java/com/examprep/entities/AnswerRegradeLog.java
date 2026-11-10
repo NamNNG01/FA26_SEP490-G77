@@ -28,6 +28,11 @@ public class AnswerRegradeLog implements Serializable {
     @JoinColumn(name = "attempt_answer_id", nullable = false)
     private AttemptAnswer attemptAnswer;
 
+    /** Null for logs written before V82 or outside a question-issue job. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "regrade_job_id")
+    private QuestionRegradeJob regradeJob;
+
     @Column(name = "old_score", precision = 5, scale = 2)
     private BigDecimal oldScore;
 

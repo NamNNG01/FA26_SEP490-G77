@@ -25,8 +25,10 @@ public class QuestionIssue implements Serializable {
     public static final String RESOLVED = "RESOLVED";
     public static final String REJECTED = "REJECTED";
     public static final String DUPLICATE = "DUPLICATE";
+    /** Every reporter took their report back while the ticket was still pending. */
+    public static final String WITHDRAWN = "WITHDRAWN";
     public static final Set<String> OPEN = Set.of(PENDING, IN_PROGRESS);
-    public static final Set<String> STATUSES = Set.of(PENDING, IN_PROGRESS, RESOLVED, REJECTED, DUPLICATE);
+    public static final Set<String> STATUSES = Set.of(PENDING, IN_PROGRESS, RESOLVED, REJECTED, DUPLICATE, WITHDRAWN);
     public static final Set<String> TYPES = Set.of("WRONG_CONTENT", "WRONG_ANSWER", "WRONG_EXPLANATION",
             "AI_EXPLANATION_ERROR", "MISSING_MEDIA", "OTHER");
     public static final Set<String> RESOLUTION_TYPES = Set.of("CONTENT_CORRECTED", "EXPLANATION_CORRECTED",
@@ -72,6 +74,14 @@ public class QuestionIssue implements Serializable {
 
     @Column(name = "resolved_at")
     private Instant resolvedAt;
+
+    /** See QuestionIssueService#refreshPriority; recomputed on every report and withdrawal. */
+    @Builder.Default
+    @Column(name = "priority_score", nullable = false)
+    private Integer priorityScore = 0;
+
+    @Column(name = "last_reported_at")
+    private Instant lastReportedAt;
 
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
