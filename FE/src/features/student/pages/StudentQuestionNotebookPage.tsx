@@ -590,7 +590,7 @@ function QuestionCard({
             : "Not practiced yet"}
         </p>
         <div className="flex flex-wrap gap-2">
-          <ReportQuestionIssueButton questionId={question.questionId} />
+          <ReportQuestionIssueButton questionId={question.questionId} source="NOTEBOOK" options={question.options ?? []} />
           <Button
             size="sm"
             variant="outline"

@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert } from '@/components/ui/Alert';
+import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { Card, SectionHeader } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
+import { Progress } from '@/components/ui/Progress';
 import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { Select } from '@/components/ui/Select';
 import { QuestionForm } from '@/features/question/components/QuestionForm';
@@ -16,8 +19,13 @@ const RESOLUTION_TYPES = ['CONTENT_CORRECTED', 'EXPLANATION_CORRECTED', 'AI_EXPL
 const EMPTY_FILTERS = { status: 'PENDING', issueType: '', courseId: '', search: '' };
 
 function Status({ value = '' }: { value?: string }) {
-  const color = value === 'RESOLVED' ? 'bg-emerald-50 text-emerald-700' : value === 'REJECTED' ? 'bg-red-50 text-red-700' : value === 'IN_PROGRESS' ? 'bg-blue-50 text-blue-700' : value === 'DUPLICATE' ? 'bg-slate-100 text-slate-600' : 'bg-amber-50 text-amber-800';
-  return <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${color}`}>{issueLabel(value)}</span>;
+  const variant = value === 'RESOLVED' ? 'success' : value === 'REJECTED' ? 'danger' : value === 'IN_PROGRESS' ? 'info' : ['DUPLICATE', 'WITHDRAWN'].includes(value) ? 'default' : 'warning';
+  return <Badge variant={variant}>{issueLabel(value)}</Badge>;
+}
+
+function PriorityBadge({ priority = 'LOW', score }: { priority?: string; score?: number }) {
+  const variant = priority === 'HIGH' ? 'danger' : priority === 'MEDIUM' ? 'warning' : 'default';
+  return <Badge variant={variant}>{priority}{score != null ? ` · ${score}` : ''}</Badge>;
 }
 
 function unwrapList(value: any) { return Array.isArray(value) ? value : value?.content ?? value?.items ?? []; }
@@ -79,7 +87,7 @@ export function ManagerQuestionIssuesPage() {
     setBusy(true);
     setError('');
     try {
-      const query: Record<string, string | number> = { page: targetPage, size: 20, sort: 'createdAt,desc' };
+      const query: Record<string, string | number> = { page: targetPage, size: 20, sort: 'priority,desc' };
       Object.entries(selectedFilters).forEach(([key, value]) => {
         if (value && value !== 'ALL') query[key] = value;
       });
@@ -132,7 +140,7 @@ export function ManagerQuestionIssuesPage() {
       if (historyResult.status === 'fulfilled') setHistory(unwrapList(historyResult.value));
       if (jobsResult.status === 'fulfilled') setJobs(unwrapList(jobsResult.value));
       if (candidatesResult?.status === 'fulfilled') {
-        setDuplicateCandidates(unwrapList(candidatesResult.value).filter((candidate: any) => candidate.issueId !== ticket.issueId && candidate.status !== 'DUPLICATE'));
+        setDuplicateCandidates(unwrapList(candidatesResult.value).filter((candidate: any) => candidate.issueId !== ticket.issueId && !['DUPLICATE', 'WITHDRAWN'].includes(candidate.status)));
       }
     } catch (e) {
       if (requestVersion === openVersion.current) setError(getApiErrorMessage(e, 'Could not load this ticket.'));
@@ -259,11 +267,12 @@ export function ManagerQuestionIssuesPage() {
       </form>
 
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[850px] text-left text-sm">
+        <table className="w-full min-w-[950px] text-left text-sm">
           <thead className="bg-surface-muted text-content-secondary"><tr>
             <th className="px-5 py-3 font-medium">Question and issue</th>
             <th className="px-5 py-3 font-medium">Course</th>
             <th className="px-5 py-3 font-medium">Reports</th>
+            <th className="px-5 py-3 font-medium">Priority</th>
             <th className="px-5 py-3 font-medium">Updated</th>
             <th className="px-5 py-3 font-medium">Status</th>
             <th className="px-5 py-3"><span className="sr-only">Review</span></th>
@@ -276,11 +285,12 @@ export function ManagerQuestionIssuesPage() {
               </td>
               <td className="max-w-xs truncate px-5 py-4 text-content-secondary">{row.courseName || row.course?.name || '—'}</td>
               <td className="whitespace-nowrap px-5 py-4 text-content-secondary">{row.reportCount ?? 0}</td>
+              <td className="whitespace-nowrap px-5 py-4"><PriorityBadge priority={row.priority} score={row.priorityScore ?? 0} /></td>
               <td className="whitespace-nowrap px-5 py-4 text-content-secondary">{row.updatedAt || row.createdAt ? new Date(row.updatedAt || row.createdAt).toLocaleDateString() : '—'}</td>
               <td className="px-5 py-4"><Status value={row.status} /></td>
               <td className="px-5 py-4 text-right"><Button size="sm" variant="outline" onClick={() => void open(row)}>Review</Button></td>
             </tr>)}
-            {!rows.length && <tr><td colSpan={6} className="p-12 text-center"><p className="font-medium text-content">{busy ? 'Loading tickets…' : 'No tickets found'}</p><p className="mt-1 text-sm text-content-secondary">{busy ? 'The issue queue is being refreshed.' : 'Try another status or clear some filters.'}</p></td></tr>}
+            {!rows.length && <tr><td colSpan={7} className="p-12 text-center"><p className="font-medium text-content">{busy ? 'Loading tickets…' : 'No tickets found'}</p><p className="mt-1 text-sm text-content-secondary">{busy ? 'The issue queue is being refreshed.' : 'Try another status or clear some filters.'}</p></td></tr>}
           </tbody>
         </table>
       </div>
@@ -300,9 +310,10 @@ export function ManagerQuestionIssuesPage() {
         <div className="min-w-0 space-y-5">
           <section className="rounded-xl border border-line bg-surface-muted p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <div><p className="text-xs font-semibold uppercase tracking-wide text-content-secondary">{issueLabel(detail.issueType || detail.reports?.[0]?.issueType)}</p><p className="mt-1 text-sm text-content-secondary">{detail.courseName || `Course #${detail.courseId ?? '—'}`} · Question version {detail.question?.lockVersion ?? '—'}</p></div>
+              <div><p className="text-xs font-semibold uppercase tracking-wide text-content-secondary">{issueLabel(detail.issueType || detail.reports?.[0]?.issueType)}</p><p className="mt-1 text-sm text-content-secondary">{detail.location?.courseName || detail.courseName || `Course #${detail.courseId ?? '—'}`} · {detail.location?.moduleTitle || 'Module unavailable'} · Question version {detail.question?.lockVersion ?? '—'}</p></div>
               <Status value={status} />
             </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2"><PriorityBadge priority={detail.priority} score={detail.priorityScore ?? 0} />{detail.lastReportedAt && <span className="text-xs text-content-secondary">Latest report {new Date(detail.lastReportedAt).toLocaleString()}</span>}</div>
             <p className="mt-4 whitespace-pre-wrap text-sm font-medium leading-6 text-content">{detail.question?.content || 'Question content unavailable'}</p>
             <details className="mt-4 rounded-lg border border-line bg-surface p-3">
               <summary className="cursor-pointer text-sm font-semibold text-content">View answers and scoring details</summary>
@@ -315,7 +326,11 @@ export function ManagerQuestionIssuesPage() {
             <div className="mt-3 space-y-3">
               {(detail.reports || []).map((report: any) => <article key={report.reportId} className="rounded-xl border border-line p-4">
                 <div className="flex flex-wrap justify-between gap-2 text-xs text-content-secondary"><span className="font-medium">{report.student?.fullName || report.studentName || `Student #${report.userId ?? '—'}`}</span><time>{report.createdAt ? new Date(report.createdAt).toLocaleString() : ''}</time></div>
+                <div className="mt-2 flex flex-wrap gap-2 text-xs"><span className="rounded bg-surface-muted px-2 py-1">{issueLabel(report.source || 'OTHER')}</span>{report.questionNumber != null && <span className="rounded bg-surface-muted px-2 py-1">Question {report.questionNumber}</span>}{report.outdated && <span className="rounded bg-amber-100 px-2 py-1 font-semibold text-amber-900">Report refers to an older version</span>}</div>
                 <p className="mt-2 whitespace-pre-wrap text-sm text-content">{report.description}</p>
+                {report.context?.selectedOptions?.length > 0 && <p className="mt-2 text-sm text-content-secondary">Student selected: {report.context.selectedOptions.map((option: any) => option.optionText).join(', ')}</p>}
+                {report.suggestedOptions?.length > 0 && <p className="mt-1 text-sm text-content-secondary">Suggested option: {report.suggestedOptions.map((option: any) => option.optionText).join(', ')}</p>}
+                {report.suggestedAnswer && <p className="mt-1 text-sm text-content-secondary">Suggested answer: {report.suggestedAnswer}</p>}
                 {report.attachmentUrl && <a href={report.attachmentUrl} target="_blank" rel="noreferrer" className="mt-3 inline-flex text-sm text-brand-700 underline">View attachment</a>}
               </article>)}
               {!detail.reports?.length && <p className="rounded-lg bg-surface-muted p-4 text-sm text-content-secondary">No report details were returned.</p>}
@@ -359,16 +374,28 @@ export function ManagerQuestionIssuesPage() {
             </details>}
           </section>
 
+          <Card className="p-4">
+            <SectionHeader title="Issue insights" subtitle="Patterns across reports and affected answers" />
+            {detail.insights ? <div className="mt-3 space-y-4 text-sm">
+              <div><p className="font-medium text-content">Report breakdown</p><div className="mt-2 flex flex-wrap gap-1.5">{(detail.insights.reports?.byType || []).map((item: any) => <Badge key={`type-${item.key}`} variant="default" size="sm" className="font-normal">{issueLabel(item.key)} · {item.count}</Badge>)}{(detail.insights.reports?.bySource || []).map((item: any) => <Badge key={`source-${item.key}`} variant="default" size="sm" className="font-normal">{issueLabel(item.key)} · {item.count}</Badge>)}<Badge variant={detail.insights.reports?.outdatedReports ? 'warning' : 'default'} size="sm" className="font-normal">Older version · {detail.insights.reports?.outdatedReports ?? 0}</Badge></div>{!!detail.insights.reports?.suggestedOptions?.length && <ul className="mt-3 space-y-2">{detail.insights.reports.suggestedOptions.map((option: any) => <li key={option.optionId} className="flex items-center justify-between gap-3 rounded-lg bg-surface-muted px-3 py-2 text-xs"><span>Suggested <b className="text-content">{option.optionText}</b>{option.isCorrectNow && <span className="ml-2 text-success">Current key</span>}</span><Badge variant="default" size="sm">{option.count} report{option.count === 1 ? '' : 's'}</Badge></li>)}</ul>}{!!detail.insights.reports?.suggestedAnswers?.length && <ul className="mt-2 space-y-2">{detail.insights.reports.suggestedAnswers.map((answer: string, index: number) => <li key={`${index}-${answer}`} className="rounded-lg bg-surface-muted px-3 py-2 text-xs leading-5 text-content-secondary">“{answer}”</li>)}</ul>}</div>
+              {!!detail.insights.answers?.optionPicks?.length && <div><p className="font-medium text-content">Answer choices</p><div className="mt-2 space-y-3">{detail.insights.answers.optionPicks.map((option: any) => <div key={option.optionId}><div className="mb-1 flex justify-between gap-2 text-xs"><span className="font-medium text-content">{option.optionText}{option.isCorrect ? ' · Current key' : ''}</span><span className="text-content-secondary">{option.pickRate ?? 0}%</span></div><Progress value={Math.min(100, Math.max(0, option.pickRate ?? 0))} size="sm" color={option.isCorrect ? '#16a34a' : '#0D7C6C'} /></div>)}</div></div>}
+              <div className="grid grid-cols-2 gap-3">{[['Exam correct', detail.insights.answers?.examCorrectRate], ['Practice correct', detail.insights.answers?.practiceCorrectRate]].map(([label, rate]: any) => <div key={label} className="rounded-xl border border-line bg-surface-muted p-3"><p className="text-xs text-content-secondary">{label}</p><p className="mt-1 text-lg font-semibold text-content">{rate == null ? '—' : `${rate}%`}</p>{rate == null && <p className="text-xs text-content-subtle">No answers yet</p>}</div>)}</div>
+              {!!detail.insights.exams?.length && <div><p className="font-medium text-content">Exams using this question</p><ul className="mt-1 space-y-1 text-xs text-content-secondary">{detail.insights.exams.map((exam: any) => <li key={exam.examId}>{exam.title} · {issueLabel(exam.status)} · {exam.attempts} attempts{exam.inPaper ? ' · fixed in paper' : ' · random pool'}</li>)}</ul></div>}
+              {detail.insights.regradeImpact && <Alert type="warning" title="Regrade impact" message={detail.insights.regradeImpact.answerCorrectionRegrades ? `Correcting the answer will regrade ${detail.insights.regradeImpact.finishedAnswers} submitted answers; ${detail.insights.regradeImpact.inProgressAnswers} active attempts will use the new key.` : `Answer correction will not regrade attempts; voiding this question can regrade ${detail.insights.regradeImpact.finishedAnswers} submitted answers.`} />}
+              {!!detail.insights.relatedIssues?.length && <div><p className="font-medium text-content">Related tickets</p><ul className="mt-1 space-y-1 text-xs text-content-secondary">{detail.insights.relatedIssues.map((issue: any) => <li key={issue.issueId}>#{issue.issueId} · {issueLabel(issue.issueType)} · {issueLabel(issue.status)} · {issue.reportCount} reports</li>)}</ul></div>}
+            </div> : <p className="mt-2 text-sm text-content-secondary">No issue insights available.</p>}
+          </Card>
+
           <section className="rounded-xl border border-line p-4">
             <h3 className="text-sm font-semibold text-content">Regrade jobs</h3>
             <div className="mt-3 space-y-3">
-              {jobs.map((job: any) => <article key={job.jobId} className="rounded-lg bg-surface-muted p-3 text-xs">
+              {jobs.map((job: any) => <Card key={job.jobId} className="p-3 text-xs">
                 <div className="flex justify-between gap-2"><b>Job #{job.jobId} · {issueLabel(job.status)}</b><span>{job.progressPercent ?? 0}%</span></div>
-                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-surface"><div className="h-full bg-brand-600" style={{ width: `${Math.min(100, Math.max(0, job.progressPercent ?? 0))}%` }} /></div>
+                <div className="mt-2"><Progress value={Math.min(100, Math.max(0, job.progressPercent ?? 0))} size="sm" /></div>
                 <p className="mt-2 text-content-secondary">{job.processedAnswers ?? 0}/{job.totalAnswers ?? 0} processed · {job.failedAnswers ?? 0} failed</p>
                 {job.status === 'PENDING_CONFIRMATION' && <div className="mt-3 space-y-2"><label className="grid gap-1 text-content-secondary">Confirmation reason<input className="rounded border border-line bg-surface px-2 py-1.5" value={jobReason} onChange={event => setJobReason(event.target.value)} /></label><Button size="sm" disabled={!jobReason.trim()} loading={busy} onClick={() => void act(() => questionIssueService.confirmRegrade(detail.issueId, job.jobId, true, jobReason.trim()), 'Could not confirm regrade.')}>Confirm regrade</Button></div>}
                 {['FAILED', 'PARTIAL_FAILED'].includes(job.status) && <Button className="mt-2" size="sm" variant="outline" loading={busy} onClick={() => void act(() => questionIssueService.retryJob(job.jobId), 'Could not retry this job.')}>Retry job</Button>}
-              </article>)}
+              </Card>)}
               {!jobs.length && <p className="text-sm text-content-secondary">No regrade jobs.</p>}
             </div>
           </section>

@@ -615,7 +615,7 @@ function ExamAttemptScreen() {
               <span className="text-xs text-content-subtle">
                 {current + 1} / {questions.length}
               </span>
-              <ReportQuestionIssueButton className="ml-auto" questionId={q.questionId} />
+              <ReportQuestionIssueButton className="ml-auto" questionId={q.questionId} attemptId={session.attemptId} options={q.options ?? []} />
             </div>
 
             {isCode ? (
