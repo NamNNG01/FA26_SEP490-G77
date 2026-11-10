@@ -102,8 +102,10 @@ export function ReportQuestionIssueDialog({
         ...(attemptId != null ? { attemptId } : {}),
         ...(practiceSessionId != null ? { practiceSessionId } : {}),
         ...(source ? { source } : {}),
-        ...(suggestedOptionIds.length ? { suggestedOptionIds } : {}),
-        ...(suggestedAnswer.trim()
+        ...(type === "WRONG_ANSWER" && suggestedOptionIds.length
+          ? { suggestedOptionIds }
+          : {}),
+        ...(type === "WRONG_ANSWER" && suggestedAnswer.trim()
           ? { suggestedAnswer: suggestedAnswer.trim() }
           : {}),
       });
@@ -159,7 +161,14 @@ export function ReportQuestionIssueDialog({
             <select
               className="rounded-lg border border-line bg-surface px-3 py-2.5"
               value={type}
-              onChange={(e) => setType(e.target.value as IssueType)}
+              onChange={(e) => {
+                const nextType = e.target.value as IssueType;
+                setType(nextType);
+                if (nextType !== "WRONG_ANSWER") {
+                  setSuggestedOptionIds([]);
+                  setSuggestedAnswer("");
+                }
+              }}
             >
               {ISSUE_TYPES.map((x) => (
                 <option key={x} value={x}>
@@ -168,52 +177,59 @@ export function ReportQuestionIssueDialog({
               ))}
             </select>
           </label>
-          <fieldset className="grid gap-2 text-sm">
-            <legend className="font-medium">
-              Correct answer, in your opinion{" "}
-              <span className="font-normal text-content-secondary">
-                Optional
-              </span>
-            </legend>
-            {options.length > 0 && (
-              <div className="grid gap-2 sm:grid-cols-2">
-                {options.map((option) => (
-                  <div
-                    key={option.optionId}
-                    className={`rounded-lg border px-3 py-2 transition-colors ${suggestedOptionIds.includes(option.optionId) ? "border-brand-line bg-primary-light" : "border-line bg-surface hover:bg-surface-hover"}`}
-                  >
-                    <Checkbox
-                      label={option.optionText}
-                      checked={suggestedOptionIds.includes(option.optionId)}
-                      disabled={
-                        !suggestedOptionIds.includes(option.optionId) &&
-                        suggestedOptionIds.length >= 20
-                      }
-                      onChange={(checked) =>
-                        setSuggestedOptionIds((current) =>
-                          checked
-                            ? [...current, option.optionId]
-                            : current.filter((id) => id !== option.optionId),
-                        )
-                      }
-                    />
+          {type === "WRONG_ANSWER" && (
+            <fieldset className="grid gap-2 text-sm">
+              <legend className="font-medium">
+                What do you think the correct answer is?{" "}
+                <span className="font-normal text-content-secondary">
+                  Optional
+                </span>
+              </legend>
+              {options.length > 0 ? (
+                <>
+                  <p className="text-xs font-normal text-content-secondary">
+                    Select all choices you believe are correct.
+                  </p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {options.map((option) => (
+                      <Checkbox
+                        key={option.optionId}
+                        label={option.optionText}
+                        checked={suggestedOptionIds.includes(option.optionId)}
+                        disabled={
+                          !suggestedOptionIds.includes(option.optionId) &&
+                          suggestedOptionIds.length >= 20
+                        }
+                        className={`w-full rounded-lg border px-3 py-2 transition-colors ${suggestedOptionIds.includes(option.optionId) ? "border-brand-line bg-primary-light" : "border-line bg-surface hover:bg-surface-hover"}`}
+                        onChange={(checked) =>
+                          setSuggestedOptionIds((current) =>
+                            checked
+                              ? [...current, option.optionId]
+                              : current.filter((id) => id !== option.optionId),
+                          )
+                        }
+                      />
+                    ))}
                   </div>
-                ))}
-              </div>
-            )}
-            <input
-              maxLength={1000}
-              value={suggestedAnswer}
-              onChange={(event) => setSuggestedAnswer(event.target.value)}
-              placeholder="Suggested answer for questions without options"
-              className="rounded-lg border border-line bg-surface px-3 py-2.5 font-normal"
-            />
-            {suggestedAnswer.length > 0 && (
-              <span className="text-right text-xs text-content-secondary">
-                {suggestedAnswer.length}/1000
-              </span>
-            )}
-          </fieldset>
+                </>
+              ) : (
+                <>
+                  <input
+                    maxLength={1000}
+                    value={suggestedAnswer}
+                    onChange={(event) => setSuggestedAnswer(event.target.value)}
+                    placeholder="Enter the correct answer"
+                    className="rounded-lg border border-line bg-surface px-3 py-2.5 font-normal"
+                  />
+                  {suggestedAnswer.length > 0 && (
+                    <span className="text-right text-xs text-content-secondary">
+                      {suggestedAnswer.length}/1000
+                    </span>
+                  )}
+                </>
+              )}
+            </fieldset>
+          )}
           <label className="grid gap-1.5 text-sm font-medium">
             What seems wrong?
             <textarea
