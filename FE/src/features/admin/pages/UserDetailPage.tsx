@@ -89,7 +89,7 @@ export function UserDetailPage({ onNavigate, params: paramsProp }: { onNavigate?
             <h3 className="text-lg font-semibold text-content mb-3">Learning Statistics</h3>
             <div className="grid grid-cols-2 xl:grid-cols-5 gap-3">
               {[
-                { label: 'Total Courses Enrolled', value: String(stats.enrolled), color: '#0D7C6C' },
+                { label: 'Total Courses Enrolled', value: String(stats.enrolled), color: '#F27124' },
                 { label: 'Exams Taken', value: String(stats.examsTaken), color: '#059669' },
                 { label: 'Average Score', value: stats.examsTaken > 0 ? `${stats.avgScore}%` : '—', color: '#7C3AED' },
                 { label: 'Certificates Earned', value: String(stats.certificates), color: '#D97706' },

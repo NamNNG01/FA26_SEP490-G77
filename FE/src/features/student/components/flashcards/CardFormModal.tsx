@@ -18,6 +18,8 @@ import {
   type DeckMode,
   type ViewerCard,
 } from '@/services/studentDeck.service';
+import { ImagePickButton } from '@/components/common/ImagePickButton';
+import { uploadService } from '@/services/upload.service';
 import { CODE_TEXTAREA_CLASS, TEXTAREA_CLASS } from './flashcardUi';
 
 type Field = 'frontText' | 'backText' | 'codeLanguage' | 'codeBody';
@@ -65,16 +67,41 @@ export function CardFormModal({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const fields = FIELDS[mode];
+  /** FLASHCARD only: an optional image per face, keyed by that face's text field. */
+  const withImages = mode === 'FLASHCARD';
+  const blankImages: Partial<Record<Field, string | null>> = { frontText: null, backText: null };
+  const [images, setImages] = useState<Partial<Record<Field, string | null>>>(
+    card ? { frontText: card.frontImageUrl ?? null, backText: card.backImageUrl ?? null } : blankImages,
+  );
+  const [uploading, setUploading] = useState<Field | null>(null);
+  const busy = saving || uploading != null;
 
   const set = (field: Field, value: string) => {
     setValues(v => ({ ...v, [field]: value }));
     setErrors(e => ({ ...e, [field]: undefined }));
   };
 
+  const pickImage = async (field: Field, file: File) => {
+    setUploading(field);
+    setSaveError(null);
+    try {
+      const uploaded = await uploadService.uploadStudentAttachment(file);
+      setImages(i => ({ ...i, [field]: uploaded.url }));
+      setErrors(e => ({ ...e, [field]: undefined }));
+    } catch (err) {
+      setSaveError(getApiErrorMessage(err, 'Could not upload the image.'));
+    } finally {
+      setUploading(null);
+    }
+  };
+
   const save = async (addAnother: boolean) => {
     const next: Partial<Record<Field, string>> = {};
     fields.forEach(f => {
-      if (f.required && !values[f.field].trim()) next[f.field] = f.field === 'codeLanguage' ? 'Pick a language.' : 'Required.';
+      // A flashcard face is complete with text, an image, or both.
+      if (withImages && images[f.field]) return;
+      if (f.required && !values[f.field].trim())
+        next[f.field] = f.field === 'codeLanguage' ? 'Pick a language.' : withImages ? 'Add text or an image.' : 'Required.';
     });
     setSaveError(null);
     if (Object.keys(next).length > 0) {
@@ -95,13 +122,21 @@ export function CardFormModal({
         payload[f.field] = v.trim();
       }
     });
+    if (withImages) {
+      // null on edit clears a stored image.
+      payload.frontImageUrl = images.frontText ?? null;
+      payload.backImageUrl = images.backText ?? null;
+    }
 
     setSaving(true);
     try {
       const saved = card ? await studentDeckService.updateCard(card.cardId, payload) : await studentDeckService.createCard(deckId, payload);
       toast.success(card ? 'Card updated.' : 'Card added.');
       onSaved(saved, addAnother);
-      if (addAnother) setValues(v => ({ ...blank, codeLanguage: v.codeLanguage }));
+      if (addAnother) {
+        setValues(v => ({ ...blank, codeLanguage: v.codeLanguage }));
+        setImages(blankImages);
+      }
     } catch (err) {
       setSaveError(getApiErrorMessage(err, card ? 'Could not update the card.' : 'Could not add the card.'));
     } finally {
@@ -113,20 +148,20 @@ export function CardFormModal({
     <Modal
       open
       size="lg"
-      onClose={saving ? () => {} : onClose}
+      onClose={busy ? () => {} : onClose}
       title={card ? 'Edit card' : 'Add card'}
       error={saveError && <Alert type="error" message={saveError} />}
       footer={
         <>
-          <Button variant="outline" onClick={onClose} disabled={saving}>
+          <Button variant="outline" onClick={onClose} disabled={busy}>
             Cancel
           </Button>
           {!card && (
-            <Button variant="secondary" onClick={() => save(true)} disabled={saving}>
+            <Button variant="secondary" onClick={() => save(true)} disabled={busy}>
               Save &amp; add another
             </Button>
           )}
-          <Button onClick={() => save(false)} loading={saving} disabled={saving}>
+          <Button onClick={() => save(false)} loading={saving} disabled={busy}>
             {card ? 'Save changes' : 'Add card'}
           </Button>
         </>
@@ -148,9 +183,41 @@ export function CardFormModal({
             />
           ) : (
             <div key={f.field} className="flex flex-col gap-1.5">
-              <label htmlFor={`card-${f.field}`} className="text-sm font-medium text-content-secondary">
-                {f.label}
-              </label>
+              <div className="flex items-center justify-between gap-2">
+                <label htmlFor={`card-${f.field}`} className="text-sm font-medium text-content-secondary">
+                  {f.label}
+                </label>
+                {withImages && (
+                  <ImagePickButton
+                    variant="ghost"
+                    loading={uploading === f.field}
+                    disabled={busy}
+                    onPick={file => void pickImage(f.field, file)}
+                    onError={setSaveError}
+                  >
+                    {images[f.field] ? 'Replace image' : 'Add image'}
+                  </ImagePickButton>
+                )}
+              </div>
+              {withImages && images[f.field] && (
+                <div className="relative w-fit">
+                  <img
+                    src={images[f.field]!}
+                    alt={`${f.label} image`}
+                    className="max-h-40 max-w-full rounded-[10px] border border-line object-contain"
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="absolute right-1 top-1"
+                    aria-label={`Remove ${f.label.toLowerCase()} image`}
+                    disabled={busy}
+                    onClick={() => setImages(i => ({ ...i, [f.field]: null }))}
+                  >
+                    Remove
+                  </Button>
+                </div>
+              )}
               <textarea
                 id={`card-${f.field}`}
                 className={`${f.field === 'codeBody' || (mode === 'CODE_OUTPUT' && f.field === 'backText') ? CODE_TEXTAREA_CLASS : TEXTAREA_CLASS} ${

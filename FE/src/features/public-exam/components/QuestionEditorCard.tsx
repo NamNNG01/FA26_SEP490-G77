@@ -348,7 +348,7 @@ export function QuestionEditorCard({
  *
  * Background is `bg-surface`, the same neutral token as every other card on the
  * page. It deliberately does NOT use `bg-primary-light`: that token is a plain
- * hex (#ECF7F4) rather than a `var(--surface-*)` reference, so it stays near-white
+ * hex (#FEF4EC) rather than a `var(--surface-*)` reference, so it stays near-white
  * in dark mode and puts #D1D5DB text on it at roughly 1.4:1. Only the Layers icon
  * and the count pill carry the blue accent.
  *

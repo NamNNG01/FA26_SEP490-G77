@@ -5,8 +5,8 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme inline {
-  --color-primary: #0D7C6C;
-  --color-primary-hover: #0A6458;
+  --color-primary: #F27124;
+  --color-primary-hover: #D95F14;
   /* Status colors + their tinted backgrounds follow the theme (see :root /
      .dark below) — a fixed light tint under dark-mode text was what made
      toasts and alerts render white-on-white. */
@@ -105,17 +105,17 @@
   --color-danger-solid-hover: #B91C1C;
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
-  --color-brand: #0D7C6C;
-  /* PrepExam jade scale — the brand ramp every hard-coded brand hex maps to. */
-  --color-brand-50: #ECF7F4;
-  --color-brand-100: #D3EEE7;
-  --color-brand-200: #A7DCCF;
-  --color-brand-300: #6FCBB6;
-  --color-brand-600: #0D7C6C;
-  --color-brand-700: #0A6458;
-  --color-brand-800: #0B5047;
-  --color-brand-900: #0F3B35;
-  --color-brand-950: #082B26;
+  --color-brand: #F27124;
+  /* FPT orange scale (brand #F27124) — the brand ramp every hard-coded brand hex maps to. */
+  --color-brand-50: #FEF4EC;
+  --color-brand-100: #FDE6D3;
+  --color-brand-200: #FBC9A3;
+  --color-brand-300: #F7A466;
+  --color-brand-600: #F27124;
+  --color-brand-700: #D95F14;
+  --color-brand-800: #B34C0F;
+  --color-brand-900: #8A3A0D;
+  --color-brand-950: #4A1E06;
   /* Star-rating gold. */
   --color-rating: #F59E0B;
   /* Warm accent, used sparingly (highlights, the exam-day marker). */
@@ -132,7 +132,7 @@
   --line: #D9DED9;
   --accent: #E7EAE7;
   --accent-foreground: #111827;
-  --primary-light: #E6F0EC;
+  --primary-light: #FEF1E7;
   --success: #16A34A;
   --success-light: #EAF4EC;
   --warning: #D97706;
@@ -147,7 +147,7 @@
   --surface-hover: #EAEEEA;
   --surface-pressed: #DDE2DD;
   --surface-pressed-strong: #CDD4CE;
-  --surface-brand: #E6F0EC;
+  --surface-brand: #FEF1E7;
   --surface-violet: #EFECF5;
   --fill: #DDE2DD;
   --fill-strong: #CDD4CE;
@@ -159,11 +159,12 @@
   --line-soft: #E1E5E1;
   --line-faint: #EAEEEA;
   --line-strong: #CDD4CE;
-  --brand-ink: #0D7C6C;
-  --brand-ink-strong: #0B5047;
-  --brand-ink-hover: #0A6458;
-  --brand-line: #A7DCCF;
-  --primary-hover-tint: #E6F0EC;
+  /* Text on light surfaces: a darker orange so small copy keeps ~4.5:1 contrast. */
+  --brand-ink: #C2540F;
+  --brand-ink-strong: #B34C0F;
+  --brand-ink-hover: #D95F14;
+  --brand-line: #FBC9A3;
+  --primary-hover-tint: #FEF1E7;
   --success-strong: #15803D;
   --success-line: #BBF7D0;
   --warning-strong: #92400E;
@@ -186,7 +187,7 @@
   --accent: #26324A;
   --accent-foreground: #F9FAFB;
   /* Lighter status hues + deep tints keep >= 4.5:1 on dark surfaces. */
-  --primary-light: #082B26;
+  --primary-light: #4A1E06;
   --success: #4ADE80;
   --success-light: #052E16;
   --warning: #FBBF24;
@@ -215,11 +216,11 @@
   --line-soft: #1F2937;
   --line-faint: #1F2937;
   --line-strong: #374151;
-  --brand-ink: #6FCBB6;
-  --brand-ink-strong: #6FCBB6;
-  --brand-ink-hover: #6FCBB6;
-  --brand-line: #0F3B35;
-  --primary-hover-tint: rgba(13, 124, 108, 0.15);
+  --brand-ink: #F7A466;
+  --brand-ink-strong: #F7A466;
+  --brand-ink-hover: #F7A466;
+  --brand-line: #8A3A0D;
+  --primary-hover-tint: rgba(242, 113, 36, 0.15);
   --success-strong: #4ADE80;
   --success-line: #14532D;
   --warning-strong: #FBBF24;
@@ -288,18 +289,18 @@ body {
   color: var(--content);
 }
 .sidebar-link.active {
-  background: #ECF7F4;
-  color: #0D7C6C;
+  background: #FEF4EC;
+  color: #F27124;
 }
 .dark .sidebar-link.active {
-  background: rgba(13, 124, 108, 0.18);
-  color: #6FCBB6;
+  background: rgba(242, 113, 36, 0.18);
+  color: #F7A466;
 }
 .dark .sidebar-link.active svg {
-  color: #6FCBB6;
+  color: #F7A466;
 }
 .sidebar-link.active svg {
-  color: #0D7C6C;
+  color: #F27124;
 }
 
 /* Dashboard content: the layout owns the gutter (side/bottom padding and a
@@ -429,11 +430,11 @@ h1, h2, h3 {
    outline (`focus:outline-none`) for a mouse-friendly look; this restores
    a clear ring for keyboard users only. */
 :where(a, button, [role='button'], [role='tab'], [role='menuitem'], summary):focus-visible {
-  outline: 2px solid #0D7C6C;
+  outline: 2px solid #F27124;
   outline-offset: 2px;
 }
 .dark :where(a, button, [role='button'], [role='tab'], [role='menuitem'], summary):focus-visible {
-  outline-color: #6FCBB6;
+  outline-color: #F7A466;
 }
 
 /* Respect reduced-motion for every transition/animation, not just the

@@ -113,7 +113,7 @@ export function StudentExamDetailPage() {
             className="absolute inset-0"
             style={{
               background:
-                "radial-gradient(ellipse at 18% 85%, rgba(13, 124, 108, 0.12), transparent 62%)",
+                "radial-gradient(ellipse at 18% 85%, rgba(242, 113, 36, 0.12), transparent 62%)",
             }}
           />
         </div>

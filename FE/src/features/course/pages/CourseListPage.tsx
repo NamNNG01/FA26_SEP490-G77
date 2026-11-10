@@ -294,7 +294,7 @@ export function CourseListPage({
           {
             label: "Total Courses",
             value: summaryStats.total,
-            color: "#0D7C6C",
+            color: "#F27124",
           },
           {
             label: "Published",

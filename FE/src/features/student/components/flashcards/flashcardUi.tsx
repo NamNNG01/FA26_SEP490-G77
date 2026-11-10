@@ -60,6 +60,8 @@ export interface CardContent {
   backText: string;
   codeLanguage: CodeLanguage | null;
   codeBody: string | null;
+  frontImageUrl?: string | null;
+  backImageUrl?: string | null;
 }
 
 /** What one face of a card shows, by deck mode: CODE_SNIPPET puts the code on the back, CODE_OUTPUT on the front. */
@@ -80,7 +82,16 @@ export function CardFace({ card, mode, side }: { card: CardContent; mode: DeckMo
       </div>
     );
   }
-  return text(side === 'front' ? card.frontText : card.backText);
+  // FLASHCARD: a face shows its image, its text, or the image above the text.
+  const faceText = side === 'front' ? card.frontText : card.backText;
+  const image = side === 'front' ? card.frontImageUrl : card.backImageUrl;
+  if (!image) return text(faceText);
+  return (
+    <div className="flex w-full flex-col items-center gap-3">
+      <img src={image} alt={faceText?.trim() || `Card ${side}`} loading="lazy" className="max-h-64 max-w-full rounded-[10px] object-contain" />
+      {faceText?.trim() && text(faceText)}
+    </div>
+  );
 }
 
 /** The student's ACTIVE courses (MC-01 has no "all" size, so walk its pages). */
