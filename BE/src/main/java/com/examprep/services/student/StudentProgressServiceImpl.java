@@ -4,6 +4,7 @@ import com.examprep.dto.IdCount;
 import com.examprep.dto.student.CourseProgressDto;
 import com.examprep.dto.student.StudentActivityDto;
 import com.examprep.entities.ExamAttempt;
+import com.examprep.exceptions.BadRequestException;
 import com.examprep.exceptions.ForbiddenException;
 import com.examprep.exceptions.ResourceNotFoundException;
 import com.examprep.repositories.*;
@@ -292,6 +293,12 @@ public class StudentProgressServiceImpl implements StudentProgressService {
     @Override
     public Page<StudentActivityDto> getActivityHistory(String type, int page, int size, Long userId) {
         String normalizedType = (type != null && !type.isBlank()) ? type.trim().toUpperCase() : null;
+        if (page < 0) {
+            throw new BadRequestException("Page index must not be less than zero");
+        }
+        if (size < 1 || size > 100) {
+            throw new BadRequestException("Page size must be between 1 and 100");
+        }
         Pageable pageable = PageRequest.of(page, size);
 
         if ("FLASHCARD".equals(normalizedType)) {

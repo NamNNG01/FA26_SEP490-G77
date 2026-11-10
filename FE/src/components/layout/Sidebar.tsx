@@ -44,8 +44,19 @@ export function Sidebar({
               }`
             }
           >
-            <span className="w-4 h-4 flex-shrink-0">{item.icon}</span>
+            <span className="relative w-4 h-4 flex-shrink-0">
+              {item.icon}
+              {collapsed && !!item.badge && (
+                <span aria-hidden="true" className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-danger ring-2 ring-surface" />
+              )}
+            </span>
             {!collapsed && <span className="flex-1">{item.title}</span>}
+            {!collapsed && !!item.badge && (
+              <span className="rounded-full bg-danger px-1.5 min-w-[18px] text-center text-[10px] font-bold leading-[18px] text-white">
+                {item.badge > 99 ? '99+' : item.badge}
+                <span className="sr-only"> pending</span>
+              </span>
+            )}
           </NavLink>
         ))}
       </nav>

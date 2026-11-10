@@ -283,6 +283,8 @@ export interface MenuItem {
   title: string;
   icon: React.ReactNode;
   path: string;
+  /** Red count pill (e.g. pending tickets); hidden when 0/undefined. */
+  badge?: number;
 }
 
 /**

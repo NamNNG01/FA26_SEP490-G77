@@ -11,7 +11,7 @@ import { QuestionForm } from '@/features/question/components/QuestionForm';
 import { fromDetail, isDraftValid, toCreateRequest, type QuestionDraft } from '@/features/question/model';
 import type { QuestionDetail } from '@/services/question.service';
 import { courseService, type CourseSummaryItem } from '@/services/course.service';
-import { ISSUE_STATUSES, ISSUE_TYPES, issueLabel, questionIssueService } from '@/services/questionIssue.service';
+import { ISSUE_STATUSES, ISSUE_TYPES, issueLabel, questionIssueService, refreshPendingIssueCount } from '@/services/questionIssue.service';
 import { useAuth } from '@/auth/authContext';
 import { getApiErrorMessage } from '@/utils/apiError';
 
@@ -92,6 +92,7 @@ export function ManagerQuestionIssuesPage() {
         if (value && value !== 'ALL') query[key] = value;
       });
       setList(await questionIssueService.managerList(query));
+      refreshPendingIssueCount();
     } catch (e) {
       setError(getApiErrorMessage(e, 'Could not load the issue queue.'));
     } finally {
