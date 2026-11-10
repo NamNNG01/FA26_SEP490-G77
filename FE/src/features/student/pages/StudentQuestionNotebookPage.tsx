@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { Button } from "@/components/ui/Button";
+import { Alert } from "@/components/ui/Alert";
 import { Pagination } from "@/components/ui/Pagination";
 import { Select } from "@/components/ui/Select";
+import { Input } from "@/components/ui/Input";
 import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import { EmptyState } from "@/components/ui/Card";
 import { SearchInput } from "@/components/common/SearchInput";
@@ -59,6 +61,8 @@ export function StudentQuestionNotebookPage() {
     "QUIZ",
   );
   const [sessionSize, setSessionSize] = useState("10");
+  const [sessionDuration, setSessionDuration] = useState("30");
+  const [sessionModalOpen, setSessionModalOpen] = useState(false);
   const [reload, setReload] = useState(0);
   const [rows, setRows] = useState<SavedQuestion[]>([]);
   const [total, setTotal] = useState(0);
@@ -118,8 +122,13 @@ export function StudentQuestionNotebookPage() {
   const startSession = async () => {
     setActionError(null);
     const size = Number(sessionSize);
+    const duration = Number(sessionDuration);
     if (!Number.isInteger(size) || size < 1 || size > 50) {
       setActionError("Question count must be a whole number between 1 and 50.");
+      return;
+    }
+    if (!Number.isInteger(duration) || duration < 1 || duration > 180) {
+      setActionError("Duration must be a whole number between 1 and 180 minutes.");
       return;
     }
     if (!sessionCourseId) {
@@ -132,6 +141,7 @@ export function StudentQuestionNotebookPage() {
         type: sessionType,
         examType: sessionExamType,
         size,
+        durationMinutes: duration,
         courseId: Number(sessionCourseId),
       });
       navigate(
@@ -253,63 +263,11 @@ export function StudentQuestionNotebookPage() {
         }
       />
 
-      <section className="card p-4 space-y-3">
-        <h2 className="font-semibold text-content">Start a review session</h2>
-        <div className="flex flex-wrap items-end gap-3">
-          <SearchableSelect
-            label="Course"
-            className="w-full sm:w-64"
-            value={sessionCourseId}
-            options={courses.map((course) => ({
-              label: course.title,
-              value: String(course.courseId),
-            }))}
-            onChange={setSessionCourseId}
-            placeholder="Choose a course"
-            searchPlaceholder="Search courses…"
-            emptyText="No active courses found"
-          />
-          <Select
-            label="Questions to practice"
-            className="w-full sm:w-56"
-            value={sessionType}
-            options={SESSION_TYPES}
-            onChange={(v) => setSessionType(v as typeof sessionType)}
-          />
-          <Select
-            label="Exam type"
-            className="w-full sm:w-44"
-            value={sessionExamType}
-            options={SESSION_EXAM_TYPES}
-            onChange={(v) => setSessionExamType(v as typeof sessionExamType)}
-          />
-          <label className="flex flex-col gap-1.5 text-sm font-medium text-content-secondary">
-            Question count
-            <input
-              type="number"
-              min={1}
-              max={50}
-              step={1}
-              value={sessionSize}
-              onChange={(e) => setSessionSize(e.target.value)}
-              aria-invalid={
-                !Number.isInteger(Number(sessionSize)) ||
-                Number(sessionSize) < 1 ||
-                Number(sessionSize) > 50
-              }
-              className="h-9 w-28 rounded-[10px] border border-line bg-surface px-3 text-content"
-            />
-          </label>
-          <Button onClick={startSession} disabled={starting}>
-            {starting ? "Starting…" : "Practice now"}
-          </Button>
-        </div>
-        {actionError && (
-          <p role="alert" className="text-sm text-danger">
-            {actionError}
-          </p>
-        )}
-      </section>
+      <div>
+        <Button onClick={() => { setActionError(null); setSessionModalOpen(true); }}>
+          Start a review session
+        </Button>
+      </div>
 
       <section className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -442,6 +400,79 @@ export function StudentQuestionNotebookPage() {
           </div>
         )}
       </section>
+
+      <Modal
+        open={sessionModalOpen}
+        onClose={() => { if (!starting) { setSessionModalOpen(false); setActionError(null); } }}
+        title="Start a review session"
+        description="Choose what to practice and set a time limit for your session."
+        size="lg"
+        dismissible={!starting}
+        error={actionError && <Alert type="error" message={actionError} />}
+        footer={
+          <>
+            <Button
+              variant="outline"
+              onClick={() => { setSessionModalOpen(false); setActionError(null); }}
+              disabled={starting}
+            >
+              Cancel
+            </Button>
+            <Button onClick={startSession} loading={starting} disabled={starting}>
+              Practice now
+            </Button>
+          </>
+        }
+      >
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <SearchableSelect
+            label="Course"
+            className="sm:col-span-2"
+            value={sessionCourseId}
+            options={courses.map((course) => ({
+              label: course.title,
+              value: String(course.courseId),
+            }))}
+            onChange={setSessionCourseId}
+            placeholder="Choose a course"
+            searchPlaceholder="Search courses…"
+            emptyText="No active courses found"
+          />
+          <Select
+            label="Questions to practice"
+            value={sessionType}
+            options={SESSION_TYPES}
+            onChange={(v) => setSessionType(v as typeof sessionType)}
+          />
+          <Select
+            label="Exam type"
+            value={sessionExamType}
+            options={SESSION_EXAM_TYPES}
+            onChange={(v) => setSessionExamType(v as typeof sessionExamType)}
+          />
+          <Input
+            label="Question count"
+            type="number"
+            min={1}
+            max={50}
+            step={1}
+            value={sessionSize}
+            onChange={(e) => setSessionSize(e.target.value)}
+            className="w-full"
+          />
+          <Input
+            label="Duration"
+            type="number"
+            min={1}
+            max={180}
+            step={1}
+            value={sessionDuration}
+            onChange={(e) => setSessionDuration(e.target.value)}
+            suffix={<span className="text-sm">min</span>}
+            className="w-full"
+          />
+        </div>
+      </Modal>
 
       <Modal
         open={bulkAction !== null}

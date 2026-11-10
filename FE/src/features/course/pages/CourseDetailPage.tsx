@@ -816,9 +816,10 @@ export function CourseDetailPage({
                 />
 
                 <Input
-                  label="Price ($)"
+                  label="Price (VND)"
                   type="number"
                   min={0}
+                  step="0.01"
                   value={price}
                   disabled={!canManageCourse}
                   readOnly={!canManageCourse}

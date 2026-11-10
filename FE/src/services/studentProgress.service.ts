@@ -43,6 +43,7 @@ export interface ReviewSessionRequest {
   type: 'wrong' | 'bookmarked' | 'all';
   examType: 'QUIZ' | 'ESSAY';
   size: number;
+  durationMinutes: number;
   courseId: number;
 }
 

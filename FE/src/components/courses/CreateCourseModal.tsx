@@ -287,9 +287,10 @@ export function CreateCourseModal({
           </div>
 
           <Input
-            label="Price ($)"
+            label="Price (VND)"
             type="number"
             min={0}
+            step="0.01"
             value={price}
             onChange={(e) => { setPrice(e.target.value); setErrors((prev) => ({ ...prev, price: undefined })); }}
             error={errors.price}
