@@ -28,7 +28,7 @@ import { downloadFile } from '@/utils/downloadFile';
  *   GET    /api/v1/student/decks?scope=MINE|COURSE            (FC-13)
  *   GET    /api/v1/student/decks/{deckId}                     (FC-14)
  *   POST   /api/v1/student/decks/{deckId}/withdraw-review     (FC-15)
- *   GET    /api/v1/student/decks/{deckId}/export?format=pdf   — the caller's own deck as a PDF download
+ *   GET    /api/v1/student/decks/{deckId}/export?format=pdf   — any readable deck as a PDF download
  */
 
 export type DeckMode = 'FLASHCARD' | 'CODE_SNIPPET' | 'CODE_OUTPUT';
@@ -294,7 +294,7 @@ export function isEndpointMissing(err: unknown): boolean {
 // ------------------------------------------------------------- calls
 
 export const studentDeckService = {
-  /** Owner only: the deck and its cards as a PDF, saved through the browser's download. */
+  /** Any readable deck (own, public, or enrolled course) and its cards as a PDF, saved through the browser's download. */
   async exportPdf(deckId: number | string, fallbackName = 'flashcards.pdf'): Promise<void> {
     await downloadFile(`/student/decks/${deckId}/export?format=pdf`, fallbackName);
   },

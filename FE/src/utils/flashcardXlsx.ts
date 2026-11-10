@@ -4,7 +4,7 @@ import type { Workbook, Worksheet } from 'exceljs';
  * Flashcard decks as a readable Excel workbook (manager and student export).
  *
  *  - "Overview" sheet: one row per deck, the deck name links to its sheet.
- *  - One sheet per deck: the deck info on top, then a # / Front / Back table
+ *  - One sheet per deck: the deck info on top, then a Front / Back table
  *    (plus Language / Code columns when a card has code).
  *
  * exceljs is loaded only when an export runs.
@@ -47,25 +47,25 @@ function sheetName(title: string, used: Set<string>) {
   return name;
 }
 
-function styleHeader(ws: Worksheet, rowNumber: number, columns: number) {
+function styleHeader(ws: Worksheet, rowNumber: number, columns: number, centerFirst = true) {
   const row = ws.getRow(rowNumber);
   row.height = 22;
   for (let c = 1; c <= columns; c++) {
     const cell = row.getCell(c);
     cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: BRAND } };
-    cell.alignment = { vertical: 'middle', horizontal: c === 1 ? 'center' : 'left' };
+    cell.alignment = { vertical: 'middle', horizontal: centerFirst && c === 1 ? 'center' : 'left' };
     cell.border = box;
   }
 }
 
-function styleBody(ws: Worksheet, from: number, to: number, columns: number, monoColumns: number[] = []) {
+function styleBody(ws: Worksheet, from: number, to: number, columns: number, monoColumns: number[] = [], centerFirst = true) {
   for (let r = from; r <= to; r++) {
     const row = ws.getRow(r);
     for (let c = 1; c <= columns; c++) {
       const cell = row.getCell(c);
       cell.border = box;
-      cell.alignment = { vertical: 'top', horizontal: c === 1 ? 'center' : 'left', wrapText: true };
+      cell.alignment = { vertical: 'top', horizontal: centerFirst && c === 1 ? 'center' : 'left', wrapText: true };
       if (monoColumns.includes(c)) cell.font = { name: 'Consolas' };
       if ((r - from) % 2 === 1) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: STRIPE } };
     }
@@ -76,9 +76,9 @@ function addDeckSheet(wb: Workbook, deck: XlsxDeck, name: string, linkBack: bool
   const hasCode = deck.cards.some(c => c.codeBody?.trim());
   const ws = wb.addWorksheet(name);
   ws.columns = hasCode
-    ? [{ width: 6 }, { width: 40 }, { width: 40 }, { width: 12 }, { width: 55 }]
-    : [{ width: 6 }, { width: 50 }, { width: 60 }];
-  const columns = hasCode ? 5 : 3;
+    ? [{ width: 40 }, { width: 40 }, { width: 12 }, { width: 55 }]
+    : [{ width: 50 }, { width: 60 }];
+  const columns = hasCode ? 4 : 2;
 
   ws.mergeCells(1, 1, 1, columns);
   const title = ws.getCell(1, 1);
@@ -97,7 +97,7 @@ function addDeckSheet(wb: Workbook, deck: XlsxDeck, name: string, linkBack: bool
   let r = 2;
   for (const [label, value] of info) {
     ws.getCell(r, 1).value = label;
-    ws.mergeCells(r, 2, r, columns);
+    if (columns > 2) ws.mergeCells(r, 2, r, columns);
     const labelCell = ws.getCell(r, 1);
     labelCell.font = { bold: true, color: { argb: MUTED } };
     const valueCell = ws.getCell(r, 2);
@@ -113,14 +113,14 @@ function addDeckSheet(wb: Workbook, deck: XlsxDeck, name: string, linkBack: bool
   }
 
   const headerRow = r + 1;
-  ws.getRow(headerRow).values = hasCode ? ['#', 'Front', 'Back', 'Language', 'Code'] : ['#', 'Front', 'Back'];
-  styleHeader(ws, headerRow, columns);
+  ws.getRow(headerRow).values = hasCode ? ['Front', 'Back', 'Language', 'Code'] : ['Front', 'Back'];
+  styleHeader(ws, headerRow, columns, false);
   deck.cards.forEach((c, i) => {
-    const values: (string | number)[] = [i + 1, c.frontText ?? '', c.backText ?? ''];
+    const values: string[] = [c.frontText ?? '', c.backText ?? ''];
     if (hasCode) values.push(c.codeLanguage ?? '', c.codeBody ?? '');
     ws.getRow(headerRow + 1 + i).values = values;
   });
-  styleBody(ws, headerRow + 1, headerRow + deck.cards.length, columns, hasCode ? [5] : []);
+  styleBody(ws, headerRow + 1, headerRow + deck.cards.length, columns, hasCode ? [4] : [], false);
   ws.views = [{ state: 'frozen', ySplit: headerRow }];
   ws.pageSetup = { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0, printTitlesRow: `${headerRow}:${headerRow}` };
 }

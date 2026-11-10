@@ -59,6 +59,7 @@ public class FlashcardPdfWriter {
     private static final float[] STRIPE = {0.902f, 0.949f, 0.941f};
     private static final float[] BORDER = {0.835f, 0.863f, 0.859f};
     private static final float[] MUTED = {0.373f, 0.42f, 0.416f};
+    private static final float[] INK = {0.102f, 0.129f, 0.125f};
     private static final float[] WHITE = {1f, 1f, 1f};
 
     public RenderedPdf write(DeckData deck) {
@@ -70,12 +71,12 @@ public class FlashcardPdfWriter {
             List<CardData> cards = deck.cards() == null ? List.of() : deck.cards();
             boolean hasCode = cards.stream().anyMatch(c -> c.codeBody() != null && !c.codeBody().isBlank());
             float[] widths = hasCode
-                    ? new float[]{24f, 142f, 142f, 52f, 155f}
-                    : new float[]{24f, (TABLE_W - 24f) / 2, (TABLE_W - 24f) / 2};
+                    ? new float[]{148f, 148f, 56f, TABLE_W - 352f}
+                    : new float[]{TABLE_W / 2, TABLE_W / 2};
             float[] colX = columnStarts(widths);
             String[] labels = hasCode
-                    ? new String[]{"#", "Front", "Back", "Language", "Code"}
-                    : new String[]{"#", "Front", "Back"};
+                    ? new String[]{"Front", "Back", "Language", "Code"}
+                    : new String[]{"Front", "Back"};
 
             float y;
             List<float[]> tableExtents = new ArrayList<>();
@@ -103,7 +104,7 @@ public class FlashcardPdfWriter {
                 if (cards.isEmpty()) {
                     y = drawWrapped(cs, regular, META_SIZE, "This deck has no cards.", MARGIN, TABLE_W, y, MUTED, floorY);
                 }
-                y = Math.min(y, floorY) - 8f;
+                y = Math.max(y, floorY) - 8f;
 
                 // Table header.
                 y = drawTableHeader(cs, bold, y, widths, labels);
@@ -113,11 +114,11 @@ public class FlashcardPdfWriter {
                 for (int index = 0; index < cards.size(); index++) {
                     CardData card = cards.get(index);
                     String[] cells = hasCode
-                            ? new String[]{String.valueOf(index + 1), card.frontText(), card.backText(), card.codeLanguage(), card.codeBody()}
-                            : new String[]{String.valueOf(index + 1), card.frontText(), card.backText()};
+                            ? new String[]{card.frontText(), card.backText(), card.codeLanguage(), card.codeBody()}
+                            : new String[]{card.frontText(), card.backText()};
                     PDFont[] fonts = hasCode
-                            ? new PDFont[]{regular, regular, regular, mono, mono}
-                            : new PDFont[]{regular, regular, regular};
+                            ? new PDFont[]{regular, regular, mono, mono}
+                            : new PDFont[]{regular, regular};
                     List<List<String>> lines = cellLines(cells, fonts, widths);
                     int height = lines.stream().mapToInt(List::size).max().orElse(1);
 
@@ -138,15 +139,9 @@ public class FlashcardPdfWriter {
                             cs.fill();
                         }
                         for (int c = 0; c < lines.size(); c++) {
-                            if (line >= lines.get(c).size() || (hasCode && c == 3 && line > 0)) continue;
+                            if (line >= lines.get(c).size() || (hasCode && c == 2 && line > 0)) continue;
                             String value = lines.get(c).get(line);
-                            PDFont cellFont = fonts[c];
-                            float size = TEXT_SIZE;
-                            float x = colX[c] + 4f;
-                            if (c == 0) {
-                                x = colX[c] + (widths[c] - widthOf(value, regular, size)) / 2;
-                            }
-                            drawText(cs, cellFont, size, value, x, y + 3f, c == 0 ? MUTED : null);
+                            drawText(cs, fonts[c], TEXT_SIZE, value, colX[c] + 4f, y + 3f, INK);
                         }
                     }
                     cs.setStrokingColor(BORDER[0], BORDER[1], BORDER[2]);
@@ -228,10 +223,7 @@ public class FlashcardPdfWriter {
         cs.stroke();
         float[] starts = columnStarts(widths);
         for (int i = 0; i < labels.length; i++) {
-            float x = i == 0
-                    ? starts[i] + (widths[i] - widthOf(labels[i], bold, META_SIZE)) / 2
-                    : starts[i] + 4f;
-            drawText(cs, bold, META_SIZE, labels[i], x, y - 12.5f, WHITE);
+            drawText(cs, bold, META_SIZE, labels[i], starts[i] + 4f, y - 12.5f, WHITE);
         }
         return y - HEADER_H;
     }
@@ -314,6 +306,10 @@ public class FlashcardPdfWriter {
         String cleaned = (text == null ? "" : text).replace("\t", "    ").replaceAll("[\\p{Cntrl}&&[^\n]]", "");
         StringBuilder out = new StringBuilder(cleaned.length());
         for (int i = 0; i < cleaned.length(); i++) {
+            if (cleaned.charAt(i) == '\n') {
+                out.append('\n');
+                continue;
+            }
             String ch = String.valueOf(cleaned.charAt(i));
             try {
                 font.getStringWidth(ch);
@@ -347,7 +343,7 @@ public class FlashcardPdfWriter {
             y = nextY;
             drawn++;
         }
-        if (drawn < lines.size()) {
+        if (drawn < lines.size() && y - (size + 3f) >= floorY) {
             drawText(cs, font, size, "…", x, y - size - 2f, color);
             y -= size + 3f;
         }

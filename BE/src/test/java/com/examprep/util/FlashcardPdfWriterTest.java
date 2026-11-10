@@ -3,6 +3,7 @@ package com.examprep.util;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
+import org.apache.pdfbox.text.TextPosition;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -26,13 +27,13 @@ class FlashcardPdfWriterTest {
                 "Photosynthesis — Quang hợp", "Sinh học", "Nguyễn Văn A", "FLASHCARD", "PRIVATE",
                 "Ôn tập chương 1: quang hợp.",
                 List.of(new FlashcardPdfWriter.CardData("Photosynthesis", "Quang hợp: quá trình cây xanh tổng hợp chất hữu cơ.", null, null),
-                        new FlashcardPdfWriter.CardData("Loop in Java", "Repeat a block", "JAVA", "for(int i=0;i<10;i++){}"))));
+                        new FlashcardPdfWriter.CardData("Loop in Java", "Repeat a block", "JAVA", "for(int i=0;i<10;i++){\n  sum += i;\n}"))));
         assertTrue(out.content().length > 0);
         assertTrue(new String(out.content(), 0, 5, java.nio.charset.StandardCharsets.US_ASCII).equals("%PDF-"));
         String extracted = text(out.content());
         assertTrue(extracted.contains("Quang hợp"), "Vietnamese back face missing: " + extracted);
         assertTrue(extracted.contains("Photosynthesis"));
-        assertTrue(extracted.contains("for(int i=0;i<10;i++){}"), "Code body missing");
+        assertTrue(extracted.contains("for(int i=0;i<10;i++){") && extracted.contains("sum += i;"), "Code body missing: " + extracted);
         assertTrue(out.fileName().endsWith("-flashcards.pdf"));
     }
 
@@ -104,5 +105,31 @@ class FlashcardPdfWriterTest {
         String extracted = text(out.content());
         assertTrue(extracted.contains("…"), "expected a visible truncation marker");
         assertTrue(!extracted.contains("ENDMARK"), "dropped description lines must not be in the PDF at all");
+    }
+
+    @Test
+    void standardDeckUsesTwoColumnsRightBelowHeader() throws IOException {
+        FlashcardPdfWriter.RenderedPdf out = writer.write(new FlashcardPdfWriter.DeckData(
+                "vgfavas", "English", "Manager Bob", "FLASHCARD", "PRIVATE", null,
+                List.of(new FlashcardPdfWriter.CardData("ádasd", "đâs", null, null),
+                        new FlashcardPdfWriter.CardData("Photosynthesis", "Quang hợp", null, null))));
+        try (PDDocument document = Loader.loadPDF(out.content())) {
+            assertEquals(1, document.getNumberOfPages(), "2-card deck must fit on page 1");
+            float[] headerTopY = {-1f};
+            PDFTextStripper finder = new PDFTextStripper() {
+                @Override
+                protected void writeString(String s, List<TextPosition> positions) throws IOException {
+                    if (headerTopY[0] < 0 && s.contains("Front") && !positions.isEmpty()) {
+                        headerTopY[0] = positions.get(0).getYDirAdj();
+                    }
+                    super.writeString(s, positions);
+                }
+            };
+            String extracted = finder.getText(document);
+            assertTrue(extracted.contains("Front Back"), "expected 2-column Front | Back header, got: " + extracted);
+            assertTrue(!extracted.contains("# Front"), "table must not include a # column");
+            assertTrue(headerTopY[0] > 0 && headerTopY[0] < 160f,
+                    "table header should sit directly under the deck info, was at y=" + headerTopY[0]);
+        }
     }
 }
