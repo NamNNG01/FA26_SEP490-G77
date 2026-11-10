@@ -29,6 +29,7 @@ import { checkProgress } from './PracticeCheck';
 import { PracticeExplanation } from './PracticeExplanation';
 import { PracticeVerdict, SCORE_ONLY_TYPES, summaryOutcome } from './PracticeVerdict';
 import { GroupPassageSplit } from './GroupPassageSplit';
+import { ReportQuestionIssueButton } from './ReportQuestionIssueDialog';
 
 /** A rubric attempt still being graded by AI is asked about again this often. */
 const POLL_MS = 4000;
@@ -614,6 +615,11 @@ export function ModulePracticeRunner({ sessionId }: { sessionId: string }) {
               >
                 <Icon.Star className={`w-4 h-4 ${isBookmarked ? 'fill-current text-warning' : ''}`} />
               </Button>
+              <ReportQuestionIssueButton
+                questionId={summary.questionId}
+                practiceSessionId={session.sessionId}
+                options={view?.options ?? []}
+              />
               <span className="text-xs text-content-subtle">
                 {current + 1} / {questions.length}
               </span>
@@ -989,6 +995,11 @@ function PartResults({
               <h3 className="text-sm font-semibold text-content uppercase tracking-wide">Question {first + selected}</h3>
               <Badge variant="info">{label(shown)}</Badge>
               <span className={`ml-auto text-xs font-semibold ${OUTCOME_TEXT[outcomes[selected]]}`}>{OUTCOME_LABEL[outcomes[selected]]}</span>
+              <ReportQuestionIssueButton
+                questionId={shown.questionId}
+                practiceSessionId={sessionId}
+                options={shownView?.options ?? []}
+              />
             </div>
             {shownView ? (
               <ReviewAnswer
