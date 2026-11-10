@@ -75,7 +75,7 @@ export function UsersPage({ onNavigate }: { onNavigate?: (id: string, params?: R
         <h2 className="text-xl font-bold text-content">User List</h2>
       </div>
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-        {[{ label: 'Total Users', value: 3847, color: '#0D7C6C' }, { label: 'Active', value: 3612, color: '#16A34A' }, { label: 'Inactive', value: 235, color: '#9CA3AF' }, { label: 'New this month', value: 147, color: '#D97706' }].map(s => (
+        {[{ label: 'Total Users', value: 3847, color: '#F27124' }, { label: 'Active', value: 3612, color: '#16A34A' }, { label: 'Inactive', value: 235, color: '#9CA3AF' }, { label: 'New this month', value: 147, color: '#D97706' }].map(s => (
           <div key={s.label} className="card p-4 flex items-center gap-3">
             <div className="w-2 h-10 rounded-full flex-shrink-0" style={{ background: s.color }} />
             <div>

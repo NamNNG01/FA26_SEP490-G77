@@ -29,7 +29,7 @@ export interface XlsxDeck {
   cards: XlsxCard[];
 }
 
-const BRAND = 'FF0D7C6C';
+const BRAND = 'FFF27124';
 const BRAND_LIGHT = 'FFE6F2F0';
 const STRIPE = 'FFF7F9F9';
 const BORDER = 'FFD5DCDB';

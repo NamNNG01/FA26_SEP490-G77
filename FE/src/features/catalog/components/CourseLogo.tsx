@@ -1,7 +1,7 @@
 import React from 'react';
 
 /** Tile colours for courses without a thumbnail — picked by a stable hash of the title. */
-const TILE_COLORS = ['#0D7C6C', '#2563EB', '#7C3AED', '#D97706', '#DB2777', '#0891B2', '#4F46E5', '#059669'];
+const TILE_COLORS = ['#F27124', '#2563EB', '#7C3AED', '#D97706', '#DB2777', '#0891B2', '#4F46E5', '#059669'];
 
 function initials(title: string): string {
   const words = title.trim().split(/\s+/).filter(Boolean);

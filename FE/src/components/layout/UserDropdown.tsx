@@ -120,7 +120,7 @@ export function UserDropdown({ avatarOnly = false }: { avatarOnly?: boolean }) {
         aria-expanded={open}
         className={`flex items-center gap-2.5 rounded-[10px] ${avatarOnly ? 'p-1' : 'px-1.5 py-1'} cursor-pointer text-foreground hover:bg-accent hover:text-accent-foreground transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-primary/30`}
       >
-        <Avatar name={user.fullName} src={user.avatarUrl ?? undefined} size="sm" color="#0D7C6C" />
+        <Avatar name={user.fullName} src={user.avatarUrl ?? undefined} size="sm" color="#F27124" />
         {!avatarOnly && (
           <div className="hidden text-left sm:block">
             <p className="text-sm font-semibold leading-tight text-foreground">

@@ -48,7 +48,7 @@ export function AnalyticsPage() {
                   {/* One hue for every bar; only subjects under target get the warning tint. */}
                   <div className="relative flex-1 h-6 bg-surface-muted rounded-[6px] overflow-hidden">
                     <div className="h-full rounded-[6px] flex items-center pl-2"
-                      style={{ width: `${p.rate}%`, background: below ? '#D97706' : '#0D7C6C' }}>
+                      style={{ width: `${p.rate}%`, background: below ? '#D97706' : '#F27124' }}>
                       <span className="text-2xs font-bold text-white">{p.rate}%</span>
                     </div>
                     <span aria-hidden className="absolute inset-y-0 w-px bg-fill-inverse" style={{ left: `${PASS_TARGET}%` }} />
@@ -82,7 +82,7 @@ export function AnalyticsPage() {
             ].map(d => (
               <div key={d.range} className="flex-1 flex flex-col items-center gap-1">
                 <span className="text-2xs text-content-soft">{d.pct}%</span>
-                <div className="w-full rounded-t-[4px]" style={{ height: `${d.pct * 4}px`, background: d.range.startsWith('7') || d.range.startsWith('8') || d.range.startsWith('9') ? '#0D7C6C' : '#A7DCCF' }} />
+                <div className="w-full rounded-t-[4px]" style={{ height: `${d.pct * 4}px`, background: d.range.startsWith('7') || d.range.startsWith('8') || d.range.startsWith('9') ? '#F27124' : '#FBC9A3' }} />
                 <span className="text-2xs text-content-soft leading-tight text-center">{d.range}</span>
               </div>
             ))}
