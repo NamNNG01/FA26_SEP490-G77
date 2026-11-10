@@ -34,6 +34,7 @@ import { CodeQuestionWorkspace, currentCodeAnswer } from '../components/code/Cod
 import { ModulePracticeRunner } from '../components/ModulePracticeRunner';
 import { ReportQuestionIssueButton } from '../components/ReportQuestionIssueDialog';
 import { GroupPassageSplit } from '../components/GroupPassageSplit';
+import { EssayQuestionPrompt } from '../components/EssayQuestionPrompt';
 import {
   canChooseTakeMode,
   forgetTakeAs,
@@ -467,6 +468,8 @@ function ExamAttemptScreen() {
   }
 
   const q = questions[current];
+  /** A written essay: question on top, the answer box filling the rest of the column (md+). */
+  const fillEssay = isEssay && q?.questionType === 'ESSAY';
   const isFlagged = flagged.has(current + 1);
   const toggleFlag = () =>
     setFlagged(prev => {
@@ -606,7 +609,17 @@ function ExamAttemptScreen() {
           mainClassName={isCode ? 'p-[clamp(0.75rem,1.5vw,1.25rem)]' : isEssay ? 'p-[30px]' : 'p-[clamp(1rem,2.5vw,1.5rem)]'}
         >
           {/* CODE: the workspace fills the height between the question header and the nav buttons. */}
-          <div className={isCode ? 'w-full space-y-3 md:h-full md:flex md:flex-col' : isEssay ? 'w-full space-y-3' : 'max-w-3xl mx-auto space-y-5'}>
+          <div
+            className={
+              isCode
+                ? 'w-full space-y-3 md:h-full md:flex md:flex-col'
+                : fillEssay
+                  ? 'w-full flex flex-col gap-3 md:h-full'
+                  : isEssay
+                    ? 'w-full space-y-3'
+                    : 'max-w-3xl mx-auto space-y-5'
+            }
+          >
             {/* Question header: number, type and points — the card below holds only the question text. */}
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-sm font-semibold text-content uppercase tracking-wide">Question {current + 1}</h2>
@@ -632,23 +645,31 @@ function ExamAttemptScreen() {
               </div>
             ) : (
               <>
-                {/* Essay papers: a compact question (scrolls past ~12vh) so the answer area stays on screen. */}
-                <div className={`card ${isEssay ? 'px-3 py-2 max-h-[12vh] overflow-y-auto' : 'p-[clamp(1rem,2.5vw,1.5rem)]'}`}>
-                  <QuestionText
-                    content={q.content}
-                    className={`text-content font-medium ${isEssay ? 'text-xs leading-normal' : 'text-lg leading-relaxed'}`}
-                  />
-                </div>
+                {/* Essay: the question stops at ~35% of the column and scrolls, so the answer box stays on screen. */}
+                {fillEssay ? (
+                  <EssayQuestionPrompt key={q.questionId} content={q.content} />
+                ) : (
+                  <div className={`card ${isEssay ? 'px-3 py-2 max-h-[12vh] overflow-y-auto' : 'p-[clamp(1rem,2.5vw,1.5rem)]'}`}>
+                    <QuestionText
+                      content={q.content}
+                      className={`text-content font-medium ${isEssay ? 'text-xs leading-normal' : 'text-lg leading-relaxed'}`}
+                    />
+                  </div>
+                )}
 
                 {/* A checked practice answer is locked: a revealed input locks itself (its key stays
                     readable), any other checked one is disabled by the fieldset. */}
-                <fieldset disabled={Boolean(check) && !check?.supported} className="min-w-0">
+                <fieldset
+                  disabled={Boolean(check) && !check?.supported}
+                  className={fillEssay ? 'min-w-0 md:flex-1 md:min-h-0 md:flex md:flex-col' : 'min-w-0'}
+                >
                   <QuestionAnswerInput
                     key={q.questionId}
                     question={q}
                     value={answers[q.questionId] ?? null}
                     onChange={changeAnswer}
                     roomy={isEssay}
+                    fill={fillEssay}
                     practice={instantCheck}
                     reveal={check?.supported ? check : null}
                     onEnter={checkable && !check && progress.ready ? () => void checkAnswer() : undefined}

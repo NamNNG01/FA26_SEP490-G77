@@ -55,6 +55,8 @@ interface InputProps {
   onChange: (next: AnswerResponse) => void;
   /** Essay screen: a taller editor. */
   roomy?: boolean;
+  /** Essay screen (md+): the editor fills the height its flex-column parent leaves free. */
+  fill?: boolean;
   /**
    * Practice "Check answer": the key of the question. When set the answer is read-only —
    * every right part turns green, every wrong part red with the right one beside it.
@@ -92,7 +94,7 @@ export function QuestionAnswerInput(props: InputProps) {
 
 const CHOICE_TYPES: ReadonlySet<string> = new Set(['SINGLE_CHOICE', 'TRUE_FALSE', 'MULTIPLE_CHOICE']);
 
-function AnswerControl({ question, value, onChange, roomy, reveal, onEnter, verdict }: InputProps) {
+function AnswerControl({ question, value, onChange, roomy, fill, reveal, onEnter, verdict }: InputProps) {
   switch (question.questionType) {
     case 'SINGLE_CHOICE':
     case 'TRUE_FALSE':
@@ -106,7 +108,7 @@ function AnswerControl({ question, value, onChange, roomy, reveal, onEnter, verd
       return <OrderingInput question={question} value={value} onChange={onChange} reveal={reveal} />;
     case 'ESSAY':
     case 'CODE':
-      return <TextInput question={question} value={value} onChange={onChange} roomy={roomy} />;
+      return <TextInput question={question} value={value} onChange={onChange} roomy={roomy} fill={fill} />;
     case 'DIAGRAM':
       return <DiagramAnswerInput value={value} onChange={onChange} roomy={roomy} />;
     default:
@@ -610,12 +612,16 @@ function OrderingReveal({
   );
 }
 
-function TextInput({ question, value, onChange, roomy }: InputProps) {
+function TextInput({ question, value, onChange, roomy, fill }: InputProps) {
   const text = value?.text ?? '';
   const limit = question.answerSpace?.maxLength ?? DEFAULT_TEXT_LIMIT;
   const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+  // fill: on md+ the box takes the free height (never under 12rem); stacked on a phone it keeps a fixed size.
+  const size = fill
+    ? 'min-h-[40vh] resize-y md:min-h-[12rem] md:flex-1 md:resize-none'
+    : `resize-y ${roomy ? 'min-h-[50vh]' : 'min-h-[14rem]'}`;
   return (
-    <div className="space-y-2">
+    <div className={fill ? 'flex flex-col gap-2 md:flex-1 md:min-h-0' : 'space-y-2'}>
       <textarea
         aria-label="Your answer"
         value={text}
@@ -623,7 +629,7 @@ function TextInput({ question, value, onChange, roomy }: InputProps) {
         onChange={e => onChange({ text: e.target.value })}
         placeholder="Write your answer…"
         spellCheck={question.questionType === 'ESSAY'}
-        className={`${FIELD} py-2.5 w-full resize-y leading-relaxed ${roomy ? 'min-h-[50vh]' : 'min-h-[14rem]'} ${
+        className={`${FIELD} py-2.5 w-full leading-relaxed ${size} ${
           question.questionType !== 'ESSAY' ? 'font-mono text-sm' : 'text-base'
         }`}
       />
