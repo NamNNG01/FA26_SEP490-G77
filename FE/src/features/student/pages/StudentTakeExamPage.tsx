@@ -316,7 +316,7 @@ function ExamAttemptScreen() {
           : session.questions
               .filter(q => q.questionType === 'CODE')
               .map(q =>
-                currentCodeAnswer(session.attemptId, q.questionId, codeMeta.get(q.questionId) ?? null, codeLanguages, answersRef.current[q.questionId]?.text),
+                currentCodeAnswer(q.questionId, codeMeta.get(q.questionId) ?? null, codeLanguages, answersRef.current[q.questionId]?.text),
               )
               .filter(a => a != null);
         if (codeAnswers.length > 0) {
@@ -663,7 +663,6 @@ function ExamAttemptScreen() {
               <div className="md:min-h-0 md:flex-1">
                 <CodeQuestionWorkspace
                   key={q.questionId}
-                  attemptId={session.attemptId}
                   question={q}
                   meta={codeMeta.get(q.questionId) ?? null}
                   languages={codeLanguages}
