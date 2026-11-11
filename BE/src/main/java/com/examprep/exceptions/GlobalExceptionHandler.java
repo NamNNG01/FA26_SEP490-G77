@@ -12,6 +12,7 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
@@ -95,6 +96,18 @@ public class GlobalExceptionHandler {
                         .message("Validation failed for request parameters")
                         .data(errors)
                         .build());
+    }
+
+    @ExceptionHandler(HandlerMethodValidationException.class)
+    public ResponseEntity<ApiResponse<Object>> handleHandlerMethodValidation(HandlerMethodValidationException ex) {
+        Map<String, String> errors = new HashMap<>();
+        ex.getAllErrors().forEach(error -> {
+            String msg = error.getDefaultMessage();
+            errors.put("error", msg);
+        });
+        log.warn("Handler Method Validation Error: {}", errors);
+        return ResponseEntity.status(ResponseCode.VALIDATION_ERROR.getHttpStatus())
+                .body(ApiResponse.error(ResponseCode.VALIDATION_ERROR, "Validation failed"));
     }
 
     @ExceptionHandler(AccessDeniedException.class)

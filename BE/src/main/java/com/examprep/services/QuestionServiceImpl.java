@@ -936,6 +936,7 @@ public class QuestionServiceImpl implements QuestionService {
         if ("CODE".equals(q.getQuestionType())) {
             List<CodeTestCase> cases = codeTestCaseRepository.findByQuestionQuestionIdOrderByOrderIndexAscTestCaseIdAsc(q.getQuestionId());
             testCases = cases.stream().map(tc -> TestCaseDto.builder()
+                    .testCaseId(tc.getTestCaseId())
                     .inputData(tc.getInputData())
                     .expectedOutput(tc.getExpectedOutput())
                     .hidden(tc.getHidden())

@@ -64,7 +64,7 @@ class StudentExamControllerTest {
     @Test
     void listMyExams_Success() throws Exception {
         MyExamDto myExam = new MyExamDto(
-                100L, "Midterm Exam", 5L, "Course 1", BigDecimal.TEN, 1L, BigDecimal.valueOf(8), "EXAM"
+                100L, "Midterm Exam", 5L, "Course 1", BigDecimal.TEN, 1L, BigDecimal.valueOf(8), "EXAM", false
         );
         UserPrincipal principal = UserPrincipal.create(10L, "student@examprep.local", "STUDENT");
         when(studentExamService.listMyExams(anyInt(), anyInt(), eq(10L)))

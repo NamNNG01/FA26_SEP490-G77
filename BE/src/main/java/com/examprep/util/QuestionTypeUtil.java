@@ -21,7 +21,7 @@ public final class QuestionTypeUtil {
             "SINGLE_CHOICE", "MULTIPLE_CHOICE", "TRUE_FALSE", "FILL_BLANK", "MATCHING", "ORDERING");
 
     private static final String KIND_MESSAGE =
-            "questionType must be one of QUIZ, ESSAY, CODE, DIAGRAM, DIAGram_ESSAY.";
+            "questionType must be one of QUIZ, ESSAY, CODE, DIAGRAM, DIAGRAM_ESSAY.";
 
     private QuestionTypeUtil() {
     }
