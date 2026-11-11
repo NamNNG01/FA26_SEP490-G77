@@ -219,7 +219,7 @@ export interface QuestionDetail {
   options: AnswerOption[];
   createdAt: string | null;
   updatedAt: string | null;
-  /** CODE only — not returned by Q-03 yet (docs/notes/student-code-exam-be-gap.md). */
+  /** CODE only. */
   codeConfig?: CodeQuestionConfig | null;
   testCases?: CodeTestCaseDto[] | null;
 }
@@ -289,6 +289,9 @@ interface ExamAiDraftQuestion {
   explanation?: string | null;
   questionMetadata?: Record<string, unknown> | null;
   essayGradingRubric?: unknown;
+  /** CODE only. */
+  codeConfig?: CodeQuestionConfig | null;
+  testCases?: CodeTestCaseDto[] | null;
   /** DIAGRAM only: the PlantUML behind questionMetadata.drawioXml. */
   plantUmlSource?: string | null;
 }
@@ -314,6 +317,8 @@ function fromExamAiDraft(d: ExamAiDraftQuestion): QuestionAiDraft {
     // plantUmlSource rides in metadata for the editor's preview; toMetadata never sends it.
     questionMetadata: d.plantUmlSource ? { ...d.questionMetadata, plantUmlSource: d.plantUmlSource } : d.questionMetadata ?? null,
     essayGradingRubric: d.essayGradingRubric ?? undefined,
+    codeConfig: d.codeConfig ?? null,
+    testCases: d.testCases ?? null,
   };
 }
 
@@ -354,6 +359,9 @@ export interface QuestionAiDraft {
   explanation?: string | null;
   questionMetadata?: Record<string, unknown> | null;
   essayGradingRubric?: unknown;
+  /** CODE only. */
+  codeConfig?: CodeQuestionConfig | null;
+  testCases?: CodeTestCaseDto[] | null;
 }
 
 /** One drafted question with the backend's checks on it. */

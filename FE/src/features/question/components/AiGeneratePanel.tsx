@@ -504,7 +504,7 @@ function AiPreviewView({ index, preview, allowedTypes, actions }: { index: numbe
   const [renders, setRenders] = useState<boolean | null | undefined>(undefined);
 
   useEffect(() => {
-    if (q.type !== 'DIAGRAM' || !plantUml) return;
+    if ((q.type !== 'DIAGRAM' && q.type !== 'DIAGRAM_ESSAY') || !plantUml) return;
     setRenders(undefined);
     const controller = new AbortController();
     checkPlantUml(plantUml, controller.signal).then(ok => { if (!controller.signal.aborted) setRenders(ok); });
@@ -571,7 +571,7 @@ function AiPreviewView({ index, preview, allowedTypes, actions }: { index: numbe
         </ul>
       )}
 
-      {q.type === 'DIAGRAM' && plantUml && (
+      {(q.type === 'DIAGRAM' || q.type === 'DIAGRAM_ESSAY') && plantUml && (
         <div className="space-y-1.5">
           <div className="rounded-[10px] border border-line bg-white p-3 flex items-center justify-center min-h-[120px]">
             <img src={plantUmlSvgUrl(plantUml)} alt={`Diagram for suggestion ${index + 1}`} className="max-h-[240px] max-w-full object-contain" />
