@@ -50,6 +50,8 @@ public class QuestionServiceImpl implements QuestionService {
     private final QuestionAccessPolicy accessPolicy;
     private final QuestionValidator questionValidator;
     private final ObjectMapper objectMapper;
+    private final CodeQuestionConfigRepository codeQuestionConfigRepository;
+    private final CodeTestCaseRepository codeTestCaseRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -262,6 +264,10 @@ public class QuestionServiceImpl implements QuestionService {
 
         for (int i = 0; i < savedQuestions.size(); i++) {
             Question q = savedQuestions.get(i);
+            QuestionCreateRequest req = requests.get(i);
+            if ("CODE".equals(req.getQuestionType())) {
+                saveCodeConfigAndTestCases(q, req.getCodeConfig(), req.getTestCases());
+            }
             List<AnswerOptionDto> optDtos = reqOptionsList.get(i);
             boolean isOrdering = isOrderingList.get(i);
             List<AnswerOption> qOptions = new ArrayList<>();
@@ -515,14 +521,8 @@ public class QuestionServiceImpl implements QuestionService {
             }
         }
 
-        if (req.getEssayGradingRubric() != null) {
-            String rubricJson = serializeJson(req.getEssayGradingRubric(), "essayGradingRubric");
-            if (!rubricJson.equals(q.getEssayGradingRubric())) {
-                if (rubricWeightsChanged(q.getEssayGradingRubric(), rubricJson)) {
-                    scoreAffectingChanged = true;
-                }
-                q.setEssayGradingRubric(rubricJson);
-            }
+        if ("CODE".equals(typeToValidate) && (req.getCodeConfig() != null || req.getTestCases() != null)) {
+            saveCodeConfigAndTestCases(q, req.getCodeConfig(), req.getTestCases());
         }
 
         boolean isOrdering = "ORDERING".equals(typeToValidate);
@@ -826,6 +826,37 @@ public class QuestionServiceImpl implements QuestionService {
     }
 
 
+
+    private void saveCodeConfigAndTestCases(Question q, CodeConfigDto cfgDto, List<TestCaseDto> tcDtos) {
+        String allowedLangsJson = cfgDto != null && cfgDto.getAllowedLanguages() != null ? serializeJson(cfgDto.getAllowedLanguages(), "allowedLanguages") : null;
+        CodeQuestionConfig config = CodeQuestionConfig.builder()
+                .questionId(q.getQuestionId())
+                .allowedLanguages(allowedLangsJson)
+                .codeTemplate(cfgDto != null ? cfgDto.getCodeTemplate() : null)
+                .timeLimitMs(cfgDto != null && cfgDto.getTimeLimitMs() != null ? cfgDto.getTimeLimitMs() : 5000)
+                .memoryLimitKb(cfgDto != null && cfgDto.getMemoryLimitKb() != null ? cfgDto.getMemoryLimitKb() : 262144)
+                .createdAt(Instant.now())
+                .updatedAt(Instant.now())
+                .build();
+        codeQuestionConfigRepository.save(config);
+
+        if (tcDtos != null && !tcDtos.isEmpty()) {
+            codeTestCaseRepository.deleteAll(codeTestCaseRepository.findByQuestionQuestionIdOrderByOrderIndexAscTestCaseIdAsc(q.getQuestionId()));
+            List<CodeTestCase> testCases = new ArrayList<>();
+            int order = 0;
+            for (TestCaseDto tcDto : tcDtos) {
+                testCases.add(CodeTestCase.builder()
+                        .question(q)
+                        .inputData(tcDto.getInputData() != null ? tcDto.getInputData() : "")
+                        .expectedOutput(tcDto.getExpectedOutput() != null ? tcDto.getExpectedOutput() : "")
+                        .hidden(Boolean.TRUE.equals(tcDto.getHidden()))
+                        .orderIndex(tcDto.getOrderIndex() != null ? tcDto.getOrderIndex() : order++)
+                        .createdAt(Instant.now())
+                        .build());
+            }
+            codeTestCaseRepository.saveAll(testCases);
+        }
+    }
 
     private QuestionDetailDto mapToDetailDto(Question q, List<AnswerOption> options) {
         Object metadataObj = parseJson(q.getQuestionMetadata());

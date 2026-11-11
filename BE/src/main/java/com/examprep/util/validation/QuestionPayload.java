@@ -1,6 +1,8 @@
 package com.examprep.util.validation;
 
 import com.examprep.dto.question.AnswerOptionDto;
+import com.examprep.dto.question.CodeConfigDto;
+import com.examprep.dto.question.TestCaseDto;
 import com.examprep.dto.question.QuestionCreateRequest;
 import com.examprep.dto.question.QuestionUpdateRequest;
 import com.examprep.entities.AnswerOption;
@@ -29,6 +31,8 @@ public class QuestionPayload {
     private Object essayGradingRubric;
     private List<AnswerOptionDto> options;
     private List<Object> correctOrder;
+    private CodeConfigDto codeConfig;
+    private List<TestCaseDto> testCases;
 
     public static QuestionPayload from(QuestionCreateRequest req) {
         if (req == null) return null;
@@ -42,6 +46,8 @@ public class QuestionPayload {
                 .essayGradingRubric(req.getEssayGradingRubric())
                 .options(req.getOptions())
                 .correctOrder(req.getCorrectOrder())
+                .codeConfig(req.getCodeConfig())
+                .testCases(req.getTestCases())
                 .build();
     }
 
@@ -57,6 +63,8 @@ public class QuestionPayload {
                 .essayGradingRubric(req.getEssayGradingRubric())
                 .options(req.getOptions())
                 .correctOrder(req.getCorrectOrder())
+                .codeConfig(req.getCodeConfig())
+                .testCases(req.getTestCases())
                 .build();
     }
 

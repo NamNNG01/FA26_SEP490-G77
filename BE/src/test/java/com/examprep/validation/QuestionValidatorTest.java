@@ -1,6 +1,8 @@
 package com.examprep.validation;
 
 import com.examprep.dto.question.AnswerOptionDto;
+import com.examprep.dto.question.CodeConfigDto;
+import com.examprep.dto.question.TestCaseDto;
 import com.examprep.util.validation.QuestionPayload;
 import com.examprep.util.validation.QuestionValidator;
 import com.examprep.util.validation.ValidationError;
@@ -32,13 +34,28 @@ class QuestionValidatorTest {
     @Test
     void testUnsupportedType() {
         QuestionPayload payload = QuestionPayload.builder()
-                .questionType("CODE")
+                .questionType("UNKNOWN_TYPE")
                 .content("Valid content")
                 .build();
         List<ValidationError> errors = validator.validate(payload);
         assertFalse(errors.isEmpty());
         assertEquals("questionType", errors.get(0).getPath());
         assertEquals("Question type not supported yet", errors.get(0).getMessage());
+    }
+
+    @Test
+    void testCodeHappyPath() {
+        QuestionPayload payload = QuestionPayload.builder()
+                .questionType("CODE")
+                .content("Two sum problem")
+                .codeConfig(CodeConfigDto.builder().allowedLanguages(List.of("JAVA")).timeLimitMs(2000).memoryLimitKb(131072).build())
+                .testCases(List.of(
+                        TestCaseDto.builder().inputData("1 2").expectedOutput("3").hidden(false).orderIndex(0).build(),
+                        TestCaseDto.builder().inputData("3 4").expectedOutput("7").hidden(true).orderIndex(1).build()
+                ))
+                .build();
+        List<ValidationError> errors = validator.validate(payload);
+        assertTrue(errors.isEmpty(), "Expected no validation errors for CODE, got: " + errors);
     }
 
     @Test

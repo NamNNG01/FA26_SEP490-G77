@@ -1,6 +1,9 @@
 package com.examprep.util.validation;
 
 import com.examprep.dto.question.AnswerOptionDto;
+import com.examprep.dto.question.CodeConfigDto;
+import com.examprep.dto.question.TestCaseDto;
+import com.examprep.services.PistonClient;
 import com.examprep.exceptions.BadRequestException;
 import com.examprep.exceptions.QuestionValidationException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -35,10 +38,7 @@ public class QuestionValidator {
         if (questionType == null || questionType.trim().isEmpty()) {
             throw new BadRequestException("Question type is required");
         }
-        if (questionType.equals("CODE")) {
-            throw new BadRequestException("Question type not supported yet");
-        }
-        if (!questionType.matches("SINGLE_CHOICE|MULTIPLE_CHOICE|TRUE_FALSE|MATCHING|FILL_BLANK|ESSAY|DIAGRAM|DIAGRAM_ESSAY|ORDERING")) {
+        if (!questionType.matches("SINGLE_CHOICE|MULTIPLE_CHOICE|TRUE_FALSE|MATCHING|FILL_BLANK|ESSAY|DIAGRAM|DIAGRAM_ESSAY|CODE|ORDERING")) {
             throw new BadRequestException("Question type not supported yet");
         }
     }
@@ -70,7 +70,7 @@ public class QuestionValidator {
             errors.add(new ValidationError(prefix + "questionType", "Question type is required"));
             return errors;
         }
-        if (type.equals("CODE") || !type.matches("SINGLE_CHOICE|MULTIPLE_CHOICE|TRUE_FALSE|MATCHING|FILL_BLANK|ESSAY|DIAGRAM|DIAGRAM_ESSAY|ORDERING")) {
+        if (!type.matches("SINGLE_CHOICE|MULTIPLE_CHOICE|TRUE_FALSE|MATCHING|FILL_BLANK|ESSAY|DIAGRAM|DIAGRAM_ESSAY|CODE|ORDERING")) {
             errors.add(new ValidationError(prefix + "questionType", "Question type not supported yet"));
             return errors;
         }
@@ -146,7 +146,7 @@ public class QuestionValidator {
         // 4. Type specific rules
         boolean hasOptionsType = type.equals("SINGLE_CHOICE") || type.equals("MULTIPLE_CHOICE") || type.equals("TRUE_FALSE");
         boolean isOrdering = type.equals("ORDERING");
-        boolean noOptionsType = type.equals("MATCHING") || type.equals("FILL_BLANK") || type.equals("ESSAY") || type.equals("DIAGRAM") || type.equals("DIAGRAM_ESSAY");
+        boolean noOptionsType = type.equals("MATCHING") || type.equals("FILL_BLANK") || type.equals("ESSAY") || type.equals("DIAGRAM") || type.equals("DIAGRAM_ESSAY") || type.equals("CODE");
 
         if (hasOptionsType) {
             if (payload.getAnswerKey() != null) {
@@ -305,6 +305,53 @@ public class QuestionValidator {
                 validateEssayRubric(payload.getEssayGradingRubric(), prefix + "essayGradingRubric", errors);
             } else if (type.equals("DIAGRAM_ESSAY")) {
                 validateEssayRubric(payload.getEssayGradingRubric(), prefix + "essayGradingRubric", errors);
+            } else if (type.equals("CODE")) {
+                if (payload.getCodeConfig() == null) {
+                    errors.add(new ValidationError(prefix + "codeConfig", "Code configuration is required for code questions"));
+                } else {
+                    CodeConfigDto cfg = payload.getCodeConfig();
+                    if (cfg.getTimeLimitMs() != null && (cfg.getTimeLimitMs() < 1 || cfg.getTimeLimitMs() > 30000)) {
+                        errors.add(new ValidationError(prefix + "codeConfig.timeLimitMs", "Time limit must be between 1 and 30000 ms"));
+                    }
+                    if (cfg.getMemoryLimitKb() != null && cfg.getMemoryLimitKb() < 1) {
+                        errors.add(new ValidationError(prefix + "codeConfig.memoryLimitKb", "Memory limit must be positive"));
+                    }
+                    if (cfg.getAllowedLanguages() != null) {
+                        for (String lang : cfg.getAllowedLanguages()) {
+                            if (!PistonClient.supports(lang)) {
+                                errors.add(new ValidationError(prefix + "codeConfig.allowedLanguages", "Unsupported language: " + lang));
+                            }
+                        }
+                    }
+                }
+                if (payload.getTestCases() == null || payload.getTestCases().isEmpty()) {
+                    errors.add(new ValidationError(prefix + "testCases", "At least one test case is required for code questions"));
+                } else {
+                    boolean hasSample = false;
+                    boolean hasHidden = false;
+                    for (int i = 0; i < payload.getTestCases().size(); i++) {
+                        TestCaseDto tc = payload.getTestCases().get(i);
+                        String tcPrefix = prefix + "testCases[" + i + "].";
+                        if (tc == null) continue;
+                        if (tc.getInputData() == null) {
+                            errors.add(new ValidationError(tcPrefix + "inputData", "Test case input data is required"));
+                        }
+                        if (tc.getExpectedOutput() == null || tc.getExpectedOutput().trim().isEmpty()) {
+                            errors.add(new ValidationError(tcPrefix + "expectedOutput", "Test case expected output is required"));
+                        }
+                        if (Boolean.TRUE.equals(tc.getHidden())) {
+                            hasHidden = true;
+                        } else {
+                            hasSample = true;
+                        }
+                    }
+                    if (!hasSample) {
+                        errors.add(new ValidationError(prefix + "testCases", "Code question must have at least one sample test case"));
+                    }
+                    if (!hasHidden) {
+                        errors.add(new ValidationError(prefix + "testCases", "Code question must have at least one hidden test case"));
+                    }
+                }
             } else if (type.equals("MATCHING")) {
                 validateMatchingAnswerKey(payload.getAnswerKey(), prefix + "answerKey", errors);
             } else if (type.equals("FILL_BLANK")) {
