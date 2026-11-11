@@ -31,6 +31,7 @@ const QUESTION_TYPE_LABEL: Record<string, string> = {
   ORDERING: 'Ordering',
   ESSAY: 'Essay',
   DIAGRAM: 'Diagram',
+  DIAGRAM_ESSAY: 'Diagram + Essay',
 };
 
 /**

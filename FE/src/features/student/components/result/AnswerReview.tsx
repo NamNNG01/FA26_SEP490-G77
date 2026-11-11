@@ -84,6 +84,27 @@ export function AnswerReview({ question, hideVerdict = false }: { question: Resu
   if (q.questionType === 'MATCHING') return <MatchingReview question={q} />;
   if (q.questionType === 'FILL_BLANK') return <FillBlankReview question={q} />;
 
+  // Diagram + essay: the diagram, then the written explanation below it.
+  if (answered && q.questionType === 'DIAGRAM_ESSAY') {
+    return (
+      <div className="space-y-3">
+        <div>
+          <p className="text-xs font-semibold text-content-subtle uppercase tracking-wide mb-1">Your diagram</p>
+          {r?.drawioXml?.trim() ? (
+            <DiagramReview xml={r.drawioXml} />
+          ) : (
+            <p className="rounded-[10px] border border-dashed border-line px-3 py-4 text-center text-sm text-content-subtle">No diagram drawn.</p>
+          )}
+        </div>
+        {r?.text?.trim() ? (
+          <WrittenAnswer text={r.text} code={false} />
+        ) : (
+          <p className="rounded-[10px] border border-dashed border-line px-3 py-4 text-center text-sm text-content-subtle">No written explanation.</p>
+        )}
+      </div>
+    );
+  }
+
   if (answered && q.questionType !== 'DIAGRAM') return <WrittenAnswer text={r?.text ?? ''} code={q.questionType === 'CODE'} />;
 
   return (
