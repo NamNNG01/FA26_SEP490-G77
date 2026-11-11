@@ -251,6 +251,25 @@ export function QuestionForm({
         </div>
       )}
 
+      {/* Difficulty and type first: the type decides what the rest of the form asks for. */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <Select
+          label="Difficulty"
+          value={q.difficulty}
+          onChange={(v) => set({ difficulty: v as QuestionDifficulty })}
+          options={DIFFICULTY_OPTIONS}
+        />
+        <Select
+          label="Type"
+          value={q.type}
+          onChange={(v) => onChange(changeType(q, v as EditableQuestionType))}
+          options={typeOptions}
+          invalid={Boolean(kindError)}
+        />
+      </div>
+
+      {typeError && <p className="text-xs text-danger -mt-1.5">{typeError}</p>}
+
       {/* Question text */}
       <div>
         <div className="flex items-center justify-between mb-1">
@@ -295,24 +314,6 @@ export function QuestionForm({
           <p className="text-xs text-danger mt-1">{contentError}</p>
         )}
       </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <Select
-          label="Difficulty"
-          value={q.difficulty}
-          onChange={(v) => set({ difficulty: v as QuestionDifficulty })}
-          options={DIFFICULTY_OPTIONS}
-        />
-        <Select
-          label="Type"
-          value={q.type}
-          onChange={(v) => onChange(changeType(q, v as EditableQuestionType))}
-          options={typeOptions}
-          invalid={Boolean(kindError)}
-        />
-      </div>
-
-      {typeError && <p className="text-xs text-danger -mt-1.5">{typeError}</p>}
 
       <AnswerSection q={q} set={set} error={answersError} />
 
