@@ -1,5 +1,6 @@
 package com.examprep.dto.question;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -27,4 +28,13 @@ public class QuestionUpdateRequest {
     private CodeConfigDto codeConfig;
     private List<TestCaseDto> testCases;
     private Long lockVersion;
+
+    /** True once groupId was set, so an explicit {@code "groupId": null} detaches the group and a missing one keeps it. */
+    @JsonIgnore
+    private boolean groupIdPresent;
+
+    public void setGroupId(Long groupId) {
+        this.groupId = groupId;
+        this.groupIdPresent = true;
+    }
 }
