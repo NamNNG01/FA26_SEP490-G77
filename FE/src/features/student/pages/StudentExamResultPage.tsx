@@ -28,8 +28,8 @@ import { QuestionNav, ResultPalette, useArrowKeyNav, type OutcomeMeta } from '..
 import { SAVABLE_QUESTION_TYPES } from '@/services/studentDeck.service';
 import { SaveToFlashcardsModal } from '../components/flashcards/SaveToFlashcardsModal';
 import { RetryWrongQuestionsModal } from '../components/RetryWrongQuestionsModal';
-import { studentCodeExamService, type CodeLanguageInfo, type CodeSubmission } from '@/services/studentCodeExam.service';
-import { CodeSubmissionHistory, CodeTestCaseStatus, latestSubmissionBefore } from '../components/code/CodeSubmissionHistory';
+import { studentCodeExamService, type CodeSubmission } from '@/services/studentCodeExam.service';
+import { CodeTestCaseStatus, latestSubmissionBefore } from '../components/code/CodeTestCaseStatus';
 import { studentProgressService } from '@/services/studentProgress.service';
 import { ReportQuestionIssueButton } from '../components/ReportQuestionIssueDialog';
 
@@ -290,18 +290,16 @@ export function StudentExamResultPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [examId, reload]);
 
-  /** CD-07 of the exam (every attempt) and CD-06; null until loaded, or when the exam has no CODE question / they failed. */
+  /** CD-07 of the exam (every attempt); null until loaded, or when the exam has no CODE question / it failed. */
   const [codeSubs, setCodeSubs] = useState<CodeSubmission[] | null>(null);
-  const [codeLanguages, setCodeLanguages] = useState<CodeLanguageInfo[]>([]);
   const resultHasCode = Boolean(result?.questions.some(x => x.questionType === 'CODE'));
   useEffect(() => {
     if (!examId || !resultHasCode) return;
     let cancelled = false;
-    Promise.allSettled([studentCodeExamService.getAllSubmissions(examId), studentCodeExamService.getLanguages()]).then(([subs, langs]) => {
-      if (cancelled) return;
-      setCodeSubs(subs.status === 'fulfilled' ? subs.value : null);
-      if (langs.status === 'fulfilled') setCodeLanguages(langs.value);
-    });
+    studentCodeExamService.getAllSubmissions(examId).then(
+      subs => !cancelled && setCodeSubs(subs),
+      () => !cancelled && setCodeSubs(null),
+    );
     return () => {
       cancelled = true;
     };
@@ -700,17 +698,6 @@ export function StudentExamResultPage() {
           )}
         </section>
       </div>
-
-      {codeSubs && (
-        <CodeSubmissionHistory
-          submissions={codeSubs}
-          languages={codeLanguages}
-          questions={result.questions
-            .map((x, i) => ({ x, i }))
-            .filter(({ x }) => x.questionType === 'CODE')
-            .map(({ x, i }) => ({ questionId: x.questionId, label: `Q${i + 1} · ${truncate(x.content, 40)}` }))}
-        />
-      )}
 
       {saveQuestions && (
         <SaveToFlashcardsModal
@@ -1231,12 +1218,6 @@ function ExplanationBox({
       )}
     </div>
   );
-}
-
-/** First `max` characters of a question on one line, for filter labels. */
-function truncate(text: string, max: number): string {
-  const line = text.replace(/\s+/g, ' ').trim();
-  return line.length > max ? `${line.slice(0, max - 1)}…` : line;
 }
 
 interface UnfinishedAttempt {
