@@ -172,7 +172,7 @@ export function ExamListPage() {
           });
           allAssessments.push(
             ...(response.content || []).filter(
-              (exam) => exam.examKind !== "QUIZ" && exam.examKind !== "CODE",
+              (exam) => exam.examKind !== "QUIZ",
             ),
           );
           hasMore = !response.last && response.content.length > 0;
@@ -326,8 +326,9 @@ export function ExamListPage() {
   const handleEditExam = (exam: ExamListItem) => {
     if (exam.examKind === "QUIZ") {
       navigate(`/manager/exams/quiz/${exam.examId}`);
-    } else if (exam.examKind !== "CODE")
+    } else {
       navigate(`/manager/exams/essay/${exam.examId}`);
+    }
   };
 
   const handleApplyStatusChange = async () => {
@@ -670,8 +671,6 @@ export function ExamListPage() {
               <tbody className="divide-y divide-line-faint text-sm">
                 {exams.map((exam) => {
                   const isChecked = selectedExamIds.has(exam.examId);
-                  const isSupportedKind = exam.examKind !== "CODE";
-
                   return (
                     <tr
                       key={exam.examId}
@@ -760,11 +759,8 @@ export function ExamListPage() {
                           }
                           items={[
                             {
-                              label: isSupportedKind
-                                ? "Edit"
-                                : "Edit (Later Version)",
+                              label: "Edit",
                               icon: <Icon.Edit className="w-4 h-4" />,
-                              disabled: !isSupportedKind,
                               onClick: () => handleEditExam(exam),
                             },
                             {
