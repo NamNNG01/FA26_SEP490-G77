@@ -15,6 +15,7 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
@@ -95,6 +96,15 @@ public class GlobalExceptionHandler {
                         .message("Validation failed for request parameters")
                         .data(errors)
                         .build());
+    }
+
+    @ExceptionHandler(HandlerMethodValidationException.class)
+    public ResponseEntity<ApiResponse<Object>> handleHandlerMethodValidation(HandlerMethodValidationException ex) {
+        log.warn("Method Validation Error: {}", ex.getMessage());
+        return ResponseEntity.status(ResponseCode.VALIDATION_ERROR.getHttpStatus())
+                .body(ApiResponse.<Object>builder().success(false)
+                        .message("Validation failed for request parameters")
+                        .data(Map.of()).build());
     }
 
     @ExceptionHandler(AccessDeniedException.class)

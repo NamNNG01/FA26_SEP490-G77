@@ -92,6 +92,11 @@ public class QuestionReviewRecorder {
             case "FILL_BLANK" -> blanks(r.path("blanks"));
             case "MATCHING" -> matches(r.path("matches"));
             case "DIAGRAM" -> r.path("drawioXml").asText("").isBlank() ? "" : "(bản vẽ)";
+            case "DIAGRAM_ESSAY" -> {
+                String answerText = r.path("text").asText("");
+                boolean hasDrawing = !r.path("drawioXml").asText("").isBlank();
+                yield hasDrawing ? (answerText.isBlank() ? "(bản vẽ)" : answerText + " (bản vẽ)") : answerText;
+            }
             default -> r.path("text").asText("");
         };
         return clip(text, "(bỏ trống)");

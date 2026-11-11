@@ -260,11 +260,11 @@ public class AttemptPaperFactory {
             blanks = blanks(answerKey.get("blanks"));
         }
 
-        if ("ESSAY".equals(type) || "DIAGRAM".equals(type) || "CODE".equals(type)) {
+        if ("ESSAY".equals(type) || "DIAGRAM".equals(type) || "DIAGRAM_ESSAY".equals(type) || "CODE".equals(type)) {
             rubric = rubric(question.getEssayGradingRubric());
         }
 
-        if ("DIAGRAM".equals(type)) {
+        if ("DIAGRAM".equals(type) || "DIAGRAM_ESSAY".equals(type)) {
             Map<String, Object> metadata = readMap(question.getQuestionMetadata());
             if (metadata != null) {
                 Object value = metadata.get("drawioXml");
@@ -308,7 +308,7 @@ public class AttemptPaperFactory {
             matching = new Snapshots.Matching(shuffler.shuffle(lefts), shuffler.shuffle(rights));
         }
 
-        if ("ESSAY".equals(type) || "CODE".equals(type)) {
+        if ("ESSAY".equals(type) || "DIAGRAM_ESSAY".equals(type) || "CODE".equals(type)) {
             answerSpace = new Snapshots.AnswerSpace(AnswerResponseValidator.ESSAY_MAX_CHARS);
         }
 

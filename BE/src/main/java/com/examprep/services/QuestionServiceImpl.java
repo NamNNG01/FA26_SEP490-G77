@@ -466,6 +466,12 @@ public class QuestionServiceImpl implements QuestionService {
         String contentToValidate = req.getContent() != null ? req.getContent() : q.getContent();
         String difficultyToValidate = req.getDifficulty() != null ? req.getDifficulty() : q.getDifficulty();
         String statusToValidate = req.getStatus() != null ? req.getStatus() : q.getStatus();
+        CodeConfigDto codeConfigToValidate = "CODE".equals(typeToValidate)
+                ? (req.getCodeConfig() != null ? req.getCodeConfig() : loadCodeConfig(q))
+                : req.getCodeConfig();
+        List<TestCaseDto> testCasesToValidate = "CODE".equals(typeToValidate)
+                ? (req.getTestCases() != null ? req.getTestCases() : loadTestCases(q))
+                : req.getTestCases();
 
         QuestionPayload payload = QuestionPayload.builder()
                 .questionType(typeToValidate)
@@ -476,6 +482,8 @@ public class QuestionServiceImpl implements QuestionService {
                 .answerKey(answerKeyToValidate)
                 .essayGradingRubric(rubricToValidate)
                 .options(optionsToValidate)
+                .codeConfig(codeConfigToValidate)
+                .testCases(testCasesToValidate)
                 .build();
 
         questionValidator.validateOrThrow(payload);
@@ -483,7 +491,7 @@ public class QuestionServiceImpl implements QuestionService {
         List<String> optionTextsForHash = optionsToValidate.stream().map(AnswerOptionDto::getOptionText).collect(Collectors.toList());
         String newHash = ContentHashUtil.computeHash(contentToValidate, optionTextsForHash);
         Long courseId = q.getCourse() != null ? q.getCourse().getCourseId() : null;
-        if (courseId != null) {
+        if (courseId != null && !Objects.equals(newHash, q.getContentHash())) {
             List<Long> duplicateIds = questionRepository.findDuplicateQuestionIds(courseId, newHash, q.getQuestionId(), Pageable.ofSize(1));
             if (!duplicateIds.isEmpty()) {
                 throw new ResourceConflictException("Question already exists in course");
@@ -506,7 +514,8 @@ public class QuestionServiceImpl implements QuestionService {
             validateMetadataKeys(req.getQuestionMetadata());
             String metaJson = serializeJson(req.getQuestionMetadata(), "questionMetadata");
             if (!metaJson.equals(q.getQuestionMetadata())) {
-                if ("DIAGRAM".equals(typeToValidate) && diagramXmlChanged(q.getQuestionMetadata(), metaJson)) {
+                if (("DIAGRAM".equals(typeToValidate) || "DIAGRAM_ESSAY".equals(typeToValidate))
+                        && diagramXmlChanged(q.getQuestionMetadata(), metaJson)) {
                     scoreAffectingChanged = true;
                 }
                 q.setQuestionMetadata(metaJson);
@@ -834,6 +843,8 @@ public class QuestionServiceImpl implements QuestionService {
             }
             List<AnswerOption> options = answerOptionRepository.findByQuestion_QuestionId(q.getQuestionId());
             QuestionPayload payload = QuestionPayload.fromEntity(q, options, objectMapper);
+            payload.setCodeConfig(loadCodeConfig(q));
+            payload.setTestCases(loadTestCases(q));
             questionValidator.validateOrThrow(payload);
         } else if ("ACTIVE".equals(currentStatus) && "ARCHIVED".equals(newStatus)) {
             // Allowed: ACTIVE -> ARCHIVED
@@ -869,19 +880,22 @@ public class QuestionServiceImpl implements QuestionService {
 
 
     private void saveCodeConfigAndTestCases(Question q, CodeConfigDto cfgDto, List<TestCaseDto> tcDtos) {
-        String allowedLangsJson = cfgDto != null && cfgDto.getAllowedLanguages() != null ? serializeJson(cfgDto.getAllowedLanguages(), "allowedLanguages") : null;
-        CodeQuestionConfig config = CodeQuestionConfig.builder()
-                .questionId(q.getQuestionId())
-                .allowedLanguages(allowedLangsJson)
-                .codeTemplate(cfgDto != null ? cfgDto.getCodeTemplate() : null)
-                .timeLimitMs(cfgDto != null && cfgDto.getTimeLimitMs() != null ? cfgDto.getTimeLimitMs() : 5000)
-                .memoryLimitKb(cfgDto != null && cfgDto.getMemoryLimitKb() != null ? cfgDto.getMemoryLimitKb() : 262144)
-                .createdAt(Instant.now())
-                .updatedAt(Instant.now())
-                .build();
-        codeQuestionConfigRepository.save(config);
+        if (cfgDto != null) {
+            String allowedLangsJson = cfgDto.getAllowedLanguages() != null
+                    ? serializeJson(cfgDto.getAllowedLanguages(), "allowedLanguages") : null;
+            CodeQuestionConfig config = CodeQuestionConfig.builder()
+                    .questionId(q.getQuestionId())
+                    .allowedLanguages(allowedLangsJson)
+                    .codeTemplate(cfgDto.getCodeTemplate())
+                    .timeLimitMs(cfgDto.getTimeLimitMs() != null ? cfgDto.getTimeLimitMs() : 5000)
+                    .memoryLimitKb(cfgDto.getMemoryLimitKb() != null ? cfgDto.getMemoryLimitKb() : 262144)
+                    .createdAt(Instant.now())
+                    .updatedAt(Instant.now())
+                    .build();
+            codeQuestionConfigRepository.save(config);
+        }
 
-        if (tcDtos != null && !tcDtos.isEmpty()) {
+        if (tcDtos != null) {
             codeTestCaseRepository.deleteAll(codeTestCaseRepository.findByQuestionQuestionIdOrderByOrderIndexAscTestCaseIdAsc(q.getQuestionId()));
             List<CodeTestCase> testCases = new ArrayList<>();
             int order = 0;
@@ -899,6 +913,28 @@ public class QuestionServiceImpl implements QuestionService {
         }
     }
 
+    private CodeConfigDto loadCodeConfig(Question q) {
+        CodeQuestionConfig cfg = codeQuestionConfigRepository.findById(q.getQuestionId()).orElse(null);
+        if (cfg == null) return null;
+        List<String> languages = null;
+        try {
+            if (cfg.getAllowedLanguages() != null && !cfg.getAllowedLanguages().isBlank()) {
+                languages = objectMapper.readValue(cfg.getAllowedLanguages(), new TypeReference<List<String>>() {});
+            }
+        } catch (Exception ex) {
+            log.warn("Could not read allowed languages for code question {}", q.getQuestionId(), ex);
+        }
+        return CodeConfigDto.builder().allowedLanguages(languages).codeTemplate(cfg.getCodeTemplate())
+                .timeLimitMs(cfg.getTimeLimitMs()).memoryLimitKb(cfg.getMemoryLimitKb()).build();
+    }
+
+    private List<TestCaseDto> loadTestCases(Question q) {
+        return codeTestCaseRepository.findByQuestionQuestionIdOrderByOrderIndexAscTestCaseIdAsc(q.getQuestionId())
+                .stream().map(tc -> TestCaseDto.builder().testCaseId(tc.getTestCaseId())
+                        .inputData(tc.getInputData()).expectedOutput(tc.getExpectedOutput())
+                        .hidden(tc.getHidden()).orderIndex(tc.getOrderIndex()).build()).toList();
+    }
+
     private QuestionDetailDto mapToDetailDto(Question q, List<AnswerOption> options) {
         Object metadataObj = parseJson(q.getQuestionMetadata());
         Object answerKeyObj = parseJson(q.getAnswerKey());
@@ -913,34 +949,11 @@ public class QuestionServiceImpl implements QuestionService {
                 .orderIndex(o.getOrderIndex())
                 .build()).collect(Collectors.toList());
 
-        CodeConfigDto codeConfig = null;
-        if ("CODE".equals(q.getQuestionType())) {
-            CodeQuestionConfig cfg = codeQuestionConfigRepository.findById(q.getQuestionId()).orElse(null);
-            if (cfg != null) {
-                List<String> langs = null;
-                try {
-                    if (cfg.getAllowedLanguages() != null && !cfg.getAllowedLanguages().isBlank()) {
-                        langs = objectMapper.readValue(cfg.getAllowedLanguages(), new TypeReference<List<String>>() {});
-                    }
-                } catch (Exception ignored) {}
-                codeConfig = CodeConfigDto.builder()
-                        .allowedLanguages(langs)
-                        .codeTemplate(cfg.getCodeTemplate())
-                        .timeLimitMs(cfg.getTimeLimitMs())
-                        .memoryLimitKb(cfg.getMemoryLimitKb())
-                        .build();
-            }
-        }
+        CodeConfigDto codeConfig = "CODE".equals(q.getQuestionType()) ? loadCodeConfig(q) : null;
 
         List<TestCaseDto> testCases = null;
         if ("CODE".equals(q.getQuestionType())) {
-            List<CodeTestCase> cases = codeTestCaseRepository.findByQuestionQuestionIdOrderByOrderIndexAscTestCaseIdAsc(q.getQuestionId());
-            testCases = cases.stream().map(tc -> TestCaseDto.builder()
-                    .inputData(tc.getInputData())
-                    .expectedOutput(tc.getExpectedOutput())
-                    .hidden(tc.getHidden())
-                    .orderIndex(tc.getOrderIndex())
-                    .build()).collect(Collectors.toList());
+            testCases = loadTestCases(q);
         }
 
         return QuestionDetailDto.builder()

@@ -11,5 +11,6 @@ public record MyExamDto(
         Long attemptCount,
         BigDecimal bestScore,
         /** Exam.mode: EXAM, PRACTICE, PRACTICE_EXAM, SMART_PRACTICE, MATERIAL_QUIZ. */
-        String mode
+        String mode,
+        Boolean hasCodeQuestions
 ) {}

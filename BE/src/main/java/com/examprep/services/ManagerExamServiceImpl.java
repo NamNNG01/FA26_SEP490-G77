@@ -43,7 +43,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Transactional(readOnly=true)
 public class ManagerExamServiceImpl implements ManagerExamService {
-    private static final Set<String> TYPES=Set.of("SINGLE_CHOICE","MULTIPLE_CHOICE","TRUE_FALSE","FILL_BLANK","MATCHING","ORDERING","ESSAY","CODE","DIAGRAM");
+    private static final Set<String> TYPES=Set.of("SINGLE_CHOICE","MULTIPLE_CHOICE","TRUE_FALSE","FILL_BLANK","MATCHING","ORDERING","ESSAY","CODE","DIAGRAM","DIAGRAM_ESSAY");
     private static final List<String> KINDS=List.of("QUIZ","ESSAY","CODE","DIAGRAM");
     private final ExamRepository exams;
     private final ExamQuestionRepository links;
@@ -265,6 +265,9 @@ public class ManagerExamServiceImpl implements ManagerExamService {
             }
 
             if (kind != null && !kind.equals("all")) {
+                if (!kind.equals("ESSAY")) {
+                    where.add(cb.not(familyPresent(root, query, cb, "DIAGRAM_ESSAY")));
+                }
                 List<Predicate> present = KINDS.stream()
                         .map(k -> familyPresent(root, query, cb, k))
                         .toList();
@@ -285,7 +288,8 @@ public class ManagerExamServiceImpl implements ManagerExamService {
                     int index = KINDS.indexOf(kind);
                     // An ESSAY exam is made of essay and/or diagram questions.
                     where.add(kind.equals("ESSAY")
-                            ? cb.or(present.get(index), present.get(KINDS.indexOf("DIAGRAM")))
+                            ? cb.or(present.get(index), present.get(KINDS.indexOf("DIAGRAM")),
+                                    familyPresent(root, query, cb, "DIAGRAM_ESSAY"))
                             : present.get(index));
                 }
             }
@@ -356,7 +360,7 @@ public class ManagerExamServiceImpl implements ManagerExamService {
         return cb.or(cb.exists(q),cb.exists(conf));
     }
     private Predicate familyPredicate(Path<String> type,CriteriaBuilder cb,String kind) {
-        if (kind.equals("QUIZ")) return cb.not(type.in("ESSAY","CODE","DIAGRAM"));
+        if (kind.equals("QUIZ")) return cb.not(type.in("ESSAY","CODE","DIAGRAM","DIAGRAM_ESSAY"));
         return cb.equal(type,kind);
     }
 
@@ -599,7 +603,7 @@ public class ManagerExamServiceImpl implements ManagerExamService {
         e.setStatus(r.status());
         exams.flush();        List<String> warnings=new ArrayList<>();
         if(r.status().equals("PUBLISHED")) for(Question question:examQuestions(e).values())
-            if(Set.of("ESSAY","DIAGRAM").contains(question.getQuestionType()) && (question.getEssayGradingRubric()==null || question.getEssayGradingRubric().isBlank()))
+            if(Set.of("ESSAY","DIAGRAM","DIAGRAM_ESSAY").contains(question.getQuestionType()) && (question.getEssayGradingRubric()==null || question.getEssayGradingRubric().isBlank()))
                 warnings.add("Question "+question.getQuestionId()+" has no rubric.");
         return new ExamResponse.Published(id,e.getTitle(),e.getStatus(),state.questionCount(),warnings);
     }
@@ -669,7 +673,7 @@ public class ManagerExamServiceImpl implements ManagerExamService {
 
     @Override @Transactional public Map<String,Object> rubric(UserPrincipal user,Long id,ExamRequests.Rubric r) {
         Question q=question(id); questionAccess(user,q);
-        if(!Set.of("ESSAY","DIAGRAM","CODE").contains(q.getQuestionType())) throw bad("This question type does not use a rubric.");
+        if(!Set.of("ESSAY","DIAGRAM","DIAGRAM_ESSAY","CODE").contains(q.getQuestionType())) throw bad("This question type does not use a rubric.");
         ExamRequests.Rubric normalized=new ExamRequests.Rubric(r.criteria(),r.notes());
         try { q.setEssayGradingRubric(json.writeValueAsString(normalized)); questions.flush(); }
         catch(JsonProcessingException ex) { throw bad("Could not encode rubric."); }

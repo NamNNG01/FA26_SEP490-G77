@@ -3,8 +3,8 @@ Course / Module: chọn trên giao diện (không ghi trong file)
 
 Quy tắc ngắn:
 - Mỗi câu bắt đầu bằng dòng [TYPE: ...], kết thúc khi gặp [TYPE: ...] tiếp theo hoặc hết file.
-- Dòng tùy chọn: DIFFICULTY: EASY | MEDIUM | HARD ; POINTS: số ; EXPLANATION: giải thích.
-- Điểm mặc định: 1 (riêng ESSAY bắt buộc có POINTS).
+- Dòng tùy chọn: DIFFICULTY: EASY | MEDIUM | HARD ; EXPLANATION: giải thích.
+- POINTS không còn hỗ trợ trong file; điểm câu hỏi được đặt khi thêm vào đề thi.
 
 PART 1 — SINGLE_CHOICE
 
@@ -70,7 +70,6 @@ PART 7 — ESSAY
 
 [TYPE: ESSAY]
 Q7. Explain why Java uses garbage collection and what trade-off it brings.
-POINTS: 4
 RUBRIC:
 - Memory management | 2 | Explains that unreachable objects are reclaimed automatically
 - Trade-off | 2 | Mentions pause time or runtime overhead
@@ -78,3 +77,32 @@ SAMPLE:
 Java reclaims memory of objects that are no longer referenced, so developers
 do not free memory manually. The cost is that collection runs at unpredictable
 times and can cause pauses.
+
+PART 8 — CODE
+
+For a code question, include one CODE_CONFIG line containing a JSON object and 3-6 TEST_CASE lines.
+Each test case must have inputData, expectedOutput and hidden. Include at least one sample (hidden=false)
+and one hidden test (hidden=true). codeTemplate, timeLimitMs and memoryLimitKb may be set in CODE_CONFIG.
+
+[TYPE: CODE]
+Q8. Read two integers from stdin and print their sum.
+DIFFICULTY: MEDIUM
+CODE_CONFIG: {"allowedLanguages":["JAVA","PYTHON"],"codeTemplate":"","timeLimitMs":5000,"memoryLimitKb":262144}
+TEST_CASE: {"inputData":"2 3\n","expectedOutput":"5","hidden":false}
+TEST_CASE: {"inputData":"-4 1\n","expectedOutput":"-3","hidden":true}
+TEST_CASE: {"inputData":"0 0\n","expectedOutput":"0","hidden":true}
+
+PART 9 — DIAGRAM and DIAGRAM_ESSAY
+
+Provide draw.io XML on DIAGRAM_XML:; XML may continue on following lines until the next block field.
+Both types require a RUBRIC. DIAGRAM_ESSAY requires both a drawing and written explanation during an attempt.
+
+[TYPE: DIAGRAM_ESSAY]
+Q9. Draw a class diagram for the described library and explain the relationships.
+DIAGRAM_XML: <mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel>
+RUBRIC:
+- Classes and attributes | 2 | Includes the required classes and attributes.
+- Relationships | 3 | Uses correct associations and multiplicities.
+- Explanation | 2 | Explains the design choices clearly.
+SAMPLE:
+The library separates books from physical copies so each title can have multiple lendable copies.

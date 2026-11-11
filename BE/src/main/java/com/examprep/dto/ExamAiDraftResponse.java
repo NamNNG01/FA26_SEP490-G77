@@ -1,5 +1,7 @@
 package com.examprep.dto;
 
+import com.examprep.dto.question.CodeConfigDto;
+import com.examprep.dto.question.TestCaseDto;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.math.BigDecimal;
@@ -11,7 +13,8 @@ public record ExamAiDraftResponse(String fileName, String title, String descript
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record DraftQuestion(String content, String questionType, String difficulty,
             List<Option> options, JsonNode answerKey, String explanation, JsonNode questionMetadata,
-            JsonNode essayGradingRubric, JsonNode graph) { }
+            JsonNode essayGradingRubric, JsonNode graph, CodeConfigDto codeConfig,
+            List<TestCaseDto> testCases) { }
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record Option(String optionText, Boolean isCorrect, Integer orderIndex) { }
 }

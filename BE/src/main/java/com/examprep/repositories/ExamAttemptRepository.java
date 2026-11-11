@@ -121,17 +121,23 @@ public interface ExamAttemptRepository extends JpaRepository<ExamAttempt, Long> 
         c.courseId,
         c.title,
         ex.maxScore,
-        COUNT(att),
+        COUNT(DISTINCT att.attemptId),
         MAX(CASE
             WHEN att.status IN ('SUBMITTED', 'GRADING', 'COMPLETED')
             THEN att.totalScore
             ELSE NULL
         END),
-        ex.mode
+        ex.mode,
+        CASE WHEN COUNT(DISTINCT CASE WHEN q.questionType = 'CODE' THEN q.questionId ELSE NULL END) > 0
+                   OR COUNT(DISTINCT CASE WHEN ec.questionType = 'CODE' THEN ec.configId ELSE NULL END) > 0
+             THEN true ELSE false END
     )
     FROM ExamAttempt att
     JOIN att.exam ex
     LEFT JOIN ex.course c
+    LEFT JOIN ExamQuestion eq ON eq.exam = ex
+    LEFT JOIN eq.question q
+    LEFT JOIN ExamConfig ec ON ec.exam = ex
     WHERE att.user.userId = :userId AND (att.mode IS NULL OR att.mode <> 'REVIEW')
     GROUP BY ex.examId, ex.title, c.courseId, c.title, ex.maxScore, ex.mode
     ORDER BY MAX(att.startTime) DESC

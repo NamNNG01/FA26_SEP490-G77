@@ -42,7 +42,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @Slf4j
 @Service
 public class StudentAiServiceImpl implements StudentAiService {
-    private static final Set<String> RUBRIC_TYPES = Set.of("ESSAY", "DIAGRAM");
+    private static final Set<String> RUBRIC_TYPES = Set.of("ESSAY", "DIAGRAM", "DIAGRAM_ESSAY");
     private static final int EXPLANATION_LOT = 10;
     private static final int LOT_ENVELOPE_TOKENS = 100;
     private static final int MAX_EXPLANATION_CHARS = 4000;

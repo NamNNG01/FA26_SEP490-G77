@@ -66,7 +66,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class ModulePracticeAiServiceImpl implements ModulePracticeAiService {
 
     /** Types whose answer is prose or a drawing: a written "correct answer" does not exist. */
-    private static final Set<String> RUBRIC_TYPES = Set.of("ESSAY", "DIAGRAM", "CODE");
+    private static final Set<String> RUBRIC_TYPES = Set.of("ESSAY", "DIAGRAM", "DIAGRAM_ESSAY", "CODE");
     private static final int LOT_ENVELOPE_TOKENS = 100;
     private static final int MAX_EXPLANATION_CHARS = 4000;
 

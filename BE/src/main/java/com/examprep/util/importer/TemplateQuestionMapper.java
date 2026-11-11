@@ -1,12 +1,15 @@
 package com.examprep.util.importer;
 
 import com.examprep.dto.question.AnswerOptionDto;
+import com.examprep.dto.question.CodeConfigDto;
 import com.examprep.dto.question.ImportBlockResult;
 import com.examprep.dto.question.ImportErrorDto;
 import com.examprep.dto.question.QuestionCreateRequest;
+import com.examprep.dto.question.TestCaseDto;
 import com.examprep.util.validation.QuestionPayload;
 import com.examprep.util.validation.QuestionValidator;
 import com.examprep.util.validation.ValidationError;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -21,9 +24,11 @@ import java.util.stream.Collectors;
 public class TemplateQuestionMapper {
 
     private final QuestionValidator questionValidator;
+    private final ObjectMapper objectMapper;
 
     private static final Set<String> SUPPORTED_TYPES = Set.of(
-            "SINGLE_CHOICE", "MULTIPLE_CHOICE", "TRUE_FALSE", "MATCHING", "FILL_BLANK", "ESSAY", "ORDERING"
+            "SINGLE_CHOICE", "MULTIPLE_CHOICE", "TRUE_FALSE", "MATCHING", "FILL_BLANK", "ESSAY", "ORDERING",
+            "CODE", "DIAGRAM", "DIAGRAM_ESSAY"
     );
 
     public ImportBlockResult mapAndValidateBlock(TemplateBlockParser.RawBlock rawBlock, int blockIndex, String defaultDifficulty) {
@@ -31,7 +36,7 @@ public class TemplateQuestionMapper {
         int startLine = rawBlock.getStartLine();
         String qType = rawBlock.getQuestionType();
 
-        if (qType.equals("CODE") || !SUPPORTED_TYPES.contains(qType)) {
+        if (!SUPPORTED_TYPES.contains(qType)) {
             errors.add(new ImportErrorDto("questionType", "Question type not supported yet", startLine));
             return ImportBlockResult.builder()
                     .index(blockIndex)
@@ -88,6 +93,10 @@ public class TemplateQuestionMapper {
         List<String[]> matchingRightRaw = new ArrayList<>(); // num -> text
         List<String> rubricLines = new ArrayList<>();
         List<String> sampleLines = new ArrayList<>();
+        List<String> testCaseJson = new ArrayList<>();
+        String codeConfigJson = null;
+        StringBuilder diagramXml = new StringBuilder();
+        boolean parsingDiagramXml = false;
 
         boolean parsingContent = true;
         boolean parsingRubric = false;
@@ -98,6 +107,39 @@ public class TemplateQuestionMapper {
         for (int i = qLineIndex + 1; i < lines.size(); i++) {
             String line = lines.get(i);
             if (line.trim().isEmpty()) continue;
+
+            if (parsingDiagramXml) {
+                if (line.startsWith("RUBRIC:") || line.startsWith("SAMPLE:") || line.startsWith("ANSWER:")
+                        || line.startsWith("DIFFICULTY:") || line.startsWith("EXPLANATION:")) {
+                    parsingDiagramXml = false;
+                } else {
+                    diagramXml.append(line);
+                    continue;
+                }
+            }
+
+            if (line.startsWith("CODE_CONFIG:")) {
+                parsingContent = false;
+                parsingRubric = false;
+                parsingSample = false;
+                codeConfigJson = line.substring("CODE_CONFIG:".length()).trim();
+                continue;
+            }
+            if (line.startsWith("TEST_CASE:")) {
+                parsingContent = false;
+                parsingRubric = false;
+                parsingSample = false;
+                testCaseJson.add(line.substring("TEST_CASE:".length()).trim());
+                continue;
+            }
+            if (line.startsWith("DIAGRAM_XML:")) {
+                parsingContent = false;
+                parsingRubric = false;
+                parsingSample = false;
+                parsingDiagramXml = true;
+                diagramXml.append(line.substring("DIAGRAM_XML:".length()).trim());
+                continue;
+            }
 
             if (line.startsWith("ANSWER:")) {
                 parsingContent = false;
@@ -317,6 +359,8 @@ case "MULTIPLE_CHOICE":
                     break;
 
                 case "ESSAY":
+                case "DIAGRAM":
+                case "DIAGRAM_ESSAY":
                     List<Map<String, Object>> criteriaList = new ArrayList<>();
                     BigDecimal totalRubricScore = BigDecimal.ZERO;
                     for (String rLine : rubricLines) {
@@ -337,6 +381,21 @@ case "MULTIPLE_CHOICE":
                             req.setExplanation(sampleText);
                         }
                     }
+                    if (qType.equals("DIAGRAM") || qType.equals("DIAGRAM_ESSAY")) {
+                        String xml = diagramXml.toString().trim();
+                        req.setQuestionMetadata(Map.of("drawioXml", xml));
+                    }
+                    break;
+
+                case "CODE":
+                    if (codeConfigJson != null && !codeConfigJson.isBlank()) {
+                        req.setCodeConfig(objectMapper.readValue(codeConfigJson, CodeConfigDto.class));
+                    }
+                    List<TestCaseDto> testCases = new ArrayList<>();
+                    for (String testCase : testCaseJson) {
+                        if (!testCase.isBlank()) testCases.add(objectMapper.readValue(testCase, TestCaseDto.class));
+                    }
+                    req.setTestCases(testCases);
                     break;
             }
 

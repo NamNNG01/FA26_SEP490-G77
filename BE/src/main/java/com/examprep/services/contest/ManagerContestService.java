@@ -32,9 +32,9 @@ import static com.examprep.services.contest.ContestRules.*;
 public class ManagerContestService {
     private static final int MAX_REWARDS = 50;
     private static final Map<String, String> SORTS = Map.of("startTime", "startTime", "endTime", "endTime", "title", "title", "createdAt", "createdAt");
-    private static final Set<String> RUBRIC_TYPES = Set.of("ESSAY", "DIAGRAM");
+    private static final Set<String> RUBRIC_TYPES = Set.of("ESSAY", "DIAGRAM", "DIAGRAM_ESSAY");
     /** Team rule (deviates from spec 6.6): contests use quiz exams only. Same split as E-01 familyPredicate. */
-    static final Set<String> NON_QUIZ_TYPES = Set.of("ESSAY", "CODE", "DIAGRAM");
+    static final Set<String> NON_QUIZ_TYPES = Set.of("ESSAY", "CODE", "DIAGRAM", "DIAGRAM_ESSAY");
 
     private final ContestRepository contests;
     private final ContestRewardRepository rewards;
