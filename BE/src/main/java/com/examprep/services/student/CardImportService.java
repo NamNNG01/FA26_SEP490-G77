@@ -175,7 +175,7 @@ public class CardImportService {
         for (Row row : chunk) {
             Flashcard card = Flashcard.builder().deck(deck).build();
             try {
-                StudentDeckService.apply(card, deck.getMode(), new CardWrite(row.front(), row.back(), row.language(), row.code()));
+                StudentDeckService.apply(card, deck.getMode(), new CardWrite(row.front(), row.back(), row.language(), row.code(), null, null));
             } catch (BadRequestException ex) {
                 errors.add(new ErrorRow(row.number(), ex.getMessage()));
                 continue;

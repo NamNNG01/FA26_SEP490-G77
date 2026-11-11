@@ -114,6 +114,14 @@ class PracticeExamApiIntegrationTest {
                 .andExpect(jsonPath("$.data.available").value(10));
     }
 
+    @Test void createWithModuleQuestionCounts() throws Exception {
+        JsonNode data = data(create(student, "{\"courseId\":" + course.getCourseId() + ",\"durationMinutes\":30,"
+                + "\"moduleQuestionCounts\":[{\"categoryId\":" + oop.getModuleId() + ",\"questionCount\":3},"
+                + "{\"categoryId\":" + io.getModuleId() + ",\"questionCount\":2}]}")
+                .andExpect(status().isCreated()));
+        assertEquals(5, data.path("questionCount").asInt());
+    }
+
     @Test void boundsValidation400() throws Exception {
         String c = "\"courseId\":" + course.getCourseId();
         create(student, "{" + c + ",\"questionCount\":0,\"durationMinutes\":30}").andExpect(status().isBadRequest());

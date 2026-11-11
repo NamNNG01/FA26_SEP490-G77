@@ -52,28 +52,63 @@ public class PracticeExamService {
     public PracticeDtos.Created create(Long userId, PracticeDtos.Create request) {
         Long courseId = request.courseId();
         requireEnrolled(userId, courseId);
-        Set<Long> moduleIds = request.categoryIds() == null ? Set.of() : new LinkedHashSet<>(request.categoryIds());
-        for (Long moduleId : moduleIds) {
-            Module module = modules.findById(moduleId).orElse(null);
-            if (module == null || !module.getCourse().getCourseId().equals(courseId) || module.isHidden()) {
-                throw new BadRequestException("categoryIds must be visible modules of this course: " + moduleId);
-            }
-        }
         boolean essay = "ESSAY".equals(request.examType());
-        List<QuestionCandidate> pool = findCandidates(courseId, essay ? List.of("ESSAY") : AUTO_GRADED,
-                moduleIds.isEmpty(), moduleIds.isEmpty() ? List.of(-1L) : moduleIds, request.difficulty());
-        int count = request.questionCount();
-        if (pool.size() < count) throw notEnough(pool.size());
-        List<QuestionCandidate> drawn = new ArrayList<>(pool);
-        Collections.shuffle(drawn);
-        drawn = drawn.subList(0, count);
+        List<String> types = essay ? List.of("ESSAY") : AUTO_GRADED;
+
+        List<Long> categoryIds = new ArrayList<>();
+        List<QuestionCandidate> drawn = new ArrayList<>();
+        int totalCount = 0;
+
+        if (request.moduleQuestionCounts() != null && !request.moduleQuestionCounts().isEmpty()) {
+            Set<Long> seenModules = new HashSet<>();
+            for (PracticeDtos.ModuleQuestionCount mq : request.moduleQuestionCounts()) {
+                Long moduleId = mq.categoryId();
+                if (!seenModules.add(moduleId)) {
+                    throw new BadRequestException("Duplicate module in moduleQuestionCounts: " + moduleId);
+                }
+                Module module = modules.findById(moduleId).orElse(null);
+                if (module == null || !module.getCourse().getCourseId().equals(courseId) || module.isHidden()) {
+                    throw new BadRequestException("Module must be a visible module of this course: " + moduleId);
+                }
+                int count = mq.questionCount();
+                List<QuestionCandidate> pool = findCandidates(courseId, types, false, List.of(moduleId), request.difficulty());
+                if (pool.size() < count) {
+                    throw new BaseException(ResponseCode.UNPROCESSABLE_VALIDATION_ERROR, "The question bank does not have enough questions.",
+                            Map.of("code", "NOT_ENOUGH_QUESTIONS", "categoryId", moduleId, "available", pool.size()));
+                }
+                List<QuestionCandidate> modDrawn = new ArrayList<>(pool);
+                Collections.shuffle(modDrawn);
+                drawn.addAll(modDrawn.subList(0, count));
+                categoryIds.add(moduleId);
+                totalCount += count;
+            }
+        } else {
+            Set<Long> moduleIds = request.categoryIds() == null ? Set.of() : new LinkedHashSet<>(request.categoryIds());
+            for (Long moduleId : moduleIds) {
+                Module module = modules.findById(moduleId).orElse(null);
+                if (module == null || !module.getCourse().getCourseId().equals(courseId) || module.isHidden()) {
+                    throw new BadRequestException("categoryIds must be visible modules of this course: " + moduleId);
+                }
+            }
+            if (request.questionCount() == null) {
+                throw new BadRequestException("questionCount is required.");
+            }
+            int count = request.questionCount();
+            List<QuestionCandidate> pool = findCandidates(courseId, types, moduleIds.isEmpty(), moduleIds.isEmpty() ? List.of(-1L) : moduleIds, request.difficulty());
+            if (pool.size() < count) throw notEnough(pool.size());
+            drawn = new ArrayList<>(pool);
+            Collections.shuffle(drawn);
+            drawn = drawn.subList(0, count);
+            categoryIds.addAll(moduleIds);
+            totalCount = count;
+        }
 
         String examType = essay ? "ESSAY" : "QUIZ";
         String title = titleOr(request.title(), "Đề luyện tùy chọn - " + (essay ? "Tự luận" : "Trắc nghiệm"));
 
         // Build practice_config JSON
-        String practiceConfig = writePracticeConfig(examType, count, request.difficulty(),
-                moduleIds.isEmpty() ? List.of() : new ArrayList<>(moduleIds));
+        String practiceConfig = writePracticeConfig(examType, totalCount, request.difficulty(),
+                categoryIds);
 
         String mode = "PRACTICE".equals(request.mode()) ? Exam.MODE_PRACTICE : Exam.MODE_PRACTICE_EXAM;
         boolean isPracticeMode = Exam.MODE_PRACTICE.equals(mode);
@@ -86,7 +121,7 @@ public class PracticeExamService {
         Exam exam = createGeneratedExam(userId, courseId, title, mode, duration,
                 drawn.stream().map(QuestionCandidate::questionId).toList(), practiceConfig);
 
-        return new PracticeDtos.Created(exam.getExamId(), title, count, duration, exam.getExamId());
+        return new PracticeDtos.Created(exam.getExamId(), title, totalCount, duration, exam.getExamId());
     }
 
     /** The student's exam name, or the fallback when it is blank. */

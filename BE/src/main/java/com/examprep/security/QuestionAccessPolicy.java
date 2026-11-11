@@ -25,15 +25,8 @@ public class QuestionAccessPolicy {
         if (User.ROLE_ADMIN.equals(user.getRoleName())) return true;
         if (question.getCourse() == null) return false;
 
-        boolean isManager = courseManagerRepository.existsByCourse_CourseIdAndUser_UserId(
+        return courseManagerRepository.existsByCourse_CourseIdAndUser_UserId(
                 question.getCourse().getCourseId(), user.getUserId());
-        if (!isManager) return false;
-
-        if ("STUDENT".equals(question.getCreatorRole())) {
-            return false;
-        }
-
-        return question.getCreatedBy() != null && question.getCreatedBy().getUserId().equals(user.getUserId());
     }
 
     public boolean canChangeStatus(User user, Question question) {
@@ -41,13 +34,7 @@ public class QuestionAccessPolicy {
         if (User.ROLE_ADMIN.equals(user.getRoleName())) return true;
         if (question.getCourse() == null) return false;
 
-        boolean isManager = courseManagerRepository.existsByCourse_CourseIdAndUser_UserId(
+        return courseManagerRepository.existsByCourse_CourseIdAndUser_UserId(
                 question.getCourse().getCourseId(), user.getUserId());
-        if (!isManager) return false;
-
-        if ("STUDENT".equals(question.getCreatorRole())) {
-            return true;
-        }
-        return question.getCreatedBy() != null && question.getCreatedBy().getUserId().equals(user.getUserId());
     }
 }

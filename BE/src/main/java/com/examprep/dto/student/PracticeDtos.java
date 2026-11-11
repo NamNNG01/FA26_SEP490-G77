@@ -11,9 +11,11 @@ import java.util.List;
 public final class PracticeDtos {
     private PracticeDtos() {}
 
+    public record ModuleQuestionCount(@NotNull @Positive Long categoryId, @NotNull @Min(1) Integer questionCount) {}
+
     /** examType QUIZ (default, auto-graded types) or ESSAY (graded later through SE-02). categoryIds are module ids of the course (a course has one category; modules are its topics). */
     public record Create(@NotNull @Positive Long courseId,
-                         @NotNull @Min(1) @Max(100) Integer questionCount,
+                         @Min(1) @Max(100) Integer questionCount,
                          @Min(1) @Max(180) Integer durationMinutes,
                          @Pattern(regexp = "QUIZ|ESSAY") String examType,
                          @Size(max = 50) List<@NotNull @Positive Long> categoryIds,
@@ -22,7 +24,8 @@ public final class PracticeDtos {
                          @Size(max = 255) String title,
                          /** How the student takes it: EXAM (default, saved as PRACTICE_EXAM) or PRACTICE (saved as PRACTICE).
                           *  durationMinutes is required when mode is EXAM (or omitted); PRACTICE mode may omit it. */
-                         @Pattern(regexp = "EXAM|PRACTICE") String mode) {}
+                         @Pattern(regexp = "EXAM|PRACTICE") String mode,
+                         @Size(max = 50) List<@jakarta.validation.Valid ModuleQuestionCount> moduleQuestionCounts) {}
 
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record Created(Long practiceId, String title, int questionCount, Integer durationMinutes, Long examId) {}

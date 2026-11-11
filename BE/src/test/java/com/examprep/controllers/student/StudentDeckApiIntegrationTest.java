@@ -116,6 +116,16 @@ class StudentDeckApiIntegrationTest {
         send(put("/api/v1/student/decks/" + text), student, "{\"mode\":\"CODE_OUTPUT\"}").andExpect(status().isConflict());
     }
 
+    @Test void flashcardImagesSupported() throws Exception {
+        long text = deck(student, "FLASHCARD");
+        long cardId = card(text, "{\"backText\":\"answer\",\"frontImageUrl\":\"http://example.com/img1.png\"}");
+        send(put("/api/v1/student/cards/" + cardId), student, "{\"frontText\":\"question\",\"frontImageUrl\":null,\"backImageUrl\":\"http://example.com/img2.png\"}")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.frontText").value("question"))
+                .andExpect(jsonPath("$.data.frontImageUrl").isEmpty())
+                .andExpect(jsonPath("$.data.backImageUrl").value("http://example.com/img2.png"));
+    }
+
     @Test void deleteDeckRemovesCardsAndProgress() throws Exception {
         long deck = deck(student, "FLASHCARD");
         long card = card(deck, "{\"frontText\":\"a\",\"backText\":\"b\"}");

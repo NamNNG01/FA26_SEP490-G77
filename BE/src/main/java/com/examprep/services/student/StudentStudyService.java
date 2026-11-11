@@ -79,6 +79,15 @@ public class StudentStudyService {
         return new DeckLearnedView(deckId, learned, content.size(), !content.isEmpty() && learned == content.size());
     }
 
+    public DeckLearnedView resetProgress(Long userId, Long deckId) {
+        decks.readableDeck(userId, deckId);
+        users.findForUpdate(userId);
+        progress.deleteByUserUserIdAndCardDeckDeckId(userId, deckId);
+        progress.flush();
+        List<Flashcard> content = cards.findByDeckDeckIdOrderByPositionAscCardIdAsc(deckId);
+        return new DeckLearnedView(deckId, 0, content.size(), false);
+    }
+
     // ------------------------------------------------------------------ FP-01 / FP-02
 
     public StudySessionView startSession(Long userId, Long deckId, SessionStart request) {
@@ -131,7 +140,8 @@ public class StudentStudyService {
         List<Flashcard> content = cards.findByDeckDeckIdOrderByPositionAscCardIdAsc(deckId);
         if (cardLimit > 0 && content.size() > cardLimit) content = content.subList(0, cardLimit);
         return new ViewerView(deckId, deck.getTitle(), deck.getMode(), content.stream()
-                .map(c -> new ViewerCard(c.getCardId(), c.getFrontText(), c.getBackText(), c.getCodeLanguage(), c.getCodeBody())).toList());
+                .map(c -> new ViewerCard(c.getCardId(), c.getFrontText(), c.getBackText(), c.getCodeLanguage(), c.getCodeBody(),
+                        c.getFrontImageUrl(), c.getBackImageUrl())).toList());
     }
 
     /** Spec 9.3: NEW, LEARNING, KNOWN; then wrong_count DESC, last_reviewed_at ASC (never reviewed first), position. */
@@ -146,7 +156,8 @@ public class StudentStudyService {
         return cards.findByDeckDeckIdOrderByPositionAscCardIdAsc(deckId).stream().sorted(order).map(c -> {
             UserCardProgress p = states.get(c.getCardId());
             return new StudyCard(c.getCardId(), c.getFrontText(), c.getBackText(), c.getCodeLanguage(), c.getCodeBody(),
-                    statusOf(p), wrongOf(p), p != null && Boolean.TRUE.equals(p.getIsStarred()));
+                    statusOf(p), wrongOf(p), p != null && Boolean.TRUE.equals(p.getIsStarred()),
+                    c.getFrontImageUrl(), c.getBackImageUrl());
         }).toList();
     }
 

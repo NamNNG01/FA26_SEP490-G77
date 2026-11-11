@@ -23,11 +23,17 @@ public class Flashcard implements Serializable {
     @JoinColumn(name = "deck_id", nullable = false)
     private Deck deck;
 
-    @Column(name = "front_text", nullable = false)
+    @Column(name = "front_text")
     private String frontText;
 
-    @Column(name = "back_text", nullable = false)
+    @Column(name = "back_text")
     private String backText;
+
+    @Column(name = "front_image_url", length = 1000)
+    private String frontImageUrl;
+
+    @Column(name = "back_image_url", length = 1000)
+    private String backImageUrl;
 
     /** 1-based order inside the deck (FC-04). */
     @Builder.Default

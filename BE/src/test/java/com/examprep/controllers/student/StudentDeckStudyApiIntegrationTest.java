@@ -107,6 +107,17 @@ class StudentDeckStudyApiIntegrationTest {
                 .setParameter("c", cards.get(0).getCardId()).getSingleResult());
     }
 
+    @Test void resetProgressResetsAllCards() throws Exception {
+        progress(cards.get(0), "{\"status\":\"KNOWN\"}");
+        progress(cards.get(1), "{\"status\":\"KNOWN\"}");
+        mvc.perform(put("/api/v1/student/decks/" + deck.getDeckId() + "/progress/reset").with(as(student)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.learnedCount").value(0))
+                .andExpect(jsonPath("$.data.totalCards").value(6))
+                .andExpect(jsonPath("$.data.deckLearned").value(false))
+                .andExpect(jsonPath("$.message").value("Deck progress reset"));
+    }
+
     @Test void sessionOrdersNewLearningKnown() throws Exception {
         Instant now = Instant.now();
         state(cards.get(0), "KNOWN", 3, now.minus(1, ChronoUnit.DAYS));

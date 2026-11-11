@@ -29,7 +29,9 @@ public final class StudentDeckDtos {
     public record CardWrite(@Size(max = 5000) String frontText,
                             @Size(max = 5000) String backText,
                             String codeLanguage,
-                            @Size(max = 20000) String codeBody) {}
+                            @Size(max = 20000) String codeBody,
+                            @Size(max = 1000) String frontImageUrl,
+                            @Size(max = 1000) String backImageUrl) {}
 
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record DeckView(Long deckId, String title, String description, String mode, Long courseId, String courseTitle,
@@ -38,7 +40,7 @@ public final class StudentDeckDtos {
 
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record CardView(Long cardId, Long deckId, String frontText, String backText, String codeLanguage, String codeBody,
-                           int position) {}
+                           int position, String frontImageUrl, String backImageUrl) {}
 
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record PublishRequestView(Long deckId, String visibility, String reviewStatus, Instant submittedAt) {}
@@ -59,7 +61,7 @@ public final class StudentDeckDtos {
 
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record StudyCard(Long cardId, String frontText, String backText, String codeLanguage, String codeBody,
-                            String status, int wrongCount, boolean isStarred) {}
+                            String status, int wrongCount, boolean isStarred, String frontImageUrl, String backImageUrl) {}
 
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record StudySessionView(String sessionId, Long deckId, String deckTitle, String deckMode, int totalCards,
@@ -71,7 +73,8 @@ public final class StudentDeckDtos {
     public record SessionSummary(int totalCards, int knownCount, int wrongCount) {}
 
     @JsonInclude(JsonInclude.Include.ALWAYS)
-    public record ViewerCard(Long cardId, String frontText, String backText, String codeLanguage, String codeBody) {}
+    public record ViewerCard(Long cardId, String frontText, String backText, String codeLanguage, String codeBody,
+                             String frontImageUrl, String backImageUrl) {}
 
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record ViewerView(Long deckId, String deckTitle, String deckMode, List<ViewerCard> cards) {}
@@ -101,5 +104,5 @@ public final class StudentDeckDtos {
 
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record CardFromQuestionView(Long cardId, Long deckId, String frontText, String backText, int position,
-                                       Long sourceQuestionId, Long sourceAttemptId) {}
+                                       Long sourceQuestionId, Long sourceAttemptId, String frontImageUrl, String backImageUrl) {}
 }

@@ -347,6 +347,10 @@ public class QuestionServiceImpl implements QuestionService {
         Question q = questionRepository.findActiveById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Question not found"));
 
+        if (!accessPolicy.canModify(currentUser, q)) {
+            throw new ForbiddenException("You do not have permission to update this question");
+        }
+
         if ("ACTIVE".equalsIgnoreCase(q.getStatus()) || "ARCHIVED".equalsIgnoreCase(q.getStatus())) {
             throw new ResourceConflictException("Cannot update question when status is ACTIVE or ARCHIVED");
         }

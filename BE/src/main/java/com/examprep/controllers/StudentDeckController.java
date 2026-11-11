@@ -69,7 +69,7 @@ public class StudentDeckController {
 
     @PutMapping("/cards/{cardId}")
     public ResponseEntity<ApiResponse<CardView>> updateCard(@AuthenticationPrincipal UserPrincipal user, @PathVariable Long cardId,
-            @Valid @RequestBody CardWrite request) {
+            @RequestBody com.fasterxml.jackson.databind.JsonNode request) {
         return ResponseEntity.ok(ApiResponse.success(decks.updateCard(user.getId(), cardId, request)));
     }
 
@@ -98,6 +98,11 @@ public class StudentDeckController {
     @PutMapping("/decks/{deckId}/learn-all")
     public ResponseEntity<ApiResponse<DeckLearnedView>> learnAll(@AuthenticationPrincipal UserPrincipal user, @PathVariable Long deckId) {
         return ResponseEntity.ok(ApiResponse.success(study.learnAll(user.getId(), deckId)));
+    }
+
+    @PutMapping("/decks/{deckId}/progress/reset")
+    public ResponseEntity<ApiResponse<DeckLearnedView>> resetProgress(@AuthenticationPrincipal UserPrincipal user, @PathVariable Long deckId) {
+        return ResponseEntity.ok(ApiResponse.success(study.resetProgress(user.getId(), deckId), "Deck progress reset"));
     }
 
     @PostMapping("/decks/{deckId}/study-sessions")

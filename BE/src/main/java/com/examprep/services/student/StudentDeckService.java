@@ -187,11 +187,56 @@ public class StudentDeckService {
         return cardView(cards.saveAndFlush(card));
     }
 
-    public CardView updateCard(Long userId, Long cardId, CardWrite request) {
+    public CardView updateCard(Long userId, Long cardId, com.fasterxml.jackson.databind.JsonNode rawRequest) {
         Flashcard card = ownedCard(userId, cardId);
-        apply(card, card.getDeck().getMode(), merged(card, request));
+        CardWrite request = treeToValue(rawRequest, CardWrite.class);
+        String front = rawRequest.has("frontText") ? optionalText(request.frontText()) : card.getFrontText();
+        String back = rawRequest.has("backText") ? optionalText(request.backText()) : card.getBackText();
+        String frontImg = rawRequest.has("frontImageUrl") ? optionalText(request.frontImageUrl()) : card.getFrontImageUrl();
+        String backImg = rawRequest.has("backImageUrl") ? optionalText(request.backImageUrl()) : card.getBackImageUrl();
+        String code = rawRequest.has("codeBody") ? (request.codeBody() == null || request.codeBody().isBlank() ? null : request.codeBody()) : card.getCodeBody();
+        String language = rawRequest.has("codeLanguage") ? optionalText(request.codeLanguage()) : card.getCodeLanguage();
+        if (language != null) language = language.toUpperCase(Locale.ROOT);
+
+        String mode = card.getDeck().getMode();
+        switch (mode) {
+            case "CODE_SNIPPET" -> {
+                require(front, "frontText");
+                require(code, "codeBody");
+                require(language, "codeLanguage");
+            }
+            case "CODE_OUTPUT" -> {
+                require(code, "codeBody");
+                require(back, "backText");
+            }
+            default -> {
+                if (front == null && frontImg == null) {
+                    throw new BadRequestException("frontText or frontImageUrl is required for this deck mode.");
+                }
+                if (back == null && backImg == null) {
+                    throw new BadRequestException("backText or backImageUrl is required for this deck mode.");
+                }
+            }
+        }
+        if (language != null && !CODE_LANGUAGES.contains(language)) {
+            throw new BadRequestException("codeLanguage must be one of JAVA, PYTHON, C, CPP.");
+        }
+        card.setFrontText(front == null ? "" : front);
+        card.setBackText(back == null ? "" : back);
+        card.setFrontImageUrl(frontImg);
+        card.setBackImageUrl(backImg);
+        card.setCodeBody(code);
+        card.setCodeLanguage(language);
         cards.flush();
         return cardView(card);
+    }
+
+    private CardWrite treeToValue(com.fasterxml.jackson.databind.JsonNode node, Class<CardWrite> clazz) {
+        try {
+            return json.treeToValue(node, clazz);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
+            throw new BadRequestException("Invalid request body.");
+        }
     }
 
     public void deleteCard(Long userId, Long cardId) {
@@ -272,7 +317,7 @@ public class StudentDeckService {
                 .position(cards.maxPosition(deckId) + 1).sourceQuestionId(question.getQuestionId())
                 .sourceAttemptId(attempt.getAttemptId()).build());
         return new CardFromQuestionView(card.getCardId(), deckId, front, back, card.getPosition(),
-                card.getSourceQuestionId(), card.getSourceAttemptId());
+                card.getSourceQuestionId(), card.getSourceAttemptId(), card.getFrontImageUrl(), card.getBackImageUrl());
     }
 
     /** Spec 14.12: choice/keyed types give the correct answer (+ explanation); essays give AI feedback or the sample answer, never the rubric. */
@@ -348,6 +393,8 @@ public class StudentDeckService {
     static void apply(Flashcard card, String mode, CardWrite request) {
         String front = optionalText(request.frontText());
         String back = optionalText(request.backText());
+        String frontImg = optionalText(request.frontImageUrl());
+        String backImg = optionalText(request.backImageUrl());
         String code = request.codeBody() == null || request.codeBody().isBlank() ? null : request.codeBody();
         String language = optionalText(request.codeLanguage());
         if (language != null) language = language.toUpperCase(Locale.ROOT);
@@ -362,8 +409,12 @@ public class StudentDeckService {
                 require(back, "backText");
             }
             default -> {
-                require(front, "frontText");
-                require(back, "backText");
+                if (front == null && frontImg == null) {
+                    throw new BadRequestException("frontText or frontImageUrl is required for this deck mode.");
+                }
+                if (back == null && backImg == null) {
+                    throw new BadRequestException("backText or backImageUrl is required for this deck mode.");
+                }
             }
         }
         if (language != null && !CODE_LANGUAGES.contains(language)) {
@@ -371,6 +422,8 @@ public class StudentDeckService {
         }
         card.setFrontText(front == null ? "" : front);
         card.setBackText(back == null ? "" : back);
+        card.setFrontImageUrl(frontImg);
+        card.setBackImageUrl(backImg);
         card.setCodeBody(code);
         card.setCodeLanguage(language);
     }
@@ -381,7 +434,9 @@ public class StudentDeckService {
                 request.frontText() != null ? request.frontText() : card.getFrontText(),
                 request.backText() != null ? request.backText() : card.getBackText(),
                 request.codeLanguage() != null ? request.codeLanguage() : card.getCodeLanguage(),
-                request.codeBody() != null ? request.codeBody() : card.getCodeBody());
+                request.codeBody() != null ? request.codeBody() : card.getCodeBody(),
+                request.frontImageUrl() != null ? request.frontImageUrl() : card.getFrontImageUrl(),
+                request.backImageUrl() != null ? request.backImageUrl() : card.getBackImageUrl());
     }
 
     private static void require(String value, String field) {
@@ -405,6 +460,6 @@ public class StudentDeckService {
 
     static CardView cardView(Flashcard card) {
         return new CardView(card.getCardId(), card.getDeck().getDeckId(), card.getFrontText(), card.getBackText(),
-                card.getCodeLanguage(), card.getCodeBody(), card.getPosition());
+                card.getCodeLanguage(), card.getCodeBody(), card.getPosition(), card.getFrontImageUrl(), card.getBackImageUrl());
     }
 }

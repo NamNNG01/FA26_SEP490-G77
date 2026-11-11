@@ -15,6 +15,10 @@ public interface UserCardProgressRepository extends JpaRepository<UserCardProgre
     List<UserCardProgress> findByUserUserIdAndCardDeckDeckId(Long userId, Long deckId);
 
     @Modifying
+    @Query("DELETE FROM UserCardProgress p WHERE p.user.userId = :userId AND p.card.deck.deckId = :deckId")
+    void deleteByUserUserIdAndCardDeckDeckId(@Param("userId") Long userId, @Param("deckId") Long deckId);
+
+    @Modifying
     @Query("DELETE FROM UserCardProgress p WHERE p.card.cardId IN " +
             "(SELECT f.cardId FROM Flashcard f WHERE f.deck.deckId = :deckId)")
     void deleteByDeck(@Param("deckId") Long deckId);
