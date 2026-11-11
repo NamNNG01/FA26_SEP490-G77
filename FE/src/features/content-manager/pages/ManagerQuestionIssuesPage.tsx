@@ -11,6 +11,7 @@ import { QuestionForm } from '@/features/question/components/QuestionForm';
 import { fromDetail, isDraftValid, toCreateRequest, type QuestionDraft } from '@/features/question/model';
 import type { QuestionDetail } from '@/services/question.service';
 import { courseService, type CourseSummaryItem } from '@/services/course.service';
+import { SearchInput } from '@/components/common/SearchInput';
 import { ISSUE_STATUSES, ISSUE_TYPES, issueLabel, questionIssueService, refreshPendingIssueCount } from '@/services/questionIssue.service';
 import { useAuth } from '@/auth/authContext';
 import { getApiErrorMessage } from '@/utils/apiError';
@@ -101,6 +102,16 @@ export function ManagerQuestionIssuesPage() {
   }, [appliedFilters, page]);
 
   useEffect(() => { void load(page, appliedFilters); }, [load]);
+
+  useEffect(() => {
+    const changed = Object.keys(filters).some(key => filters[key as keyof typeof filters] !== appliedFilters[key as keyof typeof appliedFilters]);
+    if (!changed) return;
+    const timer = window.setTimeout(() => {
+      setPage(0);
+      setAppliedFilters({ ...filters });
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [filters, appliedFilters]);
 
   useEffect(() => {
     let cancelled = false;
@@ -234,39 +245,38 @@ export function ManagerQuestionIssuesPage() {
         <h1 className="text-2xl font-bold text-content">Question issue queue</h1>
         <p className="mt-1 text-sm text-content-secondary">Review student reports, correct affected questions, and monitor regrade work.</p>
       </div>
-      <span className="rounded-lg bg-surface-muted px-3 py-2 text-sm text-content-secondary">{list?.totalElements ?? 0} tickets</span>
     </header>
 
     {error && !selectedRow && <Alert type="error" message={error} />}
 
     <section className="overflow-hidden rounded-xl border border-line bg-surface shadow-sm">
-      <form className="grid gap-4 border-b border-line p-4 sm:p-5 lg:grid-cols-[minmax(140px,.65fr)_minmax(190px,1fr)_minmax(200px,1.25fr)_minmax(220px,1.5fr)_auto] lg:items-end" onSubmit={event => {
-        event.preventDefault();
-        setPage(0);
-        setAppliedFilters({ ...filters });
-      }}>
-        <Select label="Status" value={filters.status} onChange={value => setFilters(current => ({ ...current, status: value }))} options={[
+      <div className="flex flex-wrap items-center gap-3 border-b border-line-soft px-4 py-3">
+        <SearchInput
+          className="w-full sm:w-64 lg:flex-1"
+          aria-label="Search questions and reports"
+          placeholder="Search questions and reports…"
+          value={filters.search}
+          onChange={event => setFilters(current => ({ ...current, search: event.target.value }))}
+        />
+        <Select aria-label="Filter by status" className="w-full sm:w-40" value={filters.status} onChange={value => setFilters(current => ({ ...current, status: value }))} options={[
           { label: 'Pending', value: 'PENDING' },
           ...ISSUE_STATUSES.filter(value => value !== 'PENDING').map(value => ({ label: issueLabel(value), value })),
           { label: 'All statuses', value: 'ALL' },
-        ]} triggerClassName="w-full h-10 pl-3 pr-10 rounded-lg text-sm" />
-        <Select label="Issue type" value={filters.issueType} onChange={value => setFilters(current => ({ ...current, issueType: value }))} options={[
+        ]} />
+        <Select aria-label="Filter by issue type" className="w-full sm:w-48" value={filters.issueType} onChange={value => setFilters(current => ({ ...current, issueType: value }))} options={[
           { label: 'All issue types', value: '' },
           ...ISSUE_TYPES.map(value => ({ label: issueLabel(value), value })),
-        ]} triggerClassName="w-full h-10 pl-3 pr-10 rounded-lg text-sm" />
-        <SearchableSelect label="Course" options={courseOptions} value={filters.courseId} onChange={value => setFilters(current => ({ ...current, courseId: value }))} placeholder="All courses" searchPlaceholder="Search courses…" />
-        <label className="grid gap-1.5 text-sm font-medium text-content-secondary">Search questions and reports
-          <input className="h-10 rounded-lg border border-line bg-surface px-3 text-sm text-content placeholder:text-content-subtle" placeholder="Enter a question or report phrase" value={filters.search} onChange={event => setFilters(current => ({ ...current, search: event.target.value }))} />
-        </label>
-        <div className="flex gap-2 lg:justify-end">
-          <Button type="button" variant="outline" disabled={busy} onClick={() => {
+        ]} />
+        <SearchableSelect className="w-full sm:w-56" showLabel={false} aria-label="Filter by course" options={courseOptions} value={filters.courseId} onChange={value => setFilters(current => ({ ...current, courseId: value }))} placeholder="All courses" searchPlaceholder="Search courses…" />
+        <div className="ml-auto flex items-center gap-2">
+          <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => {
             setFilters({ ...EMPTY_FILTERS });
             setAppliedFilters({ ...EMPTY_FILTERS });
             setPage(0);
           }}>Clear</Button>
-          <Button type="submit" loading={busy}>Apply filters</Button>
+          <Badge variant="default" className="whitespace-nowrap font-semibold text-xs">{list?.totalElements ?? 0} tickets</Badge>
         </div>
-      </form>
+      </div>
 
       <div className="overflow-x-auto">
         <table className="w-full min-w-[950px] text-left text-sm">
