@@ -52,6 +52,7 @@ public class StudentDeckService {
     private final AttemptAnswerRepository answers;
     private final ObjectMapper json;
     private final FlashcardPdfWriter pdfWriter;
+    private final jakarta.validation.Validator validator;
 
     // ------------------------------------------------------------------ FC-01..03
 
@@ -190,8 +191,12 @@ public class StudentDeckService {
     public CardView updateCard(Long userId, Long cardId, com.fasterxml.jackson.databind.JsonNode rawRequest) {
         Flashcard card = ownedCard(userId, cardId);
         CardWrite request = treeToValue(rawRequest, CardWrite.class);
-        String front = rawRequest.has("frontText") ? optionalText(request.frontText()) : card.getFrontText();
-        String back = rawRequest.has("backText") ? optionalText(request.backText()) : card.getBackText();
+        // The body is read as JsonNode (to tell an absent field from null), so @Valid no longer runs on it.
+        validator.validate(request).stream().findFirst().ifPresent(v -> {
+            throw new BadRequestException(v.getPropertyPath() + " " + v.getMessage());
+        });
+        String front = rawRequest.has("frontText") ? optionalText(request.frontText()) : optionalText(card.getFrontText());
+        String back = rawRequest.has("backText") ? optionalText(request.backText()) : optionalText(card.getBackText());
         String frontImg = rawRequest.has("frontImageUrl") ? optionalText(request.frontImageUrl()) : card.getFrontImageUrl();
         String backImg = rawRequest.has("backImageUrl") ? optionalText(request.backImageUrl()) : card.getBackImageUrl();
         String code = rawRequest.has("codeBody") ? (request.codeBody() == null || request.codeBody().isBlank() ? null : request.codeBody()) : card.getCodeBody();

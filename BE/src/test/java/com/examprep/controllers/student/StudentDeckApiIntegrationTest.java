@@ -126,6 +126,25 @@ class StudentDeckApiIntegrationTest {
                 .andExpect(jsonPath("$.data.backImageUrl").value("http://example.com/img2.png"));
     }
 
+    @Test void flashcardFacesTakeTextOrImage() throws Exception {
+        long text = deck(student, "FLASHCARD");
+        String img = "https://res.cloudinary.com/x/image/upload/a.png";
+        long card = card(text, "{\"frontImageUrl\":\"" + img + "\",\"backText\":\"b\"}");
+        // A field left out keeps its image; null removes it.
+        send(put("/api/v1/student/cards/" + card), student, "{\"backText\":\"b2\"}")
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.frontImageUrl").value(img));
+        send(put("/api/v1/student/cards/" + card), student, "{\"frontImageUrl\":null}").andExpect(status().isBadRequest());
+        send(put("/api/v1/student/cards/" + card), student, "{\"frontImageUrl\":\"javascript:alert(1)\"}").andExpect(status().isBadRequest());
+        send(put("/api/v1/student/cards/" + card), student, "{\"frontImageUrl\":\"https://x/" + "a".repeat(1000) + "\"}").andExpect(status().isBadRequest());
+        send(put("/api/v1/student/cards/" + card), student, "{\"frontText\":\"" + "a".repeat(5001) + "\"}").andExpect(status().isBadRequest());
+        send(post("/api/v1/student/decks/" + text + "/cards"), student, "{\"frontImageUrl\":\"data:image/png;base64,AA\",\"backText\":\"b\"}")
+                .andExpect(status().isBadRequest());
+        mvc.perform(get("/api/v1/student/decks/" + text + "/viewer").with(as(student)))
+                .andExpect(jsonPath("$.data.cards[0].frontImageUrl").value(img));
+        mvc.perform(get("/api/v1/student/decks/" + text + "/cards").with(as(student)))
+                .andExpect(jsonPath("$.data.content[0].frontImageUrl").value(img));
+    }
+
     @Test void deleteDeckRemovesCardsAndProgress() throws Exception {
         long deck = deck(student, "FLASHCARD");
         long card = card(deck, "{\"frontText\":\"a\",\"backText\":\"b\"}");
