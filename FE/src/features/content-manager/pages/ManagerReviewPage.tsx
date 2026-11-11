@@ -228,6 +228,8 @@ export function ManagerReviewPage() {
   ];
   if (contributorId && !contributorOptions.some(option => option.value === contributorId)) contributorOptions.push({ label: `Contributor #${contributorId}`, value: contributorId });
   const studentNames = new Map(students.map(student => [String(student.userId), student.fullName]));
+  const courseNames = new Map(courses.map(course => [String(course.courseId), course.title]));
+  const courseNameOf = (row: Row) => row.course?.title || row.courseName || row.courseTitle || courseNames.get(String(row.courseId)) || '—';
 
   return <main className="mx-auto max-w-screen-2xl space-y-6 p-6 lg:p-8">
     <header className="flex flex-wrap items-end justify-between gap-4">
@@ -302,7 +304,7 @@ export function ManagerReviewPage() {
             {rows.map(row => <tr key={idOf(row, kind)} onDoubleClick={() => void open(row)} className="group hover:bg-surface-hover">
               <td className="max-w-sm px-5 py-4"><div className="truncate font-medium text-content">{row.title || row.content || `Submission #${idOf(row, kind)}`}</div><div className="mt-1 truncate text-xs text-content-secondary">{kind === 'decks' ? `${row.cardCount ?? 0} cards${row.module?.title ? ` · ${row.module.title}` : ''}` : row.questionType ? questionTypeLabel(row.questionType) : `Submission #${idOf(row, kind)}`}</div></td>
               <td className="whitespace-nowrap px-5 py-4 text-content-secondary">{row.owner?.fullName || row.contributor?.fullName || studentNames.get(String(row.contributor?.id ?? row.contributorId)) || row.contributorName || '—'}</td>
-              <td className="max-w-xs truncate px-5 py-4 text-content-secondary">{row.course?.title || '—'}</td>
+              <td className="max-w-xs truncate px-5 py-4 text-content-secondary">{courseNameOf(row)}</td>
               <td className="whitespace-nowrap px-5 py-4 text-content-secondary">{row.submittedAt ? new Date(row.submittedAt).toLocaleString() : '—'}</td>
               <td className="px-5 py-4"><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${statusOf(row, kind) === 'PENDING' ? 'bg-amber-50 text-amber-800' : statusOf(row, kind) === 'REJECTED' ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>{statusLabel(statusOf(row, kind) || '')}</span></td>
               <td className="px-5 py-4 text-right"><Button size="sm" variant="outline" loading={detailLoading && openingId === idOf(row, kind)} onClick={() => void open(row)}>Review</Button></td>
@@ -341,7 +343,7 @@ export function ManagerReviewPage() {
         </div>
         <div className="grid gap-3 rounded-lg bg-surface-muted p-4 text-sm sm:grid-cols-2">
           <p><span className="text-content-secondary">Contributor</span><br /><span className="font-medium text-content">{detail.owner?.fullName || detail.contributor?.fullName || detail.contributorName || '—'}</span></p>
-          <p><span className="text-content-secondary">Course and module</span><br /><span className="font-medium text-content">{detail.course?.title || '—'}{detail.module?.title ? ` · ${detail.module.title}` : ''}</span></p>
+          <p><span className="text-content-secondary">Course and module</span><br /><span className="font-medium text-content">{courseNameOf(detail)}{detail.module?.title ? ` · ${detail.module.title}` : ''}</span></p>
           <p><span className="text-content-secondary">Submitted</span><br /><span className="font-medium text-content">{detail.submittedAt || detail.createdAt ? new Date(detail.submittedAt || detail.createdAt).toLocaleString() : '—'}</span></p>
           {kind === 'contributions' && <p><span className="text-content-secondary">Type and difficulty</span><br /><span className="font-medium text-content">{questionTypeLabel(detail.questionType || detail.type || '')} · {difficultyLabel(detail.difficulty || 'MEDIUM')}</span></p>}
         </div>

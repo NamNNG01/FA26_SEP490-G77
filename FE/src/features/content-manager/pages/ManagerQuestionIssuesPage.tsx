@@ -223,6 +223,8 @@ export function ManagerQuestionIssuesPage() {
       value: String(candidate.issueId),
     })),
   ], [duplicateCandidates]);
+  const courseNames = useMemo(() => new Map(courses.map(course => [String(course.courseId), course.title])), [courses]);
+  const assignedToMe = !!detail?.assignedTo && String(detail.assignedTo.userId) === String(user?.userId);
   const resolutionOptions = RESOLUTION_TYPES.map(value => ({ label: issueLabel(value), value }));
   const fullQuestionEditor = ['ANSWER_CORRECTED', 'RUBRIC_CORRECTED', 'OTHER_CORRECTION'].includes(resolutionType);
 
@@ -283,7 +285,7 @@ export function ManagerQuestionIssuesPage() {
                 <div className="flex flex-wrap items-center gap-2"><span className="font-semibold text-content">{row.questionContent || row.question?.content || 'Question content unavailable'}</span><span className="text-xs text-content-subtle">Question #{row.questionId}</span></div>
                 <p className="mt-1 text-xs text-content-secondary">{issueLabel(row.issueType)} · Ticket #{row.issueId}</p>
               </td>
-              <td className="max-w-xs truncate px-5 py-4 text-content-secondary">{row.courseName || row.course?.name || '—'}</td>
+              <td className="max-w-xs truncate px-5 py-4 text-content-secondary">{row.courseName || row.courseTitle || row.course?.title || row.course?.name || courseNames.get(String(row.courseId)) || '—'}</td>
               <td className="whitespace-nowrap px-5 py-4 text-content-secondary">{row.reportCount ?? 0}</td>
               <td className="whitespace-nowrap px-5 py-4"><PriorityBadge priority={row.priority} score={row.priorityScore ?? 0} /></td>
               <td className="whitespace-nowrap px-5 py-4 text-content-secondary">{row.updatedAt || row.createdAt ? new Date(row.updatedAt || row.createdAt).toLocaleDateString() : '—'}</td>
@@ -310,7 +312,7 @@ export function ManagerQuestionIssuesPage() {
         <div className="min-w-0 space-y-5">
           <section className="rounded-xl border border-line bg-surface-muted p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <div><p className="text-xs font-semibold uppercase tracking-wide text-content-secondary">{issueLabel(detail.issueType || detail.reports?.[0]?.issueType)}</p><p className="mt-1 text-sm text-content-secondary">{detail.location?.courseName || detail.courseName || `Course #${detail.courseId ?? '—'}`} · {detail.location?.moduleTitle || 'Module unavailable'} · Question version {detail.question?.lockVersion ?? '—'}</p></div>
+              <div><p className="text-xs font-semibold uppercase tracking-wide text-content-secondary">{issueLabel(detail.issueType || detail.reports?.[0]?.issueType)}</p><p className="mt-1 text-sm text-content-secondary">{detail.location?.courseName || detail.courseName || courseNames.get(String(detail.courseId)) || `Course #${detail.courseId ?? '—'}`} · {detail.location?.moduleTitle || 'Module unavailable'} · Question version {detail.question?.lockVersion ?? '—'}</p></div>
               <Status value={status} />
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-2"><PriorityBadge priority={detail.priority} score={detail.priorityScore ?? 0} />{detail.lastReportedAt && <span className="text-xs text-content-secondary">Latest report {new Date(detail.lastReportedAt).toLocaleString()}</span>}</div>
@@ -353,15 +355,16 @@ export function ManagerQuestionIssuesPage() {
           <section className="rounded-xl border border-line p-4">
             <h3 className="text-sm font-semibold text-content">Ticket actions</h3>
             <div className="mt-3 flex flex-wrap gap-2">
-              <Button variant="outline" size="sm" disabled={busy || status === 'RESOLVED' || status === 'REJECTED' || status === 'DUPLICATE'} onClick={() => {
+              <Button variant="outline" size="sm" disabled={busy || assignedToMe || status === 'RESOLVED' || status === 'REJECTED' || status === 'DUPLICATE' || status === 'WITHDRAWN'} onClick={() => {
                 if (!detail || !user) return;
                 void act(() => questionIssueService.assign(detail.issueId, user.userId), 'Could not assign this ticket.');
-              }}>Assign to me</Button>
-              {status === 'PENDING' && <Button size="sm" loading={busy} onClick={() => {
+              }}>{assignedToMe ? 'Assigned to you' : 'Assign to me'}</Button>
+              {status === 'PENDING' && <Button size="sm" loading={busy} disabled={!assignedToMe} onClick={() => {
                 if (!detail) return;
                 void act(() => questionIssueService.status(detail.issueId, 'IN_PROGRESS', note.trim()), 'Could not start ticket review.');
               }}>Start review</Button>}
             </div>
+            {status === 'PENDING' && !assignedToMe && <p className="mt-2 text-xs text-content-secondary">Assign this ticket to yourself before starting the review.</p>}
             {status === 'PENDING' && <label className="mt-3 grid gap-1.5 text-sm font-medium text-content-secondary">Review note <span className="font-normal text-content-subtle">Optional</span><textarea rows={2} className="rounded-lg border border-line bg-surface p-3 text-sm text-content" value={note} onChange={event => setNote(event.target.value)} placeholder="Add a note while taking ownership" /></label>}
             {status === 'IN_PROGRESS' && <div className="mt-3 space-y-2"><label className="grid gap-1.5 text-sm font-medium text-content-secondary">Rejection reason<textarea rows={3} className="rounded-lg border border-line bg-surface p-3 text-sm text-content" value={note} onChange={event => setNote(event.target.value)} placeholder="Explain why this report is rejected" /></label><Button variant="danger" size="sm" loading={busy} disabled={!note.trim()} onClick={() => void act(() => questionIssueService.status(detail.issueId, 'REJECTED', note.trim()), 'Could not reject this ticket.')}>Reject ticket</Button></div>}
             {status === 'IN_PROGRESS' && <details className="mt-4 border-t border-line pt-3">
