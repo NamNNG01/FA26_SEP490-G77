@@ -411,9 +411,9 @@ public class QuestionServiceImpl implements QuestionService {
             throw new ResourceConflictException("Resource was modified by another user (lock version mismatch)");
         }
 
-        QuestionGroup targetGroup = q.getGroup();
+        QuestionGroup targetGroup = req.isGroupIdPresent() && req.getGroupId() == null ? null : q.getGroup();
         if (req.getGroupId() != null) {
-            targetGroup = questionGroupRepository.findById(req.getGroupId())
+            targetGroup =questionGroupRepository.findById(req.getGroupId())
                     .orElseThrow(() -> new ResourceNotFoundException("Question group not found"));
 
             Long questionCourseId = q.getCourse() == null ? null : q.getCourse().getCourseId();
@@ -446,6 +446,8 @@ public class QuestionServiceImpl implements QuestionService {
 
         if (req.getGroupId() != null) {
             q.setGroup(targetGroup);
+        } else if (req.isGroupIdPresent()) {
+            q.setGroup(null);
         }
 
         List<AnswerOptionDto> optionsToValidate = req.getOptions();
