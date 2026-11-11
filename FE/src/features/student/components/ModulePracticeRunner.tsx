@@ -50,8 +50,11 @@ const SAVE_RETRY_MS = 1000;
  * The take-exam screen for a Module Practice session (`/student/exam?practiceSessionId=`).
  * The paper is split into parts of PART_SIZE questions, loaded one part per MP-04 batch call; the
  * progress bar on top shows every part, and a part's results show once all its questions are
- * answered (a rubric answer still grading, or whose grading failed, counts as answered), then
- * "Continue" opens the next one. Every question is answered once (MP-05) and locked.
+ * answered or skipped (a rubric answer still grading, or whose grading failed, counts as answered),
+ * then "Continue" opens the next one. Forward only: every question is answered once (MP-05) or
+ * skipped with "Next question" — left blank, stored as UNANSWERED like a blank exam answer — and
+ * then locked. A skip writes nothing, so after a reload the blanks before the furthest question
+ * reached count as skipped.
  * Answers are saved in the background with retries: auto-graded questions are checked at once
  * against MP-04's `correctAnswer`, whose key shows beside the answer at once, and MP-05's verdict wins when it arrives; an answer that cannot be
  * saved is reopened with a toast. "Explain" (MP-09) is only offered in a part's results.
@@ -81,6 +84,8 @@ export function ModulePracticeRunner({ sessionId }: { sessionId: string }) {
   /** Bookmarks toggled here (MP-10), by questionId; otherwise MP-04's isBookmarked holds. */
   const [bookmarkOverrides, setBookmarkOverrides] = useState<Record<number, boolean>>({});
   const [bookmarkBusy, setBookmarkBusy] = useState(false);
+  /** Questions left blank with "Next question", by sessionQuestionId — locked like answered ones. */
+  const [skipped, setSkipped] = useState<ReadonlySet<number>>(() => new Set());
   const [confirmFinish, setConfirmFinish] = useState(false);
   const [finishing, setFinishing] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -100,16 +105,24 @@ export function ModulePracticeRunner({ sessionId }: { sessionId: string }) {
           return;
         }
         const questions = [...s.questions].sort((a, b) => a.orderIndex - b.orderIndex);
-        const wanted = questionParam ? Number(questionParam) : s.nextSessionQuestionId;
-        let index = questions.findIndex(q => q.sessionQuestionId === wanted);
-        const firstOpen = questions.findIndex(q => !q.answered);
+        // A skip writes nothing (the question stays UNANSWERED, like a blank exam answer), so the
+        // skipped ones are the blanks before the furthest point reached: the last answer or the
+        // question the URL reopens.
+        let index = questionParam ? questions.findIndex(q => q.sessionQuestionId === Number(questionParam)) : -1;
+        let reached = index;
+        questions.forEach((q, i) => {
+          if (q.answered) reached = Math.max(reached, i);
+        });
+        const left = new Set(questions.slice(0, Math.max(0, reached)).filter(q => !q.answered).map(q => q.sessionQuestionId));
+        setSkipped(left);
+        const firstOpen = questions.findIndex(q => !q.answered && !left.has(q.sessionQuestionId));
         // A part opens only once the ones before it are done.
         if (index < 0 || (firstOpen >= 0 && partOf(index) > partOf(firstOpen))) index = firstOpen;
         setSession({ ...s, questions });
         if (index >= 0) {
           setCurrent(index);
         } else if (questions.length > 0) {
-          // Every question answered but not finished yet: back on the last part's results.
+          // Every question answered or skipped but not finished yet: back on the last part's results.
           setCurrent(questions.length - 1);
           setResultPart(partOf(questions.length - 1));
         }
@@ -134,9 +147,11 @@ export function ModulePracticeRunner({ sessionId }: { sessionId: string }) {
   const partStart = part * PART_SIZE;
   const partEnd = Math.min(questions.length, partStart + PART_SIZE);
   const partQuestions = (p: number) => questions.slice(p * PART_SIZE, (p + 1) * PART_SIZE);
-  const partDone = (p: number) => partQuestions(p).every(q => q.answered);
-  // The first part with an unanswered question; the parts after it stay locked.
-  const firstOpenIndex = questions.findIndex(q => !q.answered);
+  /** Answered or skipped: either way the student has moved past it. */
+  const passed = (q: SessionQuestionSummary) => q.answered || skipped.has(q.sessionQuestionId);
+  const partDone = (p: number) => partQuestions(p).every(passed);
+  // The first part with a question not reached yet; the parts after it stay locked.
+  const firstOpenIndex = questions.findIndex(q => !passed(q));
   const openPart = firstOpenIndex >= 0 ? partOf(firstOpenIndex) : partCount - 1;
 
   /* ── A whole part (MP-04 batch) in one call; the next part is fetched ahead ── */
@@ -266,9 +281,12 @@ export function ModulePracticeRunner({ sessionId }: { sessionId: string }) {
       setResultPart(p);
       return;
     }
-    const firstOpen = partQuestions(p).findIndex(q => !q.answered);
+    const firstOpen = partQuestions(p).findIndex(q => !passed(q));
     goTo(p * PART_SIZE + Math.max(0, firstOpen));
   };
+
+  /** "Next question" on an unanswered question: it is left blank and locked. */
+  const skip = (id: number) => setSkipped(prev => (prev.has(id) ? prev : new Set(prev).add(id)));
 
   /* ── Submit one attempt (MP-05) ───────────────────────────────────────── */
   // Saved in the background: the answer is shown (and the part moves on) at once, MP-05 follows.
@@ -480,12 +498,18 @@ export function ModulePracticeRunner({ sessionId }: { sessionId: string }) {
   }
 
   const isLastOfPart = current === partEnd - 1;
-  const partUnanswered = partQuestions(part).filter(q => !q.answered).length;
-  const thisPartDone = partUnanswered === 0;
   const isRubric = RUBRIC_TYPES.has(summary.questionType);
   const question = view ? toAttemptQuestion(view) : null;
-  // One answer per question: once sent it is shown read-only.
-  const editing = latest == null;
+  const isSkipped = latest == null && skipped.has(summary.sessionQuestionId);
+  // One answer per question: once sent — or skipped — it is shown read-only.
+  const editing = latest == null && !isSkipped;
+  // Moving on from an unanswered question (no answer on its way) skips it.
+  const leave = () => {
+    if (editing && !savesRef.current.has(summary.sessionQuestionId)) skip(summary.sessionQuestionId);
+  };
+  // Another question of this part not reached yet — one whose save failed, as a part is gone through in order.
+  const otherOpen = partQuestions(part).findIndex(q => q.sessionQuestionId !== summary.sessionQuestionId && !passed(q));
+  const nextLabel = (text: string) => (editing ? `Skip — ${text.toLowerCase()}` : text);
   /** Writing an essay: question on top, the answer box filling the rest of the column (md+). Once
    *  sent, grading and the verdict take the space, so the normal stacked layout comes back. */
   const fillEssay = editing && summary.questionType === 'ESSAY';
@@ -571,6 +595,7 @@ export function ModulePracticeRunner({ sessionId }: { sessionId: string }) {
 
       <PartProgress
         questions={questions}
+        skipped={skipped}
         current={current}
         resultPart={resultPart}
         openPart={openPart}
@@ -583,6 +608,7 @@ export function ModulePracticeRunner({ sessionId }: { sessionId: string }) {
             part={resultPart}
             partCount={partCount}
             questions={partQuestions(resultPart)}
+            skipped={skipped}
             views={views}
             sessionId={session.sessionId}
             regrading={regrading}
@@ -667,6 +693,12 @@ export function ModulePracticeRunner({ sessionId }: { sessionId: string }) {
                   </div>
                 )}
 
+                {isSkipped && (
+                  <p className="flex items-center gap-2 rounded-[10px] bg-surface-muted px-3 py-2.5 text-sm text-content-soft">
+                    <Icon.Info className="w-4 h-4 flex-shrink-0" /> You skipped this question — it is left blank.
+                  </p>
+                )}
+
                 {/* A submitted answer is shown read-only: a revealed input locks itself (its "Show the
                     correct order" stays clickable), any other one is disabled by the fieldset. */}
                 <fieldset
@@ -705,22 +737,48 @@ export function ModulePracticeRunner({ sessionId }: { sessionId: string }) {
               </>
             )}
 
-            {/* Forward only, and only once this question is answered (or sent for grading); the part's
-                last question leads to its results. */}
-            {!editing && (
+            {/* Forward only, always offered: an unanswered question is skipped (left blank, locked).
+                The part's last question leads to its results. */}
+            {view && (
               <div className="flex flex-wrap items-center justify-end gap-3">
+                {editing && <span className="text-xs text-content-subtle">Skipping leaves this question blank — you can't come back to it.</span>}
                 {!isLastOfPart ? (
-                  <Button iconRight={<Icon.ChevronRight className="w-4 h-4" />} onClick={() => goTo(current + 1)}>
-                    Next question
+                  <Button
+                    variant={editing ? 'outline' : undefined}
+                    iconRight={<Icon.ChevronRight className="w-4 h-4" />}
+                    disabled={busy}
+                    onClick={() => {
+                      leave();
+                      goTo(current + 1);
+                    }}
+                  >
+                    {nextLabel('Next question')}
                   </Button>
-                ) : thisPartDone ? (
-                  <Button iconRight={<Icon.ChevronRight className="w-4 h-4" />} onClick={() => openPartAt(part)}>
-                    See part {part + 1} results
+                ) : otherOpen < 0 ? (
+                  <Button
+                    variant={editing ? 'outline' : undefined}
+                    iconRight={<Icon.ChevronRight className="w-4 h-4" />}
+                    disabled={busy}
+                    onClick={() => {
+                      leave();
+                      setActionError(null);
+                      setCurrent(partStart);
+                      setResultPart(part);
+                    }}
+                  >
+                    {nextLabel(`See part ${part + 1} results`)}
                   </Button>
                 ) : (
                   // An earlier answer of this part could not be saved: back to it first.
-                  <Button iconRight={<Icon.ChevronRight className="w-4 h-4" />} onClick={() => openPartAt(part)}>
-                    Answer question {partStart + partQuestions(part).findIndex(q => !q.answered) + 1} again
+                  <Button
+                    iconRight={<Icon.ChevronRight className="w-4 h-4" />}
+                    disabled={busy}
+                    onClick={() => {
+                      leave();
+                      goTo(partStart + otherOpen);
+                    }}
+                  >
+                    Answer question {partStart + otherOpen + 1} again
                   </Button>
                 )}
               </div>
@@ -773,11 +831,11 @@ function imagesOf(view: PracticeQuestionView | undefined) {
   return view?.media?.filter(m => m.optionId == null && m.mediaType?.toUpperCase().startsWith('IMAGE')) ?? [];
 }
 
-type Outcome = 'correct' | 'wrong' | 'partial' | 'awaiting' | 'failed' | 'answered' | 'open';
+type Outcome = 'correct' | 'wrong' | 'partial' | 'awaiting' | 'failed' | 'answered' | 'skipped' | 'open';
 
 /** How one question of the paper went, for the progress bar and a part's results. */
-function outcomeOf(q: SessionQuestionSummary): Outcome {
-  if (!q.answered) return 'open';
+function outcomeOf(q: SessionQuestionSummary, skipped: ReadonlySet<number>): Outcome {
+  if (!q.answered) return skipped.has(q.sessionQuestionId) ? 'skipped' : 'open';
   if (AWAITING_GRADE.has(q.gradingStatus)) return 'awaiting';
   if (q.gradingStatus === 'FAILED') return 'failed';
   return summaryOutcome(q) ?? 'answered';
@@ -790,6 +848,7 @@ const TICK_TONE: Record<Outcome, string> = {
   awaiting: 'bg-info',
   failed: 'bg-content-subtle',
   answered: 'bg-content-subtle',
+  skipped: 'bg-line-strong',
   open: 'bg-line',
 };
 
@@ -799,12 +858,14 @@ const TICK_TONE: Record<Outcome, string> = {
  */
 function PartProgress({
   questions,
+  skipped,
   current,
   resultPart,
   openPart,
   onSelect,
 }: {
   questions: SessionQuestionSummary[];
+  skipped: ReadonlySet<number>;
   current: number;
   resultPart: number | null;
   openPart: number;
@@ -827,7 +888,7 @@ function PartProgress({
         {Array.from({ length: partCount }, (_, p) => {
           const items = questions.slice(p * PART_SIZE, (p + 1) * PART_SIZE);
           const locked = p > openPart;
-          const done = items.every(q => q.answered);
+          const done = items.every(q => q.answered || skipped.has(q.sessionQuestionId));
           const active = p === activePart;
           return (
             <li key={p} className="flex-1 min-w-0" style={{ flexGrow: items.length }}>
@@ -848,7 +909,7 @@ function PartProgress({
                   return (
                     <span
                       key={q.sessionQuestionId}
-                      className={`h-2 flex-1 min-w-0 rounded-[2px] ${here ? 'bg-brand-600' : TICK_TONE[outcomeOf(q)]}`}
+                      className={`h-2 flex-1 min-w-0 rounded-[2px] ${here ? 'bg-brand-600' : TICK_TONE[outcomeOf(q, skipped)]}`}
                     />
                   );
                 })}
@@ -868,6 +929,7 @@ const OUTCOME_LABEL: Record<Outcome, string> = {
   awaiting: 'Grading…',
   failed: 'Not graded',
   answered: 'Answered',
+  skipped: 'Skipped',
   open: 'Not answered',
 };
 
@@ -878,6 +940,7 @@ const OUTCOME_TEXT: Record<Outcome, string> = {
   awaiting: 'text-info',
   failed: 'text-content-soft',
   answered: 'text-content-soft',
+  skipped: 'text-content-subtle',
   open: 'text-content-subtle',
 };
 
@@ -899,6 +962,7 @@ function PartResults({
   part,
   partCount,
   questions,
+  skipped,
   views,
   sessionId,
   regrading,
@@ -911,6 +975,7 @@ function PartResults({
   part: number;
   partCount: number;
   questions: SessionQuestionSummary[];
+  skipped: ReadonlySet<number>;
   views: Record<number, PracticeQuestionView>;
   sessionId: number;
   /** Answers being sent for grading again, by sessionQuestionId. */
@@ -921,7 +986,7 @@ function PartResults({
   onContinue: () => void;
   onFinish: () => void;
 }) {
-  const outcomes = questions.map(outcomeOf);
+  const outcomes = questions.map(q => outcomeOf(q, skipped));
   const isLastPart = part === partCount - 1;
   const first = part * PART_SIZE + 1;
   const [selected, setSelected] = useState(0);
