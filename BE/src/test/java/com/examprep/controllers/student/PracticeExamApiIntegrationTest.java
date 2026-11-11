@@ -107,6 +107,25 @@ class PracticeExamApiIntegrationTest {
         assertEquals(essays, drawn);
     }
 
+    @Test void moduleQuestionCountsDrawExactlyPerModule() throws Exception {
+        String c = "{\"courseId\":" + course.getCourseId() + ",\"durationMinutes\":30,\"moduleQuestionCounts\":[";
+        String counts = "{\"categoryId\":" + oop.getModuleId() + ",\"questionCount\":4},{\"categoryId\":" + io.getModuleId() + ",\"questionCount\":3}]}";
+        JsonNode data = data(create(student, c + counts).andExpect(status().isCreated()));
+        assertEquals(7, data.path("questionCount").asInt());
+        List<Long> modules = em.createQuery("select eq.question.module.moduleId from ExamQuestion eq where eq.exam.examId = :e", Long.class)
+                .setParameter("e", data.path("examId").asLong()).getResultList();
+        assertEquals(4, modules.stream().filter(oop.getModuleId()::equals).count());
+        assertEquals(3, modules.stream().filter(io.getModuleId()::equals).count());
+
+        create(student, c + "{\"categoryId\":" + io.getModuleId() + ",\"questionCount\":4}]}")
+                .andExpect(status().isUnprocessableEntity()).andExpect(jsonPath("$.data.code").value("NOT_ENOUGH_QUESTIONS"))
+                .andExpect(jsonPath("$.data.categoryId").value(io.getModuleId())).andExpect(jsonPath("$.data.available").value(3));
+        create(student, c + "{\"categoryId\":" + io.getModuleId() + ",\"questionCount\":1},{\"categoryId\":" + io.getModuleId()
+                + ",\"questionCount\":1}]}").andExpect(status().isBadRequest());
+        create(student, c + "{\"categoryId\":" + io.getModuleId() + ",\"questionCount\":0}]}").andExpect(status().isBadRequest());
+        create(student, "{\"courseId\":" + course.getCourseId() + ",\"durationMinutes\":30}").andExpect(status().isBadRequest());
+    }
+
     @Test void notEnoughQuestions422() throws Exception {
         create(student, "{\"courseId\":" + course.getCourseId() + ",\"questionCount\":11,\"durationMinutes\":30,\"difficulty\":\"EASY\","
                 + "\"categoryIds\":[" + oop.getModuleId() + "]}")

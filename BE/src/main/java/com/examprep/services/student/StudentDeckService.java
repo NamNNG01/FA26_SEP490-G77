@@ -24,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -351,6 +352,9 @@ public class StudentDeckService {
         String code = request.codeBody() == null || request.codeBody().isBlank() ? null : request.codeBody();
         String language = optionalText(request.codeLanguage());
         if (language != null) language = language.toUpperCase(Locale.ROOT);
+        boolean images = "FLASHCARD".equals(mode);
+        String frontImage = images ? imageUrl(request.frontImageUrl()) : null;
+        String backImage = images ? imageUrl(request.backImageUrl()) : null;
         switch (mode) {
             case "CODE_SNIPPET" -> {
                 require(front, "frontText");
@@ -362,8 +366,8 @@ public class StudentDeckService {
                 require(back, "backText");
             }
             default -> {
-                require(front, "frontText");
-                require(back, "backText");
+                require(front == null ? frontImage : front, "frontText or frontImageUrl");
+                require(back == null ? backImage : back, "backText or backImageUrl");
             }
         }
         if (language != null && !CODE_LANGUAGES.contains(language)) {
@@ -373,6 +377,13 @@ public class StudentDeckService {
         card.setBackText(back == null ? "" : back);
         card.setCodeBody(code);
         card.setCodeLanguage(language);
+        card.setFrontImageUrl(frontImage);
+        card.setBackImageUrl(backImage);
+    }
+
+    /** Absent (null) or empty/blank means no image; apply() is always handed the merged value. */
+    private static String imageUrl(Optional<String> url) {
+        return url == null ? null : url.map(StudentDeckService::optionalText).orElse(null);
     }
 
     /** FC-05: fields not sent keep their stored value; a sent blank value clears it (and may then fail validation). */
@@ -381,7 +392,9 @@ public class StudentDeckService {
                 request.frontText() != null ? request.frontText() : card.getFrontText(),
                 request.backText() != null ? request.backText() : card.getBackText(),
                 request.codeLanguage() != null ? request.codeLanguage() : card.getCodeLanguage(),
-                request.codeBody() != null ? request.codeBody() : card.getCodeBody());
+                request.codeBody() != null ? request.codeBody() : card.getCodeBody(),
+                request.frontImageUrl() != null ? request.frontImageUrl() : Optional.ofNullable(card.getFrontImageUrl()),
+                request.backImageUrl() != null ? request.backImageUrl() : Optional.ofNullable(card.getBackImageUrl()));
     }
 
     private static void require(String value, String field) {
@@ -405,6 +418,6 @@ public class StudentDeckService {
 
     static CardView cardView(Flashcard card) {
         return new CardView(card.getCardId(), card.getDeck().getDeckId(), card.getFrontText(), card.getBackText(),
-                card.getCodeLanguage(), card.getCodeBody(), card.getPosition());
+                card.getCodeLanguage(), card.getCodeBody(), card.getPosition(), card.getFrontImageUrl(), card.getBackImageUrl());
     }
 }

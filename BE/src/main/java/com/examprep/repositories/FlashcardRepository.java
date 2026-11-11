@@ -34,7 +34,7 @@ public interface FlashcardRepository extends JpaRepository<Flashcard, Long> {
     @Query("SELECT new com.examprep.dto.student.CardDto(" +
             "f.cardId, f.frontText, f.backText, " +
             "COALESCE(p.status, 'NEW'), " +
-            "COALESCE(p.isStarred, false)) " +
+            "COALESCE(p.isStarred, false), f.frontImageUrl, f.backImageUrl) " +
             "FROM Flashcard f LEFT JOIN UserCardProgress p ON p.card = f AND p.user.userId = :userId " +
             "WHERE f.deck.deckId = :deckId")
     Page<com.examprep.dto.student.CardDto> findDeckCardsWithProgress(@Param("deckId") Long deckId, @Param("userId") Long userId, Pageable pageable);

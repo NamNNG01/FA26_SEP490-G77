@@ -131,7 +131,8 @@ public class StudentStudyService {
         List<Flashcard> content = cards.findByDeckDeckIdOrderByPositionAscCardIdAsc(deckId);
         if (cardLimit > 0 && content.size() > cardLimit) content = content.subList(0, cardLimit);
         return new ViewerView(deckId, deck.getTitle(), deck.getMode(), content.stream()
-                .map(c -> new ViewerCard(c.getCardId(), c.getFrontText(), c.getBackText(), c.getCodeLanguage(), c.getCodeBody())).toList());
+                .map(c -> new ViewerCard(c.getCardId(), c.getFrontText(), c.getBackText(), c.getCodeLanguage(), c.getCodeBody(),
+                        c.getFrontImageUrl(), c.getBackImageUrl())).toList());
     }
 
     /** Spec 9.3: NEW, LEARNING, KNOWN; then wrong_count DESC, last_reviewed_at ASC (never reviewed first), position. */
@@ -146,7 +147,8 @@ public class StudentStudyService {
         return cards.findByDeckDeckIdOrderByPositionAscCardIdAsc(deckId).stream().sorted(order).map(c -> {
             UserCardProgress p = states.get(c.getCardId());
             return new StudyCard(c.getCardId(), c.getFrontText(), c.getBackText(), c.getCodeLanguage(), c.getCodeBody(),
-                    statusOf(p), wrongOf(p), p != null && Boolean.TRUE.equals(p.getIsStarred()));
+                    statusOf(p), wrongOf(p), p != null && Boolean.TRUE.equals(p.getIsStarred()),
+                    c.getFrontImageUrl(), c.getBackImageUrl());
         }).toList();
     }
 

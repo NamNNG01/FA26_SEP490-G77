@@ -29,6 +29,13 @@ public class Flashcard implements Serializable {
     @Column(name = "back_text", nullable = false)
     private String backText;
 
+    /** FLASHCARD decks: optional image per face (V42 columns); a face needs text, an image or both. */
+    @Column(name = "front_image_url", length = 512)
+    private String frontImageUrl;
+
+    @Column(name = "back_image_url", length = 512)
+    private String backImageUrl;
+
     /** 1-based order inside the deck (FC-04). */
     @Builder.Default
     @Column(name = "position", nullable = false)

@@ -5,5 +5,7 @@ public record CardDto(
         String frontText,
         String backText,
         String status,
-        Boolean isStarred
+        Boolean isStarred,
+        String frontImageUrl,
+        String backImageUrl
 ) {}

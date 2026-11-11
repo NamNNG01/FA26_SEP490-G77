@@ -14,9 +14,10 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.util.UUID;
 
-/** D3: image upload for question/exam content. Returns a public URL the editor embeds; nothing is stored in the DB. */
+/** D3: image upload for question/exam content, and for students (flashcard faces, question report attachments).
+ *  Returns a public URL the editor embeds; nothing is stored in the DB. SecurityConfig guards each prefix by role. */
 @RestController
-@RequestMapping("/api/v1/manager/uploads")
+@RequestMapping({"/api/v1/manager/uploads", "/api/v1/student/uploads"})
 @RequiredArgsConstructor
 @Tag(name = "Manager Uploads", description = "D3: media upload to Cloudinary")
 public class ManagerUploadController {

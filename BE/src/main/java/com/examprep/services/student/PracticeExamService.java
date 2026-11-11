@@ -52,7 +52,23 @@ public class PracticeExamService {
     public PracticeDtos.Created create(Long userId, PracticeDtos.Create request) {
         Long courseId = request.courseId();
         requireEnrolled(userId, courseId);
-        Set<Long> moduleIds = request.categoryIds() == null ? Set.of() : new LinkedHashSet<>(request.categoryIds());
+        List<PracticeDtos.ModuleCount> perModule = request.moduleQuestionCounts() == null || request.moduleQuestionCounts().isEmpty()
+                ? null : request.moduleQuestionCounts();
+        Set<Long> moduleIds;
+        int count;
+        if (perModule == null) {
+            if (request.questionCount() == null) throw new BadRequestException("questionCount is required.");
+            moduleIds = request.categoryIds() == null ? Set.of() : new LinkedHashSet<>(request.categoryIds());
+            count = request.questionCount();
+        } else {
+            moduleIds = new LinkedHashSet<>();
+            count = 0;
+            for (PracticeDtos.ModuleCount mc : perModule) {
+                if (!moduleIds.add(mc.categoryId())) throw new BadRequestException("moduleQuestionCounts has a duplicate categoryId: " + mc.categoryId());
+                count += mc.questionCount();
+            }
+            if (count > 100) throw new BadRequestException("moduleQuestionCounts must add up to at most 100 questions.");
+        }
         for (Long moduleId : moduleIds) {
             Module module = modules.findById(moduleId).orElse(null);
             if (module == null || !module.getCourse().getCourseId().equals(courseId) || module.isHidden()) {
@@ -62,11 +78,15 @@ public class PracticeExamService {
         boolean essay = "ESSAY".equals(request.examType());
         List<QuestionCandidate> pool = findCandidates(courseId, essay ? List.of("ESSAY") : AUTO_GRADED,
                 moduleIds.isEmpty(), moduleIds.isEmpty() ? List.of(-1L) : moduleIds, request.difficulty());
-        int count = request.questionCount();
-        if (pool.size() < count) throw notEnough(pool.size());
-        List<QuestionCandidate> drawn = new ArrayList<>(pool);
-        Collections.shuffle(drawn);
-        drawn = drawn.subList(0, count);
+        List<QuestionCandidate> drawn;
+        if (perModule == null) {
+            if (pool.size() < count) throw notEnough(pool.size());
+            drawn = new ArrayList<>(pool);
+            Collections.shuffle(drawn);
+            drawn = drawn.subList(0, count);
+        } else {
+            drawn = drawPerModule(pool, perModule);
+        }
 
         String examType = essay ? "ESSAY" : "QUIZ";
         String title = titleOr(request.title(), "Đề luyện tùy chọn - " + (essay ? "Tự luận" : "Trắc nghiệm"));
@@ -210,6 +230,25 @@ public class PracticeExamService {
         if (!enrollments.existsByCourse_CourseIdAndUser_UserIdAndStatus(courseId, userId, Enrollment.STATUS_ACTIVE)) {
             throw new ForbiddenException("You are not enrolled in this course.");
         }
+    }
+
+    /** Exactly mc.questionCount() random questions from each module, then mixed; the first short module fails the request. */
+    static List<QuestionCandidate> drawPerModule(List<QuestionCandidate> pool, List<PracticeDtos.ModuleCount> perModule) {
+        Map<Long, List<QuestionCandidate>> byModule = new HashMap<>();
+        for (QuestionCandidate c : pool) byModule.computeIfAbsent(c.moduleId(), k -> new ArrayList<>()).add(c);
+        List<QuestionCandidate> drawn = new ArrayList<>();
+        for (PracticeDtos.ModuleCount mc : perModule) {
+            List<QuestionCandidate> inModule = new ArrayList<>(byModule.getOrDefault(mc.categoryId(), List.of()));
+            if (inModule.size() < mc.questionCount()) {
+                throw new BaseException(ResponseCode.UNPROCESSABLE_VALIDATION_ERROR, "A module does not have enough questions.",
+                        Map.of("code", "NOT_ENOUGH_QUESTIONS", "categoryId", mc.categoryId(), "available", inModule.size(),
+                                "requested", mc.questionCount()));
+            }
+            Collections.shuffle(inModule);
+            drawn.addAll(inModule.subList(0, mc.questionCount()));
+        }
+        Collections.shuffle(drawn);
+        return drawn;
     }
 
     static BaseException notEnough(int available) {

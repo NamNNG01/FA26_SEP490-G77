@@ -1,10 +1,15 @@
 package com.examprep.dto.student;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.databind.DeserializationContext;
+import com.fasterxml.jackson.databind.JsonDeserializer;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import jakarta.validation.constraints.*;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 /** Request/response bodies of FC-01..15, FP-01..03 and FV-01. */
 public final class StudentDeckDtos {
@@ -25,11 +30,32 @@ public final class StudentDeckDtos {
                              @Positive Long courseId,
                              @PositiveOrZero Long moduleId) {}
 
-    /** FC-04 / FC-05; which fields are required depends on the deck mode. */
+    /** FC-04 / FC-05; which fields are required depends on the deck mode.
+     *  Images (FLASHCARD decks only): field absent = keep, null = remove. */
     public record CardWrite(@Size(max = 5000) String frontText,
                             @Size(max = 5000) String backText,
                             String codeLanguage,
-                            @Size(max = 20000) String codeBody) {}
+                            @Size(max = 20000) String codeBody,
+                            @JsonDeserialize(using = Present.class)
+                            Optional<@Size(max = 512) @Pattern(regexp = IMAGE_URL, message = "must be an http(s) URL") String> frontImageUrl,
+                            @JsonDeserialize(using = Present.class)
+                            Optional<@Size(max = 512) @Pattern(regexp = IMAGE_URL, message = "must be an http(s) URL") String> backImageUrl) {
+        public CardWrite(String frontText, String backText, String codeLanguage, String codeBody) {
+            this(frontText, backText, codeLanguage, codeBody, null, null);
+        }
+    }
+
+    /** Field absent → null, JSON null → Optional.empty(), value → Optional.of(value). Jackson's own Optional
+     *  deserializer gives empty for both, which would wipe an image on every partial FC-05 update. */
+    public static final class Present extends JsonDeserializer<Optional<String>> {
+        @Override public Optional<String> deserialize(JsonParser p, DeserializationContext ctxt) throws java.io.IOException {
+            return Optional.ofNullable(p.getValueAsString());
+        }
+        @Override public Optional<String> getNullValue(DeserializationContext ctxt) { return Optional.empty(); }
+        @Override public Object getAbsentValue(DeserializationContext ctxt) { return null; }
+    }
+
+    public static final String IMAGE_URL = "^\\s*$|^https?://\\S+$";
 
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record DeckView(Long deckId, String title, String description, String mode, Long courseId, String courseTitle,
@@ -38,7 +64,7 @@ public final class StudentDeckDtos {
 
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record CardView(Long cardId, Long deckId, String frontText, String backText, String codeLanguage, String codeBody,
-                           int position) {}
+                           int position, String frontImageUrl, String backImageUrl) {}
 
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record PublishRequestView(Long deckId, String visibility, String reviewStatus, Instant submittedAt) {}
@@ -59,7 +85,7 @@ public final class StudentDeckDtos {
 
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record StudyCard(Long cardId, String frontText, String backText, String codeLanguage, String codeBody,
-                            String status, int wrongCount, boolean isStarred) {}
+                            String status, int wrongCount, boolean isStarred, String frontImageUrl, String backImageUrl) {}
 
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record StudySessionView(String sessionId, Long deckId, String deckTitle, String deckMode, int totalCards,
@@ -71,7 +97,8 @@ public final class StudentDeckDtos {
     public record SessionSummary(int totalCards, int knownCount, int wrongCount) {}
 
     @JsonInclude(JsonInclude.Include.ALWAYS)
-    public record ViewerCard(Long cardId, String frontText, String backText, String codeLanguage, String codeBody) {}
+    public record ViewerCard(Long cardId, String frontText, String backText, String codeLanguage, String codeBody,
+                             String frontImageUrl, String backImageUrl) {}
 
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record ViewerView(Long deckId, String deckTitle, String deckMode, List<ViewerCard> cards) {}

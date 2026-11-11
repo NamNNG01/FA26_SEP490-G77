@@ -123,8 +123,8 @@ public class DeckReviewController {
             cm.put("backText", f.getBackText());
             cm.put("codeLanguage", f.getCodeLanguage() != null ? f.getCodeLanguage() : null);
             cm.put("codeBody", f.getCodeBody() != null ? f.getCodeBody() : null);
-            cm.put("frontImageUrl", null);
-            cm.put("backImageUrl", null);
+            cm.put("frontImageUrl", f.getFrontImageUrl());
+            cm.put("backImageUrl", f.getBackImageUrl());
             cm.put("hint", null);
             return cm;
         }).toList();

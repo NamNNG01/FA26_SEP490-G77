@@ -116,6 +116,27 @@ class StudentDeckApiIntegrationTest {
         send(put("/api/v1/student/decks/" + text), student, "{\"mode\":\"CODE_OUTPUT\"}").andExpect(status().isConflict());
     }
 
+    @Test void flashcardFacesTakeTextOrImage() throws Exception {
+        long text = deck(student, "FLASHCARD");
+        String img = "https://res.cloudinary.com/x/image/upload/a.png";
+        long card = card(text, "{\"frontImageUrl\":\"" + img + "\",\"backText\":\"b\"}");
+        send(put("/api/v1/student/cards/" + card), student, "{\"backText\":\"b2\"}")
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.frontText").value(""))
+                .andExpect(jsonPath("$.data.frontImageUrl").value(img)).andExpect(jsonPath("$.data.backImageUrl").isEmpty());
+        // null removes the image; the front then has neither text nor image.
+        send(put("/api/v1/student/cards/" + card), student, "{\"frontImageUrl\":null}").andExpect(status().isBadRequest());
+        send(put("/api/v1/student/cards/" + card), student, "{\"frontText\":\"a\",\"frontImageUrl\":null,\"backImageUrl\":\"" + img + "\"}")
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.frontImageUrl").isEmpty())
+                .andExpect(jsonPath("$.data.backImageUrl").value(img));
+        send(post("/api/v1/student/decks/" + text + "/cards"), student, "{\"frontImageUrl\":\"javascript:alert(1)\",\"backText\":\"b\"}")
+                .andExpect(status().isBadRequest());
+        long code = deck(student, "CODE_OUTPUT");
+        send(post("/api/v1/student/decks/" + code + "/cards"), student, "{\"codeBody\":\"print(1)\",\"backText\":\"1\",\"backImageUrl\":\"" + img + "\"}")
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.data.backImageUrl").isEmpty());
+        mvc.perform(get("/api/v1/student/decks/" + text + "/viewer").with(as(student)))
+                .andExpect(jsonPath("$.data.cards[0].backImageUrl").value(img));
+    }
+
     @Test void deleteDeckRemovesCardsAndProgress() throws Exception {
         long deck = deck(student, "FLASHCARD");
         long card = card(deck, "{\"frontText\":\"a\",\"backText\":\"b\"}");
