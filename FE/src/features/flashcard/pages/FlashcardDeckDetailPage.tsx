@@ -53,7 +53,7 @@ function diff(saved: DeckInfo, draft: DeckInfo): DeckUpdateRequest {
  *
  * Loads the deck and its cards (F-03). Deck info edits stay in a local draft
  * until Save Changes sends the changed fields (F-04); Delete removes the deck
- * (F-05). Cards are read-only until the API has per-card endpoints.
+ * (F-05). Card edits use the manager card endpoints (F-06..F-08).
  */
 export function FlashcardDeckDetailPage() {
   const { deckId = '' } = useParams<{ deckId: string }>();
@@ -92,8 +92,11 @@ export function FlashcardDeckDetailPage() {
   const cards = (deck?.cards ?? []).map(toEditableCard);
   const refreshDeck = async () => setDeck(await deckService.getDeck(deckId));
   const editor = useCardEditor(cards, {
-    add: async (frontText, backText) => { await deckService.createCard(deckId, { frontText, backText }); await refreshDeck(); },
-    update: async (card, frontText, backText) => { await deckService.updateCard(card.id, { frontText, backText }); await refreshDeck(); },
+    add: async (frontText, backText, images) => { await deckService.createCard(deckId, { frontText, backText, ...images }); await refreshDeck(); },
+    update: async (card, frontText, backText, images) => {
+      await deckService.updateCard(card.id, { frontText: frontText || null, backText: backText || null, ...images });
+      await refreshDeck();
+    },
     remove: async card => { await deckService.deleteCard(card.id); await refreshDeck(); },
   }, { confirmRemove: true });
 

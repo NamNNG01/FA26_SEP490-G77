@@ -11,6 +11,7 @@ import { QuestionForm } from '@/features/question/components/QuestionForm';
 import { fromDetail, isDraftValid, toCreateRequest, type QuestionDraft } from '@/features/question/model';
 import type { QuestionDetail } from '@/services/question.service';
 import { courseService, type CourseSummaryItem } from '@/services/course.service';
+import { SearchInput } from '@/components/common/SearchInput';
 import { ISSUE_STATUSES, ISSUE_TYPES, issueLabel, questionIssueService, refreshPendingIssueCount } from '@/services/questionIssue.service';
 import { useAuth } from '@/auth/authContext';
 import { getApiErrorMessage } from '@/utils/apiError';
@@ -101,6 +102,16 @@ export function ManagerQuestionIssuesPage() {
   }, [appliedFilters, page]);
 
   useEffect(() => { void load(page, appliedFilters); }, [load]);
+
+  useEffect(() => {
+    const changed = Object.keys(filters).some(key => filters[key as keyof typeof filters] !== appliedFilters[key as keyof typeof appliedFilters]);
+    if (!changed) return;
+    const timer = window.setTimeout(() => {
+      setPage(0);
+      setAppliedFilters({ ...filters });
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [filters, appliedFilters]);
 
   useEffect(() => {
     let cancelled = false;
@@ -223,6 +234,8 @@ export function ManagerQuestionIssuesPage() {
       value: String(candidate.issueId),
     })),
   ], [duplicateCandidates]);
+  const courseNames = useMemo(() => new Map(courses.map(course => [String(course.courseId), course.title])), [courses]);
+  const assignedToMe = !!detail?.assignedTo && String(detail.assignedTo.userId) === String(user?.userId);
   const resolutionOptions = RESOLUTION_TYPES.map(value => ({ label: issueLabel(value), value }));
   const fullQuestionEditor = ['ANSWER_CORRECTED', 'RUBRIC_CORRECTED', 'OTHER_CORRECTION'].includes(resolutionType);
 
@@ -232,39 +245,38 @@ export function ManagerQuestionIssuesPage() {
         <h1 className="text-2xl font-bold text-content">Question issue queue</h1>
         <p className="mt-1 text-sm text-content-secondary">Review student reports, correct affected questions, and monitor regrade work.</p>
       </div>
-      <span className="rounded-lg bg-surface-muted px-3 py-2 text-sm text-content-secondary">{list?.totalElements ?? 0} tickets</span>
     </header>
 
     {error && !selectedRow && <Alert type="error" message={error} />}
 
     <section className="overflow-hidden rounded-xl border border-line bg-surface shadow-sm">
-      <form className="grid gap-4 border-b border-line p-4 sm:p-5 lg:grid-cols-[minmax(140px,.65fr)_minmax(190px,1fr)_minmax(200px,1.25fr)_minmax(220px,1.5fr)_auto] lg:items-end" onSubmit={event => {
-        event.preventDefault();
-        setPage(0);
-        setAppliedFilters({ ...filters });
-      }}>
-        <Select label="Status" value={filters.status} onChange={value => setFilters(current => ({ ...current, status: value }))} options={[
+      <div className="flex flex-wrap items-center gap-3 border-b border-line-soft px-4 py-3">
+        <SearchInput
+          className="w-full sm:w-64 lg:flex-1"
+          aria-label="Search questions and reports"
+          placeholder="Search questions and reports…"
+          value={filters.search}
+          onChange={event => setFilters(current => ({ ...current, search: event.target.value }))}
+        />
+        <Select aria-label="Filter by status" className="w-full sm:w-40" value={filters.status} onChange={value => setFilters(current => ({ ...current, status: value }))} options={[
           { label: 'Pending', value: 'PENDING' },
           ...ISSUE_STATUSES.filter(value => value !== 'PENDING').map(value => ({ label: issueLabel(value), value })),
           { label: 'All statuses', value: 'ALL' },
-        ]} triggerClassName="w-full h-10 pl-3 pr-10 rounded-lg text-sm" />
-        <Select label="Issue type" value={filters.issueType} onChange={value => setFilters(current => ({ ...current, issueType: value }))} options={[
+        ]} />
+        <Select aria-label="Filter by issue type" className="w-full sm:w-48" value={filters.issueType} onChange={value => setFilters(current => ({ ...current, issueType: value }))} options={[
           { label: 'All issue types', value: '' },
           ...ISSUE_TYPES.map(value => ({ label: issueLabel(value), value })),
-        ]} triggerClassName="w-full h-10 pl-3 pr-10 rounded-lg text-sm" />
-        <SearchableSelect label="Course" options={courseOptions} value={filters.courseId} onChange={value => setFilters(current => ({ ...current, courseId: value }))} placeholder="All courses" searchPlaceholder="Search courses…" />
-        <label className="grid gap-1.5 text-sm font-medium text-content-secondary">Search questions and reports
-          <input className="h-10 rounded-lg border border-line bg-surface px-3 text-sm text-content placeholder:text-content-subtle" placeholder="Enter a question or report phrase" value={filters.search} onChange={event => setFilters(current => ({ ...current, search: event.target.value }))} />
-        </label>
-        <div className="flex gap-2 lg:justify-end">
-          <Button type="button" variant="outline" disabled={busy} onClick={() => {
+        ]} />
+        <SearchableSelect className="w-full sm:w-56" showLabel={false} aria-label="Filter by course" options={courseOptions} value={filters.courseId} onChange={value => setFilters(current => ({ ...current, courseId: value }))} placeholder="All courses" searchPlaceholder="Search courses…" />
+        <div className="ml-auto flex items-center gap-2">
+          <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => {
             setFilters({ ...EMPTY_FILTERS });
             setAppliedFilters({ ...EMPTY_FILTERS });
             setPage(0);
           }}>Clear</Button>
-          <Button type="submit" loading={busy}>Apply filters</Button>
+          <Badge variant="default" className="whitespace-nowrap font-semibold text-xs">{list?.totalElements ?? 0} tickets</Badge>
         </div>
-      </form>
+      </div>
 
       <div className="overflow-x-auto">
         <table className="w-full min-w-[950px] text-left text-sm">
@@ -283,7 +295,7 @@ export function ManagerQuestionIssuesPage() {
                 <div className="flex flex-wrap items-center gap-2"><span className="font-semibold text-content">{row.questionContent || row.question?.content || 'Question content unavailable'}</span><span className="text-xs text-content-subtle">Question #{row.questionId}</span></div>
                 <p className="mt-1 text-xs text-content-secondary">{issueLabel(row.issueType)} · Ticket #{row.issueId}</p>
               </td>
-              <td className="max-w-xs truncate px-5 py-4 text-content-secondary">{row.courseName || row.course?.name || '—'}</td>
+              <td className="max-w-xs truncate px-5 py-4 text-content-secondary">{row.courseName || row.courseTitle || row.course?.title || row.course?.name || courseNames.get(String(row.courseId)) || '—'}</td>
               <td className="whitespace-nowrap px-5 py-4 text-content-secondary">{row.reportCount ?? 0}</td>
               <td className="whitespace-nowrap px-5 py-4"><PriorityBadge priority={row.priority} score={row.priorityScore ?? 0} /></td>
               <td className="whitespace-nowrap px-5 py-4 text-content-secondary">{row.updatedAt || row.createdAt ? new Date(row.updatedAt || row.createdAt).toLocaleDateString() : '—'}</td>
@@ -310,7 +322,7 @@ export function ManagerQuestionIssuesPage() {
         <div className="min-w-0 space-y-5">
           <section className="rounded-xl border border-line bg-surface-muted p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <div><p className="text-xs font-semibold uppercase tracking-wide text-content-secondary">{issueLabel(detail.issueType || detail.reports?.[0]?.issueType)}</p><p className="mt-1 text-sm text-content-secondary">{detail.location?.courseName || detail.courseName || `Course #${detail.courseId ?? '—'}`} · {detail.location?.moduleTitle || 'Module unavailable'} · Question version {detail.question?.lockVersion ?? '—'}</p></div>
+              <div><p className="text-xs font-semibold uppercase tracking-wide text-content-secondary">{issueLabel(detail.issueType || detail.reports?.[0]?.issueType)}</p><p className="mt-1 text-sm text-content-secondary">{detail.location?.courseName || detail.courseName || courseNames.get(String(detail.courseId)) || `Course #${detail.courseId ?? '—'}`} · {detail.location?.moduleTitle || 'Module unavailable'} · Question version {detail.question?.lockVersion ?? '—'}</p></div>
               <Status value={status} />
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-2"><PriorityBadge priority={detail.priority} score={detail.priorityScore ?? 0} />{detail.lastReportedAt && <span className="text-xs text-content-secondary">Latest report {new Date(detail.lastReportedAt).toLocaleString()}</span>}</div>
@@ -353,15 +365,16 @@ export function ManagerQuestionIssuesPage() {
           <section className="rounded-xl border border-line p-4">
             <h3 className="text-sm font-semibold text-content">Ticket actions</h3>
             <div className="mt-3 flex flex-wrap gap-2">
-              <Button variant="outline" size="sm" disabled={busy || status === 'RESOLVED' || status === 'REJECTED' || status === 'DUPLICATE'} onClick={() => {
+              <Button variant="outline" size="sm" disabled={busy || assignedToMe || status === 'RESOLVED' || status === 'REJECTED' || status === 'DUPLICATE' || status === 'WITHDRAWN'} onClick={() => {
                 if (!detail || !user) return;
                 void act(() => questionIssueService.assign(detail.issueId, user.userId), 'Could not assign this ticket.');
-              }}>Assign to me</Button>
-              {status === 'PENDING' && <Button size="sm" loading={busy} onClick={() => {
+              }}>{assignedToMe ? 'Assigned to you' : 'Assign to me'}</Button>
+              {status === 'PENDING' && <Button size="sm" loading={busy} disabled={!assignedToMe} onClick={() => {
                 if (!detail) return;
                 void act(() => questionIssueService.status(detail.issueId, 'IN_PROGRESS', note.trim()), 'Could not start ticket review.');
               }}>Start review</Button>}
             </div>
+            {status === 'PENDING' && !assignedToMe && <p className="mt-2 text-xs text-content-secondary">Assign this ticket to yourself before starting the review.</p>}
             {status === 'PENDING' && <label className="mt-3 grid gap-1.5 text-sm font-medium text-content-secondary">Review note <span className="font-normal text-content-subtle">Optional</span><textarea rows={2} className="rounded-lg border border-line bg-surface p-3 text-sm text-content" value={note} onChange={event => setNote(event.target.value)} placeholder="Add a note while taking ownership" /></label>}
             {status === 'IN_PROGRESS' && <div className="mt-3 space-y-2"><label className="grid gap-1.5 text-sm font-medium text-content-secondary">Rejection reason<textarea rows={3} className="rounded-lg border border-line bg-surface p-3 text-sm text-content" value={note} onChange={event => setNote(event.target.value)} placeholder="Explain why this report is rejected" /></label><Button variant="danger" size="sm" loading={busy} disabled={!note.trim()} onClick={() => void act(() => questionIssueService.status(detail.issueId, 'REJECTED', note.trim()), 'Could not reject this ticket.')}>Reject ticket</Button></div>}
             {status === 'IN_PROGRESS' && <details className="mt-4 border-t border-line pt-3">

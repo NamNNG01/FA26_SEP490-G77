@@ -186,15 +186,27 @@ interface WrongQuestionItem {
   answerSpace?: AttemptQuestion['answerSpace'];
 }
 
-type ErrorBody = { message?: string; data?: { code?: string; available?: number } | null };
+type ErrorBody = {
+  message?: string;
+  data?: {
+    code?: string;
+    available?: number;
+    categoryId?: number;
+  } | null;
+};
 
-/** Readable PQ-01 error, with the bank size on NOT_ENOUGH_QUESTIONS. */
-export function getPracticeError(error: unknown, fallback: string): string {
+/** Readable PQ-01 error, including the module when a per-module request is short. */
+export function getPracticeError(error: unknown, fallback: string, modules: { value: string; label: string }[] = []): string {
   const res = (error as { response?: { status?: number; data?: ErrorBody } } | null)?.response;
   if (!res) return fallback;
   const body = res.data;
-  if (body?.data?.code === 'NOT_ENOUGH_QUESTIONS') {
+  if (body?.data?.code === 'NOT_ENOUGH_QUESTIONS' || body?.data?.categoryId != null) {
     const available = body.data.available;
+    const categoryId = body.data.categoryId;
+    if (categoryId != null) {
+      const label = modules.find(module => module.value === String(categoryId))?.label ?? `Module ${categoryId}`;
+      return `${label} has only ${available ?? 'not enough'} matching question${available === 1 ? '' : 's'}. Reduce its count or adjust the filters.`;
+    }
     return `The question bank does not have enough questions${available != null ? ` (only ${available} match)` : ''}. Lower the question count or remove some filters.`;
   }
   if (res.status === 403) return body?.message?.trim() || 'You are not enrolled in this course.';
