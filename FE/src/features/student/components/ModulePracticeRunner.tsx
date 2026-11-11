@@ -509,7 +509,6 @@ export function ModulePracticeRunner({ sessionId }: { sessionId: string }) {
   };
   // Another question of this part not reached yet — one whose save failed, as a part is gone through in order.
   const otherOpen = partQuestions(part).findIndex(q => q.sessionQuestionId !== summary.sessionQuestionId && !passed(q));
-  const nextLabel = (text: string) => (editing ? `Skip — ${text.toLowerCase()}` : text);
   /** Writing an essay: question on top, the answer box filling the rest of the column (md+). Once
    *  sent, grading and the verdict take the space, so the normal stacked layout comes back. */
   const fillEssay = editing && summary.questionType === 'ESSAY';
@@ -560,7 +559,6 @@ export function ModulePracticeRunner({ sessionId }: { sessionId: string }) {
           {isRubric ? 'Submit for AI grading' : (progress?.label ?? 'Check answer')}
         </Button>
         {progress?.hint && !isRubric && <span className="text-xs text-content-subtle">{progress.hint}</span>}
-        {isRubric && <span className="text-xs text-content-subtle">Graded by AI against the question's rubric.</span>}
       </div>
     ) : editing && INSTANT_CHECK_TYPES.has(summary.questionType) && !busy ? (
       <p className="text-xs text-content-subtle">Pick an answer — it is checked right away.</p>
@@ -744,7 +742,6 @@ export function ModulePracticeRunner({ sessionId }: { sessionId: string }) {
                 The part's last question leads to its results. */}
             {view && (
               <div className="flex flex-wrap items-center justify-end gap-3">
-                {editing && <span className="text-xs text-content-subtle">Skipping leaves this question blank — you can't come back to it.</span>}
                 {!isLastOfPart ? (
                   <Button
                     variant={editing ? 'outline' : undefined}
@@ -755,7 +752,7 @@ export function ModulePracticeRunner({ sessionId }: { sessionId: string }) {
                       goTo(current + 1);
                     }}
                   >
-                    {nextLabel('Next question')}
+                    Next question
                   </Button>
                 ) : otherOpen < 0 ? (
                   <Button
@@ -769,7 +766,7 @@ export function ModulePracticeRunner({ sessionId }: { sessionId: string }) {
                       setResultPart(part);
                     }}
                   >
-                    {nextLabel(`See part ${part + 1} results`)}
+                    See part {part + 1} results
                   </Button>
                 ) : (
                   // An earlier answer of this part could not be saved: back to it first.
