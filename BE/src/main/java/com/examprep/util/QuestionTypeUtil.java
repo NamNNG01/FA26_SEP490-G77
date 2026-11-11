@@ -13,15 +13,15 @@ public final class QuestionTypeUtil {
 
     public static final Set<String> QUESTION_TYPES = Set.of(
             "SINGLE_CHOICE", "MULTIPLE_CHOICE", "TRUE_FALSE", "FILL_BLANK",
-            "MATCHING", "ORDERING", "ESSAY", "CODE", "DIAGRAM");
+            "MATCHING", "ORDERING", "ESSAY", "CODE", "DIAGRAM", "DIAGRAM_ESSAY");
 
-    public static final Set<String> KINDS = Set.of("QUIZ", "ESSAY", "CODE", "DIAGRAM");
+    public static final Set<String> KINDS = Set.of("QUIZ", "ESSAY", "CODE", "DIAGRAM", "DIAGRAM_ESSAY");
 
     private static final Set<String> QUIZ_TYPES = Set.of(
             "SINGLE_CHOICE", "MULTIPLE_CHOICE", "TRUE_FALSE", "FILL_BLANK", "MATCHING", "ORDERING");
 
     private static final String KIND_MESSAGE =
-            "questionType must be one of QUIZ, ESSAY, CODE, DIAGRAM.";
+            "questionType must be one of QUIZ, ESSAY, CODE, DIAGRAM, DIAGram_ESSAY.";
 
     private QuestionTypeUtil() {
     }
@@ -30,17 +30,19 @@ public final class QuestionTypeUtil {
         if (questionType == null || !QUESTION_TYPES.contains(questionType)) {
             return null;
         }
-        return QUIZ_TYPES.contains(questionType) ? "QUIZ" : questionType;
+        if (QUIZ_TYPES.contains(questionType)) return "QUIZ";
+        if ("DIAGRAM_ESSAY".equals(questionType)) return "DIAGRAM_ESSAY";
+        return questionType;
     }
 
     /**
-     * Kind of an exam built from this question type. DIAGRAM folds into ESSAY: both are
+     * Kind of an exam built from this question type. DIAGRAM and DIAGRAM_ESSAY fold into ESSAY: both are
      * rubric-graded long answers and the essay exam form holds them together, so an exam
      * with essay and diagram questions is an ESSAY exam, not an unclassified one.
      */
     public static String examKindOf(String questionType) {
         String kind = kindOf(questionType);
-        return "DIAGRAM".equals(kind) ? "ESSAY" : kind;
+        return ("DIAGRAM".equals(kind) || "DIAGRAM_ESSAY".equals(kind)) ? "ESSAY" : kind;
     }
 
     public static boolean isValidKind(String value) {

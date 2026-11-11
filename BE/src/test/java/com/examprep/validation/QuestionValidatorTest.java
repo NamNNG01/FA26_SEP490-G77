@@ -221,21 +221,28 @@ class QuestionValidatorTest {
     }
 
     @Test
-    void testOrderingErrors() {
+    void testDiagramEssayHappyPath() {
         QuestionPayload payload = QuestionPayload.builder()
-                .questionType("ORDERING")
-                .content("Order the steps")
-                .options(List.of(
-                        AnswerOptionDto.builder().key("k1").optionText("Step 1").isCorrect(false).orderIndex(0).build(),
-                        AnswerOptionDto.builder().key("k1").optionText("Step 1").isCorrect(true).orderIndex(0).build()
-                ))
-                .correctOrder(List.of("k1", "k3"))
+                .questionType("DIAGRAM_ESSAY")
+                .content("Draw and explain the system")
+                .questionMetadata(Map.of("drawioXml", "<mxfile>diagram content</mxfile>"))
+                .essayGradingRubric(Map.of("criteria", List.of(Map.of("name", "Accuracy", "weight", 5))))
+                .answerKey(Map.of("sampleAnswer", "Sample explanation"))
+                .build();
+        List<ValidationError> errors = validator.validate(payload);
+        assertTrue(errors.isEmpty(), "Expected no validation errors for DIAGRAM_ESSAY, got: " + errors);
+    }
+
+    @Test
+    void testDiagramEssayErrors() {
+        // Missing drawioXml or rubric
+        QuestionPayload payload = QuestionPayload.builder()
+                .questionType("DIAGRAM_ESSAY")
+                .content("Draw and explain")
                 .build();
         List<ValidationError> errors = validator.validate(payload);
         assertFalse(errors.isEmpty());
-        assertTrue(errors.stream().anyMatch(e -> e.getMessage().contains("cannot have isCorrect")));
-        assertTrue(errors.stream().anyMatch(e -> e.getMessage().contains("Duplicate option key")));
-        assertTrue(errors.stream().anyMatch(e -> e.getMessage().contains("Duplicate option text")));
-        assertTrue(errors.stream().anyMatch(e -> e.getMessage().contains("Unknown key in correct order")));
+        assertTrue(errors.stream().anyMatch(e -> e.getMessage().contains("questionMetadata is required for diagram questions")));
+        assertTrue(errors.stream().anyMatch(e -> e.getMessage().contains("Essay grading rubric is required")));
     }
 }

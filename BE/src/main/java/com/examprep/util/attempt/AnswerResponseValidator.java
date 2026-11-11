@@ -60,6 +60,11 @@ public final class AnswerResponseValidator {
             case "ORDERING" -> validateOrdering(response, display);
             case "ESSAY", "CODE" -> validateText(response, "text");
             case "DIAGRAM" -> validateDiagram(response);
+            case "DIAGRAM_ESSAY" -> {
+                Optional<String> errText = validateText(response, "text");
+                if (errText.isPresent()) yield errText;
+                yield validateDiagram(response);
+            }
             default -> Optional.of("unsupported question type");
         };
     }

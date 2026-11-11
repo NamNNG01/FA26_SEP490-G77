@@ -38,7 +38,7 @@ public class QuestionValidator {
         if (questionType.equals("CODE")) {
             throw new BadRequestException("Question type not supported yet");
         }
-        if (!questionType.matches("SINGLE_CHOICE|MULTIPLE_CHOICE|TRUE_FALSE|MATCHING|FILL_BLANK|ESSAY|DIAGRAM|ORDERING")) {
+        if (!questionType.matches("SINGLE_CHOICE|MULTIPLE_CHOICE|TRUE_FALSE|MATCHING|FILL_BLANK|ESSAY|DIAGRAM|DIAGRAM_ESSAY|ORDERING")) {
             throw new BadRequestException("Question type not supported yet");
         }
     }
@@ -70,7 +70,7 @@ public class QuestionValidator {
             errors.add(new ValidationError(prefix + "questionType", "Question type is required"));
             return errors;
         }
-        if (type.equals("CODE") || !type.matches("SINGLE_CHOICE|MULTIPLE_CHOICE|TRUE_FALSE|MATCHING|FILL_BLANK|ESSAY|DIAGRAM|ORDERING")) {
+        if (type.equals("CODE") || !type.matches("SINGLE_CHOICE|MULTIPLE_CHOICE|TRUE_FALSE|MATCHING|FILL_BLANK|ESSAY|DIAGRAM|DIAGRAM_ESSAY|ORDERING")) {
             errors.add(new ValidationError(prefix + "questionType", "Question type not supported yet"));
             return errors;
         }
@@ -94,7 +94,7 @@ public class QuestionValidator {
         }
 
         // 3. Question Metadata validation
-        boolean isDiagram = "DIAGRAM".equals(type);
+        boolean isDiagram = "DIAGRAM".equals(type) || "DIAGRAM_ESSAY".equals(type);
         if (payload.getQuestionMetadata() != null) {
             try {
                 Map<String, Object> metaMap;
@@ -146,7 +146,7 @@ public class QuestionValidator {
         // 4. Type specific rules
         boolean hasOptionsType = type.equals("SINGLE_CHOICE") || type.equals("MULTIPLE_CHOICE") || type.equals("TRUE_FALSE");
         boolean isOrdering = type.equals("ORDERING");
-        boolean noOptionsType = type.equals("MATCHING") || type.equals("FILL_BLANK") || type.equals("ESSAY") || type.equals("DIAGRAM");
+        boolean noOptionsType = type.equals("MATCHING") || type.equals("FILL_BLANK") || type.equals("ESSAY") || type.equals("DIAGRAM") || type.equals("DIAGRAM_ESSAY");
 
         if (hasOptionsType) {
             if (payload.getAnswerKey() != null) {
@@ -302,6 +302,8 @@ public class QuestionValidator {
                 if (payload.getAnswerKey() != null) {
                     errors.add(new ValidationError(prefix + "answerKey", "Answer key is not allowed for question type DIAGRAM"));
                 }
+                validateEssayRubric(payload.getEssayGradingRubric(), prefix + "essayGradingRubric", errors);
+            } else if (type.equals("DIAGRAM_ESSAY")) {
                 validateEssayRubric(payload.getEssayGradingRubric(), prefix + "essayGradingRubric", errors);
             } else if (type.equals("MATCHING")) {
                 validateMatchingAnswerKey(payload.getAnswerKey(), prefix + "answerKey", errors);

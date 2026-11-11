@@ -23,7 +23,7 @@ import java.util.Set;
 public final class AttemptGrader {
 
     /** Questions whose rubric the AI worker scores. */
-    private static final Set<String> RUBRIC_TYPES = Set.of("ESSAY", "DIAGRAM", "CODE");
+    private static final Set<String> RUBRIC_TYPES = Set.of("ESSAY", "DIAGRAM", "CODE", "DIAGRAM_ESSAY");
 
     /** The six types scored here against the frozen key; everything else waits for the AI worker. */
     private static final Set<String> AUTO_GRADED_TYPES = Set.of(

@@ -327,23 +327,31 @@ public class ModulePracticeGradingWorker {
         List<Criterion> criteria = criteria(key.path("rubric"), maxPoints);
 
         String student;
-        if ("DIAGRAM".equals(type)) {
+        if ("DIAGRAM".equals(type) || "DIAGRAM_ESSAY".equals(type)) {
             String xml = response.path("drawioXml").asText("");
+            String textAns = response.path("text").asText("");
             if (xml.getBytes(StandardCharsets.UTF_8).length > MAX_DIAGRAM_BYTES) {
                 return tooLarge(criteria, maxPoints, DIAGRAM_TOO_LARGE);
             }
-            if (xml.isBlank()) {
-                student = "(no diagram submitted)";
-            } else {
+            if (textAns.length() > MAX_ESSAY_CHARS) {
+                return tooLarge(criteria, maxPoints, TEXT_TOO_LONG);
+            }
+            String diagramDesc = "(no diagram submitted)";
+            if (!xml.isBlank()) {
                 try {
                     DrawioNormalizer.Result normalized = DrawioNormalizer.normalize(xml);
                     if (normalized.elements() > MAX_DIAGRAM_ELEMENTS) {
                         return tooLarge(criteria, maxPoints, DIAGRAM_TOO_LARGE);
                     }
-                    student = normalized.text();
+                    diagramDesc = normalized.text();
                 } catch (IllegalArgumentException ex) {
-                    student = "(the submitted diagram could not be read)";
+                    diagramDesc = "(the submitted diagram could not be read)";
                 }
+            }
+            if ("DIAGRAM_ESSAY".equals(type)) {
+                student = "Diagram Submission:\n" + diagramDesc + "\n\nEssay Explanation:\n" + (textAns.isBlank() ? "(no text submitted)" : textAns);
+            } else {
+                student = diagramDesc;
             }
         } else {
             student = response.path("text").asText("");
