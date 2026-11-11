@@ -10,6 +10,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class TestCaseDto {
+    private Long testCaseId;
     private String inputData;
     private String expectedOutput;
     private Boolean hidden;

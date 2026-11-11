@@ -466,6 +466,11 @@ public class QuestionServiceImpl implements QuestionService {
         String contentToValidate = req.getContent() != null ? req.getContent() : q.getContent();
         String difficultyToValidate = req.getDifficulty() != null ? req.getDifficulty() : q.getDifficulty();
         String statusToValidate = req.getStatus() != null ? req.getStatus() : q.getStatus();
+        boolean isCode = "CODE".equals(typeToValidate);
+        CodeConfigDto codeConfigToValidate = !isCode ? null
+                : req.getCodeConfig() != null ? req.getCodeConfig() : storedCodeConfig(q);
+        List<TestCaseDto> testCasesToValidate = !isCode ? null
+                : req.getTestCases() != null ? req.getTestCases() : storedTestCases(q);
 
         QuestionPayload payload = QuestionPayload.builder()
                 .questionType(typeToValidate)
@@ -476,6 +481,8 @@ public class QuestionServiceImpl implements QuestionService {
                 .answerKey(answerKeyToValidate)
                 .essayGradingRubric(rubricToValidate)
                 .options(optionsToValidate)
+                .codeConfig(codeConfigToValidate)
+                .testCases(testCasesToValidate)
                 .build();
 
         questionValidator.validateOrThrow(payload);
@@ -531,8 +538,8 @@ public class QuestionServiceImpl implements QuestionService {
             }
         }
 
-        if ("CODE".equals(typeToValidate) && (req.getCodeConfig() != null || req.getTestCases() != null)) {
-            saveCodeConfigAndTestCases(q, req.getCodeConfig(), req.getTestCases());
+        if (isCode && (req.getCodeConfig() != null || req.getTestCases() != null)) {
+            saveCodeConfigAndTestCases(q, codeConfigToValidate, testCasesToValidate);
         }
 
         boolean isOrdering = "ORDERING".equals(typeToValidate);
@@ -834,6 +841,10 @@ public class QuestionServiceImpl implements QuestionService {
             }
             List<AnswerOption> options = answerOptionRepository.findByQuestion_QuestionId(q.getQuestionId());
             QuestionPayload payload = QuestionPayload.fromEntity(q, options, objectMapper);
+            if ("CODE".equals(q.getQuestionType())) {
+                payload.setCodeConfig(storedCodeConfig(q));
+                payload.setTestCases(storedTestCases(q));
+            }
             questionValidator.validateOrThrow(payload);
         } else if ("ACTIVE".equals(currentStatus) && "ARCHIVED".equals(newStatus)) {
             // Allowed: ACTIVE -> ARCHIVED
@@ -899,6 +910,34 @@ public class QuestionServiceImpl implements QuestionService {
         }
     }
 
+    private CodeConfigDto storedCodeConfig(Question q) {
+        CodeQuestionConfig cfg = codeQuestionConfigRepository.findById(q.getQuestionId()).orElse(null);
+        if (cfg == null) return null;
+        List<String> langs = null;
+        try {
+            if (cfg.getAllowedLanguages() != null && !cfg.getAllowedLanguages().isBlank()) {
+                langs = objectMapper.readValue(cfg.getAllowedLanguages(), new TypeReference<List<String>>() {});
+            }
+        } catch (Exception ignored) {}
+        return CodeConfigDto.builder()
+                .allowedLanguages(langs)
+                .codeTemplate(cfg.getCodeTemplate())
+                .timeLimitMs(cfg.getTimeLimitMs())
+                .memoryLimitKb(cfg.getMemoryLimitKb())
+                .build();
+    }
+
+    private List<TestCaseDto> storedTestCases(Question q) {
+        return codeTestCaseRepository.findByQuestionQuestionIdOrderByOrderIndexAscTestCaseIdAsc(q.getQuestionId())
+                .stream().map(tc -> TestCaseDto.builder()
+                        .testCaseId(tc.getTestCaseId())
+                        .inputData(tc.getInputData())
+                        .expectedOutput(tc.getExpectedOutput())
+                        .hidden(tc.getHidden())
+                        .orderIndex(tc.getOrderIndex())
+                        .build()).collect(Collectors.toList());
+    }
+
     private QuestionDetailDto mapToDetailDto(Question q, List<AnswerOption> options) {
         Object metadataObj = parseJson(q.getQuestionMetadata());
         Object answerKeyObj = parseJson(q.getAnswerKey());
@@ -913,35 +952,9 @@ public class QuestionServiceImpl implements QuestionService {
                 .orderIndex(o.getOrderIndex())
                 .build()).collect(Collectors.toList());
 
-        CodeConfigDto codeConfig = null;
-        if ("CODE".equals(q.getQuestionType())) {
-            CodeQuestionConfig cfg = codeQuestionConfigRepository.findById(q.getQuestionId()).orElse(null);
-            if (cfg != null) {
-                List<String> langs = null;
-                try {
-                    if (cfg.getAllowedLanguages() != null && !cfg.getAllowedLanguages().isBlank()) {
-                        langs = objectMapper.readValue(cfg.getAllowedLanguages(), new TypeReference<List<String>>() {});
-                    }
-                } catch (Exception ignored) {}
-                codeConfig = CodeConfigDto.builder()
-                        .allowedLanguages(langs)
-                        .codeTemplate(cfg.getCodeTemplate())
-                        .timeLimitMs(cfg.getTimeLimitMs())
-                        .memoryLimitKb(cfg.getMemoryLimitKb())
-                        .build();
-            }
-        }
-
-        List<TestCaseDto> testCases = null;
-        if ("CODE".equals(q.getQuestionType())) {
-            List<CodeTestCase> cases = codeTestCaseRepository.findByQuestionQuestionIdOrderByOrderIndexAscTestCaseIdAsc(q.getQuestionId());
-            testCases = cases.stream().map(tc -> TestCaseDto.builder()
-                    .inputData(tc.getInputData())
-                    .expectedOutput(tc.getExpectedOutput())
-                    .hidden(tc.getHidden())
-                    .orderIndex(tc.getOrderIndex())
-                    .build()).collect(Collectors.toList());
-        }
+        boolean isCode = "CODE".equals(q.getQuestionType());
+        CodeConfigDto codeConfig = isCode ? storedCodeConfig(q) : null;
+        List<TestCaseDto> testCases = isCode ? storedTestCases(q) : null;
 
         return QuestionDetailDto.builder()
                 .questionId(q.getQuestionId())

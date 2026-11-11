@@ -6,7 +6,7 @@ import com.examprep.exceptions.BadRequestException;
 import java.util.Set;
 
 /**
- * Maps the supported question types onto the four kinds a question group can hold.
+ * Maps the supported question types onto the five kinds a question group can hold.
  * A group holds exactly one kind, so it can never mix quizzes with essays, code or diagrams.
  */
 public final class QuestionTypeUtil {
@@ -21,7 +21,7 @@ public final class QuestionTypeUtil {
             "SINGLE_CHOICE", "MULTIPLE_CHOICE", "TRUE_FALSE", "FILL_BLANK", "MATCHING", "ORDERING");
 
     private static final String KIND_MESSAGE =
-            "questionType must be one of QUIZ, ESSAY, CODE, DIAGRAM, DIAGram_ESSAY.";
+            "questionType must be one of QUIZ, ESSAY, CODE, DIAGRAM, DIAGRAM_ESSAY.";
 
     private QuestionTypeUtil() {
     }

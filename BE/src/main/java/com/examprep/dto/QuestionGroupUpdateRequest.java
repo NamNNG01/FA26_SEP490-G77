@@ -13,8 +13,8 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class QuestionGroupUpdateRequest {
 
-    @Pattern(regexp = "QUIZ|ESSAY|CODE|DIAGRAM",
-            message = "Question type must be one of QUIZ, ESSAY, CODE, DIAGRAM")
+    @Pattern(regexp = "QUIZ|ESSAY|CODE|DIAGRAM|DIAGRAM_ESSAY",
+            message = "Question type must be one of QUIZ, ESSAY, CODE, DIAGRAM, DIAGRAM_ESSAY")
     private String questionType;
 
     @Size(max = 255, message = "Title must not exceed 255 characters")

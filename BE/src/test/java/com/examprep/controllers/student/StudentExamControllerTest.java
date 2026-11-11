@@ -64,7 +64,7 @@ class StudentExamControllerTest {
     @Test
     void listMyExams_Success() throws Exception {
         MyExamDto myExam = new MyExamDto(
-                100L, "Midterm Exam", 5L, "Course 1", BigDecimal.TEN, 1L, BigDecimal.valueOf(8), "EXAM"
+                100L, "Midterm Exam", 5L, "Course 1", BigDecimal.TEN, 1L, BigDecimal.valueOf(8), "EXAM", true
         );
         UserPrincipal principal = UserPrincipal.create(10L, "student@examprep.local", "STUDENT");
         when(studentExamService.listMyExams(anyInt(), anyInt(), eq(10L)))
@@ -74,6 +74,7 @@ class StudentExamControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.content[0].examId").value(100))
-                .andExpect(jsonPath("$.data.content[0].mode").value("EXAM"));
+                .andExpect(jsonPath("$.data.content[0].mode").value("EXAM"))
+                .andExpect(jsonPath("$.data.content[0].hasCodeQuestions").value(true));
     }
 }

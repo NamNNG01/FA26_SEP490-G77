@@ -127,7 +127,10 @@ public interface ExamAttemptRepository extends JpaRepository<ExamAttempt, Long> 
             THEN att.totalScore
             ELSE NULL
         END),
-        ex.mode
+        ex.mode,
+        CASE WHEN EXISTS (SELECT 1 FROM ExamQuestion eq WHERE eq.exam = ex AND eq.question.questionType = 'CODE')
+                  OR EXISTS (SELECT 1 FROM ExamConfig ec WHERE ec.exam = ex AND ec.questionType = 'CODE')
+             THEN true ELSE false END
     )
     FROM ExamAttempt att
     JOIN att.exam ex
