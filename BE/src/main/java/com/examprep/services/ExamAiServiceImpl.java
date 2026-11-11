@@ -13,6 +13,7 @@ import com.examprep.dto.question.CodeConfigDto;
 import com.examprep.dto.question.TestCaseDto;
 import com.examprep.entities.Course;
 import com.examprep.entities.Module;
+import com.examprep.entities.Question;
 import com.examprep.entities.User;
 import com.examprep.exceptions.BaseException;
 import com.examprep.exceptions.ResourceNotFoundException;
@@ -53,9 +54,8 @@ public class ExamAiServiceImpl implements ExamAiService {
     private static final Set<String> RUBRIC_TYPES = Set.of("ESSAY", "DIAGRAM", "DIAGRAM_ESSAY");
     private static final List<String> CODE_LANGUAGES = List.of("JAVA", "PYTHON", "C", "CPP");
     private static final List<String> DIFFICULTIES = List.of("EASY", "MEDIUM", "HARD");
-    /** First call plus up to two top-ups for questions the model skipped or that failed validation. */
-    private static final int MAX_CALLS = 3;
-    private static final long MIN_RETRY_MILLIS = 15_000;
+    /** First call plus one top-up for questions the model skipped or that failed validation. */
+    private static final int MAX_CALLS = 2;
     private static final String INSTRUCTIONS = """
             You are an experienced university exam author. Write an exam draft as ONE JSON object:
             {"title": string, "description": string, "questions": [question]}.
@@ -136,20 +136,36 @@ public class ExamAiServiceImpl implements ExamAiService {
         List<String> warnings = new ArrayList<>();
         List<String> problems = new ArrayList<>();
         Map<String, Object> context = context(request, material);
+        context.put("course", Map.of("title", Objects.toString(course.getTitle(), ""),
+                "description", Objects.toString(course.getDescription(), "")));
+        if (module != null) {
+            context.put("module", Map.of("title", Objects.toString(module.getTitle(), ""),
+                    "description", Objects.toString(module.getDescription(), "")));
+        }
+        List<Question> bankQuestions = questions.findAiBank(request.courseId(), request.moduleId());
+        List<Map<String, String>> existingQuestions = bankQuestions.stream()
+                .map(question -> Map.of("questionType", Objects.toString(question.getQuestionType(), ""),
+                        "content", Objects.toString(question.getContent(), "")))
+                .toList();
+        context.put("existingQuestions", existingQuestions);
+        bankQuestions.stream().map(Question::getContent).filter(Objects::nonNull).map(ExamAiServiceImpl::key)
+                .forEach(seen::add);
         takeQuota(user.getId(), request.courseId());
         long timeout = material == null ? timeoutMillis : materialTimeoutMillis;
         long deadline = System.currentTimeMillis() + timeout;
         JsonNode generated = callAi(context, remainingTypes, remainingDifficulty, timeout);
         collect(generated, accepted, problems, seen, remainingTypes, remainingDifficulty);
+        warnings.addAll(problems);
         // Models often stop one short or write a slot that fails validation: top up only the missing slots.
         for (int call = 2; call <= MAX_CALLS && accepted.size() < request.questionCount(); call++) {
             long left = deadline - System.currentTimeMillis();
-            if (left < MIN_RETRY_MILLIS) break;
+            if (left <= 0) break;
             context.put("alreadyWritten", accepted.stream().map(DraftQuestion::content).toList());
             context.put("previousProblems", List.copyOf(problems));
             problems.clear();
             try {
                 collect(callAi(context, remainingTypes, remainingDifficulty, left), accepted, problems, seen, remainingTypes, remainingDifficulty);
+                warnings.addAll(problems);
             } catch (BaseException ex) {
                 warnings.add("Retry for the missing questions failed: " + ex.getMessage());
                 break;

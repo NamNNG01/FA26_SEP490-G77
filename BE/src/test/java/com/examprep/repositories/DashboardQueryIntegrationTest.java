@@ -8,11 +8,12 @@ import com.examprep.dto.StudentRecentCourse;
 import com.examprep.entities.*;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
-import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
+import jakarta.persistence.EntityManager;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -23,13 +24,14 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-@DataJpaTest
+@SpringBootTest
 @ActiveProfiles("test")
 @Import(JpaAuditingConfig.class)
+@Transactional
 class DashboardQueryIntegrationTest {
 
     @Autowired
-    private TestEntityManager em;
+    private EntityManager em;
 
     @Autowired
     private EnrollmentRepository enrollmentRepository;
@@ -295,11 +297,12 @@ class DashboardQueryIntegrationTest {
     }
 
     private ExamAttempt persistAttempt(User user, Exam exam, Instant submitTime, BigDecimal score, String status) {
+        Instant startTime = Instant.parse("2026-09-01T00:00:00Z");
         ExamAttempt attempt = ExamAttempt.builder()
                 .exam(exam)
                 .user(user)
-                .startTime(Instant.parse("2026-09-01T00:00:00Z"))
-                .deadlineAt(submitTime)
+                .startTime(startTime)
+                .deadlineAt(submitTime == null ? startTime.plusSeconds(3_600) : submitTime)
                 .submitTime(submitTime)
                 .totalScore(score)
                 .status(status)
@@ -309,7 +312,7 @@ class DashboardQueryIntegrationTest {
     }
 
     private void setCreatedAt(String table, String idColumn, Long id, Instant createdAt) {
-        em.getEntityManager().createNativeQuery(
+        em.createNativeQuery(
                         "UPDATE " + table + " SET created_at = ?1 WHERE " + idColumn + " = ?2")
                 .setParameter(1, OffsetDateTime.ofInstant(createdAt, ZoneOffset.UTC))
                 .setParameter(2, id)

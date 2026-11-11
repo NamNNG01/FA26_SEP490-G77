@@ -179,8 +179,12 @@ class QuestionGroupTypeEnforcementIntegrationTest {
                 .questionType(questionType)
                 .content(content)
                 .difficulty("EASY")
-                .status("ACTIVE")
+                .status("INACTIVE")
+                .approvalStatus("APPROVED")
                 .build();
+        if ("ESSAY".equals(questionType)) {
+            question.setEssayGradingRubric("{\"criteria\":[{\"name\":\"Accuracy\",\"weight\":1,\"descriptors\":\"Correct answer\"}],\"notes\":\"Explain the response\"}");
+        }
         entityManager.persist(question);
         return question;
     }
@@ -207,6 +211,9 @@ class QuestionGroupTypeEnforcementIntegrationTest {
                 .questionType("ESSAY")
                 .difficulty("MEDIUM")
                 .content(content)
+                .essayGradingRubric(java.util.Map.of("criteria", List.of(
+                        java.util.Map.of("name", "Accuracy", "weight", 1, "descriptors", "Correct answer")),
+                        "notes", "Explain the response"))
                 .build();
     }
 
