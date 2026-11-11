@@ -32,6 +32,8 @@ public class QuestionDetailDto {
     private String status;
     private String approvalStatus;
     private Object essayGradingRubric;
+    private CodeConfigDto codeConfig;
+    private List<TestCaseDto> testCases;
     private List<AnswerOptionDto> options;
     private Instant createdAt;
     private Instant updatedAt;

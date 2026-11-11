@@ -305,6 +305,8 @@ public class QuestionValidator {
                 validateEssayRubric(payload.getEssayGradingRubric(), prefix + "essayGradingRubric", errors);
             } else if (type.equals("DIAGRAM_ESSAY")) {
                 validateEssayRubric(payload.getEssayGradingRubric(), prefix + "essayGradingRubric", errors);
+            } else if (type.equals("ESSAY")) {
+                validateEssayRubric(payload.getEssayGradingRubric(), prefix + "essayGradingRubric", errors);
             } else if (type.equals("CODE")) {
                 if (payload.getCodeConfig() == null) {
                     errors.add(new ValidationError(prefix + "codeConfig", "Code configuration is required for code questions"));

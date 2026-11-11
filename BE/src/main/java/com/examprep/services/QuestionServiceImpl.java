@@ -521,6 +521,16 @@ public class QuestionServiceImpl implements QuestionService {
             }
         }
 
+        if (req.getEssayGradingRubric() != null) {
+            String rubricJson = serializeJson(req.getEssayGradingRubric(), "essayGradingRubric");
+            if (!rubricJson.equals(q.getEssayGradingRubric())) {
+                if (rubricWeightsChanged(q.getEssayGradingRubric(), rubricJson)) {
+                    scoreAffectingChanged = true;
+                }
+                q.setEssayGradingRubric(rubricJson);
+            }
+        }
+
         if ("CODE".equals(typeToValidate) && (req.getCodeConfig() != null || req.getTestCases() != null)) {
             saveCodeConfigAndTestCases(q, req.getCodeConfig(), req.getTestCases());
         }
@@ -767,7 +777,38 @@ public class QuestionServiceImpl implements QuestionService {
             } catch (Exception ignored) {}
         }
 
-        return mapToDetailDto(copy, copiedOptions);
+        Question finalCopy = copy;
+        if ("CODE".equals(original.getQuestionType())) {
+            codeQuestionConfigRepository.findById(original.getQuestionId()).ifPresent(origCfg -> {
+                CodeQuestionConfig newCfg = CodeQuestionConfig.builder()
+                        .questionId(finalCopy.getQuestionId())
+                        .allowedLanguages(origCfg.getAllowedLanguages())
+                        .codeTemplate(origCfg.getCodeTemplate())
+                        .timeLimitMs(origCfg.getTimeLimitMs())
+                        .memoryLimitKb(origCfg.getMemoryLimitKb())
+                        .createdAt(Instant.now())
+                        .updatedAt(Instant.now())
+                        .build();
+                codeQuestionConfigRepository.save(newCfg);
+            });
+            List<CodeTestCase> origCases = codeTestCaseRepository.findByQuestionQuestionIdOrderByOrderIndexAscTestCaseIdAsc(original.getQuestionId());
+            if (!origCases.isEmpty()) {
+                List<CodeTestCase> newCases = new ArrayList<>();
+                for (CodeTestCase tc : origCases) {
+                    newCases.add(CodeTestCase.builder()
+                            .question(finalCopy)
+                            .inputData(tc.getInputData())
+                            .expectedOutput(tc.getExpectedOutput())
+                            .hidden(tc.getHidden())
+                            .orderIndex(tc.getOrderIndex())
+                            .createdAt(Instant.now())
+                            .build());
+                }
+                codeTestCaseRepository.saveAll(newCases);
+            }
+        }
+
+        return mapToDetailDto(finalCopy, copiedOptions);
     }
 
     @Override
@@ -872,6 +913,36 @@ public class QuestionServiceImpl implements QuestionService {
                 .orderIndex(o.getOrderIndex())
                 .build()).collect(Collectors.toList());
 
+        CodeConfigDto codeConfig = null;
+        if ("CODE".equals(q.getQuestionType())) {
+            CodeQuestionConfig cfg = codeQuestionConfigRepository.findById(q.getQuestionId()).orElse(null);
+            if (cfg != null) {
+                List<String> langs = null;
+                try {
+                    if (cfg.getAllowedLanguages() != null && !cfg.getAllowedLanguages().isBlank()) {
+                        langs = objectMapper.readValue(cfg.getAllowedLanguages(), new TypeReference<List<String>>() {});
+                    }
+                } catch (Exception ignored) {}
+                codeConfig = CodeConfigDto.builder()
+                        .allowedLanguages(langs)
+                        .codeTemplate(cfg.getCodeTemplate())
+                        .timeLimitMs(cfg.getTimeLimitMs())
+                        .memoryLimitKb(cfg.getMemoryLimitKb())
+                        .build();
+            }
+        }
+
+        List<TestCaseDto> testCases = null;
+        if ("CODE".equals(q.getQuestionType())) {
+            List<CodeTestCase> cases = codeTestCaseRepository.findByQuestionQuestionIdOrderByOrderIndexAscTestCaseIdAsc(q.getQuestionId());
+            testCases = cases.stream().map(tc -> TestCaseDto.builder()
+                    .inputData(tc.getInputData())
+                    .expectedOutput(tc.getExpectedOutput())
+                    .hidden(tc.getHidden())
+                    .orderIndex(tc.getOrderIndex())
+                    .build()).collect(Collectors.toList());
+        }
+
         return QuestionDetailDto.builder()
                 .questionId(q.getQuestionId())
                 .courseId(q.getCourse() != null ? q.getCourse().getCourseId() : null)
@@ -891,6 +962,8 @@ public class QuestionServiceImpl implements QuestionService {
                 .status(q.getStatus())
                 .approvalStatus(q.getApprovalStatus())
                 .essayGradingRubric(rubricObj)
+                .codeConfig(codeConfig)
+                .testCases(testCases)
                 .options(optDtos)
                 .createdAt(q.getCreatedAt())
                 .updatedAt(q.getUpdatedAt())
