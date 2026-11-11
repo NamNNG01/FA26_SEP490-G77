@@ -237,6 +237,46 @@ const DIAGRAM: Builder[] = [
   }),
 ];
 
+/** A diagram plus a written explanation — the DIAGRAM templates with an essay rubric. */
+const DIAGRAM_ESSAY: Builder[] = DIAGRAM.map(build => (topic, lang, i) => {
+  const base = build(topic, lang, i);
+  return {
+    ...base,
+    content: `${base.content} ${t(lang, 'Giải thích ngắn gọn các lựa chọn thiết kế của bạn.', 'Briefly explain your design choices.')}`,
+    essayGradingRubric: {
+      criteria: [
+        { name: t(lang, 'Sơ đồ', 'Diagram'), maxScore: 6, description: t(lang, 'Đủ thành phần và quan hệ đúng', 'All elements and correct relationships') },
+        { name: t(lang, 'Giải thích', 'Explanation'), maxScore: 4, description: t(lang, 'Giải thích rõ lý do thiết kế', 'Clearly justifies the design') },
+      ],
+    },
+  };
+});
+
+const CODE: Builder[] = [
+  (topic, lang) => ({
+    content: t(lang, `Đọc một dòng chuỗi từ stdin và in ra chuỗi đảo ngược (chủ đề: ${topic}).`, `Read one line from stdin and print it reversed (topic: ${topic}).`),
+    options: [],
+    explanation: t(lang, 'Đọc cả dòng, đảo ngược rồi in ra.', 'Read the whole line, reverse it and print it.'),
+    codeConfig: { allowedLanguages: ['JAVA', 'PYTHON', 'C', 'CPP'], codeTemplate: null, timeLimitMs: 2000, memoryLimitKb: 262144 },
+    testCases: [
+      { inputData: 'abc', expectedOutput: 'cba', hidden: false, orderIndex: 0 },
+      { inputData: 'hello world', expectedOutput: 'dlrow olleh', hidden: true, orderIndex: 1 },
+      { inputData: 'x', expectedOutput: 'x', hidden: true, orderIndex: 2 },
+    ],
+  }),
+  (topic, lang) => ({
+    content: t(lang, `Đọc hai số nguyên a và b trên một dòng, in ra tổng của chúng (chủ đề: ${topic}).`, `Read two integers a and b on one line and print their sum (topic: ${topic}).`),
+    options: [],
+    explanation: t(lang, 'Tách dòng thành hai số rồi cộng lại.', 'Split the line into two numbers and add them.'),
+    codeConfig: { allowedLanguages: ['JAVA', 'PYTHON', 'C', 'CPP'], codeTemplate: null, timeLimitMs: 2000, memoryLimitKb: 262144 },
+    testCases: [
+      { inputData: '1 2', expectedOutput: '3', hidden: false, orderIndex: 0 },
+      { inputData: '-5 5', expectedOutput: '0', hidden: true, orderIndex: 1 },
+      { inputData: '1000000 2000000', expectedOutput: '3000000', hidden: true, orderIndex: 2 },
+    ],
+  }),
+];
+
 const BUILDERS: Partial<Record<QuestionType, Builder[]>> = {
   SINGLE_CHOICE: SINGLE,
   MULTIPLE_CHOICE: MULTIPLE,
@@ -245,6 +285,8 @@ const BUILDERS: Partial<Record<QuestionType, Builder[]>> = {
   FILL_BLANK,
   ESSAY,
   DIAGRAM,
+  DIAGRAM_ESSAY,
+  CODE,
 };
 
 const sleep = (ms: number, signal?: AbortSignal) =>

@@ -42,7 +42,7 @@ export const QUESTION_TYPE_OPTIONS: { label: string; value: EditableQuestionType
 ];
 
 /** Types the AI can draft (ExamAiServiceImpl.TYPES) — AI-01 doesn't draft ORDERING, CODE or DIAGRAM_ESSAY yet. */
-export const AI_QUESTION_TYPE_OPTIONS = QUESTION_TYPE_OPTIONS.filter(t => t.value !== 'ORDERING' && t.value !== 'CODE' && t.value !== 'DIAGRAM_ESSAY') as { label: string; value: QuestionType }[];
+export const AI_QUESTION_TYPE_OPTIONS = QUESTION_TYPE_OPTIONS.filter(t => t.value !== 'ORDERING') as { label: string; value: QuestionType }[];
 
 /**
  * A question group holds exactly one kind (QuestionTypeUtil): every choice /
@@ -727,6 +727,8 @@ function fromPreviewed(a: QuestionAiDraft): QuestionDraft {
     options: (a.options ?? []).map(o => ({ ...o, optionId: null })),
     createdAt: null,
     updatedAt: null,
+    codeConfig: a.codeConfig ?? null,
+    testCases: a.testCases ?? null,
   });
   return { ...draft, questionId: undefined, lockVersion: undefined };
 }
@@ -735,7 +737,8 @@ function fromPreviewed(a: QuestionAiDraft): QuestionDraft {
 export function fromAiDraft(a: QuestionAiDraft): QuestionDraft {
   const draft = fromPreviewed(a);
   const plantUml = typeof draft.metadata.plantUmlSource === 'string' ? draft.metadata.plantUmlSource : '';
-  const diagramXml = draft.type === 'DIAGRAM' && !draft.diagramXml && plantUml.trim() ? plantUmlToDrawioXml(plantUml) : draft.diagramXml;
+  const isDiagram = draft.type === 'DIAGRAM' || draft.type === 'DIAGRAM_ESSAY';
+  const diagramXml = isDiagram && !draft.diagramXml && plantUml.trim() ? plantUmlToDrawioXml(plantUml) : draft.diagramXml;
   return { ...draft, diagramXml, fromAi: true };
 }
 
