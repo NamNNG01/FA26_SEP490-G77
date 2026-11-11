@@ -24,6 +24,8 @@ export interface DeckCard {
   cardId: number;
   frontText: string;
   backText: string;
+  frontImageUrl?: string | null;
+  backImageUrl?: string | null;
   isStarred: boolean;
   status: string;
 }
@@ -82,8 +84,10 @@ export interface DeckUpdateRequest {
 
 /** DeckRequests.CardCreate / CardUpdate — body of createCard / updateCard. */
 export interface CardRequest {
-  frontText: string;
-  backText: string;
+  frontText: string | null;
+  backText: string | null;
+  frontImageUrl?: string | null;
+  backImageUrl?: string | null;
 }
 
 /** CardResponse — what F-06 / F-07 return (no study progress). */
@@ -92,6 +96,8 @@ export interface CardResponse {
   deckId: number;
   frontText: string;
   backText: string;
+  frontImageUrl?: string | null;
+  backImageUrl?: string | null;
 }
 
 export const DECK_PAGE_SIZE_MAX = 100;

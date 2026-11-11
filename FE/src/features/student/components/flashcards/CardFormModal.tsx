@@ -168,6 +168,11 @@ export function CardFormModal({
       }
     >
       <div className="space-y-4">
+        {withImages && (
+          <p className="rounded-[10px] border border-line bg-surface-alt px-3 py-2 text-sm text-content-secondary">
+            Each side needs text, an image, or both.
+          </p>
+        )}
         {fields.map(f =>
           f.field === 'codeLanguage' ? (
             <Select
@@ -185,7 +190,7 @@ export function CardFormModal({
             <div key={f.field} className="flex flex-col gap-1.5">
               <div className="flex items-center justify-between gap-2">
                 <label htmlFor={`card-${f.field}`} className="text-sm font-medium text-content-secondary">
-                  {f.label}
+                  {withImages ? `${f.label} text (optional)` : f.label}
                 </label>
                 {withImages && (
                   <ImagePickButton

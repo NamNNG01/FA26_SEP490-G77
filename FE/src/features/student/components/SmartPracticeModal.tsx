@@ -301,7 +301,7 @@ export function SmartPracticeModal({
       onClose();
       navigate(studentTakeExamPath(created.examId, takeAs));
     } catch (err) {
-      setRandomError(getPracticeError(err, 'Failed to create the practice exam.'));
+      setRandomError(getPracticeError(err, 'Failed to create the practice exam.', modules));
       setBusy(false);
     }
   };
@@ -474,32 +474,36 @@ export function SmartPracticeModal({
                         </p>
                       )}
                       {perModule && (
-                        <ul className="mt-2 divide-y divide-line rounded-[10px] border border-line">
-                          {moduleIds.map(id => {
-                            const err = touched ? moduleCountErrors[id] : undefined;
-                            return (
-                              <li key={id} className="flex items-center gap-3 px-3 py-2">
-                                <span className="min-w-0 flex-1 truncate text-sm text-content" title={modules.find(m => m.value === id)?.label}>
-                                  {modules.find(m => m.value === id)?.label ?? `Module ${id}`}
-                                </span>
-                                {err && <span className="text-xs text-danger">{err}</span>}
-                                <input
-                                  type="number"
-                                  inputMode="numeric"
-                                  min={1}
-                                  max={limits.questions.max}
-                                  aria-label={`Questions from ${modules.find(m => m.value === id)?.label ?? `module ${id}`}`}
-                                  value={moduleCounts[id] ?? ''}
-                                  onChange={e => setModuleCounts(prev => ({ ...prev, [id]: e.target.value }))}
-                                  placeholder="0"
-                                  className={`w-20 rounded-[8px] border bg-surface px-2 py-1 text-right text-sm text-content focus:outline-none focus:ring-2 focus:ring-brand-600/20 ${
-                                    err ? 'border-danger' : 'border-line focus:border-brand-600'
-                                  }`}
-                                />
-                              </li>
-                            );
-                          })}
-                        </ul>
+                        <>
+                          <p className="mt-3 text-xs font-medium text-content-secondary">Questions from each module</p>
+                          <ul className="mt-1.5 divide-y divide-line rounded-[10px] border border-line">
+                            {moduleIds.map(id => {
+                              const err = touched ? moduleCountErrors[id] : undefined;
+                              const moduleName = modules.find(m => m.value === id)?.label ?? `module ${id}`;
+                              return (
+                                <li key={id} className="flex items-center gap-3 px-3 py-2">
+                                  <span className="min-w-0 flex-1 truncate text-sm text-content" title={moduleName}>
+                                    {moduleName}
+                                  </span>
+                                  {err && <span className="text-xs text-danger">{err}</span>}
+                                  <input
+                                    type="number"
+                                    inputMode="numeric"
+                                    min={1}
+                                    max={limits.questions.max}
+                                    aria-label={`Questions from ${moduleName}`}
+                                    value={moduleCounts[id] ?? ''}
+                                    onChange={e => setModuleCounts(prev => ({ ...prev, [id]: e.target.value }))}
+                                    placeholder="1"
+                                    className={`w-20 rounded-[8px] border bg-surface px-2 py-1 text-right text-sm text-content focus:outline-none focus:ring-2 focus:ring-brand-600/20 ${
+                                      err ? 'border-danger' : 'border-line focus:border-brand-600'
+                                    }`}
+                                  />
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        </>
                       )}
                     </div>
                   </>
