@@ -32,6 +32,7 @@ import com.examprep.repositories.QuestionRepository;
 import com.examprep.repositories.UserRepository;
 import com.examprep.services.student.QuestionReviewRecorder;
 import com.examprep.util.attempt.AttemptScoring;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -369,6 +370,12 @@ public class StudentCodeExamServiceImpl implements StudentCodeExamService {
             throw new BadRequestException("page must be >= 0 and size must be between 1 and " + MAX_PAGE_SIZE);
         }
         Page<CodeSubmission> result = submissions.findHistory(userId, examId, PageRequest.of(page, size));
+        Map<Long, CodeTestCase> fixtureById = fixtureMap(result.getContent().stream()
+                        .map(row -> row.getQuestion().getQuestionId())
+                        .collect(Collectors.toSet()))
+                .values().stream()
+                .flatMap(List::stream)
+                .collect(Collectors.toMap(CodeTestCase::getTestCaseId, fixture -> fixture, (first, second) -> first));
         List<CodeExamResponses.SubmissionItem> items = result.getContent().stream()
                 .map(row -> new CodeExamResponses.SubmissionItem(
                         row.getSubmissionId(),
@@ -377,6 +384,7 @@ public class StudentCodeExamServiceImpl implements StudentCodeExamService {
                         row.getStatus(),
                         row.getPassedCount(),
                         row.getTotalCount(),
+                        testCaseOutcomes(row, fixtureById),
                         row.getSubmittedAt()))
                 .toList();
         return PageResponse.of(result, items);
@@ -476,6 +484,41 @@ public class StudentCodeExamServiceImpl implements StudentCodeExamService {
 
     private static int memoryLimit(CodeQuestionConfig cfg) {
         return cfg == null || cfg.getMemoryLimitKb() == null ? DEFAULT_MEMORY_KB : cfg.getMemoryLimitKb();
+    }
+
+    /**
+     * CD-07: replays the per-fixture verdicts stored at judging time, so a review can list each
+     * case instead of only its count. A hidden fixture reports pass/fail only — its input and
+     * expected output never leave the server (spec 19.1).
+     */
+    private List<CodeExamResponses.TestCaseOutcome> testCaseOutcomes(CodeSubmission row,
+                                                                    Map<Long, CodeTestCase> fixtureById) {
+        if (row.getTestResults() == null || row.getTestResults().isBlank()) {
+            return List.of();
+        }
+        JsonNode stored;
+        try {
+            stored = json.readTree(row.getTestResults());
+        } catch (Exception ex) {
+            return List.of();
+        }
+        if (stored == null || !stored.isArray()) {
+            return List.of();
+        }
+        List<CodeExamResponses.TestCaseOutcome> outcomes = new ArrayList<>(stored.size());
+        for (JsonNode node : stored) {
+            long storedId = node.path("testCaseId").asLong(-1);
+            CodeTestCase fixture = storedId > 0 ? fixtureById.get(storedId) : null;
+            boolean hidden = fixture != null && Boolean.TRUE.equals(fixture.getHidden());
+            outcomes.add(new CodeExamResponses.TestCaseOutcome(
+                    fixture != null ? storedId : null,
+                    fixture != null ? fixture.getOrderIndex() : null,
+                    hidden,
+                    node.path("passed").asBoolean(false),
+                    fixture == null || hidden ? null : fixture.getInputData(),
+                    fixture == null || hidden ? null : fixture.getExpectedOutput()));
+        }
+        return outcomes;
     }
 
     private String testResultsJson(List<PistonClient.CaseOutcome> outcomes) {
