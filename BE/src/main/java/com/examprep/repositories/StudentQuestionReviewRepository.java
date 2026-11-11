@@ -93,7 +93,7 @@ public interface StudentQuestionReviewRepository extends JpaRepository<StudentQu
            "LEFT JOIN q.group g LEFT JOIN q.course gc LEFT JOIN q.module gm LEFT JOIN gm.course gmc " +
            "WHERE r.student.userId = :studentId " +
            "AND ((:type = 'all' AND (r.status = 'WRONG_BOOKMARKED' OR r.bookmark = true)) OR (:type = 'wrong' AND r.status = 'WRONG_BOOKMARKED') OR (:type = 'bookmarked' AND r.bookmark = true)) " +
-           "AND (:examType = 'ESSAY' AND q.questionType IN ('ESSAY', 'DIAGRAM', 'DIAGRAM_ESSAY') OR :examType = 'QUIZ' AND q.questionType NOT IN ('ESSAY', 'DIAGRAM', 'DIAGRAM_ESSAY')) " +
+           "AND (:examType = 'ESSAY' AND q.questionType IN ('ESSAY', 'DIAGRAM', 'DIAGRAM_ESSAY', 'CODE') OR :examType = 'QUIZ' AND q.questionType NOT IN ('ESSAY', 'DIAGRAM', 'DIAGRAM_ESSAY', 'CODE')) " +
            "AND (:courseId IS NULL OR qc.courseId = :courseId OR mc.courseId = :courseId OR gc.courseId = :courseId OR gmc.courseId = :courseId) " +
            "AND q.deletedAt IS NULL AND q.status = 'ACTIVE' " +
            "ORDER BY r.wrongCount DESC, r.lastPracticedAt DESC")
