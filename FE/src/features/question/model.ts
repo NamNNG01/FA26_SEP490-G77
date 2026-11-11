@@ -24,7 +24,7 @@ import { hasDiagramContent, plantUmlToDrawioXml } from './diagram';
 /**
  * Types the editor offers — all the ones QuestionValidator accepts. DIAGRAM and
  * DIAGRAM_ESSAY send their draw.io XML in questionMetadata.drawioXml; ORDERING sends keyed
- * options plus answerKey.correctOrder; CODE sends `codeConfig` (languages, template, limits, test cases).
+ * options plus answerKey.correctOrder; CODE sends `codeConfig` (languages, template, limits) and `testCases`.
  */
 export type EditableQuestionType = QuestionType;
 
@@ -228,13 +228,13 @@ export const emptyCriterion = (): RubricCriterionDraft => ({ key: newKey('crit')
 
 export const emptyTestCase = (hidden = false): TestCaseDraft => ({ key: newKey('tc'), input: '', expectedOutput: '', hidden });
 
-/** A new CODE question: every language, the default limits, one public (sample) test case. */
+/** A new CODE question: every language, the default limits, a public (sample) and a hidden test case. */
 const emptyCode = (): CodeDraft => ({
   languages: CODE_LANGUAGE_OPTIONS.map(l => l.value),
   template: '',
   timeLimitMs: String(CODE_TIME_LIMIT_MS.default),
   memoryLimitKb: String(CODE_MEMORY_LIMIT_KB.default),
-  testCases: [emptyTestCase()],
+  testCases: [emptyTestCase(), emptyTestCase(true)],
 });
 
 export function emptyDraft(): QuestionDraft {
@@ -426,6 +426,7 @@ export function codeError(c: CodeDraft): string | undefined {
   if (c.testCases.some(t => bytes(t.input) > MAX_CODE_TEXT_BYTES || bytes(t.expectedOutput) > MAX_CODE_TEXT_BYTES))
     return 'A test case input or output can be at most 100 KB.';
   if (c.testCases.every(t => t.hidden)) return 'Keep at least one test case public — students see the first one as the sample.';
+  if (!c.testCases.some(t => t.hidden)) return 'Add at least one hidden test case — submissions are judged on it too.';
   return undefined;
 }
 
@@ -512,8 +513,11 @@ export function toCreateRequest(q: QuestionDraft, courseId: number, moduleId: nu
   };
 }
 
-/** CODE settings and test cases; nothing for other types. Test cases are sent in their list order. */
-function toCodeConfig(q: QuestionDraft): Pick<QuestionCreateRequest, 'codeConfig'> {
+/**
+ * CODE settings and test cases; nothing for other types. The test cases go beside codeConfig
+ * (QuestionCreateRequest.testCases), in their list order; saving replaces the stored ones.
+ */
+function toCodeConfig(q: QuestionDraft): Pick<QuestionCreateRequest, 'codeConfig' | 'testCases'> {
   if (q.type !== 'CODE') return {};
   const c = q.code;
   return {
@@ -522,24 +526,23 @@ function toCodeConfig(q: QuestionDraft): Pick<QuestionCreateRequest, 'codeConfig
       codeTemplate: c.template.trim() ? c.template : null,
       timeLimitMs: Number(c.timeLimitMs),
       memoryLimitKb: Number(c.memoryLimitKb),
-      testCases: c.testCases.map((t, i) => ({
-        testCaseId: t.testCaseId ?? null,
-        inputData: t.input,
-        expectedOutput: t.expectedOutput,
-        hidden: t.hidden,
-        orderIndex: i,
-      })),
     },
+    testCases: c.testCases.map((t, i) => ({
+      inputData: t.input,
+      expectedOutput: t.expectedOutput,
+      hidden: t.hidden,
+      orderIndex: i,
+    })),
   };
 }
 
-/** A stored codeConfig → editor fields (defaults for anything missing). */
-function fromCodeConfig(raw: QuestionDetail['codeConfig']): CodeDraft {
+/** A stored codeConfig and test cases → editor fields (defaults for anything missing). */
+function fromCodeConfig(raw: QuestionDetail['codeConfig'], rawTestCases: QuestionDetail['testCases']): CodeDraft {
   const base = emptyCode();
   if (!raw) return base;
   const known = CODE_LANGUAGE_OPTIONS.map(l => l.value);
   const languages = Array.isArray(raw.allowedLanguages) ? raw.allowedLanguages.filter(l => known.includes(l)) : [];
-  const testCases = [...(raw.testCases ?? [])]
+  const testCases = [...(rawTestCases ?? [])]
     .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0))
     .map(t => ({
       key: newKey('tc'),
@@ -695,7 +698,7 @@ export function fromDetail(d: QuestionDetail): QuestionDraft {
     diagramXml: typeof metadata.drawioXml === 'string' ? metadata.drawioXml : '',
     diagramSvg: typeof metadata.drawioSvg === 'string' ? metadata.drawioSvg : '',
     ...fromRubric(d.essayGradingRubric),
-    code: fromCodeConfig(d.codeConfig),
+    code: fromCodeConfig(d.codeConfig, d.testCases),
   };
 }
 
