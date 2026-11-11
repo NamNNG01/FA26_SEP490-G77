@@ -51,7 +51,7 @@ public interface StudentQuestionReviewRepository extends JpaRepository<StudentQu
            "LEFT JOIN q.group g LEFT JOIN g.course gc LEFT JOIN g.module gm LEFT JOIN gm.course gmc " +
            "WHERE r.student.userId = :studentId " +
            "AND ((:type = 'all' AND (r.status = 'WRONG_BOOKMARKED' OR r.bookmark = true)) OR (:type = 'wrong' AND r.status = 'WRONG_BOOKMARKED') OR (:type = 'bookmarked' AND r.bookmark = true)) " +
-           "AND (:examType IS NULL OR (:examType = 'QUIZ' AND q.questionType IN ('SINGLE_CHOICE', 'MULTIPLE_CHOICE', 'TRUE_FALSE', 'FILL_BLANK', 'MATCHING', 'ORDERING')) OR (:examType = 'ESSAY' AND q.questionType IN ('ESSAY', 'DIAGRAM', 'CODE'))) " +
+           "AND (:examType IS NULL OR (:examType = 'QUIZ' AND q.questionType IN ('SINGLE_CHOICE', 'MULTIPLE_CHOICE', 'TRUE_FALSE', 'FILL_BLANK', 'MATCHING', 'ORDERING')) OR (:examType = 'ESSAY' AND q.questionType IN ('ESSAY', 'DIAGRAM', 'DIAGRAM_ESSAY', 'CODE'))) " +
            "AND (:courseId IS NULL OR qc.courseId = :courseId OR mc.courseId = :courseId OR gc.courseId = :courseId OR gmc.courseId = :courseId) " +
            "AND (:categoryId IS NULL OR qc.categoryId = :categoryId OR mc.categoryId = :categoryId OR gc.categoryId = :categoryId OR gmc.categoryId = :categoryId) " +
            "AND (:search = '' OR LOWER(q.content) LIKE LOWER(CONCAT('%', :search, '%'))) " +
@@ -63,7 +63,7 @@ public interface StudentQuestionReviewRepository extends JpaRepository<StudentQu
            "LEFT JOIN q.group g LEFT JOIN g.course gc LEFT JOIN g.module gm LEFT JOIN gm.course gmc " +
            "WHERE r.student.userId = :studentId " +
            "AND ((:type = 'all' AND (r.status = 'WRONG_BOOKMARKED' OR r.bookmark = true)) OR (:type = 'wrong' AND r.status = 'WRONG_BOOKMARKED') OR (:type = 'bookmarked' AND r.bookmark = true)) " +
-           "AND (:examType IS NULL OR (:examType = 'QUIZ' AND q.questionType IN ('SINGLE_CHOICE', 'MULTIPLE_CHOICE', 'TRUE_FALSE', 'FILL_BLANK', 'MATCHING', 'ORDERING')) OR (:examType = 'ESSAY' AND q.questionType IN ('ESSAY', 'DIAGRAM', 'CODE'))) " +
+           "AND (:examType IS NULL OR (:examType = 'QUIZ' AND q.questionType IN ('SINGLE_CHOICE', 'MULTIPLE_CHOICE', 'TRUE_FALSE', 'FILL_BLANK', 'MATCHING', 'ORDERING')) OR (:examType = 'ESSAY' AND q.questionType IN ('ESSAY', 'DIAGRAM', 'DIAGRAM_ESSAY', 'CODE'))) " +
            "AND (:courseId IS NULL OR qc.courseId = :courseId OR mc.courseId = :courseId OR gc.courseId = :courseId OR gmc.courseId = :courseId) " +
            "AND (:categoryId IS NULL OR qc.categoryId = :categoryId OR mc.categoryId = :categoryId OR gc.categoryId = :categoryId OR gmc.categoryId = :categoryId) " +
            "AND (:search = '' OR LOWER(r.question.content) LIKE LOWER(CONCAT('%', :search, '%')))")
@@ -93,7 +93,7 @@ public interface StudentQuestionReviewRepository extends JpaRepository<StudentQu
            "LEFT JOIN q.group g LEFT JOIN q.course gc LEFT JOIN q.module gm LEFT JOIN gm.course gmc " +
            "WHERE r.student.userId = :studentId " +
            "AND ((:type = 'all' AND (r.status = 'WRONG_BOOKMARKED' OR r.bookmark = true)) OR (:type = 'wrong' AND r.status = 'WRONG_BOOKMARKED') OR (:type = 'bookmarked' AND r.bookmark = true)) " +
-           "AND (:examType = 'ESSAY' AND q.questionType IN ('ESSAY', 'DIAGRAM') OR :examType = 'QUIZ' AND q.questionType NOT IN ('ESSAY', 'DIAGRAM')) " +
+           "AND (:examType = 'ESSAY' AND q.questionType IN ('ESSAY', 'DIAGRAM', 'DIAGRAM_ESSAY') OR :examType = 'QUIZ' AND q.questionType NOT IN ('ESSAY', 'DIAGRAM', 'DIAGRAM_ESSAY')) " +
            "AND (:courseId IS NULL OR qc.courseId = :courseId OR mc.courseId = :courseId OR gc.courseId = :courseId OR gmc.courseId = :courseId) " +
            "AND q.deletedAt IS NULL AND q.status = 'ACTIVE' " +
            "ORDER BY r.wrongCount DESC, r.lastPracticedAt DESC")

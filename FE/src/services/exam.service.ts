@@ -231,6 +231,14 @@ export interface AiQuestionDraft {
   explanation?: string;
   questionMetadata?: { skillTag?: string; drawioXml?: string };
   essayGradingRubric?: { criteria: AiRubricCriterion[]; totalPoints?: number; notes?: string };
+  /** CODE only: saved with the question as Q-03 takes it. */
+  codeConfig?: {
+    allowedLanguages?: string[] | null;
+    codeTemplate?: string | null;
+    timeLimitMs?: number | null;
+    memoryLimitKb?: number | null;
+  } | null;
+  testCases?: { inputData: string; expectedOutput: string; hidden?: boolean | null; orderIndex?: number | null }[] | null;
   /** DIAGRAM only: PlantUML behind questionMetadata.drawioXml, for previews. Q-03 doesn't take it. */
   plantUmlSource?: string;
   /** Local preview returned by draw.io while an AI draft is being edited. */

@@ -38,13 +38,13 @@ public interface ContestRepository extends JpaRepository<Contest, Long>, JpaSpec
     @Query(value = "SELECT e FROM Exam e WHERE e.course.courseId = :courseId AND e.status = 'PUBLISHED' " +
             "AND e.mode = 'CONTEST' AND LOWER(e.title) LIKE :keyword ESCAPE '!' AND NOT EXISTS (SELECT c FROM Contest c WHERE c.exam = e " +
             "AND c.deletedAt IS NULL AND c.status NOT IN ('CANCELLED', 'REWARDED')) " +
-            "AND NOT EXISTS (SELECT eq FROM ExamQuestion eq WHERE eq.exam = e AND eq.question.questionType IN ('ESSAY', 'CODE', 'DIAGRAM')) " +
-            "AND NOT EXISTS (SELECT ec FROM ExamConfig ec WHERE ec.exam = e AND ec.questionType IN ('ESSAY', 'CODE', 'DIAGRAM')) ORDER BY e.publishedAt DESC, e.examId DESC",
+            "AND NOT EXISTS (SELECT eq FROM ExamQuestion eq WHERE eq.exam = e AND eq.question.questionType IN ('ESSAY', 'CODE', 'DIAGRAM', 'DIAGRAM_ESSAY')) " +
+            "AND NOT EXISTS (SELECT ec FROM ExamConfig ec WHERE ec.exam = e AND ec.questionType IN ('ESSAY', 'CODE', 'DIAGRAM', 'DIAGRAM_ESSAY')) ORDER BY e.publishedAt DESC, e.examId DESC",
             countQuery = "SELECT COUNT(e) FROM Exam e WHERE e.course.courseId = :courseId AND e.status = 'PUBLISHED' " +
             "AND e.mode = 'CONTEST' AND LOWER(e.title) LIKE :keyword ESCAPE '!' AND NOT EXISTS (SELECT c FROM Contest c WHERE c.exam = e " +
             "AND c.deletedAt IS NULL AND c.status NOT IN ('CANCELLED', 'REWARDED')) " +
-            "AND NOT EXISTS (SELECT eq FROM ExamQuestion eq WHERE eq.exam = e AND eq.question.questionType IN ('ESSAY', 'CODE', 'DIAGRAM')) " +
-            "AND NOT EXISTS (SELECT ec FROM ExamConfig ec WHERE ec.exam = e AND ec.questionType IN ('ESSAY', 'CODE', 'DIAGRAM'))")
+            "AND NOT EXISTS (SELECT eq FROM ExamQuestion eq WHERE eq.exam = e AND eq.question.questionType IN ('ESSAY', 'CODE', 'DIAGRAM', 'DIAGRAM_ESSAY')) " +
+            "AND NOT EXISTS (SELECT ec FROM ExamConfig ec WHERE ec.exam = e AND ec.questionType IN ('ESSAY', 'CODE', 'DIAGRAM', 'DIAGRAM_ESSAY'))")
     Page<Exam> findEligibleExams(@Param("courseId") Long courseId, @Param("keyword") String keyword, Pageable pageable);
 
     /** [examId, randomly drawn question count] of exams with random rules. */

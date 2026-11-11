@@ -328,7 +328,7 @@ public class StudentDeckService {
     /** Spec 14.12: choice/keyed types give the correct answer (+ explanation); essays give AI feedback or the sample answer, never the rubric. */
     private String backText(Question question, AttemptAnswer answer, JsonNode display) {
         JsonNode key = tree(answer.getKeySnapshot());
-        if (Set.of("ESSAY", "DIAGRAM").contains(question.getQuestionType())) {
+        if (Set.of("ESSAY", "DIAGRAM", "DIAGRAM_ESSAY").contains(question.getQuestionType())) {
             String feedback = tree(answer.getAiFeedbackJson()).path("overallFeedback").asText("");
             return !feedback.isBlank() ? feedback : key.path("sampleAnswer").asText(null);
         }

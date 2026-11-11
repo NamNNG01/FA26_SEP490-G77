@@ -657,7 +657,7 @@ public class StudentMaterialApiIntegrationTest {
     void generateReturns429WhenQuotaIsExhausted() throws Exception {
         Document subject = material("x".repeat(200));
         em.persist(AiUsageLog.builder().user(student).purpose("EXPLANATION").status("SUCCESS")
-                .inputTokens(19_900).outputTokens(0).billingSource("FREE").build());
+                .inputTokens(9_900).outputTokens(0).billingSource("FREE").createdAt(java.time.Instant.now()).build());
         em.flush();
         long expected = AiQuotaService.estimate(subject.getExtractedContent().length(), 500);
 
@@ -667,7 +667,7 @@ public class StudentMaterialApiIntegrationTest {
                 .andExpect(jsonPath("$.message").value("Not enough AI quota to generate this quiz"))
                 .andExpect(jsonPath("$.data.estimatedTokens").value(expected))
                 .andExpect(jsonPath("$.data.availableTokens").value(100))
-                .andExpect(jsonPath("$.data.quota").value(20_000));
+                .andExpect(jsonPath("$.data.quota").value(10_000));
         assertEquals(0, jobsOf(subject));
     }
 

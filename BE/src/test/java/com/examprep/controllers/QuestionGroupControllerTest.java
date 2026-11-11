@@ -96,7 +96,7 @@ class QuestionGroupControllerTest {
                         .with(user(manager)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.message").value("Operation completed successfully"))
+                .andExpect(jsonPath("$.message").value("Request processed successfully"))
                 .andExpect(jsonPath("$.data.content[0].groupId").value(7))
                 .andExpect(jsonPath("$.data.content[0].courseId").value(12))
                 .andExpect(jsonPath("$.data.content[0].moduleId").value(3))
@@ -267,7 +267,7 @@ class QuestionGroupControllerTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.message").value("Operation completed successfully"))
+                .andExpect(jsonPath("$.message").value("Request processed successfully"))
                 .andExpect(jsonPath("$.data.groupId").value(7))
                 .andExpect(jsonPath("$.data.questionType").value("ESSAY"))
                 .andExpect(jsonPath("$.data.title").value("Reading Passage 1 v2"))
@@ -452,7 +452,7 @@ class QuestionGroupControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.data.questionType")
-                        .value("Question type must be one of QUIZ, ESSAY, CODE, DIAGRAM"));
+                        .value("Question type must be one of QUIZ, ESSAY, CODE, DIAGRAM, DIAGRAM_ESSAY"));
 
         verifyNoInteractions(questionGroupService);
     }
@@ -471,7 +471,7 @@ class QuestionGroupControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.data.questionType")
-                        .value("Question type must be one of QUIZ, ESSAY, CODE, DIAGRAM"));
+                        .value("Question type must be one of QUIZ, ESSAY, CODE, DIAGRAM, DIAGRAM_ESSAY"));
 
         verifyNoInteractions(questionGroupService);
     }

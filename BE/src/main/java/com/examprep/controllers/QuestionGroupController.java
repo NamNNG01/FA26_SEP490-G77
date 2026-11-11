@@ -38,7 +38,7 @@ public class QuestionGroupController {
     @GetMapping
     @Operation(summary = "G-01: List question groups",
             description = "Returns paginated question groups filtered by course, module, question type "
-                    + "(QUIZ, ESSAY, CODE or DIAGRAM) and title/passage search.")
+                    + "(QUIZ, ESSAY, CODE, DIAGRAM or DIAGRAM_ESSAY) and title/passage search.")
     public ResponseEntity<ApiResponse<PageResponse<QuestionGroupResponse>>> getQuestionGroups(
             @AuthenticationPrincipal UserPrincipal currentUser,
             @RequestParam(required = false) Long courseId,
@@ -55,7 +55,7 @@ public class QuestionGroupController {
     @PostMapping
     @Operation(summary = "G-02: Create question group",
             description = "Creates a single-type question group (shared passage) for a course managed by the caller. "
-                    + "questionType is required and must be QUIZ, ESSAY, CODE or DIAGRAM.")
+                    + "questionType is required and must be QUIZ, ESSAY, CODE, DIAGRAM or DIAGRAM_ESSAY.")
     public ResponseEntity<ApiResponse<QuestionGroupResponse>> createQuestionGroup(
             @AuthenticationPrincipal UserPrincipal currentUser,
             @Valid @RequestBody QuestionGroupCreateRequest request) {

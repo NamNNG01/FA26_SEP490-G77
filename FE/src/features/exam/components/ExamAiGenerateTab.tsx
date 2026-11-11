@@ -112,7 +112,7 @@ export function ExamAiGenerateTab({
           "FILL_BLANK",
           "MATCHING",
         ]
-      : ["ESSAY", "DIAGRAM"];
+      : ["ESSAY", "DIAGRAM", "DIAGRAM_ESSAY", "CODE"];
 
   const [typeCounts, setTypeCounts] = useState<Record<string, number>>(
     formKind === "QUIZ"
@@ -123,7 +123,7 @@ export function ExamAiGenerateTab({
           FILL_BLANK: 0,
           MATCHING: 0,
         }
-      : { ESSAY: 10, DIAGRAM: 0 },
+      : { ESSAY: 10, DIAGRAM: 0, DIAGRAM_ESSAY: 0, CODE: 0 },
   );
 
   const [generating, setGenerating] = useState(false);
@@ -420,6 +420,16 @@ export function ExamAiGenerateTab({
       return "True/False question must have exactly 2 options and 1 correct answer";
     if (q.questionType === "FILL_BLANK" && !/\{\{\d+\}\}/.test(q.content))
       return "Fill blank content needs placeholders like {{1}}";
+    if (q.questionType === "CODE") {
+      const cases = q.testCases ?? [];
+      if (!q.codeConfig) return "Code question needs a code configuration";
+      if (cases.some((t) => !t.expectedOutput?.trim()))
+        return "Every test case needs an expected output";
+      if (!cases.some((t) => !t.hidden))
+        return "Code question needs at least one sample test case";
+      if (!cases.some((t) => t.hidden))
+        return "Code question needs at least one hidden test case";
+    }
     return null;
   };
 
@@ -1052,7 +1062,32 @@ export function ExamAiGenerateTab({
                     </div>
                   )}
 
-                  {q.questionType === "DIAGRAM" && (
+                  {q.questionType === "CODE" && (
+                    <div className="p-3 rounded-[8px] border border-line bg-surface-muted/40 text-xs space-y-2">
+                      <p className="text-content-secondary">
+                        <span className="font-medium">Languages: </span>
+                        {(q.codeConfig?.allowedLanguages ?? []).join(", ") || "—"}
+                        {q.codeConfig?.timeLimitMs != null &&
+                          ` · Time limit ${q.codeConfig.timeLimitMs} ms`}
+                      </p>
+                      {(q.testCases ?? []).map((t, tIdx) => (
+                        <div key={tIdx} className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <div className="min-w-0">
+                            <span className="font-medium text-content-secondary block">
+                              Test case {tIdx + 1} input{t.hidden ? " (hidden)" : " (sample)"}
+                            </span>
+                            <pre className="whitespace-pre-wrap break-words font-mono text-content">{t.inputData || "—"}</pre>
+                          </div>
+                          <div className="min-w-0">
+                            <span className="font-medium text-content-secondary block">Expected output</span>
+                            <pre className="whitespace-pre-wrap break-words font-mono text-content">{t.expectedOutput || "—"}</pre>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {["DIAGRAM", "DIAGRAM_ESSAY"].includes(q.questionType) && (
                     <div className="space-y-2">
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-xs font-medium text-content-secondary">
@@ -1071,7 +1106,7 @@ export function ExamAiGenerateTab({
                     </div>
                   )}
 
-                  {["ESSAY", "DIAGRAM"].includes(q.questionType) && (
+                  {["ESSAY", "DIAGRAM", "DIAGRAM_ESSAY"].includes(q.questionType) && (
                     <div className="p-3 rounded-[8px] border border-line bg-surface-muted/40 text-xs space-y-2">
                       <div className="flex items-center justify-between gap-2">
                         <span className="font-medium text-content-secondary">

@@ -25,6 +25,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -100,7 +101,6 @@ class QuestionBatchPerformanceTest {
                     AnswerOptionDto.builder().optionText("Opt A").isCorrect(true).orderIndex(0).build(),
                     AnswerOptionDto.builder().optionText("Opt B").isCorrect(false).orderIndex(1).build()
             ));
-            req.setAnswerKey("A");
             requests.add(req);
         }
 
@@ -116,7 +116,9 @@ class QuestionBatchPerformanceTest {
 
         System.out.println("BATCH PERF TEST | elapsedMs=" + elapsed + " | entityInserts=" + entityInserts + " | prepareStatements=" + prepareStatements);
 
-        // Assert inserts happened successfully
-        assertTrue(entityInserts >= 10);
+        // Verify persistence directly; Hibernate statistics may be disabled by the test profile.
+        em.flush();
+        assertEquals(10L, em.createQuery("select count(q) from Question q where q.module = :module", Long.class)
+                .setParameter("module", module).getSingleResult());
     }
 }

@@ -46,12 +46,13 @@ class QuestionTypeUtilTest {
 
     @Test
     void everyQuestionTypeIsKnown() {
-        assertEquals(9, QuestionTypeUtil.QUESTION_TYPES.size());
+        assertEquals(10, QuestionTypeUtil.QUESTION_TYPES.size());
         assertTrue(QuestionTypeUtil.QUESTION_TYPES.contains("ESSAY"));
         assertTrue(QuestionTypeUtil.QUESTION_TYPES.contains("CODE"));
         assertTrue(QuestionTypeUtil.QUESTION_TYPES.contains("DIAGRAM"));
+        assertTrue(QuestionTypeUtil.QUESTION_TYPES.contains("DIAGRAM_ESSAY"));
         assertFalse(QuestionTypeUtil.QUESTION_TYPES.contains("QUIZ"));
-        assertEquals(4, QuestionTypeUtil.KINDS.size());
+        assertEquals(5, QuestionTypeUtil.KINDS.size());
     }
 
     @Test
@@ -60,6 +61,7 @@ class QuestionTypeUtilTest {
         assertTrue(QuestionTypeUtil.isValidKind("ESSAY"));
         assertTrue(QuestionTypeUtil.isValidKind("CODE"));
         assertTrue(QuestionTypeUtil.isValidKind("DIAGRAM"));
+        assertTrue(QuestionTypeUtil.isValidKind("DIAGRAM_ESSAY"));
 
         assertFalse(QuestionTypeUtil.isValidKind("MIXED"));
         assertFalse(QuestionTypeUtil.isValidKind(null));

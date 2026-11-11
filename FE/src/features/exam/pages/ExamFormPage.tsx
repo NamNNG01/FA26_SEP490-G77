@@ -155,7 +155,7 @@ export function ExamFormPage({
           "MATCHING",
           "ORDERING",
         ]
-      : ["ESSAY", "DIAGRAM", "DIAGRAM_ESSAY"];
+      : ["ESSAY", "DIAGRAM", "DIAGRAM_ESSAY", "CODE"];
 
   useEffect(() => {
     if (!questionEditTarget) {

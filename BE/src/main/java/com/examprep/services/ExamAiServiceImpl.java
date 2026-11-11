@@ -9,8 +9,11 @@ import com.examprep.dto.*;
 import com.examprep.dto.ExamAiDraftResponse.DraftQuestion;
 import com.examprep.dto.ExamAiDraftResponse.Option;
 import com.examprep.dto.question.AnswerOptionDto;
+import com.examprep.dto.question.CodeConfigDto;
+import com.examprep.dto.question.TestCaseDto;
 import com.examprep.entities.Course;
 import com.examprep.entities.Module;
+import com.examprep.entities.Question;
 import com.examprep.entities.User;
 import com.examprep.exceptions.BaseException;
 import com.examprep.exceptions.ResourceNotFoundException;
@@ -47,17 +50,17 @@ import java.util.concurrent.TimeoutException;
 @PreAuthorize("hasAnyRole('COURSE_MANAGER', 'ADMIN')")
 public class ExamAiServiceImpl implements ExamAiService {
     private static final Set<String> TYPES = Set.of("SINGLE_CHOICE", "MULTIPLE_CHOICE", "TRUE_FALSE", "FILL_BLANK",
-            "MATCHING", "ESSAY", "DIAGRAM");
-    private static final Set<String> RUBRIC_TYPES = Set.of("ESSAY", "DIAGRAM");
+            "MATCHING", "ESSAY", "DIAGRAM", "DIAGRAM_ESSAY", "CODE");
+    private static final Set<String> RUBRIC_TYPES = Set.of("ESSAY", "DIAGRAM", "DIAGRAM_ESSAY");
+    private static final List<String> CODE_LANGUAGES = List.of("JAVA", "PYTHON", "C", "CPP");
     private static final List<String> DIFFICULTIES = List.of("EASY", "MEDIUM", "HARD");
-    /** First call plus up to two top-ups for questions the model skipped or that failed validation. */
-    private static final int MAX_CALLS = 3;
-    private static final long MIN_RETRY_MILLIS = 15_000;
+    /** First call plus one top-up for questions the model skipped or that failed validation. */
+    private static final int MAX_CALLS = 2;
     private static final String INSTRUCTIONS = """
             You are an experienced university exam author. Write an exam draft as ONE JSON object:
             {"title": string, "description": string, "questions": [question]}.
             Every question has: content, questionType, difficulty (EASY|MEDIUM|HARD), defaultPoints (positive number),
-            explanation (why the answer is correct; for ESSAY/DIAGRAM the key points of a model answer),
+            explanation (why the answer is correct; for ESSAY/DIAGRAM/DIAGRAM_ESSAY the key points of a model answer),
             questionMetadata {"skillTag": short topic/skill tag, max 100 chars}, and depending on the type:
             - SINGLE_CHOICE: options 3-6 [{optionText, isCorrect, orderIndex}], exactly 1 isCorrect=true.
             - MULTIPLE_CHOICE: options 4-8, at least 2 isCorrect=true AND at least 1 isCorrect=false.
@@ -74,6 +77,11 @@ public class ExamAiServiceImpl implements ExamAiService {
               {"diagramType": "CLASS|SEQUENCE|ACTIVITY|USE_CASE|ENTITY|STATE|COMPONENT", "nodes": [{"id", "label", "kind", "attributes": [string]}], "edges": [{"id", "from", "to", "label", "kind", "fromMultiplicity", "toMultiplicity"}]};
               every DIAGRAM MUST also have defaultPoints 2-10 and an essayGradingRubric with the same rules as ESSAY,
               with criteria that judge the drawn diagram.
+            - DIAGRAM_ESSAY: the learner draws a diagram and explains it in writing; content asks for both;
+              graph has the same shape as DIAGRAM; essayGradingRubric judges both the diagram and written explanation.
+            - CODE: content states the stdin/stdout format and constraints; no options, answerKey or rubric;
+              codeConfig has allowedLanguages drawn from JAVA, PYTHON, C, CPP, codeTemplate, timeLimitMs and memoryLimitKb;
+              testCases has 3-6 {inputData, expectedOutput, hidden} entries, with at least one hidden and one sample.
             Quality rules: questions must be answerable from the course/module/material given; one clear idea per question;
             distractors plausible but unambiguously wrong; no "all/none of the above"; EASY = recall, MEDIUM = apply,
             HARD = analyse/evaluate; never repeat or paraphrase existingQuestions; write everything in the requested language.
@@ -128,20 +136,36 @@ public class ExamAiServiceImpl implements ExamAiService {
         List<String> warnings = new ArrayList<>();
         List<String> problems = new ArrayList<>();
         Map<String, Object> context = context(request, material);
+        context.put("course", Map.of("title", Objects.toString(course.getTitle(), ""),
+                "description", Objects.toString(course.getDescription(), "")));
+        if (module != null) {
+            context.put("module", Map.of("title", Objects.toString(module.getTitle(), ""),
+                    "description", Objects.toString(module.getDescription(), "")));
+        }
+        List<Question> bankQuestions = questions.findAiBank(request.courseId(), request.moduleId());
+        List<Map<String, String>> existingQuestions = bankQuestions.stream()
+                .map(question -> Map.of("questionType", Objects.toString(question.getQuestionType(), ""),
+                        "content", Objects.toString(question.getContent(), "")))
+                .toList();
+        context.put("existingQuestions", existingQuestions);
+        bankQuestions.stream().map(Question::getContent).filter(Objects::nonNull).map(ExamAiServiceImpl::key)
+                .forEach(seen::add);
         takeQuota(user.getId(), request.courseId());
         long timeout = material == null ? timeoutMillis : materialTimeoutMillis;
         long deadline = System.currentTimeMillis() + timeout;
         JsonNode generated = callAi(context, remainingTypes, remainingDifficulty, timeout);
         collect(generated, accepted, problems, seen, remainingTypes, remainingDifficulty);
+        warnings.addAll(problems);
         // Models often stop one short or write a slot that fails validation: top up only the missing slots.
         for (int call = 2; call <= MAX_CALLS && accepted.size() < request.questionCount(); call++) {
             long left = deadline - System.currentTimeMillis();
-            if (left < MIN_RETRY_MILLIS) break;
+            if (left <= 0) break;
             context.put("alreadyWritten", accepted.stream().map(DraftQuestion::content).toList());
             context.put("previousProblems", List.copyOf(problems));
             problems.clear();
             try {
                 collect(callAi(context, remainingTypes, remainingDifficulty, left), accepted, problems, seen, remainingTypes, remainingDifficulty);
+                warnings.addAll(problems);
             } catch (BaseException ex) {
                 warnings.add("Retry for the missing questions failed: " + ex.getMessage());
                 break;
@@ -195,6 +219,7 @@ public class ExamAiServiceImpl implements ExamAiService {
         try {
             call = AiRequest.builder().systemPrompt(INSTRUCTIONS).prompt(json.writeValueAsString(prompt)).maxTokens(32768)
                     .responseSchema(types.entrySet().stream().anyMatch(t -> t.getValue() > 0 && RUBRIC_TYPES.contains(t.getKey()))
+                            && types.entrySet().stream().noneMatch(t -> t.getValue() > 0 && "CODE".equals(t.getKey()))
                             ? RUBRIC_DRAFT_SCHEMA : DRAFT_SCHEMA).build();
         } catch (JsonProcessingException ex) {
             throw upstream("Could not build the AI request.");
@@ -272,7 +297,7 @@ public class ExamAiServiceImpl implements ExamAiService {
         }
         else if (RUBRIC_TYPES.contains(type) && !row.path("essayGradingRubric").isObject())
             error = type.toLowerCase(Locale.ROOT) + " requires an essayGradingRubric";
-        else if ("DIAGRAM".equals(type)) {
+        else if ("DIAGRAM".equals(type) || "DIAGRAM_ESSAY".equals(type)) {
             if (graphNode == null || !graphNode.isObject()) {
                 error = "diagram requires a graph object";
             } else {
@@ -299,18 +324,32 @@ public class ExamAiServiceImpl implements ExamAiService {
                 option.path("isCorrect").isBoolean() ? option.get("isCorrect").booleanValue() : null,
                 option.path("orderIndex").canConvertToInt() ? option.get("orderIndex").intValue() : choices.size()));
         ObjectNode metadata = json.createObjectNode();
-        if ("DIAGRAM".equals(type) && graph != null) {
+        if (("DIAGRAM".equals(type) || "DIAGRAM_ESSAY".equals(type)) && graph != null) {
             metadata.put("drawioXml", DiagramGraphToDrawioConverter.convert(graph));
         }
         JsonNode answerKey = row.path("answerKey").isObject() && !row.get("answerKey").isEmpty() ? row.get("answerKey") : null;
         JsonNode rubric = RUBRIC_TYPES.contains(type) && row.path("essayGradingRubric").isObject()
                 ? row.get("essayGradingRubric").deepCopy() : null;
+        CodeConfigDto codeConfig = codeConfig(row.path("codeConfig"));
+        List<TestCaseDto> testCases = testCases(row.path("testCases"));
+        if (error == null && "CODE".equals(type) && answerKey != null) {
+            error = "code question must not have an answerKey";
+        }
+        if (error == null && "CODE".equals(type) && row.path("essayGradingRubric").isObject()
+                && !row.path("essayGradingRubric").isEmpty()) {
+            error = "code question must not have an essayGradingRubric";
+        }
+        if (error == null && "CODE".equals(type) && (testCases == null || testCases.size() < 3 || testCases.size() > 6)) {
+            error = "code question must have 3-6 test cases";
+        }
         if (error == null) {
             List<ValidationError> errors = questionValidator.validate(QuestionPayload.builder().questionType(type)
                     .difficulty(level).content(content)
                     .questionMetadata(json.convertValue(metadata, Object.class))
                     .answerKey(answerKey == null ? null : json.convertValue(answerKey, Object.class))
                     .essayGradingRubric(rubric == null ? null : json.convertValue(rubric, Object.class))
+                    .codeConfig(codeConfig)
+                    .testCases(testCases)
                     .options(choices.isEmpty() ? null : choices.stream().map(o -> AnswerOptionDto.builder()
                             .optionText(o.optionText()).isCorrect(o.isCorrect()).orderIndex(o.orderIndex()).build()).toList())
                     .build(), "");
@@ -325,7 +364,7 @@ public class ExamAiServiceImpl implements ExamAiService {
         if (rubric != null) normalizeRubric((ObjectNode) rubric, points);
         accepted.add(new DraftQuestion(content, type, level, choices.isEmpty() ? null : choices, answerKey,
                 row.hasNonNull("explanation") ? row.get("explanation").asText() : null, metadata, rubric,
-                graph == null ? null : json.valueToTree(graph)));
+                graph == null ? null : json.valueToTree(graph), codeConfig, testCases));
         types.compute(type, (k, v) -> v - 1);
         difficulty.compute(level, (k, v) -> v - 1);
     }
@@ -358,29 +397,72 @@ public class ExamAiServiceImpl implements ExamAiService {
         List<String> required = new ArrayList<>(List.of("content", "questionType", "difficulty", "defaultPoints",
                 "explanation", "questionMetadata"));
         if (rubricRequired) required.add("essayGradingRubric");
-        return object(Map.of("title", STRING, "description", STRING, "questions", array(object(Map.of(
-                "content", STRING,
-                "questionType", Map.of("type", "STRING", "enum", new TreeSet<>(TYPES).stream().toList()),
-                "difficulty", Map.of("type", "STRING", "enum", List.of("EASY", "MEDIUM", "HARD")),
-                "defaultPoints", Map.of("type", "NUMBER"),
-                "explanation", STRING,
-                "graph", object(Map.of(
-                        "diagramType", Map.of("type", "STRING", "enum", List.of("CLASS", "SEQUENCE", "ACTIVITY", "USE_CASE", "ENTITY", "STATE", "COMPONENT")),
-                        "nodes", array(object(Map.of("id", STRING, "label", STRING, "kind", STRING, "attributes", array(STRING)), "id", "label", "kind")),
-                        "edges", array(object(Map.of("id", STRING, "from", STRING, "to", STRING, "label", STRING, "kind", STRING, "fromMultiplicity", STRING, "toMultiplicity", STRING), "id", "from", "to", "kind"))
-                ), "diagramType", "nodes", "edges"),
-                "questionMetadata", object(Map.of("skillTag", STRING), "skillTag"),
-                "options", array(object(Map.of("optionText", STRING, "isCorrect", Map.of("type", "BOOLEAN"),
-                        "orderIndex", Map.of("type", "INTEGER")), "optionText", "isCorrect", "orderIndex")),
-                "answerKey", object(Map.of(
-                        "blanks", array(object(Map.of("index", Map.of("type", "INTEGER"), "accepted", array(STRING),
-                                "caseSensitive", Map.of("type", "BOOLEAN")), "index", "accepted")),
-                        "pairs", array(object(Map.of("left", STRING, "right", STRING), "left", "right")))),
-                "essayGradingRubric", object(Map.of(
-                        "criteria", array(object(Map.of("name", STRING, "weight", Map.of("type", "NUMBER"),
-                                "descriptors", STRING), "name", "weight", "descriptors")),
-                        "notes", STRING), "criteria", "notes")),
-                required.toArray(String[]::new)))), "title", "description", "questions");
+        Map<String, Object> questionProperties = new LinkedHashMap<>();
+        questionProperties.put("content", STRING);
+        questionProperties.put("questionType", Map.of("type", "STRING", "enum", new TreeSet<>(TYPES).stream().toList()));
+        questionProperties.put("difficulty", Map.of("type", "STRING", "enum", List.of("EASY", "MEDIUM", "HARD")));
+        questionProperties.put("defaultPoints", Map.of("type", "NUMBER"));
+        questionProperties.put("explanation", STRING);
+        questionProperties.put("graph", object(Map.of(
+                "diagramType", Map.of("type", "STRING", "enum", List.of("CLASS", "SEQUENCE", "ACTIVITY", "USE_CASE", "ENTITY", "STATE", "COMPONENT")),
+                "nodes", array(object(Map.of("id", STRING, "label", STRING, "kind", STRING, "attributes", array(STRING)), "id", "label", "kind")),
+                "edges", array(object(Map.of("id", STRING, "from", STRING, "to", STRING, "label", STRING, "kind", STRING, "fromMultiplicity", STRING, "toMultiplicity", STRING), "id", "from", "to", "kind"))
+        ), "diagramType", "nodes", "edges"));
+        questionProperties.put("questionMetadata", object(Map.of("skillTag", STRING), "skillTag"));
+        questionProperties.put("options", array(object(Map.of("optionText", STRING, "isCorrect", Map.of("type", "BOOLEAN"),
+                "orderIndex", Map.of("type", "INTEGER")), "optionText", "isCorrect", "orderIndex")));
+        questionProperties.put("answerKey", object(Map.of(
+                "blanks", array(object(Map.of("index", Map.of("type", "INTEGER"), "accepted", array(STRING),
+                        "caseSensitive", Map.of("type", "BOOLEAN")), "index", "accepted")),
+                "pairs", array(object(Map.of("left", STRING, "right", STRING), "left", "right")))));
+        questionProperties.put("essayGradingRubric", object(Map.of(
+                "criteria", array(object(Map.of("name", STRING, "weight", Map.of("type", "NUMBER"),
+                        "descriptors", STRING), "name", "weight", "descriptors")),
+                "notes", STRING), "criteria", "notes"));
+        questionProperties.put("codeConfig", object(Map.of(
+                "allowedLanguages", array(Map.of("type", "STRING", "enum", CODE_LANGUAGES)),
+                "codeTemplate", STRING,
+                "timeLimitMs", Map.of("type", "INTEGER"),
+                "memoryLimitKb", Map.of("type", "INTEGER")),
+                "allowedLanguages", "codeTemplate", "timeLimitMs", "memoryLimitKb"));
+        questionProperties.put("testCases", array(object(Map.of(
+                "inputData", STRING, "expectedOutput", STRING, "hidden", Map.of("type", "BOOLEAN")),
+                "inputData", "expectedOutput", "hidden")));
+        return object(Map.of("title", STRING, "description", STRING,
+                "questions", array(object(questionProperties, required.toArray(String[]::new)))),
+                "title", "description", "questions");
+    }
+
+    private CodeConfigDto codeConfig(JsonNode node) {
+        if (node == null || !node.isObject()) return null;
+        List<String> languages = new ArrayList<>();
+        JsonNode allowed = node.path("allowedLanguages");
+        if (allowed.isArray()) {
+            allowed.forEach(value -> {
+                String language = value.asText("").toUpperCase(Locale.ROOT);
+                if (CODE_LANGUAGES.contains(language) && !languages.contains(language)) languages.add(language);
+            });
+        }
+        if (languages.isEmpty()) languages.addAll(CODE_LANGUAGES);
+        return CodeConfigDto.builder().allowedLanguages(languages)
+                .codeTemplate(node.path("codeTemplate").isTextual() ? node.path("codeTemplate").asText() : null)
+                .timeLimitMs(node.path("timeLimitMs").canConvertToInt() ? node.path("timeLimitMs").intValue() : 5000)
+                .memoryLimitKb(node.path("memoryLimitKb").canConvertToInt() ? node.path("memoryLimitKb").intValue() : 262144)
+                .build();
+    }
+
+    private List<TestCaseDto> testCases(JsonNode nodes) {
+        if (nodes == null || !nodes.isArray()) return null;
+        List<TestCaseDto> result = new ArrayList<>();
+        for (int i = 0; i < nodes.size(); i++) {
+            JsonNode node = nodes.get(i);
+            result.add(TestCaseDto.builder().inputData(node.path("inputData").asText(null))
+                    .expectedOutput(node.path("expectedOutput").asText(null))
+                    .hidden(node.path("hidden").isBoolean() ? node.path("hidden").booleanValue() : null)
+                    .orderIndex(node.path("orderIndex").canConvertToInt() ? node.path("orderIndex").intValue() : i)
+                    .build());
+        }
+        return result;
     }
 
     private static Map<String, Object> object(Map<String, Object> properties, String... required) {

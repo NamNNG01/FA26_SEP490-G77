@@ -93,7 +93,8 @@ public class StudentMaterialQuizResumeCommitTest {
             examId = exam.getExamId();
             for (int i = 1; i <= 2; i++) {
                 Question question = Question.builder().course(course).createdBy(manager)
-                        .questionType("SINGLE_CHOICE").difficulty("EASY").content("Question " + i).build();
+                        .questionType("SINGLE_CHOICE").difficulty("EASY").content("Question " + i)
+                        .status("ACTIVE").approvalStatus("APPROVED").build();
                 em.persist(question);
                 for (int option = 1; option <= 4; option++) {
                     em.persist(AnswerOption.builder().question(question).optionText("Option " + option)

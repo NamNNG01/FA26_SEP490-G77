@@ -17,7 +17,7 @@ public interface QuestionContributionRepository extends JpaRepository<QuestionCo
     @Query(value = "SELECT c FROM QuestionContribution c WHERE c.userId = :userId " +
            "AND (:type IS NULL OR c.type = :type) " +
            "AND (:status IS NULL OR c.status = :status) " +
-           "ORDER BY c.submittedAt DESC",
+           "ORDER BY c.submittedAt DESC, c.contributionId DESC",
            countQuery = "SELECT COUNT(c) FROM QuestionContribution c WHERE c.userId = :userId " +
            "AND (:type IS NULL OR c.type = :type) " +
            "AND (:status IS NULL OR c.status = :status)")
@@ -37,7 +37,8 @@ public interface QuestionContributionRepository extends JpaRepository<QuestionCo
            "AND (:contributorId IS NULL OR c.userId = :contributorId) " +
            "AND (:keyword IS NULL OR LOWER(c.title) LIKE :keyword ESCAPE '!' OR LOWER(c.content) LIKE :keyword ESCAPE '!') " +
            "AND (cast(:submittedFrom as timestamp) IS NULL OR c.submittedAt >= :submittedFrom) " +
-           "AND (cast(:submittedTo as timestamp) IS NULL OR c.submittedAt < :submittedTo)",
+           "AND (cast(:submittedTo as timestamp) IS NULL OR c.submittedAt < :submittedTo) " +
+           "ORDER BY c.submittedAt DESC, c.contributionId DESC",
            countQuery = "SELECT COUNT(c) FROM QuestionContribution c WHERE " +
            "(:myCourseIds IS NULL OR c.courseId IN :myCourseIds) " +
            "AND (:moduleId IS NULL OR c.moduleId = :moduleId) " +
