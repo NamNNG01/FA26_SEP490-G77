@@ -42,6 +42,12 @@ public class StudentNotebookController {
             @RequestParam(defaultValue = "20") int size,
             @AuthenticationPrincipal UserPrincipal currentUser
     ) {
+        if (page < 0) {
+            throw new BadRequestException("Page index must not be less than zero");
+        }
+        if (size < 1 || size > 100) {
+            throw new BadRequestException("Page size must be between 1 and 100");
+        }
         Page<QuestionReviewItemDto> p = notebookService.listSavedQuestions(type, examType, courseId, categoryId, search, page, size, currentUser.getId());
         return ResponseEntity.ok(ApiResponse.success(PageResponse.of(p)));
     }

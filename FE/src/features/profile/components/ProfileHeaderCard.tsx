@@ -70,7 +70,7 @@ export function ProfileHeaderCard({
     <div className="card p-6">
       <div className="flex flex-col sm:flex-row sm:items-start gap-4">
         <div className="flex flex-col items-center gap-2 shrink-0">
-          <Avatar name={user.fullName} src={user.avatarUrl ?? undefined} size="xl" color="#0D7C6C" />
+          <Avatar name={user.fullName} src={user.avatarUrl ?? undefined} size="xl" color="#F27124" />
           <ImagePickButton
             variant="ghost"
             loading={uploadingAvatar}

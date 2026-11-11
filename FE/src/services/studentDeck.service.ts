@@ -111,6 +111,9 @@ export interface CardWriteRequest {
   backText?: string;
   codeLanguage?: CodeLanguage;
   codeBody?: string;
+  /** FLASHCARD only: an image per face (uploaded through /student/uploads); a face needs text, an image or both. */
+  frontImageUrl?: string | null;
+  backImageUrl?: string | null;
 }
 
 export interface CardView {
@@ -120,6 +123,8 @@ export interface CardView {
   backText: string;
   codeLanguage: CodeLanguage | null;
   codeBody: string | null;
+  frontImageUrl?: string | null;
+  backImageUrl?: string | null;
   position: number;
 }
 
@@ -153,6 +158,8 @@ export interface StudyCard {
   backText: string;
   codeLanguage: CodeLanguage | null;
   codeBody: string | null;
+  frontImageUrl?: string | null;
+  backImageUrl?: string | null;
   status: CardStatus;
   wrongCount: number;
   isStarred: boolean;
@@ -179,6 +186,8 @@ export interface ViewerCard {
   backText: string;
   codeLanguage: CodeLanguage | null;
   codeBody: string | null;
+  frontImageUrl?: string | null;
+  backImageUrl?: string | null;
 }
 
 export interface ViewerView {

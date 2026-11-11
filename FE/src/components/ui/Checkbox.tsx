@@ -1,7 +1,7 @@
 import React from 'react';
 import { Icon } from '@/assets/icons';
 
-export function Checkbox({ label, checked, onChange, indeterminate, disabled }: { label?: string; checked?: boolean; onChange?: (v: boolean) => void; indeterminate?: boolean; disabled?: boolean }) {
+export function Checkbox({ label, checked, onChange, indeterminate, disabled, className = '' }: { label?: string; checked?: boolean; onChange?: (v: boolean) => void; indeterminate?: boolean; disabled?: boolean; className?: string }) {
   return (
     <button
       type="button"
@@ -9,7 +9,7 @@ export function Checkbox({ label, checked, onChange, indeterminate, disabled }: 
       aria-checked={indeterminate && !checked ? 'mixed' : checked || false}
       disabled={disabled}
       onClick={() => onChange?.(!checked)}
-      className={`flex items-center gap-2 select-none text-left group ${disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
+      className={`flex items-center gap-2 select-none text-left group ${disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'} ${className}`}
     >
       <div
         className={`w-[18px] h-[18px] rounded-[5px] border-2 flex items-center justify-center transition-all

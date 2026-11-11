@@ -109,6 +109,8 @@ export function SmartPracticeModal({
   const [examType, setExamType] = useState<PracticeExamType>('QUIZ');
   const [difficulty, setDifficulty] = useState<'' | PracticeDifficulty>('');
   const [moduleIds, setModuleIds] = useState<string[]>([]);
+  /** Questions wanted per picked module, by module id (typed text, validated below). */
+  const [moduleCounts, setModuleCounts] = useState<Record<string, string>>({});
   const [modules, setModules] = useState<{ value: string; label: string }[]>([]);
   const [modulesError, setModulesError] = useState<string | null>(null);
   const [loadingModules, setLoadingModules] = useState(false);
@@ -150,6 +152,7 @@ export function SmartPracticeModal({
     setExamType('QUIZ');
     setDifficulty('');
     setModuleIds([]);
+    setModuleCounts({});
     setAiContext('');
     setTouched(false);
     setPhase('form');
@@ -165,6 +168,7 @@ export function SmartPracticeModal({
   // Modules of the course — the "category" filter of PQ-01.
   useEffect(() => {
     setModuleIds([]);
+    setModuleCounts({});
     setModules([]);
     setModulesError(null);
     if (!open || mode !== 'RANDOM' || !courseId) return;
@@ -218,7 +222,16 @@ export function SmartPracticeModal({
   };
 
   const limits = limitsOf(mode);
-  const countNum = Number(questionCount);
+  // Random with modules picked: the count is set per module and the total is their sum.
+  const perModule = mode === 'RANDOM' && moduleIds.length > 0;
+  const moduleCountErrors: Record<string, string | undefined> = {};
+  for (const id of moduleIds) {
+    const raw = moduleCounts[id] ?? '';
+    const n = Number(raw);
+    moduleCountErrors[id] = !raw.trim() ? 'Required' : Number.isInteger(n) && n >= 1 ? undefined : 'At least 1';
+  }
+  const moduleTotal = moduleIds.reduce((sum, id) => sum + (Number(moduleCounts[id]) || 0), 0);
+  const countNum = perModule ? moduleTotal : Number(questionCount);
   // Practice is untimed: the student sets no limit, the BE (which still wants one) gets the longest it allows.
   // Taken as an exam, the student's duration is the timer.
   const timedRandom = mode === 'RANDOM' && takeAs === 'EXAM';
@@ -230,7 +243,13 @@ export function SmartPracticeModal({
         : `Enter ${limits.minutes.min} – ${limits.minutes.max} minutes.`,
     title: title.trim() ? undefined : 'Enter a name for the practice exam.',
     course: courseId ? undefined : 'Select a course.',
-    count: !questionCount.trim()
+    count: perModule
+      ? Object.values(moduleCountErrors).some(Boolean)
+        ? 'Enter a question count for every module.'
+        : moduleTotal <= limits.questions.max
+          ? undefined
+          : `The modules add up to ${moduleTotal}; at most ${limits.questions.max} questions.`
+      : !questionCount.trim()
       ? 'Enter the number of questions.'
       : Number.isInteger(countNum) && countNum >= limits.questions.min && countNum <= limits.questions.max
         ? undefined
@@ -272,6 +291,9 @@ export function SmartPracticeModal({
         durationMinutes: minutesNum,
         examType,
         categoryIds: moduleIds.length > 0 ? moduleIds.map(Number) : undefined,
+        moduleQuestionCounts: perModule
+          ? moduleIds.map(id => ({ categoryId: Number(id), questionCount: Number(moduleCounts[id]) }))
+          : undefined,
         difficulty: difficulty || undefined,
         title: title.trim(),
         mode: takeAs,
@@ -372,12 +394,17 @@ export function SmartPracticeModal({
                     inputMode="numeric"
                     min={limits.questions.min}
                     max={limits.questions.max}
-                    value={questionCount}
+                    value={perModule ? String(moduleTotal) : questionCount}
                     onChange={e => setQuestionCount(e.target.value)}
+                    // With modules picked the total is the sum of their counts, set below.
+                    disabled={perModule}
                     // The maximum is shown as the placeholder rather than a hint.
                     placeholder={`Max ${limits.questions.max}`}
                     error={touched ? errors.count : undefined}
                   />
+                  {perModule && (
+                    <p className="mt-1 text-xs text-content-subtle">Total of the per-module counts below.</p>
+                  )}
                 </div>
                 {mode === 'AI' && (
                   <label className="min-w-0 flex flex-col gap-1.5 sm:col-span-2">
@@ -442,7 +469,37 @@ export function SmartPracticeModal({
                       {modulesError ? (
                         <p className="text-xs text-danger">{modulesError}</p>
                       ) : (
-                        <p className="text-xs text-content-subtle">Leave empty to draw from every module of the course.</p>
+                        <p className="text-xs text-content-subtle">
+                          Leave empty to draw from every module of the course, or pick modules to set how many questions each one gives.
+                        </p>
+                      )}
+                      {perModule && (
+                        <ul className="mt-2 divide-y divide-line rounded-[10px] border border-line">
+                          {moduleIds.map(id => {
+                            const err = touched ? moduleCountErrors[id] : undefined;
+                            return (
+                              <li key={id} className="flex items-center gap-3 px-3 py-2">
+                                <span className="min-w-0 flex-1 truncate text-sm text-content" title={modules.find(m => m.value === id)?.label}>
+                                  {modules.find(m => m.value === id)?.label ?? `Module ${id}`}
+                                </span>
+                                {err && <span className="text-xs text-danger">{err}</span>}
+                                <input
+                                  type="number"
+                                  inputMode="numeric"
+                                  min={1}
+                                  max={limits.questions.max}
+                                  aria-label={`Questions from ${modules.find(m => m.value === id)?.label ?? `module ${id}`}`}
+                                  value={moduleCounts[id] ?? ''}
+                                  onChange={e => setModuleCounts(prev => ({ ...prev, [id]: e.target.value }))}
+                                  placeholder="0"
+                                  className={`w-20 rounded-[8px] border bg-surface px-2 py-1 text-right text-sm text-content focus:outline-none focus:ring-2 focus:ring-brand-600/20 ${
+                                    err ? 'border-danger' : 'border-line focus:border-brand-600'
+                                  }`}
+                                />
+                              </li>
+                            );
+                          })}
+                        </ul>
                       )}
                     </div>
                   </>

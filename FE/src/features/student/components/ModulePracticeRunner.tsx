@@ -29,6 +29,8 @@ import { checkProgress } from './PracticeCheck';
 import { PracticeExplanation } from './PracticeExplanation';
 import { PracticeVerdict, SCORE_ONLY_TYPES, summaryOutcome } from './PracticeVerdict';
 import { GroupPassageSplit } from './GroupPassageSplit';
+import { ReportQuestionIssueButton } from './ReportQuestionIssueDialog';
+import { EssayQuestionPrompt } from './EssayQuestionPrompt';
 
 /** A rubric attempt still being graded by AI is asked about again this often. */
 const POLL_MS = 4000;
@@ -484,6 +486,9 @@ export function ModulePracticeRunner({ sessionId }: { sessionId: string }) {
   const question = view ? toAttemptQuestion(view) : null;
   // One answer per question: once sent it is shown read-only.
   const editing = latest == null;
+  /** Writing an essay: question on top, the answer box filling the rest of the column (md+). Once
+   *  sent, grading and the verdict take the space, so the normal stacked layout comes back. */
+  const fillEssay = editing && summary.questionType === 'ESSAY';
   const value = editing ? (drafts[summary.sessionQuestionId] ?? null) : (latest?.response ?? null);
   const progress = question ? checkProgress(question, value) : null;
   const answerVerdict = verdictOf(summary.questionType, latest);
@@ -592,8 +597,13 @@ export function ModulePracticeRunner({ sessionId }: { sessionId: string }) {
       ) : (
       <div className="flex flex-1 overflow-hidden flex-col md:flex-row">
         {/* A question of a group: its passage in a column of its own (left), the question on the right. */}
-        <GroupPassageSplit group={view?.group} narrow mainClassName={isRubric ? 'p-[30px]' : 'p-[clamp(1rem,2.5vw,1.5rem)]'}>
-          <div className={isRubric ? 'w-full space-y-3' : 'max-w-3xl mx-auto space-y-5'}>
+        {/* Every type sits in the middle (md+): ~15% of the column free left, right and below; the top keeps its gutter. */}
+        <GroupPassageSplit
+          group={view?.group}
+          narrow
+          mainClassName={`${isRubric ? 'p-[30px]' : 'p-[clamp(1rem,2.5vw,1.5rem)]'} md:px-[15%] md:pb-[15vh]`}
+        >
+          <div className={fillEssay ? 'w-full flex flex-col gap-3 md:h-full' : isRubric ? 'w-full space-y-3' : 'w-full space-y-5'}>
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-sm font-semibold text-content uppercase tracking-wide">Question {current + 1}</h2>
               <Badge variant="info">{QUESTION_TYPE_LABEL[summary.questionType] ?? summary.questionType}</Badge>
@@ -614,6 +624,11 @@ export function ModulePracticeRunner({ sessionId }: { sessionId: string }) {
               >
                 <Icon.Star className={`w-4 h-4 ${isBookmarked ? 'fill-current text-warning' : ''}`} />
               </Button>
+              <ReportQuestionIssueButton
+                questionId={summary.questionId}
+                practiceSessionId={session.sessionId}
+                options={view?.options ?? []}
+              />
               <span className="text-xs text-content-subtle">
                 {current + 1} / {questions.length}
               </span>
@@ -634,25 +649,38 @@ export function ModulePracticeRunner({ sessionId }: { sessionId: string }) {
               )
             ) : (
               <>
-                <div className={`card ${isRubric ? 'px-3 py-2 max-h-[18vh] overflow-y-auto' : 'p-[clamp(1rem,2.5vw,1.5rem)]'}`}>
-                  <QuestionText
-                    content={view.content}
-                    className={`text-content font-medium ${isRubric ? 'text-sm leading-normal' : 'text-lg leading-relaxed'}`}
-                  />
-                  {questionMedia.map(m => (
-                    <img key={m.mediaId} src={m.url} alt={m.altText ?? ''} className="mt-3 max-h-72 rounded-[8px] border border-line" />
-                  ))}
-                </div>
+                {fillEssay ? (
+                  <EssayQuestionPrompt key={summary.sessionQuestionId} content={view.content}>
+                    {questionMedia.map(m => (
+                      <img key={m.mediaId} src={m.url} alt={m.altText ?? ''} className="mt-3 max-h-72 rounded-[8px] border border-line" />
+                    ))}
+                  </EssayQuestionPrompt>
+                ) : (
+                  <div className={`card ${isRubric ? 'px-3 py-2 max-h-[18vh] overflow-y-auto' : 'p-[clamp(1rem,2.5vw,1.5rem)]'}`}>
+                    <QuestionText
+                      content={view.content}
+                      className={`text-content font-medium ${isRubric ? 'text-sm leading-normal' : 'text-lg leading-relaxed'}`}
+                    />
+                    {questionMedia.map(m => (
+                      <img key={m.mediaId} src={m.url} alt={m.altText ?? ''} className="mt-3 max-h-72 rounded-[8px] border border-line" />
+                    ))}
+                  </div>
+                )}
 
                 {/* A submitted answer is shown read-only: a revealed input locks itself (its "Show the
                     correct order" stays clickable), any other one is disabled by the fieldset. */}
-                <fieldset disabled={(!editing && !reveal) || busy} className="min-w-0">
+                <fieldset
+                  disabled={(!editing && !reveal) || busy}
+                  className={fillEssay ? 'min-w-0 md:flex-1 md:min-h-0 md:flex md:flex-col' : 'min-w-0'}
+                >
                   <QuestionAnswerInput
                     key={summary.sessionQuestionId}
                     question={question}
                     value={value}
                     onChange={changeAnswer}
                     roomy={isRubric}
+                    fill={fillEssay}
+                    readOnly={!editing}
                     practice
                     verdict={answerVerdict}
                     reveal={reveal}
@@ -989,6 +1017,11 @@ function PartResults({
               <h3 className="text-sm font-semibold text-content uppercase tracking-wide">Question {first + selected}</h3>
               <Badge variant="info">{label(shown)}</Badge>
               <span className={`ml-auto text-xs font-semibold ${OUTCOME_TEXT[outcomes[selected]]}`}>{OUTCOME_LABEL[outcomes[selected]]}</span>
+              <ReportQuestionIssueButton
+                questionId={shown.questionId}
+                practiceSessionId={sessionId}
+                options={shownView?.options ?? []}
+              />
             </div>
             {shownView ? (
               <ReviewAnswer
@@ -1047,6 +1080,7 @@ function ReviewAnswer({
           value={latest?.response ?? null}
           onChange={NO_CHANGE}
           practice
+          readOnly
           verdict={verdict}
           reveal={reveal}
         />

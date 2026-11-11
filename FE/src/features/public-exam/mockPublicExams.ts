@@ -74,10 +74,10 @@ export const PUBLIC_EXAM_COURSES: PublicExamCourseMeta[] = [
   { name: 'Java', monogram: 'JV', accent: '#DC2626', modules: ['Language Core', 'OOP & Collections', 'Concurrency', 'JVM & Performance'] },
   { name: 'React', monogram: 'RE', accent: '#0EA5E9', modules: ['Components & Props', 'Hooks', 'Routing & Data Fetching', 'State Management'] },
   { name: 'Angular', monogram: 'NG', accent: '#E11D48', modules: ['Components & Templates', 'Forms & Validation', 'Routing & Guards', 'RxJS & Signals'] },
-  { name: 'PostgreSQL', monogram: 'PG', accent: '#0D7C6C', modules: ['SQL Fundamentals', 'Joins & Subqueries', 'Indexing & Performance', 'Replication & High Availability'] },
+  { name: 'PostgreSQL', monogram: 'PG', accent: '#F27124', modules: ['SQL Fundamentals', 'Joins & Subqueries', 'Indexing & Performance', 'Replication & High Availability'] },
   { name: 'Linux', monogram: 'LX', accent: '#65A30D', modules: ['Filesystem & Users', 'Shell & Scripting', 'Networking & DNS', 'Processes & Services'] },
   { name: 'Web Security', monogram: 'WS', accent: '#7C3AED', modules: ['Threats & OWASP Top 10', 'Authentication & Sessions', 'Applied Cryptography', 'Secure API Design'] },
-  { name: 'Database', monogram: 'DB', accent: '#0D7C6C', modules: ['Data Modelling', 'Query Design', 'Transactions & Concurrency', 'Performance Tuning'] },
+  { name: 'Database', monogram: 'DB', accent: '#F27124', modules: ['Data Modelling', 'Query Design', 'Transactions & Concurrency', 'Performance Tuning'] },
   { name: 'Security', monogram: 'SEC', accent: '#7C3AED', modules: ['Threat Modelling', 'Network Security', 'Identity & Access', 'Incident Response'] },
   { name: 'Software Engineering', monogram: 'SE', accent: '#0F766E', modules: ['Requirements & Design', 'Architecture Patterns', 'Code Quality & Review', 'Delivery & CI'] },
 ];
@@ -90,7 +90,7 @@ export function courseMeta(name: string): PublicExamCourseMeta {
     courseMetaByName.get(name) ?? {
       name,
       monogram: name.slice(0, 3).toUpperCase(),
-      accent: '#0D7C6C',
+      accent: '#F27124',
       modules: ['General'],
     }
   );

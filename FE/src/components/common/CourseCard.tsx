@@ -49,7 +49,7 @@ export function CourseCard({
         : ('default' as const);
 
   const displayMetrics: CourseMetricItem[] = customMetrics ?? [
-    { label: 'Modules', value: modules, color: '#0D7C6C' },
+    { label: 'Modules', value: modules, color: '#F27124' },
     { label: 'Lessons', value: lessons, color: '#7C3AED' },
     { label: 'Questions', value: questions, color: '#D97706' },
     { label: 'Exams', value: examCount, color: '#059669' },
@@ -73,7 +73,7 @@ export function CourseCard({
       <div className={`grid gap-2 ${displayMetrics.length === 3 ? 'grid-cols-3' : 'grid-cols-4'}`}>
         {displayMetrics.map(m => (
           <div key={m.label} className="bg-surface-alt rounded-[8px] px-2 py-2 text-center">
-            <span className="inline-block w-1.5 h-1.5 rounded-full mb-1" style={{ background: m.color ?? '#0D7C6C' }} />
+            <span className="inline-block w-1.5 h-1.5 rounded-full mb-1" style={{ background: m.color ?? '#F27124' }} />
             <p className="text-base font-semibold text-content leading-none">{m.value !== undefined ? (typeof m.value === 'number' ? m.value.toLocaleString() : m.value) : '—'}</p>
             <p className="text-2xs text-content-subtle mt-0.5">{m.label}</p>
           </div>

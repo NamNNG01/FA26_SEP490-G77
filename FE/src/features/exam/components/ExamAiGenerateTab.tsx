@@ -131,6 +131,7 @@ export function ExamAiGenerateTab({
   const [draft, setDraft] = useState<AiExamDraftResponse | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [savedQuestionIds, setSavedQuestionIds] = useState<number[]>([]);
+  const [questionsPublished, setQuestionsPublished] = useState(false);
   const [rubricEditor, setRubricEditor] = useState<{
     questionIndex: number;
     rubric: NonNullable<AiQuestionDraft["essayGradingRubric"]>;
@@ -245,6 +246,7 @@ export function ExamAiGenerateTab({
       );
       setDraft(result);
       setSavedQuestionIds([]);
+      setQuestionsPublished(false);
       if (result.warnings?.length) {
         toast.warning(result.warnings.join(" "), {
           title: "AI draft warnings",
@@ -421,7 +423,7 @@ export function ExamAiGenerateTab({
     return null;
   };
 
-  const handleConfirmSave = async () => {
+  const validateDraftForSave = () => {
     if (!draft || draft.questions.length === 0) return;
     if (
       !Number.isFinite(maxScore) ||
@@ -444,13 +446,17 @@ export function ExamAiGenerateTab({
         return;
       }
     }
+    return true;
+  };
+
+  const handleSaveAndPublish = async () => {
+    if (!draft || questionsPublished) return;
+    if (savedQuestionIds.length === 0 && !validateDraftForSave()) return;
 
     setSaving(true);
-
-    let finalQuestionIds = [...savedQuestionIds];
-
+    let questionIds = [...savedQuestionIds];
     try {
-      if (finalQuestionIds.length === 0) {
+      if (questionIds.length === 0) {
         const questionsToSave = draft.questions.map(
           ({
             plantUmlSource: _plantUmlPreview,
@@ -460,7 +466,6 @@ export function ExamAiGenerateTab({
             ...q,
             courseId: Number(courseId),
             moduleId: moduleId ? Number(moduleId) : null,
-            status: "ACTIVE",
           }),
         ) as QuestionCreateRequest[];
 
@@ -469,11 +474,41 @@ export function ExamAiGenerateTab({
           moduleId ? Number(moduleId) : null,
           questionsToSave,
         );
-
-        finalQuestionIds = batchRes.map((r) => r.questionId);
-        setSavedQuestionIds(finalQuestionIds);
+        questionIds = batchRes.map((r) => r.questionId);
+        if (questionIds.length !== draft.questions.length) {
+          throw new Error("Not all generated questions were saved.");
+        }
+        // Retain IDs before activation so a retry will not duplicate the batch.
+        setSavedQuestionIds(questionIds);
       }
 
+      await questionService.batchUpdateStatus(questionIds, "ACTIVE");
+      setQuestionsPublished(true);
+      toast.success("Generated questions saved and published to the Question Bank.");
+    } catch (err: unknown) {
+      toast.error(
+        getApiErrorMessage(
+          err,
+          questionIds.length > 0
+            ? "Questions were saved, but could not be published. Retry to publish them."
+            : "Failed to save and publish generated questions.",
+        ),
+        { title: questionIds.length > 0 ? "Could not publish questions" : "Could not save questions", duration: null },
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCreateExam = async () => {
+    if (
+      !draft ||
+      !questionsPublished ||
+      savedQuestionIds.length !== draft.questions.length
+    ) return;
+
+    setSaving(true);
+    try {
       const created = await examService.createExam({
         title: draft.title || title || "AI Generated Exam",
         description: draft.description,
@@ -482,7 +517,7 @@ export function ExamAiGenerateTab({
         durationMinutes: draft.durationMinutes || durationMinutes || 45,
         mode,
         generationType: "STATIC",
-        questionIds: finalQuestionIds.map((qid, idx) => ({
+        questionIds: savedQuestionIds.map((qid, idx) => ({
           questionId: qid,
           weight: draft.questions[idx]?.defaultPoints ?? 1,
           orderIndex: idx,
@@ -493,23 +528,10 @@ export function ExamAiGenerateTab({
       toast.success("Exam successfully created from AI draft.");
       onCreated(created);
     } catch (err: unknown) {
-      const errorObj = err as {
-        response?: { status?: number; data?: { message?: string } };
-      };
-      if (finalQuestionIds.length > 0) {
-        toast.error(
-          "Questions have already been saved to the Question Bank. Saving the exam failed. You can click Confirm & Save again to retry creating the exam without duplicating questions.",
-          { title: "Questions saved, exam not created", duration: null },
-        );
-      } else {
-        toast.error(
-          getApiErrorMessage(
-            err,
-            "Failed to save generated questions or create exam.",
-          ),
-          { title: "Could not create exam", duration: null },
-        );
-      }
+      toast.error(getApiErrorMessage(err, "Failed to create exam."), {
+        title: "Could not create exam",
+        duration: null,
+      });
     } finally {
       setSaving(false);
     }
@@ -832,18 +854,37 @@ export function ExamAiGenerateTab({
               >
                 Back
               </Button>
-              <Button
-                icon={<Icon.Check className="w-4 h-4" />}
-                loading={saving}
-                disabled={saving || draft.questions.length === 0}
-                onClick={handleConfirmSave}
-              >
-                Confirm & Create Exam
-              </Button>
+              {questionsPublished && savedQuestionIds.length === draft.questions.length && draft.questions.length > 0 ? (
+                <Button
+                  icon={<Icon.Check className="w-4 h-4" />}
+                  loading={saving}
+                  disabled={saving}
+                  onClick={handleCreateExam}
+                >
+                  Create Exam
+                </Button>
+              ) : (
+                <Button
+                  icon={<Icon.Check className="w-4 h-4" />}
+                  loading={saving}
+                  disabled={saving || draft.questions.length === 0}
+                  onClick={handleSaveAndPublish}
+                >
+                  {savedQuestionIds.length > 0 ? "Publish Saved Questions" : "Save and Publish Questions"}
+                </Button>
+              )}
             </div>
           </div>
 
-          <div className="space-y-4">
+          {savedQuestionIds.length > 0 && (
+            <div className="p-3 rounded-[8px] border border-success-line bg-success-light/40 text-sm text-content-secondary">
+              {questionsPublished
+                ? "Questions are saved and published. Create the exam when you’re ready."
+                : "Questions are saved but still inactive. Publish them before creating the exam."} The saved question content is locked to keep it in sync with the Question Bank.
+            </div>
+          )}
+
+          <div className={`space-y-4 ${savedQuestionIds.length > 0 ? "pointer-events-none opacity-70" : ""}`}>
             {draft.questions.map((q, idx) => {
               const validationErr = validateDraftQuestion(q);
 
