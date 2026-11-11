@@ -21,8 +21,8 @@ public class QuestionGroupCreateRequest {
     private Long moduleId;
 
     @NotBlank(message = "Question type is required")
-    @Pattern(regexp = "QUIZ|ESSAY|CODE|DIAGRAM|DIAGRAM_ESSAY",
-            message = "Question type must be one of QUIZ, ESSAY, CODE, DIAGRAM, DIAGRAM_ESSAY")
+    @Pattern(regexp = "QUIZ|ESSAY|CODE|DIAGRAM",
+            message = "Question type must be one of QUIZ, ESSAY, CODE, DIAGRAM")
     private String questionType;
 
     @Size(max = 255, message = "Title must not exceed 255 characters")

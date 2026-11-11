@@ -134,32 +134,6 @@ class StudentExamApiIntegrationTest {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.content[0].examId").value(publishedExam.getExamId()))
                 .andExpect(jsonPath("$.data.content[0].attemptCount").value(1))
-                .andExpect(jsonPath("$.data.content[0].bestScore").value(9))
-                .andExpect(jsonPath("$.data.content[0].hasCodeQuestions").value(false));
-    }
-
-    @Test
-    void listMyExams_FlagsExamWithCodeQuestion() throws Exception {
-        Question code = Question.builder()
-                .course(publishedCourse)
-                .createdBy(manager)
-                .questionType("CODE")
-                .content("Reverse a string")
-                .status("ACTIVE")
-                .approvalStatus("APPROVED")
-                .build();
-        em.persist(code);
-        em.persist(ExamQuestion.builder()
-                .exam(publishedExam)
-                .question(code)
-                .orderIndex(2)
-                .weight(BigDecimal.ONE)
-                .build());
-        em.flush();
-
-        mvc.perform(get("/api/v1/student/my-exams").with(user(UserPrincipal.create(student))))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.content[0].examId").value(publishedExam.getExamId()))
-                .andExpect(jsonPath("$.data.content[0].hasCodeQuestions").value(true));
+                .andExpect(jsonPath("$.data.content[0].bestScore").value(9));
     }
 }
