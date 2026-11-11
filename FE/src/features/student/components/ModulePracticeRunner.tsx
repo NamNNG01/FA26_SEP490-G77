@@ -720,8 +720,6 @@ export function ModulePracticeRunner({ sessionId }: { sessionId: string }) {
                   />
                 </fieldset>
 
-                {submitButton}
-
                 {/* No key to check against: MP-05's verdict is waited for, where it will appear. */}
                 {busy && editing && (
                   <div
@@ -739,9 +737,10 @@ export function ModulePracticeRunner({ sessionId }: { sessionId: string }) {
             )}
 
             {/* Forward only, always offered: an unanswered question is skipped (left blank, locked).
-                The part's last question leads to its results. */}
+                The part's last question leads to its results. Submit sits on the same row, on the left. */}
             {view && (
-              <div className="flex flex-wrap items-center justify-end gap-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                {submitButton ?? <span />}
                 {!isLastOfPart ? (
                   <Button
                     variant={editing ? 'outline' : undefined}
