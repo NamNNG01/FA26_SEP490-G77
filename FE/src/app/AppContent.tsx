@@ -318,6 +318,8 @@ function AppRoutes() {
           <Route path={ROUTES.managerExamEssayEdit} element={<ExamFormPage formKind="ESSAY" mode="edit" />} />
           <Route path={ROUTES.managerExamDiagramNew} element={<ExamFormPage formKind="ESSAY" mode="create" />} />
           <Route path={ROUTES.managerExamDiagramEdit} element={<ExamFormPage formKind="ESSAY" mode="edit" />} />
+          <Route path={ROUTES.managerExamCodeNew} element={<ExamFormPage formKind="CODE" mode="create" />} />
+          <Route path={ROUTES.managerExamCodeEdit} element={<ExamFormPage formKind="CODE" mode="edit" />} />
           {/* Same shared components as the student practice-exam area. */}
           <Route path={ROUTES.managerPracticeExams} element={<PublicExamsPage />} />
           <Route path={ROUTES.managerPracticeExamDetail} element={<PublicExamDetailPage />} />

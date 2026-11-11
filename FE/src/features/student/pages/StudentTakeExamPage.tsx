@@ -64,7 +64,8 @@ type SaveState = 'saved' | 'dirty' | 'saving' | 'error';
  *    The deadline is the server's: when it passes, the screen submits on its own
  *    (and the BE auto-submits if the tab is gone).
  *  - Only questions made entirely of essay / code / diagram get the "Essay"
- *    layout (wider, taller editor); every other paper is a quiz.
+ *    layout (wider, taller editor); every other paper is a quiz. A paper of only
+ *    CODE questions is labelled "Code".
  *  - CODE questions get a 20/80 workspace (question | VS Code–style editor with Run, CD-04).
  *    Submit grades them on every test case first (CD-05), then submits the attempt.
  *  - The attempt's examMode picks the behaviour (see examModes.ts): an EXAM kind (EXAM, CONTEST) is
@@ -430,6 +431,7 @@ function ExamAttemptScreen() {
   /* ── Derived ──────────────────────────────────────────────────────────── */
   const questions = session?.questions ?? [];
   const isEssay = questions.length > 0 && questions.every(q => RUBRIC_TYPES.has(q.questionType));
+  const isCodeExam = questions.length > 0 && questions.every(q => q.questionType === 'CODE');
   const answeredSet = useMemo(() => {
     const s = new Set<number>();
     questions.forEach((q, i) => {
@@ -586,7 +588,7 @@ function ExamAttemptScreen() {
           <Icon.Logo className="w-7 h-7 flex-shrink-0 text-brand-ink" aria-hidden="true" />
           <span className="text-base font-bold text-content truncate">{session.title}</span>
           <span className="hidden sm:inline-flex flex-shrink-0 rounded-[6px] border border-line px-2 py-0.5 text-2xs font-medium text-content-soft">
-            {isEssay ? 'Essay' : 'Quiz'}
+            {isCodeExam ? 'Code' : isEssay ? 'Essay' : 'Quiz'}
           </span>
           {/* A self-made exam taken as an exam says so; a course exam needs no badge. */}
           {practice && (

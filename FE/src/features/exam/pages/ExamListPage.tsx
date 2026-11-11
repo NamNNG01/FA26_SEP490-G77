@@ -21,7 +21,7 @@ import {
   type CourseModuleResponse,
 } from "@/services/course.service";
 
-type ExamListTab = "all" | "QUIZ" | "ASSESSMENT";
+type ExamListTab = "all" | "QUIZ" | "ASSESSMENT" | "CODE";
 
 export function ExamListPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -32,8 +32,8 @@ export function ExamListPage() {
   const tabParam: ExamListTab =
     rawTabParam === "all"
       ? "all"
-      : rawTabParam === "QUIZ"
-        ? "QUIZ"
+      : rawTabParam === "QUIZ" || rawTabParam === "CODE"
+        ? rawTabParam
         : "ASSESSMENT";
   const searchParam = searchParams.get("search") || "";
   const courseParam = searchParams.get("courseId") || "";
@@ -172,7 +172,7 @@ export function ExamListPage() {
           });
           allAssessments.push(
             ...(response.content || []).filter(
-              (exam) => exam.examKind !== "QUIZ",
+              (exam) => exam.examKind !== "QUIZ" && exam.examKind !== "CODE",
             ),
           );
           hasMore = !response.last && response.content.length > 0;
@@ -188,7 +188,7 @@ export function ExamListPage() {
       } else {
         const response = await examService.getExams({
           ...filters,
-          examKind: activeTab === "QUIZ" ? "QUIZ" : undefined,
+          examKind: activeTab === "all" ? undefined : activeTab,
           page,
           size: 15,
         });
@@ -240,7 +240,7 @@ export function ExamListPage() {
     updateUrlParams({ tab, page: 0 });
   };
 
-  const handleNewExam = (kind: "QUIZ" | "ESSAY") => {
+  const handleNewExam = (kind: "QUIZ" | "ESSAY" | "CODE") => {
     navigate(`/manager/exams/${kind.toLowerCase()}/new`);
   };
 
@@ -326,6 +326,8 @@ export function ExamListPage() {
   const handleEditExam = (exam: ExamListItem) => {
     if (exam.examKind === "QUIZ") {
       navigate(`/manager/exams/quiz/${exam.examId}`);
+    } else if (exam.examKind === "CODE") {
+      navigate(`/manager/exams/code/${exam.examId}`);
     } else {
       navigate(`/manager/exams/essay/${exam.examId}`);
     }
@@ -498,6 +500,11 @@ export function ExamListPage() {
                 icon: <Icon.FileText className="w-4 h-4" />,
                 onClick: () => handleNewExam("ESSAY"),
               },
+              {
+                label: "Code Exam",
+                icon: <Icon.Code className="w-4 h-4" />,
+                onClick: () => handleNewExam("CODE"),
+              },
             ]}
           />
         </div>
@@ -538,6 +545,18 @@ export function ExamListPage() {
         >
           <Icon.FileText className="w-4 h-4" />
           Assessments
+        </button>
+        <button
+          type="button"
+          onClick={() => handleTabChange("CODE")}
+          className={`px-5 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors cursor-pointer flex items-center gap-1.5 ${
+            activeTab === "CODE"
+              ? "border-brand-ink text-brand-ink"
+              : "border-transparent text-content-subtle hover:text-content"
+          }`}
+        >
+          <Icon.Code className="w-4 h-4" />
+          Code
         </button>
       </div>
 
@@ -629,6 +648,13 @@ export function ExamListPage() {
                 >
                   New Assessment
                 </Button>
+              ) : activeTab === "CODE" ? (
+                <Button
+                  onClick={() => handleNewExam("CODE")}
+                  icon={<Icon.Plus className="w-4 h-4" />}
+                >
+                  New Code Exam
+                </Button>
               ) : (
                 <Button
                   onClick={() => handleNewExam("QUIZ")}
@@ -711,7 +737,11 @@ export function ExamListPage() {
                       <td className="px-3 py-3">
                         <Badge
                           variant={
-                            exam.examKind === "QUIZ" ? "purple" : "default"
+                            exam.examKind === "QUIZ"
+                              ? "purple"
+                              : exam.examKind === "CODE"
+                                ? "warning"
+                                : "default"
                           }
                           className="text-2xs"
                         >
