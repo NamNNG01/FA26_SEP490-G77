@@ -26,6 +26,7 @@ export type QuestionType =
   | 'ESSAY'
   | 'CODE'
   | 'DIAGRAM'
+  | 'DIAGRAM_ESSAY'
   | 'ORDERING';
 
 export type QuestionDifficulty = 'EASY' | 'MEDIUM' | 'HARD';

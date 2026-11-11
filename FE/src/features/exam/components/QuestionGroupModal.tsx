@@ -55,7 +55,7 @@ export function QuestionGroupModal({
         size: 100,
       })
       .then((res) => {
-        const types = questionType === 'ESSAY' ? ['ESSAY', 'DIAGRAM'] : [questionType];
+        const types = questionType === 'ESSAY' ? ['ESSAY', 'DIAGRAM', 'DIAGRAM_ESSAY'] : [questionType];
         setGroups((res.content || []).filter((group) => types.includes(group.questionType)));
       })
       .catch((err) => {

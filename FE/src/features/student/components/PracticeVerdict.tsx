@@ -10,7 +10,7 @@ interface Criterion {
 }
 
 /** Essay and diagram answers are only ever scored: they are never shown as right or wrong. */
-export const SCORE_ONLY_TYPES: ReadonlySet<string> = new Set(['ESSAY', 'DIAGRAM']);
+export const SCORE_ONLY_TYPES: ReadonlySet<string> = new Set(['ESSAY', 'DIAGRAM', 'DIAGRAM_ESSAY']);
 
 /**
  * Palette tone of one practice question: correct / wrong from the verdict; `partial` for a rubric

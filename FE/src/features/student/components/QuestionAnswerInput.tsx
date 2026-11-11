@@ -23,6 +23,7 @@ export const QUESTION_TYPE_LABEL: Record<string, string> = {
   ESSAY: 'Essay',
   CODE: 'Code',
   DIAGRAM: 'Diagram',
+  DIAGRAM_ESSAY: 'Diagram + Essay',
 };
 
 export function optionLetter(i: number): string {
@@ -115,6 +116,8 @@ function AnswerControl({ question, value, onChange, roomy, fill, readOnly, revea
     case 'DIAGRAM':
       if (readOnly) return <DiagramReview xml={value?.drawioXml ?? ''} />;
       return <DiagramAnswerInput value={value} onChange={onChange} roomy={roomy} />;
+    case 'DIAGRAM_ESSAY':
+      return <DiagramEssayInput question={question} value={value} onChange={onChange} roomy={roomy} readOnly={readOnly} />;
     default:
       return <p className="text-sm text-content-soft">This question type can't be answered here.</p>;
   }
@@ -616,6 +619,36 @@ function OrderingReveal({
   );
 }
 
+/**
+ * DIAGRAM_ESSAY: the diagram on top, the written explanation below. Both fields are always sent
+ * (AnswerResponseValidator wants each one a string), so an edit of one keeps the other.
+ */
+function DiagramEssayInput({ question, value, onChange, roomy, readOnly }: InputProps) {
+  // The draw.io editor reports through a callback it keeps, so read the latest answer from a ref.
+  const valueRef = React.useRef(value);
+  valueRef.current = value;
+  const merge = (patch: AnswerResponse) => {
+    const prev = valueRef.current;
+    onChange({ drawioXml: prev?.drawioXml ?? '', text: prev?.text ?? '', ...patch });
+  };
+  return (
+    <div className="space-y-4">
+      <section className="space-y-2">
+        <h3 className="text-xs font-semibold text-content-soft uppercase tracking-wide">Diagram</h3>
+        {readOnly ? (
+          <DiagramReview xml={value?.drawioXml ?? ''} />
+        ) : (
+          <DiagramAnswerInput value={value} onChange={next => merge({ drawioXml: next.drawioXml ?? '' })} roomy={roomy} />
+        )}
+      </section>
+      <section className="space-y-2">
+        <h3 className="text-xs font-semibold text-content-soft uppercase tracking-wide">Written explanation</h3>
+        <TextInput question={question} value={value} onChange={next => merge({ text: next.text ?? '' })} />
+      </section>
+    </div>
+  );
+}
+
 function TextInput({ question, value, onChange, roomy, fill }: InputProps) {
   const text = value?.text ?? '';
   const limit = question.answerSpace?.maxLength ?? DEFAULT_TEXT_LIMIT;
@@ -632,9 +665,9 @@ function TextInput({ question, value, onChange, roomy, fill }: InputProps) {
         maxLength={limit}
         onChange={e => onChange({ text: e.target.value })}
         placeholder="Write your answer…"
-        spellCheck={question.questionType === 'ESSAY'}
+        spellCheck={question.questionType !== 'CODE'}
         className={`${FIELD} py-2.5 w-full leading-relaxed ${size} ${
-          question.questionType !== 'ESSAY' ? 'font-mono text-sm' : 'text-base'
+          question.questionType === 'CODE' ? 'font-mono text-sm' : 'text-base'
         }`}
       />
       <p className="text-xs text-content-subtle text-right">

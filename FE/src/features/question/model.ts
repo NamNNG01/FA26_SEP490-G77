@@ -22,8 +22,8 @@ import { hasDiagramContent, plantUmlToDrawioXml } from './diagram';
  */
 
 /**
- * Types the editor offers — all the ones QuestionValidator accepts. DIAGRAM
- * sends its draw.io XML in questionMetadata.drawioXml; ORDERING sends keyed
+ * Types the editor offers — all the ones QuestionValidator accepts. DIAGRAM and
+ * DIAGRAM_ESSAY send their draw.io XML in questionMetadata.drawioXml; ORDERING sends keyed
  * options plus answerKey.correctOrder; CODE sends `codeConfig` (languages, template, limits, test cases).
  */
 export type EditableQuestionType = QuestionType;
@@ -38,20 +38,21 @@ export const QUESTION_TYPE_OPTIONS: { label: string; value: EditableQuestionType
   { label: 'Essay', value: 'ESSAY' },
   { label: 'Code', value: 'CODE' },
   { label: 'Diagram', value: 'DIAGRAM' },
+  { label: 'Diagram + Essay', value: 'DIAGRAM_ESSAY' },
 ];
 
-/** Types the AI can draft (ExamAiServiceImpl.TYPES) — AI-01 doesn't draft ORDERING or CODE yet. */
-export const AI_QUESTION_TYPE_OPTIONS = QUESTION_TYPE_OPTIONS.filter(t => t.value !== 'ORDERING' && t.value !== 'CODE') as { label: string; value: QuestionType }[];
+/** Types the AI can draft (ExamAiServiceImpl.TYPES) — AI-01 doesn't draft ORDERING, CODE or DIAGRAM_ESSAY yet. */
+export const AI_QUESTION_TYPE_OPTIONS = QUESTION_TYPE_OPTIONS.filter(t => t.value !== 'ORDERING' && t.value !== 'CODE' && t.value !== 'DIAGRAM_ESSAY') as { label: string; value: QuestionType }[];
 
 /**
  * A question group holds exactly one kind (QuestionTypeUtil): every choice /
  * blank / matching / ordering type is a QUIZ, the others are their own kind.
  */
-export type GroupKind = 'QUIZ' | 'ESSAY' | 'CODE' | 'DIAGRAM';
+export type GroupKind = 'QUIZ' | 'ESSAY' | 'CODE' | 'DIAGRAM' | 'DIAGRAM_ESSAY';
 
 const QUIZ_TYPES: QuestionType[] = ['SINGLE_CHOICE', 'MULTIPLE_CHOICE', 'TRUE_FALSE', 'MATCHING', 'FILL_BLANK', 'ORDERING'];
 
-export const GROUP_KIND_LABELS: Record<GroupKind, string> = { QUIZ: 'Quiz', ESSAY: 'Essay', CODE: 'Code', DIAGRAM: 'Diagram' };
+export const GROUP_KIND_LABELS: Record<GroupKind, string> = { QUIZ: 'Quiz', ESSAY: 'Essay', CODE: 'Code', DIAGRAM: 'Diagram', DIAGRAM_ESSAY: 'Diagram + Essay' };
 
 /** Kinds a new group can be created with. */
 export const GROUP_KIND_OPTIONS: { label: string; value: GroupKind; hint: string }[] = [
@@ -59,16 +60,17 @@ export const GROUP_KIND_OPTIONS: { label: string; value: GroupKind; hint: string
   { label: 'Essay', value: 'ESSAY', hint: 'Written answers graded by a rubric' },
   { label: 'Code', value: 'CODE', hint: 'Programs graded by running test cases' },
   { label: 'Diagram', value: 'DIAGRAM', hint: 'Diagram answers graded by a rubric' },
+  { label: 'Diagram + Essay', value: 'DIAGRAM_ESSAY', hint: 'A diagram with a written explanation, graded by a rubric' },
 ];
 
 export function kindOf(type: string | null | undefined): GroupKind | null {
   if (!type) return null;
   if (QUIZ_TYPES.includes(type as QuestionType)) return 'QUIZ';
-  return type === 'ESSAY' || type === 'CODE' || type === 'DIAGRAM' ? type : null;
+  return type === 'ESSAY' || type === 'CODE' || type === 'DIAGRAM' || type === 'DIAGRAM_ESSAY' ? type : null;
 }
 
 export const asGroupKind = (v: string | null | undefined): GroupKind | null =>
-  v === 'QUIZ' || v === 'ESSAY' || v === 'CODE' || v === 'DIAGRAM' ? v : null;
+  v === 'QUIZ' || v === 'ESSAY' || v === 'CODE' || v === 'DIAGRAM' || v === 'DIAGRAM_ESSAY' ? v : null;
 
 /** The editor's types a group of `kind` accepts (all of them when the kind is not set). */
 export const typesOfKind = (kind: GroupKind | null): EditableQuestionType[] =>
@@ -78,7 +80,10 @@ export const typesOfKind = (kind: GroupKind | null): EditableQuestionType[] =>
 export const MAX_DRAWIO_XML_BYTES = 512000;
 
 /** Types graded by a rubric whose total is sent as defaultPoints (E-11: DIAGRAM like ESSAY). */
-export const RUBRIC_TYPES: EditableQuestionType[] = ['ESSAY', 'DIAGRAM'];
+export const RUBRIC_TYPES: EditableQuestionType[] = ['ESSAY', 'DIAGRAM', 'DIAGRAM_ESSAY'];
+
+/** Types whose model answer is a draw.io diagram (questionMetadata.drawioXml, required by QuestionValidator). */
+export const hasModelDiagram = (type: string) => type === 'DIAGRAM' || type === 'DIAGRAM_ESSAY';
 
 /** QuestionValidator limits. */
 export const MAX_CONTENT_LENGTH = 10000;
@@ -375,12 +380,15 @@ export function validateDraft(q: QuestionDraft): QuestionErrors {
       else if (hasDuplicates(filled.map(o => o.text))) errors.answers = 'Items must be different from each other.';
       break;
     }
-    case 'DIAGRAM': {
+    case 'DIAGRAM':
+    case 'DIAGRAM_ESSAY': {
       const xml = q.diagramXml.trim();
       const { error } = rubricTotal(q.rubric);
       if (!hasDiagramContent(xml)) errors.answers = 'Draw the model answer diagram.';
       else if (!/^<(mxfile|mxGraphModel)\b/i.test(xml)) errors.answers = 'The diagram isn’t valid draw.io XML — open it in draw.io and save again.';
       else if (new TextEncoder().encode(xml).length > MAX_DRAWIO_XML_BYTES) errors.answers = 'The diagram is too large (max 500 KB) — simplify it or remove embedded images.';
+      // Like an essay, the written part can't be graded without criteria.
+      else if (q.type === 'DIAGRAM_ESSAY' && q.rubric.length === 0) errors.answers = ESSAY_RUBRIC_REQUIRED;
       else if (error) errors.answers = error;
       break;
     }
@@ -596,7 +604,7 @@ function toMetadata(q: QuestionDraft): Record<string, unknown> {
   return {
     ...kept,
     ...(q.skillTag.trim() ? { skillTag: q.skillTag.trim() } : {}),
-    ...(q.type === 'DIAGRAM' ? { drawioXml: q.diagramXml } : {}),
+    ...(hasModelDiagram(q.type) ? { drawioXml: q.diagramXml } : {}),
   };
 }
 

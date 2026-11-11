@@ -16,10 +16,10 @@ const unwrap = (response: any) => {
 };
 const idOf = (row: Row, kind: Kind) => kind === 'contributions' ? row.contributionId : row.deckId;
 const statusOf = (row: Row, kind: Kind) => kind === 'contributions' ? row.status : row.reviewStatus;
-const QUESTION_TYPES = ['SINGLE_CHOICE', 'MULTIPLE_CHOICE', 'TRUE_FALSE', 'MATCHING', 'FILL_BLANK', 'ORDERING', 'ESSAY', 'CODE', 'DIAGRAM'];
+const QUESTION_TYPES = ['SINGLE_CHOICE', 'MULTIPLE_CHOICE', 'TRUE_FALSE', 'MATCHING', 'FILL_BLANK', 'ORDERING', 'ESSAY', 'CODE', 'DIAGRAM', 'DIAGRAM_ESSAY'];
 const questionTypeLabel = (value: string) => ({
   SINGLE_CHOICE: 'Single choice', MULTIPLE_CHOICE: 'Multiple choice', TRUE_FALSE: 'True or false',
-  MATCHING: 'Matching', FILL_BLANK: 'Fill in the blank', ORDERING: 'Ordering', ESSAY: 'Essay', CODE: 'Code', DIAGRAM: 'Diagram',
+  MATCHING: 'Matching', FILL_BLANK: 'Fill in the blank', ORDERING: 'Ordering', ESSAY: 'Essay', CODE: 'Code', DIAGRAM: 'Diagram', DIAGRAM_ESSAY: 'Diagram + Essay',
 } as Record<string, string>)[value] || value;
 const statusLabel = (value: string) => ({ PENDING: 'Pending', ACCEPTED: 'Approved', APPROVED: 'Approved', REJECTED: 'Rejected', ALL: 'All statuses' } as Record<string, string>)[value] || value;
 const difficultyLabel = (value: string) => value ? value[0] + value.slice(1).toLowerCase() : '—';

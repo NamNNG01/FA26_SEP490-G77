@@ -75,6 +75,7 @@ const TARGET_TYPES: QuestionType[] = [
   'ESSAY',
   'CODE',
   'DIAGRAM',
+  'DIAGRAM_ESSAY',
 ];
 
 const CHIP = 'px-3 py-1.5 rounded-[8px] border text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-primary';
