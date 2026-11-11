@@ -14,6 +14,7 @@ import com.examprep.exceptions.BadRequestException;
 import com.examprep.exceptions.ResourceConflictException;
 import com.examprep.repositories.QuestionGroupRepository;
 import com.examprep.repositories.QuestionRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -27,6 +28,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @SpringBootTest
@@ -45,6 +47,9 @@ class QuestionGroupTypeEnforcementIntegrationTest {
 
     @Autowired
     private EntityManager entityManager;
+
+    @Autowired
+    private ObjectMapper objectMapper;
 
     private User admin;
     private Course course;
@@ -143,6 +148,25 @@ class QuestionGroupTypeEnforcementIntegrationTest {
                 quiz.getQuestionId(),
                 QuestionUpdateRequest.builder().questionType("ESSAY").build(),
                 admin));
+    }
+
+    @Test
+    void explicitNullGroupIdDetachesAndMissingGroupIdKeepsTheGroup() throws Exception {
+        QuestionGroup quizGroup = persistGroup("QUIZ");
+        QuestionDetailDto quiz =
+                questionService.createQuestion(quizRequest(quizGroup, "Grouped quiz question"), admin);
+
+        QuestionDetailDto kept = questionService.updateQuestion(
+                quiz.getQuestionId(),
+                objectMapper.readValue("{\"content\":\"Grouped quiz question, edited\"}", QuestionUpdateRequest.class),
+                admin);
+        assertEquals(quizGroup.getGroupId(), kept.getGroupId());
+
+        QuestionDetailDto detached = questionService.updateQuestion(
+                quiz.getQuestionId(),
+                objectMapper.readValue("{\"groupId\":null}", QuestionUpdateRequest.class),
+                admin);
+        assertNull(detached.getGroupId());
     }
 
     @Test
