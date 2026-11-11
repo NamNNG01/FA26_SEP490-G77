@@ -291,8 +291,8 @@ class ExamApiIntegrationTest {
                 .andExpect(jsonPath("$.data.reused").value(0))
                 .andExpect(jsonPath("$.data.skippedDuplicates").value(1))
                 .andExpect(jsonPath("$.data.questionIds.length()").value(2));
-        // Created through Q-03: ACTIVE, so the exam can be published without a manual review step.
-        assertEquals(List.of("ACTIVE", "ACTIVE"), em.createQuery("select q.status from ExamQuestion l join l.question q where l.exam = :e", String.class)
+        // Imported questions remain inactive until the manager reviews and activates them.
+        assertEquals(List.of("INACTIVE", "INACTIVE"), em.createQuery("select q.status from ExamQuestion l join l.question q where l.exam = :e", String.class)
                 .setParameter("e", first).getResultList());
         importFile(second, contents).andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.imported").value(0))

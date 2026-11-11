@@ -92,7 +92,7 @@ public class StudentCodeExamApiIntegrationTest {
         codeQuestion = codeQuestion("Reverse the string");
         sumQuestion = codeQuestion("Add two numbers");
         choiceQuestion = Question.builder().course(course).createdBy(manager).questionType("SINGLE_CHOICE")
-                .difficulty("EASY").content("Pick one").build();
+                .difficulty("EASY").content("Pick one").status("ACTIVE").approvalStatus("APPROVED").build();
         em.persist(choiceQuestion);
         for (int option = 1; option <= 2; option++) {
             em.persist(AnswerOption.builder().question(choiceQuestion).optionText("Choice " + option)
@@ -636,7 +636,7 @@ public class StudentCodeExamApiIntegrationTest {
 
     private Question codeQuestion(String content) {
         Question question = Question.builder().course(course).createdBy(manager).questionType("CODE")
-                .difficulty("MEDIUM").content(content).build();
+                .difficulty("MEDIUM").content(content).status("ACTIVE").approvalStatus("APPROVED").build();
         em.persist(question);
         return question;
     }

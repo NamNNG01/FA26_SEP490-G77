@@ -387,9 +387,7 @@ public class QuestionServiceImpl implements QuestionService {
         } else if (q.getModule() == null) {
             throw new BadRequestException("Module ID is required");
         }
-        if (req.getGroupId() == null) {
-            q.setGroup(null);
-        } else {
+        if (req.getGroupId() != null) {
             QuestionGroup group = questionGroupRepository.findById(req.getGroupId())
                     .orElseThrow(() -> new ResourceNotFoundException("Question group not found"));
 
@@ -405,7 +403,6 @@ public class QuestionServiceImpl implements QuestionService {
                 throw new ResourceConflictException("Question group must belong to the same module");
             }
 
-            q.setGroup(group);
         }
         if (req.getLockVersion() != null && !req.getLockVersion().equals(q.getLockVersion())) {
             throw new ResourceConflictException("Resource was modified by another user (lock version mismatch)");

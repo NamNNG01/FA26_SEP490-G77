@@ -452,7 +452,7 @@ class QuestionGroupControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.data.questionType")
-                        .value("Question type must be one of QUIZ, ESSAY, CODE, DIAGRAM"));
+                        .value("Question type must be one of QUIZ, ESSAY, CODE, DIAGRAM, DIAGRAM_ESSAY"));
 
         verifyNoInteractions(questionGroupService);
     }
@@ -471,7 +471,7 @@ class QuestionGroupControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.data.questionType")
-                        .value("Question type must be one of QUIZ, ESSAY, CODE, DIAGRAM"));
+                        .value("Question type must be one of QUIZ, ESSAY, CODE, DIAGRAM, DIAGRAM_ESSAY"));
 
         verifyNoInteractions(questionGroupService);
     }

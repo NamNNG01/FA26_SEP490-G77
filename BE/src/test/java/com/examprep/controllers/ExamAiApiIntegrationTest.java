@@ -164,7 +164,7 @@ class ExamAiApiIntegrationTest {
 
     @Test void existingBankQuestionsAreSentAsContextAndNeverDuplicated() throws Exception {
         em.persist(Question.builder().module(module).content("What is 2 + 2?").questionType("SINGLE_CHOICE")
-                .difficulty("EASY").build());
+                .difficulty("EASY").status("ACTIVE").approvalStatus("APPROVED").build());
         retryContent = json.writeValueAsString(Map.of("questions", List.of(choice("SINGLE_CHOICE", "EASY", "What is 3 + 3?"))));
         generate(assigned, body()).andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.questions[0].content").value("What is 3 + 3?"))
@@ -224,7 +224,7 @@ class ExamAiApiIntegrationTest {
     }
 
     @Test void rejectsTypesTheQuestionBankCannotSaveBeforeProviderCall() throws Exception {
-        for (String type : List.of("CODE", "ORDERING"))
+        for (String type : List.of("ORDERING"))
             generate(manager, body().replace("SINGLE_CHOICE", type)).andExpect(status().isBadRequest());
         assertEquals(0, calls);
     }

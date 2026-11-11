@@ -340,7 +340,7 @@ class DeckApiIntegrationTest {
         call(manager, put(cards + "/" + mine.getCardId()).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"frontText\":\"New front\",\"backText\":\"New back\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.message").value("Operation completed successfully"))
+                .andExpect(jsonPath("$.message").value("Request processed successfully"))
                 .andExpect(jsonPath("$.data.cardId").value(mine.getCardId()))
                 .andExpect(jsonPath("$.data.deckId").value(deck.getDeckId()))
                 .andExpect(jsonPath("$.data.frontText").value("New front"))

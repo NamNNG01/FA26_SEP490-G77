@@ -346,13 +346,13 @@ public class ManagerCourseApiIntegrationTest {
         call(manager, patch(modulePath(hidden) + "/status").contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"HIDDEN\"}"))
                 .andExpect(status().isOk());
         em.clear();
-        call(student, get("/api/v1/student/exams/course/" + course.getCourseId())).andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.length()").value(1))
-                .andExpect(jsonPath("$.data[0].examId").value(shownExam.getExamId()));
-        call(student, get("/api/v1/student/exams/" + hiddenExam.getExamId())).andExpect(jsonPath("$.message").value("Exam is not available"));
-        call(student, post("/api/v1/student/exams/attempts").contentType(MediaType.APPLICATION_JSON)
-                .content("{\"examId\":" + hiddenExam.getExamId() + ",\"answers\":[]}")).andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("Exam is not available"));
+        call(student, get("/api/v1/student/courses/" + course.getCourseId() + "/exams")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content.length()").value(1))
+                .andExpect(jsonPath("$.data.content[0].examId").value(shownExam.getExamId()));
+        call(student, get("/api/v1/student/exams/" + hiddenExam.getExamId())).andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Exam not found"));
+        call(student, post("/api/v1/student/exams/" + hiddenExam.getExamId() + "/attempts")).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("Exam is not published"));
     }
 
     @Test
