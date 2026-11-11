@@ -66,6 +66,19 @@ export interface CodeSubmitResult {
   failedTestCase?: number | null;
 }
 
+/**
+ * CD-07 — one judged fixture. The API omits null fields, so a hidden fixture carries neither its
+ * input nor its expected output at all.
+ */
+export interface CodeTestCaseOutcome {
+  testCaseId?: number | null;
+  orderIndex?: number | null;
+  hidden: boolean;
+  passed: boolean;
+  inputData?: string | null;
+  expectedOutput?: string | null;
+}
+
 /** CD-07 */
 export interface CodeSubmission {
   submissionId: number;
@@ -74,6 +87,8 @@ export interface CodeSubmission {
   status: 'PASSED' | 'FAILED' | string;
   testCasesPassed: number;
   testCasesTotal: number;
+  /** Per-fixture verdicts in judging order; empty for submissions judged before this field existed. */
+  testCases?: CodeTestCaseOutcome[] | null;
   createdAt: string;
 }
 

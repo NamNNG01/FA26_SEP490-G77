@@ -682,8 +682,7 @@ export function StudentExamResultPage() {
               {q.questionType === 'CODE' && codeSubs && (() => {
                 const sub = latestSubmissionBefore(codeSubs, q.questionId, result.submittedAt);
                 return sub ? (
-                  <div className="card flex flex-wrap items-center gap-2 px-4 py-3 text-sm text-content-soft">
-                    <span className="font-medium text-content">Test cases</span>
+                  <div className="card px-4 py-3 text-sm text-content-soft">
                     <CodeTestCaseStatus submission={sub} />
                   </div>
                 ) : null;

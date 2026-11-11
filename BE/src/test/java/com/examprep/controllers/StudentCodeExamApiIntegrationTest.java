@@ -548,6 +548,29 @@ public class StudentCodeExamApiIntegrationTest {
         assertEquals("PASSED", data.path("content").get(2).path("status").asText());
         assertEquals(codeQuestion.getQuestionId(), data.path("content").get(2).path("questionId").asLong());
 
+        // CD-07 lists every judged fixture; a hidden one reports pass/fail without its data (spec 19.1).
+        JsonNode firstCases = data.path("content").get(0).path("testCases");
+        assertEquals(3, firstCases.size());
+        assertFalse(firstCases.get(0).path("hidden").asBoolean());
+        assertEquals("abc", firstCases.get(0).path("inputData").asText());
+        assertEquals("cba", firstCases.get(0).path("expectedOutput").asText());
+        for (int i = 1; i < firstCases.size(); i++) {
+            assertTrue(firstCases.get(i).path("hidden").asBoolean());
+            // Nulls are omitted from responses, so a hidden fixture carries no fixture data at all.
+            assertFalse(firstCases.get(i).has("inputData"));
+            assertFalse(firstCases.get(i).has("expectedOutput"));
+        }
+        for (JsonNode testCase : firstCases) {
+            assertFalse(testCase.path("passed").asBoolean(true));
+            assertTrue(testCase.hasNonNull("testCaseId"));
+            assertTrue(testCase.hasNonNull("orderIndex"));
+        }
+        JsonNode passedCases = data.path("content").get(2).path("testCases");
+        assertEquals(3, passedCases.size());
+        for (JsonNode testCase : passedCases) {
+            assertTrue(testCase.path("passed").asBoolean(false));
+        }
+
         JsonNode page1 = data(call(student, get("/api/v1/student/code-exams/" + exam.getExamId()
                 + "/submissions?page=1&size=2")).andExpect(status().isOk()));
         assertEquals(1, page1.path("content").size());
