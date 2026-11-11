@@ -60,6 +60,9 @@ public class PracticeExamService {
         int totalCount = 0;
 
         if (request.moduleQuestionCounts() != null && !request.moduleQuestionCounts().isEmpty()) {
+            if (request.moduleQuestionCounts().stream().mapToInt(PracticeDtos.ModuleQuestionCount::questionCount).sum() > 100) {
+                throw new BadRequestException("moduleQuestionCounts must add up to at most 100 questions.");
+            }
             Set<Long> seenModules = new HashSet<>();
             for (PracticeDtos.ModuleQuestionCount mq : request.moduleQuestionCounts()) {
                 Long moduleId = mq.categoryId();

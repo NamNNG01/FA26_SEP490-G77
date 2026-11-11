@@ -92,6 +92,13 @@ class ImageUploadApiIntegrationTest {
         verify(storage).storeImage(startsWith("media/user" + manager.getUserId() + "/"), any(byte[].class), eq(false));
     }
 
+    @Test void studentUploadIsForStudents() throws Exception {
+        call(manager, multipart("/api/v1/student/uploads").file(png)).andExpect(status().isForbidden());
+        call(student, multipart("/api/v1/student/uploads").file(png))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.url").value(org.hamcrest.Matchers.startsWith("https://cdn.test/media/user" + student.getUserId() + "/")));
+    }
+
     private ResultActions call(User actor, MockMultipartHttpServletRequestBuilder request) throws Exception {
         em.flush();
         return mvc.perform(request.with(user(UserPrincipal.create(actor))));

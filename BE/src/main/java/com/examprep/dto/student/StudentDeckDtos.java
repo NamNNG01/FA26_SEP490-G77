@@ -30,8 +30,11 @@ public final class StudentDeckDtos {
                             @Size(max = 5000) String backText,
                             String codeLanguage,
                             @Size(max = 20000) String codeBody,
-                            @Size(max = 1000) String frontImageUrl,
-                            @Size(max = 1000) String backImageUrl) {}
+                            @Size(max = 1000) @Pattern(regexp = IMAGE_URL, message = "must be an http(s) URL") String frontImageUrl,
+                            @Size(max = 1000) @Pattern(regexp = IMAGE_URL, message = "must be an http(s) URL") String backImageUrl) {}
+
+    /** Blank (no image) or an http(s) URL; blocks javascript:/data: values in an img src. */
+    public static final String IMAGE_URL = "^\\s*$|^https?://\\S+$";
 
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record DeckView(Long deckId, String title, String description, String mode, Long courseId, String courseTitle,
