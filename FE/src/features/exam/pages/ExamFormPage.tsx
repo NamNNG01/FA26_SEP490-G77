@@ -76,7 +76,7 @@ export function ExamFormPage({
   const formLabel = formKind === "QUIZ" ? "Quiz" : "Essay";
   const examPathKind = formKind === "QUIZ" ? "quiz" : "essay";
   const isEssayQuestion = (question: ExamQuestion) =>
-    ["ESSAY", "DIAGRAM"].includes(question.questionType);
+    ["ESSAY", "DIAGRAM", "DIAGRAM_ESSAY"].includes(question.questionType);
 
   const [activeTab, setActiveTab] = useState<"manual" | "ai">("manual");
   const [courses, setCourses] = useState<CourseSummaryItem[]>([]);
@@ -155,7 +155,7 @@ export function ExamFormPage({
           "MATCHING",
           "ORDERING",
         ]
-      : ["ESSAY", "DIAGRAM"];
+      : ["ESSAY", "DIAGRAM", "DIAGRAM_ESSAY"];
 
   useEffect(() => {
     if (!questionEditTarget) {
@@ -329,7 +329,7 @@ export function ExamFormPage({
         const missingRubricQuestions = loadedQuestions.filter(
           (q) =>
             isAssessment &&
-            ["ESSAY", "DIAGRAM"].includes(q.questionType) &&
+            ["ESSAY", "DIAGRAM", "DIAGRAM_ESSAY"].includes(q.questionType) &&
             q.hasRubric === undefined,
         );
         if (missingRubricQuestions.length > 0) {
@@ -1734,7 +1734,7 @@ export function ExamFormPage({
                             </div>
                           )}
                         </div>
-                        {q.questionType === "DIAGRAM" && (
+                        {(q.questionType === "DIAGRAM" || q.questionType === "DIAGRAM_ESSAY") && (
                           <ExamDiagramAnswer
                             questionId={q.questionId}
                             readOnly={areQuestionsReadOnly}
@@ -2020,7 +2020,7 @@ export function ExamFormPage({
                                         </button>
                                       )}
                                     </div>
-                                    {q.questionType === "DIAGRAM" && (
+                                    {(q.questionType === "DIAGRAM" || q.questionType === "DIAGRAM_ESSAY") && (
                                       <ExamDiagramAnswer
                                         questionId={q.questionId}
                                         readOnly={areQuestionsReadOnly}

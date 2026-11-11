@@ -13,6 +13,7 @@ import {
   nextBlankIndex,
   optionLabel,
   rubricTotal,
+  ESSAY_RUBRIC_REQUIRED,
   validateDraft,
   type EditableQuestionType,
   type QuestionDraft,
@@ -250,6 +251,25 @@ export function QuestionForm({
         </div>
       )}
 
+      {/* Difficulty and type first: the type decides what the rest of the form asks for. */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <Select
+          label="Difficulty"
+          value={q.difficulty}
+          onChange={(v) => set({ difficulty: v as QuestionDifficulty })}
+          options={DIFFICULTY_OPTIONS}
+        />
+        <Select
+          label="Type"
+          value={q.type}
+          onChange={(v) => onChange(changeType(q, v as EditableQuestionType))}
+          options={typeOptions}
+          invalid={Boolean(kindError)}
+        />
+      </div>
+
+      {typeError && <p className="text-xs text-danger -mt-1.5">{typeError}</p>}
+
       {/* Question text */}
       <div>
         <div className="flex items-center justify-between mb-1">
@@ -295,24 +315,6 @@ export function QuestionForm({
         )}
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <Select
-          label="Difficulty"
-          value={q.difficulty}
-          onChange={(v) => set({ difficulty: v as QuestionDifficulty })}
-          options={DIFFICULTY_OPTIONS}
-        />
-        <Select
-          label="Type"
-          value={q.type}
-          onChange={(v) => onChange(changeType(q, v as EditableQuestionType))}
-          options={typeOptions}
-          invalid={Boolean(kindError)}
-        />
-      </div>
-
-      {typeError && <p className="text-xs text-danger -mt-1.5">{typeError}</p>}
-
       <AnswerSection q={q} set={set} error={answersError} />
 
       <div>
@@ -356,10 +358,11 @@ export function AnswerSection({
       return <BlankAnswers q={q} set={set} error={error} />;
     case "ORDERING":
       return <OrderingAnswers q={q} set={set} error={error} />;
-    case "DIAGRAM": {
+    case "DIAGRAM":
+    case "DIAGRAM_ESSAY": {
       // One answers error for both parts — show it under the part it is about.
       const rubricError =
-        error && error === rubricTotal(q.rubric).error ? error : undefined;
+        error && (error === rubricTotal(q.rubric).error || error === ESSAY_RUBRIC_REQUIRED) ? error : undefined;
       return (
         <div className="space-y-4">
           <DiagramAnswer
@@ -422,6 +425,8 @@ function RubricAnswers({
           <Icon.Info className="w-4 h-4 mt-0.5 flex-shrink-0" />
           {q.type === "ESSAY"
             ? "An essay must have a grading rubric. Add at least one criterion to define how it is scored."
+            : q.type === "DIAGRAM_ESSAY"
+            ? "A diagram + essay must have a grading rubric. Add criteria for both the diagram and the written explanation."
             : "No rubric — the diagram is worth 1 point and graded without criteria. Add criteria to define how it is scored."}
         </p>
       ) : (
