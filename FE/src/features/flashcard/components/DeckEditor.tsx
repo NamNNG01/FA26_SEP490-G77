@@ -7,6 +7,9 @@ import { useToast } from '@/components/ui/ToastHost';
 import { Icon } from '@/assets/icons';
 import { courseService, type CourseModuleResponse, type CourseSummaryItem } from '@/services/course.service';
 import { deckService, type DeckCard } from '@/services/deck.service';
+import { ImagePickButton } from '@/components/common/ImagePickButton';
+import { uploadService } from '@/services/upload.service';
+import { getApiErrorMessage } from '@/utils/apiError';
 
 /**
  * Building blocks shared by the Flashcard Detail page and the New Flashcard
@@ -178,17 +181,22 @@ export interface EditableCard {
   id: string;
   frontText: string;
   backText: string;
+  frontImageUrl?: string | null;
+  backImageUrl?: string | null;
 }
 
-export const toEditableCard = (c: DeckCard): EditableCard => ({ id: String(c.cardId), frontText: c.frontText, backText: c.backText });
+export const toEditableCard = (c: DeckCard): EditableCard => ({
+  id: String(c.cardId), frontText: c.frontText ?? '', backText: c.backText ?? '',
+  frontImageUrl: c.frontImageUrl ?? null, backImageUrl: c.backImageUrl ?? null,
+});
 
 /**
  * Where card edits go: the create modal keeps them in a local draft, the
  * detail page sends them to the card API. Throw to keep the editor's input.
  */
 export interface CardActions {
-  add: (frontText: string, backText: string) => Promise<void> | void;
-  update: (card: EditableCard, frontText: string, backText: string) => Promise<void> | void;
+  add: (frontText: string, backText: string, images: { frontImageUrl: string | null; backImageUrl: string | null }) => Promise<void> | void;
+  update: (card: EditableCard, frontText: string, backText: string, images: { frontImageUrl: string | null; backImageUrl: string | null }) => Promise<void> | void;
   remove: (card: EditableCard) => Promise<void> | void;
 }
 
@@ -200,6 +208,9 @@ export interface CardEditor {
   editingIndex: number;
   front: string;
   back: string;
+  frontImageUrl: string | null;
+  backImageUrl: string | null;
+  uploading: 'front' | 'back' | null;
   errors: { front?: string; back?: string };
   /** True when either side has text that has not been added to the list. */
   hasInput: boolean;
@@ -210,6 +221,8 @@ export interface CardEditor {
   frontRef: React.RefObject<HTMLTextAreaElement | null>;
   setFront: (v: string) => void;
   setBack: (v: string) => void;
+  setImage: (side: 'front' | 'back', file: File) => void;
+  removeImage: (side: 'front' | 'back') => void;
   clear: () => void;
   load: (card: EditableCard) => void;
   submit: () => void;
@@ -224,6 +237,9 @@ export function useCardEditor(cards: EditableCard[], actions: CardActions, optio
   const [editingId, setEditingId] = useState<string | null>(null);
   const [front, setFrontRaw] = useState('');
   const [back, setBackRaw] = useState('');
+  const [frontImageUrl, setFrontImageUrl] = useState<string | null>(null);
+  const [backImageUrl, setBackImageUrl] = useState<string | null>(null);
+  const [uploading, setUploading] = useState<'front' | 'back' | null>(null);
   const [errors, setErrors] = useState<{ front?: string; back?: string }>({});
   const [busy, setBusy] = useState(false);
   const [pendingRemoveId, setPendingRemoveId] = useState<string | null>(null);
@@ -235,6 +251,8 @@ export function useCardEditor(cards: EditableCard[], actions: CardActions, optio
     setEditingId(null);
     setFrontRaw('');
     setBackRaw('');
+    setFrontImageUrl(null);
+    setBackImageUrl(null);
     setErrors({});
   };
 
@@ -242,21 +260,23 @@ export function useCardEditor(cards: EditableCard[], actions: CardActions, optio
     setEditingId(card.id);
     setFrontRaw(card.frontText);
     setBackRaw(card.backText);
+    setFrontImageUrl(card.frontImageUrl ?? null);
+    setBackImageUrl(card.backImageUrl ?? null);
     setErrors({});
     frontRef.current?.focus({ preventScroll: window.innerWidth >= 1024 });
   };
 
   const submit = async () => {
-    if (busy) return;
+    if (busy || uploading) return;
     const f = front.trim();
     const b = back.trim();
     const next: { front?: string; back?: string } = {};
-    if (!f) next.front = 'Front side is required.';
+    if (!f && !frontImageUrl) next.front = 'Add text or an image for the front side.';
     else if (f.length > SIDE_MAX) next.front = `Front side must be ${SIDE_MAX} characters or fewer.`;
-    else if (cards.some(c => c.id !== editingId && c.frontText.trim().toLowerCase() === f.toLowerCase())) {
+    else if (f && cards.some(c => c.id !== editingId && c.frontText.trim().toLowerCase() === f.toLowerCase())) {
       next.front = 'Another card in this deck already has this front text.';
     }
-    if (!b) next.back = 'Back side is required.';
+    if (!b && !backImageUrl) next.back = 'Add text or an image for the back side.';
     else if (b.length > SIDE_MAX) next.back = `Back side must be ${SIDE_MAX} characters or fewer.`;
     setErrors(next);
     if (next.front || next.back) return;
@@ -265,10 +285,10 @@ export function useCardEditor(cards: EditableCard[], actions: CardActions, optio
     setBusy(true);
     try {
       if (editing) {
-        await actions.update(editing, f, b);
+        await actions.update(editing, f, b, { frontImageUrl, backImageUrl });
         toast.success(`Card #${editingIndex + 1} updated.`);
       } else {
-        await actions.add(f, b);
+        await actions.add(f, b, { frontImageUrl, backImageUrl });
         toast.success('Card added to the deck.');
       }
       clear();
@@ -276,6 +296,19 @@ export function useCardEditor(cards: EditableCard[], actions: CardActions, optio
       toast.error(cardErrorMessage(err, editing ? 'Could not update the card.' : 'Could not add the card.'));
     } finally {
       setBusy(false);
+    }
+  };
+
+  const setImage = async (side: 'front' | 'back', file: File) => {
+    setUploading(side);
+    try {
+      const image = await uploadService.uploadMedia(file);
+      (side === 'front' ? setFrontImageUrl : setBackImageUrl)(image.url);
+      setErrors(previous => ({ ...previous, [side]: undefined }));
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Could not upload the image.'));
+    } finally {
+      setUploading(null);
     }
   };
 
@@ -299,12 +332,17 @@ export function useCardEditor(cards: EditableCard[], actions: CardActions, optio
     front,
     back,
     errors,
-    hasInput: front.trim() !== '' || back.trim() !== '',
-    busy,
+    hasInput: front.trim() !== '' || back.trim() !== '' || !!frontImageUrl || !!backImageUrl || uploading != null,
+    busy: busy || uploading != null,
     pendingRemoveId,
     frontRef,
     setFront: v => { setFrontRaw(v); if (errors.front) setErrors(p => ({ ...p, front: undefined })); },
     setBack: v => { setBackRaw(v); if (errors.back) setErrors(p => ({ ...p, back: undefined })); },
+    frontImageUrl,
+    backImageUrl,
+    uploading,
+    setImage,
+    removeImage: side => (side === 'front' ? setFrontImageUrl : setBackImageUrl)(null),
     clear,
     load,
     submit,
@@ -352,10 +390,12 @@ export function CardList({ cards, editor, emptyHint = 'Use the card editor to ad
                   <div className="min-w-0 flex-1 grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-line">
                     <div className="min-w-0 pb-2 sm:pb-0 sm:pr-4">
                       <p className="text-2xs font-semibold uppercase tracking-wider text-brand-ink">Front</p>
+                      {card.frontImageUrl && <img src={card.frontImageUrl} alt={card.frontText || 'Front of flashcard'} className="mt-2 max-h-36 max-w-full rounded-lg border border-line object-contain" loading="lazy" />}
                       <p className="mt-0.5 text-base font-semibold text-content break-words whitespace-pre-line">{card.frontText}</p>
                     </div>
                     <div className="min-w-0 pt-2 sm:pt-0 sm:pl-4">
                       <p className="text-2xs font-semibold uppercase tracking-wider text-success">Back</p>
+                      {card.backImageUrl && <img src={card.backImageUrl} alt={card.backText || 'Back of flashcard'} className="mt-2 max-h-36 max-w-full rounded-lg border border-line object-contain" loading="lazy" />}
                       <p className="mt-0.5 text-sm text-content-secondary break-words whitespace-pre-line">{card.backText}</p>
                     </div>
                   </div>
@@ -397,6 +437,7 @@ export function CardEditorPanel({ editor, idPrefix, footnote, className = '' }: 
   footnote?: React.ReactNode;
   className?: string;
 }) {
+  const toast = useToast();
   return (
     <aside className={`card p-5 space-y-4 ${className}`} aria-labelledby={`${idPrefix}-editor-title`}>
       <div className="flex items-center justify-between gap-2">
@@ -408,10 +449,32 @@ export function CardEditorPanel({ editor, idPrefix, footnote, className = '' }: 
 
       {/* A div, not a form: the editor also lives inside the create-deck modal. */}
       <div className="space-y-4" onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); editor.submit(); } }}>
-        <EditorField id={`${idPrefix}-front`} label="Front Side" hint="Term, question or prompt" ref={editor.frontRef}
+        <EditorField id={`${idPrefix}-front`} label="Front Side text (optional)" hint="Text or image" ref={editor.frontRef}
           value={editor.front} error={editor.errors.front} placeholder="e.g. What is gradient descent?" onChange={editor.setFront} />
-        <EditorField id={`${idPrefix}-back`} label="Back Side" hint="Definition, explanation or answer"
+        <div className="-mt-2 space-y-2">
+          <ImagePickButton variant="outline" loading={editor.uploading === 'front'} disabled={editor.busy}
+            onPick={file => editor.setImage('front', file)} onError={message => toast.error(message)}>
+            {editor.frontImageUrl ? 'Replace front image' : 'Add front image'}
+          </ImagePickButton>
+          {editor.frontImageUrl && <div className="relative w-fit">
+            <img src={editor.frontImageUrl} alt={editor.front.trim() || 'Front side preview'} className="max-h-36 max-w-full rounded-lg border border-line object-contain" />
+            <Button size="sm" variant="outline" className="absolute right-1 top-1" disabled={editor.busy}
+              onClick={() => editor.removeImage('front')}>Remove</Button>
+          </div>}
+        </div>
+        <EditorField id={`${idPrefix}-back`} label="Back Side text (optional)" hint="Text or image"
           value={editor.back} error={editor.errors.back} placeholder="e.g. An optimisation algorithm that…" onChange={editor.setBack} />
+        <div className="-mt-2 space-y-2">
+          <ImagePickButton variant="outline" loading={editor.uploading === 'back'} disabled={editor.busy}
+            onPick={file => editor.setImage('back', file)} onError={message => toast.error(message)}>
+            {editor.backImageUrl ? 'Replace back image' : 'Add back image'}
+          </ImagePickButton>
+          {editor.backImageUrl && <div className="relative w-fit">
+            <img src={editor.backImageUrl} alt={editor.back.trim() || 'Back side preview'} className="max-h-36 max-w-full rounded-lg border border-line object-contain" />
+            <Button size="sm" variant="outline" className="absolute right-1 top-1" disabled={editor.busy}
+              onClick={() => editor.removeImage('back')}>Remove</Button>
+          </div>}
+        </div>
 
         <div className="space-y-2 pt-1">
           <Button type="button" className="w-full" onClick={editor.submit} disabled={editor.busy}

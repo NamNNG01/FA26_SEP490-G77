@@ -59,8 +59,8 @@ export function CreateDeckModal({ onClose, onCreated, defaultCourseId }: {
 
   // Draft cards live here until the deck is created.
   const editor = useCardEditor(cards, {
-    add: (frontText, backText) => setCards(prev => [...prev, { id: `draft-${Date.now()}-${prev.length}`, frontText, backText }]),
-    update: (card, frontText, backText) => setCards(prev => prev.map(c => (c.id === card.id ? { ...c, frontText, backText } : c))),
+    add: (frontText, backText, images) => setCards(prev => [...prev, { id: `draft-${Date.now()}-${prev.length}`, frontText, backText, ...images }]),
+    update: (card, frontText, backText, images) => setCards(prev => prev.map(c => (c.id === card.id ? { ...c, frontText, backText, ...images } : c))),
     remove: card => setCards(prev => prev.filter(c => c.id !== card.id)),
   });
 
@@ -88,7 +88,7 @@ export function CreateDeckModal({ onClose, onCreated, defaultCourseId }: {
   };
 
   const requestClose = () => {
-    if (saving) return;
+    if (saving || editor.busy) return;
     if (touched) setConfirmDiscard(true);
     else onClose();
   };
@@ -127,19 +127,36 @@ export function CreateDeckModal({ onClose, onCreated, defaultCourseId }: {
       setSaving(false);
       return;
     }
-    // In batches of the bulk limit, sequential so cards keep their order.
+    // Keep draft order while routing image cards through the manager card API
+    // and text-only runs through the existing bulk import endpoint.
     let cardsCreated = 0;
     let cardError: string | undefined;
-    for (let start = 0; start < cards.length; start += FLASHCARD_IMPORT_MAX_ROWS) {
+    let index = 0;
+    while (index < cards.length) {
+      const card = cards[index];
       try {
-        const saved = await flashcardImportService.save({
-          deckId: deck.deckId,
-          source: 'IMPORT',
-          aiGenerationId: null,
-          skipDuplicates: true,
-          cards: cards.slice(start, start + FLASHCARD_IMPORT_MAX_ROWS).map(({ frontText, backText }) => ({ frontText, backText })),
-        });
-        cardsCreated += saved.createdCount;
+        if (card.frontImageUrl || card.backImageUrl) {
+          await deckService.createCard(deck.deckId, {
+            frontText: card.frontText,
+            backText: card.backText,
+            frontImageUrl: card.frontImageUrl ?? null,
+            backImageUrl: card.backImageUrl ?? null,
+          });
+          cardsCreated++;
+          index++;
+        } else {
+          let end = index;
+          while (end < cards.length && end - index < FLASHCARD_IMPORT_MAX_ROWS && !cards[end].frontImageUrl && !cards[end].backImageUrl) end++;
+          const saved = await flashcardImportService.save({
+            deckId: deck.deckId,
+            source: 'IMPORT',
+            aiGenerationId: null,
+            skipDuplicates: true,
+            cards: cards.slice(index, end).map(({ frontText, backText }) => ({ frontText, backText })),
+          });
+          cardsCreated += saved.createdCount;
+          index = end;
+        }
       } catch (err) {
         cardError = cardErrorMessage(err, 'Some cards could not be created.');
         break;
@@ -156,8 +173,8 @@ export function CreateDeckModal({ onClose, onCreated, defaultCourseId }: {
       error={saveError && <Alert type="error" message={saveError} />}
       footer={
         <>
-          <Button variant="outline" onClick={requestClose} disabled={saving}>Cancel</Button>
-          <Button icon={<Icon.Check className="w-4 h-4" />} onClick={submit} disabled={saving || coursesLoading}>
+          <Button variant="outline" onClick={requestClose} disabled={saving || editor.busy}>Cancel</Button>
+          <Button icon={<Icon.Check className="w-4 h-4" />} onClick={submit} disabled={saving || editor.busy || coursesLoading}>
             {saving ? 'Creating…' : 'Create Deck'}
           </Button>
         </>
