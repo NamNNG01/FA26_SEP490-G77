@@ -488,8 +488,8 @@ public class StudentCodeExamServiceImpl implements StudentCodeExamService {
 
     /**
      * CD-07: replays the per-fixture verdicts stored at judging time, so a review can list each
-     * case instead of only its count. A hidden fixture reports pass/fail only — its input and
-     * expected output never leave the server (spec 19.1).
+     * case instead of only its count. Every fixture carries its input and expected output, hidden
+     * ones included, so the result page can show what each case tested.
      */
     private List<CodeExamResponses.TestCaseOutcome> testCaseOutcomes(CodeSubmission row,
                                                                     Map<Long, CodeTestCase> fixtureById) {
@@ -515,8 +515,8 @@ public class StudentCodeExamServiceImpl implements StudentCodeExamService {
                     fixture != null ? fixture.getOrderIndex() : null,
                     hidden,
                     node.path("passed").asBoolean(false),
-                    fixture == null || hidden ? null : fixture.getInputData(),
-                    fixture == null || hidden ? null : fixture.getExpectedOutput()));
+                    fixture == null ? null : fixture.getInputData(),
+                    fixture == null ? null : fixture.getExpectedOutput()));
         }
         return outcomes;
     }

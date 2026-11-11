@@ -27,7 +27,7 @@ public final class CodeExamResponses {
     /** CD-06 */
     public record Language(String id, String name) {}
 
-    /** CD-07: one judged fixture; a hidden fixture never exposes its input or expected output. */
+    /** CD-07: one judged fixture with its input and expected output, hidden or not. */
     public record TestCaseOutcome(Long testCaseId, Integer orderIndex, boolean hidden, boolean passed,
                                   String inputData, String expectedOutput) {}
 
