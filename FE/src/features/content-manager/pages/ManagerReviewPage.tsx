@@ -7,6 +7,9 @@ import { Modal } from '@/components/ui/Modal';
 import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { Select } from '@/components/ui/Select';
 import { Icon } from '@/assets/icons';
+import { QuestionForm } from '@/features/question/components/QuestionForm';
+import { fromDetail, type QuestionDraft } from '@/features/question/model';
+import type { QuestionDetail } from '@/services/question.service';
 
 type Kind = 'contributions' | 'decks';
 type Row = Record<string, any>;
@@ -28,12 +31,63 @@ const dateTimeLocal = (value: string | null, subtractMilliseconds = 0) => {
   const date = new Date(new Date(value).getTime() - subtractMilliseconds);
   return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
 };
+const parseJson = (value: unknown, fallback: unknown = null): any => {
+  if (typeof value !== 'string') return value ?? fallback;
+  try { return JSON.parse(value); } catch { return fallback; }
+};
+
+function contributionQuestionDraft(detail: Row): QuestionDraft {
+  const rawOptions = parseJson(detail.options, []);
+  const options = Array.isArray(rawOptions) ? rawOptions.map((option: Row, index: number) => ({
+    optionId: option.optionId ?? null,
+    optionText: option.optionText ?? option.text ?? option.label ?? '',
+    isCorrect: option.isCorrect ?? false,
+    explanation: option.explanation ?? null,
+    orderIndex: option.orderIndex ?? index,
+  })) : [];
+  const question: QuestionDetail = {
+    questionId: detail.contributionId,
+    courseId: detail.courseId ?? null,
+    moduleId: detail.moduleId ?? null,
+    groupId: detail.groupId ?? null,
+    questionType: detail.questionType || detail.type || 'SINGLE_CHOICE',
+    difficulty: detail.difficulty || 'MEDIUM',
+    content: detail.content ?? '',
+    questionMetadata: parseJson(detail.questionMetadata, {}),
+    answerKey: parseJson(detail.answerKey, null),
+    defaultPoints: null,
+    source: 'CONTRIBUTION_REVIEW',
+    creatorRole: 'STUDENT',
+    createdBy: detail.contributorId ?? null,
+    scoringVersion: null,
+    lockVersion: detail.version ?? null,
+    aiExplanation: detail.explanation ?? '',
+    status: 'INACTIVE',
+    approvalStatus: 'PENDING',
+    essayGradingRubric: parseJson(detail.essayGradingRubric, null),
+    options,
+    createdAt: detail.createdAt ?? null,
+    updatedAt: detail.reviewedAt ?? null,
+  };
+  return fromDetail(question);
+}
+
+async function findContributorName(courseId: number | string, userId: number | string) {
+  for (let page = 0, totalPages = 1; page < totalPages; page += 1) {
+    const result = await courseService.getCourseStudents(courseId, { page, size: 100 });
+    const match = result.content.find(student => String(student.userId) === String(userId));
+    if (match?.fullName?.trim()) return match.fullName;
+    totalPages = result.totalPages;
+  }
+  return undefined;
+}
 
 export function ManagerReviewPage() {
   const [params, setParams] = useSearchParams();
   const [kind, setKind] = useState<Kind>(params.get('kind') === 'decks' ? 'decks' : 'contributions');
   const [rows, setRows] = useState<Row[]>([]);
   const [detail, setDetail] = useState<Row | null>(null);
+  const [questionDraft, setQuestionDraft] = useState<QuestionDraft | null>(null);
   const [pageData, setPageData] = useState<any>({ page: 0, totalPages: 0, totalElements: 0 });
   const [status, setStatus] = useState(() => {
     const value = params.get('status') || 'PENDING';
@@ -52,6 +106,7 @@ export function ManagerReviewPage() {
   const [courses, setCourses] = useState<CourseSummaryItem[]>([]);
   const [modules, setModules] = useState<CourseModuleResponse[]>([]);
   const [students, setStudents] = useState<{ userId: number; fullName: string }[]>([]);
+  const [courseNameOverrides, setCourseNameOverrides] = useState<Record<string, string>>({});
   const [contributorSearch, setContributorSearch] = useState('');
   const [studentsLoading, setStudentsLoading] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -136,6 +191,29 @@ export function ManagerReviewPage() {
     return () => { cancelled = true; window.clearTimeout(timeout); };
   }, [filtersOpen, courses, courseId, contributorSearch]);
 
+  useEffect(() => {
+    let cancelled = false;
+    const knownNames = new Set(courses.map(course => String(course.courseId)));
+    const unresolvedIds = [...new Set(rows.map(row => row.courseId ?? row.course?.courseId ?? row.course?.id)
+      .filter((id): id is number | string => id != null)
+      .map(String))]
+      .filter(id => !knownNames.has(id) && !courseNameOverrides[id]);
+    if (!unresolvedIds.length) return;
+    Promise.all(unresolvedIds.map(async id => {
+      try {
+        const course = await courseService.getCourseById(id);
+        return [id, course.title] as const;
+      } catch {
+        return null;
+      }
+    })).then(results => {
+      if (cancelled) return;
+      const resolved = Object.fromEntries(results.filter((item): item is readonly [string, string] => !!item && !!item[1]));
+      if (Object.keys(resolved).length) setCourseNameOverrides(current => ({ ...current, ...resolved }));
+    });
+    return () => { cancelled = true; };
+  }, [rows, courses, courseNameOverrides]);
+
   const syncUrl = (pageNumber = 0) => {
     const next: Record<string, string> = { kind, status, page: String(pageNumber) };
     if (keyword.trim()) next.keyword = keyword.trim();
@@ -157,9 +235,22 @@ export function ManagerReviewPage() {
   const open = async (row: Row) => {
     setDetailLoading(true);
     setOpeningId(idOf(row, kind));
+    setDetail(null);
+    setQuestionDraft(null);
     setError('');
     try {
-      const data = unwrap((await apiClient.get(`/manager/${kind}/${idOf(row, kind)}`)).data);
+      let data = unwrap((await apiClient.get(`/manager/${kind}/${idOf(row, kind)}`)).data);
+      if (kind === 'contributions') {
+        const contributorId = data.contributorId ?? row.contributor?.id ?? row.contributorId;
+        const knownName = data.owner?.fullName || data.contributor?.fullName || data.contributorName || students.find(student => String(student.userId) === String(contributorId))?.fullName;
+        const fetchedName = !knownName && data.courseId && contributorId
+          ? await findContributorName(data.courseId, contributorId).catch(() => undefined)
+          : undefined;
+        data = { ...data, contributorName: knownName || fetchedName || (contributorId ? `Contributor #${contributorId}` : 'Unknown contributor') };
+        setQuestionDraft(contributionQuestionDraft(data));
+      } else {
+        setQuestionDraft(null);
+      }
       setDetail(data);
       setRejecting(false);
       setReason('');
@@ -229,7 +320,10 @@ export function ManagerReviewPage() {
   if (contributorId && !contributorOptions.some(option => option.value === contributorId)) contributorOptions.push({ label: `Contributor #${contributorId}`, value: contributorId });
   const studentNames = new Map(students.map(student => [String(student.userId), student.fullName]));
   const courseNames = new Map(courses.map(course => [String(course.courseId), course.title]));
-  const courseNameOf = (row: Row) => row.course?.title || row.courseName || row.courseTitle || courseNames.get(String(row.courseId)) || '—';
+  const courseNameOf = (row: Row) => {
+    const id = String(row.courseId ?? row.course?.courseId ?? row.course?.id);
+    return row.course?.title || row.courseName || row.courseTitle || courseNames.get(id) || courseNameOverrides[id] || '—';
+  };
 
   return <main className="mx-auto max-w-screen-2xl space-y-6 p-6 lg:p-8">
     <header className="flex flex-wrap items-end justify-between gap-4">
@@ -302,8 +396,8 @@ export function ManagerReviewPage() {
           </tr></thead>
           <tbody className="divide-y divide-line">
             {rows.map(row => <tr key={idOf(row, kind)} onDoubleClick={() => void open(row)} className="group hover:bg-surface-hover">
-              <td className="max-w-sm px-5 py-4"><div className="truncate font-medium text-content">{row.title || row.content || `Submission #${idOf(row, kind)}`}</div><div className="mt-1 truncate text-xs text-content-secondary">{kind === 'decks' ? `${row.cardCount ?? 0} cards${row.module?.title ? ` · ${row.module.title}` : ''}` : row.questionType ? questionTypeLabel(row.questionType) : `Submission #${idOf(row, kind)}`}</div></td>
-              <td className="whitespace-nowrap px-5 py-4 text-content-secondary">{row.owner?.fullName || row.contributor?.fullName || studentNames.get(String(row.contributor?.id ?? row.contributorId)) || row.contributorName || '—'}</td>
+              <td className="max-w-sm px-5 py-4"><div className="truncate font-medium text-content">{row.title || row.contentPreview || row.content || `Submission #${idOf(row, kind)}`}</div><div className="mt-1 truncate text-xs text-content-secondary">{kind === 'decks' ? `${row.cardCount ?? 0} cards${row.module?.title ? ` · ${row.module.title}` : ''}` : row.questionType ? questionTypeLabel(row.questionType) : `Submission #${idOf(row, kind)}`}</div></td>
+              <td className="whitespace-nowrap px-5 py-4 text-content-secondary">{row.owner?.fullName || row.contributor?.fullName || studentNames.get(String(row.contributor?.id ?? row.contributorId)) || row.contributorName || (row.contributor?.id ? `Contributor #${row.contributor.id}` : '—')}</td>
               <td className="max-w-xs truncate px-5 py-4 text-content-secondary">{courseNameOf(row)}</td>
               <td className="whitespace-nowrap px-5 py-4 text-content-secondary">{row.submittedAt ? new Date(row.submittedAt).toLocaleString() : '—'}</td>
               <td className="px-5 py-4"><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${statusOf(row, kind) === 'PENDING' ? 'bg-amber-50 text-amber-800' : statusOf(row, kind) === 'REJECTED' ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>{statusLabel(statusOf(row, kind) || '')}</span></td>
@@ -342,15 +436,15 @@ export function ManagerReviewPage() {
           <span className="ml-auto text-xs text-content-secondary">Version {detail.version ?? 0}</span>
         </div>
         <div className="grid gap-3 rounded-lg bg-surface-muted p-4 text-sm sm:grid-cols-2">
-          <p><span className="text-content-secondary">Contributor</span><br /><span className="font-medium text-content">{detail.owner?.fullName || detail.contributor?.fullName || detail.contributorName || '—'}</span></p>
+          <p><span className="text-content-secondary">Contributor</span><br /><span className="font-medium text-content">{detail.owner?.fullName || detail.contributor?.fullName || detail.contributorName || studentNames.get(String(detail.contributorId ?? detail.contributor?.id)) || (detail.contributorId ? `Contributor #${detail.contributorId}` : '—')}</span></p>
           <p><span className="text-content-secondary">Course and module</span><br /><span className="font-medium text-content">{courseNameOf(detail)}{detail.module?.title ? ` · ${detail.module.title}` : ''}</span></p>
           <p><span className="text-content-secondary">Submitted</span><br /><span className="font-medium text-content">{detail.submittedAt || detail.createdAt ? new Date(detail.submittedAt || detail.createdAt).toLocaleString() : '—'}</span></p>
           {kind === 'contributions' && <p><span className="text-content-secondary">Type and difficulty</span><br /><span className="font-medium text-content">{questionTypeLabel(detail.questionType || detail.type || '')} · {difficultyLabel(detail.difficulty || 'MEDIUM')}</span></p>}
         </div>
         {detail.description && <section><h3 className="mb-2 text-sm font-semibold text-content">Description</h3><p className="whitespace-pre-wrap text-sm text-content-secondary">{detail.description}</p></section>}
         {kind === 'decks' ? <section className="space-y-3"><div className="flex items-center justify-between"><h3 className="text-sm font-semibold text-content">Cards</h3><span className="text-xs text-content-secondary">{detail.cardCount ?? detail.cards?.totalElements ?? 0} total</span></div>{(detail.cards?.content || []).map((card: Row) => <div key={card.cardId} className="rounded-lg border border-line p-4"><p className="font-medium text-content">{card.frontText}</p><p className="mt-2 whitespace-pre-wrap text-sm text-content-secondary">{card.backText}</p>{card.codeBody && <pre className="mt-2 overflow-auto rounded bg-surface-muted p-3 text-sm"><code>{card.codeBody}</code></pre>}</div>)}</section> : <>
-          <section><h3 className="mb-2 text-sm font-semibold text-content">Question</h3><p className="whitespace-pre-wrap rounded-lg border border-line p-4 text-sm text-content">{detail.question?.content || detail.content || detail.questionText || '—'}</p></section>
-          {detail.explanation && <section><h3 className="mb-2 text-sm font-semibold text-content">Explanation</h3><p className="whitespace-pre-wrap text-sm text-content-secondary">{detail.explanation}</p></section>}
+          <section><h3 className="mb-2 text-sm font-semibold text-content">Submitted question</h3>{questionDraft ? <QuestionForm q={questionDraft} index={0} heading={detail.title || 'Question preview'} onChange={() => undefined} showErrors={false} readOnly /> : <p className="whitespace-pre-wrap rounded-lg border border-line p-4 text-sm text-content">{detail.question?.content || detail.content || detail.questionText || '—'}</p>}</section>
+          {kind === 'contributions' && detail.sourceReference && <section><h3 className="mb-2 text-sm font-semibold text-content">Source reference</h3><p className="whitespace-pre-wrap rounded-lg bg-surface-muted p-3 text-sm text-content-secondary">{detail.sourceReference}</p></section>}
           {detail.duplicateCheck?.isDuplicate && <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Similar content detected. Existing question #{detail.duplicateCheck.existingQuestionId}; approval is disabled.</p>}
         </>}
         {!!detail.history?.length && <section><h3 className="mb-2 text-sm font-semibold text-content">Review history</h3><div className="space-y-2">{detail.history.map((entry: Row, index: number) => <div key={index} className="rounded-lg border border-line px-3 py-2 text-sm"><div className="flex flex-wrap justify-between gap-2"><span className="font-medium text-content">{statusLabel(entry.decision || '')}</span><span className="text-xs text-content-secondary">{entry.createdAt ? new Date(entry.createdAt).toLocaleString() : ''}</span></div>{(entry.note || entry.reason) && <p className="mt-1 whitespace-pre-wrap text-content-secondary">{entry.note || entry.reason}</p>}</div>)}</div></section>}
