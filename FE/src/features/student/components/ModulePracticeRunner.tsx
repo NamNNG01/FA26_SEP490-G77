@@ -521,6 +521,8 @@ export function ModulePracticeRunner({ sessionId }: { sessionId: string }) {
   // Only an answer with no key to check against waits on MP-05; every other one is saved behind the scenes.
   const busy = checking.has(summary.sessionQuestionId);
   const questionMedia = imagesOf(view);
+  // Same test as GroupPassageSplit: a group with passage text gets its own column.
+  const hasPassage = Boolean(view?.group?.passageText?.trim());
 
   const changeAnswer = (response: AnswerResponse) => {
     // While the answer is on its way the pick stays as sent.
@@ -623,11 +625,12 @@ export function ModulePracticeRunner({ sessionId }: { sessionId: string }) {
       ) : (
       <div className="flex flex-1 overflow-hidden flex-col md:flex-row">
         {/* A question of a group: its passage in a column of its own (left), the question on the right. */}
-        {/* Every type sits in the middle (md+): ~15% of the column free left, right and below; the top keeps its gutter. */}
+        {/* Without a passage every type sits in the middle (md+): ~15% of the column free left, right and
+            below; the top keeps its gutter. Beside a passage the question takes its whole column. */}
         <GroupPassageSplit
           group={view?.group}
           narrow
-          mainClassName={`${isRubric ? 'p-[30px]' : 'p-[clamp(1rem,2.5vw,1.5rem)]'} md:px-[15%] md:pb-[15vh]`}
+          mainClassName={`${isRubric ? 'p-[30px]' : 'p-[clamp(1rem,2.5vw,1.5rem)]'} ${hasPassage ? '' : 'md:px-[15%] md:pb-[15vh]'}`}
         >
           <div className={fillEssay ? 'w-full flex flex-col gap-3 md:h-full' : isRubric ? 'w-full space-y-3' : 'w-full space-y-5'}>
             <div className="flex flex-wrap items-center gap-2">
