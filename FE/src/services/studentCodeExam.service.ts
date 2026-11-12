@@ -77,6 +77,8 @@ export interface CodeTestCaseOutcome {
   passed: boolean;
   inputData?: string | null;
   expectedOutput?: string | null;
+  /** What the student's program printed for this fixture; absent on submissions judged before the BE stored it. */
+  actualOutput?: string | null;
 }
 
 /** CD-07 */
