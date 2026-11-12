@@ -469,6 +469,13 @@ public class QuestionServiceImpl implements QuestionService {
         String difficultyToValidate = req.getDifficulty() != null ? req.getDifficulty() : q.getDifficulty();
         String statusToValidate = req.getStatus() != null ? req.getStatus() : q.getStatus();
 
+        CodeConfigDto codeConfigToValidate = null;
+        List<TestCaseDto> testCasesToValidate = null;
+        if ("CODE".equals(typeToValidate)) {
+            codeConfigToValidate = req.getCodeConfig() != null ? req.getCodeConfig() : loadCodeConfig(q);
+            testCasesToValidate = req.getTestCases() != null ? req.getTestCases() : loadTestCases(q);
+        }
+
         QuestionPayload payload = QuestionPayload.builder()
                 .questionType(typeToValidate)
                 .difficulty(difficultyToValidate)
@@ -478,6 +485,8 @@ public class QuestionServiceImpl implements QuestionService {
                 .answerKey(answerKeyToValidate)
                 .essayGradingRubric(rubricToValidate)
                 .options(optionsToValidate)
+                .codeConfig(codeConfigToValidate)
+                .testCases(testCasesToValidate)
                 .build();
 
         questionValidator.validateOrThrow(payload);
@@ -875,17 +884,31 @@ public class QuestionServiceImpl implements QuestionService {
 
 
     private void saveCodeConfigAndTestCases(Question q, CodeConfigDto cfgDto, List<TestCaseDto> tcDtos) {
-        String allowedLangsJson = cfgDto != null && cfgDto.getAllowedLanguages() != null ? serializeJson(cfgDto.getAllowedLanguages(), "allowedLanguages") : null;
-        CodeQuestionConfig config = CodeQuestionConfig.builder()
-                .questionId(q.getQuestionId())
-                .allowedLanguages(allowedLangsJson)
-                .codeTemplate(cfgDto != null ? cfgDto.getCodeTemplate() : null)
-                .timeLimitMs(cfgDto != null && cfgDto.getTimeLimitMs() != null ? cfgDto.getTimeLimitMs() : 5000)
-                .memoryLimitKb(cfgDto != null && cfgDto.getMemoryLimitKb() != null ? cfgDto.getMemoryLimitKb() : 262144)
-                .createdAt(Instant.now())
-                .updatedAt(Instant.now())
-                .build();
-        codeQuestionConfigRepository.save(config);
+        if (cfgDto != null) {
+            CodeQuestionConfig existing = codeQuestionConfigRepository.findById(q.getQuestionId()).orElse(null);
+            String allowedLangsJson = cfgDto.getAllowedLanguages() != null
+                    ? serializeJson(cfgDto.getAllowedLanguages(), "allowedLanguages")
+                    : (existing != null && existing.getAllowedLanguages() != null
+                        ? existing.getAllowedLanguages()
+                        : serializeJson(List.of("JAVA", "PYTHON", "C", "CPP"), "allowedLanguages"));
+            Instant now = Instant.now();
+            CodeQuestionConfig config = existing != null
+                    ? existing
+                    : CodeQuestionConfig.builder()
+                        .questionId(q.getQuestionId())
+                        .createdAt(now)
+                        .build();
+            config.setAllowedLanguages(allowedLangsJson);
+            config.setCodeTemplate(cfgDto.getCodeTemplate());
+            config.setTimeLimitMs(cfgDto.getTimeLimitMs() != null
+                    ? cfgDto.getTimeLimitMs()
+                    : (existing != null && existing.getTimeLimitMs() != null ? existing.getTimeLimitMs() : 5000));
+            config.setMemoryLimitKb(cfgDto.getMemoryLimitKb() != null
+                    ? cfgDto.getMemoryLimitKb()
+                    : (existing != null && existing.getMemoryLimitKb() != null ? existing.getMemoryLimitKb() : 262144));
+            config.setUpdatedAt(now);
+            codeQuestionConfigRepository.save(config);
+        }
 
         if (tcDtos != null && !tcDtos.isEmpty()) {
             codeTestCaseRepository.deleteAll(codeTestCaseRepository.findByQuestionQuestionIdOrderByOrderIndexAscTestCaseIdAsc(q.getQuestionId()));
