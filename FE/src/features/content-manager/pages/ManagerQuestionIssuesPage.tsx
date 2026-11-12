@@ -12,6 +12,7 @@ import { ESSAY_RUBRIC_REQUIRED, fromDetail, rubricTotal, toCreateRequest, valida
 import type { QuestionDetail } from '@/services/question.service';
 import { courseService, type CourseSummaryItem } from '@/services/course.service';
 import { SearchInput } from '@/components/common/SearchInput';
+import { ImageViewer } from '@/components/common/ImageViewer';
 import { ISSUE_STATUSES, ISSUE_TYPES, issueLabel, questionIssueService, refreshPendingIssueCount } from '@/services/questionIssue.service';
 import { useAuth } from '@/auth/authContext';
 import { getApiErrorMessage } from '@/utils/apiError';
@@ -82,7 +83,6 @@ export function ManagerQuestionIssuesPage() {
   const [duplicateId, setDuplicateId] = useState('');
   const [duplicateNote, setDuplicateNote] = useState('');
   const [jobReason, setJobReason] = useState('');
-  const [attachmentPreview, setAttachmentPreview] = useState<{ url: string; name: string } | null>(null);
   const openVersion = useRef(0);
 
   const load = useCallback(async (targetPage = page, selectedFilters = appliedFilters) => {
@@ -351,9 +351,8 @@ export function ManagerQuestionIssuesPage() {
                 {report.context?.selectedOptions?.length > 0 && <p className="mt-2 text-sm text-content-secondary">Student selected: {report.context.selectedOptions.map((option: any) => option.optionText).join(', ')}</p>}
                 {report.suggestedOptions?.length > 0 && <p className="mt-1 text-sm text-content-secondary">Suggested option: {report.suggestedOptions.map((option: any) => option.optionText).join(', ')}</p>}
                 {report.suggestedAnswer && <p className="mt-1 text-sm text-content-secondary">Suggested answer: {report.suggestedAnswer}</p>}
-                {report.attachmentUrl && <div className="mt-3 space-y-2">
-                  <img src={report.attachmentUrl} alt="Student attached image" className="max-h-72 max-w-full rounded-lg border border-line bg-surface-muted object-contain" />
-                  <Button type="button" size="sm" variant="outline" onClick={() => setAttachmentPreview({ url: report.attachmentUrl, name: `Attachment from ${report.student?.fullName || report.studentName || `Student #${report.userId ?? '—'}`}` })}>Open full screen</Button>
+                {report.attachmentUrl && <div className="mt-3">
+                  <ImageViewer src={report.attachmentUrl} alt={`Attachment from ${report.student?.fullName || report.studentName || `Student #${report.userId ?? '—'}`}`} />
                 </div>}
               </article>)}
               {!detail.reports?.length && <p className="rounded-lg bg-surface-muted p-4 text-sm text-content-secondary">No report details were returned.</p>}
@@ -432,11 +431,6 @@ export function ManagerQuestionIssuesPage() {
             </div>
           </section>
         </aside>
-      </div>}
-    </Modal>
-    <Modal open={!!attachmentPreview} onClose={() => setAttachmentPreview(null)} title={attachmentPreview?.name || 'Image attachment'} size="screen">
-      {attachmentPreview && <div className="flex h-full min-h-[60vh] items-center justify-center bg-black/90 p-2 sm:p-6">
-        <img src={attachmentPreview.url} alt={attachmentPreview.name} className="max-h-[78vh] max-w-full object-contain" />
       </div>}
     </Modal>
   </main>;
