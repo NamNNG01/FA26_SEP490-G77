@@ -46,7 +46,8 @@ export function CodeTestCaseStatus({ submission }: { submission: CodeSubmission 
                   {testCase.passed ? 'Passed' : 'Failed'}
                 </Badge>
               </div>
-              {(testCase.inputData != null || testCase.expectedOutput != null) && (
+              {/* Only a passed case reveals its data, so a failing student can't read the answer off a fixture. */}
+              {testCase.passed && (testCase.inputData != null || testCase.expectedOutput != null) && (
                 <p className="mt-1 break-words font-mono text-xs leading-relaxed text-content-soft">
                   in: {previewText(testCase.inputData ?? '')} → out: {previewText(testCase.expectedOutput ?? '')}
                 </p>
