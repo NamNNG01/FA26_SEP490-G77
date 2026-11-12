@@ -1,6 +1,9 @@
-import { useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Checkbox } from "@/components/ui/Checkbox";
+import { Modal } from "@/components/ui/Modal";
+import { Alert } from "@/components/ui/Alert";
+import { useToast } from "@/components/ui/ToastHost";
 import { getApiErrorMessage } from "@/utils/apiError";
 import {
   ISSUE_TYPES,
@@ -10,7 +13,24 @@ import {
 } from "@/services/questionIssue.service";
 import { Icon } from "@/assets/icons";
 import { ImagePickButton } from "@/components/common/ImagePickButton";
+import { ImageViewer } from "@/components/common/ImageViewer";
 import { uploadService } from "@/services/upload.service";
+
+const MIN_DESCRIPTION = 10;
+const MAX_DESCRIPTION = 3000;
+const MAX_SUGGESTED_ANSWER = 1000;
+const MAX_SUGGESTED_OPTIONS = 20;
+const STUDENT_ISSUE_TYPES = ISSUE_TYPES.filter((issueType) => issueType !== "AI_EXPLANATION_ERROR");
+
+/** A short hint under each issue type, so students can pick without guessing what the name means. */
+const TYPE_HINTS: Record<IssueType, string> = {
+  WRONG_CONTENT: "Typo or unclear wording",
+  WRONG_ANSWER: "The correct answer looks wrong",
+  WRONG_EXPLANATION: "The explanation is off",
+  AI_EXPLANATION_ERROR: "The AI explanation is inaccurate",
+  MISSING_MEDIA: "An image or file is missing",
+  OTHER: "Something else",
+};
 
 type ReportQuestionIssueProps = {
   questionId: number;
@@ -49,6 +69,12 @@ export function ReportQuestionIssueButton({
   );
 }
 
+const fieldCls =
+  "w-full rounded-[10px] border bg-surface px-3 py-2.5 text-sm text-content focus:outline-none focus:ring-2 transition-all";
+const fieldOk = "border-line focus:ring-brand-600/20 focus:border-brand-600";
+const fieldBad =
+  "border-danger-solid focus:ring-danger-solid/20 focus:border-danger-solid";
+
 export function ReportQuestionIssueDialog({
   questionId,
   attemptId,
@@ -61,8 +87,10 @@ export function ReportQuestionIssueDialog({
   onClose: () => void;
   onReported?: (result: any) => void;
 }) {
+  const toast = useToast();
   const [type, setType] = useState<IssueType>("WRONG_CONTENT");
   const [description, setDescription] = useState("");
+  const [descriptionError, setDescriptionError] = useState("");
   const [attachmentUrl, setAttachmentUrl] = useState("");
   const [attachmentName, setAttachmentName] = useState("");
   const [suggestedOptionIds, setSuggestedOptionIds] = useState<number[]>([]);
@@ -70,6 +98,39 @@ export function ReportQuestionIssueDialog({
   const [uploading, setUploading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+
+  const formId = useId();
+  const descriptionId = `${formId}-description`;
+  const helpId = `${formId}-help`;
+  const errorId = `${formId}-error`;
+  const descriptionRef = useRef<HTMLTextAreaElement>(null);
+  const typeGroupRef = useRef<HTMLDivElement>(null);
+
+  // The modal focuses its first control on open; start on the issue type instead, which is the first question.
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      typeGroupRef.current?.querySelector<HTMLInputElement>("input:checked")?.focus();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  const isWorking = busy || uploading;
+  const length = description.length;
+  const trimmedLength = description.trim().length;
+  const hasProgress =
+    trimmedLength > 0 ||
+    Boolean(attachmentUrl) ||
+    suggestedOptionIds.length > 0 ||
+    suggestedAnswer.trim().length > 0;
+
+  /** Escape, backdrop, ✕ and Cancel all come here, so a half-written report is never dropped silently. */
+  function requestClose() {
+    if (isWorking) return;
+    if (hasProgress) setConfirmDiscard(true);
+    else onClose();
+  }
+
   async function uploadAttachment(file: File) {
     setUploading(true);
     setError("");
@@ -83,12 +144,18 @@ export function ReportQuestionIssueDialog({
       setUploading(false);
     }
   }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (description.trim().length < 10) {
-      setError("Please describe the issue in at least 10 characters.");
+    if (isWorking) return;
+    if (trimmedLength < MIN_DESCRIPTION) {
+      setDescriptionError(
+        `Please describe the issue in at least ${MIN_DESCRIPTION} characters.`,
+      );
+      descriptionRef.current?.focus();
       return;
     }
+    setDescriptionError("");
     setBusy(true);
     setError("");
     try {
@@ -109,6 +176,7 @@ export function ReportQuestionIssueDialog({
           ? { suggestedAnswer: suggestedAnswer.trim() }
           : {}),
       });
+      toast.success("Report sent. A course manager will take a look.");
       onReported?.(result);
       onClose();
     } catch (err) {
@@ -117,69 +185,102 @@ export function ReportQuestionIssueDialog({
       setBusy(false);
     }
   }
-  const isWorking = busy || uploading;
+
+  const footerNote = uploading
+    ? "Uploading your image…"
+    : busy
+      ? "Sending your report…"
+      : "";
+
+  const counterHint =
+    length === 0
+      ? ""
+      : trimmedLength < MIN_DESCRIPTION
+        ? `${MIN_DESCRIPTION - trimmedLength} more to go`
+        : length >= MAX_DESCRIPTION - 100
+          ? `${MAX_DESCRIPTION - length} characters left`
+          : "";
+
   return (
-    <div
-      className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4"
-      role="presentation"
-      onMouseDown={(e) =>
-        e.target === e.currentTarget && !isWorking && onClose()
-      }
-    >
-      <section
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="report-issue-title"
-        className="w-full max-w-lg rounded-2xl bg-surface p-6 shadow-xl"
+    <>
+      <Modal
+        open
+        onClose={requestClose}
+        dismissible={!isWorking}
+        size="lg"
+        title="Report a question issue"
+        description={
+          <>
+            Question #{questionId}. You are flagging a possible problem. This
+            does not change the question or your answer, and your report is
+            visible to the course manager.
+          </>
+        }
+        error={error ? <Alert type="error" message={error} /> : undefined}
+        footer={
+          <>
+            {footerNote && (
+              <p
+                role="status"
+                className="basis-full text-sm text-content-secondary sm:mr-auto sm:basis-auto"
+              >
+                {footerNote}
+              </p>
+            )}
+            <Button variant="outline" onClick={requestClose} disabled={isWorking}>
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              form={formId}
+              loading={busy}
+              disabled={uploading}
+            >
+              Send report
+            </Button>
+          </>
+        }
       >
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h2
-              id="report-issue-title"
-              className="text-lg font-bold text-content"
+        <form id={formId} onSubmit={submit} noValidate className="space-y-5">
+          <fieldset>
+            <legend className="text-sm font-semibold text-content">
+              What kind of issue is it?
+            </legend>
+            <div
+              ref={typeGroupRef}
+              className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3"
             >
-              Report a question issue
-            </h2>
-            <p className="mt-1 text-sm text-content-secondary">
-              Question #{questionId}. Your report will be visible to the course
-              manager.
-            </p>
-          </div>
-          <button
-            type="button"
-            className="text-content-secondary"
-            onClick={onClose}
-            disabled={isWorking}
-            aria-label="Close"
-          >
-            ✕
-          </button>
-        </div>
-        <form onSubmit={submit} className="mt-5 space-y-4">
-          <label className="grid gap-1.5 text-sm font-medium">
-            Issue type
-            <select
-              className="rounded-lg border border-line bg-surface px-3 py-2.5"
-              value={type}
-              onChange={(e) => {
-                const nextType = e.target.value as IssueType;
-                setType(nextType);
-                if (nextType !== "WRONG_ANSWER") {
-                  setSuggestedOptionIds([]);
-                  setSuggestedAnswer("");
-                }
-              }}
-            >
-              {ISSUE_TYPES.map((x) => (
-                <option key={x} value={x}>
-                  {issueLabel(x)}
-                </option>
-              ))}
-            </select>
-          </label>
+              {STUDENT_ISSUE_TYPES.map((value) => {
+                const checked = value === type;
+                return (
+                  <label
+                    key={value}
+                    className={`flex cursor-pointer flex-col gap-0.5 rounded-[10px] border p-3 text-sm transition-colors focus-within:ring-2 focus-within:ring-brand-600/30 ${checked ? "border-brand-600 bg-primary-light" : "border-line bg-surface hover:bg-surface-hover"}`}
+                  >
+                    <input
+                      type="radio"
+                      name={`${formId}-type`}
+                      value={value}
+                      className="sr-only"
+                      checked={checked}
+                      disabled={busy}
+                      onChange={() => setType(value)}
+                    />
+                    <span className="font-medium text-content">
+                      {issueLabel(value)}
+                    </span>
+                    <span className="text-xs text-content-secondary">
+                      {TYPE_HINTS[value]}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          </fieldset>
+
           {type === "WRONG_ANSWER" && (
-            <fieldset className="grid gap-2 text-sm">
-              <legend className="font-medium">
+            <fieldset className="space-y-2 rounded-xl border border-brand-line bg-primary-light/40 p-4">
+              <legend className="px-1 text-sm font-semibold text-content">
                 What do you think the correct answer is?{" "}
                 <span className="font-normal text-content-secondary">
                   Optional
@@ -187,136 +288,218 @@ export function ReportQuestionIssueDialog({
               </legend>
               {options.length > 0 ? (
                 <>
-                  <p className="text-xs font-normal text-content-secondary">
-                    Select all choices you believe are correct.
-                  </p>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-xs text-content-secondary">
+                      Select every choice you believe is correct. You can pick
+                      more than one.
+                    </p>
+                    <span
+                      aria-live="polite"
+                      className="text-xs font-medium text-content-secondary"
+                    >
+                      {suggestedOptionIds.length} selected
+                    </span>
+                  </div>
                   <div className="grid gap-2 sm:grid-cols-2">
-                    {options.map((option) => (
-                      <Checkbox
-                        key={option.optionId}
-                        label={option.optionText}
-                        checked={suggestedOptionIds.includes(option.optionId)}
-                        disabled={
-                          !suggestedOptionIds.includes(option.optionId) &&
-                          suggestedOptionIds.length >= 20
-                        }
-                        className={`w-full rounded-lg border px-3 py-2 transition-colors ${suggestedOptionIds.includes(option.optionId) ? "border-brand-line bg-primary-light" : "border-line bg-surface hover:bg-surface-hover"}`}
-                        onChange={(checked) =>
-                          setSuggestedOptionIds((current) =>
-                            checked
-                              ? [...current, option.optionId]
-                              : current.filter((id) => id !== option.optionId),
-                          )
-                        }
-                      />
-                    ))}
+                    {options.map((option) => {
+                      const selected = suggestedOptionIds.includes(
+                        option.optionId,
+                      );
+                      return (
+                        <Checkbox
+                          key={option.optionId}
+                          label={option.optionText}
+                          checked={selected}
+                          disabled={
+                            !selected &&
+                            suggestedOptionIds.length >= MAX_SUGGESTED_OPTIONS
+                          }
+                          className={`w-full rounded-lg border px-3 py-2 transition-colors ${selected ? "border-brand-line bg-primary-light" : "border-line bg-surface hover:bg-surface-hover"}`}
+                          onChange={(checked) =>
+                            setSuggestedOptionIds((current) =>
+                              checked
+                                ? [...current, option.optionId]
+                                : current.filter((id) => id !== option.optionId),
+                            )
+                          }
+                        />
+                      );
+                    })}
                   </div>
                 </>
               ) : (
-                <>
+                <div className="space-y-1">
+                  <label
+                    htmlFor={`${formId}-suggested`}
+                    className="text-xs text-content-secondary"
+                  >
+                    There are no choices to select, so type the answer you
+                    expected.
+                  </label>
                   <input
-                    maxLength={1000}
+                    id={`${formId}-suggested`}
+                    maxLength={MAX_SUGGESTED_ANSWER}
                     value={suggestedAnswer}
                     onChange={(event) => setSuggestedAnswer(event.target.value)}
                     placeholder="Enter the correct answer"
-                    className="rounded-lg border border-line bg-surface px-3 py-2.5 font-normal"
+                    className={`${fieldCls} ${fieldOk}`}
                   />
                   {suggestedAnswer.length > 0 && (
-                    <span className="text-right text-xs text-content-secondary">
-                      {suggestedAnswer.length}/1000
-                    </span>
+                    <p className="text-right text-xs text-content-secondary">
+                      {suggestedAnswer.length}/{MAX_SUGGESTED_ANSWER}
+                    </p>
                   )}
-                </>
+                </div>
               )}
             </fieldset>
           )}
-          <label className="grid gap-1.5 text-sm font-medium">
-            What seems wrong?
-            <textarea
-              required
-              minLength={10}
-              maxLength={3000}
-              rows={5}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Tell us what you noticed and what you expected to see."
-              className="resize-y rounded-lg border border-line bg-surface px-3 py-2.5 font-normal"
-            />
-            <span className="text-right text-xs font-normal text-content-secondary">
-              {description.length}/3000
-            </span>
-          </label>
-          <div className="grid gap-1.5 text-sm font-medium">
-            <span>
-              Image attachment{" "}
-              <span className="font-normal text-content-secondary">
-                Optional · JPG, PNG, WEBP or GIF up to 5 MB
-              </span>
-            </span>
-            <div className="flex flex-wrap items-center gap-3">
-              {attachmentUrl && (
-                <>
-                  <a
-                    href={attachmentUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="block h-16 w-16 overflow-hidden rounded-lg border border-line"
-                  >
-                    <img
-                      src={attachmentUrl}
-                      alt="Uploaded issue attachment"
-                      className="h-full w-full object-cover"
-                    />
-                  </a>
-                  <span className="max-w-48 truncate text-sm font-normal text-content-secondary">
-                    {attachmentName}
-                  </span>
-                  <button
-                    type="button"
-                    className="text-sm font-medium text-danger hover:underline"
-                    onClick={() => {
-                      setAttachmentUrl("");
-                      setAttachmentName("");
-                    }}
-                    disabled={isWorking}
-                  >
-                    Remove
-                  </button>
-                </>
-              )}
-              <ImagePickButton
-                onPick={uploadAttachment}
-                onError={setError}
-                loading={uploading}
-                disabled={busy}
+
+          <div>
+            <div className="mb-1.5 flex flex-wrap items-baseline justify-between gap-x-3">
+              <label
+                htmlFor={descriptionId}
+                className="text-sm font-semibold text-content"
               >
-                {attachmentUrl ? "Replace image" : "Upload image"}
-              </ImagePickButton>
+                What seems wrong?{" "}
+                <span className="font-normal text-content-secondary">
+                  Required
+                </span>
+              </label>
+              <span className="text-xs text-content-secondary">
+                {MIN_DESCRIPTION}–{MAX_DESCRIPTION.toLocaleString()} characters
+              </span>
+            </div>
+            <textarea
+              id={descriptionId}
+              ref={descriptionRef}
+              rows={5}
+              maxLength={MAX_DESCRIPTION}
+              value={description}
+              disabled={busy}
+              aria-required="true"
+              aria-invalid={Boolean(descriptionError)}
+              aria-describedby={`${helpId}${descriptionError ? ` ${errorId}` : ""}`}
+              onChange={(e) => {
+                setDescription(e.target.value);
+                if (descriptionError) setDescriptionError("");
+              }}
+              placeholder="Tell us what you noticed and what you expected to see."
+              className={`${fieldCls} resize-y ${descriptionError ? fieldBad : fieldOk}`}
+            />
+            <div className="mt-1 flex items-start justify-between gap-3">
+              <p id={helpId} className="text-xs text-content-secondary">
+                The more specific you are, the faster it can be checked.
+                Mention the part of the question that looks wrong.
+              </p>
+              <span className="flex-shrink-0 text-right text-xs tabular-nums text-content-secondary">
+                {length}/{MAX_DESCRIPTION.toLocaleString()}
+              </span>
+            </div>
+            {/* Only announces at the thresholds that matter, not on every keystroke. */}
+            <span aria-live="polite" className="sr-only">
+              {counterHint}
+            </span>
+            {descriptionError && (
+              <p id={errorId} role="alert" className="mt-1 text-xs text-danger">
+                {descriptionError}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <p className="text-sm font-semibold text-content">
+              Add a screenshot{" "}
+              <span className="font-normal text-content-secondary">
+                Optional
+              </span>
+            </p>
+            <div className="mt-2 rounded-xl border border-dashed border-line-strong p-3">
+              {uploading ? (
+                <p
+                  role="status"
+                  className="flex items-center gap-2 text-sm text-content-secondary"
+                >
+                  <span className="spinner h-4 w-4 rounded-full border-2 border-current border-t-transparent" />
+                  Uploading your image…
+                </p>
+              ) : attachmentUrl ? (
+                <div className="flex flex-wrap items-center gap-3">
+                  <ImageViewer
+                    src={attachmentUrl}
+                    alt={`Preview of ${attachmentName || "your attachment"}`}
+                    imageClassName="max-h-24"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-content">
+                      {attachmentName}
+                    </p>
+                    <p className="text-xs text-content-secondary">
+                      Select the image to view it larger.
+                    </p>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <ImagePickButton
+                        onPick={uploadAttachment}
+                        onError={setError}
+                        disabled={busy}
+                      >
+                        Replace image
+                      </ImagePickButton>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        icon={<Icon.Trash className="h-4 w-4" />}
+                        disabled={busy}
+                        onClick={() => {
+                          setAttachmentUrl("");
+                          setAttachmentName("");
+                        }}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center gap-3">
+                  <ImagePickButton
+                    onPick={uploadAttachment}
+                    onError={setError}
+                    disabled={busy}
+                  >
+                    Upload image
+                  </ImagePickButton>
+                  <p className="text-xs text-content-secondary">
+                    A picture can help. JPG, PNG, WEBP or GIF, up to 5 MB.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
-          {error && (
-            <p
-              role="alert"
-              className="rounded-lg bg-red-50 p-3 text-sm text-red-800"
-            >
-              {error}
-            </p>
-          )}
-          <div className="flex justify-end gap-2 border-t border-line pt-4">
-            <Button
-              variant="outline"
-              type="button"
-              onClick={onClose}
-              disabled={isWorking}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" loading={busy} disabled={uploading}>
-              Send report
-            </Button>
-          </div>
         </form>
-      </section>
-    </div>
+      </Modal>
+
+      <Modal
+        open={confirmDiscard}
+        onClose={() => setConfirmDiscard(false)}
+        size="sm"
+        title="Discard this report?"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setConfirmDiscard(false)}>
+              Keep editing
+            </Button>
+            <Button variant="danger" onClick={onClose}>
+              Discard report
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-content-secondary">
+          You have started a report. If you close it now, what you wrote will
+          be lost.
+        </p>
+      </Modal>
+    </>
   );
 }
