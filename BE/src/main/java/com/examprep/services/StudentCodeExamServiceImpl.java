@@ -488,8 +488,8 @@ public class StudentCodeExamServiceImpl implements StudentCodeExamService {
 
     /**
      * CD-07: replays the per-fixture verdicts stored at judging time, so a review can list each
-     * case instead of only its count. Every fixture carries its input and expected output, hidden
-     * ones included, so the result page can show what each case tested.
+     * case instead of only its count. Every fixture carries its input and what the program printed;
+     * the expected output is withheld from a failed fixture so it can't be hard-coded.
      */
     private List<CodeExamResponses.TestCaseOutcome> testCaseOutcomes(CodeSubmission row,
                                                                     Map<Long, CodeTestCase> fixtureById) {
@@ -510,13 +510,16 @@ public class StudentCodeExamServiceImpl implements StudentCodeExamService {
             long storedId = node.path("testCaseId").asLong(-1);
             CodeTestCase fixture = storedId > 0 ? fixtureById.get(storedId) : null;
             boolean hidden = fixture != null && Boolean.TRUE.equals(fixture.getHidden());
+            boolean passed = node.path("passed").asBoolean(false);
+            JsonNode stdout = node.get("stdout");
             outcomes.add(new CodeExamResponses.TestCaseOutcome(
                     fixture != null ? storedId : null,
                     fixture != null ? fixture.getOrderIndex() : null,
                     hidden,
-                    node.path("passed").asBoolean(false),
+                    passed,
                     fixture == null ? null : fixture.getInputData(),
-                    fixture == null ? null : fixture.getExpectedOutput()));
+                    fixture == null || !passed ? null : fixture.getExpectedOutput(),
+                    stdout == null || stdout.isNull() ? null : stdout.asText()));
         }
         return outcomes;
     }
@@ -527,6 +530,7 @@ public class StudentCodeExamServiceImpl implements StudentCodeExamService {
             ObjectNode row = array.addObject();
             row.put("testCaseId", outcome.testCaseId() == null ? -1 : outcome.testCaseId().intValue());
             row.put("passed", outcome.passed());
+            row.put("stdout", outcome.stdout() == null ? null : truncate(outcome.stdout()));
         }
         return array.toString();
     }

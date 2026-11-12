@@ -46,12 +46,19 @@ export function CodeTestCaseStatus({ submission }: { submission: CodeSubmission 
                   {testCase.passed ? 'Passed' : 'Failed'}
                 </Badge>
               </div>
-              {/* Only a passed case reveals its data, so a failing student can't read the answer off a fixture. */}
-              {testCase.passed && (testCase.inputData != null || testCase.expectedOutput != null) && (
-                <p className="mt-1 break-words font-mono text-xs leading-relaxed text-content-soft">
-                  in: {previewText(testCase.inputData ?? '')} → out: {previewText(testCase.expectedOutput ?? '')}
-                </p>
-              )}
+              {/* A failed case shows the student's own output, never the expected one, so the answer can't be read off it. */}
+              {testCase.passed
+                ? (testCase.inputData != null || testCase.expectedOutput != null) && (
+                    <p className="mt-1 break-words font-mono text-xs leading-relaxed text-content-soft">
+                      in: {previewText(testCase.inputData ?? '')} → out: {previewText(testCase.expectedOutput ?? '')}
+                    </p>
+                  )
+                : (testCase.inputData != null || testCase.actualOutput != null) && (
+                    <p className="mt-1 break-words font-mono text-xs leading-relaxed text-content-soft">
+                      in: {previewText(testCase.inputData ?? '')} → your output:{' '}
+                      {testCase.actualOutput != null ? previewText(testCase.actualOutput) : '(not recorded)'}
+                    </p>
+                  )}
             </li>
           ))}
         </ul>
