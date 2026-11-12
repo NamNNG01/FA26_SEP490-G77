@@ -6,10 +6,12 @@ const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 4;
 const ZOOM_STEP = 0.25;
 
-export function ImageViewer({ src, alt, className = '' }: {
+export function ImageViewer({ src, alt, className = '', imageClassName = 'max-h-72' }: {
   src: string;
   alt: string;
   className?: string;
+  /** Height cap of the inline thumbnail (a Tailwind max-h class); the full-screen view is unaffected. */
+  imageClassName?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [zoom, setZoom] = useState(1);
@@ -27,7 +29,7 @@ export function ImageViewer({ src, alt, className = '' }: {
       title="Open image full screen"
       className={`block max-w-full cursor-zoom-in rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 ${className}`}
     >
-      <img src={src} alt={alt} className="block max-h-72 max-w-full rounded-lg border border-line bg-surface-muted object-contain" />
+      <img src={src} alt={alt} className={`block max-w-full rounded-lg border border-line bg-surface-muted object-contain ${imageClassName}`} />
     </button>
 
     <Modal open={open} onClose={close} title={alt || 'Image viewer'} size="screen">
