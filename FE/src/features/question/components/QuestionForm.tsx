@@ -52,6 +52,7 @@ export function QuestionForm({
   heading,
   actions,
   allowedTypes,
+  sections,
   kindError,
   duplicateError,
   leading,
@@ -76,6 +77,8 @@ export function QuestionForm({
   actions?: React.ReactNode;
   /** Types the Type dropdown offers (a group holds one kind); all when omitted. */
   allowedTypes?: EditableQuestionType[];
+  /** Limits the form to the named correction areas. Omit to show every section. */
+  sections?: Array<'content' | 'difficulty' | 'type' | 'answers' | 'rubric' | 'explanation'>;
   /** The question's type doesn't fit its group's kind — the Type dropdown turns red (the page explains it in a toast). */
   kindError?: string;
   /** The backend found this question's content already in the course — it can't be saved until changed. */
@@ -92,7 +95,11 @@ export function QuestionForm({
     Boolean(kindError) ||
     Boolean(duplicateError);
   const contentError = showErrors ? errors.content : undefined;
-  const answersError = showErrors ? errors.answers : undefined;
+  const answersError = showErrors
+    ? sections?.includes('answers') && !sections.includes('rubric') && q.type === 'DIAGRAM_ESSAY' && errors.answers === ESSAY_RUBRIC_REQUIRED
+      ? undefined
+      : errors.answers
+    : undefined;
   const typeError = kindError ?? (showErrors ? errors.type : undefined);
   const typeOptions = allowedTypes
     ? QUESTION_TYPE_OPTIONS.filter(
@@ -100,6 +107,7 @@ export function QuestionForm({
       )
     : QUESTION_TYPE_OPTIONS;
   const titleId = `${q.key}-title`;
+  const showSection = (section: 'content' | 'difficulty' | 'type' | 'answers' | 'rubric' | 'explanation') => !sections || sections.includes(section);
 
   const set = (patch: Partial<QuestionDraft>) => onChange({ ...q, ...patch });
 
@@ -252,13 +260,16 @@ export function QuestionForm({
       )}
 
       {/* Difficulty and type first: the type decides what the rest of the form asks for. */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      {showSection('difficulty') || showSection('type') ? <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {showSection('difficulty') && <>
         <Select
           label="Difficulty"
           value={q.difficulty}
           onChange={(v) => set({ difficulty: v as QuestionDifficulty })}
           options={DIFFICULTY_OPTIONS}
         />
+        </>}
+        {showSection('type') && <>
         <Select
           label="Type"
           value={q.type}
@@ -266,12 +277,13 @@ export function QuestionForm({
           options={typeOptions}
           invalid={Boolean(kindError)}
         />
-      </div>
+        </>}
+      </div> : null}
 
-      {typeError && <p className="text-xs text-danger -mt-1.5">{typeError}</p>}
+      {showSection('type') && typeError && <p className="text-xs text-danger -mt-1.5">{typeError}</p>}
 
       {/* Question text */}
-      <div>
+      {showSection('content') && <div>
         <div className="flex items-center justify-between mb-1">
           <label
             htmlFor={`${q.key}-content`}
@@ -313,11 +325,12 @@ export function QuestionForm({
         {contentError && (
           <p className="text-xs text-danger mt-1">{contentError}</p>
         )}
-      </div>
+      </div>}
 
-      <AnswerSection q={q} set={set} error={answersError} />
+      {showSection('answers') && <AnswerSection q={q} set={set} error={answersError} mode="answer" />}
+      {showSection('rubric') && <RubricAnswers q={q} set={set} error={answersError} />}
 
-      <div>
+      {showSection('explanation') && <div>
         <label
           htmlFor={`${q.key}-explanation`}
           className="block text-sm font-medium text-content-secondary mb-1"
@@ -332,7 +345,7 @@ export function QuestionForm({
           className="w-full h-[64px] px-3 py-2 rounded-[10px] border border-line text-sm text-content bg-surface resize-y focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600 transition-all"
           placeholder="Why the answer is correct — shown to students during review."
         />
-      </div>
+      </div>}
       </div>
     </section>
   );
@@ -342,10 +355,12 @@ export function AnswerSection({
   q,
   set,
   error,
+  mode = 'all',
 }: {
   q: QuestionDraft;
   set: (patch: Partial<QuestionDraft>) => void;
   error?: string;
+  mode?: 'all' | 'answer';
 }) {
   switch (q.type) {
     case "SINGLE_CHOICE":
@@ -360,6 +375,7 @@ export function AnswerSection({
       return <OrderingAnswers q={q} set={set} error={error} />;
     case "DIAGRAM":
     case "DIAGRAM_ESSAY": {
+      if (mode === 'answer') return <DiagramAnswer q={q} set={set} error={error} />;
       // One answers error for both parts — show it under the part it is about.
       const rubricError =
         error && (error === rubricTotal(q.rubric).error || error === ESSAY_RUBRIC_REQUIRED) ? error : undefined;
@@ -375,7 +391,7 @@ export function AnswerSection({
       );
     }
     case "ESSAY":
-      return <RubricAnswers q={q} set={set} error={error} />;
+      return mode === 'answer' ? <p className="text-sm text-content-secondary">This question is graded by a rubric. Choose “Rubric Corrected” to edit its scoring criteria.</p> : <RubricAnswers q={q} set={set} error={error} />;
     case "CODE":
       return <CodeAnswer q={q} set={set} error={error} />;
   }
@@ -582,7 +598,7 @@ function ChoiceAnswers({
         aria-label="Correct answer"
       >
         {q.options.map((o, i) => (
-          <div key={o.key} className="flex items-center gap-2">
+          <div key={o.key} className={`flex items-center gap-2 rounded-lg border px-2 py-1.5 transition-colors ${o.isCorrect ? "border-success-line bg-success-light" : "border-transparent"}`}>
             <span className="w-7 h-7 bg-surface-muted rounded-[6px] flex items-center justify-center text-xs font-bold text-content-soft flex-shrink-0">
               {optionLabel(i)}
             </span>
@@ -601,8 +617,9 @@ function ChoiceAnswers({
               onChange={() => toggleCorrect(i)}
               aria-label={`Mark option ${optionLabel(i)} as correct`}
               title="Mark as correct"
-              className="accent-success-solid w-4 h-4 flex-shrink-0 cursor-pointer"
+              className="accent-success w-4 h-4 flex-shrink-0 cursor-pointer"
             />
+            {o.isCorrect && <span className="whitespace-nowrap text-xs font-semibold text-success">Correct</span>}
             {!fixed && (
               <button
                 type="button"

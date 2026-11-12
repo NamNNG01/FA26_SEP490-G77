@@ -16,6 +16,9 @@ import type { PageResponse } from './course.service';
 /** JAVA / PYTHON / C / CPP today — CD-06 is the source of truth. */
 export type CodeLanguage = string;
 
+/** CD-05 grading budget: every question's test cases run in the sandbox before the BE answers. */
+const CODE_SUBMIT_TIMEOUT_MS = 120_000;
+
 /** BE limit on `sourceCode` (CD-04 / CD-05). */
 export const SOURCE_CODE_MAX_BYTES = 100 * 1024;
 
@@ -77,6 +80,8 @@ export interface CodeTestCaseOutcome {
   passed: boolean;
   inputData?: string | null;
   expectedOutput?: string | null;
+  /** What the student's program printed for this fixture; absent on submissions judged before the BE stored it. */
+  actualOutput?: string | null;
 }
 
 /** CD-07 */
@@ -105,9 +110,14 @@ export const studentCodeExamService = {
     return res.data;
   },
 
-  /** CD-05 */
+  /** CD-05. The BE runs every test case in the sandbox, which can take well past the default 15 s timeout. */
   async submit(examId: number, answers: CodeSubmitAnswer[]): Promise<CodeSubmitResult[]> {
-    const res = await api.post<ApiResponse<{ results: CodeSubmitResult[] }>>('/student/code-exams/submit', { examId, answers });
+    const res = await api.request<ApiResponse<{ results: CodeSubmitResult[] }>>({
+      method: 'post',
+      url: '/student/code-exams/submit',
+      data: { examId, answers },
+      timeout: CODE_SUBMIT_TIMEOUT_MS,
+    });
     return res.data?.results ?? [];
   },
 
