@@ -8,7 +8,7 @@ import { Progress } from '@/components/ui/Progress';
 import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { Select } from '@/components/ui/Select';
 import { QuestionForm } from '@/features/question/components/QuestionForm';
-import { fromDetail, isDraftValid, toCreateRequest, type QuestionDraft } from '@/features/question/model';
+import { ESSAY_RUBRIC_REQUIRED, fromDetail, rubricTotal, toCreateRequest, validateDraft, type QuestionDraft } from '@/features/question/model';
 import type { QuestionDetail } from '@/services/question.service';
 import { courseService, type CourseSummaryItem } from '@/services/course.service';
 import { SearchInput } from '@/components/common/SearchInput';
@@ -16,8 +16,8 @@ import { ISSUE_STATUSES, ISSUE_TYPES, issueLabel, questionIssueService, refreshP
 import { useAuth } from '@/auth/authContext';
 import { getApiErrorMessage } from '@/utils/apiError';
 
-const RESOLUTION_TYPES = ['CONTENT_CORRECTED', 'EXPLANATION_CORRECTED', 'AI_EXPLANATION_CORRECTED', 'ANSWER_CORRECTED', 'RUBRIC_CORRECTED', 'QUESTION_VOIDED', 'OTHER_CORRECTION'];
-const EMPTY_FILTERS = { status: 'PENDING', issueType: '', courseId: '', search: '' };
+const RESOLUTION_TYPES = ['CONTENT_CORRECTED', 'EXPLANATION_CORRECTED', 'ANSWER_CORRECTED', 'RUBRIC_CORRECTED', 'QUESTION_VOIDED', 'OTHER_CORRECTION'];
+const EMPTY_FILTERS = { status: 'ALL', issueType: '', courseId: '', search: '' };
 
 function Status({ value = '' }: { value?: string }) {
   const variant = value === 'RESOLVED' ? 'success' : value === 'REJECTED' ? 'danger' : value === 'IN_PROGRESS' ? 'info' : ['DUPLICATE', 'WITHDRAWN'].includes(value) ? 'default' : 'warning';
@@ -82,6 +82,7 @@ export function ManagerQuestionIssuesPage() {
   const [duplicateId, setDuplicateId] = useState('');
   const [duplicateNote, setDuplicateNote] = useState('');
   const [jobReason, setJobReason] = useState('');
+  const [attachmentPreview, setAttachmentPreview] = useState<{ url: string; name: string } | null>(null);
   const openVersion = useRef(0);
 
   const load = useCallback(async (targetPage = page, selectedFilters = appliedFilters) => {
@@ -192,11 +193,18 @@ export function ManagerQuestionIssuesPage() {
       if (!questionDraft.explanation.trim()) { setError('Enter the corrected explanation.'); return; }
       changes = { explanation: questionDraft.explanation.trim() };
     } else if (resolutionType === 'ANSWER_CORRECTED') {
-      if (!isDraftValid(questionDraft)) { setShowQuestionErrors(true); setError('Review the answer fields before resolving this ticket.'); return; }
+      if (questionDraft.type === 'ESSAY') { setError('This question is graded by a rubric. Choose Rubric Corrected to edit its scoring criteria.'); return; }
+      const answerError = validateDraft(questionDraft).answers;
+      if (answerError && !(questionDraft.type === 'DIAGRAM_ESSAY' && answerError === ESSAY_RUBRIC_REQUIRED)) { setShowQuestionErrors(true); setError('Review the answer fields before resolving this ticket.'); return; }
       const request = toCreateRequest(questionDraft, detail.courseId ?? 0, null);
       changes = { options: request.options ?? [], answerKey: request.answerKey ?? null };
     } else if (resolutionType === 'RUBRIC_CORRECTED') {
-      if (!isDraftValid(questionDraft)) { setShowQuestionErrors(true); setError('Review the rubric before resolving this ticket.'); return; }
+      const rubric = rubricTotal(questionDraft.rubric);
+      if (rubric.error || (['ESSAY', 'DIAGRAM_ESSAY'].includes(questionDraft.type) && !questionDraft.rubric.length)) {
+        setShowQuestionErrors(true);
+        setError(rubric.error || ESSAY_RUBRIC_REQUIRED);
+        return;
+      }
       const request = toCreateRequest(questionDraft, detail.courseId ?? 0, null);
       changes = { essayGradingRubric: request.essayGradingRubric ?? null };
     } else if (resolutionType === 'OTHER_CORRECTION') {
@@ -343,7 +351,10 @@ export function ManagerQuestionIssuesPage() {
                 {report.context?.selectedOptions?.length > 0 && <p className="mt-2 text-sm text-content-secondary">Student selected: {report.context.selectedOptions.map((option: any) => option.optionText).join(', ')}</p>}
                 {report.suggestedOptions?.length > 0 && <p className="mt-1 text-sm text-content-secondary">Suggested option: {report.suggestedOptions.map((option: any) => option.optionText).join(', ')}</p>}
                 {report.suggestedAnswer && <p className="mt-1 text-sm text-content-secondary">Suggested answer: {report.suggestedAnswer}</p>}
-                {report.attachmentUrl && <a href={report.attachmentUrl} target="_blank" rel="noreferrer" className="mt-3 inline-flex text-sm text-brand-700 underline">View attachment</a>}
+                {report.attachmentUrl && <div className="mt-3 space-y-2">
+                  <img src={report.attachmentUrl} alt="Student attached image" className="max-h-72 max-w-full rounded-lg border border-line bg-surface-muted object-contain" />
+                  <Button type="button" size="sm" variant="outline" onClick={() => setAttachmentPreview({ url: report.attachmentUrl, name: `Attachment from ${report.student?.fullName || report.studentName || `Student #${report.userId ?? '—'}`}` })}>Open full screen</Button>
+                </div>}
               </article>)}
               {!detail.reports?.length && <p className="rounded-lg bg-surface-muted p-4 text-sm text-content-secondary">No report details were returned.</p>}
             </div>
@@ -353,8 +364,8 @@ export function ManagerQuestionIssuesPage() {
             <div><h3 className="font-semibold text-content">Resolve ticket</h3><p className="mt-1 text-sm text-content-secondary">Choose the correction type, edit the relevant fields, and leave a resolution note for reporters.</p></div>
             <Select label="Resolution" value={resolutionType} onChange={value => { setResolutionType(value); setError(''); }} options={resolutionOptions} triggerClassName="w-full h-10 pl-3 pr-10 rounded-lg text-sm" />
             {resolutionType === 'CONTENT_CORRECTED' && questionDraft && <label className="grid gap-1.5 text-sm font-medium text-content-secondary">Corrected question text<textarea rows={5} value={questionDraft.content} onChange={event => setQuestionDraft(current => current ? { ...current, content: event.target.value } : current)} className="rounded-lg border border-line bg-surface p-3 text-sm text-content" /></label>}
-            {(resolutionType === 'EXPLANATION_CORRECTED' || resolutionType === 'AI_EXPLANATION_CORRECTED') && questionDraft && <label className="grid gap-1.5 text-sm font-medium text-content-secondary">Corrected explanation<textarea rows={5} value={questionDraft.explanation} onChange={event => setQuestionDraft(current => current ? { ...current, explanation: event.target.value } : current)} className="rounded-lg border border-line bg-surface p-3 text-sm text-content" /></label>}
-            {fullQuestionEditor && questionDraft && <div className="rounded-lg border border-line p-3"><p className="mb-3 text-sm text-content-secondary">Edit the question using the same structured fields used to create it.</p><QuestionForm q={questionDraft} index={0} heading="Question correction" onChange={next => setQuestionDraft(next)} showErrors={showQuestionErrors} allowedTypes={[questionDraft.type]} /></div>}
+            {resolutionType === 'EXPLANATION_CORRECTED' && questionDraft && <label className="grid gap-1.5 text-sm font-medium text-content-secondary">Corrected explanation<textarea rows={5} value={questionDraft.explanation} onChange={event => setQuestionDraft(current => current ? { ...current, explanation: event.target.value } : current)} className="rounded-lg border border-line bg-surface p-3 text-sm text-content" /></label>}
+            {fullQuestionEditor && questionDraft && <div className="rounded-lg border border-line p-3"><p className="mb-3 text-sm text-content-secondary">{resolutionType === 'ANSWER_CORRECTED' ? 'Edit the answer fields for this question.' : resolutionType === 'RUBRIC_CORRECTED' ? 'Edit the grading criteria for this question.' : 'Edit the question fields that need correction.'}</p><QuestionForm q={questionDraft} index={0} heading="Question correction" onChange={next => setQuestionDraft(next)} showErrors={showQuestionErrors} allowedTypes={[questionDraft.type]} sections={resolutionType === 'ANSWER_CORRECTED' ? ['answers'] : resolutionType === 'RUBRIC_CORRECTED' ? ['rubric'] : undefined} /></div>}
             {resolutionType === 'QUESTION_VOIDED' && <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">This will void the question and update its scoring version. No question edits are required.</p>}
             <label className="grid gap-1.5 text-sm font-medium text-content-secondary">Resolution note<textarea rows={3} value={resolutionNote} onChange={event => setResolutionNote(event.target.value)} className="rounded-lg border border-line bg-surface p-3 text-sm text-content" placeholder="Explain what was corrected and why." /></label>
             <Button loading={busy} disabled={!resolutionNote.trim() || detailLoading} onClick={() => void resolve()}>Resolve and save</Button>
@@ -421,6 +432,11 @@ export function ManagerQuestionIssuesPage() {
             </div>
           </section>
         </aside>
+      </div>}
+    </Modal>
+    <Modal open={!!attachmentPreview} onClose={() => setAttachmentPreview(null)} title={attachmentPreview?.name || 'Image attachment'} size="screen">
+      {attachmentPreview && <div className="flex h-full min-h-[60vh] items-center justify-center bg-black/90 p-2 sm:p-6">
+        <img src={attachmentPreview.url} alt={attachmentPreview.name} className="max-h-[78vh] max-w-full object-contain" />
       </div>}
     </Modal>
   </main>;
