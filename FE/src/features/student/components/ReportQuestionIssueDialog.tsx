@@ -20,6 +20,7 @@ const MIN_DESCRIPTION = 10;
 const MAX_DESCRIPTION = 3000;
 const MAX_SUGGESTED_ANSWER = 1000;
 const MAX_SUGGESTED_OPTIONS = 20;
+const STUDENT_ISSUE_TYPES = ISSUE_TYPES.filter((issueType) => issueType !== "AI_EXPLANATION_ERROR");
 
 /** A short hint under each issue type, so students can pick without guessing what the name means. */
 const TYPE_HINTS: Record<IssueType, string> = {
@@ -249,7 +250,7 @@ export function ReportQuestionIssueDialog({
               ref={typeGroupRef}
               className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3"
             >
-              {ISSUE_TYPES.map((value) => {
+              {STUDENT_ISSUE_TYPES.map((value) => {
                 const checked = value === type;
                 return (
                   <label
