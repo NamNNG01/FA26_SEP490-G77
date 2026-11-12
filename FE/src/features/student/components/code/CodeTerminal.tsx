@@ -13,7 +13,6 @@ export function CodeTerminal({
   error,
   running,
   stdin,
-  sampleInput,
   onStdinChange,
 }: {
   tab: TerminalTab;
@@ -22,7 +21,6 @@ export function CodeTerminal({
   error: string | null;
   running: boolean;
   stdin: string;
-  sampleInput: string | null;
   onStdinChange: (value: string) => void;
 }) {
   const failed = result?.status === 'FAILED';
@@ -70,7 +68,7 @@ export function CodeTerminal({
               {!result.stdout && !result.stderr && <p className="text-content-subtle">(no output)</p>}
             </div>
           ) : (
-            <p className="p-3 text-xs text-content-subtle">Press Run (Ctrl+Enter) to execute your code on the sample input.</p>
+            <p className="p-3 text-xs text-content-subtle">Type your input in the Input tab, then press Run (Ctrl+Enter).</p>
           )
         ) : (
           <div className="flex h-full flex-col gap-2 p-2">
@@ -81,11 +79,6 @@ export function CodeTerminal({
               spellCheck={false}
               className="min-h-0 flex-1 resize-none rounded-[6px] border border-line bg-surface-alt p-2 font-mono text-xs text-content focus:outline-none focus:ring-2 focus:ring-primary/30"
             />
-            {sampleInput != null && stdin !== sampleInput && (
-              <button type="button" onClick={() => onStdinChange(sampleInput)} className="self-start text-2xs font-medium text-primary hover:underline">
-                Reset to sample
-              </button>
-            )}
           </div>
         )}
       </div>
