@@ -31,6 +31,8 @@ export const api = {
     method: 'get' | 'post' | 'put' | 'patch' | 'delete';
     url: string;
     data?: unknown;
+    /** Overrides the client's default timeout (ms). */
+    timeout?: number;
   }): Promise<T> {
     const res = await apiClient.request(options);
     return assertApiResponse<T>(res.data);

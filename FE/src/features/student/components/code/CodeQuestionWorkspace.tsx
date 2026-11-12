@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
+import { Suspense, lazy, useCallback, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Icon } from '@/assets/icons';
@@ -88,11 +88,8 @@ export function CodeQuestionWorkspace({
   };
 
   // Run (CD-04)
-  const [stdin, setStdin] = useState(meta?.sampleInput ?? '');
-  const stdinTouched = useRef(false);
-  useEffect(() => {
-    if (!stdinTouched.current) setStdin(meta?.sampleInput ?? '');
-  }, [meta?.sampleInput]);
+  // Starts empty: the student types their own input.
+  const [stdin, setStdin] = useState('');
   const [tab, setTab] = useState<TerminalTab>('Output');
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<CodeRunResult | null>(null);
@@ -218,11 +215,7 @@ export function CodeQuestionWorkspace({
             error={runError}
             running={running}
             stdin={stdin}
-            sampleInput={meta?.sampleInput ?? null}
-            onStdinChange={v => {
-              stdinTouched.current = true;
-              setStdin(v);
-            }}
+            onStdinChange={setStdin}
           />
         </div>
       </section>
@@ -231,25 +224,10 @@ export function CodeQuestionWorkspace({
 }
 
 function SampleBlock({ label, text }: { label: string; text: string | null }) {
-  const [copied, setCopied] = useState(false);
   if (text == null) return null;
-  const copy = () => {
-    navigator.clipboard
-      ?.writeText(text)
-      .then(() => {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1500);
-      })
-      .catch(() => undefined);
-  };
   return (
     <div>
-      <div className="mb-1 flex items-center justify-between">
-        <h3 className="text-2xs font-semibold uppercase tracking-wide text-content-subtle">{label}</h3>
-        <button type="button" onClick={copy} aria-label={`Copy ${label.toLowerCase()}`} className="text-content-subtle hover:text-content">
-          {copied ? <Icon.Check className="h-3.5 w-3.5" /> : <Icon.Copy className="h-3.5 w-3.5" />}
-        </button>
-      </div>
+      <h3 className="mb-1 text-2xs font-semibold uppercase tracking-wide text-content-subtle">{label}</h3>
       <pre className="whitespace-pre-wrap break-words rounded-[6px] border border-line-soft bg-surface-alt p-2 font-mono text-xs text-content">{text}</pre>
     </div>
   );

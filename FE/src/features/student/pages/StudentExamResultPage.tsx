@@ -675,16 +675,20 @@ export function StudentExamResultPage() {
                     )
                   ) : undefined
                 }
+                gradeDetail={
+                  q.questionType === 'CODE' && codeSubs
+                    ? (() => {
+                        const sub = latestSubmissionBefore(codeSubs, q.questionId, result.submittedAt);
+                        return sub ? (
+                          <div className="rounded-[10px] border border-line bg-surface p-4 text-sm text-content-soft">
+                            <CodeTestCaseStatus submission={sub} />
+                          </div>
+                        ) : null;
+                      })()
+                    : undefined
+                }
               />
               {bookmarkError && <p role="alert" className="text-sm text-danger">{bookmarkError}</p>}
-              {q.questionType === 'CODE' && codeSubs && (() => {
-                const sub = latestSubmissionBefore(codeSubs, q.questionId, result.submittedAt);
-                return sub ? (
-                  <div className="card px-4 py-3 text-sm text-content-soft">
-                    <CodeTestCaseStatus submission={sub} />
-                  </div>
-                ) : null;
-              })()}
               <div className="flex items-center justify-between gap-3">
                 <Button variant="outline" icon={<Icon.ChevronLeft className="w-4 h-4" />} disabled={!navRef.current.prev} onClick={navRef.current.prev}>
                   Previous
@@ -988,6 +992,7 @@ function ResultQuestionCard({
   nav,
   saveAction,
   bookmarkAction,
+  gradeDetail,
 }: {
   question: ResultQuestion;
   index: number;
@@ -1003,6 +1008,8 @@ function ResultQuestionCard({
   /** "Save to flashcards" button, under the answer. */
   saveAction?: React.ReactNode;
   bookmarkAction?: React.ReactNode;
+  /** Shown under the score of a rubric-graded answer, e.g. a CODE answer's test cases. */
+  gradeDetail?: React.ReactNode;
 }) {
   return (
     <article className="card overflow-hidden">
@@ -1056,8 +1063,10 @@ function ResultQuestionCard({
           <div className="min-w-0">
             <AnswerReview question={q} />
           </div>
-          <div className="@3xl:sticky @3xl:top-[85px] min-w-0">
+          {/* Not sticky with test cases under the score: a long list would run past the viewport. */}
+          <div className={`min-w-0 space-y-3 ${gradeDetail ? '' : '@3xl:sticky @3xl:top-[85px]'}`}>
             <RubricGrade question={q} outcome={outcome} />
+            {gradeDetail}
           </div>
           </div>
         </div>

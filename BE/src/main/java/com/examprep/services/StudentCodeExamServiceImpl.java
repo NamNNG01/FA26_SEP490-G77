@@ -52,6 +52,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
 /**
@@ -90,6 +93,8 @@ public class StudentCodeExamServiceImpl implements StudentCodeExamService {
     private final AttemptAutoSubmitter autoSubmitter;
     private final PlatformTransactionManager transactionManager;
     private final QuestionReviewRecorder reviews;
+    /** Judges the questions of one CD-05 call side by side; PistonClient caps the provider calls. */
+    private final ExecutorService questionPool = Executors.newCachedThreadPool(PistonClient.daemonThreads("code-submit-"));
 
     private record PlannedAnswer(Long questionId, String language, String sourceCode,
                                  List<PistonClient.CaseInput> cases, BigDecimal maxPoints,
@@ -182,11 +187,13 @@ public class StudentCodeExamServiceImpl implements StudentCodeExamService {
         if (plan == null) {
             throw new IllegalStateException("Coding submission could not be prepared");
         }
-        Map<Long, List<PistonClient.CaseOutcome>> outcomes = new LinkedHashMap<>();
+        Map<Long, CompletableFuture<List<PistonClient.CaseOutcome>>> pending = new LinkedHashMap<>();
         for (PlannedAnswer answer : plan.answers()) {
-            outcomes.put(answer.questionId(), piston.judge(answer.language(), answer.sourceCode(), answer.cases(),
-                    answer.timeLimitMs(), answer.memoryLimitKb()));
+            pending.put(answer.questionId(), CompletableFuture.supplyAsync(() -> piston.judge(answer.language(),
+                    answer.sourceCode(), answer.cases(), answer.timeLimitMs(), answer.memoryLimitKb()), questionPool));
         }
+        Map<Long, List<PistonClient.CaseOutcome>> outcomes = new LinkedHashMap<>();
+        pending.forEach((questionId, future) -> outcomes.put(questionId, PistonClient.joinUnwrapped(future)));
         return new TransactionTemplate(transactionManager).execute(status -> persistSubmit(plan, outcomes));
     }
 

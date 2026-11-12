@@ -18,6 +18,13 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -73,8 +80,20 @@ public class PistonClient {
             "\\bpublic\\s+(?:(?:final|abstract|sealed|non-sealed|strictfp)\\s+)*"
                     + "(?:class|interface|enum|record)\\s+([A-Za-z_$][\\w$]*)");
 
+    /**
+     * Calls in flight against the provider, across every request of this server. The hosted
+     * plan answers 429 from about six parallel calls, so judging stays under that.
+     */
+    private static final int MAX_CONCURRENT_CALLS = 4;
+    /** Extra tries after a 429 or 5xx; the provider sheds load with both and recovers quickly. */
+    private static final int MAX_RETRIES = 2;
+    private static final long RETRY_BACKOFF_MS = 700;
+
     private final RestClient client;
     private final String apiKey;
+    private final Semaphore callPermits = new Semaphore(MAX_CONCURRENT_CALLS, true);
+    /** Runs the fixtures of a submission side by side; the permits above cap the real concurrency. */
+    private final ExecutorService fixturePool = Executors.newFixedThreadPool(16, daemonThreads("piston-judge-"));
 
     public PistonClient(
             @Value("${app.piston.base-url:https://api.onlinecompiler.io/api/v2/piston}") String baseUrl,
@@ -131,9 +150,9 @@ public class PistonClient {
 
     /**
      * CD-05: judges every fixture of one submission. A Piston run executes one program, so each
-     * fixture is a separate call; outcomes keep the order of {@code cases}. Only exit code 0 plus
-     * an output match counts as passed, so timeouts, signals, compile errors and runtime errors
-     * never pass even when stdout happens to match.
+     * fixture is a separate call; the calls run in parallel and outcomes keep the order of
+     * {@code cases}. Only exit code 0 plus an output match counts as passed, so timeouts,
+     * signals, compile errors and runtime errors never pass even when stdout happens to match.
      */
     public List<CaseOutcome> judge(String language, String sourceCode, List<CaseInput> cases,
                                    int timeLimitMs, int memoryLimitKb) {
@@ -141,12 +160,38 @@ public class PistonClient {
         if (cases.isEmpty()) {
             return List.of();
         }
-        List<CaseOutcome> outcomes = new ArrayList<>(cases.size());
+        List<CompletableFuture<CaseOutcome>> pending = new ArrayList<>(cases.size());
         for (CaseInput testCase : cases) {
-            JsonNode result = execute(language, sourceCode, testCase.input(), timeLimitMs, memoryLimitKb);
-            outcomes.add(caseOutcome(testCase, result));
+            pending.add(CompletableFuture.supplyAsync(() -> caseOutcome(testCase,
+                    execute(language, sourceCode, testCase.input(), timeLimitMs, memoryLimitKb)), fixturePool));
+        }
+        List<CaseOutcome> outcomes = new ArrayList<>(cases.size());
+        for (CompletableFuture<CaseOutcome> future : pending) {
+            outcomes.add(joinUnwrapped(future));
         }
         return outcomes;
+    }
+
+    /** Waits for a future and rethrows the task's own exception instead of the CompletionException. */
+    public static <T> T joinUnwrapped(CompletableFuture<T> future) {
+        try {
+            return future.join();
+        } catch (CompletionException ex) {
+            if (ex.getCause() instanceof RuntimeException cause) {
+                throw cause;
+            }
+            throw ex;
+        }
+    }
+
+    /** Daemon threads, so the pools never hold the JVM open on shutdown. */
+    public static ThreadFactory daemonThreads(String prefix) {
+        AtomicInteger counter = new AtomicInteger();
+        return task -> {
+            Thread thread = new Thread(task, prefix + counter.incrementAndGet());
+            thread.setDaemon(true);
+            return thread;
+        };
     }
 
     private CaseOutcome caseOutcome(CaseInput testCase, JsonNode result) {
@@ -257,9 +302,33 @@ public class PistonClient {
             body.put("run_memory_limit", (long) memoryLimitKb * 1024L);
         }
 
+        for (int attempt = 0; ; attempt++) {
+            try {
+                return post(body);
+            } catch (RestClientResponseException ex) {
+                int status = ex.getStatusCode().value();
+                if (attempt < MAX_RETRIES && (status == 429 || status >= 500)) {
+                    log.info("Piston answered HTTP {}; retrying ({}/{})", status, attempt + 1, MAX_RETRIES);
+                    pause(RETRY_BACKOFF_MS * (attempt + 1));
+                    continue;
+                }
+                log.warn("Piston rejected the submission: HTTP {}", status);
+                throw unavailable("Code execution service could not run this submission");
+            }
+        }
+    }
+
+    /** One provider call, holding a permit; a 4xx/5xx reply is left to the caller as RestClientResponseException. */
+    private JsonNode post(Map<String, Object> body) {
         var request = client.post().uri("/execute").contentType(MediaType.APPLICATION_JSON);
         if (!apiKey.isEmpty()) {
             request = request.header(HttpHeaders.AUTHORIZATION, apiKey);
+        }
+        try {
+            callPermits.acquire();
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw unavailable("Code execution was interrupted");
         }
         try {
             JsonNode result = request.body(body).retrieve().body(JsonNode.class);
@@ -270,12 +339,22 @@ public class PistonClient {
         } catch (ResourceAccessException ex) {
             log.warn("Piston is unreachable: {}", ex.getMessage());
             throw unavailable("Code execution service is unreachable");
-        } catch (RestClientResponseException ex) {
-            log.warn("Piston rejected the submission: HTTP {}", ex.getStatusCode().value());
-            throw unavailable("Code execution service could not run this submission");
+        } catch (RestClientResponseException | BaseException ex) {
+            throw ex;
         } catch (RuntimeException ex) {
             log.warn("Piston call failed: {}", ex.getMessage());
             throw unavailable("Code execution service could not run this submission");
+        } finally {
+            callPermits.release();
+        }
+    }
+
+    private static void pause(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw unavailable("Code execution was interrupted");
         }
     }
 

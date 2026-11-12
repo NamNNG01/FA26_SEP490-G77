@@ -138,6 +138,8 @@ function ExamAttemptScreen() {
 
   const [confirm, setConfirm] = useState<'submit' | 'cancel' | null>(null);
   const [busy, setBusy] = useState<'submit' | 'save' | 'cancel' | null>(null);
+  /** CD-05 is running: the sandbox judges every test case, which can take a while. */
+  const [grading, setGrading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [checks, setChecks] = useState<Record<number, AnswerCheck>>({});
   const [checking, setChecking] = useState<number | null>(null);
@@ -320,6 +322,7 @@ function ExamAttemptScreen() {
               )
               .filter(a => a != null);
         if (codeAnswers.length > 0) {
+          setGrading(true);
           try {
             await studentCodeExamService.submit(session.examId, codeAnswers);
           } catch (err) {
@@ -330,6 +333,8 @@ function ExamAttemptScreen() {
               setBusy(null);
               return;
             }
+          } finally {
+            setGrading(false);
           }
         }
         await studentAttemptService.submit(session.attemptId);
@@ -598,6 +603,11 @@ function ExamAttemptScreen() {
           )}
         </div>
         <div className="flex items-center gap-3 flex-wrap">
+          {grading && confirm !== 'submit' && (
+            <span role="status" className="text-xs text-content-soft">
+              Grading your code…
+            </span>
+          )}
           <SaveIndicator state={saveState} />
           {remaining != null && <TimerDisplay seconds={remaining} warning={remaining < WARN_SECONDS} />}
           <Button
@@ -797,6 +807,11 @@ function ExamAttemptScreen() {
         }
       >
         <p className="text-base text-content-secondary leading-relaxed">You can't change your answers after submitting.</p>
+        {grading && (
+          <p role="status" className="mt-3 text-sm text-content-soft">
+            Grading your code on every test case… this can take up to a minute.
+          </p>
+        )}
         <dl className="mt-4 grid grid-cols-3 gap-2 text-center">
           {[
             { label: 'Answered', value: answeredSet.size },
