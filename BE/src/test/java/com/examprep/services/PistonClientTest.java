@@ -19,6 +19,9 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -41,6 +44,13 @@ class PistonClientTest {
     private static final List<Call> CALLS = Collections.synchronizedList(new ArrayList<>());
     private static final Deque<String> REPLIES = new ConcurrentLinkedDeque<>();
     private static final AtomicInteger HTTP_STATUS = new AtomicInteger(200);
+    /** One-shot statuses answered before HTTP_STATUS, in order. */
+    private static final Deque<Integer> STATUSES = new ConcurrentLinkedDeque<>();
+    /** Replies picked by the request's stdin, for calls that run in parallel. */
+    private static final Map<String, String> REPLIES_BY_STDIN = new ConcurrentHashMap<>();
+    private static final AtomicInteger REPLY_DELAY_MS = new AtomicInteger();
+    private static final AtomicInteger IN_FLIGHT = new AtomicInteger();
+    private static final AtomicInteger MAX_IN_FLIGHT = new AtomicInteger();
 
     private record Call(String method, String uri, String body, String authorization) {}
 
@@ -64,6 +74,10 @@ class PistonClientTest {
         CALLS.clear();
         REPLIES.clear();
         HTTP_STATUS.set(200);
+        STATUSES.clear();
+        REPLIES_BY_STDIN.clear();
+        REPLY_DELAY_MS.set(0);
+        MAX_IN_FLIGHT.set(0);
     }
 
     // =================================================================================
@@ -231,21 +245,22 @@ class PistonClientTest {
 
     @Test
     void judgeScoresEveryCaseInOrderAndMapsCompileErrors() throws Exception {
-        REPLIES.add("""
+        // The fixtures run in parallel, so each reply is keyed by the stdin of its call.
+        REPLIES_BY_STDIN.put("a", """
                 {"compile":{"stdout":"","stderr":"CE","code":1}}""");
-        REPLIES.add("""
+        REPLIES_BY_STDIN.put("1 2", """
                 {"run":{"stdout":"3\\n","stderr":"","code":0,"signal":null,"status":null,"wall_time":11}}""");
-        REPLIES.add("""
+        REPLIES_BY_STDIN.put("w", """
                 {"run":{"stdout":"wrong\\n","stderr":"","code":0,"signal":null,"status":null,"wall_time":12}}""");
-        REPLIES.add("""
+        REPLIES_BY_STDIN.put("e", """
                 {"run":{"stdout":"","stderr":"boom","code":1,"signal":null,"status":"RE","wall_time":13}}""");
         PistonClient client = new PistonClient(baseUrl, "secret-key");
 
         List<PistonClient.CaseOutcome> outcomes = client.judge("PYTHON", "print(1)",
                 List.of(new PistonClient.CaseInput(11L, "a", "b"),
                         new PistonClient.CaseInput(22L, "1 2", "3"),
-                        new PistonClient.CaseInput(33L, "", "12"),
-                        new PistonClient.CaseInput(44L, "", "ok")),
+                        new PistonClient.CaseInput(33L, "w", "12"),
+                        new PistonClient.CaseInput(44L, "e", "ok")),
                 2_000, 131_072);
 
         assertEquals(4, outcomes.size());
@@ -273,11 +288,53 @@ class PistonClientTest {
         assertEquals("boom", failed.stderr());
 
         assertEquals(4, CALLS.size());
-        JsonNode first = JSON.readTree(CALLS.get(0).body());
-        assertEquals("python", first.path("language").asText());
-        assertEquals("main.py", first.path("files").get(0).path("name").asText());
-        assertEquals("a", first.path("stdin").asText());
-        assertEquals("1 2", JSON.readTree(CALLS.get(1).body()).path("stdin").asText());
+        List<String> stdins = new ArrayList<>();
+        for (Call call : CALLS) {
+            JsonNode body = JSON.readTree(call.body());
+            assertEquals("python", body.path("language").asText());
+            assertEquals("main.py", body.path("files").get(0).path("name").asText());
+            stdins.add(body.path("stdin").asText());
+        }
+        assertEquals(Set.of("a", "1 2", "w", "e"), Set.copyOf(stdins));
+    }
+
+    @Test
+    void judgeRunsFixturesInParallelButNeverMoreThanFourAtOnce() {
+        REPLY_DELAY_MS.set(300);
+        List<PistonClient.CaseInput> cases = new ArrayList<>();
+        for (int i = 0; i < 8; i++) {
+            REPLIES_BY_STDIN.put("in" + i, """
+                    {"run":{"stdout":"ok","stderr":"","code":0,"signal":null,"status":null}}""");
+            cases.add(new PistonClient.CaseInput((long) i, "in" + i, "ok"));
+        }
+
+        long start = System.nanoTime();
+        List<PistonClient.CaseOutcome> outcomes = new PistonClient(baseUrl, "secret-key")
+                .judge("JAVA", "x", cases, 1_000, 65_536);
+        long elapsedMs = (System.nanoTime() - start) / 1_000_000;
+
+        assertEquals(8, outcomes.size());
+        for (int i = 0; i < 8; i++) {
+            assertEquals((long) i, outcomes.get(i).testCaseId().longValue());
+            assertTrue(outcomes.get(i).passed());
+        }
+        assertEquals(4, MAX_IN_FLIGHT.get());
+        // 8 fixtures × 300 ms one by one would be 2.4 s; four at a time is two rounds.
+        assertTrue(elapsedMs < 1_500, "took " + elapsedMs + " ms");
+    }
+
+    @Test
+    void rateLimitedCallsAreRetriedUntilTheProviderAccepts() {
+        STATUSES.add(429);
+        STATUSES.add(503);
+        REPLIES.add("""
+                {"run":{"stdout":"ok","stderr":"","code":0,"signal":null,"status":null}}""");
+
+        PistonClient.RunOutcome outcome = new PistonClient(baseUrl, "secret-key")
+                .run("JAVA", "x", "", 1_000, 65_536);
+
+        assertEquals("COMPLETED", outcome.status());
+        assertEquals(3, CALLS.size());
     }
 
     @Test
@@ -341,12 +398,15 @@ class PistonClientTest {
                 () -> client.run("JAVA", "x", "", 1_000, 65_536));
         assertEquals(ResponseCode.CODE_EXECUTION_UNAVAILABLE, unauthorized.getResponseCode());
 
+        assertEquals(1, CALLS.size());
+
+        // 429 is retried twice before giving up.
         HTTP_STATUS.set(429);
         BaseException rateLimited = assertThrows(BaseException.class,
                 () -> client.run("JAVA", "x", "", 1_000, 65_536));
         assertEquals(ResponseCode.CODE_EXECUTION_UNAVAILABLE, rateLimited.getResponseCode());
 
-        assertEquals(2, CALLS.size());
+        assertEquals(4, CALLS.size());
     }
 
     // =================================================================================
@@ -359,12 +419,25 @@ class PistonClientTest {
                 exchange.getRequestHeaders().getFirst("Authorization")));
         String path = exchange.getRequestURI().getPath();
         if ("POST".equals(exchange.getRequestMethod()) && "/execute".equals(path)) {
-            int status = HTTP_STATUS.get();
+            int inFlight = IN_FLIGHT.incrementAndGet();
+            MAX_IN_FLIGHT.accumulateAndGet(inFlight, Math::max);
+            try {
+                if (REPLY_DELAY_MS.get() > 0) {
+                    Thread.sleep(REPLY_DELAY_MS.get());
+                }
+            } catch (InterruptedException ex) {
+                Thread.currentThread().interrupt();
+            } finally {
+                IN_FLIGHT.decrementAndGet();
+            }
+            Integer queued = STATUSES.pollFirst();
+            int status = queued != null ? queued : HTTP_STATUS.get();
             if (status != 200) {
                 reply(exchange, status, "{\"message\":\"provider error\"}");
                 return;
             }
-            String next = REPLIES.pollFirst();
+            String keyed = REPLIES_BY_STDIN.get(JSON.readTree(body).path("stdin").asText());
+            String next = keyed != null ? keyed : REPLIES.pollFirst();
             reply(exchange, 200, next == null ? "{}" : next);
         } else {
             exchange.sendResponseHeaders(404, -1);
