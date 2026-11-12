@@ -27,9 +27,12 @@ public final class CodeExamResponses {
     /** CD-06 */
     public record Language(String id, String name) {}
 
-    /** CD-07: one judged fixture with its input and expected output, hidden or not. */
+    /**
+     * CD-07: one judged fixture with its input and the program's own output; the expected output
+     * only comes with a passed fixture, so a failing student can't copy the answer.
+     */
     public record TestCaseOutcome(Long testCaseId, Integer orderIndex, boolean hidden, boolean passed,
-                                  String inputData, String expectedOutput) {}
+                                  String inputData, String expectedOutput, String actualOutput) {}
 
     /** CD-07 */
     public record SubmissionItem(Long submissionId, Long questionId, String language, String status,
