@@ -34,7 +34,7 @@ import {
 import { describeSaveError, loadErrorMessage, type SaveError } from '../saveError';
 import { SaveErrorAlert } from '../components/SaveErrorAlert';
 
-type Confirm = 'discard' | 'delete' | null;
+type Confirm = 'discard' | 'delete' | 'archive' | null;
 
 const STATUS_VARIANT: Record<QuestionStatus, BadgeVariant> = { INACTIVE: 'default', ACTIVE: 'success', ARCHIVED: 'danger' };
 /** The saved status plus the one it can move to next. */
@@ -61,7 +61,6 @@ export function QuestionDetailPage() {
   const [q, setQ] = useState<QuestionDraft | null>(null);
   const [courseId, setCourseId] = useState('');
   const [moduleId, setModuleId] = useState('');
-  const [status, setStatus] = useState<QuestionStatus>('ACTIVE');
   /** Values as last loaded/saved — the header badge and "Unsaved" hints compare against these. */
   const [savedStatus, setSavedStatus] = useState<QuestionStatus>('ACTIVE');
   const [savedGroupId, setSavedGroupId] = useState<number | null>(null);
@@ -93,7 +92,6 @@ export function QuestionDetailPage() {
         setQ(fromDetail(detail));
         setCourseId(detail.courseId != null ? String(detail.courseId) : '');
         setModuleId(detail.moduleId != null ? String(detail.moduleId) : '');
-        setStatus(detail.status);
         setSavedStatus(detail.status);
         setSavedGroupId(detail.groupId ?? null);
         setDirty(false);
@@ -184,11 +182,9 @@ export function QuestionDetailPage() {
     }
     setSaving(true);
     try {
-      let updated = await questionService.updateQuestion(q.questionId, toUpdateRequest(q, moduleId ? Number(moduleId) : null));
-      // Status moves go through the status API, which checks the Draft → Published → Archived order.
-      if (status !== savedStatus) [updated] = await questionService.batchUpdateStatus([q.questionId], status);
+      // Status is not part of this save — it changes on its own (changeStatus).
+      const updated = await questionService.updateQuestion(q.questionId, toUpdateRequest(q, moduleId ? Number(moduleId) : null));
       setQ(fromDetail(updated));
-      setStatus(updated.status);
       setSavedStatus(updated.status);
       setSavedGroupId(updated.groupId ?? null);
       setDirty(false);
@@ -199,6 +195,34 @@ export function QuestionDetailPage() {
       scrollRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } finally {
       setSaving(false);
+    }
+  };
+
+  /**
+   * Saved right away through the status API (Draft → Published → Archived), without the question's
+   * other fields; unsaved edits stay in the form. Archiving asks first — it makes the question read-only.
+   */
+  const changeStatus = (next: QuestionStatus) => {
+    if (next === savedStatus) return;
+    if (next === 'ARCHIVED') setConfirm('archive');
+    else void applyStatus(next);
+  };
+
+  const applyStatus = async (next: QuestionStatus) => {
+    if (!q?.questionId) return;
+    setBusy(true);
+    try {
+      const updated = await questionService.updateQuestionStatus(q.questionId, next, q.lockVersion);
+      setSavedStatus(updated.status);
+      // The status move bumps the lock version; the next Save must send the new one.
+      setQ(prev => (prev ? { ...prev, lockVersion: updated.lockVersion ?? prev.lockVersion } : prev));
+      if (updated.status === 'ARCHIVED') setDirty(false);
+      toast.success(`Question moved to ${QUESTION_STATUS_LABELS[updated.status] ?? updated.status}.`);
+    } catch (err) {
+      toast.error(errorMessage(err, 'Could not change the status.'));
+    } finally {
+      setBusy(false);
+      setConfirm(null);
     }
   };
 
@@ -358,7 +382,7 @@ export function QuestionDetailPage() {
               showErrors={submitted}
               hideHeading
             />
-            <Select label="Status" value={status} onChange={markDirty(v => setStatus(v as QuestionStatus))} options={statusOptions(savedStatus)} disabled={locked || savedStatus === 'ARCHIVED'} />
+            <Select label="Status" value={savedStatus} onChange={v => changeStatus(v as QuestionStatus)} options={statusOptions(savedStatus)} disabled={locked || savedStatus === 'ARCHIVED'} />
             <div className="space-y-2 pt-1">
               <Button className="w-full" icon={<Icon.CheckCircle className="w-4 h-4" />} onClick={save} loading={saving} disabled={locked || archived || Boolean(validateDraft(q).type)}>
                 Save Changes
@@ -385,6 +409,23 @@ export function QuestionDetailPage() {
         }
       >
         <p className="text-sm text-content-secondary">Your unsaved changes to this question will be lost.</p>
+      </Modal>
+
+      <Modal
+        open={confirm === 'archive'}
+        onClose={() => !busy && setConfirm(null)}
+        title="Archive question?"
+        size="sm"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setConfirm(null)} disabled={busy}>Cancel</Button>
+            <Button variant="danger" onClick={() => applyStatus('ARCHIVED')} loading={busy}>Archive</Button>
+          </>
+        }
+      >
+        <p className="text-sm text-content-secondary">
+          An archived question is read-only and its status can't be changed again.{dirty ? ' Your unsaved changes will be lost — save them first to keep them.' : ''}
+        </p>
       </Modal>
 
       <Modal

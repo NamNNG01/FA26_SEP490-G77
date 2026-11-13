@@ -1,5 +1,7 @@
 package com.examprep.dto;
 
+import com.examprep.dto.question.CodeConfigDto;
+import com.examprep.dto.question.TestCaseDto;
 import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -106,9 +108,11 @@ public final class QuestionIssueDtos {
 
     public record OptionView(Long optionId, String optionText, Boolean isCorrect, String explanation, Integer orderIndex) { }
 
+    /** {@code codeConfig} / {@code testCases}: a CODE question's settings, same shape as the question detail API; null otherwise. */
     public record QuestionView(Long questionId, String questionType, String difficulty, String content, String explanation, String status,
                                Long lockVersion, Integer scoringVersion, List<OptionView> options, JsonNode answerKey,
-                               JsonNode questionMetadata, JsonNode essayGradingRubric) { }
+                               JsonNode questionMetadata, JsonNode essayGradingRubric,
+                               CodeConfigDto codeConfig, List<TestCaseDto> testCases) { }
 
     public record ManagerDetail(Long issueId, Long questionId, String issueType, String status, Long courseId,
                                 String courseName, Location location, String priority, int priorityScore,

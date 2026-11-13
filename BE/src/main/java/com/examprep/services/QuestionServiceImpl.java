@@ -902,6 +902,38 @@ public class QuestionServiceImpl implements QuestionService {
         }
     }
 
+    @Override
+    public CodeConfigDto codeConfigOf(Question q) {
+        if (!"CODE".equals(q.getQuestionType())) return null;
+        CodeQuestionConfig cfg = codeQuestionConfigRepository.findById(q.getQuestionId()).orElse(null);
+        if (cfg == null) return null;
+        List<String> langs = null;
+        try {
+            if (cfg.getAllowedLanguages() != null && !cfg.getAllowedLanguages().isBlank()) {
+                langs = objectMapper.readValue(cfg.getAllowedLanguages(), new TypeReference<List<String>>() {});
+            }
+        } catch (Exception ignored) {}
+        return CodeConfigDto.builder()
+                .allowedLanguages(langs)
+                .codeTemplate(cfg.getCodeTemplate())
+                .timeLimitMs(cfg.getTimeLimitMs())
+                .memoryLimitKb(cfg.getMemoryLimitKb())
+                .build();
+    }
+
+    @Override
+    public List<TestCaseDto> testCasesOf(Question q) {
+        if (!"CODE".equals(q.getQuestionType())) return null;
+        List<CodeTestCase> cases = codeTestCaseRepository.findByQuestionQuestionIdOrderByOrderIndexAscTestCaseIdAsc(q.getQuestionId());
+        return cases.stream().map(tc -> TestCaseDto.builder()
+                .testCaseId(tc.getTestCaseId())
+                .inputData(tc.getInputData())
+                .expectedOutput(tc.getExpectedOutput())
+                .hidden(tc.getHidden())
+                .orderIndex(tc.getOrderIndex())
+                .build()).collect(Collectors.toList());
+    }
+
     private QuestionDetailDto mapToDetailDto(Question q, List<AnswerOption> options) {
         Object metadataObj = parseJson(q.getQuestionMetadata());
         Object answerKeyObj = parseJson(q.getAnswerKey());
@@ -916,36 +948,8 @@ public class QuestionServiceImpl implements QuestionService {
                 .orderIndex(o.getOrderIndex())
                 .build()).collect(Collectors.toList());
 
-        CodeConfigDto codeConfig = null;
-        if ("CODE".equals(q.getQuestionType())) {
-            CodeQuestionConfig cfg = codeQuestionConfigRepository.findById(q.getQuestionId()).orElse(null);
-            if (cfg != null) {
-                List<String> langs = null;
-                try {
-                    if (cfg.getAllowedLanguages() != null && !cfg.getAllowedLanguages().isBlank()) {
-                        langs = objectMapper.readValue(cfg.getAllowedLanguages(), new TypeReference<List<String>>() {});
-                    }
-                } catch (Exception ignored) {}
-                codeConfig = CodeConfigDto.builder()
-                        .allowedLanguages(langs)
-                        .codeTemplate(cfg.getCodeTemplate())
-                        .timeLimitMs(cfg.getTimeLimitMs())
-                        .memoryLimitKb(cfg.getMemoryLimitKb())
-                        .build();
-            }
-        }
-
-        List<TestCaseDto> testCases = null;
-        if ("CODE".equals(q.getQuestionType())) {
-            List<CodeTestCase> cases = codeTestCaseRepository.findByQuestionQuestionIdOrderByOrderIndexAscTestCaseIdAsc(q.getQuestionId());
-            testCases = cases.stream().map(tc -> TestCaseDto.builder()
-                    .testCaseId(tc.getTestCaseId())
-                    .inputData(tc.getInputData())
-                    .expectedOutput(tc.getExpectedOutput())
-                    .hidden(tc.getHidden())
-                    .orderIndex(tc.getOrderIndex())
-                    .build()).collect(Collectors.toList());
-        }
+        CodeConfigDto codeConfig = codeConfigOf(q);
+        List<TestCaseDto> testCases = testCasesOf(q);
 
         return QuestionDetailDto.builder()
                 .questionId(q.getQuestionId())

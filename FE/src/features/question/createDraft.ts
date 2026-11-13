@@ -1,6 +1,6 @@
 import { getUser } from '@/auth/storage';
 import { emptyGroupContext, type GroupContextValue } from './components/GroupContextCard';
-import type { QuestionDraft } from './model';
+import { normalizeCode, type QuestionDraft } from './model';
 
 /**
  * The New Questions page keeps its unsaved work in localStorage, so a reload
@@ -31,7 +31,12 @@ export function loadCreateDraft(): CreateDraftSnapshot | null {
       version: 1,
       savedAt: typeof s.savedAt === 'string' ? s.savedAt : new Date().toISOString(),
       // Drafts saved before a field was added get its default.
-      questions: s.questions.map(q => ({ ...q, rubric: Array.isArray(q.rubric) ? q.rubric : [], rubricNotes: q.rubricNotes ?? '' })),
+      questions: s.questions.map(q => ({
+        ...q,
+        rubric: Array.isArray(q.rubric) ? q.rubric : [],
+        rubricNotes: q.rubricNotes ?? '',
+        code: normalizeCode(q.code),
+      })),
       courseId: typeof s.courseId === 'string' ? s.courseId : '',
       moduleId: typeof s.moduleId === 'string' ? s.moduleId : '',
       groupCtx: { ...emptyGroupContext(), ...s.groupCtx },
