@@ -578,6 +578,9 @@ public class ManagerExamServiceImpl implements ManagerExamService {
     @Override @Transactional
     public ExamResponse.Published publish(UserPrincipal user,Long id,ExamRequests.Publish r) {
         Exam e=write(user,id); ExamResponse state=response(e,false);
+        // A published exam is final: it cannot go back to draft.
+        if("PUBLISHED".equals(e.getStatus()) && "DRAFT".equals(r.status()))
+            throw conflict("Published exams cannot be unpublished.");
         if(r.status().equals("PUBLISHED")) {
             List<ExamConfig> configured=configs.findByExamExamIdOrderByConfigIdAsc(id);
             List<ExamQuestion> direct=links.findAllByExamIds(List.of(id));

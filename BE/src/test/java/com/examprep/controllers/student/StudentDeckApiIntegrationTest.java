@@ -219,6 +219,46 @@ class StudentDeckApiIntegrationTest {
                 .andExpect(jsonPath("$.data.visibility").value("PUBLIC"));
     }
 
+    @Test void managerListsStudentContributedDecksAtTheDeckListEndpoint() throws Exception {
+        long deckId = courseDeck(student, "FLASHCARD");
+        send(put("/api/v1/student/decks/" + deckId), student, "{\"title\":\"Contributed deck\"}").andExpect(status().isOk());
+        card(deckId, "{\"frontText\":\"a\",\"backText\":\"b\"}");
+        mvc.perform(post("/api/v1/student/decks/" + deckId + "/publish-request").with(as(student)))
+                .andExpect(status().isOk());
+
+        // PENDING is the manager review screen's label for PENDING_REVIEW.
+        mvc.perform(get("/api/v1/manager/decks").param("status", "PENDING")
+                        .param("courseId", course.getCourseId().toString()).with(as(manager)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalElements").value(1))
+                .andExpect(jsonPath("$.data.content[0].deckId").value(deckId))
+                .andExpect(jsonPath("$.data.content[0].title").value("Contributed deck"))
+                .andExpect(jsonPath("$.data.content[0].reviewStatus").value("PENDING_REVIEW"))
+                .andExpect(jsonPath("$.data.content[0].cardCount").value(1))
+                .andExpect(jsonPath("$.data.content[0].owner.id").value(student.getUserId()))
+                .andExpect(jsonPath("$.data.content[0].course.id").value(course.getCourseId()))
+                .andExpect(jsonPath("$.data.content[0].canReview").value(true));
+
+        // The same manager, once the deck is approved, sees it under APPROVED / ACCEPTED only.
+        Deck entity = em.find(Deck.class, deckId);
+        entity.setReviewStatus("APPROVED");
+        em.flush();
+        mvc.perform(get("/api/v1/manager/decks").param("status", "PENDING")
+                        .param("courseId", course.getCourseId().toString()).with(as(manager)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.totalElements").value(0));
+        mvc.perform(get("/api/v1/manager/decks").param("status", "ACCEPTED")
+                        .param("courseId", course.getCourseId().toString()).with(as(manager)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalElements").value(1))
+                .andExpect(jsonPath("$.data.content[0].reviewStatus").value("APPROVED"))
+                .andExpect(jsonPath("$.data.content[0].canReview").value(false));
+
+        // Without status the endpoint keeps serving the F-01 managed-deck list.
+        mvc.perform(get("/api/v1/manager/decks").with(as(manager)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content[0].ownerName").value(student.getFullName()));
+    }
+
     // ------------------------------------------------------------------ FC-14 / FC-15 / DECK_LOCKED
 
     @Test void detailShowsOwnProgressAndHidesReviewNoteFromOthers() throws Exception {

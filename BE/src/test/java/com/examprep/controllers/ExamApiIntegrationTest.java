@@ -214,7 +214,7 @@ class ExamApiIntegrationTest {
         submit(payload).andExpect(status().isCreated());
     }
 
-    @Test void publishedContentIsLockedUntilUnpublished() throws Exception {
+    @Test void publishedContentIsLockedAndAPublishedExamCannotBeUnpublished() throws Exception {
         Exam exam = exam(course, module); exam.setMaxScore(BigDecimal.ONE); attach(exam, question);
         call(manager, patch(path(exam) + "/publish").contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"PUBLISHED\"}"))
                 .andExpect(status().isOk());
@@ -222,10 +222,26 @@ class ExamApiIntegrationTest {
                 .andExpect(status().isConflict());
         call(manager, post(path(exam) + "/questions").contentType(MediaType.APPLICATION_JSON)
                 .content("{\"questionId\":" + essay.getQuestionId() + ",\"weight\":2}")).andExpect(status().isConflict());
+        Long examId = exam.getExamId();
         call(manager, patch(path(exam) + "/publish").contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"DRAFT\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("Published exams cannot be unpublished."));
+        em.flush(); em.clear();
+        Exam stored = em.find(Exam.class, examId);
+        assertEquals("PUBLISHED", stored.getStatus());
+        assertNotNull(stored.getPublishedAt());
+        call(manager, put("/api/v1/manager/exams/" + examId).contentType(MediaType.APPLICATION_JSON).content("{\"title\":\"Changed\"}"))
+                .andExpect(status().isConflict());
+    }
+
+    @Test void aPublishedExamStillAcceptsAnotherPublishAndArchive() throws Exception {
+        Exam exam = exam(course, module); exam.setMaxScore(BigDecimal.ONE); attach(exam, question);
+        call(manager, patch(path(exam) + "/publish").contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"PUBLISHED\"}"))
                 .andExpect(status().isOk());
-        call(manager, put(path(exam)).contentType(MediaType.APPLICATION_JSON).content("{\"title\":\"Changed\"}"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.data.title").value("Changed"));
+        call(manager, patch(path(exam) + "/publish").contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"PUBLISHED\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.status").value("PUBLISHED"));
+        call(manager, patch(path(exam) + "/publish").contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"ARCHIVED\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.status").value("ARCHIVED"));
     }
 
     @Test void publishingEmptyIsRejectedAndMissingRubricsAreWarnings() throws Exception {
