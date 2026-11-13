@@ -230,6 +230,26 @@ class QuestionIssueApiIntegrationTest {
         assertEquals(1, question.getScoringVersion());
     }
 
+    /** Ticket #13 / question #4041: the key was changed under "Something else" and nobody got regraded. */
+    @Test void keyChangedUnderAnotherResolutionTypeStillRegrades() throws Exception {
+        long id = report(taker);
+        String flipped = "{\"options\":[{\"optionId\":" + wrong.getOptionId() + ",\"optionText\":\"wrong\",\"isCorrect\":true,\"orderIndex\":1},"
+                + "{\"optionId\":" + right.getOptionId() + ",\"optionText\":\"right\",\"isCorrect\":false,\"orderIndex\":2}]}";
+        JsonNode job = data(send(post(BASE + "/" + id + "/resolve"), manager,
+                "{\"resolutionType\":\"OTHER_CORRECTION\",\"resolutionNote\":\"Changed answer\",\"changes\":" + flipped + "}")
+                .andExpect(status().isOk())).path("regradeJob");
+        assertEquals("PENDING_CONFIRMATION", job.path("status").asText());
+        assertEquals("OTHER_CORRECTION", job.path("resolutionType").asText());
+        send(post(BASE + "/" + id + "/regrade/confirm"), manager, "{\"jobId\":" + job.path("jobId").asLong() + ",\"confirmed\":true,\"reason\":\"Key fix\"}")
+                .andExpect(jsonPath("$.data.status").value("COMPLETED"));
+        assertTrue(f.reload(answer).getIsCorrect());
+
+        long second = report(taker);
+        send(post(BASE + "/" + second + "/resolve"), manager,
+                "{\"resolutionType\":\"CONTENT_CORRECTED\",\"resolutionNote\":\"x\",\"changes\":{\"testCases\":[]}}")
+                .andExpect(status().isBadRequest());
+    }
+
     String contextBody(String extra) {
         return "{\"questionId\":" + question.getQuestionId() + ",\"issueType\":\"WRONG_ANSWER\",\"description\":\"The marked answer looks wrong to me\"," + extra + "}";
     }

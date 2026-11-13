@@ -55,10 +55,13 @@ public class QuestionRegrader {
     private final AnswerRegradeLogRepository logs;
     private final AttemptPaperFactory paperFactory;
 
-    /** True when this resolution re-scores answers of a question of this type. */
-    public static boolean regrades(String resolutionType, String questionType) {
+    /**
+     * True when this resolution re-scores answers of a question of this type. Any resolution whose edit bumped
+     * the scoring version of an auto-graded question regrades too, whatever type the manager picked.
+     */
+    public static boolean regrades(String resolutionType, String questionType, boolean scoringChanged) {
         return VOIDED.equals(resolutionType)
-                || (ANSWER_CORRECTED.equals(resolutionType) && AttemptGrader.isAutoGraded(questionType));
+                || ((ANSWER_CORRECTED.equals(resolutionType) || scoringChanged) && AttemptGrader.isAutoGraded(questionType));
     }
 
     public long countPending(Long questionId, int version) {

@@ -33,7 +33,8 @@ import java.util.*;
 @Transactional
 public class QuestionIssueService {
     private static final Set<String> EDITABLE = Set.of("content", "explanation", "difficulty", "options", "answerKey",
-            "correctOrder", "questionMetadata", "essayGradingRubric");
+            "correctOrder", "questionMetadata", "essayGradingRubric", "codeConfig", "testCases");
+    private static final Set<String> CODE_ONLY = Set.of("codeConfig", "testCases");
     private static final Map<String, String> SORTS = Map.of("createdAt", "createdAt", "updatedAt", "updatedAt",
             "priority", "priorityScore", "lastReportedAt", "lastReportedAt");
 
@@ -259,7 +260,7 @@ public class QuestionIssueService {
 
         QuestionRegradeJob job = null;
         int versionTo = question.getScoringVersion();
-        if (QuestionRegrader.regrades(resolutionType, question.getQuestionType())) {
+        if (QuestionRegrader.regrades(resolutionType, question.getQuestionType(), versionTo > versionFrom)) {
             long pending = regrader.countPending(question.getQuestionId(), versionTo);
             if (pending > 0) {
                 job = jobs.save(QuestionRegradeJob.builder().issue(issue).question(question).resolutionType(resolutionType)
@@ -369,6 +370,9 @@ public class QuestionIssueService {
         Set<String> unknown = new TreeSet<>(changes.keySet());
         unknown.removeAll(EDITABLE);
         if (!unknown.isEmpty()) throw invalid("changes", "Fields that cannot be corrected here: " + unknown + "; allowed: " + new TreeSet<>(EDITABLE));
+        if (!"CODE".equals(question.getQuestionType()) && !Collections.disjoint(changes.keySet(), CODE_ONLY)) {
+            throw invalid("changes", "codeConfig and testCases only apply to CODE questions");
+        }
         QuestionUpdateRequest request;
         try {
             request = objectMapper.convertValue(changes, QuestionUpdateRequest.class);
