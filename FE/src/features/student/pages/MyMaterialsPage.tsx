@@ -12,6 +12,7 @@ import { ROUTES, studentCoursePath, studentResumeAttemptPath } from '@/app/route
 import { getApiErrorMessage } from '@/utils/apiError';
 import { studentCourseService, type MyCourse } from '@/services/studentCourse.service';
 import { Modal } from '@/components/ui/Modal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import {
   MATERIAL_MAX_FILES,
   errorStatus,
@@ -431,33 +432,22 @@ export function MyMaterialsPage() {
           ))}
       </Modal>
 
-      <Modal
+      <ConfirmDialog
         open={deleting != null}
-        onClose={() => !deleteBusy && setDeleting(null)}
+        onClose={() => setDeleting(null)}
+        onConfirm={confirmDelete}
+        loading={deleteBusy}
+        tone="danger"
         title="Delete material?"
-        size="sm"
-        footer={
+        description={deleting && (
           <>
-            <Button variant="outline" disabled={deleteBusy} onClick={() => setDeleting(null)}>
-              Cancel
-            </Button>
-            <Button variant="danger" loading={deleteBusy} onClick={confirmDelete}>
-              Delete
-            </Button>
+            <span className="font-semibold text-content">{deleting.title}</span> will be removed
+            {(deleting.courses ?? []).length > 1 ? ` from all ${(deleting.courses ?? []).length} courses it is in` : ''}, and the
+            quizzes generated from it leave your material quiz list. This cannot be undone.
           </>
-        }
-      >
-        {deleting && (
-          <div className="space-y-2 text-sm text-content-secondary">
-            <p>
-              <span className="font-semibold text-content">{deleting.title}</span> will be removed
-              {(deleting.courses ?? []).length > 1 ? ` from all ${(deleting.courses ?? []).length} courses it is in` : ''}, and the
-              quizzes generated from it leave your material quiz list.
-            </p>
-            <p className="text-content-soft">This cannot be undone.</p>
-          </div>
         )}
-      </Modal>
+        confirmLabel="Delete"
+      />
 
       {/* Last: it opens over the "Quizzes from …" modal (same z-index, so DOM order decides). */}
       {choosingJob != null && (

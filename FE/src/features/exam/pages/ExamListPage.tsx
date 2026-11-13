@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Select } from "@/components/ui/Select";
 import { Dropdown } from "@/components/ui/Dropdown";
 import { Modal } from "@/components/ui/Modal";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { SearchInput } from "@/components/common/SearchInput";
 import { Icon } from "@/assets/icons";
@@ -885,8 +886,25 @@ export function ExamListPage() {
         </div>
       </div>
 
+      <ConfirmDialog
+        open={statusDialogTarget !== null && statusWarnings.length === 0}
+        onClose={() => setStatusDialogTarget(null)}
+        onConfirm={handleApplyStatusChange}
+        loading={statusUpdating}
+        title={`Change status to ${statusDialogTarget?.targetStatus}?`}
+        description={
+          <>
+            <strong className="text-content">"{statusDialogTarget?.exam.title}"</strong>{" "}
+            will be moved to{" "}
+            <strong className="text-brand-ink">{statusDialogTarget?.targetStatus}</strong>.
+          </>
+        }
+        confirmLabel="Confirm"
+      />
+
+      {/* After a publish that went through with warnings — information only. */}
       <Modal
-        open={statusDialogTarget !== null}
+        open={statusDialogTarget !== null && statusWarnings.length > 0}
         onClose={() => {
           setStatusDialogTarget(null);
           setStatusWarnings([]);
@@ -894,174 +912,82 @@ export function ExamListPage() {
         title={`Confirm ${statusDialogTarget?.targetStatus}`}
         size="sm"
         footer={
-          <div className="flex items-center justify-end gap-2 w-full">
-            <Button
-              variant="outline"
-              onClick={() => {
-                setStatusDialogTarget(null);
-                setStatusWarnings([]);
-              }}
-              disabled={statusUpdating}
-            >
-              {statusWarnings.length > 0 ? "Close" : "Cancel"}
-            </Button>
-            {statusWarnings.length === 0 && (
-              <Button
-                onClick={handleApplyStatusChange}
-                loading={statusUpdating}
-                icon={<Icon.Check className="w-4 h-4" />}
-              >
-                Confirm
-              </Button>
-            )}
-          </div>
+          <Button
+            variant="outline"
+            onClick={() => {
+              setStatusDialogTarget(null);
+              setStatusWarnings([]);
+            }}
+          >
+            Close
+          </Button>
         }
       >
-        <div className="space-y-3 text-sm text-content">
-          <p>
-            Are you sure you want to change the status of{" "}
-            <strong>"{statusDialogTarget?.exam.title}"</strong> to{" "}
-            <strong className="text-brand-ink">
-              {statusDialogTarget?.targetStatus}
-            </strong>
-            ?
+        <div className="p-3 bg-warning-light/40 border border-warning-line rounded-[8px] space-y-1 text-xs text-warning-strong">
+          <p className="font-semibold">
+            Published successfully with warnings:
           </p>
-
-          {statusWarnings.length > 0 && (
-            <div className="p-3 bg-warning-light/40 border border-warning-line rounded-[8px] space-y-1 text-xs text-warning-strong">
-              <p className="font-semibold">
-                Published successfully with warnings:
-              </p>
-              {statusWarnings.map((w, idx) => (
-                <p key={idx}>• {w}</p>
-              ))}
-            </div>
-          )}
+          {statusWarnings.map((w, idx) => (
+            <p key={idx}>• {w}</p>
+          ))}
         </div>
       </Modal>
 
-      <Modal
-        open={deleteDialogTarget !== null}
+      <ConfirmDialog
+        open={deleteDialogTarget !== null && !deleteConflict409}
+        onClose={() => setDeleteDialogTarget(null)}
+        onConfirm={handleDeleteExam}
+        loading={deleting}
+        tone="danger"
+        title="Delete this exam?"
+        description={
+          <>
+            <strong className="text-content">"{deleteDialogTarget?.title}"</strong>{" "}
+            will be permanently deleted. Only drafts with no submissions can be
+            deleted — archive an exam to keep its attempt history.
+          </>
+        }
+        confirmLabel="Delete"
+      />
+
+      <ConfirmDialog
+        open={deleteDialogTarget !== null && deleteConflict409}
         onClose={() => {
           setDeleteDialogTarget(null);
           setDeleteConflict409(false);
         }}
-        title={
-          deleteConflict409 ? "Cannot Delete Active Exam (409)" : "Delete Exam"
-        }
-        size="sm"
-        footer={
-          <div className="flex items-center justify-end gap-2 w-full">
-            <Button
-              variant="outline"
-              onClick={() => {
-                setDeleteDialogTarget(null);
-                setDeleteConflict409(false);
-              }}
-              disabled={deleting}
-            >
-              Cancel
-            </Button>
-            {deleteConflict409 ? (
-              <Button
-                icon={<Icon.Archive className="w-4 h-4" />}
-                onClick={async () => {
-                  if (!deleteDialogTarget) return;
-                  try {
-                    await examService.patchPublishExam(
-                      deleteDialogTarget.examId,
-                      "ARCHIVED",
-                    );
-                  } catch (err: unknown) {
-                    toast.error(
-                      getApiErrorMessage(err, "Failed to archive exam."),
-                    );
-                    return;
-                  }
-                  toast.success("Exam archived successfully.");
-                  setDeleteDialogTarget(null);
-                  setDeleteConflict409(false);
-                  fetchExams();
-                }}
-              >
-                Archive Exam Instead
-              </Button>
-            ) : (
-              <Button
-                variant="danger"
-                onClick={handleDeleteExam}
-                loading={deleting}
-              >
-                Delete Permanently
-              </Button>
-            )}
-          </div>
-        }
-      >
-        <div className="space-y-3 text-sm text-content">
-          {deleteConflict409 ? (
-            <p className="text-danger font-medium text-xs leading-relaxed">
-              This exam cannot be permanently deleted because students have
-              already submitted attempts for it. Please Archive the exam instead
-              to preserve student grading histories.
-            </p>
-          ) : (
-            <div className="space-y-2 text-xs text-content-secondary leading-relaxed">
-              <p>
-                Are you sure you want to permanently delete{" "}
-                <strong>"{deleteDialogTarget?.title}"</strong>?
-              </p>
-              <div className="p-2.5 bg-surface-muted rounded-[8px] border border-line space-y-1 text-2xs text-content-subtle">
-                <p>
-                  <strong>Delete:</strong> Permanently removes draft exam with
-                  no test submissions.
-                </p>
-                <p>
-                  <strong>Archive:</strong> Preserves past attempt histories
-                  while hiding exam from new enrollments.
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
-      </Modal>
+        onConfirm={async () => {
+          if (!deleteDialogTarget) return;
+          try {
+            await examService.patchPublishExam(
+              deleteDialogTarget.examId,
+              "ARCHIVED",
+            );
+          } catch (err: unknown) {
+            toast.error(getApiErrorMessage(err, "Failed to archive exam."));
+            return;
+          }
+          toast.success("Exam archived successfully.");
+          setDeleteDialogTarget(null);
+          setDeleteConflict409(false);
+          fetchExams();
+        }}
+        title="This exam can't be deleted"
+        description="Students have already submitted attempts for it. Archive the exam instead to preserve their grading history."
+        confirmLabel="Archive instead"
+      />
 
-      <Modal
+      <ConfirmDialog
         open={bulkDeleteConfirmOpen}
-        onClose={() => !bulkDeleting && setBulkDeleteConfirmOpen(false)}
-        title="Confirm Bulk Delete"
-        size="sm"
-        footer={
-          <div className="flex items-center justify-end gap-2 w-full">
-            <Button
-              variant="outline"
-              onClick={() => setBulkDeleteConfirmOpen(false)}
-              disabled={bulkDeleting}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="danger"
-              onClick={handleBulkDelete}
-              loading={bulkDeleting}
-              disabled={bulkDeleting || selectedExamIds.size === 0}
-            >
-              Delete {selectedExamIds.size} Exam
-              {selectedExamIds.size === 1 ? "" : "s"}
-            </Button>
-          </div>
-        }
-      >
-        <p className="text-sm text-content">
-          Permanently delete the{" "}
-          <strong>
-            {selectedExamIds.size} selected exam
-            {selectedExamIds.size === 1 ? "" : "s"}
-          </strong>
-          ? This action cannot be undone. Exams with student attempts may fail
-          to delete.
-        </p>
-      </Modal>
+        onClose={() => setBulkDeleteConfirmOpen(false)}
+        onConfirm={handleBulkDelete}
+        loading={bulkDeleting}
+        confirmDisabled={selectedExamIds.size === 0}
+        tone="danger"
+        title={`Delete ${selectedExamIds.size} exam${selectedExamIds.size === 1 ? "" : "s"}?`}
+        description="This action cannot be undone. Exams with student attempts may fail to delete."
+        confirmLabel="Delete"
+      />
 
       <Modal
         open={bulkDeleteSummary !== null}

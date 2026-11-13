@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
-import { Modal } from '@/components/ui/Modal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Icon } from '@/assets/icons';
 import { studentCourseService, type MyCourse } from '@/services/studentCourse.service';
 import {
@@ -142,24 +141,16 @@ export function ConfirmModal({
   onClose: () => void;
 }) {
   return (
-    <Modal
+    <ConfirmDialog
       open
-      size="sm"
+      onClose={onClose}
+      onConfirm={onConfirm}
       title={title}
-      onClose={busy ? () => {} : onClose}
-      footer={
-        <>
-          <Button variant="outline" onClick={onClose} disabled={busy}>
-            Cancel
-          </Button>
-          <Button variant={danger ? 'danger' : 'primary'} onClick={onConfirm} loading={busy} disabled={busy}>
-            {confirmLabel}
-          </Button>
-        </>
-      }
-    >
-      <div className="text-sm text-content-soft">{message}</div>
-    </Modal>
+      description={message}
+      confirmLabel={confirmLabel}
+      tone={danger ? 'danger' : 'warning'}
+      loading={busy}
+    />
   );
 }
 

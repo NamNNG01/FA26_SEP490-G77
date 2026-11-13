@@ -5,7 +5,7 @@ import { Select } from '@/components/ui/Select';
 import { Table, type TableColumn } from '@/components/ui/Table';
 import { Badge } from '@/components/ui/Badge';
 import { Dropdown } from '@/components/ui/Dropdown';
-import { Modal } from '@/components/ui/Modal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Alert } from '@/components/ui/Alert';
 import { DEFAULT_PAGE_SIZE } from '@/components/ui/Pagination';
 import { useToast } from '@/components/ui/ToastHost';
@@ -340,18 +340,19 @@ export function FlashcardManagementPage() {
         />
       )}
 
-      <Modal open={!!toDelete} onClose={() => !deleting && setToDelete(null)} title="Delete deck?" size="sm"
-        footer={
-          <>
-            <Button variant="outline" onClick={() => setToDelete(null)} disabled={deleting}>Cancel</Button>
-            <Button variant="danger" onClick={confirmDelete} disabled={deleting}>{deleting ? 'Deleting…' : 'Delete'}</Button>
-          </>
-        }>
-        <p className="text-base text-content-secondary">
+      <ConfirmDialog
+        open={!!toDelete}
+        onClose={() => setToDelete(null)}
+        onConfirm={confirmDelete}
+        loading={deleting}
+        tone="danger"
+        title="Delete deck?"
+        description={<>
           <span className="font-semibold text-content">"{toDelete?.title}"</span> and its {toDelete?.cardCount ?? 0} card{toDelete?.cardCount === 1 ? '' : 's'} will
           be permanently deleted, together with every learner's progress on them. This cannot be undone.
-        </p>
-      </Modal>
+        </>}
+        confirmLabel="Delete"
+      />
     </div>
   );
 }

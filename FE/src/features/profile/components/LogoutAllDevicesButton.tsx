@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router';
 import { useAuth } from '@/auth/authContext';
 import { ROUTES } from '@/app/routes';
 import { Button } from '@/components/ui/Button';
-import { Modal } from '@/components/ui/Modal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Alert } from '@/components/ui/Alert';
 import { useToast } from '@/components/ui/ToastHost';
 import { Icon } from '@/assets/icons';
@@ -65,28 +65,17 @@ export function LogoutAllDevicesButton({ className = '' }: { className?: string 
         Logout All Devices
       </Button>
 
-      <Modal
+      <ConfirmDialog
         open={confirmOpen}
         onClose={closeConfirm}
-        title="Logout from All Devices"
-        size="sm"
+        onConfirm={handleConfirm}
+        loading={loading}
         error={error && <Alert type="error" title="Action failed" message={error} />}
-        footer={
-          <>
-            <Button variant="outline" onClick={closeConfirm} disabled={loading}>
-              Cancel
-            </Button>
-            <Button variant="danger" loading={loading} disabled={loading} onClick={handleConfirm}>
-              Logout All Devices
-            </Button>
-          </>
-        }
-      >
-        <p className="text-base text-muted-foreground leading-relaxed">
-          This will immediately sign you out from every device where you are currently logged in,
-          including this one.
-        </p>
-      </Modal>
+        tone="danger"
+        title="Log out from all devices?"
+        description="This will immediately sign you out from every device where you are currently logged in, including this one."
+        confirmLabel="Log out all"
+      />
     </>
   );
 }

@@ -8,11 +8,10 @@ import { Table } from "@/components/ui/Table";
 import { Tabs } from "@/components/ui/Tabs";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { Progress } from "@/components/ui/Progress";
-import { Alert } from "@/components/ui/Alert";
 import { useToast } from "@/components/ui/ToastHost";
-import { Modal } from "@/components/ui/Modal";
 import { Avatar } from "@/components/ui/Avatar";
 import { Dropdown } from "@/components/ui/Dropdown";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { SearchInput } from "@/components/common/SearchInput";
 import { Pagination } from "@/components/ui/Pagination";
 import { Icon } from "@/assets/icons";
@@ -1112,82 +1111,42 @@ export function CourseDetailPage({
         onSaved={handleModuleUpdated}
       />
 
-      <Modal
+      <ConfirmDialog
         open={!!moduleToDelete}
         onClose={() => setModuleToDelete(null)}
-        title="Remove Module"
-        footer={
+        onConfirm={handleRemoveModule}
+        loading={deletingModule}
+        tone="danger"
+        title="Remove this module?"
+        description={
           <>
-            <Button
-              variant="outline"
-              onClick={() => setModuleToDelete(null)}
-              disabled={deletingModule}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="danger"
-              onClick={handleRemoveModule}
-              loading={deletingModule}
-              disabled={deletingModule}
-            >
-              {deletingModule ? "Removing…" : "Remove Module"}
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-3">
-          <p className="text-base text-content-secondary">
-            Are you sure you want to remove the module{" "}
             <span className="font-semibold text-content">
               "{moduleToDelete?.title}"
-            </span>
-            ?
-          </p>
-          <Alert
-            type="warning"
-            message="Questions and exams belonging to this module will not be deleted; they will become unassigned so you can reassign them later."
-          />
-        </div>
-      </Modal>
-
-      <Modal
-        open={isDeleteCourseOpen}
-        onClose={() => setIsDeleteCourseOpen(false)}
-        title="Delete Course"
-        footer={
-          <>
-            <Button
-              variant="outline"
-              onClick={() => setIsDeleteCourseOpen(false)}
-              disabled={deletingCourse}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="danger"
-              onClick={handleDeleteCourse}
-              loading={deletingCourse}
-              disabled={deletingCourse}
-            >
-              {deletingCourse ? "Deleting…" : "Delete Course"}
-            </Button>
+            </span>{" "}
+            will be removed. Its questions and exams are not deleted — they
+            become unassigned so you can reassign them later.
           </>
         }
-      >
-        <div className="space-y-3">
-          <p className="text-base text-content-secondary">
-            Are you sure you want to permanently delete{" "}
-            <span className="font-semibold text-content">"{course.title}"</span>
-            ?
-          </p>
-          <Alert
-            type="error"
-            title="Destructive Action"
-            message="This action cannot be undone. Courses with enrolled students cannot be deleted; unpublish the course instead."
-          />
-        </div>
-      </Modal>
+        confirmLabel="Remove"
+      />
+
+      <ConfirmDialog
+        open={isDeleteCourseOpen}
+        onClose={() => setIsDeleteCourseOpen(false)}
+        onConfirm={handleDeleteCourse}
+        loading={deletingCourse}
+        tone="danger"
+        title="Delete this course?"
+        description={
+          <>
+            <span className="font-semibold text-content">"{course.title}"</span>{" "}
+            will be permanently deleted. This action cannot be undone. Courses
+            with enrolled students cannot be deleted; unpublish the course
+            instead.
+          </>
+        }
+        confirmLabel="Delete"
+      />
     </div>
   );
 }

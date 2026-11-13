@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Alert } from "@/components/ui/Alert";
 import { Icon } from "@/assets/icons";
 import { useToast } from "@/components/ui/ToastHost";
@@ -2253,45 +2254,27 @@ export function ExamFormPage({
         />
       )}
 
-      <Modal
+      <ConfirmDialog
         open={removeConfirmTarget !== null}
         onClose={() => setRemoveConfirmTarget(null)}
-        title="Confirm Removal"
-        size="sm"
-        footer={
-          <div className="flex items-center justify-end gap-2 w-full">
-            <Button
-              variant="outline"
-              onClick={() => setRemoveConfirmTarget(null)}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="danger"
-              onClick={() => {
-                if (removeConfirmTarget?.type === "question") {
-                  handleRemoveQuestion(removeConfirmTarget.examQuestionId);
-                } else if (removeConfirmTarget?.type === "group") {
-                  handleRemoveGroup(removeConfirmTarget.examGroupId);
-                }
-              }}
-            >
-              Confirm Remove
-            </Button>
-          </div>
+        onConfirm={() => {
+          if (removeConfirmTarget?.type === "question") {
+            handleRemoveQuestion(removeConfirmTarget.examQuestionId);
+          } else if (removeConfirmTarget?.type === "group") {
+            handleRemoveGroup(removeConfirmTarget.examGroupId);
+          }
+        }}
+        tone="danger"
+        title="Remove from this exam?"
+        description={
+          <>
+            <strong className="text-content">"{removeConfirmTarget?.title}"</strong>{" "}
+            is only unlinked from this exam. The original item in the Question
+            Bank is preserved.
+          </>
         }
-      >
-        <div className="space-y-2 text-sm text-content">
-          <p>
-            Are you sure you want to remove{" "}
-            <strong>"{removeConfirmTarget?.title}"</strong> from this exam?
-          </p>
-          <p className="text-xs text-content-subtle">
-            Note: This only unlinks the item from this exam. The original item
-            in the Question Bank is preserved.
-          </p>
-        </div>
-      </Modal>
+        confirmLabel="Remove"
+      />
 
       <Modal
         open={archiveCloneModalOpen}
@@ -2343,33 +2326,16 @@ export function ExamFormPage({
         </div>
       </Modal>
 
-      <Modal
+      <ConfirmDialog
         open={leaveConfirmOpen}
         onClose={() => setLeaveConfirmOpen(false)}
-        title="Unsaved Changes"
-        size="sm"
-        footer={
-          <div className="flex items-center justify-end gap-2 w-full">
-            <Button
-              variant="outline"
-              onClick={() => setLeaveConfirmOpen(false)}
-            >
-              Continue Editing
-            </Button>
-            <Button
-              variant="danger"
-              onClick={() => navigate(ROUTES.managerExams)}
-            >
-              Discard Changes
-            </Button>
-          </div>
-        }
-      >
-        <p className="text-sm text-content">
-          You have unsaved changes in this exam form. Are you sure you want to
-          leave?
-        </p>
-      </Modal>
+        onConfirm={() => navigate(ROUTES.managerExams)}
+        tone="danger"
+        title="Discard unsaved changes?"
+        description="You have unsaved changes in this exam form. If you leave now, they will be lost."
+        cancelLabel="Keep editing"
+        confirmLabel="Discard"
+      />
     </div>
   );
 }
