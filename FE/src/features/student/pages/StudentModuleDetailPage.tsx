@@ -27,7 +27,15 @@ import {
   useOpenContent,
 } from '../components/courseContent';
 import { ModulePracticeModal } from '../components/ModulePracticeModal';
-import { moduleProgress, type ProgressPart, type ProgressPartKey } from '../components/courseProgress';
+import { Progress } from '@/components/ui/Progress';
+import {
+  beModuleProgress,
+  moduleProgress,
+  useBeCourseProgress,
+  type LearningProgress,
+  type ProgressPart,
+  type ProgressPartKey,
+} from '../components/courseProgress';
 
 type KindFilter = 'all' | 'exam' | 'deck';
 
@@ -247,26 +255,37 @@ function ModuleContent({
     return items.filter(item => (kind === 'all' || item.kind === kind) && (!q || contentTitle(item).toLowerCase().includes(q)));
   }, [items, kind, search]);
 
+  // LP-01, reread after a practice reset; the same numbers as this module's card on the course page.
+  const be = useBeCourseProgress(course.courseId, refresh);
   const practice = overview != null && overview !== 'error' ? overview : null;
-  // Same numbers as this module's card on the course page; the items must be in first.
-  const progress = practice && !contentLoading && !contentError ? moduleProgress(practice, items) : null;
+  // LP-01 failed: worked out from MP-01 and the items instead, once both are in.
+  const fallback = be === 'error' && practice && !contentLoading && !contentError ? moduleProgress(practice, items) : null;
+  const progress: LearningProgress | null =
+    be && be !== 'error' ? beModuleProgress(be, moduleId == null ? GENERAL_MODULE : String(moduleId)) ?? { percent: null, parts: [] } : fallback;
+  const progressLoading = be === undefined || (be === 'error' && (overview === undefined || (practice != null && contentLoading)));
   const active = practice?.activeSession?.status === 'IN_PROGRESS' ? practice.activeSession : null;
 
   return (
     <>
       <ModuleHeader title={title} description={description}>
         <div className="space-y-4">
-          {overview === undefined || (practice && contentLoading) ? (
+          {progressLoading ? (
             <Skeleton className="h-16 w-full" />
-          ) : practice ? (
-            <>
-              {progress &&
-                (progress.parts.length > 0 ? (
-                  <ProgressCards parts={progress.parts} />
-                ) : (
-                  <p className="text-sm text-content-subtle">Nothing to track yet.</p>
-                ))}
-            </>
+          ) : progress ? (
+            progress.parts.length > 0 ? (
+              <>
+                <div className="space-y-1.5">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="text-sm font-medium text-content-secondary">Module progress</span>
+                    <span className="text-lg font-bold text-primary">{progress.percent ?? 0}%</span>
+                  </div>
+                  <Progress value={progress.percent ?? 0} size="sm" />
+                </div>
+                <ProgressCards parts={progress.parts} />
+              </>
+            ) : (
+              <p className="text-sm text-content-subtle">Nothing to track yet.</p>
+            )
           ) : (
             <p className="text-sm text-content-subtle">Module progress could not be loaded.</p>
           )}

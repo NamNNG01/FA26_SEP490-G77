@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router';
 import { Button } from '@/components/ui/Button';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
@@ -18,6 +18,7 @@ import {
   type StudentDeckView,
   type ViewerCard,
 } from '@/services/studentDeck.service';
+import { studentProgressService } from '@/services/studentProgress.service';
 import { LoadError, STUDENT_PAGE_CLASS, formatDateTime } from '../components/studentUi';
 import type { DeckStudyState } from '../components/DeckCard';
 import { CardFace, ConfirmModal, DeckModeBadge, DeckStatusBadge, plural } from '../components/flashcards/flashcardUi';
@@ -80,6 +81,17 @@ export function StudentDeckStudyPage() {
   const [busy, setBusy] = useState(false);
   const [exporting, setExporting] = useState<'xlsx' | 'pdf' | null>(null);
   const study = useDeckStudy(deckId, setProgress);
+
+  // A course deck counts towards the course's progress once every card is learned: when that flips
+  // (learned in full, or reset), LP-01 stores the course's new percent. The first reading only records.
+  const progressCourseId = deck?.courseId ?? state?.courseId ?? null;
+  const deckComplete = progress ? progress.total > 0 && progress.learned >= progress.total : null;
+  const lastComplete = useRef<boolean | null>(null);
+  useEffect(() => {
+    if (deckComplete == null) return;
+    if (lastComplete.current != null && lastComplete.current !== deckComplete) studentProgressService.syncCourseProgress(progressCourseId);
+    lastComplete.current = deckComplete;
+  }, [deckComplete, progressCourseId]);
 
   useEffect(() => {
     let cancelled = false;

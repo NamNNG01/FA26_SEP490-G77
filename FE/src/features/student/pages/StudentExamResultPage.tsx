@@ -71,8 +71,8 @@ function outcomeOf(q: ResultQuestion): Outcome {
   return 'incorrect';
 }
 
-/** Rubric answers get rubric feedback, not an explanation. */
-const hasExplanation = (q: ResultQuestion) => !RUBRIC_TYPES.has(q.questionType);
+/** Essay / diagram answers get rubric feedback, not an explanation; CODE gets both. */
+const hasExplanation = (q: ResultQuestion) => q.questionType === 'CODE' || !RUBRIC_TYPES.has(q.questionType);
 
 /** SE-01 takes at most 20 question ids per call. */
 const EXPLAIN_BATCH = 20;
@@ -1069,6 +1069,17 @@ function ResultQuestionCard({
             {gradeDetail}
           </div>
           </div>
+          {hasExplanation(q) && (
+            <div className="mt-4">
+              <ExplanationBox
+                question={q}
+                state={explanation}
+                open={explanationOpen}
+                onToggle={onToggleExplanation}
+                onRetry={onRetryExplanation}
+              />
+            </div>
+          )}
         </div>
       ) : (
       /* Answers are always shown; only the explanation is collapsible. */

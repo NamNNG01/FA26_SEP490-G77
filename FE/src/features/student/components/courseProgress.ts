@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { modulePracticeService, type ModulePracticeOverview, type PracticeScope } from '@/services/modulePractice.service';
 import type { StudentCourseDetail } from '@/services/studentCourse.service';
+import { studentProgressService, type CourseProgress, type ProgressCount } from '@/services/studentProgress.service';
 import { GENERAL_MODULE, sortedModules, useCourseContent, type ContentItem } from './courseContent';
 
 /**
@@ -12,8 +13,11 @@ import { GENERAL_MODULE, sortedModules, useCourseContent, type ContentItem } fro
  *  - exams: course exams submitted at least once (graded or still waiting for the AI);
  *  - decks: flashcard decks with every card learned.
  * The module's percent is the plain average of its parts; the course's is the plain average of its
- * modules (General included when it has content). Worked out here from MP-01 / MC-02 / MC-03 until
- * the BE sends it (docs/notes/student-course-progress-be-gap.md).
+ * modules (General included when it has content).
+ *
+ * The numbers come from LP-01, which the BE works out live (and stores on the enrollment, so CL-02,
+ * My Courses and the dashboard agree). The same sums are worked out here from MP-01 / MC-02 / MC-03
+ * only as a fallback when LP-01 fails.
  */
 
 export type ProgressPartKey = 'questions' | 'exams' | 'decks';
@@ -70,6 +74,48 @@ export function courseProgress(modules: LearningProgress[]): LearningProgress {
 
 export type OverviewState = ModulePracticeOverview | 'error' | undefined;
 export type ProgressState = LearningProgress | 'error' | undefined;
+export type BeProgressState = CourseProgress | 'error' | undefined;
+
+/** An LP-01 scope (course, module or General) as a LearningProgress: only the parts it has. */
+function fromBe(percent: number | null, counts: Record<ProgressPartKey, ProgressCount | null>): LearningProgress {
+  const order: ProgressPartKey[] = ['questions', 'exams', 'decks'];
+  const parts = order
+    .map(key => ({ key, done: counts[key]?.done ?? 0, total: counts[key]?.total ?? 0 }))
+    .filter(p => p.total > 0);
+  return { percent, parts };
+}
+
+/** LP-01's course total. */
+export const beCourseProgress = (p: CourseProgress): LearningProgress =>
+  fromBe(p.progress, { questions: p.questions, exams: p.exams, decks: p.decks });
+
+/** LP-01's entry for a module (`GENERAL_MODULE` = the General pool); null when LP-01 has none, i.e. nothing to count. */
+export function beModuleProgress(p: CourseProgress, key: string): LearningProgress | null {
+  const m = p.modules.find(x => (x.moduleId == null ? GENERAL_MODULE : String(x.moduleId)) === key);
+  return m ? fromBe(m.progress, { questions: m.questions, exams: m.exams, decks: m.decks }) : null;
+}
+
+/** LP-01 of the course; reread when `refresh` changes. undefined while loading. */
+export function useBeCourseProgress(courseId: number | string | null | undefined, refresh = 0): BeProgressState {
+  const [state, setState] = useState<BeProgressState>(undefined);
+  useEffect(() => {
+    if (courseId == null || courseId === '') return;
+    let cancelled = false;
+    setState(undefined);
+    studentProgressService
+      .getCourseProgress(courseId)
+      .then(p => {
+        if (!cancelled) setState(p);
+      })
+      .catch(() => {
+        if (!cancelled) setState('error');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [courseId, refresh]);
+  return state;
+}
 
 /** A module's progress once its practice overview is read. */
 export const progressOf = (overview: OverviewState, items: ContentItem[]): ProgressState =>
@@ -99,6 +145,7 @@ function loadOverview(
  */
 export function useCourseProgress(course: StudentCourseDetail | null) {
   const content = useCourseContent(course);
+  const be = useBeCourseProgress(course?.courseId);
   const { byModule, general } = content;
   // Keyed by moduleId, plus GENERAL_MODULE for the course's General pool.
   const [overviews, setOverviews] = useState<Record<string, OverviewState>>({});
@@ -132,14 +179,22 @@ export function useCourseProgress(course: StudentCourseDetail | null) {
       ...modules.map((m): [string, ProgressState] => [String(m.moduleId), progressOf(overviews[m.moduleId], byModule.get(m.moduleId) ?? [])]),
       [GENERAL_MODULE, progressOf(overviews[GENERAL_MODULE], general)],
     ];
+    // LP-01 in: its numbers win; a module it leaves out has nothing to count.
+    if (be && be !== 'error') {
+      return {
+        byKey: Object.fromEntries(entries.map(([key]) => [key, beModuleProgress(be, key) ?? { percent: null, parts: [] }])) as Record<string, ProgressState>,
+        course: beCourseProgress(be),
+        partial: false,
+      };
+    }
     const states = entries.map(([, s]) => s);
-    const ready = !content.loading && !content.error && states.every(s => s !== undefined);
+    const ready = be === 'error' && !content.loading && !content.error && states.every(s => s !== undefined);
     return {
       byKey: Object.fromEntries(entries) as Record<string, ProgressState>,
       course: ready ? courseProgress(states.filter((s): s is LearningProgress => s !== undefined && s !== 'error')) : undefined,
-      partial: states.includes('error'),
+      partial: be === 'error' && states.includes('error'),
     };
-  }, [modules, overviews, byModule, general, content.loading, content.error]);
+  }, [modules, overviews, byModule, general, content.loading, content.error, be]);
 
   /** Modules shown on the course page: the course's own, plus General when it holds anything. */
   const moduleCount = modules.length + (hasGeneral ? 1 : 0);
