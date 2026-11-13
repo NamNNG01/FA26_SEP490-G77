@@ -78,6 +78,9 @@ export function toQuestionDetail(detail: any): QuestionDetail {
     options: question.options ?? [],
     createdAt: null,
     updatedAt: null,
+    // CODE settings, when the ticket sends them; without them the editor shows the defaults.
+    codeConfig: question.codeConfig ?? null,
+    testCases: question.testCases ?? null,
   };
 }
 
