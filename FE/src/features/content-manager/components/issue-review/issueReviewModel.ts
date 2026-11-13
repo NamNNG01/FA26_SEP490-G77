@@ -125,6 +125,15 @@ export function buildResolution(type: ResolutionType, draft: QuestionDraft, cour
         return { ok: false, message: 'Review the answer fields before resolving this ticket.', showFieldErrors: true };
       }
       const request = toCreateRequest(draft, courseId, null);
+      if (draft.type === 'CODE') {
+        return {
+          ok: true,
+          changes: {
+            codeConfig: request.codeConfig,
+            testCases: request.testCases ?? [],
+          },
+        };
+      }
       return { ok: true, changes: { options: request.options ?? [], answerKey: request.answerKey ?? null } };
     }
     case 'RUBRIC_CORRECTED': {
@@ -148,6 +157,7 @@ export function buildResolution(type: ResolutionType, draft: QuestionDraft, cour
           answerKey: request.answerKey ?? null,
           questionMetadata: request.questionMetadata,
           essayGradingRubric: request.essayGradingRubric,
+          ...(draft.type === 'CODE' ? { codeConfig: request.codeConfig, testCases: request.testCases ?? [] } : {}),
         },
       };
     }
