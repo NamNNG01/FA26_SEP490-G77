@@ -3,7 +3,6 @@ import { Alert } from '@/components/ui/Alert';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
-import { MultiSelect } from '@/components/ui/MultiSelect';
 import { Spinner } from '@/components/ui/Spinner';
 import { useToast } from '@/components/ui/ToastHost';
 import { Icon } from '@/assets/icons';
@@ -69,11 +68,6 @@ function aiErrorMessage(err: unknown): string {
   return e?.message || 'Could not generate questions. Please try again.';
 }
 
-/** `n` split as evenly as possible over `keys` (5 over Easy + Hard → 3 Easy, 2 Hard). */
-function spread<K extends string>(keys: K[], n: number): Partial<Record<K, number>> {
-  return Object.fromEntries(keys.map((k, i) => [k, Math.floor(n / keys.length) + (i < n % keys.length ? 1 : 0)])) as Partial<Record<K, number>>;
-}
-
 interface Preview {
   /** Stable across regenerations (the draft's key changes). */
   id: string;
@@ -127,7 +121,7 @@ export const AiGeneratePanel = forwardRef<AiGeneratePanelHandle, {
   const typeOptions = allowedTypes ? AI_QUESTION_TYPE_OPTIONS.filter(o => allowedTypes.includes(o.value)) : AI_QUESTION_TYPE_OPTIONS;
   const [typeCounts, setTypeCounts] = useState<TypeCounts<QuestionType>>({ SINGLE_CHOICE: String(DEFAULT_COUNT) });
   const [context, setContext] = useState('');
-  const [difficulties, setDifficulties] = useState<QuestionDifficulty[]>(['MEDIUM']);
+  const [difficultyCounts, setDifficultyCounts] = useState<TypeCounts<QuestionDifficulty>>({ MEDIUM: String(DEFAULT_COUNT) });
   const [language, setLanguage] = useState<Language>('English');
   const [showErrors, setShowErrors] = useState(false);
 
@@ -165,17 +159,34 @@ export const AiGeneratePanel = forwardRef<AiGeneratePanelHandle, {
   const countsValid = counts.length > 0 && counts.every(([, n]) => Number.isInteger(n) && n >= MIN_COUNT && n <= MAX_COUNT);
   const total = countsValid ? counts.reduce((sum, [, n]) => sum + n, 0) : 0;
 
+  const levels = Object.entries(difficultyCounts).map(([d, c]) => [d as QuestionDifficulty, Number(c)] as const);
+  const levelsValid = levels.length > 0 && levels.every(([, n]) => Number.isInteger(n) && n >= MIN_COUNT && n <= MAX_TOTAL);
+  const levelTotal = levelsValid ? levels.reduce((sum, [, n]) => sum + n, 0) : 0;
+
+  // One difficulty picked: it can only be the whole run, so it follows the types' total.
+  const levelKeys = Object.keys(difficultyCounts) as QuestionDifficulty[];
+  const onlyLevel = levelKeys.length === 1 ? levelKeys[0] : undefined;
+  useEffect(() => {
+    if (onlyLevel && total) setDifficultyCounts(prev => (prev[onlyLevel] === String(total) ? prev : { [onlyLevel]: String(total) }));
+  }, [onlyLevel, total]);
+
   const contextError = showErrors && !context.trim() ? 'Describe what the questions should be about.' : undefined;
   const typesError = !showErrors ? undefined
     : !counts.length ? 'Pick at least one question type.'
     : !countsValid ? `Enter a number from ${MIN_COUNT} to ${MAX_COUNT} for each type.`
     : undefined;
-  const difficultiesError = showErrors && !difficulties.length ? 'Pick at least one difficulty.' : undefined;
+  const difficultiesError = !showErrors ? undefined
+    : !levels.length ? 'Pick at least one difficulty.'
+    : !levelsValid ? `Enter a number from ${MIN_COUNT} to ${MAX_TOTAL} for each difficulty.`
+    : undefined;
   const totalError = total > MAX_TOTAL ? `At most ${MAX_TOTAL} questions per run — lower the numbers or pick fewer types.` : undefined;
+  const mismatchError = total > 0 && levelsValid && levelTotal !== total
+    ? `The difficulties add up to ${levelTotal} but the question types to ${total} — make them match.`
+    : undefined;
 
   const generate = async () => {
     setShowErrors(true);
-    if (!courseId || !moduleId || !context.trim() || !total || !difficulties.length || totalError) return;
+    if (!courseId || !moduleId || !context.trim() || !total || !levelsValid || totalError || mismatchError) return;
 
     abortRef.current?.abort();
     abortRegenerations();
@@ -190,7 +201,7 @@ export const AiGeneratePanel = forwardRef<AiGeneratePanelHandle, {
         courseId: Number(courseId),
         moduleId: Number(moduleId),
         questionTypeCounts: Object.fromEntries(counts),
-        difficultyCounts: spread(difficulties, total),
+        difficultyCounts: Object.fromEntries(levels),
         topic: context.trim(),
         language,
       };
@@ -324,18 +335,29 @@ export const AiGeneratePanel = forwardRef<AiGeneratePanelHandle, {
             error={typesError}
             disabled={generating}
           />
-          <MultiSelect label="Difficulties" value={difficulties} onChange={setDifficulties} options={DIFFICULTY_OPTIONS} placeholder="Pick difficulties" error={difficultiesError} disabled={generating} />
+          <TypeCountSelect
+            label="Difficulties & number of each"
+            value={difficultyCounts}
+            onChange={setDifficultyCounts}
+            options={DIFFICULTY_OPTIONS}
+            min={MIN_COUNT}
+            max={MAX_TOTAL}
+            // A newly picked difficulty starts with what is still missing from the total.
+            defaultCount={Math.max(MIN_COUNT, total - levelTotal)}
+            placeholder="Pick difficulties"
+            header={`Questions per difficulty (${MIN_COUNT}–${MAX_TOTAL})`}
+            error={difficultiesError}
+            disabled={generating}
+          />
           <Select label="Language" value={language} onChange={v => setLanguage(v as Language)} options={LANGUAGE_OPTIONS} disabled={generating} />
         </div>
 
-        {total > 0 && difficulties.length > 0 && (
-          <p className={`text-xs ${totalError ? 'text-danger' : 'text-content-soft'}`}>
-            {totalError ?? (
+        {total > 0 && levels.length > 0 && (
+          <p className={`text-xs ${totalError || mismatchError ? 'text-danger' : 'text-content-soft'}`}>
+            {totalError ?? mismatchError ?? (
               <>
                 Will generate <span className="font-medium text-content-secondary">{total} question{total === 1 ? '' : 's'}</span>
-                {difficulties.length > 1 && (
-                  <> — {Object.entries(spread(difficulties, total)).filter(([, n]) => n).map(([d, n]) => `${n} ${difficultyLabel(d)}`).join(', ')}</>
-                )}.
+                {levels.length > 1 && <> — {levels.map(([d, n]) => `${n} ${difficultyLabel(d)}`).join(', ')}</>}.
               </>
             )}
           </p>
