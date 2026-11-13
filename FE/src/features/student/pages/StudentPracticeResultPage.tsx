@@ -470,6 +470,17 @@ function PracticeQuestionCard({
               </div>
             )}
           </div>
+          {/* Essay / diagram get rubric feedback only; CODE is also explained (MP-09). */}
+          {q.questionType === 'CODE' && graded && (
+            <div className="mt-4">
+              <PracticeExplanation
+                questionId={q.questionId}
+                sessionId={sessionId}
+                sessionQuestionId={q.sessionQuestionId}
+                practiceAnswerId={latest.practiceAnswerId}
+              />
+            </div>
+          )}
         </div>
       ) : (
         <div className="border-t border-line px-4 py-4 space-y-4">
