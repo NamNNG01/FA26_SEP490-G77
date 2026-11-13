@@ -388,33 +388,13 @@ public class QuestionServiceImpl implements QuestionService {
         } else if (q.getModule() == null) {
             throw new BadRequestException("Module ID is required");
         }
-        if (req.getGroupId() == null) {
-            q.setGroup(null);
-        } else {
-            QuestionGroup group = questionGroupRepository.findById(req.getGroupId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Question group not found"));
-
-            if (q.getCourse() != null
-                    && (group.getCourse() == null
-                    || !q.getCourse().getCourseId().equals(group.getCourse().getCourseId()))) {
-                throw new ResourceConflictException("Question group must belong to the same course");
-            }
-
-            if (q.getModule() != null
-                    && (group.getModule() == null
-                    || !q.getModule().getModuleId().equals(group.getModule().getModuleId()))) {
-                throw new ResourceConflictException("Question group must belong to the same module");
-            }
-
-            q.setGroup(group);
-        }
         if (req.getLockVersion() != null && !req.getLockVersion().equals(q.getLockVersion())) {
             throw new ResourceConflictException("Resource was modified by another user (lock version mismatch)");
         }
 
         QuestionGroup targetGroup = req.isGroupIdPresent() && req.getGroupId() == null ? null : q.getGroup();
         if (req.getGroupId() != null) {
-            targetGroup =questionGroupRepository.findById(req.getGroupId())
+            targetGroup = questionGroupRepository.findById(req.getGroupId())
                     .orElseThrow(() -> new ResourceNotFoundException("Question group not found"));
 
             Long questionCourseId = q.getCourse() == null ? null : q.getCourse().getCourseId();
@@ -470,6 +450,15 @@ public class QuestionServiceImpl implements QuestionService {
         String difficultyToValidate = req.getDifficulty() != null ? req.getDifficulty() : q.getDifficulty();
         String statusToValidate = req.getStatus() != null ? req.getStatus() : q.getStatus();
 
+        // CODE settings live in their own tables; an update that only touches content/explanation
+        // must still validate against the stored config and test cases, not against null.
+        CodeConfigDto codeConfigToValidate = null;
+        List<TestCaseDto> testCasesToValidate = null;
+        if ("CODE".equals(typeToValidate)) {
+            codeConfigToValidate = req.getCodeConfig() != null ? req.getCodeConfig() : codeConfigOf(q);
+            testCasesToValidate = req.getTestCases() != null ? req.getTestCases() : testCasesOf(q);
+        }
+
         QuestionPayload payload = QuestionPayload.builder()
                 .questionType(typeToValidate)
                 .difficulty(difficultyToValidate)
@@ -479,6 +468,8 @@ public class QuestionServiceImpl implements QuestionService {
                 .answerKey(answerKeyToValidate)
                 .essayGradingRubric(rubricToValidate)
                 .options(optionsToValidate)
+                .codeConfig(codeConfigToValidate)
+                .testCases(testCasesToValidate)
                 .build();
 
         questionValidator.validateOrThrow(payload);
@@ -509,7 +500,8 @@ public class QuestionServiceImpl implements QuestionService {
             validateMetadataKeys(req.getQuestionMetadata());
             String metaJson = serializeJson(req.getQuestionMetadata(), "questionMetadata");
             if (!metaJson.equals(q.getQuestionMetadata())) {
-                if ("DIAGRAM".equals(typeToValidate) && diagramXmlChanged(q.getQuestionMetadata(), metaJson)) {
+                if (("DIAGRAM".equals(typeToValidate) || "DIAGRAM_ESSAY".equals(typeToValidate))
+                        && diagramXmlChanged(q.getQuestionMetadata(), metaJson)) {
                     scoreAffectingChanged = true;
                 }
                 q.setQuestionMetadata(metaJson);
@@ -837,6 +829,9 @@ public class QuestionServiceImpl implements QuestionService {
             }
             List<AnswerOption> options = answerOptionRepository.findByQuestion_QuestionId(q.getQuestionId());
             QuestionPayload payload = QuestionPayload.fromEntity(q, options, objectMapper);
+            // CODE settings are stored in separate tables; load them so activation validates the real data.
+            payload.setCodeConfig(codeConfigOf(q));
+            payload.setTestCases(testCasesOf(q));
             questionValidator.validateOrThrow(payload);
         } else if ("ACTIVE".equals(currentStatus) && "ARCHIVED".equals(newStatus)) {
             // Allowed: ACTIVE -> ARCHIVED
@@ -872,19 +867,34 @@ public class QuestionServiceImpl implements QuestionService {
 
 
     private void saveCodeConfigAndTestCases(Question q, CodeConfigDto cfgDto, List<TestCaseDto> tcDtos) {
-        String allowedLangsJson = cfgDto != null && cfgDto.getAllowedLanguages() != null ? serializeJson(cfgDto.getAllowedLanguages(), "allowedLanguages") : null;
+        CodeQuestionConfig existing = codeQuestionConfigRepository.findById(q.getQuestionId()).orElse(null);
+
+        // A partial update (only codeConfig or only testCases) must not reset the other half.
+        String allowedLangsJson = cfgDto != null && cfgDto.getAllowedLanguages() != null
+                ? serializeJson(cfgDto.getAllowedLanguages(), "allowedLanguages")
+                : existing != null ? existing.getAllowedLanguages() : null;
+        String codeTemplate = cfgDto != null && cfgDto.getCodeTemplate() != null
+                ? cfgDto.getCodeTemplate()
+                : existing != null ? existing.getCodeTemplate() : null;
+        Integer timeLimitMs = cfgDto != null && cfgDto.getTimeLimitMs() != null
+                ? cfgDto.getTimeLimitMs()
+                : existing != null && existing.getTimeLimitMs() != null ? existing.getTimeLimitMs() : 5000;
+        Integer memoryLimitKb = cfgDto != null && cfgDto.getMemoryLimitKb() != null
+                ? cfgDto.getMemoryLimitKb()
+                : existing != null && existing.getMemoryLimitKb() != null ? existing.getMemoryLimitKb() : 262144;
+
         CodeQuestionConfig config = CodeQuestionConfig.builder()
                 .questionId(q.getQuestionId())
                 .allowedLanguages(allowedLangsJson)
-                .codeTemplate(cfgDto != null ? cfgDto.getCodeTemplate() : null)
-                .timeLimitMs(cfgDto != null && cfgDto.getTimeLimitMs() != null ? cfgDto.getTimeLimitMs() : 5000)
-                .memoryLimitKb(cfgDto != null && cfgDto.getMemoryLimitKb() != null ? cfgDto.getMemoryLimitKb() : 262144)
-                .createdAt(Instant.now())
+                .codeTemplate(codeTemplate)
+                .timeLimitMs(timeLimitMs)
+                .memoryLimitKb(memoryLimitKb)
+                .createdAt(existing != null && existing.getCreatedAt() != null ? existing.getCreatedAt() : Instant.now())
                 .updatedAt(Instant.now())
                 .build();
         codeQuestionConfigRepository.save(config);
 
-        if (tcDtos != null && !tcDtos.isEmpty()) {
+        if (tcDtos != null) {
             codeTestCaseRepository.deleteAll(codeTestCaseRepository.findByQuestionQuestionIdOrderByOrderIndexAscTestCaseIdAsc(q.getQuestionId()));
             List<CodeTestCase> testCases = new ArrayList<>();
             int order = 0;

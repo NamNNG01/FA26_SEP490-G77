@@ -201,6 +201,51 @@ class QuestionIssueApiIntegrationTest {
         assertEquals(1, notifications(taker));
     }
 
+    @Test void regradeUsesTheKeyFrozenWhenTheJobWasCreated() throws Exception {
+        long id = report(taker);
+        send(patch(BASE + "/" + id + "/status"), manager, "{\"status\":\"IN_PROGRESS\"}").andExpect(status().isOk());
+        String flipped = "{\"options\":[{\"optionId\":" + wrong.getOptionId() + ",\"optionText\":\"wrong\",\"isCorrect\":true,\"orderIndex\":1},"
+                + "{\"optionId\":" + right.getOptionId() + ",\"optionText\":\"right\",\"isCorrect\":false,\"orderIndex\":2}]}";
+        JsonNode resolved = data(send(post(BASE + "/" + id + "/resolve"), manager,
+                "{\"resolutionType\":\"ANSWER_CORRECTED\",\"resolutionNote\":\"Key fixed\",\"expectedLockVersion\":"
+                        + question.getLockVersion() + ",\"changes\":" + flipped + "}").andExpect(status().isOk()));
+        long jobId = resolved.path("regradeJob").path("jobId").asLong();
+        int jobVersion = resolved.path("regradeJob").path("questionVersionTo").asInt();
+
+        // A later edit changes the live key again before the manager confirms the job.
+        wrong.setIsCorrect(false);
+        right.setIsCorrect(true);
+        question.setScoringVersion(question.getScoringVersion() + 1);
+        em.flush();
+
+        send(post(BASE + "/" + id + "/regrade/confirm"), manager,
+                "{\"jobId\":" + jobId + ",\"confirmed\":true,\"reason\":\"Use the frozen key\"}")
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.status").value("COMPLETED"));
+
+        AttemptAnswer after = f.reload(answer);
+        assertTrue(after.getIsCorrect(), "the frozen key marks the student's answer correct");
+        assertEquals(0, new BigDecimal("10.00").compareTo(after.getScoreEarned()));
+        assertEquals(jobVersion, after.getQuestionVersion(), "the answer is stamped with the job's target, not the newer live version");
+    }
+
+    @Test void resolvingAnotherTicketWaitsForThePendingRegrade() throws Exception {
+        long first = report(taker);
+        send(patch(BASE + "/" + first + "/status"), manager, "{\"status\":\"IN_PROGRESS\"}").andExpect(status().isOk());
+        String flipped = "{\"options\":[{\"optionId\":" + wrong.getOptionId() + ",\"optionText\":\"wrong\",\"isCorrect\":true,\"orderIndex\":1},"
+                + "{\"optionId\":" + right.getOptionId() + ",\"optionText\":\"right\",\"isCorrect\":false,\"orderIndex\":2}]}";
+        send(post(BASE + "/" + first + "/resolve"), manager,
+                "{\"resolutionType\":\"ANSWER_CORRECTED\",\"resolutionNote\":\"Key fixed\",\"expectedLockVersion\":"
+                        + question.getLockVersion() + ",\"changes\":" + flipped + "}").andExpect(status().isOk());
+
+        long second = report(taker);
+        send(patch(BASE + "/" + second + "/status"), manager, "{\"status\":\"IN_PROGRESS\"}").andExpect(status().isOk());
+        send(post(BASE + "/" + second + "/resolve"), manager,
+                "{\"resolutionType\":\"ANSWER_CORRECTED\",\"resolutionNote\":\"Another key fix\",\"changes\":" + flipped + "}")
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.data.code").value("REGRADE_ALREADY_PENDING"));
+        assertEquals(2, f.reload(question).getScoringVersion(), "the rejected correction must roll back");
+    }
+
     @Test void voidedQuestionGivesFullPointsOrCanBeCancelled() throws Exception {
         long id = report(taker);
         JsonNode job = data(send(post(BASE + "/" + id + "/resolve"), manager, "{\"resolutionType\":\"QUESTION_VOIDED\",\"resolutionNote\":\"Ambiguous wording\"}")

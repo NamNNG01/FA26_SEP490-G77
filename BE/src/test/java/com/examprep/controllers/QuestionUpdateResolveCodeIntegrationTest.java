@@ -24,6 +24,7 @@ import java.util.List;
 
 import static com.examprep.controllers.student.Fixtures.as;
 import static org.junit.jupiter.api.Assertions.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -228,6 +229,102 @@ class QuestionUpdateResolveCodeIntegrationTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.data[?(@.path=='testCases')]").exists());
+    }
+
+    @Test
+    void activatingACodeQuestionWithStoredConfigAndTestCasesSucceeds() throws Exception {
+        Question q = persistCodeQuestion("INACTIVE", "Ready to publish");
+        em.flush();
+
+        JsonNode activated = data(send(patch("/api/v1/manager/questions/" + q.getQuestionId() + "/status"), manager,
+                "{\"status\":\"ACTIVE\"}").andExpect(status().isOk()));
+
+        assertEquals("ACTIVE", activated.path("status").asText());
+        assertEquals("ACTIVE", f.reload(q).getStatus());
+    }
+
+    @Test
+    void resolvingCodeQuestionWithAnswerCorrectionUpdatesConfigAndTestCases() throws Exception {
+        Question q = persistCodeQuestion("ACTIVE", "Sum two integers");
+        em.flush();
+
+        long issueId = data(send(post("/api/v1/student/question-issues"), student,
+                "{\"questionId\":" + q.getQuestionId()
+                        + ",\"issueType\":\"WRONG_ANSWER\",\"description\":\"The test cases are wrong\"}"))
+                .path("issueId").asLong();
+
+        String changes = """
+                {
+                  "codeConfig": {
+                    "allowedLanguages": ["JAVA"],
+                    "codeTemplate": "class Main { }",
+                    "timeLimitMs": 2000,
+                    "memoryLimitKb": 65536
+                  },
+                  "testCases": [
+                    { "inputData": "4 5", "expectedOutput": "9", "hidden": false, "orderIndex": 0 },
+                    { "inputData": "11 22", "expectedOutput": "33", "hidden": true, "orderIndex": 1 }
+                  ]
+                }
+                """;
+
+        JsonNode resolved = data(send(post("/api/v1/manager/question-issues/" + issueId + "/resolve"), manager,
+                "{\"resolutionType\":\"ANSWER_CORRECTED\",\"resolutionNote\":\"Fixed the test cases\","
+                        + "\"expectedLockVersion\":" + q.getLockVersion() + ",\"changes\":" + changes + "}")
+                .andExpect(status().isOk()));
+
+        assertEquals("RESOLVED", resolved.path("issue").path("status").asText());
+        CodeQuestionConfig cfg = em.find(CodeQuestionConfig.class, q.getQuestionId());
+        assertNotNull(cfg);
+        assertEquals("[\"JAVA\"]", cfg.getAllowedLanguages());
+        assertEquals("class Main { }", cfg.getCodeTemplate());
+        assertEquals(2000, cfg.getTimeLimitMs());
+        assertEquals(65536, cfg.getMemoryLimitKb());
+        List<CodeTestCase> cases = loadCases(q);
+        assertEquals(2, cases.size());
+        assertEquals("4 5", cases.get(0).getInputData());
+        assertEquals("33", cases.get(1).getExpectedOutput());
+    }
+
+    @Test
+    void resolvingCodeQuestionWithOtherCorrectionAcceptsCodeSettings() throws Exception {
+        Question q = persistCodeQuestion("ACTIVE", "Sum two integers");
+        em.flush();
+
+        long issueId = data(send(post("/api/v1/student/question-issues"), student,
+                "{\"questionId\":" + q.getQuestionId()
+                        + ",\"issueType\":\"OTHER\",\"description\":\"The whole code setup needs a cleanup\"}"))
+                .path("issueId").asLong();
+
+        String changes = """
+                {
+                  "content": "Sum two integers (clarified)",
+                  "explanation": "Add the two inputs.",
+                  "difficulty": "MEDIUM",
+                  "options": [],
+                  "questionMetadata": {},
+                  "codeConfig": {
+                    "allowedLanguages": ["JAVA"],
+                    "codeTemplate": "class Main { }",
+                    "timeLimitMs": 2000,
+                    "memoryLimitKb": 65536
+                  },
+                  "testCases": [
+                    { "inputData": "4 5", "expectedOutput": "9", "hidden": false, "orderIndex": 0 },
+                    { "inputData": "11 22", "expectedOutput": "33", "hidden": true, "orderIndex": 1 }
+                  ]
+                }
+                """;
+
+        JsonNode resolved = data(send(post("/api/v1/manager/question-issues/" + issueId + "/resolve"), manager,
+                "{\"resolutionType\":\"OTHER_CORRECTION\",\"resolutionNote\":\"Cleaned up the code setup\","
+                        + "\"expectedLockVersion\":" + q.getLockVersion() + ",\"changes\":" + changes + "}")
+                .andExpect(status().isOk()));
+
+        assertEquals("RESOLVED", resolved.path("issue").path("status").asText());
+        assertEquals("Sum two integers (clarified)", f.reload(q).getContent());
+        assertEquals("[\"JAVA\"]", em.find(CodeQuestionConfig.class, q.getQuestionId()).getAllowedLanguages());
+        assertEquals(2, loadCases(q).size());
     }
 
     private Question persistCodeQuestion(String status, String content) {

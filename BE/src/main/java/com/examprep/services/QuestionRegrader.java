@@ -69,8 +69,13 @@ public class QuestionRegrader {
         Question question = job.getQuestion();
         boolean voided = VOIDED.equals(job.getResolutionType());
         int to = job.getQuestionVersionTo();
-        Snapshots.KeySnapshot key = voided ? null : paperFactory.key(question, options.findByQuestion_QuestionId(question.getQuestionId()));
-        String keyJson = key == null ? null : paperFactory.write(key);
+        // Prefer the key frozen at creation. Legacy jobs have no snapshot and fall back to the live key.
+        String keyJson = voided ? null
+                : job.getKeySnapshot() != null ? job.getKeySnapshot() : keyJson(question);
+        Snapshots.KeySnapshot key = keyJson == null ? null : paperFactory.read(keyJson, Snapshots.KeySnapshot.class);
+        if (!voided && key == null) {
+            throw new IllegalStateException("Regrade job " + job.getJobId() + " has an unreadable key snapshot");
+        }
 
         List<AttemptAnswer> stale = jobs.staleAnswers(question.getQuestionId(), FINISHED, to);
         Map<ExamAttempt, List<AttemptAnswer>> byAttempt = new LinkedHashMap<>();
@@ -87,13 +92,29 @@ public class QuestionRegrader {
             BigDecimal maxScore = maxScore(attempt, rows.size());
             BigDecimal totalWeight = AttemptScoring.totalWeight(rows.stream().map(AttemptAnswer::getWeightSnapshot).toList());
             for (AttemptAnswer row : entry.getValue()) {
+                Outcome outcome;
                 try {
-                    regrade(job, row, question, key, keyJson, to, totalWeight, maxScore, now);
-                    done++;
+                    outcome = outcome(row, question, key, keyJson, totalWeight, maxScore);
                 } catch (RuntimeException e) {
                     log.warn("Regrade job {} failed on attempt answer {}", job.getJobId(), row.getAttemptAnswerId(), e);
                     failed++;
+                    continue;
                 }
+                // Write the audit row first and flush it, so an answer can never be bumped without a log.
+                // A database failure here is deliberately not swallowed: it rolls back the whole job instead
+                // of leaving half-applied answers that a retry would skip.
+                logs.saveAndFlush(AnswerRegradeLog.builder()
+                        .regradeJob(job).attemptAnswer(row).oldScore(row.getScoreEarned()).newScore(outcome.newScore())
+                        .questionVersionFrom(row.getQuestionVersion()).questionVersionTo(to).build());
+                row.setScoreEarned(outcome.newScore());
+                row.setIsCorrect(outcome.correct());
+                row.setGradingStatus(outcome.gradingStatus());
+                row.setGradingError(outcome.gradingError());
+                row.setKeySnapshot(outcome.keySnapshot());
+                row.setCheckResult(outcome.checkResult());
+                row.setQuestionVersion(to);
+                row.setGradedAt(now);
+                done++;
             }
             attempt.setTotalScore(AttemptScoring.output(AttemptScoring.sumScores(
                     rows.stream().map(AttemptAnswer::getScoreEarned).filter(Objects::nonNull).toList())));
@@ -101,9 +122,14 @@ public class QuestionRegrader {
                 attempt.setStatus("COMPLETED");
             }
         }
-        // Attempts still running keep their version (they are graded at submit) but grade with the fixed key.
+        // Attempts still running keep their version (they are graded at submit). They must use the
+        // newest key, not this job's frozen one: a later correction supersedes it for future submits.
         if (!voided) {
-            jobs.inProgressAnswers(question.getQuestionId()).forEach(r -> r.setKeySnapshot(keyJson));
+            List<AttemptAnswer> inProgress = jobs.inProgressAnswers(question.getQuestionId());
+            if (!inProgress.isEmpty()) {
+                String liveKeyJson = keyJson(question);
+                inProgress.forEach(r -> r.setKeySnapshot(liveKeyJson));
+            }
         }
 
         job.setProcessedAnswers(job.getProcessedAnswers() + done);
@@ -112,37 +138,30 @@ public class QuestionRegrader {
         job.setFinishedAt(now);
     }
 
-    /** {@code key} null = the question is voided. */
-    private void regrade(QuestionRegradeJob job, AttemptAnswer row, Question question, Snapshots.KeySnapshot key, String keyJson, int to,
-                         BigDecimal totalWeight, BigDecimal maxScore, Instant now) {
-        BigDecimal oldScore = row.getScoreEarned();
-        Integer from = row.getQuestionVersion();
+    /** Freezes the current answer key for a job created now. */
+    public String keyJson(Question question) {
+        return paperFactory.write(paperFactory.key(question, options.findByQuestion_QuestionId(question.getQuestionId())));
+    }
+
+    /** {@code key} null = the question is voided. Pure: it must not touch the managed answer. */
+    private Outcome outcome(AttemptAnswer row, Question question, Snapshots.KeySnapshot key, String keyJson,
+                            BigDecimal totalWeight, BigDecimal maxScore) {
         BigDecimal maxPoints = AttemptScoring.output(AttemptScoring.questionMaxPoints(row.getWeightSnapshot(), totalWeight, maxScore));
         if (key == null) {
-            row.setScoreEarned(maxPoints);
-            row.setIsCorrect(true);
-            row.setGradingStatus("AUTO");
-            row.setGradingError(null);
-        } else {
-            Snapshots.DisplayQuestion display = paperFactory.read(row.getDisplaySnapshot(), Snapshots.DisplayQuestion.class);
-            String type = display != null ? display.questionType() : question.getQuestionType();
-            row.setKeySnapshot(keyJson);
-            row.setCheckResult(null);
-            JsonNode response = paperFactory.readResponse(row.getResponse());
-            if (AnswerResponseValidator.isEmpty(response)) {
-                row.setScoreEarned(BigDecimal.ZERO);
-                row.setIsCorrect(false);
-            } else {
-                AttemptGrader.Grade grade = AttemptGrader.grade(type, response, key, maxPoints);
-                row.setScoreEarned(AttemptScoring.output(grade.score()));
-                row.setIsCorrect(grade.correct());
-            }
+            return new Outcome(maxPoints, true, "AUTO", null, row.getKeySnapshot(), row.getCheckResult());
         }
-        row.setQuestionVersion(to);
-        row.setGradedAt(now);
-        logs.save(AnswerRegradeLog.builder().regradeJob(job).attemptAnswer(row).oldScore(oldScore).newScore(row.getScoreEarned())
-                .questionVersionFrom(from).questionVersionTo(to).build());
+        Snapshots.DisplayQuestion display = paperFactory.read(row.getDisplaySnapshot(), Snapshots.DisplayQuestion.class);
+        String type = display != null ? display.questionType() : question.getQuestionType();
+        JsonNode response = paperFactory.readResponse(row.getResponse());
+        if (AnswerResponseValidator.isEmpty(response)) {
+            return new Outcome(BigDecimal.ZERO, false, row.getGradingStatus(), row.getGradingError(), keyJson, null);
+        }
+        AttemptGrader.Grade grade = AttemptGrader.grade(type, response, key, maxPoints);
+        return new Outcome(AttemptScoring.output(grade.score()), grade.correct(), row.getGradingStatus(), row.getGradingError(), keyJson, null);
     }
+
+    private record Outcome(BigDecimal newScore, boolean correct, String gradingStatus, String gradingError,
+                           String keySnapshot, String checkResult) { }
 
     private BigDecimal maxScore(ExamAttempt attempt, int rows) {
         Snapshots.ExamSnapshot exam = paperFactory.read(attempt.getExamSnapshot(), Snapshots.ExamSnapshot.class);

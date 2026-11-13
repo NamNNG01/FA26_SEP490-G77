@@ -33,7 +33,7 @@ import java.util.*;
 @Transactional
 public class QuestionIssueService {
     private static final Set<String> EDITABLE = Set.of("content", "explanation", "difficulty", "options", "answerKey",
-            "correctOrder", "questionMetadata", "essayGradingRubric");
+            "correctOrder", "questionMetadata", "essayGradingRubric", "codeConfig", "testCases");
     private static final Map<String, String> SORTS = Map.of("createdAt", "createdAt", "updatedAt", "updatedAt",
             "priority", "priorityScore", "lastReportedAt", "lastReportedAt");
 
@@ -248,6 +248,12 @@ public class QuestionIssueService {
         if (body.expectedLockVersion() != null && !body.expectedLockVersion().equals(question.getLockVersion())) {
             throw conflict("QUESTION_VERSION_CONFLICT", "The question was changed by someone else; reload the ticket");
         }
+        if (QuestionRegrader.regrades(resolutionType, question.getQuestionType())
+                && jobs.existsByQuestion_QuestionIdAndStatusIn(question.getQuestionId(),
+                List.of(QuestionRegradeJob.PENDING_CONFIRMATION, QuestionRegradeJob.RUNNING))) {
+            throw conflict("REGRADE_ALREADY_PENDING",
+                    "A regrade for this question is waiting for confirmation; confirm or cancel it before resolving another ticket");
+        }
         int versionFrom = question.getScoringVersion();
         Map<String, Object> changes = body.changes() == null ? Map.of() : body.changes();
         if (!changes.isEmpty()) {
@@ -262,7 +268,9 @@ public class QuestionIssueService {
         if (QuestionRegrader.regrades(resolutionType, question.getQuestionType())) {
             long pending = regrader.countPending(question.getQuestionId(), versionTo);
             if (pending > 0) {
+                String keySnapshot = QuestionRegrader.VOIDED.equals(resolutionType) ? null : regrader.keyJson(question);
                 job = jobs.save(QuestionRegradeJob.builder().issue(issue).question(question).resolutionType(resolutionType)
+                        .keySnapshot(keySnapshot)
                         .questionVersionFrom(versionFrom).questionVersionTo(versionTo).totalAnswers((int) pending).build());
             }
         }

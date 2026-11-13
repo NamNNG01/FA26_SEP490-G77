@@ -2,6 +2,8 @@ package com.examprep.entities;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
@@ -41,6 +43,14 @@ public class QuestionRegradeJob implements Serializable {
 
     @Column(name = "resolution_type", nullable = false, length = 40)
     private String resolutionType;
+
+    /**
+     * The answer key frozen when the job is created, so a later correction cannot change what this job
+     * regrades. Null for QUESTION_VOIDED jobs (every answer gets full points).
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "key_snapshot", columnDefinition = "jsonb")
+    private String keySnapshot;
 
     @Builder.Default
     @Column(name = "status", nullable = false, length = 25)

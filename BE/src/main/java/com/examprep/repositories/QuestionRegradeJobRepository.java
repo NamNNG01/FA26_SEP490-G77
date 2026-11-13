@@ -19,6 +19,8 @@ public interface QuestionRegradeJobRepository extends JpaRepository<QuestionRegr
     @Query("SELECT j FROM QuestionRegradeJob j JOIN FETCH j.issue WHERE j.jobId = :id")
     Optional<QuestionRegradeJob> lockById(@Param("id") Long id);
 
+    boolean existsByQuestion_QuestionIdAndStatusIn(Long questionId, Collection<String> statuses);
+
     @EntityGraph(attributePaths = "confirmedBy")
     List<QuestionRegradeJob> findByIssue_IssueIdOrderByCreatedAtDescJobIdDesc(Long issueId);
 
