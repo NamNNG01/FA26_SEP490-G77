@@ -100,6 +100,35 @@ class ManagerContributionApiIntegrationTest {
     }
 
     @Test
+    void managerDetailReturnsCodeConfigurationAndDiagramEssayFieldsAsJson() throws Exception {
+        QuestionContribution code = QuestionContribution.builder()
+                .userId(student.getUserId()).courseId(course.getCourseId()).type("QUESTION")
+                .questionType("CODE").content("Print sum").status("PENDING")
+                .codeConfigJson("{\"allowedLanguages\":[\"JAVA\"],\"timeLimitMs\":2000,\"memoryLimitKb\":131072}")
+                .testCasesJson("[{\"inputData\":\"1 2\",\"expectedOutput\":\"3\",\"hidden\":false}]")
+                .build();
+        QuestionContribution diagram = QuestionContribution.builder()
+                .userId(student.getUserId()).courseId(course.getCourseId()).type("QUESTION")
+                .questionType("DIAGRAM_ESSAY").content("Draw it").status("PENDING")
+                .questionMetadataJson("{\"drawioXml\":\"<mxfile>diagram</mxfile>\"}")
+                .essayGradingRubricJson("{\"criteria\":[{\"name\":\"Accuracy\",\"weight\":5}]}")
+                .build();
+        em.persist(code);
+        em.persist(diagram);
+        em.flush();
+
+        mvc.perform(get("/api/v1/manager/contributions/" + code.getContributionId()).with(as(manager)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.codeConfig.allowedLanguages[0]").value("JAVA"))
+                .andExpect(jsonPath("$.data.testCases[0].expectedOutput").value("3"));
+
+        mvc.perform(get("/api/v1/manager/contributions/" + diagram.getContributionId()).with(as(manager)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.questionMetadata.drawioXml").value("<mxfile>diagram</mxfile>"))
+                .andExpect(jsonPath("$.data.essayGradingRubric.criteria[0].name").value("Accuracy"));
+    }
+
+    @Test
     void testListContributionsSortedNewestFirstAndDetailReturnsCourseAndContributorId() throws Exception {
         // Test list sorts by submittedAt descending (newest first, so c2 then c1)
         mvc.perform(get("/api/v1/manager/contributions")

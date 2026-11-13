@@ -75,6 +75,14 @@ public class QuestionContribution implements Serializable {
     @Column(name = "question_metadata_json", columnDefinition = "jsonb")
     private String questionMetadataJson;
 
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "code_config_json", columnDefinition = "jsonb")
+    private String codeConfigJson;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "test_cases_json", columnDefinition = "jsonb")
+    private String testCasesJson;
+
     @Column(name = "source_reference", length = 500)
     private String sourceReference;
     

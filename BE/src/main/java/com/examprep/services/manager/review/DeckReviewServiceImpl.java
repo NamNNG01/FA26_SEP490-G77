@@ -55,7 +55,7 @@ public class DeckReviewServiceImpl implements DeckReviewService {
             myCourseIds = List.of(courseId);
         }
 
-        String normStatus = (status == null || status.isBlank()) ? "PENDING" : status.toUpperCase();
+        String normStatus = (status == null || status.isBlank()) ? "PENDING_REVIEW" : status.toUpperCase();
         if ("ALL".equals(normStatus)) {
             normStatus = null;
         }
@@ -71,7 +71,8 @@ public class DeckReviewServiceImpl implements DeckReviewService {
     public Deck getDeckDetail(User manager, Long deckId) {
         Deck deck = deckRepository.findDetail(deckId)
                 .orElseThrow(() -> new ReviewException(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", null, "Deck not found"));
-        if (deck.getCourse() == null) {
+        if (deck.getCourse() == null || deck.getSubmittedAt() == null
+                || !User.ROLE_STUDENT.equals(deck.getUser().getRoleName())) {
             throw new ReviewException(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", null, "Deck not found");
         }
         assertCanAccessCourse(manager, deck.getCourse().getCourseId());
@@ -83,18 +84,19 @@ public class DeckReviewServiceImpl implements DeckReviewService {
     public Map<String, Object> approve(User manager, Long deckId, Long requestVersion, String note) {
         Deck deck = deckRepository.findForUpdate(deckId)
                 .orElseThrow(() -> new ReviewException(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", null, "Deck not found"));
-        if (deck.getCourse() == null) {
-            throw new ReviewException(HttpStatus.UNPROCESSABLE_ENTITY, "VALIDATION_ERROR", "DECK_NOT_SUBMITTABLE", "Deck has no course");
+        if (deck.getCourse() == null || deck.getSubmittedAt() == null
+                || !User.ROLE_STUDENT.equals(deck.getUser().getRoleName())) {
+            throw new ReviewException(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", null, "Deck not found");
         }
         assertCanAccessCourse(manager, deck.getCourse().getCourseId());
 
         if (deck.getUser().getUserId().equals(manager.getUserId())) {
             throw new ReviewException(HttpStatus.FORBIDDEN, "FORBIDDEN", "CANNOT_REVIEW_OWN", "Cannot review your own deck");
         }
-        if (!"PENDING".equals(deck.getReviewStatus())) {
+        if (!"PENDING_REVIEW".equals(deck.getReviewStatus())) {
             throw new ReviewException(HttpStatus.CONFLICT, "RESOURCE_CONFLICT", "ALREADY_REVIEWED", "Deck already reviewed", Map.of("currentStatus", deck.getReviewStatus()));
         }
-        if (requestVersion != null && !requestVersion.equals(deck.getVersion())) {
+        if (requestVersion == null || !requestVersion.equals(deck.getVersion())) {
             throw new ReviewException(HttpStatus.CONFLICT, "RESOURCE_CONFLICT", "VERSION_CONFLICT", "Version mismatch", Map.of("currentVersion", deck.getVersion(), "currentStatus", deck.getReviewStatus()));
         }
 
@@ -119,7 +121,8 @@ public class DeckReviewServiceImpl implements DeckReviewService {
         reviewLogRepository.save(log);
 
         String title = "Bộ flashcard đã được duyệt";
-        String content = "Bộ \"" + deck.getTitle() + "\" đã được công khai cho khóa \"" + deck.getCourse().getTitle() + "\".";
+        String courseTitle = deck.getCourse() == null ? "kho flashcard" : deck.getCourse().getTitle();
+        String content = "Bộ \"" + deck.getTitle() + "\" đã được duyệt cho \"" + courseTitle + "\".";
         reviewNotificationService.sendNotification(deck.getUser().getUserId(), title, content, "DECK_APPROVED", "DECK", String.valueOf(deckId), "/decks/" + deckId);
 
         return Map.of(
@@ -142,18 +145,19 @@ public class DeckReviewServiceImpl implements DeckReviewService {
 
         Deck deck = deckRepository.findForUpdate(deckId)
                 .orElseThrow(() -> new ReviewException(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", null, "Deck not found"));
-        if (deck.getCourse() == null) {
-            throw new ReviewException(HttpStatus.UNPROCESSABLE_ENTITY, "VALIDATION_ERROR", "DECK_NOT_SUBMITTABLE", "Deck has no course");
+        if (deck.getCourse() == null || deck.getSubmittedAt() == null
+                || !User.ROLE_STUDENT.equals(deck.getUser().getRoleName())) {
+            throw new ReviewException(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", null, "Deck not found");
         }
         assertCanAccessCourse(manager, deck.getCourse().getCourseId());
 
         if (deck.getUser().getUserId().equals(manager.getUserId())) {
             throw new ReviewException(HttpStatus.FORBIDDEN, "FORBIDDEN", "CANNOT_REVIEW_OWN", "Cannot review your own deck");
         }
-        if (!"PENDING".equals(deck.getReviewStatus())) {
+        if (!"PENDING_REVIEW".equals(deck.getReviewStatus())) {
             throw new ReviewException(HttpStatus.CONFLICT, "RESOURCE_CONFLICT", "ALREADY_REVIEWED", "Deck already reviewed", Map.of("currentStatus", deck.getReviewStatus()));
         }
-        if (requestVersion != null && !requestVersion.equals(deck.getVersion())) {
+        if (requestVersion == null || !requestVersion.equals(deck.getVersion())) {
             throw new ReviewException(HttpStatus.CONFLICT, "RESOURCE_CONFLICT", "VERSION_CONFLICT", "Version mismatch", Map.of("currentVersion", deck.getVersion(), "currentStatus", deck.getReviewStatus()));
         }
 

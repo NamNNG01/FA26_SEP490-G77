@@ -96,6 +96,38 @@ class StudentContributionApiIntegrationTest {
                 .andExpect(status().isNotFound());
     }
 
+    @Test void studentCanSubmitCodeAndDiagramEssayContributions() throws Exception {
+        String codeRequest = "{\"courseId\":" + course.getCourseId() + ",\"moduleId\":" + oop.getModuleId()
+                + ",\"questionType\":\"CODE\",\"difficulty\":\"EASY\",\"content\":\"Print sum\","
+                + "\"codeConfig\":{\"allowedLanguages\":[\"JAVA\"],\"codeTemplate\":\"class Main {}\",\"timeLimitMs\":2000,\"memoryLimitKb\":131072},"
+                + "\"testCases\":[{\"inputData\":\"1 2\",\"expectedOutput\":\"3\",\"hidden\":false,\"orderIndex\":0},"
+                + "{\"inputData\":\"4 5\",\"expectedOutput\":\"9\",\"hidden\":true,\"orderIndex\":1}]}";
+        JsonNode codeData = json.readTree(mvc.perform(post("/api/v1/student/contributions").with(as(student))
+                        .contentType(MediaType.APPLICATION_JSON).content(codeRequest))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString()).path("data");
+        QuestionContribution code = em.find(QuestionContribution.class, codeData.path("contributionId").asLong());
+        assertNotNull(code.getCodeConfigJson());
+        assertEquals(2, json.readTree(code.getTestCasesJson()).size());
+        code.setStatus("REJECTED");
+        em.flush();
+        mvc.perform(put("/api/v1/student/contributions/" + code.getContributionId() + "/resubmit").with(as(student))
+                        .contentType(MediaType.APPLICATION_JSON).content(codeRequest))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.status").value("PENDING"));
+        assertNotNull(code.getCodeConfigJson());
+        assertEquals(2, json.readTree(code.getTestCasesJson()).size());
+
+        String diagramRequest = "{\"courseId\":" + course.getCourseId() + ",\"moduleId\":" + oop.getModuleId()
+                + ",\"questionType\":\"DIAGRAM_ESSAY\",\"difficulty\":\"MEDIUM\",\"content\":\"Draw and explain\","
+                + "\"questionMetadata\":{\"drawioXml\":\"<mxfile>diagram</mxfile>\"},"
+                + "\"essayGradingRubric\":{\"criteria\":[{\"name\":\"Accuracy\",\"weight\":5}]}}";
+        JsonNode diagramData = json.readTree(mvc.perform(post("/api/v1/student/contributions").with(as(student))
+                        .contentType(MediaType.APPLICATION_JSON).content(diagramRequest))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString()).path("data");
+        QuestionContribution diagram = em.find(QuestionContribution.class, diagramData.path("contributionId").asLong());
+        assertTrue(diagram.getQuestionMetadataJson().contains("drawioXml"));
+        assertTrue(diagram.getEssayGradingRubricJson().contains("criteria"));
+    }
+
     @Test void testCQ03AndCQ04ListAndDetail() throws Exception {
         // Create tip contribution CQ-06
         String tipReq = "{\"courseId\":" + course.getCourseId() + ",\"title\":\"Tip 1\",\"content\":\"Always practice coding.\"}";

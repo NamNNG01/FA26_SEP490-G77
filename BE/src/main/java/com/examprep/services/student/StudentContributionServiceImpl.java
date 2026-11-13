@@ -109,6 +109,8 @@ public class StudentContributionServiceImpl implements StudentContributionServic
                 .categoryIds(writeJson(request.getCorrectOrder()))
                 .essayGradingRubricJson(writeJson(request.getEssayGradingRubric()))
                 .questionMetadataJson(writeJson(request.getQuestionMetadata()))
+                .codeConfigJson(writeJson(request.getCodeConfig()))
+                .testCasesJson(writeJson(request.getTestCases()))
                 .status("PENDING")
                 .resubmissionCount(0)
                 .build();
@@ -220,6 +222,8 @@ public class StudentContributionServiceImpl implements StudentContributionServic
                 .difficulty(c.getDifficulty())
                 .essayGradingRubric(essayGradingRubric)
                 .questionMetadata(questionMetadata)
+                .codeConfig(readJson(c.getCodeConfigJson(), new TypeReference<com.examprep.dto.question.CodeConfigDto>() {}))
+                .testCases(readJson(c.getTestCasesJson(), new TypeReference<List<com.examprep.dto.question.TestCaseDto>>() {}))
                 .sourceReference(c.getSourceReference())
                 .reviewNote(c.getReviewNote())
                 .resubmissionCount(c.getResubmissionCount())
@@ -269,6 +273,8 @@ public class StudentContributionServiceImpl implements StudentContributionServic
             c.setCategoryIds(writeJson(qReq.getCorrectOrder()));
             c.setEssayGradingRubricJson(writeJson(qReq.getEssayGradingRubric()));
             c.setQuestionMetadataJson(writeJson(qReq.getQuestionMetadata()));
+            c.setCodeConfigJson(writeJson(qReq.getCodeConfig()));
+            c.setTestCasesJson(writeJson(qReq.getTestCases()));
         } else if ("TIP".equals(c.getType())) {
             TipContributionRequestDto tReq;
             if (requestBody instanceof TipContributionRequestDto) {

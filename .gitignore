@@ -41,3 +41,5 @@ BE/docs/seed-admin.sql
 
 # SDD scratch workspace
 .superpowers/
+
+oracleJdk-27/

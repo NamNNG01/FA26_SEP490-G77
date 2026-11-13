@@ -263,6 +263,14 @@ public class StudentDeckService {
         if (cards.countByDeckDeckId(deckId) == 0) {
             throw new BaseException(ResponseCode.UNPROCESSABLE_VALIDATION_ERROR, "Add at least one card before asking for review.");
         }
+        if (deck.getCourse() == null) {
+            throw new BaseException(ResponseCode.UNPROCESSABLE_VALIDATION_ERROR,
+                    "A deck must belong to a course before it can be submitted for review.");
+        }
+        if (!enrollments.existsByCourse_CourseIdAndUser_UserIdAndStatus(
+                deck.getCourse().getCourseId(), userId, Enrollment.STATUS_ACTIVE)) {
+            throw new ForbiddenException("You must be actively enrolled in the deck course to submit it for review.");
+        }
         deck.setReviewStatus(REVIEW_PENDING);
         deck.setSubmittedAt(Instant.now());
         decks.flush();

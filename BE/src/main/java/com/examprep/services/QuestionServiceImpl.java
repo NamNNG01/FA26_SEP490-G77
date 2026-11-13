@@ -635,9 +635,6 @@ public class QuestionServiceImpl implements QuestionService {
                     }
                     if (optId != null) {
                         newCorrectOrder.add(optId);
-                        final Long targetId = optId;
-                        updatedOptions.stream().filter(o -> o.getOptionId().equals(targetId)).findFirst()
-                                .ifPresent(o -> orderedOptionTexts.add(o.getOptionText()));
                     }
                 }
             }

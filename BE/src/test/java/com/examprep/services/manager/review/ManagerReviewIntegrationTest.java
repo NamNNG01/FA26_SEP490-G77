@@ -131,6 +131,58 @@ class ManagerReviewIntegrationTest {
     }
 
     @Test
+    void testApproveCodeContributionPersistsConfigAndTestCases() {
+        QuestionContribution contribution = QuestionContribution.builder()
+                .userId(student.getUserId())
+                .courseId(course.getCourseId())
+                .moduleId(module.getModuleId())
+                .type("QUESTION")
+                .questionType("CODE")
+                .content("Print the sum of two numbers")
+                .difficulty("EASY")
+                .codeConfigJson("{\"allowedLanguages\":[\"JAVA\"],\"codeTemplate\":\"class Main {}\",\"timeLimitMs\":2000,\"memoryLimitKb\":131072}")
+                .testCasesJson("[{\"inputData\":\"1 2\",\"expectedOutput\":\"3\",\"hidden\":false,\"orderIndex\":0},{\"inputData\":\"4 5\",\"expectedOutput\":\"9\",\"hidden\":true,\"orderIndex\":1}]")
+                .status("PENDING")
+                .version(0L)
+                .build();
+        QuestionContribution saved = contributionRepository.saveAndFlush(contribution);
+
+        Map<String, Object> result = contributionReviewService.approve(manager, saved.getContributionId(), 0L, "Looks good");
+        Long questionId = (Long) result.get("acceptedQuestionId");
+
+        assertNotNull(em.find(com.examprep.entities.CodeQuestionConfig.class, questionId));
+        assertEquals(2, em.createQuery("select count(tc) from CodeTestCase tc where tc.question.questionId = :id", Long.class)
+                .setParameter("id", questionId).getSingleResult());
+    }
+
+    @Test
+    void testApproveDiagramEssayContributionKeepsMetadataAndRubric() {
+        String metadata = "{\"drawioXml\":\"<mxfile>diagram</mxfile>\"}";
+        String rubric = "{\"criteria\":[{\"name\":\"Accuracy\",\"weight\":5}]}";
+        QuestionContribution contribution = QuestionContribution.builder()
+                .userId(student.getUserId())
+                .courseId(course.getCourseId())
+                .moduleId(module.getModuleId())
+                .type("QUESTION")
+                .questionType("DIAGRAM_ESSAY")
+                .content("Draw and explain the design")
+                .difficulty("MEDIUM")
+                .questionMetadataJson(metadata)
+                .essayGradingRubricJson(rubric)
+                .status("PENDING")
+                .version(0L)
+                .build();
+        QuestionContribution saved = contributionRepository.saveAndFlush(contribution);
+
+        Map<String, Object> result = contributionReviewService.approve(manager, saved.getContributionId(), 0L, "Looks good");
+        Question question = questionRepository.findById((Long) result.get("acceptedQuestionId")).orElseThrow();
+
+        assertEquals("DIAGRAM_ESSAY", question.getQuestionType());
+        assertEquals(metadata, question.getQuestionMetadata());
+        assertEquals(rubric, question.getEssayGradingRubric());
+    }
+
+    @Test
     void testRejectContribution_requiresReason() {
         QuestionContribution contribution = QuestionContribution.builder()
                 .userId(student.getUserId())
@@ -175,7 +227,8 @@ class ManagerReviewIntegrationTest {
                 .course(course)
                 .title("Java Deck")
                 .isPublic(false)
-                .reviewStatus("PENDING")
+                .reviewStatus("PENDING_REVIEW")
+                .submittedAt(java.time.Instant.now())
                 .version(0L)
                 .build();
         final Deck savedDeck = deckRepository.save(deck);

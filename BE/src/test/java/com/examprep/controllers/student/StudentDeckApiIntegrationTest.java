@@ -158,7 +158,7 @@ class StudentDeckApiIntegrationTest {
     }
 
     @Test void publishRequestTransitions() throws Exception {
-        long deck = deck(student, "FLASHCARD");
+        long deck = courseDeck(student, "FLASHCARD");
         mvc.perform(post("/api/v1/student/decks/" + deck + "/publish-request").with(as(student))).andExpect(status().isUnprocessableEntity());
         card(deck, "{\"frontText\":\"a\",\"backText\":\"b\"}");
         mvc.perform(post("/api/v1/student/decks/" + deck + "/publish-request").with(as(other))).andExpect(status().isForbidden());
@@ -185,6 +185,38 @@ class StudentDeckApiIntegrationTest {
         em.flush();
         mvc.perform(post("/api/v1/student/decks/" + deck + "/publish-request").with(as(student)))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.data.code").value("ALREADY_PUBLIC"));
+    }
+
+    @Test void managerCanReviewSubmittedDeckAndInspectCardsWithImages() throws Exception {
+        long deckId = courseDeck(student, "FLASHCARD");
+        send(put("/api/v1/student/decks/" + deckId), student,
+                "{\"title\":\"Review me\"}").andExpect(status().isOk());
+        card(deckId, "{\"frontText\":\"Question\",\"backText\":\"Answer\",\"frontImageUrl\":\"https://cdn.example/front.png\"}");
+        card(deckId, "{\"frontText\":\"Second question\",\"backImageUrl\":\"https://cdn.example/back.png\"}");
+
+        mvc.perform(post("/api/v1/student/decks/" + deckId + "/publish-request").with(as(student)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.reviewStatus").value("PENDING_REVIEW"));
+
+        mvc.perform(get("/api/v1/manager/decks/review").param("courseId", course.getCourseId().toString()).with(as(manager)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalElements").value(1))
+                .andExpect(jsonPath("$.data.content[0].deckId").value(deckId))
+                .andExpect(jsonPath("$.data.content[0].reviewStatus").value("PENDING_REVIEW"))
+                .andExpect(jsonPath("$.data.content[0].canReview").value(true));
+
+        mvc.perform(get("/api/v1/manager/decks/review/" + deckId).with(as(manager)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.cards.totalElements").value(2))
+                .andExpect(jsonPath("$.data.cards.content[0].frontText").value("Question"))
+                .andExpect(jsonPath("$.data.cards.content[0].frontImageUrl").value("https://cdn.example/front.png"))
+                .andExpect(jsonPath("$.data.cards.content[1].backImageUrl").value("https://cdn.example/back.png"));
+
+        long currentVersion = em.find(Deck.class, deckId).getVersion();
+        mvc.perform(post("/api/v1/manager/decks/review/" + deckId + "/approve")
+                        .with(as(manager)).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"version\":" + currentVersion + ",\"note\":\"Looks good\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.reviewStatus").value("APPROVED"))
+                .andExpect(jsonPath("$.data.visibility").value("PUBLIC"));
     }
 
     // ------------------------------------------------------------------ FC-14 / FC-15 / DECK_LOCKED
@@ -218,7 +250,7 @@ class StudentDeckApiIntegrationTest {
     }
 
     @Test void withdrawReviewTransitions() throws Exception {
-        long deck = deck(student, "FLASHCARD");
+        long deck = courseDeck(student, "FLASHCARD");
         card(deck, "{\"frontText\":\"a\",\"backText\":\"b\"}");
         String path = "/api/v1/student/decks/" + deck + "/withdraw-review";
         mvc.perform(post(path).with(as(student))).andExpect(status().isConflict()).andExpect(jsonPath("$.data.code").value("NOT_PENDING_REVIEW"));
@@ -236,7 +268,7 @@ class StudentDeckApiIntegrationTest {
     }
 
     @Test void pendingOrPublicDeckIsLocked() throws Exception {
-        long deck = deck(student, "FLASHCARD");
+        long deck = courseDeck(student, "FLASHCARD");
         long card = card(deck, "{\"frontText\":\"a\",\"backText\":\"b\"}");
         mvc.perform(post("/api/v1/student/decks/" + deck + "/publish-request").with(as(student))).andExpect(status().isOk());
         send(put("/api/v1/student/decks/" + deck), student, "{\"title\":\"x\"}").andExpect(status().isConflict()).andExpect(jsonPath("$.data.code").value("DECK_LOCKED"));
@@ -252,7 +284,7 @@ class StudentDeckApiIntegrationTest {
         mvc.perform(delete("/api/v1/student/decks/" + deck).with(as(student)))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.data.code").value("DECK_LOCKED"));
 
-        long pending = deck(student, "FLASHCARD");
+        long pending = courseDeck(student, "FLASHCARD");
         card(pending, "{\"frontText\":\"a\",\"backText\":\"b\"}");
         mvc.perform(post("/api/v1/student/decks/" + pending + "/publish-request").with(as(student))).andExpect(status().isOk());
         mvc.perform(delete("/api/v1/student/decks/" + pending).with(as(student))).andExpect(status().isOk());
@@ -403,6 +435,14 @@ class StudentDeckApiIntegrationTest {
 
     long deck(User owner, String mode) throws Exception {
         String body = send(post("/api/v1/student/decks"), owner, "{\"title\":\"Deck " + System.nanoTime() + "\",\"mode\":\"" + mode + "\"}")
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        return json.readTree(body).path("data").path("deckId").asLong();
+    }
+
+    long courseDeck(User owner, String mode) throws Exception {
+        String body = send(post("/api/v1/student/decks"), owner,
+                "{\"title\":\"Course deck " + System.nanoTime() + "\",\"mode\":\"" + mode
+                        + "\",\"courseId\":" + course.getCourseId() + "}")
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         return json.readTree(body).path("data").path("deckId").asLong();
     }

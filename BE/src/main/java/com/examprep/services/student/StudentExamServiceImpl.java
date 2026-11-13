@@ -42,12 +42,7 @@ public class StudentExamServiceImpl implements StudentExamService {
             validateActiveEnrollment(exam.getCourse().getCourseId(), userId);
         }
 
-        List<QuestionTypeCountDto> typeSummaries =
-                examRepository.getExamQuestionTypeSummaries(examId);
-
-        int totalCount = typeSummaries.stream()
-                .mapToInt(QuestionTypeCountDto::count)
-                .sum();
+        int totalCount = Math.toIntExact(examRepository.countActiveQuestionsByExamId(examId));
 
         List<ExamAttempt> attempts =
                 examAttemptRepository.findByExam_ExamIdAndUser_UserId(examId, userId);

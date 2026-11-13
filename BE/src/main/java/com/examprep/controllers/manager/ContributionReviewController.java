@@ -1,6 +1,10 @@
 package com.examprep.controllers.manager;
 
 import com.examprep.dto.ApiResponse;
+import com.examprep.dto.question.CodeConfigDto;
+import com.examprep.dto.question.TestCaseDto;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.examprep.entities.QuestionContribution;
 import com.examprep.entities.ReviewLog;
 import com.examprep.entities.User;
@@ -35,6 +39,7 @@ public class ContributionReviewController {
     private final ContributionReviewService service;
     private final UserRepository userRepository;
     private final ReviewLogRepository reviewLogRepository;
+    private final ObjectMapper objectMapper;
 
     private User getUser(UserPrincipal principal) {
         return userRepository.findById(principal.getId())
@@ -135,12 +140,19 @@ public class ContributionReviewController {
         data.put("moduleId", c.getModuleId() != null ? c.getModuleId() : null);
         data.put("groupId", c.getGroupId() != null ? c.getGroupId() : null);
         data.put("questionType", c.getQuestionType() != null ? c.getQuestionType() : "");
-        data.put("options", c.getOptionsJson() != null ? c.getOptionsJson() : List.of());
-        data.put("answerKey", c.getAnswerKeyJson() != null ? c.getAnswerKeyJson() : null);
+        data.put("options", c.getOptionsJson() == null ? List.of() : readJson(c.getOptionsJson(), new TypeReference<Object>() {}));
+        Object answerKey = readJson(c.getAnswerKeyJson(), new TypeReference<Object>() {});
+        if ("CODE".equals(c.getQuestionType()) && answerKey instanceof Map<?, ?> answerKeyMap
+                && answerKeyMap.containsKey("correctOrder")) {
+            answerKey = Map.of("correctOrder", readJson(c.getCategoryIds(), new TypeReference<List<Object>>() {}));
+        }
+        data.put("answerKey", answerKey);
         data.put("explanation", c.getExplanation() != null ? c.getExplanation() : "");
         data.put("difficulty", c.getDifficulty() != null ? c.getDifficulty() : "MEDIUM");
-        data.put("essayGradingRubric", c.getEssayGradingRubricJson() != null ? c.getEssayGradingRubricJson() : null);
-        data.put("questionMetadata", c.getQuestionMetadataJson() != null ? c.getQuestionMetadataJson() : null);
+        data.put("essayGradingRubric", readJson(c.getEssayGradingRubricJson(), new TypeReference<Object>() {}));
+        data.put("questionMetadata", readJson(c.getQuestionMetadataJson(), new TypeReference<Object>() {}));
+        data.put("codeConfig", readJson(c.getCodeConfigJson(), new TypeReference<CodeConfigDto>() {}));
+        data.put("testCases", readJson(c.getTestCasesJson(), new TypeReference<List<TestCaseDto>>() {}));
         data.put("sourceReference", c.getSourceReference() != null ? c.getSourceReference() : "");
         data.put("reviewNote", c.getReviewNote() != null ? c.getReviewNote() : "");
         data.put("resubmissionCount", c.getResubmissionCount());
@@ -151,6 +163,15 @@ public class ContributionReviewController {
         data.put("version", c.getVersion() != null ? c.getVersion() : 0L);
 
         return ResponseEntity.ok(ApiResponse.success(data));
+    }
+
+    private <T> T readJson(String value, TypeReference<T> type) {
+        if (value == null || value.isBlank()) return null;
+        try {
+            return objectMapper.readValue(value, type);
+        } catch (Exception ex) {
+            throw new com.examprep.exceptions.BadRequestException("Invalid stored contribution data.");
+        }
     }
 
     @PostMapping("/{id}/approve")

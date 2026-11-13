@@ -13,7 +13,6 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -50,7 +49,7 @@ public class DeckReviewController {
             @AuthenticationPrincipal UserPrincipal principal,
             @RequestParam(required = false) Long courseId,
             @RequestParam(required = false) Long moduleId,
-            @RequestParam(required = false, defaultValue = "PENDING") String status,
+            @RequestParam(required = false, defaultValue = "PENDING_REVIEW") String status,
             @RequestParam(required = false) Long contributorId,
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) Instant submittedFrom,
@@ -68,7 +67,7 @@ public class DeckReviewController {
         Page<Deck> pageResult = service.listDecks(manager, courseId, moduleId, status, contributorId, keyword, submittedFrom, submittedTo, pageable);
 
         List<Map<String, Object>> content = pageResult.getContent().stream().map(d -> {
-            boolean canReview = "PENDING".equalsIgnoreCase(d.getReviewStatus()) && !d.getUser().getUserId().equals(manager.getUserId());
+            boolean canReview = "PENDING_REVIEW".equalsIgnoreCase(d.getReviewStatus()) && !d.getUser().getUserId().equals(manager.getUserId());
             Map<String, Object> map = new HashMap<>();
             map.put("deckId", d.getDeckId());
             map.put("title", d.getTitle());
@@ -105,20 +104,22 @@ public class DeckReviewController {
             @PathVariable Long id,
             @RequestParam(defaultValue = "0") int cardPage,
             @RequestParam(defaultValue = "50") int cardSize) {
+        if (cardPage < 0 || cardSize < 1) {
+            throw new com.examprep.exceptions.BadRequestException("cardPage must be nonnegative and cardSize must be positive.");
+        }
         if (cardSize > 100) cardSize = 100;
         User manager = getUser(principal);
         Deck d = service.getDeckDetail(manager, id);
 
-        List<com.examprep.entities.Flashcard> allCards = flashcardRepository.findByDeckDeckIdOrderByPositionAscCardIdAsc(id);
-        int start = Math.min(cardPage * cardSize, allCards.size());
-        int end = Math.min(start + cardSize, allCards.size());
-        Page<com.examprep.entities.Flashcard> cardPageResult = new PageImpl<>(allCards.subList(start, end), PageRequest.of(cardPage, cardSize), allCards.size());
+        Pageable cardPageable = PageRequest.of(cardPage, cardSize);
+        Page<com.examprep.entities.Flashcard> cardPageResult =
+                flashcardRepository.findPageByDeckDeckIdOrderByPositionAscCardIdAsc(id, cardPageable);
 
         List<Map<String, Object>> cardsContent = cardPageResult.getContent().stream().map(f -> {
             Map<String, Object> cm = new HashMap<>();
             cm.put("cardId", f.getCardId());
             cm.put("position", f.getPosition() != null ? f.getPosition() : 0);
-            cm.put("cardType", "TEXT");
+            cm.put("cardType", cardType(f));
             cm.put("frontText", f.getFrontText());
             cm.put("backText", f.getBackText());
             cm.put("codeLanguage", f.getCodeLanguage() != null ? f.getCodeLanguage() : null);
@@ -148,7 +149,7 @@ public class DeckReviewController {
             return hm;
         }).toList();
 
-        boolean canReview = "PENDING".equalsIgnoreCase(d.getReviewStatus()) && !d.getUser().getUserId().equals(manager.getUserId());
+        boolean canReview = "PENDING_REVIEW".equalsIgnoreCase(d.getReviewStatus()) && !d.getUser().getUserId().equals(manager.getUserId());
 
         Map<String, Object> data = new HashMap<>();
         data.put("deckId", d.getDeckId());
@@ -169,6 +170,17 @@ public class DeckReviewController {
         data.put("version", d.getVersion() != null ? d.getVersion() : 0L);
 
         return ResponseEntity.ok(ApiResponse.success(data));
+    }
+
+    private String cardType(com.examprep.entities.Flashcard card) {
+        if (card.getCodeBody() != null && !card.getCodeBody().isBlank()) {
+            return "CODE";
+        }
+        if ((card.getFrontImageUrl() != null && !card.getFrontImageUrl().isBlank())
+                || (card.getBackImageUrl() != null && !card.getBackImageUrl().isBlank())) {
+            return "IMAGE";
+        }
+        return "TEXT";
     }
 
     @PostMapping("/{id}/approve")

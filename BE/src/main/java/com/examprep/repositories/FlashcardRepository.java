@@ -4,6 +4,7 @@ import com.examprep.entities.Flashcard;
 import com.examprep.dto.IdCount;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -45,6 +46,8 @@ public interface FlashcardRepository extends JpaRepository<Flashcard, Long> {
     int maxPosition(@Param("deckId") Long deckId);
 
     List<Flashcard> findByDeckDeckIdOrderByPositionAscCardIdAsc(Long deckId);
+
+    Page<Flashcard> findPageByDeckDeckIdOrderByPositionAscCardIdAsc(Long deckId, Pageable pageable);
 
     Optional<Flashcard> findFirstByDeckDeckIdAndSourceQuestionId(Long deckId, Long sourceQuestionId);
 }

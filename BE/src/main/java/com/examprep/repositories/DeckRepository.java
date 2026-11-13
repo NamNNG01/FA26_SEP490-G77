@@ -30,7 +30,7 @@ public interface DeckRepository extends JpaRepository<Deck, Long> {
                                @Param("search") String search, Pageable pageable);
 
     @EntityGraph(attributePaths = {"course", "user", "module"})
-    @Query(value = "SELECT d FROM Deck d JOIN d.course c WHERE d.course IS NOT NULL AND d.submittedAt IS NOT NULL " +
+    @Query(value = "SELECT d FROM Deck d JOIN d.course c WHERE d.course IS NOT NULL AND d.submittedAt IS NOT NULL AND d.user.roleName = 'STUDENT' " +
             "AND (:myCourseIds IS NULL OR c.courseId IN :myCourseIds) " +
             "AND (:moduleId IS NULL OR d.module.moduleId = :moduleId) " +
             "AND (:status IS NULL OR d.reviewStatus = :status) " +
@@ -38,7 +38,7 @@ public interface DeckRepository extends JpaRepository<Deck, Long> {
             "AND (:keyword IS NULL OR LOWER(d.title) LIKE :keyword ESCAPE '!' OR LOWER(d.description) LIKE :keyword ESCAPE '!') " +
             "AND (cast(:submittedFrom as timestamp) IS NULL OR d.submittedAt >= :submittedFrom) " +
             "AND (cast(:submittedTo as timestamp) IS NULL OR d.submittedAt < :submittedTo)",
-           countQuery = "SELECT COUNT(d) FROM Deck d JOIN d.course c WHERE d.course IS NOT NULL AND d.submittedAt IS NOT NULL " +
+           countQuery = "SELECT COUNT(d) FROM Deck d JOIN d.course c WHERE d.course IS NOT NULL AND d.submittedAt IS NOT NULL AND d.user.roleName = 'STUDENT' " +
             "AND (:myCourseIds IS NULL OR c.courseId IN :myCourseIds) " +
             "AND (:moduleId IS NULL OR d.module.moduleId = :moduleId) " +
             "AND (:status IS NULL OR d.reviewStatus = :status) " +

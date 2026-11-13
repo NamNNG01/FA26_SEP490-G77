@@ -29,6 +29,8 @@ public class ContributionDetailDto {
     private String difficulty;
     private Object essayGradingRubric;
     private Object questionMetadata;
+    private com.examprep.dto.question.CodeConfigDto codeConfig;
+    private List<com.examprep.dto.question.TestCaseDto> testCases;
     private String sourceReference;
     private String reviewNote;
     private Integer resubmissionCount;
