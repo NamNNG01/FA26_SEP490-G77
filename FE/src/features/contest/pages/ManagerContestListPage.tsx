@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { MultiSelect } from '@/components/ui/MultiSelect';
 import { Modal } from '@/components/ui/Modal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { Dropdown } from '@/components/ui/Dropdown';
 import { Alert } from '@/components/ui/Alert';
@@ -233,21 +234,22 @@ export function ManagerContestListPage() {
         />
       </div>
 
-      <Modal open={batchConfirm} onClose={() => !batchPaying && setBatchConfirm(false)} title={`Pay rewards for ${selected.size} contest${selected.size === 1 ? '' : 's'}?`} dismissible={!batchPaying}
-        footer={<>
-          <Button variant="outline" disabled={batchPaying} onClick={() => setBatchConfirm(false)}>Cancel</Button>
-          <Button loading={batchPaying} disabled={batchPaying} onClick={() => void payBatch()}>Pay rewards</Button>
-        </>}>
-        <div className="space-y-3">
-          <p className="text-sm text-content-secondary">
-            Each contest is paid on its own, earliest end time first. One that fails is not paid and does not stop the others.
-            Contests sharing a discount use up its remaining uses in that order.
-          </p>
-          <ul className="max-h-60 space-y-1 overflow-y-auto text-sm text-content">
-            {[...selected.values()].map((title, i) => <li key={i} className="truncate">• {title}</li>)}
-          </ul>
-        </div>
-      </Modal>
+      <ConfirmDialog
+        open={batchConfirm}
+        onClose={() => setBatchConfirm(false)}
+        onConfirm={() => void payBatch()}
+        loading={batchPaying}
+        title={`Pay rewards for ${selected.size} contest${selected.size === 1 ? '' : 's'}?`}
+        description={<>
+          Each contest is paid on its own, earliest end time first. One that fails is not paid and does not stop the others.
+          Contests sharing a discount use up its remaining uses in that order.
+        </>}
+        confirmLabel="Pay rewards"
+      >
+        <ul className="max-h-60 space-y-1 overflow-y-auto text-content">
+          {[...selected.values()].map((title, i) => <li key={i} className="truncate">• {title}</li>)}
+        </ul>
+      </ConfirmDialog>
 
       <Modal open={!!batchResult} onClose={() => setBatchResult(null)} title="Batch payment result" size="lg" footer={<Button onClick={() => setBatchResult(null)}>Close</Button>}>
         {batchResult && (
