@@ -1,6 +1,5 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
+import { Suspense, lazy, useCallback, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import { Button } from '@/components/ui/Button';
-import { Select } from '@/components/ui/Select';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Icon } from '@/assets/icons';
 import { getApiErrorMessage } from '@/utils/apiError';
@@ -16,7 +15,7 @@ import {
 import type { AnswerResponse, AttemptQuestion } from '@/services/studentAttempt.service';
 import { QuestionText } from '../QuestionAnswerInput';
 import { CodeTerminal, type TerminalTab } from './CodeTerminal';
-import { byteLength, loadCodeDraft, saveCodeDraft } from './codeDraftStore';
+import { byteLength } from './codeSize';
 
 const CodeEditor = lazy(() => import('./CodeEditor'));
 
@@ -26,9 +25,12 @@ const TERMINAL_MAX_RATIO = 0.7;
 const TERMINAL_DEFAULT = 180;
 const TERMINAL_HEIGHT_KEY = 'code-terminal-height';
 
-/** CD-03 languages of the question, else every CD-06 language. */
-function allowedLanguages(meta: CodeQuestion | null, languages: CodeLanguageInfo[]): CodeLanguage[] {
-  return meta?.languages?.length ? meta.languages : languages.map(l => l.id);
+/**
+ * The one language the manager set for the question (CD-03); one stored with several uses its
+ * first. Falls back to the first CD-06 language, '' while neither has loaded.
+ */
+function questionLanguage(meta: CodeQuestion | null, languages: CodeLanguageInfo[]): CodeLanguage {
+  return meta?.languages?.[0] ?? languages[0]?.id ?? '';
 }
 
 function storedTerminalHeight(): number {
@@ -42,93 +44,52 @@ function storedTerminalHeight(): number {
 
 /**
  * What CD-05 grades for one CODE question: the code in the attempt draft (`text`) in the
- * language last selected in this browser. Null when there is no code.
+ * question's language. Null when there is no code.
  */
 export function currentCodeAnswer(
-  attemptId: number,
   questionId: number,
   meta: CodeQuestion | null,
   languages: CodeLanguageInfo[],
   text: string | undefined,
 ): CodeSubmitAnswer | null {
   if (!text?.trim()) return null;
-  const allowed = allowedLanguages(meta, languages);
-  const stored = loadCodeDraft(attemptId, questionId)?.language;
-  const language = stored && (allowed.length === 0 || allowed.includes(stored)) ? stored : allowed[0];
+  const language = questionLanguage(meta, languages);
   return language ? { questionId, language, sourceCode: text } : null;
 }
 
 /**
  * A CODE question while taking the exam: the question on the left (20%), a VS Code–style
  * editor with Run and a resizable terminal on the right (80%). Stacked on narrow screens.
- * The selected language's code goes to the attempt draft through `onChange({ text })`.
+ * The language is fixed by the question; the code goes to the attempt draft through `onChange({ text })`.
  */
 export function CodeQuestionWorkspace({
-  attemptId,
   question,
   meta,
   languages,
   value,
   onChange,
 }: {
-  attemptId: number;
   question: AttemptQuestion;
   meta: CodeQuestion | null;
   languages: CodeLanguageInfo[];
   value: AnswerResponse | null;
   onChange: (response: AnswerResponse) => void;
 }) {
-  const allowed = useMemo(() => allowedLanguages(meta, languages), [meta, languages]);
-  const labelOf = (id: CodeLanguage) => languages.find(l => l.id === id)?.name ?? id;
+  const language = questionLanguage(meta, languages);
+  const languageName = languages.find(l => l.id === language)?.name ?? language;
 
-  // Code the student typed, per language. A language without an entry shows the template.
-  const [{ language, sources }, setDraft] = useState(() => {
-    const stored = loadCodeDraft(attemptId, question.questionId);
-    const lang = stored?.language ?? allowed[0] ?? '';
-    const srcs = { ...(stored?.sources ?? {}) };
-    if (value?.text != null && lang) srcs[lang] = value.text;
-    return { language: lang, sources: srcs };
-  });
-
-  // Languages load after mount (CD-03 / CD-06): fall back to the first allowed one.
-  useEffect(() => {
-    if (allowed.length > 0 && !allowed.includes(language)) {
-      setDraft(d => {
-        const next = allowed[0];
-        // Keep code typed before the language list arrived.
-        const srcs = d.language === '' && d.sources[''] != null ? { ...d.sources, [next]: d.sources[''] } : d.sources;
-        return { language: next, sources: srcs };
-      });
-    }
-  }, [allowed, language]);
-
-  const source = sources[language] ?? meta?.codeTemplate ?? '';
-
-  const persist = (lang: CodeLanguage, srcs: Record<string, string>) => {
-    if (lang) saveCodeDraft(attemptId, question.questionId, { language: lang, sources: srcs });
-  };
+  // Code the student typed; until then the editor shows the template, which is not an answer.
+  const [typed, setTyped] = useState<string | null>(() => value?.text ?? null);
+  const source = typed ?? meta?.codeTemplate ?? '';
 
   const changeSource = (text: string) => {
-    const srcs = { ...sources, [language]: text };
-    setDraft({ language, sources: srcs });
-    persist(language, srcs);
+    setTyped(text);
     onChange({ text });
   };
 
-  const changeLanguage = (lang: CodeLanguage) => {
-    if (lang === language) return;
-    setDraft({ language: lang, sources });
-    persist(lang, sources);
-    // The draft holds only the selected language's own code; an untouched template is not an answer.
-    onChange({ text: sources[lang] ?? '' });
-  };
-
   // Run (CD-04)
-  const [stdin, setStdin] = useState(meta?.sampleInput ?? '');
-  const stdinTouched = useRef(false);
-  useEffect(() => {
-    if (!stdinTouched.current) setStdin(meta?.sampleInput ?? '');
-  }, [meta?.sampleInput]);
+  // Starts empty: the student types their own input.
+  const [stdin, setStdin] = useState('');
   const [tab, setTab] = useState<TerminalTab>('Output');
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<CodeRunResult | null>(null);
@@ -199,15 +160,13 @@ export function CodeQuestionWorkspace({
       {/* Editor + terminal */}
       <section ref={columnRef} className="card flex h-[75vh] min-h-0 flex-col overflow-hidden p-0 md:h-auto">
         <div className="flex flex-shrink-0 items-center gap-2 border-b border-line-soft px-3 py-2">
-          <Select
-            aria-label="Language"
-            className="w-44"
-            triggerClassName="h-8 px-3 text-xs"
-            value={language}
-            disabled={allowed.length === 0}
-            options={allowed.map(id => ({ value: id, label: labelOf(id) }))}
-            onChange={changeLanguage}
-          />
+          {language ? (
+            <span className="inline-flex h-8 items-center rounded-[8px] border border-line-soft bg-surface-alt px-3 text-xs text-content-soft">
+              Language:&nbsp;<span className="font-semibold text-content">{languageName}</span>
+            </span>
+          ) : (
+            <Skeleton className="h-8 w-32" />
+          )}
           {tooLarge && <span className="text-xs text-danger">Code is larger than 100 KB.</span>}
           <Button
             size="sm"
@@ -256,11 +215,7 @@ export function CodeQuestionWorkspace({
             error={runError}
             running={running}
             stdin={stdin}
-            sampleInput={meta?.sampleInput ?? null}
-            onStdinChange={v => {
-              stdinTouched.current = true;
-              setStdin(v);
-            }}
+            onStdinChange={setStdin}
           />
         </div>
       </section>
@@ -269,25 +224,10 @@ export function CodeQuestionWorkspace({
 }
 
 function SampleBlock({ label, text }: { label: string; text: string | null }) {
-  const [copied, setCopied] = useState(false);
   if (text == null) return null;
-  const copy = () => {
-    navigator.clipboard
-      ?.writeText(text)
-      .then(() => {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1500);
-      })
-      .catch(() => undefined);
-  };
   return (
     <div>
-      <div className="mb-1 flex items-center justify-between">
-        <h3 className="text-2xs font-semibold uppercase tracking-wide text-content-subtle">{label}</h3>
-        <button type="button" onClick={copy} aria-label={`Copy ${label.toLowerCase()}`} className="text-content-subtle hover:text-content">
-          {copied ? <Icon.Check className="h-3.5 w-3.5" /> : <Icon.Copy className="h-3.5 w-3.5" />}
-        </button>
-      </div>
+      <h3 className="mb-1 text-2xs font-semibold uppercase tracking-wide text-content-subtle">{label}</h3>
       <pre className="whitespace-pre-wrap break-words rounded-[6px] border border-line-soft bg-surface-alt p-2 font-mono text-xs text-content">{text}</pre>
     </div>
   );

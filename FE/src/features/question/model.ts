@@ -228,9 +228,9 @@ export const emptyCriterion = (): RubricCriterionDraft => ({ key: newKey('crit')
 
 export const emptyTestCase = (hidden = false): TestCaseDraft => ({ key: newKey('tc'), input: '', expectedOutput: '', hidden });
 
-/** A new CODE question: every language, the default limits, a public (sample) and a hidden test case. */
+/** A new CODE question: the first language, the default limits, a public (sample) and a hidden test case. */
 const emptyCode = (): CodeDraft => ({
-  languages: CODE_LANGUAGE_OPTIONS.map(l => l.value),
+  languages: [CODE_LANGUAGE_OPTIONS[0].value],
   template: '',
   timeLimitMs: String(CODE_TIME_LIMIT_MS.default),
   memoryLimitKb: String(CODE_MEMORY_LIMIT_KB.default),
@@ -411,7 +411,7 @@ const bytes = (s: string) => new TextEncoder().encode(s).length;
 
 /** First problem of a CODE question's settings, or undefined. */
 export function codeError(c: CodeDraft): string | undefined {
-  if (c.languages.length === 0) return 'Allow at least one language.';
+  if (c.languages.length !== 1) return 'Choose one language.';
   if (bytes(c.template) > MAX_CODE_TEXT_BYTES) return 'The starter code can be at most 100 KB.';
   const time = Number(c.timeLimitMs);
   if (!Number.isInteger(time) || time < CODE_TIME_LIMIT_MS.min || time > CODE_TIME_LIMIT_MS.max)
@@ -552,7 +552,8 @@ function fromCodeConfig(raw: QuestionDetail['codeConfig'], rawTestCases: Questio
       hidden: Boolean(t.hidden),
     }));
   return {
-    languages: languages.length ? languages : base.languages,
+    // A question has one language; one stored with several keeps its first.
+    languages: languages.length ? languages.slice(0, 1) : base.languages,
     template: raw.codeTemplate ?? '',
     timeLimitMs: raw.timeLimitMs != null ? String(raw.timeLimitMs) : base.timeLimitMs,
     memoryLimitKb: raw.memoryLimitKb != null ? String(raw.memoryLimitKb) : base.memoryLimitKb,

@@ -32,6 +32,7 @@ import com.examprep.repositories.QuestionRepository;
 import com.examprep.repositories.UserRepository;
 import com.examprep.services.student.QuestionReviewRecorder;
 import com.examprep.util.attempt.AttemptScoring;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -51,6 +52,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
 /**
@@ -89,6 +93,8 @@ public class StudentCodeExamServiceImpl implements StudentCodeExamService {
     private final AttemptAutoSubmitter autoSubmitter;
     private final PlatformTransactionManager transactionManager;
     private final QuestionReviewRecorder reviews;
+    /** Judges the questions of one CD-05 call side by side; PistonClient caps the provider calls. */
+    private final ExecutorService questionPool = Executors.newCachedThreadPool(PistonClient.daemonThreads("code-submit-"));
 
     private record PlannedAnswer(Long questionId, String language, String sourceCode,
                                  List<PistonClient.CaseInput> cases, BigDecimal maxPoints,
@@ -181,11 +187,13 @@ public class StudentCodeExamServiceImpl implements StudentCodeExamService {
         if (plan == null) {
             throw new IllegalStateException("Coding submission could not be prepared");
         }
-        Map<Long, List<PistonClient.CaseOutcome>> outcomes = new LinkedHashMap<>();
+        Map<Long, CompletableFuture<List<PistonClient.CaseOutcome>>> pending = new LinkedHashMap<>();
         for (PlannedAnswer answer : plan.answers()) {
-            outcomes.put(answer.questionId(), piston.judge(answer.language(), answer.sourceCode(), answer.cases(),
-                    answer.timeLimitMs(), answer.memoryLimitKb()));
+            pending.put(answer.questionId(), CompletableFuture.supplyAsync(() -> piston.judge(answer.language(),
+                    answer.sourceCode(), answer.cases(), answer.timeLimitMs(), answer.memoryLimitKb()), questionPool));
         }
+        Map<Long, List<PistonClient.CaseOutcome>> outcomes = new LinkedHashMap<>();
+        pending.forEach((questionId, future) -> outcomes.put(questionId, PistonClient.joinUnwrapped(future)));
         return new TransactionTemplate(transactionManager).execute(status -> persistSubmit(plan, outcomes));
     }
 
@@ -369,6 +377,12 @@ public class StudentCodeExamServiceImpl implements StudentCodeExamService {
             throw new BadRequestException("page must be >= 0 and size must be between 1 and " + MAX_PAGE_SIZE);
         }
         Page<CodeSubmission> result = submissions.findHistory(userId, examId, PageRequest.of(page, size));
+        Map<Long, CodeTestCase> fixtureById = fixtureMap(result.getContent().stream()
+                        .map(row -> row.getQuestion().getQuestionId())
+                        .collect(Collectors.toSet()))
+                .values().stream()
+                .flatMap(List::stream)
+                .collect(Collectors.toMap(CodeTestCase::getTestCaseId, fixture -> fixture, (first, second) -> first));
         List<CodeExamResponses.SubmissionItem> items = result.getContent().stream()
                 .map(row -> new CodeExamResponses.SubmissionItem(
                         row.getSubmissionId(),
@@ -377,6 +391,7 @@ public class StudentCodeExamServiceImpl implements StudentCodeExamService {
                         row.getStatus(),
                         row.getPassedCount(),
                         row.getTotalCount(),
+                        testCaseOutcomes(row, fixtureById),
                         row.getSubmittedAt()))
                 .toList();
         return PageResponse.of(result, items);
@@ -478,12 +493,51 @@ public class StudentCodeExamServiceImpl implements StudentCodeExamService {
         return cfg == null || cfg.getMemoryLimitKb() == null ? DEFAULT_MEMORY_KB : cfg.getMemoryLimitKb();
     }
 
+    /**
+     * CD-07: replays the per-fixture verdicts stored at judging time, so a review can list each
+     * case instead of only its count. Every fixture carries its input and what the program printed;
+     * the expected output is withheld from a failed fixture so it can't be hard-coded.
+     */
+    private List<CodeExamResponses.TestCaseOutcome> testCaseOutcomes(CodeSubmission row,
+                                                                    Map<Long, CodeTestCase> fixtureById) {
+        if (row.getTestResults() == null || row.getTestResults().isBlank()) {
+            return List.of();
+        }
+        JsonNode stored;
+        try {
+            stored = json.readTree(row.getTestResults());
+        } catch (Exception ex) {
+            return List.of();
+        }
+        if (stored == null || !stored.isArray()) {
+            return List.of();
+        }
+        List<CodeExamResponses.TestCaseOutcome> outcomes = new ArrayList<>(stored.size());
+        for (JsonNode node : stored) {
+            long storedId = node.path("testCaseId").asLong(-1);
+            CodeTestCase fixture = storedId > 0 ? fixtureById.get(storedId) : null;
+            boolean hidden = fixture != null && Boolean.TRUE.equals(fixture.getHidden());
+            boolean passed = node.path("passed").asBoolean(false);
+            JsonNode stdout = node.get("stdout");
+            outcomes.add(new CodeExamResponses.TestCaseOutcome(
+                    fixture != null ? storedId : null,
+                    fixture != null ? fixture.getOrderIndex() : null,
+                    hidden,
+                    passed,
+                    fixture == null ? null : fixture.getInputData(),
+                    fixture == null || !passed ? null : fixture.getExpectedOutput(),
+                    stdout == null || stdout.isNull() ? null : stdout.asText()));
+        }
+        return outcomes;
+    }
+
     private String testResultsJson(List<PistonClient.CaseOutcome> outcomes) {
         ArrayNode array = json.createArrayNode();
         for (PistonClient.CaseOutcome outcome : outcomes) {
             ObjectNode row = array.addObject();
             row.put("testCaseId", outcome.testCaseId() == null ? -1 : outcome.testCaseId().intValue());
             row.put("passed", outcome.passed());
+            row.put("stdout", outcome.stdout() == null ? null : truncate(outcome.stdout()));
         }
         return array.toString();
     }

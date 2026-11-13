@@ -68,7 +68,7 @@ function DraftDiagramPreview({
   );
 }
 interface ExamAiGenerateTabProps {
-  formKind: "QUIZ" | "ESSAY" | "DIAGRAM";
+  formKind: "QUIZ" | "ESSAY" | "DIAGRAM" | "CODE";
   onCreated: (createdExam: ExamDetail) => void;
   onCancel: () => void;
 }
@@ -97,11 +97,11 @@ export function ExamAiGenerateTab({
     EASY: number;
     MEDIUM: number;
     HARD: number;
-  }>({
-    EASY: 4,
-    MEDIUM: 4,
-    HARD: 2,
-  });
+  }>(
+    formKind === "CODE"
+      ? { EASY: 1, MEDIUM: 1, HARD: 1 }
+      : { EASY: 4, MEDIUM: 4, HARD: 2 },
+  );
 
   const allowedTypes =
     formKind === "QUIZ"
@@ -112,7 +112,9 @@ export function ExamAiGenerateTab({
           "FILL_BLANK",
           "MATCHING",
         ]
-      : ["ESSAY", "DIAGRAM", "DIAGRAM_ESSAY", "CODE"];
+      : formKind === "CODE"
+        ? ["CODE"]
+        : ["ESSAY", "DIAGRAM", "DIAGRAM_ESSAY"];
 
   const [typeCounts, setTypeCounts] = useState<Record<string, number>>(
     formKind === "QUIZ"
@@ -123,7 +125,9 @@ export function ExamAiGenerateTab({
           FILL_BLANK: 0,
           MATCHING: 0,
         }
-      : { ESSAY: 10, DIAGRAM: 0, DIAGRAM_ESSAY: 0, CODE: 0 },
+      : formKind === "CODE"
+        ? { CODE: 3 }
+        : { ESSAY: 10, DIAGRAM: 0, DIAGRAM_ESSAY: 0 },
   );
 
   const [generating, setGenerating] = useState(false);

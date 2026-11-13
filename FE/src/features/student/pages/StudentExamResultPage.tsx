@@ -28,8 +28,8 @@ import { QuestionNav, ResultPalette, useArrowKeyNav, type OutcomeMeta } from '..
 import { SAVABLE_QUESTION_TYPES } from '@/services/studentDeck.service';
 import { SaveToFlashcardsModal } from '../components/flashcards/SaveToFlashcardsModal';
 import { RetryWrongQuestionsModal } from '../components/RetryWrongQuestionsModal';
-import { studentCodeExamService, type CodeLanguageInfo, type CodeSubmission } from '@/services/studentCodeExam.service';
-import { CodeSubmissionHistory, CodeTestCaseStatus, latestSubmissionBefore } from '../components/code/CodeSubmissionHistory';
+import { studentCodeExamService, type CodeSubmission } from '@/services/studentCodeExam.service';
+import { CodeTestCaseStatus, latestSubmissionBefore } from '../components/code/CodeTestCaseStatus';
 import { studentProgressService } from '@/services/studentProgress.service';
 import { ReportQuestionIssueButton } from '../components/ReportQuestionIssueDialog';
 
@@ -290,18 +290,16 @@ export function StudentExamResultPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [examId, reload]);
 
-  /** CD-07 of the exam (every attempt) and CD-06; null until loaded, or when the exam has no CODE question / they failed. */
+  /** CD-07 of the exam (every attempt); null until loaded, or when the exam has no CODE question / it failed. */
   const [codeSubs, setCodeSubs] = useState<CodeSubmission[] | null>(null);
-  const [codeLanguages, setCodeLanguages] = useState<CodeLanguageInfo[]>([]);
   const resultHasCode = Boolean(result?.questions.some(x => x.questionType === 'CODE'));
   useEffect(() => {
     if (!examId || !resultHasCode) return;
     let cancelled = false;
-    Promise.allSettled([studentCodeExamService.getAllSubmissions(examId), studentCodeExamService.getLanguages()]).then(([subs, langs]) => {
-      if (cancelled) return;
-      setCodeSubs(subs.status === 'fulfilled' ? subs.value : null);
-      if (langs.status === 'fulfilled') setCodeLanguages(langs.value);
-    });
+    studentCodeExamService.getAllSubmissions(examId).then(
+      subs => !cancelled && setCodeSubs(subs),
+      () => !cancelled && setCodeSubs(null),
+    );
     return () => {
       cancelled = true;
     };
@@ -677,17 +675,20 @@ export function StudentExamResultPage() {
                     )
                   ) : undefined
                 }
+                gradeDetail={
+                  q.questionType === 'CODE' && codeSubs
+                    ? (() => {
+                        const sub = latestSubmissionBefore(codeSubs, q.questionId, result.submittedAt);
+                        return sub ? (
+                          <div className="rounded-[10px] border border-line bg-surface p-4 text-sm text-content-soft">
+                            <CodeTestCaseStatus submission={sub} />
+                          </div>
+                        ) : null;
+                      })()
+                    : undefined
+                }
               />
               {bookmarkError && <p role="alert" className="text-sm text-danger">{bookmarkError}</p>}
-              {q.questionType === 'CODE' && codeSubs && (() => {
-                const sub = latestSubmissionBefore(codeSubs, q.questionId, result.submittedAt);
-                return sub ? (
-                  <div className="card flex flex-wrap items-center gap-2 px-4 py-3 text-sm text-content-soft">
-                    <span className="font-medium text-content">Test cases</span>
-                    <CodeTestCaseStatus submission={sub} />
-                  </div>
-                ) : null;
-              })()}
               <div className="flex items-center justify-between gap-3">
                 <Button variant="outline" icon={<Icon.ChevronLeft className="w-4 h-4" />} disabled={!navRef.current.prev} onClick={navRef.current.prev}>
                   Previous
@@ -701,17 +702,6 @@ export function StudentExamResultPage() {
           )}
         </section>
       </div>
-
-      {codeSubs && (
-        <CodeSubmissionHistory
-          submissions={codeSubs}
-          languages={codeLanguages}
-          questions={result.questions
-            .map((x, i) => ({ x, i }))
-            .filter(({ x }) => x.questionType === 'CODE')
-            .map(({ x, i }) => ({ questionId: x.questionId, label: `Q${i + 1} · ${truncate(x.content, 40)}` }))}
-        />
-      )}
 
       {saveQuestions && (
         <SaveToFlashcardsModal
@@ -1002,6 +992,7 @@ function ResultQuestionCard({
   nav,
   saveAction,
   bookmarkAction,
+  gradeDetail,
 }: {
   question: ResultQuestion;
   index: number;
@@ -1017,6 +1008,8 @@ function ResultQuestionCard({
   /** "Save to flashcards" button, under the answer. */
   saveAction?: React.ReactNode;
   bookmarkAction?: React.ReactNode;
+  /** Shown under the score of a rubric-graded answer, e.g. a CODE answer's test cases. */
+  gradeDetail?: React.ReactNode;
 }) {
   return (
     <article className="card overflow-hidden">
@@ -1070,8 +1063,10 @@ function ResultQuestionCard({
           <div className="min-w-0">
             <AnswerReview question={q} />
           </div>
-          <div className="@3xl:sticky @3xl:top-[85px] min-w-0">
+          {/* Not sticky with test cases under the score: a long list would run past the viewport. */}
+          <div className={`min-w-0 space-y-3 ${gradeDetail ? '' : '@3xl:sticky @3xl:top-[85px]'}`}>
             <RubricGrade question={q} outcome={outcome} />
+            {gradeDetail}
           </div>
           </div>
         </div>
@@ -1232,12 +1227,6 @@ function ExplanationBox({
       )}
     </div>
   );
-}
-
-/** First `max` characters of a question on one line, for filter labels. */
-function truncate(text: string, max: number): string {
-  const line = text.replace(/\s+/g, ' ').trim();
-  return line.length > max ? `${line.slice(0, max - 1)}…` : line;
 }
 
 interface UnfinishedAttempt {

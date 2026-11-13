@@ -80,7 +80,7 @@ public class ExamAiServiceImpl implements ExamAiService {
             - DIAGRAM_ESSAY: the learner draws a diagram and explains it in writing; content asks for both;
               graph has the same shape as DIAGRAM; essayGradingRubric judges both the diagram and written explanation.
             - CODE: content states the stdin/stdout format and constraints; no options, answerKey or rubric;
-              codeConfig has allowedLanguages drawn from JAVA, PYTHON, C, CPP, codeTemplate, timeLimitMs and memoryLimitKb;
+              codeConfig has allowedLanguages drawn from JAVA, PYTHON, C, CPP, timeLimitMs and memoryLimitKb;
               testCases has 3-6 {inputData, expectedOutput, hidden} entries, with at least one hidden and one sample.
             Quality rules: questions must be answerable from the course/module/material given; one clear idea per question;
             distractors plausible but unambiguously wrong; no "all/none of the above"; EASY = recall, MEDIUM = apply,
@@ -421,10 +421,9 @@ public class ExamAiServiceImpl implements ExamAiService {
                 "notes", STRING), "criteria", "notes"));
         questionProperties.put("codeConfig", object(Map.of(
                 "allowedLanguages", array(Map.of("type", "STRING", "enum", CODE_LANGUAGES)),
-                "codeTemplate", STRING,
                 "timeLimitMs", Map.of("type", "INTEGER"),
                 "memoryLimitKb", Map.of("type", "INTEGER")),
-                "allowedLanguages", "codeTemplate", "timeLimitMs", "memoryLimitKb"));
+                "allowedLanguages", "timeLimitMs", "memoryLimitKb"));
         questionProperties.put("testCases", array(object(Map.of(
                 "inputData", STRING, "expectedOutput", STRING, "hidden", Map.of("type", "BOOLEAN")),
                 "inputData", "expectedOutput", "hidden")));
@@ -444,8 +443,8 @@ public class ExamAiServiceImpl implements ExamAiService {
             });
         }
         if (languages.isEmpty()) languages.addAll(CODE_LANGUAGES);
+        // No AI starter code: the model wrote the full solution into it, and the student editor opens on it.
         return CodeConfigDto.builder().allowedLanguages(languages)
-                .codeTemplate(node.path("codeTemplate").isTextual() ? node.path("codeTemplate").asText() : null)
                 .timeLimitMs(node.path("timeLimitMs").canConvertToInt() ? node.path("timeLimitMs").intValue() : 5000)
                 .memoryLimitKb(node.path("memoryLimitKb").canConvertToInt() ? node.path("memoryLimitKb").intValue() : 262144)
                 .build();

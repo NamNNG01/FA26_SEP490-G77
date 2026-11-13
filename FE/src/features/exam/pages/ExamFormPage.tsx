@@ -58,7 +58,7 @@ export function ExamFormPage({
   formKind: propFormKind,
   mode: propMode,
 }: {
-  formKind?: "QUIZ" | "ESSAY" | "DIAGRAM";
+  formKind?: "QUIZ" | "ESSAY" | "DIAGRAM" | "CODE";
   mode?: "create" | "edit";
 }) {
   const { id } = useParams<{ id: string }>();
@@ -68,13 +68,16 @@ export function ExamFormPage({
 
   const isEdit = propMode === "edit" || (Boolean(id) && id !== "new");
   const isEssayFromPath = location.pathname.includes("/essay");
+  const isCodeFromPath = location.pathname.includes("/exams/code");
   const requestedFormKind =
-    propFormKind || (isEssayFromPath ? "ESSAY" : "QUIZ");
+    propFormKind ||
+    (isCodeFromPath ? "CODE" : isEssayFromPath ? "ESSAY" : "QUIZ");
   const formKind =
     requestedFormKind === "DIAGRAM" ? "ESSAY" : requestedFormKind;
   const isAssessment = formKind !== "QUIZ";
-  const formLabel = formKind === "QUIZ" ? "Quiz" : "Essay";
-  const examPathKind = formKind === "QUIZ" ? "quiz" : "essay";
+  const formLabel =
+    formKind === "QUIZ" ? "Quiz" : formKind === "CODE" ? "Code" : "Essay";
+  const examPathKind = formKind.toLowerCase();
   const isEssayQuestion = (question: ExamQuestion) =>
     ["ESSAY", "DIAGRAM", "DIAGRAM_ESSAY"].includes(question.questionType);
 
@@ -155,7 +158,9 @@ export function ExamFormPage({
           "MATCHING",
           "ORDERING",
         ]
-      : ["ESSAY", "DIAGRAM", "DIAGRAM_ESSAY", "CODE"];
+      : formKind === "CODE"
+        ? ["CODE"]
+        : ["ESSAY", "DIAGRAM", "DIAGRAM_ESSAY"];
 
   useEffect(() => {
     if (!questionEditTarget) {
@@ -299,6 +304,16 @@ export function ExamFormPage({
     setLoading(true);
     try {
       const data = await examService.getExamById(examIdNum);
+      // A CODE exam opened through the essay URL (or the reverse) belongs to the other form.
+      if (
+        (data.examKind === "CODE") !== (formKind === "CODE") &&
+        (data.examKind === "CODE" || data.examKind === "ESSAY")
+      ) {
+        navigate(`/manager/exams/${data.examKind.toLowerCase()}/${examIdNum}`, {
+          replace: true,
+        });
+        return;
+      }
       setTitle(data.title || "");
       setDescription(data.description || "");
       setCourseId(data.courseId ? String(data.courseId) : "");
@@ -384,7 +399,7 @@ export function ExamFormPage({
         loadExamDetail(numId);
       }
     }
-  }, [id, isEdit]);
+  }, [id, isEdit, formKind]);
 
   const handlePublishStatusChange = async (targetStatus: ExamStatus) => {
     if (!id) return;
@@ -1546,7 +1561,9 @@ export function ExamFormPage({
                   <p className="text-xs text-content-subtle">
                     {formKind === "QUIZ"
                       ? "Objective questions linked directly to this exam."
-                      : "Essay and diagram questions can be combined in this exam. Each question includes its required grading rubric."}
+                      : formKind === "CODE"
+                        ? "Code questions linked to this exam. Each question is graded on its test cases."
+                        : "Essay and diagram questions can be combined in this exam. Each question includes its required grading rubric."}
                   </p>
                   {fieldErrors.questions && (
                     <p className="mt-1 text-xs text-danger">

@@ -64,7 +64,8 @@ type SaveState = 'saved' | 'dirty' | 'saving' | 'error';
  *    The deadline is the server's: when it passes, the screen submits on its own
  *    (and the BE auto-submits if the tab is gone).
  *  - Only questions made entirely of essay / code / diagram get the "Essay"
- *    layout (wider, taller editor); every other paper is a quiz.
+ *    layout (wider, taller editor); every other paper is a quiz. A paper of only
+ *    CODE questions is labelled "Code".
  *  - CODE questions get a 20/80 workspace (question | VS Code–style editor with Run, CD-04).
  *    Submit grades them on every test case first (CD-05), then submits the attempt.
  *  - The attempt's examMode picks the behaviour (see examModes.ts): an EXAM kind (EXAM, CONTEST) is
@@ -137,6 +138,8 @@ function ExamAttemptScreen() {
 
   const [confirm, setConfirm] = useState<'submit' | 'cancel' | null>(null);
   const [busy, setBusy] = useState<'submit' | 'save' | 'cancel' | null>(null);
+  /** CD-05 is running: the sandbox judges every test case, which can take a while. */
+  const [grading, setGrading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [checks, setChecks] = useState<Record<number, AnswerCheck>>({});
   const [checking, setChecking] = useState<number | null>(null);
@@ -315,10 +318,11 @@ function ExamAttemptScreen() {
           : session.questions
               .filter(q => q.questionType === 'CODE')
               .map(q =>
-                currentCodeAnswer(session.attemptId, q.questionId, codeMeta.get(q.questionId) ?? null, codeLanguages, answersRef.current[q.questionId]?.text),
+                currentCodeAnswer(q.questionId, codeMeta.get(q.questionId) ?? null, codeLanguages, answersRef.current[q.questionId]?.text),
               )
               .filter(a => a != null);
         if (codeAnswers.length > 0) {
+          setGrading(true);
           try {
             await studentCodeExamService.submit(session.examId, codeAnswers);
           } catch (err) {
@@ -329,6 +333,8 @@ function ExamAttemptScreen() {
               setBusy(null);
               return;
             }
+          } finally {
+            setGrading(false);
           }
         }
         await studentAttemptService.submit(session.attemptId);
@@ -430,6 +436,7 @@ function ExamAttemptScreen() {
   /* ── Derived ──────────────────────────────────────────────────────────── */
   const questions = session?.questions ?? [];
   const isEssay = questions.length > 0 && questions.every(q => RUBRIC_TYPES.has(q.questionType));
+  const isCodeExam = questions.length > 0 && questions.every(q => q.questionType === 'CODE');
   const answeredSet = useMemo(() => {
     const s = new Set<number>();
     questions.forEach((q, i) => {
@@ -586,7 +593,7 @@ function ExamAttemptScreen() {
           <Icon.Logo className="w-7 h-7 flex-shrink-0 text-brand-ink" aria-hidden="true" />
           <span className="text-base font-bold text-content truncate">{session.title}</span>
           <span className="hidden sm:inline-flex flex-shrink-0 rounded-[6px] border border-line px-2 py-0.5 text-2xs font-medium text-content-soft">
-            {isEssay ? 'Essay' : 'Quiz'}
+            {isCodeExam ? 'Code' : isEssay ? 'Essay' : 'Quiz'}
           </span>
           {/* A self-made exam taken as an exam says so; a course exam needs no badge. */}
           {practice && (
@@ -596,6 +603,11 @@ function ExamAttemptScreen() {
           )}
         </div>
         <div className="flex items-center gap-3 flex-wrap">
+          {grading && confirm !== 'submit' && (
+            <span role="status" className="text-xs text-content-soft">
+              Grading your code…
+            </span>
+          )}
           <SaveIndicator state={saveState} />
           {remaining != null && <TimerDisplay seconds={remaining} warning={remaining < WARN_SECONDS} />}
           <Button
@@ -661,7 +673,6 @@ function ExamAttemptScreen() {
               <div className="md:min-h-0 md:flex-1">
                 <CodeQuestionWorkspace
                   key={q.questionId}
-                  attemptId={session.attemptId}
                   question={q}
                   meta={codeMeta.get(q.questionId) ?? null}
                   languages={codeLanguages}
@@ -796,6 +807,11 @@ function ExamAttemptScreen() {
         }
       >
         <p className="text-base text-content-secondary leading-relaxed">You can't change your answers after submitting.</p>
+        {grading && (
+          <p role="status" className="mt-3 text-sm text-content-soft">
+            Grading your code on every test case… this can take up to a minute.
+          </p>
+        )}
         <dl className="mt-4 grid grid-cols-3 gap-2 text-center">
           {[
             { label: 'Answered', value: answeredSet.size },

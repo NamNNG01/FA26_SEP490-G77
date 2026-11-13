@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/Button';
 import { Checkbox } from '@/components/ui/Checkbox';
+import { Radio } from '@/components/ui/Radio';
 import { Select } from '@/components/ui/Select';
 import { Icon } from '@/assets/icons';
 import {
@@ -22,7 +23,7 @@ const MONO = (invalid: boolean) =>
   }`;
 
 /**
- * CODE answer settings: allowed languages, starter code, limits and test cases. The question is
+ * CODE answer settings: the one language, starter code, limits and test cases. The question is
  * graded only by the test cases (CD-05): every one passes = full points, otherwise 0.
  */
 export function CodeAnswer({ q, set, error }: { q: QuestionDraft; set: (patch: Partial<QuestionDraft>) => void; error?: string }) {
@@ -30,9 +31,6 @@ export function CodeAnswer({ q, set, error }: { q: QuestionDraft; set: (patch: P
   const setCode = (patch: Partial<CodeDraft>) => set({ code: { ...c, ...patch } });
   const setCase = (i: number, patch: Partial<TestCaseDraft>) =>
     setCode({ testCases: c.testCases.map((t, ti) => (ti === i ? { ...t, ...patch } : t)) });
-  const toggleLanguage = (value: string, on: boolean) =>
-    // Kept in the fixed option order, whatever order they were ticked in.
-    setCode({ languages: CODE_LANGUAGE_OPTIONS.map(l => l.value).filter(v => (v === value ? on : c.languages.includes(v))) });
   const firstPublic = c.testCases.findIndex(t => !t.hidden);
   const timeBad = Boolean(error) && !(Number(c.timeLimitMs) >= CODE_TIME_LIMIT_MS.min && Number(c.timeLimitMs) <= CODE_TIME_LIMIT_MS.max);
   const memoryValue = MEMORY_OPTIONS.some(o => o.value === c.memoryLimitKb) ? c.memoryLimitKb : String(CODE_MEMORY_LIMIT_KB.default);
@@ -40,10 +38,10 @@ export function CodeAnswer({ q, set, error }: { q: QuestionDraft; set: (patch: P
   return (
     <div className="space-y-4">
       <div>
-        <span className="block text-sm font-medium text-content-secondary mb-1.5">Languages *</span>
-        <div className="flex flex-wrap gap-x-5 gap-y-2">
+        <span className="block text-sm font-medium text-content-secondary mb-1.5">Language *</span>
+        <div role="radiogroup" aria-label="Language" className="flex flex-wrap gap-x-5 gap-y-2">
           {CODE_LANGUAGE_OPTIONS.map(l => (
-            <Checkbox key={l.value} label={l.label} checked={c.languages.includes(l.value)} onChange={on => toggleLanguage(l.value, on)} />
+            <Radio key={l.value} label={l.label} checked={c.languages[0] === l.value} onChange={() => setCode({ languages: [l.value] })} />
           ))}
         </div>
       </div>
