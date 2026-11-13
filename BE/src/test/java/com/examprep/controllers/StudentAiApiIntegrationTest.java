@@ -183,6 +183,45 @@ public class StudentAiApiIntegrationTest {
         assertEquals(1, countLogs());
     }
 
+    @Test void aCodeQuestionIsExplainedFromItsLanguagesAndPublicSampleOnly() throws Exception {
+        Question code = Question.builder().course(course).questionType("CODE").difficulty("EASY")
+                .content("Read a line and print it reversed.").status("ACTIVE").approvalStatus("APPROVED").build();
+        em.persist(code);
+        em.persist(CodeQuestionConfig.builder().questionId(code.getQuestionId()).allowedLanguages("[\"JAVA\"]")
+                .codeTemplate("class Main {}").timeLimitMs(2000).memoryLimitKb(262144)
+                .createdAt(Instant.now()).updatedAt(Instant.now()).build());
+        em.persist(CodeTestCase.builder().question(code).inputData("abc").expectedOutput("cba")
+                .hidden(false).orderIndex(0).createdAt(Instant.now()).build());
+        em.persist(CodeTestCase.builder().question(code).inputData("hidden-input").expectedOutput("hidden-output")
+                .hidden(true).orderIndex(1).createdAt(Instant.now()).build());
+        // Weight 0 keeps the fixture out of the other tests' score arithmetic; SE-01 never uses a weight.
+        answer(code, "0", "{\"content\":\"Read a line and print it reversed.\"}", "{}",
+                "{\"text\":\"return new StringBuilder(line).reverse().toString();\"}", "AUTO", "0");
+        REPLIES.add(json.writeValueAsString(Map.of("items", List.of(Map.of("questionId", code.getQuestionId(),
+                "explanation", "Read the whole line, then print its characters from last to first.")))));
+        explain(student, code.getQuestionId()).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[0].source").value("GENERATED"))
+                .andExpect(jsonPath("$.data.items[0].explanation").value(containsString("last to first")))
+                .andExpect(jsonPath("$.data.quota.freeRemaining").value(10_000 - 230));
+        // The prompt carries the allowed language and the public sample, never a hidden fixture.
+        String sent = REQUESTS.get(0);
+        assertTrue(sent.contains("JAVA"));
+        assertTrue(sent.contains("abc"));
+        assertTrue(sent.contains("cba"));
+        assertFalse(sent.contains("hidden-input"));
+        assertFalse(sent.contains("hidden-output"));
+        AiUsageLog log = onlyLog("EXPLANATION");
+        assertEquals("SUCCESS", log.getStatus());
+        assertEquals("FREE", log.getBillingSource());
+        em.refresh(code);
+        assertEquals("AI", code.getAiExplanationSource());
+        assertEquals(code.getScoringVersion(), code.getAiExplanationVersion());
+
+        explain(student, code.getQuestionId()).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[0].source").value("CACHED"));
+        assertEquals(1, REQUESTS.size());
+    }
+
     @Test void explanationRequestsAreValidatedAndOwnershipChecked() throws Exception {
         mvc.perform(post(explainPath(attempt.getAttemptId())).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"questionIds\":[1]}")).andExpect(status().isUnauthorized());

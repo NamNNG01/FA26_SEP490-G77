@@ -1,9 +1,12 @@
 package com.examprep.controllers.student;
 
 import com.examprep.entities.AiUsageLog;
+import com.examprep.entities.CodeQuestionConfig;
+import com.examprep.entities.CodeTestCase;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.junit.jupiter.api.Test;
 
+import java.time.Instant;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -300,6 +303,46 @@ class ModulePracticeAiApiIntegrationTest extends ModulePracticeTestBase {
         assertEquals("GENERATED", regenerated.path("source").asText());
         assertEquals("A freshly generated explanation.", regenerated.path("explanation").asText());
         assertEquals(1, REQUESTS.size());
+    }
+
+    @Test
+    void aCodeExplanationUsesThePublicSampleOrTheManagerText() throws Exception {
+        em.persist(CodeQuestionConfig.builder().questionId(code.getQuestionId()).allowedLanguages("[\"JAVA\"]")
+                .codeTemplate("class Main {}").timeLimitMs(2000).memoryLimitKb(262144)
+                .createdAt(Instant.now()).updatedAt(Instant.now()).build());
+        em.persist(CodeTestCase.builder().question(code).inputData("abc").expectedOutput("cba")
+                .hidden(false).orderIndex(0).createdAt(Instant.now()).build());
+        em.persist(CodeTestCase.builder().question(code).inputData("hidden-input").expectedOutput("hidden-output")
+                .hidden(true).orderIndex(1).createdAt(Instant.now()).build());
+        em.flush();
+
+        JsonNode session = sessionOf(student, moduleA.getModuleId());
+        long sessionId = session.path("sessionId").asLong();
+        long sessionQuestionId = sessionQuestionIdOf(session, code.getQuestionId());
+        answer(student, sessionId, sessionQuestionId,
+                "{\"response\":{\"text\":\"return new StringBuilder(s).reverse().toString();\"}}");
+        String body = "{\"sessionId\":" + sessionId + ",\"sessionQuestionId\":" + sessionQuestionId + "}";
+
+        REPLIES.add(explanationReply("Walk the characters from the end."));
+        JsonNode generated = data(explain(student, code.getQuestionId(), body).andExpect(status().isOk()));
+        assertEquals("GENERATED", generated.path("source").asText());
+        String sent = REQUESTS.get(0);
+        assertTrue(sent.contains("JAVA"), "the allowed language is part of the reference");
+        assertTrue(sent.contains("abc"));
+        assertTrue(sent.contains("cba"));
+        assertFalse(sent.contains("hidden-input"), "a hidden fixture must never reach the model");
+        assertFalse(sent.contains("hidden-output"), "a hidden fixture must never reach the model");
+        assertTrue(sent.contains("studentAnswer"), "the student's own code personalises the explanation");
+
+        // A manager's explanation of a CODE question is reused instead of calling the provider.
+        code.setAiExplanation("A manager wrote this.");
+        code.setAiExplanationSource(null);
+        code.setAiExplanationVersion(null);
+        em.flush();
+        JsonNode manager = data(explain(student, code.getQuestionId(), body).andExpect(status().isOk()));
+        assertEquals("MANAGER", manager.path("source").asText());
+        assertEquals("A manager wrote this.", manager.path("explanation").asText());
+        assertEquals(1, REQUESTS.size(), "a manager explanation costs nothing");
     }
 
     @Test
