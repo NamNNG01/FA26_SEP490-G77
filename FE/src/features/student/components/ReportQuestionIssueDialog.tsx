@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { Modal } from "@/components/ui/Modal";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Alert } from "@/components/ui/Alert";
 import { useToast } from "@/components/ui/ToastHost";
 import { getApiErrorMessage } from "@/utils/apiError";
@@ -485,27 +486,16 @@ export function ReportQuestionIssueDialog({
         </form>
       </Modal>
 
-      <Modal
+      <ConfirmDialog
         open={confirmDiscard}
         onClose={() => setConfirmDiscard(false)}
-        size="sm"
+        onConfirm={onClose}
+        tone="danger"
         title="Discard this report?"
-        footer={
-          <>
-            <Button variant="outline" onClick={() => setConfirmDiscard(false)}>
-              Keep editing
-            </Button>
-            <Button variant="danger" onClick={onClose}>
-              Discard report
-            </Button>
-          </>
-        }
-      >
-        <p className="text-sm text-content-secondary">
-          You have started a report. If you close it now, what you wrote will be
-          lost.
-        </p>
-      </Modal>
+        description="You have started a report. If you close it now, what you wrote will be lost."
+        cancelLabel="Keep editing"
+        confirmLabel="Discard report"
+      />
     </>
   );
 }
