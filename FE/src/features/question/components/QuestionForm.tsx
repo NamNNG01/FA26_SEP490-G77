@@ -6,6 +6,7 @@ import { Icon } from "@/assets/icons";
 import {
   DIFFICULTY_OPTIONS,
   QUESTION_TYPE_OPTIONS,
+  RUBRIC_TYPES,
   blankIndexes,
   changeType,
   emptyCriterion,
@@ -327,8 +328,8 @@ export function QuestionForm({
         )}
       </div>}
 
-      {showSection('answers') && <AnswerSection q={q} set={set} error={answersError} mode="answer" />}
-      {showSection('rubric') && <RubricAnswers q={q} set={set} error={answersError} />}
+      {showSection('answers') && <AnswerSection q={q} set={set} error={answersError} mode={sections ? 'answer' : 'all'} />}
+      {sections?.includes('rubric') && RUBRIC_TYPES.includes(q.type) && <RubricAnswers q={q} set={set} error={answersError} />}
 
       {showSection('explanation') && <div>
         <label

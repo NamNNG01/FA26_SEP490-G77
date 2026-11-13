@@ -392,18 +392,19 @@ export function ManagerReviewPage() {
       <div className="overflow-x-auto">
         <table className="w-full min-w-[720px] text-left text-sm">
           <thead className="bg-surface-muted text-content-secondary"><tr>
-            <th className="px-5 py-3 font-medium">Submission</th><th className="px-5 py-3 font-medium">Contributor</th><th className="px-5 py-3 font-medium">Course</th><th className="px-5 py-3 font-medium">Submitted</th><th className="px-5 py-3 font-medium">Status</th><th className="px-5 py-3"><span className="sr-only">Open</span></th>
+            <th className="px-5 py-3 font-medium">Submission</th><th className="px-5 py-3 font-medium">Contributor</th><th className="px-5 py-3 font-medium">Course</th><th className="px-5 py-3 font-medium">Submitted</th><th className="px-5 py-3 font-medium">Status</th>
           </tr></thead>
           <tbody className="divide-y divide-line">
-            {rows.map(row => <tr key={idOf(row, kind)} onDoubleClick={() => void open(row)} className="group hover:bg-surface-hover">
-              <td className="max-w-sm px-5 py-4"><div className="truncate font-medium text-content">{row.title || row.contentPreview || row.content || `Submission #${idOf(row, kind)}`}</div><div className="mt-1 truncate text-xs text-content-secondary">{kind === 'decks' ? `${row.cardCount ?? 0} cards${row.module?.title ? ` · ${row.module.title}` : ''}` : row.questionType ? questionTypeLabel(row.questionType) : `Submission #${idOf(row, kind)}`}</div></td>
+            {rows.map(row => <tr key={idOf(row, kind)} tabIndex={0} onClick={() => void open(row)} onKeyDown={event => {
+              if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); void open(row); }
+            }} className="group cursor-pointer hover:bg-surface-hover focus:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-600">
+              <td className="max-w-sm px-5 py-4"><div className="truncate font-medium text-content" title={row.title || row.contentPreview || row.content || `Submission #${idOf(row, kind)}`}>{row.title || row.contentPreview || row.content || `Submission #${idOf(row, kind)}`}</div><div className="mt-1 truncate text-xs text-content-secondary" title={kind === 'decks' ? `${row.cardCount ?? 0} cards${row.module?.title ? ` · ${row.module.title}` : ''}` : row.questionType ? questionTypeLabel(row.questionType) : `Submission #${idOf(row, kind)}`}>{kind === 'decks' ? `${row.cardCount ?? 0} cards${row.module?.title ? ` · ${row.module.title}` : ''}` : row.questionType ? questionTypeLabel(row.questionType) : `Submission #${idOf(row, kind)}`}</div></td>
               <td className="whitespace-nowrap px-5 py-4 text-content-secondary">{row.owner?.fullName || row.contributor?.fullName || studentNames.get(String(row.contributor?.id ?? row.contributorId)) || row.contributorName || (row.contributor?.id ? `Contributor #${row.contributor.id}` : '—')}</td>
               <td className="max-w-xs truncate px-5 py-4 text-content-secondary">{courseNameOf(row)}</td>
               <td className="whitespace-nowrap px-5 py-4 text-content-secondary">{row.submittedAt ? new Date(row.submittedAt).toLocaleString() : '—'}</td>
               <td className="px-5 py-4"><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${statusOf(row, kind) === 'PENDING' ? 'bg-amber-50 text-amber-800' : statusOf(row, kind) === 'REJECTED' ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>{statusLabel(statusOf(row, kind) || '')}</span></td>
-              <td className="px-5 py-4 text-right"><Button size="sm" variant="outline" loading={detailLoading && openingId === idOf(row, kind)} onClick={() => void open(row)}>Review</Button></td>
             </tr>)}
-            {!rows.length && <tr><td colSpan={6} className="p-12 text-center"><p className="font-medium text-content">{busy ? 'Loading submissions…' : 'No submissions found'}</p><p className="mt-1 text-sm text-content-secondary">{busy ? 'The review queue is being refreshed.' : 'Try changing the status or clearing some filters.'}</p></td></tr>}
+            {!rows.length && <tr><td colSpan={5} className="p-12 text-center"><p className="font-medium text-content">{busy ? 'Loading submissions…' : 'No submissions found'}</p><p className="mt-1 text-sm text-content-secondary">{busy ? 'The review queue is being refreshed.' : 'Try changing the status or clearing some filters.'}</p></td></tr>}
           </tbody>
         </table>
       </div>

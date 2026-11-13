@@ -121,22 +121,25 @@ export function ManagerQuestionIssuesPage() {
             <th className="px-5 py-3 font-medium">Priority</th>
             <th className="px-5 py-3 font-medium">Updated</th>
             <th className="px-5 py-3 font-medium">Status</th>
-            <th className="px-5 py-3"><span className="sr-only">Review</span></th>
           </tr></thead>
           <tbody className="divide-y divide-line">
-            {rows.map((row: any) => <tr key={row.issueId} className="hover:bg-surface-hover">
+            {rows.map((row: any) => <tr key={row.issueId} tabIndex={0} onClick={() => void review.open(row)} onKeyDown={event => {
+              if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); void review.open(row); }
+            }} className="cursor-pointer hover:bg-surface-hover focus:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-600">
               <td className="max-w-xl px-5 py-4">
-                <div className="flex flex-wrap items-center gap-2"><span className="font-semibold text-content">{row.questionContent || row.question?.content || 'Question content unavailable'}</span><span className="text-xs text-content-subtle">Question #{row.questionId}</span></div>
-                <p className="mt-1 text-xs text-content-secondary">{issueLabel(row.issueType)} · Ticket #{row.issueId}</p>
+                <div className="min-w-0">
+                  <p className="truncate font-semibold text-content" title={row.questionContent || row.question?.content || 'Question content unavailable'}>{row.questionContent || row.question?.content || 'Question content unavailable'}</p>
+                  <p className="mt-1 truncate text-xs text-content-subtle" title={`Question #${row.questionId}`}>Question #{row.questionId}</p>
+                  <p className="mt-1 truncate text-xs text-content-secondary" title={`${issueLabel(row.issueType)} · Ticket #${row.issueId}`}>{issueLabel(row.issueType)} · Ticket #{row.issueId}</p>
+                </div>
               </td>
               <td className="max-w-xs truncate px-5 py-4 text-content-secondary">{row.courseName || row.courseTitle || row.course?.title || row.course?.name || courseNames.get(String(row.courseId)) || '—'}</td>
               <td className="whitespace-nowrap px-5 py-4 text-content-secondary">{row.reportCount ?? 0}</td>
               <td className="whitespace-nowrap px-5 py-4"><PriorityBadge priority={row.priority} score={row.priorityScore ?? 0} /></td>
               <td className="whitespace-nowrap px-5 py-4 text-content-secondary">{row.updatedAt || row.createdAt ? new Date(row.updatedAt || row.createdAt).toLocaleDateString() : '—'}</td>
               <td className="px-5 py-4"><Status value={row.status} /></td>
-              <td className="px-5 py-4 text-right"><Button size="sm" variant="outline" onClick={() => void review.open(row)}>Review</Button></td>
             </tr>)}
-            {!rows.length && <tr><td colSpan={7} className="p-12 text-center"><p className="font-medium text-content">{busy ? 'Loading tickets…' : 'No tickets found'}</p><p className="mt-1 text-sm text-content-secondary">{busy ? 'The issue queue is being refreshed.' : 'Try another status or clear some filters.'}</p></td></tr>}
+            {!rows.length && <tr><td colSpan={6} className="p-12 text-center"><p className="font-medium text-content">{busy ? 'Loading tickets…' : 'No tickets found'}</p><p className="mt-1 text-sm text-content-secondary">{busy ? 'The issue queue is being refreshed.' : 'Try another status or clear some filters.'}</p></td></tr>}
           </tbody>
         </table>
       </div>
