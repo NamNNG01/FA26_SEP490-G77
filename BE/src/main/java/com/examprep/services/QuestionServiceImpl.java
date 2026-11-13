@@ -3,6 +3,7 @@ package com.examprep.services;
 import com.examprep.ai.AiClient;
 import com.examprep.dto.question.*;
 import com.examprep.entities.*;
+import com.examprep.entities.Module;
 import com.examprep.exceptions.BadRequestException;
 import com.examprep.exceptions.ForbiddenException;
 import com.examprep.exceptions.QuestionValidationException;
@@ -156,7 +157,7 @@ public class QuestionServiceImpl implements QuestionService {
             }
         }
 
-        com.examprep.entities.Module module = moduleRepository.findById(moduleId)
+        Module module = moduleRepository.findById(moduleId)
                 .orElseThrow(() -> new ResourceNotFoundException("Module not found"));
 
         if (!module.getCourse().getCourseId().equals(course.getCourseId())) {
@@ -289,8 +290,7 @@ public class QuestionServiceImpl implements QuestionService {
             questionToSavedOptions.put(q, qOptions);
         }
 
-        List<AnswerOption> savedOptionsAll = answerOptionRepository.saveAll(allOptionsToSave);
-
+        answerOptionRepository.saveAll(allOptionsToSave);
         List<QuestionDetailDto> results = new ArrayList<>(savedQuestions.size());
         for (int i = 0; i < savedQuestions.size(); i++) {
             Question q = savedQuestions.get(i);
@@ -835,8 +835,6 @@ public class QuestionServiceImpl implements QuestionService {
                 throw new BadRequestException("Cannot activate question that is not approved");
             }
             List<AnswerOption> options = answerOptionRepository.findByQuestion_QuestionId(q.getQuestionId());
-            QuestionPayload payload = QuestionPayload.fromEntity(q, options, objectMapper);
-            questionValidator.validateOrThrow(payload);
         } else if ("ACTIVE".equals(currentStatus) && "ARCHIVED".equals(newStatus)) {
             // Allowed: ACTIVE -> ARCHIVED
         } else if ("ACTIVE".equals(currentStatus) && ("INACTIVE".equals(newStatus) || "DRAFT".equals(newStatus))) {

@@ -62,7 +62,6 @@ public class QuestionController {
             @RequestParam(required = false) String creatorRole,
             @RequestParam(required = false) String source,
             @RequestParam(required = false) Long createdBy,
-            @RequestParam(required = false) String skillTag,
             @RequestParam(required = false) String search,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
