@@ -8,7 +8,7 @@ import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { Table, type TableColumn } from '@/components/ui/Table';
 import { Alert } from '@/components/ui/Alert';
 import { Dropdown } from '@/components/ui/Dropdown';
-import { Modal } from '@/components/ui/Modal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useToast } from '@/components/ui/ToastHost';
 import { SearchInput } from '@/components/common/SearchInput';
 import { Icon } from '@/assets/icons';
@@ -17,12 +17,10 @@ import { ROUTES, managerQuestionDuplicatePath, managerQuestionEditPath } from '@
 import { courseService, type CourseModuleResponse, type CourseSummaryItem } from '@/services/course.service';
 import { getUserRoleCode } from '@/auth/storage';
 import {
-  NEXT_QUESTION_STATUS,
   QUESTION_STATUS_LABELS,
   questionService,
   type QuestionListItem,
   type QuestionPage,
-  type QuestionStatus,
 } from '@/services/question.service';
 import { GROUP_KIND_LABELS, asGroupKind, kindOf } from '../model';
 import { loadCreateDraft } from '../createDraft';
@@ -47,7 +45,6 @@ const STATUS_LABELS: Record<string, string> = QUESTION_STATUS_LABELS;
 const TYPE_VARIANT: Record<string, BadgeVariant> = { ESSAY: 'purple', TRUE_FALSE: 'success', CODE: 'warning', DIAGRAM: 'warning' };
 const DIFFICULTY_VARIANT: Record<string, BadgeVariant> = { EASY: 'success', MEDIUM: 'warning', HARD: 'danger' };
 const STATUS_VARIANT: Record<string, BadgeVariant> = { INACTIVE: 'default', ACTIVE: 'success', ARCHIVED: 'danger' };
-const BULK_ACTION_LABELS: Partial<Record<QuestionStatus, string>> = { ACTIVE: 'Publish', ARCHIVED: 'Archive' };
 
 const toOptions = (allLabel: string, labels: Record<string, string>) => [
   { label: allLabel, value: ALL },
@@ -206,38 +203,29 @@ export function QuestionBankPage() {
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const selectedRows = rows.filter(r => selected.has(String(r.id)));
-  const selectedStatuses = new Set(selectedRows.map(r => r.status));
-  // Questions move together only when they share a status; mixed or archived selections can't.
-  const bulkStatus = selectedStatuses.size === 1 ? NEXT_QUESTION_STATUS[selectedRows[0].status as QuestionStatus] ?? null : null;
-  const bulkBlockedReason =
-    selectedStatuses.size > 1 ? 'Select questions with the same status — Draft to publish, or Published to archive.'
-      : selectedStatuses.has('ARCHIVED') ? 'Archived questions can’t change status.'
-      : null;
+  // Publishing is the only status move, and only drafts can make it.
+  const canBulkPublish = selectedRows.length > 0 && selectedRows.every(r => r.status === 'INACTIVE');
+  const bulkBlockedReason = canBulkPublish ? null : 'Only Draft questions can be published — published questions can’t change status.';
   const [bulkBusy, setBulkBusy] = useState(false);
-  /** Archiving can't be undone, so the bulk Archive asks first. */
-  const [confirmArchive, setConfirmArchive] = useState(false);
-  const archiveCount = selectedRows.length;
+  /** Publishing can't be undone, so the bulk Publish asks first. */
+  const [confirmPublish, setConfirmPublish] = useState(false);
+  const publishCount = selectedRows.length;
 
-  const bulkChangeStatus = async (next: QuestionStatus) => {
+  const bulkPublish = async () => {
     const ids = selectedRows.map(r => r.questionId);
     setBulkBusy(true);
     try {
-      await questionService.batchUpdateStatus(ids, next);
-      const noun = `${ids.length} question${ids.length === 1 ? '' : 's'}`;
-      toast.success(next === 'ACTIVE' ? `${noun} published.` : `${noun} archived.`);
-      setConfirmArchive(false);
+      await questionService.batchUpdateStatus(ids, 'ACTIVE');
+      toast.success(`${ids.length} question${ids.length === 1 ? '' : 's'} published.`);
+      setConfirmPublish(false);
       // Refetch so the rows show their new status and still match the active filter.
       setReloadKey(k => k + 1);
     } catch (err) {
       // All or nothing: nothing moved, so the selection stays for another try.
-      toast.error(err instanceof Error && err.message ? err.message : 'Could not change the status.');
+      toast.error(err instanceof Error && err.message ? err.message : 'Could not publish the questions.');
     } finally {
       setBulkBusy(false);
     }
-  };
-  const runBulk = () => {
-    if (bulkStatus === 'ARCHIVED') setConfirmArchive(true);
-    else if (bulkStatus) bulkChangeStatus(bulkStatus);
   };
 
   /** Question waiting for a confirmation to replace the unsaved New Questions draft. */
@@ -438,13 +426,11 @@ export function QuestionBankPage() {
               {bulkBlockedReason && <span className="text-xs text-content-soft">{bulkBlockedReason}</span>}
               <Button
                 size="sm"
-                variant={bulkStatus === 'ARCHIVED' ? 'danger' : 'primary'}
-                icon={bulkStatus === 'ARCHIVED' ? <Icon.Package className="w-4 h-4" /> : <Icon.CheckCircle className="w-4 h-4" />}
-                disabled={!bulkStatus || bulkBusy}
-                loading={bulkBusy && !confirmArchive}
-                onClick={runBulk}
+                icon={<Icon.Upload className="w-4 h-4" />}
+                disabled={!canBulkPublish || bulkBusy}
+                onClick={() => setConfirmPublish(true)}
               >
-                {(bulkStatus && BULK_ACTION_LABELS[bulkStatus]) || 'Change status'}
+                Publish
               </Button>
             </div>
           </div>
@@ -469,41 +455,25 @@ export function QuestionBankPage() {
         />
       </div>
 
-      <Modal
-        open={confirmArchive}
-        onClose={() => { if (!bulkBusy) setConfirmArchive(false); }}
-        title={archiveCount === 1 ? 'Archive question?' : `Archive ${archiveCount} questions?`}
-        size="sm"
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setConfirmArchive(false)} disabled={bulkBusy}>Cancel</Button>
-            <Button variant="danger" onClick={() => bulkChangeStatus('ARCHIVED')} loading={bulkBusy} disabled={bulkBusy}>Archive</Button>
-          </>
-        }
-      >
-        <p className="text-sm text-content-secondary">
-          Archived questions are no longer used when new exams are generated, and their status can’t be changed again.
-        </p>
-      </Modal>
+      <ConfirmDialog
+        open={confirmPublish}
+        onClose={() => setConfirmPublish(false)}
+        onConfirm={bulkPublish}
+        loading={bulkBusy}
+        title={publishCount === 1 ? 'Publish this question?' : `Publish ${publishCount} questions?`}
+        description="This action can’t be undone."
+        confirmLabel="Publish"
+      />
 
-      <Modal
+      <ConfirmDialog
         open={confirmDuplicate != null}
         onClose={() => setConfirmDuplicate(null)}
+        onConfirm={() => { if (confirmDuplicate != null) navigate(managerQuestionDuplicatePath(confirmDuplicate)); setConfirmDuplicate(null); }}
+        tone="danger"
         title="Replace your unsaved draft?"
-        size="sm"
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setConfirmDuplicate(null)}>Cancel</Button>
-            <Button variant="danger" onClick={() => { if (confirmDuplicate != null) navigate(managerQuestionDuplicatePath(confirmDuplicate)); setConfirmDuplicate(null); }}>
-              Discard &amp; duplicate
-            </Button>
-          </>
-        }
-      >
-        <p className="text-sm text-content-secondary">
-          You have new questions that haven’t been saved yet. Duplicating this question replaces them. Save them first if you want to keep them.
-        </p>
-      </Modal>
+        description="You have new questions that haven’t been saved yet. Duplicating this question replaces them. Save them first if you want to keep them."
+        confirmLabel="Discard & duplicate"
+      />
     </div>
   );
 }
