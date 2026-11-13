@@ -237,6 +237,33 @@ const emptyCode = (): CodeDraft => ({
   testCases: [emptyTestCase(), emptyTestCase(true)],
 });
 
+/**
+ * CODE settings read back from storage (a saved create draft): fields that are
+ * there and well-formed are kept, anything missing or malformed gets its default.
+ */
+export function normalizeCode(raw: unknown): CodeDraft {
+  const base = emptyCode();
+  const c = raw && typeof raw === 'object' ? (raw as Partial<CodeDraft>) : {};
+  const testCases = Array.isArray(c.testCases)
+    ? c.testCases
+        .filter((t): t is TestCaseDraft => Boolean(t) && typeof t === 'object')
+        .map(t => ({
+          ...t,
+          key: typeof t.key === 'string' ? t.key : newKey('tc'),
+          input: typeof t.input === 'string' ? t.input : '',
+          expectedOutput: typeof t.expectedOutput === 'string' ? t.expectedOutput : '',
+          hidden: Boolean(t.hidden),
+        }))
+    : base.testCases;
+  return {
+    languages: Array.isArray(c.languages) ? c.languages.filter(l => typeof l === 'string') : base.languages,
+    template: typeof c.template === 'string' ? c.template : base.template,
+    timeLimitMs: typeof c.timeLimitMs === 'string' ? c.timeLimitMs : base.timeLimitMs,
+    memoryLimitKb: typeof c.memoryLimitKb === 'string' ? c.memoryLimitKb : base.memoryLimitKb,
+    testCases,
+  };
+}
+
 export function emptyDraft(): QuestionDraft {
   return {
     key: newKey('q'),
@@ -410,7 +437,9 @@ export function validateDraft(q: QuestionDraft): QuestionErrors {
 const bytes = (s: string) => new TextEncoder().encode(s).length;
 
 /** First problem of a CODE question's settings, or undefined. */
-export function codeError(c: CodeDraft): string | undefined {
+export function codeError(c: CodeDraft | undefined): string | undefined {
+  // Safeguard only — every draft source fills `code`; restored drafts go through normalizeCode.
+  if (!c) return 'The code settings are missing — choose a language and add test cases.';
   if (c.languages.length !== 1) return 'Choose one language.';
   if (bytes(c.template) > MAX_CODE_TEXT_BYTES) return 'The starter code can be at most 100 KB.';
   const time = Number(c.timeLimitMs);
