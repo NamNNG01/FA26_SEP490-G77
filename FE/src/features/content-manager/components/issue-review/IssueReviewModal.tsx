@@ -294,18 +294,16 @@ export function IssueReviewModal({
           </div>
         ) : (
           <div className="space-y-4">
-            <div className="sticky top-0 z-[5] -mx-6 overflow-x-auto bg-surface px-6">
-              <Tabs
-                variant="underline"
-                tabs={TAB_IDS.map((id) => TAB_LABELS[id])}
-                active={TAB_LABELS[tab]}
-                onChange={(label) =>
-                  review.setTab(
-                    TAB_IDS.find((id) => TAB_LABELS[id] === label) ?? "review",
-                  )
-                }
-              />
-            </div>
+            <Tabs
+              variant="underline"
+              tabs={TAB_IDS.map((id) => TAB_LABELS[id])}
+              active={TAB_LABELS[tab]}
+              onChange={(label) =>
+                review.setTab(
+                  TAB_IDS.find((id) => TAB_LABELS[id] === label) ?? "review",
+                )
+              }
+            />
 
             <TicketSummary review={review} courseNames={courseNames} />
 
