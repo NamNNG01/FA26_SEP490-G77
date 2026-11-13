@@ -26,7 +26,7 @@ const MONO = (invalid: boolean) =>
  * CODE answer settings: the one language, starter code, limits and test cases. The question is
  * graded only by the test cases (CD-05): every one passes = full points, otherwise 0.
  */
-export function CodeAnswer({ q, set, error }: { q: QuestionDraft; set: (patch: Partial<QuestionDraft>) => void; error?: string }) {
+export function CodeAnswer({ q, set, error, readOnly = false }: { q: QuestionDraft; set: (patch: Partial<QuestionDraft>) => void; error?: string; readOnly?: boolean }) {
   const c = q.code;
   const setCode = (patch: Partial<CodeDraft>) => set({ code: { ...c, ...patch } });
   const setCase = (i: number, patch: Partial<TestCaseDraft>) =>
@@ -41,7 +41,7 @@ export function CodeAnswer({ q, set, error }: { q: QuestionDraft; set: (patch: P
         <span className="block text-sm font-medium text-content-secondary mb-1.5">Language *</span>
         <div role="radiogroup" aria-label="Language" className="flex flex-wrap gap-x-5 gap-y-2">
           {CODE_LANGUAGE_OPTIONS.map(l => (
-            <Radio key={l.value} label={l.label} checked={c.languages[0] === l.value} onChange={() => setCode({ languages: [l.value] })} />
+            <Radio key={l.value} label={l.label} checked={c.languages[0] === l.value} disabled={readOnly} onChange={() => setCode({ languages: [l.value] })} />
           ))}
         </div>
       </div>
@@ -55,6 +55,7 @@ export function CodeAnswer({ q, set, error }: { q: QuestionDraft; set: (patch: P
             max={CODE_TIME_LIMIT_MS.max}
             step={100}
             value={c.timeLimitMs}
+            disabled={readOnly}
             onChange={e => setCode({ timeLimitMs: e.target.value })}
             className={`w-full h-10 px-3 rounded-[10px] border text-base text-content bg-surface focus:outline-none focus:ring-2 ${
               timeBad ? 'border-danger-solid focus:ring-danger-solid/20' : 'border-line focus:ring-brand-600/20 focus:border-brand-600'
@@ -63,7 +64,7 @@ export function CodeAnswer({ q, set, error }: { q: QuestionDraft; set: (patch: P
         </label>
         <div className="min-w-0">
           <span className={LABEL}>Memory limit</span>
-          <Select aria-label="Memory limit" value={memoryValue} onChange={v => setCode({ memoryLimitKb: v })} options={MEMORY_OPTIONS} />
+          <Select aria-label="Memory limit" value={memoryValue} disabled={readOnly} onChange={v => setCode({ memoryLimitKb: v })} options={MEMORY_OPTIONS} />
         </div>
       </div>
 
@@ -73,6 +74,7 @@ export function CodeAnswer({ q, set, error }: { q: QuestionDraft; set: (patch: P
         </span>
         <textarea
           value={c.template}
+          readOnly={readOnly}
           onChange={e => setCode({ template: e.target.value })}
           rows={6}
           spellCheck={false}
@@ -84,7 +86,7 @@ export function CodeAnswer({ q, set, error }: { q: QuestionDraft; set: (patch: P
       <div>
         <div className="flex items-center justify-between gap-2 mb-1.5">
           <span className="text-sm font-medium text-content-secondary">Test cases *</span>
-          <Button
+          {!readOnly && <Button
             type="button"
             variant="outline"
             size="sm"
@@ -93,7 +95,7 @@ export function CodeAnswer({ q, set, error }: { q: QuestionDraft; set: (patch: P
             disabled={c.testCases.length >= MAX_TEST_CASES}
           >
             Add Test Case
-          </Button>
+          </Button>}
         </div>
         <div className="space-y-2">
           {c.testCases.map((t, i) => (
@@ -102,8 +104,8 @@ export function CodeAnswer({ q, set, error }: { q: QuestionDraft; set: (patch: P
                 <span className="text-xs font-bold text-content-soft">Test case {i + 1}</span>
                 {i === firstPublic && <span className="text-2xs font-medium text-brand-ink">Sample shown to students</span>}
                 <div className="ml-auto flex items-center gap-3">
-                  <Checkbox label="Hidden" checked={t.hidden} onChange={hidden => setCase(i, { hidden })} />
-                  <button
+                  <Checkbox label="Hidden" checked={t.hidden} disabled={readOnly} onChange={hidden => setCase(i, { hidden })} />
+                  {!readOnly && <button
                     type="button"
                     onClick={() => setCode({ testCases: c.testCases.filter((_, ti) => ti !== i) })}
                     disabled={c.testCases.length <= 1}
@@ -112,18 +114,19 @@ export function CodeAnswer({ q, set, error }: { q: QuestionDraft; set: (patch: P
                     className="p-1 text-content-subtle hover:text-danger disabled:opacity-30 disabled:cursor-not-allowed"
                   >
                     <Icon.Trash className="w-4 h-4" />
-                  </button>
+                  </button>}
                 </div>
               </div>
               <div className="grid gap-2 p-2.5 sm:grid-cols-2">
                 <label className="block min-w-0">
                   <span className={LABEL}>Input (stdin)</span>
-                  <textarea value={t.input} onChange={e => setCase(i, { input: e.target.value })} rows={3} spellCheck={false} className={MONO(false)} />
+                  <textarea value={t.input} readOnly={readOnly} onChange={e => setCase(i, { input: e.target.value })} rows={3} spellCheck={false} className={MONO(false)} />
                 </label>
                 <label className="block min-w-0">
                   <span className={LABEL}>Expected output</span>
                   <textarea
                     value={t.expectedOutput}
+                    readOnly={readOnly}
                     onChange={e => setCase(i, { expectedOutput: e.target.value })}
                     rows={3}
                     spellCheck={false}
