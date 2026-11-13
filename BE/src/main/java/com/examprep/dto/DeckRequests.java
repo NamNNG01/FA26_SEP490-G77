@@ -5,6 +5,12 @@ import jakarta.validation.constraints.*;
 public final class DeckRequests {
     private DeckRequests() {}
 
+    public static final int CARD_TEXT_MAX = 5000;
+    public static final int IMAGE_URL_MAX = 1000;
+
+    /** Blank (no image) or an http(s) URL; blocks javascript:/data: values in an img src. */
+    public static final String IMAGE_URL = "^\\s*$|^https?://\\S+$";
+
     public record Create(@NotBlank @Size(max = 255)
                          @Pattern(regexp = "(?sU).*\\S.*", message = "must not be blank") String title,
                          @Positive Long courseId, @NotNull Boolean isPublic, String description,
@@ -17,9 +23,15 @@ public final class DeckRequests {
                          /** null = unchanged, 0 = no module, otherwise a module of the deck's course (V60). */
                          @PositiveOrZero Long moduleId) {}
 
-    /** F-06 body: both faces are required. */
-    public record CardCreate(@NotBlank String frontText, @NotBlank String backText) {}
+    /** F-06 body: each face needs nonblank text, an image URL, or both. */
+    public record CardCreate(@Size(max = CARD_TEXT_MAX) String frontText,
+                             @Size(max = CARD_TEXT_MAX) String backText,
+                             @Size(max = IMAGE_URL_MAX) @Pattern(regexp = IMAGE_URL, message = "must be an http(s) URL") String frontImageUrl,
+                             @Size(max = IMAGE_URL_MAX) @Pattern(regexp = IMAGE_URL, message = "must be an http(s) URL") String backImageUrl) {}
 
-    /** F-07 body: partial update; null or blank means "leave this face unchanged". */
-    public record CardUpdate(String frontText, String backText) {}
+    /** F-07 body: an absent field keeps its stored value; an explicit null or blank clears it. */
+    public record CardUpdate(@Size(max = CARD_TEXT_MAX) String frontText,
+                             @Size(max = CARD_TEXT_MAX) String backText,
+                             @Size(max = IMAGE_URL_MAX) @Pattern(regexp = IMAGE_URL, message = "must be an http(s) URL") String frontImageUrl,
+                             @Size(max = IMAGE_URL_MAX) @Pattern(regexp = IMAGE_URL, message = "must be an http(s) URL") String backImageUrl) {}
 }

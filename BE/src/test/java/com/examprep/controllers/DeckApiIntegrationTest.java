@@ -360,11 +360,12 @@ class DeckApiIntegrationTest {
                 .andExpect(jsonPath("$.data.frontText").value("Only front"))
                 .andExpect(jsonPath("$.data.backText").value("Only back"));
 
-        // a blank face is treated as "not supplied" and leaves the stored value alone
+        // a supplied blank face clears that text, so a face left with neither text nor image is rejected
         call(manager, put(cards + "/" + mine.getCardId()).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"frontText\":\"   \"}"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.frontText").value("Only front"));
+                .andExpect(status().isBadRequest());
+        em.flush();
+        assertEquals("Only front", em.find(Flashcard.class, mine.getCardId()).getFrontText());
 
         // unknown card -> 404
         call(manager, put(cards + "/999999").contentType(MediaType.APPLICATION_JSON)
@@ -395,6 +396,129 @@ class DeckApiIntegrationTest {
         em.clear();
         assertEquals("Only front", em.find(Flashcard.class, mine.getCardId()).getFrontText());
         assertEquals("Admin edit", em.find(Flashcard.class, foreignCard.getCardId()).getFrontText());
+    }
+
+    @Test
+    void cardsAcceptTextAnImageOrBothOnEachFace() throws Exception {
+        // front image only, back text only
+        call(manager, post(path(deck) + "/cards").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"frontImageUrl\":\"https://cdn.example/front.png\",\"backText\":\"Back\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.frontText").value(""))
+                .andExpect(jsonPath("$.data.frontImageUrl").value("https://cdn.example/front.png"))
+                .andExpect(jsonPath("$.data.backText").value("Back"))
+                .andExpect(jsonPath("$.data.backImageUrl").isEmpty());
+
+        // text plus image on one face, an image on the other
+        call(manager, post(path(deck) + "/cards").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"frontText\":\"Front\",\"frontImageUrl\":\"https://cdn.example/a.png\","
+                                + "\"backImageUrl\":\"https://cdn.example/b.png\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.frontText").value("Front"))
+                .andExpect(jsonPath("$.data.frontImageUrl").value("https://cdn.example/a.png"))
+                .andExpect(jsonPath("$.data.backText").value(""))
+                .andExpect(jsonPath("$.data.backImageUrl").value("https://cdn.example/b.png"));
+
+        // the deck detail carries both images so the editor can show and edit them
+        call(manager, get(path(deck))).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.cards[0].frontImageUrl").value("https://cdn.example/front.png"))
+                .andExpect(jsonPath("$.data.cards[0].backImageUrl").isEmpty())
+                .andExpect(jsonPath("$.data.cards[1].frontImageUrl").value("https://cdn.example/a.png"))
+                .andExpect(jsonPath("$.data.cards[1].backImageUrl").value("https://cdn.example/b.png"));
+
+        long before = count("Flashcard");
+        // either empty face is rejected: no front, no back, or blank text with a blank image URL
+        for (String payload : List.of("{\"backText\":\"Back\"}", "{\"frontText\":\"Front\"}",
+                "{\"frontText\":\"  \",\"frontImageUrl\":\"   \",\"backText\":\"Back\"}")) {
+            call(manager, post(path(deck) + "/cards").contentType(MediaType.APPLICATION_JSON).content(payload))
+                    .andExpect(status().isBadRequest());
+        }
+        // invalid scheme, data URL and overlong URLs are rejected on create too
+        for (String image : List.of("javascript:alert(1)", "data:image/png;base64,AA",
+                "https://cdn.example/" + "a".repeat(1000))) {
+            call(manager, post(path(deck) + "/cards").contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(Map.of("frontImageUrl", image, "backText", "Back"))))
+                    .andExpect(status().isBadRequest());
+        }
+        assertEquals(before, count("Flashcard"));
+    }
+
+    @Test
+    void updateCardSetsReplacesAndClearsImagesWithPresenceAwarePatch() throws Exception {
+        String cards = "/api/v1/manager/cards";
+        Flashcard target = card(deck, "Original front");
+
+        // add an image to the front; the omitted faces stay as they are
+        call(collaborator, put(cards + "/" + target.getCardId()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"frontImageUrl\":\"https://cdn.example/one.png\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.frontText").value("Original front"))
+                .andExpect(jsonPath("$.data.backText").value("Answer"))
+                .andExpect(jsonPath("$.data.frontImageUrl").value("https://cdn.example/one.png"))
+                .andExpect(jsonPath("$.data.backImageUrl").isEmpty());
+
+        // a supplied URL replaces the image
+        call(manager, put(cards + "/" + target.getCardId()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"frontImageUrl\":\"https://cdn.example/two.png\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.frontImageUrl").value("https://cdn.example/two.png"));
+
+        // text can be cleared while the face still has its image
+        call(manager, put(cards + "/" + target.getCardId()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"frontText\":null}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.frontText").value(""))
+                .andExpect(jsonPath("$.data.frontImageUrl").value("https://cdn.example/two.png"));
+
+        // the last content on a face cannot be removed: the image stays, so the text may still be cleared
+        call(manager, put(cards + "/" + target.getCardId()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"frontImageUrl\":null}"))
+                .andExpect(status().isBadRequest());
+        call(manager, put(cards + "/" + target.getCardId()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"frontText\":\"   \"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.frontText").value(""))
+                .andExpect(jsonPath("$.data.frontImageUrl").value("https://cdn.example/two.png"));
+
+        // restore the front text, then clear the back text while keeping a back image
+        call(manager, put(cards + "/" + target.getCardId()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"frontText\":\"Front again\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.frontText").value("Front again"));
+        call(manager, put(cards + "/" + target.getCardId()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"backImageUrl\":\"https://cdn.example/back.png\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.backText").value("Answer"));
+        call(manager, put(cards + "/" + target.getCardId()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"backText\":\"\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.backText").value(""))
+                .andExpect(jsonPath("$.data.backImageUrl").value("https://cdn.example/back.png"));
+
+        // invalid schemes and overlong URLs are rejected on update, leaving the stored card untouched
+        call(manager, put(cards + "/" + target.getCardId()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"backImageUrl\":\"javascript:alert(1)\"}"))
+                .andExpect(status().isBadRequest());
+        call(manager, put(cards + "/" + target.getCardId()).contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("backImageUrl", "https://cdn.example/" + "a".repeat(1000)))))
+                .andExpect(status().isBadRequest());
+
+        em.flush();
+        Flashcard stored = em.find(Flashcard.class, target.getCardId());
+        assertEquals("Front again", stored.getFrontText());
+        assertEquals("", stored.getBackText());
+        assertEquals("https://cdn.example/two.png", stored.getFrontImageUrl());
+        assertEquals("https://cdn.example/back.png", stored.getBackImageUrl());
+        call(manager, get(path(deck)))
+                .andExpect(jsonPath("$.data.cards[0].frontImageUrl").value("https://cdn.example/two.png"))
+                .andExpect(jsonPath("$.data.cards[0].backImageUrl").value("https://cdn.example/back.png"));
+
+        // access is still derived from the card's deck
+        Deck foreignDeck = deck(stranger, foreignCourse, "Foreign deck", false);
+        Flashcard foreignCard = card(foreignDeck, "Foreign front");
+        call(manager, put(cards + "/" + foreignCard.getCardId()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"frontImageUrl\":\"https://cdn.example/x.png\"}"))
+                .andExpect(status().isForbidden());
     }
 
     @Test

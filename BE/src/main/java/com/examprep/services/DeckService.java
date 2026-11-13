@@ -20,8 +20,11 @@ public interface DeckService {
     /** F-06: append a card; access is derived from the deck. */
     CardResponse addCard(UserPrincipal user, Long id, DeckRequests.CardCreate request);
 
-    /** F-07: partial card update; access is derived from the card's deck. */
-    CardResponse updateCard(UserPrincipal user, Long id, DeckRequests.CardUpdate request);
+    /**
+     * F-07: partial card update; access is derived from the card's deck. The body is read as JSON so an
+     * absent field (keep) can be told apart from an explicit null (clear the text or image).
+     */
+    CardResponse updateCard(UserPrincipal user, Long id, com.fasterxml.jackson.databind.JsonNode request);
 
     /** F-08: delete a card together with its per-user progress. */
     void deleteCard(UserPrincipal user, Long id);

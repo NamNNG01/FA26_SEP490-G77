@@ -8,6 +8,8 @@ import com.examprep.exceptions.ResourceConflictException;
 import com.examprep.exceptions.ResourceNotFoundException;
 import com.examprep.repositories.*;
 import com.examprep.security.UserPrincipal;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -35,6 +37,8 @@ public class DeckServiceImpl implements DeckService {
     private final UserRepository users;
     private final ModuleRepository modules;
     private final com.examprep.util.FlashcardPdfWriter pdfWriter;
+    private final ObjectMapper json;
+    private final jakarta.validation.Validator validator;
 
     @Override
     public PageResponse<DeckResponse> list(UserPrincipal user, String search, Long courseId, Long moduleId, Boolean isPublic, int page, int size) {
@@ -128,20 +132,58 @@ public class DeckServiceImpl implements DeckService {
     @Transactional
     public CardResponse addCard(UserPrincipal user, Long id, DeckRequests.CardCreate request) {
         Deck deck = writeDeck(user, id);
+        String front = optionalText(request.frontText());
+        String back = optionalText(request.backText());
+        String frontImage = optionalText(request.frontImageUrl());
+        String backImage = optionalText(request.backImageUrl());
+        requireFace(front, frontImage, "front");
+        requireFace(back, backImage, "back");
         Flashcard card = cards.save(Flashcard.builder().deck(deck)
-                .frontText(request.frontText().strip()).backText(request.backText().strip()).build());
+                .frontText(front == null ? "" : front).backText(back == null ? "" : back)
+                .frontImageUrl(frontImage).backImageUrl(backImage).build());
         return CardResponse.from(card);
     }
 
     @Override
     @Transactional
-    public CardResponse updateCard(UserPrincipal user, Long id, DeckRequests.CardUpdate request) {
+    public CardResponse updateCard(UserPrincipal user, Long id, JsonNode request) {
         Flashcard card = writeCard(user, id);
-        if (request.frontText() != null && !request.frontText().isBlank())
-            card.setFrontText(request.frontText().strip());
-        if (request.backText() != null && !request.backText().isBlank())
-            card.setBackText(request.backText().strip());
+        // Read as JSON so an absent field (keep the stored value) differs from an explicit null (clear it).
+        DeckRequests.CardUpdate patch = cardPatch(request);
+        String front = request.has("frontText") ? optionalText(patch.frontText()) : optionalText(card.getFrontText());
+        String back = request.has("backText") ? optionalText(patch.backText()) : optionalText(card.getBackText());
+        String frontImage = request.has("frontImageUrl") ? optionalText(patch.frontImageUrl()) : card.getFrontImageUrl();
+        String backImage = request.has("backImageUrl") ? optionalText(patch.backImageUrl()) : card.getBackImageUrl();
+        // Validate the card that would be stored, so clearing an image or text cannot empty a face.
+        requireFace(front, frontImage, "front");
+        requireFace(back, backImage, "back");
+        card.setFrontText(front == null ? "" : front);
+        card.setBackText(back == null ? "" : back);
+        card.setFrontImageUrl(frontImage);
+        card.setBackImageUrl(backImage);
+        cards.flush();
         return CardResponse.from(card);
+    }
+
+    /** The body is bound as JSON, so bean validation of the converted patch has to run by hand. */
+    private DeckRequests.CardUpdate cardPatch(JsonNode request) {
+        if (request == null || !request.isObject()) throw new BadRequestException("Invalid request body.");
+        DeckRequests.CardUpdate patch;
+        try {
+            patch = json.treeToValue(request, DeckRequests.CardUpdate.class);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
+            throw new BadRequestException("Invalid request body.");
+        }
+        validator.validate(patch).stream().findFirst().ifPresent(violation -> {
+            throw new BadRequestException(violation.getPropertyPath() + " " + violation.getMessage());
+        });
+        return patch;
+    }
+
+    /** A face is text, an image, or both; a card with an empty face is rejected. */
+    private void requireFace(String text, String imageUrl, String side) {
+        if (text == null && imageUrl == null)
+            throw new BadRequestException(side + "Text or " + side + "ImageUrl is required.");
     }
 
     @Override
@@ -214,7 +256,8 @@ public class DeckServiceImpl implements DeckService {
         List<DeckResponse.Card> values = content.stream().map(card -> {
             UserCardProgress state = states.get(card.getCardId());
             return new DeckResponse.Card(card.getCardId(), card.getFrontText(), card.getBackText(),
-                    state != null && Boolean.TRUE.equals(state.getIsStarred()), state == null ? "NEW" : state.getStatus());
+                    state != null && Boolean.TRUE.equals(state.getIsStarred()), state == null ? "NEW" : state.getStatus(),
+                    card.getFrontImageUrl(), card.getBackImageUrl());
         }).toList();
         return response(deck, content.size(), values);
     }

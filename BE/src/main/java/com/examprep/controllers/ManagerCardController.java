@@ -5,9 +5,9 @@ import com.examprep.dto.CardResponse;
 import com.examprep.dto.DeckRequests;
 import com.examprep.security.UserPrincipal;
 import com.examprep.services.DeckService;
+import com.fasterxml.jackson.databind.JsonNode;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -31,10 +31,10 @@ public class ManagerCardController {
 
     @PutMapping("/{id}")
     @Operation(summary = "F-07: Update the supplied faces of a card",
-            description = "Partial update: send only the faces you want to change. "
-                    + "Blank or missing values leave the stored face untouched.")
+            description = "Partial update: an omitted field keeps its stored value, while an explicit null "
+                    + "or blank clears that text or image. A face must keep text, an image, or both.")
     public ResponseEntity<ApiResponse<CardResponse>> update(@AuthenticationPrincipal UserPrincipal user,
-            @PathVariable Long id, @Valid @RequestBody DeckRequests.CardUpdate request) {
+            @PathVariable Long id, @RequestBody JsonNode request) {
         return ResponseEntity.ok(ApiResponse.success(service.updateCard(user, id, request)));
     }
 

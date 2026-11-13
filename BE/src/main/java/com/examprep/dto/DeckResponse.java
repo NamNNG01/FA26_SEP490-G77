@@ -7,5 +7,8 @@ import java.util.List;
 public record DeckResponse(Long deckId, String title, Long courseId, String courseName,
                            Long ownerId, String ownerName, Boolean isPublic, long cardCount,
                            String description, List<Card> cards, Long moduleId, String moduleTitle) {
-    public record Card(Long cardId, String frontText, String backText, boolean isStarred, String status) {}
+    /** Image URLs are always present so the manager editor can tell "no image" from a missing field. */
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record Card(Long cardId, String frontText, String backText, boolean isStarred, String status,
+                       String frontImageUrl, String backImageUrl) {}
 }
