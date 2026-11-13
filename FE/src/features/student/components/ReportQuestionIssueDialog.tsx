@@ -20,7 +20,9 @@ const MIN_DESCRIPTION = 10;
 const MAX_DESCRIPTION = 3000;
 const MAX_SUGGESTED_ANSWER = 1000;
 const MAX_SUGGESTED_OPTIONS = 20;
-const STUDENT_ISSUE_TYPES = ISSUE_TYPES.filter((issueType) => issueType !== "AI_EXPLANATION_ERROR");
+const STUDENT_ISSUE_TYPES = ISSUE_TYPES.filter(
+  (issueType) => issueType !== "AI_EXPLANATION_ERROR",
+);
 
 /** A short hint under each issue type, so students can pick without guessing what the name means. */
 const TYPE_HINTS: Record<IssueType, string> = {
@@ -110,7 +112,9 @@ export function ReportQuestionIssueDialog({
   // The modal focuses its first control on open; start on the issue type instead, which is the first question.
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      typeGroupRef.current?.querySelector<HTMLInputElement>("input:checked")?.focus();
+      typeGroupRef.current
+        ?.querySelector<HTMLInputElement>("input:checked")
+        ?.focus();
     }, 0);
     return () => window.clearTimeout(timer);
   }, []);
@@ -227,7 +231,11 @@ export function ReportQuestionIssueDialog({
                 {footerNote}
               </p>
             )}
-            <Button variant="outline" onClick={requestClose} disabled={isWorking}>
+            <Button
+              variant="outline"
+              onClick={requestClose}
+              disabled={isWorking}
+            >
               Cancel
             </Button>
             <Button
@@ -319,7 +327,9 @@ export function ReportQuestionIssueDialog({
                             setSuggestedOptionIds((current) =>
                               checked
                                 ? [...current, option.optionId]
-                                : current.filter((id) => id !== option.optionId),
+                                : current.filter(
+                                    (id) => id !== option.optionId,
+                                  ),
                             )
                           }
                         />
@@ -387,10 +397,6 @@ export function ReportQuestionIssueDialog({
               className={`${fieldCls} resize-y ${descriptionError ? fieldBad : fieldOk}`}
             />
             <div className="mt-1 flex items-start justify-between gap-3">
-              <p id={helpId} className="text-xs text-content-secondary">
-                The more specific you are, the faster it can be checked.
-                Mention the part of the question that looks wrong.
-              </p>
               <span className="flex-shrink-0 text-right text-xs tabular-nums text-content-secondary">
                 {length}/{MAX_DESCRIPTION.toLocaleString()}
               </span>
@@ -496,8 +502,8 @@ export function ReportQuestionIssueDialog({
         }
       >
         <p className="text-sm text-content-secondary">
-          You have started a report. If you close it now, what you wrote will
-          be lost.
+          You have started a report. If you close it now, what you wrote will be
+          lost.
         </p>
       </Modal>
     </>

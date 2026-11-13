@@ -3,6 +3,7 @@ package com.examprep.services;
 import com.examprep.ai.AiClient;
 import com.examprep.dto.question.*;
 import com.examprep.entities.*;
+import com.examprep.entities.Module;
 import com.examprep.exceptions.BadRequestException;
 import com.examprep.exceptions.ForbiddenException;
 import com.examprep.exceptions.QuestionValidationException;
@@ -469,13 +470,6 @@ public class QuestionServiceImpl implements QuestionService {
         String difficultyToValidate = req.getDifficulty() != null ? req.getDifficulty() : q.getDifficulty();
         String statusToValidate = req.getStatus() != null ? req.getStatus() : q.getStatus();
 
-        CodeConfigDto codeConfigToValidate = null;
-        List<TestCaseDto> testCasesToValidate = null;
-        if ("CODE".equals(typeToValidate)) {
-            codeConfigToValidate = req.getCodeConfig() != null ? req.getCodeConfig() : loadCodeConfig(q);
-            testCasesToValidate = req.getTestCases() != null ? req.getTestCases() : loadTestCases(q);
-        }
-
         QuestionPayload payload = QuestionPayload.builder()
                 .questionType(typeToValidate)
                 .difficulty(difficultyToValidate)
@@ -485,8 +479,6 @@ public class QuestionServiceImpl implements QuestionService {
                 .answerKey(answerKeyToValidate)
                 .essayGradingRubric(rubricToValidate)
                 .options(optionsToValidate)
-                .codeConfig(codeConfigToValidate)
-                .testCases(testCasesToValidate)
                 .build();
 
         questionValidator.validateOrThrow(payload);
@@ -845,10 +837,6 @@ public class QuestionServiceImpl implements QuestionService {
             }
             List<AnswerOption> options = answerOptionRepository.findByQuestion_QuestionId(q.getQuestionId());
             QuestionPayload payload = QuestionPayload.fromEntity(q, options, objectMapper);
-            if ("CODE".equals(q.getQuestionType())) {
-                payload.setCodeConfig(loadCodeConfig(q));
-                payload.setTestCases(loadTestCases(q));
-            }
             questionValidator.validateOrThrow(payload);
         } else if ("ACTIVE".equals(currentStatus) && "ARCHIVED".equals(newStatus)) {
             // Allowed: ACTIVE -> ARCHIVED
@@ -884,31 +872,17 @@ public class QuestionServiceImpl implements QuestionService {
 
 
     private void saveCodeConfigAndTestCases(Question q, CodeConfigDto cfgDto, List<TestCaseDto> tcDtos) {
-        if (cfgDto != null) {
-            CodeQuestionConfig existing = codeQuestionConfigRepository.findById(q.getQuestionId()).orElse(null);
-            String allowedLangsJson = cfgDto.getAllowedLanguages() != null
-                    ? serializeJson(cfgDto.getAllowedLanguages(), "allowedLanguages")
-                    : (existing != null && existing.getAllowedLanguages() != null
-                        ? existing.getAllowedLanguages()
-                        : serializeJson(List.of("JAVA", "PYTHON", "C", "CPP"), "allowedLanguages"));
-            Instant now = Instant.now();
-            CodeQuestionConfig config = existing != null
-                    ? existing
-                    : CodeQuestionConfig.builder()
-                        .questionId(q.getQuestionId())
-                        .createdAt(now)
-                        .build();
-            config.setAllowedLanguages(allowedLangsJson);
-            config.setCodeTemplate(cfgDto.getCodeTemplate());
-            config.setTimeLimitMs(cfgDto.getTimeLimitMs() != null
-                    ? cfgDto.getTimeLimitMs()
-                    : (existing != null && existing.getTimeLimitMs() != null ? existing.getTimeLimitMs() : 5000));
-            config.setMemoryLimitKb(cfgDto.getMemoryLimitKb() != null
-                    ? cfgDto.getMemoryLimitKb()
-                    : (existing != null && existing.getMemoryLimitKb() != null ? existing.getMemoryLimitKb() : 262144));
-            config.setUpdatedAt(now);
-            codeQuestionConfigRepository.save(config);
-        }
+        String allowedLangsJson = cfgDto != null && cfgDto.getAllowedLanguages() != null ? serializeJson(cfgDto.getAllowedLanguages(), "allowedLanguages") : null;
+        CodeQuestionConfig config = CodeQuestionConfig.builder()
+                .questionId(q.getQuestionId())
+                .allowedLanguages(allowedLangsJson)
+                .codeTemplate(cfgDto != null ? cfgDto.getCodeTemplate() : null)
+                .timeLimitMs(cfgDto != null && cfgDto.getTimeLimitMs() != null ? cfgDto.getTimeLimitMs() : 5000)
+                .memoryLimitKb(cfgDto != null && cfgDto.getMemoryLimitKb() != null ? cfgDto.getMemoryLimitKb() : 262144)
+                .createdAt(Instant.now())
+                .updatedAt(Instant.now())
+                .build();
+        codeQuestionConfigRepository.save(config);
 
         if (tcDtos != null && !tcDtos.isEmpty()) {
             codeTestCaseRepository.deleteAll(codeTestCaseRepository.findByQuestionQuestionIdOrderByOrderIndexAscTestCaseIdAsc(q.getQuestionId()));
@@ -928,35 +902,6 @@ public class QuestionServiceImpl implements QuestionService {
         }
     }
 
-    private CodeConfigDto loadCodeConfig(Question q) {
-        CodeQuestionConfig cfg = codeQuestionConfigRepository.findById(q.getQuestionId()).orElse(null);
-        if (cfg == null) return null;
-        List<String> langs = null;
-        try {
-            if (cfg.getAllowedLanguages() != null && !cfg.getAllowedLanguages().isBlank()) {
-                langs = objectMapper.readValue(cfg.getAllowedLanguages(), new TypeReference<List<String>>() {});
-            }
-        } catch (Exception ignored) {}
-        return CodeConfigDto.builder()
-                .allowedLanguages(langs)
-                .codeTemplate(cfg.getCodeTemplate())
-                .timeLimitMs(cfg.getTimeLimitMs())
-                .memoryLimitKb(cfg.getMemoryLimitKb())
-                .build();
-    }
-
-    private List<TestCaseDto> loadTestCases(Question q) {
-        return codeTestCaseRepository.findByQuestionQuestionIdOrderByOrderIndexAscTestCaseIdAsc(q.getQuestionId()).stream()
-                .map(tc -> TestCaseDto.builder()
-                        .testCaseId(tc.getTestCaseId())
-                        .inputData(tc.getInputData())
-                        .expectedOutput(tc.getExpectedOutput())
-                        .hidden(tc.getHidden())
-                        .orderIndex(tc.getOrderIndex())
-                        .build())
-                .collect(Collectors.toList());
-    }
-
     private QuestionDetailDto mapToDetailDto(Question q, List<AnswerOption> options) {
         Object metadataObj = parseJson(q.getQuestionMetadata());
         Object answerKeyObj = parseJson(q.getAnswerKey());
@@ -972,10 +917,34 @@ public class QuestionServiceImpl implements QuestionService {
                 .build()).collect(Collectors.toList());
 
         CodeConfigDto codeConfig = null;
+        if ("CODE".equals(q.getQuestionType())) {
+            CodeQuestionConfig cfg = codeQuestionConfigRepository.findById(q.getQuestionId()).orElse(null);
+            if (cfg != null) {
+                List<String> langs = null;
+                try {
+                    if (cfg.getAllowedLanguages() != null && !cfg.getAllowedLanguages().isBlank()) {
+                        langs = objectMapper.readValue(cfg.getAllowedLanguages(), new TypeReference<List<String>>() {});
+                    }
+                } catch (Exception ignored) {}
+                codeConfig = CodeConfigDto.builder()
+                        .allowedLanguages(langs)
+                        .codeTemplate(cfg.getCodeTemplate())
+                        .timeLimitMs(cfg.getTimeLimitMs())
+                        .memoryLimitKb(cfg.getMemoryLimitKb())
+                        .build();
+            }
+        }
+
         List<TestCaseDto> testCases = null;
         if ("CODE".equals(q.getQuestionType())) {
-            codeConfig = loadCodeConfig(q);
-            testCases = loadTestCases(q);
+            List<CodeTestCase> cases = codeTestCaseRepository.findByQuestionQuestionIdOrderByOrderIndexAscTestCaseIdAsc(q.getQuestionId());
+            testCases = cases.stream().map(tc -> TestCaseDto.builder()
+                    .testCaseId(tc.getTestCaseId())
+                    .inputData(tc.getInputData())
+                    .expectedOutput(tc.getExpectedOutput())
+                    .hidden(tc.getHidden())
+                    .orderIndex(tc.getOrderIndex())
+                    .build()).collect(Collectors.toList());
         }
 
         return QuestionDetailDto.builder()
