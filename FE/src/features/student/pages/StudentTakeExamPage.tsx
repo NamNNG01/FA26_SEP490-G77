@@ -30,6 +30,7 @@ import {
 import { QUESTION_TYPE_LABEL, QuestionAnswerInput, QuestionText, isAnswered } from '../components/QuestionAnswerInput';
 import { PracticeCheck, checkProgress } from '../components/PracticeCheck';
 import { studentCodeExamService, type CodeLanguageInfo, type CodeQuestion } from '@/services/studentCodeExam.service';
+import { studentProgressService } from '@/services/studentProgress.service';
 import { CodeQuestionWorkspace, currentCodeAnswer } from '../components/code/CodeQuestionWorkspace';
 import { ModulePracticeRunner } from '../components/ModulePracticeRunner';
 import { ReportQuestionIssueButton } from '../components/ReportQuestionIssueDialog';
@@ -338,6 +339,11 @@ function ExamAttemptScreen() {
           }
         }
         await studentAttemptService.submit(session.attemptId);
+        // The session has no courseId: EX-01 gives it, then LP-01 stores the course's new percent.
+        studentAttemptService
+          .getExamDetail(session.examId)
+          .then(d => studentProgressService.syncCourseProgress(d.courseId))
+          .catch(() => {});
         finishedRef.current = true;
         clearChecks(session.attemptId);
         forgetTakeAs(session.attemptId);

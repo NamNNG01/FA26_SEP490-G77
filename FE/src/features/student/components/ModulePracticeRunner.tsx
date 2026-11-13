@@ -446,6 +446,7 @@ export function ModulePracticeRunner({ sessionId }: { sessionId: string }) {
     await Promise.allSettled(savesRef.current.values());
     try {
       await modulePracticeService.complete(session.sessionId);
+      studentProgressService.syncCourseProgress(session.courseId);
       navigate(studentPracticeResultPath(session.sessionId), { replace: true });
     } catch (err) {
       setActionError(getApiErrorMessage(err, 'Failed to finish. Please try again.'));
@@ -456,6 +457,8 @@ export function ModulePracticeRunner({ sessionId }: { sessionId: string }) {
   const exit = () => {
     if (!session) return navigate(ROUTES.studentCourses);
     toast.info('Your session is kept — continue it any time from the module.');
+    // Answers saved so far already count towards the course's progress.
+    studentProgressService.syncCourseProgress(session.courseId);
     navigate(studentModulePath(session.courseId, session.moduleId));
   };
 

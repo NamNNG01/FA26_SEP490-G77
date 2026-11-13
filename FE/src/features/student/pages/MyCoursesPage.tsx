@@ -12,6 +12,7 @@ import { useDashboard } from '@/hooks/useDashboard';
 import type { StudentRecentAttempt } from '@/services/dashboard.service';
 import { getApiErrorMessage } from '@/utils/apiError';
 import { studentCourseService, type MyCourse } from '@/services/studentCourse.service';
+import { studentProgressService } from '@/services/studentProgress.service';
 import { CardGridSkeleton, CourseThumb, LoadError, PageTitle, STUDENT_PAGE_CLASS, formatDate } from '../components/studentUi';
 import { MaterialQuizModal } from '../components/MaterialQuizModal';
 import { SmartPracticeModal } from '../components/SmartPracticeModal';
@@ -59,8 +60,17 @@ export function MyCoursesPage() {
     studentCourseService
       .getMyCourses({ page: 0, size: MY_COURSES_FETCH_SIZE })
       .then(res => {
+        if (cancelled) return;
         // Courses left with EN-04 come back as CANCELLED; they are no longer the student's.
-        if (!cancelled) setCourses(res.content.filter(c => c.status !== 'CANCELLED'));
+        const owned = res.content.filter(c => c.status !== 'CANCELLED');
+        setCourses(owned);
+        // LP-01 per active course: the bars show the BE's live percent, which LP-01 also stores
+        // on the enrollment so the course page (CL-02) and the dashboard read the same number.
+        studentProgressService.refreshCoursesProgress(
+          owned.filter(c => c.status === 'ACTIVE').map(c => c.courseId),
+          (courseId, progress) => setCourses(prev => prev.map(c => (c.courseId === courseId ? { ...c, progress } : c))),
+          () => cancelled,
+        );
       })
       .catch(err => {
         if (!cancelled) setError(getApiErrorMessage(err, 'Failed to load your courses.'));
