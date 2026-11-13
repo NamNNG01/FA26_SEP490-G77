@@ -214,7 +214,7 @@ export function QuestionForm({
       </div>
 
       {/* Read-only: the fields stay visible but can't be focused or changed */}
-      <div inert={readOnly} className={`space-y-3 ${readOnly ? 'opacity-75' : ''}`}>
+      <div aria-readonly={readOnly || undefined} className={`space-y-3 ${readOnly ? 'opacity-75' : ''}`}>
       {duplicateError && (
         <div
           role="alert"
@@ -252,6 +252,7 @@ export function QuestionForm({
           <button
             type="button"
             onClick={() => set({ importIssue: undefined })}
+            disabled={readOnly}
             className="self-start p-1 rounded-[6px] hover:bg-danger-line/40"
             aria-label="Dismiss import error"
           >
@@ -266,6 +267,7 @@ export function QuestionForm({
         <Select
           label="Difficulty"
           value={q.difficulty}
+          disabled={readOnly}
           onChange={(v) => set({ difficulty: v as QuestionDifficulty })}
           options={DIFFICULTY_OPTIONS}
         />
@@ -274,6 +276,7 @@ export function QuestionForm({
         <Select
           label="Type"
           value={q.type}
+          disabled={readOnly}
           onChange={(v) => onChange(changeType(q, v as EditableQuestionType))}
           options={typeOptions}
           invalid={Boolean(kindError)}
@@ -293,8 +296,8 @@ export function QuestionForm({
             Question Text *
           </label>
           <div className="flex items-center gap-2">
-          <InsertImageButton value={q.content} onChange={(content) => set({ content })} />
-          {q.type === "FILL_BLANK" && (
+          {!readOnly && <InsertImageButton value={q.content} onChange={(content) => set({ content })} />}
+          {!readOnly && q.type === "FILL_BLANK" && (
             <button
               type="button"
               onClick={insertBlank}
@@ -309,6 +312,7 @@ export function QuestionForm({
           id={`${q.key}-content`}
           ref={textRef}
           value={text}
+          readOnly={readOnly}
           onChange={(e) => setText(e.target.value)}
           aria-invalid={Boolean(contentError)}
           className={`w-full h-[96px] px-3 py-2 rounded-[10px] border text-base text-content bg-surface resize-y focus:outline-none focus:ring-2 transition-all ${
@@ -328,8 +332,8 @@ export function QuestionForm({
         )}
       </div>}
 
-      {showSection('answers') && <AnswerSection q={q} set={set} error={answersError} mode={sections ? 'answer' : 'all'} />}
-      {sections?.includes('rubric') && RUBRIC_TYPES.includes(q.type) && <RubricAnswers q={q} set={set} error={answersError} />}
+      {showSection('answers') && <AnswerSection q={q} set={set} error={answersError} mode={sections ? 'answer' : 'all'} readOnly={readOnly} />}
+      {sections?.includes('rubric') && RUBRIC_TYPES.includes(q.type) && <RubricAnswers q={q} set={set} error={answersError} readOnly={readOnly} />}
 
       {showSection('explanation') && <div>
         <label
@@ -342,6 +346,7 @@ export function QuestionForm({
         <textarea
           id={`${q.key}-explanation`}
           value={q.explanation}
+          readOnly={readOnly}
           onChange={(e) => set({ explanation: e.target.value })}
           className="w-full h-[64px] px-3 py-2 rounded-[10px] border border-line text-sm text-content bg-surface resize-y focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600 transition-all"
           placeholder="Why the answer is correct — shown to students during review."
@@ -357,26 +362,28 @@ export function AnswerSection({
   set,
   error,
   mode = 'all',
+  readOnly = false,
 }: {
   q: QuestionDraft;
   set: (patch: Partial<QuestionDraft>) => void;
   error?: string;
   mode?: 'all' | 'answer';
+  readOnly?: boolean;
 }) {
   switch (q.type) {
     case "SINGLE_CHOICE":
     case "MULTIPLE_CHOICE":
     case "TRUE_FALSE":
-      return <ChoiceAnswers q={q} set={set} error={error} />;
+      return <ChoiceAnswers q={q} set={set} error={error} readOnly={readOnly} />;
     case "MATCHING":
-      return <MatchingAnswers q={q} set={set} error={error} />;
+      return <MatchingAnswers q={q} set={set} error={error} readOnly={readOnly} />;
     case "FILL_BLANK":
-      return <BlankAnswers q={q} set={set} error={error} />;
+      return <BlankAnswers q={q} set={set} error={error} readOnly={readOnly} />;
     case "ORDERING":
-      return <OrderingAnswers q={q} set={set} error={error} />;
+      return <OrderingAnswers q={q} set={set} error={error} readOnly={readOnly} />;
     case "DIAGRAM":
     case "DIAGRAM_ESSAY": {
-      if (mode === 'answer') return <DiagramAnswer q={q} set={set} error={error} />;
+      if (mode === 'answer') return <DiagramAnswer q={q} set={set} error={error} readOnly={readOnly} />;
       // One answers error for both parts — show it under the part it is about.
       const rubricError =
         error && (error === rubricTotal(q.rubric).error || error === ESSAY_RUBRIC_REQUIRED) ? error : undefined;
@@ -386,15 +393,16 @@ export function AnswerSection({
             q={q}
             set={set}
             error={rubricError ? undefined : error}
+            readOnly={readOnly}
           />
-          <RubricAnswers q={q} set={set} error={rubricError} />
+          <RubricAnswers q={q} set={set} error={rubricError} readOnly={readOnly} />
         </div>
       );
     }
     case "ESSAY":
-      return mode === 'answer' ? <p className="text-sm text-content-secondary">This question is graded by a rubric. Choose “Rubric Corrected” to edit its scoring criteria.</p> : <RubricAnswers q={q} set={set} error={error} />;
+      return mode === 'answer' ? <p className="text-sm text-content-secondary">This question is graded by a rubric. Choose “Rubric Corrected” to edit its scoring criteria.</p> : <RubricAnswers q={q} set={set} error={error} readOnly={readOnly} />;
     case "CODE":
-      return <CodeAnswer q={q} set={set} error={error} />;
+      return <CodeAnswer q={q} set={set} error={error} readOnly={readOnly} />;
   }
 }
 
@@ -407,10 +415,12 @@ function RubricAnswers({
   q,
   set,
   error,
+  readOnly = false,
 }: {
   q: QuestionDraft;
   set: (patch: Partial<QuestionDraft>) => void;
   error?: string;
+  readOnly?: boolean;
 }) {
   const setCriterion = (i: number, patch: Partial<RubricCriterionDraft>) =>
     set({
@@ -424,7 +434,8 @@ function RubricAnswers({
     <div>
       <SectionHeader
         label="Grading Rubric"
-        action={
+          action={
+            !readOnly &&
           <Button
             type="button"
             variant="outline"
@@ -455,7 +466,7 @@ function RubricAnswers({
               <div key={c.key} className="rounded-[10px] border border-line-soft overflow-hidden">
                 <div className="flex items-center justify-between gap-2 bg-surface-muted px-3 py-1.5 border-b border-line-soft">
                   <span className="text-xs font-bold text-content-soft">Criterion {i + 1}</span>
-                  <button
+                  {!readOnly && <button
                     type="button"
                     onClick={() => remove(i)}
                     aria-label={`Delete criterion ${i + 1}`}
@@ -463,13 +474,14 @@ function RubricAnswers({
                     className="p-1 text-content-subtle hover:text-danger"
                   >
                     <Icon.Trash className="w-4 h-4" />
-                  </button>
+                  </button>}
                 </div>
                 <div className={`grid ${CRITERION_GRID} gap-x-2 gap-y-2.5 p-2.5`}>
                   <label className="block min-w-0">
                     <span className={CRITERION_LABEL}>Name</span>
                     <input
                       value={c.name}
+                      readOnly={readOnly}
                       onChange={(e) => setCriterion(i, { name: e.target.value })}
                       placeholder="e.g. Diagram readability"
                       maxLength={200}
@@ -484,6 +496,7 @@ function RubricAnswers({
                       step="any"
                       inputMode="decimal"
                       value={c.weight}
+                      readOnly={readOnly}
                       onChange={(e) => setCriterion(i, { weight: e.target.value })}
                       placeholder="e.g. 0.1"
                       className={inputCls(weightBad)}
@@ -493,6 +506,7 @@ function RubricAnswers({
                     <span className={CRITERION_LABEL}>Descriptors</span>
                     <textarea
                       value={c.descriptors}
+                      readOnly={readOnly}
                       onChange={(e) => setCriterion(i, { descriptors: e.target.value })}
                       placeholder="Full credit: … Partial credit: … Zero credit: …"
                       rows={3}
@@ -531,10 +545,12 @@ function ChoiceAnswers({
   q,
   set,
   error,
+  readOnly = false,
 }: {
   q: QuestionDraft;
   set: (patch: Partial<QuestionDraft>) => void;
   error?: string;
+  readOnly?: boolean;
 }) {
   const multi = q.type === "MULTIPLE_CHOICE";
   const fixed = q.type === "TRUE_FALSE";
@@ -579,7 +595,7 @@ function ChoiceAnswers({
             : "Answer Options"
         }
         action={
-          !fixed && (
+          !fixed && !readOnly && (
             <Button
               type="button"
               variant="outline"
@@ -605,7 +621,7 @@ function ChoiceAnswers({
             </span>
             <input
               value={o.text}
-              readOnly={fixed}
+              readOnly={fixed || readOnly}
               onChange={(e) => setText(i, e.target.value)}
               aria-label={`Option ${optionLabel(i)}`}
               className={`${inputCls(Boolean(error) && !fixed && o.text.trim() === "")} ${fixed ? "bg-surface-alt cursor-default" : ""}`}
@@ -615,13 +631,14 @@ function ChoiceAnswers({
               type={multi ? "checkbox" : "radio"}
               name={`correct-${q.key}`}
               checked={o.isCorrect}
+              disabled={readOnly}
               onChange={() => toggleCorrect(i)}
               aria-label={`Mark option ${optionLabel(i)} as correct`}
               title="Mark as correct"
               className="accent-success w-4 h-4 flex-shrink-0 cursor-pointer"
             />
             {o.isCorrect && <span className="whitespace-nowrap text-xs font-semibold text-success">Correct</span>}
-            {!fixed && (
+            {!fixed && !readOnly && (
               <button
                 type="button"
                 onClick={() => remove(i)}
@@ -653,10 +670,12 @@ function MatchingAnswers({
   q,
   set,
   error,
+  readOnly = false,
 }: {
   q: QuestionDraft;
   set: (patch: Partial<QuestionDraft>) => void;
   error?: string;
+  readOnly?: boolean;
 }) {
   const setPair = (i: number, patch: { left?: string; right?: string }) =>
     set({ pairs: q.pairs.map((p, pi) => (pi === i ? { ...p, ...patch } : p)) });
@@ -670,6 +689,7 @@ function MatchingAnswers({
       <SectionHeader
         label="Matching Pairs"
         action={
+          !readOnly &&
           <Button
             type="button"
             variant="outline"
@@ -690,6 +710,7 @@ function MatchingAnswers({
             </span>
             <input
               value={p.left}
+              readOnly={readOnly}
               onChange={(e) => setPair(i, { left: e.target.value })}
               aria-label={`Pair ${i + 1} left item`}
               placeholder="Item"
@@ -701,12 +722,13 @@ function MatchingAnswers({
             />
             <input
               value={p.right}
+              readOnly={readOnly}
               onChange={(e) => setPair(i, { right: e.target.value })}
               aria-label={`Pair ${i + 1} matching item`}
               placeholder="Matches with"
               className={inputCls(Boolean(error) && !p.right.trim())}
             />
-            <button
+            {!readOnly && <button
               type="button"
               onClick={() => remove(i)}
               disabled={q.pairs.length <= 2}
@@ -715,7 +737,7 @@ function MatchingAnswers({
               className="p-1 flex-shrink-0 text-content-subtle hover:text-danger disabled:opacity-30 disabled:cursor-not-allowed"
             >
               <Icon.Trash className="w-4 h-4" />
-            </button>
+            </button>}
           </div>
         ))}
       </div>
@@ -732,10 +754,12 @@ function BlankAnswers({
   q,
   set,
   error,
+  readOnly = false,
 }: {
   q: QuestionDraft;
   set: (patch: Partial<QuestionDraft>) => void;
   error?: string;
+  readOnly?: boolean;
 }) {
   const indexes = blankIndexes(q.content);
   const setBlank = (
@@ -768,6 +792,7 @@ function BlankAnswers({
               <span className="h-7 px-1.5 bg-surface-muted rounded-[6px] flex items-center justify-center text-xs font-bold text-content-soft flex-shrink-0">{`{{${n}}}`}</span>
               <input
                 value={q.blanks[n]?.accepted ?? ""}
+                readOnly={readOnly}
                 onChange={(e) => setBlank(n, { accepted: e.target.value })}
                 aria-label={`Accepted answers for blank ${n}`}
                 placeholder="Accepted answers, separated by ;"
@@ -779,6 +804,7 @@ function BlankAnswers({
                 <input
                   type="checkbox"
                   checked={q.blanks[n]?.caseSensitive ?? false}
+                  disabled={readOnly}
                   onChange={(e) =>
                     setBlank(n, { caseSensitive: e.target.checked })
                   }
@@ -799,10 +825,12 @@ function OrderingAnswers({
   q,
   set,
   error,
+  readOnly = false,
 }: {
   q: QuestionDraft;
   set: (patch: Partial<QuestionDraft>) => void;
   error?: string;
+  readOnly?: boolean;
 }) {
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [overIndex, setOverIndex] = useState<number | null>(null);
@@ -831,7 +859,8 @@ function OrderingAnswers({
     <div>
       <SectionHeader
         label="Correct Order (drag to rearrange)"
-        action={
+          action={
+            !readOnly &&
           <Button
             type="button"
             variant="outline"
@@ -848,25 +877,28 @@ function OrderingAnswers({
         {q.ordering.map((o, i) => (
           <li
             key={o.key}
-            draggable
+            draggable={!readOnly}
             onDragStart={(e) => {
+              if (readOnly) return;
               setDragIndex(i);
               e.dataTransfer.effectAllowed = "move";
             }}
             onDragOver={(e) => {
+              if (readOnly) return;
               e.preventDefault();
               setOverIndex(i);
             }}
             onDrop={(e) => {
+              if (readOnly) return;
               e.preventDefault();
               if (dragIndex != null) moveTo(dragIndex, i);
               endDrag();
             }}
-            onDragEnd={endDrag}
-            className={`flex items-center gap-2 rounded-[10px] transition-all ${dragIndex === i ? "opacity-40" : ""} ${overIndex === i && dragIndex !== i ? "ring-2 ring-brand-600/30" : ""}`}
+            onDragEnd={readOnly ? undefined : endDrag}
+            className={`flex items-center gap-2 rounded-[10px] transition-all ${readOnly ? '' : 'cursor-grab'} ${dragIndex === i ? "opacity-40" : ""} ${overIndex === i && dragIndex !== i ? "ring-2 ring-brand-600/30" : ""}`}
           >
             <span
-              className="cursor-grab active:cursor-grabbing text-content-subtle flex-shrink-0"
+              className={`${readOnly ? '' : 'cursor-grab active:cursor-grabbing'} text-content-subtle flex-shrink-0`}
               aria-hidden="true"
               title="Drag to reorder"
             >
@@ -877,12 +909,13 @@ function OrderingAnswers({
             </span>
             <input
               value={o.text}
+              readOnly={readOnly}
               onChange={(e) => setText(i, e.target.value)}
               aria-label={`Item ${i + 1}`}
               placeholder={`Item ${i + 1}`}
               className={inputCls(Boolean(error) && !o.text.trim())}
             />
-            <button
+            {!readOnly && <button
               type="button"
               onClick={() => moveTo(i, i - 1)}
               disabled={i === 0}
@@ -891,8 +924,8 @@ function OrderingAnswers({
               title="Move up"
             >
               <Icon.ArrowUp className="w-4 h-4" />
-            </button>
-            <button
+            </button>}
+            {!readOnly && <button
               type="button"
               onClick={() => moveTo(i, i + 1)}
               disabled={i === q.ordering.length - 1}
@@ -901,8 +934,8 @@ function OrderingAnswers({
               title="Move down"
             >
               <Icon.ArrowDown className="w-4 h-4" />
-            </button>
-            <button
+            </button>}
+            {!readOnly && <button
               type="button"
               onClick={() => remove(i)}
               disabled={q.ordering.length <= 2}
@@ -911,7 +944,7 @@ function OrderingAnswers({
               className="p-1 flex-shrink-0 text-content-subtle hover:text-danger disabled:opacity-30 disabled:cursor-not-allowed"
             >
               <Icon.Trash className="w-4 h-4" />
-            </button>
+            </button>}
           </li>
         ))}
       </ol>

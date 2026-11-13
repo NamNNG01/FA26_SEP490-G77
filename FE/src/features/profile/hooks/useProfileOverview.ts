@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { dashboardService, type StudentRecentCourse } from '@/services/dashboard.service';
+import { studentProgressService } from '@/services/studentProgress.service';
 import { Role } from '@/utils/permissions';
 
 export interface ProfileStat {
@@ -39,7 +40,15 @@ export function useProfileOverview(role: string | undefined) {
     async function load(): Promise<ProfileOverview> {
       if (role === Role.STUDENT) {
         const { summary, recentCourses } = await dashboardService.getStudentDashboard();
-        const courses = recentCourses ?? [];
+        // The dashboard sends the stored percent; LP-01 gives the live one (and stores it).
+        // A course LP-01 refuses (not ACTIVE) keeps the dashboard's.
+        const live = new Map<number, number>();
+        await studentProgressService.refreshCoursesProgress(
+          (recentCourses ?? []).map(c => c.courseId),
+          (courseId, progress) => live.set(courseId, progress),
+          () => cancelled,
+        );
+        const courses = (recentCourses ?? []).map(c => (live.has(c.courseId) ? { ...c, progress: live.get(c.courseId) ?? c.progress } : c));
         return {
           stats: [
             { label: 'Enrolled Courses', value: String(summary.enrolledCourses) },

@@ -171,7 +171,7 @@ export function StudentCourseDetailPage() {
 }
 
 /**
- * The course's progress: the average of its modules (courseProgress).
+ * The course's progress from LP-01 (the average of its modules), or worked out here when LP-01 fails.
  * `progress` undefined = some module is still loading; `partial` = some module could not be read.
  */
 function CourseProgressPanel({ progress, partial }: { progress?: LearningProgress; partial: boolean }) {
@@ -193,9 +193,9 @@ function CourseProgressPanel({ progress, partial }: { progress?: LearningProgres
 
 /**
  * The course content as a grid of module cards — counts and a Practice button each — plus a
- * "General" card, built the same way, for the content not filed under any module. The course
- * progress panel above it is the average of the modules (useCourseProgress); each module's own
- * progress is shown on its detail page.
+ * "General" card, built the same way, for the content not filed under any module. The panel above
+ * it shows the course's progress from LP-01 (useCourseProgress); each module's own progress is
+ * shown on its detail page.
  */
 function ModuleGrid({ course, content }: { course: StudentCourseDetail; content: ReturnType<typeof useCourseProgress> }) {
   const navigate = useNavigate();

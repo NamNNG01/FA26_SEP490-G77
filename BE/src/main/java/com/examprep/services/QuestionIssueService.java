@@ -441,7 +441,8 @@ public class QuestionIssueService {
                 .toList();
         QuestionView question = new QuestionView(q.getQuestionId(), q.getQuestionType(), q.getDifficulty(), q.getContent(), q.getAiExplanation(),
                 q.getStatus(), q.getLockVersion(), q.getScoringVersion(), optionViews, json(q.getAnswerKey()),
-                json(q.getQuestionMetadata()), json(q.getEssayGradingRubric()));
+                json(q.getQuestionMetadata()), json(q.getEssayGradingRubric()),
+                questionService.codeConfigOf(q), questionService.testCasesOf(q));
         List<QuestionIssueReport> issueReports = reports.findByIssue_IssueIdOrderByCreatedAtAscReportIdAsc(issue.getIssueId());
         List<ReportView> reportViews = issueReports.stream()
                 .map(r -> reportView(r, r.getUser().getFullName(), q.getLockVersion(), optionsById)).toList();

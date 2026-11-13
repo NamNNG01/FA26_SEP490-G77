@@ -1,6 +1,7 @@
 package com.examprep.services;
 
 import com.examprep.dto.question.*;
+import com.examprep.entities.Question;
 import com.examprep.entities.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -38,5 +39,11 @@ public interface QuestionService {
     QuestionDetailDto updateQuestionStatus(Long id, QuestionStatusRequest request, User currentUser);
 
     List<QuestionDetailDto> batchUpdateStatus(QuestionBatchStatusRequest request, User currentUser);
+
+    /** A CODE question's stored settings (null for other types or when none are stored). */
+    CodeConfigDto codeConfigOf(Question question);
+
+    /** A CODE question's test cases in order, hidden ones included (null for other types). */
+    List<TestCaseDto> testCasesOf(Question question);
 
 }

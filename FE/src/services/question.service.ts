@@ -531,8 +531,18 @@ export const questionService = {
     return res.data;
   },
 
+  /** Q-08: moves one question to its next status (Draft → Published → Archived); nothing else changes. */
+  async updateQuestionStatus(id: number | string, status: QuestionStatus, lockVersion?: number | null): Promise<QuestionDetail> {
+    const res = await api.request<ApiResponse<QuestionDetail>>({
+      method: 'patch',
+      url: `/manager/questions/${id}/status`,
+      data: { status, lockVersion: lockVersion ?? null },
+    });
+    return res.data;
+  },
+
   /**
-   * The one way to change question status (one question or many): moves every
+   * Status change for many questions at once: moves every
    * listed question to the same status, all or nothing.
    */
   async batchUpdateStatus(questionIds: number[], status: QuestionStatus): Promise<QuestionDetail[]> {
