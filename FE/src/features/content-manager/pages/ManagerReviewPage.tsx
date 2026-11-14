@@ -30,17 +30,17 @@ const questionTypeLabel = (value: string) => ({
   SINGLE_CHOICE: 'Single choice', MULTIPLE_CHOICE: 'Multiple choice', TRUE_FALSE: 'True or false',
   MATCHING: 'Matching', FILL_BLANK: 'Fill in the blank', ORDERING: 'Ordering', ESSAY: 'Essay', CODE: 'Code', DIAGRAM: 'Diagram', DIAGRAM_ESSAY: 'Diagram + Essay',
 } as Record<string, string>)[value] || value;
-const statusLabel = (value: string) => ({ PENDING: 'Pending', PENDING_REVIEW: 'Pending', ACCEPTED: 'Approved', APPROVED: 'Approved', REJECTED: 'Rejected', ALL: 'All statuses' } as Record<string, string>)[value] || value;
+const statusLabel = (value: string) => ({ PENDING: 'Pending', PENDING_REVIEW: 'Pending', ACCEPTED: 'Accepted', APPROVED: 'Approved', REJECTED: 'Rejected', ALL: 'All statuses' } as Record<string, string>)[value] || value;
 const collectionPath = (kind: Kind) => kind === 'contributions' ? '/manager/contributions' : '/manager/decks/review';
 const detailPath = (kind: Kind, id: number | string) => `${collectionPath(kind)}/${id}`;
 const actionPath = (kind: Kind, id: number | string, decision: 'approve' | 'reject') => `${detailPath(kind, id)}/${decision}`;
 const isPending = (kind: Kind, status: string | null | undefined) => status === (kind === 'contributions' ? 'PENDING' : 'PENDING_REVIEW');
 const apiStatus = (kind: Kind, status: string) => {
   if (status === 'PENDING' || status === 'PENDING_REVIEW') return kind === 'contributions' ? 'PENDING' : 'PENDING_REVIEW';
-  if (status === 'APPROVED' || status === 'ACCEPTED') return 'APPROVED';
+  if (status === 'APPROVED' || status === 'ACCEPTED') return kind === 'contributions' ? 'ACCEPTED' : 'APPROVED';
   return status;
 };
-const decisionMessage = (decision: 'approve' | 'reject', kind: Kind) => `${kind === 'decks' ? 'Flashcard deck' : 'Question contribution'} ${decision === 'approve' ? 'approved' : 'rejected'}.`;
+const decisionMessage = (decision: 'approve' | 'reject', kind: Kind) => `${kind === 'decks' ? 'Flashcard deck' : 'Question contribution'} ${decision === 'approve' ? (kind === 'decks' ? 'approved' : 'accepted') : 'rejected'}.`;
 const errorDetails = (error: any) => error?.response?.data?.data ?? error?.data ?? {};
 const errorMessage = (error: any) => error?.response?.data?.message || error?.message || 'The request could not be completed.';
 const difficultyLabel = (value: string) => value ? value[0] + value.slice(1).toLowerCase() : '—';
@@ -448,7 +448,7 @@ export function ManagerReviewPage() {
         setKind(tab);
         setStatus(current => current === 'ALL' || current === 'REJECTED'
           ? current
-          : current === 'APPROVED' || current === 'ACCEPTED' ? 'APPROVED' : (tab === 'decks' ? 'PENDING_REVIEW' : 'PENDING'));
+          : current === 'APPROVED' || current === 'ACCEPTED' ? apiStatus(tab, current) : (tab === 'decks' ? 'PENDING_REVIEW' : 'PENDING'));
         if (tab === 'decks') {
           setQuestionType('');
           setDifficulty('');
@@ -466,7 +466,7 @@ export function ManagerReviewPage() {
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <Select label="Status" value={status} onChange={value => setStatus(apiStatus(kind, value))} options={[
             { label: 'Pending', value: kind === 'contributions' ? 'PENDING' : 'PENDING_REVIEW' },
-            { label: 'Approved', value: 'APPROVED' },
+            { label: kind === 'contributions' ? 'Accepted' : 'Approved', value: kind === 'contributions' ? 'ACCEPTED' : 'APPROVED' },
             { label: 'Rejected', value: 'REJECTED' },
             { label: 'All statuses', value: 'ALL' },
           ]} />
