@@ -43,6 +43,7 @@ const SESSION_TYPES = [
 const SESSION_EXAM_TYPES = [
   { label: "Quiz", value: "QUIZ" },
   { label: "Essay", value: "ESSAY" },
+  { label: "Code", value: "CODE" },
 ];
 
 export function StudentQuestionNotebookPage() {
@@ -58,7 +59,7 @@ export function StudentQuestionNotebookPage() {
     "wrong" | "bookmarked" | "all"
   >("wrong");
   const [sessionCourseId, setSessionCourseId] = useState("");
-  const [sessionExamType, setSessionExamType] = useState<"QUIZ" | "ESSAY">(
+  const [sessionExamType, setSessionExamType] = useState<"QUIZ" | "ESSAY" | "CODE">(
     "QUIZ",
   );
   const [sessionSize, setSessionSize] = useState("10");
