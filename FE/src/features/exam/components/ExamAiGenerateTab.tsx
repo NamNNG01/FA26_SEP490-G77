@@ -24,23 +24,27 @@ import {
 import {
   questionService,
   type QuestionCreateRequest,
+  type QuestionAiDraft,
+  type QuestionType,
+  type QuestionDifficulty,
 } from "@/services/question.service";
+import { QuestionForm } from "@/features/question/components/QuestionForm";
 import { plantUmlToDrawioXml } from "@/features/question/diagram";
 import { DrawioEditorModal } from "@/features/question/components/DrawioEditorModal";
 import { useDrawioSnapshot } from "@/features/question/components/useDrawioSnapshot";
+import {
+  blankIndexes,
+  fromAiDraft,
+  validateDraft,
+  type EditableQuestionType,
+  type QuestionDraft,
+} from "@/features/question/model";
 import { getApiErrorMessage } from "@/utils/apiError";
 
-function DraftDiagramPreview({
-  question,
-  index,
-}: {
-  question: AiQuestionDraft;
-  index: number;
-}) {
-  const drawioXml =
-    typeof question.questionMetadata?.drawioXml === "string"
-      ? question.questionMetadata.drawioXml
-      : "";
+function DraftDiagramPreview({ question, index }: { question: AiQuestionDraft; index: number }) {
+  const drawioXml = typeof question.questionMetadata?.drawioXml === "string"
+    ? question.questionMetadata.drawioXml
+    : "";
   const snapshot = useDrawioSnapshot(question.diagramSvg ? "" : drawioXml);
   const previewSrc = question.diagramSvg || snapshot.svg;
 
@@ -48,24 +52,121 @@ function DraftDiagramPreview({
     <>
       <div className="p-3 rounded-[8px] border border-line bg-white flex justify-center min-h-24">
         {previewSrc ? (
-          <img
-            src={previewSrc}
-            alt={`Model answer diagram for question ${index + 1}`}
-            className="max-h-[300px] max-w-full object-contain"
-          />
+          <img src={previewSrc} alt={`Model answer diagram for question ${index + 1}`} className="max-h-[300px] max-w-full object-contain" />
         ) : snapshot.status === "loading" ? (
-          <span className="self-center text-sm text-content-soft">
-            Rendering the diagram…
-          </span>
+          <span className="self-center text-sm text-content-soft">Rendering the diagram…</span>
         ) : (
-          <span className="self-center text-sm text-content-soft">
-            Couldn’t render a preview (is diagrams.net reachable?)
-          </span>
+          <span className="self-center text-sm text-content-soft">Couldn’t render a preview (is diagrams.net reachable?)</span>
         )}
       </div>
       {snapshot.frame}
     </>
   );
+}
+
+function toEditorDraft(question: AiQuestionDraft): QuestionDraft {
+  const editorDraft = fromAiDraft({
+    content: question.content,
+    questionType: question.questionType as QuestionType,
+    difficulty: question.difficulty as QuestionDifficulty,
+    options: (question.options ?? []).map((option, index) => ({
+      optionText: option.optionText,
+      isCorrect: option.isCorrect,
+      orderIndex: option.orderIndex ?? index,
+    })),
+    answerKey: question.answerKey ?? null,
+    explanation: question.explanation,
+    questionMetadata: {
+      ...question.questionMetadata,
+      ...(question.plantUmlSource ? { plantUmlSource: question.plantUmlSource } : {}),
+    },
+    essayGradingRubric: question.essayGradingRubric,
+    codeConfig: question.codeConfig
+      ? {
+          allowedLanguages: question.codeConfig.allowedLanguages ?? [],
+          codeTemplate: question.codeConfig.codeTemplate ?? null,
+          timeLimitMs: question.codeConfig.timeLimitMs ?? 5000,
+          memoryLimitKb: question.codeConfig.memoryLimitKb ?? 262144,
+        }
+      : null,
+    testCases: question.testCases?.map((testCase, index) => ({
+      inputData: testCase.inputData,
+      expectedOutput: testCase.expectedOutput,
+      hidden: Boolean(testCase.hidden),
+      orderIndex: testCase.orderIndex ?? index,
+    })) ?? null,
+  });
+  return { ...editorDraft, diagramSvg: question.diagramSvg ?? editorDraft.diagramSvg };
+}
+
+function fromEditorDraft(original: AiQuestionDraft, edited: QuestionDraft): AiQuestionDraft {
+  const rubricType = ["ESSAY", "DIAGRAM", "DIAGRAM_ESSAY"].includes(edited.type);
+  const isDiagram = edited.type === "DIAGRAM" || edited.type === "DIAGRAM_ESSAY";
+  const questionMetadata = { ...original.questionMetadata };
+  if (edited.skillTag.trim()) questionMetadata.skillTag = edited.skillTag.trim();
+  else delete questionMetadata.skillTag;
+  if (isDiagram) questionMetadata.drawioXml = edited.diagramXml;
+  else delete questionMetadata.drawioXml;
+
+  let answerKey: AiQuestionDraft["answerKey"];
+  if (edited.type === "MATCHING") {
+    answerKey = {
+      pairs: edited.pairs
+        .filter((pair) => pair.left.trim() || pair.right.trim())
+        .map(({ left, right }) => ({ left: left.trim(), right: right.trim() })),
+    };
+  } else if (edited.type === "FILL_BLANK") {
+    answerKey = {
+      blanks: blankIndexes(edited.content).map((index) => ({
+        index,
+        accepted: (edited.blanks[index]?.accepted ?? "").split(";").map((value) => value.trim()).filter(Boolean),
+        caseSensitive: edited.blanks[index]?.caseSensitive ?? false,
+      })),
+    };
+  }
+
+  return {
+    ...original,
+    content: edited.content,
+    questionType: edited.type,
+    difficulty: edited.difficulty as Difficulty,
+    options: ["SINGLE_CHOICE", "MULTIPLE_CHOICE", "TRUE_FALSE"].includes(edited.type)
+      ? edited.options.map((option, orderIndex) => ({ optionText: option.text, isCorrect: option.isCorrect, orderIndex }))
+      : [],
+    answerKey,
+    explanation: edited.explanation,
+    questionMetadata,
+    essayGradingRubric: rubricType
+      ? {
+          criteria: edited.rubric.map((criterion) => ({
+            name: criterion.name,
+            weight: Number(criterion.weight) || 0,
+            maxScore: Number(criterion.weight) || 0,
+            descriptors: criterion.descriptors,
+          })),
+          totalPoints: edited.rubric.reduce((sum, criterion) => sum + (Number(criterion.weight) || 0), 0),
+          notes: edited.rubricNotes,
+        }
+      : undefined,
+    codeConfig: edited.type === "CODE"
+      ? {
+          allowedLanguages: edited.code.languages,
+          codeTemplate: edited.code.template || null,
+          timeLimitMs: Number(edited.code.timeLimitMs),
+          memoryLimitKb: Number(edited.code.memoryLimitKb),
+        }
+      : undefined,
+    testCases: edited.type === "CODE"
+      ? edited.code.testCases.map((testCase, orderIndex) => ({
+          inputData: testCase.input,
+          expectedOutput: testCase.expectedOutput,
+          hidden: testCase.hidden,
+          orderIndex,
+        }))
+      : undefined,
+    plantUmlSource: undefined,
+    diagramSvg: edited.diagramSvg,
+  };
 }
 interface ExamAiGenerateTabProps {
   formKind: "QUIZ" | "ESSAY" | "DIAGRAM" | "CODE";
@@ -140,9 +241,11 @@ export function ExamAiGenerateTab({
     questionIndex: number;
     rubric: NonNullable<AiQuestionDraft["essayGradingRubric"]>;
   } | null>(null);
-  const [diagramEditorQuestionIndex, setDiagramEditorQuestionIndex] = useState<
-    number | null
-  >(null);
+  const [diagramEditorQuestionIndex, setDiagramEditorQuestionIndex] = useState<number | null>(null);
+  const [editingQuestion, setEditingQuestion] = useState<{
+    index: number;
+    draft: QuestionDraft;
+  } | null>(null);
 
   const MSG01 = "This field is required.";
   const MSG06 = "AI is generating questions, please wait...";
@@ -249,6 +352,7 @@ export function ExamAiGenerateTab({
         abortCtrl.signal,
       );
       setDraft(result);
+      setEditingQuestion(null);
       setSavedQuestionIds([]);
       setQuestionsPublished(false);
       if (result.warnings?.length) {
@@ -336,10 +440,16 @@ export function ExamAiGenerateTab({
     setDraft({ ...draft, questions });
   };
 
-  const openRubricEditor = (
-    questionIndex: number,
-    question: AiQuestionDraft,
-  ) => {
+  const finishQuestionEdit = () => {
+    if (!editingQuestion || !draft) return;
+    updateDraftQuestion(
+      editingQuestion.index,
+      fromEditorDraft(draft.questions[editingQuestion.index], editingQuestion.draft),
+    );
+    setEditingQuestion(null);
+  };
+
+  const openRubricEditor = (questionIndex: number, question: AiQuestionDraft) => {
     const rubric = question.essayGradingRubric;
     setRubricEditor({
       questionIndex,
@@ -354,38 +464,26 @@ export function ExamAiGenerateTab({
     });
   };
 
-  const updateRubricCriterion = (
-    index: number,
-    update: Partial<AiRubricCriterion>,
-  ) => {
-    setRubricEditor((current) =>
-      current
-        ? {
-            ...current,
-            rubric: {
-              ...current.rubric,
-              criteria: current.rubric.criteria.map(
-                (criterion, criterionIndex) =>
-                  criterionIndex === index
-                    ? { ...criterion, ...update }
-                    : criterion,
-              ),
-            },
-          }
-        : current,
-    );
+  const updateRubricCriterion = (index: number, update: Partial<AiRubricCriterion>) => {
+    setRubricEditor((current) => current ? {
+      ...current,
+      rubric: {
+        ...current.rubric,
+        criteria: current.rubric.criteria.map((criterion, criterionIndex) =>
+          criterionIndex === index ? { ...criterion, ...update } : criterion),
+      },
+    } : current);
   };
 
   const saveRubricEditor = () => {
     if (!rubricEditor) return;
-    updateDraftQuestion(rubricEditor.questionIndex, {
-      essayGradingRubric: rubricEditor.rubric,
-    });
+    updateDraftQuestion(rubricEditor.questionIndex, { essayGradingRubric: rubricEditor.rubric });
     setRubricEditor(null);
   };
 
   const removeDraftQuestion = (index: number) => {
     if (!draft) return;
+    if (editingQuestion) setEditingQuestion(null);
     const questions = draft.questions.filter((_, i) => i !== index);
     setDraft({ ...draft, questions, questionCount: questions.length });
   };
@@ -434,7 +532,8 @@ export function ExamAiGenerateTab({
       if (!cases.some((t) => t.hidden))
         return "Code question needs at least one hidden test case";
     }
-    return null;
+    const editorErrors = validateDraft(toEditorDraft(q));
+    return editorErrors.content ?? editorErrors.answers ?? editorErrors.type ?? null;
   };
 
   const validateDraftForSave = () => {
@@ -836,7 +935,7 @@ export function ExamAiGenerateTab({
               <Button
                 icon={<Icon.Zap className="w-4 h-4" />}
                 onClick={handleGenerate}
-                disabled={!canGenerate}
+                disabled={!canGenerate || editingQuestion !== null}
               >
                 Generate Draft ({questionCount} Questions)
               </Button>
@@ -864,7 +963,7 @@ export function ExamAiGenerateTab({
               <Button
                 variant="outline"
                 onClick={() => setDraft(null)}
-                disabled={saving}
+                disabled={saving || editingQuestion !== null}
               >
                 Back
               </Button>
@@ -881,7 +980,7 @@ export function ExamAiGenerateTab({
                 <Button
                   icon={<Icon.Check className="w-4 h-4" />}
                   loading={saving}
-                  disabled={saving || draft.questions.length === 0}
+                  disabled={saving || editingQuestion !== null || draft.questions.length === 0}
                   onClick={handleSaveAndPublish}
                 >
                   {savedQuestionIds.length > 0 ? "Publish Saved Questions" : "Save and Publish Questions"}
@@ -901,6 +1000,27 @@ export function ExamAiGenerateTab({
           <div className={`space-y-4 ${savedQuestionIds.length > 0 ? "pointer-events-none opacity-70" : ""}`}>
             {draft.questions.map((q, idx) => {
               const validationErr = validateDraftQuestion(q);
+
+              if (editingQuestion?.index === idx) {
+                return (
+                  <QuestionForm
+                    key={`edit-${idx}`}
+                    q={editingQuestion.draft}
+                    index={idx}
+                    heading={`Edit generated question ${idx + 1}`}
+                    onChange={(updated) => setEditingQuestion((current) => current
+                      ? { ...current, draft: updated }
+                      : current)}
+                    showErrors
+                    allowedTypes={allowedTypes as EditableQuestionType[]}
+                    actions={
+                      <Button size="sm" onClick={finishQuestionEdit} disabled={saving}>
+                        Done
+                      </Button>
+                    }
+                  />
+                );
+              }
 
               return (
                 <div
@@ -959,14 +1079,28 @@ export function ExamAiGenerateTab({
                         ]}
                       />
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => removeDraftQuestion(idx)}
-                      className="text-content-subtle hover:text-danger p-1 rounded hover:bg-danger-light cursor-pointer"
-                      title="Remove Question from Draft"
-                    >
-                      <Icon.Trash className="w-4 h-4" />
-                    </button>
+                    <div className="flex flex-shrink-0 items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setEditingQuestion({ index: idx, draft: toEditorDraft(q) })}
+                        disabled={editingQuestion !== null || saving || savedQuestionIds.length > 0}
+                        className="rounded-[6px] p-1.5 text-content-subtle hover:bg-accent hover:text-content-secondary disabled:cursor-not-allowed disabled:opacity-30"
+                        title="Edit question"
+                        aria-label={`Edit question ${idx + 1}`}
+                      >
+                        <Icon.Edit className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => removeDraftQuestion(idx)}
+                        disabled={editingQuestion !== null || saving || savedQuestionIds.length > 0}
+                        className="rounded-[6px] p-1.5 text-content-subtle hover:bg-danger-light hover:text-danger disabled:cursor-not-allowed disabled:opacity-30"
+                        title="Remove Question from Draft"
+                        aria-label={`Delete question ${idx + 1}`}
+                      >
+                        <Icon.Trash className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
 
                   <div>
