@@ -9,7 +9,13 @@ import { EmptyState } from '@/components/ui/Card';
 import { Icon } from '@/assets/icons';
 import { ROUTES, studentCoursePath, studentModulePracticePath } from '@/app/routes';
 import { getApiErrorMessage } from '@/utils/apiError';
-import { studentCourseService, type StudentCourseDetail } from '@/services/studentCourse.service';
+import {
+  studentCourseService,
+  type StudentCourseDetail,
+  type StudentModuleContent,
+} from '@/services/studentCourse.service';
+import { useCachedQuery } from '@/hooks/useCachedQuery';
+import type { CourseProgress } from '@/services/studentProgress.service';
 import {
   modulePracticeService,
   type ModulePracticeOverview,
@@ -30,15 +36,17 @@ import { ModulePracticeModal } from '../components/ModulePracticeModal';
 import { Progress } from '@/components/ui/Progress';
 import {
   beModuleProgress,
+  courseCacheKey,
   useBeCourseProgress,
   type LearningProgress,
   type ProgressPart,
   type ProgressPartKey,
 } from '../components/courseProgress';
 
-/** Route state from the course page: its CL-02, so the module page need not read it again. */
+/** Route state from the course page: its CL-02 and LP-01, so the module page need not read them again. */
 export interface ModulePageState {
   course: StudentCourseDetail;
+  progress?: CourseProgress;
 }
 
 type KindFilter = 'all' | 'exam' | 'deck';
@@ -90,34 +98,20 @@ export function StudentModuleDetailPage() {
   const isGeneral = moduleParam === GENERAL_MODULE;
   const moduleId = isGeneral ? null : Number(moduleParam);
 
-  // The course page hands over its CL-02, so opening a module from it does not read the course again.
-  const passed = (useLocation().state as ModulePageState | null)?.course;
+  // The course page hands over its CL-02 and LP-01, so opening a module from it reads neither again.
+  const routeState = useLocation().state as ModulePageState | null;
+  const passed = routeState?.course;
   const handed = passed != null && String(passed.courseId) === courseId ? passed : null;
-  const [course, setCourse] = useState<StudentCourseDetail | null>(handed);
-  const [loading, setLoading] = useState(handed == null);
-  const [error, setError] = useState<string | null>(null);
-  const [reload, setReload] = useState(0);
-
-  useEffect(() => {
-    if (reload === 0 && handed) return;
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    studentCourseService
-      .getCourseDetail(courseId)
-      .then(res => {
-        if (!cancelled) setCourse(res);
-      })
-      .catch(err => {
-        if (!cancelled) setError(getApiErrorMessage(err, 'Failed to load the course.'));
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [courseId, reload, handed]);
+  const handedProgress = handed ? routeState?.progress : undefined;
+  // Opened directly (URL, reload), CL-02 comes from the cache when the course was seen in this tab.
+  const courseQuery = useCachedQuery<StudentCourseDetail>(
+    courseCacheKey.course(courseId),
+    () => studentCourseService.getCourseDetail(courseId),
+    { initialData: handed ?? undefined },
+  );
+  const course = courseQuery.data ?? null;
+  const { loading } = courseQuery;
+  const error = courseQuery.error ? getApiErrorMessage(courseQuery.error, 'Failed to load the course.') : null;
 
   const module = moduleId != null ? course?.modules.find(m => m.moduleId === moduleId) : undefined;
   const title = isGeneral ? 'General' : module?.title ?? 'Module';
@@ -151,7 +145,7 @@ export function StudentModuleDetailPage() {
     return (
       <div className={`${STUDENT_PAGE_CLASS} space-y-6`}>
         {breadcrumb}
-        <LoadError message={error ?? 'Module not found.'} onRetry={() => setReload(r => r + 1)} />
+        <LoadError message={error ?? 'Module not found.'} onRetry={courseQuery.reload} />
       </div>
     );
   }
@@ -163,7 +157,13 @@ export function StudentModuleDetailPage() {
     <div className={`${STUDENT_PAGE_CLASS} space-y-[clamp(1.25rem,2.5vw,1.75rem)]`}>
       {breadcrumb}
       {isActive ? (
-        <ModuleContent course={course} moduleId={moduleId} title={title} description={module?.description} />
+        <ModuleContent
+          course={course}
+          moduleId={moduleId}
+          title={title}
+          description={module?.description}
+          initialProgress={handedProgress}
+        />
       ) : (
         <>
           <ModuleHeader title={title} description={module?.description} />
@@ -195,67 +195,52 @@ function ModuleContent({
   moduleId,
   title,
   description,
+  initialProgress,
 }: {
   course: StudentCourseDetail;
   /** null = the General pseudo-module. */
   moduleId: number | null;
   title: string;
   description?: string | null;
+  /** LP-01 handed over by the course page; read again only when missing or after a practice reset. */
+  initialProgress?: CourseProgress;
 }) {
   const navigate = useNavigate();
   const openItem = useOpenContent(course);
-  const [items, setItems] = useState<ContentItem[]>([]);
-  const [contentLoading, setContentLoading] = useState(true);
-  const [contentError, setContentError] = useState<string | null>(null);
-  const [contentReload, setContentReload] = useState(0);
   const [search, setSearch] = useState('');
   const [kind, setKind] = useState<KindFilter>('all');
-  const [overview, setOverview] = useState<ModulePracticeOverview | 'error' | undefined>(undefined);
   const [practicing, setPracticing] = useState(false);
   const [refresh, setRefresh] = useState(0);
 
   const scope: PracticeScope = moduleId == null ? { courseId: course.courseId } : { moduleId };
+  const moduleKey = moduleId ?? GENERAL_MODULE;
 
-  useEffect(() => {
-    let cancelled = false;
-    setContentLoading(true);
-    setContentError(null);
-    setItems([]);
-    studentCourseService
-      .getModuleContent(course.courseId, moduleId ?? GENERAL_MODULE)
-      .then(content => {
-        if (cancelled) return;
-        setItems([
-          ...content.exams.map(exam => ({ kind: 'exam' as const, exam })),
-          ...content.decks.map(deck => ({ kind: 'deck' as const, deck })),
-        ]);
-      })
-      .catch(err => {
-        if (!cancelled) setContentError(getApiErrorMessage(err, 'Failed to load module content.'));
-      })
-      .finally(() => {
-        if (!cancelled) setContentLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [course.courseId, moduleId, contentReload]);
+  // Both cached (useCachedQuery): shown at once when seen before in this tab, then read again.
+  const contentQuery = useCachedQuery<StudentModuleContent>(courseCacheKey.moduleContent(course.courseId, moduleKey), () =>
+    studentCourseService.getModuleContent(course.courseId, moduleKey),
+  );
+  const items = useMemo<ContentItem[]>(
+    () =>
+      contentQuery.data
+        ? [
+            ...contentQuery.data.exams.map(exam => ({ kind: 'exam' as const, exam })),
+            ...contentQuery.data.decks.map(deck => ({ kind: 'deck' as const, deck })),
+          ]
+        : [],
+    [contentQuery.data],
+  );
+  const contentLoading = contentQuery.loading;
+  const contentError = contentQuery.error ? getApiErrorMessage(contentQuery.error, 'Failed to load module content.') : null;
 
+  const overviewQuery = useCachedQuery<ModulePracticeOverview>(courseCacheKey.moduleOverview(course.courseId, moduleKey), () =>
+    modulePracticeService.getOverview(scope),
+  );
+  const overview: ModulePracticeOverview | 'error' | undefined = overviewQuery.error ? 'error' : overviewQuery.data;
+  // A practice reset reads MP-01 again (LP-01 too, through `refresh` below).
+  const reloadOverview = overviewQuery.reload;
   useEffect(() => {
-    let cancelled = false;
-    setOverview(undefined);
-    modulePracticeService
-      .getOverview(moduleId == null ? { courseId: course.courseId } : { moduleId })
-      .then(o => {
-        if (!cancelled) setOverview(o);
-      })
-      .catch(() => {
-        if (!cancelled) setOverview('error');
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [course.courseId, moduleId, refresh]);
+    if (refresh > 0) reloadOverview();
+  }, [refresh, reloadOverview]);
 
   const counts = countItems(items);
   const visible = useMemo(() => {
@@ -263,8 +248,9 @@ function ModuleContent({
     return items.filter(item => (kind === 'all' || item.kind === kind) && (!q || contentTitle(item).toLowerCase().includes(q)));
   }, [items, kind, search]);
 
-  // LP-01, reread after a practice reset; the same numbers as this module's card on the course page.
-  const be = useBeCourseProgress(course.courseId, refresh);
+  // LP-01 (from the course page when opened from it), reread after a practice reset; the same
+  // numbers as this module's card on the course page.
+  const be = useBeCourseProgress(course.courseId, refresh, initialProgress);
   const practice = overview != null && overview !== 'error' ? overview : null;
   const progress: LearningProgress | null =
     be && be !== 'error' ? beModuleProgress(be, moduleId == null ? GENERAL_MODULE : String(moduleId)) ?? { percent: null, parts: [] } : null;
@@ -346,7 +332,7 @@ function ModuleContent({
         {contentLoading ? (
           <CardGridSkeleton count={6} />
         ) : contentError ? (
-          <LoadError message={contentError} onRetry={() => setContentReload(r => r + 1)} />
+          <LoadError message={contentError} onRetry={contentQuery.reload} />
         ) : visible.length === 0 ? (
           <div className="card">
             <EmptyState
