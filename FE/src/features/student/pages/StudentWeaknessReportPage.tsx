@@ -6,7 +6,9 @@ import { Select } from '@/components/ui/Select';
 import { Icon } from '@/assets/icons';
 import { ROUTES, studentCoursePath } from '@/app/routes';
 import { useAuth } from '@/auth/authContext';
-import { studentCourseService } from '@/services/studentCourse.service';
+import { studentCourseService, type StudentCourseDetail } from '@/services/studentCourse.service';
+import { useCachedQuery } from '@/hooks/useCachedQuery';
+import { courseCacheKey } from '../components/courseProgress';
 import {
   WEAKNESS_PERIOD_LABEL,
   getAiError,
@@ -88,28 +90,20 @@ export function StudentWeaknessReportPage() {
   const { user } = useAuth();
   const userId = user?.userId;
   const { courseId = '' } = useParams<{ courseId: string }>();
-  const [courseTitle, setCourseTitle] = useState<string | null>(null);
+  // CL-02 for the title, shared with the course page's cache, so it is usually there at once. A
+  // failure only leaves the title out — the report call reports enrollment problems itself.
+  const courseTitle =
+    useCachedQuery<StudentCourseDetail>(courseId ? courseCacheKey.course(courseId) : null, () =>
+      studentCourseService.getCourseDetail(courseId),
+    ).data?.title ?? null;
   const [period, setPeriod] = useState<WeaknessPeriod>(DEFAULT_PERIOD);
   const [reports, setReports] = useState<Partial<Record<WeaknessPeriod, WeaknessReport>>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<AiError | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
-    setCourseTitle(null);
     setReports(readSavedReports(userId, courseId));
     setError(null);
-    studentCourseService
-      .getCourseDetail(courseId)
-      .then(c => {
-        if (!cancelled) setCourseTitle(c.title);
-      })
-      .catch(() => {
-        // The title is only cosmetic — the report call reports enrollment problems itself.
-      });
-    return () => {
-      cancelled = true;
-    };
   }, [courseId, userId]);
 
   const report = reports[period];
