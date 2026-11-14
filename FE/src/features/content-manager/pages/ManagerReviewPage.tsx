@@ -5,6 +5,7 @@ import { courseService, type CourseModuleResponse, type CourseSummaryItem } from
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
+import { useToast } from '@/components/ui/ToastHost';
 import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { Select } from '@/components/ui/Select';
 import { SearchInput } from '@/components/common/SearchInput';
@@ -110,6 +111,7 @@ async function findContributorName(courseId: number | string, userId: number | s
 }
 
 export function ManagerReviewPage() {
+  const toast = useToast();
   const { user } = useAuth();
   const [params, setParams] = useSearchParams();
   const [kind, setKind] = useState<Kind>(params.get('kind') === 'decks' ? 'decks' : 'contributions');
@@ -318,6 +320,7 @@ export function ManagerReviewPage() {
       const id = idOf(detail, kind);
       const payload = decision === 'approve' ? { version: detail.version, note: approveNote.trim() } : { version: detail.version, reason: reason.trim() };
       unwrap((await apiClient.post(actionPath(kind, id, decision), payload)).data);
+      toast.success(decisionMessage(decision, kind));
       setRejecting(false);
       setConfirmingApproval(false);
       setReason('');
