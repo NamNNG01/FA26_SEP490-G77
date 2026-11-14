@@ -3,9 +3,12 @@ import { useSearchParams } from 'react-router';
 import { apiClient } from '@/services/axios';
 import { courseService, type CourseModuleResponse, type CourseSummaryItem } from '@/services/course.service';
 import { Button } from '@/components/ui/Button';
+import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { Select } from '@/components/ui/Select';
+import { SearchInput } from '@/components/common/SearchInput';
+import { Table, type TableColumn } from '@/components/ui/Table';
 import { ImageViewer } from '@/components/common/ImageViewer';
 import { Icon } from '@/assets/icons';
 import { QuestionForm } from '@/features/question/components/QuestionForm';
@@ -144,7 +147,6 @@ export function ManagerReviewPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
-  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const load = useCallback(async (nextPage = Number(params.get('page') || 0)) => {
     setBusy(true);
@@ -220,7 +222,7 @@ export function ManagerReviewPage() {
       }
     }, contributorSearch ? 250 : 0);
     return () => { cancelled = true; window.clearTimeout(timeout); };
-  }, [filtersOpen, courses, courseId, contributorSearch]);
+  }, [courses, courseId, contributorSearch]);
 
   useEffect(() => {
     let cancelled = false;
@@ -395,7 +397,6 @@ export function ManagerReviewPage() {
   const detailContributorId = detail?.contributor?.id ?? detail?.contributorId ?? detail?.owner?.id ?? detail?.userId;
   const isOwnSubmission = !!detail && detailContributorId != null && String(detailContributorId) === String(user?.userId);
   const canReviewDetail = !!detail?.canReview && !isOwnSubmission && isPending(kind, detailStatus);
-  const extraFilterCount = [moduleId, contributorId, submittedFrom, submittedTo, kind === 'contributions' ? questionType : '', kind === 'contributions' ? difficulty : ''].filter(Boolean).length;
   const courseOptions = [{ label: 'All courses', value: '' }, ...courses.map(course => ({ label: course.title, value: String(course.courseId) }))];
   const moduleOptions = [{ label: 'All modules', value: '' }, ...modules.map(module => ({ label: module.title, value: String(module.moduleId) }))];
   const contributorOptions = [
@@ -409,6 +410,29 @@ export function ManagerReviewPage() {
     const id = String(row.courseId ?? row.course?.courseId ?? row.course?.id);
     return row.course?.title || row.courseName || row.courseTitle || courseNames.get(id) || courseNameOverrides[id] || '—';
   };
+  const columns: TableColumn[] = [
+    { key: 'submission', label: 'Submission', width: '36%', render: value => {
+      const row = value as Row;
+      const id = idOf(row, kind);
+      const title = row.title || row.contentPreview || row.content || `Submission #${id}`;
+      const subtitle = kind === 'decks' ? `${row.cardCount ?? 0} cards${row.module?.title ? ` · ${row.module.title}` : ''}` : row.questionType ? questionTypeLabel(row.questionType) : `Submission #${id}`;
+      return <div className="min-w-0"><p className="line-clamp-2 whitespace-normal font-medium text-content" title={title}>{title}</p><p className="mt-1 truncate text-xs text-content-secondary" title={subtitle}>{subtitle}</p></div>;
+    } },
+    { key: 'contributor', label: 'Contributor', render: value => {
+      const row = value as Row;
+      return row.owner?.fullName || row.contributor?.fullName || studentNames.get(String(row.contributor?.id ?? row.contributorId)) || row.contributorName || (row.contributor?.id ? `Contributor #${row.contributor.id}` : '—');
+    } },
+    { key: 'course', label: 'Course', render: value => <span className="block truncate" title={courseNameOf(value as Row)}>{courseNameOf(value as Row)}</span> },
+    { key: 'submittedAt', label: 'Submitted', className: 'whitespace-nowrap', render: value => {
+      const submittedAt = (value as Row).submittedAt;
+      return submittedAt ? new Date(submittedAt).toLocaleString() : '—';
+    } },
+    { key: 'status', label: 'Status', render: value => {
+      const current = statusOf(value as Row, kind);
+      const variant = isPending(kind, current) ? 'warning' : current === 'REJECTED' ? 'danger' : 'success';
+      return <Badge variant={variant}>{statusLabel(current || '')}</Badge>;
+    } },
+  ];
 
   return <main className="mx-auto max-w-screen-2xl space-y-6 p-6 lg:p-8">
     <header className="flex flex-wrap items-end justify-between gap-4">
@@ -434,34 +458,16 @@ export function ManagerReviewPage() {
     {notice && <div role="status" className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-900">{notice}</div>}
     {error && <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div>}
 
-    <section className="overflow-visible rounded-xl border border-line bg-surface shadow-sm">
-      <form onSubmit={e => { e.preventDefault(); syncUrl(0); load(0); }} className="space-y-4 border-b border-line p-4 sm:p-5">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(150px,0.65fr)_minmax(220px,1.5fr)_minmax(220px,1.2fr)] lg:items-end">
-          <Select label="Status" triggerClassName="w-full h-10 pl-3 pr-10 rounded-lg text-sm" value={status} onChange={value => setStatus(apiStatus(kind, value))} options={[
+    <form onSubmit={e => { e.preventDefault(); syncUrl(0); load(0); }} className="card space-y-3 px-4 py-4">
+      <SearchInput className="w-full" aria-label="Search submissions" placeholder="Search submissions…" value={keyword} onChange={e => setKeyword(e.target.value)} />
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <Select label="Status" value={status} onChange={value => setStatus(apiStatus(kind, value))} options={[
             { label: 'Pending', value: kind === 'contributions' ? 'PENDING' : 'PENDING_REVIEW' },
             { label: 'Approved', value: 'APPROVED' },
             { label: 'Rejected', value: 'REJECTED' },
             { label: 'All statuses', value: 'ALL' },
           ]} />
-          <label className="grid gap-1.5 text-sm font-medium text-content-secondary">Search submissions
-            <input className="h-10 rounded-lg border border-line bg-surface px-3 text-content placeholder:text-content-subtle" value={keyword} onChange={e => setKeyword(e.target.value)} placeholder="Search title or content" />
-          </label>
           <SearchableSelect label="Course" options={courseOptions} value={courseId} onChange={value => { setCourseId(value); setModuleId(''); }} placeholder="All courses" searchPlaceholder="Search courses…" />
-        </div>
-
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <button type="button" aria-expanded={filtersOpen} onClick={() => setFiltersOpen(value => !value)} className="inline-flex items-center gap-2 rounded-lg px-2 py-2 text-sm font-medium text-content-secondary hover:bg-surface-hover hover:text-content">
-            <span>{filtersOpen ? 'Hide filters' : 'More filters'}</span>
-            {extraFilterCount > 0 && <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700">{extraFilterCount} active</span>}
-            <Icon.ChevronDown aria-hidden="true" className={`h-4 w-4 shrink-0 transition-transform ${filtersOpen ? 'rotate-180' : ''}`} />
-          </button>
-          <div className="flex gap-2">
-            <Button type="button" variant="outline" disabled={busy} onClick={() => void clearFilters()}>Clear filters</Button>
-            <Button type="submit" loading={busy}>Apply filters</Button>
-          </div>
-        </div>
-
-        {filtersOpen && <div className="grid gap-3 border-t border-line-soft pt-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           <SearchableSelect label="Module" options={moduleOptions} value={moduleId} onChange={setModuleId} disabled={!courseId} placeholder={courseId ? 'All modules' : 'Choose a course first'} searchPlaceholder="Search modules…" />
           <SearchableSelect label="Contributor" options={contributorOptions} value={contributorId} onChange={setContributorId} onSearchChange={setContributorSearch} placeholder="Any contributor" searchPlaceholder="Search students by name…" emptyText={studentsLoading ? 'Searching students…' : 'No students found'} />
           {kind === 'contributions' && <>
@@ -474,39 +480,24 @@ export function ManagerReviewPage() {
           <label className="grid gap-1.5 text-sm font-medium text-content-secondary">Submitted before
             <input type="datetime-local" className="h-10 rounded-lg border border-line bg-surface px-3 text-content" value={submittedTo} onChange={e => setSubmittedTo(e.target.value)} />
           </label>
-        </div>}
-      </form>
-
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[720px] text-left text-sm">
-          <thead className="bg-surface-muted text-content-secondary"><tr>
-            <th className="px-5 py-3 font-medium">Submission</th><th className="px-5 py-3 font-medium">Contributor</th><th className="px-5 py-3 font-medium">Course</th><th className="px-5 py-3 font-medium">Submitted</th><th className="px-5 py-3 font-medium">Status</th>
-          </tr></thead>
-          <tbody className="divide-y divide-line">
-            {rows.map(row => <tr key={idOf(row, kind)} tabIndex={0} onClick={() => void open(row)} onKeyDown={event => {
-              if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); void open(row); }
-            }} className="group cursor-pointer hover:bg-surface-hover focus:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-600">
-              <td className="max-w-sm px-5 py-4"><div className="truncate font-medium text-content" title={row.title || row.contentPreview || row.content || `Submission #${idOf(row, kind)}`}>{row.title || row.contentPreview || row.content || `Submission #${idOf(row, kind)}`}</div><div className="mt-1 truncate text-xs text-content-secondary" title={kind === 'decks' ? `${row.cardCount ?? 0} cards${row.module?.title ? ` · ${row.module.title}` : ''}` : row.questionType ? questionTypeLabel(row.questionType) : `Submission #${idOf(row, kind)}`}>{kind === 'decks' ? `${row.cardCount ?? 0} cards${row.module?.title ? ` · ${row.module.title}` : ''}` : row.questionType ? questionTypeLabel(row.questionType) : `Submission #${idOf(row, kind)}`}</div></td>
-              <td className="whitespace-nowrap px-5 py-4 text-content-secondary">{row.owner?.fullName || row.contributor?.fullName || studentNames.get(String(row.contributor?.id ?? row.contributorId)) || row.contributorName || (row.contributor?.id ? `Contributor #${row.contributor.id}` : '—')}</td>
-              <td className="max-w-xs truncate px-5 py-4 text-content-secondary">{courseNameOf(row)}</td>
-              <td className="whitespace-nowrap px-5 py-4 text-content-secondary">{row.submittedAt ? new Date(row.submittedAt).toLocaleString() : '—'}</td>
-              <td className="px-5 py-4"><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${isPending(kind, statusOf(row, kind)) ? 'bg-amber-50 text-amber-800' : statusOf(row, kind) === 'REJECTED' ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>{statusLabel(statusOf(row, kind) || '')}</span></td>
-            </tr>)}
-            {!rows.length && <tr><td colSpan={5} className="p-12 text-center"><p className="font-medium text-content">{busy ? 'Loading submissions…' : 'No submissions found'}</p><p className="mt-1 text-sm text-content-secondary">{busy ? 'The review queue is being refreshed.' : 'Try changing the status or clearing some filters.'}</p></td></tr>}
-          </tbody>
-        </table>
       </div>
-
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-5 py-4 text-sm">
-        <span className="text-content-secondary">Showing {rows.length ? page * pageData.size + 1 : 0}–{page * pageData.size + rows.length} of {pageData.totalElements || 0}</span>
-        <div className="flex items-center gap-2">
-          <Button size="sm" variant="outline" disabled={busy || refreshing} loading={refreshing} onClick={() => void refreshQueue()}>Refresh</Button>
-          <Button size="sm" variant="outline" disabled={page <= 0 || busy} onClick={() => { syncUrl(page - 1); load(page - 1); }}>Previous</Button>
-          <span className="min-w-20 text-center text-content-secondary">Page {page + 1} of {Math.max(1, pageData.totalPages || 1)}</span>
-          <Button size="sm" variant="outline" disabled={page + 1 >= (pageData.totalPages || 1) || busy} onClick={() => { syncUrl(page + 1); load(page + 1); }}>Next</Button>
-        </div>
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <Button type="button" variant="outline" disabled={busy || refreshing} loading={refreshing} onClick={() => void refreshQueue()}>Refresh</Button>
+        <Button type="button" variant="outline" disabled={busy} onClick={() => void clearFilters()}>Clear filters</Button>
+        <Button type="submit" loading={busy}>Apply filters</Button>
       </div>
-    </section>
+    </form>
+
+    <div className="card overflow-hidden">
+      <Table
+        columns={columns}
+        data={rows.map(row => ({ ...row, id: idOf(row, kind) }))}
+        unit="submissions"
+        serverPagination={{ page: page + 1, total: pageData.totalElements || 0, onChange: value => { syncUrl(value - 1); void load(value - 1); } }}
+        onRowClick={row => void open(row as Row)}
+        emptyState={busy ? 'Loading submissions…' : 'No submissions found. Try changing the filters.'}
+      />
+    </div>
 
     <Modal open={!!detail || detailLoading} onClose={() => { setDetail(null); setRejecting(false); setConfirmingApproval(false); setReason(''); setApproveNote(''); setError(''); }} title={detail ? (detail.title || `Submission #${idOf(detail, kind)}`) : 'Loading submission…'} size="2xl" footer={detail && <>
       {canReviewDetail && rejecting ? <>
