@@ -254,14 +254,6 @@ export function StudentQuestionNotebookPage() {
       <PageTitle
         title="Question notebook"
         subtitle="Review incorrect answers, keep useful questions, and practice them again."
-        action={
-          <Button
-            variant="outline"
-            onClick={() => navigate(ROUTES.studentLearningActivities)}
-          >
-            Learning activity
-          </Button>
-        }
       />
 
       <div>

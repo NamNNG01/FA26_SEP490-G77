@@ -48,7 +48,6 @@ export const ROUTES = {
   paymentReturn: "/payment/return",
   paymentCancel: "/payment/cancel",
   studentMyExams: "/student/my-exams",
-  studentLearningActivities: "/student/learning-activity",
   studentQuestionNotebook: "/student/questions/saved",
   studentDiscussions: "/student/discussions",
   studentDiscussionDetail: "/student/discussions/:discussionId",
@@ -335,12 +334,6 @@ export const menuByRole: Record<string, MenuItem[]> = {
       path: ROUTES.studentFlashcards,
     },
     {
-      id: "student-activity",
-      title: "Learning Activity",
-      icon: <Icon.Activity className="w-4 h-4" />,
-      path: ROUTES.studentLearningActivities,
-    },
-    {
       id: "student-notebook",
       title: "Question Notebook",
       icon: <Icon.Star className="w-4 h-4" />,
@@ -421,6 +414,12 @@ export const menuByRole: Record<string, MenuItem[]> = {
       title: "Dashboard",
       icon: <Icon.Home className="w-4 h-4" />,
       path: ROUTES.adminDashboard,
+    },
+    {
+      id: "admin-manager-reviews",
+      title: "Content review",
+      icon: <Icon.CheckCircle className="w-4 h-4" />,
+      path: ROUTES.managerReviews,
     },
     {
       id: "admin-users",

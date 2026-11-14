@@ -25,6 +25,7 @@ import { CardFace, ConfirmModal, DeckModeBadge, DeckStatusBadge, plural } from '
 import { DeckFormModal } from '../components/flashcards/DeckFormModal';
 import { CardFormModal } from '../components/flashcards/CardFormModal';
 import { ImportCardsModal } from '../components/flashcards/ImportCardsModal';
+import { DeckContributionModal } from '../components/flashcards/DeckContributionModal';
 import { downloadDecksXlsx, fileSlug } from '@/utils/flashcardXlsx';
 
 const MODE_LABEL: Record<StudentDeckView['mode'], string> = {
@@ -43,7 +44,6 @@ import {
 type Dialog =
   | { kind: 'edit' }
   | { kind: 'delete' }
-  | { kind: 'publish' }
   | { kind: 'withdraw' }
   | { kind: 'import' }
   | { kind: 'card'; card?: ViewerCard }
@@ -78,6 +78,7 @@ export function StudentDeckStudyPage() {
   const [error, setError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
   const [dialog, setDialog] = useState<Dialog | null>(null);
+  const [contributionOpen, setContributionOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [exporting, setExporting] = useState<'xlsx' | 'pdf' | null>(null);
   const study = useDeckStudy(deckId, setProgress);
@@ -306,7 +307,7 @@ export function StudentDeckStudyPage() {
                     className="col-span-2"
                     variant="outline"
                     icon={<Icon.Upload className="w-4 h-4" />}
-                    onClick={() => setDialog({ kind: 'publish' })}
+                    onClick={() => setContributionOpen(true)}
                     disabled={deck.cardCount === 0}
                     title={deck.cardCount === 0 ? 'Add at least one card first' : undefined}
                   >
@@ -512,27 +513,16 @@ export function StudentDeckStudyPage() {
           }
         />
       )}
-      {dialog?.kind === 'publish' && (
-        <ConfirmModal
-          title={deck.reviewStatus === 'REJECTED' ? 'Resubmit for review?' : 'Make this deck public?'}
-          message={
-            <>
-              A content manager will review the deck. While it waits you can't edit it (you can withdraw the request).{' '}
-              <strong className="text-content">Once approved, the deck can't be edited, made private or deleted.</strong>
-            </>
-          }
-          confirmLabel="Send for review"
-          busy={busy}
-          onClose={() => setDialog(null)}
-          onConfirm={() =>
-            act(async () => {
-              const res = await studentDeckService.requestPublish(deckId);
-              setDeck(d => (d ? { ...d, reviewStatus: res.reviewStatus, visibility: res.visibility, submittedAt: res.submittedAt } : d));
-              toast.success('Sent for review.');
-            }, 'Could not send the deck for review.')
-          }
-        />
-      )}
+      <DeckContributionModal
+        open={contributionOpen}
+        initialDeckId={deckId}
+        onClose={() => setContributionOpen(false)}
+        onSubmitted={(_submittedDeckId, result) => {
+          setDeck(current => current ? { ...current, reviewStatus: result.reviewStatus, visibility: result.visibility, submittedAt: result.submittedAt } : current);
+          setContributionOpen(false);
+          toast.success('Sent for review.');
+        }}
+      />
       {dialog?.kind === 'withdraw' && (
         <ConfirmModal
           title="Withdraw the review request?"
