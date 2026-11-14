@@ -14,4 +14,5 @@ public class CreateCommentRequestDto {
     @NotBlank
     private String content;
     private Boolean isAnonymous;
+    private String imageUrl;
 }

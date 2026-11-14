@@ -26,6 +26,10 @@ public class DiscussionItemDto {
     private boolean isUpvoted;
     @JsonProperty("isAuthor")
     private boolean isAuthor;
+    @JsonProperty("isClosed")
+    private boolean isClosed;
+    private String imageUrl;
+    private String approvalStatus;
     private Instant createdAt;
     private Instant lastCommentAt;
     private CourseRefDto course;
@@ -36,6 +40,14 @@ public class DiscussionItemDto {
 
     public void setIsAuthor(boolean isAuthor) {
         this.isAuthor = isAuthor;
+    }
+
+    public boolean isClosed() {
+        return isClosed;
+    }
+
+    public void setIsClosed(boolean isClosed) {
+        this.isClosed = isClosed;
     }
 
     @Data

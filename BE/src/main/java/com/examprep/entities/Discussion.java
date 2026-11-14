@@ -58,6 +58,10 @@ public class Discussion implements Serializable {
     @Column(name = "comment_count", nullable = false)
     private Integer commentCount = 0;
 
+    public static final String APPROVAL_PENDING = "PENDING";
+    public static final String APPROVAL_APPROVED = "APPROVED";
+    public static final String APPROVAL_REJECTED = "REJECTED";
+
     @Builder.Default
     @Column(name = "tag", nullable = false, length = 20)
     private String tag = "question"; // question, tip
@@ -73,6 +77,23 @@ public class Discussion implements Serializable {
     @Builder.Default
     @Column(name = "is_closed", nullable = false)
     private Boolean isClosed = false;
+
+    @Column(name = "image_url", length = 1000)
+    private String imageUrl;
+
+    @Builder.Default
+    @Column(name = "approval_status", nullable = false, length = 20)
+    private String approvalStatus = APPROVAL_APPROVED;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "reviewed_by")
+    private User reviewedBy;
+
+    @Column(name = "reviewed_at")
+    private Instant reviewedAt;
+
+    @Column(name = "rejection_reason", length = 1000)
+    private String rejectionReason;
 
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
