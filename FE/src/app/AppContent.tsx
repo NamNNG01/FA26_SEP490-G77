@@ -37,7 +37,6 @@ import {
   StudentTakeExamPage,
   StudentExamResultPage,
   StudentPracticeResultPage,
-  StudentLearningActivityPage,
   StudentQuestionNotebookPage,
   StudentContestsPage,
   StudentDiscountsPage,
@@ -268,7 +267,6 @@ function AppRoutes() {
           <Route path={ROUTES.studentModuleDetail} element={<StudentModuleDetailPage />} />
           <Route path={ROUTES.studentExams} element={<MyExamsPage />} />
           <Route path={ROUTES.studentMyExams} element={<MyExamsPage />} />
-          <Route path={ROUTES.studentLearningActivities} element={<StudentLearningActivityPage />} />
           <Route path={ROUTES.studentQuestionNotebook} element={<StudentQuestionNotebookPage />} />
           <Route path={ROUTES.studentContests} element={<StudentContestsPage />} />
           <Route path={ROUTES.studentContestDetail} element={<StudentContestsPage />} />

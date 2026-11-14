@@ -14,7 +14,7 @@ import { useCurrentSubscription } from '@/services/studentSubscription.service';
  * Header user menu (top-right) with role-aware navigation:
  *   - Profile → students use the header-based student profile route; managers
  *               and admins use the dashboard profile route.
- *   - Students also get quick links to Learning Activity and Question Notebook.
+ *   - Students also get a quick link to the Question Notebook.
  *   - Under the name: a student's ACTIVE plan (SB-02, 'Free' without one); the role for others.
  *   - Theme   → INSTANTLY toggles to the next registered theme via
  *               useTheme().toggleTheme() — cycles dynamically through all
@@ -160,16 +160,6 @@ export function UserDropdown({ avatarOnly = false }: { avatarOnly?: boolean }) {
 
           {user.role === Role.STUDENT && (
             <>
-              <button
-                type="button"
-                role="menuitem"
-                data-menu-item
-                onClick={() => handleNavigate(ROUTES.studentLearningActivities)}
-                className={menuItemClass}
-              >
-                <Icon.Activity className="w-4 h-4 text-muted-foreground" />
-                Learning Activity
-              </button>
               <button
                 type="button"
                 role="menuitem"
