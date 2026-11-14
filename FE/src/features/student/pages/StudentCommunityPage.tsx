@@ -88,7 +88,7 @@ function DiscussionList() {
   };
 
   return <div className={`${STUDENT_PAGE_CLASS} space-y-6`}>
-    <PageTitle title="Community" subtitle="Ask questions, share tips, and learn with your course community." action={<Button icon={<Icon.Plus className="h-4 w-4" />} onClick={() => setCreateOpen(true)}>Create post</Button>} />
+    <PageTitle title="Community" subtitle="Ask questions, share tips, and learn with your course community." action={tab !== 'Announcements' ? <Button icon={<Icon.Plus className="h-4 w-4" />} onClick={() => setCreateOpen(true)}>Create post</Button> : undefined} />
     <Tabs tabs={['Discussions', 'Tips', 'Announcements']} active={tab} onChange={chooseTab} variant="underline" />
     <div className="card flex flex-wrap items-center gap-3 p-4">
       <Select aria-label="Filter by course" className="w-full sm:w-56" value={courseId} options={courseOptions} onChange={value => { setCourseId(value); setPage(0); }} />
@@ -98,7 +98,7 @@ function DiscussionList() {
       </>}
     </div>
     {error ? <LoadError message={error} onRetry={() => setReload(value => value + 1)} /> : loading ? <div className="card p-8 text-sm text-content-subtle">Loading posts…</div> : items.length === 0 ?
-      <div className="card"><EmptyState icon={tab === 'Tips' ? <Icon.Lightbulb className="h-7 w-7" /> : tab === 'Announcements' ? <Icon.Bell className="h-7 w-7" /> : <Icon.Book className="h-7 w-7" />} title={tab === 'Tips' ? 'No tips yet' : tab === 'Announcements' ? 'No announcements yet' : 'No discussions found'} message={tab === 'Tips' ? 'Helpful tips from students will appear here.' : tab === 'Announcements' ? 'Course announcements from your managers will appear here.' : 'Start a discussion with your course community.'} action={<Button onClick={() => setCreateOpen(true)}>Create post</Button>} /></div> :
+      <div className="card"><EmptyState icon={tab === 'Tips' ? <Icon.Lightbulb className="h-7 w-7" /> : tab === 'Announcements' ? <Icon.Bell className="h-7 w-7" /> : <Icon.Book className="h-7 w-7" />} title={tab === 'Tips' ? 'No tips yet' : tab === 'Announcements' ? 'No announcements yet' : 'No discussions found'} message={tab === 'Tips' ? 'Helpful tips from students will appear here.' : tab === 'Announcements' ? 'Course announcements from your managers will appear here.' : 'Start a discussion with your course community.'} action={tab !== 'Announcements' ? <Button onClick={() => setCreateOpen(true)}>Create post</Button> : undefined} /></div> :
       <div className="space-y-3">{voteError && <Alert type="error" message={voteError} />}{items.map(item => <DiscussionCard key={item.discussionId} item={item} voting={votingIds.has(item.discussionId)} onUpvote={() => void toggleUpvote(item.discussionId)} onOpen={() => navigate(`${ROUTES.studentDiscussions}/${item.discussionId}`)} />)}
         <div className="card"><Pagination page={page + 1} total={total} perPage={PAGE_SIZE} onChange={value => setPage(value - 1)} unit={tab.toLowerCase()} /></div>
       </div>}
