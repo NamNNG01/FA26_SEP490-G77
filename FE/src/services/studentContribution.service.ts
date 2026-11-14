@@ -1,6 +1,7 @@
 import { api } from './api';
 import type { ApiResponse } from '@/auth/authContext';
 import type { StudentPage } from './studentLearning.service';
+import type { CodeQuestionConfig, CodeTestCaseDto } from './question.service';
 
 export type ContributionType = 'question' | 'tip' | 'document';
 export type ContributionStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED';
@@ -22,7 +23,7 @@ export interface ContributionOption {
   orderIndex?: number;
 }
 
-export type ContributionQuestionType = 'SINGLE_CHOICE' | 'MULTIPLE_CHOICE' | 'TRUE_FALSE' | 'MATCHING' | 'FILL_BLANK' | 'ESSAY' | 'DIAGRAM' | 'ORDERING';
+export type ContributionQuestionType = 'SINGLE_CHOICE' | 'MULTIPLE_CHOICE' | 'TRUE_FALSE' | 'MATCHING' | 'FILL_BLANK' | 'ESSAY' | 'DIAGRAM' | 'DIAGRAM_ESSAY' | 'CODE' | 'ORDERING';
 
 export interface ContributionDetail extends ContributionItem {
   courseId?: number;
@@ -36,6 +37,8 @@ export interface ContributionDetail extends ContributionItem {
   answerKey?: unknown;
   questionMetadata?: Record<string, unknown> | null;
   essayGradingRubric?: unknown;
+  codeConfig?: CodeQuestionConfig | null;
+  testCases?: CodeTestCaseDto[] | null;
   explanation?: string;
   sourceReference?: string | null;
   title?: string;
@@ -54,6 +57,8 @@ export interface QuestionContributionBody {
   correctOrder?: unknown[];
   questionMetadata?: Record<string, unknown> | null;
   essayGradingRubric?: unknown;
+  codeConfig?: CodeQuestionConfig | null;
+  testCases?: CodeTestCaseDto[] | null;
   explanation: string;
 }
 
