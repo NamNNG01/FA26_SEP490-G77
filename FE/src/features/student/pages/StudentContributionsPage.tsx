@@ -12,7 +12,6 @@ import { Select } from "@/components/ui/Select";
 import { Tabs } from "@/components/ui/Tabs";
 import { Icon } from "@/assets/icons";
 import { ROUTES, studentDeckPath } from "@/app/routes";
-import { DiagramAnswer } from "@/features/question/components/DiagramAnswer";
 import { QuestionForm } from "@/features/question/components/QuestionForm";
 import {
   emptyDraft,
@@ -389,131 +388,24 @@ function ContributionDetail({ contributionId }: { contributionId: string }) {
 }
 
 function QuestionPreview({ item }: { item: ContributionDetail }) {
-  const questionType = item.questionType ?? "SINGLE_CHOICE";
   const draft = contributionQuestionDraft(item);
-  const answerKey = item.answerKey as {
-    pairs?: { left: string; right: string }[];
-    blanks?: { index: number; accepted: string[] }[];
-    correctOrder?: string[];
-  } | null;
   return (
     <div className="space-y-3 border-t border-line pt-4">
-      <p className="text-xs font-semibold uppercase tracking-wide text-content-subtle">
-        {titleCase(questionType.replace(/_/g, " "))} · {titleCase(item.difficulty ?? "MEDIUM")}
-      </p>
-      <p className="whitespace-pre-wrap text-sm font-medium text-content">
-        {item.content ?? item.questionText ?? item.summary}
-      </p>
-      {questionType === "MATCHING" && (
-        <ol className="space-y-2">
-          {(answerKey?.pairs ?? []).map((pair, index) => (
-            <li
-              key={index}
-              className="rounded-lg bg-surface-muted px-3 py-2 text-sm text-content-secondary"
-            >
-              {pair.left} ↔ {pair.right}
-            </li>
-          ))}
-        </ol>
-      )}
-      {questionType === "FILL_BLANK" && (
-        <div className="space-y-1 text-sm text-content-secondary">
-          {(answerKey?.blanks ?? []).map((blank) => (
-            <p key={blank.index}>
-              Blank {blank.index}: {(blank.accepted ?? []).join(", ")}
-            </p>
-          ))}
-        </div>
-      )}
-      {questionType === "DIAGRAM" && (
-        <DiagramAnswer q={draft} set={() => undefined} readOnly />
-      )}
-      {["SINGLE_CHOICE", "MULTIPLE_CHOICE", "TRUE_FALSE"].includes(
-        questionType,
-      ) && (
-        <ol className="space-y-2">
-          {(item.options ?? []).map((option, index) => (
-            <li
-              key={`${index}-${option.optionText}`}
-              className={`rounded-lg px-3 py-2 text-sm ${option.isCorrect ? "bg-success-light text-success" : "bg-surface-muted text-content-secondary"}`}
-            >
-              <span className="mr-2 font-semibold">
-                {String.fromCharCode(65 + index)}.
-              </span>
-              {option.optionText}
-              {option.isCorrect && (
-                <span className="ml-2 text-xs font-semibold">Correct</span>
-              )}
-              {option.explanation && (
-                <p className="mt-1 text-xs opacity-80">{option.explanation}</p>
-              )}
-            </li>
-          ))}
-        </ol>
-      )}
-      {questionType === "ORDERING" && (
-        <ol className="space-y-2">
-          {(answerKey?.correctOrder ?? []).map((key, index) => (
-            <li
-              key={key}
-              className="rounded-lg bg-surface-muted px-3 py-2 text-sm text-content-secondary"
-            >
-              {index + 1}.{" "}
-              {(item.options ?? []).find((option) => option.key === key)
-                ?.optionText ?? key}
-            </li>
-          ))}
-        </ol>
-      )}
-      {(questionType === "ESSAY" || questionType === "DIAGRAM") && (
-        <RubricPreview criteria={draft.rubric} notes={draft.rubricNotes} questionType={questionType} />
-      )}
-      {item.explanation && (
-        <p className="rounded-lg bg-surface-muted p-3 text-sm text-content-secondary">
-          <span className="font-semibold">Explanation: </span>
-          {item.explanation}
-        </p>
-      )}
+      <QuestionForm
+        q={draft}
+        index={0}
+        heading="Question details"
+        onChange={() => {}}
+        showErrors={false}
+        allowedTypes={STUDENT_QUESTION_TYPES}
+        readOnly
+      />
       {item.sourceReference && (
         <p className="text-xs text-content-subtle">
           Source: {item.sourceReference}
         </p>
       )}
     </div>
-  );
-}
-
-function RubricPreview({
-  criteria,
-  notes,
-  questionType,
-}: {
-  criteria: QuestionDraft["rubric"];
-  notes: string;
-  questionType: string;
-}) {
-  return (
-    <section className="space-y-2 rounded-lg border border-line p-3">
-      <h2 className="text-sm font-semibold text-content">Grading rubric</h2>
-      {criteria.length ? (
-        <ol className="space-y-2">
-          {criteria.map((criterion, index) => (
-            <li key={criterion.key} className="rounded-md bg-surface-muted px-3 py-2 text-sm">
-              <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                <span className="font-medium text-content">{index + 1}. {criterion.name || `Criterion ${index + 1}`}</span>
-                {criterion.weight && <span className="text-xs font-medium text-content-secondary">{criterion.weight} points</span>}
-              </div>
-              {criterion.descriptors && <p className="mt-1 whitespace-pre-wrap text-content-secondary">{criterion.descriptors}</p>}
-            </li>
-          ))}
-        </ol>
-      ) : (
-        <p className="text-sm text-content-secondary">
-          {questionType === "DIAGRAM" ? "This diagram is graded without custom rubric criteria." : "No grading rubric details were included."}
-        </p>
-      )}
-      {notes && <p className="whitespace-pre-wrap border-t border-line pt-2 text-sm text-content-secondary"><span className="font-medium text-content">Notes: </span>{notes}</p>}
-    </section>
   );
 }
 
@@ -525,6 +417,8 @@ const STUDENT_QUESTION_TYPES: QuestionDetail["questionType"][] = [
   "FILL_BLANK",
   "ESSAY",
   "DIAGRAM",
+  "DIAGRAM_ESSAY",
+  "CODE",
   "ORDERING",
 ];
 
@@ -552,6 +446,8 @@ function contributionQuestionDraft(item?: ContributionDetail): QuestionDraft {
     status: "INACTIVE",
     approvalStatus: item.status,
     essayGradingRubric: item.essayGradingRubric ?? null,
+    codeConfig: item.codeConfig ?? null,
+    testCases: item.testCases ?? null,
     options: item.options ?? [],
     createdAt: item.createdAt ?? null,
     updatedAt: item.createdAt ?? null,

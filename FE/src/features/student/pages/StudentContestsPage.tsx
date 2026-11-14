@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
@@ -6,12 +6,15 @@ import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Pagination } from "@/components/ui/Pagination";
+import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import { Select } from "@/components/ui/Select";
 import { Tabs } from "@/components/ui/Tabs";
 import { useToast } from "@/components/ui/ToastHost";
 import { Icon } from "@/assets/icons";
 import { ROUTES } from "@/app/routes";
 import { formatVnd } from "@/services/payment.service";
+import { studentCourseService, type MyCourse } from "@/services/studentCourse.service";
+import type { StudentPage } from "@/services/studentLearning.service";
 import {
   studentContestService,
   type ContestHistoryItem,
@@ -28,7 +31,7 @@ import {
   PageTitle,
   STUDENT_PAGE_CLASS,
 } from "../components/studentUi";
-import { RankMedal } from "@/features/contest/components/contestUi";
+import { hcmInputToIso, RankMedal } from "@/features/contest/components/contestUi";
 
 const PAGE_SIZE = 9;
 const LIST_TABS = ["Contests", "History"];
@@ -53,23 +56,17 @@ export function StudentContestsPage() {
   return contestId ? <ContestDetail contestId={contestId} /> : <ContestList />;
 }
 
-type Course = { courseId: number; title: string };
+type Course = Pick<MyCourse, "courseId" | "title">;
 
-function inDateRange(value: string | undefined, from: string, to: string) {
-  if (!from && !to) return true;
-  if (!value) return false;
-  const t = new Date(value).getTime();
-  if (from && t < new Date(`${from}T00:00:00`).getTime()) return false;
-  if (to && t > new Date(`${to}T23:59:59.999`).getTime()) return false;
-  return true;
-}
+const EMPTY_PAGE = <T,>(): StudentPage<T> => ({
+  content: [], page: 0, size: PAGE_SIZE, totalElements: 0, totalPages: 0, first: true, last: true,
+});
 
-function coursesOf(items: { course?: Course | null }[]): Course[] {
-  const map = new Map<number, Course>();
-  items.forEach((item) => {
-    if (item.course) map.set(item.course.courseId, item.course);
-  });
-  return [...map.values()].sort((a, b) => a.title.localeCompare(b.title));
+function dateFilter(value: string, endOfDay = false) {
+  if (!value) return undefined;
+  const iso = hcmInputToIso(`${value}T${endOfDay ? "23:59" : "00:00"}`);
+  if (!iso || !endOfDay) return iso ?? undefined;
+  return new Date(new Date(iso).getTime() + 59_999).toISOString();
 }
 
 function ContestList() {
@@ -77,8 +74,9 @@ function ContestList() {
   const toast = useToast();
   const [tab, setTab] = useState(LIST_TABS[0]);
   const [page, setPage] = useState(1);
-  const [contests, setContests] = useState<StudentContest[]>([]);
-  const [history, setHistory] = useState<ContestHistoryItem[]>([]);
+  const [contestPage, setContestPage] = useState<StudentPage<StudentContest>>(() => EMPTY_PAGE());
+  const [historyPage, setHistoryPage] = useState<StudentPage<ContestHistoryItem>>(() => EMPTY_PAGE());
+  const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
@@ -86,40 +84,43 @@ function ContestList() {
   const [courseId, setCourseId] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  const isHistory = tab === "History";
+
+  useEffect(() => {
+    let cancelled = false;
+    studentCourseService.getMyCourses({ page: 0, size: 100 })
+      .then((result) => {
+        if (!cancelled) setCourses(result.content
+          .filter((course) => course.status !== "CANCELLED")
+          .map(({ courseId, title }) => ({ courseId, title }))
+          .sort((a, b) => a.title.localeCompare(b.title)));
+      })
+      .catch(() => { if (!cancelled) setCourses([]); });
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    Promise.all([
-      studentContestService.getAllContests(),
-      studentContestService
-        .getAllHistory()
-        .catch(() => [] as ContestHistoryItem[]),
-    ])
-      .then(([contestRows, historyRows]) => {
+    const filters = {
+      courseId: courseId ? Number(courseId) : undefined,
+      from: dateFilter(from),
+      to: dateFilter(to, true),
+      page: page - 1,
+      size: PAGE_SIZE,
+    };
+    const request = isHistory
+      ? studentContestService.getHistory(filters)
+      : studentContestService.getContests({
+          ...filters,
+          status: status ? status as ContestStatus : undefined,
+        });
+    request
+      .then((result) => {
         if (cancelled) return;
-        const joined = new Set(historyRows.map((item) => item.contestId));
-        const byStart = (
-          a: { startTime?: string },
-          b: { startTime?: string },
-        ) => (b.startTime ?? "").localeCompare(a.startTime ?? "");
-        setContests(
-          contestRows
-            .map((c) => ({
-              ...c,
-              isRegistered: Boolean(c.isRegistered || joined.has(c.contestId)),
-            }))
-            .sort(byStart),
-        );
-        const startOf = new Map(contestRows.map((c) => [c.contestId, c]));
-        setHistory(
-          historyRows.map((h) => ({
-            ...h,
-            startTime: h.startTime ?? startOf.get(h.contestId)?.startTime,
-            course: h.course ?? startOf.get(h.contestId)?.course ?? null,
-          })),
-        );
+        if (isHistory) setHistoryPage(result as StudentPage<ContestHistoryItem>);
+        else setContestPage(result as StudentPage<StudentContest>);
       })
       .catch((err) => {
         if (cancelled) return;
@@ -133,35 +134,10 @@ function ContestList() {
     return () => {
       cancelled = true;
     };
-  }, [reload, toast]);
+  }, [courseId, from, isHistory, page, reload, status, to, toast]);
 
-  const isHistory = tab === "History";
-  const courses = useMemo(
-    () => coursesOf(isHistory ? history : contests),
-    [contests, history, isHistory],
-  );
-  const filteredContests = useMemo(
-    () =>
-      contests.filter(
-        (c) =>
-          (!status || c.status === status) &&
-          (!courseId || String(c.course?.courseId) === courseId) &&
-          inDateRange(c.startTime, from, to),
-      ),
-    [contests, courseId, from, status, to],
-  );
-  const filteredHistory = useMemo(
-    () =>
-      history.filter(
-        (h) =>
-          (!courseId || String(h.course?.courseId) === courseId) &&
-          inDateRange(h.startTime ?? h.registeredAt, from, to),
-      ),
-    [courseId, from, history, to],
-  );
-
-  const rows = isHistory ? filteredHistory : filteredContests;
-  const pageRows = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const rows = isHistory ? historyPage.content : contestPage.content;
+  const totalRows = isHistory ? historyPage.totalElements : contestPage.totalElements;
   const filtersActive = Boolean(
     (!isHistory && status) || courseId || from || to,
   );
@@ -198,8 +174,7 @@ function ContestList() {
         <div
           className={`grid grid-cols-1 gap-3 sm:grid-cols-2 ${isHistory ? "lg:grid-cols-3" : "lg:grid-cols-4"}`}
         >
-          {courses.length > 0 && (
-            <Select
+          <SearchableSelect
               aria-label="Course"
               value={courseId}
               onChange={(v) => {
@@ -213,9 +188,9 @@ function ContestList() {
                   value: String(c.courseId),
                 })),
               ]}
-              maxVisibleOptions={8}
+              placeholder="All courses"
+              searchPlaceholder="Search courses…"
             />
-          )}
           {!isHistory && (
             <Select
               aria-label="Status"
@@ -286,7 +261,7 @@ function ContestList() {
       ) : isHistory ? (
         <div className="card overflow-hidden">
           <ul className="divide-y divide-line">
-            {(pageRows as ContestHistoryItem[]).map((item) => (
+            {(rows as ContestHistoryItem[]).map((item) => (
               <li
                 key={item.contestId}
                 className="flex flex-wrap items-center gap-3 px-4 py-4"
@@ -321,7 +296,7 @@ function ContestList() {
           <div className="border-t border-line">
             <Pagination
               page={page}
-              total={rows.length}
+              total={totalRows}
               perPage={PAGE_SIZE}
               onChange={setPage}
               unit="contests"
@@ -331,7 +306,7 @@ function ContestList() {
       ) : (
         <>
           <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-5">
-            {(pageRows as StudentContest[]).map((contest) => (
+            {(rows as StudentContest[]).map((contest) => (
               <ContestCard
                 key={contest.contestId}
                 contest={contest}
@@ -342,7 +317,7 @@ function ContestList() {
           <div className="card">
             <Pagination
               page={page}
-              total={rows.length}
+              total={totalRows}
               perPage={PAGE_SIZE}
               onChange={setPage}
               unit="contests"
