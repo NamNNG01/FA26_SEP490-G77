@@ -190,8 +190,8 @@ public class StudentNotebookServiceImpl implements StudentNotebookService {
         }
         String type = request.getType() != null ? request.getType() : "wrong";
         String examType = request.getExamType() != null ? request.getExamType().toUpperCase() : "QUIZ";
-        if (!"QUIZ".equals(examType) && !"ESSAY".equals(examType)) {
-            throw new BadRequestException(ResponseCode.VALIDATION_ERROR, "examType must be QUIZ or ESSAY");
+        if (!"QUIZ".equals(examType) && !"ESSAY".equals(examType)&&!"CODE".equals(examType)) {
+            throw new BadRequestException(ResponseCode.VALIDATION_ERROR, "examType must be QUIZ , ESSAY or CODE");
         }
         Long courseId = request.getCourseId();
         if (courseId == null) {
