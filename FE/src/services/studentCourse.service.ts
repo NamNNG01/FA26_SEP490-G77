@@ -237,14 +237,16 @@ export const studentCourseService = {
     return res.data;
   },
 
-  /** MC-02, every page — the course page groups exams into module folders. */
+  /**
+   * MC-02, every page — the course page groups exams into module folders. Page 0 gives the page
+   * count; the rest are read together rather than one after another.
+   */
   async getAllCourseExams(courseId: number | string): Promise<CourseExam[]> {
-    const exams: CourseExam[] = [];
-    for (let page = 0; ; page++) {
-      const res = await studentCourseService.getCourseExams(courseId, { page, size: 100, sort: 'title' });
-      exams.push(...res.content);
-      if (res.last || res.content.length === 0) return exams;
-    }
+    const read = (page: number) => studentCourseService.getCourseExams(courseId, { page, size: 100, sort: 'title' });
+    const first = await read(0);
+    if (first.last || first.totalPages <= 1) return first.content;
+    const rest = await Promise.all(Array.from({ length: first.totalPages - 1 }, (_, i) => read(i + 1)));
+    return [first, ...rest].flatMap(p => p.content);
   },
 
   /** MC-03 — not paged. */
