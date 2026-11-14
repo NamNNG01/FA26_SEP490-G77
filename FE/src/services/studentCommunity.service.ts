@@ -2,8 +2,9 @@ import { api } from './api';
 import type { ApiResponse } from '@/auth/authContext';
 import type { StudentPage } from './studentLearning.service';
 
-export type DiscussionTag = 'question' | 'tip';
+export type DiscussionTag = 'question' | 'tip' | 'announcement';
 export type DiscussionSort = 'latest' | 'mostCommented' | 'mostUpvoted';
+export type DiscussionApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 
 export interface DiscussionAuthor {
   userId: number;
@@ -17,11 +18,14 @@ export interface DiscussionComment {
   content: string;
   author: DiscussionAuthor;
   createdAt: string;
+  imageUrl?: string | null;
+  status?: 'VISIBLE' | 'HIDDEN';
 }
 
 export interface DiscussionDetailComment extends DiscussionComment {
   isAccepted: boolean;
   isAnonymous: boolean;
+  status?: 'VISIBLE' | 'HIDDEN';
 }
 
 export interface DiscussionItem {
@@ -39,6 +43,9 @@ export interface DiscussionItem {
   isAuthor: boolean;
   isAnonymous?: boolean;
   isClosed?: boolean;
+  imageUrl?: string | null;
+  approvalStatus?: DiscussionApprovalStatus;
+  rejectionReason?: string | null;
   createdAt: string;
   lastCommentAt: string | null;
   course?: { courseId: number; title: string };
@@ -59,6 +66,9 @@ export interface DiscussionDetail {
   isBookmarked: boolean;
   isAuthor: boolean;
   isClosed: boolean;
+  imageUrl?: string | null;
+  approvalStatus?: DiscussionApprovalStatus;
+  rejectionReason?: string | null;
   createdAt: string;
   updatedAt: string;
   comments: DiscussionDetailComment[];
@@ -88,12 +98,12 @@ export const studentCommunityService = {
     return res.data;
   },
 
-  async createDiscussion(body: { courseId: number; title: string; content: string; tag: DiscussionTag; isAnonymous: boolean }) {
+  async createDiscussion(body: { courseId: number; title: string; content: string; tag: DiscussionTag; isAnonymous: boolean; imageUrl?: string | null }) {
     const res = await api.post<ApiResponse<DiscussionItem>>('/student/discussions', body);
     return res.data;
   },
 
-  async addComment(id: number | string, body: { content: string; isAnonymous: boolean }) {
+  async addComment(id: number | string, body: { content: string; isAnonymous: boolean; imageUrl?: string | null }) {
     const res = await api.post<ApiResponse<DiscussionDetailComment>>(`/student/discussions/${id}/comments`, body);
     return res.data;
   },

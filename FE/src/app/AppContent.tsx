@@ -49,7 +49,7 @@ import { PaymentHistoryPage, PaymentReturnPage } from '@/features/payment';
 import { ExamListPage, ExamFormPage } from '@/features/exam';
 import { ManagerContestListPage, ManagerContestFormPage, ManagerContestDetailPage } from '@/features/contest';
 import { PublicExamsPage, PublicExamDetailPage } from '@/features/public-exam';
-import { CMDashboard } from '@/features/content-manager';
+import { CMDashboard, ManagerDiscussionPage } from '@/features/content-manager';
 import { QuestionBankPage, QuestionDetailPage, QuestionFormPage } from '@/features/question';
 import { CourseListPage, CourseDetailPage, CourseFormPage } from '@/features/course';
 import { FlashcardManagementPage, FlashcardDeckDetailPage } from '@/features/flashcard';
@@ -301,6 +301,7 @@ function AppRoutes() {
             administrators have full system access. */}
         <Route element={<RequireRole roles={ROLE_MANAGER} />}>
           <Route path={ROUTES.managerReviews} element={<ManagerReviewPage />} />
+          <Route path={ROUTES.managerDiscussions} element={<ManagerDiscussionPage />} />
           <Route path={ROUTES.managerQuestionIssues} element={<ManagerQuestionIssuesPage />} />
           <Route path={ROUTES.profile} element={<ProfilePage />} />
           <Route path={ROUTES.managerDashboard} element={<CMDashboard />} />
