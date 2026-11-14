@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
+import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { MultiSelect } from '@/components/ui/MultiSelect';
 import { Modal } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -194,8 +195,9 @@ export function ManagerContestListPage() {
             onChange={e => { setKeyword(e.target.value); resetPage(); }} className="xl:col-span-2" />
           <MultiSelect placeholder="Any status" value={statuses} onChange={v => { setStatuses(v); resetPage(); }}
             options={CONTEST_STATUSES.map(s => ({ label: STATUS_LABEL[s], value: s }))} />
-          <Select aria-label="Course" value={courseId} onChange={v => { setCourseId(v); resetPage(); }}
-            options={[{ label: 'All courses', value: '' }, ...courses.map(c => ({ label: c.title, value: String(c.courseId) }))]} maxVisibleOptions={8} />
+          <SearchableSelect aria-label="Course" value={courseId} onChange={v => { setCourseId(v); resetPage(); }}
+            options={[{ label: 'All courses', value: '' }, ...courses.map(c => ({ label: c.title, value: String(c.courseId) }))]}
+            placeholder="All courses" searchPlaceholder="Search courses…" />
           <Input aria-label="Starts from" type="date" value={from} onChange={e => { setFrom(e.target.value); resetPage(); }} />
           <Input aria-label="Starts until" type="date" value={to} onChange={e => { setTo(e.target.value); resetPage(); }} />
         </div>
