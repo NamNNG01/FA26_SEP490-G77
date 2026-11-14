@@ -73,7 +73,7 @@ public class StudentNotebookServiceImpl implements StudentNotebookService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<QuestionReviewItemDto> listSavedQuestions(String type, String examType, Long courseId, Long categoryId, String search, int page, int size, Long userId) {
+    public Page<QuestionReviewItemDto> listSavedQuestions(String type, String examType, Long courseId, String search, int page, int size, Long userId) {
         if (type == null || type.isBlank()) {
             type = "all";
         }
@@ -98,7 +98,7 @@ public class StudentNotebookServiceImpl implements StudentNotebookService {
         }
 
         Page<StudentQuestionReview> reviews = reviewRepository.findSavedQuestions(
-                userId, type, normalizedExamType, courseId, categoryId, searchTerm, pageable);
+                userId, type, normalizedExamType, courseId, searchTerm, pageable);
 
         List<Long> questionIds = reviews.getContent().stream()
                 .map(r -> r.getQuestion().getQuestionId())
@@ -365,7 +365,7 @@ public class StudentNotebookServiceImpl implements StudentNotebookService {
     @Override
     @Transactional(readOnly = true)
     public QuestionNotebookPdfWriter.RenderedPdf exportSavedQuestionsPdf(Long userId, Long courseId, String type, String examType) {
-        Page<QuestionReviewItemDto> page = listSavedQuestions(type, examType, courseId, null, null, 0, 1000, userId);
+        Page<QuestionReviewItemDto> page = listSavedQuestions(type, examType, courseId, null, 0, 1000, userId);
         return questionNotebookPdfWriter.write(page.getContent());
     }
 }

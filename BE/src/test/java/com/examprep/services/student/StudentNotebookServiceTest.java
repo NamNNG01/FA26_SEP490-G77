@@ -80,12 +80,12 @@ class StudentNotebookServiceTest {
     @Test
     void listSavedQuestions_successWithBatchOptions() {
         Page<StudentQuestionReview> page = new PageImpl<>(List.of(review1));
-        when(reviewRepository.findSavedQuestions(eq(100L), eq("all"), isNull(), isNull(), isNull(), eq(""), any())).thenReturn(page);
+        when(reviewRepository.findSavedQuestions(eq(100L), eq("all"), isNull(), isNull(), eq(""), any())).thenReturn(page);
 
         AnswerOption opt = AnswerOption.builder().optionId(11L).question(question1).optionText("A programming language").isCorrect(true).build();
         when(answerOptionRepository.findByQuestionIds(List.of(1L))).thenReturn(List.of(opt));
 
-        Page<QuestionReviewItemDto> result = notebookService.listSavedQuestions("all", null, null, null, null, 0, 20, 100L);
+        Page<QuestionReviewItemDto> result = notebookService.listSavedQuestions("all", null, null, null, 0, 20, 100L);
 
         assertNotNull(result);
         assertEquals(1, result.getTotalElements());
@@ -170,6 +170,7 @@ class StudentNotebookServiceTest {
         req.setCourseId(1L);
 
         when(courseRepository.existsById(1L)).thenReturn(true);
+        when(courseRepository.findById(1L)).thenReturn(Optional.of(Course.builder().courseId(1L).title("Test Course").build()));
         when(reviewRepository.findReviewCandidatesForCourseAndExamType(eq(100L), eq("wrong"), eq("QUIZ"), eq(1L), any())).thenReturn(List.of(review1));
         when(userRepository.findById(100L)).thenReturn(Optional.of(student));
         Exam mockExam = Exam.builder().examId(500L).title("Review Practice").maxScore(BigDecimal.ONE).durationMinutes(null).build();
@@ -198,7 +199,7 @@ class StudentNotebookServiceTest {
 
     @Test
     void listSavedQuestions_invalidExamType_throws() {
-        assertThrows(BadRequestException.class, () -> notebookService.listSavedQuestions("all", "INVALID", null, null, null, 0, 20, 100L));
+        assertThrows(BadRequestException.class, () -> notebookService.listSavedQuestions("all", "INVALID", null, null, 0, 20, 100L));
     }
 
     @Test

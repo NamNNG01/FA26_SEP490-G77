@@ -72,7 +72,6 @@ public interface StudentQuestionReviewRepository extends JpaRepository<StudentQu
     )
 
     AND (:courseId IS NULL OR c.courseId = :courseId)
-    AND (:categoryId IS NULL OR c.categoryId = :categoryId)
     AND (:search = '' OR LOWER(q.content)
         LIKE LOWER(CONCAT('%', :search, '%')))
 
@@ -102,7 +101,6 @@ public interface StudentQuestionReviewRepository extends JpaRepository<StudentQu
         ))
     )
     AND (:courseId IS NULL OR c.courseId = :courseId)
-    AND (:categoryId IS NULL OR c.categoryId = :categoryId)
     AND (:search = '' OR LOWER(q.content)
         LIKE LOWER(CONCAT('%', :search, '%')))
     """)
@@ -111,7 +109,6 @@ public interface StudentQuestionReviewRepository extends JpaRepository<StudentQu
             @Param("type") String type,
             @Param("examType") String examType,
             @Param("courseId") Long courseId,
-            @Param("categoryId") Long categoryId,
             @Param("search") String search,
             Pageable pageable
     );
