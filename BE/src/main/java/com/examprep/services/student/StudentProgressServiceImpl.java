@@ -33,8 +33,6 @@ public class StudentProgressServiceImpl implements StudentProgressService {
     private final DeckRepository deckRepository;
     private final ExamAttemptRepository examAttemptRepository;
     private final ModuleRepository moduleRepository;
-    private final QuestionRepository questionRepository;
-    private final QuestionPracticeProgressRepository progressRepository;
     private final CourseProgressSummaryRepository summaryRepository;
 
     private record Scope(Long courseId, Long moduleId) {}
@@ -87,7 +85,7 @@ public class StudentProgressServiceImpl implements StudentProgressService {
     private record DeckStat(Long deckId, long cardCount, long learnedCount) {}
 
     @Override
-    @Transactional
+    @Transactional(readOnly = true)
     public CourseProgressDto getCourseProgress(Long courseId, Long userId) {
         if (!courseRepository.existsById(courseId)) {
             throw new ResourceNotFoundException("Course not found");
@@ -101,22 +99,13 @@ public class StudentProgressServiceImpl implements StudentProgressService {
     }
 
     @Override
-    @Transactional
+    @Transactional(readOnly = true)
     public int liveProgressPercent(Long userId, Long courseId) {
-        long totalQ = questionRepository.countGeneralPracticeDrawable(courseId);
-        for (com.examprep.entities.Module m : moduleRepository.findVisibleModulesByCourseId(courseId)) {
-            totalQ += questionRepository.countPracticeDrawable(m.getModuleId());
-        }
-        long totalE = examRepository.countPublishedExamsByCourseId(courseId);
-        List<Object[]> deckRows = deckRepository.findCourseDeckStatsWithModule(courseId, userId);
-        long totalD = deckRows.size();
-
-        if (totalQ == 0 && totalE == 0 && totalD == 0) {
-            return -1;
-        }
-
         CourseProgressDto dto = computeCourseProgress(courseId, userId);
-        return dto.getProgress();
+        boolean hasAnyContent = dto.getQuestions().getTotal() > 0
+                || dto.getExams().getTotal() > 0
+                || dto.getDecks().getTotal() > 0;
+        return hasAnyContent ? dto.getProgress() : -1;
     }
 
     private CourseProgressDto computeCourseProgress(Long courseId, Long userId) {
@@ -131,6 +120,23 @@ public class StudentProgressServiceImpl implements StudentProgressService {
         Map<Long, Long> completedExamsByModule = new HashMap<>();
         examAttemptRepository.countCompletedExamsByModuleGroup(userId, courseId).forEach(c -> completedExamsByModule.put(c.id(), c.total()));
         long completedExamsGeneral = examAttemptRepository.countCompletedExamsGeneral(userId, courseId);
+
+        Map<Long, Long> questionTotalsByModule = new HashMap<>();
+        long generalQuestionTotal = 0;
+        for (Object[] row : summaryRepository.questionTotalsByCourse(courseId)) {
+            Long moduleId = (Long) row[1];
+            long count = number(row[2]);
+            if (moduleId == null) generalQuestionTotal = count;
+            else questionTotalsByModule.put(moduleId, count);
+        }
+        Map<Long, Long> questionDoneByModule = new HashMap<>();
+        long generalQuestionDone = 0;
+        for (Object[] row : summaryRepository.questionCompletionsByCourse(courseId, userId)) {
+            Long moduleId = (Long) row[1];
+            long count = number(row[2]);
+            if (moduleId == null) generalQuestionDone = count;
+            else questionDoneByModule.put(moduleId, count);
+        }
 
         // 3. Deck stats
         List<Object[]> deckRows = deckRepository.findCourseDeckStatsWithModule(courseId, userId);
@@ -164,9 +170,8 @@ public class StudentProgressServiceImpl implements StudentProgressService {
             Long modId = m.getModuleId();
             String title = m.getTitle();
 
-            long qTotal = questionRepository.countPracticeDrawable(modId);
-            List<Object[]> qSummary = progressRepository.summarizeModule(userId, modId);
-            long qDone = qSummary.isEmpty() ? 0 : number(qSummary.get(0)[5]);
+            long qTotal = questionTotalsByModule.getOrDefault(modId, 0L);
+            long qDone = questionDoneByModule.getOrDefault(modId, 0L);
 
             long eTotal = examsByModule.getOrDefault(modId, 0L);
             long eDone = completedExamsByModule.getOrDefault(modId, 0L);
@@ -206,9 +211,8 @@ public class StudentProgressServiceImpl implements StudentProgressService {
         }
 
         // Process General pool (moduleId = null)
-        long gQTotal = questionRepository.countGeneralPracticeDrawable(courseId);
-        List<Object[]> gQSummary = progressRepository.summarizeCourse(userId, courseId);
-        long gQDone = gQSummary.isEmpty() ? 0 : number(gQSummary.get(0)[5]);
+        long gQTotal = generalQuestionTotal;
+        long gQDone = generalQuestionDone;
 
         long gETotal = totalExamsGeneral;
         long gEDone = completedExamsGeneral;
@@ -250,15 +254,6 @@ public class StudentProgressServiceImpl implements StudentProgressService {
             courseProgress = (int) Math.round(modSum / moduleProgressValues.size());
             courseProgress = Math.min(100, Math.max(0, courseProgress));
         }
-
-        final int finalCourseProgress = courseProgress;
-        // Persist enrollment progress
-        enrollmentRepository.findByUser_UserIdAndCourse_CourseId(userId, courseId).ifPresent(en -> {
-            if (en.getProgress() == null || en.getProgress() != finalCourseProgress) {
-                en.setProgress(finalCourseProgress);
-                enrollmentRepository.save(en);
-            }
-        });
 
         Double avgScoreVal = examAttemptRepository.averageScoreByUserAndCourse(userId, courseId);
         BigDecimal averageScore = avgScoreVal != null ? BigDecimal.valueOf(avgScoreVal).setScale(2, RoundingMode.HALF_UP) : null;
