@@ -80,12 +80,9 @@ public class StudentContestServiceImpl implements StudentContestService {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "startTime"));
         Instant now = Instant.now();
 
-        List<String> statuses = new ArrayList<>();
-        if (statusFilter != null && !statusFilter.isBlank()) {
-            for (String s : statusFilter.split(",")) {
-                statuses.add(s.strip().toUpperCase(Locale.ROOT));
-            }
-        }
+        String status = statusFilter != null && !statusFilter.isBlank()
+                ? statusFilter.strip().toUpperCase(Locale.ROOT)
+                : null;
 
         Specification<Contest> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
@@ -100,12 +97,8 @@ public class StudentContestServiceImpl implements StudentContestService {
             if (to != null) {
                 predicates.add(cb.lessThanOrEqualTo(root.get("startTime"), to));
             }
-            if (!statuses.isEmpty()) {
-                List<Predicate> statusPredicates = new ArrayList<>();
-                for (String s : statuses) {
-                    statusPredicates.add(statusPredicate(s, root, cb, now));
-                }
-                predicates.add(cb.or(statusPredicates.toArray(new Predicate[0])));
+            if (status != null) {
+                predicates.add(statusPredicate(status, root, cb, now));
             }
             return cb.and(predicates.toArray(new Predicate[0]));
         };
@@ -147,7 +140,7 @@ public class StudentContestServiceImpl implements StudentContestService {
                 ));
 
         return pageContests.map(c -> {
-            String status = determineStatus(c, now);
+            String contestStatus = determineStatus(c, now);
             long registeredCount = registeredCounts.getOrDefault(c.getContestId(), 0L);
             boolean isRegistered = registeredContestIds.contains(c.getContestId());
             int qCount = c.getExam() != null ? questionCounts.getOrDefault(c.getExam().getExamId(), 0) : 0;
@@ -166,7 +159,7 @@ public class StudentContestServiceImpl implements StudentContestService {
                     .questionCount(qCount)
                     .maxParticipants(c.getMaxParticipants())
                     .registeredCount(registeredCount)
-                    .status(status)
+                    .status(contestStatus)
                     .isRegistered(isRegistered)
                     .course(courseRef)
                     .rewards(rewards)

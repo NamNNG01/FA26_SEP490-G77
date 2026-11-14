@@ -194,7 +194,11 @@ public class StudentNotebookServiceImpl implements StudentNotebookService {
             throw new BadRequestException(ResponseCode.VALIDATION_ERROR, "examType must be QUIZ or ESSAY");
         }
         Long courseId = request.getCourseId();
-        if (courseId != null && !courseRepository.existsById(courseId)) {
+        if (courseId == null) {
+            throw new BadRequestException("Course ID is required");
+        }
+
+        if (!courseRepository.existsById(courseId)) {
             throw new ResourceNotFoundException("Course not found");
         }
 
@@ -213,10 +217,8 @@ public class StudentNotebookServiceImpl implements StudentNotebookService {
         List<StudentQuestionReview> selected = shuffled.stream().limit(size).toList();
 
         List<Question> questions = selected.stream().map(StudentQuestionReview::getQuestion).toList();
-        Course course = courseId != null ? courseRepository.getReferenceById(courseId) : questions.get(0).getCourse();
-        if (course == null && questions.get(0).getModule() != null) {
-            course = questions.get(0).getModule().getCourse();
-        }
+        Course course = courseRepository.findById(courseId)
+                .orElseThrow(() -> new ResourceNotFoundException("Course not found"));
 
         String title = switch (type) {
             case "bookmarked" -> "Ôn câu đã lưu";

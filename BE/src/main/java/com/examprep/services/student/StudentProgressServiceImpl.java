@@ -301,10 +301,6 @@ public class StudentProgressServiceImpl implements StudentProgressService {
         }
         Pageable pageable = PageRequest.of(page, size);
 
-        if ("FLASHCARD".equals(normalizedType)) {
-            return Page.empty(pageable);
-        }
-
         Page<ExamAttempt> attempts = examAttemptRepository.findActivityAttemptsByUserAndMode(userId, normalizedType, pageable);
 
         return attempts.map(att -> {

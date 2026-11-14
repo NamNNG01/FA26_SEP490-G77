@@ -95,7 +95,7 @@ public interface ExamAttemptRepository extends JpaRepository<ExamAttempt, Long> 
     List<ExamAttempt> findRecentAttemptsByUserAndCourse(@Param("userId") Long userId, @Param("courseId") Long courseId, Pageable pageable);
 
     @Query(value = "SELECT a FROM ExamAttempt a LEFT JOIN FETCH a.exam e " +
-            "WHERE a.user.userId = :userId AND a.submitTime IS NOT NULL AND a.mode <> 'REVIEW' " +
+            "WHERE a.user.userId = :userId AND a.submitTime IS NOT NULL " +
             "AND (:mode IS NULL OR " +
             "     (:mode = 'EXAM' AND a.mode IN ('EXAM', 'CONTEST', 'PRACTICE', 'PRACTICE_EXAM')) OR " +
             "     (:mode = 'PRACTICE' AND a.mode IN ('PRACTICE', 'PRACTICE_EXAM')) OR " +
@@ -103,7 +103,7 @@ public interface ExamAttemptRepository extends JpaRepository<ExamAttempt, Long> 
             "     (:mode = a.mode)) " +
             "ORDER BY a.submitTime DESC",
             countQuery = "SELECT COUNT(a) FROM ExamAttempt a " +
-            "WHERE a.user.userId = :userId AND a.submitTime IS NOT NULL AND a.mode <> 'REVIEW' " +
+            "WHERE a.user.userId = :userId AND a.submitTime IS NOT NULL " +
             "AND (:mode IS NULL OR " +
             "     (:mode = 'EXAM' AND a.mode IN ('EXAM', 'CONTEST', 'PRACTICE', 'PRACTICE_EXAM')) OR " +
             "     (:mode = 'PRACTICE' AND a.mode IN ('PRACTICE', 'PRACTICE_EXAM')) OR " +
