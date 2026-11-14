@@ -24,4 +24,6 @@ public class CreateDiscussionRequestDto {
     @NotBlank
     private String tag; // question, tip
     private Boolean isAnonymous;
+    @Size(max = 1000)
+    private String imageUrl;
 }
