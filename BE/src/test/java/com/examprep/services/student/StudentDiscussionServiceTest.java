@@ -42,6 +42,8 @@ class StudentDiscussionServiceTest {
     private EnrollmentRepository enrollmentRepository;
     @Mock
     private UserRepository userRepository;
+    @Mock
+    private CourseManagerRepository courseManagerRepository;
 
     @InjectMocks
     private StudentDiscussionServiceImpl discussionService;
@@ -133,5 +135,39 @@ class StudentDiscussionServiceTest {
         assertEquals(false, res.get("isUpvoted"));
         assertEquals(4, res.get("upvoteCount"));
         verify(upvoteRepository).delete(upvote);
+    }
+
+    @Test
+    void updateDiscussion_close_returnsIsClosedTrue() {
+        when(discussionRepository.findById(1L)).thenReturn(Optional.of(discussion1));
+        when(discussionRepository.save(any(Discussion.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        com.examprep.dto.student.UpdateDiscussionRequestDto req = new com.examprep.dto.student.UpdateDiscussionRequestDto(true);
+        DiscussionItemDto dto = discussionService.updateDiscussion(1L, req, 200L);
+
+        assertNotNull(dto);
+        assertTrue(dto.isClosed());
+    }
+
+    @Test
+    void createDiscussion_asStudent_setsPendingApproval() {
+        when(enrollmentRepository.existsByCourse_CourseIdAndUser_UserIdAndStatus(50L, 200L, "ACTIVE")).thenReturn(true);
+        when(courseRepository.findById(50L)).thenReturn(Optional.of(course));
+        when(userRepository.findById(200L)).thenReturn(Optional.of(author));
+        when(discussionRepository.save(any(Discussion.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        CreateDiscussionRequestDto req = CreateDiscussionRequestDto.builder()
+                .courseId(50L)
+                .title("New Student Question")
+                .content("Need help with Java")
+                .tag("question")
+                .imageUrl("https://image.url/photo.png")
+                .build();
+
+        DiscussionItemDto dto = discussionService.createDiscussion(req, 200L);
+
+        assertNotNull(dto);
+        assertEquals("PENDING", dto.getApprovalStatus());
+        assertEquals("https://image.url/photo.png", dto.getImageUrl());
     }
 }

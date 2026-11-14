@@ -39,17 +39,33 @@ public class DiscussionComment implements Serializable {
     @Column(name = "content", nullable = false, columnDefinition = "TEXT")
     private String content;
 
+    public static final String STATUS_VISIBLE = "VISIBLE";
+    public static final String STATUS_HIDDEN = "HIDDEN";
+
     @Builder.Default
     @Column(name = "is_accepted", nullable = false)
     private Boolean isAccepted = false;
 
     @Builder.Default
     @Column(name = "status", nullable = false, length = 20)
-    private String status = "VISIBLE"; // VISIBLE, HIDDEN
+    private String status = STATUS_VISIBLE; // VISIBLE, HIDDEN
 
     @Builder.Default
     @Column(name = "is_anonymous", nullable = false)
     private Boolean isAnonymous = false;
+
+    @Column(name = "image_url", length = 1000)
+    private String imageUrl;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "hidden_by")
+    private User hiddenBy;
+
+    @Column(name = "hidden_at")
+    private Instant hiddenAt;
+
+    @Column(name = "hidden_reason", length = 500)
+    private String hiddenReason;
 
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)

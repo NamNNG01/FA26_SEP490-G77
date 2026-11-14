@@ -84,10 +84,13 @@ public class StudentNotebookServiceImpl implements StudentNotebookService {
                 normalizedExamType = "QUIZ";
             } else if ("ESSAY".equals(upper)) {
                 normalizedExamType = "ESSAY";
-            } else if ("ALL".equals(upper)) {
+            }else if ("CODE".equals(upper)) {
+                normalizedExamType = "CODE";
+            }
+            else if ("ALL".equals(upper)) {
                 normalizedExamType = null;
             } else {
-                throw new BadRequestException(ResponseCode.VALIDATION_ERROR, "Invalid examType. Must be QUIZ or ESSAY.");
+                throw new BadRequestException(ResponseCode.VALIDATION_ERROR, "Invalid examType. Must be QUIZ , ESSAY ,CODE.");
             }
         }
 
@@ -190,8 +193,8 @@ public class StudentNotebookServiceImpl implements StudentNotebookService {
         }
         String type = request.getType() != null ? request.getType() : "wrong";
         String examType = request.getExamType() != null ? request.getExamType().toUpperCase() : "QUIZ";
-        if (!"QUIZ".equals(examType) && !"ESSAY".equals(examType)) {
-            throw new BadRequestException(ResponseCode.VALIDATION_ERROR, "examType must be QUIZ or ESSAY");
+        if (!"QUIZ".equals(examType) && !"ESSAY".equals(examType)&&!"CODE".equals(examType)) {
+            throw new BadRequestException(ResponseCode.VALIDATION_ERROR, "examType must be QUIZ , ESSAY or CODE");
         }
         Long courseId = request.getCourseId();
         if (courseId == null) {
