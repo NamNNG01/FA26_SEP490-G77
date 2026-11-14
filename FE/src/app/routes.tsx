@@ -423,6 +423,12 @@ export const menuByRole: Record<string, MenuItem[]> = {
       path: ROUTES.adminDashboard,
     },
     {
+      id: "admin-manager-reviews",
+      title: "Content review",
+      icon: <Icon.CheckCircle className="w-4 h-4" />,
+      path: ROUTES.managerReviews,
+    },
+    {
       id: "admin-users",
       title: "User Management",
       icon: <Icon.Users className="w-4 h-4" />,
