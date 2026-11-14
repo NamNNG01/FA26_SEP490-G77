@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import { useLocation, useNavigate, useParams } from 'react-router';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { Button } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Alert';
@@ -30,12 +30,16 @@ import { ModulePracticeModal } from '../components/ModulePracticeModal';
 import { Progress } from '@/components/ui/Progress';
 import {
   beModuleProgress,
-  moduleProgress,
   useBeCourseProgress,
   type LearningProgress,
   type ProgressPart,
   type ProgressPartKey,
 } from '../components/courseProgress';
+
+/** Route state from the course page: its CL-02, so the module page need not read it again. */
+export interface ModulePageState {
+  course: StudentCourseDetail;
+}
 
 type KindFilter = 'all' | 'exam' | 'deck';
 
@@ -86,12 +90,16 @@ export function StudentModuleDetailPage() {
   const isGeneral = moduleParam === GENERAL_MODULE;
   const moduleId = isGeneral ? null : Number(moduleParam);
 
-  const [course, setCourse] = useState<StudentCourseDetail | null>(null);
-  const [loading, setLoading] = useState(true);
+  // The course page hands over its CL-02, so opening a module from it does not read the course again.
+  const passed = (useLocation().state as ModulePageState | null)?.course;
+  const handed = passed != null && String(passed.courseId) === courseId ? passed : null;
+  const [course, setCourse] = useState<StudentCourseDetail | null>(handed);
+  const [loading, setLoading] = useState(handed == null);
   const [error, setError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
 
   useEffect(() => {
+    if (reload === 0 && handed) return;
     let cancelled = false;
     setLoading(true);
     setError(null);
@@ -109,7 +117,7 @@ export function StudentModuleDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [courseId, reload]);
+  }, [courseId, reload, handed]);
 
   const module = moduleId != null ? course?.modules.find(m => m.moduleId === moduleId) : undefined;
   const title = isGeneral ? 'General' : module?.title ?? 'Module';
@@ -258,11 +266,9 @@ function ModuleContent({
   // LP-01, reread after a practice reset; the same numbers as this module's card on the course page.
   const be = useBeCourseProgress(course.courseId, refresh);
   const practice = overview != null && overview !== 'error' ? overview : null;
-  // LP-01 failed: worked out from MP-01 and the items instead, once both are in.
-  const fallback = be === 'error' && practice && !contentLoading && !contentError ? moduleProgress(practice, items) : null;
   const progress: LearningProgress | null =
-    be && be !== 'error' ? beModuleProgress(be, moduleId == null ? GENERAL_MODULE : String(moduleId)) ?? { percent: null, parts: [] } : fallback;
-  const progressLoading = be === undefined || (be === 'error' && (overview === undefined || (practice != null && contentLoading)));
+    be && be !== 'error' ? beModuleProgress(be, moduleId == null ? GENERAL_MODULE : String(moduleId)) ?? { percent: null, parts: [] } : null;
+  const progressLoading = be === undefined;
   const active = practice?.activeSession?.status === 'IN_PROGRESS' ? practice.activeSession : null;
 
   return (

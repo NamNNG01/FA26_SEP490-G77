@@ -20,6 +20,7 @@ import { GENERAL_MODULE, countItems, sortedModules } from '../components/courseC
 import { useCourseProgress, type LearningProgress, type OverviewState } from '../components/courseProgress';
 import { ModulePracticeModal } from '../components/ModulePracticeModal';
 import { SmartPracticeModal } from '../components/SmartPracticeModal';
+import type { ModulePageState } from './StudentModuleDetailPage';
 
 /**
  * Student course detail — course info (CL-02), then the course content as a grid of module cards.
@@ -170,20 +171,22 @@ export function StudentCourseDetailPage() {
   );
 }
 
-/**
- * The course's progress from LP-01 (the average of its modules), or worked out here when LP-01 fails.
- * `progress` undefined = some module is still loading; `partial` = some module could not be read.
- */
-function CourseProgressPanel({ progress, partial }: { progress?: LearningProgress; partial: boolean }) {
+/** The course's progress from LP-01 (the average of its modules); undefined while it loads. */
+function CourseProgressPanel({ progress }: { progress?: LearningProgress | 'error' }) {
   if (!progress) return <Skeleton className="h-20 w-full" />;
+  if (progress === 'error') {
+    return (
+      <section className="card p-4 sm:p-5" aria-label="Course progress">
+        <h2 className="font-semibold text-content">Your progress</h2>
+        <p className="mt-1 text-sm text-content-subtle">Progress could not be loaded.</p>
+      </section>
+    );
+  }
 
   return (
     <section className="card p-4 sm:p-5 space-y-4" aria-label="Course progress">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="font-semibold text-content">Your progress</h2>
-          {partial && <p className="mt-1 text-xs text-content-subtle">Some modules could not be loaded.</p>}
-        </div>
+        <h2 className="font-semibold text-content">Your progress</h2>
         <p className="text-xl font-bold text-primary">{progress.percent ?? 0}%</p>
       </div>
       <Progress value={progress.percent ?? 0} />
@@ -199,7 +202,7 @@ function CourseProgressPanel({ progress, partial }: { progress?: LearningProgres
  */
 function ModuleGrid({ course, content }: { course: StudentCourseDetail; content: ReturnType<typeof useCourseProgress> }) {
   const navigate = useNavigate();
-  const { byModule, general, loading, error, retry, modules, overviews, hasGeneral, course: overall, partial } = content;
+  const { byModule, general, loading, error, retry, modules, overviews, hasGeneral, course: overall } = content;
   const [practicing, setPracticing] = useState<{ key: string; scope: PracticeScope; title: string } | null>(null);
 
   if (loading) return <CardGridSkeleton count={Math.min(Math.max(modules.length, 3), 6)} />;
@@ -221,7 +224,7 @@ function ModuleGrid({ course, content }: { course: StudentCourseDetail; content:
 
   return (
     <>
-    <CourseProgressPanel progress={overall} partial={partial} />
+    <CourseProgressPanel progress={overall} />
     <section className="space-y-3" aria-label="Course content">
       <h2 className="text-base font-semibold text-content">Modules</h2>
       <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,280px),1fr))] gap-[clamp(1rem,2vw,1.25rem)]">
@@ -233,7 +236,7 @@ function ModuleGrid({ course, content }: { course: StudentCourseDetail; content:
             description={m.description}
             counts={countItems(byModule.get(m.moduleId) ?? [])}
             overview={overviews[m.moduleId]}
-            onOpen={() => navigate(studentModulePath(course.courseId, m.moduleId))}
+            onOpen={() => navigate(studentModulePath(course.courseId, m.moduleId), { state: { course } satisfies ModulePageState })}
             onPractice={() => setPracticing({ key: String(m.moduleId), scope: { moduleId: m.moduleId }, title: m.title })}
           />
         ))}
@@ -243,7 +246,7 @@ function ModuleGrid({ course, content }: { course: StudentCourseDetail; content:
             description="Practice questions, exams and flashcard decks not filed under a module."
             counts={countItems(general)}
             overview={overviews[GENERAL_MODULE]}
-            onOpen={() => navigate(studentModulePath(course.courseId, GENERAL_MODULE))}
+            onOpen={() => navigate(studentModulePath(course.courseId, GENERAL_MODULE), { state: { course } satisfies ModulePageState })}
             onPractice={() => setPracticing({ key: GENERAL_MODULE, scope: { courseId: course.courseId }, title: 'General' })}
           />
         )}
