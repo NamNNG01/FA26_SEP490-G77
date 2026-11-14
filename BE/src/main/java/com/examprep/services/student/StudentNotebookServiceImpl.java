@@ -84,10 +84,13 @@ public class StudentNotebookServiceImpl implements StudentNotebookService {
                 normalizedExamType = "QUIZ";
             } else if ("ESSAY".equals(upper)) {
                 normalizedExamType = "ESSAY";
-            } else if ("ALL".equals(upper)) {
+            }else if ("CODE".equals(upper)) {
+                normalizedExamType = "CODE";
+            }
+            else if ("ALL".equals(upper)) {
                 normalizedExamType = null;
             } else {
-                throw new BadRequestException(ResponseCode.VALIDATION_ERROR, "Invalid examType. Must be QUIZ or ESSAY.");
+                throw new BadRequestException(ResponseCode.VALIDATION_ERROR, "Invalid examType. Must be QUIZ , ESSAY ,CODE.");
             }
         }
 
