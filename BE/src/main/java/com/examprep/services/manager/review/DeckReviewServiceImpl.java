@@ -1,18 +1,24 @@
 package com.examprep.services.manager.review;
 
+import com.examprep.dto.IdCount;
 import com.examprep.entities.*;
 import com.examprep.exceptions.ReviewException;
 import com.examprep.repositories.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -58,12 +64,72 @@ public class DeckReviewServiceImpl implements DeckReviewService {
         String normStatus = (status == null || status.isBlank()) ? "PENDING_REVIEW" : status.toUpperCase();
         if ("ALL".equals(normStatus)) {
             normStatus = null;
+        } else if ("PENDING".equals(normStatus)) {
+            normStatus = "PENDING_REVIEW";
+        } else if ("ACCEPTED".equals(normStatus)) {
+            normStatus = "APPROVED";
         }
 
         String kwPattern = (keyword == null || keyword.isBlank()) ? null : "%" + keyword.strip().toLowerCase()
                 .replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%";
 
         return deckRepository.findManagedReviewDecks(myCourseIds, moduleId, normStatus, contributorId, kwPattern, submittedFrom, submittedTo, pageable);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Map<String, Object> listContributedDecks(User manager, Long courseId, Long moduleId, String status,
+                                                    Long contributorId, String keyword, Instant submittedFrom,
+                                                    Instant submittedTo, int page, int size, String sort) {
+        if (page < 0 || size < 1) {
+            throw new ReviewException(HttpStatus.UNPROCESSABLE_ENTITY, "VALIDATION_ERROR", null,
+                    "page must be nonnegative and size must be positive.");
+        }
+        if (size > 100) size = 100;
+        String[] sortParts = sort == null ? new String[0] : sort.split(",");
+        String sortField = sortParts.length > 0 && !sortParts[0].isBlank() ? sortParts[0] : "submittedAt";
+        Sort.Direction direction = sortParts.length > 1 && "desc".equalsIgnoreCase(sortParts[1])
+                ? Sort.Direction.DESC : Sort.Direction.ASC;
+        Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortField));
+
+        Page<Deck> pageResult = listDecks(manager, courseId, moduleId, status, contributorId, keyword,
+                submittedFrom, submittedTo, pageable);
+        List<Long> deckIds = pageResult.getContent().stream().map(Deck::getDeckId).toList();
+        Map<Long, Long> cardCounts = deckIds.isEmpty() ? Map.of()
+                : flashcardRepository.countByDecks(deckIds).stream()
+                        .collect(Collectors.toMap(IdCount::id, IdCount::total));
+
+        List<Map<String, Object>> content = pageResult.getContent().stream().map(d -> {
+            boolean canReview = "PENDING_REVIEW".equalsIgnoreCase(d.getReviewStatus())
+                    && !d.getUser().getUserId().equals(manager.getUserId());
+            Map<String, Object> map = new HashMap<>();
+            map.put("deckId", d.getDeckId());
+            map.put("title", d.getTitle());
+            map.put("description", d.getDescription() != null ? d.getDescription() : "");
+            map.put("cardCount", cardCounts.getOrDefault(d.getDeckId(), 0L));
+            map.put("owner", Map.of("id", d.getUser().getUserId(), "fullName", d.getUser().getFullName()));
+            map.put("course", d.getCourse() != null
+                    ? Map.of("id", d.getCourse().getCourseId(), "title", d.getCourse().getTitle()) : Map.of());
+            map.put("module", d.getModule() != null
+                    ? Map.of("id", d.getModule().getModuleId(), "title", d.getModule().getTitle()) : Map.of());
+            map.put("reviewStatus", d.getReviewStatus());
+            map.put("resubmissionCount", d.getResubmissionCount() != null ? d.getResubmissionCount() : 0);
+            map.put("submittedAt", d.getSubmittedAt() != null ? d.getSubmittedAt() : Instant.now());
+            map.put("reviewedAt", d.getUpdatedAt() != null ? d.getUpdatedAt() : null);
+            map.put("version", d.getVersion() != null ? d.getVersion() : 0L);
+            map.put("canReview", canReview);
+            return map;
+        }).toList();
+
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("content", content);
+        data.put("page", pageResult.getNumber());
+        data.put("size", pageResult.getSize());
+        data.put("totalElements", pageResult.getTotalElements());
+        data.put("totalPages", pageResult.getTotalPages());
+        data.put("first", pageResult.isFirst());
+        data.put("last", pageResult.isLast());
+        return data;
     }
 
     @Override

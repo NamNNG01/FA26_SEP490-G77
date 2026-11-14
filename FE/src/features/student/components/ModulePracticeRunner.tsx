@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { Modal } from '@/components/ui/Modal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Alert } from '@/components/ui/Alert';
 import { Spinner } from '@/components/ui/Spinner';
 import { Icon } from '@/assets/icons';
@@ -790,28 +790,17 @@ export function ModulePracticeRunner({ sessionId }: { sessionId: string }) {
       </div>
       )}
 
-      <Modal
+      <ConfirmDialog
         error={actionError && <Alert type="error" message={actionError} />}
         open={confirmFinish}
-        onClose={() => !finishing && setConfirmFinish(false)}
+        onClose={() => setConfirmFinish(false)}
+        onConfirm={finish}
+        loading={finishing}
         title="Finish this practice?"
-        size="sm"
-        footer={
-          <>
-            <Button variant="outline" disabled={finishing} onClick={() => setConfirmFinish(false)}>
-              Keep practicing
-            </Button>
-            <Button loading={finishing} disabled={finishing} onClick={finish}>
-              Finish
-            </Button>
-          </>
-        }
-      >
-        <p className="text-base text-content-secondary leading-relaxed">
-          {unanswered} question{unanswered === 1 ? ' is' : 's are'} still unanswered. They are not counted as wrong — you can practice
-          them in a new session.
-        </p>
-      </Modal>
+        description={`${unanswered} question${unanswered === 1 ? ' is' : 's are'} still unanswered. They are not counted as wrong — you can practice them in a new session.`}
+        cancelLabel="Keep practicing"
+        confirmLabel="Finish"
+      />
     </div>
   );
 }

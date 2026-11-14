@@ -9,6 +9,7 @@ import { UserDropdown } from '@/components/layout/UserDropdown';
 import { NotificationBell } from '@/components/layout/NotificationBell';
 import { Icon } from '@/assets/icons';
 import { usePendingIssueCount } from '@/services/questionIssue.service';
+import { apiClient } from '@/services/axios';
 import { useScrollTopOnRouteChange } from '@/hooks/useScrollTopOnRouteChange';
 
 /**
@@ -31,10 +32,33 @@ export function DashboardLayout() {
   const { user } = useAuth();
   const location = useLocation();
   const [collapsed, setCollapsed] = React.useState(false);
+  const [pendingReviews, setPendingReviews] = React.useState(0);
   const mainRef = useScrollTopOnRouteChange<HTMLElement>();
   const pendingIssues = usePendingIssueCount(user?.role === Role.COURSE_MANAGER);
+  React.useEffect(() => {
+    const canReviewContent = user?.role === Role.COURSE_MANAGER || user?.role === Role.ADMIN;
+    if (!canReviewContent) {
+      setPendingReviews(0);
+      return;
+    }
+    let cancelled = false;
+    const refresh = async () => {
+      try {
+        const response = (await apiClient.get('/manager/contributions/stats')).data;
+        if (!cancelled && response?.success && Number.isFinite(Number(response.data?.pending))) {
+          setPendingReviews(Number(response.data.pending));
+        }
+      } catch {
+        // Keep the most recent badge value; retry at the next refresh interval.
+      }
+    };
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 60_000);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, [user?.role]);
   const items = getMenuForRole(user?.role).map(item =>
-    item.path === ROUTES.managerQuestionIssues ? { ...item, badge: pendingIssues } : item,
+    item.path === ROUTES.managerQuestionIssues ? { ...item, badge: pendingIssues } :
+    item.path === ROUTES.managerReviews ? { ...item, badge: pendingReviews } : item,
   );
 
   // Take Exam is a fullscreen flow — hide header/sidebar for it.

@@ -15,7 +15,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -57,43 +56,9 @@ public class DeckReviewController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(defaultValue = "submittedAt,asc") String sort) {
-        if (size > 100) size = 100;
-        String[] sortParts = sort.split(",");
-        Sort.Direction direction = sortParts.length > 1 && "desc".equalsIgnoreCase(sortParts[1]) ? Sort.Direction.DESC : Sort.Direction.ASC;
-        String sortField = sortParts[0];
-        Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortField));
-
         User manager = getUser(principal);
-        Page<Deck> pageResult = service.listDecks(manager, courseId, moduleId, status, contributorId, keyword, submittedFrom, submittedTo, pageable);
-
-        List<Map<String, Object>> content = pageResult.getContent().stream().map(d -> {
-            boolean canReview = "PENDING_REVIEW".equalsIgnoreCase(d.getReviewStatus()) && !d.getUser().getUserId().equals(manager.getUserId());
-            Map<String, Object> map = new HashMap<>();
-            map.put("deckId", d.getDeckId());
-            map.put("title", d.getTitle());
-            map.put("description", d.getDescription() != null ? d.getDescription() : "");
-            map.put("cardCount", flashcardRepository.countByDeckDeckId(d.getDeckId()));
-            map.put("owner", Map.of("id", d.getUser().getUserId(), "fullName", d.getUser().getFullName()));
-            map.put("course", d.getCourse() != null ? Map.of("id", d.getCourse().getCourseId(), "title", d.getCourse().getTitle()) : Map.of());
-            map.put("module", d.getModule() != null ? Map.of("id", d.getModule().getModuleId(), "title", d.getModule().getTitle()) : Map.of());
-            map.put("reviewStatus", d.getReviewStatus());
-            map.put("resubmissionCount", d.getResubmissionCount() != null ? d.getResubmissionCount() : 0);
-            map.put("submittedAt", d.getSubmittedAt() != null ? d.getSubmittedAt() : Instant.now());
-            map.put("reviewedAt", d.getUpdatedAt() != null ? d.getUpdatedAt() : null);
-            map.put("version", d.getVersion() != null ? d.getVersion() : 0L);
-            map.put("canReview", canReview);
-            return (Map<String, Object>) map;
-        }).toList();
-
-        Map<String, Object> data = new HashMap<>();
-        data.put("content", content);
-        data.put("page", pageResult.getNumber());
-        data.put("size", pageResult.getSize());
-        data.put("totalElements", pageResult.getTotalElements());
-        data.put("totalPages", pageResult.getTotalPages());
-        data.put("first", pageResult.isFirst());
-        data.put("last", pageResult.isLast());
-
+        Map<String, Object> data = service.listContributedDecks(manager, courseId, moduleId, status, contributorId,
+                keyword, submittedFrom, submittedTo, page, size, sort);
         return ResponseEntity.ok(ApiResponse.success(data));
     }
 

@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/Button';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { Progress } from '@/components/ui/Progress';
 import { Modal } from '@/components/ui/Modal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Alert } from '@/components/ui/Alert';
 import { Select } from '@/components/ui/Select';
 import { Skeleton } from '@/components/ui/Skeleton';
@@ -1293,28 +1294,18 @@ function UnfinishedAttemptBanner({
         </Button>
       </div>
 
-      <Modal
+      <ConfirmDialog
         error={error && <Alert type="error" message={error} />}
         open={confirming}
-        onClose={() => !discarding && setConfirming(false)}
+        onClose={() => setConfirming(false)}
+        onConfirm={discard}
+        loading={discarding}
+        tone="danger"
         title="Discard this attempt?"
-        size="sm"
-        footer={
-          <>
-            <Button variant="outline" disabled={discarding} onClick={() => setConfirming(false)}>
-              Keep it
-            </Button>
-            <Button variant="danger" loading={discarding} disabled={discarding} onClick={discard}>
-              Discard
-            </Button>
-          </>
-        }
-      >
-        <p className="text-base text-content-secondary leading-relaxed">
-          The attempt and its {attempt.answered} answer{attempt.answered === 1 ? '' : 's'} are deleted — it will not count in
-          your history. This cannot be undone.
-        </p>
-      </Modal>
+        description={`The attempt and its ${attempt.answered} answer${attempt.answered === 1 ? '' : 's'} are deleted — it will not count in your history. This cannot be undone.`}
+        cancelLabel="Keep it"
+        confirmLabel="Discard"
+      />
     </div>
   );
 }

@@ -1,9 +1,12 @@
 package com.examprep.controllers;
 
 import com.examprep.dto.*;
+import com.examprep.entities.User;
+import com.examprep.repositories.UserRepository;
 import com.examprep.security.UserPrincipal;
 import com.examprep.services.DeckService;
 import com.examprep.services.contest.ContestRules;
+import com.examprep.services.manager.review.DeckReviewService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -16,6 +19,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.Instant;
+
 @RestController
 @RequestMapping("/api/v1/manager/decks")
 @RequiredArgsConstructor
@@ -23,14 +28,31 @@ import org.springframework.web.bind.annotation.*;
 @Tag(name = "Manager Decks", description = "Scoped flashcard deck and card administration (F-01..08)")
 public class ManagerDeckController {
     private final DeckService service;
+    private final DeckReviewService reviewService;
+    private final UserRepository userRepository;
 
+    /**
+     * F-01, or — when {@code status} is sent — the student-contributed decks (decks students submitted for
+     * review) in the caller's courses. A blank status means PENDING_REVIEW; PENDING/ACCEPTED are accepted
+     * aliases of PENDING_REVIEW/APPROVED and ALL removes the filter.
+     */
     @GetMapping
-    @Operation(summary = "F-01: List managed decks")
-    public ResponseEntity<ApiResponse<PageResponse<DeckResponse>>> list(@AuthenticationPrincipal UserPrincipal user,
+    @Operation(summary = "F-01: List managed decks",
+            description = "With a status filter, lists student contributed decks by review status instead.")
+    public ResponseEntity<ApiResponse<?>> list(@AuthenticationPrincipal UserPrincipal user,
             @RequestParam(required = false) String search, @RequestParam(required = false) Long courseId,
             @RequestParam(required = false) Long moduleId,
-            @RequestParam(required = false) Boolean isPublic, @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(required = false) Boolean isPublic, @RequestParam(required = false) String status,
+            @RequestParam(required = false) Long contributorId, @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) Instant submittedFrom, @RequestParam(required = false) Instant submittedTo,
+            @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "submittedAt,asc") String sort) {
+        if (status != null) {
+            User manager = userRepository.findById(user.getId())
+                    .orElseThrow(() -> new com.examprep.exceptions.ResourceNotFoundException("User not found."));
+            return ResponseEntity.ok(ApiResponse.success(reviewService.listContributedDecks(manager, courseId,
+                    moduleId, status, contributorId, keyword, submittedFrom, submittedTo, page, size, sort)));
+        }
         return ResponseEntity.ok(ApiResponse.success(service.list(user, search, courseId, moduleId, isPublic, page, size)));
     }
 

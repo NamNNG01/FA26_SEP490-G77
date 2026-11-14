@@ -132,7 +132,7 @@ export function StudentExamDetailPage() {
             <div className="max-w-3xl py-2">
               <p className="inline-flex items-center gap-2 rounded-full border border-brand-ink/10 bg-surface/70 px-3 py-1.5 text-xs font-bold uppercase tracking-[0.14em] text-brand-ink shadow-sm backdrop-blur-sm">
                 <Icon.ClipboardList className="h-4 w-4" />
-                Practice exam
+                Exam
               </p>
               <h1 className="mt-4 text-4xl font-bold tracking-tight text-content sm:text-5xl sm:leading-[1.1]">
                 {exam.title}

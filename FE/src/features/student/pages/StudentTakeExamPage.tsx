@@ -3,6 +3,7 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Alert } from '@/components/ui/Alert';
 import { Spinner } from '@/components/ui/Spinner';
 import { TimerDisplay } from '@/components/common/TimerDisplay';
@@ -783,38 +784,24 @@ function ExamAttemptScreen() {
         </aside>
       </div>
 
-      <Modal
+      <ConfirmDialog
         error={actionError && <Alert type="error" message={actionError} />}
         open={confirm === 'submit'}
         onClose={() => {
-          if (busy != null) return;
           setConfirm(null);
           setCodeGradeFailed(false);
         }}
-        title="Are you sure you want to submit?"
-        size="sm"
-        footer={
-          <>
-            <Button
-              variant="outline"
-              disabled={busy != null}
-              onClick={() => {
-                setConfirm(null);
-                setCodeGradeFailed(false);
-              }}
-            >
-              Keep working
-            </Button>
-            {/* CD-05 failed: submitting anyway closes the attempt without the test-case grading. */}
-            <Button loading={busy === 'submit'} disabled={busy != null} onClick={() => submit(false, codeGradeFailed)}>
-              {codeGradeFailed ? 'Submit anyway' : 'Submit exam'}
-            </Button>
-          </>
-        }
+        // CD-05 failed: submitting anyway closes the attempt without the test-case grading.
+        onConfirm={() => submit(false, codeGradeFailed)}
+        loading={busy === 'submit'}
+        confirmDisabled={busy != null}
+        title="Submit this exam?"
+        description="You can't change your answers after submitting."
+        cancelLabel="Keep working"
+        confirmLabel={codeGradeFailed ? 'Submit anyway' : 'Submit exam'}
       >
-        <p className="text-base text-content-secondary leading-relaxed">You can't change your answers after submitting.</p>
         {grading && (
-          <p role="status" className="mt-3 text-sm text-content-soft">
+          <p role="status" className="text-center text-content-soft">
             Grading your code on every test case… this can take up to a minute.
           </p>
         )}
@@ -831,11 +818,11 @@ function ExamAttemptScreen() {
           ))}
         </dl>
         {unanswered > 0 && (
-          <p className="mt-3 text-sm text-warning">
+          <p className="mt-3 text-center text-warning">
             {unanswered} question{unanswered === 1 ? ' is' : 's are'} still unanswered.
           </p>
         )}
-      </Modal>
+      </ConfirmDialog>
 
       <Modal
         open={confirm === 'cancel'}

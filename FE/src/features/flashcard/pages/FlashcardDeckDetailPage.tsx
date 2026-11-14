@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { Button } from '@/components/ui/Button';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
-import { Modal } from '@/components/ui/Modal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Alert } from '@/components/ui/Alert';
 import { useToast } from '@/components/ui/ToastHost';
 import { UnsavedChangesModal } from '@/components/common/UnsavedChangesModal';
@@ -235,18 +235,19 @@ export function FlashcardDeckDetailPage() {
           footnote="Each card is saved as soon as you add, update or delete it." />
       </div>
 
-      <Modal open={confirmDelete} onClose={() => !deleting && setConfirmDelete(false)} title="Delete deck?" size="sm"
-        footer={
-          <>
-            <Button variant="outline" onClick={() => setConfirmDelete(false)} disabled={deleting}>Cancel</Button>
-            <Button variant="danger" onClick={handleDelete} disabled={deleting}>{deleting ? 'Deleting…' : 'Delete'}</Button>
-          </>
-        }>
-        <p className="text-base text-content-secondary">
+      <ConfirmDialog
+        open={confirmDelete}
+        onClose={() => setConfirmDelete(false)}
+        onConfirm={handleDelete}
+        loading={deleting}
+        tone="danger"
+        title="Delete deck?"
+        description={<>
           <span className="font-semibold text-content">"{deck.title}"</span> and its {deck.cardCount} card{deck.cardCount === 1 ? '' : 's'} will
           be permanently deleted, together with every learner's progress on them. This cannot be undone.
-        </p>
-      </Modal>
+        </>}
+        confirmLabel="Delete"
+      />
 
       {importOpen && <FlashcardImportModal deckId={deck.deckId} deckTitle={deck.title} onClose={() => setImportOpen(false)} onImported={() => { void refreshDeck(); }} />}
 

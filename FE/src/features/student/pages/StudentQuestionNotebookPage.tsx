@@ -9,6 +9,7 @@ import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import { EmptyState } from "@/components/ui/Card";
 import { SearchInput } from "@/components/common/SearchInput";
 import { Modal } from "@/components/ui/Modal";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Icon } from "@/assets/icons";
 import { ROUTES } from "@/app/routes";
 import { useToast } from "@/components/ui/ToastHost";
@@ -253,14 +254,6 @@ export function StudentQuestionNotebookPage() {
       <PageTitle
         title="Question notebook"
         subtitle="Review incorrect answers, keep useful questions, and practice them again."
-        action={
-          <Button
-            variant="outline"
-            onClick={() => navigate(ROUTES.studentLearningActivities)}
-          >
-            Learning activity
-          </Button>
-        }
       />
 
       <div>
@@ -474,9 +467,12 @@ export function StudentQuestionNotebookPage() {
         </div>
       </Modal>
 
-      <Modal
+      <ConfirmDialog
         open={bulkAction !== null}
-        onClose={() => !bulkBusy && setBulkAction(null)}
+        onClose={() => setBulkAction(null)}
+        onConfirm={runBulkAction}
+        loading={bulkBusy}
+        tone={bulkAction === "delete" ? "danger" : "warning"}
         title={
           bulkAction === "bookmark"
             ? "Bookmark all saved questions?"
@@ -484,39 +480,21 @@ export function StudentQuestionNotebookPage() {
               ? "Clear all bookmarks?"
               : "Delete all saved questions?"
         }
-        size="sm"
-        footer={
-          <>
-            <Button
-              variant="outline"
-              onClick={() => setBulkAction(null)}
-              disabled={bulkBusy}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant={bulkAction === "delete" ? "danger" : "primary"}
-              onClick={runBulkAction}
-              loading={bulkBusy}
-              disabled={bulkBusy}
-            >
-              {bulkAction === "bookmark"
-                ? "Bookmark all"
-                : bulkAction === "clear-bookmarks"
-                  ? "Clear bookmarks"
-                  : "Delete all"}
-            </Button>
-          </>
-        }
-      >
-        <p className="text-sm text-content-secondary">
-          {bulkAction === "bookmark"
+        description={
+          bulkAction === "bookmark"
             ? "Bookmark every question saved in your notebook."
             : bulkAction === "clear-bookmarks"
               ? "Remove bookmarks from every question in your notebook. The questions themselves will stay saved."
-              : "Permanently delete every saved question in your notebook. This action cannot be undone."}
-        </p>
-      </Modal>
+              : "Permanently delete every saved question in your notebook. This action cannot be undone."
+        }
+        confirmLabel={
+          bulkAction === "bookmark"
+            ? "Bookmark all"
+            : bulkAction === "clear-bookmarks"
+              ? "Clear bookmarks"
+              : "Delete all"
+        }
+      />
     </div>
   );
 }

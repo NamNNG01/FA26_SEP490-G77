@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { Modal } from '@/components/ui/Modal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Alert } from '@/components/ui/Alert';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { Spinner } from '@/components/ui/Spinner';
@@ -184,30 +184,35 @@ export function ManagerContestDetailPage() {
       <Overview contest={c} />
       {c.rankingStatus === 'READY' ? <Leaderboard contest={c} refreshKey={tick} /> : <Prizes contest={c} />}
 
-      <Modal open={cancelOpen} onClose={() => !working && setCancelOpen(false)} title="Cancel this contest?" dismissible={!working}
-        footer={<>
-          <Button variant="outline" disabled={working} onClick={() => setCancelOpen(false)}>Keep contest</Button>
-          <Button variant="danger" loading={working} disabled={working || (needsReason && !cancelReason.trim())} onClick={() => void cancel()}>Cancel contest</Button>
-        </>}>
-        <div className="space-y-3">
-          <p className="text-sm text-content-secondary">
-            No prizes will be granted{c.participantCount ? ` and ${c.participantCount} participant${c.participantCount === 1 ? '' : 's'} will be notified` : ''}. This cannot be undone.
-          </p>
-          <label className="flex flex-col gap-1.5 text-sm font-medium text-content-secondary">
-            Reason{needsReason ? ' (required)' : ' (optional)'}
-            <textarea className="min-h-20 rounded-[10px] border border-line bg-surface px-3 py-2 text-sm font-normal text-content focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/20"
-              maxLength={CANCEL_REASON_MAX} value={cancelReason} onChange={e => setCancelReason(e.target.value)} placeholder="e.g. Error in the exam" />
-          </label>
-        </div>
-      </Modal>
+      <ConfirmDialog
+        open={cancelOpen}
+        onClose={() => setCancelOpen(false)}
+        onConfirm={() => void cancel()}
+        loading={working}
+        confirmDisabled={needsReason && !cancelReason.trim()}
+        tone="danger"
+        title="Cancel this contest?"
+        description={`No prizes will be granted${c.participantCount ? ` and ${c.participantCount} participant${c.participantCount === 1 ? '' : 's'} will be notified` : ''}. This cannot be undone.`}
+        cancelLabel="Keep contest"
+        confirmLabel="Cancel contest"
+      >
+        <label className="flex flex-col gap-1.5 text-sm font-medium text-content-secondary">
+          Reason{needsReason ? ' (required)' : ' (optional)'}
+          <textarea className="min-h-20 rounded-[10px] border border-line bg-surface px-3 py-2 text-sm font-normal text-content focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/20"
+            maxLength={CANCEL_REASON_MAX} value={cancelReason} onChange={e => setCancelReason(e.target.value)} placeholder="e.g. Error in the exam" />
+        </label>
+      </ConfirmDialog>
 
-      <Modal open={deleteOpen} onClose={() => !working && setDeleteOpen(false)} title="Delete draft?" dismissible={!working}
-        footer={<>
-          <Button variant="outline" disabled={working} onClick={() => setDeleteOpen(false)}>Cancel</Button>
-          <Button variant="danger" loading={working} disabled={working} onClick={() => void remove()}>Delete</Button>
-        </>}>
-        <p className="text-sm text-content-secondary">Delete the draft <strong>{c.title}</strong>? Its exam becomes available for other contests.</p>
-      </Modal>
+      <ConfirmDialog
+        open={deleteOpen}
+        onClose={() => setDeleteOpen(false)}
+        onConfirm={() => void remove()}
+        loading={working}
+        tone="danger"
+        title="Delete draft?"
+        description={<>Delete the draft <strong>{c.title}</strong>? Its exam becomes available for other contests.</>}
+        confirmLabel="Delete"
+      />
 
       <PayRewardsDialog contest={paying ? c : null} blockers={c.payBlockers} onClose={() => setPaying(false)} onPaid={() => void load()} />
     </div>

@@ -53,6 +53,7 @@ export interface StudentDeckView {
   description: string | null;
   mode: DeckMode;
   courseId: number | null;
+  moduleId?: number | null;
   cardCount: number;
   visibility: DeckVisibility;
   reviewStatus: ReviewStatus;
@@ -61,6 +62,7 @@ export interface StudentDeckView {
   createdAt: string | null;
   // FC-14 only.
   courseTitle?: string | null;
+  moduleTitle?: string | null;
   ownerName?: string | null;
   isOwner?: boolean;
   learnedCount?: number;
@@ -76,6 +78,8 @@ export interface DeckListItem {
   mode: DeckMode;
   courseId: number | null;
   courseTitle: string | null;
+  moduleId?: number | null;
+  moduleTitle?: string | null;
   ownerId: number | null;
   ownerName: string | null;
   cardCount: number;
@@ -100,6 +104,7 @@ export interface DeckCreateRequest {
   description?: string;
   mode: DeckMode;
   courseId?: number;
+  moduleId?: number;
 }
 
 /** Omitted fields stay unchanged. */

@@ -11,7 +11,7 @@ import { Pagination } from "@/components/ui/Pagination";
 import { Select } from "@/components/ui/Select";
 import { Tabs } from "@/components/ui/Tabs";
 import { Icon } from "@/assets/icons";
-import { ROUTES } from "@/app/routes";
+import { ROUTES, studentDeckPath } from "@/app/routes";
 import { DiagramAnswer } from "@/features/question/components/DiagramAnswer";
 import { QuestionForm } from "@/features/question/components/QuestionForm";
 import {
@@ -23,17 +23,16 @@ import {
 } from "@/features/question/model";
 import type { QuestionDetail } from "@/services/question.service";
 import {
-  studentCourseService,
-  type MyCourse,
-} from "@/services/studentCourse.service";
-import {
   studentContributionService,
   type ContributionDetail,
   type ContributionItem,
   type ContributionStatus,
-  type ContributionType,
   type QuestionContributionBody,
 } from "@/services/studentContribution.service";
+import { studentDeckService, type DeckListItem } from "@/services/studentDeck.service";
+import { DeckContributionModal as SharedDeckContributionModal } from "../components/flashcards/DeckContributionModal";
+import { useActiveCourses } from "../components/flashcards/flashcardUi";
+import { ContributionCourseModuleFields } from "../components/ContributionCourseModuleFields";
 import { getApiErrorMessage } from "@/utils/apiError";
 import {
   LoadError,
@@ -43,6 +42,18 @@ import {
 
 const PAGE_SIZE = 10;
 const STATUSES = ["PENDING", "ACCEPTED", "REJECTED"] as const;
+type MyContributionRow = {
+  key: string;
+  type: "question" | "deck";
+  status: string;
+  summary: string;
+  createdAt: string | null;
+  reviewedAt: string | null;
+  contributionId?: number;
+  deckId?: number;
+  cardCount?: number;
+  deck?: DeckListItem;
+};
 
 export function StudentContributionsPage() {
   const { contributionId } = useParams<{ contributionId: string }>();
@@ -58,31 +69,43 @@ function ContributionList() {
   const [tab, setTab] = useState("All");
   const [status, setStatus] = useState("");
   const [page, setPage] = useState(0);
-  const [items, setItems] = useState<ContributionItem[]>([]);
-  const [total, setTotal] = useState(0);
+  const [items, setItems] = useState<MyContributionRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
-  const [form, setForm] = useState<"question" | "tip" | null>(null);
+  const [form, setForm] = useState<"question" | "deck" | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    const type =
-      tab === "All" ? undefined : (tab.toLowerCase() as ContributionType);
-    studentContributionService
-      .getMine({
-        type,
-        status: status as ContributionStatus | undefined,
-        page,
-        size: PAGE_SIZE,
-      })
-      .then((result) => {
-        if (!cancelled) {
-          setItems(result.content);
-          setTotal(result.totalElements);
-        }
+    Promise.all([
+      studentContributionService.getAllMine({ type: "question" }),
+      studentDeckService.listAllDecks({ scope: "MINE" }),
+    ])
+      .then(([questions, decks]) => {
+        if (!cancelled) setItems([
+          ...questions.map((item: ContributionItem) => ({
+            key: `question-${item.contributionId}`,
+            type: "question" as const,
+            status: item.status,
+            summary: item.summary,
+            createdAt: item.createdAt,
+            reviewedAt: item.reviewedAt,
+            contributionId: item.contributionId,
+          })),
+          ...decks.filter(deck => deck.reviewStatus !== "NONE").map(deck => ({
+            key: `deck-${deck.deckId}`,
+            type: "deck" as const,
+            status: deck.reviewStatus,
+            summary: deck.title,
+            createdAt: deck.createdAt,
+            reviewedAt: null,
+            deckId: deck.deckId,
+            cardCount: deck.cardCount,
+            deck,
+          })),
+        ]);
       })
       .catch((err) => {
         if (!cancelled)
@@ -96,7 +119,14 @@ function ContributionList() {
     return () => {
       cancelled = true;
     };
-  }, [tab, status, page, reload]);
+  }, [reload]);
+
+  const filteredItems = useMemo(() => items
+    .filter(item => tab === "All" || (tab === "Question" ? item.type === "question" : item.type === "deck"))
+    .filter(item => !status || item.status === status || (status === "PENDING" && item.status === "PENDING_REVIEW") || (status === "ACCEPTED" && item.status === "APPROVED"))
+    .sort((a, b) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime()), [items, tab, status]);
+  const total = filteredItems.length;
+  const pageItems = filteredItems.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   const updateTab = (value: string) => {
     setTab(value);
@@ -110,15 +140,15 @@ function ContributionList() {
     <div className={`${STUDENT_PAGE_CLASS} space-y-6`}>
       <PageTitle
         title="My Contributions"
-        subtitle="Track review progress and share questions or learning tips."
+        subtitle="Track review progress for your questions and flashcard decks."
         action={
           <div className="flex flex-wrap gap-2">
             <Button
               variant="outline"
-              icon={<Icon.Lightbulb className="h-4 w-4" />}
-              onClick={() => setForm("tip")}
+              icon={<Icon.Plus className="h-4 w-4" />}
+              onClick={() => setForm("deck")}
             >
-              Share a tip
+              Contribute a flashcard deck
             </Button>
             <Button
               icon={<Icon.Plus className="h-4 w-4" />}
@@ -130,7 +160,7 @@ function ContributionList() {
         }
       />
       <Tabs
-        tabs={["All", "Question", "Tip"]}
+        tabs={["All", "Question", "Flashcard deck"]}
         active={tab}
         onChange={updateTab}
         variant="underline"
@@ -162,49 +192,38 @@ function ContributionList() {
         <div className="card p-8 text-sm text-content-subtle">
           Loading contributions…
         </div>
-      ) : items.length === 0 ? (
+      ) : pageItems.length === 0 ? (
         <div className="card">
           <EmptyState
             icon={<Icon.FileText className="h-7 w-7" />}
             title="No contributions yet"
-            message="Submit a practice question or a helpful learning tip for review."
-            action={
-              <Button onClick={() => setForm("question")}>
-                Contribute a question
-              </Button>
-            }
+            message="Submit a practice question or a flashcard deck for review."
+            action={<div className="flex flex-wrap justify-center gap-2"><Button onClick={() => setForm("question")}>Contribute a question</Button><Button variant="outline" onClick={() => setForm("deck")}>Contribute a flashcard deck</Button></div>}
           />
         </div>
       ) : (
         <div className="card overflow-hidden">
           <ul className="divide-y divide-line">
-            {items.map((item) => (
+            {pageItems.map((item) => (
               <li
                 key={item.contributionId}
                 className="flex flex-wrap items-center gap-3 px-4 py-4 sm:px-5"
               >
                 <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-light text-primary">
-                  {item.type === "tip" ? (
-                    <Icon.Lightbulb className="h-5 w-5" />
-                  ) : (
-                    <Icon.FileText className="h-5 w-5" />
-                  )}
+                  {item.type === "deck" ? <Icon.Layers className="h-5 w-5" /> : <Icon.FileText className="h-5 w-5" />}
                 </span>
                 <div className="min-w-[12rem] flex-1">
                   <button
                     type="button"
                     onClick={() =>
-                      navigate(
-                        `${ROUTES.studentContributions}/${item.contributionId}`,
-                      )
+                      navigate(item.type === "deck" ? studentDeckPath(item.deckId!) : `${ROUTES.studentContributions}/${item.contributionId}`)
                     }
                     className="text-left text-sm font-semibold text-content hover:text-primary hover:underline"
                   >
                     {item.summary}
                   </button>
                   <p className="mt-1 text-xs text-content-subtle">
-                    {titleCase(item.type)} · Submitted{" "}
-                    {formatDate(item.createdAt)}
+                    {item.type === "deck" ? `Flashcard deck · ${item.cardCount ?? 0} cards · Created ${formatDate(item.createdAt)}` : `Question · Submitted ${formatDate(item.createdAt)}`}
                     {item.reviewedAt
                       ? ` · Reviewed ${formatDate(item.reviewedAt)}`
                       : ""}
@@ -215,12 +234,10 @@ function ContributionList() {
                   size="sm"
                   variant="outline"
                   onClick={() =>
-                    navigate(
-                      `${ROUTES.studentContributions}/${item.contributionId}`,
-                    )
+                      navigate(item.type === "deck" ? studentDeckPath(item.deckId!) : `${ROUTES.studentContributions}/${item.contributionId}`)
                   }
                 >
-                  Details
+                  {item.type === "deck" ? "Open deck" : "Details"}
                 </Button>
               </li>
             ))}
@@ -231,7 +248,7 @@ function ContributionList() {
               total={total}
               perPage={PAGE_SIZE}
               onChange={(value) => setPage(value - 1)}
-              unit="contributions"
+              unit="submissions"
             />
           </div>
         </div>
@@ -241,11 +258,7 @@ function ContributionList() {
         onClose={() => setForm(null)}
         onSaved={saved}
       />
-      <TipContributionModal
-        open={form === "tip"}
-        onClose={() => setForm(null)}
-        onSaved={saved}
-      />
+      <SharedDeckContributionModal open={form === "deck"} onClose={() => setForm(null)} onSubmitted={saved} />
     </div>
   );
 }
@@ -558,53 +571,36 @@ function QuestionContributionModal({
   initial?: ContributionDetail;
   contributionId?: number;
 }) {
-  const [courses, setCourses] = useState<MyCourse[]>([]);
+  const { courses, error: coursesError } = useActiveCourses();
   const [courseId, setCourseId] = useState(
     initial?.courseId ? String(initial.courseId) : "",
   );
+  const [moduleId, setModuleId] = useState(initial?.moduleId ? String(initial.moduleId) : "");
   const [question, setQuestion] = useState<QuestionDraft>(() =>
     contributionQuestionDraft(initial),
   );
   const [showErrors, setShowErrors] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [courseError, setCourseError] = useState("");
+  const [moduleError, setModuleError] = useState("");
   useEffect(() => {
     if (!open) return;
     setQuestion(contributionQuestionDraft(initial));
     setCourseId(initial?.courseId ? String(initial.courseId) : "");
+    setModuleId(initial?.moduleId ? String(initial.moduleId) : "");
     setShowErrors(false);
     setError(null);
+    setCourseError("");
+    setModuleError("");
   }, [open, initial]);
-  useEffect(() => {
-    let cancelled = false;
-    studentCourseService
-      .getMyCourses({ page: 0, size: 100 })
-      .then((result) => {
-        if (!cancelled)
-          setCourses(
-            result.content.filter((course) => course.status === "ACTIVE"),
-          );
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-  const courseOptions = useMemo(
-    () => [
-      { label: "Choose an enrolled course", value: "" },
-      ...courses.map((course) => ({
-        label: course.title,
-        value: String(course.courseId),
-      })),
-    ],
-    [courses],
-  );
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setError(null);
-    if (!courseId) {
-      setError("Choose an enrolled course.");
+    setCourseError(courseId ? "" : "Choose an enrolled course.");
+    setModuleError(moduleId ? "" : "Choose a module.");
+    if (!courseId || !moduleId) {
+      setError("Choose both an enrolled course and a module before submitting.");
       return;
     }
     if (!isDraftValid(question)) {
@@ -618,9 +614,10 @@ function QuestionContributionModal({
       );
       return;
     }
-    const request = toCreateRequest(question, Number(courseId), null);
+    const request = toCreateRequest(question, Number(courseId), Number(moduleId));
     const body: QuestionContributionBody = {
       ...request,
+      moduleId: Number(moduleId),
       questionType:
         request.questionType as QuestionContributionBody["questionType"],
       difficulty: request.difficulty ?? "MEDIUM",
@@ -642,7 +639,7 @@ function QuestionContributionModal({
   return (
     <Modal
       open={open}
-      onClose={onClose}
+      onClose={busy ? () => {} : onClose}
       error={error && <Alert type="error" message={error} />}
       title={
         contributionId ? "Edit and resubmit question" : "Contribute a question"
@@ -650,13 +647,14 @@ function QuestionContributionModal({
       size="xl"
       footer={
         <>
-          <Button variant="outline" onClick={onClose}>
+          <Button variant="outline" onClick={onClose} disabled={busy}>
             Cancel
           </Button>
           <Button
             form="question-contribution-form"
             type="submit"
             loading={busy}
+            disabled={busy || !courses?.length}
           >
             {contributionId ? "Resubmit" : "Submit question"}
           </Button>
@@ -668,11 +666,15 @@ function QuestionContributionModal({
         onSubmit={submit}
         className="space-y-4"
       >
-        <Select
-          label="Enrolled course"
-          value={courseId}
-          options={courseOptions}
-          onChange={setCourseId}
+        <ContributionCourseModuleFields
+          courses={courses ?? []}
+          courseId={courseId}
+          moduleId={moduleId}
+          onCourseChange={value => { setCourseId(value); setCourseError(""); setError(null); }}
+          onModuleChange={value => { setModuleId(value); setModuleError(""); setError(null); }}
+          courseError={courseError || coursesError || undefined}
+          moduleError={moduleError || undefined}
+          disabled={busy}
         />
         <QuestionForm
           q={question}
@@ -685,148 +687,29 @@ function QuestionContributionModal({
           showErrors={showErrors}
           allowedTypes={STUDENT_QUESTION_TYPES}
         />
-        {!courses.length && (
-          <p className="text-sm text-warning">
-            An active course enrollment is needed to contribute a question.
-          </p>
-        )}
+        {!courses?.length && <p className="text-sm text-warning">An active course enrollment is needed to contribute a question.</p>}
       </form>
     </Modal>
   );
 }
 
-function TipContributionModal({
-  open,
-  onClose,
-  onSaved,
-}: {
-  open: boolean;
-  onClose: () => void;
-  onSaved: () => void;
-}) {
-  const [courses, setCourses] = useState<MyCourse[]>([]);
-  const [courseId, setCourseId] = useState("");
-  const [title, setTitle] = useState("");
-  const [content, setContent] = useState("");
-  const [sourceReference, setSourceReference] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    studentCourseService
-      .getMyCourses({ page: 0, size: 100 })
-      .then((result) => {
-        if (!cancelled)
-          setCourses(
-            result.content.filter((course) => course.status === "ACTIVE"),
-          );
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-  const submit = async (event: FormEvent) => {
-    event.preventDefault();
-    setError(null);
-    if (!courseId || !title.trim() || !content.trim()) {
-      setError("Choose a course and complete the title and tip.");
-      return;
-    }
-    setBusy(true);
-    try {
-      await studentContributionService.createTip({
-        courseId: Number(courseId),
-        title: title.trim(),
-        content: content.trim(),
-        sourceReference: sourceReference.trim() || null,
-      });
-      onSaved();
-    } catch (err) {
-      setError(getApiErrorMessage(err, "Could not submit this tip."));
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title="Share a learning tip"
-      error={error && <Alert type="error" message={error} />}
-      size="lg"
-      footer={
-        <>
-          <Button variant="outline" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button form="tip-contribution-form" type="submit" loading={busy}>
-            Submit tip
-          </Button>
-        </>
-      }
-    >
-      <form id="tip-contribution-form" onSubmit={submit} className="space-y-4">
-        <Select
-          label="Enrolled course"
-          value={courseId}
-          options={[
-            { label: "Choose an enrolled course", value: "" },
-            ...courses.map((course) => ({
-              label: course.title,
-              value: String(course.courseId),
-            })),
-          ]}
-          onChange={setCourseId}
-        />
-        <Input
-          label="Title"
-          required
-          maxLength={200}
-          value={title}
-          onChange={(event) => setTitle(event.target.value)}
-        />
-        <label className="flex flex-col gap-1.5 text-sm font-medium text-content-secondary">
-          Tip
-          <textarea
-            required
-            maxLength={10000}
-            rows={6}
-            value={content}
-            onChange={(event) => setContent(event.target.value)}
-            className="w-full rounded-[10px] border border-line bg-surface p-3 text-sm text-content focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/20"
-          />
-        </label>
-        <Input
-          label="Source reference (optional)"
-          value={sourceReference}
-          onChange={(event) => setSourceReference(event.target.value)}
-        />
-        {!courses.length && (
-          <p className="text-sm text-warning">
-            An active course enrollment is needed to share a tip.
-          </p>
-        )}
-      </form>
-    </Modal>
-  );
-}
-
-function StatusBadge({ status }: { status: ContributionStatus }) {
+function StatusBadge({ status }: { status: ContributionStatus | string }) {
   const variant =
-    status === "ACCEPTED"
+    status === "ACCEPTED" || status === "APPROVED"
       ? "success"
       : status === "REJECTED"
         ? "danger"
         : "warning";
-  return <Badge variant={variant}>{titleCase(status)}</Badge>;
+  const label = status === "PENDING_REVIEW" ? "Pending review" : status === "APPROVED" || status === "ACCEPTED" ? "Approved" : titleCase(status);
+  return <Badge variant={variant}>{label}</Badge>;
 }
 
 function titleCase(value: string) {
   return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
 }
 
-function formatDate(value: string) {
+function formatDate(value: string | null) {
+  if (!value) return "—";
   return new Date(value).toLocaleString(undefined, {
     dateStyle: "medium",
     timeStyle: "short",
