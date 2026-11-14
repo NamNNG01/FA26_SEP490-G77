@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { Badge } from '@/components/ui/Badge';
 import { Alert } from '@/components/ui/Alert';
@@ -9,59 +9,30 @@ import { EmptyState } from '@/components/ui/Card';
 import { Icon } from '@/assets/icons';
 import { Progress } from '@/components/ui/Progress';
 import { ROUTES, studentModulePath } from '@/app/routes';
-import { getApiErrorMessage } from '@/utils/apiError';
-import {
-  studentCourseService,
-  type StudentCourseDetail,
-} from '@/services/studentCourse.service';
-import type { PracticeScope } from '@/services/modulePractice.service';
+import type { StudentCourseDetail } from '@/services/studentCourse.service';
+import { modulePracticeService, type ModulePracticeOverview, type PracticeScope } from '@/services/modulePractice.service';
 import { CardGridSkeleton, CourseThumb, LoadError, STUDENT_PAGE_CLASS } from '../components/studentUi';
 import { GENERAL_MODULE, countItems, sortedModules } from '../components/courseContent';
-import { useCourseProgress, type LearningProgress, type OverviewState } from '../components/courseProgress';
+import { useCourseDetail, type CourseDetailState, type LearningProgress } from '../components/courseProgress';
 import { ModulePracticeModal } from '../components/ModulePracticeModal';
 import { SmartPracticeModal } from '../components/SmartPracticeModal';
 import type { ModulePageState } from './StudentModuleDetailPage';
 
 /**
  * Student course detail — course info (CL-02), then the course content as a grid of module cards.
- * Each card shows the module's exams (MC-02) and decks (MC-03), its practice progress and a
+ * Each card shows the module's exams (MC-02) and decks (MC-03), its progress (LP-01) and a
  * Practice button; clicking it opens the module page. Exams and decks not filed under a module sit
- * on a "General" card, practised as the course's General pool. MC-02/03 only answer for an ACTIVE
- * enrollment, so other states only list the modules. An enrolled student can create a practice exam for the course from the info card
- * (AI-01 / PQ-01, course fixed).
+ * on a "General" card, practised as the course's General pool. CL-02, MC-02, MC-03 and LP-01 are
+ * read together and the page is shown once all are in (useCourseDetail). MC-02/03 only answer for
+ * an ACTIVE enrollment, so other states only list the modules. An enrolled student can create a
+ * practice exam for the course from the info card (AI-01 / PQ-01, course fixed).
  */
 export function StudentCourseDetailPage() {
   const { courseId = '' } = useParams<{ courseId: string }>();
   const navigate = useNavigate();
-
-  const [course, setCourse] = useState<StudentCourseDetail | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [reload, setReload] = useState(0);
+  const { data, loading, error, retry } = useCourseDetail(courseId);
   const [personalQuiz, setPersonalQuiz] = useState(false);
-  // MC-02/03 and MP-01 only answer for an ACTIVE enrollment.
-  const activeCourse = course?.enrollment?.isEnrolled && course.enrollment.status === 'ACTIVE' ? course : null;
-  const content = useCourseProgress(activeCourse);
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    studentCourseService
-      .getCourseDetail(courseId)
-      .then(res => {
-        if (!cancelled) setCourse(res);
-      })
-      .catch(err => {
-        if (!cancelled) setError(getApiErrorMessage(err, 'Failed to load the course.'));
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [courseId, reload]);
+  const course = loading ? null : data?.course;
 
   const breadcrumb = (
     <Breadcrumb
@@ -81,23 +52,24 @@ export function StudentCourseDetailPage() {
             <Skeleton className="h-16 w-full" />
           </div>
         </div>
+        <Skeleton className="h-20 w-full" />
+        <CardGridSkeleton count={3} />
       </div>
     );
   }
 
-  if (error || !course) {
+  if (error || !data || !course) {
     return (
       <div className={`${STUDENT_PAGE_CLASS} space-y-6`}>
         {breadcrumb}
-        <LoadError message={error ?? 'Course not found.'} onRetry={() => setReload(r => r + 1)} />
+        <LoadError message={error ?? 'Course not found.'} onRetry={retry} />
       </div>
     );
   }
 
   const enrollment = course.enrollment;
-  const isActive = Boolean(enrollment?.isEnrolled && enrollment.status === 'ACTIVE');
-  // General counts once it holds anything; until the content is in, only the course's own modules.
-  const moduleCount = isActive ? content.moduleCount : course.modules.length;
+  const { isActive } = data;
+  const moduleCount = isActive ? data.moduleCount : course.modules.length;
 
   return (
     <div className={`${STUDENT_PAGE_CLASS} space-y-[clamp(1.25rem,2.5vw,1.75rem)]`}>
@@ -153,7 +125,7 @@ export function StudentCourseDetailPage() {
       )}
 
       {isActive ? (
-        <ModuleGrid course={course} content={content} />
+        <ModuleGrid content={data} onRetry={retry} />
       ) : (
         <LockedModules course={course} />
       )}
@@ -171,9 +143,8 @@ export function StudentCourseDetailPage() {
   );
 }
 
-/** The course's progress from LP-01 (the average of its modules); undefined while it loads. */
-function CourseProgressPanel({ progress }: { progress?: LearningProgress | 'error' }) {
-  if (!progress) return <Skeleton className="h-20 w-full" />;
+/** The course's progress from LP-01 (the average of its modules). */
+function CourseProgressPanel({ progress }: { progress: LearningProgress | 'error' }) {
   if (progress === 'error') {
     return (
       <section className="card p-4 sm:p-5" aria-label="Course progress">
@@ -197,16 +168,30 @@ function CourseProgressPanel({ progress }: { progress?: LearningProgress | 'erro
 /**
  * The course content as a grid of module cards — counts and a Practice button each — plus a
  * "General" card, built the same way, for the content not filed under any module. The panel above
- * it shows the course's progress from LP-01 (useCourseProgress); each module's own progress is
- * shown on its detail page.
+ * it and each card show progress from LP-01. MP-01 is read only for the module whose Practice
+ * button is pressed, to open its practice modal (with the session in progress, if any).
  */
-function ModuleGrid({ course, content }: { course: StudentCourseDetail; content: ReturnType<typeof useCourseProgress> }) {
+function ModuleGrid({ content, onRetry }: { content: CourseDetailState; onRetry: () => void }) {
   const navigate = useNavigate();
-  const { byModule, general, loading, error, retry, modules, overviews, hasGeneral, course: overall } = content;
-  const [practicing, setPracticing] = useState<{ key: string; scope: PracticeScope; title: string } | null>(null);
+  const { course, byModule, general, contentError, modules, hasGeneral, progress: overall, be, moduleProgress } = content;
+  const [practicing, setPracticing] = useState<{ scope: PracticeScope; title: string; overview: ModulePracticeOverview | null } | null>(null);
+  // The card whose MP-01 is being read before its practice modal opens.
+  const [opening, setOpening] = useState<string | null>(null);
+  // LP-01 rides along to the module page so it need not read it again.
+  const pageState: ModulePageState = { course, progress: be !== 'error' ? be : undefined };
 
-  if (loading) return <CardGridSkeleton count={Math.min(Math.max(modules.length, 3), 6)} />;
-  if (error) return <LoadError message={error} onRetry={retry} />;
+  const openPractice = (key: string, scope: PracticeScope, title: string) => {
+    if (opening) return;
+    setOpening(key);
+    modulePracticeService
+      .getOverview(scope)
+      .then(overview => setPracticing({ scope, title, overview }))
+      // Without MP-01 the modal still opens; it just cannot show the session in progress.
+      .catch(() => setPracticing({ scope, title, overview: null }))
+      .finally(() => setOpening(null));
+  };
+
+  if (contentError) return <LoadError message={contentError} onRetry={onRetry} />;
 
   if (modules.length === 0 && !hasGeneral) {
     return (
@@ -219,8 +204,6 @@ function ModuleGrid({ course, content }: { course: StudentCourseDetail; content:
       </div>
     );
   }
-
-  const practicingOverview = practicing ? overviews[practicing.key] : undefined;
 
   return (
     <>
@@ -235,9 +218,10 @@ function ModuleGrid({ course, content }: { course: StudentCourseDetail; content:
             title={m.title}
             description={m.description}
             counts={countItems(byModule.get(m.moduleId) ?? [])}
-            overview={overviews[m.moduleId]}
-            onOpen={() => navigate(studentModulePath(course.courseId, m.moduleId), { state: { course } satisfies ModulePageState })}
-            onPractice={() => setPracticing({ key: String(m.moduleId), scope: { moduleId: m.moduleId }, title: m.title })}
+            progress={moduleProgress(String(m.moduleId))}
+            practiceLoading={opening === String(m.moduleId)}
+            onOpen={() => navigate(studentModulePath(course.courseId, m.moduleId), { state: pageState })}
+            onPractice={() => openPractice(String(m.moduleId), { moduleId: m.moduleId }, m.title)}
           />
         ))}
         {hasGeneral && (
@@ -245,9 +229,10 @@ function ModuleGrid({ course, content }: { course: StudentCourseDetail; content:
             title="General"
             description="Practice questions, exams and flashcard decks not filed under a module."
             counts={countItems(general)}
-            overview={overviews[GENERAL_MODULE]}
-            onOpen={() => navigate(studentModulePath(course.courseId, GENERAL_MODULE), { state: { course } satisfies ModulePageState })}
-            onPractice={() => setPracticing({ key: GENERAL_MODULE, scope: { courseId: course.courseId }, title: 'General' })}
+            progress={moduleProgress(GENERAL_MODULE)}
+            practiceLoading={opening === GENERAL_MODULE}
+            onOpen={() => navigate(studentModulePath(course.courseId, GENERAL_MODULE), { state: pageState })}
+            onPractice={() => openPractice(GENERAL_MODULE, { courseId: course.courseId }, 'General')}
           />
         )}
       </div>
@@ -258,7 +243,7 @@ function ModuleGrid({ course, content }: { course: StudentCourseDetail; content:
           onClose={() => setPracticing(null)}
           scope={practicing.scope}
           moduleTitle={practicing.title}
-          overview={practicingOverview === 'error' ? null : practicingOverview}
+          overview={practicing.overview}
         />
       )}
     </section>
@@ -275,7 +260,8 @@ function ModuleCard({
   title,
   description,
   counts,
-  overview,
+  progress,
+  practiceLoading,
   onOpen,
   onPractice,
 }: {
@@ -283,11 +269,13 @@ function ModuleCard({
   title: string;
   description?: string | null;
   counts: { exams: number; decks: number };
-  overview?: OverviewState;
+  /** LP-01's entry for the module; null = nothing to count, undefined = LP-01 failed. */
+  progress?: LearningProgress | null;
+  /** MP-01 is being read before the practice modal opens. */
+  practiceLoading?: boolean;
   onOpen: () => void;
   onPractice?: () => void;
 }) {
-  const inProgress = overview != null && overview !== 'error' && overview.activeSession?.status === 'IN_PROGRESS';
   return (
     <div className="card overflow-hidden flex flex-col hover:shadow-md transition-shadow">
       <button
@@ -305,23 +293,46 @@ function ModuleCard({
           </div>
           <Icon.ChevronRight className="w-4 h-4 text-content-subtle flex-shrink-0 mt-1" />
         </div>
-        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-content-soft">
-          <span className="inline-flex items-center gap-1">
-            <Icon.ClipboardList className="w-3.5 h-3.5" /> {counts.exams} exam{counts.exams === 1 ? '' : 's'}
-          </span>
-          <span className="inline-flex items-center gap-1">
-            <Icon.Layers className="w-3.5 h-3.5" /> {counts.decks} deck{counts.decks === 1 ? '' : 's'}
-          </span>
+        {/* Pinned to the bottom so counts and bars line up across cards whatever the description's length. */}
+        <div className="mt-auto w-full space-y-3">
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-content-soft">
+            <span className="inline-flex items-center gap-1">
+              <Icon.ClipboardList className="w-3.5 h-3.5" /> {counts.exams} exam{counts.exams === 1 ? '' : 's'}
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <Icon.Layers className="w-3.5 h-3.5" /> {counts.decks} deck{counts.decks === 1 ? '' : 's'}
+            </span>
+          </div>
+          {/* Same height with or without a bar. */}
+          <div className="w-full h-8 flex flex-col justify-end">
+            {progress ? (
+              <div className="w-full space-y-1">
+                <div className="flex items-baseline justify-between gap-2 text-xs">
+                  <span className="text-content-soft">Progress</span>
+                  <span className="font-semibold text-primary">{progress.percent ?? 0}%</span>
+                </div>
+                <Progress value={progress.percent ?? 0} size="sm" />
+              </div>
+            ) : progress === null ? (
+              <p className="text-xs text-content-subtle">Nothing to track yet.</p>
+            ) : null}
+          </div>
         </div>
       </button>
       {onPractice && (
         <button
           type="button"
           onClick={onPractice}
-          className="flex items-center gap-1.5 border-t border-line px-4 py-2.5 text-sm font-medium text-primary hover:bg-surface-hover focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
+          disabled={practiceLoading}
+          aria-busy={practiceLoading || undefined}
+          className="flex items-center gap-1.5 border-t border-line px-4 py-2.5 text-sm font-medium text-primary hover:bg-surface-hover disabled:opacity-60 disabled:cursor-wait focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
         >
-          <Icon.Play className="w-4 h-4" />
-          {inProgress ? 'Continue practice' : 'Practice'}
+          {practiceLoading ? (
+            <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full spinner" />
+          ) : (
+            <Icon.Play className="w-4 h-4" />
+          )}
+          Practice
           <Icon.ChevronRight className="w-4 h-4 ml-auto" />
         </button>
       )}

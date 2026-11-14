@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { useNavigate, useParams } from "react-router";
+import { useCachedQuery } from "@/hooks/useCachedQuery";
 import { studentExamAttemptsPath } from "@/app/routes";
 import { Icon } from "@/assets/icons";
 import { Container } from "@/features/landing/components/Container";
@@ -9,47 +10,36 @@ import {
   type StudentExamDetail,
 } from "@/services/studentLearning.service";
 
+/**
+ * useCachedQuery key of the exam page. The take-exam page drops it once an attempt is running, so
+ * coming back after a submit never shows a stale "Continue" from before.
+ */
+export const examDetailCacheKey = (examId: number | string) => `student:exam-detail:${examId}`;
+
 export function StudentExamDetailPage() {
   const { examId: examParam } = useParams<{ examId: string }>();
   const examId = Number(examParam);
   const navigate = useNavigate();
-  const [exam, setExam] = useState<StudentExamDetail | null>(null);
-  const [activeAttempt, setActiveAttempt] =
-    useState<StudentActiveAttempt | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [refresh, setRefresh] = useState(0);
-
-  useEffect(() => {
-    if (!Number.isFinite(examId) || examId <= 0) return;
-    let active = true;
-    setLoading(true);
-    setError("");
-    Promise.all([
-      studentLearningService.getExam(examId),
-      studentLearningService.getActiveAttempt(examId),
-    ])
-      .then(([examData, attemptData]) => {
-        if (active) {
-          setExam(examData);
-          setActiveAttempt(attemptData);
-        }
-      })
-      .catch((reason: unknown) => {
-        if (active)
-          setError(
-            reason instanceof Error
-              ? reason.message
-              : "We couldn’t load this exam.",
-          );
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [examId, refresh]);
+  const validId = Number.isFinite(examId) && examId > 0;
+  // Cached: opened again, the page shows the last reading at once and reads again behind it.
+  const query = useCachedQuery<{ exam: StudentExamDetail; activeAttempt: StudentActiveAttempt | null }>(
+    validId ? examDetailCacheKey(examId) : null,
+    async () => {
+      const [exam, activeAttempt] = await Promise.all([
+        studentLearningService.getExam(examId),
+        studentLearningService.getActiveAttempt(examId),
+      ]);
+      return { exam, activeAttempt };
+    },
+  );
+  const exam = query.data?.exam ?? null;
+  const activeAttempt = query.data?.activeAttempt ?? null;
+  const { loading } = query;
+  const error = query.error
+    ? query.error instanceof Error
+      ? query.error.message
+      : "We couldn’t load this exam."
+    : "";
 
   if (!Number.isFinite(examId) || examId <= 0)
     return (
@@ -76,7 +66,7 @@ export function StudentExamDetailPage() {
           title="Exam didn’t load"
           message={error || "This exam may no longer be available."}
           onBack={() => navigate("/student/courses")}
-          onRetry={() => setRefresh((value) => value + 1)}
+          onRetry={query.reload}
         />
       </Container>
     );
