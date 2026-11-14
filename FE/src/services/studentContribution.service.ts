@@ -18,6 +18,7 @@ export interface ContributionOption {
   key?: string;
   optionText: string;
   isCorrect?: boolean | null;
+  explanation?: string | null;
   orderIndex?: number;
 }
 
@@ -44,6 +45,7 @@ export interface ContributionDetail extends ContributionItem {
 
 export interface QuestionContributionBody {
   courseId: number;
+  moduleId: number;
   questionType: ContributionQuestionType;
   difficulty: 'EASY' | 'MEDIUM' | 'HARD';
   content: string;
@@ -76,6 +78,15 @@ export const studentContributionService = {
   async getMine(params: { type?: ContributionType; status?: ContributionStatus; page?: number; size?: number }) {
     const res = await api.get<ApiResponse<StudentPage<ContributionItem>>>(`/student/contributions?${query(params)}`);
     return { ...res.data, content: (res.data.content ?? []).map(normalizeContributionItem) };
+  },
+
+  async getAllMine(params: { type?: ContributionType; status?: ContributionStatus }) {
+    const all: ContributionItem[] = [];
+    for (let page = 0; ; page += 1) {
+      const result = await studentContributionService.getMine({ ...params, page, size: 100 });
+      all.push(...result.content);
+      if (result.last || result.content.length === 0 || page + 1 >= result.totalPages) return all;
+    }
   },
 
   async getDetail(id: number | string) {

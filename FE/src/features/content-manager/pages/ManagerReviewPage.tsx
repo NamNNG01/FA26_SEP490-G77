@@ -83,11 +83,12 @@ function contributionQuestionDraft(detail: Row): QuestionDraft {
     essayGradingRubric: parseJson(detail.essayGradingRubric, null),
     options,
     codeConfig: parseJson(detail.codeConfig, metadata?.codeConfig ?? metadata?.codeQuestionConfig ?? null),
-    testCases: Array.isArray(rawTestCases) ? rawTestCases.map((testCase: Row) => ({
+    testCases: Array.isArray(rawTestCases) ? rawTestCases.map((testCase: Row, index: number) => ({
       ...testCase,
       inputData: testCase.inputData ?? testCase.input ?? '',
       expectedOutput: testCase.expectedOutput ?? testCase.output ?? '',
       hidden: testCase.hidden ?? testCase.isHidden ?? false,
+      orderIndex: testCase.orderIndex ?? index,
     })) : null,
     createdAt: detail.createdAt ?? null,
     updatedAt: detail.reviewedAt ?? null,
