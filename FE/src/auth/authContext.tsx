@@ -16,6 +16,7 @@ import {
   saveUser,
 } from './storage';
 import { onSessionExpired } from './sessionExpired';
+import { clearQueryCache } from '@/hooks/useCachedQuery';
 
 /**
  * Backend DTO types (mirror com.examprep.dto).
@@ -140,6 +141,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // `reauthRequired` marks a forced sign-out (vs. one the user asked for).
   function clearLocalSession(reauthRequired = false) {
     clearAuth();
+    clearQueryCache();
     setState({
       user: null,
       accessToken: null,
@@ -239,6 +241,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error(body.message || 'Login failed');
     }
 
+    // A new session starts with an empty page cache (useCachedQuery).
+    clearQueryCache();
     saveAuth({
       accessToken: data.accessToken,
       refreshToken: data.refreshToken,
