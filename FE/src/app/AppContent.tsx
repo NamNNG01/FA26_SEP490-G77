@@ -37,7 +37,6 @@ import {
   StudentTakeExamPage,
   StudentExamResultPage,
   StudentPracticeResultPage,
-  StudentLearningActivityPage,
   StudentQuestionNotebookPage,
   StudentContestsPage,
   StudentDiscountsPage,
@@ -50,7 +49,7 @@ import { PaymentHistoryPage, PaymentReturnPage } from '@/features/payment';
 import { ExamListPage, ExamFormPage } from '@/features/exam';
 import { ManagerContestListPage, ManagerContestFormPage, ManagerContestDetailPage } from '@/features/contest';
 import { PublicExamsPage, PublicExamDetailPage } from '@/features/public-exam';
-import { CMDashboard } from '@/features/content-manager';
+import { CMDashboard, ManagerDiscussionPage } from '@/features/content-manager';
 import { QuestionBankPage, QuestionDetailPage, QuestionFormPage } from '@/features/question';
 import { CourseListPage, CourseDetailPage, CourseFormPage } from '@/features/course';
 import { FlashcardManagementPage, FlashcardDeckDetailPage } from '@/features/flashcard';
@@ -268,7 +267,6 @@ function AppRoutes() {
           <Route path={ROUTES.studentModuleDetail} element={<StudentModuleDetailPage />} />
           <Route path={ROUTES.studentExams} element={<MyExamsPage />} />
           <Route path={ROUTES.studentMyExams} element={<MyExamsPage />} />
-          <Route path={ROUTES.studentLearningActivities} element={<StudentLearningActivityPage />} />
           <Route path={ROUTES.studentQuestionNotebook} element={<StudentQuestionNotebookPage />} />
           <Route path={ROUTES.studentContests} element={<StudentContestsPage />} />
           <Route path={ROUTES.studentContestDetail} element={<StudentContestsPage />} />
@@ -303,6 +301,7 @@ function AppRoutes() {
             administrators have full system access. */}
         <Route element={<RequireRole roles={ROLE_MANAGER} />}>
           <Route path={ROUTES.managerReviews} element={<ManagerReviewPage />} />
+          <Route path={ROUTES.managerDiscussions} element={<ManagerDiscussionPage />} />
           <Route path={ROUTES.managerQuestionIssues} element={<ManagerQuestionIssuesPage />} />
           <Route path={ROUTES.profile} element={<ProfilePage />} />
           <Route path={ROUTES.managerDashboard} element={<CMDashboard />} />

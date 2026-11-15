@@ -117,15 +117,42 @@ export function Table({
                   <Checkbox checked={allChecked} indeterminate={someChecked && !allChecked} onChange={toggleAll} />
                 </th>
               )}
-              {columns.map(col => (
-                    <th key={col.key} style={{ width: col.width }} onClick={() => col.sortable && onSort?.(col.key)}
-                      className={`px-2.5 sm:px-3 lg:px-4 py-3 text-left text-xs font-semibold text-content-soft uppercase tracking-wide whitespace-nowrap ${col.className ?? ''} ${col.sortable ? 'cursor-pointer hover:text-content-secondary select-none' : ''}`}>
-                    <div className="flex items-center gap-1">
+              {columns.map(col => {
+                const canSort = Boolean(col.sortable && onSort);
+                const isSorted = canSort && sortKey === col.key;
+                const direction = sortDir === 'asc' ? 'ascending' : 'descending';
+                return (
+                  <th
+                    key={col.key}
+                    scope="col"
+                    style={{ width: col.width }}
+                    aria-sort={canSort ? (isSorted ? direction : 'none') : undefined}
+                    className={`px-2.5 py-3 text-left text-xs font-semibold uppercase tracking-wide whitespace-nowrap sm:px-3 lg:px-4 ${col.className ?? ''} ${isSorted ? 'text-brand-ink' : 'text-content-soft'}`}
+                  >
+                    {canSort ? (
+                      <button
+                        type="button"
+                        onClick={() => onSort?.(col.key)}
+                        aria-label={isSorted
+                          ? `${col.label}, sorted ${direction}. Activate to sort ${sortDir === 'asc' ? 'descending' : 'ascending'}.`
+                          : `Sort by ${col.label}`}
+                        className="group/sort inline-flex max-w-full items-center gap-1 rounded-sm text-left transition-colors hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2"
+                      >
+                        <span className="max-w-[220px] truncate" title={col.label}>{col.label}</span>
+                        {isSorted
+                          ? sortDir === 'asc'
+                            ? <Icon.ArrowUp aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-brand-ink" />
+                            : <Icon.ArrowDown aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-brand-ink" />
+                          : <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" className="h-3.5 w-3.5 shrink-0 text-content-subtle transition-colors group-hover/sort:text-content-secondary">
+                              <path d="M5 2.5v11m0-11L2.75 5m2.25-2.5L7.25 5M11 13.5v-11m0 11L8.75 11m2.25 2.5L13.25 11" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>}
+                      </button>
+                    ) : (
                       <span className="max-w-[220px] truncate" title={col.label}>{col.label}</span>
-                      {col.sortable && sortKey === col.key && (sortDir === 'asc' ? <Icon.ArrowUp className="w-3 h-3 flex-shrink-0" /> : <Icon.ArrowDown className="w-3 h-3 flex-shrink-0" />)}
-                    </div>
+                    )}
                   </th>
-                ))}
+                );
+              })}
             </tr>
           </thead>
           <tbody>

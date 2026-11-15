@@ -5,8 +5,10 @@ import { Badge } from "@/components/ui/Badge";
 import { Select } from "@/components/ui/Select";
 import { Dropdown } from "@/components/ui/Dropdown";
 import { Modal } from "@/components/ui/Modal";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { SearchInput } from "@/components/common/SearchInput";
+import { Table, type TableColumn } from "@/components/ui/Table";
 import { Icon } from "@/assets/icons";
 import { useToast } from "@/components/ui/ToastHost";
 import { getApiErrorMessage } from "@/utils/apiError";
@@ -22,6 +24,7 @@ import {
 } from "@/services/course.service";
 
 type ExamListTab = "all" | "QUIZ" | "ASSESSMENT" | "CODE";
+const asExam = (row: Record<string, unknown>) => row as unknown as ExamListItem;
 
 export function ExamListPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -426,30 +429,49 @@ export function ExamListPage() {
     fetchExams();
   };
 
-  const allPageIds = useMemo(() => exams.map((e) => e.examId), [exams]);
-  const isAllChecked =
-    allPageIds.length > 0 && allPageIds.every((id) => selectedExamIds.has(id));
-  const isSomeChecked = allPageIds.some((id) => selectedExamIds.has(id));
-
-  const toggleSelectAll = () => {
-    if (isAllChecked) {
-      setSelectedExamIds(new Set());
-    } else {
-      setSelectedExamIds(new Set(allPageIds));
-    }
+  const columns: TableColumn[] = [
+    { key: 'title', label: 'Exam title', render: value => <span className="line-clamp-2 whitespace-normal font-medium text-content" title={asExam(value).title}>{asExam(value).title}</span> },
+    { key: 'courseName', label: 'Course', render: value => <span className="block truncate" title={asExam(value).courseName}>{asExam(value).courseName}</span> },
+    { key: 'moduleName', label: 'Module', render: value => asExam(value).moduleName || '—' },
+    { key: 'examKind', label: 'Kind', render: value => {
+      const kind = asExam(value).examKind;
+      return <Badge variant={kind === 'QUIZ' ? 'purple' : kind === 'CODE' ? 'warning' : 'default'} className="whitespace-nowrap text-2xs">{kind === 'DIAGRAM' || !kind ? 'ESSAY' : kind}</Badge>;
+    } },
+    { key: 'questionCount', label: 'Questions', className: 'whitespace-nowrap', render: value => asExam(value).questionCount },
+    { key: 'maxScore', label: 'Max score', className: 'whitespace-nowrap', render: value => {
+      const exam = asExam(value);
+      return exam.maxScore ?? exam.totalPoints ?? 0;
+    } },
+    { key: 'durationMinutes', label: 'Duration', className: 'whitespace-nowrap', render: value => `${asExam(value).durationMinutes}m` },
+    { key: 'status', label: 'Status', render: value => {
+      const status = asExam(value).status;
+      return <Badge variant={status === 'PUBLISHED' ? 'success' : status === 'ARCHIVED' ? 'default' : 'warning'} className="whitespace-nowrap text-2xs">{status.charAt(0) + status.slice(1).toLowerCase()}</Badge>;
+    } },
+    { key: 'createdAt', label: 'Created', className: 'whitespace-nowrap', render: value => new Date(asExam(value).createdAt).toLocaleDateString() },
+    { key: 'actions', label: 'Actions', className: 'whitespace-nowrap', render: value => {
+      const exam = asExam(value);
+      return <div onClick={event => event.stopPropagation()}><Dropdown
+        trigger={<button type="button" aria-label={`Actions for ${exam.title}`} className="rounded-[6px] p-1.5 text-content-subtle hover:bg-surface-hover hover:text-content"><Icon.MoreHorizontal className="h-4 w-4" /></button>}
+        items={[
+          { label: 'Edit', icon: <Icon.Edit className="h-4 w-4" />, onClick: () => handleEditExam(exam) },
+          { label: exam.status === 'PUBLISHED' ? 'Unpublish to Draft' : 'Publish', icon: exam.status === 'PUBLISHED' ? <Icon.EyeOff className="h-4 w-4" /> : <Icon.CheckCircle className="h-4 w-4" />, disabled: exam.status !== 'PUBLISHED' && exam.questionCount === 0 && exam.generationType === 'STATIC', onClick: () => setStatusDialogTarget({ exam, targetStatus: exam.status === 'PUBLISHED' ? 'DRAFT' : 'PUBLISHED' }) },
+          { label: 'Archive', icon: <Icon.Archive className="h-4 w-4" />, disabled: exam.status === 'ARCHIVED', onClick: () => setStatusDialogTarget({ exam, targetStatus: 'ARCHIVED' }) },
+          { divider: true } as { label: string; divider: true },
+          { label: 'Delete', icon: <Icon.Trash className="h-4 w-4" />, danger: true, onClick: () => { setDeleteConflict409(false); setDeleteDialogTarget(exam); } },
+        ]}
+      /></div>;
+    } },
+  ];
+  const tableRows = exams.map(exam => ({ ...exam, id: exam.examId }));
+  const filtersActive = Boolean(searchTerm || selectedCourse || selectedModule || selectedStatus !== 'all');
+  const clearFilters = () => {
+    setSearchTerm('');
+    setSelectedCourse('');
+    setSelectedModule('');
+    setSelectedStatus('all');
+    setPage(0);
+    updateUrlParams({ search: '', courseId: '', moduleId: '', status: 'all', page: 0 });
   };
-
-  const toggleSelectRow = (examId: number) => {
-    setSelectedExamIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(examId)) next.delete(examId);
-      else next.add(examId);
-      return next;
-    });
-  };
-
-  const startShowing = totalElements === 0 ? 0 : page * 15 + 1;
-  const endShowing = Math.min((page + 1) * 15, totalElements);
 
   return (
     <div className="p-8 space-y-5">
@@ -560,333 +582,99 @@ export function ExamListPage() {
         </button>
       </div>
 
-      <div className="card overflow-hidden">
-        <div className="flex flex-wrap items-center gap-3 px-4 py-3 border-b border-line-soft">
-          <SearchInput
-            className="w-full sm:w-60"
-            placeholder="Search exams…"
-            value={searchTerm}
-            onChange={(e) => handleSearchChange(e.target.value)}
-          />
-
+      <div className="card space-y-3 px-4 py-4">
+        <SearchInput
+          className="w-full"
+          placeholder="Search exams…"
+          value={searchTerm}
+          onChange={e => handleSearchChange(e.target.value)}
+          aria-label="Search exams"
+        />
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <Select
-            className="w-full sm:w-52"
+            label="Course"
             value={selectedCourse}
             onChange={handleCourseChange}
-            options={[
-              { label: "All Courses", value: "" },
-              ...courses.map((c) => ({
-                label: c.title,
-                value: String(c.courseId),
-              })),
-            ]}
+            options={[{ label: 'All courses', value: '' }, ...courses.map(course => ({ label: course.title, value: String(course.courseId) }))]}
           />
-
           <Select
-            className="w-full sm:w-48"
+            label="Module"
             value={selectedModule}
             disabled={!selectedCourse}
             onChange={handleModuleChange}
-            options={[
-              { label: "All Modules", value: "" },
-              ...modules.map((m) => ({
-                label: m.title,
-                value: String(m.moduleId),
-              })),
-            ]}
+            options={[{ label: selectedCourse ? 'All modules' : 'Select a course first', value: '' }, ...modules.map(module => ({ label: module.title, value: String(module.moduleId) }))]}
           />
-
           <Select
-            className="w-full sm:w-36"
+            label="Status"
             value={selectedStatus}
             onChange={handleStatusChange}
-            options={[
-              { label: "All Status", value: "all" },
-              { label: "Draft", value: "DRAFT" },
-              { label: "Published", value: "PUBLISHED" },
-              { label: "Archived", value: "ARCHIVED" },
-            ]}
+            options={[{ label: 'All statuses', value: 'all' }, { label: 'Draft', value: 'DRAFT' }, { label: 'Published', value: 'PUBLISHED' }, { label: 'Archived', value: 'ARCHIVED' }]}
           />
-
-          <div className="flex-1" />
-          <Badge variant="default" className="font-semibold text-xs">
-            {totalElements} exams
-          </Badge>
         </div>
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          {filtersActive && <button type="button" onClick={clearFilters} className="inline-flex items-center gap-1 whitespace-nowrap text-sm font-medium text-brand-ink hover:underline"><Icon.X className="h-3.5 w-3.5" />Clear filters</button>}
+          <Badge variant="default" className="font-semibold text-xs">{totalElements} exams</Badge>
+        </div>
+      </div>
 
+      <div className="card overflow-hidden">
         {error ? (
-          <div className="p-12 text-center space-y-3">
-            <p className="text-sm text-danger font-medium">
-              Exam list could not be loaded. See the notification for details.
-            </p>
-            <Button size="sm" variant="outline" onClick={fetchExams}>
-              Retry
-            </Button>
+          <div className="space-y-3 p-12 text-center">
+            <p className="text-sm font-medium text-danger">Exam list could not be loaded. See the notification for details.</p>
+            <Button size="sm" variant="outline" onClick={fetchExams}>Retry</Button>
           </div>
         ) : loading ? (
-          <div className="p-6 space-y-4">
+          <div className="space-y-4 p-6">
             <Skeleton className="h-8 w-full rounded" />
             <Skeleton className="h-8 w-full rounded" />
             <Skeleton className="h-8 w-full rounded" />
             <Skeleton className="h-8 w-full rounded" />
           </div>
         ) : exams.length === 0 ? (
-          <div className="p-16 text-center space-y-3">
-            <Icon.ClipboardList className="w-10 h-10 mx-auto text-content-subtle" />
-            <h4 className="text-base font-semibold text-content">
-              No exams found
-            </h4>
-            <p className="text-xs text-content-subtle max-w-sm mx-auto">
-              There are no exams matching your search criteria. Create a quiz or
-              assessment to get started.
-            </p>
-            <div className="pt-2 flex justify-center">
-              {activeTab === "ASSESSMENT" ? (
-                <Button
-                  onClick={() => handleNewExam("ESSAY")}
-                  icon={<Icon.Plus className="w-4 h-4" />}
-                >
-                  New Assessment
-                </Button>
-              ) : activeTab === "CODE" ? (
-                <Button
-                  onClick={() => handleNewExam("CODE")}
-                  icon={<Icon.Plus className="w-4 h-4" />}
-                >
-                  New Code Exam
-                </Button>
-              ) : (
-                <Button
-                  onClick={() => handleNewExam("QUIZ")}
-                  icon={<Icon.Plus className="w-4 h-4" />}
-                >
-                  New Exam
-                </Button>
-              )}
+          <div className="space-y-3 p-16 text-center">
+            <Icon.ClipboardList className="mx-auto h-10 w-10 text-content-subtle" />
+            <h4 className="text-base font-semibold text-content">No exams found</h4>
+            <p className="mx-auto max-w-sm text-xs text-content-subtle">There are no exams matching your search criteria. Create a quiz or assessment to get started.</p>
+            <div className="flex justify-center pt-2">
+              {activeTab === 'ASSESSMENT' ? <Button onClick={() => handleNewExam('ESSAY')} icon={<Icon.Plus className="h-4 w-4" />}>New Assessment</Button>
+                : activeTab === 'CODE' ? <Button onClick={() => handleNewExam('CODE')} icon={<Icon.Plus className="h-4 w-4" />}>New Code Exam</Button>
+                  : <Button onClick={() => handleNewExam('QUIZ')} icon={<Icon.Plus className="h-4 w-4" />}>New Exam</Button>}
             </div>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse">
-              <thead>
-                <tr className="border-b border-line-soft text-left text-xs font-semibold text-content-soft uppercase tracking-wide">
-                  <th className="w-10 px-3 py-3">
-                    <input
-                      type="checkbox"
-                      checked={isAllChecked}
-                      ref={(el) => {
-                        if (el)
-                          el.indeterminate = isSomeChecked && !isAllChecked;
-                      }}
-                      onChange={toggleSelectAll}
-                      className="cursor-pointer"
-                    />
-                  </th>
-                  <th className="px-3 py-3">Exam Title</th>
-                  <th className="px-3 py-3">Course</th>
-                  <th className="px-3 py-3">Module</th>
-                  <th className="px-3 py-3">Kind</th>
-                  <th className="px-3 py-3 text-center">Questions</th>
-                  <th className="px-3 py-3 text-center">Max Score</th>
-                  <th className="px-3 py-3 text-center">Duration</th>
-                  <th className="px-3 py-3 text-center">Status</th>
-                  <th className="px-3 py-3">Created</th>
-                  <th className="w-16 px-3 py-3 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-line-faint text-sm">
-                {exams.map((exam) => {
-                  const isChecked = selectedExamIds.has(exam.examId);
-                  return (
-                    <tr
-                      key={exam.examId}
-                      onClick={() => handleEditExam(exam)}
-                      className={`cursor-pointer hover:bg-surface-hover transition-colors ${
-                        isChecked ? "bg-primary-light/40" : ""
-                      }`}
-                    >
-                      <td
-                        className="px-3 py-3"
-                        onClick={(event) => event.stopPropagation()}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={() => toggleSelectRow(exam.examId)}
-                          className="cursor-pointer"
-                        />
-                      </td>
-                      <td
-                        className="px-3 py-3 font-semibold text-content max-w-xs truncate"
-                        title={exam.title}
-                      >
-                        {exam.title}
-                      </td>
-                      <td
-                        className="px-3 py-3 text-content-secondary max-w-[150px] truncate"
-                        title={exam.courseName}
-                      >
-                        {exam.courseName}
-                      </td>
-                      <td
-                        className="px-3 py-3 text-content-subtle max-w-[130px] truncate"
-                        title={exam.moduleName || "—"}
-                      >
-                        {exam.moduleName || "—"}
-                      </td>
-                      <td className="px-3 py-3">
-                        <Badge
-                          variant={
-                            exam.examKind === "QUIZ"
-                              ? "purple"
-                              : exam.examKind === "CODE"
-                                ? "warning"
-                                : "default"
-                          }
-                          className="text-2xs"
-                        >
-                          {exam.examKind === "DIAGRAM" || !exam.examKind
-                            ? "ESSAY"
-                            : exam.examKind}
-                        </Badge>
-                      </td>
-                      <td className="px-3 py-3 text-center text-content-secondary font-medium">
-                        {exam.questionCount}
-                      </td>
-                      <td className="px-3 py-3 text-center text-brand-ink font-semibold">
-                        {exam.maxScore ?? exam.totalPoints ?? 0}
-                      </td>
-                      <td className="px-3 py-3 text-center text-content-secondary">
-                        {exam.durationMinutes}m
-                      </td>
-                      <td className="px-3 py-3 text-center">
-                        <Badge
-                          variant={
-                            exam.status === "PUBLISHED"
-                              ? "success"
-                              : exam.status === "ARCHIVED"
-                                ? "default"
-                                : "warning"
-                          }
-                          className="text-2xs"
-                        >
-                          {exam.status.charAt(0) +
-                            exam.status.slice(1).toLowerCase()}
-                        </Badge>
-                      </td>
-                      <td className="px-3 py-3 text-xs text-content-subtle whitespace-nowrap">
-                        {new Date(exam.createdAt).toLocaleDateString()}
-                      </td>
-                      <td
-                        className="px-3 py-3 text-right"
-                        onClick={(event) => event.stopPropagation()}
-                      >
-                        <Dropdown
-                          trigger={
-                            <button className="p-1.5 hover:bg-surface-hover rounded-[6px] text-content-subtle hover:text-content cursor-pointer">
-                              <Icon.MoreHorizontal className="w-4 h-4" />
-                            </button>
-                          }
-                          items={[
-                            {
-                              label: "Edit",
-                              icon: <Icon.Edit className="w-4 h-4" />,
-                              onClick: () => handleEditExam(exam),
-                            },
-                            {
-                              label:
-                                exam.status === "PUBLISHED"
-                                  ? "Unpublish to Draft"
-                                  : "Publish",
-                              icon:
-                                exam.status === "PUBLISHED" ? (
-                                  <Icon.EyeOff className="w-4 h-4" />
-                                ) : (
-                                  <Icon.CheckCircle className="w-4 h-4" />
-                                ),
-                              disabled:
-                                exam.status !== "PUBLISHED" &&
-                                exam.questionCount === 0 &&
-                                exam.generationType === "STATIC",
-                              onClick: () =>
-                                setStatusDialogTarget({
-                                  exam,
-                                  targetStatus:
-                                    exam.status === "PUBLISHED"
-                                      ? "DRAFT"
-                                      : "PUBLISHED",
-                                }),
-                            },
-                            {
-                              label: "Archive",
-                              icon: <Icon.Archive className="w-4 h-4" />,
-                              disabled: exam.status === "ARCHIVED",
-                              onClick: () =>
-                                setStatusDialogTarget({
-                                  exam,
-                                  targetStatus: "ARCHIVED",
-                                }),
-                            },
-                            { divider: true } as {
-                              label: string;
-                              divider: true;
-                            },
-                            {
-                              label: "Delete",
-                              icon: <Icon.Trash className="w-4 h-4" />,
-                              danger: true,
-                              onClick: () => {
-                                setDeleteConflict409(false);
-                                setDeleteDialogTarget(exam);
-                              },
-                            },
-                          ]}
-                        />
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <Table
+            columns={columns}
+            data={tableRows}
+            selectable
+            selectedKeys={new Set([...selectedExamIds].map(String))}
+            onSelectionChange={keys => setSelectedExamIds(new Set([...keys].map(Number)))}
+            onRowClick={row => handleEditExam(row as unknown as ExamListItem)}
+            isRowActive={row => selectedExamIds.has(Number(row.examId))}
+            perPage={15}
+            unit="exams"
+            serverPagination={{ page: page + 1, total: totalElements, onChange: value => { const nextPage = value - 1; setPage(nextPage); updateUrlParams({ page: nextPage }); } }}
+          />
         )}
-
-        <div className="flex items-center justify-between px-4 py-3 border-t border-line-soft text-xs text-content-subtle">
-          <span>
-            Showing {startShowing}–{endShowing} of {totalElements}
-          </span>
-          <div className="flex items-center gap-1.5">
-            <button
-              onClick={() => {
-                const prevPage = Math.max(0, page - 1);
-                setPage(prevPage);
-                updateUrlParams({ page: prevPage });
-              }}
-              disabled={page === 0 || loading}
-              className="px-3 py-1 rounded border border-line hover:bg-surface-hover disabled:opacity-40 cursor-pointer"
-            >
-              Previous
-            </button>
-            <span className="px-2">
-              Page {page + 1} of {totalPages}
-            </span>
-            <button
-              onClick={() => {
-                const nextPage = Math.min(totalPages - 1, page + 1);
-                setPage(nextPage);
-                updateUrlParams({ page: nextPage });
-              }}
-              disabled={page >= totalPages - 1 || loading}
-              className="px-3 py-1 rounded border border-line hover:bg-surface-hover disabled:opacity-40 cursor-pointer"
-            >
-              Next
-            </button>
-          </div>
-        </div>
       </div>
+      <ConfirmDialog
+        open={statusDialogTarget !== null && statusWarnings.length === 0}
+        onClose={() => setStatusDialogTarget(null)}
+        onConfirm={handleApplyStatusChange}
+        loading={statusUpdating}
+        title={`Change status to ${statusDialogTarget?.targetStatus}?`}
+        description={
+          <>
+            <strong className="text-content">"{statusDialogTarget?.exam.title}"</strong>{" "}
+            will be moved to{" "}
+            <strong className="text-brand-ink">{statusDialogTarget?.targetStatus}</strong>.
+          </>
+        }
+        confirmLabel="Confirm"
+      />
 
+      {/* After a publish that went through with warnings — information only. */}
       <Modal
-        open={statusDialogTarget !== null}
+        open={statusDialogTarget !== null && statusWarnings.length > 0}
         onClose={() => {
           setStatusDialogTarget(null);
           setStatusWarnings([]);
@@ -894,174 +682,82 @@ export function ExamListPage() {
         title={`Confirm ${statusDialogTarget?.targetStatus}`}
         size="sm"
         footer={
-          <div className="flex items-center justify-end gap-2 w-full">
-            <Button
-              variant="outline"
-              onClick={() => {
-                setStatusDialogTarget(null);
-                setStatusWarnings([]);
-              }}
-              disabled={statusUpdating}
-            >
-              {statusWarnings.length > 0 ? "Close" : "Cancel"}
-            </Button>
-            {statusWarnings.length === 0 && (
-              <Button
-                onClick={handleApplyStatusChange}
-                loading={statusUpdating}
-                icon={<Icon.Check className="w-4 h-4" />}
-              >
-                Confirm
-              </Button>
-            )}
-          </div>
+          <Button
+            variant="outline"
+            onClick={() => {
+              setStatusDialogTarget(null);
+              setStatusWarnings([]);
+            }}
+          >
+            Close
+          </Button>
         }
       >
-        <div className="space-y-3 text-sm text-content">
-          <p>
-            Are you sure you want to change the status of{" "}
-            <strong>"{statusDialogTarget?.exam.title}"</strong> to{" "}
-            <strong className="text-brand-ink">
-              {statusDialogTarget?.targetStatus}
-            </strong>
-            ?
+        <div className="p-3 bg-warning-light/40 border border-warning-line rounded-[8px] space-y-1 text-xs text-warning-strong">
+          <p className="font-semibold">
+            Published successfully with warnings:
           </p>
-
-          {statusWarnings.length > 0 && (
-            <div className="p-3 bg-warning-light/40 border border-warning-line rounded-[8px] space-y-1 text-xs text-warning-strong">
-              <p className="font-semibold">
-                Published successfully with warnings:
-              </p>
-              {statusWarnings.map((w, idx) => (
-                <p key={idx}>• {w}</p>
-              ))}
-            </div>
-          )}
+          {statusWarnings.map((w, idx) => (
+            <p key={idx}>• {w}</p>
+          ))}
         </div>
       </Modal>
 
-      <Modal
-        open={deleteDialogTarget !== null}
+      <ConfirmDialog
+        open={deleteDialogTarget !== null && !deleteConflict409}
+        onClose={() => setDeleteDialogTarget(null)}
+        onConfirm={handleDeleteExam}
+        loading={deleting}
+        tone="danger"
+        title="Delete this exam?"
+        description={
+          <>
+            <strong className="text-content">"{deleteDialogTarget?.title}"</strong>{" "}
+            will be permanently deleted. Only drafts with no submissions can be
+            deleted — archive an exam to keep its attempt history.
+          </>
+        }
+        confirmLabel="Delete"
+      />
+
+      <ConfirmDialog
+        open={deleteDialogTarget !== null && deleteConflict409}
         onClose={() => {
           setDeleteDialogTarget(null);
           setDeleteConflict409(false);
         }}
-        title={
-          deleteConflict409 ? "Cannot Delete Active Exam (409)" : "Delete Exam"
-        }
-        size="sm"
-        footer={
-          <div className="flex items-center justify-end gap-2 w-full">
-            <Button
-              variant="outline"
-              onClick={() => {
-                setDeleteDialogTarget(null);
-                setDeleteConflict409(false);
-              }}
-              disabled={deleting}
-            >
-              Cancel
-            </Button>
-            {deleteConflict409 ? (
-              <Button
-                icon={<Icon.Archive className="w-4 h-4" />}
-                onClick={async () => {
-                  if (!deleteDialogTarget) return;
-                  try {
-                    await examService.patchPublishExam(
-                      deleteDialogTarget.examId,
-                      "ARCHIVED",
-                    );
-                  } catch (err: unknown) {
-                    toast.error(
-                      getApiErrorMessage(err, "Failed to archive exam."),
-                    );
-                    return;
-                  }
-                  toast.success("Exam archived successfully.");
-                  setDeleteDialogTarget(null);
-                  setDeleteConflict409(false);
-                  fetchExams();
-                }}
-              >
-                Archive Exam Instead
-              </Button>
-            ) : (
-              <Button
-                variant="danger"
-                onClick={handleDeleteExam}
-                loading={deleting}
-              >
-                Delete Permanently
-              </Button>
-            )}
-          </div>
-        }
-      >
-        <div className="space-y-3 text-sm text-content">
-          {deleteConflict409 ? (
-            <p className="text-danger font-medium text-xs leading-relaxed">
-              This exam cannot be permanently deleted because students have
-              already submitted attempts for it. Please Archive the exam instead
-              to preserve student grading histories.
-            </p>
-          ) : (
-            <div className="space-y-2 text-xs text-content-secondary leading-relaxed">
-              <p>
-                Are you sure you want to permanently delete{" "}
-                <strong>"{deleteDialogTarget?.title}"</strong>?
-              </p>
-              <div className="p-2.5 bg-surface-muted rounded-[8px] border border-line space-y-1 text-2xs text-content-subtle">
-                <p>
-                  <strong>Delete:</strong> Permanently removes draft exam with
-                  no test submissions.
-                </p>
-                <p>
-                  <strong>Archive:</strong> Preserves past attempt histories
-                  while hiding exam from new enrollments.
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
-      </Modal>
+        onConfirm={async () => {
+          if (!deleteDialogTarget) return;
+          try {
+            await examService.patchPublishExam(
+              deleteDialogTarget.examId,
+              "ARCHIVED",
+            );
+          } catch (err: unknown) {
+            toast.error(getApiErrorMessage(err, "Failed to archive exam."));
+            return;
+          }
+          toast.success("Exam archived successfully.");
+          setDeleteDialogTarget(null);
+          setDeleteConflict409(false);
+          fetchExams();
+        }}
+        title="This exam can't be deleted"
+        description="Students have already submitted attempts for it. Archive the exam instead to preserve their grading history."
+        confirmLabel="Archive instead"
+      />
 
-      <Modal
+      <ConfirmDialog
         open={bulkDeleteConfirmOpen}
-        onClose={() => !bulkDeleting && setBulkDeleteConfirmOpen(false)}
-        title="Confirm Bulk Delete"
-        size="sm"
-        footer={
-          <div className="flex items-center justify-end gap-2 w-full">
-            <Button
-              variant="outline"
-              onClick={() => setBulkDeleteConfirmOpen(false)}
-              disabled={bulkDeleting}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="danger"
-              onClick={handleBulkDelete}
-              loading={bulkDeleting}
-              disabled={bulkDeleting || selectedExamIds.size === 0}
-            >
-              Delete {selectedExamIds.size} Exam
-              {selectedExamIds.size === 1 ? "" : "s"}
-            </Button>
-          </div>
-        }
-      >
-        <p className="text-sm text-content">
-          Permanently delete the{" "}
-          <strong>
-            {selectedExamIds.size} selected exam
-            {selectedExamIds.size === 1 ? "" : "s"}
-          </strong>
-          ? This action cannot be undone. Exams with student attempts may fail
-          to delete.
-        </p>
-      </Modal>
+        onClose={() => setBulkDeleteConfirmOpen(false)}
+        onConfirm={handleBulkDelete}
+        loading={bulkDeleting}
+        confirmDisabled={selectedExamIds.size === 0}
+        tone="danger"
+        title={`Delete ${selectedExamIds.size} exam${selectedExamIds.size === 1 ? "" : "s"}?`}
+        description="This action cannot be undone. Exams with student attempts may fail to delete."
+        confirmLabel="Delete"
+      />
 
       <Modal
         open={bulkDeleteSummary !== null}

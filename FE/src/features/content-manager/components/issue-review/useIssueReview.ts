@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { fromDetail, type QuestionDraft } from '@/features/question/model';
+import { useToast } from '@/components/ui/ToastHost';
 import { questionIssueService } from '@/services/questionIssue.service';
 import { getApiErrorMessage } from '@/utils/apiError';
 import { buildResolution, toQuestionDetail, unwrapList, type ResolutionType, type ReviewTabId } from './issueReviewModel';
@@ -9,6 +10,7 @@ import { buildResolution, toQuestionDetail, unwrapList, type ResolutionType, typ
  * callback that reloads its queue after a ticket changes.
  */
 export function useIssueReview({ userId, onChanged }: { userId?: number | string; onChanged: () => Promise<unknown> | void }) {
+  const toast = useToast();
   const [row, setRow] = useState<any>(null);
   const [detail, setDetail] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -137,7 +139,11 @@ export function useIssueReview({ userId, onChanged }: { userId?: number | string
     return ok;
   }, [act, startNote]);
 
-  const reject = useCallback(() => act(ticket => questionIssueService.status(ticket.issueId, 'REJECTED', rejectReason.trim()), 'Could not reject this ticket.', 'Ticket rejected.'), [act, rejectReason]);
+  const reject = useCallback(async () => {
+    const ok = await act(ticket => questionIssueService.status(ticket.issueId, 'REJECTED', rejectReason.trim()), 'Could not reject this ticket.', 'Ticket rejected.');
+    if (ok) toast.success('Ticket rejected.');
+    return ok;
+  }, [act, rejectReason, toast]);
 
   const markDuplicate = useCallback(() => act(ticket => questionIssueService.duplicate(ticket.issueId, Number(duplicateId), duplicateNote.trim()), 'Could not mark this ticket as a duplicate.', 'Ticket marked as a duplicate.'), [act, duplicateId, duplicateNote]);
 
@@ -155,17 +161,19 @@ export function useIssueReview({ userId, onChanged }: { userId?: number | string
     return false;
   }, [detail, draft, resolutionType]);
 
-  const submitResolution = useCallback(() => {
-    if (!draft) return Promise.resolve(false);
+  const submitResolution = useCallback(async () => {
+    if (!draft) return false;
     const result = buildResolution(resolutionType, draft, detail?.courseId ?? 0);
-    if (!result.ok) return Promise.resolve(false);
-    return act(ticket => questionIssueService.resolve(ticket.issueId, {
+    if (!result.ok) return false;
+    const ok = await act(ticket => questionIssueService.resolve(ticket.issueId, {
       resolutionType,
       resolutionNote: resolutionNote.trim(),
       expectedLockVersion: ticket.question?.lockVersion ?? ticket.questionLockVersion,
       changes: result.changes,
     }), 'Could not resolve this ticket.', 'Ticket resolved.');
-  }, [act, detail?.courseId, draft, resolutionNote, resolutionType]);
+    if (ok) toast.success('Ticket resolved.');
+    return ok;
+  }, [act, detail?.courseId, draft, resolutionNote, resolutionType, toast]);
 
   /** Switching the correction type; `discard` throws away edits made for the previous type. */
   const selectResolution = useCallback((type: ResolutionType, discard = false) => {

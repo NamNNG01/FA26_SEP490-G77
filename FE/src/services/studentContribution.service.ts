@@ -1,6 +1,7 @@
 import { api } from './api';
 import type { ApiResponse } from '@/auth/authContext';
 import type { StudentPage } from './studentLearning.service';
+import type { CodeQuestionConfig, CodeTestCaseDto } from './question.service';
 
 export type ContributionType = 'question' | 'tip' | 'document';
 export type ContributionStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED';
@@ -18,10 +19,11 @@ export interface ContributionOption {
   key?: string;
   optionText: string;
   isCorrect?: boolean | null;
+  explanation?: string | null;
   orderIndex?: number;
 }
 
-export type ContributionQuestionType = 'SINGLE_CHOICE' | 'MULTIPLE_CHOICE' | 'TRUE_FALSE' | 'MATCHING' | 'FILL_BLANK' | 'ESSAY' | 'DIAGRAM' | 'ORDERING';
+export type ContributionQuestionType = 'SINGLE_CHOICE' | 'MULTIPLE_CHOICE' | 'TRUE_FALSE' | 'MATCHING' | 'FILL_BLANK' | 'ESSAY' | 'DIAGRAM' | 'DIAGRAM_ESSAY' | 'CODE' | 'ORDERING';
 
 export interface ContributionDetail extends ContributionItem {
   courseId?: number;
@@ -35,6 +37,8 @@ export interface ContributionDetail extends ContributionItem {
   answerKey?: unknown;
   questionMetadata?: Record<string, unknown> | null;
   essayGradingRubric?: unknown;
+  codeConfig?: CodeQuestionConfig | null;
+  testCases?: CodeTestCaseDto[] | null;
   explanation?: string;
   sourceReference?: string | null;
   title?: string;
@@ -44,6 +48,7 @@ export interface ContributionDetail extends ContributionItem {
 
 export interface QuestionContributionBody {
   courseId: number;
+  moduleId: number;
   questionType: ContributionQuestionType;
   difficulty: 'EASY' | 'MEDIUM' | 'HARD';
   content: string;
@@ -52,6 +57,8 @@ export interface QuestionContributionBody {
   correctOrder?: unknown[];
   questionMetadata?: Record<string, unknown> | null;
   essayGradingRubric?: unknown;
+  codeConfig?: CodeQuestionConfig | null;
+  testCases?: CodeTestCaseDto[] | null;
   explanation: string;
 }
 
@@ -76,6 +83,15 @@ export const studentContributionService = {
   async getMine(params: { type?: ContributionType; status?: ContributionStatus; page?: number; size?: number }) {
     const res = await api.get<ApiResponse<StudentPage<ContributionItem>>>(`/student/contributions?${query(params)}`);
     return { ...res.data, content: (res.data.content ?? []).map(normalizeContributionItem) };
+  },
+
+  async getAllMine(params: { type?: ContributionType; status?: ContributionStatus }) {
+    const all: ContributionItem[] = [];
+    for (let page = 0; ; page += 1) {
+      const result = await studentContributionService.getMine({ ...params, page, size: 100 });
+      all.push(...result.content);
+      if (result.last || result.content.length === 0 || page + 1 >= result.totalPages) return all;
+    }
   },
 
   async getDetail(id: number | string) {

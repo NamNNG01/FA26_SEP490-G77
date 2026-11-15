@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Modal } from "@/components/ui/Modal";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Spinner } from "@/components/ui/Spinner";
 import { Switch } from "@/components/ui/Switch";
 import { Table, type TableColumn } from "@/components/ui/Table";
@@ -993,40 +994,24 @@ export function DiscountsPage() {
         )}
       </Modal>
 
-      <Modal
+      <ConfirmDialog
         open={!!changingStatus}
         onClose={() => setChangingStatus(null)}
+        onConfirm={() => void confirmStatus()}
+        loading={working}
+        tone={changingStatus?.isActive ? "danger" : "warning"}
         title={
           changingStatus?.isActive
             ? "Deactivate discount?"
             : "Activate discount?"
         }
-        footer={
-          <>
-            <Button
-              variant="outline"
-              disabled={working}
-              onClick={() => setChangingStatus(null)}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant={changingStatus?.isActive ? "danger" : "primary"}
-              loading={working}
-              disabled={working}
-              onClick={() => void confirmStatus()}
-            >
-              {changingStatus?.isActive ? "Deactivate" : "Activate"}
-            </Button>
-          </>
-        }
-      >
-        <p className="text-sm text-content-secondary">
-          {changingStatus?.isActive
+        description={
+          changingStatus?.isActive
             ? `Deactivating ${changingStatus?.code} will prevent redemption and block reward payments in contests that use it.`
-            : `Activate ${changingStatus?.code} for future use?`}
-        </p>
-      </Modal>
+            : `Activate ${changingStatus?.code} for future use?`
+        }
+        confirmLabel={changingStatus?.isActive ? "Deactivate" : "Activate"}
+      />
       <Modal
         open={affected !== null}
         onClose={() => setAffected(null)}
@@ -1055,36 +1040,21 @@ export function DiscountsPage() {
           </p>
         )}
       </Modal>
-      <Modal
+      <ConfirmDialog
         open={!!deleting}
         onClose={() => setDeleting(null)}
+        onConfirm={() => void confirmDelete()}
+        loading={working}
+        tone="danger"
         title="Delete discount?"
-        footer={
+        description={
           <>
-            <Button
-              variant="outline"
-              disabled={working}
-              onClick={() => setDeleting(null)}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="danger"
-              loading={working}
-              disabled={working}
-              onClick={() => void confirmDelete()}
-            >
-              Delete
-            </Button>
+            Delete <strong>{deleting?.code}</strong>? Discounts with active
+            contest usage or assigned vouchers cannot be deleted.
           </>
         }
-      >
-        <p className="text-sm text-content-secondary">
-          Delete <strong>{deleting?.code}</strong>? Discounts with active
-          contest usage or assigned vouchers cannot be deleted; the API will
-          explain the conflict.
-        </p>
-      </Modal>
+        confirmLabel="Delete"
+      />
     </div>
   );
 }

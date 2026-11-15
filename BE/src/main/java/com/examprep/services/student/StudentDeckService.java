@@ -53,6 +53,7 @@ public class StudentDeckService {
     private final ObjectMapper json;
     private final FlashcardPdfWriter pdfWriter;
     private final jakarta.validation.Validator validator;
+    private final DeckBookmarkRepository bookmarks;
 
     // ------------------------------------------------------------------ FC-01..03
 
@@ -106,7 +107,6 @@ public class StudentDeckService {
 
     // ------------------------------------------------------------------ FC-13
 
-    /** MINE = the caller's own decks; COURSE = decks of the courses the caller is ACTIVE-enrolled in (not their own). */
     @Transactional(readOnly = true)
     public PageResponse<DeckListItem> list(Long userId, String scope, Long courseId, String search, String mode, int page, int size) {
         if (page < 0 || size < 1 || size > 100 || (long) page * size > Integer.MAX_VALUE) {
@@ -123,7 +123,8 @@ public class StudentDeckService {
                 if (courseId != null) enrolledCourse(userId, courseId);
                 yield decks.findEnrolledCourseDecks(userId, courseId, modeFilter, pattern, pageable);
             }
-            default -> throw new BadRequestException("scope must be MINE or COURSE.");
+            case "BOOKMARKED" -> decks.findBookmarkedDecks(userId, modeFilter, pattern, pageable);
+            default -> throw new BadRequestException("scope must be MINE, COURSE, or BOOKMARKED.");
         };
         List<Long> ids = result.getContent().stream().map(Deck::getDeckId).toList();
         if (ids.isEmpty()) return PageResponse.of(result, List.of());
@@ -168,6 +169,7 @@ public class StudentDeckService {
         Deck deck = readableDeck(userId, deckId);
         boolean owner = deck.getUser().getUserId().equals(userId);
         List<Long> id = List.of(deckId);
+        boolean isBookmarked = bookmarks.existsByDeck_DeckIdAndUser_UserId(deckId, userId);
         return new DeckDetail(deck.getDeckId(), deck.getTitle(), deck.getDescription(), deck.getMode(),
                 deck.getCourse() == null ? null : deck.getCourse().getCourseId(),
                 deck.getCourse() == null ? null : deck.getCourse().getTitle(), deck.getUser().getUserId(),
@@ -176,7 +178,7 @@ public class StudentDeckService {
                 byDeck(progress.countStarredByDecks(userId, id)).getOrDefault(deckId, 0L), deck.getVisibility(),
                 deck.getReviewStatus(), owner ? deck.getReviewNote() : null, deck.getSubmittedAt(), deck.getCreatedAt(),
                 deck.getModule() == null ? null : deck.getModule().getModuleId(),
-                deck.getModule() == null ? null : deck.getModule().getTitle());
+                deck.getModule() == null ? null : deck.getModule().getTitle(), isBookmarked);
     }
 
     // ------------------------------------------------------------------ FC-04..06
@@ -352,6 +354,79 @@ public class StudentDeckService {
         } catch (java.io.IOException ex) {
             return json.createObjectNode();
         }
+    }
+
+    // ------------------------------------------------------------------ Bookmark & Copy Deck
+
+    public StudentDeckDtos.BookmarkResponse toggleBookmark(Long userId, Long deckId) {
+        Deck deck = readableDeck(userId, deckId);
+        boolean isBookmarked = bookmarks.existsByDeck_DeckIdAndUser_UserId(deckId, userId);
+
+        if (isBookmarked) {
+            bookmarks.deleteByDeck_DeckIdAndUser_UserId(deckId, userId);
+        } else {
+            DeckBookmark bookmark = DeckBookmark.builder()
+                    .user(users.getReferenceById(userId))
+                    .deck(deck)
+                    .build();
+            bookmarks.save(bookmark);
+        }
+        return new StudentDeckDtos.BookmarkResponse(deckId, !isBookmarked);
+    }
+
+    public StudentDeckDtos.CopyDeckResponse copyDeck(Long userId, Long deckId, StudentDeckDtos.CopyDeckRequest request) {
+        Deck sourceDeck = readableDeck(userId, deckId);
+
+        // Verify it's a readable deck (not PENDING_REVIEW for student decks)
+        boolean studentDeck = User.ROLE_STUDENT.equals(sourceDeck.getUser().getRoleName());
+        if (studentDeck && !Deck.VISIBILITY_PUBLIC.equals(sourceDeck.getVisibility())) {
+            throw new ForbiddenException("Cannot copy this deck.");
+        }
+
+        String newTitle = request.newTitle().strip();
+
+        // Validate title uniqueness for personal deck (no course)
+        long titleCount = decks.countByOwnerWithoutCourseAndTitle(userId, newTitle, -1L);
+        if (titleCount > 0) {
+            throw new ResourceConflictException("A deck with this title already exists in your personal library.");
+        }
+
+        // Create new deck (private, no course)
+        Deck newDeck = decks.saveAndFlush(Deck.builder()
+                .user(users.getReferenceById(userId))
+                .course(null)
+                .module(null)
+                .title(newTitle)
+                .description(sourceDeck.getDescription())
+                .mode(sourceDeck.getMode())
+                .isPublic(false)
+                .visibility(Deck.VISIBILITY_PRIVATE)
+                .reviewStatus("NONE")
+                .build());
+
+        // Copy all flashcards from source deck
+        List<Flashcard> sourceCards = cards.findByDeckDeckIdOrderByPositionAscCardIdAsc(deckId);
+        List<Flashcard> copiedCards = new java.util.ArrayList<>();
+        for (Flashcard sourceCard : sourceCards) {
+            Flashcard newCard = Flashcard.builder()
+                    .deck(newDeck)
+                    .position(sourceCard.getPosition())
+                    .frontText(sourceCard.getFrontText())
+                    .backText(sourceCard.getBackText())
+                    .frontImageUrl(sourceCard.getFrontImageUrl())
+                    .backImageUrl(sourceCard.getBackImageUrl())
+                    .codeLanguage(sourceCard.getCodeLanguage())
+                    .codeBody(sourceCard.getCodeBody())
+                    .sourceQuestionId(sourceCard.getSourceQuestionId())
+                    .build();
+            copiedCards.add(newCard);
+        }
+        if (!copiedCards.isEmpty()) {
+            cards.saveAllAndFlush(copiedCards);
+        }
+
+        return new StudentDeckDtos.CopyDeckResponse(deckId, newDeck.getDeckId(), newTitle,
+                "Deck copied successfully to your personal library.");
     }
 
     // ------------------------------------------------------------------ access, shared with study/import/FC-12

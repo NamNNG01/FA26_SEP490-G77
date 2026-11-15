@@ -3,6 +3,7 @@ package com.examprep.services.admin;
 import com.examprep.dto.AdminDiscountDtos.*;
 import com.examprep.entities.ContestReward;
 import com.examprep.entities.Discount;
+import com.examprep.entities.User;
 import com.examprep.entities.UserDiscount;
 import com.examprep.dto.ResponseCode;
 import com.examprep.repositories.ContestRewardRepository;
@@ -280,36 +281,24 @@ public class AdminDiscountService {
         discountRepository.findById(id).filter(x -> x.getDeletedAt() == null)
                 .orElseThrow(() -> ContestRules.error(ResponseCode.RESOURCE_NOT_FOUND, "DISCOUNT_NOT_FOUND", "Discount not found"));
 
-        String kw = (keyword != null && !keyword.isBlank()) ? keyword.trim().toLowerCase() : null;
+        String kw = (keyword != null && !keyword.isBlank()) ? keyword.trim() : null;
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "assignedAt"));
 
-        List<UserDiscount> all = userDiscountRepository.findAll();
-        List<AssignmentItem> filtered = new ArrayList<>();
-        for (UserDiscount ud : all) {
-            if (!ud.getDiscount().getDiscountId().equals(id)) continue;
-            if (isUsed != null && !isUsed.equals(ud.getIsUsed())) continue;
-            var u = ud.getUser();
-            if (kw != null) {
-                boolean matchName = u.getFullName() != null && u.getFullName().toLowerCase().contains(kw);
-                boolean matchEmail = u.getEmail() != null && u.getEmail().toLowerCase().contains(kw);
-                if (!matchName && !matchEmail) continue;
-            }
+        // Filter and pagination are now handled by repository query
+        Page<UserDiscount> userDiscounts = userDiscountRepository.findByDiscountIdWithFilters(id, isUsed, kw, pageable);
+
+        return userDiscounts.map(ud -> {
+            User u = ud.getUser();
             SourceRef source = ud.getSourceType() != null ? new SourceRef(ud.getSourceType(), ud.getSourceId(), null) : null;
-            filtered.add(new AssignmentItem(
+            return new AssignmentItem(
                     ud.getUserDiscountId(),
                     new UserRef(u.getUserId(), u.getFullName(), u.getEmail()),
                     ud.getIsUsed(),
                     ud.getAssignedAt(),
                     ud.getUsedAt(),
                     source
-            ));
-        }
-
-        int start = (int) pageable.getOffset();
-        int end = Math.min((start + pageable.getPageSize()), filtered.size());
-        List<AssignmentItem> pageContent = start > filtered.size() ? List.of() : filtered.subList(start, end);
-
-        return new org.springframework.data.domain.PageImpl<>(pageContent, pageable, filtered.size());
+            );
+        });
     }
 
     private void validateRequest(DiscountWriteRequest req, Discount existing) {

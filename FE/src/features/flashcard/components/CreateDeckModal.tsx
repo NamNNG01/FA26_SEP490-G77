@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Alert } from '@/components/ui/Alert';
 import { useToast } from '@/components/ui/ToastHost';
 import { Icon } from '@/assets/icons';
@@ -200,22 +201,16 @@ export function CreateDeckModal({ onClose, onCreated, defaultCourseId }: {
     )}
 
     {/* Its own dialog over the form, so the form's buttons never change under the cursor. */}
-    <Modal open={confirmDiscard} onClose={() => setConfirmDiscard(false)} title="Discard this new deck?" size="sm"
-      footer={
-        <>
-          <Button variant="outline" onClick={() => setConfirmDiscard(false)}>Keep Editing</Button>
-          <Button variant="danger" onClick={onClose}>Discard</Button>
-        </>
-      }>
-      <div className="flex items-start gap-3">
-        <span className="w-9 h-9 rounded-full bg-warning-light flex items-center justify-center flex-shrink-0">
-          <Icon.AlertCircle className="w-5 h-5 text-warning" />
-        </span>
-        <p className="text-sm text-content-secondary">
-          The deck hasn’t been created yet. Everything you entered{cards.length > 0 ? ` — including ${cards.length} card${cards.length === 1 ? '' : 's'} —` : ''} will be lost.
-        </p>
-      </div>
-    </Modal>
+    <ConfirmDialog
+      open={confirmDiscard}
+      onClose={() => setConfirmDiscard(false)}
+      onConfirm={onClose}
+      tone="danger"
+      title="Discard this new deck?"
+      description={`The deck hasn’t been created yet. Everything you entered${cards.length > 0 ? ` — including ${cards.length} card${cards.length === 1 ? '' : 's'} —` : ''} will be lost.`}
+      cancelLabel="Keep editing"
+      confirmLabel="Discard"
+    />
     </>
   );
 }

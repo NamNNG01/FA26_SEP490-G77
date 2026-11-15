@@ -37,4 +37,19 @@ public interface UserDiscountRepository extends JpaRepository<UserDiscount, Long
                                             @Param("status") String status,
                                             @Param("now") Instant now,
                                             Pageable pageable);
+
+    /**
+     * API 19: Find assignments for a specific discount with filtering and pagination
+     * Moved filter logic to query for better performance
+     */
+    @Query("SELECT ud FROM UserDiscount ud JOIN ud.user u " +
+           "WHERE ud.discount.discountId = :discountId " +
+           "AND (:isUsed IS NULL OR ud.isUsed = :isUsed) " +
+           "AND (:keyword IS NULL OR LOWER(u.fullName) LIKE CONCAT('%', LOWER(:keyword), '%') " +
+           "OR LOWER(u.email) LIKE CONCAT('%', LOWER(:keyword), '%')) " +
+           "ORDER BY ud.assignedAt DESC")
+    Page<UserDiscount> findByDiscountIdWithFilters(@Param("discountId") Long discountId,
+                                                    @Param("isUsed") Boolean isUsed,
+                                                    @Param("keyword") String keyword,
+                                                    Pageable pageable);
 }

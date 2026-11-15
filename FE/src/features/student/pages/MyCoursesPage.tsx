@@ -13,6 +13,8 @@ import type { StudentRecentAttempt } from '@/services/dashboard.service';
 import { getApiErrorMessage } from '@/utils/apiError';
 import { studentCourseService, type MyCourse } from '@/services/studentCourse.service';
 import { studentProgressService } from '@/services/studentProgress.service';
+import { cacheGeneration, getCached, setCached } from '@/hooks/useCachedQuery';
+import { courseCacheKey } from '../components/courseProgress';
 import { CardGridSkeleton, CourseThumb, LoadError, PageTitle, STUDENT_PAGE_CLASS, formatDate } from '../components/studentUi';
 import { MaterialQuizModal } from '../components/MaterialQuizModal';
 import { SmartPracticeModal } from '../components/SmartPracticeModal';
@@ -49,13 +51,22 @@ export function MyCoursesPage() {
   const [quizModal, setQuizModal] = useState<'material' | 'smart' | null>(null);
   const [smartCourseId, setSmartCourseId] = useState<number | null>(null);
 
-  const [courses, setCourses] = useState<MyCourse[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Cached for this tab (useCachedQuery's store): back on My Courses, the list and its live percents
+  // show at once, and are read again behind them.
+  const [courses, setCourses] = useState<MyCourse[]>(() => getCached<MyCourse[]>(courseCacheKey.myCourses) ?? []);
+  const [loading, setLoading] = useState(() => getCached(courseCacheKey.myCourses) === undefined);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
+    const cached = getCached<MyCourse[]>(courseCacheKey.myCourses);
+    const gen = cacheGeneration();
+    const update = (next: MyCourse[]) => {
+      // Signed out meanwhile: keep it out of the new session's cache.
+      if (gen === cacheGeneration()) setCached(courseCacheKey.myCourses, next);
+      if (!cancelled) setCourses(next);
+    };
+    setLoading(!cached);
     setError(null);
     studentCourseService
       .getMyCourses({ page: 0, size: MY_COURSES_FETCH_SIZE })
@@ -63,17 +74,24 @@ export function MyCoursesPage() {
         if (cancelled) return;
         // Courses left with EN-04 come back as CANCELLED; they are no longer the student's.
         const owned = res.content.filter(c => c.status !== 'CANCELLED');
-        setCourses(owned);
-        // LP-01 per active course: the bars show the BE's live percent, which LP-01 also stores
-        // on the enrollment so the course page (CL-02) and the dashboard read the same number.
+        // Keep the live percents read last time until LP-01 gives the new ones, so the bars do not
+        // drop to MC-01's stored percent and climb back.
+        const known = new Map((cached ?? []).map(c => [c.courseId, c.progress]));
+        let list = owned.map(c => (known.has(c.courseId) ? { ...c, progress: known.get(c.courseId)! } : c));
+        update(list);
+        // LP-01 per active course: the bars show the BE's live percent.
         studentProgressService.refreshCoursesProgress(
           owned.filter(c => c.status === 'ACTIVE').map(c => c.courseId),
-          (courseId, progress) => setCourses(prev => prev.map(c => (c.courseId === courseId ? { ...c, progress } : c))),
+          (courseId, progress) => {
+            list = list.map(c => (c.courseId === courseId ? { ...c, progress } : c));
+            update(list);
+          },
           () => cancelled,
         );
       })
       .catch(err => {
-        if (!cancelled) setError(getApiErrorMessage(err, 'Failed to load your courses.'));
+        // With a cached list on screen, keep it; the next visit tries again.
+        if (!cancelled && !cached) setError(getApiErrorMessage(err, 'Failed to load your courses.'));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);

@@ -61,9 +61,11 @@ export interface SavedQuestion {
   lastPracticedAt: string | null;
 }
 
+export type ReviewSessionExamType = 'QUIZ' | 'ESSAY' | 'CODE';
+
 export interface ReviewSessionRequest {
   type: 'wrong' | 'bookmarked' | 'all';
-  examType: 'QUIZ' | 'ESSAY';
+  examType: ReviewSessionExamType;
   size: number;
   durationMinutes: number;
   courseId: number;
@@ -78,7 +80,7 @@ export interface SavedQuestionExportParams {
 export interface ReviewSessionResponse {
   examId: number;
   attemptId: number;
-  examType: 'QUIZ' | 'ESSAY';
+  examType: ReviewSessionExamType;
   title: string;
   maxScore: number;
   durationMinutes: number;

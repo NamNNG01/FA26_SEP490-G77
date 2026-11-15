@@ -8,7 +8,6 @@ import { Sidebar } from '@/components/layout/Sidebar';
 import { UserDropdown } from '@/components/layout/UserDropdown';
 import { NotificationBell } from '@/components/layout/NotificationBell';
 import { Icon } from '@/assets/icons';
-import { usePendingIssueCount } from '@/services/questionIssue.service';
 import { useScrollTopOnRouteChange } from '@/hooks/useScrollTopOnRouteChange';
 
 /**
@@ -32,10 +31,7 @@ export function DashboardLayout() {
   const location = useLocation();
   const [collapsed, setCollapsed] = React.useState(false);
   const mainRef = useScrollTopOnRouteChange<HTMLElement>();
-  const pendingIssues = usePendingIssueCount(user?.role === Role.COURSE_MANAGER);
-  const items = getMenuForRole(user?.role).map(item =>
-    item.path === ROUTES.managerQuestionIssues ? { ...item, badge: pendingIssues } : item,
-  );
+  const items = getMenuForRole(user?.role);
 
   // Take Exam is a fullscreen flow — hide header/sidebar for it.
   // Exact match only: '/student/exam-rules' and '/student/exam-result'

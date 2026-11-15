@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Modal } from '@/components/ui/Modal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Spinner } from '@/components/ui/Spinner';
 import { Switch } from '@/components/ui/Switch';
 import { Table, type TableColumn } from '@/components/ui/Table';
@@ -256,16 +257,30 @@ export function SubscriptionPackagesPage() {
       </div>}
     </Modal>
 
-    <Modal open={!!changingStatus} onClose={() => setChangingStatus(null)} title={changingStatus?.isActive ? 'Hide this plan?' : 'Put this plan on sale?'} footer={<><Button variant="outline" disabled={working} onClick={() => setChangingStatus(null)}>Cancel</Button><Button variant={changingStatus?.isActive ? 'danger' : 'primary'} loading={working} disabled={working} onClick={() => void confirmStatus()}>{changingStatus?.isActive ? 'Hide plan' : 'Put on sale'}</Button></>}>
-      <p className="text-sm text-content-secondary">{changingStatus?.isActive ? <>Students can no longer buy <strong>{changingStatus?.planName}</strong>. Current subscribers keep it until it expires.</> : <>Show <strong>{changingStatus?.planName}</strong> on the purchase page again?</>}</p>
-    </Modal>
+    <ConfirmDialog
+      open={!!changingStatus}
+      onClose={() => setChangingStatus(null)}
+      onConfirm={() => void confirmStatus()}
+      loading={working}
+      tone={changingStatus?.isActive ? 'danger' : 'warning'}
+      title={changingStatus?.isActive ? 'Hide this plan?' : 'Put this plan on sale?'}
+      description={changingStatus?.isActive ? <>Students can no longer buy <strong>{changingStatus?.planName}</strong>. Current subscribers keep it until it expires.</> : <>Show <strong>{changingStatus?.planName}</strong> on the purchase page again?</>}
+      confirmLabel={changingStatus?.isActive ? 'Hide plan' : 'Put on sale'}
+    />
 
-    <Modal open={!!deleting} onClose={() => setDeleting(null)} title="Delete plan?" footer={deleteBlocked
-      ? <><Button variant="outline" onClick={() => setDeleting(null)}>Close</Button>{deleting?.isActive && <Button onClick={() => { const p = deleting; setDeleting(null); setChangingStatus(p); }}>Hide plan instead</Button>}</>
-      : <><Button variant="outline" disabled={working} onClick={() => setDeleting(null)}>Cancel</Button><Button variant="danger" loading={working} disabled={working} onClick={() => void confirmDelete()}>Delete</Button></>}>
-      {deleteBlocked
-        ? <p className="text-sm text-content-secondary"><strong>{deleting?.planName}</strong> still has active subscribers, so it can’t be deleted. Hide it from checkout instead — current subscribers keep it until it expires.</p>
-        : <p className="text-sm text-content-secondary">Delete <strong>{deleting?.planName}</strong>? Plans with active subscribers can’t be deleted.</p>}
+    <ConfirmDialog
+      open={!!deleting && !deleteBlocked}
+      onClose={() => setDeleting(null)}
+      onConfirm={() => void confirmDelete()}
+      loading={working}
+      tone="danger"
+      title="Delete plan?"
+      description={<>Delete <strong>{deleting?.planName}</strong>? Plans with active subscribers can’t be deleted.</>}
+      confirmLabel="Delete"
+    />
+
+    <Modal open={!!deleting && deleteBlocked} onClose={() => setDeleting(null)} title="Delete plan?" footer={<><Button variant="outline" onClick={() => setDeleting(null)}>Close</Button>{deleting?.isActive && <Button onClick={() => { const p = deleting; setDeleting(null); setChangingStatus(p); }}>Hide plan instead</Button>}</>}>
+      <p className="text-sm text-content-secondary"><strong>{deleting?.planName}</strong> still has active subscribers, so it can’t be deleted. Hide it from checkout instead — current subscribers keep it until it expires.</p>
     </Modal>
 
     <Modal open={ordering !== null} onClose={() => setOrdering(null)} title="Reorder plans" size="lg" footer={<><Button variant="outline" disabled={working} onClick={() => setOrdering(null)}>Cancel</Button><Button loading={working} disabled={working || !ordering?.length} onClick={() => void saveOrder()}>Save order</Button></>}>

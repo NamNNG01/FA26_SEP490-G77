@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Switch } from "@/components/ui/Switch";
 import { useToast } from "@/components/ui/ToastHost";
 import { Icon } from "@/assets/icons";
@@ -421,37 +422,24 @@ export function CategoriesPage() {
       )}
 
       {deletingCategory && (
-        <Modal
+        <ConfirmDialog
           open={Boolean(deletingCategory)}
           onClose={() => setDeletingCategory(null)}
-          title="Delete Category"
-        >
-          <div className="space-y-4">
-            <p className="text-sm text-content">
-              Are you sure you want to delete category{" "}
+          onConfirm={handleDeleteConfirm}
+          loading={submittingDelete}
+          tone="danger"
+          title="Delete category?"
+          description={
+            <>
+              Category{" "}
               <strong className="text-content font-semibold">
                 {deletingCategory.name}
-              </strong>
-              ?
-            </p>
-            <div className="flex justify-end gap-2 pt-4 border-t border-line-soft">
-              <Button
-                variant="outline"
-                onClick={() => setDeletingCategory(null)}
-                disabled={submittingDelete}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="danger"
-                loading={submittingDelete}
-                onClick={handleDeleteConfirm}
-              >
-                Delete Category
-              </Button>
-            </div>
-          </div>
-        </Modal>
+              </strong>{" "}
+              will be deleted.
+            </>
+          }
+          confirmLabel="Delete"
+        />
       )}
     </div>
   );

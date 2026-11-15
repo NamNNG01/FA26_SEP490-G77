@@ -31,7 +31,10 @@ export type QuestionType =
 
 export type QuestionDifficulty = 'EASY' | 'MEDIUM' | 'HARD';
 
-/** New questions are saved INACTIVE; the only moves are INACTIVE → ACTIVE → ARCHIVED (final). */
+/**
+ * New questions are saved INACTIVE; the only move is INACTIVE → ACTIVE, and publishing is final.
+ * ARCHIVED is no longer reachable from the UI — it stays here for questions archived before.
+ */
 export type QuestionStatus = 'INACTIVE' | 'ACTIVE' | 'ARCHIVED';
 
 /** UI names for the stored statuses: INACTIVE shows as Draft, ACTIVE as Published. */
@@ -39,13 +42,6 @@ export const QUESTION_STATUS_LABELS: Record<QuestionStatus, string> = {
   INACTIVE: 'Draft',
   ACTIVE: 'Published',
   ARCHIVED: 'Archived',
-};
-
-/** The one status a question can move to next, or null once archived. */
-export const NEXT_QUESTION_STATUS: Record<QuestionStatus, QuestionStatus | null> = {
-  INACTIVE: 'ACTIVE',
-  ACTIVE: 'ARCHIVED',
-  ARCHIVED: null,
 };
 
 /** QuestionListItemDto */
@@ -531,7 +527,7 @@ export const questionService = {
     return res.data;
   },
 
-  /** Q-08: moves one question to its next status (Draft → Published → Archived); nothing else changes. */
+  /** Q-08: moves one question to its next status (Draft → Published); nothing else changes. */
   async updateQuestionStatus(id: number | string, status: QuestionStatus, lockVersion?: number | null): Promise<QuestionDetail> {
     const res = await api.request<ApiResponse<QuestionDetail>>({
       method: 'patch',

@@ -9,6 +9,29 @@ import java.util.List;
 
 /** Scalar summaries for a page of courses; never load question bodies or attempt entities. */
 public interface CourseProgressSummaryRepository extends JpaRepository<Course, Long> {
+    /** LP-01: question totals for one course, grouped by module; moduleId null is the General pool. */
+    @Query("""
+        SELECT COALESCE(m.course.courseId, q.course.courseId), m.moduleId, COUNT(q)
+        FROM Question q LEFT JOIN q.module m
+        WHERE COALESCE(m.course.courseId, q.course.courseId) = :courseId
+          AND (m IS NULL OR m.status <> 'HIDDEN')
+          AND q.deletedAt IS NULL AND q.status = 'ACTIVE'
+          AND q.approvalStatus = 'APPROVED' AND q.sourceDocumentId IS NULL
+        GROUP BY COALESCE(m.course.courseId, q.course.courseId), m.moduleId
+        """)
+    List<Object[]> questionTotalsByCourse(@Param("courseId") Long courseId);
+
+    /** LP-01: ever-correct question counts for one course, grouped by module; moduleId null is General. */
+    @Query("""
+        SELECT COALESCE(m.course.courseId, p.course.courseId), m.moduleId, COUNT(p)
+        FROM QuestionPracticeProgress p LEFT JOIN p.module m
+        WHERE p.user.userId = :userId AND p.correctAttempts > 0
+          AND COALESCE(m.course.courseId, p.course.courseId) = :courseId
+          AND (m IS NULL OR m.status <> 'HIDDEN')
+        GROUP BY COALESCE(m.course.courseId, p.course.courseId), m.moduleId
+        """)
+    List<Object[]> questionCompletionsByCourse(@Param("courseId") Long courseId, @Param("userId") Long userId);
+
     @Query("""
         SELECT COALESCE(m.course.courseId, q.course.courseId), m.moduleId, COUNT(q)
         FROM Question q LEFT JOIN q.module m

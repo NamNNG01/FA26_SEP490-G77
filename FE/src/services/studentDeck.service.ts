@@ -25,9 +25,11 @@ import { downloadFile } from '@/utils/downloadFile';
  *   POST   /api/v1/student/study-sessions/{sessionId}/finish  (FP-02)
  *   GET    /api/v1/student/decks/{deckId}/review-cards        (FP-03)
  *   GET    /api/v1/student/decks/{deckId}/viewer              (FV-01)
- *   GET    /api/v1/student/decks?scope=MINE|COURSE            (FC-13)
+ *   GET    /api/v1/student/decks?scope=MINE|COURSE|BOOKMARKED (FC-13)
  *   GET    /api/v1/student/decks/{deckId}                     (FC-14)
  *   POST   /api/v1/student/decks/{deckId}/withdraw-review     (FC-15)
+ *   POST   /api/v1/student/decks/{deckId}/bookmark            — toggles the caller's bookmark
+ *   POST   /api/v1/student/decks/{deckId}/copy                — private copy (cards included) in the caller's library
  *   GET    /api/v1/student/decks/{deckId}/export?format=pdf   — any readable deck as a PDF download
  */
 
@@ -53,6 +55,7 @@ export interface StudentDeckView {
   description: string | null;
   mode: DeckMode;
   courseId: number | null;
+  moduleId?: number | null;
   cardCount: number;
   visibility: DeckVisibility;
   reviewStatus: ReviewStatus;
@@ -61,11 +64,13 @@ export interface StudentDeckView {
   createdAt: string | null;
   // FC-14 only.
   courseTitle?: string | null;
+  moduleTitle?: string | null;
   ownerName?: string | null;
   isOwner?: boolean;
   learnedCount?: number;
   starredCount?: number;
   submittedAt?: string | null;
+  isBookmarked?: boolean;
 }
 
 /** FC-13 list item. */
@@ -76,6 +81,8 @@ export interface DeckListItem {
   mode: DeckMode;
   courseId: number | null;
   courseTitle: string | null;
+  moduleId?: number | null;
+  moduleTitle?: string | null;
   ownerId: number | null;
   ownerName: string | null;
   cardCount: number;
@@ -87,7 +94,7 @@ export interface DeckListItem {
 }
 
 export interface DeckListParams {
-  scope: 'MINE' | 'COURSE';
+  scope: 'MINE' | 'COURSE' | 'BOOKMARKED';
   courseId?: number;
   search?: string;
   mode?: DeckMode;
@@ -100,6 +107,7 @@ export interface DeckCreateRequest {
   description?: string;
   mode: DeckMode;
   courseId?: number;
+  moduleId?: number;
 }
 
 /** Omitted fields stay unchanged. */
@@ -126,6 +134,18 @@ export interface CardView {
   frontImageUrl?: string | null;
   backImageUrl?: string | null;
   position: number;
+}
+
+export interface BookmarkView {
+  deckId: number;
+  isBookmarked: boolean;
+}
+
+export interface CopyDeckView {
+  originalDeckId: number;
+  newDeckId: number;
+  newTitle: string;
+  message: string;
 }
 
 export interface PublishRequestView {
@@ -357,6 +377,18 @@ export const studentDeckService = {
   /** FC-15 */
   async withdrawReview(deckId: number | string): Promise<PublishRequestView> {
     const res = await api.post<ApiResponse<PublishRequestView>>(`/student/decks/${deckId}/withdraw-review`);
+    return res.data;
+  },
+
+  /** Bookmarks the deck, or removes the bookmark if it is already there. */
+  async toggleBookmark(deckId: number | string): Promise<BookmarkView> {
+    const res = await api.post<ApiResponse<BookmarkView>>(`/student/decks/${deckId}/bookmark`);
+    return res.data;
+  },
+
+  /** 409 when the caller already has a personal deck (no course) with this title. */
+  async copyDeck(deckId: number | string, newTitle: string): Promise<CopyDeckView> {
+    const res = await api.post<ApiResponse<CopyDeckView>>(`/student/decks/${deckId}/copy`, { newTitle });
     return res.data;
   },
 

@@ -3,7 +3,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
-import { Modal } from '@/components/ui/Modal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Spinner } from '@/components/ui/Spinner';
 import { useToast } from '@/components/ui/ToastHost';
 import { ROUTES } from '@/app/routes';
@@ -41,7 +41,8 @@ import { describeSaveError, loadErrorMessage, type SaveError } from '../saveErro
 /** Q-03 accepts 1..50 questions per request. */
 const MAX_BATCH = 50;
 
-type Confirm = 'archive' | null;
+/** Publishing is final, so both publish buttons ask first: this question (edit) or the ticked drafts (create). */
+type Confirm = 'publishOne' | 'publishSaved' | null;
 
 /**
  * Create mode: write questions by hand, or draft them with AI (AI-01/02). The
@@ -490,6 +491,7 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
       showSaveError(describeSaveError(err, 'Could not publish the questions.'));
     } finally {
       setPublishing(false);
+      setConfirm(null);
     }
   };
 
@@ -565,17 +567,17 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
 
   const save = !isEdit && createMode === 'ai' ? saveAi : saveManual;
 
-  const changeStatus = async (next: QuestionStatus) => {
+  const publishOne = async () => {
     const q = questions[0];
     if (!q?.questionId) return;
     setStatusBusy(true);
     try {
-      const [updated] = await questionService.batchUpdateStatus([q.questionId], next);
+      const [updated] = await questionService.batchUpdateStatus([q.questionId], 'ACTIVE');
       setStatus(updated.status);
       setQuestions(prev => prev.map(p => ({ ...p, lockVersion: updated.lockVersion })));
-      toast.success(next === 'ACTIVE' ? 'Question published.' : 'Question archived.');
+      toast.success('Question published.');
     } catch (err) {
-      showSaveError(describeSaveError(err, 'Could not change the status.'));
+      showSaveError(describeSaveError(err, 'Could not publish the question.'));
     } finally {
       setStatusBusy(false);
       setConfirm(null);
@@ -751,7 +753,7 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
 
         <QuestionSidePanel
           tabs={modeSwitch}
-          onPublish={isEdit ? undefined : publishSaved}
+          onPublish={isEdit ? undefined : () => setConfirm('publishSaved')}
           publishCount={pickedDrafts.length}
           publishing={publishing}
           mode={mode}
@@ -766,10 +768,9 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
           onSave={save}
           saveLabel={!isEdit && createMode === 'ai' ? `Save Accepted (${aiAccepted.length})` : undefined}
           onCancel={cancel}
-          onToggleStatus={isEdit && status !== 'ARCHIVED' ? () => (status === 'ACTIVE' ? setConfirm('archive') : changeStatus('ACTIVE')) : undefined}
+          onPublishOne={isEdit && status === 'INACTIVE' ? () => setConfirm('publishOne') : undefined}
           saving={saving}
           statusBusy={statusBusy}
-          isActive={status === 'ACTIVE'}
         />
       </div>
 
@@ -788,35 +789,26 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
         details={unsavedDetails}
       />
 
-      <Modal
+      <ConfirmDialog
         open={confirmRemove != null}
         onClose={() => setConfirmRemove(null)}
+        onConfirm={() => { if (confirmRemove != null) remove(confirmRemove); setConfirmRemove(null); }}
+        tone="danger"
         title={`Delete question ${confirmRemove != null ? confirmRemove + 1 : ''}?`}
-        size="sm"
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setConfirmRemove(null)}>Keep it</Button>
-            <Button variant="danger" onClick={() => { if (confirmRemove != null) remove(confirmRemove); setConfirmRemove(null); }}>Delete</Button>
-          </>
-        }
-      >
-        <p className="text-sm text-content-secondary">This question hasn’t been saved yet, so what you wrote for it will be lost.</p>
-      </Modal>
+        description="This question hasn’t been saved yet, so what you wrote for it will be lost."
+        cancelLabel="Keep it"
+        confirmLabel="Delete"
+      />
 
-      <Modal
-        open={confirm === 'archive'}
+      <ConfirmDialog
+        open={confirm != null}
         onClose={() => setConfirm(null)}
-        title="Archive question?"
-        size="sm"
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setConfirm(null)} disabled={statusBusy}>Cancel</Button>
-            <Button variant="danger" onClick={() => changeStatus('ARCHIVED')} loading={statusBusy}>Archive</Button>
-          </>
-        }
-      >
-        <p className="text-sm text-content-secondary">Archived questions are no longer used when new exams are generated, and their status can’t be changed again.</p>
-      </Modal>
+        onConfirm={confirm === 'publishSaved' ? publishSaved : publishOne}
+        loading={statusBusy || publishing}
+        title={confirm === 'publishSaved' && pickedDrafts.length !== 1 ? `Publish ${pickedDrafts.length} questions?` : 'Publish this question?'}
+        description="This action can’t be undone."
+        confirmLabel="Publish"
+      />
     </div>
   );
 }

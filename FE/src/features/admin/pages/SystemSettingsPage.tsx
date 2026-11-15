@@ -5,7 +5,7 @@ import { Select } from '@/components/ui/Select';
 import { Input } from '@/components/ui/Input';
 import { Switch } from '@/components/ui/Switch';
 import { Alert } from '@/components/ui/Alert';
-import { Modal } from '@/components/ui/Modal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Icon } from '@/assets/icons';
 
 // ── Section definitions ───────────────────────────────────────────────────────
@@ -314,22 +314,17 @@ export function SystemSettingsPage() {
       </div>
 
       {/* Reset confirmation dialog */}
-      <Modal
+      <ConfirmDialog
         open={confirmReset}
         onClose={() => setConfirmReset(false)}
-        title="Reset to Default"
-        size="sm"
-        footer={
-          <>
-            <Button variant="outline" onClick={() => setConfirmReset(false)}>Cancel</Button>
-            <Button variant="danger" onClick={resetSection}>Reset</Button>
-          </>
-        }
-      >
-        <p className="text-base text-content-secondary">
+        onConfirm={resetSection}
+        tone="danger"
+        title="Reset to default?"
+        description={<>
           This will restore the <span className="font-semibold">{SECTIONS.find(s => s.id === section)?.label}</span> settings to their default values. Any unsaved changes in this section will be lost.
-        </p>
-      </Modal>
+        </>}
+        confirmLabel="Reset"
+      />
     </div>
   );
 }

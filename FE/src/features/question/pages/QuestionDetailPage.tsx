@@ -5,13 +5,13 @@ import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { Alert } from '@/components/ui/Alert';
 import { Badge, type BadgeVariant } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { Modal } from '@/components/ui/Modal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Select } from '@/components/ui/Select';
 import { Spinner } from '@/components/ui/Spinner';
 import { useToast } from '@/components/ui/ToastHost';
 import { Icon } from '@/assets/icons';
 import { ROUTES } from '@/app/routes';
-import { NEXT_QUESTION_STATUS, QUESTION_STATUS_LABELS, questionService, type QuestionDifficulty, type QuestionStatus } from '@/services/question.service';
+import { QUESTION_STATUS_LABELS, questionService, type QuestionDifficulty, type QuestionStatus } from '@/services/question.service';
 import { questionGroupService, type QuestionGroup } from '@/services/questionGroup.service';
 import { AnswerSection } from '../components/QuestionForm';
 import { QuestionLocationCard } from '../components/QuestionLocationCard';
@@ -34,14 +34,9 @@ import {
 import { describeSaveError, loadErrorMessage, type SaveError } from '../saveError';
 import { SaveErrorAlert } from '../components/SaveErrorAlert';
 
-type Confirm = 'discard' | 'delete' | 'archive' | null;
+type Confirm = 'discard' | 'delete' | 'publish' | null;
 
 const STATUS_VARIANT: Record<QuestionStatus, BadgeVariant> = { INACTIVE: 'default', ACTIVE: 'success', ARCHIVED: 'danger' };
-/** The saved status plus the one it can move to next. */
-const statusOptions = (saved: QuestionStatus) =>
-  [saved, NEXT_QUESTION_STATUS[saved]]
-    .filter((s): s is QuestionStatus => s != null)
-    .map(value => ({ label: QUESTION_STATUS_LABELS[value] ?? value, value }));
 const TYPE_VARIANT: Partial<Record<EditableQuestionType, BadgeVariant>> = { ESSAY: 'purple', TRUE_FALSE: 'success', ORDERING: 'warning' };
 const typeLabel = (t: EditableQuestionType) => QUESTION_TYPE_OPTIONS.find(o => o.value === t)?.label ?? t;
 
@@ -199,27 +194,20 @@ export function QuestionDetailPage() {
   };
 
   /**
-   * Saved right away through the status API (Draft → Published → Archived), without the question's
-   * other fields; unsaved edits stay in the form. Archiving asks first — it makes the question read-only.
+   * Draft → Published, saved right away through the status API without the question's other fields;
+   * unsaved edits stay in the form. Publishing is final, so the button asks first (confirm === 'publish').
    */
-  const changeStatus = (next: QuestionStatus) => {
-    if (next === savedStatus) return;
-    if (next === 'ARCHIVED') setConfirm('archive');
-    else void applyStatus(next);
-  };
-
-  const applyStatus = async (next: QuestionStatus) => {
+  const publish = async () => {
     if (!q?.questionId) return;
     setBusy(true);
     try {
-      const updated = await questionService.updateQuestionStatus(q.questionId, next, q.lockVersion);
+      const updated = await questionService.updateQuestionStatus(q.questionId, 'ACTIVE', q.lockVersion);
       setSavedStatus(updated.status);
       // The status move bumps the lock version; the next Save must send the new one.
       setQ(prev => (prev ? { ...prev, lockVersion: updated.lockVersion ?? prev.lockVersion } : prev));
-      if (updated.status === 'ARCHIVED') setDirty(false);
-      toast.success(`Question moved to ${QUESTION_STATUS_LABELS[updated.status] ?? updated.status}.`);
+      toast.success('Question published.');
     } catch (err) {
-      toast.error(errorMessage(err, 'Could not change the status.'));
+      toast.error(errorMessage(err, 'Could not publish the question.'));
     } finally {
       setBusy(false);
       setConfirm(null);
@@ -382,8 +370,12 @@ export function QuestionDetailPage() {
               showErrors={submitted}
               hideHeading
             />
-            <Select label="Status" value={savedStatus} onChange={v => changeStatus(v as QuestionStatus)} options={statusOptions(savedStatus)} disabled={locked || savedStatus === 'ARCHIVED'} />
             <div className="space-y-2 pt-1">
+              {savedStatus === 'INACTIVE' && (
+                <Button variant="secondary" className="w-full" icon={<Icon.Upload className="w-4 h-4" />} onClick={() => setConfirm('publish')} disabled={locked}>
+                  Publish
+                </Button>
+              )}
               <Button className="w-full" icon={<Icon.CheckCircle className="w-4 h-4" />} onClick={save} loading={saving} disabled={locked || archived || Boolean(validateDraft(q).type)}>
                 Save Changes
               </Button>
@@ -396,54 +388,39 @@ export function QuestionDetailPage() {
         </div>
       </div>
 
-      <Modal
+      <ConfirmDialog
         open={confirm === 'discard'}
         onClose={() => setConfirm(null)}
+        onConfirm={() => { setDirty(false); goToBank(); }}
+        tone="danger"
         title="Discard changes?"
-        size="sm"
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setConfirm(null)}>Keep editing</Button>
-            <Button variant="danger" onClick={() => { setDirty(false); goToBank(); }}>Discard</Button>
-          </>
-        }
-      >
-        <p className="text-sm text-content-secondary">Your unsaved changes to this question will be lost.</p>
-      </Modal>
+        description="Your unsaved changes to this question will be lost."
+        cancelLabel="Keep editing"
+        confirmLabel="Discard"
+      />
 
-      <Modal
-        open={confirm === 'archive'}
-        onClose={() => !busy && setConfirm(null)}
-        title="Archive question?"
-        size="sm"
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setConfirm(null)} disabled={busy}>Cancel</Button>
-            <Button variant="danger" onClick={() => applyStatus('ARCHIVED')} loading={busy}>Archive</Button>
-          </>
-        }
+      <ConfirmDialog
+        open={confirm === 'publish'}
+        onClose={() => setConfirm(null)}
+        onConfirm={publish}
+        loading={busy}
+        title="Publish this question?"
+        description="This action can't be undone."
+        confirmLabel="Publish"
       >
-        <p className="text-sm text-content-secondary">
-          An archived question is read-only and its status can't be changed again.{dirty ? ' Your unsaved changes will be lost — save them first to keep them.' : ''}
-        </p>
-      </Modal>
+        {dirty && <p className="text-center text-content-soft">Unsaved edits aren't included — use Save Changes to keep them.</p>}
+      </ConfirmDialog>
 
-      <Modal
+      <ConfirmDialog
         open={confirm === 'delete'}
-        onClose={() => !busy && setConfirm(null)}
-        title="Delete question?"
-        size="sm"
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setConfirm(null)} disabled={busy}>Cancel</Button>
-            <Button variant="danger" onClick={remove} loading={busy}>Delete</Button>
-          </>
-        }
-      >
-        <p className="text-sm text-content-secondary">
-          Question #{q.questionId} will be removed from the question bank and won't be used in new exams. Questions already used by a published exam can't be deleted.
-        </p>
-      </Modal>
+        onClose={() => setConfirm(null)}
+        onConfirm={remove}
+        loading={busy}
+        tone="danger"
+        title="Delete this question?"
+        description={`Question #${q.questionId} will be removed from the question bank. Questions already used by a published exam can't be deleted.`}
+        confirmLabel="Delete"
+      />
     </div>
   );
 }

@@ -15,7 +15,6 @@ import java.time.Instant;
 public class DiscussionItemDto {
     private Long discussionId;
     private String title;
-    private String tag; // question, tip
     private String excerpt;
     private AuthorDto author;
     private long upvoteCount;
@@ -24,8 +23,14 @@ public class DiscussionItemDto {
     private boolean isPinned;
     @JsonProperty("isUpvoted")
     private boolean isUpvoted;
+    @JsonProperty("isBookmarked")
+    private boolean isBookmarked;
     @JsonProperty("isAuthor")
     private boolean isAuthor;
+    @JsonProperty("isClosed")
+    private boolean isClosed;
+    private String imageUrl;
+    private String approvalStatus;
     private Instant createdAt;
     private Instant lastCommentAt;
     private CourseRefDto course;
@@ -36,6 +41,14 @@ public class DiscussionItemDto {
 
     public void setIsAuthor(boolean isAuthor) {
         this.isAuthor = isAuthor;
+    }
+
+    public boolean isClosed() {
+        return isClosed;
+    }
+
+    public void setIsClosed(boolean isClosed) {
+        this.isClosed = isClosed;
     }
 
     @Data

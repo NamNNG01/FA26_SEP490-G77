@@ -104,7 +104,14 @@ function query(params: Record<string, string | number | undefined | null>) {
 }
 
 export const studentContestService = {
-  async getContests(params: { status?: ContestStatus; page?: number; size?: number } = {}) {
+  async getContests(params: {
+    status?: ContestStatus;
+    courseId?: number;
+    from?: string;
+    to?: string;
+    page?: number;
+    size?: number;
+  } = {}) {
     const res = await api.get<ApiResponse<StudentPage<StudentContest>>>(`/student/contests?${query(params)}`);
     return res.data;
   },
@@ -134,29 +141,15 @@ export const studentContestService = {
     return res.data;
   },
 
-  async getHistory(params: { page?: number; size?: number } = {}) {
+  async getHistory(params: {
+    courseId?: number;
+    from?: string;
+    to?: string;
+    page?: number;
+    size?: number;
+  } = {}) {
     const res = await api.get<ApiResponse<StudentPage<ContestHistoryItem>>>(`/student/contests/history?${query(params)}`);
     return res.data;
-  },
-
-  /** Every page of CT-01 (it ignores its filters today, so the list page filters on the client). */
-  async getAllContests(): Promise<StudentContest[]> {
-    const all: StudentContest[] = [];
-    for (let page = 0; ; page++) {
-      const res = await studentContestService.getContests({ page, size: 100 });
-      all.push(...res.content);
-      if (res.last || res.content.length === 0 || page + 1 >= res.totalPages) return all;
-    }
-  },
-
-  /** Every page of CT-06. */
-  async getAllHistory(): Promise<ContestHistoryItem[]> {
-    const all: ContestHistoryItem[] = [];
-    for (let page = 0; ; page++) {
-      const res = await studentContestService.getHistory({ page, size: 100 });
-      all.push(...res.content);
-      if (res.last || res.content.length === 0 || page + 1 >= res.totalPages) return all;
-    }
   },
 
   async claimReward(contestId: number | string, rewardId: number) {

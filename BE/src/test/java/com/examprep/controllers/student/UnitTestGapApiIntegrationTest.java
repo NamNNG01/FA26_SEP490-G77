@@ -236,9 +236,9 @@ class UnitTestGapApiIntegrationTest {
         assertEquals(q.getQuestionId(), page.path("content").get(0).path("questionId").asLong());
     }
 
-    /** UTC887 - MN-01 examType + categoryId filters are both applied. */
+    /** UTC887 - MN-01 examType + courseId filters are applied. */
     @Test
-    void utc887_examTypeAndCategoryFiltersAreApplied() throws Exception {
+    void utc887_examTypeAndCourseFiltersAreApplied() throws Exception {
         Course otherCourse = f.course(manager);
         Module otherModule = f.module(otherCourse, "M2");
         Question quiz = f.question(course, module, "EASY");
@@ -250,7 +250,7 @@ class UnitTestGapApiIntegrationTest {
         review(student, otherCategory, "WRONG_BOOKMARKED", false, 1);
         em.flush();
 
-        JsonNode page = data("/api/v1/student/questions/saved?examType=QUIZ&categoryId=" + course.getCategoryId());
+        JsonNode page = data("/api/v1/student/questions/saved?examType=QUIZ&courseId=" + course.getCourseId());
         assertEquals(1, page.path("totalElements").asInt());
         assertEquals(quiz.getQuestionId(), page.path("content").get(0).path("questionId").asLong());
     }

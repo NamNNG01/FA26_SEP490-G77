@@ -30,6 +30,9 @@ public class DiscussionDetailDto {
     private boolean isAuthor;
     @JsonProperty("isClosed")
     private boolean isClosed;
+    private String imageUrl;
+    private String approvalStatus;
+    private String rejectionReason;
     private Instant createdAt;
     private Instant updatedAt;
     private List<CommentDto> comments;
@@ -52,6 +55,8 @@ public class DiscussionDetailDto {
         private DiscussionItemDto.AuthorDto author;
         private boolean isAccepted;
         private boolean isAnonymous;
+        private String imageUrl;
+        private String status;
         private Instant createdAt;
     }
 }

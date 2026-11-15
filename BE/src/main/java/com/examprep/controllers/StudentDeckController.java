@@ -3,6 +3,7 @@ package com.examprep.controllers;
 import com.examprep.dto.ApiResponse;
 import com.examprep.dto.PageResponse;
 import com.examprep.dto.ResponseCode;
+import com.examprep.dto.student.StudentDeckDtos;
 import com.examprep.dto.student.StudentDeckDtos.*;
 import com.examprep.security.UserPrincipal;
 import com.examprep.services.contest.ContestRules;
@@ -162,5 +163,17 @@ public class StudentDeckController {
         return ResponseEntity.ok().contentType(MediaType.APPLICATION_PDF)
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + pdf.fileName() + "\"")
                 .body(pdf.content());
+    }
+
+    @PostMapping("/decks/{deckId}/bookmark")
+    public ResponseEntity<ApiResponse<StudentDeckDtos.BookmarkResponse>> toggleBookmark(@AuthenticationPrincipal UserPrincipal user,
+            @PathVariable Long deckId) {
+        return ResponseEntity.ok(ApiResponse.success(decks.toggleBookmark(user.getId(), deckId)));
+    }
+
+    @PostMapping("/decks/{deckId}/copy")
+    public ResponseEntity<ApiResponse<StudentDeckDtos.CopyDeckResponse>> copyDeck(@AuthenticationPrincipal UserPrincipal user,
+            @PathVariable Long deckId, @Valid @RequestBody StudentDeckDtos.CopyDeckRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(decks.copyDeck(user.getId(), deckId, request), "Deck copied"));
     }
 }

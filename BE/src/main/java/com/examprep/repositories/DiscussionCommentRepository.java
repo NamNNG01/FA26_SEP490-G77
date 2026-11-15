@@ -14,4 +14,10 @@ import java.util.List;
 public interface DiscussionCommentRepository extends JpaRepository<DiscussionComment, Long> {
     @Query("SELECT c FROM DiscussionComment c JOIN FETCH c.user u WHERE c.discussion.discussionId = :discussionId AND c.status = 'VISIBLE' ORDER BY c.createdAt DESC")
     List<DiscussionComment> findLatestCommentsByDiscussionId(@Param("discussionId") Long discussionId, Pageable pageable);
+
+    @Query(
+            value = "SELECT c FROM DiscussionComment c JOIN FETCH c.user u WHERE c.discussion.discussionId = :discussionId ORDER BY c.createdAt DESC",
+            countQuery = "SELECT COUNT(c) FROM DiscussionComment c WHERE c.discussion.discussionId = :discussionId"
+    )
+    Page<DiscussionComment> findAllCommentsForManager(@Param("discussionId") Long discussionId, Pageable pageable);
 }

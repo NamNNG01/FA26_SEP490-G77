@@ -13,7 +13,7 @@ export const SIDEBAR_CLS = 'space-y-4 pb-4 lg:sticky lg:top-[10px] lg:max-h-[cal
 /** Right-hand column: optional tabs, Location card + Actions card. */
 export function QuestionSidePanel({
   mode, count, courseId, moduleId, onLocationChange, showErrors, prerequisiteNote,
-  onAdd, onImport, onSave, saveLabel, onCancel, onToggleStatus, saving, statusBusy, isActive, tabs, onPublish, publishCount = 0, publishing,
+  onAdd, onImport, onSave, saveLabel, onCancel, onPublishOne, saving, statusBusy, tabs, onPublish, publishCount = 0, publishing,
 }: {
   /** Create mode: publishes the saved drafts ticked in the list — disabled until some are. */
   onPublish?: () => void;
@@ -37,11 +37,10 @@ export function QuestionSidePanel({
   /** Defaults to "Save Changes" / "Save All (n)". */
   saveLabel?: string;
   onCancel: () => void;
-  /** Edit mode: publish / archive the question. */
-  onToggleStatus?: () => void;
+  /** Edit mode: publish the question — passed only while it's a draft (publishing is final). */
+  onPublishOne?: () => void;
   saving?: boolean;
   statusBusy?: boolean;
-  isActive?: boolean;
 }) {
   const isEdit = mode === 'edit';
   return (
@@ -71,23 +70,23 @@ export function QuestionSidePanel({
             <Icon.AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />{prerequisiteNote}
           </p>
         )}
-        {isEdit && onToggleStatus && (
+        {isEdit && onPublishOne && (
           <Button
-            variant={isActive ? 'danger' : 'outline'}
+            variant="outline"
             className="w-full"
-            icon={isActive ? <Icon.Package className="w-4 h-4" /> : <Icon.CheckCircle className="w-4 h-4" />}
-            onClick={onToggleStatus}
+            icon={<Icon.Upload className="w-4 h-4" />}
+            onClick={onPublishOne}
             loading={statusBusy}
             disabled={saving || statusBusy}
           >
-            {isActive ? 'Archive' : 'Publish'}
+            Publish
           </Button>
         )}
         {onPublish && (
           <Button
             variant="outline"
             className="w-full"
-            icon={<Icon.CheckCircle className="w-4 h-4" />}
+            icon={<Icon.Upload className="w-4 h-4" />}
             onClick={onPublish}
             loading={publishing}
             disabled={saving || publishing || publishCount === 0}

@@ -73,7 +73,7 @@ public class StudentNotebookServiceImpl implements StudentNotebookService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<QuestionReviewItemDto> listSavedQuestions(String type, String examType, Long courseId, Long categoryId, String search, int page, int size, Long userId) {
+    public Page<QuestionReviewItemDto> listSavedQuestions(String type, String examType, Long courseId, String search, int page, int size, Long userId) {
         if (type == null || type.isBlank()) {
             type = "all";
         }
@@ -84,10 +84,13 @@ public class StudentNotebookServiceImpl implements StudentNotebookService {
                 normalizedExamType = "QUIZ";
             } else if ("ESSAY".equals(upper)) {
                 normalizedExamType = "ESSAY";
-            } else if ("ALL".equals(upper)) {
+            }else if ("CODE".equals(upper)) {
+                normalizedExamType = "CODE";
+            }
+            else if ("ALL".equals(upper)) {
                 normalizedExamType = null;
             } else {
-                throw new BadRequestException(ResponseCode.VALIDATION_ERROR, "Invalid examType. Must be QUIZ or ESSAY.");
+                throw new BadRequestException(ResponseCode.VALIDATION_ERROR, "Invalid examType. Must be QUIZ , ESSAY ,CODE.");
             }
         }
 
@@ -98,7 +101,7 @@ public class StudentNotebookServiceImpl implements StudentNotebookService {
         }
 
         Page<StudentQuestionReview> reviews = reviewRepository.findSavedQuestions(
-                userId, type, normalizedExamType, courseId, categoryId, searchTerm, pageable);
+                userId, type, normalizedExamType, courseId, searchTerm, pageable);
 
         List<Long> questionIds = reviews.getContent().stream()
                 .map(r -> r.getQuestion().getQuestionId())
@@ -190,11 +193,15 @@ public class StudentNotebookServiceImpl implements StudentNotebookService {
         }
         String type = request.getType() != null ? request.getType() : "wrong";
         String examType = request.getExamType() != null ? request.getExamType().toUpperCase() : "QUIZ";
-        if (!"QUIZ".equals(examType) && !"ESSAY".equals(examType)) {
-            throw new BadRequestException(ResponseCode.VALIDATION_ERROR, "examType must be QUIZ or ESSAY");
+        if (!"QUIZ".equals(examType) && !"ESSAY".equals(examType)&&!"CODE".equals(examType)) {
+            throw new BadRequestException(ResponseCode.VALIDATION_ERROR, "examType must be QUIZ , ESSAY or CODE");
         }
         Long courseId = request.getCourseId();
-        if (courseId != null && !courseRepository.existsById(courseId)) {
+        if (courseId == null) {
+            throw new BadRequestException("Course ID is required");
+        }
+
+        if (!courseRepository.existsById(courseId)) {
             throw new ResourceNotFoundException("Course not found");
         }
 
@@ -213,10 +220,8 @@ public class StudentNotebookServiceImpl implements StudentNotebookService {
         List<StudentQuestionReview> selected = shuffled.stream().limit(size).toList();
 
         List<Question> questions = selected.stream().map(StudentQuestionReview::getQuestion).toList();
-        Course course = courseId != null ? courseRepository.getReferenceById(courseId) : questions.get(0).getCourse();
-        if (course == null && questions.get(0).getModule() != null) {
-            course = questions.get(0).getModule().getCourse();
-        }
+        Course course = courseRepository.findById(courseId)
+                .orElseThrow(() -> new ResourceNotFoundException("Course not found"));
 
         String title = switch (type) {
             case "bookmarked" -> "Ôn câu đã lưu";
@@ -363,7 +368,7 @@ public class StudentNotebookServiceImpl implements StudentNotebookService {
     @Override
     @Transactional(readOnly = true)
     public QuestionNotebookPdfWriter.RenderedPdf exportSavedQuestionsPdf(Long userId, Long courseId, String type, String examType) {
-        Page<QuestionReviewItemDto> page = listSavedQuestions(type, examType, courseId, null, null, 0, 1000, userId);
+        Page<QuestionReviewItemDto> page = listSavedQuestions(type, examType, courseId, null, 0, 1000, userId);
         return questionNotebookPdfWriter.write(page.getContent());
     }
 }

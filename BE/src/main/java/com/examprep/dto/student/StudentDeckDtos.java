@@ -103,9 +103,19 @@ public final class StudentDeckDtos {
                              Long ownerId, String ownerName, boolean isOwner, long cardCount, long learnedCount,
                              long starredCount, String visibility, String reviewStatus, String reviewNote,
                              Instant submittedAt, Instant createdAt,
-                             Long moduleId, String moduleTitle) {}
+                             Long moduleId, String moduleTitle, boolean isBookmarked) {}
 
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record CardFromQuestionView(Long cardId, Long deckId, String frontText, String backText, int position,
                                        Long sourceQuestionId, Long sourceAttemptId, String frontImageUrl, String backImageUrl) {}
+
+    // ------------------------------------------------------------- Bookmark & Copy Deck
+
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record BookmarkResponse(Long deckId, boolean isBookmarked) {}
+
+    public record CopyDeckRequest(@NotBlank @Size(max = 150) String newTitle) {}
+
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record CopyDeckResponse(Long originalDeckId, Long newDeckId, String newTitle, String message) {}
 }

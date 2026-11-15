@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/Button';
-import { Modal } from '@/components/ui/Modal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Alert } from '@/components/ui/Alert';
 import { useToast } from '@/components/ui/ToastHost';
 import { Icon } from '@/assets/icons';
@@ -44,28 +44,21 @@ export function ResetPracticeButton({ scope, moduleTitle, onReset }: { scope: Pr
       >
         Reset progress
       </Button>
-      <Modal
+      <ConfirmDialog
         open={open}
-        onClose={() => !busy && setOpen(false)}
-        title="Reset practice progress?"
+        onClose={() => setOpen(false)}
+        onConfirm={reset}
+        loading={busy}
         error={error && <Alert type="error" message={error} />}
-        size="sm"
-        footer={
-          <>
-            <Button variant="outline" disabled={busy} onClick={() => setOpen(false)}>
-              Keep it
-            </Button>
-            <Button variant="danger" loading={busy} disabled={busy} onClick={reset}>
-              Reset
-            </Button>
-          </>
-        }
-      >
-        <p className="text-base text-content-secondary leading-relaxed">
+        tone="danger"
+        title="Reset practice progress?"
+        description={<>
           Every practice session, answer and statistic of <strong>{moduleTitle}</strong> will be deleted, including a session in
           progress. Your mistake notebook, bookmarks, exams and flashcards are not affected. This cannot be undone.
-        </p>
-      </Modal>
+        </>}
+        cancelLabel="Keep it"
+        confirmLabel="Reset"
+      />
     </>
   );
 }

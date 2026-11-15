@@ -7,7 +7,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/Card';
 import { useToast } from '@/components/ui/ToastHost';
 import { Icon } from '@/assets/icons';
-import { ROUTES, studentCoursePath } from '@/app/routes';
+import { ROUTES, studentCoursePath, studentDeckPath } from '@/app/routes';
 import { getApiErrorMessage } from '@/utils/apiError';
 import {
   apiErrorCode,
@@ -17,7 +17,9 @@ import {
   studentDeckService,
   type StudentDeckView,
   type ViewerCard,
+  type ViewerView,
 } from '@/services/studentDeck.service';
+import { cacheGeneration, getCached, invalidateCached, setCached } from '@/hooks/useCachedQuery';
 import { studentProgressService } from '@/services/studentProgress.service';
 import { LoadError, STUDENT_PAGE_CLASS, formatDateTime } from '../components/studentUi';
 import type { DeckStudyState } from '../components/DeckCard';
@@ -25,6 +27,8 @@ import { CardFace, ConfirmModal, DeckModeBadge, DeckStatusBadge, plural } from '
 import { DeckFormModal } from '../components/flashcards/DeckFormModal';
 import { CardFormModal } from '../components/flashcards/CardFormModal';
 import { ImportCardsModal } from '../components/flashcards/ImportCardsModal';
+import { DeckContributionModal } from '../components/flashcards/DeckContributionModal';
+import { CopyDeckModal } from '../components/flashcards/CopyDeckModal';
 import { downloadDecksXlsx, fileSlug } from '@/utils/flashcardXlsx';
 
 const MODE_LABEL: Record<StudentDeckView['mode'], string> = {
@@ -40,12 +44,19 @@ import {
   type DeckProgress,
 } from '../components/flashcards/StudyPanel';
 
+/** What the deck page reads on load (FC-11 viewer + FC-14), cached per deck for this tab. */
+interface DeckReading {
+  viewer: ViewerView;
+  detail: StudentDeckView | null;
+}
+const deckCacheKey = (deckId: number) => `student:deck:${deckId}`;
+
 type Dialog =
   | { kind: 'edit' }
   | { kind: 'delete' }
-  | { kind: 'publish' }
   | { kind: 'withdraw' }
   | { kind: 'import' }
+  | { kind: 'copy' }
   | { kind: 'card'; card?: ViewerCard }
   | { kind: 'deleteCard'; card: ViewerCard };
 
@@ -63,8 +74,15 @@ const CONFLICT_MESSAGE: Record<string, string> = {
  *
  * Deck info comes from FC-14; until the BE has it, from router state (set by
  * the list and right after create) or the viewer (title + mode, read-only).
+ *
+ * Keyed by the deck id so moving to another deck (e.g. right after a copy) starts from a clean state.
  */
 export function StudentDeckStudyPage() {
+  const { deckId = '' } = useParams<{ deckId: string }>();
+  return <DeckPage key={deckId} />;
+}
+
+function DeckPage() {
   const { deckId: deckIdParam = '' } = useParams<{ deckId: string }>();
   const deckId = Number(deckIdParam);
   const navigate = useNavigate();
@@ -78,8 +96,10 @@ export function StudentDeckStudyPage() {
   const [error, setError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
   const [dialog, setDialog] = useState<Dialog | null>(null);
+  const [contributionOpen, setContributionOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [exporting, setExporting] = useState<'xlsx' | 'pdf' | null>(null);
+  const [bookmarking, setBookmarking] = useState(false);
   const study = useDeckStudy(deckId, setProgress);
 
   // A course deck counts towards the course's progress once every card is learned: when that flips
@@ -95,8 +115,43 @@ export function StudentDeckStudyPage() {
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
+    const key = deckCacheKey(deckId);
+    const apply = ({ viewer, detail }: DeckReading) => {
+      setCards(viewer.cards);
+      setDeck(prev => {
+        const base: StudentDeckView = detail ??
+          prev ?? {
+            deckId,
+            title: viewer.deckTitle,
+            description: null,
+            mode: viewer.deckMode,
+            courseId: state?.courseId ?? null,
+            courseTitle: state?.courseTitle ?? null,
+            cardCount: viewer.cards.length,
+            visibility: 'PRIVATE',
+            reviewStatus: 'NONE',
+            reviewNote: null,
+            createdAt: null,
+            isOwner: false,
+          };
+        return {
+          ...base,
+          // FC-14 may not say whether the caller owns it; the list / create state does.
+          isOwner: detail?.isOwner ?? prev?.isOwner ?? base.isOwner ?? false,
+          courseTitle: base.courseTitle ?? prev?.courseTitle ?? state?.courseTitle ?? null,
+          mode: viewer.deckMode,
+          cardCount: viewer.cards.length,
+        };
+      });
+      if (detail?.learnedCount != null) setProgress({ learned: detail.learnedCount, total: viewer.cards.length });
+    };
+    // Seen before in this tab: show the last reading at once, then read again behind it
+    // (a study run takes its cards from FP-01, never from this reading).
+    const cached = getCached<DeckReading>(key);
+    if (cached) apply(cached);
+    setLoading(!cached);
     setError(null);
+    const gen = cacheGeneration();
     (async () => {
       try {
         const [viewer, detail] = await Promise.all([
@@ -106,36 +161,15 @@ export function StudentDeckStudyPage() {
             throw err;
           }),
         ]);
+        // Signed out meanwhile: keep it out of the new session's cache.
+        if (gen === cacheGeneration()) setCached<DeckReading>(key, { viewer, detail });
         if (cancelled) return;
-        setCards(viewer.cards);
-        setDeck(prev => {
-          const base: StudentDeckView = detail ??
-            prev ?? {
-              deckId,
-              title: viewer.deckTitle,
-              description: null,
-              mode: viewer.deckMode,
-              courseId: state?.courseId ?? null,
-              courseTitle: state?.courseTitle ?? null,
-              cardCount: viewer.cards.length,
-              visibility: 'PRIVATE',
-              reviewStatus: 'NONE',
-              reviewNote: null,
-              createdAt: null,
-              isOwner: false,
-            };
-          return {
-            ...base,
-            // FC-14 may not say whether the caller owns it; the list / create state does.
-            isOwner: detail?.isOwner ?? prev?.isOwner ?? base.isOwner ?? false,
-            courseTitle: base.courseTitle ?? prev?.courseTitle ?? state?.courseTitle ?? null,
-            mode: viewer.deckMode,
-            cardCount: viewer.cards.length,
-          };
-        });
-        if (detail?.learnedCount != null) setProgress({ learned: detail.learnedCount, total: viewer.cards.length });
+        apply({ viewer, detail });
       } catch (err) {
-        if (!cancelled) setError(getApiErrorMessage(err, 'Failed to load the deck.'));
+        if (cancelled) return;
+        // A deck that is gone (or no longer readable) must not stay on screen from the cache.
+        invalidateCached(key);
+        setError(getApiErrorMessage(err, 'Failed to load the deck.'));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -219,6 +253,30 @@ export function StudentDeckStudyPage() {
     }
   };
 
+  /** Flips at once; the BE's answer (or a failure) settles it, and the cached reading follows. */
+  const toggleBookmark = async () => {
+    if (!deck || bookmarking) return;
+    const before = Boolean(deck.isBookmarked);
+    const settle = (isBookmarked: boolean) => {
+      setDeck(d => (d ? { ...d, isBookmarked } : d));
+      const key = deckCacheKey(deckId);
+      const cached = getCached<DeckReading>(key);
+      if (cached?.detail) setCached<DeckReading>(key, { ...cached, detail: { ...cached.detail, isBookmarked } });
+    };
+    settle(!before);
+    setBookmarking(true);
+    try {
+      const res = await studentDeckService.toggleBookmark(deck.deckId);
+      settle(res.isBookmarked);
+      toast.success(res.isBookmarked ? 'Deck bookmarked.' : 'Bookmark removed.');
+    } catch (err) {
+      settle(before);
+      toast.error(getApiErrorMessage(err, 'Could not update the bookmark.'));
+    } finally {
+      setBookmarking(false);
+    }
+  };
+
   const crumbs: { label: string; onClick?: () => void }[] = [{ label: 'Flashcards', onClick: () => navigate(flashcardsUrl) }];
   const courseId = deck?.courseId ?? state?.courseId;
   const courseTitle = deck?.courseTitle ?? state?.courseTitle;
@@ -298,6 +356,31 @@ export function StudentDeckStudyPage() {
 
         <div className="min-w-0 flex flex-col gap-3 lg:border-l lg:border-line lg:pl-5">
           <StudyActions study={study} deckId={deckId} cardCount={deck.cardCount} onProgress={setProgress} />
+          {/* Another student's public deck or a course deck: keep it close, or take a copy to edit. */}
+          {!isOwner && (
+            <div className={`grid grid-cols-2 gap-2 ${deck.cardCount > 0 ? 'border-t border-line pt-3' : ''}`}>
+              <Button
+                variant="outline"
+                size="sm"
+                icon={<Icon.Bookmark className={`w-4 h-4 ${deck.isBookmarked ? 'fill-current text-primary' : ''}`} />}
+                onClick={toggleBookmark}
+                disabled={bookmarking}
+                aria-pressed={Boolean(deck.isBookmarked)}
+              >
+                {deck.isBookmarked ? 'Bookmarked' : 'Bookmark'}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                icon={<Icon.Copy className="w-4 h-4" />}
+                onClick={() => setDialog({ kind: 'copy' })}
+                disabled={deck.cardCount === 0}
+                title={deck.cardCount === 0 ? 'This deck has no cards to copy' : 'Copy this deck to My decks'}
+              >
+                Copy
+              </Button>
+            </div>
+          )}
           {isOwner && (editable || deletable || deck.reviewStatus === 'PENDING_REVIEW') && (
             <div className={`grid grid-cols-2 gap-2 ${deck.cardCount > 0 ? 'border-t border-line pt-3' : ''}`}>
               {editable && (
@@ -306,7 +389,7 @@ export function StudentDeckStudyPage() {
                     className="col-span-2"
                     variant="outline"
                     icon={<Icon.Upload className="w-4 h-4" />}
-                    onClick={() => setDialog({ kind: 'publish' })}
+                    onClick={() => setContributionOpen(true)}
                     disabled={deck.cardCount === 0}
                     title={deck.cardCount === 0 ? 'Add at least one card first' : undefined}
                   >
@@ -477,6 +560,40 @@ export function StudentDeckStudyPage() {
       {dialog?.kind === 'import' && (
         <ImportCardsModal deckId={deckId} deckTitle={deck.title} mode={deck.mode} onClose={() => setDialog(null)} onImported={() => void reloadCards()} />
       )}
+      {dialog?.kind === 'copy' && (
+        <CopyDeckModal
+          deck={deck}
+          onClose={() => setDialog(null)}
+          onCopied={copy => {
+            setDialog(null);
+            toast.success(`Copied to My decks as "${copy.newTitle}".`);
+            navigate(studentDeckPath(copy.newDeckId), {
+              state: {
+                deckTitle: copy.newTitle,
+                tab: 'mine',
+                deck: {
+                  ...deck,
+                  deckId: copy.newDeckId,
+                  title: copy.newTitle,
+                  courseId: null,
+                  courseTitle: null,
+                  moduleId: null,
+                  moduleTitle: null,
+                  visibility: 'PRIVATE',
+                  reviewStatus: 'NONE',
+                  reviewNote: null,
+                  submittedAt: null,
+                  ownerName: null,
+                  isOwner: true,
+                  isBookmarked: false,
+                  learnedCount: 0,
+                  starredCount: 0,
+                },
+              } satisfies DeckStudyState,
+            });
+          }}
+        />
+      )}
       {dialog?.kind === 'deleteCard' && (
         <ConfirmModal
           title="Delete this card?"
@@ -506,33 +623,23 @@ export function StudentDeckStudyPage() {
           onConfirm={() =>
             act(async () => {
               await studentDeckService.deleteDeck(deckId);
+              invalidateCached(deckCacheKey(deckId));
               toast.success('Deck deleted.');
               navigate(`${ROUTES.studentFlashcards}?tab=mine`, { replace: true });
             }, 'Could not delete the deck.')
           }
         />
       )}
-      {dialog?.kind === 'publish' && (
-        <ConfirmModal
-          title={deck.reviewStatus === 'REJECTED' ? 'Resubmit for review?' : 'Make this deck public?'}
-          message={
-            <>
-              A content manager will review the deck. While it waits you can't edit it (you can withdraw the request).{' '}
-              <strong className="text-content">Once approved, the deck can't be edited, made private or deleted.</strong>
-            </>
-          }
-          confirmLabel="Send for review"
-          busy={busy}
-          onClose={() => setDialog(null)}
-          onConfirm={() =>
-            act(async () => {
-              const res = await studentDeckService.requestPublish(deckId);
-              setDeck(d => (d ? { ...d, reviewStatus: res.reviewStatus, visibility: res.visibility, submittedAt: res.submittedAt } : d));
-              toast.success('Sent for review.');
-            }, 'Could not send the deck for review.')
-          }
-        />
-      )}
+      <DeckContributionModal
+        open={contributionOpen}
+        initialDeckId={deckId}
+        onClose={() => setContributionOpen(false)}
+        onSubmitted={(_submittedDeckId, result) => {
+          setDeck(current => current ? { ...current, reviewStatus: result.reviewStatus, visibility: result.visibility, submittedAt: result.submittedAt } : current);
+          setContributionOpen(false);
+          toast.success('Sent for review.');
+        }}
+      />
       {dialog?.kind === 'withdraw' && (
         <ConfirmModal
           title="Withdraw the review request?"

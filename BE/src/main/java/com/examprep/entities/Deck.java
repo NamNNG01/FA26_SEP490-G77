@@ -8,6 +8,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.io.Serializable;
 import java.time.Instant;
+import java.util.List;
 
 @Entity
 @Table(name = "decks")
@@ -88,4 +89,7 @@ public class Deck implements Serializable {
     @Version
     @Column(name = "version")
     private Long version;
+
+    @OneToMany(mappedBy = "deck", cascade = CascadeType.REMOVE, orphanRemoval = true)
+    private List<DeckBookmark> bookmarks;
 }
