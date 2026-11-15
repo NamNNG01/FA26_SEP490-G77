@@ -17,7 +17,9 @@ import {
   studentDeckService,
   type StudentDeckView,
   type ViewerCard,
+  type ViewerView,
 } from '@/services/studentDeck.service';
+import { cacheGeneration, getCached, invalidateCached, setCached } from '@/hooks/useCachedQuery';
 import { studentProgressService } from '@/services/studentProgress.service';
 import { LoadError, STUDENT_PAGE_CLASS, formatDateTime } from '../components/studentUi';
 import type { DeckStudyState } from '../components/DeckCard';
@@ -40,6 +42,13 @@ import {
   useDeckStudy,
   type DeckProgress,
 } from '../components/flashcards/StudyPanel';
+
+/** What the deck page reads on load (FC-11 viewer + FC-14), cached per deck for this tab. */
+interface DeckReading {
+  viewer: ViewerView;
+  detail: StudentDeckView | null;
+}
+const deckCacheKey = (deckId: number) => `student:deck:${deckId}`;
 
 type Dialog =
   | { kind: 'edit' }
@@ -96,8 +105,43 @@ export function StudentDeckStudyPage() {
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
+    const key = deckCacheKey(deckId);
+    const apply = ({ viewer, detail }: DeckReading) => {
+      setCards(viewer.cards);
+      setDeck(prev => {
+        const base: StudentDeckView = detail ??
+          prev ?? {
+            deckId,
+            title: viewer.deckTitle,
+            description: null,
+            mode: viewer.deckMode,
+            courseId: state?.courseId ?? null,
+            courseTitle: state?.courseTitle ?? null,
+            cardCount: viewer.cards.length,
+            visibility: 'PRIVATE',
+            reviewStatus: 'NONE',
+            reviewNote: null,
+            createdAt: null,
+            isOwner: false,
+          };
+        return {
+          ...base,
+          // FC-14 may not say whether the caller owns it; the list / create state does.
+          isOwner: detail?.isOwner ?? prev?.isOwner ?? base.isOwner ?? false,
+          courseTitle: base.courseTitle ?? prev?.courseTitle ?? state?.courseTitle ?? null,
+          mode: viewer.deckMode,
+          cardCount: viewer.cards.length,
+        };
+      });
+      if (detail?.learnedCount != null) setProgress({ learned: detail.learnedCount, total: viewer.cards.length });
+    };
+    // Seen before in this tab: show the last reading at once, then read again behind it
+    // (a study run takes its cards from FP-01, never from this reading).
+    const cached = getCached<DeckReading>(key);
+    if (cached) apply(cached);
+    setLoading(!cached);
     setError(null);
+    const gen = cacheGeneration();
     (async () => {
       try {
         const [viewer, detail] = await Promise.all([
@@ -107,36 +151,15 @@ export function StudentDeckStudyPage() {
             throw err;
           }),
         ]);
+        // Signed out meanwhile: keep it out of the new session's cache.
+        if (gen === cacheGeneration()) setCached<DeckReading>(key, { viewer, detail });
         if (cancelled) return;
-        setCards(viewer.cards);
-        setDeck(prev => {
-          const base: StudentDeckView = detail ??
-            prev ?? {
-              deckId,
-              title: viewer.deckTitle,
-              description: null,
-              mode: viewer.deckMode,
-              courseId: state?.courseId ?? null,
-              courseTitle: state?.courseTitle ?? null,
-              cardCount: viewer.cards.length,
-              visibility: 'PRIVATE',
-              reviewStatus: 'NONE',
-              reviewNote: null,
-              createdAt: null,
-              isOwner: false,
-            };
-          return {
-            ...base,
-            // FC-14 may not say whether the caller owns it; the list / create state does.
-            isOwner: detail?.isOwner ?? prev?.isOwner ?? base.isOwner ?? false,
-            courseTitle: base.courseTitle ?? prev?.courseTitle ?? state?.courseTitle ?? null,
-            mode: viewer.deckMode,
-            cardCount: viewer.cards.length,
-          };
-        });
-        if (detail?.learnedCount != null) setProgress({ learned: detail.learnedCount, total: viewer.cards.length });
+        apply({ viewer, detail });
       } catch (err) {
-        if (!cancelled) setError(getApiErrorMessage(err, 'Failed to load the deck.'));
+        if (cancelled) return;
+        // A deck that is gone (or no longer readable) must not stay on screen from the cache.
+        invalidateCached(key);
+        setError(getApiErrorMessage(err, 'Failed to load the deck.'));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -507,6 +530,7 @@ export function StudentDeckStudyPage() {
           onConfirm={() =>
             act(async () => {
               await studentDeckService.deleteDeck(deckId);
+              invalidateCached(deckCacheKey(deckId));
               toast.success('Deck deleted.');
               navigate(`${ROUTES.studentFlashcards}?tab=mine`, { replace: true });
             }, 'Could not delete the deck.')

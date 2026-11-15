@@ -78,6 +78,7 @@ export const ROUTES = {
   managerCourseDetail: "/manager/courses/:courseId",
   managerQuestions: "/manager/question-bank",
   managerReviews: "/manager/reviews",
+  managerDiscussions: "/manager/discussions",
   managerQuestionIssues: "/manager/question-issues",
   managerQuestionCreate: "/manager/question-bank/new",
   /** Route pattern — render with managerQuestionEditPath(id). */
@@ -384,6 +385,12 @@ export const menuByRole: Record<string, MenuItem[]> = {
       path: ROUTES.managerReviews,
     },
     {
+      id: "manager-discussions",
+      title: "Discussions",
+      icon: <Icon.ClipboardList className="w-4 h-4" />,
+      path: ROUTES.managerDiscussions,
+    },
+    {
       id: "manager-question-issues",
       title: "Question issues",
       icon: <Icon.ClipboardList className="w-4 h-4" />,
@@ -420,6 +427,12 @@ export const menuByRole: Record<string, MenuItem[]> = {
       title: "Content review",
       icon: <Icon.CheckCircle className="w-4 h-4" />,
       path: ROUTES.managerReviews,
+    },
+    {
+      id: "admin-manager-discussions",
+      title: "Discussions",
+      icon: <Icon.ClipboardList className="w-4 h-4" />,
+      path: ROUTES.managerDiscussions,
     },
     {
       id: "admin-users",

@@ -1,16 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Badge } from '@/components/ui/Badge';
 import { Icon } from '@/assets/icons';
 import { studentDeckPath, studentExamPath } from '@/app/routes';
-import { getApiErrorMessage } from '@/utils/apiError';
 import type { ExamKind } from '@/services/exam.service';
-import {
-  studentCourseService,
-  type CourseExam,
-  type StudentCourseDetail,
-  type StudentDeck,
-} from '@/services/studentCourse.service';
+import type { CourseExam, StudentCourseDetail, StudentDeck } from '@/services/studentCourse.service';
 import type { DeckStudyState } from './DeckCard';
 import { formatScore } from './studentUi';
 
@@ -35,52 +28,19 @@ export function sortedModules(course: StudentCourseDetail) {
  * MC-02 exams and MC-03 decks of a course, grouped by their explicit module assignment. Only
  * items with a null moduleId belong to `general`; a stale or invalid module ID is not General.
  */
-export function useCourseContent(course: StudentCourseDetail | null) {
-  const courseId = course?.courseId;
-  const [exams, setExams] = useState<CourseExam[]>([]);
-  const [decks, setDecks] = useState<StudentDeck[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [reload, setReload] = useState(0);
-
-  useEffect(() => {
-    if (courseId == null) return;
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    Promise.all([studentCourseService.getAllCourseExams(courseId), studentCourseService.getCourseDecks(courseId)])
-      .then(([examRes, deckRes]) => {
-        if (cancelled) return;
-        setExams(examRes);
-        setDecks(deckRes);
-      })
-      .catch(err => {
-        if (!cancelled) setError(getApiErrorMessage(err, 'Failed to load the course content.'));
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [courseId, reload]);
-
-  const grouped = useMemo(() => {
-    const byModule = new Map<number, ContentItem[]>((course?.modules ?? []).map(m => [m.moduleId, []]));
-    const general: ContentItem[] = [];
-    const file = (moduleId: number | null, item: ContentItem) => {
-      if (moduleId == null) {
-        general.push(item);
-        return;
-      }
-      byModule.get(moduleId)?.push(item);
-    };
-    exams.forEach(exam => file(exam.moduleId, { kind: 'exam', exam }));
-    decks.forEach(deck => file(deck.moduleId, { kind: 'deck', deck }));
-    return { byModule, general };
-  }, [course, exams, decks]);
-
-  return { ...grouped, loading, error, retry: () => setReload(r => r + 1) };
+export function groupCourseContent(course: StudentCourseDetail, exams: CourseExam[], decks: StudentDeck[]) {
+  const byModule = new Map<number, ContentItem[]>(course.modules.map(m => [m.moduleId, []]));
+  const general: ContentItem[] = [];
+  const file = (moduleId: number | null, item: ContentItem) => {
+    if (moduleId == null) {
+      general.push(item);
+      return;
+    }
+    byModule.get(moduleId)?.push(item);
+  };
+  exams.forEach(exam => file(exam.moduleId, { kind: 'exam', exam }));
+  decks.forEach(deck => file(deck.moduleId, { kind: 'deck', deck }));
+  return { byModule, general };
 }
 
 /** Opens an exam's detail page, or a deck's study page with the course for its breadcrumb. */

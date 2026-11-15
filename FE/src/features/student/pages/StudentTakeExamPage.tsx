@@ -37,6 +37,8 @@ import { ModulePracticeRunner } from '../components/ModulePracticeRunner';
 import { ReportQuestionIssueButton } from '../components/ReportQuestionIssueDialog';
 import { GroupPassageSplit } from '../components/GroupPassageSplit';
 import { EssayQuestionPrompt } from '../components/EssayQuestionPrompt';
+import { invalidateCached } from '@/hooks/useCachedQuery';
+import { examDetailCacheKey } from './StudentExamDetailPage';
 import {
   canChooseTakeMode,
   forgetTakeAs,
@@ -221,6 +223,10 @@ function ExamAttemptScreen() {
 
   // CODE questions: languages, template and sample I/O. A failure leaves the editor usable without them.
   const sessionExamId = session?.examId;
+  // An attempt is running: the exam page's cached reading (its "Continue" / stats) is out of date.
+  useEffect(() => {
+    if (sessionExamId != null) invalidateCached(examDetailCacheKey(sessionExamId));
+  }, [sessionExamId]);
   const hasCode = Boolean(session?.questions.some(q => q.questionType === 'CODE'));
   useEffect(() => {
     if (sessionExamId == null || !hasCode) return;
