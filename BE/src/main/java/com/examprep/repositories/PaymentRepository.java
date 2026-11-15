@@ -38,4 +38,21 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
     List<Payment> lockReservedExpired(@Param("status") String status, @Param("now") Instant now);
 
     Page<Payment> findByUserUserIdOrderByCreatedAtDesc(Long userId, Pageable pageable);
+
+    /**
+     * DASH-04: every successful payment paid inside the window, as
+     * {@code (paidAt, type, refId, amount, title)}. The report buckets these rows by calendar day
+     * itself, which keeps the query portable across PostgreSQL and the H2 test profile; {@code title}
+     * is the target's name at checkout and backs the plan/course labels up.
+     */
+    @Query("SELECT p.paidAt, p.type, p.refId, p.amount, p.title FROM Payment p "
+            + "WHERE p.status = 'SUCCEEDED' AND p.paidAt IS NOT NULL "
+            + "AND p.paidAt >= :from AND p.paidAt < :to")
+    List<Object[]> findPaidBetween(@Param("from") Instant from, @Param("to") Instant to);
+
+    /** DASH-04: lifetime course revenue per course, as {@code (courseId, SUM(amount))}. */
+    @Query("SELECT p.refId, SUM(p.amount) FROM Payment p "
+            + "WHERE p.type = 'COURSE' AND p.status = 'SUCCEEDED' AND p.refId IS NOT NULL "
+            + "GROUP BY p.refId")
+    List<Object[]> sumCourseRevenueByCourse();
 }

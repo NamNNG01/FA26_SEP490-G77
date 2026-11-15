@@ -1,27 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CmCourseStat, CmDashboardSummary, CmExamStat } from '@/services/cmDashboard.types';
 import { CM_MIN_ATTEMPTS } from '@/services/cmDashboard.types';
-import {
-  mockFetchCmCourses,
-  mockFetchCmExams,
-  mockFetchCmSummary,
-} from '../mocks/cmDashboard.mock';
+import { cmDashboardService } from '@/services/cmDashboard.service';
 
 /**
  * useCmDashboard
  *
  * Data for the Course Manager dashboard v2. The three sections load
- * independently — each will map to its own endpoint, so one failing or
- * being slow never blocks the others:
+ * independently, so one failing or being slow never blocks the others:
  *
- *   summary → GET /api/v1/dashboard/course-manager/summary?range=7d
- *   courses → GET /api/v1/dashboard/course-manager/courses?sort=passRate&page=&size=
- *   exams   → GET /api/v1/dashboard/course-manager/exams?courseId=&sort=passRate&minAttempts=5&page=&size=
+ *   summary → GET /api/v1/dashboard/course-manager/summary
+ *   courses → GET /api/v1/dashboard/course-manager/courses
+ *   exams   → GET /api/v1/dashboard/course-manager/exams?minAttempts=5
  *
- * DEMO: the fetchers below are mocks (~400ms latency). When the backend
- * ships, replace them with dashboardService calls — the return shape and
- * the UI stay the same. Exams are fetched unfiltered and filtered by course
- * on the client; switch to the `courseId` param once paging is server-side.
+ * All three are scoped server-side to the signed-in course manager. Exams
+ * arrive unfiltered and the panel narrows them to the selected course on the
+ * client — the lists are small and the API also accepts `courseId` when a
+ * caller needs only one course.
  */
 
 export type CmDashboardSection = 'summary' | 'courses' | 'exams';
@@ -63,10 +58,10 @@ export function useCmDashboard(): UseCmDashboardResult {
 
     const request: Promise<void> =
       section === 'summary'
-        ? mockFetchCmSummary({ range: '7d' }).then(keep(setSummary))
+        ? cmDashboardService.getSummary().then(keep(setSummary))
         : section === 'courses'
-          ? mockFetchCmCourses({ sort: 'passRate' }).then(keep(setCourses))
-          : mockFetchCmExams({ sort: 'passRate', minAttempts: CM_MIN_ATTEMPTS }).then(keep(setExams));
+          ? cmDashboardService.getCourses().then(keep(setCourses))
+          : cmDashboardService.getExams({ minAttempts: CM_MIN_ATTEMPTS }).then(keep(setExams));
 
     request
       .catch((e: unknown) => {

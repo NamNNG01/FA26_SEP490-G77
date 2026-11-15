@@ -5,7 +5,7 @@ import { Select } from '@/components/ui/Select';
 import { Pagination, usePagination } from '@/components/ui/Pagination';
 import { SearchInput } from '@/components/common/SearchInput';
 import { Icon } from '@/assets/icons';
-import type { AiUsageLog } from '../data/adminDashboardDemo';
+import type { AiUsageLog } from '@/services/adminDashboard.service';
 import { formatDateTime, formatInteger } from '../utils/dashboardFormat';
 import { SortHeader } from './SortHeader';
 
@@ -39,10 +39,13 @@ const inputClass =
 export function AiUsageLogTable({
   logs,
   dayRange,
+  totals,
 }: {
   logs: AiUsageLog[];
   /** First/last day of the dashboard period (YYYY-MM-DD), bounds the time filter. */
   dayRange: { from: string; to: string };
+  /** Period-wide counts from the API; `logs` only carries the newest entries. */
+  totals?: { requests: number; failed: number; shown: number };
 }) {
   const [userQuery, setUserQuery] = useState('');
   const [result, setResult] = useState<ResultFilter>('all');
@@ -108,9 +111,12 @@ export function AiUsageLogTable({
             <h4 className="text-lg font-semibold text-content">AI Usage Log</h4>
             <p className="text-xs text-content-subtle">
               {hasFilter
-                ? `${formatInteger(filtered.length)} of ${formatInteger(logs.length)} requests match`
-                : `${formatInteger(logs.length)} requests in this period`}
-              {failedCount > 0 && ` · ${formatInteger(failedCount)} failed`}
+                ? `${formatInteger(filtered.length)} of ${formatInteger(logs.length)} loaded requests match`
+                : `${formatInteger(totals?.requests ?? logs.length)} requests in this period`}
+              {!hasFilter && totals && totals.shown < totals.requests
+                && ` · showing the newest ${formatInteger(totals.shown)}`}
+              {(hasFilter ? failedCount : (totals?.failed ?? failedCount)) > 0
+                && ` · ${formatInteger(hasFilter ? failedCount : (totals?.failed ?? failedCount))} failed`}
             </p>
           </div>
           {!hasFilter && logs.length > RECENT_LOG_COUNT && (

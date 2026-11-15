@@ -1,5 +1,5 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { Granularity, RevenuePoint } from '../data/adminDashboardDemo';
+import type { Granularity, RevenuePoint } from '@/services/adminDashboard.service';
 import { formatCompact, formatPeriod, formatVnd } from '../utils/dashboardFormat';
 
 const HEIGHT = 240;

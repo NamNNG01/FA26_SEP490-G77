@@ -1,32 +1,30 @@
 import React, { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router';
 import { StatCard } from '@/components/ui/StatCard';
-import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { DashboardError } from '@/components/common/DashboardState';
-import { useToast } from '@/components/ui/ToastHost';
 import { Icon } from '@/assets/icons';
+import { ROUTES } from '@/app/routes';
 import type { CmDashboardSummary } from '@/services/cmDashboard.types';
+import { CM_PASS_THRESHOLD_PERCENT } from '@/services/cmDashboard.types';
 import { useCmDashboard } from '../hooks/useCmDashboard';
 import { CmCoursePanel } from '../components/CmCoursePanel';
 import { CmExamPanel } from '../components/CmExamPanel';
-import { InfoTip, LabelWithInfo } from '../components/cmDashboardUi';
+import { InfoTip, LabelWithInfo, fmtPct } from '../components/cmDashboardUi';
 
 /**
  * CMDashboard (Course Manager) — v2
  *
- * DEMO: every figure is mock data served by useCmDashboard
- * (mocks/cmDashboard.mock.ts) because the backend has no endpoints for this
- * layout yet; the planned contract is documented in
- * services/cmDashboard.types.ts. The old GET /dashboard/course-manager call
- * (dashboardService.getManagerDashboard) is no longer used by this page.
+ * Every figure comes from the DASH-05 endpoints (services/cmDashboard.service.ts), scoped
+ * server-side to the courses this manager owns or co-manages and the course exams they created.
  *
  * KPI row, "Course của tôi" and "Hiệu suất bài thi" load and fail
  * independently. Clicking a course row and the course Select share one
  * filter state.
  */
 export function CMDashboard() {
-  const toast = useToast();
+  const navigate = useNavigate();
   const { summary, courses, exams, loading, error, refresh } = useCmDashboard();
   const [selectedCourseId, setSelectedCourseId] = useState<number | null>(null);
 
@@ -38,11 +36,6 @@ export function CMDashboard() {
     return [...seen].map(([courseId, title]) => ({ courseId, title }));
   }, [courses, exams]);
 
-  const notReady = (what: string) => {
-    console.log('[CMDashboard] not implemented yet:', what);
-    toast.info('Đang phát triển');
-  };
-
   return (
     <div className="p-8 space-y-5">
       {/* Header */}
@@ -50,10 +43,9 @@ export function CMDashboard() {
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-xl font-bold text-content">Course Manager Dashboard</h2>
-            <Badge variant="warning">Demo data</Badge>
           </div>
           <p className="text-sm text-content-soft mt-0.5 flex items-center gap-1.5">
-            Demo figures — not live data yet
+            Số liệu trực tiếp từ course và exam bạn quản lý
             <InfoTip side="bottom" label="Course dùng chung giữa nhiều CM; số liệu exam là của riêng bạn" />
           </p>
         </div>
@@ -88,7 +80,7 @@ export function CMDashboard() {
             onRetry={() => refresh('courses')}
             selectedCourseId={selectedCourseId}
             onSelectCourse={setSelectedCourseId}
-            onViewAll={() => notReady('all courses')}
+            onViewAll={() => navigate(ROUTES.managerCourses)}
           />
         </div>
         <div className="min-w-0 xl:col-span-7">
@@ -100,7 +92,7 @@ export function CMDashboard() {
             courseOptions={courseOptions}
             selectedCourseId={selectedCourseId}
             onSelectCourse={setSelectedCourseId}
-            onViewAll={() => notReady('all exams')}
+            onViewAll={() => navigate(ROUTES.managerExams)}
           />
         </div>
       </div>
@@ -139,9 +131,29 @@ function KpiRow({ summary: s }: { summary: CmDashboardSummary }) {
         icon={<Icon.FileText />}
         footer={
           <p className="text-sm text-content-subtle">
-            {s.myExams.published} published · {s.myExams.draft} draft · {s.myExams.hidden} ẩn
+            {s.myExams.published} published · {s.myExams.draft} draft · {s.myExams.archived} archived
           </p>
         }
+      />
+      <StatCard
+        title={<LabelWithInfo info="Attempt đã nộp trong 7 ngày gần nhất, tính cả bài đang chờ chấm">Bài nộp (7 ngày)</LabelWithInfo>}
+        value={s.submittedAttempts7d.toLocaleString()}
+        icon={<Icon.Upload />}
+      />
+      <StatCard
+        title={
+          <LabelWithInfo info={`Điểm phần trăm trung bình của các attempt đã chấm; pass rate tính từ ${CM_PASS_THRESHOLD_PERCENT}% điểm tối đa trở lên`}>
+            Điểm trung bình
+          </LabelWithInfo>
+        }
+        value={fmtPct(s.avgScore)}
+        icon={<Icon.BarChart />}
+        footer={<p className="text-sm text-content-subtle">Pass rate {fmtPct(s.passRate)}</p>}
+      />
+      <StatCard
+        title={<LabelWithInfo info="Attempt đã nộp nhưng chưa chấm xong (chờ AI hoặc đang chấm)">Chờ chấm</LabelWithInfo>}
+        value={s.pendingGrading.toLocaleString()}
+        icon={<Icon.Clock />}
       />
     </div>
   );

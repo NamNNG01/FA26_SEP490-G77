@@ -4,6 +4,7 @@ import { Badge, Chip } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { DashboardError } from '@/components/common/DashboardState';
 import type { CmExamStat } from '@/services/cmDashboard.types';
+import { CM_MIN_ATTEMPTS, CM_PASS_THRESHOLD_PERCENT } from '@/services/cmDashboard.types';
 import {
   MetricCell,
   Panel,
@@ -16,9 +17,9 @@ import {
 } from './cmDashboardUi';
 
 /**
- * "Hiệu suất bài thi". Rows arrive already sorted by the (mock) API:
- * lowest pass rate first, exams under 5 attempts last — filtering by
- * course keeps that order.
+ * "Hiệu suất bài thi". Rows arrive already sorted by the API (lowest pass
+ * rate first, exams under 5 attempts last); filtering by course keeps that
+ * order.
  */
 export function CmExamPanel({ exams, loading, error, onRetry, courseOptions, selectedCourseId, onSelectCourse, onViewAll }: {
   exams: CmExamStat[] | null;
@@ -46,7 +47,7 @@ export function CmExamPanel({ exams, loading, error, onRetry, courseOptions, sel
         return (
           <div className="flex items-center gap-2 min-w-0">
             <span className="truncate font-medium text-foreground" title={e.title}>{e.title}</span>
-            {e.status === 'HIDDEN' && <Badge variant="default" className="flex-shrink-0">Đã ẩn</Badge>}
+            {e.status === 'ARCHIVED' && <Badge variant="default" className="flex-shrink-0">Đã lưu trữ</Badge>}
             {e.status === 'DRAFT' && <Badge variant="warning" className="flex-shrink-0">Draft</Badge>}
           </div>
         );
@@ -112,7 +113,8 @@ export function CmExamPanel({ exams, loading, error, onRetry, courseOptions, sel
       ) : (
         <>
           <p className="px-5 pt-3 text-xs text-muted-foreground">
-            Pass rate thấp nhất lên đầu · exam dưới 5 bài nộp xếp cuối.
+            Pass rate = tỉ lệ bài đã chấm đạt ≥ {CM_PASS_THRESHOLD_PERCENT}% điểm tối đa · thấp nhất lên đầu ·
+            exam dưới {CM_MIN_ATTEMPTS} bài nộp xếp cuối.
           </p>
           <Table columns={columns} data={rows} unit="exam" resetKey={selectedCourseId ?? 'all'} />
         </>

@@ -1,5 +1,5 @@
 import { downloadXlsx } from '@/utils/xlsx';
-import type { AdminDashboardDemo, DashboardFilter, TopCourseSort } from '../data/adminDashboardDemo';
+import type { AdminDashboardReport, DashboardFilter, TopCourseSort } from '@/services/adminDashboard.service';
 import { formatDateTime, formatPeriod } from './dashboardFormat';
 
 const GRANULARITY_LABEL = { day: 'Day', month: 'Month', year: 'Year' } as const;
@@ -8,8 +8,8 @@ const GRANULARITY_LABEL = { day: 'Day', month: 'Month', year: 'Year' } as const;
  * Exports the whole dashboard, for the active filter, as a 5-sheet workbook:
  * Overview, Revenue by period, Revenue by source, Top courses, AI usage log.
  */
-export function exportAdminDashboard(data: AdminDashboardDemo, filter: DashboardFilter, sortBy: TopCourseSort): void {
-  const { summary, revenueSeries, revenueBySource, topCourses, aiLogs } = data;
+export function exportAdminDashboard(data: AdminDashboardReport, filter: DashboardFilter, sortBy: TopCourseSort): void {
+  const { summary, revenueSeries, revenueBySource, topCourses, aiLogs, aiLogTotals } = data;
   const g = filter.granularity;
   const range = `${formatPeriod(filter.from, g)} – ${formatPeriod(filter.to, g)}`;
   const totalRevenue = revenueBySource.courseSales + revenueBySource.aiSubscription;
@@ -22,14 +22,14 @@ export function exportAdminDashboard(data: AdminDashboardDemo, filter: Dashboard
       widths: [32, 18, 44],
       rows: [
         ['Report period', range, `Grouped by ${GRANULARITY_LABEL[g].toLowerCase()}`],
-        ['Net revenue (VND)', summary.netRevenue, 'After discounts and PayOS fees'],
+        ['Net revenue (VND)', summary.netRevenue, 'Collected payments of the period, after discounts'],
         ['Total users', summary.users.total, 'All time'],
         ['  Students', summary.users.students, ''],
         ['  Course managers', summary.users.courseManagers, ''],
         ['  Admins', summary.users.admins, ''],
         ['Active courses (published)', summary.courses.active, `of ${summary.courses.total} courses`],
-        ['AI tokens used', summary.ai.tokensUsed, 'In report period'],
-        ['AI provider token quota', summary.ai.providerQuota, 'From the AI provider'],
+        ['AI tokens used', summary.ai.tokensUsed, 'Settled requests of the period'],
+        ['AI requests', aiLogTotals.requests, `Settled in the period · ${aiLogTotals.failed} failed`],
       ],
     },
     {
@@ -68,13 +68,21 @@ export function exportAdminDashboard(data: AdminDashboardDemo, filter: Dashboard
       name: 'AI usage log',
       header: ['Time', 'User', 'AI feature', 'Tokens', 'Result'],
       widths: [18, 24, 22, 12, 10],
-      rows: aiLogs.map((log) => [
-        formatDateTime(log.time),
-        log.user,
-        log.feature,
-        log.tokens,
-        log.success ? 'Success' : 'Failed',
-      ]),
+      rows: [
+        ...aiLogs.map((log) => [
+          formatDateTime(log.time),
+          log.user,
+          log.feature,
+          log.tokens,
+          log.success ? 'Success' : 'Failed',
+        ]),
+        [],
+        [
+          aiLogTotals.shown < aiLogTotals.requests
+            ? `Showing the newest ${aiLogTotals.shown} of ${aiLogTotals.requests} settled requests`
+            : `${aiLogTotals.requests} settled requests`,
+        ],
+      ],
     },
   ]);
 }

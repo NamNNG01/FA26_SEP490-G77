@@ -53,4 +53,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
     long countByStatus(String status);
 
     long countByCreatedAtAfter(Instant from);
+
+    /** DASH-04: registration instant of the oldest account — the platform's first data day. */
+    @Query("SELECT MIN(u.createdAt) FROM User u")
+    Instant findFirstCreatedAt();
 }

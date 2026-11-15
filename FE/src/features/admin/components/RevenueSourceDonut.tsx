@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import type { CourseRevenue, PlanRevenue } from '../data/adminDashboardDemo';
+import type { CourseRevenue, PlanRevenue } from '@/services/adminDashboard.service';
 import { formatCompact, formatVnd } from '../utils/dashboardFormat';
 
 const SIZE = 168;

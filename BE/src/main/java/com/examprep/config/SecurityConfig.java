@@ -78,9 +78,14 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/admin/**").hasRole(User.ROLE_ADMIN)
                         .requestMatchers("/api/v1/manager/**").hasAnyRole(User.ROLE_COURSE_MANAGER, User.ROLE_ADMIN)
                         .requestMatchers("/api/v1/student/**").hasAnyRole(User.ROLE_STUDENT, User.ROLE_ADMIN)
-                        .requestMatchers("/api/v1/dashboard/student").hasAnyRole(User.ROLE_STUDENT, User.ROLE_ADMIN)
-                        .requestMatchers("/api/v1/dashboard/course-manager").hasAnyRole(User.ROLE_COURSE_MANAGER, User.ROLE_ADMIN)
-                        .requestMatchers("/api/v1/dashboard/admin").hasRole(User.ROLE_ADMIN)
+                        // Each dashboard prefix and everything under it: the reports live on sub-paths
+                        // (…/admin/report, …/course-manager/summary|courses|exams).
+                        .requestMatchers("/api/v1/dashboard/student", "/api/v1/dashboard/student/**")
+                        .hasAnyRole(User.ROLE_STUDENT, User.ROLE_ADMIN)
+                        .requestMatchers("/api/v1/dashboard/course-manager", "/api/v1/dashboard/course-manager/**")
+                        .hasAnyRole(User.ROLE_COURSE_MANAGER, User.ROLE_ADMIN)
+                        .requestMatchers("/api/v1/dashboard/admin", "/api/v1/dashboard/admin/**")
+                        .hasRole(User.ROLE_ADMIN)
                         // All other endpoints (including /api/v1/auth/logout, /api/v1/auth/logout-all) require authentication
                         .anyRequest().authenticated()
                 )

@@ -1,82 +1,138 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { StatCard } from '@/components/ui/StatCard';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { Progress } from '@/components/ui/Progress';
+import { Alert } from '@/components/ui/Alert';
+import { Skeleton } from '@/components/ui/Skeleton';
+import { DashboardError } from '@/components/common/DashboardState';
 import { Icon } from '@/assets/icons';
 import { ROUTES } from '@/app/routes';
+import { getApiErrorMessage } from '@/utils/apiError';
+import {
+  adminDashboardService,
+  type AdminDashboardReport,
+  type DashboardFilter,
+  type Granularity,
+  type TopCourseSort,
+} from '@/services/adminDashboard.service';
 import { PeriodFilter } from '../components/PeriodFilter';
 import { RevenueTrendChart, REVENUE_SERIES } from '../components/RevenueTrendChart';
 import { RevenueSourceDonut } from '../components/RevenueSourceDonut';
 import { AiUsageLogTable } from '../components/AiUsageLogTable';
 import { SortHeader } from '../components/SortHeader';
-import {
-  DEMO_DATA_START,
-  defaultFilter,
-  filterDayRange,
-  getAdminDashboardDemo,
-  type DashboardFilter,
-  type TopCourseSort,
-} from '../data/adminDashboardDemo';
+import { defaultFilter, filterDayRange } from '../utils/dashboardPeriods';
 import { formatCompact, formatInteger, formatPeriod, formatVnd } from '../utils/dashboardFormat';
 import { exportAdminDashboard } from '../utils/exportAdminDashboard';
+
+/** Until the first report arrives the picker offers any date; the API bounds the report itself. */
+const FALLBACK_DATA_START = '2000-01-01';
 
 /**
  * AdminDashboard
  *
- * DEMO: every figure comes from `getAdminDashboardDemo` (client-side, seeded)
- * because the backend has no payments / AI-usage data yet. Swap that call for
- * the dashboard API when it lands — the page only depends on its return shape.
+ * Every figure comes from GET /dashboard/admin/report — collected payments (course sales and
+ * subscription plans), accounts, courses and settled AI usage logs of the live database.
  *
- * Period filter (Day / Month / Year + range) drives net revenue, AI tokens,
- * both revenue charts, the AI log and the Excel export. Users, courses and
- * top courses are all-time figures.
+ * Period filter (Day / Month / Year + range) drives net revenue, AI tokens, both revenue charts,
+ * the AI log and the Excel export. Users, courses and top courses are all-time figures.
  */
 export function AdminDashboard() {
-  const navigate = useNavigate();
   const [filter, setFilter] = useState<DashboardFilter>(() => defaultFilter('day'));
   const [sortBy, setSortBy] = useState<TopCourseSort>('revenue');
+  const [data, setData] = useState<AdminDashboardReport | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [reload, setReload] = useState(0);
 
-  const data = useMemo(() => getAdminDashboardDemo(filter, sortBy), [filter, sortBy]);
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    adminDashboardService
+      .getReport(filter, sortBy)
+      .then(report => {
+        if (!cancelled) setData(report);
+      })
+      .catch(err => {
+        if (!cancelled) setError(getApiErrorMessage(err, 'Could not load the dashboard report.'));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [filter, sortBy, reload]);
+
+  const retry = useCallback(() => setReload(value => value + 1), []);
+  // A new period invalidates the AI table's own time window.
   const dayRange = useMemo(() => filterDayRange(filter), [filter]);
-  const { summary, revenueSeries, revenueBySource, topCourses, aiLogs } = data;
   const g = filter.granularity;
-  const hasRevenue = summary.netRevenue > 0;
-  const quotaPct = summary.ai.providerQuota ? (summary.ai.tokensUsed / summary.ai.providerQuota) * 100 : 0;
 
   return (
     <div className="p-8 space-y-6">
       {/* Header + filters */}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
-            <h2 className="text-xl font-bold text-content">System Admin Dashboard</h2>
-            <Badge variant="warning">Demo data</Badge>
-          </div>
+          <h2 className="text-xl font-bold text-content">System Admin Dashboard</h2>
           <p className="text-sm text-content-soft mt-0.5">
             {formatPeriod(filter.from, g)} – {formatPeriod(filter.to, g)}
+            {loading && <span className="ml-2 text-content-subtle">Updating…</span>}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <PeriodFilter value={filter} minDate={DEMO_DATA_START} onChange={setFilter} />
+          <PeriodFilter value={filter} minDate={data?.dataStart ?? FALLBACK_DATA_START} onChange={setFilter} />
           <Button
             variant="outline"
             icon={<Icon.Download className="w-4 h-4" />}
-            onClick={() => exportAdminDashboard(data, filter, sortBy)}
+            disabled={!data}
+            onClick={() => data && exportAdminDashboard(data, filter, sortBy)}
           >
             Export Excel
           </Button>
         </div>
       </div>
 
+      {!data ? (
+        error ? (
+          <div className="card">
+            <DashboardError message={error} onRetry={retry} />
+          </div>
+        ) : (
+          <AdminDashboardSkeleton />
+        )
+      ) : (
+        <>
+          {/* A failed refresh keeps the last report on screen; the banner explains the gap. */}
+          {error && <Alert type="error" title="Could not refresh" message={error} />}
+          <DashboardBody data={data} granularity={g} sortBy={sortBy} onSort={setSortBy} dayRange={dayRange} />
+        </>
+      )}
+    </div>
+  );
+}
+
+function DashboardBody({ data, granularity, sortBy, onSort, dayRange }: {
+  data: AdminDashboardReport;
+  granularity: Granularity;
+  sortBy: TopCourseSort;
+  onSort: (sort: TopCourseSort) => void;
+  dayRange: { from: string; to: string };
+}) {
+  const navigate = useNavigate();
+  const { summary, revenueSeries, revenueBySource, topCourses, aiLogs, aiLogTotals } = data;
+  const hasRevenue = summary.netRevenue > 0;
+
+  return (
+    <>
       {/* KPI cards — grid rows stretch, so every card shares the tallest height. */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <StatCard
           title="Net Revenue"
           value={formatVnd(summary.netRevenue)}
           icon={<Icon.TrendingUp />}
-          footer={<p className="text-xs text-content-subtle">After discounts & PayOS fees</p>}
+          footer={<p className="text-xs text-content-subtle">Collected payments, after discounts</p>}
         />
 
         <div
@@ -116,15 +172,13 @@ export function AdminDashboard() {
         />
         <StatCard
           title="AI Tokens"
-          value={`${formatCompact(summary.ai.tokensUsed)} / ${formatCompact(summary.ai.providerQuota)}`}
+          value={formatCompact(summary.ai.tokensUsed)}
           icon={<Icon.Brain />}
           footer={
-            <div className="space-y-1">
-              <Progress value={Math.min(quotaPct, 100)} size="sm" color="var(--chart-1)" />
-              <p className="text-xs text-content-subtle">
-                {quotaPct < 0.1 && quotaPct > 0 ? '<0,1' : quotaPct.toFixed(1).replace('.', ',')}% of provider quota
-              </p>
-            </div>
+            <p className="text-xs text-content-subtle">
+              {formatInteger(aiLogTotals.requests)} settled request{aiLogTotals.requests === 1 ? '' : 's'} in this period
+              {aiLogTotals.failed > 0 && ` · ${formatInteger(aiLogTotals.failed)} failed`}
+            </p>
           }
         />
       </div>
@@ -143,7 +197,7 @@ export function AdminDashboard() {
               ))}
             </div>
           </div>
-          {hasRevenue ? <RevenueTrendChart data={revenueSeries} granularity={g} /> : <EmptyState />}
+          {hasRevenue ? <RevenueTrendChart data={revenueSeries} granularity={granularity} /> : <EmptyState />}
         </div>
 
         <div className="card p-5 min-w-0">
@@ -178,12 +232,12 @@ export function AdminDashboard() {
               <tr className="text-left text-xs text-content-subtle border-b border-line-soft">
                 <th className="px-5 py-2.5 font-medium w-12">#</th>
                 <th className="px-5 py-2.5 font-medium">Course</th>
-                <SortHeader label="Revenue" align="right" active={sortBy === 'revenue'} onClick={() => setSortBy('revenue')} />
+                <SortHeader label="Revenue" align="right" active={sortBy === 'revenue'} onClick={() => onSort('revenue')} />
                 <SortHeader
                   label="Enrollments"
                   align="right"
                   active={sortBy === 'enrollments'}
-                  onClick={() => setSortBy('enrollments')}
+                  onClick={() => onSort('enrollments')}
                 />
                 <th className="px-5 py-2.5 font-medium">Status</th>
               </tr>
@@ -204,10 +258,32 @@ export function AdminDashboard() {
               ))}
             </tbody>
           </table>
+          {topCourses.length === 0 && <EmptyState />}
         </div>
       </div>
 
-      <AiUsageLogTable logs={aiLogs} dayRange={dayRange} />
+      <AiUsageLogTable logs={aiLogs} dayRange={dayRange} totals={aiLogTotals} />
+    </>
+  );
+}
+
+function AdminDashboardSkeleton() {
+  return (
+    <div className="space-y-6" aria-busy="true">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="card p-5 flex flex-col gap-4">
+            <Skeleton className="h-4 w-24 rounded" />
+            <Skeleton className="h-8 w-24 rounded" />
+            <Skeleton className="h-3 w-32 rounded" />
+          </div>
+        ))}
+      </div>
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        <div className="card p-5 xl:col-span-2"><Skeleton className="h-60 w-full rounded-[10px]" /></div>
+        <div className="card p-5"><Skeleton className="h-60 w-full rounded-[10px]" /></div>
+      </div>
+      <div className="card p-5"><Skeleton className="h-40 w-full rounded-[10px]" /></div>
     </div>
   );
 }

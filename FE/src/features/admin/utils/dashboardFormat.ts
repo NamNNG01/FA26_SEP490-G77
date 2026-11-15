@@ -1,4 +1,4 @@
-import type { Granularity } from '../data/adminDashboardDemo';
+import type { Granularity } from '@/services/adminDashboard.service';
 
 const vndFormatter = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 });
 const integerFormatter = new Intl.NumberFormat('vi-VN');

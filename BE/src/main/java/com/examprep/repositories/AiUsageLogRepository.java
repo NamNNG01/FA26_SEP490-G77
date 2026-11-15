@@ -1,6 +1,7 @@
 package com.examprep.repositories;
 
 import com.examprep.entities.AiUsageLog;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -64,4 +65,29 @@ public interface AiUsageLogRepository extends JpaRepository<AiUsageLog, Long> {
 
     // Ownership check for the AI log detail endpoint.
     Optional<AiUsageLog> findByLogIdAndUserUserId(Long logId, Long userId);
+
+    // ---- DASH-04: admin AI usage report -------------------------------------------------------
+    // "Settled" = the request finished one way or another (SUCCESS / PARTIAL / FAILED / TIMEOUT).
+    // PENDING and PROCESSING reservations are in flight and are never shown as a result.
+
+    /** Input + output tokens of every settled request in the window. */
+    @Query("SELECT COALESCE(SUM(COALESCE(l.inputTokens, 0) + COALESCE(l.outputTokens, 0)), 0) "
+            + "FROM AiUsageLog l WHERE l.status IN ('SUCCESS', 'PARTIAL') "
+            + "AND l.createdAt >= :from AND l.createdAt < :to")
+    Long sumSettledTokensBetween(@Param("from") Instant from, @Param("to") Instant to);
+
+    /** Settled requests in the window. */
+    @Query("SELECT COUNT(l) FROM AiUsageLog l WHERE l.status IN ('SUCCESS', 'PARTIAL', 'FAILED', 'TIMEOUT') "
+            + "AND l.createdAt >= :from AND l.createdAt < :to")
+    long countSettledBetween(@Param("from") Instant from, @Param("to") Instant to);
+
+    /** Failed / timed-out requests in the window. */
+    @Query("SELECT COUNT(l) FROM AiUsageLog l WHERE l.status IN ('FAILED', 'TIMEOUT') "
+            + "AND l.createdAt >= :from AND l.createdAt < :to")
+    long countFailedBetween(@Param("from") Instant from, @Param("to") Instant to);
+
+    /** Newest settled requests of the window with their user, newest first (paged so the report caps them). */
+    @Query("SELECT l FROM AiUsageLog l JOIN FETCH l.user WHERE l.status IN ('SUCCESS', 'PARTIAL', 'FAILED', 'TIMEOUT') "
+            + "AND l.createdAt >= :from AND l.createdAt < :to ORDER BY l.createdAt DESC, l.logId DESC")
+    List<AiUsageLog> findRecentSettledBetween(@Param("from") Instant from, @Param("to") Instant to, Pageable pageable);
 }

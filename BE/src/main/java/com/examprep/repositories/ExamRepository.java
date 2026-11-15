@@ -1,5 +1,6 @@
 package com.examprep.repositories;
 
+import com.examprep.dto.CmAttemptFact;
 import com.examprep.dto.student.CourseExamDto;
 import com.examprep.entities.Exam;
 import com.examprep.dto.IdCount;
@@ -9,6 +10,7 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.*;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import jakarta.persistence.LockModeType;
@@ -170,4 +172,30 @@ public interface ExamRepository extends JpaRepository<Exam, Long>, JpaSpecificat
             @Param("moduleId") Long moduleId,
             @Param("userId") Long userId
     );
+
+    /**
+     * DASH-05: course exams the manager created in the given courses, as
+     * {@code (examId, title, status, courseId, courseTitle)}. An exam may hang off the course
+     * directly or off one of its modules, hence the explicit left joins (an implicit join would
+     * drop rows with a null course).
+     */
+    @Query("SELECT e.examId, e.title, e.status, COALESCE(c.courseId, mc.courseId), COALESCE(c.title, mc.title) "
+            + "FROM Exam e LEFT JOIN e.course c LEFT JOIN e.module m LEFT JOIN m.course mc "
+            + "WHERE e.createdBy.userId = :userId AND e.mode IN ('EXAM', 'CONTEST') "
+            + "AND COALESCE(c.courseId, mc.courseId) IN :courseIds "
+            + "ORDER BY e.createdAt DESC, e.examId DESC")
+    List<Object[]> findMyCourseExamsForDashboard(@Param("userId") Long userId,
+                                                 @Param("courseIds") Collection<Long> courseIds);
+
+    /**
+     * DASH-05: every submitted attempt of those exams, one row per attempt, with the frozen max
+     * score snapshot so a later exam edit cannot restate an old attempt's percentage.
+     */
+    @Query("SELECT new com.examprep.dto.CmAttemptFact(e.examId, COALESCE(c.courseId, mc.courseId), a.status, "
+            + "a.totalScore, a.submittedAt, a.startTime, e.maxScore, a.examSnapshot) "
+            + "FROM ExamAttempt a JOIN a.exam e LEFT JOIN e.course c LEFT JOIN e.module m LEFT JOIN m.course mc "
+            + "WHERE e.createdBy.userId = :userId AND e.mode IN ('EXAM', 'CONTEST') "
+            + "AND COALESCE(c.courseId, mc.courseId) IN :courseIds AND a.submittedAt IS NOT NULL")
+    List<CmAttemptFact> findAttemptFactsForManager(@Param("userId") Long userId,
+                                                   @Param("courseIds") Collection<Long> courseIds);
 }

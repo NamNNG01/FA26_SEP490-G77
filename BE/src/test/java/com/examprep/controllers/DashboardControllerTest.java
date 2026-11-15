@@ -6,6 +6,8 @@ import com.examprep.security.JwtTokenProvider;
 import com.examprep.security.RestAccessDeniedHandler;
 import com.examprep.security.RestAuthenticationEntryPoint;
 import com.examprep.security.UserPrincipal;
+import com.examprep.services.AdminDashboardService;
+import com.examprep.services.CourseManagerDashboardService;
 import com.examprep.services.DashboardService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -39,6 +41,12 @@ class DashboardControllerTest {
 
     @MockBean
     private DashboardService dashboardService;
+
+    @MockBean
+    private AdminDashboardService adminDashboardService;
+
+    @MockBean
+    private CourseManagerDashboardService courseManagerDashboardService;
 
     @MockBean
     private JwtTokenProvider jwtTokenProvider;
@@ -255,5 +263,118 @@ class DashboardControllerTest {
                 .andExpect(jsonPath("$.success").value(true));
 
         verify(dashboardService).getCourseManagerDashboard(1L);
+    }
+
+    // =================================================================================
+    // DASH-04 / DASH-05
+    // =================================================================================
+
+    @Test
+    void adminReport_Success() throws Exception {
+        AdminDashboardReport body = AdminDashboardReport.builder()
+                .summary(AdminDashboardReport.Summary.builder()
+                        .netRevenue(new BigDecimal("800000"))
+                        .users(AdminDashboardReport.Users.builder()
+                                .total(3).students(1).courseManagers(1).admins(1).build())
+                        .courses(AdminDashboardReport.Courses.builder().active(1).total(2).build())
+                        .ai(AdminDashboardReport.Ai.builder().tokensUsed(3600).build())
+                        .build())
+                .revenueSeries(List.of(AdminDashboardReport.RevenuePoint.builder()
+                        .period("2026-09-18")
+                        .courseSales(new BigDecimal("600000"))
+                        .aiSubscription(new BigDecimal("200000"))
+                        .build()))
+                .aiLogTotals(AdminDashboardReport.AiLogTotals.builder().requests(4).failed(2).shown(4).build())
+                .dataStart("2026-01-01")
+                .build();
+
+        UserPrincipal principal = UserPrincipal.create(1L, "admin@gmail.com", "ADMIN");
+        when(adminDashboardService.report("day", "2026-09-18", "2026-09-18", "revenue")).thenReturn(body);
+
+        mockMvc.perform(get("/api/v1/dashboard/admin/report")
+                        .param("granularity", "day")
+                        .param("from", "2026-09-18")
+                        .param("to", "2026-09-18")
+                        .param("sortBy", "revenue")
+                        .with(user(principal)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.summary.netRevenue").value(800000))
+                .andExpect(jsonPath("$.data.summary.ai.tokensUsed").value(3600))
+                .andExpect(jsonPath("$.data.revenueSeries[0].period").value("2026-09-18"))
+                .andExpect(jsonPath("$.data.revenueSeries[0].courseSales").value(600000))
+                .andExpect(jsonPath("$.data.aiLogTotals.requests").value(4))
+                .andExpect(jsonPath("$.data.dataStart").value("2026-01-01"));
+
+        verify(adminDashboardService).report("day", "2026-09-18", "2026-09-18", "revenue");
+    }
+
+    @Test
+    void adminReport_ForbiddenForManager_Returns403() throws Exception {
+        UserPrincipal principal = UserPrincipal.create(201L, "manager@gmail.com", "COURSE_MANAGER");
+
+        mockMvc.perform(get("/api/v1/dashboard/admin/report")
+                        .param("from", "2026-09-18").param("to", "2026-09-18").with(user(principal)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value("Access denied."));
+
+        verifyNoInteractions(adminDashboardService);
+    }
+
+    @Test
+    void courseManagerPanels_Success() throws Exception {
+        CourseManagerDashboardDtos.Summary summary = CourseManagerDashboardDtos.Summary.builder()
+                .managedCourses(2)
+                .activeStudents(2)
+                .myExams(CourseManagerDashboardDtos.MyExams.builder()
+                        .total(3).published(1).draft(1).archived(1).build())
+                .submittedAttempts7d(13)
+                .avgScore(new BigDecimal("76.2"))
+                .passRate(new BigDecimal("76.9"))
+                .pendingGrading(1)
+                .build();
+        List<CourseManagerDashboardDtos.ExamStat> exams = List.of(CourseManagerDashboardDtos.ExamStat.builder()
+                .examId(7L).title("Midterm Java").courseId(3L).courseTitle("Java basics").status("PUBLISHED")
+                .submittedAttempts(4).avgScore(new BigDecimal("30.0")).passRate(BigDecimal.ZERO)
+                .avgDurationMinutes(30).pendingGrading(1)
+                .build());
+
+        UserPrincipal principal = UserPrincipal.create(201L, "manager@gmail.com", "COURSE_MANAGER");
+        when(courseManagerDashboardService.summary(201L)).thenReturn(summary);
+        when(courseManagerDashboardService.exams(201L, 3L, 5)).thenReturn(exams);
+
+        mockMvc.perform(get("/api/v1/dashboard/course-manager/summary").with(user(principal)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.managedCourses").value(2))
+                .andExpect(jsonPath("$.data.myExams.archived").value(1))
+                .andExpect(jsonPath("$.data.passRate").value(76.9));
+
+        mockMvc.perform(get("/api/v1/dashboard/course-manager/exams")
+                        .param("courseId", "3").param("minAttempts", "5").with(user(principal)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(1))
+                .andExpect(jsonPath("$.data[0].examId").value(7))
+                .andExpect(jsonPath("$.data[0].status").value("PUBLISHED"))
+                .andExpect(jsonPath("$.data[0].avgDurationMinutes").value(30));
+
+        verify(courseManagerDashboardService).summary(201L);
+        verify(courseManagerDashboardService).exams(201L, 3L, 5);
+    }
+
+    @Test
+    void courseManagerPanels_ForbiddenForStudent_Returns403() throws Exception {
+        UserPrincipal principal = UserPrincipal.create(101L, "student@gmail.com", "STUDENT");
+
+        for (String url : List.of(
+                "/api/v1/dashboard/course-manager/summary",
+                "/api/v1/dashboard/course-manager/courses",
+                "/api/v1/dashboard/course-manager/exams")) {
+            mockMvc.perform(get(url).with(user(principal)))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.success").value(false));
+        }
+
+        verifyNoInteractions(courseManagerDashboardService);
     }
 }

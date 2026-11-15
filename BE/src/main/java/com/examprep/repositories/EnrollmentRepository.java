@@ -11,6 +11,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -71,4 +72,23 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
 
     @Query("SELECT e FROM Enrollment e WHERE e.user.userId = :userId AND e.status = :status")
     List<Enrollment> findByUserIdAndStatus(@Param("userId") Long userId, @Param("status") String status);
+
+    /** DASH-04: lifetime enrollment rows per course (any status), as {@code (courseId, COUNT)}. */
+    @Query("SELECT e.course.courseId, COUNT(e) FROM Enrollment e GROUP BY e.course.courseId")
+    List<Object[]> countAllByCourse();
+
+    /** DASH-05: distinct students per course with the given status, as {@code (courseId, COUNT)}. */
+    @Query("SELECT e.course.courseId, COUNT(DISTINCT e.user.userId) FROM Enrollment e "
+            + "WHERE e.course.courseId IN :ids AND e.status = :status GROUP BY e.course.courseId")
+    List<Object[]> countDistinctStudentsByCourseIds(@Param("ids") Collection<Long> ids,
+                                                    @Param("status") String status);
+
+    /**
+     * DASH-05: distinct students with an enrollment in the given status across the courses the
+     * manager owns or co-manages (the DASH-02 counter counts every status).
+     */
+    @Query("SELECT COUNT(DISTINCT e.user.userId) FROM Enrollment e JOIN e.course c WHERE " + CourseRepository.MANAGER_SCOPE
+            + " AND e.status = :status")
+    long countDistinctStudentsByManagerIdAndStatus(@Param("managerId") Long managerId,
+                                                   @Param("status") String status);
 }

@@ -1,7 +1,8 @@
 import React from 'react';
 import { Tabs } from '@/components/ui/Tabs';
 import { Select } from '@/components/ui/Select';
-import { defaultFilter, toIsoDate, type DashboardFilter, type Granularity } from '../data/adminDashboardDemo';
+import type { DashboardFilter, Granularity } from '@/services/adminDashboard.service';
+import { defaultFilter, toIsoDate } from '../utils/dashboardPeriods';
 
 const GRANULARITY_TABS: { label: string; value: Granularity }[] = [
   { label: 'Day', value: 'day' },
