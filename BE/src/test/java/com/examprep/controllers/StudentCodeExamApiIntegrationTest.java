@@ -214,6 +214,21 @@ public class StudentCodeExamApiIntegrationTest {
         assertNull(answerOf(attemptId, codeQuestion.getQuestionId()).getScoreEarned());
     }
 
+    @Test
+    void archivedCodeQuestionRemainsUsableInAnExistingAttempt() throws Exception {
+        startAttempt();
+        codeQuestion.setStatus("ARCHIVED");
+        exam.setStatus("ARCHIVED");
+        em.flush();
+        call(student, get("/api/v1/student/code-exams/" + exam.getExamId() + "/questions"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.questions.length()").value(2));
+        stubJudge();
+        call(student, post("/api/v1/student/code-exams/submit").contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("examId", exam.getExamId(), "answers", List.of(
+                        Map.of("questionId", codeQuestion.getQuestionId(), "language", "JAVA", "sourceCode", "PASS"))))))
+                .andExpect(status().isOk());
+    }
+
     // =================================================================================
     // CD-04
     // =================================================================================

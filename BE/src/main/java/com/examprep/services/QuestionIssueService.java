@@ -90,6 +90,13 @@ public class QuestionIssueService {
                 .suggestedOptionIds(suggested.isEmpty() ? null : write(suggested)).suggestedAnswer(blankToNull(body.suggestedAnswer()))
                 .build());
         log(issue, student, "REPORTED", null, issue.getStatus(), type + (context.source() == null ? "" : " from " + context.source()));
+        if (issue.getAssignedTo() == null) {
+            User assignee = autoAssignee(issue.getCourse());
+            if (assignee != null) {
+                issue.setAssignedTo(assignee);
+                log(issue, null, "AUTO_ASSIGNED", issue.getStatus(), issue.getStatus(), assignee.getFullName());
+            }
+        }
         issue.setLastReportedAt(Instant.now());
         issue.setUpdatedAt(Instant.now());
         refreshPriority(issue);
@@ -199,7 +206,7 @@ public class QuestionIssueService {
             case QuestionIssue.IN_PROGRESS -> {
                 if (!QuestionIssue.PENDING.equals(from)) throw conflict("ISSUE_STATUS_INVALID", "Only a pending ticket can be taken into review");
                 issue.setStatus(QuestionIssue.IN_PROGRESS);
-                if (issue.getAssignedTo() == null) issue.setAssignedTo(actor);
+                issue.setAssignedTo(actor); // whoever starts the review owns the ticket
                 log(issue, actor, "REVIEW_STARTED", from, target, note);
             }
             case QuestionIssue.REJECTED -> {
@@ -358,6 +365,22 @@ public class QuestionIssueService {
         if (course == null) return false;
         return (course.getManager() != null && course.getManager().getUserId().equals(userId))
                 || assignments.existsByCourseCourseIdAndUserUserId(course.getCourseId(), userId);
+    }
+
+    /**
+     * The active owner or co-manager of the course with the fewest open tickets; ties go to the owner, then the
+     * earliest co-manager. Null when the course has nobody (ADMIN picks it up from the queue).
+     */
+    private User autoAssignee(Course course) {
+        if (course == null) return null;
+        Map<Long, User> candidates = new LinkedHashMap<>();
+        if (course.getManager() != null) candidates.put(course.getManager().getUserId(), course.getManager());
+        assignments.findByCourseCourseIdOrderByCourseManagerIdAsc(course.getCourseId())
+                .forEach(cm -> candidates.putIfAbsent(cm.getUser().getUserId(), cm.getUser()));
+        // ponytail: one count query per manager; a course has a handful, group by if that ever changes
+        return candidates.values().stream().filter(u -> User.STATUS_ACTIVE.equals(u.getStatus()))
+                .min(Comparator.comparingLong(u -> issues.countByAssignedTo_UserIdAndStatusIn(u.getUserId(), QuestionIssue.OPEN)))
+                .orElse(null);
     }
 
     /** Practised it (any attempt holds it), or enrolled in its course (module practice, notebook). */

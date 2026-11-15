@@ -18,6 +18,7 @@ import com.examprep.util.ContentHashUtil;
 import com.examprep.util.QuestionTypeUtil;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -43,6 +44,9 @@ public class QuestionServiceImpl implements QuestionService {
     private final QuestionGroupRepository questionGroupRepository;
     private final CourseManagerRepository courseManagerRepository;
     private final ExamQuestionRepository examQuestionRepository;
+    private final ExamGroupRepository examGroupRepository;
+    private final ExamConfigRepository examConfigRepository;
+    private final EntityManager entityManager;
     private final AttemptAnswerRepository attemptAnswerRepository;
     private final DocumentRepository documentRepository;
     private final UserSubscriptionRepository userSubscriptionRepository;
@@ -813,6 +817,9 @@ public class QuestionServiceImpl implements QuestionService {
             throw new ForbiddenException("You do not have permission to change status of this question");
         }
 
+        lockQuestionCourses(List.of(q));
+        entityManager.refresh(q);
+
         if (req.getLockVersion() != null && !req.getLockVersion().equals(q.getLockVersion())) {
             throw new ResourceConflictException("Lock version mismatch");
         }
@@ -831,7 +838,7 @@ public class QuestionServiceImpl implements QuestionService {
             payload.setTestCases(testCasesOf(q));
             questionValidator.validateOrThrow(payload);
         } else if ("ACTIVE".equals(currentStatus) && "ARCHIVED".equals(newStatus)) {
-            // Allowed: ACTIVE -> ARCHIVED
+            checkArchiveImpact(q, Set.of(q.getQuestionId()));
         } else if ("ACTIVE".equals(currentStatus) && ("INACTIVE".equals(newStatus) || "DRAFT".equals(newStatus))) {
             throw new ResourceConflictException("Once active, a question can only be updated to archived");
         } else if ("ARCHIVED".equals(currentStatus)) {
@@ -853,12 +860,87 @@ public class QuestionServiceImpl implements QuestionService {
             throw new BadRequestException("Question IDs are required");
         }
         String newStatus = req.getStatus() != null ? req.getStatus().toUpperCase() : "";
+        List<Question> batch = new ArrayList<>();
+        for (Long id : req.getQuestionIds()) {
+            Question question = questionRepository.findActiveById(id)
+                    .orElseThrow(() -> new ResourceNotFoundException("Question not found"));
+            if (!accessPolicy.canChangeStatus(currentUser, question)) {
+                throw new ForbiddenException("You do not have permission to change status of this question");
+            }
+            batch.add(question);
+        }
+        lockQuestionCourses(batch);
+        if ("ARCHIVED".equals(newStatus)) {
+            Set<Long> batchIds = batch.stream().map(Question::getQuestionId).collect(Collectors.toSet());
+            for (Question question : batch) {
+                entityManager.refresh(question);
+                if ("ACTIVE".equals(question.getStatus())) checkArchiveImpact(question, batchIds);
+            }
+        }
         List<QuestionDetailDto> results = new ArrayList<>();
         for (Long id : req.getQuestionIds()) {
             QuestionStatusRequest sReq = QuestionStatusRequest.builder().status(newStatus).build();
             results.add(updateQuestionStatus(id, sReq, currentUser));
         }
         return results;
+    }
+
+    private void lockQuestionCourses(List<Question> questions) {
+        Set<Long> courseIds = new TreeSet<>();
+        for (Question question : questions) {
+            if (question.getCourse() != null) courseIds.add(question.getCourse().getCourseId());
+            if (question.getModule() != null) courseIds.add(question.getModule().getCourse().getCourseId());
+            if (question.getGroup() != null && question.getGroup().getCourse() != null) {
+                courseIds.add(question.getGroup().getCourse().getCourseId());
+            }
+            if (question.getGroup() != null && question.getGroup().getModule() != null) {
+                courseIds.add(question.getGroup().getModule().getCourse().getCourseId());
+            }
+        }
+        for (Long courseId : courseIds) courseRepository.findForUpdate(courseId);
+    }
+
+    private void checkArchiveImpact(Question question, Set<Long> archivedIds) {
+        Map<Long, Exam> affected = new LinkedHashMap<>();
+        for (ExamQuestion link : examQuestionRepository.findByQuestion_QuestionId(question.getQuestionId())) {
+            if ("PUBLISHED".equals(link.getExam().getStatus())) {
+                affected.put(link.getExam().getExamId(), link.getExam());
+            }
+        }
+        if (question.getGroup() != null) {
+            for (Exam exam : examGroupRepository.findPublishedExamsByGroupId(question.getGroup().getGroupId())) {
+                affected.put(exam.getExamId(), exam);
+            }
+        }
+
+        Set<Long> courseIds = new HashSet<>();
+        if (question.getCourse() != null) courseIds.add(question.getCourse().getCourseId());
+        if (question.getModule() != null) courseIds.add(question.getModule().getCourse().getCourseId());
+        if (!courseIds.isEmpty() && question.getSourceDocumentId() == null
+                && "APPROVED".equals(question.getApprovalStatus())) {
+            for (ExamConfig rule : examConfigRepository.findPublishedByCourseIds(courseIds)) {
+                Exam exam = rule.getExam();
+                Long examCourseId = exam.getCourse() != null ? exam.getCourse().getCourseId()
+                        : exam.getModule().getCourse().getCourseId();
+                Long moduleId = rule.getModule() == null ? null : rule.getModule().getModuleId();
+                List<Long> pool = questionRepository.findDrawableIds(examCourseId, moduleId,
+                        rule.getQuestionType(), rule.getDifficulty());
+                if (!pool.contains(question.getQuestionId())) continue;
+                Set<Long> fixedIds = examQuestionRepository.findAllByExamIds(List.of(exam.getExamId())).stream()
+                        .map(link -> link.getQuestion().getQuestionId()).collect(Collectors.toSet());
+                List<ExamGroup> groups = examGroupRepository.findAllByExamIds(List.of(exam.getExamId()));
+                if (!groups.isEmpty()) {
+                    List<Long> groupIds = groups.stream().map(link -> link.getGroup().getGroupId()).toList();
+                    questionRepository.findAllByGroupIds(groupIds).forEach(q -> fixedIds.add(q.getQuestionId()));
+                }
+                long remaining = pool.stream().filter(id -> !archivedIds.contains(id) && !fixedIds.contains(id)).count();
+                if (remaining < rule.getNumberOfQuestions()) affected.put(exam.getExamId(), exam);
+            }
+        }
+        if (!affected.isEmpty()) {
+            String ids = affected.keySet().stream().map(String::valueOf).collect(Collectors.joining(", "));
+            throw new ResourceConflictException("Cannot archive question. Published exam(s) would be affected: " + ids);
+        }
     }
 
 

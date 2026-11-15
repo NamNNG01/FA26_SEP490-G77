@@ -14,6 +14,13 @@ public interface ExamConfigRepository extends JpaRepository<ExamConfig, Long> {
     boolean existsByModuleModuleId(Long moduleId);
     boolean existsByModuleCourseCourseId(Long courseId);
     @Query("""
+    SELECT ec FROM ExamConfig ec LEFT JOIN ec.exam.module em LEFT JOIN em.course moduleCourse LEFT JOIN ec.exam.course course
+    WHERE ec.exam.status = 'PUBLISHED' AND ec.exam.generationType <> 'STATIC'
+      AND (course.courseId IN :courseIds OR moduleCourse.courseId IN :courseIds)
+    ORDER BY ec.exam.examId, ec.configId
+    """)
+    List<ExamConfig> findPublishedByCourseIds(@Param("courseIds") Collection<Long> courseIds);
+    @Query("""
     SELECT ec
     FROM ExamConfig ec
     WHERE ec.exam.examId IN :examIds

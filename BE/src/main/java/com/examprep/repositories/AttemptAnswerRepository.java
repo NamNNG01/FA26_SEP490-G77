@@ -15,6 +15,7 @@ import org.springframework.data.repository.query.Param;
 @Repository
 public interface AttemptAnswerRepository extends JpaRepository<AttemptAnswer, Long> {
     boolean existsByQuestion_QuestionId(Long questionId);
+    boolean existsByQuestion_QuestionIdAndAttempt_User_UserIdAndAttempt_Status(Long questionId, Long userId, String status);
     List<AttemptAnswer> findByAttempt_AttemptId(Long attemptId);
     List<AttemptAnswer> findByGradingStatus(String gradingStatus);
 

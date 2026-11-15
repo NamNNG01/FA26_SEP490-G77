@@ -130,6 +130,24 @@ class QuestionIssueApiIntegrationTest {
                 .andExpect(jsonPath("$.data.assignedTo.userId").value(manager.getUserId()));
     }
 
+    @Test void newTicketsGoToTheLeastBusyManagerAndStartingReviewTakesIt() throws Exception {
+        User coManager = f.account(User.ROLE_COURSE_MANAGER);
+        em.persist(CourseManager.builder().course(course).user(coManager).build());
+        Question second = f.question(course, module, "EASY");
+        em.flush();
+
+        long first = report(taker);
+        mvc.perform(get(BASE + "/" + first).with(as(manager))).andExpect(jsonPath("$.data.assignedTo.userId").value(manager.getUserId()));
+        long other = data(send(post("/api/v1/student/question-issues"), enrolled, reportBody(second, "WRONG_ANSWER"))
+                .andExpect(status().isCreated())).path("issueId").asLong();
+        mvc.perform(get(BASE + "/" + other).with(as(manager))).andExpect(jsonPath("$.data.assignedTo.userId").value(coManager.getUserId()));
+        send(post("/api/v1/student/question-issues"), enrolled, reportBody(question, "OTHER")).andExpect(status().isCreated());
+        mvc.perform(get(BASE + "/" + first).with(as(manager))).andExpect(jsonPath("$.data.assignedTo.userId").value(manager.getUserId()));
+
+        send(patch(BASE + "/" + other + "/status"), manager, "{\"status\":\"IN_PROGRESS\"}").andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.assignedTo.userId").value(manager.getUserId()));
+    }
+
     @Test void rejectNotifiesReportersAndClosesTheTicket() throws Exception {
         long id = report(taker);
         report(enrolled);
@@ -147,7 +165,7 @@ class QuestionIssueApiIntegrationTest {
         assertEquals(1, notifications(taker));
         assertEquals(1, notifications(enrolled));
         JsonNode history = data(mvc.perform(get(BASE + "/" + id + "/history").with(as(manager))));
-        assertEquals(List.of("REPORTED", "REPORTED", "REVIEW_STARTED", "REJECTED"),
+        assertEquals(List.of("REPORTED", "AUTO_ASSIGNED", "REPORTED", "REVIEW_STARTED", "REJECTED"),
                 json.convertValue(history.findValuesAsText("action"), List.class));
         assertNotEquals(id, report(taker), "a closed ticket does not take new reports");
     }
