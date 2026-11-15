@@ -120,7 +120,7 @@ public interface DeckRepository extends JpaRepository<Deck, Long> {
             "FROM Deck d LEFT JOIN d.module m " +
             "WHERE d.course.courseId = :courseId " +
             "AND ((:moduleId IS NULL AND d.module IS NULL) OR (m.moduleId = :moduleId)) " +
-            "AND (d.user.roleName <> 'STUDENT' OR d.user.userId = :userId OR d.visibility = 'PUBLIC') " +
+            "AND d.visibility = 'PUBLIC' " +
             "ORDER BY d.title ASC, d.deckId ASC")
     List<DeckDto> findDecksByModuleOrGeneral(
             @Param("courseId") Long courseId,

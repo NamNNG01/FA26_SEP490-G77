@@ -36,6 +36,7 @@ class StudentContestStartIntegrationTest {
     Fixtures f;
     User student;
     Contest contest;
+    Question contestQuestion;
 
     @BeforeEach void setUp() {
         f = new Fixtures(em);
@@ -46,7 +47,11 @@ class StudentContestStartIntegrationTest {
         Module module = f.module(course, "M1");
         Exam exam = f.exam(course, module, manager, "CONTEST");
         for (int i = 1; i <= 2; i++) {
-            em.persist(ExamQuestion.builder().exam(exam).question(f.question(course, module, "EASY"))
+            Question question = f.question(course, module, "EASY");
+            if (i == 1) {
+                contestQuestion = question;
+            }
+            em.persist(ExamQuestion.builder().exam(exam).question(question)
                     .orderIndex(i).weight(BigDecimal.ONE).build());
         }
         Instant now = Instant.now();
@@ -80,6 +85,29 @@ class StudentContestStartIntegrationTest {
                 .setParameter("id", first.path("attemptId").asLong()).getSingleResult());
     }
 
+    @Test void resumingContestUsesTheFrozenQuestionSnapshot() throws Exception {
+        JsonNode first = data(post("/api/v1/student/contests/" + contest.getContestId() + "/start"));
+        JsonNode frozenQuestion = findQuestion(first.path("questions"), contestQuestion.getQuestionId());
+        String originalContent = frozenQuestion.path("content").asText();
+        String originalOption = frozenQuestion.path("options").get(0).path("optionText").asText();
+
+        contestQuestion.setContent("Changed after the attempt started");
+        AnswerOption option = em.createQuery(
+                        "select o from AnswerOption o where o.question.questionId = :questionId order by o.orderIndex",
+                        AnswerOption.class)
+                .setParameter("questionId", contestQuestion.getQuestionId())
+                .setMaxResults(1)
+                .getSingleResult();
+        option.setOptionText("Changed option");
+        em.flush();
+
+        JsonNode resumed = data(post("/api/v1/student/contests/" + contest.getContestId() + "/start"));
+        JsonNode resumedQuestion = findQuestion(resumed.path("questions"), contestQuestion.getQuestionId());
+
+        assertEquals(originalContent, resumedQuestion.path("content").asText());
+        assertEquals(originalOption, resumedQuestion.path("options").get(0).path("optionText").asText());
+    }
+
     @Test void attemptStartedWithoutAPaperGetsOneOnResume() throws Exception {
         Instant now = Instant.now();
         ExamAttempt broken = ExamAttempt.builder().exam(contest.getExam()).user(student).mode("CONTEST").status("IN_PROGRESS")
@@ -96,5 +124,15 @@ class StudentContestStartIntegrationTest {
     private JsonNode data(org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder request) throws Exception {
         String body = mvc.perform(request.with(as(student))).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         return json.readTree(body).path("data");
+    }
+
+    private JsonNode findQuestion(JsonNode questions, long questionId) {
+        for (JsonNode question : questions) {
+            if (question.path("questionId").asLong() == questionId) {
+                return question;
+            }
+        }
+        fail("Question was not returned");
+        return null;
     }
 }

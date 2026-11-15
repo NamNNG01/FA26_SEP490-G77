@@ -220,10 +220,11 @@ public class StudentContestServiceImpl implements StudentContestService {
         if (!activeAttempts.isEmpty()) {
             ExamAttempt att = activeAttempts.get(0);
             List<AttemptAnswer> rows = answerRepository.findByAttemptIdOrdered(att.getAttemptId());
-            List<Question> questions = rows.isEmpty()
-                    ? freezePaper(att, c.getExam())
-                    : rows.stream().map(AttemptAnswer::getQuestion).toList();
-            return new ContestStartResponseDto(att.getAttemptId(), c.getExam().getExamId(), c.getDurationMinutes(), att.getDeadlineAt(), questionDtos(questions));
+            if (rows.isEmpty()) {
+                freezePaper(att, c.getExam());
+                rows = answerRepository.findByAttemptIdOrdered(att.getAttemptId());
+            }
+            return new ContestStartResponseDto(att.getAttemptId(), c.getExam().getExamId(), c.getDurationMinutes(), att.getDeadlineAt(), questionDtos(rows));
         }
 
         ContestParticipant participant = participantRepository.findByContest_ContestIdAndUser_UserId(contestId, userId)
@@ -247,7 +248,8 @@ public class StudentContestServiceImpl implements StudentContestService {
                 .build();
         examAttemptRepository.save(attempt);
         examAttemptRepository.flush();
-        List<Question> questions = freezePaper(attempt, c.getExam());
+        freezePaper(attempt, c.getExam());
+        List<AttemptAnswer> rows = answerRepository.findByAttemptIdOrdered(attempt.getAttemptId());
 
         // Only assign participant.attemptId if currently null (first official attempt)
         if (participant.getAttemptId() == null) {
@@ -255,7 +257,7 @@ public class StudentContestServiceImpl implements StudentContestService {
             participantRepository.save(participant);
         }
 
-        return new ContestStartResponseDto(attempt.getAttemptId(), c.getExam().getExamId(), c.getDurationMinutes(), deadlineAt, questionDtos(questions));
+        return new ContestStartResponseDto(attempt.getAttemptId(), c.getExam().getExamId(), c.getDurationMinutes(), deadlineAt, questionDtos(rows));
     }
 
     private List<Question> freezePaper(ExamAttempt attempt, Exam exam) {
@@ -293,14 +295,31 @@ public class StudentContestServiceImpl implements StudentContestService {
         return questions;
     }
 
-    private List<ContestStartResponseDto.QuestionDto> questionDtos(List<Question> questions) {
-        Map<Long, List<AnswerOption>> optionsMap = attemptPaperFactory.optionsOf(questions);
+    private List<ContestStartResponseDto.QuestionDto> questionDtos(List<AttemptAnswer> rows) {
         List<ContestStartResponseDto.QuestionDto> qDtos = new ArrayList<>();
-        int idx = 1;
-        for (Question q : questions) {
-            List<AnswerOption> opts = optionsMap.getOrDefault(q.getQuestionId(), List.of());
-            List<ContestStartResponseDto.OptionDto> optDtos = opts.stream().map(o -> new ContestStartResponseDto.OptionDto(o.getOptionId(), o.getOptionText())).toList();
-            qDtos.add(new ContestStartResponseDto.QuestionDto(q.getQuestionId(), idx++, q.getQuestionType(), q.getContent(), optDtos));
+        int fallbackOrder = 1;
+        for (AttemptAnswer row : rows) {
+            Snapshots.DisplayQuestion display =
+                    attemptPaperFactory.read(row.getDisplaySnapshot(), Snapshots.DisplayQuestion.class);
+            if (display == null) {
+                throw new BaseException(ResponseCode.INTERNAL_SERVER_ERROR,
+                        "Contest attempt answer has no display snapshot");
+            }
+
+            List<ContestStartResponseDto.OptionDto> options = display.options() == null
+                    ? List.of()
+                    : display.options().stream()
+                    .map(option -> new ContestStartResponseDto.OptionDto(option.optionId(), option.optionText()))
+                    .toList();
+
+            int order = display.orderIndex() == null ? fallbackOrder : display.orderIndex();
+            qDtos.add(new ContestStartResponseDto.QuestionDto(
+                    display.questionId(),
+                    order,
+                    display.questionType(),
+                    display.content(),
+                    options));
+            fallbackOrder++;
         }
         return qDtos;
     }
