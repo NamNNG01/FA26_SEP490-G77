@@ -78,10 +78,9 @@ public interface DeckRepository extends JpaRepository<Deck, Long> {
 
     String COURSE_DECKS = "EXISTS (SELECT e.enrollmentId FROM Enrollment e WHERE e.course = c AND e.user.userId = :userId " +
             "AND e.status = 'ACTIVE') AND d.user.userId <> :userId " +
-            "AND (d.user.roleName <> 'STUDENT' OR d.visibility = 'PUBLIC') " +
+            "AND (d.user.roleName <> 'STUDENT' OR (d.visibility = 'PUBLIC' AND d.reviewStatus = 'APPROVED')) " +
             "AND (:courseId IS NULL OR c.courseId = :courseId) AND (:mode = '' OR d.mode = :mode) " +
-            "AND LOWER(d.title) LIKE :search ESCAPE '!' " +
-            "AND EXISTS (SELECT p.progressId FROM UserCardProgress p WHERE p.card.deck = d AND p.user.userId = :userId AND p.status = 'KNOWN')";
+            "AND LOWER(d.title) LIKE :search ESCAPE '!'";
 
     @EntityGraph(attributePaths = {"course", "user", "module"})
     @Query("SELECT d FROM Deck d WHERE d.deckId = :id")
@@ -145,4 +144,16 @@ public interface DeckRepository extends JpaRepository<Deck, Long> {
       AND (d.user.roleName <> 'STUDENT' OR d.user.userId = :userId OR d.visibility = 'PUBLIC')
     """)
     List<Object[]> findCourseDeckStatsWithModule(@Param("courseId") Long courseId, @Param("userId") Long userId);
+
+    /** FC-13 BOOKMARKED: decks bookmarked by the caller, only APPROVED student decks or their own decks */
+    @EntityGraph(attributePaths = {"course", "user"})
+    @Query(value = "SELECT d FROM Deck d JOIN d.bookmarks db WHERE db.user.userId = :userId " +
+            "AND (d.reviewStatus = 'APPROVED' OR d.user.userId = :userId OR d.user.roleName <> 'STUDENT') " +
+            "AND (:mode = '' OR d.mode = :mode) AND LOWER(d.title) LIKE :search ESCAPE '!' " +
+            "ORDER BY db.createdAt DESC, d.deckId DESC",
+            countQuery = "SELECT COUNT(d) FROM Deck d JOIN d.bookmarks db WHERE db.user.userId = :userId " +
+            "AND (d.reviewStatus = 'APPROVED' OR d.user.userId = :userId OR d.user.roleName <> 'STUDENT') " +
+            "AND (:mode = '' OR d.mode = :mode) AND LOWER(d.title) LIKE :search ESCAPE '!'")
+    Page<Deck> findBookmarkedDecks(@Param("userId") Long userId, @Param("mode") String mode, @Param("search") String search,
+                                   Pageable pageable);
 }
