@@ -8,7 +8,7 @@ import { Tabs } from '@/components/ui/Tabs';
 import { Icon } from '@/assets/icons';
 import { useAuth } from '@/auth/authContext';
 import { useToast } from '@/components/ui/ToastHost';
-import { ROUTES, publicExamListPathFor } from '@/app/routes';
+import { publicExamListPathFor } from '@/app/routes';
 import { Role } from '@/utils/permissions';
 import { useExamEditor } from '../examStore';
 import { AttemptHistory } from '../components/AttemptHistory';
@@ -134,14 +134,16 @@ export function PublicExamDetailPage() {
 
   /** Primary student-facing action, plus the retake only a completed exam offers. */
   const primary = completed
-    ? { label: 'View Result', route: ROUTES.studentExamResult, icon: <Icon.BarChart className="h-4 w-4" /> }
+    ? { label: 'View Result', icon: <Icon.BarChart className="h-4 w-4" /> }
     : draft.status === 'in-progress'
-      ? { label: 'Continue Exam', route: ROUTES.studentExam, icon: <Icon.RefreshCw className="h-4 w-4" /> }
-      : { label: 'Start Practice', route: ROUTES.studentExam, icon: <Icon.Zap className="h-4 w-4" /> };
+      ? { label: 'Continue Exam', icon: <Icon.RefreshCw className="h-4 w-4" /> }
+      : { label: 'Start Practice', icon: <Icon.Zap className="h-4 w-4" /> };
 
   const handleSave = () => {
     editor.save();
-    toast.success(`Saved “${draft.title}”`);
+    // The editor writes to a session-only store (this feature has no backend yet), so the toast
+    // must not pretend the change survives a reload.
+    toast.info(`Saved “${draft.title}” for this session only — this page is demo data.`);
   };
 
   const handleCancel = () => {
@@ -183,12 +185,16 @@ export function PublicExamDetailPage() {
 
   return (
     <div className="mx-auto w-full max-w-[1400px] space-y-6 px-[clamp(1rem,2.5vw,2rem)] py-[clamp(1.25rem,2.5vw,1.75rem)]">
-      <Breadcrumb
-        items={[
-          { label: 'Public Exam', onClick: () => navigate(listPath) },
-          { label: canEdit ? 'Edit Exam' : draft.title },
-        ]}
-      />
+      <div className="flex flex-wrap items-center gap-2">
+        <Breadcrumb
+          items={[
+            { label: 'Public Exam', onClick: () => navigate(listPath) },
+            { label: canEdit ? 'Edit Exam' : draft.title },
+          ]}
+        />
+        {/* This catalogue is a design prototype: its exams, attempts and edits are fixture data. */}
+        <Badge variant="warning">Demo data</Badge>
+      </div>
 
       <div
         className={`grid grid-cols-1 gap-6 ${
@@ -465,7 +471,9 @@ export function PublicExamDetailPage() {
             <p className="text-sm text-muted-foreground">
               {completed ? 'Finished' : draft.status === 'in-progress' ? 'Partially complete' : 'Ready when you are'}
             </p>
-            <Button className="mt-3 w-full" icon={primary.icon} onClick={() => navigate(primary.route)}>
+            {/* These exams exist only in the fixture: starting one cannot open a real attempt, so
+                the action is honestly disabled instead of navigating to an empty exam screen. */}
+            <Button className="mt-3 w-full" icon={primary.icon} disabled title="Demo exam — not part of the live catalogue">
               {primary.label}
             </Button>
             {completed && (
@@ -473,11 +481,16 @@ export function PublicExamDetailPage() {
                 className="mt-2 w-full"
                 variant="outline"
                 icon={<Icon.RefreshCw className="h-4 w-4" />}
-                onClick={() => navigate(ROUTES.studentExam)}
+                disabled
+                title="Demo exam — not part of the live catalogue"
               >
                 Retake Exam
               </Button>
             )}
+            <p className="mt-3 text-xs leading-relaxed text-content-subtle">
+              This is a demo catalogue built from fixture data. Exams here cannot be started, and nothing you
+              change on this page leaves your browser.
+            </p>
 
             <dl className="mt-5 space-y-2.5 border-t border-line pt-4">
               {[

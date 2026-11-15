@@ -87,7 +87,12 @@ export interface ReviewSessionResponse {
   questions: unknown[];
 }
 
-function query(params: Record<string, string | number | undefined | null>) {
+/**
+ * Query string from plain params (undefined / null / '' are dropped). `object` rather than an
+ * index-signature type so named param interfaces (`SavedQuestionExportParams`, …) are accepted
+ * without adding `[key: string]: …` to every call-site type.
+ */
+function query(params: object) {
   const qs = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined && value !== null && value !== '') qs.set(key, String(value));

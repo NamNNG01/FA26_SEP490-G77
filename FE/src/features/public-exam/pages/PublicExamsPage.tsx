@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Icon } from '@/assets/icons';
+import { Badge } from '@/components/ui/Badge';
 import { Select } from '@/components/ui/Select';
 import { Tabs } from '@/components/ui/Tabs';
 import { EmptyState } from '@/components/ui/Card';
@@ -138,9 +139,13 @@ export function PublicExamsPage() {
     <div className="mx-auto w-full max-w-[1400px] space-y-8 px-[clamp(1rem,2.5vw,2rem)] py-[clamp(1.25rem,2.5vw,1.75rem)]">
       {/* Page header */}
       <header>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">Public Exam</h1>
+        <div className="flex flex-wrap items-center gap-2">
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Public Exam</h1>
+          {/* The catalogue is fixture data: label it so the figures are not mistaken for live ones. */}
+          <Badge variant="warning">Demo data</Badge>
+        </div>
         <p className="mt-2 max-w-2xl text-base leading-relaxed text-muted-foreground">
-          Practice with real exam-style questions to improve your skills and track your learning progress.
+          A preview of the public exam catalogue, built from fixture data. These exams cannot be started yet.
         </p>
       </header>
 

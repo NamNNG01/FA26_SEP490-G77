@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Select } from '@/components/ui/Select';
@@ -7,6 +7,8 @@ import { Switch } from '@/components/ui/Switch';
 import { Alert } from '@/components/ui/Alert';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Icon } from '@/assets/icons';
+import { systemSettingsService } from '@/services/systemSettings.service';
+import { getApiErrorMessage } from '@/utils/apiError';
 
 // ── Section definitions ───────────────────────────────────────────────────────
 
@@ -103,34 +105,72 @@ const clone = (s: Settings): Settings => ({
   maintenance: { ...s.maintenance },
 });
 
+/**
+ * The stored document merged over the defaults, section by section, so a document written by an
+ * older screen (missing a field) still opens instead of silently losing the missing defaults.
+ */
+function fromDocument(document: Record<string, unknown>): Settings {
+  const next = clone(INITIAL);
+  for (const id of Object.keys(INITIAL) as SectionId[]) {
+    const stored = document[id];
+    if (stored != null && typeof stored === 'object' && !Array.isArray(stored)) {
+      Object.assign(next[id] as unknown as Record<string, unknown>, stored as Record<string, unknown>);
+    }
+  }
+  return next;
+}
+
 export function SystemSettingsPage() {
   const [section, setSection] = useState<SectionId>('general');
   const [settings, setSettings] = useState<Settings>(() => clone(INITIAL));
+  const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [confirmReset, setConfirmReset] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
-  const [actionFlash, setActionFlash] = useState<string | null>(null);
 
-  const set = <K extends SectionId>(id: K, patch: Partial<Settings[K]>) =>
+  const load = useCallback(() => {
+    setLoadError(null);
+    setLoaded(false);
+    systemSettingsService
+      .get()
+      .then(document => {
+        setSettings(fromDocument(document));
+        setLoaded(true);
+      })
+      .catch(err => setLoadError(getApiErrorMessage(err, 'Could not load the current settings.')));
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const set = <K extends SectionId>(id: K, patch: Partial<Settings[K]>) => {
+    setSavedFlash(false);
     setSettings(prev => ({ ...prev, [id]: { ...prev[id], ...patch } }) as Settings);
+  };
 
   const resetSection = () => {
     setSettings(prev => ({ ...prev, [section]: { ...INITIAL[section] } }));
     setConfirmReset(false);
+    setSavedFlash(false);
   };
 
-  const handleSave = () => {
-    setSavedFlash(true);
-    window.setTimeout(() => setSavedFlash(false), 2500);
+  /** Save now writes to the server: the success banner appears only after the write lands. */
+  const handleSave = async () => {
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await systemSettingsService.save(settings as unknown as Record<string, unknown>);
+      setSavedFlash(true);
+      window.setTimeout(() => setSavedFlash(false), 2500);
+    } catch (err) {
+      setSaveError(getApiErrorMessage(err, 'Could not save the settings. Please try again.'));
+    } finally {
+      setSaving(false);
+    }
   };
-
-  const runMaintenance = (label: string) => {
-    setActionFlash(label);
-    window.setTimeout(() => setActionFlash(null), 2500);
-  };
-
-  const statusPill = (ok: boolean, label: string) => (
-    <Badge variant={ok ? 'success' : 'danger'}>{label}</Badge>
-  );
 
   return (
     <div className="p-8 space-y-5">
@@ -157,6 +197,16 @@ export function SystemSettingsPage() {
 
         {/* Right (75%): settings content */}
         <div className="lg:col-span-3 min-w-0 space-y-5">
+          {loadError && (
+            <div className="card p-4 space-y-3">
+              <Alert type="error" message={loadError} />
+              <Button variant="outline" icon={<Icon.RefreshCw className="w-4 h-4" />} onClick={load}>
+                Retry
+              </Button>
+            </div>
+          )}
+          {!loaded && !loadError && <div className="card p-4 text-sm text-content-subtle">Loading settings…</div>}
+
           {/* ── General ── */}
           {section === 'general' && (
             <div className="card p-6 space-y-4">
@@ -259,42 +309,23 @@ export function SystemSettingsPage() {
             <div className="space-y-5">
               <div className="card p-6 space-y-4">
                 <h4 className="text-lg font-semibold text-content">Maintenance</h4>
-                <ToggleRow
-                  label="Enable Maintenance Mode"
-                  desc="Disable access for all non-admin users while updates are applied"
-                  checked={settings.maintenance.maintenanceMode}
-                  onChange={v => set('maintenance', { maintenanceMode: v })}
-                />
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                  <Button variant="outline" icon={<Icon.RefreshCw className="w-4 h-4" />} onClick={() => runMaintenance('Cache cleared')}>Clear Cache</Button>
-                  <Button variant="outline" icon={<Icon.Database className="w-4 h-4" />} onClick={() => runMaintenance('Database backup started')}>Backup Database</Button>
-                  <Button variant="outline" icon={<Icon.Upload className="w-4 h-4" />} onClick={() => runMaintenance('Restore preview: select a backup file')}>Restore Database</Button>
-                  <Button variant="outline" icon={<Icon.Activity className="w-4 h-4" />} onClick={() => runMaintenance('All systems operational')}>View System Status</Button>
-                  <div className="sm:col-span-2">
-                    <Alert type="warning" title="Careful" message="Restore replaces the current database with the selected backup. Create a fresh backup first." />
+                <div className="flex items-start justify-between gap-4 py-3 first:pt-0">
+                  <div className="min-w-0">
+                    <p className="text-base font-medium text-content-secondary">Maintenance Mode</p>
+                    <p className="text-xs text-content-subtle mt-0.5">
+                      Managed by the deployment environment, not by this screen — nothing here disables student access
+                    </p>
                   </div>
+                  <Badge variant="default">Not available</Badge>
                 </div>
               </div>
-              <div className="card overflow-hidden">
-                <div className="px-5 py-4 border-b border-line-soft"><h4 className="text-lg font-semibold text-content">Backup History</h4></div>
-                <div className="divide-y divide-line-faint">
-                  {[
-                    { date: '2026-09-21 03:00', size: '14.2 GB', status: 'Success', type: 'Auto' },
-                    { date: '2026-09-20 03:00', size: '14.0 GB', status: 'Success', type: 'Auto' },
-                    { date: '2026-09-19 14:35', size: '13.9 GB', status: 'Success', type: 'Manual' },
-                  ].map(b => (
-                    <div key={b.date} className="flex items-center gap-4 px-5 py-3 hover:bg-surface-hover">
-                      <Icon.Database className="w-5 h-5 text-brand-ink flex-shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-content-secondary font-mono truncate">{b.date}</p>
-                        <p className="text-xs text-content-subtle">{b.size}</p>
-                      </div>
-                      <Badge variant={b.type === 'Manual' ? 'purple' : 'default'}>{b.type}</Badge>
-                      {statusPill(b.status === 'Success', b.status)}
-                      <button className="p-1.5 hover:bg-accent rounded-[6px] flex-shrink-0"><Icon.Download className="w-4 h-4 text-content-soft" /></button>
-                    </div>
-                  ))}
-                </div>
+              <div className="card p-6 space-y-4">
+                <h4 className="text-lg font-semibold text-content">Operations</h4>
+                <Alert
+                  type="info"
+                  title="Managed outside this screen"
+                  message="Cache, backup, restore and system-status operations run in the deployment environment. Controls that only reported success have been removed instead of pretending."
+                />
               </div>
             </div>
           )}
@@ -302,12 +333,16 @@ export function SystemSettingsPage() {
           {/* Save / Reset footer (shared by every section) */}
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div className="min-w-0 flex-1">
-              {savedFlash && <Alert type="success" message="Settings saved successfully." />}
-              {!savedFlash && actionFlash && <Alert type="info" message={actionFlash} />}
+              {saveError && <Alert type="error" message={saveError} />}
+              {!saveError && savedFlash && <Alert type="success" message="Settings saved successfully." />}
             </div>
             <div className="flex gap-2 flex-shrink-0">
-              <Button variant="outline" onClick={() => setConfirmReset(true)}>Reset to Default</Button>
-              <Button onClick={handleSave}>Save Changes</Button>
+              <Button variant="outline" onClick={() => setConfirmReset(true)} disabled={!loaded || saving}>
+                Reset to Default
+              </Button>
+              <Button onClick={() => void handleSave()} loading={saving} disabled={!loaded || saving}>
+                Save Changes
+              </Button>
             </div>
           </div>
         </div>

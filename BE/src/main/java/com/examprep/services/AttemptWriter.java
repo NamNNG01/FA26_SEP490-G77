@@ -81,16 +81,23 @@ public class AttemptWriter {
      * SA-04. Already submitted → the current result is returned without grading again (spec 6.4
      * rule 1). Otherwise the optional answers are applied like SA-03, every answer is graded and
      * the attempt is closed.
+     *
+     * <p>Past {@code deadlineAt + 5s} the answers carried by the request are <em>not</em> applied:
+     * only what was saved as a draft in time counts (spec 6.3 — a late submit still answers with
+     * the graded result, marked {@code autoSubmitted}, but it must never award points for answers
+     * that arrived after the deadline).</p>
      */
     @Transactional
     public AttemptResponses.Submitted submit(Long userId, Long attemptId, AttemptRequests.Submit body) {
         ExamAttempt attempt = lockedOwnedAttempt(userId, attemptId);
         List<AttemptAnswer> rows = answers.findByAttemptIdOrdered(attemptId);
         if (STATUS_IN_PROGRESS.equals(attempt.getStatus())) {
-            if (body != null && body.answers() != null && !body.answers().isEmpty()) {
+            Instant now = Instant.now();
+            if (!autoSubmitter.isExpired(attempt, now)
+                    && body != null && body.answers() != null && !body.answers().isEmpty()) {
                 apply(rows, submitEntries(body), null, null);
             }
-            autoSubmitter.gradeAndClose(attempt, rows, Instant.now());
+            autoSubmitter.gradeAndClose(attempt, rows, now);
         }
         return submitted(attempt, rows);
     }

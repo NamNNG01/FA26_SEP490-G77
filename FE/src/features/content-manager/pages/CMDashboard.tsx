@@ -53,7 +53,7 @@ export function CMDashboard() {
             <Badge variant="warning">Demo data</Badge>
           </div>
           <p className="text-sm text-content-soft mt-0.5 flex items-center gap-1.5">
-            Số liệu cập nhật theo thời gian thực
+            Demo figures — not live data yet
             <InfoTip side="bottom" label="Course dùng chung giữa nhiều CM; số liệu exam là của riêng bạn" />
           </p>
         </div>

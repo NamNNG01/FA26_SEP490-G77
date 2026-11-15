@@ -145,6 +145,8 @@ function ExamAttemptScreen() {
   /** CD-05 is running: the sandbox judges every test case, which can take a while. */
   const [grading, setGrading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  /** Answers the last autosave batch had refused (SA-03 `rejected`): shown, kept dirty, retried. */
+  const [saveRejections, setSaveRejections] = useState<{ questionId: number; reason: string; detail: string }[]>([]);
   const [checks, setChecks] = useState<Record<number, AnswerCheck>>({});
   const [checking, setChecking] = useState<number | null>(null);
   /** Question just checked: its "Next question" button takes the focus. */
@@ -259,11 +261,17 @@ function ExamAttemptScreen() {
         for (let i = 0; i < entries.length; i += DRAFT_BATCH_LIMIT) {
           const chunk = entries.slice(i, i + DRAFT_BATCH_LIMIT);
           const res = await studentAttemptService.saveDrafts(session.attemptId, chunk);
-          const done = new Set([...res.saved.map(s => s.questionId), ...res.rejected.map(r => r.questionId)]);
+          const saved = new Set(res.saved.map(s => s.questionId));
           for (const e of chunk) {
             // Edited again while saving → stays dirty with its newer seq.
-            if (done.has(e.questionId) && seqRef.current[e.questionId] === e.seq) dirtyRef.current.delete(e.questionId);
+            if (saved.has(e.questionId) && seqRef.current[e.questionId] === e.seq) dirtyRef.current.delete(e.questionId);
           }
+          // A rejected answer was NOT saved: unlike before, it is not treated as done. It stays
+          // dirty (the next autosave or flush retries it) and the student is told about it.
+          setSaveRejections(prev => [
+            ...prev.filter(rejection => !chunk.some(entry => entry.questionId === rejection.questionId)),
+            ...res.rejected,
+          ]);
         }
         setSaveState(dirtyRef.current.size > 0 ? 'dirty' : 'saved');
       } catch (err) {
@@ -649,6 +657,24 @@ function ExamAttemptScreen() {
       {actionError && !confirm && (
         <div role="alert" className="bg-danger-light text-danger text-sm px-6 py-2 flex items-center gap-2">
           <Icon.AlertCircle className="w-4 h-4 flex-shrink-0" /> {actionError}
+        </div>
+      )}
+
+      {/* Rejected drafts: the server refused these answers, so they are neither saved nor dropped
+          silently. Each one keeps retrying on the next autosave until it is accepted or replaced. */}
+      {saveRejections.length > 0 && (
+        <div role="alert" className="bg-warning-light text-warning-strong text-sm px-6 py-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+          <Icon.AlertCircle className="w-4 h-4 flex-shrink-0" />
+          <span>
+            Not saved:{' '}
+            {saveRejections
+              .map(rejection => {
+                const index = questions.findIndex(question => question.questionId === rejection.questionId);
+                return `Question ${index >= 0 ? index + 1 : rejection.questionId} (${rejection.detail})`;
+              })
+              .join('; ')}
+            . Retrying automatically — edit the answer or keep this tab open until it saves.
+          </span>
         </div>
       )}
 

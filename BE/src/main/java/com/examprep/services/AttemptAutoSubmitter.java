@@ -85,12 +85,16 @@ public class AttemptAutoSubmitter {
         BigDecimal totalWeight = AttemptScoring.totalWeight(weights);
 
         boolean waitingForAi = false;
+        // Every addend keeps AGGREGATE_SCALE digits; only the total is rounded, so a paper whose
+        // every question is fully correct totals exactly maxScore instead of drifting a cent.
         List<BigDecimal> scores = new ArrayList<>();
         for (AttemptAnswer row : rows) {
             // CD-05 finalized a code answer while the attempt was still running: its verdict and
-            // score stand (spec 19.3), so this row is never re-graded here.
+            // score stand (spec 19.3), so this row is never re-graded here. A score that took the
+            // whole question is re-derived from the snapshot instead of the 2-digit stored value.
             if (row.getGradedAt() != null && row.getScoreEarned() != null) {
-                scores.add(row.getScoreEarned());
+                scores.add(AttemptScoring.contribution(
+                        row.getWeightSnapshot(), totalWeight, maxScore, row.getScoreEarned()));
                 continue;
             }
             JsonNode response = paperFactory.readResponse(row.getResponse());
@@ -99,11 +103,16 @@ public class AttemptAutoSubmitter {
             // A legacy row without a display snapshot still has its question type on the live row.
             String type = display != null ? display.questionType() : row.getQuestion().getQuestionType();
 
+            // The addend for the running total: the unrounded score of this pass, or null while a
+            // rubric answer waits for the AI worker. The row itself stores the 2-digit value.
+            BigDecimal rawScore;
             if (AnswerResponseValidator.isEmpty(response)) {
-                row.setScoreEarned(BigDecimal.ZERO);
+                rawScore = BigDecimal.ZERO;
+                row.setScoreEarned(rawScore);
                 row.setIsCorrect(false);
                 row.setGradingStatus(GRADING_AUTO);
             } else if (AttemptGrader.isRubricType(type)) {
+                rawScore = null;
                 row.setScoreEarned(null);
                 row.setIsCorrect(null);
                 row.setGradingStatus(GRADING_PENDING_AI);
@@ -111,18 +120,20 @@ public class AttemptAutoSubmitter {
             } else {
                 Snapshots.KeySnapshot key =
                         paperFactory.read(row.getKeySnapshot(), Snapshots.KeySnapshot.class);
-                BigDecimal maxPoints = AttemptScoring.output(
-                        AttemptScoring.questionMaxPoints(row.getWeightSnapshot(), totalWeight, maxScore));
+                // The grader works with the unrounded P_q; the 2-digit column value is written below.
+                BigDecimal maxPoints = AttemptScoring.questionPointsExact(
+                        row.getWeightSnapshot(), totalWeight, maxScore);
                 AttemptGrader.Grade grade = AttemptGrader.grade(type, response, key, maxPoints);
-                row.setScoreEarned(AttemptScoring.output(grade.score()));
+                rawScore = grade.score();
+                row.setScoreEarned(AttemptScoring.output(rawScore));
                 row.setIsCorrect(grade.correct());
                 row.setGradingStatus(GRADING_AUTO);
             }
             if (row.getIsCorrect() != null) {
                 reviews.record(attempt.getUser().getUserId(), row.getQuestion(), row.getIsCorrect(), row.getResponse());
             }
-            if (row.getScoreEarned() != null) {
-                scores.add(row.getScoreEarned());
+            if (rawScore != null) {
+                scores.add(rawScore);
             }
         }
 

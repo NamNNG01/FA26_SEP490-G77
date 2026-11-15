@@ -1,72 +1,210 @@
-import React, { useState } from 'react';
-import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router';
+import { Badge, type BadgeVariant } from '@/components/ui/Badge';
 import { Select } from '@/components/ui/Select';
-import { Table } from '@/components/ui/Table';
+import { Table, type TableColumn } from '@/components/ui/Table';
 import { Dropdown } from '@/components/ui/Dropdown';
 import { Avatar } from '@/components/ui/Avatar';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { SearchInput } from '@/components/common/SearchInput';
+import { DashboardError } from '@/components/common/DashboardState';
 import { Icon } from '@/assets/icons';
-import { MOCK_USERS, getUserListState, type MockUser } from '../mockUsers';
+import { useToast } from '@/components/ui/ToastHost';
+import { getApiErrorMessage } from '@/utils/apiError';
+import { ROUTES } from '@/app/routes';
+import { adminUserService, type AdminUserItem, type AdminUserListStats } from '@/services/adminUser.service';
+import { getUserListState, type UserListState } from '../userListState';
 
-export interface UserListState {
-  search: string;
-  role: string;
-  status: string;
-  sortKey: string;
-  sortDir: 'asc' | 'desc';
-  page: number;
+/** Matches Table's DEFAULT_PAGE_SIZE — the list is paginated on the server. */
+const PAGE_SIZE = 10;
+/** Search runs on the server: wait for a typing pause instead of one call per keystroke. */
+const SEARCH_DEBOUNCE_MS = 300;
+
+const ROLE_LABELS: Record<string, string> = { STUDENT: 'Student', COURSE_MANAGER: 'Content Manager', ADMIN: 'Admin' };
+const roleLabel = (role: string) => ROLE_LABELS[role] ?? role;
+const roleBadgeVariant = (role: string): BadgeVariant => (role === 'ADMIN' ? 'danger' : role === 'COURSE_MANAGER' ? 'purple' : 'info');
+const statusLabel = (status: string) => (status === 'ACTIVE' ? 'Active' : status === 'INACTIVE' ? 'Inactive' : status);
+
+/** "Nov 16, 2026, 2:05 PM", or null when the account has never logged in. */
+function formatLastLogin(value: string | null): string | null {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+}
+
+/** Table-shaped skeleton shown while the first page of the list loads. */
+function UsersTableSkeleton() {
+  return (
+    <div className="divide-y divide-line-faint" aria-hidden="true">
+      {Array.from({ length: 6 }, (_, i) => (
+        <div key={i} className="flex items-center gap-4 px-4 py-3">
+          <Skeleton className="w-7 h-7 rounded-full" />
+          <div className="flex-1 space-y-2">
+            <Skeleton className="h-4 w-1/3" />
+            <Skeleton className="h-3 w-1/4" />
+          </div>
+          <Skeleton className="h-5 w-16 rounded-full" />
+          <Skeleton className="h-5 w-20 rounded-full" />
+        </div>
+      ))}
+    </div>
+  );
 }
 
 export function UsersPage({ onNavigate }: { onNavigate?: (id: string, params?: Record<string, string>) => void }) {
-  // Filters, sorting, and pagination persist in a module singleton so "Back to
-  // User List" from User Detail restores the exact previous view.
+  const navigate = useNavigate();
+  const toast = useToast();
+  // Filters, search and page persist in a module singleton so "Back to User
+  // List" from User Detail restores the exact previous view.
   const saved = getUserListState();
   const [search, setSearch] = useState(saved.search);
+  const [debouncedSearch, setDebouncedSearch] = useState(saved.search);
   const [role, setRole] = useState(saved.role);
   const [status, setStatus] = useState(saved.status);
-  const [sortKey, setSortKey] = useState(saved.sortKey);
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>(saved.sortDir);
+  const [pageIndex, setPageIndex] = useState(saved.page);
+  const [rows, setRows] = useState<AdminUserItem[]>([]);
+  const [stats, setStats] = useState<AdminUserListStats | null>(null);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  /** User whose row action (reset password / status change) is running. */
+  const [workingId, setWorkingId] = useState<number | null>(null);
+  // Latest-wins: a slow response never overwrites a newer one.
+  const requestRef = useRef(0);
+  const appliedSearch = useRef(saved.search);
 
   const pushState = (patch: Partial<UserListState>) => {
     Object.assign(saved, patch);
   };
 
-  const users = MOCK_USERS;
-  const lc = (s: string) => s.toLowerCase();
-  const filtered = users.filter(u => {
-    const matchesSearch = !search || lc(u.name).includes(lc(search)) || lc(u.email).includes(lc(search)) || lc(u.username).includes(lc(search));
-    const matchesRole = role === 'all' || u.role === role;
-    const matchesStatus = status === 'all' || u.status === status;
-    return matchesSearch && matchesRole && matchesStatus;
-  });
-  const sorted = [...filtered].sort((a, b) => {
-    const dir = sortDir === 'asc' ? 1 : -1;
-    if (sortKey === 'name') return dir * a.name.localeCompare(b.name);
-    if (sortKey === 'lastLogin') return dir * a.lastLogin.localeCompare(b.lastLogin);
-    return 0;
-  });
+  // Debounce the search box; the applied term then drives the server query.
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const value = search.trim();
+      if (appliedSearch.current === value) return;
+      appliedSearch.current = value;
+      setDebouncedSearch(value);
+      setPageIndex(1);
+      pushState({ search: value, page: 1 });
+    }, SEARCH_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [search, saved]);
 
-  const openDetail = (u: MockUser) => onNavigate?.('user-detail', { userId: u.id });
+  const load = useCallback(async () => {
+    const requestId = ++requestRef.current;
+    setLoading(true);
+    try {
+      const result = await adminUserService.list({
+        search: debouncedSearch || undefined,
+        role: role === 'all' ? undefined : role,
+        status: status === 'all' ? undefined : status,
+        page: pageIndex - 1,
+        size: PAGE_SIZE,
+      });
+      if (requestId !== requestRef.current) return;
+      // The current page can disappear after a status change — fall back to the last real page.
+      if (pageIndex > 1 && result.content.length === 0 && result.totalPages > 0 && pageIndex > result.totalPages) {
+        setPageIndex(result.totalPages);
+        pushState({ page: result.totalPages });
+        return;
+      }
+      setRows(result.content);
+      setStats(result.stats);
+      setTotal(result.totalElements);
+      setError(null);
+    } catch (err) {
+      if (requestId !== requestRef.current) return;
+      setError(getApiErrorMessage(err, 'Could not load users.'));
+    } finally {
+      if (requestId === requestRef.current) setLoading(false);
+    }
+  }, [debouncedSearch, pageIndex, role, saved, status]);
 
-  const columns = [
-    { key: 'name', label: 'User', sortable: true, render: (r: Record<string, unknown>) => (
-      <button onClick={() => openDetail(r as unknown as MockUser)} className="flex items-center gap-2.5 text-left rounded-[6px] -ml-1 pl-1 pr-2 py-0.5 hover:bg-accent transition-colors min-w-0">
-        <Avatar name={r.name as string} size="sm" />
-        <div className="min-w-0">
-          <p className="font-medium text-content text-sm truncate hover:text-brand-ink transition-colors">{r.name as string}</p>
-          <p className="text-2xs text-content-subtle truncate">{r.email as string}</p>
-        </div>
-      </button>
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const openDetail = (item: AdminUserItem) => {
+    if (onNavigate) onNavigate('user-detail', { userId: String(item.userId) });
+    else navigate(`${ROUTES.adminUsers}/${item.userId}`);
+  };
+
+  const resetPassword = async (item: AdminUserItem) => {
+    setWorkingId(item.userId);
+    try {
+      await adminUserService.resetPassword(item.userId);
+      toast.success(`Password reset email sent to ${item.email}.`);
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Could not send the password reset email.'));
+    } finally {
+      setWorkingId(null);
+    }
+  };
+
+  const toggleStatus = async (item: AdminUserItem) => {
+    const next = item.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
+    setWorkingId(item.userId);
+    try {
+      await adminUserService.setStatus(item.userId, next);
+      toast.success(next === 'ACTIVE' ? `${item.fullName} activated.` : `${item.fullName} deactivated.`);
+      await load();
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Could not change this user’s status.'));
+    } finally {
+      setWorkingId(null);
+    }
+  };
+
+  const statCards: { label: string; value: number | null; color: string }[] = [
+    { label: 'Total Users', value: stats?.total ?? null, color: '#F27124' },
+    { label: 'Active', value: stats?.active ?? null, color: '#16A34A' },
+    { label: 'Inactive', value: stats?.inactive ?? null, color: '#9CA3AF' },
+    { label: 'New this month', value: stats?.newThisMonth ?? null, color: '#D97706' },
+  ];
+
+  const filtersActive = search.trim() !== '' || role !== 'all' || status !== 'all';
+
+  const columns: TableColumn[] = [
+    { key: 'name', label: 'User', render: (row: Record<string, unknown>) => {
+      const item = row as unknown as AdminUserItem;
+      return (
+        <button onClick={() => openDetail(item)} className="flex items-center gap-2.5 text-left rounded-[6px] -ml-1 pl-1 pr-2 py-0.5 hover:bg-accent transition-colors min-w-0">
+          <Avatar name={item.fullName} src={item.avatarUrl ?? undefined} size="sm" />
+          <div className="min-w-0">
+            <p className="font-medium text-content text-sm truncate hover:text-brand-ink transition-colors">{item.fullName}</p>
+            <p className="text-2xs text-content-subtle truncate">{item.email}</p>
+          </div>
+        </button>
+      );
+    }},
+    { key: 'role', label: 'Role', render: (row: Record<string, unknown>) => (
+      <Badge variant={roleBadgeVariant(String(row.role))}>{roleLabel(String(row.role))}</Badge>
     )},
-    { key: 'role', label: 'Role', render: (r: Record<string, unknown>) => <Badge variant={r.role === 'Admin' ? 'danger' : r.role === 'Content Manager' ? 'purple' : 'info'}>{r.role as string}</Badge> },
-    { key: 'status', label: 'Status', render: (r: Record<string, unknown>) => <Badge variant={r.status === 'Active' ? 'success' : 'default'}>{r.status as string}</Badge> },
-    { key: 'lastLogin', label: 'Last Login', sortable: true, render: (r: Record<string, unknown>) => <span className="text-sm text-content-soft">{r.lastLogin as string}</span> },
-    { key: 'courses', label: 'Courses', render: (r: Record<string, unknown>) => r.courses !== null ? <span className="text-sm text-content-secondary">{r.courses as number}</span> : <span className="text-content-faint">—</span> },
-    { key: 'actions', label: '', render: (r: Record<string, unknown>) => (
-      <Dropdown trigger={<button className="p-1.5 hover:bg-accent rounded-[6px]"><Icon.MoreHorizontal className="w-4 h-4 text-content-soft"/></button>}
-        items={[{ label: 'View', icon: <Icon.Eye />, onClick: () => openDetail(r as unknown as MockUser) }, { label: 'Edit', icon: <Icon.Edit /> }, { label: 'Reset Password', icon: <Icon.Lock /> }, { label: 'Change Role', icon: <Icon.Shield /> }, { divider: true } as {label: string; divider: true}, { label: 'Deactivate', icon: <Icon.X />, danger: true }]} />
+    { key: 'status', label: 'Status', render: (row: Record<string, unknown>) => (
+      <Badge variant={row.status === 'ACTIVE' ? 'success' : 'default'}>{statusLabel(String(row.status))}</Badge>
     )},
+    { key: 'lastLoginAt', label: 'Last Login', render: (row: Record<string, unknown>) => {
+      const value = formatLastLogin(row.lastLoginAt as string | null);
+      return value ? <span className="text-sm text-content-soft">{value}</span> : <span className="text-content-faint">—</span>;
+    }},
+    { key: 'courses', label: 'Courses', render: (row: Record<string, unknown>) => (
+      <span className="text-sm text-content-secondary">{String(row.enrolledCoursesCount ?? 0)}</span>
+    )},
+    { key: 'actions', label: '', render: (row: Record<string, unknown>) => {
+      const item = row as unknown as AdminUserItem;
+      const busy = workingId === item.userId;
+      return (
+        <Dropdown trigger={<button className="p-1.5 hover:bg-accent rounded-[6px]" aria-label={`Actions for ${item.fullName}`}><Icon.MoreHorizontal className="w-4 h-4 text-content-soft"/></button>}
+          items={[
+            { label: 'View', icon: <Icon.Eye className="w-4 h-4" />, onClick: () => openDetail(item) },
+            { divider: true } as {label: string; divider: true},
+            { label: 'Reset Password', icon: <Icon.Lock className="w-4 h-4" />, disabled: busy, onClick: () => void resetPassword(item) },
+            item.status === 'ACTIVE'
+              ? { label: 'Deactivate', icon: <Icon.X className="w-4 h-4" />, danger: true, disabled: busy, onClick: () => void toggleStatus(item) }
+              : { label: 'Activate', icon: <Icon.CheckCircle className="w-4 h-4" />, disabled: busy, onClick: () => void toggleStatus(item) },
+          ]} />
+      );
+    }},
   ];
 
   return (
@@ -75,11 +213,15 @@ export function UsersPage({ onNavigate }: { onNavigate?: (id: string, params?: R
         <h2 className="text-xl font-bold text-content">User List</h2>
       </div>
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-        {[{ label: 'Total Users', value: 3847, color: '#F27124' }, { label: 'Active', value: 3612, color: '#16A34A' }, { label: 'Inactive', value: 235, color: '#9CA3AF' }, { label: 'New this month', value: 147, color: '#D97706' }].map(s => (
+        {statCards.map(s => (
           <div key={s.label} className="card p-4 flex items-center gap-3">
             <div className="w-2 h-10 rounded-full flex-shrink-0" style={{ background: s.color }} />
-            <div>
-              <p className="text-xl font-bold text-content">{s.value.toLocaleString()}</p>
+            <div className="min-w-0">
+              {s.value === null
+                ? error
+                  ? <p className="text-xl font-bold text-content-faint">—</p>
+                  : <Skeleton className="h-6 w-16" />
+                : <p className="text-xl font-bold text-content">{s.value.toLocaleString()}</p>}
               <p className="text-xs text-content-subtle">{s.label}</p>
             </div>
           </div>
@@ -87,25 +229,26 @@ export function UsersPage({ onNavigate }: { onNavigate?: (id: string, params?: R
       </div>
       <div className="card overflow-hidden">
         <div className="flex flex-wrap items-center gap-3 px-4 py-3 border-b border-line-soft">
-          <SearchInput className="w-full sm:w-64" placeholder="Search users…" value={search} onChange={e => { setSearch(e.target.value); pushState({ search: e.target.value }); }} />
-          <Select value={role} onChange={v => { setRole(v); pushState({ role: v }); }} options={[{ label: 'All Roles', value: 'all' }, { label: 'Student', value: 'Student' }, { label: 'Content Manager', value: 'Content Manager' }, { label: 'Admin', value: 'Admin' }]} className="w-full sm:w-40" />
-          <Select value={status} onChange={v => { setStatus(v); pushState({ status: v }); }} options={[{ label: 'All Status', value: 'all' }, { label: 'Active', value: 'Active' }, { label: 'Inactive', value: 'Inactive' }]} className="w-full sm:w-32" />
-          <div className="flex-1" />
-          <Button variant="outline" size="sm" icon={<Icon.Download className="w-3.5 h-3.5" />}>Export</Button>
+          <SearchInput className="w-full sm:w-64" placeholder="Search users…" value={search} onChange={e => setSearch(e.target.value)} />
+          <Select value={role} onChange={v => { setRole(v); setPageIndex(1); pushState({ role: v, page: 1 }); }} options={[{ label: 'All Roles', value: 'all' }, { label: 'Student', value: 'STUDENT' }, { label: 'Content Manager', value: 'COURSE_MANAGER' }, { label: 'Admin', value: 'ADMIN' }]} className="w-full sm:w-40" />
+          <Select value={status} onChange={v => { setStatus(v); setPageIndex(1); pushState({ status: v, page: 1 }); }} options={[{ label: 'All Status', value: 'all' }, { label: 'Active', value: 'ACTIVE' }, { label: 'Inactive', value: 'INACTIVE' }]} className="w-full sm:w-32" />
         </div>
-        <Table
-          columns={columns}
-          data={sorted as unknown as Record<string, unknown>[]}
-          unit="users"
-          onSort={k => {
-            const dir = sortKey === k ? (sortDir === 'asc' ? 'desc' : 'asc') : 'asc';
-            setSortKey(k); setSortDir(dir); pushState({ sortKey: k, sortDir: dir });
-          }}
-          sortKey={sortKey}
-          sortDir={sortDir}
-          initialPage={saved.page}
-          onPageChange={p => pushState({ page: p })}
-        />
+        {error ? (
+          <DashboardError bare message={error} onRetry={() => void load()} />
+        ) : loading && rows.length === 0 ? (
+          <UsersTableSkeleton />
+        ) : (
+          <div className={`transition-opacity ${loading ? 'opacity-60' : ''}`} aria-busy={loading}>
+            <Table
+              columns={columns}
+              data={rows.map(item => ({ ...item, id: item.userId })) as unknown as Record<string, unknown>[]}
+              perPage={PAGE_SIZE}
+              unit="users"
+              serverPagination={{ page: pageIndex, total, onChange: p => { setPageIndex(p); pushState({ page: p }); } }}
+              emptyState={filtersActive ? 'No users match your filters.' : 'No users yet.'}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

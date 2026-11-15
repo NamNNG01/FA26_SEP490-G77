@@ -18,11 +18,15 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
 @Transactional
 public class ManagerDiscussionServiceImpl implements ManagerDiscussionService {
+
+    /** The three tags a discussion may carry (V49). */
+    private static final Set<String> TAGS = Set.of("question", "tip", "announcement");
 
     private final DiscussionRepository discussionRepository;
     private final DiscussionCommentRepository commentRepository;
@@ -69,20 +73,11 @@ public class ManagerDiscussionServiceImpl implements ManagerDiscussionService {
      */
     private DiscussionItemDto mapToItemDto(Discussion d, Long currentUserId) {
         User author = d.getUser();
-        String displayName = Boolean.TRUE.equals(d.getIsAnonymous()) ? "Học sinh ẩn danh" : author.getFullName();
-        String avatarUrl = Boolean.TRUE.equals(d.getIsAnonymous()) ? null : author.getAvatarUrl();
 
         String excerpt = d.getContent();
         if (excerpt != null && excerpt.length() > 150) {
             excerpt = excerpt.substring(0, 150) + "...";
         }
-
-        DiscussionItemDto.AuthorDto authorDto = new DiscussionItemDto.AuthorDto(
-                author.getUserId(),
-                displayName,
-                avatarUrl,
-                author.getRoleName()
-        );
 
         DiscussionItemDto.CourseRefDto courseRef = new DiscussionItemDto.CourseRefDto(
                 d.getCourse().getCourseId(),
@@ -96,7 +91,8 @@ public class ManagerDiscussionServiceImpl implements ManagerDiscussionService {
                 .discussionId(d.getDiscussionId())
                 .title(d.getTitle())
                 .excerpt(excerpt)
-                .author(authorDto)
+                .tag(d.getTag())
+                .author(DiscussionItemDto.AuthorDto.of(author, Boolean.TRUE.equals(d.getIsAnonymous())))
                 .upvoteCount(d.getUpvoteCount() != null ? d.getUpvoteCount() : 0)
                 .commentCount(d.getCommentCount() != null ? d.getCommentCount() : 0)
                 .isPinned(Boolean.TRUE.equals(d.getIsPinned()))
@@ -117,32 +113,17 @@ public class ManagerDiscussionServiceImpl implements ManagerDiscussionService {
      */
     private DiscussionDetailDto mapToDetailDto(Discussion d, Long currentUserId, List<DiscussionComment> comments) {
         User author = d.getUser();
-        String displayName = Boolean.TRUE.equals(d.getIsAnonymous()) ? "Học sinh ẩn danh" : author.getFullName();
-        String avatarUrl = Boolean.TRUE.equals(d.getIsAnonymous()) ? null : author.getAvatarUrl();
 
-        DiscussionItemDto.AuthorDto authorDto = new DiscussionItemDto.AuthorDto(
-                author.getUserId(),
-                displayName,
-                avatarUrl,
-                author.getRoleName()
-        );
-
-        List<DiscussionDetailDto.CommentDto> commentDtos = comments.stream().map(c -> {
-            User cAuthor = c.getUser();
-            String cName = Boolean.TRUE.equals(c.getIsAnonymous()) ? "Học sinh ẩn danh" : cAuthor.getFullName();
-            String cAvatar = Boolean.TRUE.equals(c.getIsAnonymous()) ? null : cAuthor.getAvatarUrl();
-
-            return new DiscussionDetailDto.CommentDto(
-                    c.getCommentId(),
-                    c.getContent(),
-                    new DiscussionItemDto.AuthorDto(cAuthor.getUserId(), cName, cAvatar, cAuthor.getRoleName()),
-                    Boolean.TRUE.equals(c.getIsAccepted()),
-                    Boolean.TRUE.equals(c.getIsAnonymous()),
-                    c.getImageUrl(),
-                    c.getStatus(),
-                    c.getCreatedAt()
-            );
-        }).toList();
+        List<DiscussionDetailDto.CommentDto> commentDtos = comments.stream().map(c -> new DiscussionDetailDto.CommentDto(
+                c.getCommentId(),
+                c.getContent(),
+                DiscussionItemDto.AuthorDto.of(c.getUser(), Boolean.TRUE.equals(c.getIsAnonymous())),
+                Boolean.TRUE.equals(c.getIsAccepted()),
+                Boolean.TRUE.equals(c.getIsAnonymous()),
+                c.getImageUrl(),
+                c.getStatus(),
+                c.getCreatedAt()
+        )).toList();
 
         boolean isAuthor = currentUserId != null && author.getUserId().equals(currentUserId);
         boolean isClosed = Boolean.TRUE.equals(d.getIsClosed()) || "CLOSED".equalsIgnoreCase(d.getStatus());
@@ -151,7 +132,8 @@ public class ManagerDiscussionServiceImpl implements ManagerDiscussionService {
                 .discussionId(d.getDiscussionId())
                 .title(d.getTitle())
                 .content(d.getContent())
-                .author(authorDto)
+                .tag(d.getTag())
+                .author(DiscussionItemDto.AuthorDto.of(author, Boolean.TRUE.equals(d.getIsAnonymous())))
                 .upvoteCount(d.getUpvoteCount() != null ? d.getUpvoteCount() : 0)
                 .commentCount(d.getCommentCount() != null ? d.getCommentCount() : 0)
                 .isPinned(Boolean.TRUE.equals(d.getIsPinned()))
@@ -184,6 +166,9 @@ public class ManagerDiscussionServiceImpl implements ManagerDiscussionService {
         String tag = (request.getTag() != null && !request.getTag().isBlank())
                 ? request.getTag().trim().toLowerCase()
                 : "announcement";
+        if (!TAGS.contains(tag)) {
+            throw new BadRequestException("Unknown discussion tag: " + request.getTag());
+        }
 
         boolean isPinned = Boolean.TRUE.equals(request.getIsPinned());
 
@@ -193,6 +178,7 @@ public class ManagerDiscussionServiceImpl implements ManagerDiscussionService {
                 .user(manager)
                 .title(request.getTitle().trim())
                 .content(request.getContent().trim())
+                .tag(tag)
                 .isAnonymous(false)
                 .status("OPEN")
                 .isPinned(isPinned)

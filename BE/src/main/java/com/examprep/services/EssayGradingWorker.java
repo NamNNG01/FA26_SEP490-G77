@@ -7,6 +7,7 @@ import com.examprep.ai.AiResponse;
 import com.examprep.entities.*;
 import com.examprep.services.student.QuestionReviewRecorder;
 import com.examprep.repositories.*;
+import com.examprep.util.attempt.AttemptScoring;
 import com.examprep.util.diagram.DrawioNormalizer;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -371,8 +372,15 @@ public class EssayGradingWorker {
         boolean running = rows.stream().anyMatch(a -> QUEUED.equals(a.getGradingStatus()) || GRADING.equals(a.getGradingStatus()));
         boolean waiting = rows.stream().anyMatch(a -> PENDING_AI.equals(a.getGradingStatus()) || FAILED.equals(a.getGradingStatus()));
         String before = attempt.getStatus();
-        attempt.setTotalScore(rows.stream().map(AttemptAnswer::getScoreEarned).filter(Objects::nonNull)
-                .reduce(BigDecimal.ZERO, BigDecimal::add).setScale(2, RoundingMode.HALF_UP));
+        // Full-credit answers contribute their unrounded P_q, so a perfect paper still totals M
+        // after the AI worker recomputes the attempt from the stored 2-digit scores.
+        BigDecimal maxScore = examMaxScore(attempt);
+        BigDecimal totalWeight = AttemptScoring.totalWeight(
+                rows.stream().map(AttemptAnswer::getWeightSnapshot).toList());
+        attempt.setTotalScore(AttemptScoring.output(AttemptScoring.sumScores(rows.stream()
+                .map(row -> AttemptScoring.contribution(
+                        row.getWeightSnapshot(), totalWeight, maxScore, row.getScoreEarned()))
+                .toList())));
         attempt.setStatus(running ? GRADING : waiting ? "SUBMITTED" : "COMPLETED");
         attempts.save(attempt);
         if ("COMPLETED".equals(attempt.getStatus()) && !"COMPLETED".equals(before)) notifyCompleted(attempt);

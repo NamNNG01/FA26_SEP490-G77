@@ -1,5 +1,6 @@
 package com.examprep.controllers.student;
 
+import com.examprep.dto.student.DiscussionItemDto;
 import com.examprep.entities.*;
 import com.examprep.entities.Module;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -16,6 +17,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import static com.examprep.controllers.student.Fixtures.as;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -150,6 +153,7 @@ class StudentV2FeaturesApiIntegrationTest {
                 .content("{\"courseId\":" + course.getCourseId() + ",\"title\":\"\",\"content\":\"\",\"tag\":\"question\"}"))
                 .andExpect(status().isBadRequest());
 
+        // A student who is not enrolled in the course cannot post to it, even by URL.
         mvc.perform(post("/api/v1/student/discussions")
                 .with(as(other))
                 .contentType(MediaType.APPLICATION_JSON)
@@ -161,21 +165,39 @@ class StudentV2FeaturesApiIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"courseId\":" + course.getCourseId() + ",\"title\":\"How to learn Java?\",\"content\":\"Please share tips.\",\"tag\":\"question\"}"))
                 .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.approvalStatus").value("PENDING"))
+                .andExpect(jsonPath("$.data.tag").value("question"))
                 .andReturn().getResponse().getContentAsString()).path("data");
 
         Long discId = created.path("discussionId").asLong();
 
+        // Moderation: a pending post is visible to its author only — it is not in the public list.
         mvc.perform(get("/api/v1/student/discussions")
                 .param("courseId", course.getCourseId().toString())
+                .param("tag", "question")
                 .param("sort", "latest")
                 .with(as(student)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.totalElements").value(1));
+                .andExpect(jsonPath("$.data.totalElements").value(0));
 
         mvc.perform(get("/api/v1/student/discussions/" + discId)
                 .with(as(student)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.title").value("How to learn Java?"));
+                .andExpect(jsonPath("$.data.title").value("How to learn Java?"))
+                .andExpect(jsonPath("$.data.isAuthor").value(true));
+
+        // A course manager approves it; only then does the post become public.
+        mvc.perform(post("/api/v1/manager/discussions/" + discId + "/approve").with(as(manager)))
+                .andExpect(status().isOk());
+
+        mvc.perform(get("/api/v1/student/discussions")
+                .param("courseId", course.getCourseId().toString())
+                .param("tag", "question")
+                .param("sort", "latest")
+                .with(as(student)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalElements").value(1))
+                .andExpect(jsonPath("$.data.content[0].tag").value("question"));
 
         mvc.perform(post("/api/v1/student/discussions/" + discId + "/comments")
                 .with(as(student))
@@ -210,5 +232,66 @@ class StudentV2FeaturesApiIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"isClosed\":true}"))
                 .andExpect(status().isOk());
+    }
+
+    @Test void anonymousPostsAndCommentsNeverExposeTheirAuthor() throws Exception {
+        Long discId = utf8(mvc.perform(post("/api/v1/student/discussions")
+                .with(as(student))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"courseId\":" + course.getCourseId()
+                        + ",\"title\":\"Anonymous question\",\"content\":\"Body\",\"tag\":\"question\",\"isAnonymous\":true}"))
+                .andExpect(status().isCreated())).path("data").path("discussionId").asLong();
+
+        // The author can still act on their own post, but the payload carries no identity.
+        JsonNode own = utf8(mvc.perform(get("/api/v1/student/discussions/" + discId).with(as(student)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.isAuthor").value(true))).path("data");
+        assertTrue(own.path("author").path("userId").isMissingNode()
+                        || own.path("author").path("userId").isNull(),
+                "an anonymous author's user id must never be returned");
+        assertEquals(DiscussionItemDto.AuthorDto.ANONYMOUS_DISPLAY_NAME, own.path("author").path("displayName").asText());
+
+        // Approval comes before the reply: an unapproved post refuses comments.
+        mvc.perform(post("/api/v1/manager/discussions/" + discId + "/approve").with(as(manager)))
+                .andExpect(status().isOk());
+
+        JsonNode comment = utf8(mvc.perform(post("/api/v1/student/discussions/" + discId + "/comments")
+                .with(as(student))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"content\":\"An anonymous reply\",\"isAnonymous\":true}"))
+                .andExpect(status().isCreated())).path("data");
+        assertEquals(DiscussionItemDto.AuthorDto.ANONYMOUS_DISPLAY_NAME, comment.path("author").path("displayName").asText());
+        assertTrue(comment.path("author").path("userId").isMissingNode()
+                || comment.path("author").path("userId").isNull());
+
+        // A second student reads the approved post from the public list: still no identity.
+        JsonNode listed = utf8(mvc.perform(get("/api/v1/student/discussions")
+                .param("courseId", course.getCourseId().toString())
+                .with(as(other)))
+                .andExpect(status().isOk())).path("data").path("content").get(0);
+        assertTrue(listed.path("author").path("userId").isMissingNode()
+                        || listed.path("author").path("userId").isNull(),
+                "the public list must not unmask an anonymous author");
+        assertTrue(listed.path("author").path("role").isMissingNode()
+                || listed.path("author").path("role").isNull());
+        assertEquals(DiscussionItemDto.AuthorDto.ANONYMOUS_DISPLAY_NAME, listed.path("author").path("displayName").asText());
+
+        JsonNode detail = utf8(mvc.perform(get("/api/v1/student/discussions/" + discId).with(as(other)))
+                .andExpect(status().isOk())).path("data");
+        assertTrue(detail.path("author").path("userId").isMissingNode()
+                || detail.path("author").path("userId").isNull());
+        assertTrue(detail.path("comments").get(0).path("author").path("userId").isMissingNode()
+                        || detail.path("comments").get(0).path("author").path("userId").isNull(),
+                "an anonymous comment must not expose its author either");
+    }
+
+    /**
+     * Parses a response body as UTF-8. MockHttpServletResponse#getContentAsString falls back to
+     * ISO-8859-1 for an application/json response without an explicit charset, which turns the
+     * masked display name (Học sinh ẩn danh) into mojibake before it can be compared.
+     */
+    private JsonNode utf8(org.springframework.test.web.servlet.ResultActions actions) throws Exception {
+        return json.readTree(actions.andReturn().getResponse()
+                .getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
     }
 }

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Icon } from '@/assets/icons';
 import { AlertBannerContext } from './Alert';
 
@@ -33,6 +33,8 @@ export function Modal({ open, isOpen, onClose, title, description, children, foo
   footer?: React.ReactNode; error?: React.ReactNode; size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | 'full' | 'screen'; dismissible?: boolean;
 }) {
   const isVisible = Boolean(open ?? isOpen);
+  // The heading is the dialog's accessible name: assistive tech announces "dialog: <title>".
+  const titleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
   // Read at call time, so toggling `dismissible` needs no re-subscription.
@@ -95,10 +97,10 @@ export function Modal({ open, isOpen, onClose, title, description, children, foo
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" onClick={() => onCloseRef.current()} />
-      <div ref={panelRef} role="dialog" aria-modal="true" className={`relative min-w-0 bg-surface rounded-[14px] shadow-xl w-full ${widths[size]} flex flex-col max-h-[90vh]`}>
+      <div ref={panelRef} role="dialog" aria-modal="true" aria-labelledby={title ? titleId : undefined} className={`relative min-w-0 bg-surface rounded-[14px] shadow-xl w-full ${widths[size]} flex flex-col max-h-[90vh]`}>
         {title && (
           <div className="flex items-center justify-between gap-4 px-6 py-4 border-b border-line-soft">
-            <h3 className="min-w-0 text-lg font-semibold text-content">{title}</h3>
+            <h3 id={titleId} className="min-w-0 text-lg font-semibold text-content">{title}</h3>
             {dismissible && <button onClick={onClose} aria-label="Close" className="text-content-subtle hover:text-content-secondary transition-colors"><Icon.X className="w-5 h-5" /></button>}
           </div>
         )}

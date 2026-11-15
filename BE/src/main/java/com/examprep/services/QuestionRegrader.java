@@ -24,7 +24,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -119,8 +118,12 @@ public class QuestionRegrader {
                 row.setGradedAt(now);
                 done++;
             }
-            attempt.setTotalScore(AttemptScoring.output(AttemptScoring.sumScores(
-                    rows.stream().map(AttemptAnswer::getScoreEarned).filter(Objects::nonNull).toList())));
+            // A full-credit answer contributes its unrounded P_q, so a perfect paper keeps
+            // totalling exactly maxScore after the regrade re-sums the stored 2-digit scores.
+            attempt.setTotalScore(AttemptScoring.output(AttemptScoring.sumScores(rows.stream()
+                    .map(row -> AttemptScoring.contribution(
+                            row.getWeightSnapshot(), totalWeight, maxScore, row.getScoreEarned()))
+                    .toList())));
             if ("SUBMITTED".equals(attempt.getStatus()) && rows.stream().noneMatch(r -> WAITING_FOR_AI.contains(r.getGradingStatus()))) {
                 attempt.setStatus("COMPLETED");
             }

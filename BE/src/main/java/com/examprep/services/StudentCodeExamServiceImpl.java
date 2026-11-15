@@ -519,8 +519,13 @@ public class StudentCodeExamServiceImpl implements StudentCodeExamService {
 
     /**
      * CD-07: replays the per-fixture verdicts stored at judging time, so a review can list each
-     * case instead of only its count. Every fixture carries its input and what the program printed;
-     * the expected output is withheld from a failed fixture so it can't be hard-coded.
+     * case instead of only its count. A public fixture carries its input and what the program
+     * printed; the expected output is withheld from a failed fixture so it can't be hard-coded.
+     *
+     * <p>A hidden fixture reports only {@code passed}/{@code failed}: its input, its expected
+     * output and the program's stdout never leave the server. Stdout is withheld too because a
+     * program that echoes its stdin would otherwise print the hidden input back into the history,
+     * where the attempt can still be resubmitted.</p>
      */
     private List<CodeExamResponses.TestCaseOutcome> testCaseOutcomes(CodeSubmission row,
                                                                     Map<Long, CodeTestCase> fixtureById) {
@@ -548,9 +553,9 @@ public class StudentCodeExamServiceImpl implements StudentCodeExamService {
                     fixture != null ? fixture.getOrderIndex() : null,
                     hidden,
                     passed,
-                    fixture == null ? null : fixture.getInputData(),
-                    fixture == null || !passed ? null : fixture.getExpectedOutput(),
-                    stdout == null || stdout.isNull() ? null : stdout.asText()));
+                    fixture == null || hidden ? null : fixture.getInputData(),
+                    fixture == null || hidden || !passed ? null : fixture.getExpectedOutput(),
+                    stdout == null || stdout.isNull() || hidden ? null : stdout.asText()));
         }
         return outcomes;
     }

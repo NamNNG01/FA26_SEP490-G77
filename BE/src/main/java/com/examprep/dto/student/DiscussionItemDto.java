@@ -1,5 +1,6 @@
 package com.examprep.dto.student;
 
+import com.examprep.entities.User;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -16,6 +17,8 @@ public class DiscussionItemDto {
     private Long discussionId;
     private String title;
     private String excerpt;
+    /** question, tip or announcement. */
+    private String tag;
     private AuthorDto author;
     private long upvoteCount;
     private long commentCount;
@@ -56,10 +59,26 @@ public class DiscussionItemDto {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class AuthorDto {
+        /** Shown instead of the real identity of an anonymous post or comment. */
+        public static final String ANONYMOUS_DISPLAY_NAME = "Học sinh ẩn danh";
+
         private Long userId;
         private String displayName;
         private String avatarUrl;
         private String role;
+
+        /**
+         * The author as readers see them. An anonymous author keeps no identifying field — no user
+         * id, no avatar and no role; only the caller's own {@code isAuthor} flag (or the comment's
+         * {@code isAnonymous} flag) tells the writer apart from the crowd.
+         */
+        public static AuthorDto of(User user, boolean anonymous) {
+            return new AuthorDto(
+                    anonymous ? null : user.getUserId(),
+                    anonymous ? ANONYMOUS_DISPLAY_NAME : user.getFullName(),
+                    anonymous ? null : user.getAvatarUrl(),
+                    anonymous ? null : user.getRoleName());
+        }
     }
 
     @Data

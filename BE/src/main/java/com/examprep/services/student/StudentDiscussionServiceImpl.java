@@ -23,6 +23,11 @@ import java.util.*;
 @Transactional
 public class StudentDiscussionServiceImpl implements StudentDiscussionService {
 
+    private static final String TAG_QUESTION = "question";
+    private static final String TAG_TIP = "tip";
+    private static final String TAG_ANNOUNCEMENT = "announcement";
+    private static final Set<String> TAGS = Set.of(TAG_QUESTION, TAG_TIP, TAG_ANNOUNCEMENT);
+
     private final DiscussionRepository discussionRepository;
     private final DiscussionCommentRepository commentRepository;
     private final DiscussionUpvoteRepository upvoteRepository;
@@ -56,26 +61,27 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
         }
     }
 
+    /** question, tip or announcement (case-insensitive); null or blank means question. */
+    private static String normalizeTag(String tag) {
+        if (tag == null || tag.isBlank()) {
+            return TAG_QUESTION;
+        }
+        String normalized = tag.trim().toLowerCase();
+        if (!TAGS.contains(normalized)) {
+            throw new BadRequestException("Unknown discussion tag: " + tag);
+        }
+        return normalized;
+    }
+
     private DiscussionItemDto mapToDto(Discussion d, Long userId, Set<Long> upvotedIds, Set<Long> bookmarkedIds) {
         boolean isUpvoted = userId != null && upvotedIds.contains(d.getDiscussionId());
         boolean isBookmarked = userId != null && bookmarkedIds.contains(d.getDiscussionId());
         boolean isAuthor = userId != null && d.getUser().getUserId().equals(userId);
 
-        User author = d.getUser();
-        String displayName = Boolean.TRUE.equals(d.getIsAnonymous()) ? "Học sinh ẩn danh" : author.getFullName();
-        String avatarUrl = Boolean.TRUE.equals(d.getIsAnonymous()) ? null : author.getAvatarUrl();
-
         String excerpt = d.getContent();
         if (excerpt != null && excerpt.length() > 150) {
             excerpt = excerpt.substring(0, 150) + "...";
         }
-
-        DiscussionItemDto.AuthorDto authorDto = new DiscussionItemDto.AuthorDto(
-                author.getUserId(),
-                displayName,
-                avatarUrl,
-                author.getRoleName()
-        );
 
         DiscussionItemDto.CourseRefDto courseRef = new DiscussionItemDto.CourseRefDto(
                 d.getCourse().getCourseId(),
@@ -86,7 +92,8 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
                 .discussionId(d.getDiscussionId())
                 .title(d.getTitle())
                 .excerpt(excerpt)
-                .author(authorDto)
+                .tag(d.getTag())
+                .author(DiscussionItemDto.AuthorDto.of(d.getUser(), Boolean.TRUE.equals(d.getIsAnonymous())))
                 .upvoteCount(d.getUpvoteCount())
                 .commentCount(d.getCommentCount())
                 .isPinned(Boolean.TRUE.equals(d.getIsPinned()))
@@ -104,11 +111,13 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<DiscussionItemDto> listDiscussions(Long courseId, String search, String sort, int page, int size, Long userId) {
+    public Page<DiscussionItemDto> listDiscussions(Long courseId, String tag, String search, String sort, int page, int size, Long userId) {
         if (sort == null || sort.isBlank()) {
             sort = "latest";
         }
         Pageable pageable = PageRequest.of(page, size);
+        // A blank tag means "every tag"; anything else must be one of the three known tags.
+        String tagFilter = tag == null || tag.isBlank() ? null : normalizeTag(tag);
         String searchTerm = search != null && !search.isBlank()
                 ? search.trim()
                 : "";
@@ -116,7 +125,7 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
             searchTerm = searchTerm.substring(0, 100);
         }
 
-        Page<Discussion> discussions = discussionRepository.findDiscussions(courseId, searchTerm, sort, pageable);
+        Page<Discussion> discussions = discussionRepository.findDiscussions(courseId, tagFilter, searchTerm, sort, pageable);
         List<Long> discussionIds = discussions.getContent().stream().map(Discussion::getDiscussionId).toList();
         Set<Long> upvotedIds = (userId != null && !discussionIds.isEmpty())
                 ? new HashSet<>(upvoteRepository.findUpvotedDiscussionIds(userId, discussionIds))
@@ -146,38 +155,27 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
         boolean isUpvoted = userId != null && upvoteRepository.existsByDiscussion_DiscussionIdAndUser_UserId(discussionId, userId);
         boolean isBookmarked = userId != null && bookmarkRepository.existsByDiscussion_DiscussionIdAndUser_UserId(discussionId, userId);
 
-        User author = d.getUser();
-        String displayName = Boolean.TRUE.equals(d.getIsAnonymous()) ? "Học sinh ẩn danh" : author.getFullName();
-        String avatarUrl = Boolean.TRUE.equals(d.getIsAnonymous()) ? null : author.getAvatarUrl();
-
-        DiscussionItemDto.AuthorDto authorDto = new DiscussionItemDto.AuthorDto(
-                author.getUserId(),
-                displayName,
-                avatarUrl,
-                author.getRoleName()
-        );
+        // An anonymous author is masked on every read path: the real id never leaves the server.
+        DiscussionItemDto.AuthorDto authorDto =
+                DiscussionItemDto.AuthorDto.of(d.getUser(), Boolean.TRUE.equals(d.getIsAnonymous()));
 
         List<DiscussionComment> comments = commentRepository.findLatestCommentsByDiscussionId(discussionId, PageRequest.of(0, 20));
-        List<DiscussionDetailDto.CommentDto> commentDtos = comments.stream().map(c -> {
-            User cAuthor = c.getUser();
-            String cName = Boolean.TRUE.equals(c.getIsAnonymous()) ? "Học sinh ẩn danh" : cAuthor.getFullName();
-            String cAvatar = Boolean.TRUE.equals(c.getIsAnonymous()) ? null : cAuthor.getAvatarUrl();
-            return new DiscussionDetailDto.CommentDto(
-                    c.getCommentId(),
-                    c.getContent(),
-                    new DiscussionItemDto.AuthorDto(cAuthor.getUserId(), cName, cAvatar, cAuthor.getRoleName()),
-                    Boolean.TRUE.equals(c.getIsAccepted()),
-                    Boolean.TRUE.equals(c.getIsAnonymous()),
-                    c.getImageUrl(),
-                    c.getStatus(),
-                    c.getCreatedAt()
-            );
-        }).toList();
+        List<DiscussionDetailDto.CommentDto> commentDtos = comments.stream().map(c -> new DiscussionDetailDto.CommentDto(
+                c.getCommentId(),
+                c.getContent(),
+                DiscussionItemDto.AuthorDto.of(c.getUser(), Boolean.TRUE.equals(c.getIsAnonymous())),
+                Boolean.TRUE.equals(c.getIsAccepted()),
+                Boolean.TRUE.equals(c.getIsAnonymous()),
+                c.getImageUrl(),
+                c.getStatus(),
+                c.getCreatedAt()
+        )).toList();
 
         return DiscussionDetailDto.builder()
                 .discussionId(d.getDiscussionId())
                 .title(d.getTitle())
                 .content(d.getContent())
+                .tag(d.getTag())
                 .author(authorDto)
                 .upvoteCount(d.getUpvoteCount())
                 .commentCount(d.getCommentCount())
@@ -200,18 +198,18 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-        // Kiểm tra xem student có mua khóa học nào chưa
-        List<Course> enrolledCourses = enrollmentRepository
-                .findByUserIdAndStatus(userId, "ACTIVE").stream()
-                .map(e -> e.getCourse())
-                .toList();
-
-        if (enrolledCourses.isEmpty()) {
-            throw new ForbiddenException("You must be enrolled in at least one course to create a discussion");
+        if (request.getCourseId() == null) {
+            throw new BadRequestException("Course is required");
         }
+        // The post belongs to the course the client picked, never to "whichever enrollment comes
+        // first": a request for course B must not be stored under course A.
+        Course course = courseRepository.findById(request.getCourseId())
+                .orElseThrow(() -> new ResourceNotFoundException("Course not found"));
 
-        // Lấy khóa học đầu tiên (mặc định)
-        Course course = enrolledCourses.get(0);
+        boolean isManager = isManagerOrAdmin(course.getCourseId(), userId);
+        if (!isManager) {
+            validateActiveEnrollment(course.getCourseId(), userId);
+        }
 
         if (request.getTitle() == null || request.getTitle().isBlank()) {
             throw new BadRequestException("Title is required");
@@ -220,7 +218,11 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
             throw new BadRequestException("Content is required");
         }
 
-        boolean isManager = isManagerOrAdmin(course.getCourseId(), userId);
+        String tag = normalizeTag(request.getTag());
+        if (TAG_ANNOUNCEMENT.equals(tag) && !isManager) {
+            throw new BadRequestException("Only course managers can post announcements");
+        }
+
         String approvalStatus = isManager ? Discussion.APPROVAL_APPROVED : Discussion.APPROVAL_PENDING;
 
         Discussion d = Discussion.builder()
@@ -228,6 +230,7 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
                 .user(user)
                 .title(request.getTitle().trim())
                 .content(request.getContent().trim())
+                .tag(tag)
                 .isAnonymous(Boolean.TRUE.equals(request.getIsAnonymous()))
                 .status("OPEN")
                 .isPinned(false)
@@ -278,13 +281,10 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
         d.setCommentCount(d.getCommentCount() + 1);
         discussionRepository.save(d);
 
-        String cName = Boolean.TRUE.equals(comment.getIsAnonymous()) ? "Học sinh ẩn danh" : user.getFullName();
-        String cAvatar = Boolean.TRUE.equals(comment.getIsAnonymous()) ? null : user.getAvatarUrl();
-
         return new DiscussionDetailDto.CommentDto(
                 comment.getCommentId(),
                 comment.getContent(),
-                new DiscussionItemDto.AuthorDto(user.getUserId(), cName, cAvatar, user.getRoleName()),
+                DiscussionItemDto.AuthorDto.of(user, Boolean.TRUE.equals(comment.getIsAnonymous())),
                 false,
                 comment.getIsAnonymous(),
                 comment.getImageUrl(),
@@ -364,9 +364,9 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
     @Transactional(readOnly = true)
     public Page<DiscussionItemDto> listTips(Long courseId, int page, int size, Long userId) {
         Pageable pageable = PageRequest.of(page, size);
-        // Tips là những discussions có approvalStatus = APPROVED và tag = tip (cũ)
-        // Bây giờ không có tag nữa, nên list tất cả approved discussions
-        Page<Discussion> discussions = discussionRepository.findDiscussions(courseId, null, "latest", pageable);
+        // Tips are the APPROVED discussions tagged "tip" (the tag filter also keeps them out of
+        // the announcement / question tabs).
+        Page<Discussion> discussions = discussionRepository.findDiscussions(courseId, TAG_TIP, null, "latest", pageable);
         List<Long> discussionIds = discussions.getContent().stream().map(Discussion::getDiscussionId).toList();
         Set<Long> upvotedIds = (userId != null && !discussionIds.isEmpty())
                 ? new HashSet<>(upvoteRepository.findUpvotedDiscussionIds(userId, discussionIds))

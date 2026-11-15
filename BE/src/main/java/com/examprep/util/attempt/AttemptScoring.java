@@ -10,7 +10,9 @@ import java.util.List;
  * Weight to points conversion (spec section 1).
  *
  * <p>All arithmetic is done at {@link #INTERNAL_SCALE} digits; every value that leaves the service
- * is rounded to {@link #OUTPUT_SCALE} digits with {@link RoundingMode#HALF_UP} (spec 0.2).</p>
+ * is rounded to {@link #OUTPUT_SCALE} digits with {@link RoundingMode#HALF_UP} (spec 0.2). A value
+ * that only feeds a sum ({@link #questionPointsExact}) keeps {@link #AGGREGATE_SCALE} digits so
+ * rounding happens once, on the total, and a perfect paper totals exactly {@code M}.</p>
  *
  * <p>{@code M} is always {@code exam_snapshot.maxScore} and {@code w} is always
  * {@code weight_snapshot}: current exam/question data never takes part (spec 0.3 rule 6).</p>
@@ -21,6 +23,11 @@ public final class AttemptScoring {
     public static final int INTERNAL_SCALE = 4;
     /** Digits handed back to the FE. */
     public static final int OUTPUT_SCALE = 2;
+    /**
+     * Precision of the P_q values that are summed into an attempt total: high enough that rounding
+     * an addend can never move the total by an output digit when every question is correct.
+     */
+    public static final int AGGREGATE_SCALE = 12;
 
     private static final BigDecimal WEIGHTLESS = BigDecimal.ZERO;
 
@@ -47,13 +54,38 @@ public final class AttemptScoring {
      * weights, so this only guards against a corrupt snapshot).</p>
      */
     public static BigDecimal questionMaxPoints(BigDecimal weight, BigDecimal totalWeight, BigDecimal maxScore) {
+        return questionPointsExact(weight, totalWeight, maxScore)
+                .setScale(INTERNAL_SCALE, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * P_q = (w_q / W) × M at {@link #AGGREGATE_SCALE} digits, for summing many questions into one
+     * attempt total. Rounding every addend to {@link #OUTPUT_SCALE} before adding made a perfect
+     * paper total {@code 10.02} (six equally weighted questions) or {@code 9.99} (three) instead of
+     * {@code M}, so totals are built from this value and only the total is rounded.
+     */
+    public static BigDecimal questionPointsExact(BigDecimal weight, BigDecimal totalWeight, BigDecimal maxScore) {
         if (weight == null || totalWeight == null || totalWeight.signum() <= 0
                 || weight.signum() <= 0 || maxScore == null) {
             return WEIGHTLESS;
         }
-        return weight.divide(totalWeight, INTERNAL_SCALE, RoundingMode.HALF_UP)
-                .multiply(maxScore)
-                .setScale(INTERNAL_SCALE, RoundingMode.HALF_UP);
+        return weight.multiply(maxScore).divide(totalWeight, AGGREGATE_SCALE, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * The contribution of an already-scored answer to an attempt total: an answer that earned its
+     * whole (unrounded) P_q contributes that exact P_q — the stored 2-digit score equals
+     * {@code output(P_q)} exactly when the answer took the whole question, whether it was an
+     * all-or-nothing quiz answer or a rubric answer the AI scored at its maximum. A partial score
+     * stands as stored. {@code null} means the answer has no score yet.
+     */
+    public static BigDecimal contribution(BigDecimal weight, BigDecimal totalWeight, BigDecimal maxScore,
+                                          BigDecimal score) {
+        if (score == null) {
+            return null;
+        }
+        BigDecimal exact = questionPointsExact(weight, totalWeight, maxScore);
+        return score.compareTo(output(exact)) >= 0 ? exact : score;
     }
 
     /**

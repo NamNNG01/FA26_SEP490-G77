@@ -473,6 +473,38 @@ public class StudentCodeExamApiIntegrationTest {
     }
 
     @Test
+    void aPaperWithEveryAnswerCorrectTotalsExactlyTheMaximum() throws Exception {
+        long attemptId = startAttempt();
+        stubJudge();
+
+        // CD-05 stores each code answer with its 2-digit P_q (1/3 x 10 → 3.33).
+        submit(student, json.writeValueAsString(Map.of(
+                "examId", exam.getExamId(),
+                "answers", List.of(
+                        Map.of("questionId", codeQuestion.getQuestionId(), "language", "JAVA", "sourceCode", "PASS"),
+                        Map.of("questionId", sumQuestion.getQuestionId(), "language", "CPP", "sourceCode", "PASS")))))
+                .andExpect(status().isOk());
+
+        // The last (choice) answer rides on the submit; adding the stored 2-digit scores would end
+        // the fully correct paper at 9.99. It must total exactly the frozen max score (10.00).
+        AnswerOption correct = em.createQuery("select o from AnswerOption o where o.question.questionId = :id "
+                        + "and o.isCorrect = true", AnswerOption.class)
+                .setParameter("id", choiceQuestion.getQuestionId()).getSingleResult();
+        call(student, post("/api/v1/student/attempts/" + attemptId + "/submit")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("answers", List.of(Map.of(
+                        "questionId", choiceQuestion.getQuestionId(), "seq", 1,
+                        "response", Map.of("selectedOptionIds", List.of(correct.getOptionId()))))))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("COMPLETED"))
+                .andExpect(jsonPath("$.data.maxScore").value(10))
+                .andExpect(jsonPath("$.data.totalScore").value(10.00));
+
+        assertEquals(0, new BigDecimal("10.00")
+                .compareTo(em.find(ExamAttempt.class, attemptId).getTotalScore()));
+    }
+
+    @Test
     void submitRequiresARunningNonExpiredAttempt() throws Exception {
         String body = json.writeValueAsString(Map.of("examId", exam.getExamId(),
                 "answers", List.of(Map.of("questionId", codeQuestion.getQuestionId(),
@@ -563,8 +595,9 @@ public class StudentCodeExamApiIntegrationTest {
         assertEquals("PASSED", data.path("content").get(2).path("status").asText());
         assertEquals(codeQuestion.getQuestionId(), data.path("content").get(2).path("questionId").asLong());
 
-        // CD-07 lists every judged fixture with its input and the program's output, hidden ones
-        // included; a failed fixture never carries its expected output.
+        // CD-07 lists a public fixture's input and the program's output; a failed fixture never
+        // carries its expected output, and a hidden fixture carries none of its data at all — a
+        // student must not be able to read hidden inputs from the history and resubmit around them.
         JsonNode firstCases = data.path("content").get(0).path("testCases");
         assertEquals(3, firstCases.size());
         assertFalse(firstCases.get(0).path("hidden").asBoolean());
@@ -572,22 +605,33 @@ public class StudentCodeExamApiIntegrationTest {
             assertTrue(firstCases.get(i).path("hidden").asBoolean());
         }
         assertEquals("abc", firstCases.get(0).path("inputData").asText());
-        assertEquals("xyz", firstCases.get(1).path("inputData").asText());
-        assertEquals("hello", firstCases.get(2).path("inputData").asText());
-        for (JsonNode testCase : firstCases) {
-            assertFalse(testCase.path("passed").asBoolean(true));
-            assertTrue(testCase.hasNonNull("testCaseId"));
-            assertTrue(testCase.hasNonNull("orderIndex"));
-            assertFalse(testCase.hasNonNull("expectedOutput"));
-            assertEquals("wrong", testCase.path("actualOutput").asText());
+        assertFalse(firstCases.get(0).path("passed").asBoolean(true));
+        assertEquals("wrong", firstCases.get(0).path("actualOutput").asText());
+        assertFalse(firstCases.get(0).hasNonNull("expectedOutput"));
+        for (int i = 1; i < firstCases.size(); i++) {
+            JsonNode hiddenCase = firstCases.get(i);
+            assertTrue(hiddenCase.hasNonNull("testCaseId"));
+            assertTrue(hiddenCase.hasNonNull("orderIndex"));
+            assertFalse(hiddenCase.path("passed").asBoolean(true));
+            assertFalse(hiddenCase.hasNonNull("inputData"), "a hidden input must never leave the server");
+            assertFalse(hiddenCase.hasNonNull("expectedOutput"));
+            assertFalse(hiddenCase.hasNonNull("actualOutput"), "stdout can echo the hidden input back");
         }
         JsonNode passedCases = data.path("content").get(2).path("testCases");
         assertEquals(3, passedCases.size());
         for (JsonNode testCase : passedCases) {
             assertTrue(testCase.path("passed").asBoolean(false));
-            assertEquals(testCase.path("expectedOutput").asText(), testCase.path("actualOutput").asText());
         }
-        assertEquals("zyx", passedCases.get(1).path("expectedOutput").asText());
+        // The public case shows its input, what was expected and what the program printed; the
+        // hidden ones stay colorless even after passing.
+        assertEquals("abc", passedCases.get(0).path("inputData").asText());
+        assertEquals("cba", passedCases.get(0).path("expectedOutput").asText());
+        assertEquals("cba", passedCases.get(0).path("actualOutput").asText());
+        for (int i = 1; i < passedCases.size(); i++) {
+            assertFalse(passedCases.get(i).hasNonNull("inputData"));
+            assertFalse(passedCases.get(i).hasNonNull("expectedOutput"));
+            assertFalse(passedCases.get(i).hasNonNull("actualOutput"));
+        }
 
         JsonNode page1 = data(call(student, get("/api/v1/student/code-exams/" + exam.getExamId()
                 + "/submissions?page=1&size=2")).andExpect(status().isOk()));

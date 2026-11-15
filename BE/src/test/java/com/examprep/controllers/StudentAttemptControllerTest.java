@@ -748,6 +748,36 @@ class StudentAttemptControllerTest {
     }
 
     @Test
+    void answersSentAfterTheDeadlineAreNeverAppliedOrAwarded() throws Exception {
+        long attemptId = data(call(student, post(startUrl(mainExam))).andExpect(status().isCreated()))
+                .path("attemptId").asLong();
+        attempt(attemptId).setDeadlineAt(Instant.now().minusSeconds(120));
+
+        // A fresh, correct answer arrives two minutes past the deadline: the attempt closes with
+        // the (empty) drafts and the late answer is dropped instead of scoring 2.00 + 4.00.
+        call(student, post(submitUrl(attemptId)).contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("answers", List.of(
+                        draft(single.getQuestionId(), 1, selected(singleRight.getOptionId())),
+                        draft(multiple.getQuestionId(), 1,
+                                selected(multipleA.getOptionId(), multipleB.getOptionId())))))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.autoSubmitted").value(true))
+                .andExpect(jsonPath("$.data.totalScore").value(0.00));
+
+        assertNull(answer(attemptId, single.getQuestionId()).getResponse(),
+                "a late answer must not be stored");
+        assertEquals("COMPLETED", attempt(attemptId).getStatus());
+    }
+
+    @Test
+    void aPerfectScoreNeverExceedsOrFallsShortOfTheMaximum() throws Exception {
+        // 1/3 x 10 used to total 9.99 and 1/6 x 10 used to total 10.02, because every answer was
+        // rounded to 2 digits before the total was added up.
+        assertEquals(0, MAX_SCORE.compareTo(perfectTotal(3)), "three equal questions must total 10.00");
+        assertEquals(0, MAX_SCORE.compareTo(perfectTotal(6)), "six equal questions must total 10.00");
+    }
+
+    @Test
     void submitIgnoresQuestionsThatAreNotPartOfTheAttempt() throws Exception {
         long attemptId = data(call(student, post(startUrl(mainExam))).andExpect(status().isCreated()))
                 .path("attemptId").asLong();
@@ -1046,6 +1076,31 @@ class StudentAttemptControllerTest {
         call(student, post(submitUrl(attemptId)).contentType(MediaType.APPLICATION_JSON)
                 .content(json.writeValueAsString(Map.of("answers", drafts)))).andExpect(status().isOk());
         return attemptId;
+    }
+
+    /**
+     * Starts an exam of {@code count} equally weighted single-choice questions (maxScore 10),
+     * answers every one correctly and returns the stored total score.
+     */
+    private BigDecimal perfectTotal(int count) throws Exception {
+        Exam equalExam = exam("Perfect " + count, "STATIC", MAX_SCORE);
+        List<Map<String, Object>> drafts = new ArrayList<>();
+        for (int i = 1; i <= count; i++) {
+            Question question = question("SINGLE_CHOICE", "Perfect question " + i);
+            option(question, "Wrong " + i, false, 0);
+            AnswerOption right = option(question, "Right " + i, true, 1);
+            attach(equalExam, question, "1");
+            drafts.add(draft(question.getQuestionId(), i, selected(right.getOptionId())));
+        }
+
+        long attemptId = data(call(student, post(startUrl(equalExam))).andExpect(status().isCreated()))
+                .path("attemptId").asLong();
+        call(student, post(submitUrl(attemptId)).contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("answers", drafts))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("COMPLETED"))
+                .andExpect(jsonPath("$.data.totalScore").value(10.00));
+        return attempt(attemptId).getTotalScore();
     }
 
     private ResultActions call(User actor, MockHttpServletRequestBuilder request) throws Exception {

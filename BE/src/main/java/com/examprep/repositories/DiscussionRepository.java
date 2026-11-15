@@ -16,8 +16,9 @@ public interface DiscussionRepository extends JpaRepository<Discussion, Long> {
                     "JOIN FETCH d.user u " +
                     "LEFT JOIN FETCH d.course c " +
                     "WHERE (:courseId IS NULL OR d.course.courseId = :courseId) " +
+                    "AND (:tag IS NULL OR d.tag = :tag) " +
                     "AND (d.approvalStatus = 'APPROVED' AND d.status <> 'HIDDEN') " +
-                    "AND (:search = '' OR " +
+                    "AND (:search IS NULL OR :search = '' OR " +
                     "LOWER(d.title) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
                     "LOWER(d.content) LIKE LOWER(CONCAT('%', :search, '%'))) " +
                     "ORDER BY d.isPinned DESC, " +
@@ -27,13 +28,15 @@ public interface DiscussionRepository extends JpaRepository<Discussion, Long> {
 
             countQuery = "SELECT COUNT(d) FROM Discussion d " +
                     "WHERE (:courseId IS NULL OR d.course.courseId = :courseId) " +
+                    "AND (:tag IS NULL OR d.tag = :tag) " +
                     "AND (d.approvalStatus = 'APPROVED' AND d.status <> 'HIDDEN') " +
-                    "AND (:search = '' OR " +
+                    "AND (:search IS NULL OR :search = '' OR " +
                     "LOWER(d.title) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
                     "LOWER(d.content) LIKE LOWER(CONCAT('%', :search, '%')))"
     )
     Page<Discussion> findDiscussions(
             @Param("courseId") Long courseId,
+            @Param("tag") String tag,
             @Param("search") String search,
             @Param("sort") String sort,
             Pageable pageable

@@ -49,7 +49,9 @@ public final class AttemptGrader {
     /**
      * Scores a non-empty answer of a quiz question.
      *
-     * @param maxPoints P_q of this question, already rounded for output.
+     * @param maxPoints P_q of this question at full working precision; callers round it when they
+     *                  write it (the 2-digit {@code score_earned} column) and only round a total
+     *                  once, so a perfect paper totals exactly the exam's max score.
      */
     public static Grade grade(String questionType,
                               JsonNode response,
