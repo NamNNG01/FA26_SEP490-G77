@@ -37,7 +37,7 @@ public interface DiscountRepository extends JpaRepository<Discount, Long>, JpaSp
     int releaseUsage(@Param("discountId") Long discountId);
 
     @Query("SELECT d FROM Discount d WHERE d.isActive = true AND d.deletedAt IS NULL AND (d.expiresAt IS NULL OR d.expiresAt > :now) " +
-            "AND d.appliesTo IN ('COURSE', 'ALL') " +
+            "AND d.appliesTo IN ('COURSE', 'ALL') AND d.accessType = 'CLAIM_REQUIRED' " +
             "AND d.usageLimit - d.usedCount - (SELECT COUNT(ud) FROM UserDiscount ud WHERE ud.discount = d AND ud.isUsed = false) > 0 " +
             "AND (LOWER(d.code) LIKE :keyword ESCAPE '!' OR LOWER(COALESCE(d.name, '')) LIKE :keyword ESCAPE '!') ORDER BY d.discountId DESC")
     Page<Discount> findContestPrizes(@Param("now") Instant now, @Param("keyword") String keyword, Pageable pageable);

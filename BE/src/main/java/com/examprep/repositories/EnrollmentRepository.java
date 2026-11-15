@@ -68,4 +68,7 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
             "AND (LOWER(e.user.fullName) LIKE :search ESCAPE '!' OR LOWER(e.user.email) LIKE :search ESCAPE '!')")
     Page<Enrollment> findStudents(@Param("courseId") Long courseId, @Param("status") String status,
                                   @Param("search") String search, Pageable pageable);
+
+    @Query("SELECT e FROM Enrollment e WHERE e.user.userId = :userId AND e.status = :status")
+    List<Enrollment> findByUserIdAndStatus(@Param("userId") Long userId, @Param("status") String status);
 }

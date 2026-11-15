@@ -29,7 +29,6 @@ public class StudentDiscussionController {
     @Operation(summary = "DI-01: List Discussions")
     public ResponseEntity<ApiResponse<PageResponse<DiscussionItemDto>>> listDiscussions(
             @RequestParam(required = false) Long courseId,
-            @RequestParam(required = false) String tag,
             @RequestParam(required = false) String search,
             @RequestParam(defaultValue = "latest") String sort,
             @RequestParam(defaultValue = "0") int page,
@@ -37,7 +36,7 @@ public class StudentDiscussionController {
             @AuthenticationPrincipal UserPrincipal currentUser
     ) {
         Long userId = currentUser != null ? currentUser.getId() : null;
-        Page<DiscussionItemDto> p = discussionService.listDiscussions(courseId, tag, search, sort, page, size, userId);
+        Page<DiscussionItemDto> p = discussionService.listDiscussions(courseId, search, sort, page, size, userId);
         return ResponseEntity.ok(ApiResponse.success(PageResponse.of(p)));
     }
 
@@ -91,6 +90,18 @@ public class StudentDiscussionController {
     ) {
         Map<String, Object> data = discussionService.toggleBookmark(discussionId, currentUser.getId());
         return ResponseEntity.ok(ApiResponse.success(data));
+    }
+
+    @GetMapping("/discussions/bookmarked")
+    @Operation(summary = "DI-07: List Bookmarked Discussions")
+    public ResponseEntity<ApiResponse<PageResponse<DiscussionItemDto>>> listBookmarkedDiscussions(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @AuthenticationPrincipal UserPrincipal currentUser
+    ) {
+        Long userId = currentUser != null ? currentUser.getId() : null;
+        Page<DiscussionItemDto> p = discussionService.listBookmarkedDiscussions(page, size, userId);
+        return ResponseEntity.ok(ApiResponse.success(PageResponse.of(p)));
     }
 
     @GetMapping("/tips")

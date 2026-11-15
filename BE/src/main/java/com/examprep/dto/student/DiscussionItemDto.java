@@ -15,7 +15,6 @@ import java.time.Instant;
 public class DiscussionItemDto {
     private Long discussionId;
     private String title;
-    private String tag; // question, tip
     private String excerpt;
     private AuthorDto author;
     private long upvoteCount;
@@ -24,6 +23,8 @@ public class DiscussionItemDto {
     private boolean isPinned;
     @JsonProperty("isUpvoted")
     private boolean isUpvoted;
+    @JsonProperty("isBookmarked")
+    private boolean isBookmarked;
     @JsonProperty("isAuthor")
     private boolean isAuthor;
     @JsonProperty("isClosed")

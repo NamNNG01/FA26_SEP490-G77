@@ -63,10 +63,6 @@ public class Discussion implements Serializable {
     public static final String APPROVAL_REJECTED = "REJECTED";
 
     @Builder.Default
-    @Column(name = "tag", nullable = false, length = 20)
-    private String tag = "question"; // question, tip
-
-    @Builder.Default
     @Column(name = "is_anonymous", nullable = false)
     private Boolean isAnonymous = false;
 

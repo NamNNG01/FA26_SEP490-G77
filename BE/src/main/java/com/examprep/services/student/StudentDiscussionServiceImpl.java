@@ -56,8 +56,9 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
         }
     }
 
-    private DiscussionItemDto mapToDto(Discussion d, Long userId, Set<Long> upvotedIds) {
+    private DiscussionItemDto mapToDto(Discussion d, Long userId, Set<Long> upvotedIds, Set<Long> bookmarkedIds) {
         boolean isUpvoted = userId != null && upvotedIds.contains(d.getDiscussionId());
+        boolean isBookmarked = userId != null && bookmarkedIds.contains(d.getDiscussionId());
         boolean isAuthor = userId != null && d.getUser().getUserId().equals(userId);
 
         User author = d.getUser();
@@ -84,13 +85,13 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
         return DiscussionItemDto.builder()
                 .discussionId(d.getDiscussionId())
                 .title(d.getTitle())
-                .tag(d.getTag())
                 .excerpt(excerpt)
                 .author(authorDto)
                 .upvoteCount(d.getUpvoteCount())
                 .commentCount(d.getCommentCount())
                 .isPinned(Boolean.TRUE.equals(d.getIsPinned()))
                 .isUpvoted(isUpvoted)
+                .isBookmarked(isBookmarked)
                 .isAuthor(isAuthor)
                 .isClosed(Boolean.TRUE.equals(d.getIsClosed()) || "CLOSED".equals(d.getStatus()))
                 .imageUrl(d.getImageUrl())
@@ -103,7 +104,7 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<DiscussionItemDto> listDiscussions(Long courseId, String tag, String search, String sort, int page, int size, Long userId) {
+    public Page<DiscussionItemDto> listDiscussions(Long courseId, String search, String sort, int page, int size, Long userId) {
         if (sort == null || sort.isBlank()) {
             sort = "latest";
         }
@@ -115,13 +116,16 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
             searchTerm = searchTerm.substring(0, 100);
         }
 
-        Page<Discussion> discussions = discussionRepository.findDiscussions(courseId, tag, searchTerm, sort, pageable);
+        Page<Discussion> discussions = discussionRepository.findDiscussions(courseId, searchTerm, sort, pageable);
         List<Long> discussionIds = discussions.getContent().stream().map(Discussion::getDiscussionId).toList();
         Set<Long> upvotedIds = (userId != null && !discussionIds.isEmpty())
                 ? new HashSet<>(upvoteRepository.findUpvotedDiscussionIds(userId, discussionIds))
                 : Collections.emptySet();
+        Set<Long> bookmarkedIds = (userId != null && !discussionIds.isEmpty())
+                ? new HashSet<>(bookmarkRepository.findBookmarkedDiscussionIds(userId, discussionIds))
+                : Collections.emptySet();
 
-        return discussions.map(d -> mapToDto(d, userId, upvotedIds));
+        return discussions.map(d -> mapToDto(d, userId, upvotedIds, bookmarkedIds));
     }
 
     @Override
@@ -174,7 +178,6 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
                 .discussionId(d.getDiscussionId())
                 .title(d.getTitle())
                 .content(d.getContent())
-                .tag(d.getTag())
                 .author(authorDto)
                 .upvoteCount(d.getUpvoteCount())
                 .commentCount(d.getCommentCount())
@@ -194,10 +197,21 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
 
     @Override
     public DiscussionItemDto createDiscussion(CreateDiscussionRequestDto request, Long userId) {
-        boolean isManager = isManagerOrAdmin(request.getCourseId(), userId);
-        if (!isManager) {
-            validateActiveEnrollment(request.getCourseId(), userId);
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        // Kiểm tra xem student có mua khóa học nào chưa
+        List<Course> enrolledCourses = enrollmentRepository
+                .findByUserIdAndStatus(userId, "ACTIVE").stream()
+                .map(e -> e.getCourse())
+                .toList();
+
+        if (enrolledCourses.isEmpty()) {
+            throw new ForbiddenException("You must be enrolled in at least one course to create a discussion");
         }
+
+        // Lấy khóa học đầu tiên (mặc định)
+        Course course = enrolledCourses.get(0);
 
         if (request.getTitle() == null || request.getTitle().isBlank()) {
             throw new BadRequestException("Title is required");
@@ -206,14 +220,7 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
             throw new BadRequestException("Content is required");
         }
 
-        Course course = courseRepository.findById(request.getCourseId())
-                .orElseThrow(() -> new ResourceNotFoundException("Course not found"));
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
-
-        String tag = (request.getTag() != null && request.getTag().equalsIgnoreCase("tip")) ? "tip" : "question";
-
-        // Student tạo thì Manager phải duyệt (PENDING), Manager tạo thì không cần duyệt (APPROVED)
+        boolean isManager = isManagerOrAdmin(course.getCourseId(), userId);
         String approvalStatus = isManager ? Discussion.APPROVAL_APPROVED : Discussion.APPROVAL_PENDING;
 
         Discussion d = Discussion.builder()
@@ -221,7 +228,6 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
                 .user(user)
                 .title(request.getTitle().trim())
                 .content(request.getContent().trim())
-                .tag(tag)
                 .isAnonymous(Boolean.TRUE.equals(request.getIsAnonymous()))
                 .status("OPEN")
                 .isPinned(false)
@@ -234,7 +240,7 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
                 .build();
 
         Discussion saved = discussionRepository.save(d);
-        return mapToDto(saved, userId, Collections.emptySet());
+        return mapToDto(saved, userId, Collections.emptySet(), Collections.emptySet());
     }
 
     @Override
@@ -339,15 +345,37 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
 
     @Override
     @Transactional(readOnly = true)
+    public Page<DiscussionItemDto> listBookmarkedDiscussions(int page, int size, Long userId) {
+        if (userId == null) {
+            throw new ForbiddenException("Authentication required");
+        }
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Discussion> discussions = discussionRepository.findBookmarkedByUser(userId, pageable);
+        List<Long> discussionIds = discussions.getContent().stream().map(Discussion::getDiscussionId).toList();
+        Set<Long> upvotedIds = !discussionIds.isEmpty()
+                ? new HashSet<>(upvoteRepository.findUpvotedDiscussionIds(userId, discussionIds))
+                : Collections.emptySet();
+        Set<Long> bookmarkedIds = new HashSet<>(discussionIds); // Tất cả đều bookmarked
+
+        return discussions.map(d -> mapToDto(d, userId, upvotedIds, bookmarkedIds));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Page<DiscussionItemDto> listTips(Long courseId, int page, int size, Long userId) {
         Pageable pageable = PageRequest.of(page, size);
-        Page<Discussion> discussions = discussionRepository.findDiscussions(courseId, "tip", null, "latest", pageable);
+        // Tips là những discussions có approvalStatus = APPROVED và tag = tip (cũ)
+        // Bây giờ không có tag nữa, nên list tất cả approved discussions
+        Page<Discussion> discussions = discussionRepository.findDiscussions(courseId, null, "latest", pageable);
         List<Long> discussionIds = discussions.getContent().stream().map(Discussion::getDiscussionId).toList();
         Set<Long> upvotedIds = (userId != null && !discussionIds.isEmpty())
                 ? new HashSet<>(upvoteRepository.findUpvotedDiscussionIds(userId, discussionIds))
                 : Collections.emptySet();
+        Set<Long> bookmarkedIds = (userId != null && !discussionIds.isEmpty())
+                ? new HashSet<>(bookmarkRepository.findBookmarkedDiscussionIds(userId, discussionIds))
+                : Collections.emptySet();
 
-        return discussions.map(d -> mapToDto(d, userId, upvotedIds));
+        return discussions.map(d -> mapToDto(d, userId, upvotedIds, bookmarkedIds));
     }
 
     @Override
@@ -356,9 +384,10 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
                 .orElseThrow(() -> new ResourceNotFoundException("Discussion not found"));
 
         boolean isAuthor = d.getUser().getUserId().equals(userId);
-        boolean isManager = isManagerOrAdmin(d.getCourse().getCourseId(), userId);
-        if (!isAuthor && !isManager) {
-            throw new ForbiddenException("Only author or course manager can update discussion");
+
+        // Chỉ author mới có thể update (close/open) discussion của mình
+        if (!isAuthor) {
+            throw new ForbiddenException("Only author can update their discussion");
         }
 
         if (request.getIsClosed() != null) {
@@ -367,7 +396,12 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
         }
 
         Discussion saved = discussionRepository.save(d);
-        boolean isUpvoted = upvoteRepository.existsByDiscussion_DiscussionIdAndUser_UserId(discussionId, userId);
-        return mapToDto(saved, userId, isUpvoted ? Set.of(discussionId) : Collections.emptySet());
+        Set<Long> upvotedIds = upvoteRepository.existsByDiscussion_DiscussionIdAndUser_UserId(discussionId, userId)
+                ? Set.of(discussionId)
+                : Collections.emptySet();
+        Set<Long> bookmarkedIds = bookmarkRepository.existsByDiscussion_DiscussionIdAndUser_UserId(discussionId, userId)
+                ? Set.of(discussionId)
+                : Collections.emptySet();
+        return mapToDto(saved, userId, upvotedIds, bookmarkedIds);
     }
 }

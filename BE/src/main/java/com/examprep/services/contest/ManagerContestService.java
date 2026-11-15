@@ -324,6 +324,9 @@ public class ManagerContestService {
         wanted.forEach((rank, discountId) -> {
             Discount d = found.get(discountId);
             if (d == null || d.getDeletedAt() != null) throw rankInvalid("Discount " + discountId + " does not exist.");
+            if (!"CLAIM_REQUIRED".equalsIgnoreCase(d.getAccessType())) {
+                throw rankInvalid("Discount " + d.getCode() + " must have CLAIM_REQUIRED access type to be used as a contest prize.");
+            }
             ranks.put(rank, d);
         });
         return ranks;
