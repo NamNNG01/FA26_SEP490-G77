@@ -70,6 +70,44 @@ class ExamApiIntegrationTest {
         call(manager, get("/api/v1/manager/exams").param("size", "101")).andExpect(status().isBadRequest());
     }
 
+    @Test void archivingAQuestionUsedByAPublishedExamIsRejected() throws Exception {
+        Exam published = exam(course, module);
+        published.setStatus("PUBLISHED");
+        attach(published, question);
+        call(admin, patch("/api/v1/manager/questions/" + question.getQuestionId() + "/status")
+                .contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"ARCHIVED\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString(published.getExamId().toString())));
+        assertEquals("ACTIVE", question.getStatus());
+    }
+
+    @Test void batchArchiveKeepsRandomExamPoolAndRollsBackTogether() throws Exception {
+        Question second = question(module, "SINGLE_CHOICE", "Another eligible question");
+        Exam published = exam(course, module);
+        published.setStatus("PUBLISHED");
+        published.setGenerationType("RANDOM");
+        em.persist(ExamConfig.builder().exam(published).module(module).questionType("SINGLE_CHOICE")
+                .numberOfQuestions(1).build());
+        call(admin, patch("/api/v1/manager/questions/batch/status").contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("questionIds", List.of(question.getQuestionId(), second.getQuestionId()), "status", "ARCHIVED"))))
+                .andExpect(status().isConflict());
+        em.clear();
+        assertEquals("ACTIVE", em.find(Question.class, question.getQuestionId()).getStatus());
+        assertEquals("ACTIVE", em.find(Question.class, second.getQuestionId()).getStatus());
+    }
+
+    @Test void randomExamAllowsArchiveWhenEnoughQuestionsRemain() throws Exception {
+        question(module, "SINGLE_CHOICE", "Another eligible question");
+        Exam published = exam(course, module);
+        published.setStatus("PUBLISHED");
+        published.setGenerationType("RANDOM");
+        em.persist(ExamConfig.builder().exam(published).module(module).questionType("SINGLE_CHOICE")
+                .numberOfQuestions(1).build());
+        call(admin, patch("/api/v1/manager/questions/" + question.getQuestionId() + "/status")
+                .contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"ARCHIVED\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.status").value("ARCHIVED"));
+    }
+
     @Test void createsDraftWithDirectAndGroupedQuestionsAndCountsPoints() throws Exception {
         QuestionGroup group = QuestionGroup.builder().course(course).module(module).title("Passage").build();
         em.persist(group);

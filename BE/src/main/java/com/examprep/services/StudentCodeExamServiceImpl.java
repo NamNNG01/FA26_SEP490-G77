@@ -48,6 +48,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -109,13 +110,23 @@ public class StudentCodeExamServiceImpl implements StudentCodeExamService {
     @Override
     @Transactional(readOnly = true)
     public CodeExamResponses.Questions questions(Long userId, Long examId) {
-        Exam exam = requireExam(userId, examId);
+        Exam exam = requireExam(userId, examId, true);
         // One link query feeds both the code-question list and its paper order.
         List<ExamQuestion> links = examLinks.findByExamExamIdOrderByOrderIndexAscExamQuestionIdAsc(examId);
-        List<Long> codeQuestionIds = links.stream()
+        List<Long> codeQuestionIds = new ArrayList<>(links.stream()
                 .filter(link -> TYPE_CODE.equals(link.getQuestion().getQuestionType()))
                 .map(link -> link.getQuestion().getQuestionId())
-                .toList();
+                .toList());
+        Set<Long> activeQuestionIds = new HashSet<>();
+        attempts.findActiveAttempt(examId, userId, STATUS_IN_PROGRESS).ifPresent(attempt -> {
+            for (AttemptAnswer answer : answers.findByAttemptIdOrdered(attempt.getAttemptId())) {
+                Question question = answer.getQuestion();
+                activeQuestionIds.add(question.getQuestionId());
+                if (TYPE_CODE.equals(question.getQuestionType()) && !codeQuestionIds.contains(question.getQuestionId())) {
+                    codeQuestionIds.add(question.getQuestionId());
+                }
+            }
+        });
         Map<Long, Integer> orderById = links.stream()
                 .collect(Collectors.toMap(link -> link.getQuestion().getQuestionId(),
                         ExamQuestion::getOrderIndex, (first, second) -> first));
@@ -128,6 +139,9 @@ public class StudentCodeExamServiceImpl implements StudentCodeExamService {
         List<CodeExamResponses.QuestionItem> items = new ArrayList<>();
         for (Long questionId : codeQuestionIds) {
             Question question = questionById.get(questionId);
+            if (question == null && activeQuestionIds.contains(questionId)) {
+                question = questions.findActiveById(questionId).filter(StudentCodeExamServiceImpl::archivedAndApproved).orElse(null);
+            }
             if (question == null) {
                 continue;
             }
@@ -155,7 +169,14 @@ public class StudentCodeExamServiceImpl implements StudentCodeExamService {
     @Override
     public CodeExamResponses.RunResult run(Long userId, CodeExamRequests.Run request) {
         Question question = questions.findDeliverableById(request.questionId())
-                .orElseThrow(() -> new ResourceNotFoundException("Question not found"));
+                .orElseGet(() -> {
+                    if (!answers.existsByQuestion_QuestionIdAndAttempt_User_UserIdAndAttempt_Status(request.questionId(), userId, STATUS_IN_PROGRESS)) {
+                        throw new ResourceNotFoundException("Question not found");
+                    }
+                    return questions.findActiveById(request.questionId())
+                            .filter(StudentCodeExamServiceImpl::archivedAndApproved)
+                            .orElseThrow(() -> new ResourceNotFoundException("Question not found"));
+                });
         requireCodeQuestion(question);
         requireEnrollment(userId, courseIdOf(question));
         CodeQuestionConfig cfg = configs.findById(question.getQuestionId()).orElse(null);
@@ -199,7 +220,7 @@ public class StudentCodeExamServiceImpl implements StudentCodeExamService {
 
     /** Validates the request against the running attempt and freezes what the judge needs. */
     private SubmitPlan prepareSubmit(Long userId, CodeExamRequests.Submit request) {
-        Exam exam = requireExam(userId, request.examId());
+        Exam exam = requireExam(userId, request.examId(), true);
         ExamAttempt attempt = attempts.findActiveAttempt(request.examId(), userId, STATUS_IN_PROGRESS)
                 .orElseThrow(() -> new ResourceConflictException("No attempt is in progress for this exam"));
         if (autoSubmitter.isExpired(attempt, Instant.now())) {
@@ -212,24 +233,24 @@ public class StudentCodeExamServiceImpl implements StudentCodeExamService {
                 throw new BadRequestException("Duplicate questionId in answers");
             }
         }
-        Set<Long> examQuestionIds = examLinks
-                .findByExamExamIdOrderByOrderIndexAscExamQuestionIdAsc(request.examId()).stream()
-                .map(link -> link.getQuestion().getQuestionId())
-                .collect(Collectors.toSet());
-        for (Long questionId : requested.keySet()) {
-            if (!examQuestionIds.contains(questionId)) {
-                throw new ResourceNotFoundException("Question is not part of this exam");
-            }
-        }
-
         Set<Long> ids = requested.keySet();
         Map<Long, CodeQuestionConfig> cfgById = configMap(ids);
         Map<Long, List<CodeTestCase>> fixturesByQuestion = fixtureMap(ids);
-        Map<Long, Question> questionById = questions.findDeliverableWithAccessRelationsByQuestionIdIn(ids).stream()
+        List<AttemptAnswer> attemptRows = answers.findByAttemptIdOrdered(attempt.getAttemptId());
+        Map<Long, AttemptAnswer> rowById = attemptRows.stream()
+                .collect(Collectors.toMap(row -> row.getQuestion().getQuestionId(), row -> row,
+                        (first, second) -> first));
+        Set<Long> examQuestionIds = examLinks.findByExamExamIdOrderByOrderIndexAscExamQuestionIdAsc(request.examId()).stream()
+                .map(link -> link.getQuestion().getQuestionId()).collect(Collectors.toSet());
+        examQuestionIds.addAll(rowById.keySet());
+        if (!examQuestionIds.containsAll(ids)) throw new ResourceNotFoundException("Question is not part of this exam");
+        Map<Long, Question> questionById = questions.findActiveWithAccessRelationsByQuestionIdIn(ids).stream()
                 .collect(Collectors.toMap(Question::getQuestionId, question -> question, (first, second) -> first));
         for (Long questionId : ids) {
             Question question = questionById.get(questionId);
-            if (question == null) {
+            if (question == null || !"APPROVED".equals(question.getApprovalStatus())
+                    || !("ACTIVE".equals(question.getStatus())
+                    || ("ARCHIVED".equals(question.getStatus()) && rowById.containsKey(questionId)))) {
                 throw new ResourceNotFoundException("Question not found");
             }
             requireCodeQuestion(question);
@@ -239,14 +260,8 @@ public class StudentCodeExamServiceImpl implements StudentCodeExamService {
             }
         }
 
-        List<AttemptAnswer> attemptRows = answers.findByAttemptIdOrdered(attempt.getAttemptId());
-        Map<Long, AttemptAnswer> rowById = attemptRows.stream()
-                .collect(Collectors.toMap(row -> row.getQuestion().getQuestionId(), row -> row,
-                        (first, second) -> first));
-        for (Long questionId : ids) {
-            if (!rowById.containsKey(questionId)) {
-                throw new ResourceConflictException("The attempt has no answer row for this question");
-            }
+        if (!rowById.keySet().containsAll(ids)) {
+            throw new ResourceConflictException("The attempt has no answer row for this question");
         }
 
         List<BigDecimal> weights = attemptRows.stream()
@@ -272,6 +287,10 @@ public class StudentCodeExamServiceImpl implements StudentCodeExamService {
                     timeLimit(cfg), memoryLimit(cfg)));
         }
         return new SubmitPlan(userId, attempt.getAttemptId(), planned);
+    }
+
+    private static boolean archivedAndApproved(Question question) {
+        return "ARCHIVED".equals(question.getStatus()) && "APPROVED".equals(question.getApprovalStatus());
     }
 
     /** Writes the verified verdicts while the attempt is still running; the attempt row stays locked. */
@@ -403,9 +422,14 @@ public class StudentCodeExamServiceImpl implements StudentCodeExamService {
 
     /** CD-03/CD-05/CD-07: the exam must be published to students and belong to their course. */
     private Exam requireExam(Long userId, Long examId) {
+        return requireExam(userId, examId, false);
+    }
+
+    private Exam requireExam(Long userId, Long examId, boolean allowActiveAttempt) {
         Exam exam = exams.findById(examId)
                 .orElseThrow(() -> new ResourceNotFoundException("Exam not found"));
-        if (!exam.isVisibleToStudents()) {
+        if (!exam.isVisibleToStudents() && !(allowActiveAttempt && "ARCHIVED".equals(exam.getStatus())
+                && attempts.findActiveAttempt(examId, userId, STATUS_IN_PROGRESS).isPresent())) {
             throw new ResourceNotFoundException("Exam not found");
         }
         requireEnrollment(userId, courseIdOf(exam));
