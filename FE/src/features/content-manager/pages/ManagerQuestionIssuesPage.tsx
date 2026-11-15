@@ -7,7 +7,7 @@ import { Select } from '@/components/ui/Select';
 import { Table, type TableColumn } from '@/components/ui/Table';
 import { courseService, type CourseSummaryItem } from '@/services/course.service';
 import { SearchInput } from '@/components/common/SearchInput';
-import { ISSUE_STATUSES, ISSUE_TYPES, issueLabel, questionIssueService, refreshPendingIssueCount } from '@/services/questionIssue.service';
+import { ISSUE_STATUSES, ISSUE_TYPES, issueLabel, questionIssueService } from '@/services/questionIssue.service';
 import { useAuth } from '@/auth/authContext';
 import { getApiErrorMessage } from '@/utils/apiError';
 import { IssueReviewModal, PriorityBadge, Status, unwrapList, useIssueReview } from '../components/issue-review';
@@ -35,7 +35,6 @@ export function ManagerQuestionIssuesPage() {
         if (value && value !== 'ALL') query[key] = value;
       });
       setList(await questionIssueService.managerList(query));
-      refreshPendingIssueCount();
     } catch (e) {
       setError(getApiErrorMessage(e, 'Could not load the issue queue.'));
     } finally {
