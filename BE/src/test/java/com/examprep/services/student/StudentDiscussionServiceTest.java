@@ -62,7 +62,6 @@ class StudentDiscussionServiceTest {
                 .user(author)
                 .title("Discussion Title")
                 .content("Discussion Content")
-                .tag("question")
                 .isAnonymous(false)
                 .status("OPEN")
                 .isPinned(false)
@@ -77,10 +76,10 @@ class StudentDiscussionServiceTest {
     @Test
     void listDiscussions_batchUpvotes() {
         Page<Discussion> page = new PageImpl<>(List.of(discussion1));
-        when(discussionRepository.findDiscussions(eq(50L), eq("question"), eq(""), eq("latest"), any())).thenReturn(page);
+        when(discussionRepository.findDiscussions(eq(50L), eq("question"), eq("latest"), any())).thenReturn(page);
         when(upvoteRepository.findUpvotedDiscussionIds(eq(200L), eq(List.of(1L)))).thenReturn(List.of(1L));
 
-        Page<DiscussionItemDto> res = discussionService.listDiscussions(50L, "question", "", "latest", 0, 10, 200L);
+        Page<DiscussionItemDto> res = discussionService.listDiscussions(50L, "question", "latest", 0, 10, 200L);
 
         assertNotNull(res);
         assertEquals(1, res.getTotalElements());
@@ -93,9 +92,8 @@ class StudentDiscussionServiceTest {
 
     @Test
     void listTips_batchUpvotes() {
-        discussion1.setTag("tip");
         Page<Discussion> page = new PageImpl<>(List.of(discussion1));
-        when(discussionRepository.findDiscussions(eq(50L), eq("tip"), isNull(), eq("latest"), any())).thenReturn(page);
+        when(discussionRepository.findDiscussions(eq(50L), isNull(), eq("latest"), any())).thenReturn(page);
         when(upvoteRepository.findUpvotedDiscussionIds(eq(200L), eq(List.of(1L)))).thenReturn(List.of());
 
         Page<DiscussionItemDto> res = discussionService.listTips(50L, 0, 10, 200L);
@@ -103,7 +101,6 @@ class StudentDiscussionServiceTest {
         assertNotNull(res);
         assertEquals(1, res.getTotalElements());
         DiscussionItemDto item = res.getContent().get(0);
-        assertEquals("tip", item.getTag());
         assertFalse(item.isUpvoted());
     }
 
@@ -151,16 +148,14 @@ class StudentDiscussionServiceTest {
 
     @Test
     void createDiscussion_asStudent_setsPendingApproval() {
-        when(enrollmentRepository.existsByCourse_CourseIdAndUser_UserIdAndStatus(50L, 200L, "ACTIVE")).thenReturn(true);
-        when(courseRepository.findById(50L)).thenReturn(Optional.of(course));
+        Enrollment enrollment = Enrollment.builder().course(course).user(author).status("ACTIVE").build();
+        when(enrollmentRepository.findByUserIdAndStatus(200L, "ACTIVE")).thenReturn(List.of(enrollment));
         when(userRepository.findById(200L)).thenReturn(Optional.of(author));
         when(discussionRepository.save(any(Discussion.class))).thenAnswer(inv -> inv.getArgument(0));
 
         CreateDiscussionRequestDto req = CreateDiscussionRequestDto.builder()
-                .courseId(50L)
                 .title("New Student Question")
                 .content("Need help with Java")
-                .tag("question")
                 .imageUrl("https://image.url/photo.png")
                 .build();
 

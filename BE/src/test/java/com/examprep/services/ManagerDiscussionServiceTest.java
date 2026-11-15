@@ -63,7 +63,6 @@ class ManagerDiscussionServiceTest {
                 .user(student)
                 .title("Student Question")
                 .content("Question Content")
-                .tag("question")
                 .status("OPEN")
                 .approvalStatus(Discussion.APPROVAL_PENDING)
                 .isClosed(false)
