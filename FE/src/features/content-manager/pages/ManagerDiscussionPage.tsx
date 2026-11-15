@@ -60,6 +60,7 @@ export function ManagerDiscussionPage() {
   const [rejectReason, setRejectReason] = useState('');
   const [rejecting, setRejecting] = useState(false);
   const [moderationReason, setModerationReason] = useState('');
+  const [hidingCommentId, setHidingCommentId] = useState<number | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
 
@@ -129,14 +130,16 @@ export function ManagerDiscussionPage() {
   const togglePin = () => void runAction(detail?.isPinned ? 'Discussion unpinned.' : 'Discussion pinned.', () => managerDiscussionService.setPinned(detail!.discussionId, !detail!.isPinned));
   const toggleClosed = () => void runAction(detail?.isClosed ? 'Discussion reopened.' : 'Discussion closed.', () => managerDiscussionService.setClosed(detail!.discussionId, !detail!.isClosed));
 
-  const moderateComment = async (comment: DiscussionDetailComment) => {
-    const next = comment.status === 'HIDDEN' ? 'VISIBLE' : 'HIDDEN';
-    if (next === 'HIDDEN' && moderationReason.trim().length < 5) {
-      toast.warning('Add a moderation reason of at least 5 characters before hiding a comment.');
-      return;
-    }
-    const succeeded = await runAction(next === 'HIDDEN' ? 'Comment hidden from students.' : 'Comment restored.', () => managerDiscussionService.setCommentStatus(comment.commentId, next, next === 'HIDDEN' ? moderationReason.trim() : undefined));
-    if (succeeded && next === 'HIDDEN') setModerationReason('');
+  const restoreComment = async (comment: DiscussionDetailComment) => {
+    const succeeded = await runAction('Reply restored for students.', () => managerDiscussionService.setCommentStatus(comment.commentId, 'VISIBLE'));
+    if (succeeded) setHidingCommentId(null);
+  };
+
+  const hideComment = async (comment: DiscussionDetailComment) => {
+    const reason = moderationReason.trim();
+    if (reason.length < 5) return;
+    const succeeded = await runAction('Reply hidden from students.', () => managerDiscussionService.setCommentStatus(comment.commentId, 'HIDDEN', reason));
+    if (succeeded) { setHidingCommentId(null); setModerationReason(''); }
   };
 
   const confirmDelete = async () => {
@@ -167,6 +170,7 @@ export function ManagerDiscussionPage() {
     setRejecting(false);
     setRejectReason('');
     setModerationReason('');
+    setHidingCommentId(null);
     try { setDetail(await managerDiscussionService.getDetail(item.discussionId)); }
     catch (err) { toast.error(getApiErrorMessage(err, 'Could not load discussion details.')); }
     finally { setDetailLoading(false); }
@@ -241,11 +245,20 @@ export function ManagerDiscussionPage() {
         {detail.approvalStatus === 'REJECTED' && detail.rejectionReason && <Alert type="warning" title="Rejection reason" message={detail.rejectionReason} />}
         <section className="space-y-3 border-t border-line pt-4">
           <div><h3 className="font-semibold text-content">Replies <span className="font-normal text-content-subtle">({detail.commentCount})</span></h3><p className="mt-1 text-xs text-content-subtle">Hidden replies remain visible here for moderation.</p></div>
-          <label className="grid gap-1.5 text-xs font-medium text-content-secondary">Reason for hiding a reply
-            <Input maxLength={500} value={moderationReason} onChange={event => setModerationReason(event.target.value)} placeholder="Explain why it should be hidden" />
-          </label>
           {(detail.comments ?? []).length === 0 ? <p className="rounded-lg bg-surface-muted p-4 text-sm text-content-subtle">No replies yet.</p> : <div className="divide-y divide-line rounded-lg border border-line">
-            {detail.comments.map(comment => <ManagerReply key={comment.commentId} comment={comment} busy={busy} onToggle={() => void moderateComment(comment)} onDelete={() => setDeleteTarget({ kind: 'comment', id: comment.commentId })} />)}
+            {detail.comments.map(comment => <ManagerReply
+              key={comment.commentId}
+              comment={comment}
+              busy={busy}
+              hiding={hidingCommentId === comment.commentId}
+              reason={moderationReason}
+              onStartHide={() => { setHidingCommentId(comment.commentId); setModerationReason(''); }}
+              onCancelHide={() => { setHidingCommentId(null); setModerationReason(''); }}
+              onReasonChange={setModerationReason}
+              onHide={() => void hideComment(comment)}
+              onRestore={() => void restoreComment(comment)}
+              onDelete={() => setDeleteTarget({ kind: 'comment', id: comment.commentId })}
+            />)}
           </div>}
         </section>
       </div>}
@@ -256,12 +269,30 @@ export function ManagerDiscussionPage() {
   </main>;
 }
 
-function ManagerReply({ comment, busy, onToggle, onDelete }: { comment: DiscussionDetailComment; busy: boolean; onToggle: () => void; onDelete: () => void }) {
+function ManagerReply({ comment, busy, hiding, reason, onStartHide, onCancelHide, onReasonChange, onHide, onRestore, onDelete }: {
+  comment: DiscussionDetailComment;
+  busy: boolean;
+  hiding: boolean;
+  reason: string;
+  onStartHide: () => void;
+  onCancelHide: () => void;
+  onReasonChange: (reason: string) => void;
+  onHide: () => void;
+  onRestore: () => void;
+  onDelete: () => void;
+}) {
   const hidden = comment.status === 'HIDDEN';
   return <article className={`flex flex-wrap items-start gap-3 p-4 ${hidden ? 'bg-surface-muted' : ''}`}>
     <Avatar name={comment.author.displayName} src={comment.author.avatarUrl || undefined} size="sm" />
-    <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><p className="text-xs text-content-subtle">{comment.author.displayName} · {dateLabel(comment.createdAt)}</p>{hidden && <Badge variant="danger">Hidden</Badge>}</div><p className="mt-2 whitespace-pre-wrap text-sm text-content-secondary">{comment.content}</p>{comment.imageUrl && <ImageViewer src={comment.imageUrl} alt="Reply attachment" className="mt-3" imageClassName="max-h-52" />}</div>
-    <div className="flex shrink-0 gap-2"><Button size="sm" variant="outline" disabled={busy} onClick={onToggle}>{hidden ? 'Restore' : 'Hide'}</Button><Button size="sm" variant="ghost" icon={<Icon.Trash className="h-4 w-4" />} aria-label="Delete reply" disabled={busy} onClick={onDelete} /></div>
+    <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><p className="text-xs text-content-subtle">{comment.author.displayName} · {dateLabel(comment.createdAt)}</p>{hidden && <Badge variant="danger">Hidden</Badge>}</div><p className="mt-2 whitespace-pre-wrap text-sm text-content-secondary">{comment.content}</p>{comment.imageUrl && <ImageViewer src={comment.imageUrl} alt="Reply attachment" className="mt-3" imageClassName="max-h-52" />}
+      {hiding && <section className="mt-4 rounded-lg border border-warning-line bg-warning-light p-3">
+        <label className="grid gap-1.5 text-sm font-medium text-content">Reason for hiding this reply
+          <textarea maxLength={500} rows={2} value={reason} onChange={event => onReasonChange(event.target.value)} aria-describedby={`hide-reason-help-${comment.commentId}`} className="w-full rounded-lg border border-line bg-surface p-3 text-sm font-normal text-content focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/20" placeholder="Explain why this reply should be hidden" />
+        </label>
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2"><p id={`hide-reason-help-${comment.commentId}`} className="text-xs text-content-subtle">A reason of at least 5 characters is required. {reason.length}/500</p><div className="flex gap-2"><Button size="sm" variant="outline" onClick={onCancelHide} disabled={busy}>Cancel</Button><Button size="sm" variant="danger" onClick={onHide} disabled={busy || reason.trim().length < 5} loading={busy}>Hide reply</Button></div></div>
+      </section>}
+    </div>
+    <div className="flex shrink-0 gap-2">{!hiding && <Button size="sm" variant="outline" disabled={busy} onClick={hidden ? onRestore : onStartHide}>{hidden ? 'Restore' : 'Hide'}</Button>}<Button size="sm" variant="ghost" icon={<Icon.Trash className="h-4 w-4" />} aria-label="Delete reply" disabled={busy} onClick={onDelete} /></div>
   </article>;
 }
 
