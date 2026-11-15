@@ -30,6 +30,8 @@ public interface QuestionIssueRepository extends JpaRepository<QuestionIssue, Lo
 
     Optional<QuestionIssue> findFirstByQuestion_QuestionIdAndStatusIn(Long questionId, Collection<String> statuses);
 
+    long countByAssignedTo_UserIdAndStatusIn(Long userId, Collection<String> statuses);
+
     @Query("SELECT COUNT(a) > 0 FROM AttemptAnswer a WHERE a.question.questionId = :questionId AND a.attempt.user.userId = :userId")
     boolean answeredBy(@Param("questionId") Long questionId, @Param("userId") Long userId);
 

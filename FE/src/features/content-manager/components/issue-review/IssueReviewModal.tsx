@@ -206,16 +206,12 @@ export function IssueReviewModal({
   let primary: ReactNode = null;
   let helper = "";
   if (detail?.status === "PENDING") {
-    helper = review.assignedToMe
+    helper = review.assignedToMe || !detail.assignedTo
       ? "Start the review to unlock corrections."
-      : "Assign the ticket to yourself, then start the review.";
-    primary = review.assignedToMe ? (
+      : `Starting the review takes this ticket over from ${detail.assignedTo.fullName || "another manager"}.`;
+    primary = (
       <Button loading={busy} onClick={() => void review.startReview()}>
         Start review
-      </Button>
-    ) : (
-      <Button loading={busy} onClick={() => void review.assignToMe()}>
-        Assign to me
       </Button>
     );
   } else if (detail?.status === "IN_PROGRESS") {
