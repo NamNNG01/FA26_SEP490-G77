@@ -120,7 +120,10 @@ public interface DeckRepository extends JpaRepository<Deck, Long> {
             "FROM Deck d LEFT JOIN d.module m " +
             "WHERE d.course.courseId = :courseId " +
             "AND ((:moduleId IS NULL AND d.module IS NULL) OR (m.moduleId = :moduleId)) " +
-            "AND d.visibility = 'PUBLIC' " +
+            // Same rule as the other course deck queries: manager decks and the viewer's own decks
+            // always show; another student's deck only once its public request was approved
+            // (visibility flips to PUBLIC on approval, so a pending review stays private).
+            "AND (d.user.roleName <> 'STUDENT' OR d.user.userId = :userId OR d.visibility = 'PUBLIC') " +
             "ORDER BY d.title ASC, d.deckId ASC")
     List<DeckDto> findDecksByModuleOrGeneral(
             @Param("courseId") Long courseId,
