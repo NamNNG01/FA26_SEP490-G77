@@ -12,7 +12,7 @@ export interface DeckStudyState {
   /** The deck as the list / create call saw it; `isOwner` marks the student's own deck. */
   deck?: StudentDeckView;
   /** Flashcards tab to return to. */
-  tab?: 'mine' | 'course';
+  tab?: 'mine' | 'course' | 'bookmarked';
 }
 
 export function DeckCard({ deck, onOpen }: { deck: StudentDeck; onOpen: () => void }) {
