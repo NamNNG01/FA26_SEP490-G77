@@ -5,6 +5,7 @@ import { Select } from '@/components/ui/Select';
 import { Table, type TableColumn } from '@/components/ui/Table';
 import { Dropdown } from '@/components/ui/Dropdown';
 import { Avatar } from '@/components/ui/Avatar';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { SearchInput } from '@/components/common/SearchInput';
 import { DashboardError } from '@/components/common/DashboardState';
@@ -69,6 +70,8 @@ export function UsersPage({ onNavigate }: { onNavigate?: (id: string, params?: R
   const [error, setError] = useState<string | null>(null);
   /** User whose row action (reset password / status change) is running. */
   const [workingId, setWorkingId] = useState<number | null>(null);
+  /** User awaiting the reset-password confirmation. */
+  const [resetTarget, setResetTarget] = useState<AdminUserItem | null>(null);
   // Latest-wins: a slow response never overwrites a newer one.
   const requestRef = useRef(0);
   const appliedSearch = useRef(saved.search);
@@ -138,6 +141,7 @@ export function UsersPage({ onNavigate }: { onNavigate?: (id: string, params?: R
       toast.error(getApiErrorMessage(err, 'Could not send the password reset email.'));
     } finally {
       setWorkingId(null);
+      setResetTarget(null);
     }
   };
 
@@ -168,7 +172,8 @@ export function UsersPage({ onNavigate }: { onNavigate?: (id: string, params?: R
     { key: 'name', label: 'User', render: (row: Record<string, unknown>) => {
       const item = row as unknown as AdminUserItem;
       return (
-        <button onClick={() => openDetail(item)} className="flex items-center gap-2.5 text-left rounded-[6px] -ml-1 pl-1 pr-2 py-0.5 hover:bg-accent transition-colors min-w-0">
+        // The whole row opens the detail; this button keeps it reachable by keyboard.
+        <button onClick={e => { e.stopPropagation(); openDetail(item); }} className="flex items-center gap-2.5 text-left rounded-[6px] -ml-1 pl-1 pr-2 py-0.5 hover:bg-accent transition-colors min-w-0">
           <Avatar name={item.fullName} src={item.avatarUrl ?? undefined} size="sm" />
           <div className="min-w-0">
             <p className="font-medium text-content text-sm truncate hover:text-brand-ink transition-colors">{item.fullName}</p>
@@ -193,16 +198,19 @@ export function UsersPage({ onNavigate }: { onNavigate?: (id: string, params?: R
     { key: 'actions', label: '', render: (row: Record<string, unknown>) => {
       const item = row as unknown as AdminUserItem;
       const busy = workingId === item.userId;
+      // Menu clicks must not bubble up to the row and open the detail as well.
       return (
-        <Dropdown trigger={<button className="p-1.5 hover:bg-accent rounded-[6px]" aria-label={`Actions for ${item.fullName}`}><Icon.MoreHorizontal className="w-4 h-4 text-content-soft"/></button>}
-          items={[
-            { label: 'View', icon: <Icon.Eye className="w-4 h-4" />, onClick: () => openDetail(item) },
-            { divider: true } as {label: string; divider: true},
-            { label: 'Reset Password', icon: <Icon.Lock className="w-4 h-4" />, disabled: busy, onClick: () => void resetPassword(item) },
-            item.status === 'ACTIVE'
-              ? { label: 'Deactivate', icon: <Icon.X className="w-4 h-4" />, danger: true, disabled: busy, onClick: () => void toggleStatus(item) }
-              : { label: 'Activate', icon: <Icon.CheckCircle className="w-4 h-4" />, disabled: busy, onClick: () => void toggleStatus(item) },
-          ]} />
+        <div onClick={e => e.stopPropagation()}>
+          <Dropdown trigger={<button className="p-1.5 hover:bg-accent rounded-[6px]" aria-label={`Actions for ${item.fullName}`}><Icon.MoreHorizontal className="w-4 h-4 text-content-soft"/></button>}
+            items={[
+              { label: 'View', icon: <Icon.Eye className="w-4 h-4" />, onClick: () => openDetail(item) },
+              { divider: true } as {label: string; divider: true},
+              { label: 'Reset Password', icon: <Icon.Lock className="w-4 h-4" />, disabled: busy, onClick: () => setResetTarget(item) },
+              item.status === 'ACTIVE'
+                ? { label: 'Deactivate', icon: <Icon.X className="w-4 h-4" />, danger: true, disabled: busy, onClick: () => void toggleStatus(item) }
+                : { label: 'Activate', icon: <Icon.CheckCircle className="w-4 h-4" />, disabled: busy, onClick: () => void toggleStatus(item) },
+            ]} />
+        </div>
       );
     }},
   ];
@@ -244,12 +252,23 @@ export function UsersPage({ onNavigate }: { onNavigate?: (id: string, params?: R
               data={rows.map(item => ({ ...item, id: item.userId })) as unknown as Record<string, unknown>[]}
               perPage={PAGE_SIZE}
               unit="users"
+              onRowClick={row => openDetail(row as unknown as AdminUserItem)}
               serverPagination={{ page: pageIndex, total, onChange: p => { setPageIndex(p); pushState({ page: p }); } }}
               emptyState={filtersActive ? 'No users match your filters.' : 'No users yet.'}
             />
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={resetTarget != null}
+        onClose={() => { if (workingId == null) setResetTarget(null); }}
+        onConfirm={() => { if (resetTarget) void resetPassword(resetTarget); }}
+        title="Reset password?"
+        description={<>A password reset email will be sent to <span className="font-medium text-content">{resetTarget?.email}</span>.</>}
+        confirmLabel="Send reset email"
+        loading={resetTarget != null && workingId === resetTarget.userId}
+      />
     </div>
   );
 }
