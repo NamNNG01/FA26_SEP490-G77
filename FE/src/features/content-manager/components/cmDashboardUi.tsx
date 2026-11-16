@@ -10,11 +10,11 @@ import { CM_MIN_ATTEMPTS } from '@/services/cmDashboard.types';
  */
 
 export const EMPTY = '—';
-export const NOT_ENOUGH_DATA = `Chưa đủ dữ liệu (cần ≥ ${CM_MIN_ATTEMPTS} bài nộp)`;
+export const NOT_ENOUGH_DATA = `Not enough data (needs ≥ ${CM_MIN_ATTEMPTS} submissions)`;
 
 export const fmtScore = (v: number | null) => (v == null ? EMPTY : (Math.round(v * 10) / 10).toFixed(1));
 export const fmtPct = (v: number | null) => (v == null ? EMPTY : `${Math.round(v * 10) / 10}%`);
-export const fmtMinutes = (v: number | null) => (v == null ? EMPTY : `${v} phút`);
+export const fmtMinutes = (v: number | null) => (v == null ? EMPTY : `${v} min`);
 
 /** Pass rate under 50% is flagged: warning below 50, danger below 40. */
 export function passRateTone(v: number | null): string {

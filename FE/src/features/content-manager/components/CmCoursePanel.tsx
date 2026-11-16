@@ -12,7 +12,7 @@ import { LabelWithInfo, Panel, PanelEmpty, PanelSkeleton } from './cmDashboardUi
 const normalize = (s: string) =>
   s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase();
 
-/** "Course của tôi" — click a row to filter the exam panel by that course. */
+/** "My courses" — click a row to filter the exam panel by that course. */
 export function CmCoursePanel({ courses, loading, error, onRetry, selectedCourseId, onSelectCourse, onViewAll }: {
   courses: CmCourseStat[] | null;
   loading: boolean;
@@ -39,11 +39,11 @@ export function CmCoursePanel({ courses, loading, error, onRetry, selectedCourse
             <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
               <span className="inline-flex items-center gap-1">
                 <Icon.Users className="w-3.5 h-3.5" />
-                {c.activeStudents} học viên
+                {c.activeStudents} students
               </span>
               <span aria-hidden>·</span>
               {c.myExamCount === 0 ? (
-                <span className="italic">Chưa có exam</span>
+                <span className="italic">No exams yet</span>
               ) : (
                 <span className="inline-flex items-center gap-1">
                   <Icon.FileText className="w-3.5 h-3.5" />
@@ -64,11 +64,11 @@ export function CmCoursePanel({ courses, loading, error, onRetry, selectedCourse
 
   return (
     <Panel
-      title={<LabelWithInfo side="bottom" info="Course dùng chung giữa nhiều CM; số liệu exam là của riêng bạn">Course của tôi</LabelWithInfo>}
+      title={<LabelWithInfo side="bottom" info="Courses are shared across managers; exam figures are yours only">My courses</LabelWithInfo>}
       count={courses && <Badge variant="default">{courses.length} course</Badge>}
       actions={
         <Button variant="outline" size="sm" onClick={onViewAll}>
-          Xem tất cả
+          View all
         </Button>
       }
     >
@@ -77,20 +77,20 @@ export function CmCoursePanel({ courses, loading, error, onRetry, selectedCourse
       ) : error ? (
         <DashboardError bare message={error} onRetry={onRetry} />
       ) : !courses || courses.length === 0 ? (
-        <PanelEmpty message="Bạn chưa được giao quản lý course nào." />
+        <PanelEmpty message="You have not been assigned to manage any courses yet." />
       ) : (
         <>
           <div className="px-5 pt-4">
             <SearchInput
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Tìm course…"
-              aria-label="Tìm course"
+              placeholder="Search courses…"
+              aria-label="Search courses"
             />
-            <p className="mt-2 text-xs text-muted-foreground">Chọn một course để lọc bảng hiệu suất bài thi.</p>
+            <p className="mt-2 text-xs text-muted-foreground">Select a course to filter the exam performance table.</p>
           </div>
           {rows.length === 0 ? (
-            <PanelEmpty message={`Không tìm thấy course nào khớp “${query.trim()}”.`} />
+            <PanelEmpty message={`No courses match “${query.trim()}”.`} />
           ) : (
           <Table
             columns={columns}

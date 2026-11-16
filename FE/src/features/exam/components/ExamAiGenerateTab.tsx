@@ -775,7 +775,7 @@ export function ExamAiGenerateTab({
               onChange={(v) => setLanguage(v as "en" | "vi")}
               options={[
                 { label: "English (en)", value: "en" },
-                { label: "Tiếng Việt (vi)", value: "vi" },
+                { label: "Vietnamese (vi)", value: "vi" },
               ]}
             />
           </div>
