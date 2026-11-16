@@ -3,6 +3,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
+import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { Badge } from '@/components/ui/Badge';
 import { Alert } from '@/components/ui/Alert';
 import { Spinner } from '@/components/ui/Spinner';
@@ -341,8 +342,9 @@ export function AiFlashcardGenerateModal({ onClose, onSaved }: {
       </div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Input label="Focus topic (optional)" maxLength={AI_FOCUS_TOPIC_MAX} value={focusTopic} onChange={e => setFocusTopic(e.target.value)} placeholder="e.g. Photosynthesis" />
-        <Select label="Course (optional)" value={courseId} onChange={setCourseId}
-          options={[{ value: '', label: 'No course' }, ...courses.map(c => ({ value: String(c.courseId), label: c.title }))]} />
+        <SearchableSelect label="Course (optional)" value={courseId} onChange={setCourseId}
+          options={[{ value: '', label: 'No course' }, ...courses.map(c => ({ value: String(c.courseId), label: c.title }))]}
+          placeholder="No course" searchPlaceholder="Search courses…" emptyText="No courses found" />
       </div>
     </div>}
 

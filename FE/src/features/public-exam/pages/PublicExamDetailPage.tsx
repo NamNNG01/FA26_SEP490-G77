@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
+import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { Tabs } from '@/components/ui/Tabs';
 import { Icon } from '@/assets/icons';
 import { useAuth } from '@/auth/authContext';
@@ -446,8 +447,8 @@ export function PublicExamDetailPage() {
               <div className="mb-4 space-y-4">
                 <h2 className="text-lg font-semibold text-foreground">Exam Information</h2>
                 <label className="flex flex-col gap-1.5"><span className="text-xs text-muted-foreground">Exam Name</span><input value={draft.title} onChange={e => editor.setField('title', e.target.value)} aria-label="Exam Name" className="h-9 rounded-[10px] border border-line bg-surface px-3 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20" /></label>
-                <div className="flex flex-col gap-1.5"><span className="text-xs text-muted-foreground">Course</span><Select value={draft.course} onChange={v => editor.setField('course', v)} aria-label="Course" triggerClassName={FIELD_SELECT} options={COURSE_FILTER_OPTIONS.filter(o => o.value)} /></div>
-                <div className="flex flex-col gap-1.5"><span className="text-xs text-muted-foreground">Module</span><Select value={draft.module} onChange={v => editor.setField('module', v)} aria-label="Module" triggerClassName={FIELD_SELECT} options={moduleOptions} /></div>
+                <div className="flex flex-col gap-1.5"><span className="text-xs text-muted-foreground">Course</span><SearchableSelect value={draft.course} onChange={v => editor.setField('course', v)} aria-label="Course" options={COURSE_FILTER_OPTIONS.filter(o => o.value)} placeholder="Choose a course" searchPlaceholder="Search courses…" emptyText="No courses found" /></div>
+                <div className="flex flex-col gap-1.5"><span className="text-xs text-muted-foreground">Module</span><SearchableSelect value={draft.module} onChange={v => editor.setField('module', v)} aria-label="Module" options={moduleOptions} placeholder="Choose a module" searchPlaceholder="Search modules…" emptyText="No modules found" /></div>
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <label className="flex min-w-0 flex-col gap-1.5"><span className="text-xs text-muted-foreground">Time (minutes)</span><input type="number" min={1} value={draft.duration} onChange={e => editor.setField('duration', Math.max(1, Number(e.target.value) || 1))} aria-label="Time in minutes" className="h-9 w-full rounded-[10px] border border-line bg-surface px-3 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20" /></label>
                   <label className="flex min-w-0 flex-col gap-1.5"><span className="text-xs text-muted-foreground">Number of Questions</span><input value={draft.questions.length} readOnly aria-label="Number of Questions" className="h-9 w-full rounded-[10px] border border-line bg-accent px-3 text-sm text-muted-foreground outline-none" /></label>

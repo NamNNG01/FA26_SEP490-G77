@@ -3,6 +3,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
+import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { useToast } from '@/components/ui/ToastHost';
 import { getApiErrorMessage } from '@/utils/apiError';
 import {
@@ -159,12 +160,15 @@ export function DeckFormModal({
           </p>
         </div>
         <div className="space-y-1.5">
-          <Select
+          <SearchableSelect
             label="Course"
             options={courseOptions}
             value={courseId}
             onChange={setCourseId}
             disabled={courses == null}
+            placeholder="Choose a course"
+            searchPlaceholder="Search courses…"
+            emptyText="No courses found"
           />
           <p className="text-xs text-content-soft">
             {coursesError ?? (deck?.courseId != null ? "A deck can't be detached from its course." : 'Only courses you are studying.')}

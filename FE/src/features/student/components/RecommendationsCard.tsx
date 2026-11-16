@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Button } from '@/components/ui/Button';
-import { Select } from '@/components/ui/Select';
+import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { Icon } from '@/assets/icons';
 import { studentDeckPath, studentExamPath } from '@/app/routes';
 import type { MyCourse } from '@/services/studentCourse.service';
@@ -129,13 +129,16 @@ export function RecommendationsCard({
           </div>
         </div>
         <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-          <Select
+          <SearchableSelect
             className="w-full sm:w-64"
             aria-label="Course for recommendations"
             options={courses.map(c => ({ value: String(c.courseId), label: c.title }))}
-            value={courseId != null ? String(courseId) : undefined}
+            value={courseId != null ? String(courseId) : ''}
             onChange={changeCourse}
             disabled={loading}
+            placeholder="Choose a course"
+            searchPlaceholder="Search courses…"
+            emptyText="No courses found"
           />
           <Button loading={loading} disabled={loading || courseId == null} icon={<AiSparkle />} onClick={load}>
             {data ? 'Refresh' : 'Get recommendations'}

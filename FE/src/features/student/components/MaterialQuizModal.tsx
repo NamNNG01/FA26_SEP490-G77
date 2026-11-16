@@ -4,6 +4,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
+import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { Alert } from '@/components/ui/Alert';
 import { Progress } from '@/components/ui/Progress';
 import { Spinner } from '@/components/ui/Spinner';
@@ -462,7 +463,7 @@ export function MaterialQuizModal({
                   error={touched ? errors.quizTitle : undefined}
                 />
 
-                <Select
+                <SearchableSelect
                   label="Course"
                   options={[
                     { value: NO_COURSE, label: 'No course selected' },
@@ -470,6 +471,9 @@ export function MaterialQuizModal({
                   ]}
                   value={courseId}
                   onChange={changeCourse}
+                  placeholder="No course selected"
+                  searchPlaceholder="Search courses…"
+                  emptyText="No courses found"
                 />
 
                 <div className="space-y-3">

@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
+import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import { Icon } from "@/assets/icons";
@@ -667,7 +668,7 @@ export function ExamAiGenerateTab({
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <Select
+              <SearchableSelect
                 label="Target Course *"
                 value={courseId}
                 onChange={(v) => {
@@ -687,6 +688,9 @@ export function ExamAiGenerateTab({
                     value: String(c.courseId),
                   })),
                 ]}
+                placeholder="Select course"
+                searchPlaceholder="Search courses…"
+                emptyText="No courses found"
               />
               {fieldErrors.courseId && (
                 <p className="text-xs text-danger mt-1">
@@ -696,7 +700,7 @@ export function ExamAiGenerateTab({
             </div>
 
             <div>
-              <Select
+              <SearchableSelect
                 label="Module (optional)"
                 value={moduleId}
                 onChange={(value) => {
@@ -705,6 +709,9 @@ export function ExamAiGenerateTab({
                     setFieldErrors((prev) => ({ ...prev, moduleId: "" }));
                 }}
                 disabled={!courseId}
+                placeholder={!courseId ? 'Select a course first' : 'No module'}
+                searchPlaceholder="Search modules…"
+                emptyText="No modules found"
                 options={[
                   { label: "Select Module", value: "" },
                   ...modules.map((m) => ({

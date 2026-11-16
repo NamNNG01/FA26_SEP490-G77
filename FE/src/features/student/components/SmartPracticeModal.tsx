@@ -4,6 +4,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
+import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { MultiSelect } from '@/components/ui/MultiSelect';
 import { Tabs } from '@/components/ui/Tabs';
 import { Badge } from '@/components/ui/Badge';
@@ -378,11 +379,14 @@ export function SmartPracticeModal({
                 </div>
                 {!lockCourse && (
                   <div className="min-w-0 sm:col-span-2">
-                    <Select
+                    <SearchableSelect
                       label="Course"
                       options={courses.map(c => ({ value: String(c.courseId), label: c.title }))}
                       value={courseId}
                       onChange={setCourseId}
+                      placeholder="Choose a course"
+                      searchPlaceholder="Search courses…"
+                      emptyText="No courses found"
                       error={touched ? errors.course : undefined}
                     />
                   </div>
@@ -465,6 +469,8 @@ export function SmartPracticeModal({
                         value={moduleIds}
                         onChange={setModuleIds}
                         disabled={loadingModules || modules.length === 0}
+                        searchable
+                        searchPlaceholder="Search modules…"
                       />
                       {modulesError ? (
                         <p className="text-xs text-danger">{modulesError}</p>

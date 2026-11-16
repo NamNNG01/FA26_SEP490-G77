@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Select } from '@/components/ui/Select';
+import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { Icon } from '@/assets/icons';
 import { courseService, type CourseModuleResponse, type CourseSummaryItem } from '@/services/course.service';
 
@@ -64,21 +64,27 @@ export function QuestionLocationCard({ courseId, moduleId, onChange, courseLocke
         </h3>
       )}
       <div>
-        <Select
+        <SearchableSelect
           label="Course *"
           value={courseId}
           onChange={v => onChange(v, '')}
           disabled={courseLocked}
+          placeholder="Select course"
+          searchPlaceholder="Search courses…"
+          emptyText="No courses found"
           options={[{ label: 'Select course', value: '' }, ...courseOptions]}
         />
         {showErrors && !courseId && <p className="text-xs text-danger mt-1">Select a course.</p>}
       </div>
       <div>
-        <Select
+        <SearchableSelect
           label={moduleRequired ? 'Module *' : 'Module (optional)'}
           value={moduleId}
           onChange={v => onChange(courseId, v)}
           disabled={!courseId || loadingModules}
+          placeholder={!courseId ? 'Select a course first' : loadingModules ? 'Loading…' : moduleRequired ? 'Select module' : 'No module'}
+          searchPlaceholder="Search modules…"
+          emptyText="No modules found"
           options={[{ label: !courseId ? 'Select a course first' : loadingModules ? 'Loading…' : moduleRequired ? 'Select module' : 'No module', value: '' }, ...moduleOptions]}
         />
         {moduleRequired && courseId && !loadingModules && modules.length === 0 ? (
