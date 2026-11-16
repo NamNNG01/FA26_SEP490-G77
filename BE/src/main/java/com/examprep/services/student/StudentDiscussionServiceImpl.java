@@ -83,11 +83,6 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
             excerpt = excerpt.substring(0, 150) + "...";
         }
 
-        DiscussionItemDto.CourseRefDto courseRef = new DiscussionItemDto.CourseRefDto(
-                d.getCourse().getCourseId(),
-                d.getCourse().getTitle()
-        );
-
         return DiscussionItemDto.builder()
                 .discussionId(d.getDiscussionId())
                 .title(d.getTitle())
@@ -105,13 +100,12 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
                 .approvalStatus(d.getApprovalStatus())
                 .createdAt(d.getCreatedAt())
                 .lastCommentAt(d.getUpdatedAt())
-                .course(courseRef)
                 .build();
     }
 
     @Override
     @Transactional(readOnly = true)
-    public Page<DiscussionItemDto> listDiscussions(Long courseId, String tag, String search, String sort, int page, int size, Long userId) {
+    public Page<DiscussionItemDto> listDiscussions(String tag, String search, String sort, int page, int size, Long userId) {
         if (sort == null || sort.isBlank()) {
             sort = "latest";
         }
@@ -125,7 +119,7 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
             searchTerm = searchTerm.substring(0, 100);
         }
 
-        Page<Discussion> discussions = discussionRepository.findDiscussions(courseId, tagFilter, searchTerm, sort, pageable);
+        Page<Discussion> discussions = discussionRepository.findAllDiscussions(tagFilter, searchTerm, sort, pageable);
         List<Long> discussionIds = discussions.getContent().stream().map(Discussion::getDiscussionId).toList();
         Set<Long> upvotedIds = (userId != null && !discussionIds.isEmpty())
                 ? new HashSet<>(upvoteRepository.findUpvotedDiscussionIds(userId, discussionIds))

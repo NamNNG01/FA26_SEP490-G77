@@ -28,7 +28,6 @@ public class StudentDiscussionController {
     @GetMapping("/discussions")
     @Operation(summary = "DI-01: List Discussions")
     public ResponseEntity<ApiResponse<PageResponse<DiscussionItemDto>>> listDiscussions(
-            @RequestParam(required = false) Long courseId,
             @RequestParam(required = false) String tag,
             @RequestParam(required = false) String search,
             @RequestParam(defaultValue = "latest") String sort,
@@ -37,7 +36,7 @@ public class StudentDiscussionController {
             @AuthenticationPrincipal UserPrincipal currentUser
     ) {
         Long userId = currentUser != null ? currentUser.getId() : null;
-        Page<DiscussionItemDto> p = discussionService.listDiscussions(courseId, tag, search, sort, page, size, userId);
+        Page<DiscussionItemDto> p = discussionService.listDiscussions(tag, search, sort, page, size, userId);
         return ResponseEntity.ok(ApiResponse.success(PageResponse.of(p)));
     }
 

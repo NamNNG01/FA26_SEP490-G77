@@ -57,9 +57,9 @@ function DiscussionList() {
   useEffect(() => {
     let cancelled = false;
     setLoading(true); setError(null);
-    const params = { courseId: courseId ? Number(courseId) : undefined, page, size: PAGE_SIZE };
+    const params = { page, size: PAGE_SIZE };
     const request = tab === 'Tips'
-      ? studentCommunityService.getTips(params)
+      ? studentCommunityService.getTips({ courseId: courseId ? Number(courseId) : undefined, ...params })
       : studentCommunityService.getDiscussions({ ...params, tag: tab === 'Announcements' ? 'announcement' : 'question', search: search.trim() || undefined, sort });
     request.then(result => {
       if (cancelled) return;
@@ -91,7 +91,7 @@ function DiscussionList() {
     <PageTitle title="Community" subtitle="Ask questions, share tips, and learn with your course community." action={tab !== 'Announcements' ? <Button icon={<Icon.Plus className="h-4 w-4" />} onClick={() => setCreateOpen(true)}>Create post</Button> : undefined} />
     <Tabs tabs={['Discussions', 'Tips', 'Announcements']} active={tab} onChange={chooseTab} variant="underline" />
     <div className="card flex flex-wrap items-center gap-3 p-4">
-      <Select aria-label="Filter by course" className="w-full sm:w-56" value={courseId} options={courseOptions} onChange={value => { setCourseId(value); setPage(0); }} />
+      {tab === 'Tips' && <Select aria-label="Filter by course" className="w-full sm:w-56" value={courseId} options={courseOptions} onChange={value => { setCourseId(value); setPage(0); }} />}
       {tab === 'Discussions' && <>
         <Input className="w-full sm:w-72" aria-label="Search discussions" placeholder="Search discussions…" value={search} onChange={event => { setSearch(event.target.value); setPage(0); }} />
       <Select aria-label="Sort discussions" className="w-full sm:w-52" value={sort} options={[{ label: 'Latest', value: 'latest' }, { label: 'Most commented', value: 'mostCommented' }, { label: 'Most upvoted', value: 'mostUpvoted' }]} onChange={value => { setSort(value as DiscussionSort); setPage(0); }} />
@@ -114,7 +114,6 @@ function DiscussionCard({ item, onOpen, onUpvote, voting }: { item: DiscussionIt
           {item.isPinned && <Badge variant="warning">Pinned</Badge>}
           <Badge variant={item.tag === 'tip' ? 'success' : item.tag === 'announcement' ? 'warning' : 'info'}>{item.tag === 'tip' ? 'Tip' : item.tag === 'announcement' ? 'Announcement' : 'Question'}</Badge>
           {item.isClosed && <Badge variant="default">Closed</Badge>}
-          {item.course && <span className="text-xs text-content-subtle">{item.course.title}</span>}
         </div>
         <button type="button" onClick={onOpen} className="text-left text-base font-semibold leading-snug text-content hover:text-primary hover:underline">{item.title}</button>
         <p className="mt-1 line-clamp-2 whitespace-pre-line text-sm text-content-soft">{item.excerpt}</p>

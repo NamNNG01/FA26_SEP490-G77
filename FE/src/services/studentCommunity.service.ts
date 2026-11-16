@@ -48,7 +48,6 @@ export interface DiscussionItem {
   rejectionReason?: string | null;
   createdAt: string;
   lastCommentAt: string | null;
-  course?: { courseId: number; title: string };
   comments?: DiscussionComment[];
 }
 
@@ -83,7 +82,7 @@ function query(params: Record<string, string | number | undefined | null>) {
 }
 
 export const studentCommunityService = {
-  async getDiscussions(params: { courseId?: number; tag?: DiscussionTag; search?: string; sort?: DiscussionSort; page?: number; size?: number }) {
+  async getDiscussions(params: { tag?: DiscussionTag; search?: string; sort?: DiscussionSort; page?: number; size?: number }) {
     const res = await api.get<ApiResponse<StudentPage<DiscussionItem>>>(`/student/discussions?${query(params)}`);
     return res.data;
   },
