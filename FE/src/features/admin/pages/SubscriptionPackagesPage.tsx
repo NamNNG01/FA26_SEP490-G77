@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Input } from '@/components/ui/Input';
@@ -75,14 +76,17 @@ export function SubscriptionPackagesPage() {
   const [ordering, setOrdering] = useState<AdminSubscriptionPlan[] | null>(null);
   const [orderLoading, setOrderLoading] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  /** `'quiet'` = shared auto-refresh: no loader, no error toast. */
+  const load = useCallback(async (mode?: 'quiet') => {
+    const quiet = mode === 'quiet';
+    if (!quiet) setLoading(true);
     try {
       setPage(await adminSubscriptionPlanService.list({ keyword: keyword.trim(), isActive: activeFilter, page: pageIndex - 1, size: PAGE_SIZE }));
-    } catch (error) { toast.error(getApiErrorMessage(error, 'Could not load subscription plans.')); }
+    } catch (error) { if (!quiet) toast.error(getApiErrorMessage(error, 'Could not load subscription plans.')); }
     finally { setLoading(false); }
   }, [activeFilter, keyword, pageIndex, toast]);
   useEffect(() => { void load(); }, [load]);
+  useAutoRefresh(() => void load('quiet'));
 
   const openCreate = async () => {
     // sort_order has to be one past the highest existing value. Using the plan count repeats a

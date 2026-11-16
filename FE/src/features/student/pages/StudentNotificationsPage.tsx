@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import { useNavigate, useSearchParams } from 'react-router';
 import { Button } from '@/components/ui/Button';
 import { Pagination } from '@/components/ui/Pagination';
@@ -43,10 +44,14 @@ export function StudentNotificationsPage() {
   const [error, setError] = useState<string | null>(null);
   const [markingAll, setMarkingAll] = useState(false);
 
-  const load = useCallback(() => {
+  /** `'quiet'` = shared auto-refresh: the inbox stays on screen and a failure is ignored. */
+  const load = useCallback((mode?: 'quiet') => {
+    const quiet = mode === 'quiet';
     let cancelled = false;
-    setInbox(null);
-    setError(null);
+    if (!quiet) {
+      setInbox(null);
+      setError(null);
+    }
     studentNotificationService
       .list({ unreadOnly, page: page - 1, size: PAGE_SIZE })
       .then(res => {
@@ -54,11 +59,12 @@ export function StudentNotificationsPage() {
         setInbox(res);
         setUnreadCount(res.unreadCount);
       })
-      .catch(err => { if (!cancelled) setError(getApiErrorMessage(err, 'Could not load notifications.')); });
+      .catch(err => { if (!cancelled && !quiet) setError(getApiErrorMessage(err, 'Could not load notifications.')); });
     return () => { cancelled = true; };
   }, [unreadOnly, page]);
 
   useEffect(() => load(), [load]);
+  useAutoRefresh(() => void load('quiet'));
 
   function update(next: { filter?: 'unread' | null; page?: number }) {
     const p = new URLSearchParams(params);

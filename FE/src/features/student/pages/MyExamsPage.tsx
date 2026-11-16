@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useQuietRefresh } from '@/hooks/useAutoRefresh';
 import { useNavigate, useSearchParams } from 'react-router';
 import { Button } from '@/components/ui/Button';
 import { Table, type TableColumn } from '@/components/ui/Table';
@@ -145,6 +146,7 @@ export function MyExamsPage() {
   const [searchParams] = useSearchParams();
   const [page, setPage] = useState(1);
   const [reload, setReload] = useState(0);
+  const takeQuiet = useQuietRefresh(() => setReload(r => r + 1));
   const [history, setHistory] = useState<HistoryRow[]>([]);
   /** MC-01 enrollments: the left (CANCELLED) ones lock their rows, the others feed the quiz builders. */
   const [enrollments, setEnrollments] = useState<MyCourse[]>([]);
@@ -164,14 +166,18 @@ export function MyExamsPage() {
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setError(null);
+    // A shared auto-refresh read keeps the list and any error as they are.
+    const quiet = takeQuiet();
+    if (!quiet) {
+      setLoading(true);
+      setError(null);
+    }
     loadHistory()
       .then(res => {
         if (!cancelled) setHistory(res);
       })
       .catch(err => {
-        if (!cancelled) setError(getApiErrorMessage(err, 'Failed to load your exams.'));
+        if (!cancelled && !quiet) setError(getApiErrorMessage(err, 'Failed to load your exams.'));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);

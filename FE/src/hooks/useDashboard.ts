@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '@/auth/authContext';
+import { DASHBOARD_REFRESH_MS, useQuietRefresh } from './useAutoRefresh';
 import {
   dashboardService,
   type StudentDashboardData,
@@ -61,6 +62,8 @@ export function useDashboard(): UseDashboardResult {
   const [tick, setTick] = useState(0);
 
   const refresh = useCallback(() => setTick((t) => t + 1), []);
+  // Re-read quietly on the shared clock; the numbers on screen stay until the new ones arrive.
+  const takeQuiet = useQuietRefresh(refresh, true, DASHBOARD_REFRESH_MS);
 
   useEffect(() => {
     const fetcher = roleCode ? FETCHER_BY_ROLE[roleCode] : undefined;
@@ -74,8 +77,11 @@ export function useDashboard(): UseDashboardResult {
     }
 
     let cancelled = false;
-    setLoading(true);
-    setError(null);
+    const quiet = takeQuiet();
+    if (!quiet) {
+      setLoading(true);
+      setError(null);
+    }
 
     fetcher()
       .then((payload) => {
@@ -85,7 +91,8 @@ export function useDashboard(): UseDashboardResult {
         }
       })
       .catch(() => {
-        if (!cancelled) {
+        // A failed background read keeps the last numbers on screen.
+        if (!cancelled && !quiet) {
           setData(null);
           setError('Unable to load dashboard.');
           setLoading(false);
@@ -95,6 +102,7 @@ export function useDashboard(): UseDashboardResult {
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roleCode, tick]);
 
   return { data, loading, error, refresh };

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useQuietRefresh } from '@/hooks/useAutoRefresh';
 import { useNavigate } from "react-router";
 import { Button } from "@/components/ui/Button";
 import { Alert } from "@/components/ui/Alert";
@@ -66,6 +67,7 @@ export function StudentQuestionNotebookPage() {
   const [sessionDuration, setSessionDuration] = useState("30");
   const [sessionModalOpen, setSessionModalOpen] = useState(false);
   const [reload, setReload] = useState(0);
+  const takeQuiet = useQuietRefresh(() => setReload((value) => value + 1));
   const [rows, setRows] = useState<SavedQuestion[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -92,8 +94,12 @@ export function StudentQuestionNotebookPage() {
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setError(null);
+    // A shared auto-refresh read keeps the list and any error as they are.
+    const quiet = takeQuiet();
+    if (!quiet) {
+      setLoading(true);
+      setError(null);
+    }
     studentProgressService.getSavedQuestions({
       page,
       size: SIZE,
@@ -108,7 +114,7 @@ export function StudentQuestionNotebookPage() {
         setTotal(result.totalElements);
       })
       .catch((err) => {
-        if (!cancelled)
+        if (!cancelled && !quiet)
           setError(
             getApiErrorMessage(err, "Failed to load the question notebook."),
           );

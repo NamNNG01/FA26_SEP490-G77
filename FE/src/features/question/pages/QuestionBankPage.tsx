@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useQuietRefresh } from '@/hooks/useAutoRefresh';
 import { useNavigate } from 'react-router';
 import { questionPlainText } from '@/components/common/QuestionContent';
 import { Button } from '@/components/ui/Button';
@@ -105,6 +106,7 @@ export function QuestionBankPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const takeQuiet = useQuietRefresh(() => setReloadKey(k => k + 1));
 
   // Course options (the caller's courses) load once; module options follow the selected course.
   useEffect(() => {
@@ -141,10 +143,14 @@ export function QuestionBankPage() {
       return;
     }
     let cancelled = false;
-    setLoading(true);
-    setError(null);
-    // Selection only covers the rows on screen, so a new page or filter starts empty.
-    setSelected(new Set());
+    // A shared auto-refresh read keeps the rows, the selection and any error as they are.
+    const quiet = takeQuiet();
+    if (!quiet) {
+      setLoading(true);
+      setError(null);
+      // Selection only covers the rows on screen, so a new page or filter starts empty.
+      setSelected(new Set());
+    }
     questionService
       .getQuestions({
         search: debouncedQuery || undefined,
@@ -165,7 +171,7 @@ export function QuestionBankPage() {
         if (res.totalPages > 0 && page > res.totalPages) setPage(res.totalPages);
       })
       .catch((err: Error) => {
-        if (!cancelled) setError(err.message || 'Could not load questions.');
+        if (!cancelled && !quiet) setError(err.message || 'Could not load questions.');
       })
       .finally(() => {
         if (!cancelled) setLoading(false);

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useQuietRefresh } from "@/hooks/useAutoRefresh";
 import { useNavigate, useParams } from "react-router";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -72,12 +73,17 @@ function ContributionList() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
+  const takeQuiet = useQuietRefresh(() => setReload((value) => value + 1));
   const [form, setForm] = useState<"question" | "deck" | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setError(null);
+    // A shared auto-refresh read keeps the list and any error as they are.
+    const quiet = takeQuiet();
+    if (!quiet) {
+      setLoading(true);
+      setError(null);
+    }
     Promise.all([
       studentContributionService.getAllMine({ type: "question" }),
       studentDeckService.listAllDecks({ scope: "MINE" }),
@@ -107,7 +113,7 @@ function ContributionList() {
         ]);
       })
       .catch((err) => {
-        if (!cancelled)
+        if (!cancelled && !quiet)
           setError(
             getApiErrorMessage(err, "Failed to load your contributions."),
           );
