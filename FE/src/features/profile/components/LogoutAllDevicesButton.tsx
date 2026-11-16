@@ -73,7 +73,7 @@ export function LogoutAllDevicesButton({ className = '' }: { className?: string 
         error={error && <Alert type="error" title="Action failed" message={error} />}
         tone="danger"
         title="Log out from all devices?"
-        description="This will immediately sign you out from every device where you are currently logged in, including this one."
+        description="This device will sign out now. Other devices may remain signed in until their current access token expires and they make another request."
         confirmLabel="Log out all"
       />
     </>
