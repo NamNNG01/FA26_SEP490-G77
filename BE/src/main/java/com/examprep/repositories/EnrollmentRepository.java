@@ -73,9 +73,13 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
     @Query("SELECT e FROM Enrollment e WHERE e.user.userId = :userId AND e.status = :status")
     List<Enrollment> findByUserIdAndStatus(@Param("userId") Long userId, @Param("status") String status);
 
-    /** DASH-04: lifetime enrollment rows per course (any status), as {@code (courseId, COUNT)}. */
-    @Query("SELECT e.course.courseId, COUNT(e) FROM Enrollment e GROUP BY e.course.courseId")
-    List<Object[]> countAllByCourse();
+    /**
+     * DASH-04: lifetime enrollments per course as {@code (courseId, COUNT)}. Cancelled rows are
+     * excluded so the count matches the revenue column — a cancelled enrollment is not a student
+     * of the course and carries no money.
+     */
+    @Query("SELECT e.course.courseId, COUNT(e) FROM Enrollment e WHERE e.status <> 'CANCELLED' GROUP BY e.course.courseId")
+    List<Object[]> countLiveByCourse();
 
     /** DASH-05: distinct students per course with the given status, as {@code (courseId, COUNT)}. */
     @Query("SELECT e.course.courseId, COUNT(DISTINCT e.user.userId) FROM Enrollment e "

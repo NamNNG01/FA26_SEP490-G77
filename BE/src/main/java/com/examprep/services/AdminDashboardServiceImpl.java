@@ -220,9 +220,10 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
     }
 
     /**
-     * All-time top courses for the requested ranking: lifetime course revenue against every
-     * enrollment row of the course. The candidates are the top {@link #TOP_COURSES} of each metric,
-     * so the correct top 5 exists whichever ranking the caller picked.
+     * All-time top courses for the requested ranking: lifetime course revenue against the course's
+     * live enrollments (cancelled rows are excluded from the count so it agrees with revenue).
+     * The candidates are the top {@link #TOP_COURSES} of each metric, so the correct top 5 exists
+     * whichever ranking the caller picked.
      */
     private List<AdminDashboardReport.TopCourse> topCourses(String sort) {
         Map<Long, BigDecimal> revenue = new HashMap<>();
@@ -230,7 +231,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
             revenue.put((Long) row[0], row[1] == null ? BigDecimal.ZERO : (BigDecimal) row[1]);
         }
         Map<Long, Long> enrollmentCounts = new HashMap<>();
-        for (Object[] row : enrollments.countAllByCourse()) {
+        for (Object[] row : enrollments.countLiveByCourse()) {
             enrollmentCounts.put((Long) row[0], ((Number) row[1]).longValue());
         }
         Set<Long> candidates = new LinkedHashSet<>(topIdsByDecimal(revenue, TOP_COURSES));
