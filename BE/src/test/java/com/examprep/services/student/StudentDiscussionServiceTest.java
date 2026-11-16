@@ -77,10 +77,10 @@ class StudentDiscussionServiceTest {
     @Test
     void listDiscussions_batchUpvotes() {
         Page<Discussion> page = new PageImpl<>(List.of(discussion1));
-        when(discussionRepository.findDiscussions(eq(50L), eq("question"), eq(""), eq("latest"), any())).thenReturn(page);
+        when(discussionRepository.findAllDiscussions(eq("question"), eq(""), eq("latest"), any())).thenReturn(page);
         when(upvoteRepository.findUpvotedDiscussionIds(eq(200L), eq(List.of(1L)))).thenReturn(List.of(1L));
 
-        Page<DiscussionItemDto> res = discussionService.listDiscussions(50L, "question", "", "latest", 0, 10, 200L);
+        Page<DiscussionItemDto> res = discussionService.listDiscussions("question", "", "latest", 0, 10, 200L);
 
         assertNotNull(res);
         assertEquals(1, res.getTotalElements());

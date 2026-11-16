@@ -1,6 +1,7 @@
 package com.examprep.dto.student;
 
 import com.examprep.entities.User;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -36,6 +37,7 @@ public class DiscussionItemDto {
     private String approvalStatus;
     private Instant createdAt;
     private Instant lastCommentAt;
+    @JsonIgnore
     private CourseRefDto course;
 
     public boolean isAuthor() {

@@ -45,6 +45,32 @@ public interface DiscussionRepository extends JpaRepository<Discussion, Long> {
     @Query(
             value = "SELECT d FROM Discussion d " +
                     "JOIN FETCH d.user u " +
+                    "WHERE (:tag IS NULL OR d.tag = :tag) " +
+                    "AND d.approvalStatus = 'APPROVED' AND d.status <> 'HIDDEN' " +
+                    "AND (:search IS NULL OR :search = '' OR " +
+                    "LOWER(d.title) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+                    "LOWER(d.content) LIKE LOWER(CONCAT('%', :search, '%'))) " +
+                    "ORDER BY d.isPinned DESC, " +
+                    "CASE WHEN :sort = 'mostCommented' THEN d.commentCount END DESC, " +
+                    "CASE WHEN :sort = 'mostUpvoted' THEN d.upvoteCount END DESC, " +
+                    "d.createdAt DESC",
+            countQuery = "SELECT COUNT(d) FROM Discussion d " +
+                    "WHERE (:tag IS NULL OR d.tag = :tag) " +
+                    "AND d.approvalStatus = 'APPROVED' AND d.status <> 'HIDDEN' " +
+                    "AND (:search IS NULL OR :search = '' OR " +
+                    "LOWER(d.title) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+                    "LOWER(d.content) LIKE LOWER(CONCAT('%', :search, '%')))"
+    )
+    Page<Discussion> findAllDiscussions(
+            @Param("tag") String tag,
+            @Param("search") String search,
+            @Param("sort") String sort,
+            Pageable pageable
+    );
+
+    @Query(
+            value = "SELECT d FROM Discussion d " +
+                    "JOIN FETCH d.user u " +
                     "LEFT JOIN FETCH d.course c " +
                     "WHERE (:courseId IS NULL OR d.course.courseId = :courseId) " +
                     "AND (:approvalStatus IS NULL OR d.approvalStatus = :approvalStatus) " +
