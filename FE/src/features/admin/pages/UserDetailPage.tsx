@@ -7,6 +7,7 @@ import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { Button } from '@/components/ui/Button';
 import { Table, type TableColumn } from '@/components/ui/Table';
 import { Modal } from '@/components/ui/Modal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Skeleton } from '@/components/ui/Skeleton';
@@ -110,6 +111,7 @@ export function UserDetailPage({ onNavigate, params: paramsProp }: { onNavigate?
   const [form, setForm] = useState<EditForm>({ fullName: '', email: '', role: 'STUDENT', status: 'ACTIVE' });
   const [saving, setSaving] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
   const [changingStatus, setChangingStatus] = useState(false);
 
   // Only ever render the profile that belongs to the id in the URL.
@@ -184,6 +186,7 @@ export function UserDetailPage({ onNavigate, params: paramsProp }: { onNavigate?
       toast.error(getApiErrorMessage(err, 'Could not send the password reset email.'));
     } finally {
       setResetting(false);
+      setResetConfirmOpen(false);
     }
   };
 
@@ -236,6 +239,8 @@ export function UserDetailPage({ onNavigate, params: paramsProp }: { onNavigate?
     );
   }
 
+  // Learning stats and exam attempts only exist for students.
+  const isStudent = profile.role === 'STUDENT';
   const attemptRows = profile.recentAttempts.map(attempt => ({ ...attempt, id: attempt.attemptId }));
   const attemptColumns: TableColumn[] = [
     { key: 'examTitle', label: 'Exam Name', render: (row: Record<string, unknown>) => (
@@ -305,6 +310,7 @@ export function UserDetailPage({ onNavigate, params: paramsProp }: { onNavigate?
             </div>
           </div>
 
+          {isStudent && <>
           {/* Learning Statistics */}
           <div>
             <h3 className="text-lg font-semibold text-content mb-3">Learning Statistics</h3>
@@ -332,6 +338,7 @@ export function UserDetailPage({ onNavigate, params: paramsProp }: { onNavigate?
               emptyState="No exam attempts yet."
             />
           </div>
+          </>}
         </div>
 
         {/* Right (25%): sticky sidebar */}
@@ -353,7 +360,7 @@ export function UserDetailPage({ onNavigate, params: paramsProp }: { onNavigate?
           <div className="card p-5 space-y-2">
             <h4 className="text-base font-semibold text-content mb-1">Actions</h4>
             <Button icon={<Icon.Edit className="w-4 h-4" />} className="w-full justify-center" onClick={openEdit}>Edit User</Button>
-            <Button variant="outline" icon={<Icon.Lock className="w-4 h-4" />} className="w-full justify-center" loading={resetting} disabled={resetting} onClick={() => void resetPassword()}>Reset Password</Button>
+            <Button variant="outline" icon={<Icon.Lock className="w-4 h-4" />} className="w-full justify-center" disabled={resetting} onClick={() => setResetConfirmOpen(true)}>Reset Password</Button>
             <Button
               variant={profile.status === 'ACTIVE' ? 'outline' : 'primary'}
               icon={profile.status === 'ACTIVE' ? <Icon.EyeOff className="w-4 h-4" /> : <Icon.CheckCircle className="w-4 h-4" />}
@@ -394,6 +401,16 @@ export function UserDetailPage({ onNavigate, params: paramsProp }: { onNavigate?
           </div>
         </form>
       </Modal>
+
+      <ConfirmDialog
+        open={resetConfirmOpen}
+        onClose={() => setResetConfirmOpen(false)}
+        onConfirm={() => void resetPassword()}
+        title="Reset password?"
+        description={<>A password reset email will be sent to <span className="font-medium text-content">{profile.email}</span>.</>}
+        confirmLabel="Send reset email"
+        loading={resetting}
+      />
     </div>
   );
 }
