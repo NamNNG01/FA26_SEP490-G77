@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import { useNavigate } from 'react-router';
 import { Badge, type BadgeVariant } from '@/components/ui/Badge';
 import { Select } from '@/components/ui/Select';
@@ -93,9 +94,11 @@ export function UsersPage({ onNavigate }: { onNavigate?: (id: string, params?: R
     return () => window.clearTimeout(timer);
   }, [search, saved]);
 
-  const load = useCallback(async () => {
+  /** `'quiet'` = shared auto-refresh: no loader, and a failure keeps the list on screen. */
+  const load = useCallback(async (mode?: 'quiet') => {
+    const quiet = mode === 'quiet';
     const requestId = ++requestRef.current;
-    setLoading(true);
+    if (!quiet) setLoading(true);
     try {
       const result = await adminUserService.list({
         search: debouncedSearch || undefined,
@@ -116,7 +119,7 @@ export function UsersPage({ onNavigate }: { onNavigate?: (id: string, params?: R
       setTotal(result.totalElements);
       setError(null);
     } catch (err) {
-      if (requestId !== requestRef.current) return;
+      if (requestId !== requestRef.current || quiet) return;
       setError(getApiErrorMessage(err, 'Could not load users.'));
     } finally {
       if (requestId === requestRef.current) setLoading(false);
@@ -126,6 +129,7 @@ export function UsersPage({ onNavigate }: { onNavigate?: (id: string, params?: R
   useEffect(() => {
     void load();
   }, [load]);
+  useAutoRefresh(() => void load('quiet'));
 
   const openDetail = (item: AdminUserItem) => {
     if (onNavigate) onNavigate('user-detail', { userId: String(item.userId) });

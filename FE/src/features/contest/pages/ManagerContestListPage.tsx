@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import { useNavigate } from 'react-router';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -72,8 +73,10 @@ export function ManagerContestListPage() {
       .catch(() => setCourses([]));
   }, []);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  /** `'quiet'` = shared auto-refresh: no loader; a failure keeps the list and shows no toast. */
+  const load = useCallback(async (mode?: 'quiet') => {
+    const quiet = mode === 'quiet';
+    if (!quiet) setLoading(true);
     try {
       setPage(await managerContestService.list({
         keyword: search, status: statuses, courseId: courseId ? Number(courseId) : undefined,
@@ -83,6 +86,7 @@ export function ManagerContestListPage() {
       }));
     } catch (err) {
       const code = contestErrorCode(err);
+      if (quiet) return;
       toast.error((code && CONTEST_ERROR_TEXT[code]) || getApiErrorMessage(err, 'Could not load contests.'));
       setPage(EMPTY);
     } finally {
@@ -90,6 +94,7 @@ export function ManagerContestListPage() {
     }
   }, [courseId, from, search, pageIndex, sort, statuses, to, toast]);
   useEffect(() => { void load(); }, [load]);
+  useAutoRefresh(() => void load('quiet'));
 
   const resetPage = () => setPageIndex(1);
   const filtersActive = keyword !== '' || statuses.length > 0 || courseId !== '' || from !== '' || to !== '';

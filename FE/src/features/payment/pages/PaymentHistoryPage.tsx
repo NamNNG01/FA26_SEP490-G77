@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useQuietRefresh } from '@/hooks/useAutoRefresh';
 import { useNavigate } from 'react-router';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -30,6 +31,7 @@ export function PaymentHistoryPage() {
   const toast = useToast();
   const [page, setPage] = useState(1);
   const [reload, setReload] = useState(0);
+  const takeQuiet = useQuietRefresh(() => setReload(r => r + 1));
   const [rows, setRows] = useState<PaymentHistoryItem[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -38,8 +40,12 @@ export function PaymentHistoryPage() {
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setError(null);
+    // A shared auto-refresh read keeps the list and any error as they are.
+    const quiet = takeQuiet();
+    if (!quiet) {
+      setLoading(true);
+      setError(null);
+    }
     paymentService
       .getHistory(page - 1, PAGE_SIZE)
       .then(res => {
@@ -47,7 +53,7 @@ export function PaymentHistoryPage() {
         setRows(res.content);
         setTotal(res.totalElements);
       })
-      .catch(err => { if (!cancelled) setError(getApiErrorMessage(err, 'Could not load your payments.')); })
+      .catch(err => { if (!cancelled && !quiet) setError(getApiErrorMessage(err, 'Could not load your payments.')); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [page, reload]);

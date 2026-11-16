@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
+import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Input } from "@/components/ui/Input";
@@ -169,8 +170,10 @@ export function DiscountsPage() {
     { title: string; status: string; contestId: number }[] | null
   >(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  /** `'quiet'` = shared auto-refresh: no loader, no error toast. */
+  const load = useCallback(async (mode?: 'quiet') => {
+    const quiet = mode === 'quiet';
+    if (!quiet) setLoading(true);
     try {
       setPage(
         await adminDiscountService.list({
@@ -184,7 +187,7 @@ export function DiscountsPage() {
         }),
       );
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Could not load discounts."));
+      if (!quiet) toast.error(getApiErrorMessage(error, "Could not load discounts."));
     } finally {
       setLoading(false);
     }
@@ -200,6 +203,7 @@ export function DiscountsPage() {
   useEffect(() => {
     void load();
   }, [load]);
+  useAutoRefresh(() => void load('quiet'));
 
   const loadAssignments = useCallback(
     async (discountId: number) => {

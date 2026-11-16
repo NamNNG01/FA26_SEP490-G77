@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useQuietRefresh } from '@/hooks/useAutoRefresh';
 import { useNavigate, useParams } from 'react-router';
 import { Alert } from '@/components/ui/Alert';
 import { Avatar } from '@/components/ui/Avatar';
@@ -43,6 +44,7 @@ function DiscussionList() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
+  const takeQuiet = useQuietRefresh(() => setReload(value => value + 1));
   const [createOpen, setCreateOpen] = useState(false);
   const [votingIds, setVotingIds] = useState<Set<number>>(new Set());
   const [voteError, setVoteError] = useState<string | null>(null);
@@ -57,7 +59,9 @@ function DiscussionList() {
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true); setError(null);
+    // A shared auto-refresh read keeps the posts and any error as they are.
+    const quiet = takeQuiet();
+    if (!quiet) { setLoading(true); setError(null); }
     const params = { page, size: PAGE_SIZE };
     const request = tab === 'Tips'
       ? studentCommunityService.getTips({ courseId: courseId ? Number(courseId) : undefined, ...params })
@@ -65,7 +69,7 @@ function DiscussionList() {
     request.then(result => {
       if (cancelled) return;
       setItems(result.content); setTotal(result.totalElements);
-    }).catch(err => { if (!cancelled) setError(getApiErrorMessage(err, 'Failed to load community posts.')); })
+    }).catch(err => { if (!cancelled && !quiet) setError(getApiErrorMessage(err, 'Failed to load community posts.')); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [tab, courseId, search, sort, page, reload]);

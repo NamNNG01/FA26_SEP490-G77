@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CmCourseStat, CmDashboardSummary, CmExamStat } from '@/services/cmDashboard.types';
 import { CM_MIN_ATTEMPTS } from '@/services/cmDashboard.types';
 import { cmDashboardService } from '@/services/cmDashboard.service';
+import { DASHBOARD_REFRESH_MS, useAutoRefresh } from '@/hooks/useAutoRefresh';
 
 /**
  * useCmDashboard
@@ -46,10 +47,13 @@ export function useCmDashboard(): UseCmDashboardResult {
   const requestIds = useRef<SectionFlags<number>>({ summary: 0, courses: 0, exams: 0 });
   const mounted = useRef(true);
 
-  const load = useCallback((section: CmDashboardSection) => {
+  /** `quiet` (shared auto-refresh): no loader, and a failure keeps what is on screen. */
+  const load = useCallback((section: CmDashboardSection, quiet = false) => {
     const id = ++requestIds.current[section];
-    setLoading((s) => ({ ...s, [section]: true }));
-    setError((s) => ({ ...s, [section]: null }));
+    if (!quiet) {
+      setLoading((s) => ({ ...s, [section]: true }));
+      setError((s) => ({ ...s, [section]: null }));
+    }
 
     const isCurrent = () => mounted.current && id === requestIds.current[section];
     const keep = <T,>(set: (v: T) => void) => (v: T) => {
@@ -65,7 +69,7 @@ export function useCmDashboard(): UseCmDashboardResult {
 
     request
       .catch((e: unknown) => {
-        if (!isCurrent()) return;
+        if (!isCurrent() || quiet) return;
         setError((s) => ({ ...s, [section]: e instanceof Error ? e.message : 'Failed to load data.' }));
       })
       .finally(() => {
@@ -74,9 +78,11 @@ export function useCmDashboard(): UseCmDashboardResult {
   }, []);
 
   const refresh = useCallback(
-    (section?: CmDashboardSection) => (section ? [section] : SECTIONS).forEach(load),
+    (section?: CmDashboardSection) => (section ? [section] : SECTIONS).forEach(s => load(s)),
     [load],
   );
+
+  useAutoRefresh(() => SECTIONS.forEach(s => load(s, true)), true, DASHBOARD_REFRESH_MS);
 
   useEffect(() => {
     mounted.current = true;

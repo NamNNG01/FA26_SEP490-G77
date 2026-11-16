@@ -24,6 +24,7 @@ import { SortHeader } from '../components/SortHeader';
 import { defaultFilter, filterDayRange } from '../utils/dashboardPeriods';
 import { formatCompact, formatInteger, formatPeriod, formatVnd } from '../utils/dashboardFormat';
 import { exportAdminDashboard } from '../utils/exportAdminDashboard';
+import { DASHBOARD_REFRESH_MS, useQuietRefresh } from '@/hooks/useAutoRefresh';
 
 /** Until the first report arrives the picker offers any date; the API bounds the report itself. */
 const FALLBACK_DATA_START = '2000-01-01';
@@ -44,18 +45,23 @@ export function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
+  const takeQuiet = useQuietRefresh(() => setReload(value => value + 1), true, DASHBOARD_REFRESH_MS);
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setError(null);
+    // A shared auto-refresh read keeps the report on screen and drops its own errors.
+    const quiet = takeQuiet();
+    if (!quiet) {
+      setLoading(true);
+      setError(null);
+    }
     adminDashboardService
       .getReport(filter, sortBy)
       .then(report => {
         if (!cancelled) setData(report);
       })
       .catch(err => {
-        if (!cancelled) setError(getApiErrorMessage(err, 'Could not load the dashboard report.'));
+        if (!cancelled && !quiet) setError(getApiErrorMessage(err, 'Could not load the dashboard report.'));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);

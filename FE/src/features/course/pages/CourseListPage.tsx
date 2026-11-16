@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from "react";
+import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import { useNavigate } from "react-router";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
@@ -154,9 +155,13 @@ export function CourseListPage({
       });
   }, [user?.role]);
 
-  const fetchCourses = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  /** `'quiet'` = shared auto-refresh: no loader; a failure keeps the list and shows no toast. */
+  const fetchCourses = useCallback(async (mode?: 'quiet') => {
+    const quiet = mode === 'quiet';
+    if (!quiet) {
+      setLoading(true);
+      setError(null);
+    }
     try {
       const isPublishedParam =
         selectedStatus === "published"
@@ -181,6 +186,7 @@ export function CourseListPage({
       setCourses(data.content);
       setTotalElements(data.totalElements);
     } catch (err: unknown) {
+      if (quiet) return;
       const msg = getApiErrorMessage(
         err,
         "Failed to load courses. Please try again.",
@@ -197,6 +203,7 @@ export function CourseListPage({
   useEffect(() => {
     fetchCourses();
   }, [fetchCourses]);
+  useAutoRefresh(() => void fetchCourses('quiet'));
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearch(e.target.value);

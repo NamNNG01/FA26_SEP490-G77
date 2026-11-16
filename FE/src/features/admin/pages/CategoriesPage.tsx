@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo } from "react";
+import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
@@ -38,13 +39,15 @@ export function CategoriesPage() {
     useState<AdminCategoryNode | null>(null);
   const [submittingDelete, setSubmittingDelete] = useState(false);
 
-  const loadCategories = async () => {
-    setLoading(true);
+  /** `'quiet'` = shared auto-refresh: no loader, no error toast. */
+  const loadCategories = async (mode?: 'quiet') => {
+    const quiet = mode === 'quiet';
+    if (!quiet) setLoading(true);
     try {
       const data = await categoryService.getAdminCategories();
       setCategories(data);
     } catch (error) {
-      notification.error(
+      if (!quiet) notification.error(
         getApiErrorMessage(error, "Failed to load categories."),
       );
     } finally {
@@ -55,6 +58,7 @@ export function CategoriesPage() {
   useEffect(() => {
     loadCategories();
   }, []);
+  useAutoRefresh(() => void loadCategories('quiet'));
 
   const handleOpenAdd = () => {
     setAddName("");
@@ -225,7 +229,7 @@ export function CategoriesPage() {
           <Button
             variant="outline"
             icon={<Icon.RefreshCw className="w-4 h-4" />}
-            onClick={loadCategories}
+            onClick={() => void loadCategories()}
             disabled={loading}
           >
             Refresh

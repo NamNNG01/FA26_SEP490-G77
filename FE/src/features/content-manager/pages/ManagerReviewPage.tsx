@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import { useSearchParams } from 'react-router';
 import { apiClient } from '@/services/axios';
 import { courseService, type CourseModuleResponse, type CourseSummaryItem } from '@/services/course.service';
@@ -149,10 +150,17 @@ export function ManagerReviewPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  /** Last query the user applied — what the shared auto-refresh reads again. */
+  const lastQueryUrl = useRef<string | null>(null);
 
-  const load = useCallback(async (nextPage = Number(params.get('page') || 0)) => {
-    setBusy(true);
-    setError('');
+  /** `quiet` (shared auto-refresh) repeats the last applied query, so unsubmitted filter edits are not
+   * applied, and keeps the busy state, error and open item untouched. */
+  const load = useCallback(async (nextPage = Number(params.get('page') || 0), quiet = false) => {
+    if (quiet && !lastQueryUrl.current) return [];
+    if (!quiet) {
+      setBusy(true);
+      setError('');
+    }
     try {
       const query = new URLSearchParams({ page: String(nextPage), size: '20', status: apiStatus(kind, status), sort: 'submittedAt,asc' });
       if (keyword.trim()) query.set('keyword', keyword.trim());
@@ -163,16 +171,20 @@ export function ManagerReviewPage() {
       if (kind === 'contributions' && difficulty) query.set('difficulty', difficulty);
       if (submittedFrom) query.set('submittedFrom', new Date(submittedFrom).toISOString());
       if (submittedTo) query.set('submittedTo', new Date(new Date(submittedTo).getTime() + 60_000).toISOString());
-      const data = unwrap((await apiClient.get(`${collectionPath(kind)}?${query}`)).data);
+      const url = quiet ? lastQueryUrl.current! : `${collectionPath(kind)}?${query}`;
+      if (!quiet) lastQueryUrl.current = url;
+      const data = unwrap((await apiClient.get(url)).data);
+      // The queue changed kind/filters while this quiet read was in flight: drop it.
+      if (quiet && url !== lastQueryUrl.current) return [];
       setRows(data.content || []);
       setPageData(data);
-      setDetail(null);
+      if (!quiet) setDetail(null);
       return data.content || [];
     } catch (e: any) {
-      setError(errorMessage(e) || 'Could not load review queue');
+      if (!quiet) setError(errorMessage(e) || 'Could not load review queue');
       return [];
     } finally {
-      setBusy(false);
+      if (!quiet) setBusy(false);
     }
   }, [kind, status, keyword, courseId, moduleId, contributorId, questionType, difficulty, submittedFrom, submittedTo, params]);
 
@@ -266,6 +278,7 @@ export function ManagerReviewPage() {
     syncUrl(0);
     load(0);
   }, [kind, status]);
+  useAutoRefresh(() => void load(0, true));
 
   const open = async (row: Row, cardPage = 0) => {
     if (kind === 'decks' && detail?.deckId === idOf(row, kind)) setCardsLoading(true);

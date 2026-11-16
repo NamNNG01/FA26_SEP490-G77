@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useQuietRefresh } from '@/hooks/useAutoRefresh';
 import { useNavigate, useParams } from "react-router";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
@@ -80,6 +81,7 @@ function ContestList() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
+  const takeQuiet = useQuietRefresh(() => setReload((v) => v + 1));
   const [status, setStatus] = useState("");
   const [courseId, setCourseId] = useState("");
   const [from, setFrom] = useState("");
@@ -101,8 +103,12 @@ function ContestList() {
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setError(null);
+    // A shared auto-refresh read keeps the list and any error as they are, with no toast.
+    const quiet = takeQuiet();
+    if (!quiet) {
+      setLoading(true);
+      setError(null);
+    }
     const filters = {
       courseId: courseId ? Number(courseId) : undefined,
       from: dateFilter(from),
@@ -123,7 +129,7 @@ function ContestList() {
         else setContestPage(result as StudentPage<StudentContest>);
       })
       .catch((err) => {
-        if (cancelled) return;
+        if (cancelled || quiet) return;
         const message = getApiErrorMessage(err, "Failed to load contests.");
         setError(message);
         toast.error(message);

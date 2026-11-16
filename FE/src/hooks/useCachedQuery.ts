@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useAutoRefresh } from './useAutoRefresh';
 
 /**
  * A small in-memory cache for read-only pages the student keeps coming back to (course, module,
@@ -91,11 +92,12 @@ export interface CachedQuery<T> {
  * Reads `fetcher()` under `key` (null = do not read), unless the cached value is fresh (FRESH_MS).
  * `initialData`, when given, is cached on the first render as just read (e.g. data handed over in
  * router state by the page that just read it), so it is shown without reading; `reload` always reads.
+ * `autoRefresh` reads it again quietly on the shared auto-refresh clock (see useAutoRefresh).
  */
 export function useCachedQuery<T>(
   key: string | null,
   fetcher: () => Promise<T>,
-  options: { initialData?: T } = {},
+  options: { initialData?: T; autoRefresh?: boolean } = {},
 ): CachedQuery<T> {
   const fetcherRef = useRef(fetcher);
   fetcherRef.current = fetcher;
@@ -133,6 +135,7 @@ export function useCachedQuery<T>(
   }, [key, tick]);
 
   const reload = useCallback(() => setTick(t => t + 1), []);
+  useAutoRefresh(reload, options.autoRefresh === true && key != null);
   const setData = useCallback(
     (update: T | ((prev: T | undefined) => T)) => {
       setEntry(prev => {
