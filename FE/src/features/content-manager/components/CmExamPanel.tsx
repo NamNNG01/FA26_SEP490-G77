@@ -17,7 +17,7 @@ import {
 } from './cmDashboardUi';
 
 /**
- * "Hiệu suất bài thi". Rows arrive already sorted by the API (lowest pass
+ * "Exam performance". Rows arrive already sorted by the API (lowest pass
  * rate first, exams under 5 attempts last); filtering by course keeps that
  * order.
  */
@@ -41,13 +41,13 @@ export function CmExamPanel({ exams, loading, error, onRetry, courseOptions, sel
   const columns: TableColumn[] = [
     {
       key: 'title',
-      label: 'Tên exam',
+      label: 'Exam name',
       render: (row) => {
         const e = of(row);
         return (
           <div className="flex items-center gap-2 min-w-0">
             <span className="truncate font-medium text-foreground" title={e.title}>{e.title}</span>
-            {e.status === 'ARCHIVED' && <Badge variant="default" className="flex-shrink-0">Đã lưu trữ</Badge>}
+            {e.status === 'ARCHIVED' && <Badge variant="default" className="flex-shrink-0">Archived</Badge>}
             {e.status === 'DRAFT' && <Badge variant="warning" className="flex-shrink-0">Draft</Badge>}
           </div>
         );
@@ -58,10 +58,10 @@ export function CmExamPanel({ exams, loading, error, onRetry, courseOptions, sel
       label: 'Course',
       render: (row) => <span className="block truncate max-w-[160px]" title={of(row).courseTitle}>{of(row).courseTitle}</span>,
     },
-    { key: 'submittedAttempts', label: 'Bài nộp', render: (row) => of(row).submittedAttempts },
+    { key: 'submittedAttempts', label: 'Submissions', render: (row) => of(row).submittedAttempts },
     {
       key: 'avgScore',
-      label: 'Điểm TB',
+      label: 'Avg score',
       overflowVisible: true,
       render: (row) => <MetricCell text={fmtScore(of(row).avgScore)} attempts={of(row).submittedAttempts} />,
     },
@@ -76,7 +76,7 @@ export function CmExamPanel({ exams, loading, error, onRetry, courseOptions, sel
     },
     {
       key: 'avgDurationMinutes',
-      label: 'Thời gian TB',
+      label: 'Avg time',
       render: (row) => <span className="whitespace-nowrap">{fmtMinutes(of(row).avgDurationMinutes)}</span>,
     },
   ];
@@ -86,7 +86,7 @@ export function CmExamPanel({ exams, loading, error, onRetry, courseOptions, sel
 
   return (
     <Panel
-      title="Hiệu suất bài thi"
+      title="Exam performance"
       count={exams && <Badge variant="default">{visible.length} exam</Badge>}
       actions={
         <>
@@ -97,7 +97,7 @@ export function CmExamPanel({ exams, loading, error, onRetry, courseOptions, sel
             </Chip>
           )}
           <Button variant="outline" size="sm" onClick={onViewAll}>
-            Xem tất cả
+            View all
           </Button>
         </>
       }
@@ -108,13 +108,13 @@ export function CmExamPanel({ exams, loading, error, onRetry, courseOptions, sel
         <DashboardError bare message={error} onRetry={onRetry} />
       ) : rows.length === 0 ? (
         <PanelEmpty
-          message={selectedTitle ? `Bạn chưa có exam nào trong “${selectedTitle}”.` : 'Bạn chưa tạo exam nào.'}
+          message={selectedTitle ? `You have no exams in “${selectedTitle}”.` : 'You have not created any exams yet.'}
         />
       ) : (
         <>
           <p className="px-5 pt-3 text-xs text-muted-foreground">
-            Pass rate = tỉ lệ bài đã chấm đạt ≥ {CM_PASS_THRESHOLD_PERCENT}% điểm tối đa · thấp nhất lên đầu ·
-            exam dưới {CM_MIN_ATTEMPTS} bài nộp xếp cuối.
+            Pass rate = share of graded attempts scoring ≥ {CM_PASS_THRESHOLD_PERCENT}% of max points · lowest first ·
+            exams with fewer than {CM_MIN_ATTEMPTS} submissions listed last.
           </p>
           <Table columns={columns} data={rows} unit="exam" resetKey={selectedCourseId ?? 'all'} />
         </>

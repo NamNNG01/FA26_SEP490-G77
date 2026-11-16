@@ -7,11 +7,10 @@ import { DashboardError } from '@/components/common/DashboardState';
 import { Icon } from '@/assets/icons';
 import { ROUTES } from '@/app/routes';
 import type { CmDashboardSummary } from '@/services/cmDashboard.types';
-import { CM_PASS_THRESHOLD_PERCENT } from '@/services/cmDashboard.types';
 import { useCmDashboard } from '../hooks/useCmDashboard';
 import { CmCoursePanel } from '../components/CmCoursePanel';
 import { CmExamPanel } from '../components/CmExamPanel';
-import { InfoTip, LabelWithInfo, fmtPct } from '../components/cmDashboardUi';
+import { InfoTip, LabelWithInfo } from '../components/cmDashboardUi';
 
 /**
  * CMDashboard (Course Manager) — v2
@@ -19,7 +18,7 @@ import { InfoTip, LabelWithInfo, fmtPct } from '../components/cmDashboardUi';
  * Every figure comes from the DASH-05 endpoints (services/cmDashboard.service.ts), scoped
  * server-side to the courses this manager owns or co-manages and the course exams they created.
  *
- * KPI row, "Course của tôi" and "Hiệu suất bài thi" load and fail
+ * KPI row, "My courses" and "Exam performance" load and fail
  * independently. Clicking a course row and the course Select share one
  * filter state.
  */
@@ -45,8 +44,8 @@ export function CMDashboard() {
             <h2 className="text-xl font-bold text-content">Course Manager Dashboard</h2>
           </div>
           <p className="text-sm text-content-soft mt-0.5 flex items-center gap-1.5">
-            Số liệu trực tiếp từ course và exam bạn quản lý
-            <InfoTip side="bottom" label="Course dùng chung giữa nhiều CM; số liệu exam là của riêng bạn" />
+            Live figures from the courses and exams you manage
+            <InfoTip side="bottom" label="Courses are shared across managers; exam figures are yours only" />
           </p>
         </div>
         <Button
@@ -55,7 +54,7 @@ export function CMDashboard() {
           onClick={() => refresh()}
           disabled={loading.summary || loading.courses || loading.exams}
         >
-          Làm mới
+          Refresh
         </Button>
       </div>
 
@@ -119,14 +118,14 @@ function KpiSkeleton() {
 function KpiRow({ summary: s }: { summary: CmDashboardSummary }) {
   return (
     <div className={KPI_GRID}>
-      <StatCard title="Course đang quản lý" value={String(s.managedCourses)} icon={<Icon.Book />} />
+      <StatCard title="Managed courses" value={String(s.managedCourses)} icon={<Icon.Book />} />
       <StatCard
-        title={<LabelWithInfo info="Chỉ tính enrollment ACTIVE">Học viên đang tham gia</LabelWithInfo>}
+        title={<LabelWithInfo info="Counts ACTIVE enrollments only">Active students</LabelWithInfo>}
         value={s.activeStudents.toLocaleString()}
         icon={<Icon.Users />}
       />
       <StatCard
-        title={<LabelWithInfo info="Exam do bạn tạo, trong các course bạn còn quản lý">Exam của tôi</LabelWithInfo>}
+        title={<LabelWithInfo info="Exams you created in courses you still manage">My exams</LabelWithInfo>}
         value={String(s.myExams.total)}
         icon={<Icon.FileText />}
         footer={
@@ -134,26 +133,6 @@ function KpiRow({ summary: s }: { summary: CmDashboardSummary }) {
             {s.myExams.published} published · {s.myExams.draft} draft · {s.myExams.archived} archived
           </p>
         }
-      />
-      <StatCard
-        title={<LabelWithInfo info="Attempt đã nộp trong 7 ngày gần nhất, tính cả bài đang chờ chấm">Bài nộp (7 ngày)</LabelWithInfo>}
-        value={s.submittedAttempts7d.toLocaleString()}
-        icon={<Icon.Upload />}
-      />
-      <StatCard
-        title={
-          <LabelWithInfo info={`Điểm phần trăm trung bình của các attempt đã chấm; pass rate tính từ ${CM_PASS_THRESHOLD_PERCENT}% điểm tối đa trở lên`}>
-            Điểm trung bình
-          </LabelWithInfo>
-        }
-        value={fmtPct(s.avgScore)}
-        icon={<Icon.BarChart />}
-        footer={<p className="text-sm text-content-subtle">Pass rate {fmtPct(s.passRate)}</p>}
-      />
-      <StatCard
-        title={<LabelWithInfo info="Attempt đã nộp nhưng chưa chấm xong (chờ AI hoặc đang chấm)">Chờ chấm</LabelWithInfo>}
-        value={s.pendingGrading.toLocaleString()}
-        icon={<Icon.Clock />}
       />
     </div>
   );
