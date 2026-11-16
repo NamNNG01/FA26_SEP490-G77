@@ -10,6 +10,7 @@ export function ContributionCourseModuleFields({
   onModuleChange,
   courseError,
   moduleError,
+  moduleOptional = false,
   disabled = false,
 }: {
   courses: MyCourse[];
@@ -19,6 +20,7 @@ export function ContributionCourseModuleFields({
   onModuleChange: (value: string) => void;
   courseError?: string;
   moduleError?: string;
+  moduleOptional?: boolean;
   disabled?: boolean;
 }) {
   const [modules, setModules] = useState<CourseModuleSummary[]>([]);
@@ -64,7 +66,7 @@ export function ContributionCourseModuleFields({
     ...courses.map(course => ({ label: course.title, value: String(course.courseId) })),
   ];
   const moduleOptions = [
-    { label: 'Choose a module', value: '' },
+    { label: moduleOptional ? 'No module (optional)' : 'Choose a module', value: '' },
     ...modules.map(module => ({ label: module.title, value: String(module.moduleId) })),
   ];
 
@@ -85,11 +87,11 @@ export function ContributionCourseModuleFields({
       </div>
       <div>
         <SearchableSelect
-          label="Module *"
+          label={moduleOptional ? 'Module (optional)' : 'Module *'}
           options={moduleOptions}
           value={moduleId}
           onChange={onModuleChange}
-          placeholder={!courseId ? 'Choose a course first' : loadingModules ? 'Loading modules…' : 'Choose a module'}
+          placeholder={!courseId ? 'Choose a course first' : loadingModules ? 'Loading modules…' : moduleOptional ? 'No module' : 'Choose a module'}
           searchPlaceholder="Search modules…"
           emptyText="No visible modules found"
           disabled={disabled || !courseId || loadingModules || modules.length === 0}

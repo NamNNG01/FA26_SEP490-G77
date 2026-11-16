@@ -31,7 +31,6 @@ export function DeckContributionModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [courseError, setCourseError] = useState('');
-  const [moduleError, setModuleError] = useState('');
 
   useEffect(() => {
     if (!open) return;
@@ -42,7 +41,6 @@ export function DeckContributionModal({
     setModuleId('');
     setError(null);
     setCourseError('');
-    setModuleError('');
     setLoadingDecks(true);
     studentDeckService.listAllDecks({ scope: 'MINE' })
       .then(items => {
@@ -82,18 +80,19 @@ export function DeckContributionModal({
     event.preventDefault();
     setError(null);
     setCourseError(courseId ? '' : 'Choose an enrolled course.');
-    setModuleError(moduleId ? '' : 'Choose a module.');
-    if (!selectedDeck || !courseId || !moduleId) {
-      setError('Choose a deck, an enrolled course, and a module before submitting.');
+    if (!selectedDeck || !courseId) {
+      setError('Choose a deck and an enrolled course before submitting.');
       return;
     }
 
     setBusy(true);
     try {
-      if (selectedDeck.courseId !== Number(courseId) || selectedDeck.moduleId !== Number(moduleId)) {
+      const nextCourseId = Number(courseId);
+      const nextModuleId = moduleId ? Number(moduleId) : null;
+      if (selectedDeck.courseId !== nextCourseId || (selectedDeck.moduleId ?? null) !== nextModuleId) {
         await studentDeckService.updateDeck(selectedDeck.deckId, {
-          courseId: Number(courseId),
-          moduleId: Number(moduleId),
+          ...(selectedDeck.courseId !== nextCourseId ? { courseId: nextCourseId } : {}),
+          ...((selectedDeck.moduleId ?? null) !== nextModuleId ? { moduleId: nextModuleId ?? 0 } : {}),
         });
       }
       const result = await studentDeckService.requestPublish(selectedDeck.deckId);
@@ -150,9 +149,9 @@ export function DeckContributionModal({
           courseId={courseId}
           moduleId={moduleId}
           onCourseChange={value => { setCourseId(value); setCourseError(''); setError(null); }}
-          onModuleChange={value => { setModuleId(value); setModuleError(''); setError(null); }}
+          onModuleChange={value => { setModuleId(value); setError(null); }}
           courseError={courseError || coursesError || undefined}
-          moduleError={moduleError || undefined}
+          moduleOptional
           disabled={busy || !selectedDeck}
         />
         {!courses?.length && !coursesError && <p className="text-sm text-warning">An active course enrollment is needed to contribute a deck.</p>}
