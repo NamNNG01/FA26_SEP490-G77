@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useQuietRefresh } from '@/hooks/useAutoRefresh';
 import { useNavigate, useSearchParams } from 'react-router';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/Card';
@@ -156,6 +157,7 @@ export function StudentFlashcardsPage() {
   const [data, setData] = useState<FlashcardsData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
+  const takeQuiet = useQuietRefresh(() => setReload(r => r + 1));
   const [search, setSearch] = useState('');
   const [mode, setMode] = useState<DeckMode | ''>('');
   const [creating, setCreating] = useState(false);
@@ -170,13 +172,15 @@ export function StudentFlashcardsPage() {
 
   useEffect(() => {
     let cancelled = false;
-    setError(null);
+    // A shared auto-refresh read keeps any error as it is.
+    const quiet = takeQuiet();
+    if (!quiet) setError(null);
     loadFlashcards()
       .then(next => {
         if (!cancelled) setData(next);
       })
       .catch(err => {
-        if (!cancelled) setError(getApiErrorMessage(err, 'Failed to load your flashcards.'));
+        if (!cancelled && !quiet) setError(getApiErrorMessage(err, 'Failed to load your flashcards.'));
       });
     return () => {
       cancelled = true;

@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, useMemo } from "react";
+import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import { useSearchParams, useNavigate } from "react-router";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -145,15 +146,19 @@ export function ExamListPage() {
     });
   };
 
-  const fetchExams = async () => {
+  /** `'quiet'` = shared auto-refresh: no loader; a failure keeps the list and shows no toast. */
+  const fetchExams = async (mode?: 'quiet') => {
+    const quiet = mode === 'quiet';
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
     const abortCtrl = new AbortController();
     abortControllerRef.current = abortCtrl;
 
-    setLoading(true);
-    setError(null);
+    if (!quiet) {
+      setLoading(true);
+      setError(null);
+    }
 
     const filters = {
       search: searchTerm.trim() || undefined,
@@ -208,6 +213,7 @@ export function ExamListPage() {
       };
       if (errorObj?.name === "CanceledError" || errorObj?.name === "AbortError")
         return;
+      if (quiet) return;
       if (errorObj?.response?.status === 403) {
         const message =
           "You do not have permission to view exams for this course.";
@@ -237,6 +243,7 @@ export function ExamListPage() {
     selectedStatus,
     page,
   ]);
+  useAutoRefresh(() => void fetchExams('quiet'));
 
   const handleTabChange = (tab: ExamListTab) => {
     setActiveTab(tab);
@@ -628,7 +635,7 @@ export function ExamListPage() {
         {error ? (
           <div className="space-y-3 p-12 text-center">
             <p className="text-sm font-medium text-danger">Exam list could not be loaded. See the notification for details.</p>
-            <Button size="sm" variant="outline" onClick={fetchExams}>Retry</Button>
+            <Button size="sm" variant="outline" onClick={() => void fetchExams()}>Retry</Button>
           </div>
         ) : loading ? (
           <div className="space-y-4 p-6">

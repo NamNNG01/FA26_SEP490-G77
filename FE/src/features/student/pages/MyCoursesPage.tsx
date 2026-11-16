@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { DASHBOARD_REFRESH_MS, useAutoRefresh } from '@/hooks/useAutoRefresh';
 import { Link, useNavigate } from 'react-router';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -47,6 +48,9 @@ export function MyCoursesPage() {
 
   const [page, setPage] = useState(1);
   const [reload, setReload] = useState(0);
+  // Each refresh also reads every active course's live percent (LP-01), so it runs on the slower
+  // dashboard clock. A cached list is already re-read without a loader.
+  useAutoRefresh(() => setReload(r => r + 1), true, DASHBOARD_REFRESH_MS);
   const [search, setSearch] = useState('');
   const [quizModal, setQuizModal] = useState<'material' | 'smart' | null>(null);
   const [smartCourseId, setSmartCourseId] = useState<number | null>(null);

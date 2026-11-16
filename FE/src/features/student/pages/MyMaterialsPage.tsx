@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useQuietRefresh } from '@/hooks/useAutoRefresh';
 import { useNavigate } from 'react-router';
 import { Button } from '@/components/ui/Button';
 import { Pagination } from '@/components/ui/Pagination';
@@ -65,6 +66,7 @@ export function MyMaterialsPage() {
   const toast = useToast();
   const [page, setPage] = useState(1);
   const [reload, setReload] = useState(0);
+  const takeQuiet = useQuietRefresh(() => setReload(r => r + 1));
   const [courses, setCourses] = useState<MyCourse[]>([]);
   const [rows, setRows] = useState<MaterialItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -87,7 +89,9 @@ export function MyMaterialsPage() {
     let cancelled = false;
     // Background refreshes keep the list on screen.
     if (!loadedOnce.current) setLoading(true);
-    setError(null);
+    // A shared auto-refresh read keeps any error as it is.
+    const quiet = takeQuiet();
+    if (!quiet) setError(null);
     // Refreshes (polling, after an upload or a delete) only reload MQ-02: the enrolled courses do not change here.
     Promise.all([
       loadedOnce.current ? null : studentCourseService.getMyCourses({ page: 0, size: MY_COURSES_FETCH_SIZE }),
@@ -100,7 +104,7 @@ export function MyMaterialsPage() {
         loadedOnce.current = true;
       })
       .catch(err => {
-        if (!cancelled) setError(getApiErrorMessage(err, 'Failed to load your materials.'));
+        if (!cancelled && !quiet) setError(getApiErrorMessage(err, 'Failed to load your materials.'));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);

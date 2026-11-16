@@ -1,8 +1,8 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Tabs } from '@/components/ui/Tabs';
 import { Select } from '@/components/ui/Select';
 import type { DashboardFilter, Granularity } from '@/services/adminDashboard.service';
-import { defaultFilter, toIsoDate } from '../utils/dashboardPeriods';
+import { clampToDataStart, defaultFilter, toIsoDate } from '../utils/dashboardPeriods';
 
 const GRANULARITY_TABS: { label: string; value: Granularity }[] = [
   { label: 'Day', value: 'day' },
@@ -16,7 +16,7 @@ const inputClass =
 /**
  * Two-step period picker: choose Day / Month / Year first, then a from–to
  * range in that unit. Switching unit resets the range to its default
- * (last 7 days, last 6 months, last 3 years). Ranges never run past today
+ * (last 7 days, last 6 months, last 3 years), never starting before `minDate`. Ranges never run past today
  * and "from" can never be after "to" — editing one end pulls the other along.
  */
 export function PeriodFilter({
@@ -35,6 +35,13 @@ export function PeriodFilter({
     month: { min: minDate.slice(0, 7), max: today.slice(0, 7) },
     year: { min: minDate.slice(0, 4), max: today.slice(0, 4) },
   }[value.granularity];
+
+  // The first data day arrives with the report: pull a range that starts before it forward, so the
+  // pickers never show a period the selects do not even offer.
+  useEffect(() => {
+    const clamped = clampToDataStart(value, minDate);
+    if (clamped !== value) onChange(clamped);
+  }, [value, minDate, onChange]);
 
   // ISO strings of equal length compare correctly as plain strings.
   const clamp = (v: string) => (v < bounds.min ? bounds.min : v > bounds.max ? bounds.max : v);
@@ -64,7 +71,7 @@ export function PeriodFilter({
         active={activeLabel}
         onChange={(label) => {
           const g = GRANULARITY_TABS.find((t) => t.label === label)!.value;
-          if (g !== value.granularity) onChange(defaultFilter(g));
+          if (g !== value.granularity) onChange(defaultFilter(g, undefined, minDate));
         }}
       />
       <div className="flex items-center gap-2">

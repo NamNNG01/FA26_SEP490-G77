@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
@@ -17,13 +18,16 @@ export function StudentQuestionIssuesPage() {
   const [loading, setLoading] = useState(false);
   const [withdrawing, setWithdrawing] = useState(false);
   const [error, setError] = useState('');
-  const load = useCallback(async () => {
-    setLoading(true); setError('');
+  /** `'quiet'` = shared auto-refresh: no loader, and a failure keeps the list on screen. */
+  const load = useCallback(async (mode?: 'quiet') => {
+    const quiet = mode === 'quiet';
+    if (!quiet) { setLoading(true); setError(''); }
     try { const res = await questionIssueService.studentList({ page, size: 20, ...(status ? { status } : {}) }); setData(res); }
-    catch (e) { setError(getApiErrorMessage(e, 'Could not load your reports.')); }
-    finally { setLoading(false); }
+    catch (e) { if (!quiet) setError(getApiErrorMessage(e, 'Could not load your reports.')); }
+    finally { if (!quiet) setLoading(false); }
   }, [page, status]);
   useEffect(() => { void load(); }, [load]);
+  useAutoRefresh(() => void load('quiet'));
   async function open(row: any) {
     try { setSelected(await questionIssueService.studentDetail(row.issueId)); }
     catch (e) { setError(getApiErrorMessage(e, 'Could not load this report.')); }

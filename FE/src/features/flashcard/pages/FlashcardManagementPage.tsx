@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useQuietRefresh } from '@/hooks/useAutoRefresh';
 import { useNavigate } from 'react-router';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
@@ -72,6 +73,7 @@ export function FlashcardManagementPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const takeQuiet = useQuietRefresh(() => setReloadKey(k => k + 1));
 
   const [createOpen, setCreateOpen] = useState(false);
   const [toDelete, setToDelete] = useState<Deck | null>(null);
@@ -88,8 +90,12 @@ export function FlashcardManagementPage() {
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setLoadError(null);
+    // A shared auto-refresh read keeps the decks and any error as they are.
+    const quiet = takeQuiet();
+    if (!quiet) {
+      setLoading(true);
+      setLoadError(null);
+    }
     deckService.getDecks({ ...filters, page: page - 1, size: DEFAULT_PAGE_SIZE })
       .then(res => {
         if (cancelled) return;
@@ -97,7 +103,7 @@ export function FlashcardManagementPage() {
         if (res.content.length === 0 && page > 1 && res.totalElements > 0) setPage(p => p - 1);
         else setResult(res);
       })
-      .catch(err => { if (!cancelled) setLoadError(errorMessage(err, 'Could not load flashcard decks.')); })
+      .catch(err => { if (!cancelled && !quiet) setLoadError(errorMessage(err, 'Could not load flashcard decks.')); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `filters` is derived from these values

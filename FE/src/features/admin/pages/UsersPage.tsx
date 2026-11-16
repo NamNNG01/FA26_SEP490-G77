@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import { useNavigate } from 'react-router';
 import { Badge, type BadgeVariant } from '@/components/ui/Badge';
 import { Select } from '@/components/ui/Select';
 import { Table, type TableColumn } from '@/components/ui/Table';
 import { Dropdown } from '@/components/ui/Dropdown';
 import { Avatar } from '@/components/ui/Avatar';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { SearchInput } from '@/components/common/SearchInput';
 import { DashboardError } from '@/components/common/DashboardState';
@@ -14,6 +17,8 @@ import { getApiErrorMessage } from '@/utils/apiError';
 import { ROUTES } from '@/app/routes';
 import { adminUserService, type AdminUserItem, type AdminUserListStats } from '@/services/adminUser.service';
 import { getUserListState, type UserListState } from '../userListState';
+import { AddUserModal } from '../components/AddUserModal';
+import { SubscriptionCell } from '../components/SubscriptionCell';
 
 /** Matches Table's DEFAULT_PAGE_SIZE — the list is paginated on the server. */
 const PAGE_SIZE = 10;
@@ -69,6 +74,9 @@ export function UsersPage({ onNavigate }: { onNavigate?: (id: string, params?: R
   const [error, setError] = useState<string | null>(null);
   /** User whose row action (reset password / status change) is running. */
   const [workingId, setWorkingId] = useState<number | null>(null);
+  /** User awaiting the reset-password confirmation. */
+  const [resetTarget, setResetTarget] = useState<AdminUserItem | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
   // Latest-wins: a slow response never overwrites a newer one.
   const requestRef = useRef(0);
   const appliedSearch = useRef(saved.search);
@@ -90,9 +98,11 @@ export function UsersPage({ onNavigate }: { onNavigate?: (id: string, params?: R
     return () => window.clearTimeout(timer);
   }, [search, saved]);
 
-  const load = useCallback(async () => {
+  /** `'quiet'` = shared auto-refresh: no loader, and a failure keeps the list on screen. */
+  const load = useCallback(async (mode?: 'quiet') => {
+    const quiet = mode === 'quiet';
     const requestId = ++requestRef.current;
-    setLoading(true);
+    if (!quiet) setLoading(true);
     try {
       const result = await adminUserService.list({
         search: debouncedSearch || undefined,
@@ -113,7 +123,7 @@ export function UsersPage({ onNavigate }: { onNavigate?: (id: string, params?: R
       setTotal(result.totalElements);
       setError(null);
     } catch (err) {
-      if (requestId !== requestRef.current) return;
+      if (requestId !== requestRef.current || quiet) return;
       setError(getApiErrorMessage(err, 'Could not load users.'));
     } finally {
       if (requestId === requestRef.current) setLoading(false);
@@ -123,6 +133,7 @@ export function UsersPage({ onNavigate }: { onNavigate?: (id: string, params?: R
   useEffect(() => {
     void load();
   }, [load]);
+  useAutoRefresh(() => void load('quiet'));
 
   const openDetail = (item: AdminUserItem) => {
     if (onNavigate) onNavigate('user-detail', { userId: String(item.userId) });
@@ -138,6 +149,7 @@ export function UsersPage({ onNavigate }: { onNavigate?: (id: string, params?: R
       toast.error(getApiErrorMessage(err, 'Could not send the password reset email.'));
     } finally {
       setWorkingId(null);
+      setResetTarget(null);
     }
   };
 
@@ -168,7 +180,8 @@ export function UsersPage({ onNavigate }: { onNavigate?: (id: string, params?: R
     { key: 'name', label: 'User', render: (row: Record<string, unknown>) => {
       const item = row as unknown as AdminUserItem;
       return (
-        <button onClick={() => openDetail(item)} className="flex items-center gap-2.5 text-left rounded-[6px] -ml-1 pl-1 pr-2 py-0.5 hover:bg-accent transition-colors min-w-0">
+        // The whole row opens the detail; this button keeps it reachable by keyboard.
+        <button onClick={e => { e.stopPropagation(); openDetail(item); }} className="flex items-center gap-2.5 text-left rounded-[6px] -ml-1 pl-1 pr-2 py-0.5 hover:bg-accent transition-colors min-w-0">
           <Avatar name={item.fullName} src={item.avatarUrl ?? undefined} size="sm" />
           <div className="min-w-0">
             <p className="font-medium text-content text-sm truncate hover:text-brand-ink transition-colors">{item.fullName}</p>
@@ -187,30 +200,38 @@ export function UsersPage({ onNavigate }: { onNavigate?: (id: string, params?: R
       const value = formatLastLogin(row.lastLoginAt as string | null);
       return value ? <span className="text-sm text-content-soft">{value}</span> : <span className="text-content-faint">—</span>;
     }},
-    { key: 'courses', label: 'Courses', render: (row: Record<string, unknown>) => (
-      <span className="text-sm text-content-secondary">{String(row.enrolledCoursesCount ?? 0)}</span>
-    )},
+    { key: 'subscription', label: 'Subscription', render: (row: Record<string, unknown>) => {
+      const item = row as unknown as AdminUserItem;
+      return <SubscriptionCell role={item.role} subscription={item.subscription} />;
+    }},
     { key: 'actions', label: '', render: (row: Record<string, unknown>) => {
       const item = row as unknown as AdminUserItem;
       const busy = workingId === item.userId;
+      // Menu clicks must not bubble up to the row and open the detail as well.
       return (
-        <Dropdown trigger={<button className="p-1.5 hover:bg-accent rounded-[6px]" aria-label={`Actions for ${item.fullName}`}><Icon.MoreHorizontal className="w-4 h-4 text-content-soft"/></button>}
-          items={[
-            { label: 'View', icon: <Icon.Eye className="w-4 h-4" />, onClick: () => openDetail(item) },
-            { divider: true } as {label: string; divider: true},
-            { label: 'Reset Password', icon: <Icon.Lock className="w-4 h-4" />, disabled: busy, onClick: () => void resetPassword(item) },
-            item.status === 'ACTIVE'
-              ? { label: 'Deactivate', icon: <Icon.X className="w-4 h-4" />, danger: true, disabled: busy, onClick: () => void toggleStatus(item) }
-              : { label: 'Activate', icon: <Icon.CheckCircle className="w-4 h-4" />, disabled: busy, onClick: () => void toggleStatus(item) },
-          ]} />
+        <div onClick={e => e.stopPropagation()}>
+          <Dropdown trigger={<button className="p-1.5 hover:bg-accent rounded-[6px]" aria-label={`Actions for ${item.fullName}`}><Icon.MoreHorizontal className="w-4 h-4 text-content-soft"/></button>}
+            items={[
+              { label: 'View', icon: <Icon.Eye className="w-4 h-4" />, onClick: () => openDetail(item) },
+              { divider: true } as {label: string; divider: true},
+              { label: 'Reset Password', icon: <Icon.Lock className="w-4 h-4" />, disabled: busy, onClick: () => setResetTarget(item) },
+              item.status === 'ACTIVE'
+                ? { label: 'Deactivate', icon: <Icon.X className="w-4 h-4" />, danger: true, disabled: busy, onClick: () => void toggleStatus(item) }
+                : { label: 'Activate', icon: <Icon.CheckCircle className="w-4 h-4" />, disabled: busy, onClick: () => void toggleStatus(item) },
+            ]} />
+        </div>
       );
     }},
   ];
 
   return (
     <div className="p-8 space-y-5">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-content">User List</h2>
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-bold text-content">User Management</h2>
+          <p className="text-sm text-content-soft mt-0.5">Manage accounts, roles, status and subscriptions.</p>
+        </div>
+        <Button icon={<Icon.Plus className="w-4 h-4" />} onClick={() => setAddOpen(true)}>Add User</Button>
       </div>
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
         {statCards.map(s => (
@@ -244,12 +265,33 @@ export function UsersPage({ onNavigate }: { onNavigate?: (id: string, params?: R
               data={rows.map(item => ({ ...item, id: item.userId })) as unknown as Record<string, unknown>[]}
               perPage={PAGE_SIZE}
               unit="users"
+              onRowClick={row => openDetail(row as unknown as AdminUserItem)}
               serverPagination={{ page: pageIndex, total, onChange: p => { setPageIndex(p); pushState({ page: p }); } }}
               emptyState={filtersActive ? 'No users match your filters.' : 'No users yet.'}
             />
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={resetTarget != null}
+        onClose={() => { if (workingId == null) setResetTarget(null); }}
+        onConfirm={() => { if (resetTarget) void resetPassword(resetTarget); }}
+        title="Reset password?"
+        description={<>A password reset email will be sent to <span className="font-medium text-content">{resetTarget?.email}</span>.</>}
+        confirmLabel="Send reset email"
+        loading={resetTarget != null && workingId === resetTarget.userId}
+      />
+
+      <AddUserModal
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        onCreated={user => {
+          setAddOpen(false);
+          toast.success(`${user.fullName} was created. Sign-in details were sent to ${user.email}.`);
+          void load();
+        }}
+      />
     </div>
   );
 }

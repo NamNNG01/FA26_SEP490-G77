@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import { Alert } from '@/components/ui/Alert';
 import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
@@ -75,10 +76,14 @@ export function ManagerDiscussionPage() {
     return () => { cancelled = true; };
   }, []);
 
-  const load = useCallback(async () => {
+  /** `'quiet'` = shared auto-refresh: no loader, and a failure keeps the list on screen. */
+  const load = useCallback(async (mode?: 'quiet') => {
+    const quiet = mode === 'quiet';
     if (!courseId) { setItems([]); setTotal(0); return; }
-    setLoading(true);
-    setError('');
+    if (!quiet) {
+      setLoading(true);
+      setError('');
+    }
     try {
       const result = await managerDiscussionService.list(courseId, {
         approvalStatus,
@@ -90,13 +95,14 @@ export function ManagerDiscussionPage() {
       setItems(result.content);
       setTotal(result.totalElements);
     } catch (err) {
-      setError(getApiErrorMessage(err, 'Could not load course discussions.'));
+      if (!quiet) setError(getApiErrorMessage(err, 'Could not load course discussions.'));
     } finally {
-      setLoading(false);
+      if (!quiet) setLoading(false);
     }
   }, [courseId, approvalStatus, postStatus, appliedSearch, page]);
 
   useEffect(() => { void load(); }, [load, reload]);
+  useAutoRefresh(() => void load('quiet'));
 
   const courseOptions = useMemo(() => courses.map(course => ({ label: course.title, value: String(course.courseId) })), [courses]);
   const refreshDetail = async (discussionId: number) => {

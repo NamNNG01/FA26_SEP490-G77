@@ -21,16 +21,35 @@ function addDays(d: Date, days: number): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate() + days);
 }
 
-/** Default range per unit: last 7 days, last 6 months, last 3 years (ending today). */
-export function defaultFilter(granularity: Granularity, today = new Date()): DashboardFilter {
+/** Length of a period value per unit: YYYY-MM-DD, YYYY-MM, YYYY. */
+const PERIOD_LENGTH: Record<Granularity, number> = { day: 10, month: 7, year: 4 };
+
+/**
+ * Moves a range so it never starts before the platform's first data day (`minDate`, YYYY-MM-DD):
+ * with data only since 2026, "last 3 years" is 2026–2026, not 2024–2026.
+ */
+export function clampToDataStart(filter: DashboardFilter, minDate?: string): DashboardFilter {
+  if (!minDate) return filter;
+  const min = minDate.slice(0, PERIOD_LENGTH[filter.granularity]);
+  if (filter.from >= min) return filter;
+  return { ...filter, from: min, to: filter.to < min ? min : filter.to };
+}
+
+/**
+ * Default range per unit: last 7 days, last 6 months, last 3 years (ending today), never starting
+ * before `minDate` when it is given.
+ */
+export function defaultFilter(granularity: Granularity, today = new Date(), minDate?: string): DashboardFilter {
+  let filter: DashboardFilter;
   if (granularity === 'month') {
     const from = new Date(today.getFullYear(), today.getMonth() - 5, 1);
-    return { granularity, from: toIsoDate(from).slice(0, 7), to: toIsoDate(today).slice(0, 7) };
+    filter = { granularity, from: toIsoDate(from).slice(0, 7), to: toIsoDate(today).slice(0, 7) };
+  } else if (granularity === 'year') {
+    filter = { granularity, from: String(today.getFullYear() - 2), to: String(today.getFullYear()) };
+  } else {
+    filter = { granularity, from: toIsoDate(addDays(today, -6)), to: toIsoDate(today) };
   }
-  if (granularity === 'year') {
-    return { granularity, from: String(today.getFullYear() - 2), to: String(today.getFullYear()) };
-  }
-  return { granularity, from: toIsoDate(addDays(today, -6)), to: toIsoDate(today) };
+  return clampToDataStart(filter, minDate);
 }
 
 /**

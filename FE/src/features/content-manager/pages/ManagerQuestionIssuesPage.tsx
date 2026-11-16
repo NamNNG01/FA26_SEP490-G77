@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import { Alert } from '@/components/ui/Alert';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -26,9 +27,12 @@ export function ManagerQuestionIssuesPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
-  const load = useCallback(async (targetPage = page, selectedFilters = appliedFilters) => {
-    setBusy(true);
-    setError('');
+  /** `quiet` = shared auto-refresh: no busy state, and a failure keeps the queue on screen. */
+  const load = useCallback(async (targetPage = page, selectedFilters = appliedFilters, quiet = false) => {
+    if (!quiet) {
+      setBusy(true);
+      setError('');
+    }
     try {
       const query: Record<string, string | number> = { page: targetPage, size: 20, sort: `${sortKey},${sortDir}` };
       Object.entries(selectedFilters).forEach(([key, value]) => {
@@ -36,13 +40,14 @@ export function ManagerQuestionIssuesPage() {
       });
       setList(await questionIssueService.managerList(query));
     } catch (e) {
-      setError(getApiErrorMessage(e, 'Could not load the issue queue.'));
+      if (!quiet) setError(getApiErrorMessage(e, 'Could not load the issue queue.'));
     } finally {
-      setBusy(false);
+      if (!quiet) setBusy(false);
     }
   }, [appliedFilters, page, sortDir, sortKey]);
 
   useEffect(() => { void load(page, appliedFilters); }, [load]);
+  useAutoRefresh(() => void load(page, appliedFilters, true));
 
   useEffect(() => {
     const changed = Object.keys(filters).some(key => filters[key as keyof typeof filters] !== appliedFilters[key as keyof typeof appliedFilters]);

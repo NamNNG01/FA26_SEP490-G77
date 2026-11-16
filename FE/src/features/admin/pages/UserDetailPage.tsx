@@ -7,6 +7,7 @@ import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { Button } from '@/components/ui/Button';
 import { Table, type TableColumn } from '@/components/ui/Table';
 import { Modal } from '@/components/ui/Modal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Skeleton } from '@/components/ui/Skeleton';
@@ -15,6 +16,8 @@ import { Icon } from '@/assets/icons';
 import { useToast } from '@/components/ui/ToastHost';
 import { getApiErrorMessage } from '@/utils/apiError';
 import { ROUTES } from '@/app/routes';
+import { adminSubscriptionPlanService, type AdminSubscriptionPlan } from '@/services/adminSubscriptionPlan.service';
+import { activeSubscription, formatPlanDate } from '../components/SubscriptionCell';
 import {
   adminUserService,
   type AdminUserDetail,
@@ -54,7 +57,28 @@ function scoreLabel(score: number | null): string | null {
   return score == null ? null : String(Number(score));
 }
 
-type EditForm = { fullName: string; email: string; role: AdminUserRole; status: AdminUserStatus };
+/** `planId` '' = the Free plan; `endDate` is YYYY-MM-DD and only used with a paid plan. */
+type EditForm = { fullName: string; email: string; role: AdminUserRole; status: AdminUserStatus; planId: string; endDate: string };
+
+/** Local calendar date as YYYY-MM-DD (what <input type="date"> reads and writes). */
+function toDateInput(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+/** "Premium · until Dec 17, 2026", or "Free" without an active paid plan. */
+function subscriptionLabel(p: AdminUserDetail): string {
+  const active = activeSubscription(p.subscription);
+  if (!active) return 'Free';
+  const until = formatPlanDate(active.endDate);
+  return until ? `${active.planName} · until ${until}` : active.planName;
+}
+
+function addDays(days: number): Date {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return date;
+}
 
 /** Skeleton of the detail layout shown while the profile loads. */
 function UserDetailSkeleton() {
@@ -107,9 +131,14 @@ export function UserDetailPage({ onNavigate, params: paramsProp }: { onNavigate?
   const [notFound, setNotFound] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editOpen, setEditOpen] = useState(false);
-  const [form, setForm] = useState<EditForm>({ fullName: '', email: '', role: 'STUDENT', status: 'ACTIVE' });
+  const [form, setForm] = useState<EditForm>({ fullName: '', email: '', role: 'STUDENT', status: 'ACTIVE', planId: '', endDate: '' });
+  /** Paid plans for the subscription picker; null while loading. */
+  const [plans, setPlans] = useState<AdminSubscriptionPlan[] | null>(null);
+  const [plansError, setPlansError] = useState<string | null>(null);
+  const [endDateError, setEndDateError] = useState<string | undefined>();
   const [saving, setSaving] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
   const [changingStatus, setChangingStatus] = useState(false);
 
   // Only ever render the profile that belongs to the id in the URL.
@@ -146,10 +175,33 @@ export function UserDetailPage({ onNavigate, params: paramsProp }: { onNavigate?
     else navigate(ROUTES.adminUsers);
   };
 
+  /** The subscription the form started from, to send UM-07 only when it changed. */
+  const initialPlan = (p: AdminUserDetail) => {
+    const active = activeSubscription(p.subscription);
+    return { planId: active ? String(active.planId) : '', endDate: active?.endDate ? toDateInput(new Date(active.endDate)) : '' };
+  };
+
   const openEdit = () => {
     if (!profile) return;
-    setForm({ fullName: profile.fullName, email: profile.email, role: profile.role, status: profile.status });
+    setForm({ fullName: profile.fullName, email: profile.email, role: profile.role, status: profile.status, ...initialPlan(profile) });
+    setEndDateError(undefined);
     setEditOpen(true);
+    setPlansError(null);
+    const currentPlanId = activeSubscription(profile.subscription)?.planId;
+    adminSubscriptionPlanService.listAll()
+      // Paid plans that are on sale; a turned-off plan only when it is the student's current one,
+      // so the form still shows what they have.
+      .then(all => setPlans(all
+        .filter(plan => plan.price > 0 && (plan.isActive || plan.planId === currentPlanId))
+        .sort((a, b) => a.sortOrder - b.sortOrder)))
+      .catch(err => { setPlans([]); setPlansError(getApiErrorMessage(err, 'Could not load subscription plans.')); });
+  };
+
+  const choosePlan = (planId: string) => {
+    const plan = plans?.find(p => String(p.planId) === planId);
+    // A newly picked paid plan runs for its usual length from today; Free has no end date.
+    setForm(prev => ({ ...prev, planId, endDate: plan ? toDateInput(addDays(plan.durationDays)) : '' }));
+    setEndDateError(undefined);
   };
 
   const saveEdit = async (event: React.FormEvent) => {
@@ -161,16 +213,35 @@ export function UserDetailPage({ onNavigate, params: paramsProp }: { onNavigate?
       toast.error('Full name and email are required.');
       return;
     }
+    const start = initialPlan(profile);
+    const subscriptionChanged = form.role === 'STUDENT' && (form.planId !== start.planId || (form.planId !== '' && form.endDate !== start.endDate));
+    if (subscriptionChanged && form.planId !== '') {
+      if (!form.endDate) { setEndDateError('Choose when the plan ends.'); return; }
+      if (form.endDate < toDateInput(new Date())) { setEndDateError('The end date cannot be in the past.'); return; }
+    }
     setSaving(true);
     try {
       await adminUserService.update(profile.userId, { fullName, email, role: form.role, status: form.status });
-      toast.success('User updated.');
-      setEditOpen(false);
-      await load();
     } catch (err) {
       toast.error(getApiErrorMessage(err, 'Could not update this user.'));
+      setSaving(false);
+      return;
+    }
+    try {
+      if (subscriptionChanged) {
+        await adminUserService.setSubscription(profile.userId, {
+          planId: form.planId ? Number(form.planId) : null,
+          endDate: form.planId ? form.endDate : null,
+        });
+      }
+      toast.success('User updated.');
+      setEditOpen(false);
+    } catch (err) {
+      // The profile is saved; keep the dialog open so the plan can be retried.
+      toast.error(getApiErrorMessage(err, 'The profile was saved, but the subscription could not be changed.'));
     } finally {
       setSaving(false);
+      await load();
     }
   };
 
@@ -184,6 +255,7 @@ export function UserDetailPage({ onNavigate, params: paramsProp }: { onNavigate?
       toast.error(getApiErrorMessage(err, 'Could not send the password reset email.'));
     } finally {
       setResetting(false);
+      setResetConfirmOpen(false);
     }
   };
 
@@ -214,7 +286,7 @@ export function UserDetailPage({ onNavigate, params: paramsProp }: { onNavigate?
           <h3 className="text-lg font-semibold text-content mb-1.5">User not found</h3>
           <p className="text-sm text-content-soft mb-6">No account matches this link. It may have been removed, or the address may be wrong.</p>
           <Button variant="outline" icon={<Icon.ChevronLeft className="w-4 h-4" />} onClick={backToUsers}>
-            Back to User List
+            Back to User Management
           </Button>
         </div>
       </div>
@@ -229,13 +301,15 @@ export function UserDetailPage({ onNavigate, params: paramsProp }: { onNavigate?
         </div>
         <div className="mt-4 flex justify-center">
           <Button variant="ghost" icon={<Icon.ChevronLeft className="w-4 h-4" />} onClick={backToUsers}>
-            Back to User List
+            Back to User Management
           </Button>
         </div>
       </div>
     );
   }
 
+  // Learning stats and exam attempts only exist for students.
+  const isStudent = profile.role === 'STUDENT';
   const attemptRows = profile.recentAttempts.map(attempt => ({ ...attempt, id: attempt.attemptId }));
   const attemptColumns: TableColumn[] = [
     { key: 'examTitle', label: 'Exam Name', render: (row: Record<string, unknown>) => (
@@ -269,7 +343,7 @@ export function UserDetailPage({ onNavigate, params: paramsProp }: { onNavigate?
 
   return (
     <div className="p-8 space-y-5">
-      <Breadcrumb items={[{ label: 'User List', onClick: backToUsers }, { label: profile.fullName }]} />
+      <Breadcrumb items={[{ label: 'User Management', onClick: backToUsers }, { label: profile.fullName }]} />
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
         {/* Left (75%): profile, learning stats, recent exam attempts */}
@@ -296,6 +370,7 @@ export function UserDetailPage({ onNavigate, params: paramsProp }: { onNavigate?
                 { label: 'Status', value: statusLabel(profile.status) },
                 { label: 'Date Joined', value: formatDateTime(profile.createdAt) ?? '—' },
                 { label: 'Last Login', value: formatDateTime(profile.lastLoginAt) ?? '—' },
+                ...(isStudent ? [{ label: 'Subscription', value: subscriptionLabel(profile) }] : []),
               ].map(f => (
                 <div key={f.label} className="min-w-0">
                   <p className="text-xs text-content-subtle">{f.label}</p>
@@ -305,6 +380,7 @@ export function UserDetailPage({ onNavigate, params: paramsProp }: { onNavigate?
             </div>
           </div>
 
+          {isStudent && <>
           {/* Learning Statistics */}
           <div>
             <h3 className="text-lg font-semibold text-content mb-3">Learning Statistics</h3>
@@ -332,6 +408,7 @@ export function UserDetailPage({ onNavigate, params: paramsProp }: { onNavigate?
               emptyState="No exam attempts yet."
             />
           </div>
+          </>}
         </div>
 
         {/* Right (25%): sticky sidebar */}
@@ -353,7 +430,7 @@ export function UserDetailPage({ onNavigate, params: paramsProp }: { onNavigate?
           <div className="card p-5 space-y-2">
             <h4 className="text-base font-semibold text-content mb-1">Actions</h4>
             <Button icon={<Icon.Edit className="w-4 h-4" />} className="w-full justify-center" onClick={openEdit}>Edit User</Button>
-            <Button variant="outline" icon={<Icon.Lock className="w-4 h-4" />} className="w-full justify-center" loading={resetting} disabled={resetting} onClick={() => void resetPassword()}>Reset Password</Button>
+            <Button variant="outline" icon={<Icon.Lock className="w-4 h-4" />} className="w-full justify-center" disabled={resetting} onClick={() => setResetConfirmOpen(true)}>Reset Password</Button>
             <Button
               variant={profile.status === 'ACTIVE' ? 'outline' : 'primary'}
               icon={profile.status === 'ACTIVE' ? <Icon.EyeOff className="w-4 h-4" /> : <Icon.CheckCircle className="w-4 h-4" />}
@@ -367,7 +444,7 @@ export function UserDetailPage({ onNavigate, params: paramsProp }: { onNavigate?
           </div>
 
           <Button variant="ghost" icon={<Icon.ChevronLeft className="w-4 h-4" />} className="w-full justify-center" onClick={backToUsers}>
-            Back to User List
+            Back to User Management
           </Button>
         </div>
       </div>
@@ -388,12 +465,52 @@ export function UserDetailPage({ onNavigate, params: paramsProp }: { onNavigate?
             onChange={v => setForm(prev => ({ ...prev, status: v as AdminUserStatus }))}
             options={[{ label: 'Active', value: 'ACTIVE' }, { label: 'Inactive', value: 'INACTIVE' }]}
           />
+          {form.role === 'STUDENT' && (
+            <div className="space-y-3 pt-4 border-t border-line-soft">
+              <div>
+                <p className="text-sm font-semibold text-content">Subscription</p>
+                <p className="text-xs text-content-subtle mt-0.5">Granted by an admin, free of charge.</p>
+              </div>
+              <Select
+                label="Plan"
+                value={form.planId}
+                onChange={choosePlan}
+                disabled={plans == null}
+                error={plansError ?? undefined}
+                options={[
+                  { label: plans == null ? 'Loading plans…' : 'Free', value: '' },
+                  ...(plans ?? []).map(plan => ({ label: plan.isActive ? plan.planName : `${plan.planName} (hidden)`, value: String(plan.planId) })),
+                ]}
+              />
+              {form.planId !== '' && (
+                <Input
+                  label="End Date"
+                  type="date"
+                  required
+                  min={toDateInput(new Date())}
+                  value={form.endDate}
+                  error={endDateError}
+                  onChange={e => { setForm(prev => ({ ...prev, endDate: e.target.value })); setEndDateError(undefined); }}
+                />
+              )}
+            </div>
+          )}
           <div className="flex justify-end gap-2 pt-4 border-t border-line-soft">
             <Button type="button" variant="outline" onClick={() => setEditOpen(false)} disabled={saving}>Cancel</Button>
             <Button type="submit" variant="primary" loading={saving} disabled={saving}>Save Changes</Button>
           </div>
         </form>
       </Modal>
+
+      <ConfirmDialog
+        open={resetConfirmOpen}
+        onClose={() => setResetConfirmOpen(false)}
+        onConfirm={() => void resetPassword()}
+        title="Reset password?"
+        description={<>A password reset email will be sent to <span className="font-medium text-content">{profile.email}</span>.</>}
+        confirmLabel="Send reset email"
+        loading={resetting}
+      />
     </div>
   );
 }
