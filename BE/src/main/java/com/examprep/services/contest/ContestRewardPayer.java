@@ -59,7 +59,7 @@ public class ContestRewardPayer {
         prizes.forEach(r -> winning.put(r.getRankPosition(), locked.get(r.getDiscount().getDiscountId())));
         List<Issue> issues = rules.issues(winning, now, true);
         if (!issues.isEmpty()) {
-            throw new BaseException(ResponseCode.CONFLICT, "Không thể trả thưởng do có discount không khả dụng",
+            throw new BaseException(ResponseCode.CONFLICT, "Cannot pay rewards: some discounts are unavailable",
                     Map.of("code", "REWARD_PAYMENT_BLOCKED", "issues", issues));
         }
 
@@ -72,8 +72,8 @@ public class ContestRewardPayer {
             p.setRewardClaimed(true);
             p.setRewardUserDiscount(voucher);
             p.setRewardGrantedAt(now);
-            manager.notify(p.getUser(), contest, "Chúc mừng bạn đạt hạng " + prize.getKey() + " – " + contest.getTitle(),
-                    "Bạn nhận được mã giảm giá " + d.getCode() + " (" + valueText(d) + "). Xem trong mục Ưu đãi của tôi.", "CONTEST_REWARD");
+            manager.notify(p.getUser(), contest, "Congratulations, you placed #" + prize.getKey() + " – " + contest.getTitle(),
+                    "You received discount code " + d.getCode() + " (" + valueText(d) + "). See it under My Discounts.", "CONTEST_REWARD");
             winners.add(new PaidWinner(prize.getKey(), p.getUser().getUserId(), p.getUser().getFullName(),
                     new WinnerDiscount(d.getDiscountId(), d.getCode())));
         }
@@ -84,9 +84,9 @@ public class ContestRewardPayer {
         return new PayResult(contestId, REWARDED, now, winners.size(), winners);
     }
 
-    /** "50%" or "30000đ" (section 6.5). */
+    /** "50%" or "30000 VND" (section 6.5). */
     private static String valueText(Discount d) {
         java.math.BigDecimal value = ContestRules.value(d);
-        return (value == null ? "0" : value.toPlainString()) + ("PERCENT".equals(d.getDiscountType()) ? "%" : "đ");
+        return (value == null ? "0" : value.toPlainString()) + ("PERCENT".equals(d.getDiscountType()) ? "%" : " VND");
     }
 }

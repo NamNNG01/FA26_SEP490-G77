@@ -213,7 +213,7 @@ public class QuestionIssueService {
                 if (note == null) throw invalid("note", "A reason is required to reject a ticket");
                 close(issue, actor, QuestionIssue.REJECTED, null, note);
                 log(issue, actor, "REJECTED", from, target, note);
-                notifyReporters(issue, "Báo cáo câu hỏi #" + issue.getQuestion().getQuestionId() + " không được chấp nhận", note);
+                notifyReporters(issue, "Your report on question #" + issue.getQuestion().getQuestionId() + " was rejected", note);
             }
             default -> throw invalid("status", "status must be IN_PROGRESS or REJECTED; use the resolve or duplicate endpoint for the others");
         }
@@ -240,8 +240,8 @@ public class QuestionIssueService {
         close(issue, actor, QuestionIssue.DUPLICATE, null, note);
         log(issue, actor, "DUPLICATE", from, QuestionIssue.DUPLICATE, "Duplicate of #" + primary.getIssueId() + ": " + note);
         log(primary, actor, "DUPLICATE_LINKED", primary.getStatus(), primary.getStatus(), "Ticket #" + issue.getIssueId() + " marked as a duplicate");
-        notifyReporters(issue, "Báo cáo câu hỏi #" + issue.getQuestion().getQuestionId() + " đã được gộp",
-                "Báo cáo của bạn trùng với báo cáo #" + primary.getIssueId() + ". " + note);
+        notifyReporters(issue, "Your report on question #" + issue.getQuestion().getQuestionId() + " was merged",
+                "Your report duplicates report #" + primary.getIssueId() + ". " + note);
         return detail(issue);
     }
 
@@ -291,7 +291,7 @@ public class QuestionIssueService {
             log(issue, actor, "REGRADE_CREATED", QuestionIssue.RESOLVED, QuestionIssue.RESOLVED,
                     job.getTotalAnswers() + " answers wait for confirmation (job #" + job.getJobId() + ")");
         }
-        notifyReporters(issue, "Câu hỏi #" + question.getQuestionId() + " bạn báo cáo đã được sửa", note);
+        notifyReporters(issue, "Question #" + question.getQuestionId() + " you reported has been fixed", note);
         return new ResolveResult(detail(issue), job == null ? null : jobView(job));
     }
 
@@ -656,7 +656,7 @@ public class QuestionIssueService {
     }
 
     private static void checkPage(int page, int size) {
-        if (page < 0 || size < 1 || size > 100) throw invalid("size", "page must be >= 0 and size 1-100");
+        if (page < 0 || size < 1 || size > 100) throw invalid(page < 0 ? "page" : "size", "page must be >= 0 and size 1-100");
     }
 
     private static String like(String keyword) {
@@ -684,7 +684,7 @@ public class QuestionIssueService {
     }
 
     private static BaseException invalid(String field, String message) {
-        return new BaseException(ResponseCode.VALIDATION_ERROR, "Dữ liệu không hợp lệ",
+        return new BaseException(ResponseCode.VALIDATION_ERROR, "Validation failed",
                 Map.of("code", "VALIDATION_FAILED", "errors", List.of(Map.of("field", field, "message", message))));
     }
 }

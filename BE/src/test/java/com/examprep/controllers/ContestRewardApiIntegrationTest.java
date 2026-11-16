@@ -98,7 +98,7 @@ class ContestRewardApiIntegrationTest {
     }
 
     @Test void paysWinnersAndNotifies() throws Exception {
-        JsonNode data = data(pay(contest).andExpect(status().isOk()).andExpect(jsonPath("$.message").value("Đã trả thưởng cho 2 người thắng")));
+        JsonNode data = data(pay(contest).andExpect(status().isOk()).andExpect(jsonPath("$.message").value("Rewards paid to 2 winner(s)")));
         assertEquals("REWARDED", data.path("status").asText());
         assertEquals(2, data.path("rewardsGranted").asInt());
         assertEquals(1, data.path("winners").get(0).path("rank").asInt());
@@ -112,9 +112,9 @@ class ContestRewardApiIntegrationTest {
         assertEquals(contest.getContestId(), granted.get(0).getSourceId());
         List<String> titles = em.createQuery("select un.notification.title from UserNotification un where un.notification.type = 'CONTEST_REWARD' "
                 + "order by un.notification.notificationId", String.class).getResultList();
-        assertEquals(List.of("Chúc mừng bạn đạt hạng 1 – Weekly", "Chúc mừng bạn đạt hạng 2 – Weekly"), titles);
-        String content = em.createQuery("select n.content from Notification n where n.title like '%hạng 2%'", String.class).getSingleResult();
-        assertTrue(content.contains("TOP2-30K (30000đ)"), content);
+        assertEquals(List.of("Congratulations, you placed #1 – Weekly", "Congratulations, you placed #2 – Weekly"), titles);
+        String content = em.createQuery("select n.content from Notification n where n.title like '%placed #2%'", String.class).getSingleResult();
+        assertTrue(content.contains("TOP2-30K (30000 VND)"), content);
         ContestParticipant paid = em.find(ContestParticipant.class, winner.getParticipantId());
         assertTrue(paid.getRewardClaimed());
         assertNotNull(paid.getRewardGrantedAt());
@@ -183,7 +183,7 @@ class ContestRewardApiIntegrationTest {
         ranker.rankDue();
         em.flush();
         JsonNode data = data(batch("[" + late.getContestId() + "," + early.getContestId() + "]").andExpect(status().isOk())
-                .andExpect(jsonPath("$.message").value("Đã trả thưởng 1/2 contest")));
+                .andExpect(jsonPath("$.message").value("Rewards paid for 1/2 contest(s)")));
         assertEquals(2, data.path("total").asInt());
         assertEquals(1, data.path("succeeded").asInt());
         assertEquals(1, data.path("failed").asInt());

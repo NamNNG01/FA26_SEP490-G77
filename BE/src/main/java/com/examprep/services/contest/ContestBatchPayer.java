@@ -67,7 +67,7 @@ public class ContestBatchPayer {
         }
         int succeeded = (int) rows.stream().filter(BatchRow::success).count();
         return new Outcome(new BatchResult(rows.size(), succeeded, rows.size() - succeeded, rows),
-                "Đã trả thưởng " + succeeded + "/" + rows.size() + " contest");
+                "Rewards paid for " + succeeded + "/" + rows.size() + " contest(s)");
     }
 
     @SuppressWarnings("unchecked")

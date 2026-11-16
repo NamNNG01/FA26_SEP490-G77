@@ -15,7 +15,7 @@ public final class PersonalizationDtos {
                                @Min(10) @Max(30) Integer questionCount,
                                @Min(10) @Max(60) Integer durationMinutes,
                                @Size(max = 2000) String context,
-                               /** Name the student gives the exam; blank falls back to "Đề luyện thông minh". */
+                               /** Name the student gives the exam; blank falls back to "Smart practice exam". */
                                @Size(max = 255) String title) {}
 
     @JsonInclude(JsonInclude.Include.ALWAYS)

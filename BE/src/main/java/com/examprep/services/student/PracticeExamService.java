@@ -107,7 +107,7 @@ public class PracticeExamService {
         }
 
         String examType = essay ? "ESSAY" : "QUIZ";
-        String title = titleOr(request.title(), "Đề luyện tùy chọn - " + (essay ? "Tự luận" : "Trắc nghiệm"));
+        String title = titleOr(request.title(), "Custom practice - " + (essay ? "Essay" : "Multiple choice"));
 
         // Build practice_config JSON
         String practiceConfig = writePracticeConfig(examType, totalCount, request.difficulty(),

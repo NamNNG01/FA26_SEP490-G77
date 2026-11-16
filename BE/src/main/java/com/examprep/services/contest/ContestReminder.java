@@ -53,8 +53,8 @@ public class ContestReminder {
                 || !contest.getStartTime().isAfter(now)) return;
         long minutes = (Duration.between(now, contest.getStartTime()).getSeconds() + 59) / 60; // published late: fewer than 5
         for (ContestParticipant p : participants.findByContestContestIdOrderByParticipantIdAsc(id)) {
-            manager.notify(p.getUser(), contest, "Cuộc thi sắp bắt đầu – " + contest.getTitle(),
-                    "Cuộc thi \"" + contest.getTitle() + "\" sẽ bắt đầu sau " + minutes + " phút.", "CONTEST_REMINDER");
+            manager.notify(p.getUser(), contest, "Contest starting soon – " + contest.getTitle(),
+                    "Contest \"" + contest.getTitle() + "\" starts in " + minutes + " minutes.", "CONTEST_REMINDER");
         }
         contest.setReminderSentAt(now);
     }

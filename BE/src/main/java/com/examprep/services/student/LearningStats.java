@@ -27,7 +27,7 @@ public class LearningStats {
 
     private final LearningStatsRepository repository;
 
-    /** categoryId/name are the module's id/title; null/"Chung" for questions outside any module. Counts are distinct questions. */
+    /** categoryId/name are the module's id/title; null/"General" for questions outside any module. Counts are distinct questions. */
     public record ModuleStat(Long categoryId, String name, int accuracy, int questionCount, int correctCount, String trend) {
         public boolean enoughData() { return questionCount >= MIN_QUESTIONS; }
     }
@@ -59,7 +59,7 @@ public class LearningStats {
         Function<Verdict, Object> byModule = v -> v.moduleId() == null ? "none" : v.moduleId();
         Map<Object, int[]> moduleRecent = tally(recent, byModule), moduleBefore = tally(before, byModule);
         Map<Object, String> names = new HashMap<>();
-        period.forEach(v -> names.put(byModule.apply(v), v.moduleName() == null ? "Chung" : v.moduleName()));
+        period.forEach(v -> names.put(byModule.apply(v), v.moduleName() == null ? "General" : v.moduleName()));
         List<ModuleStat> modules = new ArrayList<>();
         tally(period, byModule).forEach((key, t) -> modules.add(new ModuleStat(key instanceof Long id ? id : null, names.get(key),
                 percent(t[1], t[0]), t[0], t[1], trend(moduleRecent.get(key), moduleBefore.get(key)))));

@@ -20,7 +20,7 @@ public final class PracticeDtos {
                          @Pattern(regexp = "QUIZ|ESSAY") String examType,
                          @Size(max = 50) List<@NotNull @Positive Long> categoryIds,
                          @Pattern(regexp = "EASY|MEDIUM|HARD") String difficulty,
-                         /** Name the student gives the exam; blank falls back to "Đề luyện tùy chọn - <type>". */
+                         /** Name the student gives the exam; blank falls back to "Custom practice - <type>". */
                          @Size(max = 255) String title,
                          /** How the student takes it: EXAM (default, saved as PRACTICE_EXAM) or PRACTICE (saved as PRACTICE).
                           *  durationMinutes is required when mode is EXAM (or omitted); PRACTICE mode may omit it. */

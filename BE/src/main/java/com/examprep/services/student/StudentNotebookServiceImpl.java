@@ -224,10 +224,10 @@ public class StudentNotebookServiceImpl implements StudentNotebookService {
                 .orElseThrow(() -> new ResourceNotFoundException("Course not found"));
 
         String title = switch (type) {
-            case "bookmarked" -> "Ôn câu đã lưu";
-            case "all" -> "Ôn tập sổ lỗi";
-            default -> "Ôn câu sai";
-        } + " - " + ("ESSAY".equals(examType) ? "Tự luận" : "Trắc nghiệm");
+            case "bookmarked" -> "Saved questions review";
+            case "all" -> "Mistake notebook review";
+            default -> "Wrong answers review";
+        } + " - " + ("ESSAY".equals(examType) ? "Essay" : "Multiple choice");
 
         String practiceConfig = writePracticeConfig(examType, size, null, List.of());
 

@@ -15,7 +15,7 @@ public final class MaterialRequests {
             @Pattern(regexp = "EASY|MEDIUM|HARD") String difficulty,
             Long sourceLessonId,
             Long courseId,
-            /** Name the student gives the quiz; blank falls back to "Quiz từ tài liệu <material>". */
+            /** Name the student gives the quiz; blank falls back to "Quiz from material <material>". */
             @Size(max = 255) String title,
             /** Free-text guidance for the AI (focus topics, question style). */
             @Size(max = 2000) String context,

@@ -52,7 +52,7 @@ class QuestionReviewRecorderTest {
         recorder.record(5L, choice, false, "{\"selectedOptionIds\":[]}");
         assertEquals(0, r.getCorrectStreak());
         assertEquals(4, r.getWrongCount());
-        assertEquals("(bỏ trống)", r.getLastWrongChoice());
+        assertEquals("(blank)", r.getLastWrongChoice());
         recorder.record(5L, choice, true, null);
         recorder.record(5L, choice, true, null);
         assertEquals("ANSWERED_BOOKMARKED", r.getStatus());
@@ -72,7 +72,7 @@ class QuestionReviewRecorderTest {
         assertEquals("(1) int / Integer; (2) x", recorder.describe(blank, "{\"blanks\":{\"1\":[\"int\",\"Integer\"],\"2\":\"x\"}}"));
         assertEquals("a → 1; b → 2", recorder.describe(match, "{\"matches\":[{\"left\":\"a\",\"right\":\"1\"},{\"left\":\"b\",\"right\":\"2\"}]}"));
         assertEquals("x".repeat(500), recorder.describe(essay, "{\"text\":\"" + "x".repeat(600) + "\"}"));
-        assertEquals("(bản vẽ)", recorder.describe(diagram, "{\"drawioXml\":\"<mxfile/>\"}"));
+        assertEquals("(drawing)", recorder.describe(diagram, "{\"drawioXml\":\"<mxfile/>\"}"));
         assertEquals("legacy", recorder.describe(essay, "legacy"));
     }
 

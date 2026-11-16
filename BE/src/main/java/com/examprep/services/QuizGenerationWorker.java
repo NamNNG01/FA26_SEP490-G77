@@ -336,7 +336,7 @@ public class QuizGenerationWorker {
         Instant now = Instant.now();
         int count = generated.questions().size();
         String title = claimed.title() != null ? claimed.title()
-                : "Quiz từ tài liệu " + (claimed.docTitle() == null ? "" : claimed.docTitle()).strip();
+                : "Quiz from material " + (claimed.docTitle() == null ? "" : claimed.docTitle()).strip();
         if (title.length() > 250) {
             title = title.substring(0, 250);
         }

@@ -38,7 +38,7 @@ export interface SmartPracticeRequest {
   durationMinutes?: number;
   /** Free-text guidance for the AI (focus topics, weak points, question style). */
   context?: string;
-  /** Name the student gives the practice exam; blank falls back to "Đề luyện thông minh". */
+  /** Name the student gives the practice exam; blank falls back to "Smart practice exam". */
   title?: string;
 }
 
