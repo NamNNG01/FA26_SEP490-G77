@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { Pagination } from '@/components/ui/Pagination';
 import { Select } from '@/components/ui/Select';
+import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { Tabs } from '@/components/ui/Tabs';
 import { Icon } from '@/assets/icons';
 import { DiscussionImageAttachment } from '@/components/common/DiscussionImageAttachment';
@@ -91,7 +92,7 @@ function DiscussionList() {
     <PageTitle title="Community" subtitle="Ask questions, share tips, and learn with your course community." action={tab !== 'Announcements' ? <Button icon={<Icon.Plus className="h-4 w-4" />} onClick={() => setCreateOpen(true)}>Create post</Button> : undefined} />
     <Tabs tabs={['Discussions', 'Tips', 'Announcements']} active={tab} onChange={chooseTab} variant="underline" />
     <div className="card flex flex-wrap items-center gap-3 p-4">
-      {tab === 'Tips' && <Select aria-label="Filter by course" className="w-full sm:w-56" value={courseId} options={courseOptions} onChange={value => { setCourseId(value); setPage(0); }} />}
+      {tab === 'Tips' && <SearchableSelect aria-label="Filter by course" className="w-full sm:w-56" value={courseId} options={courseOptions} onChange={value => { setCourseId(value); setPage(0); }} placeholder="All courses" searchPlaceholder="Search courses…" emptyText="No courses found" />}
       {tab === 'Discussions' && <>
         <Input className="w-full sm:w-72" aria-label="Search discussions" placeholder="Search discussions…" value={search} onChange={event => { setSearch(event.target.value); setPage(0); }} />
       <Select aria-label="Sort discussions" className="w-full sm:w-52" value={sort} options={[{ label: 'Latest', value: 'latest' }, { label: 'Most commented', value: 'mostCommented' }, { label: 'Most upvoted', value: 'mostUpvoted' }]} onChange={value => { setSort(value as DiscussionSort); setPage(0); }} />
@@ -157,7 +158,7 @@ function CreateDiscussionModal({ open, courses, defaultTag, onClose, onCreated }
   };
   return <Modal open={open} onClose={onClose} title="Create a community post" size="lg" error={error && <Alert type="error" message={error} />} footer={<><Button variant="outline" onClick={onClose}>Cancel</Button><Button form="create-discussion-form" type="submit" loading={busy}>Publish</Button></>}>
     <form id="create-discussion-form" onSubmit={submit} className="space-y-4">
-      <Select label="Course" value={courseId} options={[{ label: 'Choose an enrolled course', value: '' }, ...courses.map(course => ({ label: course.title, value: String(course.courseId) }))]} onChange={setCourseId} />
+      <SearchableSelect label="Course" value={courseId} options={[{ label: 'Choose an enrolled course', value: '' }, ...courses.map(course => ({ label: course.title, value: String(course.courseId) }))]} onChange={setCourseId} placeholder="Choose a course" searchPlaceholder="Search courses…" emptyText="No enrolled courses found" />
       <Select label="Post type" value={tag} options={[{ label: 'Question', value: 'question' }, { label: 'Tip', value: 'tip' }]} onChange={value => setTag(value as 'question' | 'tip')} />
       <Input label="Title" maxLength={200} value={title} onChange={event => setTitle(event.target.value)} placeholder="What would you like to discuss?" />
       <label className="flex flex-col gap-1.5 text-sm font-medium text-content-secondary">Details

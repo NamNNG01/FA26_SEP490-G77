@@ -3,6 +3,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
+import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { useToast } from '@/components/ui/ToastHost';
 import { Icon } from '@/assets/icons';
 import { courseService, type CourseModuleResponse, type CourseSummaryItem } from '@/services/course.service';
@@ -147,13 +148,15 @@ export function DeckInfoFields({ value, onChange, errors = {}, courses, coursesL
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           {/* A module belongs to one course: changing the course clears it. */}
-          <Select label={allowNoCourse ? 'Course' : 'Course *'} value={value.courseId}
+          <SearchableSelect label={allowNoCourse ? 'Course' : 'Course *'} value={value.courseId}
             onChange={v => onChange(v === value.courseId ? { courseId: v } : { courseId: v, moduleId: NO_MODULE })} disabled={coursesLoading} invalid={Boolean(errors.courseId)}
-            options={coursesLoading ? [{ label: 'Loading courses…', value: value.courseId }] : courseOptions} />
+            options={coursesLoading ? [{ label: 'Loading courses…', value: value.courseId }] : courseOptions}
+            placeholder="Choose a course" searchPlaceholder="Search courses…" emptyText="No courses found" />
           {errors.courseId && <p className="text-xs text-danger mt-1">{errors.courseId}</p>}
         </div>
-        <Select label="Module" value={value.moduleId} onChange={v => onChange({ moduleId: v })}
-          disabled={noCourse || modulesLoading || modules.length === 0} options={moduleOptions} />
+        <SearchableSelect label="Module" value={value.moduleId} onChange={v => onChange({ moduleId: v })}
+          disabled={noCourse || modulesLoading || modules.length === 0} options={moduleOptions}
+          placeholder={noCourse ? 'Pick a course first' : 'No module'} searchPlaceholder="Search modules…" emptyText="No modules found" />
         <Select label="Visibility" value={value.isPublic ? 'public' : 'private'} onChange={v => onChange({ isPublic: v === 'public' })}
           options={[{ label: 'Private', value: 'private' }, { label: 'Public', value: 'public' }]} />
       </div>

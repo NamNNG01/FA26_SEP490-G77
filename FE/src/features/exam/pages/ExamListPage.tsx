@@ -3,6 +3,7 @@ import { useSearchParams, useNavigate } from "react-router";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Select } from "@/components/ui/Select";
+import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { Dropdown } from "@/components/ui/Dropdown";
 import { Modal } from "@/components/ui/Modal";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
@@ -591,17 +592,23 @@ export function ExamListPage() {
           aria-label="Search exams"
         />
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <Select
+          <SearchableSelect
             label="Course"
             value={selectedCourse}
             onChange={handleCourseChange}
+            placeholder="All courses"
+            searchPlaceholder="Search courses…"
+            emptyText="No courses found"
             options={[{ label: 'All courses', value: '' }, ...courses.map(course => ({ label: course.title, value: String(course.courseId) }))]}
           />
-          <Select
+          <SearchableSelect
             label="Module"
             value={selectedModule}
             disabled={!selectedCourse}
             onChange={handleModuleChange}
+            placeholder={selectedCourse ? 'All modules' : 'Select a course first'}
+            searchPlaceholder="Search modules…"
+            emptyText="No modules found"
             options={[{ label: selectedCourse ? 'All modules' : 'Select a course first', value: '' }, ...modules.map(module => ({ label: module.title, value: String(module.moduleId) }))]}
           />
           <Select

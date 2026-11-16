@@ -9,7 +9,7 @@ const GAP = 4;
  * The menu is portalled to <body> (like <Dropdown>) so scroll containers
  * don't clip it; it closes on outside click, Escape, scroll or resize.
  */
-export function MultiSelect<T extends string>({ label, options, value, onChange, placeholder = 'Select…', error, disabled, className = '' }: {
+export function MultiSelect<T extends string>({ label, options, value, onChange, placeholder = 'Select…', error, disabled, className = '', searchable = false, searchPlaceholder = 'Search…' }: {
   label?: string;
   options: { label: string; value: T }[];
   value: T[];
@@ -18,15 +18,21 @@ export function MultiSelect<T extends string>({ label, options, value, onChange,
   error?: string;
   disabled?: boolean;
   className?: string;
+  searchable?: boolean;
+  searchPlaceholder?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
   const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
   const id = useId();
 
   useEffect(() => {
     if (!open) return;
+    setQuery('');
+    if (searchable) requestAnimationFrame(() => searchRef.current?.focus());
     const onDown = (e: MouseEvent) => {
       const t = e.target as Node;
       if (triggerRef.current?.contains(t) || menuRef.current?.contains(t)) return;
@@ -67,6 +73,9 @@ export function MultiSelect<T extends string>({ label, options, value, onChange,
     onChange(options.map(o => o.value).filter(o => next.includes(o)));
   };
 
+  const filteredOptions = searchable && query.trim()
+    ? options.filter(option => option.label.toLowerCase().includes(query.trim().toLowerCase()))
+    : options;
   const selected = options.filter(o => value.includes(o.value));
   const summary = selected.length === 0 ? placeholder
     : selected.length <= 2 ? selected.map(o => o.label).join(', ')
@@ -101,21 +110,38 @@ export function MultiSelect<T extends string>({ label, options, value, onChange,
           aria-multiselectable="true"
           aria-labelledby={id}
           style={{ position: 'fixed', top: pos?.top ?? 0, left: pos?.left ?? 0, minWidth: pos?.width ?? 0, visibility: pos ? 'visible' : 'hidden' }}
-          className="bg-surface rounded-[10px] border border-line shadow-lg z-50 py-1 max-h-72 overflow-y-auto"
+          className={`bg-surface rounded-[10px] border border-line shadow-lg z-50 max-h-72 ${searchable ? 'flex flex-col overflow-hidden' : 'py-1 overflow-y-auto'}`}
         >
-          <div className="flex items-center justify-between gap-3 px-3 py-1.5 border-b border-line-soft text-xs">
-            <button type="button" className="font-medium text-brand-ink hover:underline" onClick={() => onChange(options.map(o => o.value))}>Select all</button>
-            <button type="button" className="text-content-soft hover:underline disabled:opacity-40" disabled={!value.length} onClick={() => onChange([])}>Clear</button>
+          {searchable && <div className="border-b border-line-soft p-2">
+            <input
+              type="search"
+              ref={searchRef}
+              value={query}
+              onChange={event => setQuery(event.target.value)}
+              placeholder={searchPlaceholder}
+              aria-label={searchPlaceholder}
+              className="h-9 w-full rounded-lg border border-line bg-surface px-3 text-sm text-content outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20"
+            />
+          </div>}
+          <div className={searchable ? 'min-h-0 flex-1 overflow-y-auto py-1' : ''}>
+            <div className="flex items-center justify-between gap-3 px-3 py-1.5 border-b border-line-soft text-xs">
+              <button type="button" className="font-medium text-brand-ink hover:underline" onClick={() => {
+                const selectedValues = new Set(value);
+                filteredOptions.forEach(option => selectedValues.add(option.value));
+                onChange(options.map(option => option.value).filter(option => selectedValues.has(option)));
+              }}>Select all</button>
+              <button type="button" className="text-content-soft hover:underline disabled:opacity-40" disabled={!value.length} onClick={() => onChange([])}>Clear</button>
+            </div>
+            {filteredOptions.length ? filteredOptions.map(o => {
+              const checked = value.includes(o.value);
+              return (
+                <label key={o.value} role="option" aria-selected={checked} className="flex items-center gap-2.5 px-3 py-2 text-sm text-content-secondary hover:bg-surface-hover cursor-pointer">
+                  <input type="checkbox" checked={checked} onChange={() => toggle(o.value)} className="w-4 h-4 accent-brand-600" />
+                  {o.label}
+                </label>
+              );
+            }) : <p className="px-3 py-3 text-sm text-content-subtle">No matching options</p>}
           </div>
-          {options.map(o => {
-            const checked = value.includes(o.value);
-            return (
-              <label key={o.value} role="option" aria-selected={checked} className="flex items-center gap-2.5 px-3 py-2 text-sm text-content-secondary hover:bg-surface-hover cursor-pointer">
-                <input type="checkbox" checked={checked} onChange={() => toggle(o.value)} className="w-4 h-4 accent-brand-600" />
-                {o.label}
-              </label>
-            );
-          })}
         </div>,
         document.body,
       )}

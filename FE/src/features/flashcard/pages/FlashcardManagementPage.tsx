@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
+import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { Table, type TableColumn } from '@/components/ui/Table';
 import { Badge } from '@/components/ui/Badge';
 import { Dropdown } from '@/components/ui/Dropdown';
@@ -287,11 +288,13 @@ export function FlashcardManagementPage() {
           aria-label="Search flashcard decks"
         />
         {/* A module filter only makes sense within one course: changing the course clears it. */}
-        <Select aria-label="Filter by course" value={course} onChange={filterSetter(v => { setCourse(v); setModule(ALL); })}
+        <SearchableSelect aria-label="Filter by course" value={course} onChange={filterSetter(v => { setCourse(v); setModule(ALL); })}
           options={[{ label: 'All Courses', value: ALL }, ...courses.map(c => ({ label: c.title, value: String(c.courseId) }))]}
+          placeholder="All Courses" searchPlaceholder="Search courses…" emptyText="No courses found"
           className="w-full sm:w-48 lg:w-auto lg:min-w-0 lg:flex-[1.25]" />
-        <Select aria-label="Filter by module" value={module} onChange={filterSetter(setModule)} disabled={course === ALL}
+        <SearchableSelect aria-label="Filter by module" value={module} onChange={filterSetter(setModule)} disabled={course === ALL}
           options={[{ label: course === ALL ? 'All Modules (pick a course)' : 'All Modules', value: ALL }, ...modules.map(m => ({ label: m.title, value: String(m.moduleId) }))]}
+          placeholder={course === ALL ? 'Pick a course first' : 'All Modules'} searchPlaceholder="Search modules…" emptyText="No modules found"
           className="w-full sm:w-48 lg:w-auto lg:min-w-0 lg:flex-[1.25]" />
         <Select aria-label="Filter by visibility" value={visibility} onChange={filterSetter(setVisibility)}
           options={[{ label: 'All Visibility', value: ALL }, { label: 'Public', value: 'public' }, { label: 'Private', value: 'private' }]}

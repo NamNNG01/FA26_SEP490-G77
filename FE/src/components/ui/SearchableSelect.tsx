@@ -9,7 +9,7 @@ const GAP = 4;
  * narrow the list, ↑/↓ to move, Enter to pick, Escape to close. The menu is
  * portalled to <body> (like <MultiSelect>) so scroll containers don't clip it.
  */
-export function SearchableSelect({ label, options, value, onChange, onSearchChange, placeholder = 'Select…', searchPlaceholder = 'Search…', emptyText = 'No matches', disabled, className = '', showLabel = true, 'aria-label': ariaLabel }: {
+export function SearchableSelect({ label, options, value, onChange, onSearchChange, placeholder = 'Select…', searchPlaceholder = 'Search…', emptyText = 'No matches', disabled, invalid = false, error, className = '', showLabel = true, 'aria-label': ariaLabel }: {
   label?: string;
   options: { label: string; value: string }[];
   value: string;
@@ -19,6 +19,8 @@ export function SearchableSelect({ label, options, value, onChange, onSearchChan
   searchPlaceholder?: string;
   emptyText?: string;
   disabled?: boolean;
+  invalid?: boolean;
+  error?: string;
   className?: string;
   /** Whether to show the visible title above the dropdown (defaults to true). */
   showLabel?: boolean;
@@ -110,16 +112,18 @@ export function SearchableSelect({ label, options, value, onChange, onSearchChan
         aria-label={label && showLabel ? undefined : label ?? ariaLabel}
         aria-haspopup="listbox"
         aria-expanded={open}
+        aria-invalid={invalid || Boolean(error) || undefined}
         onClick={() => setOpen(o => !o)}
         onKeyDown={e => { if ((e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') && !open) { e.preventDefault(); setOpen(true); } }}
         title={selected?.label}
-        className={`relative w-full h-9 pl-3 pr-10 rounded-[10px] border border-line bg-surface text-base text-left truncate focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600 transition-all ${
+        className={`relative w-full h-9 pl-3 pr-10 rounded-[10px] border bg-surface text-base text-left truncate focus:outline-none focus:ring-2 transition-all ${invalid || error ? 'border-danger-solid focus:ring-danger-solid/20 focus:border-danger-solid' : 'border-line focus:ring-brand-600/20 focus:border-brand-600'} ${
           selected ? 'text-content' : 'text-content-subtle'
         } ${disabled ? 'cursor-not-allowed bg-surface-alt text-content-subtle' : 'cursor-pointer'}`}
       >
         {selected?.label ?? placeholder}
         <Icon.ChevronDown className={`absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-content-subtle pointer-events-none transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
+      {error && <p className="text-xs text-danger" role="alert">{error}</p>}
 
       {open && createPortal(
         <div

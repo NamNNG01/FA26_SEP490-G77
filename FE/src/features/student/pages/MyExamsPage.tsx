@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/Button';
 import { Table, type TableColumn } from '@/components/ui/Table';
 import { EmptyState } from '@/components/ui/Card';
 import { Select } from '@/components/ui/Select';
+import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { Badge, type BadgeVariant } from '@/components/ui/Badge';
 import { SearchInput } from '@/components/common/SearchInput';
 import { Icon } from '@/assets/icons';
@@ -374,11 +375,14 @@ export function MyExamsPage() {
             options={rows.some(r => r.hasCode) || kind === CODE_FILTER ? [...KIND_OPTIONS, CODE_OPTION] : KIND_OPTIONS}
             className="w-full sm:w-44 lg:w-auto lg:min-w-0 lg:flex-1"
           />
-          <Select
+          <SearchableSelect
             aria-label="Filter by course"
             value={course}
             onChange={withPageReset(setCourse)}
             options={courseOptions}
+            placeholder="All courses"
+            searchPlaceholder="Search courses…"
+            emptyText="No courses found"
             className="w-full sm:w-52 lg:w-auto lg:min-w-0 lg:flex-[1.25]"
           />
           <Select

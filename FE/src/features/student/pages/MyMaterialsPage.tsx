@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/Button';
 import { Pagination } from '@/components/ui/Pagination';
 import { EmptyState } from '@/components/ui/Card';
 import { Select } from '@/components/ui/Select';
+import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { Badge } from '@/components/ui/Badge';
 import { useToast } from '@/components/ui/ToastHost';
 import { SearchInput } from '@/components/common/SearchInput';
@@ -225,7 +226,7 @@ export function MyMaterialsPage() {
               setPage(1);
             }}
           />
-          <Select
+          <SearchableSelect
             aria-label="Filter by course"
             value={course}
             onChange={v => {
@@ -233,6 +234,9 @@ export function MyMaterialsPage() {
               setPage(1);
             }}
             options={courseOptions}
+            placeholder="All courses"
+            searchPlaceholder="Search courses…"
+            emptyText="No courses found"
             className="w-full sm:w-52 lg:w-auto lg:min-w-0 lg:flex-[1.25]"
           />
           {filtersActive && (
