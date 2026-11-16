@@ -39,7 +39,7 @@ const FALLBACK_DATA_START = '2000-01-01';
  * the AI log and the Excel export. Users, courses and top courses are all-time figures.
  */
 export function AdminDashboard() {
-  const [filter, setFilter] = useState<DashboardFilter>(() => defaultFilter('day'));
+  const [filter, setFilter] = useState<DashboardFilter>(() => defaultFilter('month'));
   const [sortBy, setSortBy] = useState<TopCourseSort>('revenue');
   const [data, setData] = useState<AdminDashboardReport | null>(null);
   const [loading, setLoading] = useState(true);
