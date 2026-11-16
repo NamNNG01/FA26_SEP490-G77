@@ -84,7 +84,19 @@ export function SubscriptionPackagesPage() {
   }, [activeFilter, keyword, pageIndex, toast]);
   useEffect(() => { void load(); }, [load]);
 
-  const openCreate = () => { setEditing(null); setForm(blankForm(page.totalElements)); setFieldErrors({}); setFormError(null); setFormOpen(true); };
+  const openCreate = async () => {
+    // sort_order has to be one past the highest existing value. Using the plan count repeats a
+    // number that is already taken, so every new plan showed the same "#" until the next reload.
+    let nextSortOrder = 0;
+    try {
+      const all = await adminSubscriptionPlanService.listAll();
+      nextSortOrder = all.reduce((max, plan) => Math.max(max, plan.sortOrder), -1) + 1;
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Could not read the current plan order.'));
+      return;
+    }
+    setEditing(null); setForm(blankForm(nextSortOrder)); setFieldErrors({}); setFormError(null); setFormOpen(true);
+  };
   const openEdit = async (plan: AdminSubscriptionPlan) => {
     try { const full = await adminSubscriptionPlanService.get(plan.planId); setEditing(full); setForm(formFromPlan(full)); setFieldErrors({}); setFormError(null); setFormOpen(true); }
     catch (error) { toast.error(getApiErrorMessage(error, 'Could not load plan details.')); }
@@ -196,7 +208,7 @@ export function SubscriptionPackagesPage() {
       <div><h1 className="text-2xl font-bold text-content">Subscription Packages</h1><p className="mt-1 text-sm text-content-soft">Configure plan prices, duration, AI token limits and the order students see them in.</p></div>
       <div className="flex flex-wrap gap-2">
         <Button variant="outline" icon={<Icon.SortAsc className="h-4 w-4" />} loading={orderLoading} disabled={orderLoading} onClick={() => void openReorder()}>Reorder</Button>
-        <Button icon={<Icon.Plus className="h-4 w-4" />} onClick={openCreate}>New plan</Button>
+        <Button icon={<Icon.Plus className="h-4 w-4" />} onClick={() => void openCreate()}>New plan</Button>
       </div>
     </header>
 
