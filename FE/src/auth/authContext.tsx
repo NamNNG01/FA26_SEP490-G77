@@ -298,12 +298,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function logoutAll() {
-    try {
-      await apiClient.post('/auth/logout-all');
-    } catch {
-    } finally {
-      clearLocalSession();
-    }
+    // Keep this device signed in if the server could not revoke the other
+    // sessions. The caller handles the error and only navigates away on success.
+    await apiClient.post('/auth/logout-all');
+    clearLocalSession();
   }
 
   // ---- Set auth state (used by the Axios interceptor's refresh flow) ----
