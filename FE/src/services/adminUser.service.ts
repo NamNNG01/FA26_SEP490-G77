@@ -16,11 +16,24 @@ export interface AdminUserProfile {
   createdAt: string;
 }
 
+/**
+ * The user's current paid subscription (pending BE — see docs/notes/admin-user-management-be-gap-2026-11-17.md).
+ * Null (or missing, until the BE ships it) = no active paid plan: the Free plan for a student.
+ */
+export interface AdminUserSubscription {
+  planId: number;
+  planName: string;
+  /** ISO instant; the plan is usable until then. */
+  endDate: string | null;
+  status: 'ACTIVE' | 'EXPIRED' | 'CANCELLED' | string;
+}
+
 /** UM-01: one row of GET /admin/users. */
 export interface AdminUserItem extends AdminUserProfile {
   /** Null when the account has never logged in. */
   lastLoginAt: string | null;
   enrolledCoursesCount: number;
+  subscription?: AdminUserSubscription | null;
 }
 
 /** UM-01: overview counters above the list — computed across every account, filters ignored. */
@@ -56,8 +69,22 @@ export interface AdminUserRecentAttempt {
 
 export interface AdminUserDetail extends AdminUserProfile {
   lastLoginAt: string | null;
+  subscription?: AdminUserSubscription | null;
   stats: AdminUserLearningStats;
   recentAttempts: AdminUserRecentAttempt[];
+}
+
+/** UM-06 body (pending BE): the BE generates the password and e-mails it to the new user. */
+export interface AdminUserCreatePayload {
+  fullName: string;
+  email: string;
+  role: AdminUserRole;
+}
+
+/** UM-07 body (pending BE): `planId` null = back to the Free plan; `endDate` YYYY-MM-DD, null for Free. */
+export interface AdminUserSubscriptionPayload {
+  planId: number | null;
+  endDate: string | null;
 }
 
 /** UM-03 body: every field is required; the backend rejects duplicate e-mails (409). */
@@ -104,5 +131,17 @@ export const adminUserService = {
   /** UM-05 — send the password-reset e-mail. */
   async resetPassword(userId: number) {
     await api.post<ApiResponse<null>>(`/admin/users/${userId}/reset-password`);
+  },
+  /** UM-06 (pending BE) — create an account; the generated password is e-mailed to it (409 e-mail taken). */
+  async create(payload: AdminUserCreatePayload) {
+    const res = await api.post<ApiResponse<AdminUserProfile>>('/admin/users', payload);
+    return res.data;
+  },
+  /** UM-07 (pending BE) — set a student's plan and end date, free of charge. */
+  async setSubscription(userId: number, payload: AdminUserSubscriptionPayload) {
+    const res = await api.request<ApiResponse<AdminUserSubscription | null>>({
+      method: 'put', url: `/admin/users/${userId}/subscription`, data: payload,
+    });
+    return res.data;
   },
 };

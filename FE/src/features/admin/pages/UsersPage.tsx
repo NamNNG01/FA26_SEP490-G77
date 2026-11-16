@@ -7,6 +7,7 @@ import { Table, type TableColumn } from '@/components/ui/Table';
 import { Dropdown } from '@/components/ui/Dropdown';
 import { Avatar } from '@/components/ui/Avatar';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { SearchInput } from '@/components/common/SearchInput';
 import { DashboardError } from '@/components/common/DashboardState';
@@ -16,6 +17,8 @@ import { getApiErrorMessage } from '@/utils/apiError';
 import { ROUTES } from '@/app/routes';
 import { adminUserService, type AdminUserItem, type AdminUserListStats } from '@/services/adminUser.service';
 import { getUserListState, type UserListState } from '../userListState';
+import { AddUserModal } from '../components/AddUserModal';
+import { SubscriptionCell } from '../components/SubscriptionCell';
 
 /** Matches Table's DEFAULT_PAGE_SIZE — the list is paginated on the server. */
 const PAGE_SIZE = 10;
@@ -73,6 +76,7 @@ export function UsersPage({ onNavigate }: { onNavigate?: (id: string, params?: R
   const [workingId, setWorkingId] = useState<number | null>(null);
   /** User awaiting the reset-password confirmation. */
   const [resetTarget, setResetTarget] = useState<AdminUserItem | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
   // Latest-wins: a slow response never overwrites a newer one.
   const requestRef = useRef(0);
   const appliedSearch = useRef(saved.search);
@@ -196,9 +200,10 @@ export function UsersPage({ onNavigate }: { onNavigate?: (id: string, params?: R
       const value = formatLastLogin(row.lastLoginAt as string | null);
       return value ? <span className="text-sm text-content-soft">{value}</span> : <span className="text-content-faint">—</span>;
     }},
-    { key: 'courses', label: 'Courses', render: (row: Record<string, unknown>) => (
-      <span className="text-sm text-content-secondary">{String(row.enrolledCoursesCount ?? 0)}</span>
-    )},
+    { key: 'subscription', label: 'Subscription', render: (row: Record<string, unknown>) => {
+      const item = row as unknown as AdminUserItem;
+      return <SubscriptionCell role={item.role} subscription={item.subscription} />;
+    }},
     { key: 'actions', label: '', render: (row: Record<string, unknown>) => {
       const item = row as unknown as AdminUserItem;
       const busy = workingId === item.userId;
@@ -221,8 +226,12 @@ export function UsersPage({ onNavigate }: { onNavigate?: (id: string, params?: R
 
   return (
     <div className="p-8 space-y-5">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-content">User List</h2>
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-bold text-content">User Management</h2>
+          <p className="text-sm text-content-soft mt-0.5">Manage accounts, roles, status and subscriptions.</p>
+        </div>
+        <Button icon={<Icon.Plus className="w-4 h-4" />} onClick={() => setAddOpen(true)}>Add User</Button>
       </div>
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
         {statCards.map(s => (
@@ -272,6 +281,16 @@ export function UsersPage({ onNavigate }: { onNavigate?: (id: string, params?: R
         description={<>A password reset email will be sent to <span className="font-medium text-content">{resetTarget?.email}</span>.</>}
         confirmLabel="Send reset email"
         loading={resetTarget != null && workingId === resetTarget.userId}
+      />
+
+      <AddUserModal
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        onCreated={user => {
+          setAddOpen(false);
+          toast.success(`${user.fullName} was created. Sign-in details were sent to ${user.email}.`);
+          void load();
+        }}
       />
     </div>
   );
