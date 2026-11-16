@@ -5,6 +5,7 @@ import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
+import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
@@ -1251,7 +1252,7 @@ export function ExamFormPage({
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <Select
+                    <SearchableSelect
                       label="Course *"
                       value={courseId}
                       disabled={isReadOnly || hasAddedQuestions}
@@ -1273,6 +1274,9 @@ export function ExamFormPage({
                           value: String(c.courseId),
                         })),
                       ]}
+                      placeholder="Select course"
+                      searchPlaceholder="Search courses…"
+                      emptyText="No courses found"
                     />
                     {fieldErrors.courseId && (
                       <p className="text-xs text-danger mt-1">
@@ -1282,7 +1286,7 @@ export function ExamFormPage({
                   </div>
 
                   <div>
-                    <Select
+                    <SearchableSelect
                       label="Module (optional)"
                       value={moduleId}
                       disabled={isReadOnly || !courseId || hasAddedQuestions}
@@ -1299,6 +1303,9 @@ export function ExamFormPage({
                           value: String(m.moduleId),
                         })),
                       ]}
+                      placeholder={!courseId ? 'Select a course first' : 'No module'}
+                      searchPlaceholder="Search modules…"
+                      emptyText="No modules found"
                     />
                     {fieldErrors.moduleId && (
                       <p className="text-xs text-danger mt-1">

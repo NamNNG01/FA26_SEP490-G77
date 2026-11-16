@@ -384,11 +384,14 @@ export function QuestionBankPage() {
             searchPlaceholder="Search courses…"
             emptyText="No courses match"
           />
-          <Select
+          <SearchableSelect
             label="Module"
             value={module}
             onChange={filterSetter(setModule)}
             disabled={course === ALL}
+            placeholder={course === ALL ? 'Select a course first' : 'All Modules'}
+            searchPlaceholder="Search modules…"
+            emptyText="No modules found"
             options={[
               { label: course === ALL ? 'Select a course first' : 'All Modules', value: ALL },
               ...modules.map(m => ({ label: m.title, value: String(m.moduleId) })),

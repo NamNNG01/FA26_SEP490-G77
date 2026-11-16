@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Icon } from '@/assets/icons';
 import { Badge } from '@/components/ui/Badge';
 import { Select } from '@/components/ui/Select';
+import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { Tabs } from '@/components/ui/Tabs';
 import { EmptyState } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -171,7 +172,8 @@ export function PublicExamsPage() {
         />
 
         <div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-3">
-          <Select aria-label="Filter by course" value={course} onChange={setCourse} options={COURSE_OPTIONS} />
+          <SearchableSelect aria-label="Filter by course" value={course} onChange={setCourse} options={COURSE_OPTIONS}
+            placeholder="All courses" searchPlaceholder="Search courses…" emptyText="No courses found" />
           <Select
             aria-label="Filter by difficulty"
             value={difficulty}
