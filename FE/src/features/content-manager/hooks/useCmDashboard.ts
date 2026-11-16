@@ -66,7 +66,7 @@ export function useCmDashboard(): UseCmDashboardResult {
     request
       .catch((e: unknown) => {
         if (!isCurrent()) return;
-        setError((s) => ({ ...s, [section]: e instanceof Error ? e.message : 'Không tải được dữ liệu.' }));
+        setError((s) => ({ ...s, [section]: e instanceof Error ? e.message : 'Failed to load data.' }));
       })
       .finally(() => {
         if (isCurrent()) setLoading((s) => ({ ...s, [section]: false }));
