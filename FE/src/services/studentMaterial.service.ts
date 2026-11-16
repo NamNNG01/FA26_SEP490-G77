@@ -86,7 +86,7 @@ export interface GenerateQuizRequest {
   courseId?: number;
   difficulty?: MaterialDifficulty;
   sourceLessonId?: number;
-  /** Name the student gives the quiz; blank falls back to "Quiz từ tài liệu <material>". */
+  /** Name the student gives the quiz; blank falls back to "Quiz from material <material>". */
   title?: string;
   /** Free-text guidance for the AI (sent as studentContext). */
   context?: string;

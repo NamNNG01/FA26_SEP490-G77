@@ -113,12 +113,12 @@ public class ContestRules {
     }
 
     public static BaseException invalid(String field, String message) {
-        return new BaseException(ResponseCode.VALIDATION_ERROR, "Dữ liệu không hợp lệ",
+        return new BaseException(ResponseCode.VALIDATION_ERROR, "Validation failed",
                 Map.of("code", "VALIDATION_FAILED", "errors", List.of(Map.of("field", field, "message", message))));
     }
 
     public static BaseException invalid(List<Map<String, String>> errors) {
-        return new BaseException(ResponseCode.VALIDATION_ERROR, "Dữ liệu không hợp lệ", Map.of("code", "VALIDATION_FAILED", "errors", errors));
+        return new BaseException(ResponseCode.VALIDATION_ERROR, "Validation failed", Map.of("code", "VALIDATION_FAILED", "errors", errors));
     }
 
     public static BaseException notFound() {

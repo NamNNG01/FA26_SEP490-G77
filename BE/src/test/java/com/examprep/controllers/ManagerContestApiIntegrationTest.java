@@ -63,7 +63,7 @@ public class ManagerContestApiIntegrationTest {
 
     Discount discount(String code, int limit) {
         Discount d = Discount.builder().code(code).name("Giảm").discountType("PERCENT").value(new BigDecimal("50")).usageLimit(limit)
-                .isActive(true).appliesTo("ALL").expiresAt(Instant.now().plus(30, ChronoUnit.DAYS)).build();
+                .isActive(true).appliesTo("ALL").accessType("CLAIM_REQUIRED").expiresAt(Instant.now().plus(30, ChronoUnit.DAYS)).build();
         em.persist(d);
         return d;
     }
@@ -333,7 +333,7 @@ public class ManagerContestApiIntegrationTest {
                 Notification.class).setParameter("u", student).getSingleResult();
         assertEquals(soon, sent.getReferenceId());
         assertEquals("/student/contests/" + soon, sent.getLink());
-        assertTrue(sent.getContent().contains("4 phút"), sent.getContent());
+        assertTrue(sent.getContent().contains("4 minutes"), sent.getContent());
         assertNotNull(em.find(Contest.class, soon).getReminderSentAt());
         assertNull(em.find(Contest.class, later).getReminderSentAt());
     }

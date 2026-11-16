@@ -308,7 +308,7 @@ public class StudentAiApiIntegrationTest {
                 .setParameter("u", student).getSingleResult(); // the right essay opens no row, the weak diagram does
         assertEquals(diagram.getQuestionId(), row.getQuestion().getQuestionId());
         assertEquals("WRONG_BOOKMARKED", row.getStatus());
-        assertEquals("(bản vẽ)", row.getLastWrongChoice());
+        assertEquals("(drawing)", row.getLastWrongChoice());
         assertEquals(1L, em.createQuery("select count(n) from UserNotification n where n.user = :u", Long.class)
                 .setParameter("u", student).getSingleResult());
         em.createQuery("select l from AiUsageLog l where l.purpose = 'ESSAY_GRADING'", AiUsageLog.class).getResultList()

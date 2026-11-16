@@ -91,15 +91,15 @@ public class QuestionReviewRecorder {
             case "ORDERING" -> texts(r.path("orderedOptionIds"), optionTexts, " → ");
             case "FILL_BLANK" -> blanks(r.path("blanks"));
             case "MATCHING" -> matches(r.path("matches"));
-            case "DIAGRAM" -> r.path("drawioXml").asText("").isBlank() ? "" : "(bản vẽ)";
+            case "DIAGRAM" -> r.path("drawioXml").asText("").isBlank() ? "" : "(drawing)";
             case "DIAGRAM_ESSAY" -> {
                 String answerText = r.path("text").asText("");
                 boolean hasDrawing = !r.path("drawioXml").asText("").isBlank();
-                yield hasDrawing ? (answerText.isBlank() ? "(bản vẽ)" : answerText + " (bản vẽ)") : answerText;
+                yield hasDrawing ? (answerText.isBlank() ? "(drawing)" : answerText + " (drawing)") : answerText;
             }
             default -> r.path("text").asText("");
         };
-        return clip(text, "(bỏ trống)");
+        return clip(text, "(blank)");
     }
 
     /** The expected answer from an attempt's key snapshot; empty for rubric types, which have no single answer. */

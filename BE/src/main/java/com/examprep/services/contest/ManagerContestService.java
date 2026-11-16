@@ -202,8 +202,8 @@ public class ManagerContestService {
         contest.setCancelledAt(Instant.now());
         contest.setCancelReason(text == null || text.isEmpty() ? null : text);
         for (ContestParticipant p : joined) {
-            notify(p.getUser(), contest, "Cuộc thi đã bị huỷ – " + contest.getTitle(),
-                    "Cuộc thi \"" + contest.getTitle() + "\" đã bị huỷ" + (contest.getCancelReason() == null ? "." : ": " + contest.getCancelReason()),
+            notify(p.getUser(), contest, "Contest cancelled – " + contest.getTitle(),
+                    "Contest \"" + contest.getTitle() + "\" has been cancelled" + (contest.getCancelReason() == null ? "." : ": " + contest.getCancelReason()),
                     "CONTEST_CANCELLED");
         }
         contests.flush();
@@ -299,7 +299,7 @@ public class ManagerContestService {
         if (body.startTime() == null) errors.add(Map.of("field", "startTime", "message", "startTime is required"));
         if (body.endTime() == null) errors.add(Map.of("field", "endTime", "message", "endTime is required"));
         else if (body.startTime() != null && !body.endTime().isAfter(body.startTime())) {
-            errors.add(Map.of("field", "endTime", "message", "endTime phải sau startTime"));
+            errors.add(Map.of("field", "endTime", "message", "endTime must be after startTime"));
         }
         if (!errors.isEmpty()) throw invalid(errors);
         String description = body.description() == null || body.description().isBlank() ? null : body.description().strip();

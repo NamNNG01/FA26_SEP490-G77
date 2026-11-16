@@ -133,7 +133,7 @@ public class PersonalizationService {
             String courseTitle = courses.findById(courseId).map(Course::getTitle).orElse("");
             LearningStats.Stats stats = learning.forStudent(userId, courseId, LearningStats.ALL_TIME);
             if (stats.finishedAttempts() < 5) {
-                throw insufficient("Cần ít nhất 5 bài đã hoàn thành để AI phân tích");
+                throw insufficient("Complete at least 5 attempts before AI analysis");
             }
             List<QuestionCandidate> pool = practice.candidates(courseId, List.of(), null);
             if (pool.size() < count) throw PracticeExamService.notEnough(pool.size());
@@ -154,7 +154,7 @@ public class PersonalizationService {
             pending.put(jobId, new SmartWork(prompt, prepared.offered().stream()
                     .collect(Collectors.toMap(QuestionCandidate::questionId, c -> c, (a, b) -> a, LinkedHashMap::new)),
                     accuracy, count, duration, courseId, userId, logId,
-                    PracticeExamService.titleOr(request.title(), "Đề luyện thông minh")));
+                    PracticeExamService.titleOr(request.title(), "Smart practice exam")));
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override public void afterCommit() { worker.execute(() -> runSmartPractice(jobId)); }
                 @Override public void afterCompletion(int status) { if (status != STATUS_COMMITTED) pending.remove(jobId); }
@@ -311,7 +311,7 @@ public class PersonalizationService {
                 .map(m -> new Weakness(m.categoryId(), m.name(), m.accuracy(), m.trend(), m.accuracy() < 40 ? "HIGH" : "MEDIUM")).toList();
         if (stats.finishedAttempts() < 3) {
             return new Recommendations(Instant.now(), "GENERATED", courseId, prepared.readiness(), strengths, weaknesses, List.of(),
-                    "Hãy làm thêm ít nhất 3 bài trong khóa để nhận gợi ý cá nhân hoá.", readTx.execute(s -> quotaLeft(userId)));
+                    "Complete at least 3 attempts in this course to get personalized recommendations.", readTx.execute(s -> quotaLeft(userId)));
         }
         Resources resources = prepared.resources();
         ObjectNode prompt = json.createObjectNode().put("wrongToReview", prepared.wrongToReview());
@@ -401,7 +401,7 @@ public class PersonalizationService {
                 .forEach(r -> decks.put((Long) r[0], (String) r[1]));
         statsRepository.courseExams(courseId, org.springframework.data.domain.PageRequest.of(0, 30)).forEach(r -> {
             exams.put((Long) r[0], (String) r[1]);
-            modules.put((Long) r[0], r[2] == null ? "Chung" : (String) r[2]);
+            modules.put((Long) r[0], r[2] == null ? "General" : (String) r[2]);
         });
         Map<Long, double[]> scores = new HashMap<>();
         if (!exams.isEmpty()) {
@@ -463,7 +463,7 @@ public class PersonalizationService {
             if (cached != null) return new Prepared(cached, null, null, null, null);
             LearningStats.Stats stats = learning.forStudent(userId, courseId, from);
             if (stats.finishedAttempts() < 5 || stats.wrongAnswers() < 20) {
-                throw insufficient("Cần ít nhất 5 bài đã làm và 20 câu sai trong khoảng thời gian này để phân tích");
+                throw insufficient("At least 5 attempts and 20 wrong answers in this period are needed for analysis");
             }
             Map<Long, Set<Long>> sample = new HashMap<>();
             ArrayNode wrong = wrongSample(userId, courseId, from, stats, sample);
@@ -747,7 +747,7 @@ public class PersonalizationService {
         ArrayNode list = prompt.putArray("candidates");
         for (QuestionCandidate c : offered) {
             String text = c.content() == null ? "" : c.content();
-            list.addObject().put("id", c.questionId()).put("module", c.moduleTitle() == null ? "Chung" : c.moduleTitle())
+            list.addObject().put("id", c.questionId()).put("module", c.moduleTitle() == null ? "General" : c.moduleTitle())
                     .put("difficulty", c.difficulty()).put("type", c.questionType())
                     .put("text", text.length() > 200 ? text.substring(0, 200) : text);
         }
@@ -756,9 +756,9 @@ public class PersonalizationService {
 
     private static List<String> focusAreas(List<QuestionCandidate> chosen) {
         Map<String, Long> byModule = chosen.stream().collect(Collectors.groupingBy(
-                c -> c.moduleTitle() == null ? "Chung" : c.moduleTitle(), LinkedHashMap::new, Collectors.counting()));
+                c -> c.moduleTitle() == null ? "General" : c.moduleTitle(), LinkedHashMap::new, Collectors.counting()));
         return byModule.entrySet().stream().sorted(Map.Entry.<String, Long>comparingByValue().reversed())
-                .map(e -> e.getKey() + " (" + e.getValue() + " câu)").toList();
+                .map(e -> e.getKey() + " (" + e.getValue() + " questions)").toList();
     }
 
     static String estimatedDifficulty(List<QuestionCandidate> chosen) {

@@ -69,7 +69,7 @@ class PracticeExamApiIntegrationTest {
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.message").value("Practice exam created")));
         assertEquals(10, data.path("questionCount").asInt());
         assertEquals(30, data.path("durationMinutes").asInt());
-        assertTrue(data.path("title").asText().contains("Trắc nghiệm"));
+        assertTrue(data.path("title").asText().contains("Multiple choice"));
         Exam exam = em.find(Exam.class, data.path("examId").asLong());
         assertEquals("PRACTICE_EXAM", exam.getMode());
         assertEquals("PUBLISHED", exam.getStatus());
@@ -86,7 +86,7 @@ class PracticeExamApiIntegrationTest {
         JsonNode named = data(create(student, body + "\"  Giữa kỳ OOP \"}").andExpect(status().isCreated()));
         assertEquals("Giữa kỳ OOP", named.path("title").asText());
         assertEquals("Giữa kỳ OOP", em.find(Exam.class, named.path("examId").asLong()).getTitle());
-        assertEquals("Đề luyện tùy chọn - Trắc nghiệm", data(create(student, body + "\" \"}").andExpect(status().isCreated())).path("title").asText());
+        assertEquals("Custom practice - Multiple choice", data(create(student, body + "\" \"}").andExpect(status().isCreated())).path("title").asText());
         create(student, body + "\"" + "x".repeat(256) + "\"}").andExpect(status().isBadRequest());
     }
 
@@ -101,7 +101,7 @@ class PracticeExamApiIntegrationTest {
         essays.add(em.createQuery("select q.questionId from Question q where q.content = 'essay'", Long.class).getSingleResult());
         JsonNode data = data(create(student, "{\"courseId\":" + course.getCourseId() + ",\"questionCount\":5,\"durationMinutes\":30,"
                 + "\"examType\":\"ESSAY\"}").andExpect(status().isCreated()));
-        assertTrue(data.path("title").asText().contains("Tự luận"));
+        assertTrue(data.path("title").asText().contains("Essay"));
         Set<Long> drawn = new HashSet<>(em.createQuery("select eq.question.questionId from ExamQuestion eq where eq.exam.examId = :e", Long.class)
                 .setParameter("e", data.path("examId").asLong()).getResultList());
         assertEquals(essays, drawn);

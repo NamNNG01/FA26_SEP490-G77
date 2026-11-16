@@ -78,7 +78,7 @@ public class ManagerContestController {
     @PostMapping("/contests/{id}/pay-rewards")
     public ResponseEntity<ApiResponse<PayResult>> payRewards(@AuthenticationPrincipal UserPrincipal user, @PathVariable Long id) {
         PayResult result = payer.pay(user, id);
-        return ResponseEntity.ok(ApiResponse.success(result, "Đã trả thưởng cho " + result.rewardsGranted() + " người thắng"));
+        return ResponseEntity.ok(ApiResponse.success(result, "Rewards paid to " + result.rewardsGranted() + " winner(s)"));
     }
 
     @PostMapping("/contests/batch-pay-rewards")
