@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { MoneyInput } from '@/components/ui/MoneyInput';
+import { COURSE_PRICE_MAX, coursePriceError } from '@/features/course/coursePrice';
 import { Dropdown } from '@/components/ui/Dropdown';
 import { Alert } from '@/components/ui/Alert';
 import { useToast } from '@/components/ui/ToastHost';
@@ -138,9 +140,8 @@ export function CreateCourseModal({
     if (!title.trim()) nextErrors.title = 'Course title is required.';
     if (!categoryId) nextErrors.categoryId = 'Please select a category.';
     const numPrice = Number(price);
-    if (Number.isNaN(numPrice) || numPrice < 0) {
-      nextErrors.price = 'Price must be 0 or greater.';
-    }
+    const priceError = coursePriceError(price);
+    if (priceError) nextErrors.price = priceError;
     if (managerIds.length === 0) {
       nextErrors.managerIds = 'Please select at least one course manager.';
     }
@@ -286,13 +287,11 @@ export function CreateCourseModal({
             {errors.categoryId && <p className="text-[12px] text-red-500 mt-1">{errors.categoryId}</p>}
           </div>
 
-          <Input
+          <MoneyInput
             label="Price (VND)"
-            type="number"
-            min={0}
-            step="0.01"
+            max={COURSE_PRICE_MAX}
             value={price}
-            onChange={(e) => { setPrice(e.target.value); setErrors((prev) => ({ ...prev, price: undefined })); }}
+            onValueChange={(v) => { setPrice(v); setErrors((prev) => ({ ...prev, price: undefined })); }}
             error={errors.price}
             hint="Set 0 for free course"
           />

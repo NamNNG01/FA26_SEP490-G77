@@ -16,6 +16,7 @@ import { AuthLayout } from '@/layouts/AuthLayout';
 import { DashboardLayout } from '@/layouts/DashboardLayout';
 import { PublicLayout } from '@/layouts/PublicLayout';
 import { LoadingScreen } from '@/components/LoadingScreen';
+import { PlanFeatureRequiredPrompt } from '@/components/common/PlanFeatureRequiredPrompt';
 import { Role } from '@/utils/permissions';
 
 import { LoginPage } from '@/features/auth';
@@ -245,6 +246,8 @@ function AppRoutes() {
   //     screens render inside ONE DashboardLayout so the sidebar is mounted
   //     exactly once and persists across route changes.
   return (
+    <>
+    {isStudent && <PlanFeatureRequiredPrompt />}
     <Routes>
       {publicRoutes(<SignedInHome isEntry={location.key === entryKey} />, !isStudent)}
 
@@ -359,5 +362,6 @@ function AppRoutes() {
         <Route path="*" element={<Navigate to={landing} replace />} />
       </Route>
     </Routes>
+    </>
   );
 }

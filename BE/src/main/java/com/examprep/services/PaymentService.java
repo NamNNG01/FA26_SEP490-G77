@@ -7,7 +7,6 @@ import java.util.List;
 public interface PaymentService {
     List<PaymentResponses.Plan> plans(Long currentUserId);
     PaymentResponses.Current current(Long userId);
-    PaymentResponses.AutoRenew autoRenew(Long userId, boolean enabled);
     PaymentResponses.Checkout checkout(Long userId, Long courseId, Long planId, String discountCode);
     PaymentResponses.Cancelled cancel(Long userId, String orderCode);
     PaymentResponses.PaymentState status(Long userId, String orderCode);

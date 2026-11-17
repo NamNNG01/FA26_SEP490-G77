@@ -12,19 +12,19 @@ const FULL_NAME_MAX = 100;
 const EMAIL_MAX = 150;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+/** Students sign up by themselves; the admin only creates staff accounts. */
 const ROLE_OPTIONS: { label: string; value: AdminUserRole }[] = [
-  { label: 'Student', value: 'STUDENT' },
   { label: 'Content Manager', value: 'COURSE_MANAGER' },
   { label: 'Admin', value: 'ADMIN' },
 ];
 
 type Form = { fullName: string; email: string; role: AdminUserRole };
 type FieldErrors = Partial<Record<keyof Form, string>>;
-const EMPTY: Form = { fullName: '', email: '', role: 'STUDENT' };
+const EMPTY: Form = { fullName: '', email: '', role: 'COURSE_MANAGER' };
 
 /**
- * Creates an account (UM-06). The admin never sees or types a password: the backend generates one
- * and e-mails it to the new user together with the sign-in details.
+ * Creates a staff account (UM-06) — Content Manager or Admin only. The admin never sees or types a
+ * password: the backend generates one and e-mails it to the new user together with the sign-in details.
  */
 export function AddUserModal({ open, onClose, onCreated }: {
   open: boolean;

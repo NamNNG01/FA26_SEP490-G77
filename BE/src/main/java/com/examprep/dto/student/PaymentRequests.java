@@ -8,5 +8,4 @@ public final class PaymentRequests {
 
     public record Checkout(Long courseId, Long planId, @Size(max = 50) String discountCode) {}
     public record SubscriptionCheckout(@NotNull Long planId, @Size(max = 50) String discountCode) {}
-    public record AutoRenew(@NotNull Boolean autoRenew) {}
 }

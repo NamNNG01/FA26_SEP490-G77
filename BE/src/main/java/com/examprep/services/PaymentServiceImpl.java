@@ -91,15 +91,6 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     @Override
-    @Transactional
-    public PaymentResponses.AutoRenew autoRenew(Long userId, boolean enabled) {
-        UserSubscription subscription = subscriptions.lockActiveSubscriptionByUser(userId, Instant.now())
-                .orElseThrow(() -> new ResourceNotFoundException("Active subscription not found"));
-        subscription.setAutoRenew(enabled);
-        return new PaymentResponses.AutoRenew(subscription.getSubscriptionId(), enabled);
-    }
-
-    @Override
     public PaymentResponses.Checkout checkout(Long userId, Long courseId, Long planId, String discountCode) {
         // One student cannot run two checkouts concurrently: the scan/reuse/cancel/create sequence
         // must see the link the other call is about to issue.

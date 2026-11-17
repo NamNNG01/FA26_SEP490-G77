@@ -2,24 +2,29 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '@/auth/authContext';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { Switch } from '@/components/ui/Switch';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useToast } from '@/components/ui/ToastHost';
 import { Icon } from '@/assets/icons';
 import { getApiErrorMessage } from '@/utils/apiError';
 import {
+  isPaidSubscription,
   refreshCurrentSubscription,
   subscriptionService,
   useCurrentSubscription,
   type CurrentSubscription,
   type SubscriptionPlan,
 } from '@/services/studentSubscription.service';
+import { studentAttemptService, type AiQuota } from '@/services/studentAttempt.service';
 import { formatVnd } from '@/services/payment.service';
 import { PaymentCheckoutModal, type PaymentItem } from '@/features/payment/components/PaymentCheckoutModal';
 import { CardGridSkeleton, LoadError, PageTitle, STUDENT_PAGE_CLASS, formatDate } from '../components/studentUi';
 
+const formatTokens = (n: number) => Math.max(0, n).toLocaleString('vi-VN');
+
 /**
- * Subscription — the student's ACTIVE plan (SB-02) with its auto-renew switch (SB-04), and every
- * plan on offer (SB-01). A paid plan is bought through PaymentCheckoutModal (PY-01 + PayOS).
+ * Subscription — the student's plan (SB-02) with its days and AI tokens left, and every plan on
+ * offer (SB-01). Paid plans always auto-renew. A paid plan is bought through PaymentCheckoutModal
+ * (PY-01 + PayOS); buying another plan replaces the current one straight away.
  */
 export function StudentSubscriptionPage() {
   const { user } = useAuth();
@@ -31,6 +36,8 @@ export function StudentSubscriptionPage() {
   const [error, setError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
   const [buying, setBuying] = useState<PaymentItem | null>(null);
+  const [switching, setSwitching] = useState<SubscriptionPlan | null>(null);
+  const [quota, setQuota] = useState<AiQuota | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -41,6 +48,11 @@ export function StudentSubscriptionPage() {
       .then(data => { if (!cancelled) setPlans(data); })
       .catch(err => { if (!cancelled) setError(getApiErrorMessage(err, 'Could not load the plans.')); })
       .finally(() => { if (!cancelled) setLoading(false); });
+    // Token balance is extra info: a failure just leaves it out.
+    studentAttemptService
+      .getAiQuota()
+      .then(data => { if (!cancelled) setQuota(data); })
+      .catch(() => { if (!cancelled) setQuota(null); });
     return () => { cancelled = true; };
   }, [reload]);
 
@@ -50,11 +62,19 @@ export function StudentSubscriptionPage() {
     setReload(r => r + 1);
   }
 
+  function choose(plan: SubscriptionPlan) {
+    // A new purchase replaces the running paid plan at once — say so before checkout.
+    if (isPaidSubscription(current.data) && current.data.daysRemaining > 0) setSwitching(plan);
+    else setBuying(planPaymentItem(plan));
+  }
+
+  const active = isPaidSubscription(current.data) ? current.data : null;
+
   return (
     <div className={`${STUDENT_PAGE_CLASS} space-y-6`}>
       <PageTitle title="Subscription" subtitle="Your study plan and the plans you can upgrade to." />
 
-      <CurrentPlanCard loaded={current.loaded} subscription={current.data} />
+      <CurrentPlanCard loaded={current.loaded} subscription={current.data} quota={quota} />
 
       <section className="space-y-3">
         {loading ? (
@@ -66,11 +86,23 @@ export function StudentSubscriptionPage() {
         ) : (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-[clamp(1rem,2vw,1.25rem)]">
             {plans.map(plan => (
-              <PlanCard key={plan.planId} plan={plan} onChoose={() => setBuying(planPaymentItem(plan))} />
+              <PlanCard key={plan.planId} plan={plan} onChoose={() => choose(plan)} />
             ))}
           </div>
         )}
       </section>
+
+      <ConfirmDialog
+        open={!!switching}
+        onClose={() => setSwitching(null)}
+        onConfirm={() => { if (switching) setBuying(planPaymentItem(switching)); setSwitching(null); }}
+        title={`Switch to ${switching?.name ?? 'this plan'}?`}
+        description={active && <>
+          Your <strong>{active.planName}</strong> plan ends as soon as the payment goes through.
+          The {active.daysRemaining} day{active.daysRemaining === 1 ? '' : 's'} left on it and its unused AI tokens are not carried over.
+        </>}
+        confirmLabel="Continue to payment"
+      />
 
       <PaymentCheckoutModal item={buying} onClose={() => setBuying(null)} onPaid={handlePaid} />
     </div>
@@ -88,37 +120,42 @@ function planPaymentItem(plan: SubscriptionPlan): PaymentItem {
   };
 }
 
-function CurrentPlanCard({ loaded, subscription }: { loaded: boolean; subscription: CurrentSubscription | null }) {
-  const toast = useToast();
-  const [autoRenew, setAutoRenew] = useState(subscription?.autoRenew ?? false);
-  const [saving, setSaving] = useState(false);
+function CurrentPlanCard({ loaded, subscription, quota }: {
+  loaded: boolean; subscription: CurrentSubscription | null; quota: AiQuota | null;
+}) {
+  if (!loaded) return null;
 
-  useEffect(() => { setAutoRenew(subscription?.autoRenew ?? false); }, [subscription?.subscriptionId, subscription?.autoRenew]);
-
-  async function toggleAutoRenew(next: boolean) {
-    setAutoRenew(next);
-    setSaving(true);
-    try {
-      const res = await subscriptionService.setAutoRenew(next);
-      setAutoRenew(res.autoRenew);
-      toast.success(res.autoRenew ? 'Auto-renew is on' : 'Auto-renew is off — you will not be charged for the next period');
-      void refreshCurrentSubscription();
-    } catch (err) {
-      setAutoRenew(!next);
-      toast.error(getApiErrorMessage(err, 'Could not update auto-renew.'));
-      void refreshCurrentSubscription();
-    } finally {
-      setSaving(false);
-    }
+  if (!isPaidSubscription(subscription)) {
+    // Free Plan (no subscription row): no dates to show, only the monthly free AI allowance.
+    return (
+      <div className="card p-5 space-y-4">
+        <div className="flex items-center gap-4 min-w-0">
+          <div className="w-10 h-10 rounded-[10px] bg-primary-light flex items-center justify-center shrink-0">
+            <Icon.Award className="w-5 h-5 text-brand-ink" />
+          </div>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="font-semibold text-content">{subscription?.planName ?? 'Free Plan'}</p>
+              <Badge variant="default">Free</Badge>
+            </div>
+            <p className="text-sm text-content-soft">Choose a plan below to unlock more AI tokens and features.</p>
+          </div>
+        </div>
+        {quota && (
+          <UsageBar
+            label={`${formatTokens(quota.free.remaining)} / ${formatTokens(quota.free.monthlyLimit)} free AI tokens left`}
+            aside={`Resets on ${formatDate(quota.free.resetAt)}`}
+            left={quota.free.remaining}
+            total={quota.free.monthlyLimit}
+          />
+        )}
+      </div>
+    );
   }
-
-  // Without an ACTIVE plan the plan grid says it all (no placeholder either, so nothing flashes).
-  if (!loaded || !subscription) return null;
 
   const totalDays = Math.max(1, Math.ceil((Date.parse(subscription.expiresAt) - Date.parse(subscription.startedAt)) / 86_400_000));
   const left = Math.max(0, subscription.daysRemaining);
-  const used = Number.isFinite(totalDays) ? Math.min(100, Math.max(0, ((totalDays - left) / totalDays) * 100)) : 0;
-  const ending = left <= 7;
+  const planQuota = quota?.plan ?? null;
 
   return (
     <div className="card p-5 space-y-4">
@@ -137,21 +174,43 @@ function CurrentPlanCard({ loaded, subscription }: { loaded: boolean; subscripti
             </p>
           </div>
         </div>
-        <Switch checked={autoRenew} onChange={toggleAutoRenew} disabled={saving} label="Auto-renew" />
+        <span className="inline-flex items-center gap-1.5 text-sm text-content-secondary">
+          <Icon.Check className="w-4 h-4 text-success" /> Auto-renew on
+        </span>
       </div>
 
-      <div className="space-y-1.5">
-        <div className="flex justify-between text-sm">
-          <span className={ending ? 'font-medium text-warning' : 'text-content-soft'}>
-            {left === 0 ? 'Expired' : `${left} day${left === 1 ? '' : 's'} left`}
-          </span>
-          <span className="text-content-soft">
-            {autoRenew ? `Renews on ${formatDate(subscription.expiresAt)}` : `Ends on ${formatDate(subscription.expiresAt)}`}
-          </span>
-        </div>
-        <div className="h-2 rounded-full bg-fill-strong overflow-hidden">
-          <div className={`h-full rounded-full ${ending ? 'bg-warning' : 'bg-brand-600'}`} style={{ width: `${used}%` }} />
-        </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <UsageBar
+          label={left === 0 ? 'Expired' : `${left} day${left === 1 ? '' : 's'} left`}
+          aside={`Renews on ${formatDate(subscription.expiresAt)}`}
+          left={left}
+          total={totalDays}
+        />
+        {planQuota && (
+          <UsageBar
+            label={`${formatTokens(planQuota.remaining)} / ${formatTokens(planQuota.tokenLimit)} AI tokens left`}
+            aside="For this plan period"
+            left={planQuota.remaining}
+            total={planQuota.tokenLimit}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** A "what is left" bar: it shrinks as the days or tokens are used, and turns amber under 20%. */
+function UsageBar({ label, aside, left, total }: { label: string; aside: string; left: number; total: number }) {
+  const share = total > 0 ? Math.min(100, Math.max(0, (left / total) * 100)) : 0;
+  const low = share <= 20;
+  return (
+    <div className="space-y-1.5">
+      <div className="flex flex-wrap justify-between gap-x-3 text-sm">
+        <span className={low ? 'font-medium text-warning' : 'text-content-secondary'}>{label}</span>
+        <span className="text-content-soft">{aside}</span>
+      </div>
+      <div className="h-2 rounded-full bg-fill-strong overflow-hidden">
+        <div className={`h-full rounded-full ${low ? 'bg-warning' : 'bg-brand-600'}`} style={{ width: `${share}%` }} />
       </div>
     </div>
   );
@@ -160,13 +219,10 @@ function CurrentPlanCard({ loaded, subscription }: { loaded: boolean; subscripti
 function PlanCard({ plan, onChoose }: { plan: SubscriptionPlan; onChoose: () => void }) {
   const free = plan.price <= 0;
   return (
-    <div className={`card p-5 flex flex-col gap-4 ${plan.isRecommended ? 'border-brand-600! shadow-lg!' : ''}`}>
+    <div className="card p-5 flex flex-col gap-4">
       <div className="flex items-start justify-between gap-2">
         <h3 className="font-semibold text-content">{plan.name}</h3>
-        <div className="flex flex-wrap justify-end gap-1">
-          {plan.isCurrent && <Badge variant="success">Current</Badge>}
-          {plan.isRecommended && <Badge variant="info">Recommended</Badge>}
-        </div>
+        {plan.isCurrent && <Badge variant="success">Current</Badge>}
       </div>
 
       <div>
@@ -194,7 +250,7 @@ function PlanCard({ plan, onChoose }: { plan: SubscriptionPlan; onChoose: () => 
       ) : free ? (
         <Button variant="outline" disabled>Included</Button>
       ) : (
-        <Button variant={plan.isRecommended ? 'primary' : 'outline'} onClick={onChoose}>Choose plan</Button>
+        <Button onClick={onChoose}>Choose plan</Button>
       )}
     </div>
   );
