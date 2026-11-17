@@ -11,7 +11,9 @@ import com.examprep.exceptions.BadRequestException;
 import com.examprep.exceptions.BaseException;
 import com.examprep.exceptions.ForbiddenException;
 import com.examprep.exceptions.ResourceNotFoundException;
+import com.examprep.exceptions.ResourceConflictException;
 import com.examprep.repositories.*;
+import com.examprep.util.ContentHashUtil;
 import com.examprep.util.validation.QuestionPayload;
 import com.examprep.util.validation.QuestionValidator;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -27,6 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Slf4j
 @Service
@@ -35,6 +38,7 @@ import java.util.Map;
 public class StudentContributionServiceImpl implements StudentContributionService {
 
     private final QuestionContributionRepository contributionRepository;
+    private final QuestionRepository questionRepository;
     private final EnrollmentRepository enrollmentRepository;
     private final CourseRepository courseRepository;
     private final ModuleRepository moduleRepository;
@@ -93,6 +97,7 @@ public class StudentContributionServiceImpl implements StudentContributionServic
         }
 
         questionValidator.validateOrThrow(QuestionPayload.from(request));
+        rejectIfQuestionAlreadyExists(request);
 
         QuestionContribution contribution = QuestionContribution.builder()
                 .userId(userId)
@@ -260,6 +265,7 @@ public class StudentContributionServiceImpl implements StudentContributionServic
             }
             validateActiveEnrollment(qReq.getCourseId(), userId);
             questionValidator.validateOrThrow(QuestionPayload.from(qReq));
+            rejectIfQuestionAlreadyExists(qReq);
 
             c.setCourseId(qReq.getCourseId());
             c.setContent(qReq.getContent());
@@ -307,5 +313,19 @@ public class StudentContributionServiceImpl implements StudentContributionServic
                 "status", saved.getStatus(),
                 "resubmissionCount", saved.getResubmissionCount()
         );
+    }
+
+    /**
+     * Student contributions use the same content hash as manager-created questions so that
+     * whitespace and option ordering cannot bypass the course-level duplicate check.
+     */
+    private void rejectIfQuestionAlreadyExists(QuestionCreateRequest request) {
+        List<String> optionTexts = request.getOptions() == null
+                ? null
+                : request.getOptions().stream().map(AnswerOptionDto::getOptionText).toList();
+        String contentHash = ContentHashUtil.computeHash(request.getContent(), optionTexts);
+        if (!questionRepository.findExistingContentHashes(request.getCourseId(), Set.of(contentHash)).isEmpty()) {
+            throw new ResourceConflictException("Question already exists in course");
+        }
     }
 }

@@ -17,7 +17,8 @@ import { getApiErrorMessage } from "@/utils/apiError";
 import { CourseThumbnailField } from "@/components/courses/CourseThumbnailField";
 import { uploadService } from "@/services/upload.service";
 import { useObjectUrl } from "@/utils/useObjectUrl";
-import { coursePriceError } from "../coursePrice";
+import { COURSE_PRICE_MAX, coursePriceError } from "../coursePrice";
+import { MoneyInput, moneyToDigits } from "@/components/ui/MoneyInput";
 
 export function CourseFormPage({
   mode = "create",
@@ -81,7 +82,7 @@ export function CourseFormPage({
             title: c.title,
             categoryId: String(c.categoryId),
             description: c.description ?? "",
-            price: String(c.price ?? 0),
+            price: moneyToDigits(c.price ?? 0),
           };
           setTitle(values.title);
           setCategoryId(values.categoryId);
@@ -251,18 +252,11 @@ export function CourseFormPage({
                   : [{ label: "Select Category", value: "" }]
               }
             />
-            <Input
+            <MoneyInput
               label="Price (VND)"
-              type="number"
-              min={0}
-              step="0.01"
+              max={COURSE_PRICE_MAX}
               value={price}
-              onChange={(e) => {
-                const nextPrice = e.target.value;
-                if (nextPrice === "" || Number(nextPrice) >= 0) {
-                  setPrice(nextPrice);
-                }
-              }}
+              onValueChange={setPrice}
               hint="0 = Free"
             />
           </div>

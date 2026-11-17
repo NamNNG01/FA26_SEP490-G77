@@ -11,7 +11,6 @@ public final class PaymentResponses {
                        boolean isRecommended, boolean isCurrent) {}
     public record Current(Long subscriptionId, Long planId, String planName, String status, BigDecimal price,
                           Instant startedAt, Instant expiresAt, long daysRemaining, boolean autoRenew, List<String> featureKeys) {}
-    public record AutoRenew(Long subscriptionId, boolean autoRenew) {}
     /** PY-01: same payload as EN-01 (course) or SB-03 (plan); the other target pair is omitted. */
     public record Checkout(String orderCode, Long courseId, String courseTitle, Long planId, String planName,
                            BigDecimal originalPrice, BigDecimal discountAmount, BigDecimal totalPrice,

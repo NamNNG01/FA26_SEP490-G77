@@ -171,7 +171,7 @@ public class PaymentTransactionService {
         });
         subscriptions.save(UserSubscription.builder().user(user).plan(plan).startDate(now)
                 .endDate(now.plusSeconds(plan.getDurationDays().longValue() * 86400L)).status("ACTIVE")
-                .paidAmount(payment.getAmount()).autoRenew(false).build());
+                .paidAmount(payment.getAmount()).autoRenew(true).build());
         consumeDiscount(payment, now);
     }
 

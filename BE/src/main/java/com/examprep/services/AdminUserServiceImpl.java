@@ -200,7 +200,7 @@ public class AdminUserServiceImpl implements AdminUserService {
         if (plan == null) return null;
         Instant end = request.endDate().plusDays(1).atStartOfDay(AiQuotaService.ZONE).toInstant().minusNanos(1000);
         var sub = subscriptions.save(com.examprep.entities.UserSubscription.builder().user(user).plan(plan).startDate(now)
-                .endDate(end).status("ACTIVE").paidAmount(BigDecimal.ZERO).autoRenew(false).build());
+                .endDate(end).status("ACTIVE").paidAmount(BigDecimal.ZERO).autoRenew(true).build());
         return com.examprep.dto.AdminSubscription.from(sub);
     }
 

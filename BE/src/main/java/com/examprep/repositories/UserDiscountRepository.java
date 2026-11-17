@@ -17,6 +17,12 @@ public interface UserDiscountRepository extends JpaRepository<UserDiscount, Long
 
     Optional<UserDiscount> findFirstByUserUserIdAndDiscountDiscountIdAndIsUsedFalse(Long userId, Long discountId);
 
+    long countByDiscount_DiscountId(Long discountId);
+
+    long countByDiscount_DiscountIdAndIsUsedFalse(Long discountId);
+
+    boolean existsByDiscount_DiscountId(Long discountId);
+
     /** [discountId, assigned-but-unused count]: the "held" part of remaining (section 6.2). */
     @Query("SELECT ud.discount.discountId, COUNT(ud) FROM UserDiscount ud WHERE ud.isUsed = false AND ud.discount.discountId IN :ids " +
             "GROUP BY ud.discount.discountId")
@@ -45,8 +51,8 @@ public interface UserDiscountRepository extends JpaRepository<UserDiscount, Long
     @Query("SELECT ud FROM UserDiscount ud JOIN ud.user u " +
            "WHERE ud.discount.discountId = :discountId " +
            "AND (:isUsed IS NULL OR ud.isUsed = :isUsed) " +
-           "AND (:keyword IS NULL OR LOWER(u.fullName) LIKE CONCAT('%', LOWER(:keyword), '%') " +
-           "OR LOWER(u.email) LIKE CONCAT('%', LOWER(:keyword), '%')) " +
+           "AND (:keyword = '' OR LOWER(COALESCE(u.fullName, '')) LIKE CONCAT('%', LOWER(:keyword), '%') " +
+           "OR LOWER(COALESCE(u.email, '')) LIKE CONCAT('%', LOWER(:keyword), '%')) " +
            "ORDER BY ud.assignedAt DESC")
     Page<UserDiscount> findByDiscountIdWithFilters(@Param("discountId") Long discountId,
                                                     @Param("isUsed") Boolean isUsed,

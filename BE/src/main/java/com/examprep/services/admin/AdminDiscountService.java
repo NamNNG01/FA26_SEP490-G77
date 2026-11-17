@@ -13,8 +13,10 @@ import com.examprep.services.contest.ContestRules;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -47,7 +49,7 @@ public class AdminDiscountService {
         }
         Pageable pageable = PageRequest.of(page, size, Sort.by(dir, prop));
 
-        Page<Discount> discounts = discountRepository.findAll((root, query, cb) -> {
+        Specification<Discount> specification = (root, query, cb) -> {
             var p = cb.conjunction();
             p = cb.and(p, cb.isNull(root.get("deletedAt")));
             if (kw != null) {
@@ -66,36 +68,26 @@ public class AdminDiscountService {
                 p = cb.and(p, cb.equal(root.get("accessType"), at));
             }
             return p;
-        }, pageable);
+        };
 
         Instant now = Instant.now();
-        List<Discount> content = discounts.getContent();
-        Map<Long, Long> remainingMap = contestRules.remaining(content);
+        if (val == null) {
+            Page<Discount> discounts = discountRepository.findAll(specification, pageable);
+            Map<Long, Long> remainingMap = contestRules.remaining(discounts.getContent());
+            return discounts.map(d -> toItem(d, remainingMap, now));
+        }
 
-        return discounts.map(d -> {
-            long rem = remainingMap.getOrDefault(d.getDiscountId(), 0L);
-            String vState = ContestRules.validity(d, rem, now);
-            if (val != null && !val.equals(vState)) {
-                return null;
-            }
-            return new DiscountItem(
-                    d.getDiscountId(),
-                    d.getCode(),
-                    d.getName(),
-                    d.getDiscountType(),
-                    ContestRules.value(d),
-                    d.getAppliesTo(),
-                    d.getAccessType(),
-                    d.getUsageLimit(),
-                    d.getUsedCount(),
-                    rem,
-                    d.getStartAt(),
-                    d.getExpiresAt(),
-                    d.getIsActive(),
-                    vState,
-                    d.getCreatedAt()
-            );
-        });
+        // Validity depends on held assignments, so calculate it before slicing the page.
+        List<Discount> candidates = discountRepository.findAll(specification, pageable.getSort());
+        Map<Long, Long> remainingMap = contestRules.remaining(candidates);
+        List<DiscountItem> filtered = candidates.stream()
+                .filter(d -> val.equals(ContestRules.validity(d, remainingMap.getOrDefault(d.getDiscountId(), 0L), now)))
+                .map(d -> toItem(d, remainingMap, now))
+                .toList();
+
+        int from = (int) Math.min(pageable.getOffset(), filtered.size());
+        int to = Math.min(from + pageable.getPageSize(), filtered.size());
+        return new PageImpl<>(filtered.subList(from, to), pageable, filtered.size());
     }
 
     @Transactional(readOnly = true)
@@ -108,10 +100,10 @@ public class AdminDiscountService {
         long rem = contestRules.remaining(List.of(d)).get(id);
         String vState = ContestRules.validity(d, rem, now);
 
-        long assigned = userDiscountRepository.findAll().stream().filter(ud -> ud.getDiscount().getDiscountId().equals(id)).count();
-        long unusedAssignedCount = userDiscountRepository.findAll().stream().filter(ud -> ud.getDiscount().getDiscountId().equals(id) && !Boolean.TRUE.equals(ud.getIsUsed())).count();
+        long assigned = userDiscountRepository.countByDiscount_DiscountId(id);
+        long unusedAssignedCount = userDiscountRepository.countByDiscount_DiscountIdAndIsUsedFalse(id);
 
-        List<ContestRef> usedInContests = contestRewardRepository.findByContestContestIdOrderByRankPositionAsc(id).stream()
+        List<ContestRef> usedInContests = contestRewardRepository.findByDiscount_DiscountIdOrderByRankPositionAsc(id).stream()
                 .map(cr -> {
                     var c = cr.getContest();
                     return new ContestRef(c.getContestId(), c.getTitle(), ContestRules.status(c, now), cr.getRankPosition());
@@ -187,7 +179,7 @@ public class AdminDiscountService {
             throw ContestRules.error(ResponseCode.CONFLICT, "DISCOUNT_CODE_EXISTS", "Discount code already exists");
         }
 
-        long assignedCount = userDiscountRepository.findAll().stream().filter(ud -> ud.getDiscount().getDiscountId().equals(id)).count();
+        long assignedCount = userDiscountRepository.countByDiscount_DiscountId(id);
         boolean locked = assignedCount > 0 || d.getUsedCount() > 0;
 
         if (locked) {
@@ -195,7 +187,7 @@ public class AdminDiscountService {
                     || !Objects.equals(ContestRules.value(d), req.value()) || !d.getAppliesTo().equalsIgnoreCase(req.appliesTo())) {
                 throw ContestRules.error(ResponseCode.CONFLICT, "DISCOUNT_FIELD_LOCKED", "Locked fields cannot be modified after assignment or usage");
             }
-            long unusedAssigned = userDiscountRepository.findAll().stream().filter(ud -> ud.getDiscount().getDiscountId().equals(id) && !Boolean.TRUE.equals(ud.getIsUsed())).count();
+            long unusedAssigned = userDiscountRepository.countByDiscount_DiscountIdAndIsUsedFalse(id);
             if (req.usageLimit() < d.getUsedCount() + unusedAssigned) {
                 throw ContestRules.error(ResponseCode.CONFLICT, "USAGE_LIMIT_TOO_LOW", "Usage limit cannot be less than used plus assigned unused count");
             }
@@ -236,10 +228,8 @@ public class AdminDiscountService {
         Instant now = Instant.now();
         List<AffectedContest> affected = new ArrayList<>();
         if (!req.isActive()) {
-            contestRewardRepository.findAll().stream()
-                    .filter(cr -> cr.getDiscount() != null && cr.getDiscount().getDiscountId().equals(id))
+            contestRewardRepository.findActiveByDiscountId(id).stream()
                     .map(ContestReward::getContest)
-                    .filter(c -> c.getDeletedAt() == null && !ContestRules.CANCELLED.equals(c.getStatus()) && !ContestRules.REWARDED.equals(c.getStatus()))
                     .distinct()
                     .forEach(c -> {
                         String st = ContestRules.status(c, now);
@@ -257,17 +247,12 @@ public class AdminDiscountService {
                 .filter(x -> x.getDeletedAt() == null)
                 .orElseThrow(() -> ContestRules.error(ResponseCode.RESOURCE_NOT_FOUND, "DISCOUNT_NOT_FOUND", "Discount not found"));
 
-        boolean inUse = contestRewardRepository.findAll().stream()
-                .anyMatch(cr -> cr.getDiscount() != null && cr.getDiscount().getDiscountId().equals(id)
-                        && cr.getContest().getDeletedAt() == null
-                        && !ContestRules.CANCELLED.equals(cr.getContest().getStatus())
-                        && !ContestRules.REWARDED.equals(cr.getContest().getStatus()));
+        boolean inUse = contestRewardRepository.existsActiveByDiscountId(id);
         if (inUse) {
             throw ContestRules.error(ResponseCode.CONFLICT, "DISCOUNT_IN_USE", "Discount is currently in use by active contests");
         }
 
-        boolean hasAssignments = userDiscountRepository.findAll().stream()
-                .anyMatch(ud -> ud.getDiscount().getDiscountId().equals(id));
+        boolean hasAssignments = userDiscountRepository.existsByDiscount_DiscountId(id);
         if (hasAssignments) {
             throw ContestRules.error(ResponseCode.CONFLICT, "DISCOUNT_HAS_ASSIGNMENTS", "Discount has existing assignments; please deactivate instead");
         }
@@ -281,7 +266,7 @@ public class AdminDiscountService {
         discountRepository.findById(id).filter(x -> x.getDeletedAt() == null)
                 .orElseThrow(() -> ContestRules.error(ResponseCode.RESOURCE_NOT_FOUND, "DISCOUNT_NOT_FOUND", "Discount not found"));
 
-        String kw = (keyword != null && !keyword.isBlank()) ? keyword.trim() : null;
+        String kw = keyword == null ? "" : keyword.trim().toLowerCase();
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "assignedAt"));
 
         // Filter and pagination are now handled by repository query
@@ -302,6 +287,10 @@ public class AdminDiscountService {
     }
 
     private void validateRequest(DiscountWriteRequest req, Discount existing) {
+        if (req.appliesTo() == null || !Set.of("COURSE", "SUBSCRIPTION", "ALL").contains(req.appliesTo().trim().toUpperCase())) {
+            throw ContestRules.invalid("appliesTo", "appliesTo must be COURSE, SUBSCRIPTION, or ALL");
+        }
+
         if (req.accessType() != null && !req.accessType().isBlank()) {
             String at = req.accessType().toUpperCase();
             if (!at.equals("PUBLIC") && !at.equals("CLAIM_REQUIRED")) {
@@ -324,5 +313,26 @@ public class AdminDiscountService {
         if (req.startAt() != null && req.expiredAt() != null && !req.expiredAt().isAfter(req.startAt())) {
             throw ContestRules.invalid("expiredAt", "expiredAt must be after startAt");
         }
+    }
+
+    private DiscountItem toItem(Discount d, Map<Long, Long> remainingMap, Instant now) {
+        long remaining = remainingMap.getOrDefault(d.getDiscountId(), 0L);
+        return new DiscountItem(
+                d.getDiscountId(),
+                d.getCode(),
+                d.getName(),
+                d.getDiscountType(),
+                ContestRules.value(d),
+                d.getAppliesTo(),
+                d.getAccessType(),
+                d.getUsageLimit(),
+                d.getUsedCount(),
+                remaining,
+                d.getStartAt(),
+                d.getExpiresAt(),
+                d.getIsActive(),
+                ContestRules.validity(d, remaining, now),
+                d.getCreatedAt()
+        );
     }
 }

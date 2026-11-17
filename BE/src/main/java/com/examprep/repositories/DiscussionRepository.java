@@ -72,6 +72,39 @@ public interface DiscussionRepository extends JpaRepository<Discussion, Long> {
             value = "SELECT d FROM Discussion d " +
                     "JOIN FETCH d.user u " +
                     "LEFT JOIN FETCH d.course c " +
+                    "WHERE d.user.userId = :userId " +
+                    "AND (:tag IS NULL OR d.tag = :tag) " +
+                    "AND (:approvalStatus IS NULL OR d.approvalStatus = :approvalStatus) " +
+                    "AND (:status IS NULL OR d.status = :status) " +
+                    "AND (:search IS NULL OR :search = '' OR " +
+                    "LOWER(d.title) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+                    "LOWER(d.content) LIKE LOWER(CONCAT('%', :search, '%'))) " +
+                    "ORDER BY d.isPinned DESC, " +
+                    "CASE WHEN :sort = 'mostCommented' THEN d.commentCount END DESC, " +
+                    "CASE WHEN :sort = 'mostUpvoted' THEN d.upvoteCount END DESC, " +
+                    "d.createdAt DESC",
+            countQuery = "SELECT COUNT(d) FROM Discussion d " +
+                    "WHERE d.user.userId = :userId " +
+                    "AND (:tag IS NULL OR d.tag = :tag) " +
+                    "AND (:approvalStatus IS NULL OR d.approvalStatus = :approvalStatus) " +
+                    "AND (:status IS NULL OR d.status = :status) " +
+                    "AND (:search IS NULL OR :search = '' OR " +
+                    "LOWER(d.title) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+                    "LOWER(d.content) LIKE LOWER(CONCAT('%', :search, '%')))")
+    Page<Discussion> findMineDiscussions(
+            @Param("userId") Long userId,
+            @Param("tag") String tag,
+            @Param("approvalStatus") String approvalStatus,
+            @Param("status") String status,
+            @Param("search") String search,
+            @Param("sort") String sort,
+            Pageable pageable
+    );
+
+    @Query(
+            value = "SELECT d FROM Discussion d " +
+                    "JOIN FETCH d.user u " +
+                    "LEFT JOIN FETCH d.course c " +
                     "WHERE (:courseId IS NULL OR d.course.courseId = :courseId) " +
                     "AND (:approvalStatus IS NULL OR d.approvalStatus = :approvalStatus) " +
                     "AND (:status IS NULL OR d.status = :status) " +

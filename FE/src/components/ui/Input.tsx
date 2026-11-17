@@ -8,6 +8,7 @@ export function Input({
   labelAction?: React.ReactNode;
   error?: string; hint?: string; className?: string;
   icon?: React.ReactNode; suffix?: React.ReactNode;
+  ref?: React.Ref<HTMLInputElement>;
 } & React.InputHTMLAttributes<HTMLInputElement>) {
   // Tie the visible label (and error/hint text) to the input so screen
   // readers announce them and clicking the label focuses the field.

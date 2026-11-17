@@ -80,7 +80,8 @@ class StudentDiscussionServiceTest {
         when(discussionRepository.findAllDiscussions(eq("question"), eq(""), eq("latest"), any())).thenReturn(page);
         when(upvoteRepository.findUpvotedDiscussionIds(eq(200L), eq(List.of(1L)))).thenReturn(List.of(1L));
 
-        Page<DiscussionItemDto> res = discussionService.listDiscussions("question", "", "latest", 0, 10, 200L);
+        Page<DiscussionItemDto> res = discussionService.listDiscussions(
+                "PUBLIC", "question", null, null, "", "latest", 0, 10, 200L);
 
         assertNotNull(res);
         assertEquals(1, res.getTotalElements());
@@ -89,6 +90,30 @@ class StudentDiscussionServiceTest {
         assertTrue(item.isUpvoted());
         assertTrue(item.isAuthor());
         verify(upvoteRepository, times(1)).findUpvotedDiscussionIds(eq(200L), any());
+    }
+
+    @Test
+    void listMineDiscussions_appliesOwnerAndStatusFilters() {
+        Page<Discussion> page = new PageImpl<>(List.of(discussion1));
+        when(discussionRepository.findMineDiscussions(
+                eq(200L), eq("question"), eq("REJECTED"), eq("CLOSED"),
+                eq("dependency"), eq("latest"), any())).thenReturn(page);
+        when(upvoteRepository.findUpvotedDiscussionIds(eq(200L), eq(List.of(1L)))).thenReturn(List.of());
+
+        Page<DiscussionItemDto> result = discussionService.listDiscussions(
+                "MINE", "question", "REJECTED", "CLOSED", "dependency", "latest", 0, 10, 200L);
+
+        assertEquals(1, result.getTotalElements());
+        verify(discussionRepository).findMineDiscussions(
+                eq(200L), eq("question"), eq("REJECTED"), eq("CLOSED"),
+                eq("dependency"), eq("latest"), any());
+    }
+
+    @Test
+    void listMineDiscussions_requiresAuthentication() {
+        assertThrows(ForbiddenException.class, () -> discussionService.listDiscussions(
+                "MINE", "ALL", "ALL", "ALL", null, "latest", 0, 10, null));
+        verifyNoInteractions(discussionRepository);
     }
 
     @Test

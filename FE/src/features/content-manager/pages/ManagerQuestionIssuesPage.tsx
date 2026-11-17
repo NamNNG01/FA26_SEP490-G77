@@ -24,6 +24,7 @@ export function ManagerQuestionIssuesPage() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [list, setList] = useState<any>(null);
   const [courses, setCourses] = useState<CourseSummaryItem[]>([]);
+  const [coursesReady, setCoursesReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -65,6 +66,8 @@ export function ManagerQuestionIssuesPage() {
       if (!cancelled) setCourses(result.content);
     }).catch(() => {
       if (!cancelled) setCourses([]);
+    }).finally(() => {
+      if (!cancelled) setCoursesReady(true);
     });
     return () => { cancelled = true; };
   }, []);
@@ -73,6 +76,17 @@ export function ManagerQuestionIssuesPage() {
   const review = useIssueReview({ userId: user?.userId, onChanged: () => load(page, appliedFilters) });
 
   const rows = unwrapList(list);
+  // The queue only shows tickets of courses this manager owns or co-manages, so an empty result
+  // can mean "no courses yet" — say so instead of sending them off to change filters.
+  const filtersActive = (Object.keys(EMPTY_FILTERS) as (keyof typeof EMPTY_FILTERS)[])
+    .some(key => appliedFilters[key] !== EMPTY_FILTERS[key]);
+  const emptyState = busy || !coursesReady
+    ? 'Loading tickets…'
+    : filtersActive
+      ? 'No tickets match these filters. Try changing the status or clearing some filters.'
+      : !courses.length
+        ? 'You do not manage any course yet. Reports appear here once you are the owner or a co-manager of a course.'
+        : 'No tickets for your courses yet. New student reports will appear here.';
   const courseOptions = useMemo(() => [
     { label: 'All courses', value: '' },
     ...courses.map(course => ({ label: course.title, value: String(course.courseId) })),
@@ -160,7 +174,7 @@ export function ManagerQuestionIssuesPage() {
         sortDir={sortDir}
         serverPagination={{ page: page + 1, total: list?.totalElements ?? 0, onChange: value => setPage(value - 1) }}
         onRowClick={row => void review.open(row as any)}
-        emptyState={busy ? 'Loading tickets…' : 'No tickets found. Try changing the status or clearing some filters.'}
+        emptyState={emptyState}
       />
     </div>
 
