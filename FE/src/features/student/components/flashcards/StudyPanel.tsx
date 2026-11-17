@@ -4,7 +4,10 @@ import { useToast } from '@/components/ui/ToastHost';
 import { Icon } from '@/assets/icons';
 import { getApiErrorMessage } from '@/utils/apiError';
 import { isEndpointMissing, studentDeckService, type DeckMode, type StudyCard } from '@/services/studentDeck.service';
+import { useNavigate } from 'react-router';
+import { studentDeckLearnPath, studentDeckTestPath } from '@/app/routes';
 import { CardFace, ConfirmModal, plural } from './flashcardUi';
+import { MIN_QUIZ_CARDS } from './flashcardQuiz';
 
 /**
  * A study run, always a server session (FP-01/02). "review" studies only the cards not learned
@@ -162,14 +165,18 @@ export function StudyActions({
   study,
   deckId,
   cardCount,
+  quizCount,
   onProgress,
 }: {
   study: DeckStudy;
   deckId: number;
   cardCount: number;
+  /** Cards Learn / Test can ask (a back with text); below MIN_QUIZ_CARDS both are off. */
+  quizCount: number;
   onProgress: (p: DeckProgress) => void;
 }) {
   const toast = useToast();
+  const navigate = useNavigate();
   const [confirm, setConfirm] = useState<'learnAll' | 'reset' | null>(null);
   const [working, setWorking] = useState(false);
   const busy = study.starting != null || study.run != null;
@@ -227,6 +234,26 @@ export function StudyActions({
       >
         Review missed cards
       </Button>
+      <div className="grid grid-cols-2 gap-2">
+        <Button
+          variant="outline"
+          icon={<Icon.Brain className="w-4 h-4" />}
+          onClick={() => navigate(studentDeckLearnPath(deckId))}
+          disabled={busy || quizCount < MIN_QUIZ_CARDS}
+          title={quizCount < MIN_QUIZ_CARDS ? `Learn needs at least ${MIN_QUIZ_CARDS} cards with a text back.` : 'Answer multiple-choice questions until you know every card'}
+        >
+          Learn
+        </Button>
+        <Button
+          variant="outline"
+          icon={<Icon.ClipboardList className="w-4 h-4" />}
+          onClick={() => navigate(studentDeckTestPath(deckId))}
+          disabled={busy || quizCount < MIN_QUIZ_CARDS}
+          title={quizCount < MIN_QUIZ_CARDS ? `Test needs at least ${MIN_QUIZ_CARDS} cards with a text back.` : 'Take a multiple-choice test on this deck'}
+        >
+          Test
+        </Button>
+      </div>
       <div className="grid grid-cols-2 gap-2">
         <Button variant="ghost" size="sm" icon={<Icon.CheckCircle className="w-4 h-4" />} onClick={() => setConfirm('learnAll')} disabled={busy}>
           Mark all learned
