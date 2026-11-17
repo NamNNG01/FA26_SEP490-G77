@@ -30,6 +30,7 @@ import { ImportCardsModal } from '../components/flashcards/ImportCardsModal';
 import { DeckContributionModal } from '../components/flashcards/DeckContributionModal';
 import { CopyDeckModal } from '../components/flashcards/CopyDeckModal';
 import { downloadDecksXlsx, fileSlug } from '@/utils/flashcardXlsx';
+import { usableCards } from '../components/flashcards/flashcardQuiz';
 
 const MODE_LABEL: Record<StudentDeckView['mode'], string> = {
   FLASHCARD: 'Flashcard',
@@ -355,7 +356,13 @@ function DeckPage() {
         </div>
 
         <div className="min-w-0 flex flex-col gap-3 lg:border-l lg:border-line lg:pl-5">
-          <StudyActions study={study} deckId={deckId} cardCount={deck.cardCount} onProgress={setProgress} />
+          <StudyActions
+            study={study}
+            deckId={deckId}
+            cardCount={deck.cardCount}
+            quizCount={usableCards(cards, deck.mode).length}
+            onProgress={setProgress}
+          />
           {/* Another student's public deck or a course deck: keep it close, or take a copy to edit. */}
           {!isOwner && (
             <div className={`grid grid-cols-2 gap-2 ${deck.cardCount > 0 ? 'border-t border-line pt-3' : ''}`}>
