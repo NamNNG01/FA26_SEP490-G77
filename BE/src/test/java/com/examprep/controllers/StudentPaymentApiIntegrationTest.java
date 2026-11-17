@@ -93,7 +93,7 @@ class StudentPaymentApiIntegrationTest {
         activeSubscription = UserSubscription.builder().user(subscriber).plan(proPlan)
                 .startDate(Instant.now().minus(10, ChronoUnit.DAYS))
                 .endDate(Instant.now().plus(20, ChronoUnit.DAYS))
-                .status("ACTIVE").paidAmount(proPlan.getPrice()).autoRenew(false).build();
+                .status("ACTIVE").paidAmount(proPlan.getPrice()).autoRenew(true).build();
         em.persist(activeSubscription);
 
         percentDiscount = discount("SAVE10", "PERCENT", "10", "ALL");
@@ -463,7 +463,7 @@ class StudentPaymentApiIntegrationTest {
         assertEquals("ACTIVE", data.path("status").asText());
         assertEquals(0, proPlan.getPrice().compareTo(data.path("price").decimalValue()));
         assertEquals(20, data.path("daysRemaining").asLong());
-        assertFalse(data.path("autoRenew").asBoolean());
+        assertTrue(data.path("autoRenew").asBoolean());
         assertNotNull(data.path("startedAt").textValue());
         assertNotNull(data.path("expiresAt").textValue());
     }
@@ -535,29 +535,12 @@ class StudentPaymentApiIntegrationTest {
     // =================================================================================
 
     @Test
-    void autoRenewTogglesTheActiveSubscription() throws Exception {
-        call(subscriber, patch("/api/v1/student/subscription/auto-renew")
-                .contentType(MediaType.APPLICATION_JSON).content("{\"autoRenew\":true}"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.subscriptionId").value(activeSubscription.getSubscriptionId()))
-                .andExpect(jsonPath("$.data.autoRenew").value(true));
-        assertTrue(activeSubscription.getAutoRenew());
-
+    void autoRenewCanNoLongerBeChangedByTheStudent() throws Exception {
         call(subscriber, patch("/api/v1/student/subscription/auto-renew")
                 .contentType(MediaType.APPLICATION_JSON).content("{\"autoRenew\":false}"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.autoRenew").value(false));
-        assertFalse(activeSubscription.getAutoRenew());
-    }
-
-    @Test
-    void autoRenewNeedsAnActiveSubscriptionAndAValue() throws Exception {
-        call(student, patch("/api/v1/student/subscription/auto-renew")
-                .contentType(MediaType.APPLICATION_JSON).content("{\"autoRenew\":true}"))
-                .andExpect(status().isNotFound());
-        call(subscriber, patch("/api/v1/student/subscription/auto-renew")
-                .contentType(MediaType.APPLICATION_JSON).content("{}"))
-                .andExpect(status().isBadRequest());
+                .andExpect(result -> assertTrue(result.getResponse().getStatus() >= 400));
+        em.refresh(activeSubscription);
+        assertTrue(activeSubscription.getAutoRenew());
     }
 
     // =================================================================================
@@ -967,6 +950,7 @@ class StudentPaymentApiIntegrationTest {
         assertEquals("ACTIVE", fresh.getStatus());
         assertEquals(basicPlan.getPlanId(), fresh.getPlan().getPlanId());
         assertEquals(0, basicPlan.getPrice().compareTo(fresh.getPaidAmount()));
+        assertTrue(fresh.getAutoRenew());
         long days = ChronoUnit.DAYS.between(fresh.getStartDate(), fresh.getEndDate());
         assertEquals(30, days);
     }

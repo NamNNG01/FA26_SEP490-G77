@@ -46,10 +46,5 @@ public class StudentSubscriptionController {
                 checkout.expiresAt()), "Checkout created"));
     }
 
-    @PatchMapping("/auto-renew")
-    @Operation(summary = "SB-04: Update auto-renew preference")
-    public ResponseEntity<ApiResponse<PaymentResponses.AutoRenew>> autoRenew(@AuthenticationPrincipal UserPrincipal user,
-            @Valid @RequestBody PaymentRequests.AutoRenew request) {
-        return ResponseEntity.ok(ApiResponse.success(service.autoRenew(user.getId(), request.autoRenew())));
-    }
+    // SB-04 (PATCH /auto-renew) is gone: paid plans always auto-renew and students cannot change it.
 }
