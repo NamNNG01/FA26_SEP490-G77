@@ -45,6 +45,4 @@ public class StudentSubscriptionController {
                 checkout.discountAmount(), checkout.totalPrice(), checkout.paymentUrl(), checkout.qrCode(),
                 checkout.expiresAt()), "Checkout created"));
     }
-
-    // SB-04 (PATCH /auto-renew) is gone: paid plans always auto-renew and students cannot change it.
 }

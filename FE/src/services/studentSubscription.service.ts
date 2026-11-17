@@ -10,7 +10,6 @@ import type { ApiResponse } from '@/auth/authContext';
  *
  * A plan is bought with the shared PY-01 checkout (payment.service, `{ planId }`); it turns ACTIVE
  * through the PayOS webhook. SB-03 (`/subscription/checkout`) answers the same and is not used.
- * Paid plans always auto-renew; the student cannot turn it off.
  */
 
 /** SB-01 */

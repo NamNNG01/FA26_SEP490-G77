@@ -37,7 +37,7 @@ export const ROUTES = {
   studentExams: "/student/exams",
   /** Materials the student uploaded (MQ-02) and the quizzes generated from them. */
   studentMaterials: "/student/materials",
-  /** Study plans (SB-01..SB-04): the ACTIVE plan, auto-renew and upgrades. */
+  /** Study plans (SB-01..SB-03): the ACTIVE plan and upgrades. */
   studentSubscription: "/student/subscription",
   /** Vouchers assigned to the signed-in student. */
   studentDiscounts: "/student/discounts",

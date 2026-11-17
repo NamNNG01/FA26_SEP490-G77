@@ -44,14 +44,14 @@ INSERT INTO seed_demo_target (email, plan_name, course_id) VALUES
 
 -- 1) Close whatever ACTIVE plan they hold now (Free Plan or an older purchase).
 UPDATE user_subscriptions s
-SET status = 'SUPERSEDED', auto_renew = FALSE
+SET status = 'SUPERSEDED'
 FROM seed_demo_target t
 JOIN users u ON LOWER(u.email) = LOWER(t.email) AND u.role_name = 'STUDENT'
 WHERE s.user_id = u.user_id AND s.status = 'ACTIVE';
 
 -- 2) Open the paid plan period, snapshotting the list price as paid_amount.
-INSERT INTO user_subscriptions (user_id, plan_id, start_date, end_date, status, paid_amount, auto_renew, created_at)
-SELECT u.user_id, p.plan_id, NOW(), NOW() + (p.duration_days || ' days')::interval, 'ACTIVE', p.price, FALSE, NOW()
+INSERT INTO user_subscriptions (user_id, plan_id, start_date, end_date, status, paid_amount, created_at)
+SELECT u.user_id, p.plan_id, NOW(), NOW() + (p.duration_days || ' days')::interval, 'ACTIVE', p.price, NOW()
 FROM seed_demo_target t
 JOIN users u ON LOWER(u.email) = LOWER(t.email) AND u.role_name = 'STUDENT'
 JOIN subscription_plans p ON LOWER(p.plan_name) = LOWER(t.plan_name) AND p.deleted_at IS NULL
