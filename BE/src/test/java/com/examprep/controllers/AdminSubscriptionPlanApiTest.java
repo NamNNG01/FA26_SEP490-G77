@@ -682,6 +682,6 @@ class AdminSubscriptionPlanApiTest {
 
     private void subscription(User user, SubscriptionPlan plan, Instant start, Instant end, String status) {
         subscriptionRepository.save(UserSubscription.builder().user(user).plan(plan).startDate(start).endDate(end)
-                .status(status).paidAmount(plan.getPrice()).autoRenew(false).build());
+                .status(status).paidAmount(plan.getPrice()).build());
     }
 }

@@ -41,8 +41,4 @@ public class UserSubscription implements Serializable {
     @Column(name = "paid_amount", nullable = false, precision = 10, scale = 2)
     private BigDecimal paidAmount;
 
-    @Builder.Default
-    @Column(name = "auto_renew", nullable = false)
-    /** Paid plans always auto-renew; students cannot turn it off (it is only cleared when a plan ends early). */
-    private Boolean autoRenew = true;
 }

@@ -93,7 +93,7 @@ class StudentPaymentApiIntegrationTest {
         activeSubscription = UserSubscription.builder().user(subscriber).plan(proPlan)
                 .startDate(Instant.now().minus(10, ChronoUnit.DAYS))
                 .endDate(Instant.now().plus(20, ChronoUnit.DAYS))
-                .status("ACTIVE").paidAmount(proPlan.getPrice()).autoRenew(true).build();
+                .status("ACTIVE").paidAmount(proPlan.getPrice()).build();
         em.persist(activeSubscription);
 
         percentDiscount = discount("SAVE10", "PERCENT", "10", "ALL");
@@ -463,7 +463,6 @@ class StudentPaymentApiIntegrationTest {
         assertEquals("ACTIVE", data.path("status").asText());
         assertEquals(0, proPlan.getPrice().compareTo(data.path("price").decimalValue()));
         assertEquals(20, data.path("daysRemaining").asLong());
-        assertTrue(data.path("autoRenew").asBoolean());
         assertNotNull(data.path("startedAt").textValue());
         assertNotNull(data.path("expiresAt").textValue());
     }
@@ -528,19 +527,6 @@ class StudentPaymentApiIntegrationTest {
         call(manager, post("/api/v1/student/subscription/checkout").contentType(MediaType.APPLICATION_JSON)
                 .content(json.writeValueAsString(Map.of("planId", basicPlan.getPlanId()))))
                 .andExpect(status().isForbidden());
-    }
-
-    // =================================================================================
-    // SB-04
-    // =================================================================================
-
-    @Test
-    void autoRenewCanNoLongerBeChangedByTheStudent() throws Exception {
-        call(subscriber, patch("/api/v1/student/subscription/auto-renew")
-                .contentType(MediaType.APPLICATION_JSON).content("{\"autoRenew\":false}"))
-                .andExpect(result -> assertTrue(result.getResponse().getStatus() >= 400));
-        em.refresh(activeSubscription);
-        assertTrue(activeSubscription.getAutoRenew());
     }
 
     // =================================================================================
@@ -682,7 +668,7 @@ class StudentPaymentApiIntegrationTest {
         UserSubscription old = UserSubscription.builder().user(student).plan(freePlan)
                 .startDate(Instant.now().minus(60, ChronoUnit.DAYS))
                 .endDate(Instant.now().minus(30, ChronoUnit.DAYS))
-                .status("ACTIVE").paidAmount(BigDecimal.ZERO).autoRenew(false).build();
+                .status("ACTIVE").paidAmount(BigDecimal.ZERO).build();
         em.persist(old);
         em.flush();
         SubscriptionPlan premium = plan("Premium", "199000", 30, 2_000_000, 4);
@@ -977,7 +963,6 @@ class StudentPaymentApiIntegrationTest {
         assertEquals(Payment.SUCCEEDED, payment(pending.getOrderCode()).getStatus());
         em.refresh(activeSubscription);
         assertEquals("SUPERSEDED", activeSubscription.getStatus());
-        assertFalse(activeSubscription.getAutoRenew());
 
         List<UserSubscription> rows = em.createQuery(
                         "select s from UserSubscription s where s.user = :u order by s.subscriptionId",
@@ -988,7 +973,6 @@ class StudentPaymentApiIntegrationTest {
         assertEquals("ACTIVE", fresh.getStatus());
         assertEquals(basicPlan.getPlanId(), fresh.getPlan().getPlanId());
         assertEquals(0, basicPlan.getPrice().compareTo(fresh.getPaidAmount()));
-        assertTrue(fresh.getAutoRenew());
         long days = ChronoUnit.DAYS.between(fresh.getStartDate(), fresh.getEndDate());
         assertEquals(30, days);
     }

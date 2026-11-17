@@ -24,7 +24,7 @@ type TokenBalance = { status: 'loading' | 'error' } | { status: 'ready'; usage: 
 
 /**
  * Subscription — the student's plan (SB-02) with its days and AI tokens left, and every plan on
- * offer (SB-01). Paid plans always auto-renew. A paid plan is bought through PaymentCheckoutModal
+ * offer (SB-01). A paid plan is bought through PaymentCheckoutModal
  * (PY-01 + PayOS); buying another plan replaces the current one straight away.
  */
 export function StudentSubscriptionPage() {
@@ -182,15 +182,12 @@ function CurrentPlanCard({ loaded, subscription, balance, onRetryBalance }: {
             </p>
           </div>
         </div>
-        <span className="inline-flex items-center gap-1.5 text-sm text-content-secondary">
-          <Icon.Check className="w-4 h-4 text-success" /> Auto-renew on
-        </span>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <UsageBar
           label={left === 0 ? 'Expired' : `${left} day${left === 1 ? '' : 's'} left`}
-          aside={`Renews on ${formatDate(subscription.expiresAt)}`}
+          aside={`Expires on ${formatDate(subscription.expiresAt)}`}
           left={left}
           total={totalDays}
         />

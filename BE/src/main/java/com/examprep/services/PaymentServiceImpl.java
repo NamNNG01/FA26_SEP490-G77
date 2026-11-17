@@ -81,13 +81,13 @@ public class PaymentServiceImpl implements PaymentService {
             long days = Math.max(0, (long) Math.ceil((s.getEndDate().toEpochMilli() - Instant.now().toEpochMilli()) / 86400000.0));
             return new PaymentResponses.Current(s.getSubscriptionId(), s.getPlan().getPlanId(), s.getPlan().getPlanName(),
                     s.getStatus(), s.getPlan().getPrice(), s.getStartDate(), s.getEndDate(), days,
-                    Boolean.TRUE.equals(s.getAutoRenew()), com.examprep.services.admin.AdminSubscriptionPlanService.featureKeys(s.getPlan()));
+                    com.examprep.services.admin.AdminSubscriptionPlanService.featureKeys(s.getPlan()));
         }).orElseGet(() -> plans.findByPlanNameIgnoreCaseAndDeletedAtIsNull("Free Plan")
                 .map(plan -> new PaymentResponses.Current(null, plan.getPlanId(), plan.getPlanName(), "ACTIVE",
-                        plan.getPrice(), null, null, 0, false,
+                        plan.getPrice(), null, null, 0,
                         com.examprep.services.admin.AdminSubscriptionPlanService.featureKeys(plan)))
                 .orElse(new PaymentResponses.Current(null, null, "Free", "ACTIVE", BigDecimal.ZERO,
-                        null, null, 0, false, List.of())));
+                        null, null, 0, List.of())));
     }
 
     @Override

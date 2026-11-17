@@ -474,7 +474,7 @@ public class AiFlashcardApiTest {
         subscriptions.save(UserSubscription.builder().user(student).plan(plan)
                 .startDate(Instant.now().minus(1, ChronoUnit.DAYS))
                 .endDate(Instant.now().plus(29, ChronoUnit.DAYS))
-                .status("ACTIVE").paidAmount(plan.getPrice()).autoRenew(false).build());
+                .status("ACTIVE").paidAmount(plan.getPrice()).build());
         when(aiClient.complete(any())).thenReturn(AiResponse.builder()
                 .text("{\"cards\":[{\"frontText\":\"Quang hợp là gì?\",\"backText\":\"Quá trình tổng hợp\"}]}")
                 .inputTokens(120).outputTokens(30).model("gemini-test").build());
@@ -509,7 +509,7 @@ public class AiFlashcardApiTest {
         em.persist(UserSubscription.builder().user(student).plan(plan)
                 .startDate(Instant.now().minus(1, ChronoUnit.DAYS))
                 .endDate(Instant.now().plus(29, ChronoUnit.DAYS))
-                .status("ACTIVE").paidAmount(plan.getPrice()).autoRenew(false).build());
+                .status("ACTIVE").paidAmount(plan.getPrice()).build());
         em.flush();
 
         // The 20-card estimate (~2951 tokens) exceeds the 500-token plan pool: the PLAN bucket alone
@@ -600,7 +600,7 @@ public class AiFlashcardApiTest {
                 .price(new BigDecimal("99000")).durationDays(30).aiTokenLimit(600_000).build();
         em.persist(plan);
         em.persist(UserSubscription.builder().user(student).plan(plan).startDate(start).endDate(end)
-                .status("ACTIVE").paidAmount(new BigDecimal("99000")).autoRenew(false).build());
+                .status("ACTIVE").paidAmount(new BigDecimal("99000")).build());
         em.flush();
 
         JsonNode data = usage(student);
