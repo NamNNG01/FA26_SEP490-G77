@@ -22,7 +22,24 @@ import java.util.List;
 @Tag(name = "Admin Subscription Plans")
 public class AdminSubscriptionPlanController {
 
+    private static final List<FeatureKey> FEATURE_KEYS = List.of(
+            new FeatureKey("AI_FLASHCARD_GENERATION", "AI flashcards", "Generate flashcards from study materials"),
+            new FeatureKey("AI_QUIZ_FROM_MATERIAL", "AI quizzes", "Generate quizzes from study materials"),
+            new FeatureKey("AI_ESSAY_GRADING", "Essay grading", "Grade essay answers with AI"),
+            new FeatureKey("WEAKNESS_REPORT", "Weakness report", "Generate a detailed weakness report"),
+            new FeatureKey("SMART_PRACTICE", "Smart practice", "Generate adaptive practice"),
+            new FeatureKey("PERSONALISED_RECOMMENDATIONS", "Recommendations", "Personalised study recommendations"),
+            new FeatureKey("WEAK_SPOTS", "Weak spots", "View weak question topics"),
+            new FeatureKey("EARLY_ACCESS", "Early access", "Access new features early"));
+
+    public record FeatureKey(String key, String label, String description) {}
+
     private final AdminSubscriptionPlanService service;
+
+    @GetMapping("/feature-keys")
+    public ResponseEntity<ApiResponse<List<FeatureKey>>> featureKeys() {
+        return ResponseEntity.ok(ApiResponse.success(FEATURE_KEYS));
+    }
 
     @GetMapping
     @Operation(summary = "API 20: Admin Subscription Plan List")
