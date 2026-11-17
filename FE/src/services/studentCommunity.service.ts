@@ -5,6 +5,9 @@ import type { StudentPage } from './studentLearning.service';
 export type DiscussionTag = 'question' | 'tip' | 'announcement';
 export type DiscussionSort = 'latest' | 'mostCommented' | 'mostUpvoted';
 export type DiscussionApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+export type DiscussionScope = 'PUBLIC' | 'MINE';
+export type DiscussionContentStatus = 'OPEN' | 'CLOSED' | 'HIDDEN' | 'ALL';
+export type DiscussionApprovalFilter = DiscussionApprovalStatus | 'ALL';
 
 export interface DiscussionAuthor {
   userId: number;
@@ -45,6 +48,7 @@ export interface DiscussionItem {
   isClosed?: boolean;
   imageUrl?: string | null;
   approvalStatus?: DiscussionApprovalStatus;
+  status?: Exclude<DiscussionContentStatus, 'ALL'>;
   rejectionReason?: string | null;
   createdAt: string;
   lastCommentAt: string | null;
@@ -65,6 +69,7 @@ export interface DiscussionDetail {
   isBookmarked: boolean;
   isAuthor: boolean;
   isClosed: boolean;
+  status?: Exclude<DiscussionContentStatus, 'ALL'>;
   imageUrl?: string | null;
   approvalStatus?: DiscussionApprovalStatus;
   rejectionReason?: string | null;
@@ -82,7 +87,7 @@ function query(params: Record<string, string | number | undefined | null>) {
 }
 
 export const studentCommunityService = {
-  async getDiscussions(params: { tag?: DiscussionTag; search?: string; sort?: DiscussionSort; page?: number; size?: number }) {
+  async getDiscussions(params: { scope?: DiscussionScope; tag?: DiscussionTag | 'ALL'; approvalStatus?: DiscussionApprovalFilter; status?: DiscussionContentStatus; search?: string; sort?: DiscussionSort; page?: number; size?: number }) {
     const res = await api.get<ApiResponse<StudentPage<DiscussionItem>>>(`/student/discussions?${query(params)}`);
     return res.data;
   },
