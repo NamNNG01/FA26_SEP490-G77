@@ -16,11 +16,13 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/v1/student/ai")
 @RequiredArgsConstructor
 public class StudentPersonalizationController {
+    private final com.examprep.services.PlanEntitlementService entitlements;
     private final PersonalizationService personalization;
 
     @PostMapping("/smart-practice")
     public ResponseEntity<ApiResponse<SmartStarted>> smartPractice(@AuthenticationPrincipal UserPrincipal user,
             @Valid @RequestBody SmartRequest request) {
+        entitlements.require(user.getId(), "SMART_PRACTICE");
         return ResponseEntity.status(HttpStatus.ACCEPTED)
                 .body(ApiResponse.success(personalization.startSmartPractice(user.getId(), request), "Generating smart practice"));
     }
@@ -36,12 +38,14 @@ public class StudentPersonalizationController {
     @GetMapping("/recommendations")
     public ResponseEntity<ApiResponse<Recommendations>> recommendations(@AuthenticationPrincipal UserPrincipal user,
             @RequestParam Long courseId) {
+        entitlements.require(user.getId(), "PERSONALISED_RECOMMENDATIONS");
         return ResponseEntity.ok(ApiResponse.success(personalization.recommendations(user.getId(), courseId)));
     }
 
     @PostMapping("/weakness-report")
     public ResponseEntity<ApiResponse<WeaknessReport>> weaknessReport(@AuthenticationPrincipal UserPrincipal user,
             @Valid @RequestBody WeaknessRequest request) {
+        entitlements.require(user.getId(), "WEAKNESS_REPORT");
         return ResponseEntity.ok(ApiResponse.success(personalization.weaknessReport(user.getId(), request)));
     }
 }

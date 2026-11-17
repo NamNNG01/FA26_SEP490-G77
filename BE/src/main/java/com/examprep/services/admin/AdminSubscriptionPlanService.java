@@ -106,6 +106,7 @@ public class AdminSubscriptionPlanService {
                 .durationDays(req.durationDays())
                 .aiTokenLimit(req.aiTokenLimit())
                 .featuresJson(writeFeatures(validateFeatures(req.features())))
+                .featureKeysJson(writeFeatures(validateKeys(req.featureKeys())))
                 .isActive(req.isActive() != null ? req.isActive() : true)
                 .sortOrder(req.sortOrder() != null ? req.sortOrder() : 0)
                 .build();
@@ -134,6 +135,7 @@ public class AdminSubscriptionPlanService {
         plan.setDurationDays(req.durationDays());
         plan.setAiTokenLimit(req.aiTokenLimit());
         plan.setFeaturesJson(writeFeatures(validateFeatures(req.features())));
+        if (req.featureKeys() != null) plan.setFeatureKeysJson(writeFeatures(validateKeys(req.featureKeys())));
         // Null keeps the current value on update; defaults only apply on create.
         if (req.isActive() != null) plan.setIsActive(req.isActive());
         if (req.sortOrder() != null) plan.setSortOrder(req.sortOrder());
@@ -217,6 +219,7 @@ public class AdminSubscriptionPlanService {
                 plan.getDurationDays(),
                 plan.getAiTokenLimit(),
                 features,
+                featureKeys(plan),
                 plan.getIsActive(),
                 plan.getSortOrder(),
                 activeSubscribers);
@@ -233,6 +236,7 @@ public class AdminSubscriptionPlanService {
                 plan.getDurationDays(),
                 plan.getAiTokenLimit(),
                 features,
+                featureKeys(plan),
                 plan.getIsActive(),
                 plan.getSortOrder(),
                 activeSubscribers,
@@ -251,8 +255,25 @@ public class AdminSubscriptionPlanService {
                 plan.getDurationDays(),
                 plan.getAiTokenLimit(),
                 features,
+                featureKeys(plan),
                 plan.getIsActive(),
                 plan.getSortOrder());
+    }
+
+    public static List<String> featureKeys(SubscriptionPlan plan) {
+        try {
+            String json = plan.getFeatureKeysJson();
+            if (json == null) return List.of();
+            return List.copyOf(new ObjectMapper().readValue(json, new com.fasterxml.jackson.core.type.TypeReference<List<String>>() {}));
+        } catch (Exception ex) { return List.of(); }
+    }
+
+    private static List<String> validateKeys(List<String> keys) {
+        Set<String> allowed = Set.of("AI_FLASHCARD_GENERATION", "AI_QUIZ_FROM_MATERIAL", "AI_ESSAY_GRADING", "WEAKNESS_REPORT", "SMART_PRACTICE", "PERSONALISED_RECOMMENDATIONS", "WEAK_SPOTS", "EARLY_ACCESS");
+        if (keys == null) return List.of();
+        if (keys.stream().anyMatch(k -> k == null || !allowed.contains(k)))
+            throw ContestRules.invalid("featureKeys", "Unknown feature key");
+        return keys.stream().distinct().toList();
     }
 
     // ------------------------------------------------------------------ features JSON

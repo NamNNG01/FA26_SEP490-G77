@@ -18,6 +18,7 @@ import java.util.List;
 @AllArgsConstructor
 public class AdminUserDetailResponse {
 
+    private AdminSubscription subscription;
     private Long userId;
     private String fullName;
     private String email;

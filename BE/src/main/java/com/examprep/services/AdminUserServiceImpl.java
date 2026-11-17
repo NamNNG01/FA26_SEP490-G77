@@ -52,6 +52,11 @@ public class AdminUserServiceImpl implements AdminUserService {
     private final ExamAttemptRepository attempts;
     private final RefreshTokenRepository refreshTokens;
     private final AuthService authService;
+    private final com.examprep.repositories.UserSubscriptionRepository subscriptions;
+    private final com.examprep.repositories.SubscriptionPlanRepository plans;
+    private final org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
+    private final PasswordResetMailService mail;
+    private final AiQuotaService quota;
 
     @Override
     public AdminUserPageResponse list(String search, String role, String status, int page, int size) {
@@ -72,7 +77,14 @@ public class AdminUserServiceImpl implements AdminUserService {
         Map<Long, Long> counts = ids.isEmpty() ? Map.of()
                 : enrollments.countByUserIds(ids).stream().collect(Collectors.toMap(IdCount::id, IdCount::total));
 
-        Page<AdminUserItem> content = result.map(u -> AdminUserItem.from(u, counts.getOrDefault(u.getUserId(), 0L)));
+        Map<Long, com.examprep.dto.AdminSubscription> latest = new java.util.HashMap<>();
+        if (!ids.isEmpty()) for (var sub : subscriptions.findLatestForUsers(ids))
+            latest.putIfAbsent(sub.getUser().getUserId(), com.examprep.dto.AdminSubscription.from(sub));
+        Page<AdminUserItem> content = result.map(u -> {
+            AdminUserItem item = AdminUserItem.from(u, counts.getOrDefault(u.getUserId(), 0L));
+            if (User.ROLE_STUDENT.equals(u.getRoleName())) item.setSubscription(latest.get(u.getUserId()));
+            return item;
+        });
 
         AdminUserListStats stats = AdminUserListStats.builder()
                 .total(users.count())
@@ -96,7 +108,10 @@ public class AdminUserServiceImpl implements AdminUserService {
                 .lastActivityAt(recent.isEmpty() ? null : recent.get(0).getSubmittedAt())
                 .build();
 
-        return AdminUserDetailResponse.from(user, stats, recent);
+        AdminUserDetailResponse detail = AdminUserDetailResponse.from(user, stats, recent);
+        if (User.ROLE_STUDENT.equals(user.getRoleName())) subscriptions.findLatestForUsers(List.of(id)).stream().findFirst()
+                .ifPresent(sub -> detail.setSubscription(com.examprep.dto.AdminSubscription.from(sub)));
+        return detail;
     }
 
     @Override
@@ -147,6 +162,46 @@ public class AdminUserServiceImpl implements AdminUserService {
     @Transactional
     public void resetPassword(Long id) {
         authService.sendPasswordResetEmail(requireUser(id));
+    }
+
+    @Override
+    @Transactional
+    public AdminUserResponse create(AdminUserRequests.Create request) {
+        requireKnownRole(request.role());
+        String email = request.email().trim().toLowerCase(Locale.ROOT);
+        if (users.existsByEmailIgnoreCase(email))
+            throw new BaseException(ResponseCode.CONFLICT, "Email already exists", Map.of("code", "EMAIL_EXISTS"));
+        byte[] bytes = new byte[24];
+        new java.security.SecureRandom().nextBytes(bytes);
+        String password = "Aa1!" + java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+        User user = users.saveAndFlush(User.builder().fullName(request.fullName().trim()).email(email)
+                .roleName(request.role()).status(User.STATUS_ACTIVE).passwordHash(passwordEncoder.encode(password)).build());
+        if (!mail.sendNewAccountEmail(email, password)) throw new IllegalStateException("Account email delivery failed");
+        return AdminUserResponse.from(user);
+    }
+
+    @Override
+    @Transactional
+    public com.examprep.dto.AdminSubscription setSubscription(Long id, AdminUserRequests.Subscription request) {
+        User user = users.findForUpdate(id).orElseThrow(() -> new ResourceNotFoundException("User not found."));
+        if (!User.ROLE_STUDENT.equals(user.getRoleName())) throw com.examprep.services.contest.ContestRules.invalid("userId", "Only students can have subscriptions");
+        if ((request.planId() == null) != (request.endDate() == null)) throw com.examprep.services.contest.ContestRules.invalid("endDate", "planId and endDate must both be set or null");
+        com.examprep.entities.SubscriptionPlan plan = null;
+        if (request.planId() != null) {
+            plan = plans.findAvailable(request.planId()).orElseThrow(() -> new ResourceNotFoundException("Subscription plan not found"));
+            if (plan.getPrice().signum() <= 0 || request.endDate().isBefore(LocalDate.now(AiQuotaService.ZONE)))
+                throw com.examprep.services.contest.ContestRules.invalid("planId", "A paid plan and a current or future end date are required");
+        }
+        quota.lock(id);
+        Instant now = Instant.now();
+        for (var sub : subscriptions.findCurrentOrFutureByUser(id, now)) {
+            sub.setStatus("CANCELLED"); sub.setAutoRenew(false);
+        }
+        if (plan == null) return null;
+        Instant end = request.endDate().plusDays(1).atStartOfDay(AiQuotaService.ZONE).toInstant().minusNanos(1000);
+        var sub = subscriptions.save(com.examprep.entities.UserSubscription.builder().user(user).plan(plan).startDate(now)
+                .endDate(end).status("ACTIVE").paidAmount(BigDecimal.ZERO).autoRenew(false).build());
+        return com.examprep.dto.AdminSubscription.from(sub);
     }
 
     private static void requireKnownRole(String role) {

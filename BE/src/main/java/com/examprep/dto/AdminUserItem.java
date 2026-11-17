@@ -17,6 +17,7 @@ import java.time.Instant;
 @AllArgsConstructor
 public class AdminUserItem {
 
+    private AdminSubscription subscription;
     private Long userId;
     private String fullName;
     private String email;

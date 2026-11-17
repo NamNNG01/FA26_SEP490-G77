@@ -27,6 +27,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 @Tag(name = "Student Notebook", description = "Student mistake notebook and saved questions APIs")
 public class StudentNotebookController {
+    private final com.examprep.services.PlanEntitlementService entitlements;
 
     private final StudentNotebookService notebookService;
 
@@ -88,6 +89,7 @@ public class StudentNotebookController {
             @RequestParam(required = false) Long courseId,
             @AuthenticationPrincipal UserPrincipal currentUser
     ) {
+        entitlements.require(currentUser.getId(), "WEAK_SPOTS");
         List<QuestionReviewItemDto> list = notebookService.getWeakSpots(limit, courseId, currentUser.getId());
         return ResponseEntity.ok(ApiResponse.success(list));
     }

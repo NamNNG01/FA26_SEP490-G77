@@ -33,6 +33,17 @@ public class AdminUserController {
 
     private final AdminUserService service;
 
+    @PostMapping
+    public ResponseEntity<ApiResponse<AdminUserResponse>> create(@Valid @RequestBody AdminUserRequests.Create request) {
+        return ResponseEntity.status(201).body(ApiResponse.success(service.create(request)));
+    }
+
+    @PutMapping("/{id}/subscription")
+    public ResponseEntity<ApiResponse<com.examprep.dto.AdminSubscription>> subscription(@PathVariable Long id,
+            @Valid @RequestBody AdminUserRequests.Subscription request) {
+        return ResponseEntity.ok(ApiResponse.success(service.setSubscription(id, request)));
+    }
+
     @GetMapping
     @Operation(summary = "UM-01: Search, filter and paginate the user list with overview counters",
             description = "ADMIN only. Powers the User List screen and the Course Manager dropdown "

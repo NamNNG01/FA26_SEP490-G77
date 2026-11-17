@@ -28,6 +28,7 @@ public final class AdminPlanDtos {
             Integer durationDays,
             Integer aiTokenLimit,
             List<String> features,
+            List<String> featureKeys,
             Boolean isActive,
             Integer sortOrder,
             long activeSubscribers
@@ -43,6 +44,7 @@ public final class AdminPlanDtos {
             Integer durationDays,
             Integer aiTokenLimit,
             List<String> features,
+            List<String> featureKeys,
             Boolean isActive,
             Integer sortOrder,
             long activeSubscribers,
@@ -59,9 +61,15 @@ public final class AdminPlanDtos {
             @NotNull @Min(1) Integer durationDays,
             @NotNull @Min(0) Integer aiTokenLimit,
             List<@Size(max = 200) String> features,
+            List<String> featureKeys,
             Boolean isActive,
             Integer sortOrder
-    ) {}
+    ) {
+        public PlanWriteRequest(String planName, String description, BigDecimal price, Integer durationDays,
+                                Integer aiTokenLimit, List<String> features, Boolean isActive, Integer sortOrder) {
+            this(planName, description, price, durationDays, aiTokenLimit, features, null, isActive, sortOrder);
+        }
+    }
 
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record PublicPlanItem(
@@ -73,6 +81,7 @@ public final class AdminPlanDtos {
             Integer durationDays,
             Integer aiTokenLimit,
             List<String> features,
+            List<String> featureKeys,
             Boolean isActive,
             Integer sortOrder
     ) {}

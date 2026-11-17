@@ -18,6 +18,7 @@ import java.util.Optional;
 public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByEmail(String email);
     boolean existsByEmail(String email);
+    boolean existsByEmailIgnoreCase(String email);
 
     /** AUTH-09: recognise the account that already owns this Google subject id. */
     Optional<User> findByGoogleId(String googleId);
