@@ -4,10 +4,11 @@ import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { Button } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Alert';
 import { Input } from '@/components/ui/Input';
+import { Dropdown } from '@/components/ui/Dropdown';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/Card';
 import { Icon } from '@/assets/icons';
-import { ROUTES, studentCoursePath, studentModulePracticePath } from '@/app/routes';
+import { ROUTES, studentCoursePath, studentModulePath, studentModulePracticePath } from '@/app/routes';
 import { getApiErrorMessage } from '@/utils/apiError';
 import {
   studentCourseService,
@@ -29,6 +30,7 @@ import {
   contentKey,
   contentTitle,
   countItems,
+  sortedModules,
   type ContentItem,
   useOpenContent,
 } from '../components/courseContent';
@@ -37,6 +39,7 @@ import { Progress } from '@/components/ui/Progress';
 import {
   beModuleProgress,
   courseCacheKey,
+  type BeProgressState,
   useBeCourseProgress,
   type LearningProgress,
   type ProgressPart,
@@ -90,7 +93,8 @@ function ProgressCards({ parts }: { parts: ProgressPart[] }) {
 /**
  * One module of a course: its practice overview and Practice button, then its exams (MC-02) and
  * flashcard decks (MC-03) with a search box and a type filter. `moduleId = general` lists the
- * content not filed under any module, practised as the course's General pool.
+ * content not filed under any module, practised as the course's General pool. The title is a
+ * module switcher, with Prev / Next beside it, so other modules open without the course page.
  */
 export function StudentModuleDetailPage() {
   const { courseId = '', moduleId: moduleParam = '' } = useParams<{ courseId: string; moduleId: string }>();
@@ -157,7 +161,9 @@ export function StudentModuleDetailPage() {
     <div className={`${STUDENT_PAGE_CLASS} space-y-[clamp(1.25rem,2.5vw,1.75rem)]`}>
       {breadcrumb}
       {isActive ? (
+        // Keyed by module: moving to another one starts its search, filter and practice state afresh.
         <ModuleContent
+          key={moduleParam}
           course={course}
           moduleId={moduleId}
           title={title}
@@ -165,25 +171,144 @@ export function StudentModuleDetailPage() {
           initialProgress={handedProgress}
         />
       ) : (
-        <>
-          <ModuleHeader title={title} description={module?.description} />
-          <Alert
-            type="warning"
-            title="Not available"
-            message="Exams, flashcards and practice are only available while your enrollment in this course is active."
-          />
-        </>
+        <LockedModule course={course} moduleKey={moduleParam} title={title} description={module?.description} />
       )}
     </div>
   );
 }
 
-function ModuleHeader({ title, description, children }: { title: string; description?: string | null; children?: ReactNode }) {
+function LockedModule({
+  course,
+  moduleKey,
+  title,
+  description,
+}: {
+  course: StudentCourseDetail;
+  moduleKey: string;
+  title: string;
+  description?: string | null;
+}) {
+  const nav = useModuleNav(course, moduleKey);
+  return (
+    <>
+      <ModuleHeader title={title} description={description} nav={nav} />
+      <Alert
+        type="warning"
+        title="Not available"
+        message="Exams, flashcards and practice are only available while your enrollment in this course is active."
+      />
+    </>
+  );
+}
+
+interface ModuleEntry {
+  key: string;
+  title: string;
+  /** Position in the course; none for General. */
+  index?: number;
+}
+
+/**
+ * The course's modules in order, for moving between them without going back to the course page:
+ * its own modules, then General when LP-01 lists it (it does once General holds anything) or it is
+ * the one open. Moving replaces the history entry, so Back still returns to the course page.
+ */
+function useModuleNav(course: StudentCourseDetail, currentKey: string, be?: BeProgressState) {
+  const navigate = useNavigate();
+  const progress = be && be !== 'error' ? be : undefined;
+  const entries: ModuleEntry[] = sortedModules(course).map((m, i) => ({ key: String(m.moduleId), title: m.title, index: i + 1 }));
+  if (currentKey === GENERAL_MODULE || progress?.modules.some(m => m.moduleId == null)) {
+    entries.push({ key: GENERAL_MODULE, title: 'General' });
+  }
+  const at = entries.findIndex(e => e.key === currentKey);
+  return {
+    entries,
+    currentKey,
+    prev: at > 0 ? entries[at - 1] : null,
+    next: at >= 0 && at < entries.length - 1 ? entries[at + 1] : null,
+    /** LP-01 percent of a module; undefined while LP-01 is missing. */
+    percentOf: (key: string) => (progress ? beModuleProgress(progress, key)?.percent ?? 0 : undefined),
+    go: (key: string) =>
+      navigate(studentModulePath(course.courseId, key), { replace: true, state: { course, progress } satisfies ModulePageState }),
+  };
+}
+
+type ModuleNav = ReturnType<typeof useModuleNav>;
+
+const entryLabel = (e: ModuleEntry) => (e.index != null ? `${e.index}. ${e.title}` : e.title);
+
+function ModuleHeader({
+  title,
+  description,
+  nav,
+  children,
+}: {
+  title: string;
+  description?: string | null;
+  nav: ModuleNav;
+  children?: ReactNode;
+}) {
+  const { entries, currentKey, prev, next, percentOf, go } = nav;
+  const titleClass = 'text-[clamp(1.25rem,1.1rem+0.6vw,1.5rem)] font-bold text-content';
   return (
     <section className="card p-[clamp(1rem,2vw,1.25rem)] space-y-4">
-      <div>
-        <h1 className="text-[clamp(1.25rem,1.1rem+0.6vw,1.5rem)] font-bold text-content">{title}</h1>
-        {description && <p className="text-sm text-content-soft mt-1 whitespace-pre-line">{description}</p>}
+      <div className="flex flex-wrap items-start gap-3">
+        <div className="flex-1 min-w-[min(100%,14rem)]">
+          {entries.length > 1 ? (
+            // The title doubles as the module switcher.
+            <div role="heading" aria-level={1}>
+              <Dropdown
+                className="inline-block max-w-full"
+                value={currentKey}
+                onSelect={key => key !== currentKey && go(String(key))}
+                search={entries.length > 8}
+                searchPlaceholder="Find a module…"
+                items={entries.map(e => {
+                  const percent = percentOf(e.key);
+                  return { value: e.key, label: percent != null ? `${entryLabel(e)} · ${percent}%` : entryLabel(e) };
+                })}
+                trigger={
+                  <button
+                    type="button"
+                    aria-haspopup="menu"
+                    aria-label={`${title} — switch module`}
+                    className={`${titleClass} inline-flex max-w-full items-center gap-1.5 text-left rounded-md hover:text-primary focus-visible:outline-2 focus-visible:outline-primary`}
+                  >
+                    <span className="min-w-0 break-words">{title}</span>
+                    <Icon.ChevronDown className="w-5 h-5 flex-shrink-0 text-content-subtle" />
+                  </button>
+                }
+              />
+            </div>
+          ) : (
+            <h1 className={titleClass}>{title}</h1>
+          )}
+          {description && <p className="text-sm text-content-soft mt-1 whitespace-pre-line">{description}</p>}
+        </div>
+        {entries.length > 1 && (
+          <div className="flex flex-wrap items-center gap-2 flex-shrink-0">
+            <Button
+              variant="outline"
+              size="sm"
+              icon={<Icon.ChevronLeft className="w-4 h-4" />}
+              disabled={!prev}
+              onClick={() => prev && go(prev.key)}
+              title={prev ? entryLabel(prev) : undefined}
+            >
+              Prev
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              iconRight={<Icon.ChevronRight className="w-4 h-4" />}
+              disabled={!next}
+              onClick={() => next && go(next.key)}
+              title={next ? entryLabel(next) : undefined}
+            >
+              Next
+            </Button>
+          </div>
+        )}
       </div>
       {children}
     </section>
@@ -256,10 +381,11 @@ function ModuleContent({
     be && be !== 'error' ? beModuleProgress(be, moduleId == null ? GENERAL_MODULE : String(moduleId)) ?? { percent: null, parts: [] } : null;
   const progressLoading = be === undefined;
   const active = practice?.activeSession?.status === 'IN_PROGRESS' ? practice.activeSession : null;
+  const nav = useModuleNav(course, String(moduleKey), be);
 
   return (
     <>
-      <ModuleHeader title={title} description={description}>
+      <ModuleHeader title={title} description={description} nav={nav}>
         <div className="space-y-4">
           {progressLoading ? (
             <Skeleton className="h-16 w-full" />
