@@ -99,7 +99,7 @@ class StudentPaymentApiIntegrationTest {
         percentDiscount = discount("SAVE10", "PERCENT", "10", "ALL");
         expiredDiscount = discount("EXPIRED10", "PERCENT", "10", "ALL");
         expiredDiscount.setExpiresAt(Instant.now().minus(1, ChronoUnit.DAYS));
-        subscriptionOnly = discount("PLANONLY", "FIXED", "20000", "SUBSCRIPTION");
+        subscriptionOnly = discount("PLANONLY", "FIXED_AMOUNT", "20000", "SUBSCRIPTION");
         usedDiscount = discount("USED10", "PERCENT", "10", "ALL");
         em.persist(UserDiscount.builder().user(student).discount(usedDiscount).isUsed(true)
                 .assignedAt(Instant.now()).sourceType("PAYMENT").build());

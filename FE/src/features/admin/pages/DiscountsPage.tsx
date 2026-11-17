@@ -15,6 +15,7 @@ import { useToast } from "@/components/ui/ToastHost";
 import { getApiErrorMessage } from "@/utils/apiError";
 import {
   adminDiscountService,
+  type AppliesTo,
   type Discount,
   type DiscountAccessType,
   type DiscountAssignment,
@@ -50,7 +51,7 @@ type FormState = {
   value: string;
   maxDiscountAmount: string;
   minOrderAmount: string;
-  appliesTo: string;
+  appliesTo: AppliesTo;
   accessType: DiscountAccessType;
   usageLimit: string;
   startAt: string;
@@ -119,7 +120,7 @@ const toPayload = (f: FormState): DiscountPayload => ({
       ? Number(f.maxDiscountAmount)
       : null,
   minOrderAmount: f.minOrderAmount ? Number(f.minOrderAmount) : null,
-  appliesTo: f.appliesTo as DiscountPayload["appliesTo"],
+  appliesTo: f.appliesTo,
   accessType: f.accessType,
   usageLimit: Number(f.usageLimit),
   startAt: hcmInputToIso(f.startAt),
@@ -303,7 +304,7 @@ export function DiscountsPage() {
     setAssignmentLoading(false);
     setAssignmentError(null);
   };
-  const updateForm = (key: keyof FormState, value: string | boolean) =>
+  const updateForm = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setForm((prev) => ({ ...prev, [key]: value }));
   const lockedFields = Boolean(
     editing &&
@@ -731,8 +732,10 @@ export function DiscountsPage() {
               disabled={lockedFields}
               value={form.discountType}
               onChange={(v) => {
-                updateForm("discountType", v);
-                if (v === "FIXED_AMOUNT") updateForm("maxDiscountAmount", "");
+                if (v === "PERCENT" || v === "FIXED_AMOUNT") {
+                  updateForm("discountType", v);
+                  if (v === "FIXED_AMOUNT") updateForm("maxDiscountAmount", "");
+                }
               }}
               options={[
                 { label: "Percent", value: "PERCENT" },
@@ -773,7 +776,11 @@ export function DiscountsPage() {
               label="Applies to"
               disabled={lockedFields}
               value={form.appliesTo}
-              onChange={(v) => updateForm("appliesTo", v)}
+              onChange={(v) => {
+                if (v === "COURSE" || v === "SUBSCRIPTION" || v === "ALL") {
+                  updateForm("appliesTo", v);
+                }
+              }}
               options={[
                 { label: "All", value: "ALL" },
                 { label: "Courses", value: "COURSE" },

@@ -17,6 +17,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 
 import static com.examprep.controllers.student.Fixtures.as;
@@ -36,6 +37,9 @@ class AdminDiscountAndFlashcardComprehensiveTest {
     @Autowired DeckRepository deckRepository;
     @Autowired UserRepository userRepository;
     @Autowired UserDiscountRepository userDiscountRepository;
+    @Autowired ContestRewardRepository contestRewardRepository;
+    @Autowired ExamRepository examRepository;
+    @Autowired ContestRepository contestRepository;
 
     User admin, student;
     Discount discount;
@@ -78,6 +82,112 @@ class AdminDiscountAndFlashcardComprehensiveTest {
                 .with(as(admin)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.totalElements").value(1));
+    }
+
+    @Test void testDiscountListFiltersFixedAmount() throws Exception {
+        Discount fixedDiscount = Discount.builder()
+                .code("FIXED50K")
+                .name("Fixed 50K")
+                .discountType("FIXED_AMOUNT")
+                .value(BigDecimal.valueOf(50000))
+                .usageLimit(10)
+                .usedCount(0)
+                .isActive(true)
+                .appliesTo("ALL")
+                .build();
+        discountRepository.save(fixedDiscount);
+
+        mvc.perform(get("/api/v1/admin/discounts")
+                .param("page", "0")
+                .param("size", "10")
+                .param("discountType", "FIXED_AMOUNT")
+                .with(as(admin)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalElements").value(1))
+                .andExpect(jsonPath("$.data.content[0].discountType").value("FIXED_AMOUNT"));
+    }
+
+    @Test void testDiscountListFiltersValidityBeforePagination() throws Exception {
+        for (int i = 1; i <= 3; i++) {
+            discountRepository.save(Discount.builder()
+                    .code("EXPIRED" + i)
+                    .name("Expired " + i)
+                    .discountType("PERCENT")
+                    .percent(BigDecimal.TEN)
+                    .usageLimit(10)
+                    .usedCount(0)
+                    .isActive(true)
+                    .expiresAt(Instant.now().minusSeconds(i))
+                    .appliesTo("ALL")
+                    .build());
+        }
+
+        mvc.perform(get("/api/v1/admin/discounts")
+                .param("page", "0")
+                .param("size", "2")
+                .param("validity", "EXPIRED")
+                .with(as(admin)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalElements").value(3))
+                .andExpect(jsonPath("$.data.content.length()").value(2))
+                .andExpect(jsonPath("$.data.content[0]").isNotEmpty())
+                .andExpect(jsonPath("$.data.content[1]").isNotEmpty());
+    }
+
+    @Test void testDiscountDetailFindsContestsByDiscountId() throws Exception {
+        Exam exam = Exam.builder()
+                .createdBy(admin)
+                .title("Contest exam")
+                .generationType("MANUAL")
+                .durationMinutes(30)
+                .build();
+        Contest contest = Contest.builder()
+                .exam(exam)
+                .createdBy(admin)
+                .title("Contest using discount")
+                .durationMinutes(30)
+                .startTime(Instant.now().minusSeconds(60))
+                .endTime(Instant.now().plusSeconds(3600))
+                .status("PUBLISHED")
+                .build();
+        examRepository.save(exam);
+        contestRepository.save(contest);
+        contestRewardRepository.save(ContestReward.builder()
+                .contest(contest)
+                .discount(discount)
+                .rankPosition(1)
+                .build());
+
+        mvc.perform(get("/api/v1/admin/discounts/" + discount.getDiscountId())
+                .with(as(admin)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.usedInContests[0].title").value("Contest using discount"));
+    }
+
+    @Test void testDiscountPaginationRejectsInvalidValues() throws Exception {
+        mvc.perform(get("/api/v1/admin/discounts")
+                .param("page", "-1")
+                .with(as(admin)))
+                .andExpect(status().isBadRequest());
+
+        mvc.perform(get("/api/v1/admin/discounts/" + discount.getDiscountId() + "/assignments")
+                .param("size", "0")
+                .with(as(admin)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test void testDiscountRejectsInvalidAppliesTo() throws Exception {
+        DiscountWriteRequest invalidRequest = new DiscountWriteRequest(
+                "BADAPPLY", "Invalid appliesTo", null, "PERCENT",
+                BigDecimal.valueOf(20), null, null, "INVALID", 10, null, null, true
+        );
+
+        mvc.perform(post("/api/v1/admin/discounts")
+                .with(as(admin))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(invalidRequest)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.data.code").value("VALIDATION_FAILED"));
     }
 
     @Test void testDiscountDetailNotFound() throws Exception {
@@ -129,6 +239,12 @@ class AdminDiscountAndFlashcardComprehensiveTest {
     }
 
     @Test void testDiscountAssignmentsAndStatus() throws Exception {
+        userDiscountRepository.save(UserDiscount.builder()
+                .user(student)
+                .discount(discount)
+                .isUsed(false)
+                .build());
+
         mvc.perform(get("/api/v1/admin/discounts/" + discount.getDiscountId() + "/assignments")
                 .with(as(admin)))
                 .andExpect(status().isOk());
