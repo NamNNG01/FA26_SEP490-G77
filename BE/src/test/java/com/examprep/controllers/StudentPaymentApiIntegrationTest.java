@@ -444,12 +444,13 @@ class StudentPaymentApiIntegrationTest {
     // =================================================================================
 
     @Test
-    void currentSubscriptionIsNullWithoutAnActiveRow() throws Exception {
-        MvcResult result = call(student, get("/api/v1/student/subscription/current"))
+    void currentSubscriptionReturnsFreePlanAndFeatureKeysWithoutAnActiveRow() throws Exception {
+        JsonNode data = data(call(student, get("/api/v1/student/subscription/current"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(true))
-                .andReturn();
-        assertTrue(data(result).isNull());
+                .andExpect(jsonPath("$.success").value(true)));
+        assertEquals("Free", data.path("planName").asText());
+        assertTrue(data.path("featureKeys").isArray());
+        assertTrue(data.path("featureKeys").isEmpty());
     }
 
     @Test
@@ -468,13 +469,14 @@ class StudentPaymentApiIntegrationTest {
     }
 
     @Test
-    void expiredSubscriptionIsNotCurrent() throws Exception {
+    void expiredSubscriptionFallsBackToFreePlan() throws Exception {
         activeSubscription.setStartDate(Instant.now().minus(60, ChronoUnit.DAYS));
         activeSubscription.setEndDate(Instant.now().minus(1, ChronoUnit.DAYS));
         em.flush();
-        MvcResult result = call(subscriber, get("/api/v1/student/subscription/current"))
-                .andExpect(status().isOk()).andReturn();
-        assertTrue(data(result).isNull());
+        JsonNode data = data(call(subscriber, get("/api/v1/student/subscription/current"))
+                .andExpect(status().isOk()));
+        assertEquals("Free", data.path("planName").asText());
+        assertTrue(data.path("featureKeys").isArray());
     }
 
     // =================================================================================
