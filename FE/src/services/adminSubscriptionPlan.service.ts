@@ -13,6 +13,7 @@ import type { Page } from './adminDiscount.service';
  *   PUT    /api/v1/admin/subscription-plans/reorder       (API 25) — every non-deleted plan, sort_order = index
  *   DELETE /api/v1/admin/subscription-plans/{id}          (API 26) — soft delete
  *   GET    /api/v1/subscription-plans                     (API 27) — active plans only, no paging
+ *   GET    /api/v1/admin/subscription-plans/feature-keys  — capabilities a plan can unlock (`featureKeys`)
  *
  * Errors: PLAN_NAME_EXISTS (409), PLAN_HAS_ACTIVE_SUBSCRIBERS (409), VALIDATION_FAILED (400).
  */
@@ -34,9 +35,17 @@ export interface AdminSubscriptionPlan {
   /** Total tokens for the whole plan period. */
   aiTokenLimit: number;
   features: string[];
+  /** Capabilities the BE unlocks for subscribers (AI_FLASHCARD_GENERATION, …). */
+  featureKeys: string[];
   isActive: boolean;
   sortOrder: number;
   activeSubscribers: number;
+}
+
+export interface PlanFeatureKey {
+  key: string;
+  label: string;
+  description: string;
 }
 
 /** API 21 */
@@ -54,6 +63,7 @@ export interface SubscriptionPlanPayload {
   durationDays: number;
   aiTokenLimit: number;
   features: string[];
+  featureKeys: string[];
   isActive: boolean;
   sortOrder: number;
 }
@@ -106,6 +116,10 @@ export const adminSubscriptionPlanService = {
   },
   async remove(id: number) {
     await api.request<ApiResponse<null>>({ method: 'delete', url: `/admin/subscription-plans/${id}` });
+  },
+  async featureKeys(): Promise<PlanFeatureKey[]> {
+    const res = await api.get<ApiResponse<PlanFeatureKey[]>>('/admin/subscription-plans/feature-keys');
+    return res.data ?? [];
   },
   /** API 27 — public. */
   async listPublic(): Promise<PublicSubscriptionPlan[]> {

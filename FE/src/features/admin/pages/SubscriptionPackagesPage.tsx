@@ -24,26 +24,31 @@ import {
   adminSubscriptionPlanService,
   type AdminSubscriptionPlan,
   type AdminSubscriptionPlanDetail,
+  type PlanFeatureKey,
   type SubscriptionPlanPayload,
 } from '@/services/adminSubscriptionPlan.service';
+import { MoneyInput, moneyToDigits } from '@/components/ui/MoneyInput';
+import { Checkbox } from '@/components/ui/Checkbox';
 import { formatInteger, formatVnd } from '../utils/dashboardFormat';
 
 const PAGE_SIZE = 10;
+/** subscription_plans.ai_token_limit is an INTEGER. */
+const AI_TOKEN_LIMIT_MAX = 2_147_483_647;
 const EMPTY_PAGE: Page<AdminSubscriptionPlan> = { content: [], page: 0, size: PAGE_SIZE, totalElements: 0, totalPages: 0, first: true, last: true };
 
 type PlanFieldErrors = Partial<Record<'planName' | 'price' | 'durationDays' | 'aiTokenLimit' | 'features', string>>;
 type FormState = {
   planName: string; description: string; price: string; durationDays: string;
-  aiTokenLimit: string; features: string[]; isActive: boolean; sortOrder: string;
+  aiTokenLimit: string; features: string[]; featureKeys: string[]; isActive: boolean; sortOrder: string;
 };
-const blankForm = (sortOrder = 0): FormState => ({ planName: '', description: '', price: '0', durationDays: '30', aiTokenLimit: '0', features: [''], isActive: true, sortOrder: String(sortOrder) });
+const blankForm = (sortOrder = 0): FormState => ({ planName: '', description: '', price: '0', durationDays: '30', aiTokenLimit: '', features: [''], featureKeys: [], isActive: true, sortOrder: String(sortOrder) });
 const formFromPlan = (p: AdminSubscriptionPlan): FormState => ({
-  planName: p.planName, description: p.description ?? '', price: String(p.price), durationDays: String(p.durationDays),
-  aiTokenLimit: String(p.aiTokenLimit), features: p.features.length ? [...p.features] : [''], isActive: p.isActive, sortOrder: String(p.sortOrder),
+  planName: p.planName, description: p.description ?? '', price: moneyToDigits(p.price), durationDays: String(p.durationDays),
+  aiTokenLimit: String(p.aiTokenLimit), features: p.features.length ? [...p.features] : [''], featureKeys: [...(p.featureKeys ?? [])], isActive: p.isActive, sortOrder: String(p.sortOrder),
 });
 const toPayload = (f: FormState): SubscriptionPlanPayload => ({
   planName: f.planName.trim(), description: f.description.trim(), price: Number(f.price), durationDays: Number(f.durationDays),
-  aiTokenLimit: Number(f.aiTokenLimit), features: f.features.map(x => x.trim()).filter(Boolean), isActive: f.isActive, sortOrder: Number(f.sortOrder),
+  aiTokenLimit: Number(f.aiTokenLimit), features: f.features.map(x => x.trim()).filter(Boolean), featureKeys: f.featureKeys, isActive: f.isActive, sortOrder: Number(f.sortOrder),
 });
 const priceLabel = (price: number) => (price === 0 ? 'Free' : formatVnd(price));
 const dateLabel = (value?: string | null) => (value ? new Date(value).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }) : '—');
@@ -75,6 +80,15 @@ export function SubscriptionPackagesPage() {
   const [working, setWorking] = useState(false);
   const [ordering, setOrdering] = useState<AdminSubscriptionPlan[] | null>(null);
   const [orderLoading, setOrderLoading] = useState(false);
+  const [featureKeyOptions, setFeatureKeyOptions] = useState<PlanFeatureKey[]>([]);
+
+  useEffect(() => {
+    adminSubscriptionPlanService.featureKeys().then(setFeatureKeyOptions)
+      .catch(error => toast.error(getApiErrorMessage(error, 'Could not load the plan capabilities.')));
+  }, [toast]);
+  const featureKeyLabel = (key: string) => featureKeyOptions.find(o => o.key === key)?.label ?? key;
+  const toggleFeatureKey = (key: string, on: boolean) =>
+    updateForm('featureKeys', on ? [...form.featureKeys.filter(k => k !== key), key] : form.featureKeys.filter(k => k !== key));
 
   /** `'quiet'` = shared auto-refresh: no loader, no error toast. */
   const load = useCallback(async (mode?: 'quiet') => {
@@ -122,11 +136,11 @@ export function SubscriptionPackagesPage() {
     const errors: PlanFieldErrors = {};
     if (!payload.planName) errors.planName = 'Plan name is required.';
     else if (payload.planName.length > PLAN_NAME_MAX) errors.planName = `Plan name must be ${PLAN_NAME_MAX} characters or fewer.`;
-    if (!Number.isFinite(payload.price) || payload.price < 0) errors.price = 'Price must be 0 or more (0 = free plan).';
-    else if (payload.price > PLAN_PRICE_MAX) errors.price = 'Price must not exceed 99,999,999.99 VND.';
-    else if (!/^\d+(\.\d{1,2})?$/.test(form.price.trim())) errors.price = 'Price can have at most 2 decimal places.';
+    if (form.price === '' || !Number.isInteger(payload.price) || payload.price < 0) errors.price = 'Price must be 0 or more (0 = free plan).';
+    else if (payload.price > PLAN_PRICE_MAX) errors.price = `Price must not exceed ${formatVnd(Math.floor(PLAN_PRICE_MAX))}.`;
     if (!Number.isInteger(payload.durationDays) || payload.durationDays < 1) errors.durationDays = 'Duration must be at least 1 day.';
-    if (!Number.isInteger(payload.aiTokenLimit) || payload.aiTokenLimit < 0) errors.aiTokenLimit = 'AI token limit must be 0 or more.';
+    if (!form.aiTokenLimit.trim() || !Number.isInteger(payload.aiTokenLimit) || payload.aiTokenLimit < 1) errors.aiTokenLimit = 'AI token limit must be greater than 0.';
+    else if (payload.aiTokenLimit > AI_TOKEN_LIMIT_MAX) errors.aiTokenLimit = `AI token limit must not exceed ${formatInteger(AI_TOKEN_LIMIT_MAX)}.`;
     if (payload.features.length > PLAN_FEATURES_MAX) errors.features = `A plan can list at most ${PLAN_FEATURES_MAX} features.`;
     else if (payload.features.some(f => f.length > PLAN_FEATURE_TEXT_MAX)) errors.features = `Each feature must be ${PLAN_FEATURE_TEXT_MAX} characters or fewer.`;
     setFormError(null);
@@ -237,10 +251,19 @@ export function SubscriptionPackagesPage() {
         {editing && editing.activeSubscribers > 0 && <p className="rounded-[10px] bg-warning-light/40 px-3 py-2 text-xs text-content-secondary">{formatInteger(editing.activeSubscribers)} students are on this plan. A new price only applies to future purchases; a new AI token limit applies to them right away.</p>}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Input label="Plan name" required maxLength={PLAN_NAME_MAX} value={form.planName} error={fieldErrors.planName} onChange={e => { updateForm('planName', e.target.value); clearFieldError('planName'); }} />
-          <Input label="Price (VND)" type="number" min={0} max={PLAN_PRICE_MAX} step={1000} required value={form.price} error={fieldErrors.price} onChange={e => { updateForm('price', e.target.value); clearFieldError('price'); }} hint="0 = free plan" />
+          <MoneyInput label="Price (VND)" max={Math.floor(PLAN_PRICE_MAX)} required value={form.price} error={fieldErrors.price} onValueChange={v => { updateForm('price', v); clearFieldError('price'); }} hint="0 = free plan" />
           <Input label="Duration (days)" type="number" min={1} required value={form.durationDays} error={fieldErrors.durationDays} onChange={e => { updateForm('durationDays', e.target.value); clearFieldError('durationDays'); }} />
-          <Input label="AI token limit" type="number" min={0} step={1000} required value={form.aiTokenLimit} error={fieldErrors.aiTokenLimit} onChange={e => { updateForm('aiTokenLimit', e.target.value); clearFieldError('aiTokenLimit'); }} hint="Total tokens for the whole plan period." />
+          <Input label="AI token limit" type="number" min={1} step={1} max={AI_TOKEN_LIMIT_MAX} required value={form.aiTokenLimit} error={fieldErrors.aiTokenLimit} onChange={e => { updateForm('aiTokenLimit', e.target.value); clearFieldError('aiTokenLimit'); }} hint="Total tokens for the whole plan period (any number above 0)." />
         </div>
+        {featureKeyOptions.length > 0 && <div className="space-y-2">
+          <p className="text-sm font-medium text-content-secondary">Unlocked capabilities <span className="font-normal text-content-subtle">— what subscribers can actually use</span></p>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {featureKeyOptions.map(option => <div key={option.key} className="rounded-[10px] border border-line-soft px-3 py-2">
+              <Checkbox label={option.label} checked={form.featureKeys.includes(option.key)} onChange={on => toggleFeatureKey(option.key, on)} />
+              <p className="mt-0.5 pl-[26px] text-xs text-content-soft">{option.description}</p>
+            </div>)}
+          </div>
+        </div>}
         <label className="flex flex-col gap-1.5 text-sm font-medium text-content-secondary">Description<textarea className="min-h-20 rounded-[10px] border border-line bg-surface px-3 py-2 text-sm font-normal text-content focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/20" maxLength={1000} value={form.description} onChange={e => updateForm('description', e.target.value)} /></label>
         <div className="space-y-2">
           <div className="flex items-center justify-between"><p className="text-sm font-medium text-content-secondary">Features <span className="font-normal text-content-subtle">({form.features.filter(f => f.trim()).length}/{PLAN_FEATURES_MAX})</span></p>
@@ -269,6 +292,7 @@ export function SubscriptionPackagesPage() {
           <Info label="Updated" value={dateLabel(detail.updatedAt)} />
         </div>
         {detail.description && <p className="text-sm text-content-secondary">{detail.description}</p>}
+        <div><h3 className="mb-2 font-semibold text-content">Unlocked capabilities</h3>{detail.featureKeys?.length ? <div className="flex flex-wrap gap-1.5">{detail.featureKeys.map(k => <Badge key={k} variant="info">{featureKeyLabel(k)}</Badge>)}</div> : <p className="text-sm text-content-soft">None — subscribers only get the AI token allowance.</p>}</div>
         <div><h3 className="mb-2 font-semibold text-content">Features</h3>{detail.features.length ? <ul className="space-y-1.5">{detail.features.map(f => <li key={f} className="flex items-start gap-1.5 text-sm text-content-secondary"><Icon.Check className="mt-0.5 h-4 w-4 flex-shrink-0 text-success" />{f}</li>)}</ul> : <p className="text-sm text-content-soft">No features listed.</p>}</div>
       </div>}
     </Modal>
