@@ -13,9 +13,6 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class CreateDiscussionRequestDto {
-    /** The course the post belongs to (DI-03). Required: never default to "some" enrollment. */
-    @NotNull
-    private Long courseId;
     @NotBlank
     @Size(max = 200)
     private String title;

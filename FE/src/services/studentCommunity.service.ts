@@ -92,7 +92,7 @@ export const studentCommunityService = {
     return res.data;
   },
 
-  async getTips(params: { courseId?: number; page?: number; size?: number }) {
+  async getTips(params: { page?: number; size?: number }) {
     const res = await api.get<ApiResponse<StudentPage<DiscussionItem>>>(`/student/tips?${query(params)}`);
     return res.data;
   },
@@ -102,7 +102,7 @@ export const studentCommunityService = {
     return res.data;
   },
 
-  async createDiscussion(body: { courseId?: number | null; title: string; content: string; tag: DiscussionTag; isAnonymous: boolean; imageUrl?: string | null }) {
+  async createDiscussion(body: { title: string; content: string; tag: DiscussionTag; isAnonymous: boolean; imageUrl?: string | null }) {
     const res = await api.post<ApiResponse<DiscussionItem>>('/student/discussions', body);
     return res.data;
   },

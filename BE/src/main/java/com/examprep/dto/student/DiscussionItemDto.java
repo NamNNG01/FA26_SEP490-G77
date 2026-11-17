@@ -35,11 +35,9 @@ public class DiscussionItemDto {
     private boolean isClosed;
     private String imageUrl;
     private String approvalStatus;
+    private String status;
     private Instant createdAt;
     private Instant lastCommentAt;
-    @JsonIgnore
-    private CourseRefDto course;
-
     public boolean isAuthor() {
         return isAuthor;
     }
@@ -83,12 +81,4 @@ public class DiscussionItemDto {
         }
     }
 
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class CourseRefDto {
-        private Long courseId;
-        private String title;
-    }
 }

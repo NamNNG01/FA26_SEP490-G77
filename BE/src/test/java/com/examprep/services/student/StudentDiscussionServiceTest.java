@@ -4,6 +4,7 @@ import com.examprep.dto.student.CreateDiscussionRequestDto;
 import com.examprep.dto.student.DiscussionDetailDto;
 import com.examprep.dto.student.DiscussionItemDto;
 import com.examprep.entities.*;
+import com.examprep.exceptions.BadRequestException;
 import com.examprep.exceptions.ForbiddenException;
 import com.examprep.exceptions.ResourceNotFoundException;
 import com.examprep.repositories.*;
@@ -37,28 +38,21 @@ class StudentDiscussionServiceTest {
     @Mock
     private DiscussionBookmarkRepository bookmarkRepository;
     @Mock
-    private CourseRepository courseRepository;
-    @Mock
     private EnrollmentRepository enrollmentRepository;
     @Mock
     private UserRepository userRepository;
-    @Mock
-    private CourseManagerRepository courseManagerRepository;
 
     @InjectMocks
     private StudentDiscussionServiceImpl discussionService;
 
     private User author;
-    private Course course;
     private Discussion discussion1;
 
     @BeforeEach
     void setUp() {
         author = User.builder().userId(200L).fullName("Author User").avatarUrl("http://avatar").roleName("STUDENT").build();
-        course = Course.builder().courseId(50L).title("Course 50").build();
         discussion1 = Discussion.builder()
                 .discussionId(1L)
-                .course(course)
                 .user(author)
                 .title("Discussion Title")
                 .content("Discussion Content")
@@ -120,10 +114,10 @@ class StudentDiscussionServiceTest {
     void listTips_batchUpvotes() {
         discussion1.setTag("tip");
         Page<Discussion> page = new PageImpl<>(List.of(discussion1));
-        when(discussionRepository.findDiscussions(eq(50L), eq("tip"), isNull(), eq("latest"), any())).thenReturn(page);
+        when(discussionRepository.findDiscussions(eq("tip"), isNull(), eq("latest"), any())).thenReturn(page);
         when(upvoteRepository.findUpvotedDiscussionIds(eq(200L), eq(List.of(1L)))).thenReturn(List.of());
 
-        Page<DiscussionItemDto> res = discussionService.listTips(50L, 0, 10, 200L);
+        Page<DiscussionItemDto> res = discussionService.listTips(0, 10, 200L);
 
         assertNotNull(res);
         assertEquals(1, res.getTotalElements());
@@ -135,6 +129,7 @@ class StudentDiscussionServiceTest {
     @Test
     void getDiscussionDetail_success_authorMatches() {
         when(discussionRepository.findById(1L)).thenReturn(Optional.of(discussion1));
+        discussion1.setApprovalStatus(Discussion.APPROVAL_APPROVED);
         when(upvoteRepository.existsByDiscussion_DiscussionIdAndUser_UserId(1L, 200L)).thenReturn(true);
         when(bookmarkRepository.existsByDiscussion_DiscussionIdAndUser_UserId(1L, 200L)).thenReturn(false);
         when(commentRepository.findLatestCommentsByDiscussionId(eq(1L), any())).thenReturn(List.of());
@@ -151,6 +146,7 @@ class StudentDiscussionServiceTest {
     @Test
     void toggleUpvote_addAndRemove() {
         when(discussionRepository.findById(1L)).thenReturn(Optional.of(discussion1));
+        discussion1.setApprovalStatus(Discussion.APPROVAL_APPROVED);
         DiscussionUpvote upvote = DiscussionUpvote.builder().discussion(discussion1).user(author).build();
         when(upvoteRepository.findByDiscussion_DiscussionIdAndUser_UserId(1L, 200L)).thenReturn(Optional.of(upvote));
 
@@ -165,6 +161,7 @@ class StudentDiscussionServiceTest {
     @Test
     void updateDiscussion_close_returnsIsClosedTrue() {
         when(discussionRepository.findById(1L)).thenReturn(Optional.of(discussion1));
+        discussion1.setApprovalStatus(Discussion.APPROVAL_APPROVED);
         when(discussionRepository.save(any(Discussion.class))).thenAnswer(inv -> inv.getArgument(0));
 
         com.examprep.dto.student.UpdateDiscussionRequestDto req = new com.examprep.dto.student.UpdateDiscussionRequestDto(true);
@@ -175,14 +172,23 @@ class StudentDiscussionServiceTest {
     }
 
     @Test
+    void updateDiscussion_hiddenDiscussion_isBlockedForAuthor() {
+        discussion1.setApprovalStatus(Discussion.APPROVAL_APPROVED);
+        discussion1.setStatus("HIDDEN");
+        when(discussionRepository.findById(1L)).thenReturn(Optional.of(discussion1));
+
+        assertThrows(BadRequestException.class, () -> discussionService.updateDiscussion(
+                1L, new com.examprep.dto.student.UpdateDiscussionRequestDto(false), 200L));
+        verify(discussionRepository, never()).save(any(Discussion.class));
+    }
+
+    @Test
     void createDiscussion_asStudent_setsPendingApproval() {
-        when(enrollmentRepository.existsByCourse_CourseIdAndUser_UserIdAndStatus(50L, 200L, "ACTIVE")).thenReturn(true);
-        when(courseRepository.findById(50L)).thenReturn(Optional.of(course));
+        when(enrollmentRepository.existsByUser_UserIdAndStatus(200L, "ACTIVE")).thenReturn(true);
         when(userRepository.findById(200L)).thenReturn(Optional.of(author));
         when(discussionRepository.save(any(Discussion.class))).thenAnswer(inv -> inv.getArgument(0));
 
         CreateDiscussionRequestDto req = CreateDiscussionRequestDto.builder()
-                .courseId(50L)
                 .title("New Student Question")
                 .content("Need help with Java")
                 .tag("question")

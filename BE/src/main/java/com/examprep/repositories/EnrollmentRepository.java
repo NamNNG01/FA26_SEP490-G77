@@ -21,6 +21,8 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
 
     boolean existsByCourse_CourseIdAndUser_UserIdAndStatus(Long courseId, Long userId, String status);
 
+    boolean existsByUser_UserIdAndStatus(Long userId, String status);
+
     Optional<Enrollment> findByUser_UserIdAndCourse_CourseId(Long userId, Long courseId);
 
     @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)

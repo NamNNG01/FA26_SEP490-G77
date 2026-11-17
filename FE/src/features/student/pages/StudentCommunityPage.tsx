@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { useQuietRefresh } from '@/hooks/useAutoRefresh';
 import { useNavigate, useParams } from 'react-router';
 import { Alert } from '@/components/ui/Alert';
@@ -12,15 +12,13 @@ import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { Pagination } from '@/components/ui/Pagination';
 import { Select } from '@/components/ui/Select';
-import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { Tabs } from '@/components/ui/Tabs';
 import { Icon } from '@/assets/icons';
 import { DiscussionImageAttachment } from '@/components/common/DiscussionImageAttachment';
 import { ImageViewer } from '@/components/common/ImageViewer';
 import { useToast } from '@/components/ui/ToastHost';
 import { ROUTES } from '@/app/routes';
-import { studentCourseService, type MyCourse } from '@/services/studentCourse.service';
-import { studentCommunityService, type DiscussionApprovalFilter, type DiscussionContentStatus, type DiscussionDetail as DiscussionDetailItem, type DiscussionItem, type DiscussionSort } from '@/services/studentCommunity.service';
+import { studentCommunityService, type DiscussionApprovalFilter, type DiscussionContentStatus, type DiscussionDetail as DiscussionDetailItem, type DiscussionItem, type DiscussionSort, type DiscussionTag } from '@/services/studentCommunity.service';
 import { getApiErrorMessage } from '@/utils/apiError';
 import { LoadError, PageTitle, STUDENT_PAGE_CLASS } from '../components/studentUi';
 
@@ -35,11 +33,10 @@ function DiscussionList() {
   const navigate = useNavigate();
   const toast = useToast();
   const [tab, setTab] = useState<'Discussions' | 'My Discussions' | 'Tips' | 'Announcements'>('Discussions');
-  const [courses, setCourses] = useState<MyCourse[]>([]);
-  const [courseId, setCourseId] = useState('');
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [sort, setSort] = useState<DiscussionSort>('latest');
+  const [tagFilter, setTagFilter] = useState<DiscussionTag | 'ALL'>('ALL');
   const [approvalFilter, setApprovalFilter] = useState<DiscussionApprovalFilter>('ALL');
   const [contentStatusFilter, setContentStatusFilter] = useState<DiscussionContentStatus>('ALL');
   const [page, setPage] = useState(0);
@@ -60,22 +57,14 @@ function DiscussionList() {
 
   useEffect(() => {
     let cancelled = false;
-    studentCourseService.getMyCourses({ page: 0, size: 100 }).then(result => {
-      if (!cancelled) setCourses(result.content.filter(course => course.status === 'ACTIVE'));
-    }).catch(() => undefined);
-    return () => { cancelled = true; };
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
     // A shared auto-refresh read keeps the posts and any error as they are.
     const quiet = takeQuiet();
     if (!quiet) { setLoading(true); setError(null); }
     const params = { page, size: PAGE_SIZE };
     const request = tab === 'Tips'
-      ? studentCommunityService.getTips({ courseId: courseId ? Number(courseId) : undefined, ...params })
+      ? studentCommunityService.getTips(params)
       : studentCommunityService.getDiscussions(tab === 'My Discussions'
-        ? { ...params, scope: 'MINE', tag: 'ALL', approvalStatus: approvalFilter, status: contentStatusFilter, search: debouncedSearch || undefined, sort }
+        ? { ...params, scope: 'MINE', tag: tagFilter, approvalStatus: approvalFilter, status: contentStatusFilter, search: debouncedSearch || undefined, sort }
         : { ...params, scope: 'PUBLIC', tag: tab === 'Announcements' ? 'announcement' : 'question', search: tab === 'Discussions' ? debouncedSearch || undefined : undefined, sort });
     request.then(result => {
       if (cancelled) return;
@@ -83,11 +72,10 @@ function DiscussionList() {
     }).catch(err => { if (!cancelled && !quiet) setError(getApiErrorMessage(err, 'Failed to load community posts.')); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [tab, courseId, debouncedSearch, sort, approvalFilter, contentStatusFilter, page, reload]);
+  }, [tab, debouncedSearch, sort, tagFilter, approvalFilter, contentStatusFilter, page, reload]);
 
-  const courseOptions = useMemo(() => [{ label: 'All courses', value: '' }, ...courses.map(course => ({ label: course.title, value: String(course.courseId) }))], [courses]);
   const chooseTab = (value: string) => { setTab(value as typeof tab); setPage(0); };
-  const hasMyFilters = Boolean(debouncedSearch || approvalFilter !== 'ALL' || contentStatusFilter !== 'ALL');
+  const hasMyFilters = Boolean(debouncedSearch || tagFilter !== 'ALL' || approvalFilter !== 'ALL' || contentStatusFilter !== 'ALL');
   const toggleUpvote = async (discussionId: number) => {
     if (votingIds.has(discussionId)) return;
     setVotingIds(current => new Set(current).add(discussionId));
@@ -105,13 +93,13 @@ function DiscussionList() {
   };
 
   return <div className={`${STUDENT_PAGE_CLASS} space-y-6`}>
-    <PageTitle title="Community" subtitle="Ask questions, share tips, and learn with your course community." action={tab !== 'Announcements' ? <Button icon={<Icon.Plus className="h-4 w-4" />} onClick={() => setCreateOpen(true)}>Create post</Button> : undefined} />
+    <PageTitle title="Community" subtitle="Ask questions, share tips, and learn with the community." action={tab !== 'Announcements' ? <Button icon={<Icon.Plus className="h-4 w-4" />} onClick={() => setCreateOpen(true)}>Create post</Button> : undefined} />
     <Tabs tabs={['Discussions', 'My Discussions', 'Tips', 'Announcements']} active={tab} onChange={chooseTab} variant="underline" />
     <div className="card flex flex-wrap items-center gap-3 p-4">
-      {tab === 'Tips' && <SearchableSelect aria-label="Filter by course" className="w-full sm:w-56" value={courseId} options={courseOptions} onChange={value => { setCourseId(value); setPage(0); }} placeholder="All courses" searchPlaceholder="Search courses…" emptyText="No courses found" />}
       {(tab === 'Discussions' || tab === 'My Discussions') && <>
         <Input className="w-full sm:w-72" aria-label={tab === 'My Discussions' ? 'Search my discussions' : 'Search discussions'} placeholder={tab === 'My Discussions' ? 'Search my posts…' : 'Search discussions…'} maxLength={100} value={search} onChange={event => { setSearch(event.target.value); setPage(0); }} />
         {tab === 'My Discussions' && <>
+          <Select aria-label="Filter by tag" className="w-full sm:w-48" value={tagFilter} options={[{ label: 'All tags', value: 'ALL' }, { label: 'Questions', value: 'question' }, { label: 'Tips', value: 'tip' }, { label: 'Announcements', value: 'announcement' }]} onChange={value => { setTagFilter(value as DiscussionTag | 'ALL'); setPage(0); }} />
           <Select aria-label="Filter by review status" className="w-full sm:w-52" value={approvalFilter} options={[{ label: 'All review statuses', value: 'ALL' }, { label: 'Pending approval', value: 'PENDING' }, { label: 'Published', value: 'APPROVED' }, { label: 'Rejected', value: 'REJECTED' }]} onChange={value => { setApprovalFilter(value as DiscussionApprovalFilter); setPage(0); }} />
           <Select aria-label="Filter by post status" className="w-full sm:w-48" value={contentStatusFilter} options={[{ label: 'All post statuses', value: 'ALL' }, { label: 'Open', value: 'OPEN' }, { label: 'Closed', value: 'CLOSED' }, { label: 'Hidden', value: 'HIDDEN' }]} onChange={value => { setContentStatusFilter(value as DiscussionContentStatus); setPage(0); }} />
         </>}
@@ -123,7 +111,7 @@ function DiscussionList() {
       <div className="space-y-3">{voteError && <Alert type="error" message={voteError} />}{items.map(item => <DiscussionCard key={item.discussionId} item={item} showReviewStatus={tab === 'My Discussions'} voting={votingIds.has(item.discussionId)} onUpvote={() => void toggleUpvote(item.discussionId)} onOpen={() => navigate(`${ROUTES.studentDiscussions}/${item.discussionId}`)} />)}
         <div className="card"><Pagination page={page + 1} total={total} perPage={PAGE_SIZE} onChange={value => setPage(value - 1)} unit={tab.toLowerCase()} /></div>
       </div>}
-    <CreateDiscussionModal open={createOpen} courses={courses} defaultTag={tab === 'Tips' ? 'tip' : 'question'} onClose={() => setCreateOpen(false)} onCreated={item => { setCreateOpen(false); toast.info('Your post was submitted and is waiting for a course manager to approve it before it becomes public. You can still view it here.'); navigate(`${ROUTES.studentDiscussions}/${item.discussionId}`); }} />
+    <CreateDiscussionModal open={createOpen} defaultTag={tab === 'Tips' ? 'tip' : 'question'} onClose={() => setCreateOpen(false)} onCreated={item => { setCreateOpen(false); toast.info('Your post was submitted and is waiting for a manager to approve it before it becomes public. You can still view it here.'); navigate(`${ROUTES.studentDiscussions}/${item.discussionId}`); }} />
   </div>;
 }
 
@@ -159,8 +147,7 @@ function DiscussionCard({ item, onOpen, onUpvote, voting, showReviewStatus = fal
   </article>;
 }
 
-function CreateDiscussionModal({ open, courses, defaultTag, onClose, onCreated }: { open: boolean; courses: MyCourse[]; defaultTag: 'question' | 'tip'; onClose: () => void; onCreated: (item: DiscussionItem) => void }) {
-  const [courseId, setCourseId] = useState('');
+function CreateDiscussionModal({ open, defaultTag, onClose, onCreated }: { open: boolean; defaultTag: 'question' | 'tip'; onClose: () => void; onCreated: (item: DiscussionItem) => void }) {
   const [tag, setTag] = useState<'question' | 'tip'>(defaultTag);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
@@ -170,28 +157,27 @@ function CreateDiscussionModal({ open, courses, defaultTag, onClose, onCreated }
   const [error, setError] = useState<string | null>(null);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   useEffect(() => { if (open) { setTag(defaultTag); setError(null); } }, [open, defaultTag]);
-  const hasDraft = Boolean(courseId || title.trim() || content.trim() || anonymous || imageUrl);
+  const hasDraft = Boolean(title.trim() || content.trim() || anonymous || imageUrl);
   const requestClose = () => {
     if (busy) return;
     if (hasDraft) setConfirmDiscard(true);
     else onClose();
   };
   const discard = () => {
-    setCourseId(''); setTitle(''); setContent(''); setAnonymous(false); setImageUrl(''); setError(null); setConfirmDiscard(false); onClose();
+    setTitle(''); setContent(''); setAnonymous(false); setImageUrl(''); setError(null); setConfirmDiscard(false); onClose();
   };
   const submit = async (event: FormEvent) => {
     event.preventDefault(); setError(null);
     if (!title.trim() || !content.trim()) { setError('Complete the title and content.'); return; }
     setBusy(true);
     try {
-      const item = await studentCommunityService.createDiscussion({ courseId: courseId ? Number(courseId) : null, tag, title: title.trim(), content: content.trim(), isAnonymous: anonymous, imageUrl: imageUrl || null });
-      onCreated(item); setTitle(''); setContent(''); setCourseId(''); setAnonymous(false); setImageUrl('');
+      const item = await studentCommunityService.createDiscussion({ tag, title: title.trim(), content: content.trim(), isAnonymous: anonymous, imageUrl: imageUrl || null });
+      onCreated(item); setTitle(''); setContent(''); setAnonymous(false); setImageUrl('');
     } catch (err) { setError(getApiErrorMessage(err, 'Could not create this post.')); }
     finally { setBusy(false); }
   };
   return <><Modal open={open} onClose={requestClose} title="Create a community post" size="lg" error={error && <Alert type="error" message={error} />} footer={<><Button variant="outline" onClick={requestClose} disabled={busy}>Cancel</Button><Button form="create-discussion-form" type="submit" loading={busy}>Publish</Button></>}>
     <form id="create-discussion-form" onSubmit={submit} className="space-y-4">
-      <SearchableSelect label="Course (optional)" value={courseId} options={[{ label: 'No course (general post)', value: '' }, ...courses.map(course => ({ label: course.title, value: String(course.courseId) }))]} onChange={setCourseId} placeholder="No course (general post)" searchPlaceholder="Search courses…" emptyText="No enrolled courses found" />
       <Select label="Post type" value={tag} options={[{ label: 'Question', value: 'question' }, { label: 'Tip', value: 'tip' }]} onChange={value => setTag(value as 'question' | 'tip')} />
       <Input label="Title" maxLength={200} value={title} onChange={event => setTitle(event.target.value)} placeholder="What would you like to discuss?" />
       <label className="flex flex-col gap-1.5 text-sm font-medium text-content-secondary">Details
@@ -200,7 +186,6 @@ function CreateDiscussionModal({ open, courses, defaultTag, onClose, onCreated }
       </label>
       <div className="space-y-1.5"><p className="text-sm font-medium text-content-secondary">Image attachment <span className="font-normal text-content-subtle">Optional</span></p><DiscussionImageAttachment imageUrl={imageUrl} onChange={setImageUrl} /></div>
       <Checkbox checked={anonymous} onChange={setAnonymous} label="Post anonymously" />
-      {!courses.length && <p className="text-sm text-content-subtle">No active course enrollments. You can still create a general post.</p>}
     </form>
   </Modal><ConfirmDialog open={confirmDiscard} onClose={() => setConfirmDiscard(false)} onConfirm={discard} tone="warning" title="Discard this post?" description="Your draft will be cleared and cannot be recovered." confirmLabel="Discard draft" /></>;
 }
@@ -267,7 +252,7 @@ function DiscussionDetail({ discussionId }: { discussionId: string }) {
     <Button variant="ghost" onClick={() => navigate(ROUTES.studentDiscussions)}>← Community</Button>
     <article className="card space-y-4 p-5 sm:p-6">
       <div className="flex flex-wrap items-center gap-2"><Badge variant={item.tag === 'tip' ? 'success' : item.tag === 'announcement' ? 'warning' : 'info'}>{item.tag === 'tip' ? 'Tip' : item.tag === 'announcement' ? 'Announcement' : 'Question'}</Badge>{item.approvalStatus === 'PENDING' && <Badge variant="warning">Pending approval</Badge>}{item.approvalStatus === 'APPROVED' && <Badge variant="success">Published</Badge>}{item.approvalStatus === 'REJECTED' && <Badge variant="danger">Rejected</Badge>}{item.status === 'HIDDEN' && <Badge variant="danger">Hidden</Badge>}{item.isPinned && <Badge variant="warning">Pinned</Badge>}{item.isClosed && <Badge>Closed</Badge>}</div>
-      {item.approvalStatus === 'PENDING' && <Alert type="info" message="This post is waiting for a course manager to approve it. It is not visible to other students yet." />}
+      {item.approvalStatus === 'PENDING' && <Alert type="info" message="This post is waiting for a manager to approve it. It is not visible to other students yet." />}
       {item.approvalStatus === 'REJECTED' && item.rejectionReason && <Alert type="error" message={`This post was not approved: ${item.rejectionReason}`} />}
       <h1 className="text-2xl font-bold text-content">{item.title}</h1>
       <div className="flex items-center gap-3">
@@ -280,7 +265,7 @@ function DiscussionDetail({ discussionId }: { discussionId: string }) {
         {approved && <>
           <Button size="sm" variant={item.isUpvoted ? 'primary' : 'outline'} disabled={busy} icon={<Icon.Star className={`h-4 w-4 ${item.isUpvoted ? 'fill-current' : 'fill-none'}`} />} onClick={() => update('upvote')}>{item.isUpvoted ? 'Upvoted' : 'Upvote'} · {item.upvoteCount}</Button>
           <Button size="sm" variant={item.isBookmarked ? 'primary' : 'outline'} disabled={busy} icon={<Icon.Book className="h-4 w-4" />} onClick={() => update('bookmark')}>{item.isBookmarked ? 'Saved' : 'Save'}</Button>
-          {item.isAuthor && <Button size="sm" variant="outline" disabled={busy} icon={<Icon.Lock className="h-4 w-4" />} onClick={() => update('close')}>{item.isClosed ? 'Reopen discussion' : 'Close discussion'}</Button>}
+          {item.isAuthor && item.status !== 'HIDDEN' && <Button size="sm" variant="outline" disabled={busy} icon={<Icon.Lock className="h-4 w-4" />} onClick={() => update('close')}>{item.isClosed ? 'Reopen discussion' : 'Close discussion'}</Button>}
         </>}
       </div>
     </article>
@@ -316,8 +301,8 @@ function emptyTitle(tab: 'Discussions' | 'My Discussions' | 'Tips' | 'Announceme
 function emptyMessage(tab: 'Discussions' | 'My Discussions' | 'Tips' | 'Announcements', filtered: boolean) {
   if (tab === 'My Discussions') return filtered ? 'Try changing your search or status filters.' : 'Posts you create will appear here, including posts waiting for review.';
   if (tab === 'Tips') return 'Helpful tips from students will appear here.';
-  if (tab === 'Announcements') return 'Course announcements from your managers will appear here.';
-  return 'Start a discussion with your course community.';
+  if (tab === 'Announcements') return 'Announcements from your managers will appear here.';
+  return 'Start a discussion with the community.';
 }
 
 function authorAvatar(author: DiscussionItem['author'], isAnonymous = false) {
