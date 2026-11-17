@@ -79,7 +79,7 @@ function contributionQuestionDraft(detail: Row): QuestionDraft {
     defaultPoints: null,
     source: 'CONTRIBUTION_REVIEW',
     creatorRole: 'STUDENT',
-    createdBy: detail.contributorId ?? null,
+    createdBy: detail.contributor?.userId ?? detail.contributor?.id ?? detail.contributorId ?? null,
     scoringVersion: null,
     lockVersion: detail.version ?? null,
     aiExplanation: detail.explanation ?? '',
@@ -291,8 +291,8 @@ export function ManagerReviewPage() {
       const query = kind === 'decks' ? `?cardPage=${cardPage}&cardSize=50` : '';
       let data = unwrap((await apiClient.get(`${detailPath(kind, idOf(row, kind))}${query}`)).data);
       if (kind === 'contributions') {
-        const contributorId = data.contributorId ?? row.contributor?.id ?? row.contributorId;
-        const knownName = data.owner?.fullName || data.contributor?.fullName || data.contributorName || students.find(student => String(student.userId) === String(contributorId))?.fullName;
+        const contributorId = data.contributorId ?? data.contributor?.userId ?? data.contributor?.id ?? row.contributor?.userId ?? row.contributor?.id ?? row.contributorId;
+        const knownName = data.owner?.fullName || data.contributor?.fullName || data.contributor?.displayName || data.contributor?.name || data.contributorName || students.find(student => String(student.userId) === String(contributorId))?.fullName;
         const fetchedName = !knownName && data.courseId && contributorId
           ? await findContributorName(data.courseId, contributorId).catch(() => undefined)
           : undefined;
@@ -410,7 +410,7 @@ export function ManagerReviewPage() {
 
   const page = Number(pageData.page || 0);
   const detailStatus = detail && statusOf(detail, kind);
-  const detailContributorId = detail?.contributor?.id ?? detail?.contributorId ?? detail?.owner?.id ?? detail?.userId;
+  const detailContributorId = detail?.contributor?.userId ?? detail?.contributor?.id ?? detail?.contributorId ?? detail?.owner?.userId ?? detail?.owner?.id ?? detail?.userId;
   const isOwnSubmission = !!detail && detailContributorId != null && String(detailContributorId) === String(user?.userId);
   const canReviewDetail = !!detail?.canReview && !isOwnSubmission && isPending(kind, detailStatus);
   const courseOptions = [{ label: 'All courses', value: '' }, ...courses.map(course => ({ label: course.title, value: String(course.courseId) }))];
@@ -423,22 +423,30 @@ export function ManagerReviewPage() {
   const studentNames = new Map(students.map(student => [String(student.userId), student.fullName]));
   const courseNames = new Map(courses.map(course => [String(course.courseId), course.title]));
   const courseNameOf = (row: Row) => {
-    const id = String(row.courseId ?? row.course?.courseId ?? row.course?.id);
-    return row.course?.title || row.courseName || row.courseTitle || courseNames.get(id) || courseNameOverrides[id] || '—';
+    const rawId = row.courseId ?? row.course?.courseId ?? row.course?.id;
+    const id = String(rawId);
+    return row.course?.title || row.course?.name || row.courseName || row.courseTitle || courseNames.get(id) || courseNameOverrides[id] || (rawId != null ? `Course #${rawId}` : '—');
+  };
+  const moduleNameOf = (row: Row) => {
+    const rawId = row.moduleId ?? row.module?.moduleId ?? row.module?.id;
+    const knownModule = rawId == null ? undefined : modules.find(module => String(module.moduleId) === String(rawId));
+    return row.module?.title || row.module?.name || row.moduleName || row.moduleTitle || knownModule?.title || (rawId != null ? `Module #${rawId}` : 'No module assigned');
   };
   const columns: TableColumn[] = [
     { key: 'submission', label: 'Submission', width: '36%', render: value => {
       const row = value as Row;
       const id = idOf(row, kind);
       const title = row.title || row.contentPreview || row.content || `Submission #${id}`;
-      const subtitle = kind === 'decks' ? `${row.cardCount ?? 0} cards${row.module?.title ? ` · ${row.module.title}` : ''}` : row.questionType ? questionTypeLabel(row.questionType) : `Submission #${id}`;
+      const subtitle = kind === 'decks' ? `${row.cardCount ?? 0} cards${row.moduleId != null || row.module?.title || row.module?.name || row.moduleName || row.moduleTitle ? ` · ${moduleNameOf(row)}` : ''}` : row.questionType ? questionTypeLabel(row.questionType) : `Submission #${id}`;
       return <div className="min-w-0"><p className="line-clamp-2 whitespace-normal font-medium text-content" title={title}>{title}</p><p className="mt-1 truncate text-xs text-content-secondary" title={subtitle}>{subtitle}</p></div>;
     } },
     { key: 'contributor', label: 'Contributor', render: value => {
       const row = value as Row;
-      return row.owner?.fullName || row.contributor?.fullName || studentNames.get(String(row.contributor?.id ?? row.contributorId)) || row.contributorName || (row.contributor?.id ? `Contributor #${row.contributor.id}` : '—');
+      const id = row.contributor?.userId ?? row.contributor?.id ?? row.contributorId;
+      return row.owner?.fullName || row.contributor?.fullName || row.contributor?.displayName || row.contributor?.name || studentNames.get(String(id)) || row.contributorName || (id ? `Contributor #${id}` : '—');
     } },
     { key: 'course', label: 'Course', render: value => <span className="block truncate" title={courseNameOf(value as Row)}>{courseNameOf(value as Row)}</span> },
+    { key: 'module', label: 'Module', render: value => <span className="block truncate" title={moduleNameOf(value as Row)}>{moduleNameOf(value as Row)}</span> },
     { key: 'submittedAt', label: 'Submitted', className: 'whitespace-nowrap', render: value => {
       const submittedAt = (value as Row).submittedAt;
       return submittedAt ? new Date(submittedAt).toLocaleString() : '—';
@@ -536,8 +544,9 @@ export function ManagerReviewPage() {
           <span className="ml-auto text-xs text-content-secondary">Version {detail.version ?? 0}</span>
         </div>
         <div className="grid gap-3 rounded-lg bg-surface-muted p-4 text-sm sm:grid-cols-2">
-          <p><span className="text-content-secondary">Contributor</span><br /><span className="font-medium text-content">{detail.owner?.fullName || detail.contributor?.fullName || detail.contributorName || studentNames.get(String(detail.contributorId ?? detail.contributor?.id)) || (detail.contributorId ? `Contributor #${detail.contributorId}` : '—')}</span></p>
-          <p><span className="text-content-secondary">Course and module</span><br /><span className="font-medium text-content">{courseNameOf(detail)}{detail.module?.title ? ` · ${detail.module.title}` : ''}</span></p>
+          <p><span className="text-content-secondary">Contributor</span><br /><span className="font-medium text-content">{detail.owner?.fullName || detail.contributor?.fullName || detail.contributor?.displayName || detail.contributor?.name || detail.contributorName || studentNames.get(String(detail.contributorId ?? detail.contributor?.userId ?? detail.contributor?.id)) || (detail.contributorId || detail.contributor?.userId || detail.contributor?.id ? `Contributor #${detail.contributorId ?? detail.contributor?.userId ?? detail.contributor?.id}` : '—')}</span></p>
+          <p><span className="text-content-secondary">Course</span><br /><span className="font-medium text-content">{courseNameOf(detail)}</span></p>
+          <p><span className="text-content-secondary">Module</span><br /><span className="font-medium text-content">{moduleNameOf(detail)}</span></p>
           <p><span className="text-content-secondary">Submitted</span><br /><span className="font-medium text-content">{detail.submittedAt || detail.createdAt ? new Date(detail.submittedAt || detail.createdAt).toLocaleString() : '—'}</span></p>
           <p><span className="text-content-secondary">Submission</span><br /><span className="font-medium text-content">{detail.resubmissionCount ? `Resubmission ${detail.resubmissionCount}` : 'First submission'}</span></p>
           {kind === 'contributions' && <p><span className="text-content-secondary">Type and difficulty</span><br /><span className="font-medium text-content">{questionTypeLabel(detail.questionType || detail.type || '')} · {difficultyLabel(detail.difficulty || 'MEDIUM')}</span></p>}
