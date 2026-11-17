@@ -3,6 +3,7 @@ import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Input } from "@/components/ui/Input";
+import { MoneyInput, moneyToDigits } from "@/components/ui/MoneyInput";
 import { Select } from "@/components/ui/Select";
 import { Modal } from "@/components/ui/Modal";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
@@ -98,10 +99,9 @@ const formFromDiscount = (d: Discount): FormState => ({
   name: d.name,
   description: d.description ?? "",
   discountType: d.discountType,
-  value: String(d.value),
-  maxDiscountAmount:
-    d.maxDiscountAmount == null ? "" : String(d.maxDiscountAmount),
-  minOrderAmount: d.minOrderAmount == null ? "" : String(d.minOrderAmount),
+  value: d.discountType === "FIXED_AMOUNT" ? moneyToDigits(d.value) : String(d.value),
+  maxDiscountAmount: moneyToDigits(d.maxDiscountAmount),
+  minOrderAmount: moneyToDigits(d.minOrderAmount),
   appliesTo: d.appliesTo,
   accessType: d.accessType ?? "PUBLIC",
   usageLimit: String(d.usageLimit),
@@ -734,7 +734,10 @@ export function DiscountsPage() {
               onChange={(v) => {
                 if (v === "PERCENT" || v === "FIXED_AMOUNT") {
                   updateForm("discountType", v);
-                  if (v === "FIXED_AMOUNT") updateForm("maxDiscountAmount", "");
+                  if (v === "FIXED_AMOUNT") {
+                    updateForm("maxDiscountAmount", "");
+                    updateForm("value", moneyToDigits(form.value));
+                  }
                 }
               }}
               options={[
@@ -742,35 +745,37 @@ export function DiscountsPage() {
                 { label: "Fixed amount", value: "FIXED_AMOUNT" },
               ]}
             />
-            <Input
-              label={
-                form.discountType === "PERCENT" ? "Value (%)" : "Value (VND)"
-              }
-              type="number"
-              min={form.discountType === "PERCENT" ? 1 : 0.01}
-              max={form.discountType === "PERCENT" ? 100 : undefined}
-              required
-              disabled={lockedFields}
-              value={form.value}
-              onChange={(e) => updateForm("value", e.target.value)}
-            />
-            {form.discountType === "PERCENT" && (
+            {form.discountType === "PERCENT" ? (
               <Input
-                label="Maximum discount (VND)"
+                label="Value (%)"
                 type="number"
                 min={1}
-                value={form.maxDiscountAmount}
-                onChange={(e) =>
-                  updateForm("maxDiscountAmount", e.target.value)
-                }
+                max={100}
+                required
+                disabled={lockedFields}
+                value={form.value}
+                onChange={(e) => updateForm("value", e.target.value)}
+              />
+            ) : (
+              <MoneyInput
+                label="Value (VND)"
+                required
+                disabled={lockedFields}
+                value={form.value}
+                onValueChange={(v) => updateForm("value", v)}
               />
             )}
-            <Input
+            {form.discountType === "PERCENT" && (
+              <MoneyInput
+                label="Maximum discount (VND)"
+                value={form.maxDiscountAmount}
+                onValueChange={(v) => updateForm("maxDiscountAmount", v)}
+              />
+            )}
+            <MoneyInput
               label="Minimum order (VND)"
-              type="number"
-              min={0}
               value={form.minOrderAmount}
-              onChange={(e) => updateForm("minOrderAmount", e.target.value)}
+              onValueChange={(v) => updateForm("minOrderAmount", v)}
             />
             <Select
               label="Applies to"
