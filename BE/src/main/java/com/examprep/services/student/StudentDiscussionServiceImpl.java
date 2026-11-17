@@ -97,6 +97,8 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
                 .isAuthor(isAuthor)
                 .isClosed(Boolean.TRUE.equals(d.getIsClosed()) || "CLOSED".equals(d.getStatus()))
                 .imageUrl(d.getImageUrl())
+                .courseId(d.getCourse() != null ? d.getCourse().getCourseId() : null)
+                .courseTitle(d.getCourse() != null ? d.getCourse().getTitle() : null)
                 .approvalStatus(d.getApprovalStatus())
                 .createdAt(d.getCreatedAt())
                 .lastCommentAt(d.getUpdatedAt())
@@ -106,20 +108,39 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
     @Override
     @Transactional(readOnly = true)
     public Page<DiscussionItemDto> listDiscussions(String tag, String search, String sort, int page, int size, Long userId) {
-        if (sort == null || sort.isBlank()) {
-            sort = "latest";
-        }
-        Pageable pageable = PageRequest.of(page, size);
-        // A blank tag means "every tag"; anything else must be one of the three known tags.
-        String tagFilter = tag == null || tag.isBlank() ? null : normalizeTag(tag);
-        String searchTerm = search != null && !search.isBlank()
-                ? search.trim()
-                : "";
-        if (searchTerm.length() > 100) {
-            searchTerm = searchTerm.substring(0, 100);
-        }
+        return listDiscussions(DiscussionListFilter.publicFeed(tag, search, sort, page, size), userId);
+    }
 
-        Page<Discussion> discussions = discussionRepository.findAllDiscussions(tagFilter, searchTerm, sort, pageable);
+    @Override
+    @Transactional(readOnly = true)
+    public Page<DiscussionItemDto> listDiscussions(DiscussionListFilter filter, Long userId) {
+        String scope = normalizeScope(filter.scope());
+        String sort = normalizeSort(filter.sort());
+        String tagFilter = normalizeOptionalTag(filter.tag());
+        String approvalFilter = normalizeOptionalStatus(filter.approvalStatus(), "approvalStatus",
+                Set.of(Discussion.APPROVAL_PENDING, Discussion.APPROVAL_APPROVED, Discussion.APPROVAL_REJECTED));
+        String statusFilter = normalizeOptionalStatus(filter.status(), "status",
+                Set.of("OPEN", "CLOSED", "HIDDEN"));
+        validatePaging(filter.page(), filter.size());
+
+        String searchTerm = filter.search() != null && !filter.search().isBlank()
+                ? filter.search().trim()
+                : "";
+        if (searchTerm.length() > 100) searchTerm = searchTerm.substring(0, 100);
+
+        Pageable pageable = PageRequest.of(filter.page(), filter.size());
+        Page<Discussion> discussions;
+        if ("MINE".equals(scope)) {
+            if (userId == null) throw new ForbiddenException("Authentication required");
+            discussions = discussionRepository.findMineDiscussions(
+                    userId, filter.courseId(), tagFilter, approvalFilter, statusFilter, searchTerm, sort, pageable);
+        } else {
+            // Public feed visibility is fixed: query filters must never expose pending, rejected or hidden posts.
+            discussions = filter.courseId() == null
+                    ? discussionRepository.findAllDiscussions(tagFilter, searchTerm, sort, pageable)
+                    : discussionRepository.findDiscussions(
+                            filter.courseId(), tagFilter, searchTerm, sort, pageable);
+        }
         List<Long> discussionIds = discussions.getContent().stream().map(Discussion::getDiscussionId).toList();
         Set<Long> upvotedIds = (userId != null && !discussionIds.isEmpty())
                 ? new HashSet<>(upvoteRepository.findUpvotedDiscussionIds(userId, discussionIds))
@@ -129,6 +150,42 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
                 : Collections.emptySet();
 
         return discussions.map(d -> mapToDto(d, userId, upvotedIds, bookmarkedIds));
+    }
+
+    private static String normalizeScope(String scope) {
+        String value = scope == null || scope.isBlank() ? "PUBLIC" : scope.trim().toUpperCase();
+        if (!Set.of("PUBLIC", "MINE").contains(value)) {
+            throw new BadRequestException("scope must be PUBLIC or MINE");
+        }
+        return value;
+    }
+
+    private static String normalizeSort(String sort) {
+        String value = sort == null || sort.isBlank() ? "latest" : sort.trim();
+        if (!Set.of("latest", "mostCommented", "mostUpvoted").contains(value)) {
+            throw new BadRequestException("sort must be latest, mostCommented or mostUpvoted");
+        }
+        return value;
+    }
+
+    private static String normalizeOptionalTag(String tag) {
+        if (tag == null || tag.isBlank() || "ALL".equalsIgnoreCase(tag.trim())) return null;
+        return normalizeTag(tag);
+    }
+
+    private static String normalizeOptionalStatus(String value, String field, Set<String> allowed) {
+        if (value == null || value.isBlank() || "ALL".equalsIgnoreCase(value.trim())) return null;
+        String normalized = value.trim().toUpperCase();
+        if (!allowed.contains(normalized)) {
+            throw new BadRequestException(field + " has an invalid value");
+        }
+        return normalized;
+    }
+
+    private static void validatePaging(int page, int size) {
+        if (page < 0 || size < 1 || size > 100) {
+            throw new BadRequestException("page must be >= 0 and size must be between 1 and 100");
+        }
     }
 
     @Override

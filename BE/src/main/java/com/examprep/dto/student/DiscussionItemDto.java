@@ -34,6 +34,8 @@ public class DiscussionItemDto {
     @JsonProperty("isClosed")
     private boolean isClosed;
     private String imageUrl;
+    private Long courseId;
+    private String courseTitle;
     private String approvalStatus;
     private Instant createdAt;
     private Instant lastCommentAt;
