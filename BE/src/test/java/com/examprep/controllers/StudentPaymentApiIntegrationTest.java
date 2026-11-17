@@ -678,14 +678,15 @@ class StudentPaymentApiIntegrationTest {
     }
 
     @Test
-    void paidSubscriptionReplacesAnExpiredRowStillMarkedActive() throws Exception {
+    void paidPremiumReplacesAnExpiredActivePlanAndGrantsItsTokenLimitExactlyOnce() throws Exception {
         UserSubscription old = UserSubscription.builder().user(student).plan(freePlan)
                 .startDate(Instant.now().minus(60, ChronoUnit.DAYS))
                 .endDate(Instant.now().minus(30, ChronoUnit.DAYS))
                 .status("ACTIVE").paidAmount(BigDecimal.ZERO).autoRenew(false).build();
         em.persist(old);
         em.flush();
-        String orderCode = checkoutOrderCode(basicPlan, null);
+        SubscriptionPlan premium = plan("Premium", "199000", 30, 2_000_000, 4);
+        String orderCode = checkoutOrderCode(premium, null);
         Payment pending = payment(orderCode);
         pending.setStatus(Payment.EXPIRED);
         em.flush();
@@ -694,13 +695,24 @@ class StudentPaymentApiIntegrationTest {
 
         call(student, get("/api/v1/student/payments/" + orderCode + "/status"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.status").value(Payment.SUCCEEDED));
+        payWebhook(orderCode, pending.getAmount().longValueExact());
+        call(student, get("/api/v1/student/payments/" + orderCode + "/status"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.status").value(Payment.SUCCEEDED));
+        call(student, get("/api/v1/ai/usage/me"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.billingSource").value("SUBSCRIPTION"))
+                .andExpect(jsonPath("$.data.planName").value("Premium"))
+                .andExpect(jsonPath("$.data.tokenLimit").value(2_000_000))
+                .andExpect(jsonPath("$.data.tokenRemaining").value(2_000_000));
         em.flush();
         em.refresh(old);
         assertEquals("SUPERSEDED", old.getStatus());
         List<UserSubscription> active = em.createQuery("select s from UserSubscription s where s.user = :u and s.status = 'ACTIVE'", UserSubscription.class)
                 .setParameter("u", student).getResultList();
         assertEquals(1, active.size());
-        assertEquals(basicPlan.getPlanId(), active.get(0).getPlan().getPlanId());
+        assertEquals(premium.getPlanId(), active.get(0).getPlan().getPlanId());
+        assertEquals(2L, em.createQuery("select count(s) from UserSubscription s where s.user = :u", Long.class)
+                .setParameter("u", student).getSingleResult());
     }
 
     @Test

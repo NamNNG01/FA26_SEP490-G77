@@ -212,16 +212,21 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     @Override
-    @Transactional
     public PaymentResponses.PaymentState status(Long userId, String orderCode) {
-        Payment payment = payments.findByOrderCodeAndUserUserId(orderCode, userId)
-                .orElseThrow(() -> new ResourceNotFoundException("Payment not found"));
+        PaymentRepository.StatusRow payment = readStatus(userId, orderCode);
         if ((Payment.PENDING.equals(payment.getStatus()) || Payment.EXPIRED.equals(payment.getStatus()))
                 && payment.getPayosOrderCode() != null) {
-            // PY-04 self-heals a missed webhook: PayOS is asked directly while the student waits.
-            reconcileWithProvider(payment);
+            reconcileWithProvider(orderCode, payment.getPayosOrderCode());
+            // A webhook can also finish while PayOS is being queried.
+            payment = readStatus(userId, orderCode);
         }
-        return new PaymentResponses.PaymentState(payment.getOrderCode(), payment.getStatus(), payment.getPaidAt(), payment.getExpiresAt());
+        return new PaymentResponses.PaymentState(orderCode, payment.getStatus(), payment.getPaidAt(), payment.getExpiresAt());
+    }
+
+    private PaymentRepository.StatusRow readStatus(Long userId, String orderCode) {
+        // Read scalar fields so the subsequent write lock cannot reuse a stale managed Payment.
+        return payments.findStatus(orderCode, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Payment not found"));
     }
 
     /**
@@ -229,17 +234,17 @@ public class PaymentServiceImpl implements PaymentService {
      * (localhost development, closed firewall, lost delivery). A provider hiccup leaves the local state alone;
      * the next poll retries.
      */
-    private void reconcileWithProvider(Payment payment) {
+    private void reconcileWithProvider(String orderCode, long payosOrderCode) {
         PayosClient.RemotePayment remote;
         try {
-            remote = payos.fetch(payment.getPayosOrderCode());
+            remote = payos.fetch(payosOrderCode);
         } catch (RuntimeException ex) {
-            log.warn("PayOS status lookup failed for payment {}", payment.getPaymentId(), ex);
+            log.warn("PayOS status lookup failed for order {}", orderCode, ex);
             return;
         }
         if (remote != null && "PAID".equalsIgnoreCase(remote.status())
-                && transactions.reconcilePaid(payment.getOrderCode(), remote.amountPaid(), remote.raw())) {
-            log.info("Payment {} confirmed through the PayOS status API (missing webhook)", payment.getPaymentId());
+                && transactions.reconcilePaid(orderCode, remote.amountPaid(), remote.raw())) {
+            log.info("Order {} confirmed through the PayOS status API", orderCode);
         }
     }
 

@@ -14,12 +14,13 @@ import {
   type CurrentSubscription,
   type SubscriptionPlan,
 } from '@/services/studentSubscription.service';
-import { studentAttemptService, type AiQuota } from '@/services/studentAttempt.service';
+import { aiFlashcardService, type AiUsage } from '@/services/aiFlashcard.service';
 import { formatVnd } from '@/services/payment.service';
 import { PaymentCheckoutModal, type PaymentItem } from '@/features/payment/components/PaymentCheckoutModal';
 import { CardGridSkeleton, LoadError, PageTitle, STUDENT_PAGE_CLASS, formatDate } from '../components/studentUi';
 
 const formatTokens = (n: number) => Math.max(0, n).toLocaleString('vi-VN');
+type TokenBalance = { status: 'loading' | 'error' } | { status: 'ready'; usage: AiUsage };
 
 /**
  * Subscription — the student's plan (SB-02) with its days and AI tokens left, and every plan on
@@ -37,7 +38,8 @@ export function StudentSubscriptionPage() {
   const [reload, setReload] = useState(0);
   const [buying, setBuying] = useState<PaymentItem | null>(null);
   const [switching, setSwitching] = useState<SubscriptionPlan | null>(null);
-  const [quota, setQuota] = useState<AiQuota | null>(null);
+  const [balance, setBalance] = useState<TokenBalance>({ status: 'loading' });
+  const [balanceReload, setBalanceReload] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -48,18 +50,27 @@ export function StudentSubscriptionPage() {
       .then(data => { if (!cancelled) setPlans(data); })
       .catch(err => { if (!cancelled) setError(getApiErrorMessage(err, 'Could not load the plans.')); })
       .finally(() => { if (!cancelled) setLoading(false); });
-    // Token balance is extra info: a failure just leaves it out.
-    studentAttemptService
-      .getAiQuota()
-      .then(data => { if (!cancelled) setQuota(data); })
-      .catch(() => { if (!cancelled) setQuota(null); });
     return () => { cancelled = true; };
   }, [reload]);
+
+  useEffect(() => {
+    let cancelled = false;
+    aiFlashcardService.getMyUsage()
+      .then(usage => { if (!cancelled) setBalance({ status: 'ready', usage }); })
+      .catch(() => { if (!cancelled) setBalance({ status: 'error' }); });
+    return () => { cancelled = true; };
+  }, [balanceReload, user?.userId]);
+
+  function refreshBalance() {
+    setBalance({ status: 'loading' });
+    setBalanceReload(r => r + 1);
+  }
 
   function handlePaid(item: PaymentItem) {
     toast.success(`${item.title} is now active`);
     void refreshCurrentSubscription();
     setReload(r => r + 1);
+    refreshBalance();
   }
 
   function choose(plan: SubscriptionPlan) {
@@ -74,7 +85,7 @@ export function StudentSubscriptionPage() {
     <div className={`${STUDENT_PAGE_CLASS} space-y-6`}>
       <PageTitle title="Subscription" subtitle="Your study plan and the plans you can upgrade to." />
 
-      <CurrentPlanCard loaded={current.loaded} subscription={current.data} quota={quota} />
+      <CurrentPlanCard loaded={current.loaded} subscription={current.data} balance={balance} onRetryBalance={refreshBalance} />
 
       <section className="space-y-3">
         {loading ? (
@@ -120,10 +131,15 @@ function planPaymentItem(plan: SubscriptionPlan): PaymentItem {
   };
 }
 
-function CurrentPlanCard({ loaded, subscription, quota }: {
-  loaded: boolean; subscription: CurrentSubscription | null; quota: AiQuota | null;
+function CurrentPlanCard({ loaded, subscription, balance, onRetryBalance }: {
+  loaded: boolean;
+  subscription: CurrentSubscription | null;
+  balance: TokenBalance;
+  onRetryBalance: () => void;
 }) {
   if (!loaded) return null;
+
+  const tokenBalance = <TokenBalanceDisplay balance={balance} onRetry={onRetryBalance} />;
 
   if (!isPaidSubscription(subscription)) {
     // Free Plan (no subscription row): no dates to show, only the monthly free AI allowance.
@@ -141,21 +157,13 @@ function CurrentPlanCard({ loaded, subscription, quota }: {
             <p className="text-sm text-content-soft">Choose a plan below to unlock more AI tokens and features.</p>
           </div>
         </div>
-        {quota && (
-          <UsageBar
-            label={`${formatTokens(quota.free.remaining)} / ${formatTokens(quota.free.monthlyLimit)} free AI tokens left`}
-            aside={`Resets on ${formatDate(quota.free.resetAt)}`}
-            left={quota.free.remaining}
-            total={quota.free.monthlyLimit}
-          />
-        )}
+        {tokenBalance}
       </div>
     );
   }
 
   const totalDays = Math.max(1, Math.ceil((Date.parse(subscription.expiresAt) - Date.parse(subscription.startedAt)) / 86_400_000));
   const left = Math.max(0, subscription.daysRemaining);
-  const planQuota = quota?.plan ?? null;
 
   return (
     <div className="card p-5 space-y-4">
@@ -186,16 +194,32 @@ function CurrentPlanCard({ loaded, subscription, quota }: {
           left={left}
           total={totalDays}
         />
-        {planQuota && (
-          <UsageBar
-            label={`${formatTokens(planQuota.remaining)} / ${formatTokens(planQuota.tokenLimit)} AI tokens left`}
-            aside="For this plan period"
-            left={planQuota.remaining}
-            total={planQuota.tokenLimit}
-          />
-        )}
+        {tokenBalance}
       </div>
     </div>
+  );
+}
+
+function TokenBalanceDisplay({ balance, onRetry }: { balance: TokenBalance; onRetry: () => void }) {
+  if (balance.status !== 'ready') {
+    return (
+      <div className="flex flex-wrap items-center gap-2 text-sm text-content-soft">
+        <span role="status">
+          {balance.status === 'loading' ? 'Loading AI token balance…' : 'Could not load AI token balance.'}
+        </span>
+        {balance.status === 'error' && <Button size="sm" variant="outline" onClick={onRetry}>Retry</Button>}
+      </div>
+    );
+  }
+
+  const { tokenRemaining, tokenLimit, billingSource, periodEnd } = balance.usage;
+  return (
+    <UsageBar
+      label={`${formatTokens(tokenRemaining)} / ${formatTokens(tokenLimit)} AI tokens left`}
+      aside={billingSource === 'FREE_QUOTA' ? `Resets on ${formatDate(periodEnd)}` : 'For this plan period'}
+      left={tokenRemaining}
+      total={tokenLimit}
+    />
   );
 }
 

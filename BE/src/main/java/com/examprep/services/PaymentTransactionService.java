@@ -95,10 +95,7 @@ public class PaymentTransactionService {
     public boolean completeWebhook(JsonNode webhook) {
         JsonNode data = webhook.path("data");
         if (!"00".equals(webhook.path("code").asText()) || !data.path("orderCode").canConvertToLong()) return false;
-        Long numericCode = data.path("orderCode").asLong();
-        Payment payment = payments.findByPayosOrderCode(numericCode).orElse(null);
-        if (payment == null) return false;
-        Payment locked = payments.lockByOrderCode(payment.getOrderCode()).orElse(null);
+        Payment locked = payments.lockByPayosOrderCode(data.path("orderCode").asLong()).orElse(null);
         if (locked == null || Payment.SUCCEEDED.equals(locked.getStatus())) return locked != null;
         // EXPIRED rows stay payable for a late webhook: the sweep only runs after the PayOS link
         // itself expired, so a verified "paid" callback means the student paid just in time.
