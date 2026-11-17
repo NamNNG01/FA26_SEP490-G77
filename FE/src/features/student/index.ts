@@ -6,6 +6,7 @@ export { MyMaterialsPage } from './pages/MyMaterialsPage';
 export { StudentSubscriptionPage } from './pages/StudentSubscriptionPage';
 export { StudentFlashcardsPage } from './pages/StudentFlashcardsPage';
 export { StudentDeckStudyPage } from './pages/StudentDeckStudyPage';
+export { StudentDeckLearnPage } from './pages/StudentDeckLearnPage';
 export { StudentExamDetailPage } from './pages/StudentExamDetailPage';
 export { StudentTakeExamPage } from './pages/StudentTakeExamPage';
 export { StudentExamResultPage } from './pages/StudentExamResultPage';

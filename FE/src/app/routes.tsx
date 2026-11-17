@@ -61,6 +61,9 @@ export const ROUTES = {
   studentFlashcards: "/student/flashcards",
   /** Route pattern — render with studentDeckPath(id). */
   studentFlashcardDeck: "/student/flashcards/:deckId",
+  /** Route patterns — render with studentDeckLearnPath(id) / studentDeckTestPath(id). Full-screen. */
+  studentFlashcardLearn: "/student/flashcards/:deckId/learn",
+  studentFlashcardTest: "/student/flashcards/:deckId/test",
   studentPublicExam: "/student/public-exam",
   /** Route pattern — render with publicExamPath(id). */
   studentPublicExamDetail: "/student/public-exam/:examId",
@@ -148,6 +151,14 @@ export function studentModulePath(
 
 export function studentDeckPath(id: number | string): string {
   return `${ROUTES.studentFlashcards}/${id}`;
+}
+
+export function studentDeckLearnPath(id: number | string): string {
+  return `${studentDeckPath(id)}/learn`;
+}
+
+export function studentDeckTestPath(id: number | string): string {
+  return `${studentDeckPath(id)}/test`;
 }
 
 /** Read-only exam detail — e.g. studentExamPath(12) → '/student/exams/12'. */
