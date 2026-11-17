@@ -65,19 +65,11 @@ export interface Page<T> {
   last: boolean;
 }
 
-function normalizeDiscountType(value: string): DiscountType {
-  return value === 'FIXED' ? 'FIXED_AMOUNT' : value as DiscountType;
-}
-
-function normalizeDiscount<T extends { discountType: string }>(discount: T): T & { discountType: DiscountType } {
-  return { ...discount, discountType: normalizeDiscountType(discount.discountType) };
-}
-
 function normalizeDiscountPage(value: Page<Discount> | null | undefined): Page<Discount> {
   if (!value || !Array.isArray(value.content) || !Number.isFinite(value.totalElements)) {
     throw new Error('The server returned an invalid discount list. Please retry.');
   }
-  return { ...value, content: value.content.map(normalizeDiscount) };
+  return value;
 }
 
 function query(params: Record<string, string | number | boolean | undefined>) {
@@ -95,15 +87,15 @@ export const adminDiscountService = {
   },
   async get(id: number) {
     const res = await api.get<ApiResponse<Discount>>(`/admin/discounts/${id}`);
-    return normalizeDiscount(res.data);
+    return res.data;
   },
   async create(payload: DiscountPayload) {
     const res = await api.post<ApiResponse<Discount>>('/admin/discounts', payload);
-    return normalizeDiscount(res.data);
+    return res.data;
   },
   async update(id: number, payload: DiscountPayload) {
     const res = await api.request<ApiResponse<Discount>>({ method: 'put', url: `/admin/discounts/${id}`, data: payload });
-    return normalizeDiscount(res.data);
+    return res.data;
   },
   async setStatus(id: number, isActive: boolean) {
     const res = await api.request<ApiResponse<{ discountId: number; isActive: boolean; affectedContests: { contestId: number; title: string; status: string }[] }>>({

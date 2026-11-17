@@ -3,6 +3,7 @@ package com.examprep.controllers.student;
 import com.examprep.entities.*;
 import com.examprep.entities.Module;
 import com.examprep.repositories.QuestionRepository;
+import com.examprep.util.ContentHashUtil;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityManager;
@@ -94,6 +95,68 @@ class StudentContributionApiIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(badModuleReq))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void rejectsQuestionAlreadyInCourseOnCreateAndResubmit() throws Exception {
+        String duplicateContent = "What is duplicate checking?";
+        Question existing = Question.builder()
+                .course(course)
+                .module(oop)
+                .questionType("SINGLE_CHOICE")
+                .difficulty("MEDIUM")
+                .content(duplicateContent)
+                .contentHash(ContentHashUtil.computeHash(duplicateContent, java.util.List.of("A", "B")))
+                .status("ACTIVE")
+                .approvalStatus("APPROVED")
+                .build();
+        em.persist(existing);
+        em.flush();
+
+        String duplicateRequest = "{\"courseId\":" + course.getCourseId() + ",\"moduleId\":" + oop.getModuleId()
+                + ",\"questionType\":\"SINGLE_CHOICE\",\"difficulty\":\"EASY\",\"content\":\"  " + duplicateContent + "  \","
+                + "\"options\":[{\"optionText\":\"B\",\"isCorrect\":false},{\"optionText\":\"A\",\"isCorrect\":true}]}";
+        mvc.perform(post("/api/v1/student/contributions")
+                        .with(as(student))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(duplicateRequest))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("Question already exists in course"));
+
+        String resubmitContent = "Question duplicated on resubmit";
+        String initialRequest = "{\"courseId\":" + course.getCourseId() + ",\"moduleId\":" + oop.getModuleId()
+                + ",\"questionType\":\"SINGLE_CHOICE\",\"difficulty\":\"MEDIUM\",\"content\":\"Original question\","
+                + "\"options\":[{\"optionText\":\"A\",\"isCorrect\":true},{\"optionText\":\"B\",\"isCorrect\":false}]}";
+        JsonNode created = json.readTree(mvc.perform(post("/api/v1/student/contributions")
+                        .with(as(student))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(initialRequest))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString()).path("data");
+        QuestionContribution contribution = em.find(QuestionContribution.class, created.path("contributionId").asLong());
+        contribution.setStatus("REJECTED");
+
+        Question resubmitDuplicate = Question.builder()
+                .course(course)
+                .module(oop)
+                .questionType("SINGLE_CHOICE")
+                .difficulty("HARD")
+                .content(resubmitContent)
+                .contentHash(ContentHashUtil.computeHash(resubmitContent, java.util.List.of("A", "B")))
+                .status("ACTIVE")
+                .approvalStatus("APPROVED")
+                .build();
+        em.persist(resubmitDuplicate);
+        em.flush();
+
+        String resubmitRequest = "{\"courseId\":" + course.getCourseId() + ",\"moduleId\":" + oop.getModuleId()
+                + ",\"questionType\":\"SINGLE_CHOICE\",\"difficulty\":\"EASY\",\"content\":\"" + resubmitContent + "\","
+                + "\"options\":[{\"optionText\":\"B\",\"isCorrect\":false},{\"optionText\":\"A\",\"isCorrect\":true}]}";
+        mvc.perform(put("/api/v1/student/contributions/" + contribution.getContributionId() + "/resubmit")
+                        .with(as(student))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(resubmitRequest))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("Question already exists in course"));
     }
 
     @Test void studentCanSubmitCodeAndDiagramEssayContributions() throws Exception {

@@ -30,8 +30,8 @@ export type ContestStatus = 'DRAFT' | 'UPCOMING' | 'ONGOING' | 'PENDING_REWARD' 
 export type StoredContestStatus = 'DRAFT' | 'PUBLISHED' | 'REWARDED' | 'CANCELLED';
 /** null before the contest ends. */
 export type RankingStatus = 'CALCULATING' | 'READY' | null;
-/** Seeded discounts use FIXED, admin-created ones FIXED_AMOUNT; anything but PERCENT is an amount in VND. */
-export type PrizeDiscountType = 'PERCENT' | 'FIXED' | 'FIXED_AMOUNT';
+/** Discount type values stored by the backend. */
+export type PrizeDiscountType = 'PERCENT' | 'FIXED_AMOUNT';
 export type DiscountValidity = 'ACTIVE' | 'UPCOMING' | 'EXPIRED' | 'EXHAUSTED' | 'INACTIVE';
 
 export const CONTEST_STATUSES: ContestStatus[] = ['DRAFT', 'UPCOMING', 'ONGOING', 'PENDING_REWARD', 'REWARDED', 'CANCELLED'];

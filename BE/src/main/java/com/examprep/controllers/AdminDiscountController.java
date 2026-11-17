@@ -7,16 +7,20 @@ import com.examprep.services.admin.AdminDiscountService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/v1/admin/discounts")
 @RequiredArgsConstructor
 @PreAuthorize("hasRole('ADMIN')")
+@Validated
 @Tag(name = "Admin Discounts")
 public class AdminDiscountController {
 
@@ -30,8 +34,8 @@ public class AdminDiscountController {
             @RequestParam(required = false) Boolean isActive,
             @RequestParam(required = false) String validity,
             @RequestParam(required = false) String accessType,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size,
             @RequestParam(defaultValue = "createdAt,desc") String sort) {
         return ResponseEntity.ok(ApiResponse.success(PageResponse.of(service.list(keyword, discountType, isActive, validity, accessType, page, size, sort))));
     }
@@ -73,8 +77,8 @@ public class AdminDiscountController {
             @PathVariable Long id,
             @RequestParam(required = false) Boolean isUsed,
             @RequestParam(required = false) String keyword,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
         return ResponseEntity.ok(ApiResponse.success(PageResponse.of(service.assignments(id, isUsed, keyword, page, size))));
     }
 }

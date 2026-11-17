@@ -2,6 +2,7 @@ package com.examprep.exceptions;
 
 import com.examprep.dto.ApiResponse;
 import com.examprep.dto.ResponseCode;
+import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
@@ -108,6 +109,23 @@ public class GlobalExceptionHandler {
         log.warn("Handler Method Validation Error: {}", errors);
         return ResponseEntity.status(ResponseCode.VALIDATION_ERROR.getHttpStatus())
                 .body(ApiResponse.error(ResponseCode.VALIDATION_ERROR, "Validation failed"));
+    }
+
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ApiResponse<Map<String, String>>> handleConstraintViolation(ConstraintViolationException ex) {
+        Map<String, String> errors = new HashMap<>();
+        ex.getConstraintViolations().forEach(violation -> {
+            String path = violation.getPropertyPath().toString();
+            String field = path.substring(path.lastIndexOf('.') + 1);
+            errors.put(field, violation.getMessage());
+        });
+        log.warn("Constraint violation: {}", errors);
+        return ResponseEntity.status(ResponseCode.VALIDATION_ERROR.getHttpStatus())
+                .body(ApiResponse.<Map<String, String>>builder()
+                        .success(false)
+                        .message("Validation failed for request parameters")
+                        .data(errors)
+                        .build());
     }
 
     @ExceptionHandler(AccessDeniedException.class)

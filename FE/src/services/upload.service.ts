@@ -7,6 +7,7 @@ import type { CourseDetailResponse } from './course.service';
  *   POST /users/me/avatar                  USER-03 → UserResponse
  *   POST /manager/courses/{id}/thumbnail   C-15    → CourseDetailResponse
  *   POST /manager/uploads                  D3      → UploadedImage
+ *   POST /student/uploads                  Student question/attachment image → UploadedImage
  */
 
 export const IMAGE_ACCEPT = 'image/jpeg,image/png,image/webp,image/gif';

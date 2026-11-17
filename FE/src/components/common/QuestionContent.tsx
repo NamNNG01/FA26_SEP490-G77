@@ -136,10 +136,12 @@ export function InsertImageButton({
   value,
   onChange,
   disabled,
+  uploadScope = 'manager',
 }: {
   value: string;
   onChange: (next: string) => void;
   disabled?: boolean;
+  uploadScope?: 'manager' | 'student';
 }) {
   const toast = useToast();
   const [uploading, setUploading] = useState(false);
@@ -147,7 +149,9 @@ export function InsertImageButton({
   const insert = async (file: File) => {
     setUploading(true);
     try {
-      const { url } = await uploadService.uploadMedia(file);
+      const { url } = uploadScope === 'student'
+        ? await uploadService.uploadStudentAttachment(file)
+        : await uploadService.uploadMedia(file);
       onChange(withQuestionImage(splitQuestionImage(value).text, url));
     } catch (err) {
       toast.error(getApiErrorMessage(err, 'Could not upload the image.'));
