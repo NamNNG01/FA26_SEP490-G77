@@ -10,6 +10,7 @@ import { Alert } from "@/components/ui/Alert";
 import { focusFirstInvalidAfter } from "@/utils/focusFirstInvalid";
 import { Pagination } from "@/components/ui/Pagination";
 import { Select } from "@/components/ui/Select";
+import { useToast } from '@/components/ui/ToastHost';
 import { Tabs } from "@/components/ui/Tabs";
 import { Icon } from "@/assets/icons";
 import { ROUTES, studentDeckPath } from "@/app/routes";
@@ -94,7 +95,7 @@ function ContributionList() {
             key: `question-${item.contributionId}`,
             type: "question" as const,
             status: item.status,
-            summary: item.summary,
+            summary: item.summary.replace(/\{\{\s*\d+\s*\}\}/g, "____"),
             createdAt: item.createdAt,
             reviewedAt: item.reviewedAt,
             contributionId: item.contributionId,
@@ -201,9 +202,9 @@ function ContributionList() {
         <div className="card">
           <EmptyState
             icon={<Icon.FileText className="h-7 w-7" />}
-            title="No contributions yet"
-            message="Submit a practice question or a flashcard deck for review."
-            action={<div className="flex flex-wrap justify-center gap-2"><Button onClick={() => setForm("question")}>Contribute a question</Button><Button variant="outline" onClick={() => setForm("deck")}>Contribute a flashcard deck</Button></div>}
+            title={items.length ? 'No contributions match these filters' : 'No contributions yet'}
+            message={items.length ? 'Try changing the type or review status filter.' : 'Submit a practice question or a flashcard deck for review.'}
+            action={items.length ? undefined : <div className="flex flex-wrap justify-center gap-2"><Button onClick={() => setForm("question")}>Contribute a question</Button><Button variant="outline" onClick={() => setForm("deck")}>Contribute a flashcard deck</Button></div>}
           />
         </div>
       ) : (
@@ -211,7 +212,7 @@ function ContributionList() {
           <ul className="divide-y divide-line">
             {pageItems.map((item) => (
               <li
-                key={item.contributionId}
+                key={item.key}
                 className="flex flex-wrap items-center gap-3 px-4 py-4 sm:px-5"
               >
                 <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-light text-primary">
@@ -229,7 +230,7 @@ function ContributionList() {
                   </button>
                   <p className="mt-1 text-xs text-content-subtle">
                     {item.type === "deck" ? `Flashcard deck · ${item.cardCount ?? 0} cards · Created ${formatDate(item.createdAt)}` : `Question · Submitted ${formatDate(item.createdAt)}`}
-                    {item.reviewedAt
+                    {item.reviewedAt && ["ACCEPTED", "APPROVED", "REJECTED"].includes(item.status.toUpperCase())
                       ? ` · Reviewed ${formatDate(item.reviewedAt)}`
                       : ""}
                   </p>
@@ -345,7 +346,7 @@ function ContributionDetail({ contributionId }: { contributionId: string }) {
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-content-subtle">
           <p>Submitted {formatDate(item.createdAt)}</p>
           <span aria-hidden="true" className="text-content-subtle/60">·</span>
-          <p>{item.reviewedAt ? `Reviewed ${formatDate(item.reviewedAt)}` : "Awaiting review"}</p>
+          <p>{item.reviewedAt && ["ACCEPTED", "APPROVED", "REJECTED"].includes(item.status.toUpperCase()) ? `Reviewed ${formatDate(item.reviewedAt)}` : "Awaiting review"}</p>
         </div>
         {item.reviewNote && (
           <div className="rounded-xl border border-warning-line bg-warning-light p-4">
@@ -473,6 +474,7 @@ function QuestionContributionModal({
   initial?: ContributionDetail;
   contributionId?: number;
 }) {
+  const toast = useToast();
   const { courses, error: coursesError } = useActiveCourses();
   const [courseId, setCourseId] = useState(
     initial?.courseId ? String(initial.courseId) : "",
@@ -531,6 +533,7 @@ function QuestionContributionModal({
       if (contributionId)
         await studentContributionService.resubmit(contributionId, body);
       else await studentContributionService.createQuestion(body);
+      toast.success(contributionId ? 'Question resubmitted for review.' : 'Question submitted for review.');
       onSaved();
     } catch (err) {
       setError(getApiErrorMessage(err, "Could not submit this question."));
@@ -602,7 +605,7 @@ function StatusBadge({ status }: { status: ContributionStatus | string }) {
       : status === "REJECTED"
         ? "danger"
         : "warning";
-  const label = status === "PENDING_REVIEW" ? "Pending review" : status === "APPROVED" || status === "ACCEPTED" ? "Approved" : titleCase(status);
+  const label = status === "PENDING_REVIEW" ? "Pending review" : status === "APPROVED" || status === "ACCEPTED" ? "Accepted" : titleCase(status);
   return <Badge variant={variant}>{label}</Badge>;
 }
 

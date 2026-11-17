@@ -6,6 +6,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Checkbox } from '@/components/ui/Checkbox';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
@@ -37,6 +38,7 @@ function DiscussionList() {
   const [courses, setCourses] = useState<MyCourse[]>([]);
   const [courseId, setCourseId] = useState('');
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [sort, setSort] = useState<DiscussionSort>('latest');
   const [page, setPage] = useState(0);
   const [items, setItems] = useState<DiscussionItem[]>([]);
@@ -48,6 +50,11 @@ function DiscussionList() {
   const [createOpen, setCreateOpen] = useState(false);
   const [votingIds, setVotingIds] = useState<Set<number>>(new Set());
   const [voteError, setVoteError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => window.clearTimeout(timer);
+  }, [search]);
 
   useEffect(() => {
     let cancelled = false;
@@ -65,14 +72,14 @@ function DiscussionList() {
     const params = { page, size: PAGE_SIZE };
     const request = tab === 'Tips'
       ? studentCommunityService.getTips({ courseId: courseId ? Number(courseId) : undefined, ...params })
-      : studentCommunityService.getDiscussions({ ...params, tag: tab === 'Announcements' ? 'announcement' : 'question', search: search.trim() || undefined, sort });
+      : studentCommunityService.getDiscussions({ ...params, tag: tab === 'Announcements' ? 'announcement' : 'question', search: debouncedSearch || undefined, sort });
     request.then(result => {
       if (cancelled) return;
       setItems(result.content); setTotal(result.totalElements);
     }).catch(err => { if (!cancelled && !quiet) setError(getApiErrorMessage(err, 'Failed to load community posts.')); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [tab, courseId, search, sort, page, reload]);
+  }, [tab, courseId, debouncedSearch, sort, page, reload]);
 
   const courseOptions = useMemo(() => [{ label: 'All courses', value: '' }, ...courses.map(course => ({ label: course.title, value: String(course.courseId) }))], [courses]);
   const chooseTab = (value: string) => { setTab(value); setPage(0); };
@@ -131,10 +138,10 @@ function DiscussionCard({ item, onOpen, onUpvote, voting }: { item: DiscussionIt
       <Button variant="outline" size="sm" onClick={onOpen}>Open</Button>
     </div>
     <div className="mt-4 flex flex-wrap gap-4 border-t border-line pt-3 text-xs text-content-secondary">
-      <button type="button" aria-pressed={item.isUpvoted} aria-label={`${item.isUpvoted ? 'Remove upvote' : 'Upvote'} this discussion. ${item.upvoteCount} upvotes`} disabled={voting} onClick={onUpvote} className={`inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 transition-colors disabled:cursor-wait disabled:opacity-60 ${item.isUpvoted ? 'font-medium text-amber-600 hover:bg-amber-50' : 'text-content-secondary hover:bg-surface-hover hover:text-amber-600'}`}>
-        <Icon.Star className={`h-4 w-4 ${item.isUpvoted ? 'fill-current' : 'fill-none'}`} />{item.upvoteCount} upvotes
+      <button type="button" aria-pressed={item.isUpvoted} aria-label={`${item.isUpvoted ? 'Remove upvote' : 'Upvote'} this discussion. ${item.upvoteCount} ${item.upvoteCount === 1 ? 'upvote' : 'upvotes'}`} disabled={voting} onClick={onUpvote} className={`inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 transition-colors disabled:cursor-wait disabled:opacity-60 ${item.isUpvoted ? 'font-medium text-amber-600 hover:bg-amber-50' : 'text-content-secondary hover:bg-surface-hover hover:text-amber-600'}`}>
+        <Icon.Star className={`h-4 w-4 ${item.isUpvoted ? 'fill-current' : 'fill-none'}`} />{item.upvoteCount} {item.upvoteCount === 1 ? 'upvote' : 'upvotes'}
       </button>
-      <span className="inline-flex items-center gap-1.5"><Icon.Users className="h-4 w-4" />{item.commentCount} comments</span>
+      <span className="inline-flex items-center gap-1.5"><Icon.Users className="h-4 w-4" />{item.commentCount} {item.commentCount === 1 ? 'comment' : 'comments'}</span>
       {item.lastCommentAt && <span className="ml-auto">Last reply {formatDate(item.lastCommentAt)}</span>}
     </div>
   </article>;
@@ -149,7 +156,17 @@ function CreateDiscussionModal({ open, courses, defaultTag, onClose, onCreated }
   const [imageUrl, setImageUrl] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
   useEffect(() => { if (open) { setTag(defaultTag); setError(null); } }, [open, defaultTag]);
+  const hasDraft = Boolean(courseId || title.trim() || content.trim() || anonymous || imageUrl);
+  const requestClose = () => {
+    if (busy) return;
+    if (hasDraft) setConfirmDiscard(true);
+    else onClose();
+  };
+  const discard = () => {
+    setCourseId(''); setTitle(''); setContent(''); setAnonymous(false); setImageUrl(''); setError(null); setConfirmDiscard(false); onClose();
+  };
   const submit = async (event: FormEvent) => {
     event.preventDefault(); setError(null);
     if (!courseId || !title.trim() || !content.trim()) { setError('Choose a course and complete the title and content.'); return; }
@@ -160,7 +177,7 @@ function CreateDiscussionModal({ open, courses, defaultTag, onClose, onCreated }
     } catch (err) { setError(getApiErrorMessage(err, 'Could not create this post.')); }
     finally { setBusy(false); }
   };
-  return <Modal open={open} onClose={onClose} title="Create a community post" size="lg" error={error && <Alert type="error" message={error} />} footer={<><Button variant="outline" onClick={onClose}>Cancel</Button><Button form="create-discussion-form" type="submit" loading={busy}>Publish</Button></>}>
+  return <><Modal open={open} onClose={requestClose} title="Create a community post" size="lg" error={error && <Alert type="error" message={error} />} footer={<><Button variant="outline" onClick={requestClose} disabled={busy}>Cancel</Button><Button form="create-discussion-form" type="submit" loading={busy}>Publish</Button></>}>
     <form id="create-discussion-form" onSubmit={submit} className="space-y-4">
       <SearchableSelect label="Course" value={courseId} options={[{ label: 'Choose an enrolled course', value: '' }, ...courses.map(course => ({ label: course.title, value: String(course.courseId) }))]} onChange={setCourseId} placeholder="Choose a course" searchPlaceholder="Search courses…" emptyText="No enrolled courses found" />
       <Select label="Post type" value={tag} options={[{ label: 'Question', value: 'question' }, { label: 'Tip', value: 'tip' }]} onChange={value => setTag(value as 'question' | 'tip')} />
@@ -173,7 +190,7 @@ function CreateDiscussionModal({ open, courses, defaultTag, onClose, onCreated }
       <Checkbox checked={anonymous} onChange={setAnonymous} label="Post anonymously" />
       {!courses.length && <p className="text-sm text-warning">Enroll in an active course to create a post.</p>}
     </form>
-  </Modal>;
+  </Modal><ConfirmDialog open={confirmDiscard} onClose={() => setConfirmDiscard(false)} onConfirm={discard} tone="warning" title="Discard this post?" description="Your draft will be cleared and cannot be recovered." confirmLabel="Discard draft" /></>;
 }
 
 function DiscussionDetail({ discussionId }: { discussionId: string }) {
@@ -189,6 +206,8 @@ function DiscussionDetail({ discussionId }: { discussionId: string }) {
   const [reload, setReload] = useState(0);
   useEffect(() => {
     let cancelled = false;
+    setComment('');
+    setCommentImageUrl('');
     setLoading(true); setError(null);
     studentCommunityService.getDiscussion(discussionId).then(data => { if (!cancelled) setItem(data); })
       .catch(err => { if (!cancelled) setError(getApiErrorMessage(err, 'Failed to load this discussion.')); })
@@ -225,7 +244,13 @@ function DiscussionDetail({ discussionId }: { discussionId: string }) {
   };
 
   if (loading) return <div className={`${STUDENT_PAGE_CLASS}`}><div className="card p-8 text-sm text-content-subtle">Loading discussion…</div></div>;
-  if (error || !item) return <div className={`${STUDENT_PAGE_CLASS} space-y-4`}><Button variant="ghost" onClick={() => navigate(ROUTES.studentDiscussions)}>← Community</Button><LoadError message={error ?? 'Discussion not found.'} onRetry={() => setReload(value => value + 1)} /></div>;
+  if (error || !item) {
+    const validId = /^\d+$/.test(discussionId) && Number(discussionId) > 0;
+    const notFound = !validId || /not found|invalid request parameter/i.test(error ?? '');
+    return <div className={`${STUDENT_PAGE_CLASS} space-y-4`}><Button variant="ghost" onClick={() => navigate(ROUTES.studentDiscussions)}>← Community</Button>{notFound ? <div className="card p-8 text-center"><h1 className="font-semibold text-content">Discussion not found</h1><p className="mt-2 text-sm text-content-subtle">It may have been removed or the link may be incorrect.</p><Button className="mt-4" onClick={() => navigate(ROUTES.studentDiscussions)}>Back to Community</Button></div> : <LoadError message={error ?? 'Failed to load this discussion.'} onRetry={() => setReload(value => value + 1)} />}</div>;
+  }
+  const approved = item.approvalStatus === 'APPROVED';
+  const visibleComments = (item.comments ?? []).filter(reply => reply.status !== 'HIDDEN');
   return <div className={`${STUDENT_PAGE_CLASS} space-y-5`}>
     <Button variant="ghost" onClick={() => navigate(ROUTES.studentDiscussions)}>← Community</Button>
     <article className="card space-y-4 p-5 sm:p-6">
@@ -240,20 +265,22 @@ function DiscussionDetail({ discussionId }: { discussionId: string }) {
       <div className="whitespace-pre-wrap border-t border-line pt-4 text-sm leading-6 text-content-secondary">{item.content}</div>
       {item.imageUrl && <ImageViewer src={item.imageUrl} alt="Discussion attachment" imageClassName="max-h-[28rem]" />}
       <div className="flex flex-wrap gap-2 border-t border-line pt-4">
-        <Button size="sm" variant={item.isUpvoted ? 'primary' : 'outline'} disabled={busy} icon={<Icon.Star className={`h-4 w-4 ${item.isUpvoted ? 'fill-current' : 'fill-none'}`} />} onClick={() => update('upvote')}>{item.isUpvoted ? 'Upvoted' : 'Upvote'} · {item.upvoteCount}</Button>
-        <Button size="sm" variant={item.isBookmarked ? 'primary' : 'outline'} disabled={busy} icon={<Icon.Book className="h-4 w-4" />} onClick={() => update('bookmark')}>{item.isBookmarked ? 'Saved' : 'Save'}</Button>
-        {item.isAuthor && <Button size="sm" variant="outline" disabled={busy} icon={<Icon.Lock className="h-4 w-4" />} onClick={() => update('close')}>{item.isClosed ? 'Reopen discussion' : 'Close discussion'}</Button>}
+        {approved && <>
+          <Button size="sm" variant={item.isUpvoted ? 'primary' : 'outline'} disabled={busy} icon={<Icon.Star className={`h-4 w-4 ${item.isUpvoted ? 'fill-current' : 'fill-none'}`} />} onClick={() => update('upvote')}>{item.isUpvoted ? 'Upvoted' : 'Upvote'} · {item.upvoteCount}</Button>
+          <Button size="sm" variant={item.isBookmarked ? 'primary' : 'outline'} disabled={busy} icon={<Icon.Book className="h-4 w-4" />} onClick={() => update('bookmark')}>{item.isBookmarked ? 'Saved' : 'Save'}</Button>
+          {item.isAuthor && <Button size="sm" variant="outline" disabled={busy} icon={<Icon.Lock className="h-4 w-4" />} onClick={() => update('close')}>{item.isClosed ? 'Reopen discussion' : 'Close discussion'}</Button>}
+        </>}
       </div>
     </article>
 
     <section className="card p-5 sm:p-6">
-      <h2 className="text-lg font-semibold text-content">Replies <span className="text-sm font-normal text-content-subtle">({item.commentCount})</span></h2>
-      <div className="mt-4 divide-y divide-line">{(item.comments ?? []).filter(reply => reply.status !== 'HIDDEN').map(reply => <article key={reply.commentId} className="flex gap-3 py-4 first:pt-0 last:pb-0">
+      <h2 className="text-lg font-semibold text-content">Replies <span className="text-sm font-normal text-content-subtle">({visibleComments.length})</span></h2>
+      <div className="mt-4 divide-y divide-line">{visibleComments.map(reply => <article key={reply.commentId} className="flex gap-3 py-4 first:pt-0 last:pb-0">
         <Avatar name={reply.author.displayName} src={authorAvatar(reply.author, reply.isAnonymous)} size="sm" />
         <div className="min-w-0 flex-1"><p className="text-xs text-content-subtle">{reply.author.displayName} · {formatDate(reply.createdAt)}</p><p className="mt-2 whitespace-pre-wrap text-sm text-content-secondary">{reply.content}</p>{reply.imageUrl && <ImageViewer src={reply.imageUrl} alt="Reply attachment" className="mt-3" imageClassName="max-h-64" />}</div>
       </article>)}</div>
-      {item.comments?.length === 0 && <p className="py-4 text-sm text-content-subtle">No replies yet.</p>}
-      {item.isClosed ? <p className="mt-4 rounded-lg bg-surface-muted p-3 text-sm text-content-soft">This discussion is closed to new replies.</p> : <form onSubmit={postComment} className="mt-5 space-y-3 border-t border-line pt-4">
+      {visibleComments.length === 0 && <p className="py-4 text-sm text-content-subtle">No replies yet.</p>}
+      {!approved ? <p className="mt-4 rounded-lg bg-surface-muted p-3 text-sm text-content-soft">Replies and reactions are available after a manager approves this post.</p> : item.isClosed ? <p className="mt-4 rounded-lg bg-surface-muted p-3 text-sm text-content-soft">This discussion is closed to new replies.</p> : <form onSubmit={postComment} className="mt-5 space-y-3 border-t border-line pt-4">
         <label className="flex flex-col gap-1.5 text-sm font-medium text-content-secondary">Add a reply<textarea required maxLength={10000} rows={3} value={comment} onChange={event => setComment(event.target.value)} className="w-full rounded-[10px] border border-line bg-surface p-3 text-sm text-content focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/20" placeholder="Write a helpful reply…" /></label>
         <DiscussionImageAttachment imageUrl={commentImageUrl} onChange={setCommentImageUrl} label="Attach image to reply" />
         <div className="flex flex-wrap items-center justify-between gap-3"><Checkbox checked={anonymous} onChange={setAnonymous} label="Reply anonymously" /><Button type="submit" disabled={busy || !comment.trim()} loading={busy}>Post reply</Button></div>

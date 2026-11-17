@@ -19,6 +19,12 @@ export function DiscussionImageAttachment({ imageUrl, onChange, scope = 'student
     if (!file) return;
     const validation = imageFileError(file);
     if (validation) { setError(validation); return; }
+    const bytes = new Uint8Array(await file.slice(0, 12).arrayBuffer());
+    const isPng = bytes.length >= 8 && [137, 80, 78, 71, 13, 10, 26, 10].every((byte, i) => bytes[i] === byte);
+    const isJpeg = bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+    const isGif = bytes.length >= 6 && String.fromCharCode(...bytes.slice(0, 6)).startsWith('GIF8');
+    const isWebp = bytes.length >= 12 && String.fromCharCode(...bytes.slice(0, 4)) === 'RIFF' && String.fromCharCode(...bytes.slice(8, 12)) === 'WEBP';
+    if (!(isPng || isJpeg || isGif || isWebp)) { setError('This file does not appear to be a valid image. Choose a JPG, PNG, WEBP, or GIF file.'); return; }
     setUploading(true);
     setError('');
     try {
