@@ -5,7 +5,6 @@ import com.examprep.dto.PageResponse;
 import com.examprep.dto.discussion.DiscussionManagerDtos;
 import com.examprep.dto.student.DiscussionDetailDto;
 import com.examprep.dto.student.DiscussionItemDto;
-import com.examprep.dto.student.UpdateDiscussionRequestDto;
 import com.examprep.security.UserPrincipal;
 import com.examprep.services.ManagerDiscussionService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -21,29 +20,27 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/v1/manager")
 @RequiredArgsConstructor
-@Tag(name = "Manager Discussions", description = "Course manager discussion creation, moderation, approval and comment control APIs")
+@Tag(name = "Manager Discussions", description = "Global discussion creation, moderation, approval and comment control APIs")
 public class ManagerDiscussionController {
 
     private final ManagerDiscussionService managerDiscussionService;
 
-    @PostMapping("/courses/{courseId}/discussions")
+    @PostMapping("/discussions")
     @Operation(summary = "MD-01: Manager creates discussion / announcement",
-            description = "Creates an approved discussion or announcement in a managed course. Supports optional image and pin flag.")
+            description = "Creates an approved global discussion or announcement. Supports optional image and pin flag.")
     public ResponseEntity<ApiResponse<DiscussionDetailDto>> createDiscussion(
-            @PathVariable Long courseId,
             @Valid @RequestBody DiscussionManagerDtos.CreateDiscussionRequest request,
             @AuthenticationPrincipal UserPrincipal user
     ) {
-        DiscussionDetailDto dto = managerDiscussionService.createDiscussion(courseId, request, user.getId());
+        DiscussionDetailDto dto = managerDiscussionService.createDiscussion(request, user.getId());
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(dto, "Discussion created successfully"));
     }
 
-    @GetMapping("/courses/{courseId}/discussions")
-    @Operation(summary = "MD-02: Manager lists course discussions",
-            description = "Lists discussions in a managed course with optional filtering by approvalStatus (PENDING, APPROVED, REJECTED, ALL) and status (OPEN, CLOSED, HIDDEN, ALL).")
+    @GetMapping("/discussions")
+    @Operation(summary = "MD-02: Manager lists discussions",
+            description = "Lists global discussions with optional filtering by approvalStatus (PENDING, APPROVED, REJECTED, ALL) and status (OPEN, CLOSED, HIDDEN, ALL).")
     public ResponseEntity<ApiResponse<PageResponse<DiscussionItemDto>>> listDiscussions(
-            @PathVariable Long courseId,
             @RequestParam(required = false, defaultValue = "PENDING") String approvalStatus,
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String search,
@@ -51,7 +48,7 @@ public class ManagerDiscussionController {
             @RequestParam(defaultValue = "20") int size,
             @AuthenticationPrincipal UserPrincipal user
     ) {
-        Page<DiscussionItemDto> p = managerDiscussionService.listDiscussions(courseId, approvalStatus, status, search, page, size, user.getId());
+        Page<DiscussionItemDto> p = managerDiscussionService.listDiscussions(approvalStatus, status, search, page, size, user.getId());
         return ResponseEntity.ok(ApiResponse.success(PageResponse.of(p)));
     }
 
@@ -91,7 +88,7 @@ public class ManagerDiscussionController {
 
     @PatchMapping("/discussions/{discussionId}/pin")
     @Operation(summary = "MD-06: Manager pins or unpins discussion",
-            description = "Pins or unpins a discussion to keep it at the top of the course discussion list.")
+            description = "Pins or unpins an approved global discussion.")
     public ResponseEntity<ApiResponse<DiscussionItemDto>> updatePin(
             @PathVariable Long discussionId,
             @Valid @RequestBody DiscussionManagerDtos.UpdatePinRequest request,
@@ -101,27 +98,26 @@ public class ManagerDiscussionController {
         return ResponseEntity.ok(ApiResponse.success(dto, Boolean.TRUE.equals(request.getIsPinned()) ? "Discussion pinned" : "Discussion unpinned"));
     }
 
-    @PatchMapping("/discussions/{discussionId}/close")
-    @Operation(summary = "MD-07: Manager closes or reopens discussion",
-            description = "Closes or reopens any discussion in the managed course.")
-    public ResponseEntity<ApiResponse<DiscussionItemDto>> updateClose(
+    @PostMapping("/discussions/{discussionId}/hide")
+    @Operation(summary = "MD-08: Manager hides discussion",
+            description = "Hides a discussion from the public feed while keeping it visible to its author in My Discussions.")
+    public ResponseEntity<ApiResponse<DiscussionItemDto>> hideDiscussion(
             @PathVariable Long discussionId,
-            @Valid @RequestBody UpdateDiscussionRequestDto request,
             @AuthenticationPrincipal UserPrincipal user
     ) {
-        DiscussionItemDto dto = managerDiscussionService.updateClose(discussionId, request, user.getId());
-        return ResponseEntity.ok(ApiResponse.success(dto, Boolean.TRUE.equals(request.getIsClosed()) ? "Discussion closed" : "Discussion reopened"));
+        DiscussionItemDto dto = managerDiscussionService.hideDiscussion(discussionId, user.getId());
+        return ResponseEntity.ok(ApiResponse.success(dto, "Discussion hidden"));
     }
 
-    @DeleteMapping("/discussions/{discussionId}")
-    @Operation(summary = "MD-08: Manager deletes discussion",
-            description = "Permanently deletes an inappropriate or violated discussion.")
-    public ResponseEntity<ApiResponse<Void>> deleteDiscussion(
+    @PostMapping("/discussions/{discussionId}/restore")
+    @Operation(summary = "MD-08: Manager restores discussion",
+            description = "Restores a hidden discussion to the public feed and reopens it for replies.")
+    public ResponseEntity<ApiResponse<DiscussionItemDto>> restoreDiscussion(
             @PathVariable Long discussionId,
             @AuthenticationPrincipal UserPrincipal user
     ) {
-        managerDiscussionService.deleteDiscussion(discussionId, user.getId());
-        return ResponseEntity.ok(ApiResponse.success(null, "Discussion deleted"));
+        DiscussionItemDto dto = managerDiscussionService.restoreDiscussion(discussionId, user.getId());
+        return ResponseEntity.ok(ApiResponse.success(dto, "Discussion restored"));
     }
 
     @PatchMapping("/discussions/comments/{commentId}/status")

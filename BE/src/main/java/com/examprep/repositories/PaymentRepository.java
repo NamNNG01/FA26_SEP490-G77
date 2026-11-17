@@ -19,7 +19,23 @@ import java.util.Optional;
 public interface PaymentRepository extends JpaRepository<Payment, Long> {
     Optional<Payment> findByOrderCodeAndUserUserId(String orderCode, Long userId);
     Optional<Payment> findByOrderCode(String orderCode);
-    Optional<Payment> findByPayosOrderCode(Long payosOrderCode);
+    interface StatusRow {
+        Long getPayosOrderCode();
+        String getStatus();
+        Instant getPaidAt();
+        Instant getExpiresAt();
+    }
+
+    @Query("""
+            select p.payosOrderCode as payosOrderCode, p.status as status,
+                   p.paidAt as paidAt, p.expiresAt as expiresAt
+            from Payment p where p.orderCode = :orderCode and p.user.userId = :userId
+            """)
+    Optional<StatusRow> findStatus(@Param("orderCode") String orderCode, @Param("userId") Long userId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select p from Payment p where p.payosOrderCode = :payosOrderCode")
+    Optional<Payment> lockByPayosOrderCode(@Param("payosOrderCode") Long payosOrderCode);
 
     /** Live checkouts of one target, newest first; the discount is read for the reuse check. */
     @EntityGraph(attributePaths = "discount")

@@ -3,8 +3,6 @@ package com.examprep.services;
 import com.examprep.dto.discussion.DiscussionManagerDtos;
 import com.examprep.dto.student.DiscussionDetailDto;
 import com.examprep.dto.student.DiscussionItemDto;
-import com.examprep.dto.student.UpdateDiscussionRequestDto;
-import com.examprep.entities.Course;
 import com.examprep.entities.Discussion;
 import com.examprep.entities.DiscussionComment;
 import com.examprep.entities.User;
@@ -36,18 +34,13 @@ class ManagerDiscussionServiceTest {
     @Mock
     private DiscussionCommentRepository commentRepository;
     @Mock
-    private CourseRepository courseRepository;
-    @Mock
     private UserRepository userRepository;
-    @Mock
-    private CourseManagerRepository courseManagerRepository;
 
     @InjectMocks
     private ManagerDiscussionServiceImpl managerDiscussionService;
 
     private User manager;
     private User student;
-    private Course course;
     private Discussion discussion;
     private DiscussionComment comment;
 
@@ -55,11 +48,8 @@ class ManagerDiscussionServiceTest {
     void setUp() {
         manager = User.builder().userId(10L).fullName("Course Manager").roleName(User.ROLE_COURSE_MANAGER).build();
         student = User.builder().userId(20L).fullName("Student User").roleName(User.ROLE_STUDENT).build();
-        course = Course.builder().courseId(100L).title("Java 101").manager(manager).build();
-
         discussion = Discussion.builder()
                 .discussionId(1L)
-                .course(course)
                 .user(student)
                 .title("Student Question")
                 .content("Question Content")
@@ -87,7 +77,6 @@ class ManagerDiscussionServiceTest {
     @Test
     void createDiscussion_asManager_autoApproved() {
         when(userRepository.findById(10L)).thenReturn(Optional.of(manager));
-        when(courseRepository.findById(100L)).thenReturn(Optional.of(course));
         when(discussionRepository.save(any(Discussion.class))).thenAnswer(inv -> inv.getArgument(0));
 
         DiscussionManagerDtos.CreateDiscussionRequest req = DiscussionManagerDtos.CreateDiscussionRequest.builder()
@@ -98,7 +87,7 @@ class ManagerDiscussionServiceTest {
                 .isPinned(true)
                 .build();
 
-        DiscussionDetailDto res = managerDiscussionService.createDiscussion(100L, req, 10L);
+        DiscussionDetailDto res = managerDiscussionService.createDiscussion(req, 10L);
 
         assertNotNull(res);
         assertEquals("Class Announcement", res.getTitle());
@@ -111,26 +100,21 @@ class ManagerDiscussionServiceTest {
     void createDiscussion_notCourseManager_throwsForbidden() {
         User otherUser = User.builder().userId(99L).fullName("Other User").roleName(User.ROLE_STUDENT).build();
         when(userRepository.findById(99L)).thenReturn(Optional.of(otherUser));
-        when(courseRepository.findById(100L)).thenReturn(Optional.of(course));
-        when(courseManagerRepository.existsByCourse_CourseIdAndUser_UserId(100L, 99L)).thenReturn(false);
-
         DiscussionManagerDtos.CreateDiscussionRequest req = DiscussionManagerDtos.CreateDiscussionRequest.builder()
                 .title("Test")
                 .content("Content")
                 .build();
 
-        assertThrows(ForbiddenException.class, () -> managerDiscussionService.createDiscussion(100L, req, 99L));
+        assertThrows(ForbiddenException.class, () -> managerDiscussionService.createDiscussion(req, 99L));
     }
 
     @Test
     void listDiscussions_success() {
         when(userRepository.findById(10L)).thenReturn(Optional.of(manager));
-        when(courseRepository.findById(100L)).thenReturn(Optional.of(course));
-
         Page<Discussion> page = new PageImpl<>(List.of(discussion));
-        when(discussionRepository.findDiscussionsForManager(eq(100L), eq("PENDING"), isNull(), eq(""), any())).thenReturn(page);
+        when(discussionRepository.findDiscussionsForManager(eq("PENDING"), isNull(), eq(""), any())).thenReturn(page);
 
-        Page<DiscussionItemDto> res = managerDiscussionService.listDiscussions(100L, "PENDING", null, "", 0, 20, 10L);
+        Page<DiscussionItemDto> res = managerDiscussionService.listDiscussions("PENDING", null, "", 0, 20, 10L);
 
         assertNotNull(res);
         assertEquals(1, res.getTotalElements());
@@ -141,7 +125,6 @@ class ManagerDiscussionServiceTest {
     void approveDiscussion_success() {
         when(discussionRepository.findById(1L)).thenReturn(Optional.of(discussion));
         when(userRepository.findById(10L)).thenReturn(Optional.of(manager));
-        when(courseRepository.findById(100L)).thenReturn(Optional.of(course));
         when(discussionRepository.save(any(Discussion.class))).thenAnswer(inv -> inv.getArgument(0));
 
         DiscussionItemDto res = managerDiscussionService.approveDiscussion(1L, 10L);
@@ -157,7 +140,6 @@ class ManagerDiscussionServiceTest {
     void rejectDiscussion_success() {
         when(discussionRepository.findById(1L)).thenReturn(Optional.of(discussion));
         when(userRepository.findById(10L)).thenReturn(Optional.of(manager));
-        when(courseRepository.findById(100L)).thenReturn(Optional.of(course));
         when(discussionRepository.save(any(Discussion.class))).thenAnswer(inv -> inv.getArgument(0));
 
         DiscussionManagerDtos.RejectDiscussionRequest req = new DiscussionManagerDtos.RejectDiscussionRequest("Not relevant");
@@ -171,8 +153,8 @@ class ManagerDiscussionServiceTest {
     @Test
     void updatePin_success() {
         when(discussionRepository.findById(1L)).thenReturn(Optional.of(discussion));
+        discussion.setApprovalStatus(Discussion.APPROVAL_APPROVED);
         when(userRepository.findById(10L)).thenReturn(Optional.of(manager));
-        when(courseRepository.findById(100L)).thenReturn(Optional.of(course));
         when(discussionRepository.save(any(Discussion.class))).thenAnswer(inv -> inv.getArgument(0));
 
         DiscussionManagerDtos.UpdatePinRequest req = new DiscussionManagerDtos.UpdatePinRequest(true);
@@ -184,36 +166,38 @@ class ManagerDiscussionServiceTest {
     }
 
     @Test
-    void updateClose_success() {
+    void hideDiscussion_success() {
         when(discussionRepository.findById(1L)).thenReturn(Optional.of(discussion));
         when(userRepository.findById(10L)).thenReturn(Optional.of(manager));
-        when(courseRepository.findById(100L)).thenReturn(Optional.of(course));
         when(discussionRepository.save(any(Discussion.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        UpdateDiscussionRequestDto req = new UpdateDiscussionRequestDto(true);
-        DiscussionItemDto res = managerDiscussionService.updateClose(1L, req, 10L);
+        DiscussionItemDto result = managerDiscussionService.hideDiscussion(1L, 10L);
 
-        assertNotNull(res);
-        assertTrue(res.isClosed());
-        assertEquals("CLOSED", discussion.getStatus());
+        assertEquals("HIDDEN", result.getStatus());
+        assertTrue(discussion.getIsClosed());
+        assertFalse(discussion.getIsPinned());
+        verify(discussionRepository).save(discussion);
     }
 
     @Test
-    void deleteDiscussion_success() {
+    void restoreDiscussion_success() {
+        discussion.setStatus("HIDDEN");
+        discussion.setIsClosed(true);
         when(discussionRepository.findById(1L)).thenReturn(Optional.of(discussion));
         when(userRepository.findById(10L)).thenReturn(Optional.of(manager));
-        when(courseRepository.findById(100L)).thenReturn(Optional.of(course));
+        when(discussionRepository.save(any(Discussion.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        managerDiscussionService.deleteDiscussion(1L, 10L);
+        DiscussionItemDto result = managerDiscussionService.restoreDiscussion(1L, 10L);
 
-        verify(discussionRepository).delete(discussion);
+        assertEquals("OPEN", result.getStatus());
+        assertFalse(discussion.getIsClosed());
+        verify(discussionRepository).save(discussion);
     }
 
     @Test
     void updateCommentStatus_hide_success() {
         when(commentRepository.findById(5L)).thenReturn(Optional.of(comment));
         when(userRepository.findById(10L)).thenReturn(Optional.of(manager));
-        when(courseRepository.findById(100L)).thenReturn(Optional.of(course));
         when(commentRepository.save(any(DiscussionComment.class))).thenAnswer(inv -> inv.getArgument(0));
 
         DiscussionManagerDtos.UpdateCommentStatusRequest req = new DiscussionManagerDtos.UpdateCommentStatusRequest("HIDDEN", "Spam comment");
@@ -230,8 +214,6 @@ class ManagerDiscussionServiceTest {
     void deleteComment_decrementsCount() {
         when(commentRepository.findById(5L)).thenReturn(Optional.of(comment));
         when(userRepository.findById(10L)).thenReturn(Optional.of(manager));
-        when(courseRepository.findById(100L)).thenReturn(Optional.of(course));
-
         managerDiscussionService.deleteComment(5L, 10L);
 
         verify(commentRepository).delete(comment);

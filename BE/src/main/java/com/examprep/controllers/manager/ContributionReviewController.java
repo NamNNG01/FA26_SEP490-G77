@@ -9,6 +9,8 @@ import com.examprep.entities.QuestionContribution;
 import com.examprep.entities.ReviewLog;
 import com.examprep.entities.User;
 import com.examprep.repositories.ReviewLogRepository;
+import com.examprep.repositories.CourseRepository;
+import com.examprep.repositories.ModuleRepository;
 import com.examprep.repositories.UserRepository;
 import com.examprep.security.UserPrincipal;
 import com.examprep.services.manager.review.ContributionReviewService;
@@ -26,8 +28,11 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/v1/manager/contributions")
@@ -38,6 +43,8 @@ public class ContributionReviewController {
 
     private final ContributionReviewService service;
     private final UserRepository userRepository;
+    private final CourseRepository courseRepository;
+    private final ModuleRepository moduleRepository;
     private final ReviewLogRepository reviewLogRepository;
     private final ObjectMapper objectMapper;
 
@@ -72,6 +79,15 @@ public class ContributionReviewController {
 
         User manager = getUser(principal);
         Page<QuestionContribution> pageResult = service.listContributions(manager, courseId, moduleId, questionType, difficulty, status, contributorId, keyword, submittedFrom, submittedTo, pageable);
+        Map<Long, com.examprep.entities.Course> courses = courseRepository.findAllById(pageResult.getContent().stream()
+                        .map(QuestionContribution::getCourseId).filter(java.util.Objects::nonNull).collect(Collectors.toSet()))
+                .stream().collect(Collectors.toMap(com.examprep.entities.Course::getCourseId, Function.identity()));
+        Map<Long, com.examprep.entities.Module> modules = moduleRepository.findAllById(pageResult.getContent().stream()
+                        .map(QuestionContribution::getModuleId).filter(java.util.Objects::nonNull).collect(Collectors.toSet()))
+                .stream().collect(Collectors.toMap(com.examprep.entities.Module::getModuleId, Function.identity()));
+        Map<Long, User> contributors = userRepository.findAllById(pageResult.getContent().stream()
+                        .map(QuestionContribution::getUserId).filter(java.util.Objects::nonNull).collect(Collectors.toSet()))
+                .stream().collect(Collectors.toMap(User::getUserId, Function.identity()));
 
         List<Map<String, Object>> content = pageResult.getContent().stream().map(c -> {
             String preview = c.getContent();
@@ -79,15 +95,18 @@ public class ContributionReviewController {
                 preview = preview.substring(0, 120) + "...";
             }
             boolean canReview = "PENDING".equalsIgnoreCase(c.getStatus()) && !c.getUserId().equals(manager.getUserId());
-            Map<String, Object> map = new HashMap<>();
+            Map<String, Object> map = new LinkedHashMap<>();
             map.put("contributionId", c.getContributionId());
             map.put("title", c.getTitle() != null ? c.getTitle() : "");
             map.put("contentPreview", preview != null ? preview : "");
             map.put("questionType", c.getQuestionType() != null ? c.getQuestionType() : "SINGLE_CHOICE");
             map.put("difficulty", c.getDifficulty() != null ? c.getDifficulty() : "MEDIUM");
-            map.put("course", Map.of("id", c.getCourseId()));
-            map.put("module", c.getModuleId() != null ? Map.of("id", c.getModuleId()) : Map.of());
-            map.put("contributor", Map.of("id", c.getUserId()));
+            map.put("courseId", c.getCourseId());
+            map.put("course", courseSummary(courses.get(c.getCourseId())));
+            map.put("moduleId", c.getModuleId());
+            map.put("module", moduleSummary(modules.get(c.getModuleId())));
+            map.put("contributorId", c.getUserId());
+            map.put("contributor", contributorSummary(contributors.get(c.getUserId())));
             map.put("status", c.getStatus());
             map.put("resubmissionCount", c.getResubmissionCount());
             map.put("submittedAt", c.getSubmittedAt() != null ? c.getSubmittedAt() : Instant.now());
@@ -132,12 +151,16 @@ public class ContributionReviewController {
         Map<String, Object> data = new HashMap<>();
         data.put("contributionId", c.getContributionId());
         data.put("courseId", c.getCourseId());
+        data.put("course", courseSummary(courseRepository.findById(c.getCourseId()).orElse(null)));
         data.put("contributorId", c.getUserId());
+        data.put("contributor", contributorSummary(userRepository.findById(c.getUserId()).orElse(null)));
         data.put("type", c.getType());
         data.put("status", c.getStatus());
         data.put("title", c.getTitle() != null ? c.getTitle() : "");
         data.put("content", c.getContent());
         data.put("moduleId", c.getModuleId() != null ? c.getModuleId() : null);
+        data.put("module", moduleSummary(c.getModuleId() == null
+                ? null : moduleRepository.findById(c.getModuleId()).orElse(null)));
         data.put("groupId", c.getGroupId() != null ? c.getGroupId() : null);
         data.put("questionType", c.getQuestionType() != null ? c.getQuestionType() : "");
         data.put("options", c.getOptionsJson() == null ? List.of() : readJson(c.getOptionsJson(), new TypeReference<Object>() {}));
@@ -172,6 +195,21 @@ public class ContributionReviewController {
         } catch (Exception ex) {
             throw new com.examprep.exceptions.BadRequestException("Invalid stored contribution data.");
         }
+    }
+
+    private Map<String, Object> courseSummary(com.examprep.entities.Course course) {
+        if (course == null) return null;
+        return Map.of("courseId", course.getCourseId(), "title", course.getTitle());
+    }
+
+    private Map<String, Object> moduleSummary(com.examprep.entities.Module module) {
+        if (module == null) return null;
+        return Map.of("moduleId", module.getModuleId(), "title", module.getTitle());
+    }
+
+    private Map<String, Object> contributorSummary(User user) {
+        if (user == null) return null;
+        return Map.of("userId", user.getUserId(), "displayName", user.getFullName());
     }
 
     @PostMapping("/{id}/approve")

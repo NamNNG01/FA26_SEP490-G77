@@ -15,17 +15,17 @@ function query(params: Record<string, string | number | undefined>) {
 }
 
 export const managerDiscussionService = {
-  async list(courseId: number | string, params: { approvalStatus?: ManagerDiscussionStatus; status?: ManagerPostStatus; search?: string; page?: number; size?: number } = {}) {
+  async list(params: { approvalStatus?: ManagerDiscussionStatus; status?: ManagerPostStatus; search?: string; page?: number; size?: number } = {}) {
     const qs = query(params);
-    const res = await api.get<ApiResponse<StudentPage<DiscussionItem>>>(`/manager/courses/${courseId}/discussions${qs ? `?${qs}` : ''}`);
+    const res = await api.get<ApiResponse<StudentPage<DiscussionItem>>>(`/manager/discussions${qs ? `?${qs}` : ''}`);
     return res.data;
   },
   async getDetail(discussionId: number | string) {
     const res = await api.get<ApiResponse<DiscussionDetail>>(`/manager/discussions/${discussionId}`);
     return res.data;
   },
-  async create(courseId: number | string, body: { title: string; content: string; tag: DiscussionTag; imageUrl?: string | null; isPinned: boolean }) {
-    const res = await api.post<ApiResponse<DiscussionDetail>>(`/manager/courses/${courseId}/discussions`, body);
+  async create(body: { title: string; content: string; tag: DiscussionTag; imageUrl?: string | null; isPinned: boolean }) {
+    const res = await api.post<ApiResponse<DiscussionDetail>>('/manager/discussions', body);
     return res.data;
   },
   async approve(discussionId: number | string) {
@@ -40,12 +40,13 @@ export const managerDiscussionService = {
     const res = await api.request<ApiResponse<DiscussionItem>>({ method: 'patch', url: `/manager/discussions/${discussionId}/pin`, data: { isPinned } });
     return res.data;
   },
-  async setClosed(discussionId: number | string, isClosed: boolean) {
-    const res = await api.request<ApiResponse<DiscussionItem>>({ method: 'patch', url: `/manager/discussions/${discussionId}/close`, data: { isClosed } });
+  async hide(discussionId: number | string) {
+    const res = await api.post<ApiResponse<DiscussionItem>>(`/manager/discussions/${discussionId}/hide`);
     return res.data;
   },
-  async delete(discussionId: number | string) {
-    await api.request<ApiResponse<null>>({ method: 'delete', url: `/manager/discussions/${discussionId}` });
+  async restore(discussionId: number | string) {
+    const res = await api.post<ApiResponse<DiscussionItem>>(`/manager/discussions/${discussionId}/restore`);
+    return res.data;
   },
   async setCommentStatus(commentId: number | string, status: 'VISIBLE' | 'HIDDEN', reason?: string) {
     const res = await api.request<ApiResponse<DiscussionDetailComment>>({ method: 'patch', url: `/manager/discussions/comments/${commentId}/status`, data: { status, reason } });

@@ -95,10 +95,7 @@ public class PaymentTransactionService {
     public boolean completeWebhook(JsonNode webhook) {
         JsonNode data = webhook.path("data");
         if (!"00".equals(webhook.path("code").asText()) || !data.path("orderCode").canConvertToLong()) return false;
-        Long numericCode = data.path("orderCode").asLong();
-        Payment payment = payments.findByPayosOrderCode(numericCode).orElse(null);
-        if (payment == null) return false;
-        Payment locked = payments.lockByOrderCode(payment.getOrderCode()).orElse(null);
+        Payment locked = payments.lockByPayosOrderCode(data.path("orderCode").asLong()).orElse(null);
         if (locked == null || Payment.SUCCEEDED.equals(locked.getStatus())) return locked != null;
         // EXPIRED rows stay payable for a late webhook: the sweep only runs after the PayOS link
         // itself expired, so a verified "paid" callback means the student paid just in time.
@@ -165,10 +162,13 @@ public class PaymentTransactionService {
     private void grantSubscription(Payment payment, Instant now) {
         User user = users.findForUpdate(payment.getUser().getUserId()).orElseThrow(() -> new ResourceNotFoundException("User not found"));
         SubscriptionPlan plan = plans.findAvailable(payment.getRefId()).orElseThrow(() -> new ResourceNotFoundException("Subscription plan not found"));
-        subscriptions.findCurrentOrFutureByUser(user.getUserId(), now).forEach(old -> {
+        subscriptions.findByUserUserIdAndStatus(user.getUserId(), "ACTIVE").forEach(old -> {
             old.setStatus("SUPERSEDED");
             old.setAutoRenew(false);
         });
+        // PostgreSQL enforces one ACTIVE row per user, even if its end date has passed.
+        // Flush the updates before the IDENTITY insert of the replacement subscription.
+        subscriptions.flush();
         subscriptions.save(UserSubscription.builder().user(user).plan(plan).startDate(now)
                 .endDate(now.plusSeconds(plan.getDurationDays().longValue() * 86400L)).status("ACTIVE")
                 .paidAmount(payment.getAmount()).autoRenew(true).build());

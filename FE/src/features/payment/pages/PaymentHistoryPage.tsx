@@ -10,6 +10,7 @@ import { Icon } from '@/assets/icons';
 import { ROUTES, coursePath, studentCoursePath } from '@/app/routes';
 import { getApiErrorMessage } from '@/utils/apiError';
 import { formatVnd, paymentService, type PaymentHistoryItem, type PaymentStatus } from '@/services/payment.service';
+import { refreshCurrentSubscription } from '@/services/studentSubscription.service';
 import { ListSkeleton, LoadError, PageTitle, STUDENT_PAGE_CLASS, formatDateTime } from '@/features/student/components/studentUi';
 
 const PAGE_SIZE = 10;
@@ -37,6 +38,7 @@ export function PaymentHistoryPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState<string | null>(null);
+  const [checking, setChecking] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -67,6 +69,24 @@ export function PaymentHistoryPage() {
       toast.error(getApiErrorMessage(err, 'Could not cancel the payment.'));
     } finally {
       setCancelling(null);
+      setReload(r => r + 1);
+    }
+  }
+
+  async function handleCheck(row: PaymentHistoryItem) {
+    setChecking(row.orderCode);
+    try {
+      const result = await paymentService.getStatus(row.orderCode);
+      if (result.status === 'SUCCEEDED') {
+        if (row.type === 'SUBSCRIPTION') void refreshCurrentSubscription();
+        toast.success('Payment confirmed');
+      } else {
+        toast.info('Payment has not been confirmed yet.');
+      }
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Could not check the payment.'));
+    } finally {
+      setChecking(null);
       setReload(r => r + 1);
     }
   }
@@ -123,6 +143,11 @@ export function PaymentHistoryPage() {
                       <td className="px-5 py-3 text-content-soft whitespace-nowrap">{formatDateTime(row.paidAt)}</td>
                       <td className="px-5 py-3">
                         <div className="flex justify-end gap-2">
+                          {(row.status === 'PENDING' || row.status === 'EXPIRED') && (
+                            <Button size="sm" variant="outline" loading={checking === row.orderCode} onClick={() => handleCheck(row)}>
+                              Check payment
+                            </Button>
+                          )}
                           {row.status === 'PENDING' && (
                             <>
                               <Button size="sm" variant="ghost" loading={cancelling === row.orderCode} onClick={() => handleCancel(row.orderCode)}>

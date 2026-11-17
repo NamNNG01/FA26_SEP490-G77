@@ -23,6 +23,6 @@ public interface StudentDiscussionService {
     Map<String, Object> toggleUpvote(Long discussionId, Long userId);
     Map<String, Object> toggleBookmark(Long discussionId, Long userId);
     Page<DiscussionItemDto> listBookmarkedDiscussions(int page, int size, Long userId);
-    Page<DiscussionItemDto> listTips(Long courseId, int page, int size, Long userId);
+    Page<DiscussionItemDto> listTips(int page, int size, Long userId);
     DiscussionItemDto updateDiscussion(Long discussionId, UpdateDiscussionRequestDto request, Long userId);
 }

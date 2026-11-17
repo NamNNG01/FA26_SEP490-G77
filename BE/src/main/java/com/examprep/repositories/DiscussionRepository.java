@@ -14,28 +14,23 @@ public interface DiscussionRepository extends JpaRepository<Discussion, Long> {
     @Query(
             value = "SELECT d FROM Discussion d " +
                     "JOIN FETCH d.user u " +
-                    "LEFT JOIN FETCH d.course c " +
-                    "WHERE (:courseId IS NULL OR d.course.courseId = :courseId) " +
-                    "AND (:tag IS NULL OR d.tag = :tag) " +
+                    "WHERE (:tag IS NULL OR d.tag = :tag) " +
                     "AND (d.approvalStatus = 'APPROVED' AND d.status <> 'HIDDEN') " +
                     "AND (:search IS NULL OR :search = '' OR " +
-                    "LOWER(d.title) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-                    "LOWER(d.content) LIKE LOWER(CONCAT('%', :search, '%'))) " +
+                    "LOWER(d.title) LIKE LOWER(CONCAT('%', :search, '%')) ESCAPE '!' OR " +
+                    "LOWER(d.content) LIKE LOWER(CONCAT('%', :search, '%')) ESCAPE '!') " +
                     "ORDER BY d.isPinned DESC, " +
                     "CASE WHEN :sort = 'mostCommented' THEN d.commentCount END DESC, " +
                     "CASE WHEN :sort = 'mostUpvoted' THEN d.upvoteCount END DESC, " +
                     "d.createdAt DESC",
 
             countQuery = "SELECT COUNT(d) FROM Discussion d " +
-                    "WHERE (:courseId IS NULL OR d.course.courseId = :courseId) " +
-                    "AND (:tag IS NULL OR d.tag = :tag) " +
+                    "WHERE (:tag IS NULL OR d.tag = :tag) " +
                     "AND (d.approvalStatus = 'APPROVED' AND d.status <> 'HIDDEN') " +
                     "AND (:search IS NULL OR :search = '' OR " +
-                    "LOWER(d.title) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-                    "LOWER(d.content) LIKE LOWER(CONCAT('%', :search, '%')))"
-    )
+                    "LOWER(d.title) LIKE LOWER(CONCAT('%', :search, '%')) ESCAPE '!' OR " +
+                    "LOWER(d.content) LIKE LOWER(CONCAT('%', :search, '%')) ESCAPE '!')")
     Page<Discussion> findDiscussions(
-            @Param("courseId") Long courseId,
             @Param("tag") String tag,
             @Param("search") String search,
             @Param("sort") String sort,
@@ -48,8 +43,8 @@ public interface DiscussionRepository extends JpaRepository<Discussion, Long> {
                     "WHERE (:tag IS NULL OR d.tag = :tag) " +
                     "AND d.approvalStatus = 'APPROVED' AND d.status <> 'HIDDEN' " +
                     "AND (:search IS NULL OR :search = '' OR " +
-                    "LOWER(d.title) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-                    "LOWER(d.content) LIKE LOWER(CONCAT('%', :search, '%'))) " +
+                    "LOWER(d.title) LIKE LOWER(CONCAT('%', :search, '%')) ESCAPE '!' OR " +
+                    "LOWER(d.content) LIKE LOWER(CONCAT('%', :search, '%')) ESCAPE '!') " +
                     "ORDER BY d.isPinned DESC, " +
                     "CASE WHEN :sort = 'mostCommented' THEN d.commentCount END DESC, " +
                     "CASE WHEN :sort = 'mostUpvoted' THEN d.upvoteCount END DESC, " +
@@ -58,9 +53,8 @@ public interface DiscussionRepository extends JpaRepository<Discussion, Long> {
                     "WHERE (:tag IS NULL OR d.tag = :tag) " +
                     "AND d.approvalStatus = 'APPROVED' AND d.status <> 'HIDDEN' " +
                     "AND (:search IS NULL OR :search = '' OR " +
-                    "LOWER(d.title) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-                    "LOWER(d.content) LIKE LOWER(CONCAT('%', :search, '%')))"
-    )
+                    "LOWER(d.title) LIKE LOWER(CONCAT('%', :search, '%')) ESCAPE '!' OR " +
+                    "LOWER(d.content) LIKE LOWER(CONCAT('%', :search, '%')) ESCAPE '!')")
     Page<Discussion> findAllDiscussions(
             @Param("tag") String tag,
             @Param("search") String search,
@@ -71,14 +65,13 @@ public interface DiscussionRepository extends JpaRepository<Discussion, Long> {
     @Query(
             value = "SELECT d FROM Discussion d " +
                     "JOIN FETCH d.user u " +
-                    "LEFT JOIN FETCH d.course c " +
                     "WHERE d.user.userId = :userId " +
                     "AND (:tag IS NULL OR d.tag = :tag) " +
                     "AND (:approvalStatus IS NULL OR d.approvalStatus = :approvalStatus) " +
                     "AND (:status IS NULL OR d.status = :status) " +
                     "AND (:search IS NULL OR :search = '' OR " +
-                    "LOWER(d.title) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-                    "LOWER(d.content) LIKE LOWER(CONCAT('%', :search, '%'))) " +
+                    "LOWER(d.title) LIKE LOWER(CONCAT('%', :search, '%')) ESCAPE '!' OR " +
+                    "LOWER(d.content) LIKE LOWER(CONCAT('%', :search, '%')) ESCAPE '!') " +
                     "ORDER BY d.isPinned DESC, " +
                     "CASE WHEN :sort = 'mostCommented' THEN d.commentCount END DESC, " +
                     "CASE WHEN :sort = 'mostUpvoted' THEN d.upvoteCount END DESC, " +
@@ -89,8 +82,8 @@ public interface DiscussionRepository extends JpaRepository<Discussion, Long> {
                     "AND (:approvalStatus IS NULL OR d.approvalStatus = :approvalStatus) " +
                     "AND (:status IS NULL OR d.status = :status) " +
                     "AND (:search IS NULL OR :search = '' OR " +
-                    "LOWER(d.title) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-                    "LOWER(d.content) LIKE LOWER(CONCAT('%', :search, '%')))")
+                    "LOWER(d.title) LIKE LOWER(CONCAT('%', :search, '%')) ESCAPE '!' OR " +
+                    "LOWER(d.content) LIKE LOWER(CONCAT('%', :search, '%')) ESCAPE '!')")
     Page<Discussion> findMineDiscussions(
             @Param("userId") Long userId,
             @Param("tag") String tag,
@@ -104,25 +97,21 @@ public interface DiscussionRepository extends JpaRepository<Discussion, Long> {
     @Query(
             value = "SELECT d FROM Discussion d " +
                     "JOIN FETCH d.user u " +
-                    "LEFT JOIN FETCH d.course c " +
-                    "WHERE (:courseId IS NULL OR d.course.courseId = :courseId) " +
-                    "AND (:approvalStatus IS NULL OR d.approvalStatus = :approvalStatus) " +
+                    "WHERE (:approvalStatus IS NULL OR d.approvalStatus = :approvalStatus) " +
                     "AND (:status IS NULL OR d.status = :status) " +
                     "AND (:search = '' OR " +
-                    "LOWER(d.title) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-                    "LOWER(d.content) LIKE LOWER(CONCAT('%', :search, '%'))) " +
+                    "LOWER(d.title) LIKE LOWER(CONCAT('%', :search, '%')) ESCAPE '!' OR " +
+                    "LOWER(d.content) LIKE LOWER(CONCAT('%', :search, '%')) ESCAPE '!') " +
                     "ORDER BY d.isPinned DESC, d.createdAt DESC",
 
             countQuery = "SELECT COUNT(d) FROM Discussion d " +
-                    "WHERE (:courseId IS NULL OR d.course.courseId = :courseId) " +
-                    "AND (:approvalStatus IS NULL OR d.approvalStatus = :approvalStatus) " +
+                    "WHERE (:approvalStatus IS NULL OR d.approvalStatus = :approvalStatus) " +
                     "AND (:status IS NULL OR d.status = :status) " +
                     "AND (:search = '' OR " +
-                    "LOWER(d.title) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-                    "LOWER(d.content) LIKE LOWER(CONCAT('%', :search, '%')))"
+                    "LOWER(d.title) LIKE LOWER(CONCAT('%', :search, '%')) ESCAPE '!' OR " +
+                    "LOWER(d.content) LIKE LOWER(CONCAT('%', :search, '%')) ESCAPE '!')"
     )
     Page<Discussion> findDiscussionsForManager(
-            @Param("courseId") Long courseId,
             @Param("approvalStatus") String approvalStatus,
             @Param("status") String status,
             @Param("search") String search,
@@ -135,7 +124,6 @@ public interface DiscussionRepository extends JpaRepository<Discussion, Long> {
     @Query(
             value = "SELECT d FROM Discussion d " +
                     "JOIN FETCH d.user u " +
-                    "LEFT JOIN FETCH d.course c " +
                     "INNER JOIN DiscussionBookmark db ON d.discussionId = db.discussion.discussionId " +
                     "WHERE db.user.userId = :userId " +
                     "ORDER BY db.createdAt DESC",

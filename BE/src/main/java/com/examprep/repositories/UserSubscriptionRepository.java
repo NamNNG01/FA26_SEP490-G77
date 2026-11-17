@@ -27,6 +27,8 @@ public interface UserSubscriptionRepository extends JpaRepository<UserSubscripti
     @Query("SELECT s FROM UserSubscription s JOIN FETCH s.plan WHERE s.user.userId = :userId AND s.status = 'ACTIVE' AND s.endDate >= :now ORDER BY s.endDate DESC")
     List<UserSubscription> findCurrentOrFutureByUser(@Param("userId") Long userId, @Param("now") Instant now);
 
+    List<UserSubscription> findByUserUserIdAndStatus(Long userId, String status);
+
     @Query("SELECT s FROM UserSubscription s JOIN FETCH s.plan WHERE s.user.userId = :userId AND s.endDate < :now ORDER BY s.endDate DESC LIMIT 1")
     Optional<UserSubscription> findLatestExpiredByUser(@Param("userId") Long userId, @Param("now") Instant now);
 

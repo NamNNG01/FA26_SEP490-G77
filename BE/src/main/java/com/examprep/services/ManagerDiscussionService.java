@@ -3,7 +3,6 @@ package com.examprep.services;
 import com.examprep.dto.discussion.DiscussionManagerDtos;
 import com.examprep.dto.student.DiscussionDetailDto;
 import com.examprep.dto.student.DiscussionItemDto;
-import com.examprep.dto.student.UpdateDiscussionRequestDto;
 import org.springframework.data.domain.Page;
 
 public interface ManagerDiscussionService {
@@ -12,12 +11,12 @@ public interface ManagerDiscussionService {
      * Manager tạo bài thảo luận / thông báo mới trong khóa học.
      * Bài tạo bởi Manager sẽ tự động được phê duyệt (APPROVED) và hiển thị ngay.
      */
-    DiscussionDetailDto createDiscussion(Long courseId, DiscussionManagerDtos.CreateDiscussionRequest request, Long managerId);
+    DiscussionDetailDto createDiscussion(DiscussionManagerDtos.CreateDiscussionRequest request, Long managerId);
 
     /**
      * Manager lấy danh sách thảo luận trong khóa học (có thể lọc theo trạng thái duyệt PENDING, APPROVED, REJECTED).
      */
-    Page<DiscussionItemDto> listDiscussions(Long courseId, String approvalStatus, String status, String search, int page, int size, Long managerId);
+    Page<DiscussionItemDto> listDiscussions(String approvalStatus, String status, String search, int page, int size, Long managerId);
 
     /**
      * Manager xem chi tiết một bài thảo luận kèm toàn bộ bình luận (kể cả bình luận đã bị ẩn).
@@ -40,14 +39,14 @@ public interface ManagerDiscussionService {
     DiscussionItemDto updatePin(Long discussionId, DiscussionManagerDtos.UpdatePinRequest request, Long managerId);
 
     /**
-     * Manager đóng hoặc mở lại bài thảo luận bất kỳ trong khóa học quản lý.
+     * Manager ẩn bài thảo luận khỏi public feed nhưng giữ lại cho tác giả xem.
      */
-    DiscussionItemDto updateClose(Long discussionId, UpdateDiscussionRequestDto request, Long managerId);
+    DiscussionItemDto hideDiscussion(Long discussionId, Long managerId);
 
     /**
-     * Manager xóa bài thảo luận vi phạm.
+     * Manager hiện lại bài thảo luận đã bị ẩn.
      */
-    void deleteDiscussion(Long discussionId, Long managerId);
+    DiscussionItemDto restoreDiscussion(Long discussionId, Long managerId);
 
     /**
      * Manager ẩn hoặc hiện lại bình luận vi phạm.

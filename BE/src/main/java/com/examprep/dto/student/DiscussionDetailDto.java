@@ -32,6 +32,7 @@ public class DiscussionDetailDto {
     private boolean isClosed;
     private String imageUrl;
     private String approvalStatus;
+    private String status;
     private String rejectionReason;
     private Instant createdAt;
     private Instant updatedAt;

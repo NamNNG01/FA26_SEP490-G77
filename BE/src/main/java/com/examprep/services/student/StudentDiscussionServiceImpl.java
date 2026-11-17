@@ -32,32 +32,16 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
     private final DiscussionCommentRepository commentRepository;
     private final DiscussionUpvoteRepository upvoteRepository;
     private final DiscussionBookmarkRepository bookmarkRepository;
-    private final CourseRepository courseRepository;
     private final EnrollmentRepository enrollmentRepository;
     private final UserRepository userRepository;
-    private final CourseManagerRepository courseManagerRepository;
 
-    private boolean isManagerOrAdmin(Long courseId, Long userId) {
-        if (userId == null) {
-            return false;
-        }
-        User user = userRepository.findById(userId).orElse(null);
-        if (user == null) {
-            return false;
-        }
-        if ("ADMIN".equals(user.getRoleName())) {
-            return true;
-        }
-        return courseId != null && courseManagerRepository.existsByCourse_CourseIdAndUser_UserId(courseId, userId);
-    }
-
-    private void validateActiveEnrollment(Long courseId, Long userId) {
+    private void validateActiveEnrollment(Long userId) {
         if (userId == null) {
             throw new ForbiddenException("Authentication required");
         }
-        boolean active = enrollmentRepository.existsByCourse_CourseIdAndUser_UserIdAndStatus(courseId, userId, "ACTIVE");
+        boolean active = enrollmentRepository.existsByUser_UserIdAndStatus(userId, "ACTIVE");
         if (!active) {
-            throw new ForbiddenException("Student is not actively enrolled in this course");
+            throw new ForbiddenException("Student must be actively enrolled in at least one course");
         }
     }
 
@@ -98,6 +82,7 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
                 .isClosed(Boolean.TRUE.equals(d.getIsClosed()) || "CLOSED".equals(d.getStatus()))
                 .imageUrl(d.getImageUrl())
                 .approvalStatus(d.getApprovalStatus())
+                .status(d.getStatus())
                 .createdAt(d.getCreatedAt())
                 .lastCommentAt(d.getUpdatedAt())
                 .build();
@@ -126,7 +111,7 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
         validatePaging(page, size);
 
         String searchTerm = search != null && !search.isBlank()
-                ? search.trim()
+                ? escapeLikePattern(search.trim())
                 : "";
         if (searchTerm.length() > 100) searchTerm = searchTerm.substring(0, 100);
 
@@ -187,6 +172,10 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
         }
     }
 
+    private static String escapeLikePattern(String value) {
+        return value.replace("!", "!!").replace("%", "!%").replace("_", "!_");
+    }
+
     @Override
     @Transactional(readOnly = true)
     public DiscussionDetailDto getDiscussionDetail(Long discussionId, Long userId) {
@@ -194,10 +183,9 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
                 .orElseThrow(() -> new ResourceNotFoundException("Discussion not found"));
 
         boolean isAuthor = userId != null && d.getUser().getUserId().equals(userId);
-        boolean isManager = isManagerOrAdmin(d.getCourse().getCourseId(), userId);
 
         if (d.getApprovalStatus() != null && !Discussion.APPROVAL_APPROVED.equals(d.getApprovalStatus())) {
-            if (!isAuthor && !isManager) {
+            if (!isAuthor) {
                 throw new ResourceNotFoundException("Discussion not found");
             }
         }
@@ -236,6 +224,7 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
                 .isClosed(Boolean.TRUE.equals(d.getIsClosed()) || "CLOSED".equals(d.getStatus()))
                 .imageUrl(d.getImageUrl())
                 .approvalStatus(d.getApprovalStatus())
+                .status(d.getStatus())
                 .rejectionReason(d.getRejectionReason())
                 .createdAt(d.getCreatedAt())
                 .updatedAt(d.getUpdatedAt())
@@ -248,18 +237,7 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-        if (request.getCourseId() == null) {
-            throw new BadRequestException("Course is required");
-        }
-        // The post belongs to the course the client picked, never to "whichever enrollment comes
-        // first": a request for course B must not be stored under course A.
-        Course course = courseRepository.findById(request.getCourseId())
-                .orElseThrow(() -> new ResourceNotFoundException("Course not found"));
-
-        boolean isManager = isManagerOrAdmin(course.getCourseId(), userId);
-        if (!isManager) {
-            validateActiveEnrollment(course.getCourseId(), userId);
-        }
+        validateActiveEnrollment(userId);
 
         if (request.getTitle() == null || request.getTitle().isBlank()) {
             throw new BadRequestException("Title is required");
@@ -269,14 +247,11 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
         }
 
         String tag = normalizeTag(request.getTag());
-        if (TAG_ANNOUNCEMENT.equals(tag) && !isManager) {
-            throw new BadRequestException("Only course managers can post announcements");
+        if (TAG_ANNOUNCEMENT.equals(tag)) {
+            throw new BadRequestException("Only managers can post announcements");
         }
 
-        String approvalStatus = isManager ? Discussion.APPROVAL_APPROVED : Discussion.APPROVAL_PENDING;
-
         Discussion d = Discussion.builder()
-                .course(course)
                 .user(user)
                 .title(request.getTitle().trim())
                 .content(request.getContent().trim())
@@ -289,7 +264,7 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
                 .upvoteCount(0)
                 .isClosed(false)
                 .imageUrl(request.getImageUrl())
-                .approvalStatus(approvalStatus)
+                .approvalStatus(Discussion.APPROVAL_PENDING)
                 .build();
 
         Discussion saved = discussionRepository.save(d);
@@ -305,14 +280,15 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
             throw new BaseException(ResponseCode.CONFLICT, "Discussion closed");
         }
 
+        if ("HIDDEN".equals(d.getStatus())) {
+            throw new BadRequestException("Cannot comment on a hidden discussion");
+        }
+
         if (d.getApprovalStatus() != null && !Discussion.APPROVAL_APPROVED.equals(d.getApprovalStatus())) {
             throw new BadRequestException("Cannot comment on an unapproved discussion");
         }
 
-        boolean isManager = isManagerOrAdmin(d.getCourse().getCourseId(), userId);
-        if (!isManager) {
-            validateActiveEnrollment(d.getCourse().getCourseId(), userId);
-        }
+        validateActiveEnrollment(userId);
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
@@ -347,6 +323,7 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
     public Map<String, Object> toggleUpvote(Long discussionId, Long userId) {
         Discussion d = discussionRepository.findById(discussionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Discussion not found"));
+        ensureReactable(d);
 
         Optional<DiscussionUpvote> existing = upvoteRepository.findByDiscussion_DiscussionIdAndUser_UserId(discussionId, userId);
         boolean isUpvoted;
@@ -374,6 +351,7 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
     public Map<String, Object> toggleBookmark(Long discussionId, Long userId) {
         Discussion d = discussionRepository.findById(discussionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Discussion not found"));
+        ensureReactable(d);
 
         Optional<DiscussionBookmark> existing = bookmarkRepository.findByDiscussion_DiscussionIdAndUser_UserId(discussionId, userId);
         boolean isBookmarked;
@@ -412,11 +390,11 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<DiscussionItemDto> listTips(Long courseId, int page, int size, Long userId) {
+    public Page<DiscussionItemDto> listTips(int page, int size, Long userId) {
         Pageable pageable = PageRequest.of(page, size);
         // Tips are the APPROVED discussions tagged "tip" (the tag filter also keeps them out of
         // the announcement / question tabs).
-        Page<Discussion> discussions = discussionRepository.findDiscussions(courseId, TAG_TIP, null, "latest", pageable);
+        Page<Discussion> discussions = discussionRepository.findDiscussions(TAG_TIP, null, "latest", pageable);
         List<Long> discussionIds = discussions.getContent().stream().map(Discussion::getDiscussionId).toList();
         Set<Long> upvotedIds = (userId != null && !discussionIds.isEmpty())
                 ? new HashSet<>(upvoteRepository.findUpvotedDiscussionIds(userId, discussionIds))
@@ -435,9 +413,11 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
 
         boolean isAuthor = d.getUser().getUserId().equals(userId);
 
-        // Chỉ author mới có thể update (close/open) discussion của mình
         if (!isAuthor) {
             throw new ForbiddenException("Only author can update their discussion");
+        }
+        if (!Discussion.APPROVAL_APPROVED.equals(d.getApprovalStatus()) || "HIDDEN".equals(d.getStatus())) {
+            throw new BadRequestException("Only an approved discussion can be closed or reopened");
         }
 
         if (request.getIsClosed() != null) {
@@ -453,5 +433,12 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
                 ? Set.of(discussionId)
                 : Collections.emptySet();
         return mapToDto(saved, userId, upvotedIds, bookmarkedIds);
+    }
+
+    private static void ensureReactable(Discussion discussion) {
+        if (!Discussion.APPROVAL_APPROVED.equals(discussion.getApprovalStatus())
+                || "HIDDEN".equals(discussion.getStatus())) {
+            throw new BadRequestException("Only an approved, visible discussion can be reacted to");
+        }
     }
 }

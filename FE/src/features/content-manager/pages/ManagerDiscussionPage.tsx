@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import { Alert } from '@/components/ui/Alert';
 import { Avatar } from '@/components/ui/Avatar';
@@ -12,11 +12,9 @@ import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { Pagination } from '@/components/ui/Pagination';
 import { SearchInput } from '@/components/common/SearchInput';
-import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { Select } from '@/components/ui/Select';
 import { Icon } from '@/assets/icons';
 import { useToast } from '@/components/ui/ToastHost';
-import { courseService, type CourseSummaryItem } from '@/services/course.service';
 import { managerDiscussionService, type ManagerDiscussionStatus, type ManagerPostStatus } from '@/services/managerDiscussion.service';
 import type { DiscussionDetail, DiscussionDetailComment, DiscussionItem, DiscussionTag } from '@/services/studentCommunity.service';
 import { getApiErrorMessage } from '@/utils/apiError';
@@ -38,13 +36,10 @@ const approvalLabel = (status?: string) => ({ PENDING: 'Pending approval', APPRO
 const tagLabel = (tag: string) => ({ QUESTION: 'Question', question: 'Question', TIP: 'Tip', tip: 'Tip', ANNOUNCEMENT: 'Announcement', announcement: 'Announcement', GENERAL: 'General', general: 'General' }[tag] ?? tag);
 const dateLabel = (value?: string | null) => value ? new Date(value).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '—';
 
-type DeleteTarget = { kind: 'discussion'; id: number } | { kind: 'comment'; id: number };
+type DeleteTarget = { kind: 'comment'; id: number };
 
 export function ManagerDiscussionPage() {
   const toast = useToast();
-  const [courses, setCourses] = useState<CourseSummaryItem[]>([]);
-  const [courseId, setCourseId] = useState('');
-  const [courseError, setCourseError] = useState('');
   const [approvalStatus, setApprovalStatus] = useState<ManagerDiscussionStatus>('PENDING');
   const [postStatus, setPostStatus] = useState<ManagerPostStatus>('ALL');
   const [search, setSearch] = useState('');
@@ -65,27 +60,15 @@ export function ManagerDiscussionPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    setCourseError('');
-    courseService.getCourses({ page: 0, size: 100, sort: 'title,asc' }).then(result => {
-      if (cancelled) return;
-      setCourses(result.content);
-      if (!courseId && result.content.length) setCourseId(String(result.content[0].courseId));
-    }).catch(err => { if (!cancelled) setCourseError(getApiErrorMessage(err, 'Could not load managed courses.')); });
-    return () => { cancelled = true; };
-  }, []);
-
   /** `'quiet'` = shared auto-refresh: no loader, and a failure keeps the list on screen. */
   const load = useCallback(async (mode?: 'quiet') => {
     const quiet = mode === 'quiet';
-    if (!courseId) { setItems([]); setTotal(0); return; }
     if (!quiet) {
       setLoading(true);
       setError('');
     }
     try {
-      const result = await managerDiscussionService.list(courseId, {
+      const result = await managerDiscussionService.list({
         approvalStatus,
         status: postStatus,
         search: appliedSearch || undefined,
@@ -95,16 +78,15 @@ export function ManagerDiscussionPage() {
       setItems(result.content);
       setTotal(result.totalElements);
     } catch (err) {
-      if (!quiet) setError(getApiErrorMessage(err, 'Could not load course discussions.'));
+      if (!quiet) setError(getApiErrorMessage(err, 'Could not load discussions.'));
     } finally {
       if (!quiet) setLoading(false);
     }
-  }, [courseId, approvalStatus, postStatus, appliedSearch, page]);
+  }, [approvalStatus, postStatus, appliedSearch, page]);
 
   useEffect(() => { void load(); }, [load, reload]);
   useAutoRefresh(() => void load('quiet'));
 
-  const courseOptions = useMemo(() => courses.map(course => ({ label: course.title, value: String(course.courseId) })), [courses]);
   const refreshDetail = async (discussionId: number) => {
     const fresh = await managerDiscussionService.getDetail(discussionId);
     setDetail(fresh);
@@ -134,7 +116,14 @@ export function ManagerDiscussionPage() {
   };
 
   const togglePin = () => void runAction(detail?.isPinned ? 'Discussion unpinned.' : 'Discussion pinned.', () => managerDiscussionService.setPinned(detail!.discussionId, !detail!.isPinned));
-  const toggleClosed = () => void runAction(detail?.isClosed ? 'Discussion reopened.' : 'Discussion closed.', () => managerDiscussionService.setClosed(detail!.discussionId, !detail!.isClosed));
+  const hideDiscussion = () => void runAction('Discussion hidden from students.', async () => {
+    await managerDiscussionService.hide(detail!.discussionId);
+    setDetail(current => current ? { ...current, status: 'HIDDEN', isClosed: true, isPinned: false } : current);
+  });
+  const restoreDiscussion = () => void runAction('Discussion restored for students.', async () => {
+    await managerDiscussionService.restore(detail!.discussionId);
+    setDetail(current => current ? { ...current, status: 'OPEN', isClosed: false } : current);
+  });
   const cancelReject = () => { setRejecting(false); setRejectReason(''); };
 
   const restoreComment = async (comment: DiscussionDetailComment) => {
@@ -153,12 +142,7 @@ export function ManagerDiscussionPage() {
     if (!deleteTarget) return;
     setBusy(true);
     try {
-      if (deleteTarget.kind === 'discussion') {
-        await managerDiscussionService.delete(deleteTarget.id);
-        setDetail(null);
-        toast.success('Discussion deleted.');
-        await load();
-      } else if (detail) {
+      if (detail) {
         await managerDiscussionService.deleteComment(deleteTarget.id);
         toast.success('Reply deleted.');
         await Promise.all([load(), refreshDetail(detail.discussionId)]);
@@ -184,9 +168,8 @@ export function ManagerDiscussionPage() {
   };
 
   const submitCreate = async (payload: { title: string; content: string; tag: DiscussionTag; imageUrl?: string | null; isPinned: boolean }) => {
-    if (!courseId) return;
     try {
-      const created = await managerDiscussionService.create(courseId, payload);
+      const created = await managerDiscussionService.create(payload);
       setCreateOpen(false);
       toast.success('Discussion published.');
       await load();
@@ -198,14 +181,12 @@ export function ManagerDiscussionPage() {
 
   return <main className="mx-auto max-w-screen-2xl space-y-6 p-6 lg:p-8">
     <header className="flex flex-wrap items-end justify-between gap-4">
-      <div><h1 className="text-2xl font-bold text-content">Course discussions</h1><p className="mt-1 text-sm text-content-subtle">Review student posts, moderate replies, and publish course announcements.</p></div>
-      <Button icon={<Icon.Plus className="h-4 w-4" />} onClick={() => setCreateOpen(true)} disabled={!courseId}>Create course post</Button>
+      <div><h1 className="text-2xl font-bold text-content">Discussions</h1><p className="mt-1 text-sm text-content-subtle">Review student posts, moderate replies, and publish announcements.</p></div>
+      <Button icon={<Icon.Plus className="h-4 w-4" />} onClick={() => setCreateOpen(true)}>Create discussion</Button>
     </header>
 
     <section className="card space-y-4 p-4">
-      {courseError && <Alert type="error" message={courseError} />}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <SearchableSelect label="Course" value={courseId} options={courseOptions} onChange={value => { setCourseId(value); setPage(0); }} placeholder="Choose a course" searchPlaceholder="Search courses…" emptyText="No managed courses" />
         <Select label="Approval" value={approvalStatus} options={APPROVAL_OPTIONS} onChange={value => { setApprovalStatus(value as ManagerDiscussionStatus); setPage(0); }} />
         <Select label="Post status" value={postStatus} options={POST_STATUS_OPTIONS} onChange={value => { setPostStatus(value as ManagerPostStatus); setPage(0); }} />
         <form onSubmit={event => { event.preventDefault(); setAppliedSearch(search.trim()); setPage(0); }} className="flex items-end gap-2">
@@ -216,7 +197,7 @@ export function ManagerDiscussionPage() {
       <div className="flex items-center justify-between border-t border-line pt-3 text-sm text-content-subtle"><span>{total} {total === 1 ? 'post' : 'posts'}</span><Button size="sm" variant="ghost" icon={<Icon.RefreshCw className="h-4 w-4" />} onClick={() => setReload(value => value + 1)}>Refresh</Button></div>
     </section>
 
-    {error ? <Alert type="error" message={error} /> : loading ? <div className="card p-8 text-center text-sm text-content-subtle">Loading course discussions…</div> : items.length === 0 ? <div className="card p-8 text-center"><p className="font-medium text-content">No discussions match these filters</p><p className="mt-1 text-sm text-content-subtle">Try a different status, search term, or course.</p></div> : <section className="space-y-3">
+    {error ? <Alert type="error" message={error} /> : loading ? <div className="card p-8 text-center text-sm text-content-subtle">Loading discussions…</div> : items.length === 0 ? <div className="card p-8 text-center"><p className="font-medium text-content">No discussions match these filters</p><p className="mt-1 text-sm text-content-subtle">Try a different status or search term.</p></div> : <section className="space-y-3">
       {items.map(item => <article key={item.discussionId} className="card p-4 transition-colors hover:border-brand-300 hover:bg-surface-hover">
         <div className="flex flex-wrap items-start gap-4">
           <button type="button" onClick={() => void openDetail(item)} className="min-w-0 flex-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600">
@@ -234,16 +215,15 @@ export function ManagerDiscussionPage() {
 
     <Modal open={detailLoading || !!detail} onClose={() => { if (!busy) setDetail(null); }} title={detail?.title ?? 'Loading discussion…'} size="2xl" footer={detail && <>
       <Button variant="outline" onClick={() => setDetail(null)} disabled={busy}>Close</Button>
-      {detail.approvalStatus === 'APPROVED' && <>
+      {detail.approvalStatus === 'APPROVED' && detail.status !== 'HIDDEN' && <>
         <Button variant="outline" icon={<Icon.Bookmark className="h-4 w-4" />} onClick={togglePin} disabled={busy}>{detail.isPinned ? 'Unpin' : 'Pin'}</Button>
-        <Button variant="outline" icon={<Icon.Lock className="h-4 w-4" />} onClick={toggleClosed} disabled={busy}>{detail.isClosed ? 'Reopen' : 'Close discussion'}</Button>
       </>}
       {detail.approvalStatus === 'PENDING' && !rejecting && <>
         <Button variant="danger" onClick={() => setRejecting(true)} disabled={busy}>Reject</Button>
         <Button onClick={approve} disabled={busy}>Approve</Button>
       </>}
       {rejecting && <><Button variant="outline" onClick={cancelReject} disabled={busy}>Cancel rejection</Button><Button variant="danger" onClick={() => void reject()} disabled={busy || rejectReason.trim().length < 5} loading={busy}>Confirm rejection</Button></>}
-      <Button variant="danger" icon={<Icon.Trash className="h-4 w-4" />} onClick={() => setDeleteTarget({ kind: 'discussion', id: detail.discussionId })} disabled={busy}>Delete</Button>
+      {detail.status === 'HIDDEN' ? <Button onClick={restoreDiscussion} disabled={busy}>Restore</Button> : <Button variant="danger" onClick={hideDiscussion} disabled={busy}>Hide</Button>}
     </>}>
       {!detail ? <div className="py-12 text-center text-sm text-content-subtle">Loading discussion details…</div> : <div className="space-y-5">
         <div className="flex flex-wrap items-center gap-2"><Badge variant={detail.approvalStatus === 'PENDING' ? 'warning' : detail.approvalStatus === 'REJECTED' ? 'danger' : 'success'}>{approvalLabel(detail.approvalStatus)}</Badge><Badge>{tagLabel(detail.tag)}</Badge>{detail.isPinned && <Badge variant="warning">Pinned</Badge>}{detail.isClosed && <Badge>Closed</Badge>}<span className="ml-auto text-xs text-content-subtle">{dateLabel(detail.createdAt)}</span></div>
@@ -273,8 +253,8 @@ export function ManagerDiscussionPage() {
       </div>}
     </Modal>
 
-    <CreateManagerDiscussionModal open={createOpen} courseTitle={courses.find(course => String(course.courseId) === courseId)?.title ?? ''} onClose={() => setCreateOpen(false)} onSubmit={submitCreate} />
-    <ConfirmDialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={() => void confirmDelete()} loading={busy} tone="danger" confirmLabel="Delete" title={deleteTarget?.kind === 'comment' ? 'Delete this reply?' : 'Delete this discussion?'} description="This permanently removes the selected content and cannot be undone." />
+    <CreateManagerDiscussionModal open={createOpen} onClose={() => setCreateOpen(false)} onSubmit={submitCreate} />
+    <ConfirmDialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={() => void confirmDelete()} loading={busy} tone="danger" confirmLabel="Delete" title="Delete this reply?" description="This permanently removes the reply and cannot be undone." />
   </main>;
 }
 
@@ -305,7 +285,7 @@ function ManagerReply({ comment, busy, hiding, reason, onStartHide, onCancelHide
   </article>;
 }
 
-function CreateManagerDiscussionModal({ open, courseTitle, onClose, onSubmit }: { open: boolean; courseTitle: string; onClose: () => void; onSubmit: (payload: { title: string; content: string; tag: DiscussionTag; imageUrl?: string | null; isPinned: boolean }) => Promise<void> }) {
+function CreateManagerDiscussionModal({ open, onClose, onSubmit }: { open: boolean; onClose: () => void; onSubmit: (payload: { title: string; content: string; tag: DiscussionTag; imageUrl?: string | null; isPinned: boolean }) => Promise<void> }) {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [tag, setTag] = useState<DiscussionTag>('announcement');
@@ -327,13 +307,13 @@ function CreateManagerDiscussionModal({ open, courseTitle, onClose, onSubmit }: 
     finally { setBusy(false); }
   };
 
-  return <Modal open={open} onClose={() => { if (!busy) onClose(); }} title="Create a course post" description={courseTitle ? `Publishing to ${courseTitle}. This post is visible immediately.` : undefined} size="lg" error={error && <Alert type="error" message={error} />} footer={<><Button variant="outline" onClick={onClose} disabled={busy}>Cancel</Button><Button form="manager-discussion-form" type="submit" loading={busy}>Publish post</Button></>}>
+  return <Modal open={open} onClose={() => { if (!busy) onClose(); }} title="Create a discussion" description="This post is visible immediately." size="lg" error={error && <Alert type="error" message={error} />} footer={<><Button variant="outline" onClick={onClose} disabled={busy}>Cancel</Button><Button form="manager-discussion-form" type="submit" loading={busy}>Publish post</Button></>}>
     <form id="manager-discussion-form" onSubmit={submit} className="space-y-4">
       <Select label="Post type" value={tag} onChange={value => setTag(value as DiscussionTag)} options={[{ label: 'Announcement', value: 'announcement' }, { label: 'Tip', value: 'tip' }, { label: 'Question', value: 'question' }]} />
       <Input label="Title" maxLength={200} value={title} onChange={event => setTitle(event.target.value)} placeholder="Post title" />
-      <label className="grid gap-1.5 text-sm font-medium text-content-secondary">Details<textarea required maxLength={10000} rows={6} value={content} onChange={event => setContent(event.target.value)} className="w-full rounded-[10px] border border-line bg-surface p-3 text-sm text-content focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/20" placeholder="Write the course post…" /><span className="text-right text-xs font-normal text-content-subtle">{content.length}/10,000</span></label>
+      <label className="grid gap-1.5 text-sm font-medium text-content-secondary">Details<textarea required maxLength={10000} rows={6} value={content} onChange={event => setContent(event.target.value)} className="w-full rounded-[10px] border border-line bg-surface p-3 text-sm text-content focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/20" placeholder="Write the discussion…" /><span className="text-right text-xs font-normal text-content-subtle">{content.length}/10,000</span></label>
       <DiscussionImageAttachment imageUrl={imageUrl} onChange={setImageUrl} scope="manager" />
-      <Checkbox checked={pinned} onChange={setPinned} label="Pin this post to the top of the course discussion" />
+      <Checkbox checked={pinned} onChange={setPinned} label="Pin this post to the top" />
     </form>
   </Modal>;
 }

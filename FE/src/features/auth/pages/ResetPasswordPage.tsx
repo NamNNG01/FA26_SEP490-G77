@@ -7,7 +7,7 @@ import { Alert } from '@/components/ui/Alert';
 import { Icon } from '@/assets/icons';
 import { ROUTES } from '@/app/routes';
 import { useAuth } from '@/auth/authContext';
-import { passwordService, PASSWORD_MIN_LENGTH, PASSWORD_TOO_LONG_MESSAGE, isPasswordTooLong } from '@/services/password.service';
+import { passwordService, PASSWORD_MIN_LENGTH, getPasswordValidationError } from '@/services/password.service';
 import { AuthPageHeader } from '../components/AuthPageHeader';
 
 /**
@@ -63,9 +63,9 @@ export function ResetPasswordPage() {
 
   let strength = 0;
   if (password.length >= 8) strength++;
-  if (/[A-Z]/.test(password)) strength++;
-  if (/[0-9]/.test(password)) strength++;
-  if (/[^A-Za-z0-9]/.test(password)) strength++;
+  if (/\p{Lu}/u.test(password)) strength++;
+  if (/\p{N}/u.test(password)) strength++;
+  if (/[\p{P}\p{S}]/u.test(password)) strength++;
   const strengthLabel = ['', 'Weak', 'Fair', 'Good', 'Strong'];
   const strengthColor = ['', '#DC2626', '#D97706', '#F27124', '#16A34A'];
 
@@ -84,12 +84,9 @@ export function ResetPasswordPage() {
       setError('New password is required');
       return;
     }
-    if (password.length < PASSWORD_MIN_LENGTH) {
-      setError(`Password must be at least ${PASSWORD_MIN_LENGTH} characters`);
-      return;
-    }
-    if (isPasswordTooLong(password)) {
-      setError(PASSWORD_TOO_LONG_MESSAGE);
+    const passwordError = getPasswordValidationError(password);
+    if (passwordError) {
+      setError(passwordError);
       return;
     }
     if (password !== confirmPassword) {
@@ -142,7 +139,7 @@ export function ResetPasswordPage() {
       <AuthPageHeader
         icon={<Icon.Lock className="w-7 h-7" />}
         title="New password"
-        subtitle={`At least ${PASSWORD_MIN_LENGTH} characters. Mix 8+ characters with uppercase letters, numbers and symbols for a stronger password.`}
+        subtitle={`Required: ${PASSWORD_MIN_LENGTH}+ characters, an uppercase letter, a number, and a symbol.`}
       />
 
       <div className="card p-6 [@media(max-height:850px)]:p-5 shadow-lg">
