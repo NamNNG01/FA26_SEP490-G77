@@ -216,7 +216,8 @@ public class PaymentServiceImpl implements PaymentService {
     public PaymentResponses.PaymentState status(Long userId, String orderCode) {
         Payment payment = payments.findByOrderCodeAndUserUserId(orderCode, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Payment not found"));
-        if (Payment.PENDING.equals(payment.getStatus()) && payment.getPayosOrderCode() != null) {
+        if ((Payment.PENDING.equals(payment.getStatus()) || Payment.EXPIRED.equals(payment.getStatus()))
+                && payment.getPayosOrderCode() != null) {
             // PY-04 self-heals a missed webhook: PayOS is asked directly while the student waits.
             reconcileWithProvider(payment);
         }
@@ -229,14 +230,16 @@ public class PaymentServiceImpl implements PaymentService {
      * the next poll retries.
      */
     private void reconcileWithProvider(Payment payment) {
+        PayosClient.RemotePayment remote;
         try {
-            PayosClient.RemotePayment remote = payos.fetch(payment.getPayosOrderCode());
-            if (remote != null && "PAID".equalsIgnoreCase(remote.status())
-                    && transactions.reconcilePaid(payment.getOrderCode(), remote.amountPaid(), remote.raw())) {
-                log.info("Payment {} confirmed through the PayOS status API (missing webhook)", payment.getPaymentId());
-            }
+            remote = payos.fetch(payment.getPayosOrderCode());
         } catch (RuntimeException ex) {
-            log.debug("PayOS status lookup failed for payment {}", payment.getPaymentId(), ex);
+            log.warn("PayOS status lookup failed for payment {}", payment.getPaymentId(), ex);
+            return;
+        }
+        if (remote != null && "PAID".equalsIgnoreCase(remote.status())
+                && transactions.reconcilePaid(payment.getOrderCode(), remote.amountPaid(), remote.raw())) {
+            log.info("Payment {} confirmed through the PayOS status API (missing webhook)", payment.getPaymentId());
         }
     }
 

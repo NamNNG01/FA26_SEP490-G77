@@ -678,6 +678,32 @@ class StudentPaymentApiIntegrationTest {
     }
 
     @Test
+    void paidSubscriptionReplacesAnExpiredRowStillMarkedActive() throws Exception {
+        UserSubscription old = UserSubscription.builder().user(student).plan(freePlan)
+                .startDate(Instant.now().minus(60, ChronoUnit.DAYS))
+                .endDate(Instant.now().minus(30, ChronoUnit.DAYS))
+                .status("ACTIVE").paidAmount(BigDecimal.ZERO).autoRenew(false).build();
+        em.persist(old);
+        em.flush();
+        String orderCode = checkoutOrderCode(basicPlan, null);
+        Payment pending = payment(orderCode);
+        pending.setStatus(Payment.EXPIRED);
+        em.flush();
+        when(payos.fetch(pending.getPayosOrderCode()))
+                .thenReturn(new PayosClient.RemotePayment("PAID", pending.getAmount().longValueExact(), "{}"));
+
+        call(student, get("/api/v1/student/payments/" + orderCode + "/status"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.status").value(Payment.SUCCEEDED));
+        em.flush();
+        em.refresh(old);
+        assertEquals("SUPERSEDED", old.getStatus());
+        List<UserSubscription> active = em.createQuery("select s from UserSubscription s where s.user = :u and s.status = 'ACTIVE'", UserSubscription.class)
+                .setParameter("u", student).getResultList();
+        assertEquals(1, active.size());
+        assertEquals(basicPlan.getPlanId(), active.get(0).getPlan().getPlanId());
+    }
+
+    @Test
     void statusKeepsThePaymentPendingUntilPayosHasTheFullAmount() throws Exception {
         String orderCode = checkoutOrderCode(paidCourse, null);
         Payment pending = payment(orderCode);
