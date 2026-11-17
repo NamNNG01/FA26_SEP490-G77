@@ -65,6 +65,21 @@ export interface Page<T> {
   last: boolean;
 }
 
+function normalizeDiscountType(value: string): DiscountType {
+  return value === 'FIXED' ? 'FIXED_AMOUNT' : value as DiscountType;
+}
+
+function normalizeDiscount<T extends { discountType: string }>(discount: T): T & { discountType: DiscountType } {
+  return { ...discount, discountType: normalizeDiscountType(discount.discountType) };
+}
+
+function normalizeDiscountPage(value: Page<Discount> | null | undefined): Page<Discount> {
+  if (!value || !Array.isArray(value.content) || !Number.isFinite(value.totalElements)) {
+    throw new Error('The server returned an invalid discount list. Please retry.');
+  }
+  return { ...value, content: value.content.map(normalizeDiscount) };
+}
+
 function query(params: Record<string, string | number | boolean | undefined>) {
   const search = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
@@ -76,19 +91,19 @@ function query(params: Record<string, string | number | boolean | undefined>) {
 export const adminDiscountService = {
   async list(params: { keyword?: string; discountType?: string; isActive?: string; validity?: string; accessType?: DiscountAccessType | ''; page: number; size: number }) {
     const res = await api.get<ApiResponse<Page<Discount>>>(`/admin/discounts?${query({ ...params, sort: 'createdAt,desc' })}`);
-    return res.data;
+    return normalizeDiscountPage(res.data);
   },
   async get(id: number) {
     const res = await api.get<ApiResponse<Discount>>(`/admin/discounts/${id}`);
-    return res.data;
+    return normalizeDiscount(res.data);
   },
   async create(payload: DiscountPayload) {
     const res = await api.post<ApiResponse<Discount>>('/admin/discounts', payload);
-    return res.data;
+    return normalizeDiscount(res.data);
   },
   async update(id: number, payload: DiscountPayload) {
     const res = await api.request<ApiResponse<Discount>>({ method: 'put', url: `/admin/discounts/${id}`, data: payload });
-    return res.data;
+    return normalizeDiscount(res.data);
   },
   async setStatus(id: number, isActive: boolean) {
     const res = await api.request<ApiResponse<{ discountId: number; isActive: boolean; affectedContests: { contestId: number; title: string; status: string }[] }>>({

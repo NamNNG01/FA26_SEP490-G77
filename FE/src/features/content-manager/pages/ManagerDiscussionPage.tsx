@@ -35,7 +35,7 @@ const POST_STATUS_OPTIONS = [
   { label: 'Hidden', value: 'HIDDEN' },
 ];
 const approvalLabel = (status?: string) => ({ PENDING: 'Pending approval', APPROVED: 'Published', REJECTED: 'Rejected' }[status ?? ''] ?? status ?? '—');
-const tagLabel = (tag: string) => ({ question: 'Question', tip: 'Tip', announcement: 'Announcement' }[tag] ?? tag);
+const tagLabel = (tag: string) => ({ QUESTION: 'Question', question: 'Question', TIP: 'Tip', tip: 'Tip', ANNOUNCEMENT: 'Announcement', announcement: 'Announcement', GENERAL: 'General', general: 'General' }[tag] ?? tag);
 const dateLabel = (value?: string | null) => value ? new Date(value).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '—';
 
 type DeleteTarget = { kind: 'discussion'; id: number } | { kind: 'comment'; id: number };
@@ -135,6 +135,7 @@ export function ManagerDiscussionPage() {
 
   const togglePin = () => void runAction(detail?.isPinned ? 'Discussion unpinned.' : 'Discussion pinned.', () => managerDiscussionService.setPinned(detail!.discussionId, !detail!.isPinned));
   const toggleClosed = () => void runAction(detail?.isClosed ? 'Discussion reopened.' : 'Discussion closed.', () => managerDiscussionService.setClosed(detail!.discussionId, !detail!.isClosed));
+  const cancelReject = () => { setRejecting(false); setRejectReason(''); };
 
   const restoreComment = async (comment: DiscussionDetailComment) => {
     const succeeded = await runAction('Reply restored for students.', () => managerDiscussionService.setCommentStatus(comment.commentId, 'VISIBLE'));
@@ -159,7 +160,7 @@ export function ManagerDiscussionPage() {
         await load();
       } else if (detail) {
         await managerDiscussionService.deleteComment(deleteTarget.id);
-        toast.success('Comment deleted.');
+        toast.success('Reply deleted.');
         await Promise.all([load(), refreshDetail(detail.discussionId)]);
       }
       setDeleteTarget(null);
@@ -233,13 +234,15 @@ export function ManagerDiscussionPage() {
 
     <Modal open={detailLoading || !!detail} onClose={() => { if (!busy) setDetail(null); }} title={detail?.title ?? 'Loading discussion…'} size="2xl" footer={detail && <>
       <Button variant="outline" onClick={() => setDetail(null)} disabled={busy}>Close</Button>
-      <Button variant="outline" icon={<Icon.Bookmark className="h-4 w-4" />} onClick={togglePin} disabled={busy}>{detail.isPinned ? 'Unpin' : 'Pin'}</Button>
-      <Button variant="outline" icon={<Icon.Lock className="h-4 w-4" />} onClick={toggleClosed} disabled={busy}>{detail.isClosed ? 'Reopen' : 'Close discussion'}</Button>
+      {detail.approvalStatus === 'APPROVED' && <>
+        <Button variant="outline" icon={<Icon.Bookmark className="h-4 w-4" />} onClick={togglePin} disabled={busy}>{detail.isPinned ? 'Unpin' : 'Pin'}</Button>
+        <Button variant="outline" icon={<Icon.Lock className="h-4 w-4" />} onClick={toggleClosed} disabled={busy}>{detail.isClosed ? 'Reopen' : 'Close discussion'}</Button>
+      </>}
       {detail.approvalStatus === 'PENDING' && !rejecting && <>
         <Button variant="danger" onClick={() => setRejecting(true)} disabled={busy}>Reject</Button>
         <Button onClick={approve} disabled={busy}>Approve</Button>
       </>}
-      {rejecting && <Button variant="danger" onClick={() => void reject()} disabled={busy || rejectReason.trim().length < 5} loading={busy}>Confirm rejection</Button>}
+      {rejecting && <><Button variant="outline" onClick={cancelReject} disabled={busy}>Cancel rejection</Button><Button variant="danger" onClick={() => void reject()} disabled={busy || rejectReason.trim().length < 5} loading={busy}>Confirm rejection</Button></>}
       <Button variant="danger" icon={<Icon.Trash className="h-4 w-4" />} onClick={() => setDeleteTarget({ kind: 'discussion', id: detail.discussionId })} disabled={busy}>Delete</Button>
     </>}>
       {!detail ? <div className="py-12 text-center text-sm text-content-subtle">Loading discussion details…</div> : <div className="space-y-5">
@@ -250,9 +253,9 @@ export function ManagerDiscussionPage() {
         {rejecting && <section className="rounded-lg border border-danger-line bg-danger-light p-4"><label className="grid gap-2 text-sm font-medium text-content">Reason shown to the student<textarea maxLength={1000} rows={3} value={rejectReason} onChange={event => setRejectReason(event.target.value)} className="rounded-lg border border-line bg-surface p-3 font-normal text-content" placeholder="Explain why this post was rejected (at least 5 characters)." /></label><p className="mt-1 text-right text-xs text-content-subtle">{rejectReason.length}/1000</p></section>}
         {detail.approvalStatus === 'REJECTED' && detail.rejectionReason && <Alert type="warning" title="Rejection reason" message={detail.rejectionReason} />}
         <section className="space-y-3 border-t border-line pt-4">
-          <div><h3 className="font-semibold text-content">Replies <span className="font-normal text-content-subtle">({detail.commentCount})</span></h3><p className="mt-1 text-xs text-content-subtle">Hidden replies remain visible here for moderation.</p></div>
+          <div><h3 className="font-semibold text-content">Replies <span className="font-normal text-content-subtle">({(detail.comments ?? []).filter(comment => comment.status !== 'HIDDEN').length})</span></h3><p className="mt-1 text-xs text-content-subtle">Hidden replies remain visible here for moderation ({(detail.comments ?? []).filter(comment => comment.status === 'HIDDEN').length} hidden).</p></div>
           {(detail.comments ?? []).length === 0 ? <p className="rounded-lg bg-surface-muted p-4 text-sm text-content-subtle">No replies yet.</p> : <div className="divide-y divide-line rounded-lg border border-line">
-            {detail.comments.map(comment => <ManagerReply
+            {[...detail.comments].reverse().map(comment => <ManagerReply
               key={comment.commentId}
               comment={comment}
               busy={busy}
@@ -289,7 +292,7 @@ function ManagerReply({ comment, busy, hiding, reason, onStartHide, onCancelHide
 }) {
   const hidden = comment.status === 'HIDDEN';
   return <article className={`flex flex-wrap items-start gap-3 p-4 ${hidden ? 'bg-surface-muted' : ''}`}>
-    <Avatar name={comment.author.displayName} src={comment.author.avatarUrl || undefined} size="sm" />
+    <Avatar name={comment.author.displayName} src={comment.isAnonymous || /anonymous|ẩn danh/i.test(comment.author.displayName) ? '/images/anonymous_student.png' : comment.author.avatarUrl || undefined} size="sm" />
     <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><p className="text-xs text-content-subtle">{comment.author.displayName} · {dateLabel(comment.createdAt)}</p>{hidden && <Badge variant="danger">Hidden</Badge>}</div><p className="mt-2 whitespace-pre-wrap text-sm text-content-secondary">{comment.content}</p>{comment.imageUrl && <ImageViewer src={comment.imageUrl} alt="Reply attachment" className="mt-3" imageClassName="max-h-52" />}
       {hiding && <section className="mt-4 rounded-lg border border-warning-line bg-warning-light p-3">
         <label className="grid gap-1.5 text-sm font-medium text-content">Reason for hiding this reply

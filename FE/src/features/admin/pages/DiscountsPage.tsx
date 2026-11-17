@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -144,6 +144,7 @@ export function DiscountsPage() {
   const [page, setPage] = useState<Page<Discount>>(EMPTY_PAGE);
   const [pageIndex, setPageIndex] = useState(1);
   const [keyword, setKeyword] = useState("");
+  const [debouncedKeyword, setDebouncedKeyword] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [activeFilter, setActiveFilter] = useState("");
   const [validityFilter, setValidityFilter] = useState("");
@@ -157,44 +158,67 @@ export function DiscountsPage() {
   const [saving, setSaving] = useState(false);
   const [detail, setDetail] = useState<Discount | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [listError, setListError] = useState<string | null>(null);
   const [assignments, setAssignments] =
     useState<Page<DiscountAssignment> | null>(null);
   const [assignmentPage, setAssignmentPage] = useState(0);
   const [assignmentKeyword, setAssignmentKeyword] = useState("");
+  const [debouncedAssignmentKeyword, setDebouncedAssignmentKeyword] = useState("");
   const [assignmentUsed, setAssignmentUsed] = useState("");
   const [assignmentLoading, setAssignmentLoading] = useState(false);
+  const [assignmentError, setAssignmentError] = useState<string | null>(null);
   const [changingStatus, setChangingStatus] = useState<Discount | null>(null);
   const [deleting, setDeleting] = useState<Discount | null>(null);
   const [working, setWorking] = useState(false);
   const [affected, setAffected] = useState<
     { title: string; status: string; contestId: number }[] | null
   >(null);
+  const listRequestId = useRef(0);
+  const detailRequestId = useRef(0);
+  const assignmentRequestId = useRef(0);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedKeyword(keyword.trim());
+      setPageIndex(1);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [keyword]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedAssignmentKeyword(assignmentKeyword.trim());
+      setAssignmentPage(0);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [assignmentKeyword]);
 
   /** `'quiet'` = shared auto-refresh: no loader, no error toast. */
   const load = useCallback(async (mode?: 'quiet') => {
+    const requestId = ++listRequestId.current;
     const quiet = mode === 'quiet';
-    if (!quiet) setLoading(true);
+    if (!quiet) { setLoading(true); setListError(null); }
     try {
-      setPage(
-        await adminDiscountService.list({
-          keyword: keyword.trim(),
+      const result = await adminDiscountService.list({
+          keyword: debouncedKeyword,
           discountType: typeFilter,
           isActive: activeFilter,
           validity: validityFilter,
           accessType: accessTypeFilter,
           page: pageIndex - 1,
           size: PAGE_SIZE,
-        }),
-      );
+        });
+      if (requestId === listRequestId.current) setPage(result);
     } catch (error) {
-      if (!quiet) toast.error(getApiErrorMessage(error, "Could not load discounts."));
+      if (requestId === listRequestId.current && !quiet) {
+        setListError(getApiErrorMessage(error, "Could not load discounts."));
+      }
     } finally {
-      setLoading(false);
+      if (requestId === listRequestId.current) setLoading(false);
     }
   }, [
     accessTypeFilter,
     activeFilter,
-    keyword,
+    debouncedKeyword,
     pageIndex,
     toast,
     typeFilter,
@@ -207,25 +231,28 @@ export function DiscountsPage() {
 
   const loadAssignments = useCallback(
     async (discountId: number) => {
+      const requestId = ++assignmentRequestId.current;
       setAssignmentLoading(true);
+      setAssignmentError(null);
       try {
-        setAssignments(
-          await adminDiscountService.assignments(discountId, {
+        const result = await adminDiscountService.assignments(discountId, {
             isUsed: assignmentUsed,
-            keyword: assignmentKeyword.trim(),
+            keyword: debouncedAssignmentKeyword,
             page: assignmentPage,
             size: PAGE_SIZE,
-          }),
-        );
+          });
+        if (!result || !Array.isArray(result.content)) throw new Error("The server returned an invalid assignment list.");
+        if (requestId === assignmentRequestId.current) setAssignments(result);
       } catch (error) {
-        toast.error(
-          getApiErrorMessage(error, "Could not load assigned users."),
-        );
+        if (requestId === assignmentRequestId.current) {
+          setAssignments(null);
+          setAssignmentError(getApiErrorMessage(error, "Could not load assigned users."));
+        }
       } finally {
-        setAssignmentLoading(false);
+        if (requestId === assignmentRequestId.current) setAssignmentLoading(false);
       }
     },
-    [assignmentKeyword, assignmentPage, assignmentUsed, toast],
+    [assignmentPage, assignmentUsed, debouncedAssignmentKeyword],
   );
   useEffect(() => {
     if (detail) void loadAssignments(detail.discountId);
@@ -249,20 +276,32 @@ export function DiscountsPage() {
     }
   };
   const openDetail = async (discount: Discount) => {
+    const requestId = ++detailRequestId.current;
+    assignmentRequestId.current++;
+    setDetail(null);
     setDetailLoading(true);
     setAssignments(null);
+    setAssignmentError(null);
     setAssignmentPage(0);
     setAssignmentKeyword("");
+    setDebouncedAssignmentKeyword("");
     setAssignmentUsed("");
     try {
-      setDetail(await adminDiscountService.get(discount.discountId));
+      const result = await adminDiscountService.get(discount.discountId);
+      if (requestId === detailRequestId.current) setDetail(result);
     } catch (error) {
-      toast.error(
-        getApiErrorMessage(error, "Could not load discount details."),
-      );
+      if (requestId === detailRequestId.current) toast.error(getApiErrorMessage(error, "Could not load discount details."));
     } finally {
-      setDetailLoading(false);
+      if (requestId === detailRequestId.current) setDetailLoading(false);
     }
+  };
+  const closeDetail = () => {
+    detailRequestId.current++;
+    assignmentRequestId.current++;
+    setDetail(null);
+    setDetailLoading(false);
+    setAssignmentLoading(false);
+    setAssignmentError(null);
   };
   const updateForm = (key: keyof FormState, value: string | boolean) =>
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -504,6 +543,7 @@ export function DiscountsPage() {
     accessTypeFilter !== "";
   const resetFilters = () => {
     setKeyword("");
+    setDebouncedKeyword("");
     setTypeFilter("");
     setActiveFilter("");
     setValidityFilter("");
@@ -535,7 +575,6 @@ export function DiscountsPage() {
             value={keyword}
             onChange={(e) => {
               setKeyword(e.target.value);
-              setPageIndex(1);
             }}
           />
           <Select
@@ -612,7 +651,12 @@ export function DiscountsPage() {
         className={`card overflow-hidden transition-opacity ${loading && page.content.length ? "opacity-60" : ""}`}
         aria-busy={loading}
       >
-        <Table
+        {listError ? (
+          <div role="alert" className="flex flex-wrap items-center justify-between gap-3 p-5 text-sm text-danger">
+            <span>{listError}</span>
+            <Button size="sm" variant="outline" onClick={() => void load()}>Retry</Button>
+          </div>
+        ) : <Table
           columns={columns}
           data={rows as unknown as Record<string, unknown>[]}
           perPage={PAGE_SIZE}
@@ -630,7 +674,7 @@ export function DiscountsPage() {
                 ? "No discounts match your filters."
                 : "No discounts yet. Click “New discount” to add one."
           }
-        />
+        />}
       </div>
 
       <Modal
@@ -796,7 +840,7 @@ export function DiscountsPage() {
 
       <Modal
         open={detailLoading || !!detail}
-        onClose={() => setDetail(null)}
+        onClose={closeDetail}
         title={detail ? `${detail.code} · ${detail.name}` : "Discount details"}
         size="2xl"
       >
@@ -892,7 +936,6 @@ export function DiscountsPage() {
                     value={assignmentKeyword}
                     onChange={(e) => {
                       setAssignmentKeyword(e.target.value);
-                      setAssignmentPage(0);
                     }}
                   />
                   <Select
@@ -910,7 +953,12 @@ export function DiscountsPage() {
                   />
                 </div>
               </div>
-              {assignmentLoading ? (
+              {assignmentError ? (
+                <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-danger-line bg-danger-light p-4 text-sm text-danger">
+                  <span>{assignmentError}</span>
+                  <Button size="sm" variant="outline" onClick={() => detail && void loadAssignments(detail.discountId)}>Retry</Button>
+                </div>
+              ) : assignmentLoading ? (
                 <div className="flex justify-center py-6">
                   <Spinner size="sm" />
                 </div>
