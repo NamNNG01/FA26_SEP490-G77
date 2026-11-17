@@ -6,13 +6,11 @@ import type { ApiResponse } from '@/auth/authContext';
  * StudentSubscriptionService — study plans (spec §16, StudentSubscriptionController).
  *
  *   GET   /api/v1/student/subscription/plans        (SB-01) — public; `isCurrent` needs the token
- *   GET   /api/v1/student/subscription/current      (SB-02) — `data: null` without an ACTIVE plan
- *   PATCH /api/v1/student/subscription/auto-renew   (SB-04) — ACTIVE plan only
+ *   GET   /api/v1/student/subscription/current      (SB-02) — the Free Plan (`subscriptionId: null`) without a paid plan
  *
  * A plan is bought with the shared PY-01 checkout (payment.service, `{ planId }`); it turns ACTIVE
  * through the PayOS webhook. SB-03 (`/subscription/checkout`) answers the same and is not used.
- *
- * Errors: SB-04 404 no ACTIVE plan.
+ * Paid plans always auto-renew; the student cannot turn it off.
  */
 
 /** SB-01 */
@@ -26,17 +24,23 @@ export interface SubscriptionPlan {
   isCurrent: boolean;
 }
 
-/** SB-02 */
+/** SB-02 — `subscriptionId`, `startedAt` and `expiresAt` are null for the Free Plan fallback. */
 export interface CurrentSubscription {
-  subscriptionId: number;
-  planId: number;
+  subscriptionId: number | null;
+  planId: number | null;
   planName: string;
   status: string;
   price: number;
-  startedAt: string;
-  expiresAt: string;
+  startedAt: string | null;
+  expiresAt: string | null;
   daysRemaining: number;
-  autoRenew: boolean;
+  /** Capabilities the plan unlocks (AI_FLASHCARD_GENERATION, …). */
+  featureKeys: string[];
+}
+
+/** A paid plan the student is subscribed to — the Free Plan fallback has no subscription row. */
+export function isPaidSubscription(s: CurrentSubscription | null): s is CurrentSubscription & { subscriptionId: number; startedAt: string; expiresAt: string } {
+  return !!s && s.subscriptionId != null && !!s.startedAt && !!s.expiresAt;
 }
 
 export const subscriptionService = {
@@ -49,20 +53,11 @@ export const subscriptionService = {
     const res = await api.get<ApiResponse<CurrentSubscription | null>>('/student/subscription/current');
     return res.data ?? null;
   },
-
-  async setAutoRenew(autoRenew: boolean): Promise<{ subscriptionId: number; autoRenew: boolean }> {
-    const res = await api.request<ApiResponse<{ subscriptionId: number; autoRenew: boolean }>>({
-      method: 'patch',
-      url: '/student/subscription/auto-renew',
-      data: { autoRenew },
-    });
-    return res.data;
-  },
 };
 
 /*
  * Current plan shared by the header badge and the Subscription page: one SB-02 call for both, and
- * refreshCurrentSubscription() after a purchase or an auto-renew change updates every reader.
+ * refreshCurrentSubscription() after a purchase updates every reader.
  */
 type CurrentState = { loaded: boolean; data: CurrentSubscription | null };
 
