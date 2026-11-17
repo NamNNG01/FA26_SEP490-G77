@@ -10,7 +10,7 @@ import { GoogleSignInButton } from '../components/GoogleSignInButton';
 import { Icon } from '@/assets/icons';
 import { ROUTES } from '@/app/routes';
 import { safeRedirect, withRedirectTarget } from '@/hooks/useRequireAuth';
-import { PASSWORD_TOO_LONG_MESSAGE, isPasswordTooLong } from '@/services/password.service';
+import { getPasswordValidationError, PASSWORD_MIN_LENGTH } from '@/services/password.service';
 
 /**
  * Sign-up form. `?redirect=` (e.g. a guest buying a course) is where the new
@@ -63,13 +63,9 @@ export function RegisterPage() {
       setLoading(false);
       return;
     }
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters');
-      setLoading(false);
-      return;
-    }
-    if (isPasswordTooLong(password)) {
-      setError(PASSWORD_TOO_LONG_MESSAGE);
+    const passwordError = getPasswordValidationError(password);
+    if (passwordError) {
+      setError(passwordError);
       setLoading(false);
       return;
     }
@@ -144,8 +140,10 @@ export function RegisterPage() {
               label="Password"
               placeholder="Enter your password"
               type={showPwd ? 'text' : 'password'}
+              autoComplete="new-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              hint={`Required: ${PASSWORD_MIN_LENGTH}+ characters, an uppercase letter, a number, and a symbol.`}
               icon={<Icon.Lock className="w-4 h-4" />}
               suffix={
                 <button
