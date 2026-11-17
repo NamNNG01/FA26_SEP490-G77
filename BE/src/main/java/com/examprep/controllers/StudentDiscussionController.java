@@ -29,7 +29,6 @@ public class StudentDiscussionController {
     @Operation(summary = "DI-01: List Discussions")
     public ResponseEntity<ApiResponse<PageResponse<DiscussionItemDto>>> listDiscussions(
             @RequestParam(defaultValue = "PUBLIC") String scope,
-            @RequestParam(required = false) Long courseId,
             @RequestParam(required = false) String tag,
             @RequestParam(required = false) String approvalStatus,
             @RequestParam(required = false) String status,
@@ -40,9 +39,8 @@ public class StudentDiscussionController {
             @AuthenticationPrincipal UserPrincipal currentUser
     ) {
         Long userId = currentUser != null ? currentUser.getId() : null;
-        DiscussionListFilter filter = new DiscussionListFilter(
-                scope, courseId, tag, approvalStatus, status, search, sort, page, size);
-        Page<DiscussionItemDto> p = discussionService.listDiscussions(filter, userId);
+        Page<DiscussionItemDto> p = discussionService.listDiscussions(
+                scope, tag, approvalStatus, status, search, sort, page, size, userId);
         return ResponseEntity.ok(ApiResponse.success(PageResponse.of(p)));
     }
 

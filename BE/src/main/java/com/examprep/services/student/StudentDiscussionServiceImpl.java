@@ -97,8 +97,6 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
                 .isAuthor(isAuthor)
                 .isClosed(Boolean.TRUE.equals(d.getIsClosed()) || "CLOSED".equals(d.getStatus()))
                 .imageUrl(d.getImageUrl())
-                .courseId(d.getCourse() != null ? d.getCourse().getCourseId() : null)
-                .courseTitle(d.getCourse() != null ? d.getCourse().getTitle() : null)
                 .approvalStatus(d.getApprovalStatus())
                 .createdAt(d.getCreatedAt())
                 .lastCommentAt(d.getUpdatedAt())
@@ -107,39 +105,40 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<DiscussionItemDto> listDiscussions(String tag, String search, String sort, int page, int size, Long userId) {
-        return listDiscussions(DiscussionListFilter.publicFeed(tag, search, sort, page, size), userId);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public Page<DiscussionItemDto> listDiscussions(DiscussionListFilter filter, Long userId) {
-        String scope = normalizeScope(filter.scope());
-        String sort = normalizeSort(filter.sort());
-        String tagFilter = normalizeOptionalTag(filter.tag());
-        String approvalFilter = normalizeOptionalStatus(filter.approvalStatus(), "approvalStatus",
+    public Page<DiscussionItemDto> listDiscussions(
+            String scope,
+            String tag,
+            String approvalStatus,
+            String status,
+            String search,
+            String sort,
+            int page,
+            int size,
+            Long userId
+    ) {
+        String normalizedScope = normalizeScope(scope);
+        String normalizedSort = normalizeSort(sort);
+        String tagFilter = normalizeOptionalTag(tag);
+        String approvalFilter = normalizeOptionalStatus(approvalStatus, "approvalStatus",
                 Set.of(Discussion.APPROVAL_PENDING, Discussion.APPROVAL_APPROVED, Discussion.APPROVAL_REJECTED));
-        String statusFilter = normalizeOptionalStatus(filter.status(), "status",
+        String statusFilter = normalizeOptionalStatus(status, "status",
                 Set.of("OPEN", "CLOSED", "HIDDEN"));
-        validatePaging(filter.page(), filter.size());
+        validatePaging(page, size);
 
-        String searchTerm = filter.search() != null && !filter.search().isBlank()
-                ? filter.search().trim()
+        String searchTerm = search != null && !search.isBlank()
+                ? search.trim()
                 : "";
         if (searchTerm.length() > 100) searchTerm = searchTerm.substring(0, 100);
 
-        Pageable pageable = PageRequest.of(filter.page(), filter.size());
+        Pageable pageable = PageRequest.of(page, size);
         Page<Discussion> discussions;
-        if ("MINE".equals(scope)) {
+        if ("MINE".equals(normalizedScope)) {
             if (userId == null) throw new ForbiddenException("Authentication required");
             discussions = discussionRepository.findMineDiscussions(
-                    userId, filter.courseId(), tagFilter, approvalFilter, statusFilter, searchTerm, sort, pageable);
+                    userId, tagFilter, approvalFilter, statusFilter, searchTerm, normalizedSort, pageable);
         } else {
             // Public feed visibility is fixed: query filters must never expose pending, rejected or hidden posts.
-            discussions = filter.courseId() == null
-                    ? discussionRepository.findAllDiscussions(tagFilter, searchTerm, sort, pageable)
-                    : discussionRepository.findDiscussions(
-                            filter.courseId(), tagFilter, searchTerm, sort, pageable);
+            discussions = discussionRepository.findAllDiscussions(tagFilter, searchTerm, normalizedSort, pageable);
         }
         List<Long> discussionIds = discussions.getContent().stream().map(Discussion::getDiscussionId).toList();
         Set<Long> upvotedIds = (userId != null && !discussionIds.isEmpty())

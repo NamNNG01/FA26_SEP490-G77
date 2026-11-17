@@ -73,7 +73,6 @@ public interface DiscussionRepository extends JpaRepository<Discussion, Long> {
                     "JOIN FETCH d.user u " +
                     "LEFT JOIN FETCH d.course c " +
                     "WHERE d.user.userId = :userId " +
-                    "AND (:courseId IS NULL OR c.courseId = :courseId) " +
                     "AND (:tag IS NULL OR d.tag = :tag) " +
                     "AND (:approvalStatus IS NULL OR d.approvalStatus = :approvalStatus) " +
                     "AND (:status IS NULL OR d.status = :status) " +
@@ -86,7 +85,6 @@ public interface DiscussionRepository extends JpaRepository<Discussion, Long> {
                     "d.createdAt DESC",
             countQuery = "SELECT COUNT(d) FROM Discussion d " +
                     "WHERE d.user.userId = :userId " +
-                    "AND (:courseId IS NULL OR d.course.courseId = :courseId) " +
                     "AND (:tag IS NULL OR d.tag = :tag) " +
                     "AND (:approvalStatus IS NULL OR d.approvalStatus = :approvalStatus) " +
                     "AND (:status IS NULL OR d.status = :status) " +
@@ -95,7 +93,6 @@ public interface DiscussionRepository extends JpaRepository<Discussion, Long> {
                     "LOWER(d.content) LIKE LOWER(CONCAT('%', :search, '%')))")
     Page<Discussion> findMineDiscussions(
             @Param("userId") Long userId,
-            @Param("courseId") Long courseId,
             @Param("tag") String tag,
             @Param("approvalStatus") String approvalStatus,
             @Param("status") String status,
