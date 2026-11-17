@@ -12,6 +12,7 @@ import { QuestionPalette } from '@/components/common/QuestionPalette';
 import { UnsavedChangesModal } from '@/components/common/UnsavedChangesModal';
 import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
 import { QuestionAnswerInput } from '../components/QuestionAnswerInput';
+import { ResultPalette, type OutcomeMeta } from '../components/result/ResultNavigator';
 import {
   MIN_QUIZ_CARDS,
   buildQuestion,
@@ -26,6 +27,15 @@ import { FullScreenMessage, QuizHeader, QuizPrompt, SkippedNote, choiceRenderer 
 
 /** Questions offered by default on the setup screen (fewer when the deck has fewer cards). */
 const DEFAULT_QUESTIONS = 20;
+
+type TestOutcome = 'correct' | 'incorrect' | 'unanswered';
+
+/** Same cells as the exam result's navigator. */
+const PALETTE: OutcomeMeta<TestOutcome> = {
+  correct: { label: 'Correct', cell: 'bg-success-solid text-white' },
+  incorrect: { label: 'Incorrect', cell: 'bg-danger-solid text-white' },
+  unanswered: { label: 'Unanswered', cell: 'bg-content-subtle text-white' },
+};
 
 interface Loaded {
   title: string;
@@ -59,6 +69,8 @@ function TestScreen({ deckId }: { deckId: number }) {
   const [flagged, setFlagged] = useState<Set<number>>(() => new Set());
   const [current, setCurrent] = useState(0);
   const [confirmSubmit, setConfirmSubmit] = useState(false);
+  /** Result: the question last picked in the navigator (highlighted in the list). */
+  const [reviewed, setReviewed] = useState(0);
 
   const { blocker, leave } = useUnsavedChangesGuard(phase === 'taking');
 
@@ -139,6 +151,7 @@ function TestScreen({ deckId }: { deckId: number }) {
   const submit = () => {
     setConfirmSubmit(false);
     setCurrent(0);
+    setReviewed(0);
     setPhase('result');
   };
 
@@ -192,6 +205,14 @@ function TestScreen({ deckId }: { deckId: number }) {
 
   if (phase === 'result') {
     const percent = Math.round((score / questions.length) * 100);
+    const outcomes: TestOutcome[] = questions.map(q => {
+      const a = answers[q.question.questionId];
+      return pickedOf(a) == null ? 'unanswered' : isCorrect(q, a) ? 'correct' : 'incorrect';
+    });
+    const showQuestion = (index: number) => {
+      setReviewed(index);
+      document.getElementById(`test-question-${index + 1}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
     return (
       <div className="h-[100dvh] flex flex-col bg-surface-alt">
         <QuizHeader title={loaded.title} badge="Test result">
@@ -199,7 +220,8 @@ function TestScreen({ deckId }: { deckId: number }) {
             Back to deck
           </Button>
         </QuizHeader>
-        <main className="flex-1 overflow-y-auto p-[clamp(1rem,2.5vw,1.5rem)] md:px-[15%] space-y-4">
+        <main className="flex-1 overflow-y-auto p-[clamp(1rem,2.5vw,1.5rem)] space-y-4">
+          <div className="max-w-6xl mx-auto space-y-4">
           <div className="card p-5 flex flex-wrap items-center justify-between gap-4">
             <div>
               <p className="text-3xl font-bold text-content">{percent}%</p>
@@ -216,12 +238,21 @@ function TestScreen({ deckId }: { deckId: number }) {
               </Button>
             </div>
           </div>
-          <ol className="space-y-3">
+          {/* Navigator above the list on small screens (folded); beside it, sticky, from lg — as on the exam result. */}
+          <div className="grid lg:grid-cols-[minmax(0,1fr)_300px] gap-[clamp(1rem,2vw,1.5rem)] items-start">
+          <aside className="lg:order-2 min-w-0 lg:sticky lg:top-0">
+            <ResultPalette outcomes={outcomes} meta={PALETTE} current={reviewed} onSelect={showQuestion} />
+          </aside>
+          <ol className="lg:order-1 space-y-3 min-w-0">
             {questions.map((q, i) => {
               const a = answers[q.question.questionId] ?? null;
               const ok = isCorrect(q, a);
               return (
-                <li key={q.question.questionId} className="card p-4 space-y-3">
+                <li
+                  key={q.question.questionId}
+                  id={`test-question-${i + 1}`}
+                  className={`card p-4 space-y-3 scroll-mt-4 ${i === reviewed ? 'ring-2 ring-brand-600' : ''}`}
+                >
                   <div className="flex items-center gap-2">
                     <h2 className="text-sm font-semibold text-content uppercase tracking-wide">Question {i + 1}</h2>
                     <span className={`ml-auto text-xs font-semibold ${ok ? 'text-success-strong' : 'text-danger-strong'}`}>
@@ -240,6 +271,8 @@ function TestScreen({ deckId }: { deckId: number }) {
               );
             })}
           </ol>
+          </div>
+          </div>
         </main>
       </div>
     );
