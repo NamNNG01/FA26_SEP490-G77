@@ -111,13 +111,12 @@ public class StudentDiscussionController {
     @GetMapping("/tips")
     @Operation(summary = "DI-07: List Tips")
     public ResponseEntity<ApiResponse<PageResponse<DiscussionItemDto>>> listTips(
-            @RequestParam(required = false) Long courseId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @AuthenticationPrincipal UserPrincipal currentUser
     ) {
         Long userId = currentUser != null ? currentUser.getId() : null;
-        Page<DiscussionItemDto> p = discussionService.listTips(courseId, page, size, userId);
+        Page<DiscussionItemDto> p = discussionService.listTips(page, size, userId);
         return ResponseEntity.ok(ApiResponse.success(PageResponse.of(p)));
     }
 

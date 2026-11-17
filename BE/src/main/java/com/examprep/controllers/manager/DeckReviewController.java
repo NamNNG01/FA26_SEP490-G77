@@ -122,8 +122,12 @@ public class DeckReviewController {
         data.put("description", d.getDescription() != null ? d.getDescription() : "");
         data.put("mode", d.getMode());
         data.put("owner", Map.of("id", d.getUser().getUserId(), "fullName", d.getUser().getFullName()));
-        data.put("course", d.getCourse() != null ? Map.of("id", d.getCourse().getCourseId(), "title", d.getCourse().getTitle()) : Map.of());
-        data.put("module", d.getModule() != null ? Map.of("id", d.getModule().getModuleId(), "title", d.getModule().getTitle()) : Map.of());
+        data.put("contributorId", d.getUser().getUserId());
+        data.put("contributor", contributorSummary(d.getUser()));
+        data.put("courseId", d.getCourse() != null ? d.getCourse().getCourseId() : null);
+        data.put("course", courseSummary(d.getCourse()));
+        data.put("moduleId", d.getModule() != null ? d.getModule().getModuleId() : null);
+        data.put("module", moduleSummary(d.getModule()));
         data.put("reviewStatus", d.getReviewStatus());
         data.put("reviewNote", d.getReviewNote() != null ? d.getReviewNote() : "");
         data.put("resubmissionCount", d.getResubmissionCount() != null ? d.getResubmissionCount() : 0);
@@ -146,6 +150,21 @@ public class DeckReviewController {
             return "IMAGE";
         }
         return "TEXT";
+    }
+
+    private Map<String, Object> courseSummary(com.examprep.entities.Course course) {
+        if (course == null) return null;
+        return Map.of("courseId", course.getCourseId(), "title", course.getTitle());
+    }
+
+    private Map<String, Object> moduleSummary(com.examprep.entities.Module module) {
+        if (module == null) return null;
+        return Map.of("moduleId", module.getModuleId(), "title", module.getTitle());
+    }
+
+    private Map<String, Object> contributorSummary(User user) {
+        if (user == null) return null;
+        return Map.of("userId", user.getUserId(), "displayName", user.getFullName());
     }
 
     @PostMapping("/{id}/approve")

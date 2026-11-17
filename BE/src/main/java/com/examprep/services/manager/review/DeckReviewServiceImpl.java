@@ -108,10 +108,12 @@ public class DeckReviewServiceImpl implements DeckReviewService {
             map.put("description", d.getDescription() != null ? d.getDescription() : "");
             map.put("cardCount", cardCounts.getOrDefault(d.getDeckId(), 0L));
             map.put("owner", Map.of("id", d.getUser().getUserId(), "fullName", d.getUser().getFullName()));
-            map.put("course", d.getCourse() != null
-                    ? Map.of("id", d.getCourse().getCourseId(), "title", d.getCourse().getTitle()) : Map.of());
-            map.put("module", d.getModule() != null
-                    ? Map.of("id", d.getModule().getModuleId(), "title", d.getModule().getTitle()) : Map.of());
+            map.put("contributorId", d.getUser().getUserId());
+            map.put("contributor", contributorSummary(d.getUser()));
+            map.put("courseId", d.getCourse() != null ? d.getCourse().getCourseId() : null);
+            map.put("course", courseSummary(d.getCourse()));
+            map.put("moduleId", d.getModule() != null ? d.getModule().getModuleId() : null);
+            map.put("module", moduleSummary(d.getModule()));
             map.put("reviewStatus", d.getReviewStatus());
             map.put("resubmissionCount", d.getResubmissionCount() != null ? d.getResubmissionCount() : 0);
             map.put("submittedAt", d.getSubmittedAt() != null ? d.getSubmittedAt() : Instant.now());
@@ -257,5 +259,20 @@ public class DeckReviewServiceImpl implements DeckReviewService {
                 "reviewedAt", Instant.now(),
                 "version", savedDeck.getVersion()
         );
+    }
+
+    private Map<String, Object> courseSummary(Course course) {
+        if (course == null) return null;
+        return Map.of("courseId", course.getCourseId(), "title", course.getTitle());
+    }
+
+    private Map<String, Object> moduleSummary(com.examprep.entities.Module module) {
+        if (module == null) return null;
+        return Map.of("moduleId", module.getModuleId(), "title", module.getTitle());
+    }
+
+    private Map<String, Object> contributorSummary(User user) {
+        if (user == null) return null;
+        return Map.of("userId", user.getUserId(), "displayName", user.getFullName());
     }
 }

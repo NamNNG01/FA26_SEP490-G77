@@ -3,7 +3,6 @@ package com.examprep.services;
 import com.examprep.dto.discussion.DiscussionManagerDtos;
 import com.examprep.dto.student.DiscussionDetailDto;
 import com.examprep.dto.student.DiscussionItemDto;
-import com.examprep.dto.student.UpdateDiscussionRequestDto;
 import com.examprep.entities.*;
 import com.examprep.exceptions.BadRequestException;
 import com.examprep.exceptions.ForbiddenException;
@@ -30,42 +29,21 @@ public class ManagerDiscussionServiceImpl implements ManagerDiscussionService {
 
     private final DiscussionRepository discussionRepository;
     private final DiscussionCommentRepository commentRepository;
-    private final CourseRepository courseRepository;
     private final UserRepository userRepository;
-    private final CourseManagerRepository courseManagerRepository;
 
     /**
-     * Kiểm tra quyền quản lý khóa học của người dùng.
-     * Người dùng được phép thao tác nếu là ADMIN, hoặc là Manager chính của khóa học,
-     * hoặc được phân công làm Co-Manager trong bảng course_managers.
+     * Kiểm tra quyền quản lý discussion global của người dùng.
+     * Người dùng được phép thao tác nếu là ADMIN hoặc COURSE_MANAGER.
      */
-    private Course validateCourseManager(Long courseId, Long userId) {
+    private void validateManager(Long userId) {
         if (userId == null) {
             throw new ForbiddenException("Authentication required");
         }
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
-
-        Course course = courseRepository.findById(courseId)
-                .orElseThrow(() -> new ResourceNotFoundException("Course not found"));
-
-        // 1. Quản trị viên (ADMIN) có toàn quyền
-        if (User.ROLE_ADMIN.equals(user.getRoleName())) {
-            return course;
+        if (!User.ROLE_ADMIN.equals(user.getRoleName()) && !User.ROLE_COURSE_MANAGER.equals(user.getRoleName())) {
+            throw new ForbiddenException("Manager access required");
         }
-
-        // 2. Manager chính của khóa học
-        if (course.getManager() != null && course.getManager().getUserId().equals(userId)) {
-            return course;
-        }
-
-        // 3. Co-Manager được phân quyền
-        boolean isCoManager = courseManagerRepository.existsByCourse_CourseIdAndUser_UserId(courseId, userId);
-        if (isCoManager) {
-            return course;
-        }
-
-        throw new ForbiddenException("Course is outside your management scope");
     }
 
     /**
@@ -78,11 +56,6 @@ public class ManagerDiscussionServiceImpl implements ManagerDiscussionService {
         if (excerpt != null && excerpt.length() > 150) {
             excerpt = excerpt.substring(0, 150) + "...";
         }
-
-        DiscussionItemDto.CourseRefDto courseRef = new DiscussionItemDto.CourseRefDto(
-                d.getCourse().getCourseId(),
-                d.getCourse().getTitle()
-        );
 
         boolean isAuthor = currentUserId != null && author.getUserId().equals(currentUserId);
         boolean isClosed = Boolean.TRUE.equals(d.getIsClosed()) || "CLOSED".equalsIgnoreCase(d.getStatus());
@@ -102,9 +75,9 @@ public class ManagerDiscussionServiceImpl implements ManagerDiscussionService {
                 .isClosed(isClosed)
                 .imageUrl(d.getImageUrl())
                 .approvalStatus(d.getApprovalStatus())
+                .status(d.getStatus())
                 .createdAt(d.getCreatedAt())
                 .lastCommentAt(d.getUpdatedAt())
-                .course(courseRef)
                 .build();
     }
 
@@ -143,6 +116,7 @@ public class ManagerDiscussionServiceImpl implements ManagerDiscussionService {
                 .isClosed(isClosed)
                 .imageUrl(d.getImageUrl())
                 .approvalStatus(d.getApprovalStatus())
+                .status(d.getStatus())
                 .rejectionReason(d.getRejectionReason())
                 .createdAt(d.getCreatedAt())
                 .updatedAt(d.getUpdatedAt())
@@ -151,8 +125,8 @@ public class ManagerDiscussionServiceImpl implements ManagerDiscussionService {
     }
 
     @Override
-    public DiscussionDetailDto createDiscussion(Long courseId, DiscussionManagerDtos.CreateDiscussionRequest request, Long managerId) {
-        Course course = validateCourseManager(courseId, managerId);
+    public DiscussionDetailDto createDiscussion(DiscussionManagerDtos.CreateDiscussionRequest request, Long managerId) {
+        validateManager(managerId);
         User manager = userRepository.findById(managerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Manager not found"));
 
@@ -174,7 +148,6 @@ public class ManagerDiscussionServiceImpl implements ManagerDiscussionService {
 
         // Manager tạo thảo luận/thông báo thì tự động phê duyệt (APPROVED) và hiển thị ngay
         Discussion discussion = Discussion.builder()
-                .course(course)
                 .user(manager)
                 .title(request.getTitle().trim())
                 .content(request.getContent().trim())
@@ -198,8 +171,8 @@ public class ManagerDiscussionServiceImpl implements ManagerDiscussionService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<DiscussionItemDto> listDiscussions(Long courseId, String approvalStatus, String status, String search, int page, int size, Long managerId) {
-        validateCourseManager(courseId, managerId);
+    public Page<DiscussionItemDto> listDiscussions(String approvalStatus, String status, String search, int page, int size, Long managerId) {
+        validateManager(managerId);
 
         Pageable pageable = PageRequest.of(page, size);
 
@@ -211,15 +184,19 @@ public class ManagerDiscussionServiceImpl implements ManagerDiscussionService {
                 ? status.trim().toUpperCase()
                 : null;
 
-        String searchTerm = (search != null && !search.isBlank()) ? search.trim() : "";
+        String searchTerm = (search != null && !search.isBlank()) ? escapeLikePattern(search.trim()) : "";
         if (searchTerm.length() > 100) {
             searchTerm = searchTerm.substring(0, 100);
         }
 
         Page<Discussion> discussions = discussionRepository.findDiscussionsForManager(
-                courseId, normalizedApproval, normalizedStatus, searchTerm, pageable);
+                normalizedApproval, normalizedStatus, searchTerm, pageable);
 
         return discussions.map(d -> mapToItemDto(d, managerId));
+    }
+
+    private static String escapeLikePattern(String value) {
+        return value.replace("!", "!!").replace("%", "!%").replace("_", "!_");
     }
 
     @Override
@@ -228,7 +205,7 @@ public class ManagerDiscussionServiceImpl implements ManagerDiscussionService {
         Discussion discussion = discussionRepository.findById(discussionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Discussion not found"));
 
-        validateCourseManager(discussion.getCourse().getCourseId(), managerId);
+        validateManager(managerId);
 
         // Manager xem toàn bộ bình luận (kể cả bình luận đã bị ẩn)
         Pageable commentPageable = PageRequest.of(0, 50);
@@ -242,7 +219,7 @@ public class ManagerDiscussionServiceImpl implements ManagerDiscussionService {
         Discussion discussion = discussionRepository.findById(discussionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Discussion not found"));
 
-        Course course = validateCourseManager(discussion.getCourse().getCourseId(), managerId);
+        validateManager(managerId);
         User manager = userRepository.findById(managerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Manager not found"));
 
@@ -260,7 +237,7 @@ public class ManagerDiscussionServiceImpl implements ManagerDiscussionService {
         Discussion discussion = discussionRepository.findById(discussionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Discussion not found"));
 
-        validateCourseManager(discussion.getCourse().getCourseId(), managerId);
+        validateManager(managerId);
         User manager = userRepository.findById(managerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Manager not found"));
 
@@ -282,7 +259,11 @@ public class ManagerDiscussionServiceImpl implements ManagerDiscussionService {
         Discussion discussion = discussionRepository.findById(discussionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Discussion not found"));
 
-        validateCourseManager(discussion.getCourse().getCourseId(), managerId);
+        validateManager(managerId);
+        if (!Discussion.APPROVAL_APPROVED.equals(discussion.getApprovalStatus())
+                || "HIDDEN".equals(discussion.getStatus())) {
+            throw new BadRequestException("Only an approved, visible discussion can be pinned");
+        }
 
         if (request == null || request.getIsPinned() == null) {
             throw new BadRequestException("isPinned is required");
@@ -294,31 +275,38 @@ public class ManagerDiscussionServiceImpl implements ManagerDiscussionService {
     }
 
     @Override
-    public DiscussionItemDto updateClose(Long discussionId, UpdateDiscussionRequestDto request, Long managerId) {
+    public DiscussionItemDto hideDiscussion(Long discussionId, Long managerId) {
         Discussion discussion = discussionRepository.findById(discussionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Discussion not found"));
 
-        validateCourseManager(discussion.getCourse().getCourseId(), managerId);
+        validateManager(managerId);
 
-        if (request == null || request.getIsClosed() == null) {
-            throw new BadRequestException("isClosed is required");
+        if ("HIDDEN".equals(discussion.getStatus())) {
+            throw new BadRequestException("Discussion is already hidden");
         }
 
-        discussion.setIsClosed(request.getIsClosed());
-        discussion.setStatus(request.getIsClosed() ? "CLOSED" : "OPEN");
-
+        discussion.setStatus("HIDDEN");
+        discussion.setIsClosed(true);
+        discussion.setIsPinned(false);
         Discussion saved = discussionRepository.save(discussion);
         return mapToItemDto(saved, managerId);
     }
 
     @Override
-    public void deleteDiscussion(Long discussionId, Long managerId) {
+    public DiscussionItemDto restoreDiscussion(Long discussionId, Long managerId) {
         Discussion discussion = discussionRepository.findById(discussionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Discussion not found"));
 
-        validateCourseManager(discussion.getCourse().getCourseId(), managerId);
+        validateManager(managerId);
 
-        discussionRepository.delete(discussion);
+        if (!"HIDDEN".equals(discussion.getStatus())) {
+            throw new BadRequestException("Discussion is not hidden");
+        }
+
+        discussion.setStatus("OPEN");
+        discussion.setIsClosed(false);
+        Discussion saved = discussionRepository.save(discussion);
+        return mapToItemDto(saved, managerId);
     }
 
     @Override
@@ -326,7 +314,7 @@ public class ManagerDiscussionServiceImpl implements ManagerDiscussionService {
         DiscussionComment comment = commentRepository.findById(commentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Comment not found"));
 
-        validateCourseManager(comment.getDiscussion().getCourse().getCourseId(), managerId);
+        validateManager(managerId);
         User manager = userRepository.findById(managerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Manager not found"));
 
@@ -339,6 +327,7 @@ public class ManagerDiscussionServiceImpl implements ManagerDiscussionService {
             throw new BadRequestException("Status must be VISIBLE or HIDDEN");
         }
 
+        String previousStatus = comment.getStatus();
         comment.setStatus(targetStatus);
         if (DiscussionComment.STATUS_HIDDEN.equals(targetStatus)) {
             comment.setHiddenBy(manager);
@@ -351,6 +340,16 @@ public class ManagerDiscussionServiceImpl implements ManagerDiscussionService {
         }
 
         DiscussionComment saved = commentRepository.save(comment);
+        if (!targetStatus.equals(previousStatus)) {
+            int currentCount = comment.getDiscussion().getCommentCount() != null
+                    ? comment.getDiscussion().getCommentCount()
+                    : 0;
+            comment.getDiscussion().setCommentCount(
+                    DiscussionComment.STATUS_VISIBLE.equals(targetStatus)
+                            ? currentCount + 1
+                            : Math.max(0, currentCount - 1));
+            discussionRepository.save(comment.getDiscussion());
+        }
 
         User cAuthor = saved.getUser();
         String cName = Boolean.TRUE.equals(saved.getIsAnonymous()) ? "Học sinh ẩn danh" : cAuthor.getFullName();
@@ -374,13 +373,13 @@ public class ManagerDiscussionServiceImpl implements ManagerDiscussionService {
                 .orElseThrow(() -> new ResourceNotFoundException("Comment not found"));
 
         Discussion discussion = comment.getDiscussion();
-        validateCourseManager(discussion.getCourse().getCourseId(), managerId);
+        validateManager(managerId);
 
         commentRepository.delete(comment);
-
-        // Giảm commentCount trên bài thảo luận
-        int currentCount = discussion.getCommentCount() != null ? discussion.getCommentCount() : 0;
-        discussion.setCommentCount(Math.max(0, currentCount - 1));
+        if (DiscussionComment.STATUS_VISIBLE.equals(comment.getStatus())) {
+            int currentCount = discussion.getCommentCount() != null ? discussion.getCommentCount() : 0;
+            discussion.setCommentCount(Math.max(0, currentCount - 1));
+        }
         discussionRepository.save(discussion);
     }
 }
