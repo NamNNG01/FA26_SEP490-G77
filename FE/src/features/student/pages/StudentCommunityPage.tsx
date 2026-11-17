@@ -181,17 +181,17 @@ function CreateDiscussionModal({ open, courses, defaultTag, onClose, onCreated }
   };
   const submit = async (event: FormEvent) => {
     event.preventDefault(); setError(null);
-    if (!courseId || !title.trim() || !content.trim()) { setError('Choose a course and complete the title and content.'); return; }
+    if (!title.trim() || !content.trim()) { setError('Complete the title and content.'); return; }
     setBusy(true);
     try {
-      const item = await studentCommunityService.createDiscussion({ courseId: Number(courseId), tag, title: title.trim(), content: content.trim(), isAnonymous: anonymous, imageUrl: imageUrl || null });
+      const item = await studentCommunityService.createDiscussion({ courseId: courseId ? Number(courseId) : null, tag, title: title.trim(), content: content.trim(), isAnonymous: anonymous, imageUrl: imageUrl || null });
       onCreated(item); setTitle(''); setContent(''); setCourseId(''); setAnonymous(false); setImageUrl('');
     } catch (err) { setError(getApiErrorMessage(err, 'Could not create this post.')); }
     finally { setBusy(false); }
   };
   return <><Modal open={open} onClose={requestClose} title="Create a community post" size="lg" error={error && <Alert type="error" message={error} />} footer={<><Button variant="outline" onClick={requestClose} disabled={busy}>Cancel</Button><Button form="create-discussion-form" type="submit" loading={busy}>Publish</Button></>}>
     <form id="create-discussion-form" onSubmit={submit} className="space-y-4">
-      <SearchableSelect label="Course" value={courseId} options={[{ label: 'Choose an enrolled course', value: '' }, ...courses.map(course => ({ label: course.title, value: String(course.courseId) }))]} onChange={setCourseId} placeholder="Choose a course" searchPlaceholder="Search courses…" emptyText="No enrolled courses found" />
+      <SearchableSelect label="Course (optional)" value={courseId} options={[{ label: 'No course (general post)', value: '' }, ...courses.map(course => ({ label: course.title, value: String(course.courseId) }))]} onChange={setCourseId} placeholder="No course (general post)" searchPlaceholder="Search courses…" emptyText="No enrolled courses found" />
       <Select label="Post type" value={tag} options={[{ label: 'Question', value: 'question' }, { label: 'Tip', value: 'tip' }]} onChange={value => setTag(value as 'question' | 'tip')} />
       <Input label="Title" maxLength={200} value={title} onChange={event => setTitle(event.target.value)} placeholder="What would you like to discuss?" />
       <label className="flex flex-col gap-1.5 text-sm font-medium text-content-secondary">Details
@@ -200,7 +200,7 @@ function CreateDiscussionModal({ open, courses, defaultTag, onClose, onCreated }
       </label>
       <div className="space-y-1.5"><p className="text-sm font-medium text-content-secondary">Image attachment <span className="font-normal text-content-subtle">Optional</span></p><DiscussionImageAttachment imageUrl={imageUrl} onChange={setImageUrl} /></div>
       <Checkbox checked={anonymous} onChange={setAnonymous} label="Post anonymously" />
-      {!courses.length && <p className="text-sm text-warning">Enroll in an active course to create a post.</p>}
+      {!courses.length && <p className="text-sm text-content-subtle">No active course enrollments. You can still create a general post.</p>}
     </form>
   </Modal><ConfirmDialog open={confirmDiscard} onClose={() => setConfirmDiscard(false)} onConfirm={discard} tone="warning" title="Discard this post?" description="Your draft will be cleared and cannot be recovered." confirmLabel="Discard draft" /></>;
 }

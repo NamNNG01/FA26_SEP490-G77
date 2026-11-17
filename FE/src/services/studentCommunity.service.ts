@@ -102,7 +102,7 @@ export const studentCommunityService = {
     return res.data;
   },
 
-  async createDiscussion(body: { courseId: number; title: string; content: string; tag: DiscussionTag; isAnonymous: boolean; imageUrl?: string | null }) {
+  async createDiscussion(body: { courseId?: number | null; title: string; content: string; tag: DiscussionTag; isAnonymous: boolean; imageUrl?: string | null }) {
     const res = await api.post<ApiResponse<DiscussionItem>>('/student/discussions', body);
     return res.data;
   },
