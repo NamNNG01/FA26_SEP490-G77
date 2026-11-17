@@ -1,6 +1,6 @@
 import React from 'react';
 import { Icon } from '@/assets/icons';
-import type { AnswerResponse, AttemptQuestion } from '@/services/studentAttempt.service';
+import type { AnswerResponse, AttemptOption, AttemptQuestion } from '@/services/studentAttempt.service';
 import { normalizeBlank, type CorrectAnswer } from '@/services/studentPracticeExam.service';
 import { DiagramAnswerInput } from './DiagramAnswerInput';
 import { DiagramReview } from './result/DiagramReview';
@@ -75,6 +75,8 @@ interface InputProps {
    * the picked options green / red; any other type gets a green / red frame around the answer.
    */
   verdict?: boolean | null;
+  /** Choice questions: draws an option instead of its plain text (flashcard Learn / Test show a card back). */
+  renderOption?: (option: AttemptOption) => React.ReactNode;
 }
 
 export interface AnswerReveal {
@@ -98,12 +100,12 @@ export function QuestionAnswerInput(props: InputProps) {
 
 const CHOICE_TYPES: ReadonlySet<string> = new Set(['SINGLE_CHOICE', 'TRUE_FALSE', 'MULTIPLE_CHOICE']);
 
-function AnswerControl({ question, value, onChange, roomy, fill, readOnly, reveal, onEnter, verdict }: InputProps) {
+function AnswerControl({ question, value, onChange, roomy, fill, readOnly, reveal, onEnter, verdict, renderOption }: InputProps) {
   switch (question.questionType) {
     case 'SINGLE_CHOICE':
     case 'TRUE_FALSE':
     case 'MULTIPLE_CHOICE':
-      return <ChoiceInput question={question} value={value} onChange={onChange} reveal={reveal} verdict={verdict} />;
+      return <ChoiceInput question={question} value={value} onChange={onChange} reveal={reveal} verdict={verdict} renderOption={renderOption} />;
     case 'FILL_BLANK':
       return <FillBlankInput question={question} value={value} onChange={onChange} reveal={reveal} onEnter={onEnter} />;
     case 'MATCHING':
@@ -123,7 +125,7 @@ function AnswerControl({ question, value, onChange, roomy, fill, readOnly, revea
   }
 }
 
-function ChoiceInput({ question, value, onChange, reveal, verdict }: InputProps) {
+function ChoiceInput({ question, value, onChange, reveal, verdict, renderOption }: InputProps) {
   const multi = question.questionType === 'MULTIPLE_CHOICE';
   const selected = new Set(value?.selectedOptionIds ?? []);
   const correct = reveal ? new Set(reveal.correctOptionIds) : null;
@@ -201,7 +203,11 @@ function ChoiceInput({ question, value, onChange, reveal, verdict }: InputProps)
                 optionLetter(i)
               )}
             </span>
-            <span className="flex-1 text-base leading-relaxed text-content-secondary break-words">{opt.optionText}</span>
+            {renderOption ? (
+              <span className="flex-1 min-w-0">{renderOption(opt)}</span>
+            ) : (
+              <span className="flex-1 text-base leading-relaxed text-content-secondary break-words">{opt.optionText}</span>
+            )}
             {judged && isOn && (
               <span className={`flex-shrink-0 self-center text-xs font-semibold ${verdict ? 'text-success-strong' : 'text-danger-strong'}`}>
                 {verdict ? 'Correct' : 'Wrong'}

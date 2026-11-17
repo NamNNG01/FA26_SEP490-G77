@@ -33,6 +33,8 @@ import {
   StudentSubscriptionPage,
   StudentFlashcardsPage,
   StudentDeckStudyPage,
+  StudentDeckLearnPage,
+  StudentDeckTestPage,
   StudentExamDetailPage,
   StudentTakeExamPage,
   StudentExamResultPage,
@@ -288,6 +290,8 @@ function AppRoutes() {
 
       <Route element={<RequireRole roles={ROLE_STUDENT} />}>
         <Route path={ROUTES.studentExam} element={<StudentTakeExamPage />} />
+        <Route path={ROUTES.studentFlashcardLearn} element={<StudentDeckLearnPage />} />
+        <Route path={ROUTES.studentFlashcardTest} element={<StudentDeckTestPage />} />
       </Route>
 
       <Route element={<DashboardLayout />}>
