@@ -443,8 +443,9 @@ export const studentDeckService = {
   },
 
   /** cardLimit 0 = every card, in the BE's study order (new, learning, known). */
-  async startSession(deckId: number | string, cardLimit = 0): Promise<StudySessionView> {
-    const res = await api.post<ApiResponse<StudySessionView>>(`/student/decks/${deckId}/study-sessions`, { mode: 'LEARN', cardLimit });
+  /** `mode`: LEARN = flipping cards, PRACTICE = the multiple-choice Learn screen. */
+  async startSession(deckId: number | string, cardLimit = 0, mode: 'LEARN' | 'PRACTICE' = 'LEARN'): Promise<StudySessionView> {
+    const res = await api.post<ApiResponse<StudySessionView>>(`/student/decks/${deckId}/study-sessions`, { mode, cardLimit });
     if (!res.data || !Array.isArray(res.data.cards)) throw new Error('Study session response is invalid.');
     return res.data;
   },
