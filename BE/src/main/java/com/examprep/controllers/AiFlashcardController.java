@@ -30,6 +30,7 @@ import org.springframework.web.multipart.MultipartFile;
 @PreAuthorize("hasAnyRole('STUDENT','COURSE_MANAGER')")
 @Tag(name = "AI Flashcards")
 public class AiFlashcardController {
+    private final com.examprep.services.PlanEntitlementService entitlements;
     private final AiFlashcardService service;
 
     /** {@code text} XOR {@code file}; query parameters are accepted too, so no strict {@code consumes}. */
@@ -44,6 +45,7 @@ public class AiFlashcardController {
             @RequestParam(name = "style", required = false, defaultValue = "QA") String style,
             @RequestParam(name = "focusTopic", required = false) String focusTopic,
             @RequestParam(name = "courseId", required = false) Long courseId) {
+        if ("STUDENT".equals(user.getRole())) entitlements.require(user.getId(), "AI_FLASHCARD_GENERATION");
         GenerateAccepted accepted = service.generate(user, file, text, numberOfCards, language, style, focusTopic, courseId);
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(ApiResponse.success(accepted, "Đã tiếp nhận yêu cầu"));
     }

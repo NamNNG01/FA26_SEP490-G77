@@ -50,6 +50,27 @@ public class PasswordResetMailService {
         }
     }
 
+    @Value("${app.frontend.base-url:http://localhost:3000}")
+    private String frontendBaseUrl;
+
+    public boolean sendNewAccountEmail(String email, String password) {
+        if (!mailEnabled) return false;
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, false, "UTF-8");
+            helper.setFrom(mailFrom, mailFromName);
+            helper.setTo(email);
+            helper.setSubject("[ExamPrep] Your account");
+            helper.setText("Sign in at " + frontendBaseUrl.replaceAll("/+$", "") + "/login\nEmail: " + email
+                    + "\nPassword: " + password + "\nPlease change your password after signing in.", false);
+            mailSender.send(message);
+            return true;
+        } catch (Exception ex) {
+            log.warn("Account email delivery failed");
+            return false;
+        }
+    }
+
     private String buildTextBody(String displayName, String resetLink, long expiresMinutes) {
         String name = displayName == null || displayName.isBlank() ? "there" : displayName.trim();
         return "Hi " + name + ",\n\n"

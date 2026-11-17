@@ -20,5 +20,10 @@ public final class AdminUserRequests {
      * UM-04 body: activate or deactivate an account. Deactivating revokes
      * every active session; admins may not deactivate themselves.
      */
+    public record Create(@NotBlank @Size(max = 100) String fullName,
+                         @NotBlank @Email @Size(max = 150) String email,
+                         @NotBlank String role) {}
+    public record Subscription(Long planId, java.time.LocalDate endDate) {}
+
     public record StatusUpdate(@NotBlank String status) {}
 }

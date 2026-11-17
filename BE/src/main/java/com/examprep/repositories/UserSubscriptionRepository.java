@@ -14,6 +14,9 @@ import java.util.Optional;
 @Repository
 public interface UserSubscriptionRepository extends JpaRepository<UserSubscription, Long> {
 
+    @Query("SELECT s FROM UserSubscription s JOIN FETCH s.plan WHERE s.user.userId IN :ids ORDER BY s.endDate DESC, s.subscriptionId DESC")
+    List<UserSubscription> findLatestForUsers(@Param("ids") Collection<Long> ids);
+
     @Query("SELECT s FROM UserSubscription s JOIN FETCH s.plan WHERE s.user.userId = :userId AND s.status = 'ACTIVE' AND s.startDate <= :now AND s.endDate >= :now")
     Optional<UserSubscription> findActiveSubscriptionByUser(@Param("userId") Long userId, @Param("now") Instant now);
 

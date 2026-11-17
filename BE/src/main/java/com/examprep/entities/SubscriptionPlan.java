@@ -48,7 +48,8 @@ public class SubscriptionPlan implements Serializable {
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "feature_keys", columnDefinition = "JSONB")
-    private String featureKeysJson;
+    @Builder.Default
+    private String featureKeysJson = "[]";
 
     @Builder.Default
     @Column(name = "is_active", nullable = false)

@@ -28,7 +28,7 @@ public class StudentSubscriptionController {
         return ResponseEntity.ok(ApiResponse.success(service.plans(user == null ? null : user.getId())));
     }
 
-    @GetMapping("/current")
+    @GetMapping({"", "/current"})
     @Operation(summary = "SB-02: Get current subscription")
     public ResponseEntity<ApiResponse<PaymentResponses.Current>> current(@AuthenticationPrincipal UserPrincipal user) {
         return ResponseEntity.ok(ApiResponse.success(service.current(user.getId())));

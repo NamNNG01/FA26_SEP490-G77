@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/v1/student")
 @RequiredArgsConstructor
 public class StudentAiController {
+    private final com.examprep.services.PlanEntitlementService entitlements;
     private final StudentAiService service;
 
     @PostMapping("/attempts/{attemptId}/explanations:batch")
@@ -28,6 +29,7 @@ public class StudentAiController {
     @PostMapping("/attempts/{attemptId}/grading")
     public ResponseEntity<ApiResponse<StudentAiResponse.Grading>> grade(@AuthenticationPrincipal UserPrincipal user,
             @PathVariable Long attemptId, @Valid @RequestBody(required = false) StudentAiRequests.Grading request) {
+        entitlements.require(user.getId(), "AI_ESSAY_GRADING");
         return ResponseEntity.status(HttpStatus.ACCEPTED)
                 .body(ApiResponse.success(service.grade(user, attemptId, request), "Grading queued"));
     }

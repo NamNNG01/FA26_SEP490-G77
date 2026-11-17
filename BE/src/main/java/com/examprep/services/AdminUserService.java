@@ -39,4 +39,6 @@ public interface AdminUserService {
      * are logged by the auth service, never surfaced.
      */
     void resetPassword(Long id);
+    AdminUserResponse create(AdminUserRequests.Create request);
+    com.examprep.dto.AdminSubscription setSubscription(Long id, AdminUserRequests.Subscription request);
 }
