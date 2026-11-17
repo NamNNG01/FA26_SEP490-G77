@@ -293,7 +293,7 @@ export function QuestionForm({
             htmlFor={`${q.key}-content`}
             className="text-sm font-medium text-content-secondary"
           >
-            Question Text *
+            {readOnly ? "Question Text" : "Question Text *"}
           </label>
           <div className="flex items-center gap-2">
           {!readOnly && <InsertImageButton value={q.content} onChange={(content) => set({ content })} />}
@@ -655,7 +655,7 @@ function ChoiceAnswers({
       </div>
       {error && <p className="text-xs text-danger mt-1.5">{error}</p>}
       <p className="text-xs font-medium text-success mt-2">
-        Correct answer:{" "}
+        {correct.length > 1 ? 'Correct answers:' : 'Correct answer:'}{" "}
         {correct.length ? (
           correct.join(", ")
         ) : (
@@ -742,10 +742,10 @@ function MatchingAnswers({
         ))}
       </div>
       {error && <p className="text-xs text-danger mt-1.5">{error}</p>}
-      <p className="text-xs text-content-subtle mt-2">
+      {!readOnly && <p className="text-xs text-content-subtle mt-2">
         Students see the right-hand items shuffled and match each one to its
         item.
-      </p>
+      </p>}
     </div>
   );
 }
@@ -858,7 +858,7 @@ function OrderingAnswers({
   return (
     <div>
       <SectionHeader
-        label="Correct Order (drag to rearrange)"
+        label={readOnly ? 'Correct Order' : 'Correct Order (drag to rearrange)'}
           action={
             !readOnly &&
           <Button

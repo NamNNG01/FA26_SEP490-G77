@@ -102,12 +102,18 @@ export function Pagination({ page, total, perPage = DEFAULT_PAGE_SIZE, onChange,
   const totalPages = Math.max(1, Math.ceil(total / perPage));
   const start = total === 0 ? 0 : (page - 1) * perPage + 1;
   const end = Math.min(page * perPage, total);
+  const singularUnit = unit.endsWith('ies')
+    ? unit.slice(0, -3) + 'y'
+    : unit.endsWith('s') && !unit.endsWith('ss')
+      ? unit.slice(0, -1)
+      : unit;
+  const displayedUnit = total === 1 ? singularUnit : unit;
 
   return (
     <nav aria-label="Pagination" className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 px-3 py-3 sm:justify-between sm:px-4">
       <p className="order-2 w-full text-center text-xs text-content-soft sm:order-1 sm:w-auto sm:text-left sm:text-sm">
         Showing <span className="font-medium text-content-secondary">{start}&ndash;{end}</span> of{' '}
-        <span className="font-medium text-content-secondary">{total.toLocaleString()}</span> {unit}
+        <span className="font-medium text-content-secondary">{total.toLocaleString()}</span> {displayedUnit}
       </p>
 
       {totalPages > 1 && (
