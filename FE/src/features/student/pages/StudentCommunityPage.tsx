@@ -100,7 +100,7 @@ function DiscussionList() {
         <Input className="w-full sm:w-72" aria-label={tab === 'My Discussions' ? 'Search my discussions' : 'Search discussions'} placeholder={tab === 'My Discussions' ? 'Search my posts…' : 'Search discussions…'} maxLength={100} value={search} onChange={event => { setSearch(event.target.value); setPage(0); }} />
         {tab === 'My Discussions' && <>
           <Select aria-label="Filter by tag" className="w-full sm:w-48" value={tagFilter} options={[{ label: 'All tags', value: 'ALL' }, { label: 'Questions', value: 'question' }, { label: 'Tips', value: 'tip' }, { label: 'Announcements', value: 'announcement' }]} onChange={value => { setTagFilter(value as DiscussionTag | 'ALL'); setPage(0); }} />
-          <Select aria-label="Filter by review status" className="w-full sm:w-52" value={approvalFilter} options={[{ label: 'All review statuses', value: 'ALL' }, { label: 'Pending approval', value: 'PENDING' }, { label: 'Published', value: 'APPROVED' }, { label: 'Rejected', value: 'REJECTED' }]} onChange={value => { setApprovalFilter(value as DiscussionApprovalFilter); setPage(0); }} />
+          <Select aria-label="Filter by review status" className="w-full sm:w-52" value={approvalFilter} options={[{ label: 'All review statuses', value: 'ALL' }, { label: 'Pending approval', value: 'PENDING' }, { label: 'Approved', value: 'APPROVED' }, { label: 'Rejected', value: 'REJECTED' }]} onChange={value => { setApprovalFilter(value as DiscussionApprovalFilter); setPage(0); }} />
           <Select aria-label="Filter by post status" className="w-full sm:w-48" value={contentStatusFilter} options={[{ label: 'All post statuses', value: 'ALL' }, { label: 'Open', value: 'OPEN' }, { label: 'Closed', value: 'CLOSED' }, { label: 'Hidden', value: 'HIDDEN' }]} onChange={value => { setContentStatusFilter(value as DiscussionContentStatus); setPage(0); }} />
         </>}
         <Select aria-label="Sort discussions" className="w-full sm:w-52" value={sort} options={[{ label: 'Latest', value: 'latest' }, { label: 'Most commented', value: 'mostCommented' }, { label: 'Most upvoted', value: 'mostUpvoted' }]} onChange={value => { setSort(value as DiscussionSort); setPage(0); }} />
@@ -123,8 +123,9 @@ function DiscussionCard({ item, onOpen, onUpvote, voting, showReviewStatus = fal
         <div className="mb-2 flex flex-wrap items-center gap-2">
           {item.isPinned && <Badge variant="warning">Pinned</Badge>}
           <Badge variant={item.tag === 'tip' ? 'success' : item.tag === 'announcement' ? 'warning' : 'info'}>{item.tag === 'tip' ? 'Tip' : item.tag === 'announcement' ? 'Announcement' : 'Question'}</Badge>
-          {showReviewStatus && item.approvalStatus && <Badge variant={item.approvalStatus === 'REJECTED' ? 'danger' : item.approvalStatus === 'PENDING' ? 'warning' : 'success'}>{item.approvalStatus === 'PENDING' ? 'Pending approval' : item.approvalStatus === 'APPROVED' ? 'Published' : 'Rejected'}</Badge>}
-          {showReviewStatus && item.status === 'HIDDEN' && <Badge variant="danger">Hidden</Badge>}
+          {showReviewStatus && item.status === 'HIDDEN'
+            ? <Badge variant="danger">Hidden</Badge>
+            : showReviewStatus && item.approvalStatus && <Badge variant={item.approvalStatus === 'REJECTED' ? 'danger' : item.approvalStatus === 'PENDING' ? 'warning' : 'success'}>{item.approvalStatus === 'PENDING' ? 'Pending approval' : item.approvalStatus === 'APPROVED' ? 'Approved' : 'Rejected'}</Badge>}
           {item.isClosed && <Badge variant="default">Closed</Badge>}
         </div>
         <button type="button" onClick={onOpen} className="text-left text-base font-semibold leading-snug text-content hover:text-primary hover:underline">{item.title}</button>
@@ -251,8 +252,8 @@ function DiscussionDetail({ discussionId }: { discussionId: string }) {
   return <div className={`${STUDENT_PAGE_CLASS} space-y-5`}>
     <Button variant="ghost" onClick={() => navigate(ROUTES.studentDiscussions)}>← Community</Button>
     <article className="card space-y-4 p-5 sm:p-6">
-      <div className="flex flex-wrap items-center gap-2"><Badge variant={item.tag === 'tip' ? 'success' : item.tag === 'announcement' ? 'warning' : 'info'}>{item.tag === 'tip' ? 'Tip' : item.tag === 'announcement' ? 'Announcement' : 'Question'}</Badge>{item.approvalStatus === 'PENDING' && <Badge variant="warning">Pending approval</Badge>}{item.approvalStatus === 'APPROVED' && <Badge variant="success">Published</Badge>}{item.approvalStatus === 'REJECTED' && <Badge variant="danger">Rejected</Badge>}{item.status === 'HIDDEN' && <Badge variant="danger">Hidden</Badge>}{item.isPinned && <Badge variant="warning">Pinned</Badge>}{item.isClosed && <Badge>Closed</Badge>}</div>
-      {item.approvalStatus === 'PENDING' && <Alert type="info" message="This post is waiting for a manager to approve it. It is not visible to other students yet." />}
+      <div className="flex flex-wrap items-center gap-2"><Badge variant={item.tag === 'tip' ? 'success' : item.tag === 'announcement' ? 'warning' : 'info'}>{item.tag === 'tip' ? 'Tip' : item.tag === 'announcement' ? 'Announcement' : 'Question'}</Badge>{item.status === 'HIDDEN' ? <Badge variant="danger">Hidden</Badge> : <>{item.approvalStatus === 'PENDING' && <Badge variant="warning">Pending approval</Badge>}{item.approvalStatus === 'APPROVED' && <Badge variant="success">Approved</Badge>}{item.approvalStatus === 'REJECTED' && <Badge variant="danger">Rejected</Badge>}</>}{item.isPinned && <Badge variant="warning">Pinned</Badge>}{item.isClosed && <Badge>Closed</Badge>}</div>
+      {item.approvalStatus === 'PENDING' && item.status !== 'HIDDEN' && <Alert type="info" message="This post is waiting for a manager to approve it. It is not visible to other students yet." />}
       {item.approvalStatus === 'REJECTED' && item.rejectionReason && <Alert type="error" message={`This post was not approved: ${item.rejectionReason}`} />}
       <h1 className="text-2xl font-bold text-content">{item.title}</h1>
       <div className="flex items-center gap-3">
