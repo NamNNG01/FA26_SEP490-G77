@@ -8,7 +8,7 @@ import {
   useLocation,
   useSearchParams,
 } from 'react-router';
-import { useAuth, landingPathForRole } from '@/auth/authContext';
+import { useAuth, landingPathForRole, AFTER_AUTH_STATE } from '@/auth/authContext';
 import { RequireRole, ROLE_ADMIN, ROLE_MANAGER, ROLE_STUDENT, ROLE_COURSE_MANAGER_ONLY } from '@/auth/RequireRole';
 import { ROUTES } from '@/app/routes';
 import { safeRedirect } from '@/hooks/useRequireAuth';
@@ -16,7 +16,6 @@ import { AuthLayout } from '@/layouts/AuthLayout';
 import { DashboardLayout } from '@/layouts/DashboardLayout';
 import { PublicLayout } from '@/layouts/PublicLayout';
 import { LoadingScreen } from '@/components/LoadingScreen';
-import { PlanFeatureRequiredPrompt } from '@/components/common/PlanFeatureRequiredPrompt';
 import { Role } from '@/utils/permissions';
 
 import { LoginPage } from '@/features/auth';
@@ -147,7 +146,8 @@ function publicRoutes(home: React.ReactNode = <LandingPage />, withCatalog = tru
 function LoggedInLoginRedirect() {
   const [searchParams] = useSearchParams();
   const landing = useLandingPath();
-  return <Navigate to={safeRedirect(searchParams.get('redirect')) ?? landing} replace />;
+  const redirect = safeRedirect(searchParams.get('redirect'));
+  return <Navigate to={redirect ?? landing} replace state={redirect ? undefined : AFTER_AUTH_STATE} />;
 }
 
 /**
@@ -247,7 +247,6 @@ function AppRoutes() {
   //     exactly once and persists across route changes.
   return (
     <>
-    {isStudent && <PlanFeatureRequiredPrompt />}
     <Routes>
       {publicRoutes(<SignedInHome isEntry={location.key === entryKey} />, !isStudent)}
 

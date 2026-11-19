@@ -3,7 +3,6 @@ import { config } from '@/config';
 import { clearAuth, getAccessToken, getRefreshToken, saveTokens } from '@/auth/storage';
 import { emitSessionExpired } from '@/auth/sessionExpired';
 import { serverErrorMessage } from '@/utils/apiError';
-import { emitPlanFeatureRequired, planFeatureRequiredKey, planFeatureRequiredMessage } from './planFeatureRequired';
 
 export const apiClient = axios.create({
   baseURL: config.apiBaseUrl,
@@ -138,15 +137,6 @@ apiClient.interceptors.response.use(
     const serverMessage = serverErrorMessage(error.response?.data);
     if (typeof serverMessage === 'string' && serverMessage.trim()) {
       error.message = serverMessage;
-    }
-
-    // The plan lacks this capability: readable text for every caller, plus the upgrade prompt.
-    const lockedFeature = planFeatureRequiredKey(error);
-    if (lockedFeature !== null) {
-      const message = planFeatureRequiredMessage(lockedFeature);
-      error.message = message;
-      if (error.response?.data && typeof error.response.data === 'object') error.response.data.message = message;
-      emitPlanFeatureRequired(lockedFeature);
     }
 
     return Promise.reject(error);

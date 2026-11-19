@@ -7,6 +7,7 @@ import { useRequireAuth } from '@/hooks/useRequireAuth';
 import { Button } from '@/components/ui/Button';
 import { Role } from '@/utils/permissions';
 import { getApiErrorMessage } from '@/utils/apiError';
+import { planLines } from '@/utils/planDescription';
 import { formatVnd } from '@/services/payment.service';
 import {
   adminSubscriptionPlanService,
@@ -108,15 +109,13 @@ function PricingCard({
   onChoose: () => void;
 }) {
   const free = plan.price <= 0;
-  const features = plan.features.length > 0 ? plan.features : [`Full access for ${plan.durationDays} days`];
+  const lines = planLines(plan);
+  const features = lines.length > 0 ? lines : [`Full access for ${plan.durationDays} days`];
 
   return (
     <div className="card flex h-full flex-col gap-5 p-6">
       <div>
         <h2 className="text-lg font-semibold text-content">{plan.planName}</h2>
-        {plan.description && (
-          <p className="mt-1 text-sm leading-relaxed text-content-soft line-clamp-2">{plan.description}</p>
-        )}
       </div>
 
       <div>
@@ -129,8 +128,8 @@ function PricingCard({
       </div>
 
       <ul className="flex-1 space-y-2">
-        {features.map((feature) => (
-          <li key={feature} className="flex items-start gap-2 text-sm text-content-secondary">
+        {features.map((feature, index) => (
+          <li key={index}className="flex items-start gap-2 text-sm text-content-secondary">
             <Icon.Check className="mt-0.5 h-4 w-4 shrink-0 text-success" />
             <span>{feature}</span>
           </li>

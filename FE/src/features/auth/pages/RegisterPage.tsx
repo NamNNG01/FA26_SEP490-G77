@@ -4,7 +4,7 @@ import { isAxiosError } from 'axios';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Alert } from '@/components/ui/Alert';
-import { useAuth, landingPathForRole } from '@/auth/authContext';
+import { useAuth, landingPathForRole, AFTER_AUTH_STATE } from '@/auth/authContext';
 import { AuthPageHeader } from '../components/AuthPageHeader';
 import { GoogleSignInButton } from '../components/GoogleSignInButton';
 import { Icon } from '@/assets/icons';
@@ -90,7 +90,7 @@ export function RegisterPage() {
       // Backend register always creates STUDENT accounts; use the fresh
       // user returned by register() rather than stale context state.
       const registeredUser = await register(trimmedEmail, password, fullName);
-      navigate(redirectTo ?? landingPathForRole(registeredUser.role), { replace: true });
+      navigate(redirectTo ?? landingPathForRole(registeredUser.role), { replace: true, state: AFTER_AUTH_STATE });
     } catch (err: unknown) {
       // 409 = the backend hit a database conflict while saving the account
       // (GlobalExceptionHandler → DataIntegrityViolationException); its
@@ -124,6 +124,9 @@ export function RegisterPage() {
             <Input
               label="Full name"
               placeholder="Enter your name"
+              id="register-name"
+              name="name"
+              autoComplete="name"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
               icon={<Icon.User className="w-4 h-4" />}
@@ -131,6 +134,9 @@ export function RegisterPage() {
             <Input
               label="Email"
               placeholder="Enter your email"
+              id="register-email"
+              name="email"
+              autoComplete="username"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -140,6 +146,8 @@ export function RegisterPage() {
               label="Password"
               placeholder="Enter your password"
               type={showPwd ? 'text' : 'password'}
+              id="register-password"
+              name="password"
               autoComplete="new-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -160,6 +168,9 @@ export function RegisterPage() {
               label="Confirm password"
               placeholder="Confirm your password"
               type={showConfirm ? 'text' : 'password'}
+              id="register-confirm-password"
+              name="confirmPassword"
+              autoComplete="new-password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               icon={<Icon.Lock className="w-4 h-4" />}

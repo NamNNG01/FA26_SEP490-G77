@@ -4,6 +4,23 @@
 /* Class-based dark mode (toggled on <html> by ThemeProvider). */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* Tailwind v4's preflight gives <button> the default arrow cursor (v3 gave it a pointer), so
+   every bare button — cards, menu items, toggles, accordions — looked unclickable. Restore the
+   pointer for enabled controls; in the base layer, so cursor-* utilities still win. */
+@layer base {
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']),
+  summary,
+  select:not(:disabled),
+  input[type='checkbox']:not(:disabled),
+  input[type='radio']:not(:disabled),
+  input[type='file']:not(:disabled),
+  label:has(> input[type='checkbox']:not(:disabled)),
+  label:has(> input[type='radio']:not(:disabled)) {
+    cursor: pointer;
+  }
+}
+
 @theme inline {
   --color-primary: #F27124;
   --color-primary-hover: #D95F14;

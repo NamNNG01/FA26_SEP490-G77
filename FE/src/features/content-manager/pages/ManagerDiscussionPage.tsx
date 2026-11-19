@@ -22,7 +22,7 @@ import { getApiErrorMessage } from '@/utils/apiError';
 const PAGE_SIZE = 20;
 const APPROVAL_OPTIONS = [
   { label: 'Pending approval', value: 'PENDING' },
-  { label: 'Published', value: 'APPROVED' },
+  { label: 'Approved', value: 'APPROVED' },
   { label: 'Rejected', value: 'REJECTED' },
   { label: 'All approval statuses', value: 'ALL' },
 ];
@@ -32,7 +32,7 @@ const POST_STATUS_OPTIONS = [
   { label: 'Closed', value: 'CLOSED' },
   { label: 'Hidden', value: 'HIDDEN' },
 ];
-const approvalLabel = (status?: string) => ({ PENDING: 'Pending approval', APPROVED: 'Published', REJECTED: 'Rejected' }[status ?? ''] ?? status ?? '—');
+const approvalLabel = (status?: string) => ({ PENDING: 'Pending approval', APPROVED: 'Approved', REJECTED: 'Rejected' }[status ?? ''] ?? status ?? '—');
 const tagLabel = (tag: string) => ({ QUESTION: 'Question', question: 'Question', TIP: 'Tip', tip: 'Tip', ANNOUNCEMENT: 'Announcement', announcement: 'Announcement', GENERAL: 'General', general: 'General' }[tag] ?? tag);
 const dateLabel = (value?: string | null) => value ? new Date(value).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '—';
 
@@ -108,7 +108,7 @@ export function ManagerDiscussionPage() {
     }
   };
 
-  const approve = () => void runAction('Discussion approved and published.', () => managerDiscussionService.approve(detail!.discussionId));
+  const approve = () => void runAction('Discussion approved.', () => managerDiscussionService.approve(detail!.discussionId));
   const reject = async () => {
     if (!detail || rejectReason.trim().length < 5) return;
     const succeeded = await runAction('Discussion rejected.', () => managerDiscussionService.reject(detail.discussionId, rejectReason.trim()));
@@ -201,7 +201,7 @@ export function ManagerDiscussionPage() {
       {items.map(item => <article key={item.discussionId} className="card p-4 transition-colors hover:border-brand-300 hover:bg-surface-hover">
         <div className="flex flex-wrap items-start gap-4">
           <button type="button" onClick={() => void openDetail(item)} className="min-w-0 flex-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600">
-            <div className="mb-2 flex flex-wrap items-center gap-2"><Badge variant={item.approvalStatus === 'PENDING' ? 'warning' : item.approvalStatus === 'REJECTED' ? 'danger' : 'success'}>{approvalLabel(item.approvalStatus)}</Badge><Badge>{tagLabel(item.tag)}</Badge>{item.isPinned && <Badge variant="warning">Pinned</Badge>}{item.isClosed && <Badge>Closed</Badge>}</div>
+            <div className="mb-2 flex flex-wrap items-center gap-2">{item.status === 'HIDDEN' ? <Badge variant="danger">Hidden</Badge> : <Badge variant={item.approvalStatus === 'PENDING' ? 'warning' : item.approvalStatus === 'REJECTED' ? 'danger' : 'success'}>{approvalLabel(item.approvalStatus)}</Badge>}<Badge>{tagLabel(item.tag)}</Badge>{item.isPinned && <Badge variant="warning">Pinned</Badge>}{item.isClosed && <Badge>Closed</Badge>}</div>
             <h2 className="font-semibold text-content">{item.title}</h2>
             <p className="mt-1 line-clamp-2 whitespace-pre-line text-sm text-content-secondary">{item.excerpt}</p>
             <p className="mt-3 text-xs text-content-subtle">{item.author.displayName} · {dateLabel(item.createdAt)} · {item.commentCount} replies</p>
@@ -226,7 +226,7 @@ export function ManagerDiscussionPage() {
       {detail.status === 'HIDDEN' ? <Button onClick={restoreDiscussion} disabled={busy}>Restore</Button> : <Button variant="danger" onClick={hideDiscussion} disabled={busy}>Hide</Button>}
     </>}>
       {!detail ? <div className="py-12 text-center text-sm text-content-subtle">Loading discussion details…</div> : <div className="space-y-5">
-        <div className="flex flex-wrap items-center gap-2"><Badge variant={detail.approvalStatus === 'PENDING' ? 'warning' : detail.approvalStatus === 'REJECTED' ? 'danger' : 'success'}>{approvalLabel(detail.approvalStatus)}</Badge><Badge>{tagLabel(detail.tag)}</Badge>{detail.isPinned && <Badge variant="warning">Pinned</Badge>}{detail.isClosed && <Badge>Closed</Badge>}<span className="ml-auto text-xs text-content-subtle">{dateLabel(detail.createdAt)}</span></div>
+        <div className="flex flex-wrap items-center gap-2">{detail.status === 'HIDDEN' ? <Badge variant="danger">Hidden</Badge> : <Badge variant={detail.approvalStatus === 'PENDING' ? 'warning' : detail.approvalStatus === 'REJECTED' ? 'danger' : 'success'}>{approvalLabel(detail.approvalStatus)}</Badge>}<Badge>{tagLabel(detail.tag)}</Badge>{detail.isPinned && <Badge variant="warning">Pinned</Badge>}{detail.isClosed && <Badge>Closed</Badge>}<span className="ml-auto text-xs text-content-subtle">{dateLabel(detail.createdAt)}</span></div>
         <div className="flex items-center gap-3"><Avatar name={detail.author.displayName} src={detail.author.avatarUrl || undefined} size="sm" /><p className="text-sm text-content-secondary">{detail.author.displayName}</p></div>
         <p className="whitespace-pre-wrap text-sm leading-6 text-content-secondary">{detail.content}</p>
         {detail.imageUrl && <ImageViewer src={detail.imageUrl} alt="Discussion attachment" imageClassName="max-h-[28rem]" />}

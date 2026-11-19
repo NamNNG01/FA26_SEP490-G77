@@ -111,6 +111,14 @@ export function landingPathForRole(roleCode: string | undefined | null): string 
 }
 
 /**
+ * Router state for the navigation right after signing in or creating an account.
+ * My Courses reads it: a student with no course is sent on to the catalog.
+ */
+export const AFTER_AUTH_STATE = { afterAuth: true } as const;
+export const isAfterAuthState = (state: unknown): boolean =>
+  (state as { afterAuth?: unknown } | null)?.afterAuth === true;
+
+/**
  * Fields that define WHO the session belongs to and WHAT it may do. If any of
  * them differs between the stored user and GET /users/me, the stored session
  * is stale and the user must sign in again. fullName / avatarUrl are display

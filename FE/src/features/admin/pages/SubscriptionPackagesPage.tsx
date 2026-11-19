@@ -17,18 +17,16 @@ import { focusFirstInvalidAfter } from '@/utils/focusFirstInvalid';
 import { Alert } from '@/components/ui/Alert';
 import type { Page } from '@/services/adminDiscount.service';
 import {
-  PLAN_FEATURES_MAX,
-  PLAN_FEATURE_TEXT_MAX,
+  PLAN_DESCRIPTION_MAX,
   PLAN_NAME_MAX,
   PLAN_PRICE_MAX,
   adminSubscriptionPlanService,
   type AdminSubscriptionPlan,
   type AdminSubscriptionPlanDetail,
-  type PlanFeatureKey,
   type SubscriptionPlanPayload,
 } from '@/services/adminSubscriptionPlan.service';
 import { MoneyInput, moneyToDigits } from '@/components/ui/MoneyInput';
-import { Checkbox } from '@/components/ui/Checkbox';
+import { planDescriptionLines, planLines, planLinesToDescription } from '@/utils/planDescription';
 import { formatInteger, formatVnd } from '../utils/dashboardFormat';
 
 const PAGE_SIZE = 10;
@@ -36,19 +34,21 @@ const PAGE_SIZE = 10;
 const AI_TOKEN_LIMIT_MAX = 2_147_483_647;
 const EMPTY_PAGE: Page<AdminSubscriptionPlan> = { content: [], page: 0, size: PAGE_SIZE, totalElements: 0, totalPages: 0, first: true, last: true };
 
-type PlanFieldErrors = Partial<Record<'planName' | 'price' | 'durationDays' | 'aiTokenLimit' | 'features', string>>;
+type PlanFieldErrors = Partial<Record<'planName' | 'price' | 'durationDays' | 'aiTokenLimit' | 'description', string>>;
 type FormState = {
   planName: string; description: string; price: string; durationDays: string;
-  aiTokenLimit: string; features: string[]; featureKeys: string[]; isActive: boolean; sortOrder: string;
+  aiTokenLimit: string; isActive: boolean; sortOrder: string;
 };
-const blankForm = (sortOrder = 0): FormState => ({ planName: '', description: '', price: '0', durationDays: '30', aiTokenLimit: '', features: [''], featureKeys: [], isActive: true, sortOrder: String(sortOrder) });
+const blankForm = (sortOrder = 0): FormState => ({ planName: '', description: '', price: '0', durationDays: '30', aiTokenLimit: '', isActive: true, sortOrder: String(sortOrder) });
+// A plan saved with the old feature list gets those features folded into its description, so
+// saving it (which clears `features`) keeps every line students saw.
 const formFromPlan = (p: AdminSubscriptionPlan): FormState => ({
-  planName: p.planName, description: p.description ?? '', price: moneyToDigits(p.price), durationDays: String(p.durationDays),
-  aiTokenLimit: String(p.aiTokenLimit), features: p.features.length ? [...p.features] : [''], featureKeys: [...(p.featureKeys ?? [])], isActive: p.isActive, sortOrder: String(p.sortOrder),
+  planName: p.planName, description: p.features.length ? planLinesToDescription(planLines(p)) : p.description ?? '', price: moneyToDigits(p.price), durationDays: String(p.durationDays),
+  aiTokenLimit: String(p.aiTokenLimit), isActive: p.isActive, sortOrder: String(p.sortOrder),
 });
 const toPayload = (f: FormState): SubscriptionPlanPayload => ({
   planName: f.planName.trim(), description: f.description.trim(), price: Number(f.price), durationDays: Number(f.durationDays),
-  aiTokenLimit: Number(f.aiTokenLimit), features: f.features.map(x => x.trim()).filter(Boolean), featureKeys: f.featureKeys, isActive: f.isActive, sortOrder: Number(f.sortOrder),
+  aiTokenLimit: Number(f.aiTokenLimit), features: [], isActive: f.isActive, sortOrder: Number(f.sortOrder),
 });
 const priceLabel = (price: number) => (price === 0 ? 'Free' : formatVnd(price));
 const dateLabel = (value?: string | null) => (value ? new Date(value).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }) : '—');
@@ -66,29 +66,20 @@ export function SubscriptionPackagesPage() {
   const [keyword, setKeyword] = useState('');
   const [activeFilter, setActiveFilter] = useState('');
   const [loading, setLoading] = useState(true);
-  const [editing, setEditing] = useState<AdminSubscriptionPlan | null>(null);
+  /** The plan open in the details/edit modal; null while creating. */
+  const [editing, setEditing] = useState<AdminSubscriptionPlanDetail | null>(null);
   const [formOpen, setFormOpen] = useState(false);
+  const [editLoading, setEditLoading] = useState(false);
   const [form, setForm] = useState<FormState>(blankForm);
   const [fieldErrors, setFieldErrors] = useState<PlanFieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [detail, setDetail] = useState<AdminSubscriptionPlanDetail | null>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
   const [changingStatus, setChangingStatus] = useState<AdminSubscriptionPlan | null>(null);
   const [deleting, setDeleting] = useState<AdminSubscriptionPlan | null>(null);
   const [deleteBlocked, setDeleteBlocked] = useState(false);
   const [working, setWorking] = useState(false);
   const [ordering, setOrdering] = useState<AdminSubscriptionPlan[] | null>(null);
   const [orderLoading, setOrderLoading] = useState(false);
-  const [featureKeyOptions, setFeatureKeyOptions] = useState<PlanFeatureKey[]>([]);
-
-  useEffect(() => {
-    adminSubscriptionPlanService.featureKeys().then(setFeatureKeyOptions)
-      .catch(error => toast.error(getApiErrorMessage(error, 'Could not load the plan capabilities.')));
-  }, [toast]);
-  const featureKeyLabel = (key: string) => featureKeyOptions.find(o => o.key === key)?.label ?? key;
-  const toggleFeatureKey = (key: string, on: boolean) =>
-    updateForm('featureKeys', on ? [...form.featureKeys.filter(k => k !== key), key] : form.featureKeys.filter(k => k !== key));
 
   /** `'quiet'` = shared auto-refresh: no loader, no error toast. */
   const load = useCallback(async (mode?: 'quiet') => {
@@ -115,20 +106,15 @@ export function SubscriptionPackagesPage() {
     }
     setEditing(null); setForm(blankForm(nextSortOrder)); setFieldErrors({}); setFormError(null); setFormOpen(true);
   };
+  /** Details and editing share one modal: it opens on the plan's editable form. */
   const openEdit = async (plan: AdminSubscriptionPlan) => {
-    try { const full = await adminSubscriptionPlanService.get(plan.planId); setEditing(full); setForm(formFromPlan(full)); setFieldErrors({}); setFormError(null); setFormOpen(true); }
-    catch (error) { toast.error(getApiErrorMessage(error, 'Could not load plan details.')); }
-  };
-  const openDetail = async (plan: AdminSubscriptionPlan) => {
-    setDetailLoading(true);
-    try { setDetail(await adminSubscriptionPlanService.get(plan.planId)); }
-    catch (error) { toast.error(getApiErrorMessage(error, 'Could not load plan details.')); }
-    finally { setDetailLoading(false); }
+    setEditing(null); setFieldErrors({}); setFormError(null); setEditLoading(true); setFormOpen(true);
+    try { const full = await adminSubscriptionPlanService.get(plan.planId); setEditing(full); setForm(formFromPlan(full)); }
+    catch (error) { toast.error(getApiErrorMessage(error, 'Could not load plan details.')); setFormOpen(false); }
+    finally { setEditLoading(false); }
   };
   const updateForm = <K extends keyof FormState>(key: K, value: FormState[K]) => setForm(prev => ({ ...prev, [key]: value }));
-  const setFeature = (index: number, value: string) => { updateForm('features', form.features.map((f, i) => (i === index ? value : f))); clearFieldError('features'); };
-  const addFeature = () => { if (form.features.length < PLAN_FEATURES_MAX) updateForm('features', [...form.features, '']); };
-  const removeFeature = (index: number) => updateForm('features', form.features.length === 1 ? [''] : form.features.filter((_, i) => i !== index));
+  const descriptionLines = planDescriptionLines(form.description);
 
   const save = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -141,8 +127,7 @@ export function SubscriptionPackagesPage() {
     if (!Number.isInteger(payload.durationDays) || payload.durationDays < 1) errors.durationDays = 'Duration must be at least 1 day.';
     if (!form.aiTokenLimit.trim() || !Number.isInteger(payload.aiTokenLimit) || payload.aiTokenLimit < 1) errors.aiTokenLimit = 'AI token limit must be greater than 0.';
     else if (payload.aiTokenLimit > AI_TOKEN_LIMIT_MAX) errors.aiTokenLimit = `AI token limit must not exceed ${formatInteger(AI_TOKEN_LIMIT_MAX)}.`;
-    if (payload.features.length > PLAN_FEATURES_MAX) errors.features = `A plan can list at most ${PLAN_FEATURES_MAX} features.`;
-    else if (payload.features.some(f => f.length > PLAN_FEATURE_TEXT_MAX)) errors.features = `Each feature must be ${PLAN_FEATURE_TEXT_MAX} characters or fewer.`;
+    if (payload.description.length > PLAN_DESCRIPTION_MAX) errors.description = `Description must be ${PLAN_DESCRIPTION_MAX} characters or fewer.`;
     setFormError(null);
     if (Object.keys(errors).length) {
       if (!focusFirstInvalidAfter(() => setFieldErrors(errors))) setFormError(Object.values(errors).join(' '));
@@ -206,14 +191,12 @@ export function SubscriptionPackagesPage() {
     { key: 'planName', label: 'Plan', width: '28%', render: row => { const p = row as unknown as AdminSubscriptionPlan; return <div className="min-w-0"><p className="font-semibold text-content">{p.planName}</p>{p.description && <p className="truncate text-xs text-content-soft">{p.description}</p>}</div>; } },
     { key: 'price', label: 'Price', render: row => { const p = row as unknown as AdminSubscriptionPlan; return <div className="whitespace-nowrap"><span className="font-medium text-content-secondary">{priceLabel(p.price)}</span><p className="text-xs text-content-soft">{p.durationDays} days</p></div>; } },
     { key: 'aiTokenLimit', label: 'AI tokens / period', render: row => <span className="tabular-nums text-content-secondary">{formatInteger(Number(row.aiTokenLimit))}</span> },
-    { key: 'features', label: 'Features', render: row => <span className="text-content-secondary">{(row.features as string[]).length}</span> },
     { key: 'activeSubscribers', label: 'Active subscribers', render: row => <span className="tabular-nums font-medium text-content-secondary">{formatInteger(Number(row.activeSubscribers))}</span> },
     { key: 'isActive', label: 'On sale', render: row => { const p = row as unknown as AdminSubscriptionPlan; return <div onClick={event => event.stopPropagation()}><Switch checked={p.isActive} onChange={() => setChangingStatus(p)} size="sm" label={p.isActive ? 'On' : 'Off'} /></div>; } },
     { key: 'actions', label: '', width: '48px', render: row => {
       const p = row as unknown as AdminSubscriptionPlan;
       return <div onClick={event => event.stopPropagation()}><Dropdown trigger={<button type="button" aria-label={`Actions for ${p.planName}`} className="rounded-[6px] p-1.5 hover:bg-accent"><Icon.MoreHorizontal className="h-4 w-4 text-content-soft" /></button>} items={[
-        { label: 'Details', icon: <Icon.Eye className="h-4 w-4" />, onClick: () => void openDetail(p) },
-        { label: 'Edit', icon: <Icon.Edit className="h-4 w-4" />, onClick: () => void openEdit(p) },
+        { label: 'Details', icon: <Icon.Eye className="h-4 w-4" />, onClick: () => void openEdit(p) },
         { label: 'Delete', icon: <Icon.Trash className="h-4 w-4" />, danger: true, onClick: () => { setDeleteBlocked(false); setDeleting(p); } },
       ]} /></div>;
     } },
@@ -241,13 +224,19 @@ export function SubscriptionPackagesPage() {
     <div className={`card overflow-hidden transition-opacity ${loading && page.content.length ? 'opacity-60' : ''}`} aria-busy={loading}>
       <Table columns={columns} data={rows as unknown as Record<string, unknown>[]} perPage={PAGE_SIZE} unit="plans"
         serverPagination={{ page: pageIndex, total: page.totalElements, onChange: setPageIndex }}
-        onRowClick={row => void openDetail(row as unknown as AdminSubscriptionPlan)}
+        onRowClick={row => void openEdit(row as unknown as AdminSubscriptionPlan)}
         emptyState={loading ? 'Loading plans…' : filtersActive ? 'No plans match your filters.' : 'No plans yet. Click “New plan” to add one.'}
       />
     </div>
 
-    <Modal open={formOpen} onClose={() => setFormOpen(false)} title={editing ? `Edit ${editing.planName}` : 'Create plan'} size="xl" error={formError && <Alert type="error" message={formError} />} footer={<><Button variant="outline" disabled={saving} onClick={() => setFormOpen(false)}>Cancel</Button><Button loading={saving} disabled={saving} onClick={() => document.getElementById('plan-form-submit')?.click()}>{editing ? 'Save changes' : 'Create plan'}</Button></>}>
-      <form onSubmit={save} className="space-y-4">
+    <Modal open={formOpen} onClose={() => setFormOpen(false)} title={editLoading ? 'Plan details' : editing ? editing.planName : 'Create plan'} size="xl" error={formError && <Alert type="error" message={formError} />} footer={editLoading ? undefined : <><Button variant="outline" disabled={saving} onClick={() => setFormOpen(false)}>Cancel</Button><Button loading={saving} disabled={saving} onClick={() => document.getElementById('plan-form-submit')?.click()}>{editing ? 'Save changes' : 'Create plan'}</Button></>}>
+      {editLoading ? <div className="flex justify-center py-12"><Spinner /></div> : <form onSubmit={save} className="space-y-4">
+        {editing && <div className="grid grid-cols-2 gap-4 rounded-[10px] border border-line-soft bg-surface-hover/40 p-3 sm:grid-cols-4">
+          <Info label="Active subscribers" value={formatInteger(editing.activeSubscribers)} />
+          <Info label="Total subscribers" value={formatInteger(editing.totalSubscribers)} />
+          <Info label="Created" value={dateLabel(editing.createdAt)} />
+          <Info label="Updated" value={dateLabel(editing.updatedAt)} />
+        </div>}
         {editing && editing.activeSubscribers > 0 && <p className="rounded-[10px] bg-warning-light/40 px-3 py-2 text-xs text-content-secondary">{formatInteger(editing.activeSubscribers)} students are on this plan. A new price only applies to future purchases; a new AI token limit applies to them right away.</p>}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Input label="Plan name" required maxLength={PLAN_NAME_MAX} value={form.planName} error={fieldErrors.planName} onChange={e => { updateForm('planName', e.target.value); clearFieldError('planName'); }} />
@@ -255,47 +244,20 @@ export function SubscriptionPackagesPage() {
           <Input label="Duration (days)" type="number" min={1} required value={form.durationDays} error={fieldErrors.durationDays} onChange={e => { updateForm('durationDays', e.target.value); clearFieldError('durationDays'); }} />
           <Input label="AI token limit" type="number" min={1} step={1} max={AI_TOKEN_LIMIT_MAX} required value={form.aiTokenLimit} error={fieldErrors.aiTokenLimit} onChange={e => { updateForm('aiTokenLimit', e.target.value); clearFieldError('aiTokenLimit'); }} hint="Total tokens for the whole plan period (any number above 0)." />
         </div>
-        {featureKeyOptions.length > 0 && <div className="space-y-2">
-          <p className="text-sm font-medium text-content-secondary">Unlocked capabilities <span className="font-normal text-content-subtle">— what subscribers can actually use</span></p>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            {featureKeyOptions.map(option => <div key={option.key} className="rounded-[10px] border border-line-soft px-3 py-2">
-              <Checkbox label={option.label} checked={form.featureKeys.includes(option.key)} onChange={on => toggleFeatureKey(option.key, on)} />
-              <p className="mt-0.5 pl-[26px] text-xs text-content-soft">{option.description}</p>
-            </div>)}
-          </div>
-        </div>}
-        <label className="flex flex-col gap-1.5 text-sm font-medium text-content-secondary">Description<textarea className="min-h-20 rounded-[10px] border border-line bg-surface px-3 py-2 text-sm font-normal text-content focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/20" maxLength={1000} value={form.description} onChange={e => updateForm('description', e.target.value)} /></label>
-        <div className="space-y-2">
-          <div className="flex items-center justify-between"><p className="text-sm font-medium text-content-secondary">Features <span className="font-normal text-content-subtle">({form.features.filter(f => f.trim()).length}/{PLAN_FEATURES_MAX})</span></p>
-            <Button type="button" size="sm" variant="outline" icon={<Icon.Plus className="h-3.5 w-3.5" />} disabled={form.features.length >= PLAN_FEATURES_MAX} onClick={addFeature}>Add feature</Button></div>
-          {form.features.map((feature, index) => <div key={index} className="flex items-center gap-2">
-            <Input aria-label={`Feature ${index + 1}`} className="flex-1" maxLength={PLAN_FEATURE_TEXT_MAX} placeholder="e.g. Unlimited decks" value={feature} onChange={e => setFeature(index, e.target.value)} />
-            <button type="button" aria-label={`Remove feature ${index + 1}`} onClick={() => removeFeature(index)} className="p-1.5 text-content-subtle hover:text-danger"><Icon.Trash className="h-4 w-4" /></button>
-          </div>)}
-          {fieldErrors.features && <p className="text-xs text-danger">{fieldErrors.features}</p>}
+        <div className="space-y-1.5">
+          <label htmlFor="plan-description" className="flex items-baseline justify-between gap-2 text-sm font-medium text-content-secondary">Description <span className="text-xs font-normal tabular-nums text-content-subtle">{form.description.length}/{PLAN_DESCRIPTION_MAX}</span></label>
+          <textarea id="plan-description" aria-invalid={fieldErrors.description ? true : undefined} aria-describedby="plan-description-hint" className="min-h-28 w-full rounded-[10px] border border-line bg-surface px-3 py-2 text-sm text-content focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/20" maxLength={PLAN_DESCRIPTION_MAX} placeholder="e.g. 500,000 AI tokens for 30 days. Generate flashcards and quizzes from your materials. Grade essay answers with AI." value={form.description} onChange={e => { updateForm('description', e.target.value); clearFieldError('description'); }} />
+          {fieldErrors.description ? <p className="text-xs text-danger">{fieldErrors.description}</p> : <p id="plan-description-hint" className="text-xs text-content-soft">Each sentence ending with “.” is shown as its own line.</p>}
+          {descriptionLines.length > 0 && <div className="rounded-[10px] border border-line-soft px-3 py-2.5">
+            <p className="mb-1.5 text-xs font-medium text-content-soft">Preview</p>
+            <PlanLineList lines={descriptionLines} />
+          </div>}
         </div>
         <label className="flex items-center gap-2 text-sm text-content-secondary"><input type="checkbox" checked={form.isActive} onChange={e => updateForm('isActive', e.target.checked)} /> On sale (shown on the purchase page)</label>
         <button id="plan-form-submit" className="hidden" type="submit" />
-      </form>
+      </form>}
     </Modal>
 
-    <Modal open={detailLoading || !!detail} onClose={() => setDetail(null)} title={detail ? detail.planName : 'Plan details'} size="xl">
-      {detailLoading || !detail ? <div className="flex justify-center py-12"><Spinner /></div> : <div className="space-y-5">
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <Info label="Price" value={priceLabel(detail.price)} />
-          <Info label="Duration" value={`${detail.durationDays} days`} />
-          <Info label="AI tokens / period" value={formatInteger(detail.aiTokenLimit)} />
-          <Info label="Status" value={detail.isActive ? 'On sale' : 'Hidden'} />
-          <Info label="Active subscribers" value={formatInteger(detail.activeSubscribers)} />
-          <Info label="Total subscribers" value={formatInteger(detail.totalSubscribers)} />
-          <Info label="Created" value={dateLabel(detail.createdAt)} />
-          <Info label="Updated" value={dateLabel(detail.updatedAt)} />
-        </div>
-        {detail.description && <p className="text-sm text-content-secondary">{detail.description}</p>}
-        <div><h3 className="mb-2 font-semibold text-content">Unlocked capabilities</h3>{detail.featureKeys?.length ? <div className="flex flex-wrap gap-1.5">{detail.featureKeys.map(k => <Badge key={k} variant="info">{featureKeyLabel(k)}</Badge>)}</div> : <p className="text-sm text-content-soft">None — subscribers only get the AI token allowance.</p>}</div>
-        <div><h3 className="mb-2 font-semibold text-content">Features</h3>{detail.features.length ? <ul className="space-y-1.5">{detail.features.map(f => <li key={f} className="flex items-start gap-1.5 text-sm text-content-secondary"><Icon.Check className="mt-0.5 h-4 w-4 flex-shrink-0 text-success" />{f}</li>)}</ul> : <p className="text-sm text-content-soft">No features listed.</p>}</div>
-      </div>}
-    </Modal>
 
     <ConfirmDialog
       open={!!changingStatus}
@@ -334,6 +296,10 @@ export function SubscriptionPackagesPage() {
       </li>)}</ol> : <p className="text-sm text-content-soft">No plans to reorder.</p>}
     </Modal>
   </div>;
+}
+
+function PlanLineList({ lines }: { lines: string[] }) {
+  return <ul className="space-y-1.5">{lines.map((line, i) => <li key={i} className="flex items-start gap-1.5 text-sm text-content-secondary"><Icon.Check className="mt-0.5 h-4 w-4 flex-shrink-0 text-success" />{line}</li>)}</ul>;
 }
 
 function Info({ label, value }: { label: string; value: string }) { return <div className="min-w-0"><p className="text-xs text-content-soft">{label}</p><p className="mt-1 break-words text-sm font-medium text-content">{value}</p></div>; }

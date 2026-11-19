@@ -3,7 +3,7 @@ import { useLocation, useNavigate, useSearchParams } from "react-router";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Alert } from "@/components/ui/Alert";
-import { useAuth, landingPathForRole } from "@/auth/authContext";
+import { useAuth, landingPathForRole, AFTER_AUTH_STATE } from "@/auth/authContext";
 import { AuthPageHeader } from "../components/AuthPageHeader";
 import { GoogleSignInButton } from "../components/GoogleSignInButton";
 import { Icon } from "@/assets/icons";
@@ -54,6 +54,7 @@ export function LoginPage() {
       const from = redirectTo ?? locationState?.from;
       navigate(from ?? landingPathForRole(loggedInUser.role), {
         replace: true,
+        state: AFTER_AUTH_STATE,
       });
     } catch (err: unknown) {
       const message =
@@ -108,7 +109,9 @@ export function LoginPage() {
             <Input
               label="Email"
               placeholder="you@example.com"
-              autoComplete="email"
+              id="login-email"
+              name="email"
+              autoComplete="username"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -130,6 +133,8 @@ export function LoginPage() {
                 </button>
               }
               placeholder="Enter your password"
+              id="login-password"
+              name="password"
               autoComplete="current-password"
               type={showPwd ? "text" : "password"}
               value={password}

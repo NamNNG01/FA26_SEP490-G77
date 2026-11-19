@@ -33,8 +33,6 @@ export interface CurrentSubscription {
   startedAt: string | null;
   expiresAt: string | null;
   daysRemaining: number;
-  /** Capabilities the plan unlocks (AI_FLASHCARD_GENERATION, …). */
-  featureKeys: string[];
 }
 
 /** A paid plan the student is subscribed to — the Free Plan fallback has no subscription row. */
