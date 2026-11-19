@@ -73,7 +73,8 @@ public interface QuestionRepository extends JpaRepository<Question, Long>, JpaSp
     boolean existsByModuleCourseCourseId(Long courseId);
     boolean existsByCourseCourseIdOrModuleCourseCourseId(Long courseId, Long moduleCourseId);
 
-    @Query("SELECT new com.examprep.dto.IdCount(q.module.moduleId, COUNT(q)) FROM Question q WHERE q.module.moduleId IN :ids GROUP BY q.module.moduleId")
+    @Query("SELECT new com.examprep.dto.IdCount(q.module.moduleId, COUNT(q)) FROM Question q " +
+            "WHERE q.module.moduleId IN :ids AND q.deletedAt IS NULL GROUP BY q.module.moduleId")
     List<IdCount> countByModules(@Param("ids") List<Long> ids);
 
     @Query("SELECT q.group.groupId, COUNT(q) FROM Question q " +

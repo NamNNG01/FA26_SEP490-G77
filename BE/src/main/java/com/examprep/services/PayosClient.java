@@ -50,7 +50,7 @@ public class PayosClient {
     /** What PayOS itself reports for a link — the fallback when its webhook never reaches this deployment. */
     public record RemotePayment(String status, long amountPaid, String raw) {}
 
-    public Link create(long payosOrderCode, int amountVnd, String description) {
+    public Link create(long payosOrderCode, int amountVnd, String description, Instant expiresAt) {
         requireCredentials();
         String safeDescription = description.length() > 25 ? description.substring(0, 25) : description;
         String signature = sign("amount=" + amountVnd + "&cancelUrl=" + cancelUrl + "&description=" + safeDescription
@@ -60,7 +60,7 @@ public class PayosClient {
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(Map.of("orderCode", payosOrderCode, "amount", amountVnd, "description", safeDescription,
                         "cancelUrl", cancelUrl, "returnUrl", returnUrl,
-                        "expiredAt", Instant.now().plusSeconds(1800).getEpochSecond(), "signature", signature))
+                        "expiredAt", expiresAt.getEpochSecond(), "signature", signature))
                 .retrieve().body(JsonNode.class);
         JsonNode data = response == null ? null : response.path("data");
         if (data == null || !data.hasNonNull("checkoutUrl")) {

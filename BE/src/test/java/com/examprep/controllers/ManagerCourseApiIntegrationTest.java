@@ -107,6 +107,7 @@ public class ManagerCourseApiIntegrationTest {
         Module first = module(course, "First", 1);
         question(first);
         exam(course, first);
+        em.persist(Deck.builder().course(course).module(first).user(manager).title("Flashcards").isPublic(false).build());
         enrollment(student, course, "ACTIVE", 65);
         call(collaborator, get(path())).andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.moduleCount").value(2))
@@ -114,7 +115,8 @@ public class ManagerCourseApiIntegrationTest {
                 .andExpect(jsonPath("$.data.studentCount").value(1))
                 .andExpect(jsonPath("$.data.modules[0].moduleId").value(first.getModuleId()))
                 .andExpect(jsonPath("$.data.modules[0].questionCount").value(1))
-                .andExpect(jsonPath("$.data.modules[0].examCount").value(1));
+                .andExpect(jsonPath("$.data.modules[0].examCount").value(1))
+                .andExpect(jsonPath("$.data.modules[0].deckCount").value(1));
         call(manager, get(path() + "/modules")).andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[1].moduleId").value(second.getModuleId()));
     }
@@ -212,7 +214,12 @@ public class ManagerCourseApiIntegrationTest {
         course.setDescription("Old description");
         course.setThumbnailUrl("https://example.com/old.png");
         call(collaborator, put(path()).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"title\":\"Updated\",\"description\":\"\",\"thumbnailUrl\":\"\",\"price\":-3,\"managerId\":-1}"))
+                .content("{\"title\":\"Rejected\",\"price\":999}"))
+                .andExpect(status().isForbidden());
+        call(admin, get(path())).andExpect(jsonPath("$.data.title").value("Python for beginners"))
+                .andExpect(jsonPath("$.data.price").value(0));
+        call(collaborator, put(path()).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"title\":\"Updated\",\"description\":\"\",\"thumbnailUrl\":\"\",\"price\":0,\"managerId\":-1}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.title").value("Updated"))
                 .andExpect(jsonPath("$.data.price").value(0))
                 .andExpect(jsonPath("$.data.managerId").value(manager.getUserId()))
@@ -266,12 +273,28 @@ public class ManagerCourseApiIntegrationTest {
     }
 
     @Test
-    void publishRequiresModuleAndAdminCanManageAnyCourse() throws Exception {
-        call(admin, patch(path() + "/publish").contentType(MediaType.APPLICATION_JSON).content("{\"isPublished\":true}"))
+    void draftRequiresVisibleModuleContentToBecomeReadyAndPublish() throws Exception {
+        String publish = "{\"isPublished\":true}";
+        call(admin, patch(path() + "/publish").contentType(MediaType.APPLICATION_JSON).content(publish))
                 .andExpect(status().isBadRequest());
-        module(course, "First", 1);
-        call(admin, patch(path() + "/publish").contentType(MediaType.APPLICATION_JSON).content("{\"isPublished\":true}"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.data.isPublished").value(true));
+        Module first = module(course, "First", 1);
+        String list = "/api/v1/manager/courses";
+        call(admin, patch(path() + "/publish").contentType(MediaType.APPLICATION_JSON).content(publish))
+                .andExpect(status().isBadRequest());
+        call(admin, get(path())).andExpect(jsonPath("$.data.status").value("DRAFT"));
+        call(admin, get(list).param("status", "READY_TO_PUBLISH")).andExpect(jsonPath("$.data.totalElements").value(0));
+        question(first);
+        first.setStatus(Module.STATUS_HIDDEN);
+        call(admin, get(path())).andExpect(jsonPath("$.data.status").value("DRAFT"));
+        first.setStatus(Module.STATUS_VISIBLE);
+        call(admin, get(path())).andExpect(jsonPath("$.data.status").value("READY_TO_PUBLISH"));
+        call(admin, get(list).param("status", "READY_TO_PUBLISH"))
+                .andExpect(jsonPath("$.data.totalElements").value(1))
+                .andExpect(jsonPath("$.data.content[0].courseId").value(course.getCourseId()));
+        call(admin, get(list).param("status", "DRAFT")).andExpect(jsonPath("$.data.totalElements").value(0));
+        call(admin, patch(path() + "/publish").contentType(MediaType.APPLICATION_JSON).content(publish))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.isPublished").value(true))
+                .andExpect(jsonPath("$.data.status").value("PUBLISHED"));
         call(admin, patch(path() + "/publish").contentType(MediaType.APPLICATION_JSON).content("{\"isPublished\":false}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.isPublished").value(false));
     }
@@ -322,6 +345,7 @@ public class ManagerCourseApiIntegrationTest {
                 .andExpect(jsonPath("$.data[1].status").value("VISIBLE"));
 
         // Published course: the last visible module can be neither hidden nor deleted; hidden ones can.
+        question(second);
         call(admin, patch(path() + "/publish").contentType(MediaType.APPLICATION_JSON).content("{\"isPublished\":true}")).andExpect(status().isOk());
         call(manager, patch(modulePath(second) + "/status").contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"HIDDEN\"}"))
                 .andExpect(status().isConflict());

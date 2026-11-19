@@ -17,6 +17,7 @@ import { Pagination } from "@/components/ui/Pagination";
 import { Icon } from "@/assets/icons";
 import {
   courseService,
+  COURSE_STATUS_LABELS,
   type CourseDetailResponse,
   type CourseManagerItem,
   type CourseModuleResponse,
@@ -383,7 +384,7 @@ export function CourseDetailPage({
             "Course must have at least 1 module to be published.",
           );
         }
-        await courseService.publishCourse(course.courseId, isPublished);
+        updated = await courseService.publishCourse(course.courseId, isPublished);
       }
 
       let savedManagers = updated.managers ?? course.managers;
@@ -697,8 +698,8 @@ export function CourseDetailPage({
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold text-content">Course Details</h3>
               <div className="flex items-center gap-2">
-                <Badge variant={isPublished ? "success" : "warning"}>
-                  {isPublished ? "Published" : "Draft"}
+                <Badge variant={course.status === "PUBLISHED" ? "success" : "warning"}>
+                  {COURSE_STATUS_LABELS[course.status]}
                 </Badge>
                 {canManageCourse && (
                   <Button
@@ -791,7 +792,7 @@ export function CourseDetailPage({
                   onChange={(val) => setIsPublished(val === "published")}
                   options={[
                     { label: "Published", value: "published" },
-                    { label: "Draft", value: "draft" },
+                    { label: course.status === "READY_TO_PUBLISH" ? COURSE_STATUS_LABELS.READY_TO_PUBLISH : "Draft", value: "draft" },
                   ]}
                 />
 
@@ -885,7 +886,7 @@ export function CourseDetailPage({
                     Description
                   </span>
                   <span className="col-span-2 text-center">Status</span>
-                  <span className="col-span-1 text-center">Exams</span>
+                  <span className="col-span-1 text-center">Content</span>
                   {canCreateModule && (
                     <span className="col-span-3 text-right">Actions</span>
                   )}
@@ -942,8 +943,7 @@ export function CourseDetailPage({
                         {mod.title}
                       </p>
                       <p className="text-2xs text-content-subtle sm:hidden">
-                        {mod.examCount} exam{mod.examCount === 1 ? "" : "s"} ·{" "}
-                        {mod.questionCount} questions
+                        {mod.examCount} exams · {mod.questionCount} questions · {mod.deckCount} flashcard decks
                       </p>
                     </div>
 
@@ -973,8 +973,10 @@ export function CourseDetailPage({
                       </Badge>
                     </div>
 
-                    <div className="col-span-1 text-center hidden sm:block">
-                      <Badge variant="default">{mod.examCount}</Badge>
+                    <div className="col-span-1 hidden text-center text-xs text-content-soft sm:block">
+                      <div>{mod.examCount} exams</div>
+                      <div>{mod.questionCount} questions</div>
+                      <div>{mod.deckCount} flashcard decks</div>
                     </div>
 
                     {canCreateModule && (

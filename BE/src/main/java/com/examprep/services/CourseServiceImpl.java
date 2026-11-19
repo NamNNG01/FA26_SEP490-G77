@@ -5,6 +5,7 @@ import com.examprep.entities.*;
 import com.examprep.entities.Module;
 import com.examprep.exceptions.BadRequestException;
 import com.examprep.exceptions.BaseException;
+import com.examprep.exceptions.ForbiddenException;
 import com.examprep.exceptions.ResourceNotFoundException;
 import com.examprep.repositories.*;
 import com.examprep.security.UserPrincipal;
@@ -38,6 +39,7 @@ public class CourseServiceImpl implements CourseService {
     private final EnrollmentRepository enrollments;
     private final QuestionRepository questions;
     private final ExamRepository exams;
+    private final DeckRepository decks;
     private final ExamConfigRepository configs;
     private final QuestionGroupRepository groups;
     private final DocumentRepository documents;
@@ -48,18 +50,19 @@ public class CourseServiceImpl implements CourseService {
 
     @Override
     public PageResponse<CourseResponse> list(UserPrincipal user, String search, Long categoryId, Boolean published,
-                                             int page, int size, String sort) {
+                                             CourseResponse.Status status, int page, int size, String sort) {
         if (categoryId != null) positiveId(categoryId);
         Page<Course> result = courses.findManagedCourses(admin(user) ? null : user.getId(), categoryId, published,
-                searchPattern(search), paging(page, size, courseSort(sort)));
+                status == null ? null : status.name(), searchPattern(search), paging(page, size, courseSort(sort)));
         List<Long> ids = result.getContent().stream().map(Course::getCourseId).toList();
         if (ids.isEmpty()) return PageResponse.of(result, List.of());
         Map<Long, Long> moduleCounts = counts(modules.countByCourses(ids));
         Map<Long, Long> studentCounts = counts(enrollments.countByCourses(ids));
         Map<Long, Long> examCounts = counts(exams.countByCourses(ids));
+        Set<Long> ready = Set.copyOf(courses.findCoursesWithVisibleModuleContent(ids));
         return PageResponse.of(result, result.getContent().stream().map(c -> response(c,
                 moduleCounts.getOrDefault(c.getCourseId(), 0L), studentCounts.getOrDefault(c.getCourseId(), 0L),
-                examCounts.getOrDefault(c.getCourseId(), 0L), null, null)).toList());
+                examCounts.getOrDefault(c.getCourseId(), 0L), ready.contains(c.getCourseId()), null, null)).toList());
     }
 
     @Override
@@ -126,6 +129,9 @@ public class CourseServiceImpl implements CourseService {
     public CourseResponse update(UserPrincipal user, Long id, CourseRequests.Update request) {
         Course course = writeCourse(id);
         checkAccess(user, course);
+        if (!admin(user) && request.price() != null && request.price().compareTo(course.getPrice()) != 0) {
+            throw new ForbiddenException("Only administrators can change the course price.");
+        }
         if (request.title() != null) {
             course.setTitle(request.title().strip());
             // Published slugs stay stable so shared links keep working.
@@ -175,8 +181,14 @@ public class CourseServiceImpl implements CourseService {
     @PreAuthorize("hasRole('ADMIN')")
     public CourseResponse publish(Long id, CourseRequests.Publish request) {
         Course course = writeCourse(id);
-        if (request.isPublished() && modules.countByCourseCourseIdAndStatus(id, Module.STATUS_VISIBLE) == 0)
-            throw new BadRequestException("Add at least one visible module before publishing the course.");
+        if (request.isPublished() && !Boolean.TRUE.equals(course.getIsPublished())) {
+            if (modules.countByCourseCourseIdAndStatus(id, Module.STATUS_VISIBLE) == 0) {
+                throw new BadRequestException("Add at least one visible module before publishing the course.");
+            }
+            if (courses.findCoursesWithVisibleModuleContent(List.of(id)).isEmpty()) {
+                throw new BadRequestException("Add a question, published exam, or flashcard deck to a visible module before publishing the course.");
+            }
+        }
         course.setIsPublished(request.isPublished());
         courses.flush();
         return detailResponse(course);
@@ -223,7 +235,7 @@ public class CourseServiceImpl implements CourseService {
                 .description(optionalText(request.description())).orderIndex(order).build());
         course.setUpdatedAt(Instant.now());
         modules.flush();
-        return moduleResponse(module, 0, 0);
+        return moduleResponse(module, 0, 0, 0);
     }
 
     @Override
@@ -237,7 +249,8 @@ public class CourseServiceImpl implements CourseService {
         modules.flush();
         List<Long> ids = List.of(id);
         return moduleResponse(module, counts(questions.countByModules(ids)).getOrDefault(id, 0L),
-                counts(exams.countByModules(ids)).getOrDefault(id, 0L));
+                counts(exams.countByModules(ids)).getOrDefault(id, 0L),
+                counts(decks.countManagedByModules(ids)).getOrDefault(id, 0L));
     }
 
     @Override
@@ -270,7 +283,8 @@ public class CourseServiceImpl implements CourseService {
         }
         List<Long> ids = List.of(id);
         return moduleResponse(module, counts(questions.countByModules(ids)).getOrDefault(id, 0L),
-                counts(exams.countByModules(ids)).getOrDefault(id, 0L));
+                counts(exams.countByModules(ids)).getOrDefault(id, 0L),
+                counts(decks.countManagedByModules(ids)).getOrDefault(id, 0L));
     }
 
     private boolean lastVisible(Module module) {
@@ -351,14 +365,18 @@ public class CourseServiceImpl implements CourseService {
                         .map(CourseManager::getUser).filter(u -> !u.getUserId().equals(primary.getUserId()))
                         .map(u -> new CourseResponse.Manager(u.getUserId(), u.getFullName(), false))).toList();
         return response(course, content.size(), counts(enrollments.countByCourses(ids)).getOrDefault(course.getCourseId(), 0L),
-                counts(exams.countByCourses(ids)).getOrDefault(course.getCourseId(), 0L), managers, content);
+                counts(exams.countByCourses(ids)).getOrDefault(course.getCourseId(), 0L),
+                !courses.findCoursesWithVisibleModuleContent(ids).isEmpty(), managers, content);
     }
 
-    private CourseResponse response(Course course, long moduleCount, long studentCount, long examCount,
+    private CourseResponse response(Course course, long moduleCount, long studentCount, long examCount, boolean ready,
                                     List<CourseResponse.Manager> managers, List<ModuleResponse> content) {
+        CourseResponse.Status status = CourseResponse.Status.DRAFT;
+        if (Boolean.TRUE.equals(course.getIsPublished())) status = CourseResponse.Status.PUBLISHED;
+        else if (ready) status = CourseResponse.Status.READY_TO_PUBLISH;
         return new CourseResponse(course.getCourseId(), course.getTitle(), course.getSlug(), course.getCategoryId(),
                 course.getCategory().getName(), course.getManager().getUserId(), course.getManager().getFullName(), managers,
-                course.getThumbnailUrl(), course.getPrice(), course.getIsPublished(), moduleCount, studentCount, examCount,
+                course.getThumbnailUrl(), course.getPrice(), course.getIsPublished(), status, moduleCount, studentCount, examCount,
                 course.getCreatedAt(), course.getUpdatedAt(), course.getDescription(), content);
     }
 
@@ -368,13 +386,14 @@ public class CourseServiceImpl implements CourseService {
         List<Long> ids = content.stream().map(Module::getModuleId).toList();
         Map<Long, Long> questionCounts = counts(questions.countByModules(ids));
         Map<Long, Long> examCounts = counts(exams.countByModules(ids));
+        Map<Long, Long> deckCounts = counts(decks.countManagedByModules(ids));
         return content.stream().map(m -> moduleResponse(m, questionCounts.getOrDefault(m.getModuleId(), 0L),
-                examCounts.getOrDefault(m.getModuleId(), 0L))).toList();
+                examCounts.getOrDefault(m.getModuleId(), 0L), deckCounts.getOrDefault(m.getModuleId(), 0L))).toList();
     }
 
-    private ModuleResponse moduleResponse(Module module, long questionCount, long examCount) {
+    private ModuleResponse moduleResponse(Module module, long questionCount, long examCount, long deckCount) {
         return new ModuleResponse(module.getModuleId(), module.getCourse().getCourseId(), module.getTitle(),
-                module.getDescription(), module.getOrderIndex(), module.getStatus(), questionCount, examCount);
+                module.getDescription(), module.getOrderIndex(), module.getStatus(), questionCount, examCount, deckCount);
     }
 
     private Map<Long, Long> counts(List<IdCount> values) {

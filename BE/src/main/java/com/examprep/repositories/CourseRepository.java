@@ -21,6 +21,16 @@ public interface CourseRepository extends JpaRepository<Course, Long> {
 
     String MANAGER_SCOPE = "(c.manager.userId = :managerId OR EXISTS (SELECT cm.courseManagerId FROM CourseManager cm WHERE cm.course = c AND cm.user.userId = :managerId))";
 
+    String HAS_VISIBLE_MODULE_CONTENT = """
+        EXISTS (SELECT 1 FROM Module m WHERE m.course = c AND m.status = 'VISIBLE' AND (
+            EXISTS (SELECT 1 FROM Question q WHERE q.module = m AND q.deletedAt IS NULL
+                AND q.approvalStatus = 'APPROVED' AND q.status IN ('INACTIVE', 'ACTIVE'))
+            OR EXISTS (SELECT 1 FROM Exam ex WHERE ex.module = m AND ex.status = 'PUBLISHED' AND ex.mode = 'EXAM')
+            OR EXISTS (SELECT 1 FROM Deck d WHERE d.module = m
+                AND (d.user.roleName <> 'STUDENT' OR (d.visibility = 'PUBLIC' AND d.reviewStatus = 'APPROVED')))
+        ))
+        """;
+
     @Query("""
     SELECT DISTINCT c.courseId FROM Course c
     WHERE c.manager.userId = :userId
@@ -58,9 +68,16 @@ public interface CourseRepository extends JpaRepository<Course, Long> {
     @Query("SELECT c FROM Course c WHERE (:managerId IS NULL OR " + MANAGER_SCOPE + ") " +
             "AND (:categoryId IS NULL OR c.categoryId = :categoryId) " +
             "AND (:published IS NULL OR c.isPublished = :published) " +
+            "AND (:status IS NULL OR (:status = 'PUBLISHED' AND c.isPublished = true) " +
+            "OR (:status = 'READY_TO_PUBLISH' AND c.isPublished = false AND " + HAS_VISIBLE_MODULE_CONTENT + ") " +
+            "OR (:status = 'DRAFT' AND c.isPublished = false AND NOT " + HAS_VISIBLE_MODULE_CONTENT + ")) " +
             "AND (LOWER(c.title) LIKE :search ESCAPE '!' OR LOWER(c.description) LIKE :search ESCAPE '!')")
     Page<Course> findManagedCourses(@Param("managerId") Long managerId, @Param("categoryId") Long categoryId,
-                                   @Param("published") Boolean published, @Param("search") String search, Pageable pageable);
+                                   @Param("published") Boolean published, @Param("status") String status,
+                                   @Param("search") String search, Pageable pageable);
+
+    @Query("SELECT c.courseId FROM Course c WHERE c.courseId IN :ids AND " + HAS_VISIBLE_MODULE_CONTENT)
+    List<Long> findCoursesWithVisibleModuleContent(@Param("ids") List<Long> ids);
 
     @EntityGraph(attributePaths = {"category", "manager"})
     @Query("SELECT c FROM Course c WHERE c.courseId = :id")

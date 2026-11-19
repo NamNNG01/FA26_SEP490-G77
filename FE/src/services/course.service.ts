@@ -16,6 +16,14 @@ export interface CourseManagerItem {
   avatarUrl?: string | null;
 }
 
+export const COURSE_STATUS_LABELS = {
+  DRAFT: 'Draft',
+  READY_TO_PUBLISH: 'Ready to publish',
+  PUBLISHED: 'Published',
+} as const;
+
+export type CourseStatus = keyof typeof COURSE_STATUS_LABELS;
+
 export interface CourseSummaryItem {
   courseId: number;
   title: string;
@@ -28,6 +36,7 @@ export interface CourseSummaryItem {
   thumbnailUrl: string | null;
   price: number;
   isPublished: boolean;
+  status: CourseStatus;
   moduleCount: number;
   studentCount: number;
   examCount: number;
@@ -49,6 +58,7 @@ export interface CourseListParams {
   search?: string;
   categoryId?: number;
   isPublished?: boolean;
+  status?: CourseStatus;
   page?: number;
   size?: number;
   sort?: string;
@@ -63,6 +73,7 @@ export interface CourseModuleResponse {
   status: 'VISIBLE' | 'HIDDEN';
   questionCount: number;
   examCount: number;
+  deckCount: number;
 }
 
 export interface CreateModuleRequest {
@@ -91,6 +102,7 @@ export interface CourseDetailResponse {
   thumbnailUrl: string | null;
   price: number;
   isPublished: boolean;
+  status: CourseStatus;
   moduleCount: number;
   studentCount: number;
   examCount: number;
@@ -120,16 +132,7 @@ export interface UpdateCourseRequest {
   managerIds?: number[];
 }
 
-export interface PublishCourseResponse {
-  courseId: number;
-  title: string;
-  slug: string;
-  isPublished: boolean;
-  moduleCount: number;
-  studentCount: number;
-  examCount: number;
-  updatedAt: string;
-}
+export type PublishCourseResponse = CourseDetailResponse;
 
 export interface CourseStudentItem {
   userId: number;
@@ -160,6 +163,7 @@ export const courseService = {
     if (params?.search) query.set('search', params.search);
     if (params?.categoryId !== undefined) query.set('categoryId', String(params.categoryId));
     if (params?.isPublished !== undefined) query.set('isPublished', String(params.isPublished));
+    if (params?.status) query.set('status', params.status);
     if (params?.page !== undefined) query.set('page', String(params.page));
     if (params?.size !== undefined) query.set('size', String(params.size));
     if (params?.sort) query.set('sort', params.sort);

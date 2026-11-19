@@ -29,9 +29,10 @@ public class ManagerCourseController {
     public ResponseEntity<ApiResponse<PageResponse<CourseResponse>>> list(@AuthenticationPrincipal UserPrincipal user,
             @RequestParam(required = false) String search, @RequestParam(required = false) Long categoryId,
             @RequestParam(name = "isPublished", required = false) Boolean published,
+            @RequestParam(required = false) CourseResponse.Status status,
             @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size,
             @RequestParam(defaultValue = "updatedAt,desc") String sort) {
-        return ResponseEntity.ok(ApiResponse.success(service.list(user, search, categoryId, published, page, size, sort)));
+        return ResponseEntity.ok(ApiResponse.success(service.list(user, search, categoryId, published, status, page, size, sort)));
     }
 
     @GetMapping("/courses/{id}")

@@ -5,7 +5,8 @@ import com.examprep.security.UserPrincipal;
 import java.util.List;
 
 public interface CourseService {
-    PageResponse<CourseResponse> list(UserPrincipal user, String search, Long categoryId, Boolean published, int page, int size, String sort);
+    PageResponse<CourseResponse> list(UserPrincipal user, String search, Long categoryId, Boolean published,
+                                      CourseResponse.Status status, int page, int size, String sort);
     CourseResponse detail(UserPrincipal user, Long id);
     CourseResponse create(CourseRequests.Create request);
     CourseResponse update(UserPrincipal user, Long id, CourseRequests.Update request);

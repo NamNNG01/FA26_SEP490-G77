@@ -72,11 +72,12 @@ class ManagerCourseConcurrencyPostgresTest {
                 () -> call(managerId, "COURSE_MANAGER", delete("/api/v1/manager/modules/" + moduleId)));
         int publishStatus = results.get(0).getResponse().getStatus();
         int deleteStatus = results.get(1).getResponse().getStatus();
-        assertTrue((publishStatus == 200 && deleteStatus == 409) || (publishStatus == 400 && deleteStatus == 200),
-                "publish=" + publishStatus + ", delete=" + deleteStatus);
+        assertEquals(400, publishStatus);
+        assertEquals(200, deleteStatus);
         Boolean published = db.queryForObject("SELECT is_published FROM courses WHERE course_id = ?", Boolean.class, courseId);
         int modules = db.queryForObject("SELECT count(*) FROM modules WHERE course_id = ?", Integer.class, courseId);
-        assertFalse(Boolean.TRUE.equals(published) && modules == 0);
+        assertFalse(Boolean.TRUE.equals(published));
+        assertEquals(0, modules);
     }
 
     @Test
