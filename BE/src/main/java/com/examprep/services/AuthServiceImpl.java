@@ -21,13 +21,18 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Locale;
+import java.util.regex.Pattern;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class AuthServiceImpl implements AuthService {
+    private static final Pattern REGISTRATION_PASSWORD_COMPLEXITY =
+            Pattern.compile("(?s)(?=.*\\p{Lu})(?=.*\\p{N})(?=.*[\\p{P}\\p{S}]).*");
+    private static final int BCRYPT_PASSWORD_MAX_BYTES = 72;
 
     private final UserRepository userRepository;
     private final RefreshTokenRepository refreshTokenRepository;
@@ -61,10 +66,18 @@ public class AuthServiceImpl implements AuthService {
             throw new BadRequestException("Email is already registered.");
         }
 
+        String password = request.getPassword();
+        if (!REGISTRATION_PASSWORD_COMPLEXITY.matcher(password).matches()) {
+            throw new BadRequestException("Password must include an uppercase letter, a number and a symbol.");
+        }
+        if (password.getBytes(StandardCharsets.UTF_8).length > BCRYPT_PASSWORD_MAX_BYTES) {
+            throw new BadRequestException("Password is too long. Use at most 72 UTF-8 bytes.");
+        }
+
         // Always assign STUDENT role for registration (role stored directly on users.role_name)
         User user = User.builder()
                 .email(email)
-                .passwordHash(passwordEncoder.encode(request.getPassword()))
+                .passwordHash(passwordEncoder.encode(password))
                 .fullName(request.getFullName().trim())
                 .roleName(User.ROLE_STUDENT)
                 .status(User.STATUS_ACTIVE)

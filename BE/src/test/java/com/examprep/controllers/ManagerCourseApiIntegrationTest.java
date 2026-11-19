@@ -194,12 +194,18 @@ public class ManagerCourseApiIntegrationTest {
         for (String payload : List.of(
                 createBody(" "),
                 createBody("A").replace("\"managerId\":" + manager.getUserId(), "\"managerId\":" + student.getUserId()),
-                createBody("A").replace("\"price\":0", "\"price\":-1"),
-                createBody("A").replace("\"price\":0", "\"price\":0.001"),
-                createBody("A").replace("\"price\":0", "\"price\":100000000"))) {
+                createBody("A").replace("\"price\":0", "\"price\":-1"))) {
             call(admin, post("/api/v1/manager/courses").contentType(MediaType.APPLICATION_JSON).content(payload))
                     .andExpect(status().isBadRequest());
         }
+        call(admin, post("/api/v1/manager/courses").contentType(MediaType.APPLICATION_JSON)
+                .content(createBody("A").replace("\"price\":0", "\"price\":100000000")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.data.price").value("must be less than or equal to 99999999.99"));
+        call(admin, post("/api/v1/manager/courses").contentType(MediaType.APPLICATION_JSON)
+                .content(createBody("A").replace("\"price\":0", "\"price\":0.001")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.data.price").value("numeric value out of bounds (<8 digits>.<2 digits> expected)"));
         manager.setStatus("INACTIVE");
         call(admin, post("/api/v1/manager/courses").contentType(MediaType.APPLICATION_JSON).content(createBody("A")))
                 .andExpect(status().isBadRequest());

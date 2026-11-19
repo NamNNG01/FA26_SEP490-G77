@@ -66,7 +66,7 @@ export function CourseCard({
         {status && <Badge variant={statusVariant}>{status}</Badge>}
       </div>
       <div>
-        <h3 className="text-lg font-semibold text-content leading-snug">{title}</h3>
+        <h3 className="text-lg font-semibold text-content leading-snug [overflow-wrap:anywhere]">{title}</h3>
         {difficulty && <p className="text-xs text-content-subtle mt-0.5">{subject}</p>}
       </div>
       {description && <p className="text-xs text-content-soft leading-relaxed line-clamp-2">{description}</p>}

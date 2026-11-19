@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import { Icon } from '@/assets/icons';
 import { Container } from '@/features/landing/components/Container';
 import { studentCourseService, type StudentCourseItem, type StudentCoursePage } from '@/services/studentCourse.service';
@@ -18,8 +18,9 @@ export function StudentCourseCatalog() {
   const inDashboard = user?.role === Role.STUDENT;
   const Shell = inDashboard ? Plain : Container;
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [page, setPage] = useState<StudentCoursePage | null>(null);
-  const [keyword, setKeyword] = useState('');
+  const keyword = (searchParams.get('q') ?? '').slice(0, 100);
   const debouncedKeyword = useDebounce(keyword, 250);
   const [sort, setSort] = useState<'newest' | 'title'>('newest');
   const [categoryId, setCategoryId] = useState('');
@@ -28,6 +29,10 @@ export function StudentCourseCatalog() {
   const [refresh, setRefresh] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    setPageIndex(0);
+  }, [keyword]);
 
   useEffect(() => {
     let active = true;
@@ -59,6 +64,14 @@ export function StudentCourseCatalog() {
     return () => { active = false; };
   }, [pageIndex, debouncedKeyword, sort, categoryId, refresh]);
 
+  function setKeyword(value: string) {
+    const next = new URLSearchParams(searchParams);
+    const text = value.slice(0, 100);
+    if (text) next.set('q', text);
+    else next.delete('q');
+    setSearchParams(next, { replace: true });
+  }
+
   function resetFilters() {
     setKeyword('');
     setSort('newest');
@@ -76,7 +89,7 @@ export function StudentCourseCatalog() {
           <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:items-center">
             <label className="relative block w-full sm:max-w-md">
               <Icon.Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-content-subtle" />
-              <input value={keyword} onChange={(event) => { setKeyword(event.target.value.slice(0, 100)); setPageIndex(0); }} placeholder="Search courses" aria-label="Search courses" className="h-12 w-full rounded-xl border border-line bg-surface pl-10 pr-4 text-sm text-content outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-100" />
+              <input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="Search courses" aria-label="Search courses" className="h-12 w-full rounded-xl border border-line bg-surface pl-10 pr-4 text-sm text-content outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-100" />
             </label>
             <Select
               aria-label="Filter by category"
@@ -154,7 +167,7 @@ function CatalogCourseCard({ course, onOpen }: { course: StudentCourseItem; onOp
       </div>
       <div className="flex flex-1 flex-col p-5">
         <div className="flex items-center gap-2 text-xs text-content-subtle"><span>{course.category?.name ?? 'Course'}</span><span aria-hidden="true">·</span><span>{course.publishedExamCount} {course.publishedExamCount === 1 ? 'exam' : 'exams'}</span></div>
-        <h3 className="mt-2 text-lg font-semibold leading-snug text-content">{course.title}</h3>
+        <h3 className="mt-2 text-lg font-semibold leading-snug text-content [overflow-wrap:anywhere]">{course.title}</h3>
         <p className="mt-1 text-sm text-content-soft">{course.manager?.fullName ? `Created by ${course.manager.fullName}` : 'Build a little more knowledge every day.'}</p>
         <div className="mt-auto flex items-center justify-between gap-3 pt-5">
           <span className={`text-sm font-semibold ${course.price === 0 ? 'text-success' : 'text-content'}`}>{price}</span>

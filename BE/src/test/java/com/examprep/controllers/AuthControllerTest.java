@@ -75,6 +75,21 @@ class AuthControllerTest {
     }
 
     @Test
+    void registerRejectsPasswordsShorterThanTheRegistrationFormAllows() throws Exception {
+        RegisterRequest request = RegisterRequest.builder()
+                .email("student@example.test")
+                .password("A1!bcde")
+                .fullName("Test Student")
+                .build();
+
+        mockMvc.perform(post("/api/v1/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.data.password").value("Password must be at least 8 characters"));
+    }
+
+    @Test
     void login_Success() throws Exception {
         LoginRequest request = LoginRequest.builder()
                 .email("student@gmail.com")
