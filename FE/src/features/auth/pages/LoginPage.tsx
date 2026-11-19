@@ -108,7 +108,9 @@ export function LoginPage() {
             <Input
               label="Email"
               placeholder="you@example.com"
-              autoComplete="email"
+              id="login-email"
+              name="email"
+              autoComplete="username"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -131,6 +133,8 @@ export function LoginPage() {
               }
               placeholder="Enter your password"
               autoComplete="current-password"
+              id="login-password"
+              name="password"
               type={showPwd ? "text" : "password"}
               value={password}
               onChange={(e) => setPassword(e.target.value)}

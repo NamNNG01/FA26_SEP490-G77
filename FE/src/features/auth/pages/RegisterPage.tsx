@@ -124,6 +124,9 @@ export function RegisterPage() {
             <Input
               label="Full name"
               placeholder="Enter your name"
+              id="register-name"
+              name="name"
+              autoComplete="name"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
               icon={<Icon.User className="w-4 h-4" />}
@@ -131,6 +134,9 @@ export function RegisterPage() {
             <Input
               label="Email"
               placeholder="Enter your email"
+              id="register-email"
+              name="email"
+              autoComplete="username"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -140,6 +146,8 @@ export function RegisterPage() {
               label="Password"
               placeholder="Enter your password"
               type={showPwd ? 'text' : 'password'}
+              id="register-password"
+              name="password"
               autoComplete="new-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -160,6 +168,9 @@ export function RegisterPage() {
               label="Confirm password"
               placeholder="Confirm your password"
               type={showConfirm ? 'text' : 'password'}
+              id="register-confirm-password"
+              name="confirmPassword"
+              autoComplete="new-password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               icon={<Icon.Lock className="w-4 h-4" />}
