@@ -31,7 +31,6 @@ import com.examprep.exceptions.BadRequestException;
 @RequiredArgsConstructor
 @Tag(name = "Student Materials", description = "MQ-01 … MQ-06: material upload and material-based quiz generation")
 public class StudentMaterialController {
-    private final com.examprep.services.PlanEntitlementService entitlements;
     private final StudentMaterialService service;
 
     @PostMapping
@@ -94,7 +93,6 @@ public class StudentMaterialController {
             @AuthenticationPrincipal UserPrincipal user,
             @PathVariable Long documentId,
             @Valid @RequestBody MaterialRequests.GenerateQuiz request) {
-        entitlements.require(user.getId(), "AI_QUIZ_FROM_MATERIAL");
         return ResponseEntity.status(202)
                 .body(ApiResponse.success(service.generateQuiz(user.getId(), documentId, request), "Accepted"));
     }

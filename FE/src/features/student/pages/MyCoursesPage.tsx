@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { DASHBOARD_REFRESH_MS, useAutoRefresh } from '@/hooks/useAutoRefresh';
-import { Link, useNavigate } from 'react-router';
+import { Link, useLocation, useNavigate } from 'react-router';
+import { isAfterAuthState } from '@/auth/authContext';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Pagination } from '@/components/ui/Pagination';
@@ -43,6 +44,9 @@ function matchesSearch(course: MyCourse, term: string) {
  */
 export function MyCoursesPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  // Just signed in / signed up: with no course yet, the catalog is a better start than an empty list.
+  const afterAuthRef = useRef(isAfterAuthState(location.state));
   const { data: dashboard } = useDashboard();
   const student = dashboard?.kind === 'student' ? dashboard : null;
 
@@ -78,6 +82,13 @@ export function MyCoursesPage() {
         if (cancelled) return;
         // Courses left with EN-04 come back as CANCELLED; they are no longer the student's.
         const owned = res.content.filter(c => c.status !== 'CANCELLED');
+        if (afterAuthRef.current) {
+          afterAuthRef.current = false;
+          if (owned.length === 0) {
+            navigate(ROUTES.courses, { replace: true });
+            return;
+          }
+        }
         // Keep the live percents read last time until LP-01 gives the new ones, so the bars do not
         // drop to MC-01's stored percent and climb back.
         const known = new Map((cached ?? []).map(c => [c.courseId, c.progress]));
