@@ -13,7 +13,6 @@ import type { Page } from './adminDiscount.service';
  *   PUT    /api/v1/admin/subscription-plans/reorder       (API 25) — every non-deleted plan, sort_order = index
  *   DELETE /api/v1/admin/subscription-plans/{id}          (API 26) — soft delete
  *   GET    /api/v1/subscription-plans                     (API 27) — active plans only, no paging
- *   GET    /api/v1/admin/subscription-plans/feature-keys  — capabilities a plan can unlock (`featureKeys`)
  *
  * Errors: PLAN_NAME_EXISTS (409), PLAN_HAS_ACTIVE_SUBSCRIBERS (409), VALIDATION_FAILED (400).
  */
@@ -21,8 +20,7 @@ import type { Page } from './adminDiscount.service';
 export const PLAN_NAME_MAX = 100;
 /** subscription_plans.price is DECIMAL(10,2). */
 export const PLAN_PRICE_MAX = 99_999_999.99;
-export const PLAN_FEATURES_MAX = 20;
-export const PLAN_FEATURE_TEXT_MAX = 200;
+export const PLAN_DESCRIPTION_MAX = 1000;
 
 /** API 20 row */
 export interface AdminSubscriptionPlan {
@@ -34,18 +32,11 @@ export interface AdminSubscriptionPlan {
   durationDays: number;
   /** Total tokens for the whole plan period. */
   aiTokenLimit: number;
+  /** Legacy bullet list — plans now keep this in `description`, one sentence per line. */
   features: string[];
-  /** Capabilities the BE unlocks for subscribers (AI_FLASHCARD_GENERATION, …). */
-  featureKeys: string[];
   isActive: boolean;
   sortOrder: number;
   activeSubscribers: number;
-}
-
-export interface PlanFeatureKey {
-  key: string;
-  label: string;
-  description: string;
 }
 
 /** API 21 */
@@ -63,7 +54,6 @@ export interface SubscriptionPlanPayload {
   durationDays: number;
   aiTokenLimit: number;
   features: string[];
-  featureKeys: string[];
   isActive: boolean;
   sortOrder: number;
 }
@@ -116,10 +106,6 @@ export const adminSubscriptionPlanService = {
   },
   async remove(id: number) {
     await api.request<ApiResponse<null>>({ method: 'delete', url: `/admin/subscription-plans/${id}` });
-  },
-  async featureKeys(): Promise<PlanFeatureKey[]> {
-    const res = await api.get<ApiResponse<PlanFeatureKey[]>>('/admin/subscription-plans/feature-keys');
-    return res.data ?? [];
   },
   /** API 27 — public. */
   async listPublic(): Promise<PublicSubscriptionPlan[]> {

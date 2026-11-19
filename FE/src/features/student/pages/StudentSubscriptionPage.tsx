@@ -16,10 +16,13 @@ import {
 } from '@/services/studentSubscription.service';
 import { aiFlashcardService, type AiUsage } from '@/services/aiFlashcard.service';
 import { formatVnd } from '@/services/payment.service';
+import { adminSubscriptionPlanService } from '@/services/adminSubscriptionPlan.service';
+import { planLines } from '@/utils/planDescription';
 import { PaymentCheckoutModal, type PaymentItem } from '@/features/payment/components/PaymentCheckoutModal';
 import { CardGridSkeleton, LoadError, PageTitle, STUDENT_PAGE_CLASS, formatDate } from '../components/studentUi';
 
 const formatTokens = (n: number) => Math.max(0, n).toLocaleString('vi-VN');
+type PlanWithDescription = SubscriptionPlan & { description: string | null };
 type TokenBalance = { status: 'loading' | 'error' } | { status: 'ready'; usage: AiUsage };
 
 /**
@@ -32,7 +35,7 @@ export function StudentSubscriptionPage() {
   const toast = useToast();
   const current = useCurrentSubscription(user?.userId ?? null);
 
-  const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
+  const [plans, setPlans] = useState<PlanWithDescription[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
@@ -45,9 +48,13 @@ export function StudentSubscriptionPage() {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    subscriptionService
-      .getPlans()
-      .then(data => { if (!cancelled) setPlans(data); })
+    // SB-01 has no description, which now holds a plan's lines; API 27 (public, active plans) does.
+    Promise.all([subscriptionService.getPlans(), adminSubscriptionPlanService.listPublic().catch(() => [])])
+      .then(([data, publicPlans]) => {
+        if (cancelled) return;
+        const descriptions = new Map(publicPlans.map(p => [p.planId, p.description]));
+        setPlans(data.map(plan => ({ ...plan, description: descriptions.get(plan.planId) ?? null })));
+      })
       .catch(err => { if (!cancelled) setError(getApiErrorMessage(err, 'Could not load the plans.')); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
@@ -237,8 +244,9 @@ function UsageBar({ label, aside, left, total }: { label: string; aside: string;
   );
 }
 
-function PlanCard({ plan, onChoose }: { plan: SubscriptionPlan; onChoose: () => void }) {
+function PlanCard({ plan, onChoose }: { plan: PlanWithDescription; onChoose: () => void }) {
   const free = plan.price <= 0;
+  const lines = planLines(plan);
   return (
     <div className="card p-5 flex flex-col gap-4">
       <div className="flex items-start justify-between gap-2">
@@ -252,14 +260,14 @@ function PlanCard({ plan, onChoose }: { plan: SubscriptionPlan; onChoose: () => 
       </div>
 
       <ul className="space-y-2 flex-1">
-        {plan.features.length === 0 && (
+        {lines.length === 0 && (
           <li className="flex items-start gap-2 text-sm text-content-secondary">
             <Icon.Check className="w-4 h-4 mt-0.5 text-success shrink-0" />
             <span>Full access for {plan.durationDays} days</span>
           </li>
         )}
-        {plan.features.map(feature => (
-          <li key={feature} className="flex items-start gap-2 text-sm text-content-secondary">
+        {lines.map((feature, index) => (
+          <li key={index}className="flex items-start gap-2 text-sm text-content-secondary">
             <Icon.Check className="w-4 h-4 mt-0.5 text-success shrink-0" />
             <span>{feature}</span>
           </li>
