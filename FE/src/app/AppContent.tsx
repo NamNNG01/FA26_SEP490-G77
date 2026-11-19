@@ -16,7 +16,6 @@ import { AuthLayout } from '@/layouts/AuthLayout';
 import { DashboardLayout } from '@/layouts/DashboardLayout';
 import { PublicLayout } from '@/layouts/PublicLayout';
 import { LoadingScreen } from '@/components/LoadingScreen';
-import { PlanFeatureRequiredPrompt } from '@/components/common/PlanFeatureRequiredPrompt';
 import { Role } from '@/utils/permissions';
 
 import { LoginPage } from '@/features/auth';
@@ -247,7 +246,6 @@ function AppRoutes() {
   //     exactly once and persists across route changes.
   return (
     <>
-    {isStudent && <PlanFeatureRequiredPrompt />}
     <Routes>
       {publicRoutes(<SignedInHome isEntry={location.key === entryKey} />, !isStudent)}
 
