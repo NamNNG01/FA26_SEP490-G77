@@ -11,6 +11,8 @@ import { SearchInput } from "@/components/common/SearchInput";
 import { Icon } from "@/assets/icons";
 import {
   courseService,
+  COURSE_STATUS_LABELS,
+  type CourseStatus,
   type CourseSummaryItem,
   type CategoryResponse,
   type CourseDetailResponse,
@@ -55,7 +57,7 @@ function exportCoursesToCsv(items: CourseSummaryItem[]) {
     c.courseId,
     `"${c.title.replace(/"/g, '""')}"`,
     `"${(c.categoryName || "").replace(/"/g, '""')}"`,
-    c.isPublished ? "Published" : "Draft",
+    COURSE_STATUS_LABELS[c.status],
     c.moduleCount,
     c.examCount,
     c.studentCount,
@@ -94,7 +96,7 @@ export function CourseListPage({
 
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
-  const [selectedStatus, setSelectedStatus] = useState("all");
+  const [selectedStatus, setSelectedStatus] = useState<CourseStatus | "all">("all");
   const [page, setPage] = useState(1);
   const pageSize = 12;
 
@@ -163,13 +165,6 @@ export function CourseListPage({
       setError(null);
     }
     try {
-      const isPublishedParam =
-        selectedStatus === "published"
-          ? true
-          : selectedStatus === "draft"
-            ? false
-            : undefined;
-
       const categoryIdParam =
         selectedCategory !== "all" && !Number.isNaN(Number(selectedCategory))
           ? Number(selectedCategory)
@@ -178,7 +173,7 @@ export function CourseListPage({
       const data = await courseService.getCourses({
         search: search.trim() || undefined,
         categoryId: categoryIdParam,
-        isPublished: isPublishedParam,
+        status: selectedStatus === "all" ? undefined : selectedStatus,
         page: page - 1,
         size: pageSize,
       });
@@ -216,7 +211,7 @@ export function CourseListPage({
   };
 
   const handleStatusChange = (val: string) => {
-    setSelectedStatus(val);
+    setSelectedStatus(val as CourseStatus | "all");
     setPage(1);
   };
 
@@ -246,8 +241,9 @@ export function CourseListPage({
 
   const statusOptions = [
     { label: "All Status", value: "all" },
-    { label: "Published", value: "published" },
-    { label: "Draft", value: "draft" },
+    { label: COURSE_STATUS_LABELS.PUBLISHED, value: "PUBLISHED" },
+    { label: COURSE_STATUS_LABELS.READY_TO_PUBLISH, value: "READY_TO_PUBLISH" },
+    { label: COURSE_STATUS_LABELS.DRAFT, value: "DRAFT" },
   ];
 
   return (
@@ -371,7 +367,7 @@ export function CourseListPage({
               key={c.courseId}
               title={c.title}
               subject={c.categoryName || "Uncategorized"}
-              status={c.isPublished ? "Published" : "Draft"}
+              status={COURSE_STATUS_LABELS[c.status]}
               customMetrics={[
                 { label: "Modules", value: c.moduleCount, color: "#2563EB" },
                 { label: "Exams", value: c.examCount, color: "#059669" },

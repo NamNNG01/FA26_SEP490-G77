@@ -11,6 +11,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
@@ -22,6 +23,7 @@ public class StudentEnrollmentController {
     private final EnrollmentService service;
 
     @PostMapping("/courses/{courseId}/checkout")
+    @PreAuthorize("hasRole('STUDENT')")
     @Operation(summary = "EN-01: Create course checkout")
     public ResponseEntity<ApiResponse<EnrollmentResponses.Checkout>> checkout(
             @AuthenticationPrincipal UserPrincipal user, @PathVariable Long courseId,
@@ -32,6 +34,7 @@ public class StudentEnrollmentController {
     }
 
     @PostMapping("/courses/{courseId}/enroll")
+    @PreAuthorize("hasRole('STUDENT')")
     @Operation(summary = "EN-02: Enroll in free course")
     public ResponseEntity<ApiResponse<EnrollmentResponses.Enrolled>> enroll(
             @AuthenticationPrincipal UserPrincipal user, @PathVariable Long courseId) {

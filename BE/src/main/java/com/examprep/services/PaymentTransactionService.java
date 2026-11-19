@@ -8,6 +8,7 @@ import com.examprep.exceptions.ResourceNotFoundException;
 import com.examprep.repositories.*;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -29,6 +30,7 @@ public class PaymentTransactionService {
     private final DiscountRepository discounts;
     private final UserDiscountRepository userDiscounts;
     private final ObjectMapper json;
+    private final EntityManager entityManager;
 
     @Transactional
     public Payment createPending(Long userId, String orderCode, String type, Long refId, String title,
@@ -76,6 +78,33 @@ public class PaymentTransactionService {
                 payment.setUpdatedAt(Instant.now());
             }
         });
+    }
+
+    @Transactional
+    public void expireDuePayments() {
+        Instant now = Instant.now();
+        for (Payment payment : payments.lockExpired(Payment.PENDING, now)) {
+            expirePending(payment, now);
+        }
+    }
+
+    @Transactional
+    public void expireIfDue(String orderCode, boolean providerExpired) {
+        Payment payment = payments.lockByOrderCode(orderCode)
+                .orElseThrow(() -> new ResourceNotFoundException("Payment not found"));
+        entityManager.refresh(payment);
+        Instant now = Instant.now();
+        if (Payment.PENDING.equals(payment.getStatus())
+                && (providerExpired || (payment.getExpiresAt() != null && !payment.getExpiresAt().isAfter(now)))) {
+            expirePending(payment, now);
+        }
+    }
+
+    private void expirePending(Payment payment, Instant now) {
+        releaseDiscount(payment);
+        payment.setStatus(Payment.EXPIRED);
+        payment.setCancelledAt(now);
+        payment.setUpdatedAt(now);
     }
 
     @Transactional

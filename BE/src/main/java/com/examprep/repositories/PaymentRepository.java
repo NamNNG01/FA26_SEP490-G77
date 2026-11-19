@@ -19,6 +19,7 @@ import java.util.Optional;
 public interface PaymentRepository extends JpaRepository<Payment, Long> {
     Optional<Payment> findByOrderCodeAndUserUserId(String orderCode, Long userId);
     Optional<Payment> findByOrderCode(String orderCode);
+    Optional<Payment> findFirstByUserUserIdAndTypeAndRefIdOrderByPaymentIdDesc(Long userId, String type, Long refId);
     interface StatusRow {
         Long getPayosOrderCode();
         String getStatus();
@@ -48,10 +49,10 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
 
     boolean existsByUserUserIdAndDiscountDiscountIdAndStatus(Long userId, Long discountId, String status);
 
-    /** Checkouts whose discount reservation must be released because the link expired unpaid. */
+    /** Unpaid checkouts past their deadline, whether or not they reserved a discount. */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select p from Payment p where p.status = :status and p.discountReserved = true and p.expiresAt < :now")
-    List<Payment> lockReservedExpired(@Param("status") String status, @Param("now") Instant now);
+    @Query("select p from Payment p where p.status = :status and p.expiresAt <= :now order by p.paymentId")
+    List<Payment> lockExpired(@Param("status") String status, @Param("now") Instant now);
 
     Page<Payment> findByUserUserIdOrderByCreatedAtDesc(Long userId, Pageable pageable);
 

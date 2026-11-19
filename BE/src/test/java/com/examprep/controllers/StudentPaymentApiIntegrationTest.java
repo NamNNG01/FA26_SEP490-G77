@@ -65,7 +65,7 @@ class StudentPaymentApiIntegrationTest {
 
     @BeforeEach
     void fixtures() {
-        when(payos.create(anyLong(), anyInt(), anyString())).thenAnswer(invocation ->
+        when(payos.create(anyLong(), anyInt(), anyString(), any(Instant.class))).thenAnswer(invocation ->
                 new PayosClient.Link("https://pay.test/" + invocation.getArgument(0),
                         "qr-" + invocation.getArgument(0), "link-" + invocation.getArgument(0)));
 
@@ -136,7 +136,8 @@ class StudentPaymentApiIntegrationTest {
         assertEquals(0, new BigDecimal("500000").compareTo(payment.getAmount()));
         assertNotNull(payment.getPayosOrderCode());
         assertEquals("https://pay.test/" + payment.getPayosOrderCode(), payment.getCheckoutUrl());
-        verify(payos, times(1)).create(payment.getPayosOrderCode(), 500000, "Spring Boot " + payment.getOrderCode());
+        verify(payos, times(1)).create(payment.getPayosOrderCode(), 500000,
+                "Spring Boot " + payment.getOrderCode(), payment.getExpiresAt());
     }
 
     @Test
@@ -178,7 +179,7 @@ class StudentPaymentApiIntegrationTest {
                 .content("{}")).andExpect(status().isCreated()));
         assertEquals(first.path("orderCode").asText(), repeated.path("orderCode").asText());
         assertEquals(first.path("paymentUrl").asText(), repeated.path("paymentUrl").asText());
-        verify(payos, times(1)).create(anyLong(), anyInt(), anyString());
+        verify(payos, times(1)).create(anyLong(), anyInt(), anyString(), any(Instant.class));
         assertEquals(1, payments().size());
 
         // A different discount cannot ride on the old amount: the old link is closed and replaced.
@@ -206,12 +207,12 @@ class StudentPaymentApiIntegrationTest {
         assertEquals(Payment.PENDING, payment(first.path("orderCode").asText()).getStatus(),
                 "a link PayOS did not cancel must stay payable so a late payment is still honoured");
         assertEquals(1, payments().size());
-        verify(payos, times(1)).create(anyLong(), anyInt(), anyString());
+        verify(payos, times(1)).create(anyLong(), anyInt(), anyString(), any(Instant.class));
     }
 
     @Test
     void checkoutMarksThePaymentFailedWhenPayosCannotCreateTheLink() throws Exception {
-        when(payos.create(anyLong(), anyInt(), anyString())).thenThrow(new IllegalStateException("PayOS down"));
+        when(payos.create(anyLong(), anyInt(), anyString(), any(Instant.class))).thenThrow(new IllegalStateException("PayOS down"));
 
         call(student, post(checkoutUrl(paidCourse)).contentType(MediaType.APPLICATION_JSON).content("{}"))
                 .andExpect(status().isBadGateway())
@@ -897,6 +898,14 @@ class StudentPaymentApiIntegrationTest {
     }
 
     @Test
+    void onlyStudentsCanEnrollInAFreeCourse() throws Exception {
+        User admin = account(User.ROLE_ADMIN);
+        call(admin, post("/api/v1/student/courses/" + freeCourse.getCourseId() + "/enroll"))
+                .andExpect(status().isForbidden());
+        assertTrue(enrollments(freeCourse, admin).isEmpty());
+    }
+
+    @Test
     void webhookGrantsAnExpiredCheckoutBecauseTheMoneyWasCaptured() throws Exception {
         String orderCode = checkoutOrderCode(paidCourse, null);
         Payment pending = payment(orderCode);
@@ -909,6 +918,26 @@ class StudentPaymentApiIntegrationTest {
     }
 
     @Test
+    void unpaidCheckoutExpiresOnStatusReadAndCanBeRetried() throws Exception {
+        String orderCode = checkoutOrderCode(paidCourse, null);
+        Payment pending = payment(orderCode);
+        pending.setExpiresAt(Instant.now().minusSeconds(1));
+        em.flush();
+
+        call(student, get("/api/v1/student/payments/" + orderCode + "/status"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value(Payment.EXPIRED));
+        String latest = "/api/v1/student/payments/courses/" + paidCourse.getCourseId() + "/latest";
+        call(student, get(latest)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.orderCode").value(orderCode))
+                .andExpect(jsonPath("$.data.status").value(Payment.EXPIRED));
+        call(other, get(latest)).andExpect(status().isOk()).andExpect(jsonPath("$.data.orderCode").doesNotExist());
+        assertNotEquals(orderCode, checkoutOrderCode(paidCourse, null));
+        assertEquals(Payment.EXPIRED, payment(orderCode).getStatus());
+        verify(payos, never()).cancel(pending.getPayosOrderCode());
+    }
+
+    @Test
     void theReservationSweepReturnsTheDiscountAndALateWebhookStillGrantsAccess() throws Exception {
         String orderCode = checkoutOrderCode(paidCourse, "SAVE10");
         Payment pending = payment(orderCode);
@@ -917,7 +946,7 @@ class StudentPaymentApiIntegrationTest {
         pending.setExpiresAt(Instant.now().minus(5, ChronoUnit.MINUTES));
         em.flush();
 
-        paymentService.expireUnpaidReservations();
+        paymentService.expireUnpaidCheckouts();
 
         assertEquals(Payment.EXPIRED, payment(orderCode).getStatus());
         em.refresh(percentDiscount);

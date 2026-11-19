@@ -108,6 +108,11 @@ export const paymentService = {
     return res.data;
   },
 
+  async getLatestCourseCheckout(courseId: number): Promise<PaymentState | null> {
+    const res = await api.get<ApiResponse<PaymentState | null>>(`/student/payments/courses/${courseId}/latest`);
+    return res.data ?? null;
+  },
+
   async validateDiscount(code: string, target: PaymentTarget): Promise<DiscountCheck> {
     const res = await api.get<ApiResponse<DiscountCheck>>(
       `/student/discounts/validate?code=${encodeURIComponent(code.trim())}&${targetQuery(target)}`,

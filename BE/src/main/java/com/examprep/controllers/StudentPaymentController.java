@@ -11,6 +11,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
@@ -22,6 +23,7 @@ public class StudentPaymentController {
     private final PaymentService service;
 
     @PostMapping("/payments/checkout")
+    @PreAuthorize("#request.courseId() == null or hasRole('STUDENT')")
     @Operation(summary = "PY-01: Create payment checkout")
     public ResponseEntity<ApiResponse<PaymentResponses.Checkout>> checkout(@AuthenticationPrincipal UserPrincipal user,
             @Valid @RequestBody PaymentRequests.Checkout request) {
@@ -41,6 +43,13 @@ public class StudentPaymentController {
     public ResponseEntity<ApiResponse<PaymentResponses.PaymentState>> status(@AuthenticationPrincipal UserPrincipal user,
             @PathVariable String orderCode) {
         return ResponseEntity.ok(ApiResponse.success(service.status(user.getId(), orderCode)));
+    }
+
+    @GetMapping("/payments/courses/{courseId}/latest")
+    @Operation(summary = "Get the signed-in user's latest checkout for a course")
+    public ResponseEntity<ApiResponse<PaymentResponses.PaymentState>> latestCourseCheckout(
+            @AuthenticationPrincipal UserPrincipal user, @PathVariable Long courseId) {
+        return ResponseEntity.ok(ApiResponse.success(service.latestCourseCheckout(user.getId(), courseId).orElse(null)));
     }
 
     @GetMapping("/discounts/validate")

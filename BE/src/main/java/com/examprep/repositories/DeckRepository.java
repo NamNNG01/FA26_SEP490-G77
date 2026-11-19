@@ -1,6 +1,7 @@
 package com.examprep.repositories;
 
 import com.examprep.entities.Deck;
+import com.examprep.dto.IdCount;
 import com.examprep.dto.student.DeckDto;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
@@ -17,6 +18,14 @@ import java.util.Optional;
 
 @Repository
 public interface DeckRepository extends JpaRepository<Deck, Long> {
+    @Query("""
+        SELECT new com.examprep.dto.IdCount(d.module.moduleId, COUNT(d)) FROM Deck d
+        WHERE d.module.moduleId IN :ids
+          AND (d.user.roleName <> 'STUDENT' OR (d.visibility = 'PUBLIC' AND d.reviewStatus = 'APPROVED'))
+        GROUP BY d.module.moduleId
+        """)
+    List<IdCount> countManagedByModules(@Param("ids") List<Long> ids);
+
     @EntityGraph(attributePaths = {"course", "user", "module"})
     @Query("SELECT d FROM Deck d LEFT JOIN d.course c WHERE (:managerId IS NULL " +
             "OR (c IS NULL AND d.user.userId = :managerId) " +

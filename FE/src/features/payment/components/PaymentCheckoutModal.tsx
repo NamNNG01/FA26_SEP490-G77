@@ -78,12 +78,14 @@ export function PaymentCheckoutModal({
   const [checkout, setCheckout] = useState<PaymentCheckout | null>(null);
   const [status, setStatus] = useState<PaymentStatus>('PENDING');
   const [cancelling, setCancelling] = useState(false);
+  const [checkingPrevious, setCheckingPrevious] = useState(false);
   const onPaidRef = useRef(onPaid);
   onPaidRef.current = onPaid;
 
   const itemKey = item ? `${item.type}-${item.refId}` : '';
+  const courseId = item?.type === 'COURSE' ? item.refId : null;
 
-  // Another item starts from the first step.
+  // Check the previous course checkout when the dialog opens again.
   useEffect(() => {
     setCode('');
     setDiscount(null);
@@ -91,7 +93,24 @@ export function PaymentCheckoutModal({
     setError(null);
     setCheckout(null);
     setStatus('PENDING');
-  }, [itemKey]);
+    if (courseId === null) {
+      setCheckingPrevious(false);
+      return;
+    }
+    let active = true;
+    setCheckingPrevious(true);
+    paymentService.getLatestCourseCheckout(courseId)
+      .then(previous => {
+        if (active && previous?.status === 'EXPIRED') setStatus('EXPIRED');
+      })
+      .catch(() => {
+        // A status lookup failure still leaves the checkout form available.
+      })
+      .finally(() => {
+        if (active) setCheckingPrevious(false);
+      });
+    return () => { active = false; };
+  }, [itemKey, courseId]);
 
   useEffect(() => {
     if (!checkout || !item || status !== 'PENDING') return;
@@ -195,12 +214,12 @@ export function PaymentCheckoutModal({
 
   if (!item) return null;
 
-  const paying = checkout != null;
+  const paying = checkout != null || status === 'EXPIRED';
   const busy = submitting || checkingCode;
   const footer = !paying ? (
     <>
       <Button variant="outline" onClick={onClose} disabled={busy}>Cancel</Button>
-      <Button onClick={handleCheckout} loading={submitting} disabled={checkingCode}>Continue to payment</Button>
+      <Button onClick={handleCheckout} loading={submitting || checkingPrevious} disabled={checkingCode || checkingPrevious}>Continue to payment</Button>
     </>
   ) : status === 'PENDING' ? (
     <Button variant="ghost" onClick={handleCancelPayment} loading={cancelling}>Cancel payment</Button>
@@ -209,7 +228,7 @@ export function PaymentCheckoutModal({
   ) : (
     <>
       <Button variant="outline" onClick={onClose}>Close</Button>
-      <Button onClick={startOver}>New payment</Button>
+      <Button onClick={startOver}>{status === 'EXPIRED' ? 'Try again' : 'New payment'}</Button>
     </>
   );
 
@@ -282,9 +301,9 @@ export function PaymentCheckoutModal({
 
         {paying && (
           <>
-            <PriceBreakdown checkout={checkout} title={item.title} />
+            {checkout && <PriceBreakdown checkout={checkout} title={item.title} />}
 
-            {status === 'PENDING' && (
+            {status === 'PENDING' && checkout && (
               <div className="flex flex-col items-center gap-3 text-center">
                 <PaymentQr value={checkout.qrCode} />
                 <p className="text-sm text-content-soft">

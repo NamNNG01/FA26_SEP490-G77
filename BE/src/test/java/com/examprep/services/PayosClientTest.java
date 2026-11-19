@@ -16,6 +16,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HexFormat;
@@ -129,7 +130,8 @@ class PayosClientTest {
                  "qrCode":"qr-data","paymentLinkId":"pl-123"}}""";
         PayosClient client = client("client-1", "api-key-1", CHECKSUM_KEY);
 
-        PayosClient.Link link = client.create(1001L, 50_000, "A description that is far longer than 25 chars");
+        Instant expiresAt = Instant.now().plusSeconds(1800);
+        PayosClient.Link link = client.create(1001L, 50_000, "A description that is far longer than 25 chars", expiresAt);
 
         assertEquals("https://pay.payos.vn/x", link.checkoutUrl());
         assertEquals("qr-data", link.qrCode());
@@ -148,7 +150,7 @@ class PayosClientTest {
         assertEquals("A description that is far", description);
         assertEquals("https://student.example/return", body.path("returnUrl").asText());
         assertEquals("https://student.example/cancel", body.path("cancelUrl").asText());
-        assertTrue(body.path("expiredAt").asLong() > java.time.Instant.now().getEpochSecond());
+        assertEquals(expiresAt.getEpochSecond(), body.path("expiredAt").asLong());
         String expected = hmacHex(CHECKSUM_KEY, "amount=50000&cancelUrl=https://student.example/cancel&description="
                 + description + "&orderCode=1001&returnUrl=https://student.example/return");
         assertEquals(expected, body.path("signature").asText());
@@ -157,13 +159,14 @@ class PayosClientTest {
     @Test
     void createFailsWithoutCredentialsAndWhenPayosReturnsNoCheckoutUrl() {
         PayosClient unconfigured = client("", "", "");
-        assertThrows(IllegalStateException.class, () -> unconfigured.create(1L, 10_000, "order"));
+        Instant expiresAt = Instant.now().plusSeconds(1800);
+        assertThrows(IllegalStateException.class, () -> unconfigured.create(1L, 10_000, "order", expiresAt));
         assertEquals(0, REQUESTS.size());
 
         createReply = """
                 {"code":"99","desc":"error"}""";
         PayosClient client = client("client-1", "api-key-1", CHECKSUM_KEY);
-        assertThrows(IllegalStateException.class, () -> client.create(1L, 10_000, "order"));
+        assertThrows(IllegalStateException.class, () -> client.create(1L, 10_000, "order", expiresAt));
     }
 
     // =================================================================================

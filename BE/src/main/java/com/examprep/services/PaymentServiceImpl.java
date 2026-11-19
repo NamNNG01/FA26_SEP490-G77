@@ -27,6 +27,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -124,6 +125,14 @@ public class PaymentServiceImpl implements PaymentService {
             if (plan.getPrice().signum() <= 0) throw new ResourceConflictException("Free plan does not require checkout");
             refId = planId; title = plan.getPlanName(); original = plan.getPrice();
         }
+        List<Payment> pending = payments.findByUserUserIdAndTypeAndRefIdAndStatusOrderByPaymentIdDesc(
+                userId, type, refId, Payment.PENDING);
+        Instant now = Instant.now();
+        for (Payment previous : pending) {
+            if (previous.getExpiresAt() != null && !previous.getExpiresAt().isAfter(now)) {
+                transactions.expireIfDue(previous.getOrderCode(), false);
+            }
+        }
         Discount discount = discountCode == null || discountCode.isBlank() ? null : validatedDiscount(userId, discountCode, type, original);
         BigDecimal discountAmount = discount == null ? BigDecimal.ZERO : calculateDiscount(discount, original);
         BigDecimal total = original.subtract(discountAmount).max(BigDecimal.ZERO).setScale(0, RoundingMode.HALF_UP);
@@ -131,11 +140,11 @@ public class PaymentServiceImpl implements PaymentService {
         // One live link per target: reuse the previous PENDING checkout when nothing changed, or
         // close it before creating a new one (spec 16/17 keep at most one payable link per order).
         Payment reusable = null;
-        for (Payment previous : payments.findByUserUserIdAndTypeAndRefIdAndStatusOrderByPaymentIdDesc(
-                userId, type, refId, Payment.PENDING)) {
+        for (Payment previous : pending) {
+            if (previous.getExpiresAt() != null && !previous.getExpiresAt().isAfter(now)) continue;
             if (reusable == null && sameDiscount(previous.getDiscount(), discountCode)
                     && previous.getCheckoutUrl() != null && previous.getExpiresAt() != null
-                    && previous.getExpiresAt().isAfter(Instant.now().plusSeconds(120))) {
+                    && previous.getExpiresAt().isAfter(now.plusSeconds(120))) {
                 reusable = previous;
             } else if (!cancelPreviousPending(userId, previous)
                     && (previous.getExpiresAt() == null || previous.getExpiresAt().isAfter(Instant.now()))) {
@@ -150,7 +159,7 @@ public class PaymentServiceImpl implements PaymentService {
                     reusable.getAmount().add(pendingDiscount), pendingDiscount, reusable.getAmount(),
                     reusable.getCheckoutUrl(), reusable.getQrCodeUrl(), reusable.getExpiresAt());
         }
-        Instant expiresAt = Instant.now().plus(30, ChronoUnit.MINUTES);
+        Instant expiresAt = Instant.now().plus(30, ChronoUnit.MINUTES).truncatedTo(ChronoUnit.SECONDS);
         // Epoch seconds alone collide when a student replaces a pending link for the same target
         // within one second, and order_code is unique.
         String orderCode = type + "-" + refId + "-USER" + userId + "-" + Instant.now().toEpochMilli()
@@ -163,7 +172,7 @@ public class PaymentServiceImpl implements PaymentService {
             throw new ResourceConflictException("A checkout for this item is already in progress");
         }
         try {
-            PayosClient.Link link = payos.create(payment.getPayosOrderCode(), total.intValueExact(), title + " " + orderCode);
+            PayosClient.Link link = payos.create(payment.getPayosOrderCode(), total.intValueExact(), title + " " + orderCode, expiresAt);
             transactions.attachPayosLink(orderCode, link);
             return checkoutPayload(orderCode, type, refId, title, original, discountAmount, total,
                     link.checkoutUrl(), link.qrCode(), expiresAt);
@@ -194,33 +203,34 @@ public class PaymentServiceImpl implements PaymentService {
         return new PaymentResponses.Cancelled(orderCode, Payment.CANCELLED);
     }
 
-    /** Abandoned checkout links give their discount reservation back once PayOS expired them. */
+    /** Close abandoned unpaid links even if the student never polls for their status. */
     @Scheduled(initialDelayString = "${app.payments.reservation-sweep-ms:600000}",
             fixedDelayString = "${app.payments.reservation-sweep-ms:600000}")
-    @Transactional
-    public void expireUnpaidReservations() {
-        Instant now = Instant.now();
-        for (Payment payment : payments.lockReservedExpired(Payment.PENDING, now)) {
-            if (payment.getDiscount() != null) {
-                discounts.releaseUsage(payment.getDiscount().getDiscountId());
-            }
-            payment.setDiscountReserved(false);
-            payment.setStatus(Payment.EXPIRED);
-            payment.setCancelledAt(now);
-            payment.setUpdatedAt(now);
-        }
+    public void expireUnpaidCheckouts() {
+        transactions.expireDuePayments();
     }
 
     @Override
     public PaymentResponses.PaymentState status(Long userId, String orderCode) {
         PaymentRepository.StatusRow payment = readStatus(userId, orderCode);
-        if ((Payment.PENDING.equals(payment.getStatus()) || Payment.EXPIRED.equals(payment.getStatus()))
-                && payment.getPayosOrderCode() != null) {
-            reconcileWithProvider(orderCode, payment.getPayosOrderCode());
-            // A webhook can also finish while PayOS is being queried.
+        boolean pending = Payment.PENDING.equals(payment.getStatus());
+        if (pending || Payment.EXPIRED.equals(payment.getStatus())) {
+            boolean providerExpired = payment.getPayosOrderCode() != null
+                    && reconcileWithProvider(orderCode, payment.getPayosOrderCode());
+            if (pending && (providerExpired
+                    || (payment.getExpiresAt() != null && !payment.getExpiresAt().isAfter(Instant.now())))) {
+                transactions.expireIfDue(orderCode, providerExpired);
+            }
+            // A webhook can also finish while PayOS is being queried or the link is being expired.
             payment = readStatus(userId, orderCode);
         }
         return new PaymentResponses.PaymentState(orderCode, payment.getStatus(), payment.getPaidAt(), payment.getExpiresAt());
+    }
+
+    @Override
+    public Optional<PaymentResponses.PaymentState> latestCourseCheckout(Long userId, Long courseId) {
+        return payments.findFirstByUserUserIdAndTypeAndRefIdOrderByPaymentIdDesc(userId, Payment.COURSE, courseId)
+                .map(payment -> status(userId, payment.getOrderCode()));
     }
 
     private PaymentRepository.StatusRow readStatus(Long userId, String orderCode) {
@@ -234,18 +244,19 @@ public class PaymentServiceImpl implements PaymentService {
      * (localhost development, closed firewall, lost delivery). A provider hiccup leaves the local state alone;
      * the next poll retries.
      */
-    private void reconcileWithProvider(String orderCode, long payosOrderCode) {
+    private boolean reconcileWithProvider(String orderCode, long payosOrderCode) {
         PayosClient.RemotePayment remote;
         try {
             remote = payos.fetch(payosOrderCode);
         } catch (RuntimeException ex) {
             log.warn("PayOS status lookup failed for order {}", orderCode, ex);
-            return;
+            return false;
         }
         if (remote != null && "PAID".equalsIgnoreCase(remote.status())
                 && transactions.reconcilePaid(orderCode, remote.amountPaid(), remote.raw())) {
             log.info("Order {} confirmed through the PayOS status API", orderCode);
         }
+        return remote != null && Payment.EXPIRED.equalsIgnoreCase(remote.status());
     }
 
     @Override
