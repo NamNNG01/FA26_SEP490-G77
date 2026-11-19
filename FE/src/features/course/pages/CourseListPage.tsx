@@ -22,7 +22,7 @@ import { CreateCourseModal } from "@/components/courses/CreateCourseModal";
 import { useAuth } from "@/auth/authContext";
 import { Role } from "@/utils/permissions";
 import { getApiErrorMessage } from "@/utils/apiError";
-import { formatPrice } from "@/features/catalog/components/CourseLogo";
+import { formatStoredCoursePrice } from "../coursePrice";
 
 function formatTimestamp(isoString: string): string {
   if (!isoString) return "—";
@@ -374,7 +374,7 @@ export function CourseListPage({
                 { label: "Students", value: c.studentCount, color: "#7C3AED" },
                 {
                   label: "Price",
-                  value: formatPrice(c.price),
+                  value: formatStoredCoursePrice(c.price),
                   color: "#D97706",
                 },
               ]}

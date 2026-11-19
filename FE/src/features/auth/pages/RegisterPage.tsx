@@ -40,7 +40,7 @@ export function RegisterPage() {
 
     // Backend validation (from RegisterRequest):
     // - Email: @NotBlank, @Email, @Size(max=150)
-    // - Password: @NotBlank, @Size(min=6)
+    // - Password: @NotBlank, @Size(min=8), plus the registration password policy
     // - Full name: @NotBlank, @Size(max=100)
     const trimmedEmail = email.trim();
     if (!trimmedEmail) {
@@ -120,7 +120,7 @@ export function RegisterPage() {
             <Alert type="error" title="Password mismatch" message={confirmError} />
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-[18px] [@media(max-height:850px)]:space-y-3.5">
+          <form noValidate onSubmit={handleSubmit} className="space-y-[18px] [@media(max-height:850px)]:space-y-3.5">
             <Input
               label="Full name"
               placeholder="Enter your name"

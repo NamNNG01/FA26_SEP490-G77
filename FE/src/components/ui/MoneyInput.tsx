@@ -21,22 +21,24 @@ type InputProps = React.ComponentProps<typeof Input>;
  * `value` / `onValueChange` carry plain digits ("22000", or "" when empty).
  */
 export function MoneyInput({
-  value, onValueChange, max, suffix = '₫', ...props
+  value, onValueChange, max, preserveNegativeSign = false, suffix = '₫', ...props
 }: Omit<InputProps, 'value' | 'onChange' | 'type' | 'max'> & {
   value: string;
   onValueChange: (digits: string) => void;
   /** Extra digits past this amount are ignored. */
   max?: number;
+  /** Keep a negative entry intact so the form can ask the user to correct it. */
+  preserveNegativeSign?: boolean;
 }) {
   const ref = useRef<HTMLInputElement>(null);
   /** Digits left of the caret after the last edit — the caret is put back after them. */
   const caretDigits = useRef<number | null>(null);
-  const display = formatMoneyDigits(value);
+  const display = (preserveNegativeSign && value.startsWith('-') ? '-' : '') + formatMoneyDigits(value);
 
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el || caretDigits.current === null || document.activeElement !== el) return;
-    let pos = 0;
+    let pos = display.startsWith('-') ? 1 : 0;
     for (let seen = 0; pos < display.length && seen < caretDigits.current; pos++) {
       if (/\d/.test(display[pos])) seen++;
     }
@@ -56,11 +58,12 @@ export function MoneyInput({
       onChange={e => {
         const typed = e.target.value;
         const caret = e.target.selectionStart ?? typed.length;
+        const negative = preserveNegativeSign && /[-−]/.test(typed);
         let digits = typed.replace(/\D/g, '').replace(/^0+(?=\d)/, '');
-        if (max !== undefined && digits !== '' && Number(digits) > max) return;
+        if (!negative && max !== undefined && digits !== '' && Number(digits) > max) return;
         caretDigits.current = typed.slice(0, caret).replace(/\D/g, '').length;
         if (digits.length > 15) digits = digits.slice(0, 15);
-        onValueChange(digits);
+        onValueChange(negative ? `-${digits}` : digits);
       }}
     />
   );

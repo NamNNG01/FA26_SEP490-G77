@@ -107,6 +107,20 @@ class AuthServiceTest {
     }
 
     @Test
+    void registerRejectsWeakOrOversizedPasswords() {
+        for (String password : java.util.List.of("password", "A1!" + "é".repeat(35))) {
+            RegisterRequest request = RegisterRequest.builder()
+                    .email("student@example.test")
+                    .password(password)
+                    .fullName("Test Student")
+                    .build();
+
+            assertThrows(BadRequestException.class, () -> authService.register(request));
+        }
+        verify(userRepository, never()).save(any(User.class));
+    }
+
+    @Test
     void login_Success() {
         LoginRequest request = LoginRequest.builder()
                 .email("student@gmail.com")

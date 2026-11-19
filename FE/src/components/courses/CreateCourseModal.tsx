@@ -289,6 +289,7 @@ export function CreateCourseModal({
 
           <MoneyInput
             label="Price (VND)"
+            preserveNegativeSign
             max={COURSE_PRICE_MAX}
             value={price}
             onValueChange={(v) => { setPrice(v); setErrors((prev) => ({ ...prev, price: undefined })); }}

@@ -27,7 +27,7 @@ import {
 } from "@/services/course.service";
 import { AddModuleModal } from "@/components/modules/AddModuleModal";
 import { EditModuleModal } from "@/components/modules/EditModuleModal";
-import { COURSE_PRICE_MAX, coursePriceError } from "../coursePrice";
+import { COURSE_PRICE_MAX, coursePriceError, formatStoredCoursePrice } from "../coursePrice";
 import { MoneyInput, moneyToDigits } from "@/components/ui/MoneyInput";
 import { useAuth } from "@/auth/authContext";
 import { Role } from "@/utils/permissions";
@@ -123,13 +123,15 @@ export function CourseDetailPage({
   const [categoryId, setCategoryId] = useState("");
   const [isPublished, setIsPublished] = useState(false);
   const [price, setPrice] = useState("0");
+  const [priceEdited, setPriceEdited] = useState(false);
   const [saving, setSaving] = useState(false);
+  const hasPriceChanges = course !== null && priceEdited && (price === "" || Number(price) !== course.price);
   const hasCourseChanges = Boolean(
     course &&
     (title.trim() !== course.title.trim() ||
       description.trim() !== (course.description ?? "").trim() ||
       categoryId !== String(course.categoryId) ||
-      Number(price) !== Number(course.price) ||
+      hasPriceChanges ||
       isPublished !== course.isPublished),
   );
   const [managerOptions, setManagerOptions] = useState<ManagerOption[]>([]);
@@ -264,6 +266,7 @@ export function CourseDetailPage({
       setCategoryId(String(data.categoryId));
       setIsPublished(data.isPublished);
       setPrice(moneyToDigits(data.price ?? 0));
+      setPriceEdited(false);
       setModules(
         [...(data.modules ?? [])].sort((a, b) => a.orderIndex - b.orderIndex),
       );
@@ -363,7 +366,7 @@ export function CourseDetailPage({
         updatePayload.title = title.trim();
         updatePayload.description = description.trim() || undefined;
         updatePayload.categoryId = categoryId ? Number(categoryId) : undefined;
-        updatePayload.price = Number(price);
+        if (hasPriceChanges) updatePayload.price = Number(price);
       }
       if (hasManagerChanges) {
         updatePayload.managerId = managerIds[0];
@@ -418,6 +421,7 @@ export function CourseDetailPage({
         isPublished,
         modules,
       });
+      setPriceEdited(false);
       setSelectedManagerIds(
         hasManagerChanges ? managerIds.map(String) : savedManagerIds,
       );
@@ -818,12 +822,18 @@ export function CourseDetailPage({
 
                 <MoneyInput
                   label="Price (VND)"
+                  preserveNegativeSign
                   max={COURSE_PRICE_MAX}
                   value={price}
                   disabled={!canManageCourse}
                   readOnly={!canManageCourse}
-                  onValueChange={setPrice}
-                  hint={canManageCourse ? "0 = Free" : undefined}
+                  onValueChange={(value) => {
+                    setPrice(value);
+                    setPriceEdited(true);
+                  }}
+                  hint={!hasPriceChanges && !Number.isInteger(course.price)
+                    ? `Stored price: ${formatStoredCoursePrice(course.price)}`
+                    : canManageCourse ? "0 = Free" : undefined}
                 />
 
                 <CourseManagerList

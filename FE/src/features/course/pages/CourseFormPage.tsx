@@ -143,7 +143,7 @@ export function CourseFormPage({
           title: title.trim(),
           categoryId: Number(categoryId),
           description: description.trim() || undefined,
-          price: Number(price),
+          ...(price !== initialValues?.price ? { price: Number(price) } : {}),
         });
         await uploadThumbnail(courseId);
         notification.success("Course updated successfully.");
@@ -254,6 +254,7 @@ export function CourseFormPage({
             />
             <MoneyInput
               label="Price (VND)"
+              preserveNegativeSign
               max={COURSE_PRICE_MAX}
               value={price}
               onValueChange={setPrice}
