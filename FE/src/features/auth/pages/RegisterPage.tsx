@@ -4,7 +4,7 @@ import { isAxiosError } from 'axios';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Alert } from '@/components/ui/Alert';
-import { useAuth, landingPathForRole } from '@/auth/authContext';
+import { useAuth, landingPathForRole, AFTER_AUTH_STATE } from '@/auth/authContext';
 import { AuthPageHeader } from '../components/AuthPageHeader';
 import { GoogleSignInButton } from '../components/GoogleSignInButton';
 import { Icon } from '@/assets/icons';
@@ -90,7 +90,7 @@ export function RegisterPage() {
       // Backend register always creates STUDENT accounts; use the fresh
       // user returned by register() rather than stale context state.
       const registeredUser = await register(trimmedEmail, password, fullName);
-      navigate(redirectTo ?? landingPathForRole(registeredUser.role), { replace: true });
+      navigate(redirectTo ?? landingPathForRole(registeredUser.role), { replace: true, state: AFTER_AUTH_STATE });
     } catch (err: unknown) {
       // 409 = the backend hit a database conflict while saving the account
       // (GlobalExceptionHandler → DataIntegrityViolationException); its

@@ -8,7 +8,7 @@ import {
   useLocation,
   useSearchParams,
 } from 'react-router';
-import { useAuth, landingPathForRole } from '@/auth/authContext';
+import { useAuth, landingPathForRole, AFTER_AUTH_STATE } from '@/auth/authContext';
 import { RequireRole, ROLE_ADMIN, ROLE_MANAGER, ROLE_STUDENT, ROLE_COURSE_MANAGER_ONLY } from '@/auth/RequireRole';
 import { ROUTES } from '@/app/routes';
 import { safeRedirect } from '@/hooks/useRequireAuth';
@@ -146,7 +146,8 @@ function publicRoutes(home: React.ReactNode = <LandingPage />, withCatalog = tru
 function LoggedInLoginRedirect() {
   const [searchParams] = useSearchParams();
   const landing = useLandingPath();
-  return <Navigate to={safeRedirect(searchParams.get('redirect')) ?? landing} replace />;
+  const redirect = safeRedirect(searchParams.get('redirect'));
+  return <Navigate to={redirect ?? landing} replace state={redirect ? undefined : AFTER_AUTH_STATE} />;
 }
 
 /**

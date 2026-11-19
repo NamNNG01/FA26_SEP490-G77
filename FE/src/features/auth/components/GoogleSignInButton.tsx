@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { config } from '@/config';
-import { useAuth, landingPathForRole } from '@/auth/authContext';
+import { useAuth, landingPathForRole, AFTER_AUTH_STATE } from '@/auth/authContext';
 import { useToast } from '@/components/ui/ToastHost';
 
 /**
@@ -113,7 +113,7 @@ export function GoogleSignInButton({ mode, redirectTo, onStart, onError }: Googl
       if (newUser) {
         toast.success(`Welcome to ${config.appName}, ${user.fullName}! Your account has been created.`);
       }
-      navigate(redirectTo ?? landingPathForRole(user.role), { replace: true });
+      navigate(redirectTo ?? landingPathForRole(user.role), { replace: true, state: AFTER_AUTH_STATE });
     } catch (err: unknown) {
       setBusy(false);
       onError(err instanceof Error ? err.message : 'Google sign-in failed. Please try again.');
