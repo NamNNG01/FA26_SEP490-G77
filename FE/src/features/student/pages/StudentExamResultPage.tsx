@@ -30,7 +30,7 @@ import { SAVABLE_QUESTION_TYPES } from '@/services/studentDeck.service';
 import { SaveToFlashcardsModal } from '../components/flashcards/SaveToFlashcardsModal';
 import { RetryWrongQuestionsModal } from '../components/RetryWrongQuestionsModal';
 import { studentCodeExamService, type CodeSubmission } from '@/services/studentCodeExam.service';
-import { CodeTestCaseStatus, latestSubmissionBefore } from '../components/code/CodeTestCaseStatus';
+import { CodeTestCaseStatus, latestSubmissionOfAttempt } from '../components/code/CodeTestCaseStatus';
 import { studentProgressService } from '@/services/studentProgress.service';
 import { ReportQuestionIssueButton } from '../components/ReportQuestionIssueDialog';
 
@@ -291,7 +291,7 @@ export function StudentExamResultPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [examId, reload]);
 
-  /** CD-07 of the exam (every attempt); null until loaded, or when the exam has no CODE question / it failed. */
+  /** CD-07 of the exam (every attempt, picked per attempt below); null until loaded, or when the exam has no CODE question / it failed. */
   const [codeSubs, setCodeSubs] = useState<CodeSubmission[] | null>(null);
   const resultHasCode = Boolean(result?.questions.some(x => x.questionType === 'CODE'));
   useEffect(() => {
@@ -305,6 +305,8 @@ export function StudentExamResultPage() {
       cancelled = true;
     };
   }, [examId, resultHasCode]);
+  /** SA-06 row of the attempt on screen: its time window keeps other attempts' CD-07 verdicts out. */
+  const viewedAttempt = result ? (attempts?.find(a => a.attemptId === result.attemptId) ?? null) : null;
 
   /** Questions to save as flashcards (modal open while set). */
   const [saveQuestions, setSaveQuestions] = useState<number[] | null>(null);
@@ -677,9 +679,9 @@ export function StudentExamResultPage() {
                   ) : undefined
                 }
                 gradeDetail={
-                  q.questionType === 'CODE' && codeSubs
+                  q.questionType === 'CODE' && codeSubs && viewedAttempt
                     ? (() => {
-                        const sub = latestSubmissionBefore(codeSubs, q.questionId, result.submittedAt);
+                        const sub = latestSubmissionOfAttempt(codeSubs, q.questionId, viewedAttempt);
                         return sub ? (
                           <div className="rounded-[10px] border border-line bg-surface p-4 text-sm text-content-soft">
                             <CodeTestCaseStatus submission={sub} />

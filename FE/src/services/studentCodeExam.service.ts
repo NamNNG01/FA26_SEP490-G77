@@ -88,6 +88,8 @@ export interface CodeTestCaseOutcome {
 export interface CodeSubmission {
   submissionId: number;
   questionId: number;
+  /** Attempt the submission was graded in; absent until the BE returns it (then the attempt's time window is used). */
+  attemptId?: number | null;
   language: CodeLanguage;
   status: 'PASSED' | 'FAILED' | string;
   testCasesPassed: number;
