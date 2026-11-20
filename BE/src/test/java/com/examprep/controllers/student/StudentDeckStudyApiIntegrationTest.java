@@ -107,6 +107,29 @@ class StudentDeckStudyApiIntegrationTest {
                 .setParameter("c", cards.get(0).getCardId()).getSingleResult());
     }
 
+    @Test void starOnlyKeepsCardNewAndLearnAllMarksIt() throws Exception {
+        progress(cards.get(0), "{\"isStarred\":true}").andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("NEW")).andExpect(jsonPath("$.data.isStarred").value(true));
+        // A starred card never studied is not a missed card.
+        mvc.perform(get("/api/v1/student/decks/" + deck.getDeckId() + "/review-cards").with(as(student)))
+                .andExpect(jsonPath("$.data.length()").value(0));
+        // LEARNING on a NEW row moves it to LEARNING.
+        progress(cards.get(1), "{\"isStarred\":true}");
+        progress(cards.get(1), "{\"status\":\"LEARNING\"}").andExpect(jsonPath("$.data.status").value("LEARNING"));
+        // Rows left by the old star-only write: LEARNING, never reviewed.
+        state(cards.get(2), "LEARNING", 0, null);
+        em.flush();
+        mvc.perform(put("/api/v1/student/decks/" + deck.getDeckId() + "/learn-all").with(as(student)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.learnedCount").value(5));
+        em.clear();
+        UserCardProgress starred = em.createQuery("select p from UserCardProgress p where p.card.cardId = :c", UserCardProgress.class)
+                .setParameter("c", cards.get(0).getCardId()).getSingleResult();
+        assertEquals("KNOWN", starred.getStatus());
+        assertEquals(true, starred.getIsStarred());
+        assertEquals("LEARNING", em.createQuery("select p.status from UserCardProgress p where p.card.cardId = :c", String.class)
+                .setParameter("c", cards.get(1).getCardId()).getSingleResult());
+    }
+
     @Test void resetProgressResetsAllCards() throws Exception {
         progress(cards.get(0), "{\"status\":\"KNOWN\"}");
         progress(cards.get(1), "{\"status\":\"KNOWN\"}");

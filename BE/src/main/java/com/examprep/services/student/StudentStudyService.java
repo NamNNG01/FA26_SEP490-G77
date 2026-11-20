@@ -42,7 +42,7 @@ public class StudentStudyService {
         // Serialises this student's progress writes so two first writes of one card cannot both insert.
         users.findForUpdate(userId);
         UserCardProgress row = progress.findByUserUserIdAndCardCardId(userId, cardId).orElseGet(() -> UserCardProgress.builder()
-                .user(users.getReferenceById(userId)).card(card).isStarred(false).status("LEARNING").build());
+                .user(users.getReferenceById(userId)).card(card).isStarred(false).status("NEW").build());
         Instant now = Instant.now();
         if (request.status() != null) {
             switch (request.status()) {
@@ -51,7 +51,8 @@ public class StudentStudyService {
                     row.setStatus("LEARNING");
                 }
                 case "KNOWN" -> row.setStatus("KNOWN");
-                default -> { } // LEARNING: a new row is LEARNING, an existing group is kept
+                // LEARNING: a NEW card becomes LEARNING, LEARNING / KNOWN are kept
+                default -> { if ("NEW".equals(row.getStatus())) row.setStatus("LEARNING"); }
             }
             row.setLastReviewedAt(now);
         }
@@ -67,10 +68,15 @@ public class StudentStudyService {
     public DeckLearnedView learnAll(Long userId, Long deckId) {
         decks.readableDeck(userId, deckId);
         users.findForUpdate(userId);
-        Set<Long> tracked = progress.findByUserUserIdAndCardDeckDeckId(userId, deckId).stream()
-                .map(p -> p.getCard().getCardId()).collect(Collectors.toSet());
+        List<UserCardProgress> rows = progress.findByUserUserIdAndCardDeckDeckId(userId, deckId);
+        Set<Long> tracked = rows.stream().map(p -> p.getCard().getCardId()).collect(Collectors.toSet());
         List<Flashcard> content = cards.findByDeckDeckIdOrderByPositionAscCardIdAsc(deckId);
         Instant now = Instant.now();
+        // A row never reviewed is only a star: the card was not studied yet, so it is learned too (star kept).
+        rows.stream().filter(p -> p.getLastReviewedAt() == null).forEach(p -> {
+            p.setStatus("KNOWN");
+            p.setLastReviewedAt(now);
+        });
         progress.saveAll(content.stream().filter(c -> !tracked.contains(c.getCardId()))
                 .map(c -> UserCardProgress.builder().user(users.getReferenceById(userId)).card(c).isStarred(false)
                         .status("KNOWN").lastReviewedAt(now).build()).toList());
