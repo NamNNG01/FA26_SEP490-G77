@@ -329,14 +329,20 @@ function ExamAttemptScreen() {
           if (!auto) throw err;
         });
         // CODE answers are graded on the test cases (CD-05) before the attempt is closed.
-        const codeAnswers = skipCode
+        const written = skipCode
           ? []
           : session.questions
               .filter(q => q.questionType === 'CODE')
-              .map(q =>
-                currentCodeAnswer(q.questionId, codeMeta.get(q.questionId) ?? null, codeLanguages, answersRef.current[q.questionId]?.text),
-              )
+              .map(q => currentCodeAnswer(q.questionId, codeMeta.get(q.questionId) ?? null, answersRef.current[q.questionId]))
               .filter(a => a != null);
+        // Code whose language is not known is never graded in a guessed one.
+        if (!auto && written.some(a => a.language === '')) {
+          setCodeGradeFailed(true);
+          setActionError('The language of a code question could not be loaded, so your code was not graded. Reload the page and try again.');
+          setBusy(null);
+          return;
+        }
+        const codeAnswers = written.filter(a => a.language !== '');
         if (codeAnswers.length > 0) {
           setGrading(true);
           try {
@@ -373,7 +379,7 @@ function ExamAttemptScreen() {
         submittingRef.current = false;
       }
     },
-    [session, flush, navigate, codeMeta, codeLanguages, contestId, toast, instantCheck],
+    [session, flush, navigate, codeMeta, contestId, toast, instantCheck],
   );
 
   /**

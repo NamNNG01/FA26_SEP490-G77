@@ -47,6 +47,8 @@ export interface AnswerResponse {
   blanks?: Record<string, string>;
   orderedOptionIds?: number[];
   text?: string;
+  /** CODE: the language `text` is written in (CD-06 id), kept with the draft so a reload grades it in that language. */
+  language?: string;
   drawioXml?: string;
 }
 
