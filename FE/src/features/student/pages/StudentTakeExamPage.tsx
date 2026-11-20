@@ -52,6 +52,8 @@ import {
 /** Unsaved answers are pushed to SA-03 this often. */
 const AUTOSAVE_MS = 4000;
 const WARN_SECONDS = 300;
+/** With code written, time-up submits this early so CD-05 still reaches the BE before the deadline. */
+const CODE_SUBMIT_LEAD_SECONDS = 5;
 
 type SaveState = 'saved' | 'dirty' | 'saving' | 'error';
 
@@ -66,7 +68,8 @@ type SaveState = 'saved' | 'dirty' | 'saving' | 'error';
  *  - Cancel offers "Save and exit" (drafts flushed, the attempt stays IN_PROGRESS and
  *    SA-01 resumes it) or "Discard" (the attempt and its drafts are deleted, SA-07).
  *    The deadline is the server's: when it passes, the screen submits on its own
- *    (and the BE auto-submits if the tab is gone).
+ *    (and the BE auto-submits if the tab is gone). With code written it submits
+ *    CODE_SUBMIT_LEAD_SECONDS early, so the code is graded before the deadline.
  *  - Only questions made entirely of essay / code / diagram get the "Essay"
  *    layout (wider, taller editor); every other paper is a quiz. A paper of only
  *    CODE questions is labelled "Code".
@@ -329,14 +332,20 @@ function ExamAttemptScreen() {
           if (!auto) throw err;
         });
         // CODE answers are graded on the test cases (CD-05) before the attempt is closed.
-        const codeAnswers = skipCode
+        const written = skipCode
           ? []
           : session.questions
               .filter(q => q.questionType === 'CODE')
-              .map(q =>
-                currentCodeAnswer(q.questionId, codeMeta.get(q.questionId) ?? null, codeLanguages, answersRef.current[q.questionId]?.text),
-              )
+              .map(q => currentCodeAnswer(q.questionId, codeMeta.get(q.questionId) ?? null, answersRef.current[q.questionId]))
               .filter(a => a != null);
+        // Code whose language is not known is never graded in a guessed one.
+        if (!auto && written.some(a => a.language === '')) {
+          setCodeGradeFailed(true);
+          setActionError('The language of a code question could not be loaded, so your code was not graded. Reload the page and try again.');
+          setBusy(null);
+          return;
+        }
+        const codeAnswers = written.filter(a => a.language !== '');
         if (codeAnswers.length > 0) {
           setGrading(true);
           try {
@@ -373,7 +382,7 @@ function ExamAttemptScreen() {
         submittingRef.current = false;
       }
     },
-    [session, flush, navigate, codeMeta, codeLanguages, contestId, toast, instantCheck],
+    [session, flush, navigate, codeMeta, contestId, toast, instantCheck],
   );
 
   /**
@@ -447,7 +456,10 @@ function ExamAttemptScreen() {
     const tick = () => {
       const left = Math.max(0, Math.round((deadline - (Date.now() + offset)) / 1000));
       setRemaining(left);
-      if (left === 0) submit(true);
+      const codeWritten = session.questions.some(
+        q => q.questionType === 'CODE' && Boolean(answersRef.current[q.questionId]?.text?.trim()),
+      );
+      if (left === 0 || (codeWritten && left <= CODE_SUBMIT_LEAD_SECONDS)) submit(true);
     };
     tick();
     const id = window.setInterval(tick, 1000);

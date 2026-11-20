@@ -27,10 +27,12 @@ const TERMINAL_HEIGHT_KEY = 'code-terminal-height';
 
 /**
  * The one language the manager set for the question (CD-03); one stored with several uses its
- * first. Falls back to the first CD-06 language, '' while neither has loaded.
+ * first. A question stored with none falls back to the language saved with the answer. Never a
+ * guess: '' while CD-03 has not loaded, so code is not run or graded in the wrong language.
  */
-function questionLanguage(meta: CodeQuestion | null, languages: CodeLanguageInfo[]): CodeLanguage {
-  return meta?.languages?.[0] ?? languages[0]?.id ?? '';
+function questionLanguage(meta: CodeQuestion | null, saved: string | undefined): CodeLanguage {
+  if (!meta) return '';
+  return meta.languages?.[0] ?? saved ?? '';
 }
 
 function storedTerminalHeight(): number {
@@ -44,17 +46,16 @@ function storedTerminalHeight(): number {
 
 /**
  * What CD-05 grades for one CODE question: the code in the attempt draft (`text`) in the
- * question's language. Null when there is no code.
+ * question's language. Null when there is no code; `language` is '' when it is not known yet.
  */
 export function currentCodeAnswer(
   questionId: number,
   meta: CodeQuestion | null,
-  languages: CodeLanguageInfo[],
-  text: string | undefined,
+  response: AnswerResponse | null | undefined,
 ): CodeSubmitAnswer | null {
+  const text = response?.text;
   if (!text?.trim()) return null;
-  const language = questionLanguage(meta, languages);
-  return language ? { questionId, language, sourceCode: text } : null;
+  return { questionId, language: questionLanguage(meta, response?.language), sourceCode: text };
 }
 
 /**
@@ -75,16 +76,19 @@ export function CodeQuestionWorkspace({
   value: AnswerResponse | null;
   onChange: (response: AnswerResponse) => void;
 }) {
-  const language = questionLanguage(meta, languages);
+  const language = questionLanguage(meta, value?.language);
   const languageName = languages.find(l => l.id === language)?.name ?? language;
+  /** CD-03 loaded but the question has no language: nothing to run or grade in. */
+  const noLanguage = meta != null && language === '';
 
   // Code the student typed; until then the editor shows the template, which is not an answer.
   const [typed, setTyped] = useState<string | null>(() => value?.text ?? null);
   const source = typed ?? meta?.codeTemplate ?? '';
 
+  // The language goes with the code, so a reload and CD-05 use the one it was written in.
   const changeSource = (text: string) => {
     setTyped(text);
-    onChange({ text });
+    onChange(language ? { text, language } : { text });
   };
 
   // Run (CD-04)
@@ -164,6 +168,8 @@ export function CodeQuestionWorkspace({
             <span className="inline-flex h-8 items-center rounded-[8px] border border-line-soft bg-surface-alt px-3 text-xs text-content-soft">
               Language:&nbsp;<span className="font-semibold text-content">{languageName}</span>
             </span>
+          ) : noLanguage ? (
+            <span className="text-xs text-danger">This question has no language set, so it cannot be run.</span>
           ) : (
             <Skeleton className="h-8 w-32" />
           )}

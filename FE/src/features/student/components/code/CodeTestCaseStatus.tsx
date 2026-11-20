@@ -1,14 +1,23 @@
 import { Badge } from '@/components/ui/Badge';
 import type { CodeSubmission } from '@/services/studentCodeExam.service';
 
-/** Newest CD-07 submission of a question made at or before `before` (the attempt's submit time). */
-export function latestSubmissionBefore(subs: CodeSubmission[], questionId: number, before: string | null): CodeSubmission | null {
-  const limit = before ? Date.parse(before) : Infinity;
+/**
+ * Newest CD-07 submission of a question made in one attempt. CD-07 lists every attempt of the exam:
+ * a submission carrying `attemptId` is matched on it, an older one on the attempt's
+ * `startTime` … `submittedAt` window, so another attempt's verdict never shows.
+ */
+export function latestSubmissionOfAttempt(
+  subs: CodeSubmission[],
+  questionId: number,
+  attempt: { attemptId: number; startTime: string; submittedAt: string | null },
+): CodeSubmission | null {
+  const from = Date.parse(attempt.startTime);
+  const until = attempt.submittedAt ? Date.parse(attempt.submittedAt) : Infinity;
   let best: CodeSubmission | null = null;
   for (const s of subs) {
     if (s.questionId !== questionId) continue;
     const at = Date.parse(s.createdAt);
-    if (at > limit) continue;
+    if (s.attemptId != null ? s.attemptId !== attempt.attemptId : at < from || at > until) continue;
     if (!best || at > Date.parse(best.createdAt)) best = s;
   }
   return best;
