@@ -26,5 +26,5 @@ public interface StudentCodeExamService {
     List<CodeExamResponses.Language> languages();
 
     /** CD-07 */
-    PageResponse<CodeExamResponses.SubmissionItem> submissions(Long userId, Long examId, int page, int size);
+    PageResponse<CodeExamResponses.SubmissionItem> submissions(Long userId, Long examId, Long attemptId, int page, int size);
 }

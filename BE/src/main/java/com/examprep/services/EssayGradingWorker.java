@@ -370,7 +370,8 @@ public class EssayGradingWorker {
     private void refreshAttempt(ExamAttempt attempt) {
         List<AttemptAnswer> rows = answers.findByAttempt_AttemptId(attempt.getAttemptId());
         boolean running = rows.stream().anyMatch(a -> QUEUED.equals(a.getGradingStatus()) || GRADING.equals(a.getGradingStatus()));
-        boolean waiting = rows.stream().anyMatch(a -> PENDING_AI.equals(a.getGradingStatus()) || FAILED.equals(a.getGradingStatus()));
+        boolean waiting = rows.stream().anyMatch(a -> a.getScoreEarned() == null
+                && (PENDING_AI.equals(a.getGradingStatus()) || FAILED.equals(a.getGradingStatus())));
         String before = attempt.getStatus();
         // Full-credit answers contribute their unrounded P_q, so a perfect paper still totals M
         // after the AI worker recomputes the attempt from the stored 2-digit scores.

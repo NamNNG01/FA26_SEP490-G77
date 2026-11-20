@@ -35,7 +35,7 @@ public final class CodeExamResponses {
                                   String inputData, String expectedOutput, String actualOutput) {}
 
     /** CD-07 */
-    public record SubmissionItem(Long submissionId, Long questionId, String language, String status,
+    public record SubmissionItem(Long submissionId, Long attemptId, Long questionId, String language, String status,
                                  Integer testCasesPassed, Integer testCasesTotal,
                                  List<TestCaseOutcome> testCases, Instant createdAt) {}
 }

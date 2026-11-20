@@ -2,6 +2,7 @@ package com.examprep.services;
 
 import com.examprep.dto.ResponseCode;
 import com.examprep.exceptions.BaseException;
+import com.examprep.util.attempt.CodeSource;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -313,6 +314,13 @@ public class PistonClient {
                     continue;
                 }
                 log.warn("Piston rejected the submission: HTTP {}", status);
+                if (status == 413) {
+                    throw CodeSource.sizeRejected("The execution provider rejected the source size");
+                }
+                if (status == 400 || status == 422) {
+                    throw new BaseException(ResponseCode.BAD_REQUEST, "The execution provider rejected the source",
+                            Map.of("code", "SOURCE_REJECTED"));
+                }
                 throw unavailable("Code execution service could not run this submission");
             }
         }

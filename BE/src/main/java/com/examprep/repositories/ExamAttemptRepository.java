@@ -13,6 +13,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -24,6 +25,22 @@ public interface ExamAttemptRepository extends JpaRepository<ExamAttempt, Long> 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT a FROM ExamAttempt a WHERE a.attemptId = :id")
     Optional<ExamAttempt> lockById(@Param("id") Long id);
+
+    @Query("SELECT a.attemptId FROM ExamAttempt a WHERE a.exam.examId = :examId "
+            + "AND a.user.userId = :userId AND a.status = 'IN_PROGRESS'")
+    Optional<Long> findActiveAttemptId(@Param("examId") Long examId, @Param("userId") Long userId);
+
+    @Query("""
+            SELECT a.attemptId FROM ExamAttempt a LEFT JOIN a.exam e
+            WHERE a.status = 'IN_PROGRESS' AND a.deadlineAt < :cutoff
+              AND (a.codeJudgingUntil IS NULL OR a.codeJudgingUntil <= :now)
+              AND (e IS NULL OR e.durationMinutes IS NOT NULL)
+              AND (a.mode IS NULL OR a.mode NOT IN ('PRACTICE', 'SMART_PRACTICE', 'MATERIAL_QUIZ', 'REVIEW')
+                   OR (a.mode = 'MATERIAL_QUIZ' AND a.takeAs = 'EXAM'))
+              AND EXISTS (SELECT aa FROM AttemptAnswer aa WHERE aa.attempt = a AND aa.question.questionType = 'CODE')
+            ORDER BY a.deadlineAt, a.attemptId
+            """)
+    List<Long> findExpiredCodeAttemptIds(@Param("cutoff") Instant cutoff, @Param("now") Instant now, Pageable pageable);
 
     @Query("SELECT a FROM ExamAttempt a LEFT JOIN FETCH a.exam e LEFT JOIN FETCH e.course WHERE a.attemptId = :id")
     Optional<ExamAttempt> findWithExamById(@Param("id") Long id);

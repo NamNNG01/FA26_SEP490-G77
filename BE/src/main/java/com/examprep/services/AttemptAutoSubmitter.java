@@ -2,36 +2,50 @@ package com.examprep.services;
 
 import com.examprep.dto.attempt.Snapshots;
 import com.examprep.entities.AttemptAnswer;
+import com.examprep.entities.Exam;
 import com.examprep.entities.ExamAttempt;
+import com.examprep.exceptions.ForbiddenException;
+import com.examprep.exceptions.ResourceNotFoundException;
+import com.examprep.repositories.AttemptAnswerRepository;
+import com.examprep.repositories.ExamAttemptRepository;
 import com.examprep.services.student.QuestionReviewRecorder;
 import com.examprep.util.attempt.AnswerResponseValidator;
 import com.examprep.util.attempt.AttemptGrader;
 import com.examprep.util.attempt.AttemptScoring;
 import com.fasterxml.jackson.databind.JsonNode;
+import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
-import com.examprep.entities.Exam;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import java.util.function.Consumer;
 
 /**
  * Grades and closes an attempt (spec 6.4 rules 3-5, 6.3 "410 ATTEMPT_EXPIRED").
  *
- * <p>{@link #gradeAndClose} always runs inside the caller's transaction, and every caller closes
- * the attempt <em>before</em> it can fail: SA-01 closes a stale attempt and then starts a new one,
- * SA-02 closes it before building the response, and SA-03 returns {@code 410} only after its own
- * write transaction has already committed the closing.</p>
+ * <p>Sandbox judging happens between transactions. A final attempt lock protects the write
+ * and verifies that the judged source still matches the saved draft.</p>
  */
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class AttemptAutoSubmitter {
 
     /** Past {@code deadlineAt} the student may still save (spec 6.3: 410 past deadline + 5s). */
     public static final long EXPIRY_GRACE_SECONDS = 5;
+    private static final Set<String> UNTIMED_MODES = Set.of("PRACTICE", "SMART_PRACTICE", "MATERIAL_QUIZ", "REVIEW");
 
     private static final String STATUS_SUBMITTED = "SUBMITTED";
     private static final String STATUS_COMPLETED = "COMPLETED";
@@ -40,6 +54,11 @@ public class AttemptAutoSubmitter {
 
     private final AttemptPaperFactory paperFactory;
     private final QuestionReviewRecorder reviews;
+    private final AttemptAnswerRepository answers;
+    private final ExamAttemptRepository attempts;
+    private final CodeAnswerJudge judge;
+    private final EntityManager entityManager;
+    private final PlatformTransactionManager transactionManager;
 
     /** True past {@code deadlineAt + 5s}: from then on the server refuses further saves. */
     public boolean isExpired(ExamAttempt attempt, Instant now) {
@@ -47,7 +66,7 @@ public class AttemptAutoSubmitter {
             return false;
         }
         String mode = attempt.getMode();
-        if (Set.of("PRACTICE", "SMART_PRACTICE", "MATERIAL_QUIZ", "REVIEW").contains(mode)) {
+        if (mode != null && UNTIMED_MODES.contains(mode)) {
             if (!"MATERIAL_QUIZ".equals(mode) || !"EXAM".equals(attempt.getTakeAs())) {
                 return false;
             }
@@ -60,6 +79,103 @@ public class AttemptAutoSubmitter {
                 && now.isAfter(attempt.getDeadlineAt().plusSeconds(EXPIRY_GRACE_SECONDS));
     }
 
+    public boolean codeJudgingInProgress(ExamAttempt attempt, Instant now) {
+        return attempt.getCodeJudgingUntil() != null && now.isBefore(attempt.getCodeJudgingUntil());
+    }
+
+    boolean hasUngradedCode(List<AttemptAnswer> rows) {
+        return rows.stream().anyMatch(row -> (row.getGradedAt() == null || row.getScoreEarned() == null)
+                && row.getResponse() != null && judge.isCode(row) && !judge.source(row).isBlank());
+    }
+
+    public void closeExpired(Long attemptId, Long userId, Instant now) {
+        close(attemptId, userId, now, true, null);
+    }
+
+    @Scheduled(initialDelayString = "${app.code-exam.auto-submit-ms:15000}",
+            fixedDelayString = "${app.code-exam.auto-submit-ms:15000}")
+    public void closeExpiredCodeAttempts() {
+        Instant now = Instant.now();
+        List<Long> due = attempts.findExpiredCodeAttemptIds(now.minusSeconds(EXPIRY_GRACE_SECONDS), now,
+                PageRequest.of(0, 25));
+        for (Long id : due) {
+            try {
+                closeExpired(id, null, now);
+            } catch (RuntimeException ex) {
+                log.error("Auto-submitting code attempt {} failed", id, ex);
+            }
+        }
+    }
+
+    boolean close(Long attemptId, Long userId, Instant submittedAt, boolean expiredOnly,
+                  Consumer<List<AttemptAnswer>> applyDrafts) {
+        TransactionTemplate tx = new TransactionTemplate(transactionManager);
+        CloseStep step = tx.execute(status -> prepareClose(attemptId, userId, submittedAt, expiredOnly,
+                applyDrafts, List.of(), Map.of()));
+        while (!step.done() && !step.deferred()) {
+            List<CodeAnswerJudge.Plan> plans = step.plans();
+            Map<Long, CodeAnswerJudge.Verdict> verdicts = judge.judge(plans, true);
+            step = tx.execute(status -> prepareClose(attemptId, userId, submittedAt, expiredOnly, null, plans, verdicts));
+        }
+        return !step.deferred();
+    }
+
+    private record CloseStep(boolean done, boolean deferred, List<CodeAnswerJudge.Plan> plans) {}
+
+    private CloseStep prepareClose(Long attemptId, Long userId, Instant submittedAt, boolean expiredOnly,
+                                   Consumer<List<AttemptAnswer>> applyDrafts, List<CodeAnswerJudge.Plan> judged,
+                                   Map<Long, CodeAnswerJudge.Verdict> verdicts) {
+        ExamAttempt attempt = attempts.lockById(attemptId).orElse(null);
+        if (attempt == null) {
+            if (userId == null) {
+                return new CloseStep(true, false, List.of());
+            }
+            throw new ResourceNotFoundException("Attempt not found");
+        }
+        entityManager.refresh(attempt);
+        if (userId != null && !Objects.equals(attempt.getUser().getUserId(), userId)) {
+            throw new ForbiddenException("Attempt belongs to another student");
+        }
+        boolean expired = isExpired(attempt, submittedAt);
+        if (!"IN_PROGRESS".equals(attempt.getStatus()) || (expiredOnly && !expired)) {
+            return new CloseStep(true, false, List.of());
+        }
+        if (codeJudgingInProgress(attempt, Instant.now())) {
+            return new CloseStep(false, true, List.of());
+        }
+
+        List<AttemptAnswer> rows = answers.findByAttemptIdOrdered(attemptId);
+        if (!judged.isEmpty()) {
+            // Open EntityManager in View can keep these entities across the two transactions.
+            rows.forEach(entityManager::refresh);
+        }
+        if (!expired && applyDrafts != null) {
+            applyDrafts.accept(rows);
+            answers.flush();
+        }
+        List<CodeAnswerJudge.Plan> plans = hasUngradedCode(rows)
+                ? judge.prepareDrafts(rows, maxScore(attempt, rows)) : List.of();
+        if (!plans.isEmpty() && !plans.equals(judged)) {
+            return new CloseStep(false, false, plans);
+        }
+        for (CodeAnswerJudge.Plan plan : plans) {
+            AttemptAnswer row = rows.stream().filter(answer -> plan.questionId().equals(answer.getQuestion().getQuestionId()))
+                    .findFirst().orElseThrow();
+            judge.persist(row, plan, verdicts.get(plan.questionId()), Instant.now());
+        }
+        gradeAndClose(attempt, rows, submittedAt);
+        return new CloseStep(true, false, List.of());
+    }
+
+    private BigDecimal maxScore(ExamAttempt attempt, List<AttemptAnswer> rows) {
+        Snapshots.ExamSnapshot exam = paperFactory.read(attempt.getExamSnapshot(), Snapshots.ExamSnapshot.class);
+        if (exam != null && exam.maxScore() != null) {
+            return exam.maxScore();
+        }
+        return attempt.getExam() != null && attempt.getExam().getMaxScore() != null
+                ? attempt.getExam().getMaxScore() : BigDecimal.valueOf(rows.size());
+    }
+
     /**
      * Grades every answer of the attempt and closes it (spec 6.4 rule 3):
      *
@@ -67,7 +183,7 @@ public class AttemptAutoSubmitter {
      *   <li>no answer → {@code score 0}, {@code isCorrect = false}, {@code grading_status = AUTO}
      *       (an unanswered essay does not wait for the AI worker);</li>
      *   <li>quiz question → all-or-nothing against {@code key_snapshot}, {@code score = P_q} or 0;</li>
-     *   <li>rubric question (ESSAY/DIAGRAM/CODE) with an answer → {@code PENDING_AI},
+     *   <li>rubric question (ESSAY/DIAGRAM) with an answer → {@code PENDING_AI},
      *       {@code score = null}; no AI call here (spec 0.3 rule 7).</li>
      * </ul>
      *
@@ -75,11 +191,8 @@ public class AttemptAutoSubmitter {
      * (spec 0.3 rule 6). The attempt ends {@code SUBMITTED} while a rubric answer waits for the
      * AI worker, {@code COMPLETED} otherwise.</p>
      */
-    public void gradeAndClose(ExamAttempt attempt, List<AttemptAnswer> rows, Instant now) {
-        Snapshots.ExamSnapshot exam = paperFactory.read(attempt.getExamSnapshot(), Snapshots.ExamSnapshot.class);
-        BigDecimal maxScore = exam != null && exam.maxScore() != null
-                ? exam.maxScore()
-                : (attempt.getExam() != null && attempt.getExam().getMaxScore() != null ? attempt.getExam().getMaxScore() : BigDecimal.valueOf(rows.size()));
+    void gradeAndClose(ExamAttempt attempt, List<AttemptAnswer> rows, Instant now) {
+        BigDecimal maxScore = maxScore(attempt, rows);
 
         List<BigDecimal> weights = rows.stream().map(AttemptAnswer::getWeightSnapshot).toList();
         BigDecimal totalWeight = AttemptScoring.totalWeight(weights);
@@ -101,12 +214,12 @@ public class AttemptAutoSubmitter {
             Snapshots.DisplayQuestion display =
                     paperFactory.read(row.getDisplaySnapshot(), Snapshots.DisplayQuestion.class);
             // A legacy row without a display snapshot still has its question type on the live row.
-            String type = display != null ? display.questionType() : row.getQuestion().getQuestionType();
+            String type = paperFactory.questionType(row, display);
 
             // The addend for the running total: the unrounded score of this pass, or null while a
             // rubric answer waits for the AI worker. The row itself stores the 2-digit value.
             BigDecimal rawScore;
-            if (AnswerResponseValidator.isEmpty(response)) {
+            if (AnswerResponseValidator.isEmpty(response) || "CODE".equals(type)) {
                 rawScore = BigDecimal.ZERO;
                 row.setScoreEarned(rawScore);
                 row.setIsCorrect(false);
@@ -138,9 +251,12 @@ public class AttemptAutoSubmitter {
         }
 
         attempt.setTotalScore(AttemptScoring.output(AttemptScoring.sumScores(scores)));
-        attempt.setSubmittedAt(now);
-        attempt.setSubmitTime(now);
+        Instant storedTime = now.truncatedTo(ChronoUnit.MICROS);
+        attempt.setSubmittedAt(storedTime);
+        attempt.setSubmitTime(storedTime);
         attempt.setAutoSubmitted(attempt.getDeadlineAt() != null && now.isAfter(attempt.getDeadlineAt()));
         attempt.setStatus(waitingForAi ? STATUS_SUBMITTED : STATUS_COMPLETED);
+        attempt.setCodeJudgingToken(null);
+        attempt.setCodeJudgingUntil(null);
     }
 }

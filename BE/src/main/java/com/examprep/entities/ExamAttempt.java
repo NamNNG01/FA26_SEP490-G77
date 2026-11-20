@@ -8,6 +8,7 @@ import org.hibernate.type.SqlTypes;
 import java.io.Serializable;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.UUID;
 
 @Entity
 @Table(name = "exam_attempts")
@@ -63,4 +64,10 @@ public class ExamAttempt implements Serializable {
 
     @Column(name = "take_as", length = 20)
     private String takeAs;
+
+    @Column(name = "code_judging_token")
+    private UUID codeJudgingToken;
+
+    @Column(name = "code_judging_until")
+    private Instant codeJudgingUntil;
 }

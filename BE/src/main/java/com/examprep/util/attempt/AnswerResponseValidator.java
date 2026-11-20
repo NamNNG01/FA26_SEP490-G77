@@ -1,6 +1,7 @@
 package com.examprep.util.attempt;
 
 import com.examprep.dto.attempt.Snapshots;
+import com.examprep.services.PistonClient;
 import com.fasterxml.jackson.databind.JsonNode;
 
 import java.nio.charset.StandardCharsets;
@@ -26,7 +27,7 @@ import java.util.regex.Pattern;
  */
 public final class AnswerResponseValidator {
 
-    /** ESSAY / CODE text limit (spec 6.3). */
+    /** ESSAY text limit (spec 6.3). */
     public static final int ESSAY_MAX_CHARS = 10_000;
     /** DIAGRAM payload limit: 500 KB (spec 6.3). */
     public static final int DIAGRAM_MAX_BYTES = 500 * 1024;
@@ -46,6 +47,10 @@ public final class AnswerResponseValidator {
     public static Optional<String> validate(String questionType,
                                             JsonNode response,
                                             Snapshots.DisplayQuestion display) {
+        if ("CODE".equals(questionType) && response != null && response.isObject()
+                && (response.has("text") || response.has("language"))) {
+            return validateCode(response);
+        }
         if (isEmpty(response)) {
             return Optional.empty();
         }
@@ -58,7 +63,8 @@ public final class AnswerResponseValidator {
             case "MATCHING" -> validateMatching(response, display);
             case "FILL_BLANK" -> validateFillBlank(response, display);
             case "ORDERING" -> validateOrdering(response, display);
-            case "ESSAY", "CODE" -> validateText(response, "text");
+            case "ESSAY" -> validateText(response, "text");
+            case "CODE" -> validateCode(response);
             case "DIAGRAM" -> validateDiagram(response);
             case "DIAGRAM_ESSAY" -> {
                 Optional<String> errText = validateText(response, "text");
@@ -67,6 +73,18 @@ public final class AnswerResponseValidator {
             }
             default -> Optional.of("unsupported question type");
         };
+    }
+
+    private static Optional<String> validateCode(JsonNode response) {
+        JsonNode text = response.get("text");
+        if (text == null || !text.isTextual()) {
+            return Optional.of("text must be a string");
+        }
+        JsonNode language = response.get("language");
+        if (language != null && (!language.isTextual() || !PistonClient.supports(language.textValue()))) {
+            return Optional.of("language must be a supported language");
+        }
+        return CodeSource.tooLarge(text.textValue()) ? Optional.of(CodeSource.TOO_LARGE) : Optional.empty();
     }
 
     /**

@@ -63,8 +63,9 @@ public class StudentCodeExamController {
     public ResponseEntity<ApiResponse<PageResponse<CodeExamResponses.SubmissionItem>>> submissions(
             @AuthenticationPrincipal UserPrincipal user,
             @PathVariable Long examId,
+            @RequestParam(required = false) Long attemptId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
-        return ResponseEntity.ok(ApiResponse.success(service.submissions(user.getId(), examId, page, size)));
+        return ResponseEntity.ok(ApiResponse.success(service.submissions(user.getId(), examId, attemptId, page, size)));
     }
 }

@@ -13,19 +13,16 @@ import java.util.List;
 public final class CodeExamRequests {
     private CodeExamRequests() {}
 
-    /** Source is capped at 100 KB (spec 19.2). */
-    public static final int MAX_SOURCE_CHARS = 100 * 1024;
-
     public record Run(
             @NotNull Long questionId,
             @NotBlank @Pattern(regexp = "JAVA|PYTHON|C|CPP") String language,
-            @NotBlank @Size(max = 102400) String sourceCode,
+            @NotBlank String sourceCode,
             @Size(max = 100000) String stdin) {}
 
     public record Answer(
             @NotNull Long questionId,
             @NotBlank @Pattern(regexp = "JAVA|PYTHON|C|CPP") String language,
-            @NotBlank @Size(max = 102400) String sourceCode) {}
+            @NotBlank String sourceCode) {}
 
     public record Submit(
             @NotNull Long examId,

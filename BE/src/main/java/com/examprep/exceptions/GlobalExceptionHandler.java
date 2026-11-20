@@ -23,6 +23,7 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.sql.SQLException;
 
 @Slf4j
 @RestControllerAdvice
@@ -180,9 +181,17 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ApiResponse<Object>> handleDataIntegrityViolation(DataIntegrityViolationException ex) {
-        log.warn("Data Integrity Violation: {}", ex.getMessage());
-        return ResponseEntity.status(ResponseCode.CONFLICT.getHttpStatus())
-                .body(ApiResponse.error(ResponseCode.CONFLICT, "Resource already exists or state conflict"));
+        for (Throwable cause = ex; cause != null; cause = cause.getCause()) {
+            if (cause instanceof SQLException sql) {
+                for (SQLException failure = sql; failure != null; failure = failure.getNextException()) {
+                    if ("23505".equals(failure.getSQLState())) {
+                        return ResponseEntity.status(ResponseCode.CONFLICT.getHttpStatus())
+                                .body(ApiResponse.error(ResponseCode.CONFLICT, "Resource already exists"));
+                    }
+                }
+            }
+        }
+        return handleGenericException(ex);
     }
 
     @ExceptionHandler(Exception.class)
