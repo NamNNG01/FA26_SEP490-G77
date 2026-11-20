@@ -34,11 +34,14 @@ import com.examprep.util.attempt.AttemptShuffler;
 import com.examprep.util.attempt.AnswerResponseValidator;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -93,6 +96,9 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
     private final AttemptAutoSubmitter autoSubmitter;
     private final AttemptWriter writer;
     private final ObjectMapper objectMapper;
+    private final CodeAnswerJudge codeJudge;
+    private final PlatformTransactionManager transactionManager;
+    private final EntityManager entityManager;
 
     // ---------------------------------------------------------------------------------
     // SA-01
@@ -105,8 +111,20 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
      * {@code question_version}. Question and option order come from the attempt's own seed.
      */
     @Override
-    @Transactional
     public AttemptResponses.Session start(Long userId, Long examId, String idempotencyKey) {
+        TransactionTemplate tx = new TransactionTemplate(transactionManager);
+        while (true) {
+            StartResult result = tx.execute(status -> startAttempt(userId, examId, idempotencyKey));
+            if (result.expiredAttemptId() == null) {
+                return result.session();
+            }
+            autoSubmitter.closeExpired(result.expiredAttemptId(), userId, Instant.now());
+        }
+    }
+
+    private record StartResult(AttemptResponses.Session session, Long expiredAttemptId) {}
+
+    private StartResult startAttempt(Long userId, Long examId, String idempotencyKey) {
         Exam exam = exams.findById(examId)
                 .orElseThrow(() -> new ResourceNotFoundException("Exam not found"));
         requireEnrollment(exam, userId);
@@ -140,7 +158,8 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
                         throw new ResourceConflictException("Idempotency-Key was already used for another exam");
                     } else {
                         // Same key, same exam: replay the original 201, no second attempt.
-                        return sessionView(replayed, answers.findByAttemptIdOrdered(replayed.getAttemptId()), false);
+                        return new StartResult(sessionView(replayed,
+                                answers.findByAttemptIdOrdered(replayed.getAttemptId()), false), null);
                     }
                 }
             }
@@ -150,19 +169,23 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
             throw new ResourceConflictException("Exam is not published");
         }
 
-        ExamAttempt active = attempts
-                .findActiveAttempt(examId, userId, STATUS_IN_PROGRESS)
+        ExamAttempt locked = attempts.findActiveAttemptId(examId, userId)
+                .flatMap(attempts::lockById)
                 .orElse(null);
-        if (active != null) {
-            ExamAttempt locked = attempts.lockById(active.getAttemptId()).orElse(active);
-            if (autoSubmitter.isExpired(locked, now)) {
-                // Deadline is long gone: close it so the student can start over.
-                autoSubmitter.gradeAndClose(locked, answers.findByAttemptIdOrdered(locked.getAttemptId()), now);
-            } else {
+        if (locked != null) {
+            entityManager.refresh(locked);
+        }
+        if (locked != null && STATUS_IN_PROGRESS.equals(locked.getStatus())) {
+            if (!autoSubmitter.isExpired(locked, now) || autoSubmitter.codeJudgingInProgress(locked, now)) {
                 throw new BaseException(ResponseCode.ATTEMPT_IN_PROGRESS,
                         "An attempt is already in progress for this exam",
                         new AttemptResponses.AttemptInProgress(locked.getAttemptId(), locked.getDeadlineAt()));
             }
+            List<AttemptAnswer> activeRows = answers.findByAttemptIdOrdered(locked.getAttemptId());
+            if (autoSubmitter.hasUngradedCode(activeRows)) {
+                return new StartResult(null, locked.getAttemptId());
+            }
+            autoSubmitter.gradeAndClose(locked, activeRows, now);
         }
 
         long seed = AttemptShuffler.newSeed();
@@ -222,7 +245,7 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
                     .build());
         }
 
-        return sessionView(attempt, rows, false);
+        return new StartResult(sessionView(attempt, rows, false), null);
     }
 
     // ---------------------------------------------------------------------------------
@@ -231,19 +254,17 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
 
     /**
      * Reloads the attempt (spec 6.2). A still-running attempt whose deadline has passed is closed
-     * first, in this same transaction, so the student sees the real status instead of an attempt
+     * first, so the student sees the real status instead of an attempt
      * that can never be saved to again. Closing happens before the response is built, so the
      * entity the view reads already carries the final score and status.
      */
     @Override
-    @Transactional
     public AttemptResponses.Session get(Long userId, Long attemptId) {
-        ExamAttempt attempt = ownedAttempt(userId, attemptId);
-        List<AttemptAnswer> rows = answers.findByAttemptIdOrdered(attemptId);
-        if (STATUS_IN_PROGRESS.equals(attempt.getStatus()) && autoSubmitter.isExpired(attempt, Instant.now())) {
-            autoSubmitter.gradeAndClose(attempt, rows, Instant.now());
-        }
-        return sessionView(attempt, rows, true);
+        autoSubmitter.closeExpired(attemptId, userId, Instant.now());
+        TransactionTemplate read = new TransactionTemplate(transactionManager);
+        read.setReadOnly(true);
+        return read.execute(status -> sessionView(ownedAttempt(userId, attemptId),
+                answers.findByAttemptIdOrdered(attemptId), true));
     }
 
     // ---------------------------------------------------------------------------------
@@ -252,14 +273,14 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
 
     /**
      * Saves a batch of drafts (spec 6.3). The transactional work happens in {@link AttemptWriter};
-     * when the deadline had already passed the writer closes the attempt and reports it, and the
-     * caller answers {@code 410 ATTEMPT_EXPIRED} here — throwing from inside that transaction
-     * would roll the closing back.
+     * when the deadline has passed, this method auto-submits before reporting
+     * {@code 410 ATTEMPT_EXPIRED}.
      */
     @Override
     public AttemptResponses.DraftSaved saveDrafts(Long userId, Long attemptId, AttemptRequests.DraftSave body) {
         Optional<AttemptResponses.DraftSaved> outcome = writer.saveDrafts(userId, attemptId, body);
         if (outcome.isEmpty()) {
+            autoSubmitter.closeExpired(attemptId, userId, Instant.now());
             throw new BaseException(ResponseCode.ATTEMPT_EXPIRED, "The attempt deadline has passed");
         }
         return outcome.get();
@@ -481,7 +502,6 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
         }
         Instant now = Instant.now();
         if (autoSubmitter.isExpired(attempt, now)) {
-            autoSubmitter.gradeAndClose(attempt, answers.findByAttemptIdOrdered(attemptId), now);
             throw new BaseException(ResponseCode.ATTEMPT_NOT_IN_PROGRESS, "Attempt is not in progress");
         }
         if ("MATERIAL_QUIZ".equals(attempt.getMode()) && "EXAM".equals(attempt.getTakeAs())) {
@@ -505,11 +525,17 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
 
         Snapshots.DisplayQuestion display =
                 paperFactory.read(row.getDisplaySnapshot(), Snapshots.DisplayQuestion.class);
-        String questionType = display != null ? display.questionType() : row.getQuestion().getQuestionType();
+        String questionType = paperFactory.questionType(row, display);
+        if ("CODE".equals(questionType) && row.getGradedAt() != null) {
+            throw new ResourceConflictException("Coding answers are final once judged");
+        }
 
         JsonNode responseNode;
         if (body != null && body.response() != null) {
             Optional<String> error = AnswerResponseValidator.validate(questionType, body.response(), display);
+            if (error.isEmpty() && "CODE".equals(questionType)) {
+                error = codeJudge.draftLanguageError(questionId, body.response());
+            }
             if (error.isPresent()) {
                 throw new BadRequestException(error.get());
             }

@@ -1,12 +1,10 @@
 package com.examprep.services;
 
-import com.examprep.dto.ResponseCode;
 import com.examprep.dto.attempt.AttemptRequests;
 import com.examprep.dto.attempt.AttemptResponses;
 import com.examprep.dto.attempt.Snapshots;
 import com.examprep.entities.AttemptAnswer;
 import com.examprep.entities.ExamAttempt;
-import com.examprep.exceptions.BaseException;
 import com.examprep.exceptions.ForbiddenException;
 import com.examprep.exceptions.ResourceConflictException;
 import com.examprep.exceptions.ResourceNotFoundException;
@@ -17,7 +15,9 @@ import com.examprep.util.attempt.AttemptScoring;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -44,6 +44,8 @@ public class AttemptWriter {
     private final AttemptAnswerRepository answers;
     private final AttemptPaperFactory paperFactory;
     private final AttemptAutoSubmitter autoSubmitter;
+    private final CodeAnswerJudge judge;
+    private final PlatformTransactionManager transactionManager;
 
     /** One normalized draft entry of either request body. */
     private record Entry(Long questionId, Integer seq, JsonNode response) {
@@ -54,8 +56,7 @@ public class AttemptWriter {
      * stores the ones that are newer than what is already saved.
      *
      * @return the per-entry outcome, or <strong>empty when the deadline had already passed</strong>:
-     * in that case the attempt has just been auto-submitted inside this transaction and the
-     * caller must answer {@code 410 ATTEMPT_EXPIRED}.
+     * in that case the caller closes the attempt before returning {@code 410 ATTEMPT_EXPIRED}.
      */
     @Transactional
     public Optional<AttemptResponses.DraftSaved> saveDrafts(Long userId, Long attemptId, AttemptRequests.DraftSave body) {
@@ -64,12 +65,11 @@ public class AttemptWriter {
             throw new ResourceConflictException("Attempt has already been submitted");
         }
         Instant now = Instant.now();
-        List<AttemptAnswer> rows = answers.findByAttemptIdOrdered(attemptId);
         if (autoSubmitter.isExpired(attempt, now)) {
-            autoSubmitter.gradeAndClose(attempt, rows, now);
             return Optional.empty();
         }
 
+        List<AttemptAnswer> rows = answers.findByAttemptIdOrdered(attemptId);
         List<AttemptResponses.Saved> saved = new ArrayList<>();
         List<AttemptResponses.Rejected> rejected = new ArrayList<>();
         apply(rows, entries(body), saved, rejected);
@@ -87,19 +87,14 @@ public class AttemptWriter {
      * the graded result, marked {@code autoSubmitted}, but it must never award points for answers
      * that arrived after the deadline).</p>
      */
-    @Transactional
     public AttemptResponses.Submitted submit(Long userId, Long attemptId, AttemptRequests.Submit body) {
-        ExamAttempt attempt = lockedOwnedAttempt(userId, attemptId);
-        List<AttemptAnswer> rows = answers.findByAttemptIdOrdered(attemptId);
-        if (STATUS_IN_PROGRESS.equals(attempt.getStatus())) {
-            Instant now = Instant.now();
-            if (!autoSubmitter.isExpired(attempt, now)
-                    && body != null && body.answers() != null && !body.answers().isEmpty()) {
-                apply(rows, submitEntries(body), null, null);
-            }
-            autoSubmitter.gradeAndClose(attempt, rows, now);
+        List<Entry> entries = submitEntries(body);
+        if (!autoSubmitter.close(attemptId, userId, Instant.now(), false,
+                entries.isEmpty() ? null : rows -> apply(rows, entries, null, null))) {
+            throw new ResourceConflictException("Code judging is already in progress");
         }
-        return submitted(attempt, rows);
+        return new TransactionTemplate(transactionManager).execute(status ->
+                submitted(lockedOwnedAttempt(userId, attemptId), answers.findByAttemptIdOrdered(attemptId)));
     }
 
     private ExamAttempt lockedOwnedAttempt(Long userId, Long attemptId) {
@@ -134,7 +129,10 @@ public class AttemptWriter {
                 continue;
             }
             // CD-05 judged the exact submitted source; a later SA-03 draft must not detach it.
-            if (row.getGradedAt() != null && TYPE_CODE.equals(row.getQuestion().getQuestionType())) {
+            Snapshots.DisplayQuestion display =
+                    paperFactory.read(row.getDisplaySnapshot(), Snapshots.DisplayQuestion.class);
+            String type = paperFactory.questionType(row, display);
+            if (row.getGradedAt() != null && TYPE_CODE.equals(type)) {
                 reject(rejectedOut, entry.questionId(), AttemptResponses.REASON_ALREADY_GRADED,
                         "Coding answers are final once judged");
                 continue;
@@ -144,10 +142,10 @@ public class AttemptWriter {
                         "Question answer is locked");
                 continue;
             }
-            Snapshots.DisplayQuestion display =
-                    paperFactory.read(row.getDisplaySnapshot(), Snapshots.DisplayQuestion.class);
-            Optional<String> error = AnswerResponseValidator.validate(
-                    display != null ? display.questionType() : null, entry.response(), display);
+            Optional<String> error = AnswerResponseValidator.validate(type, entry.response(), display);
+            if (error.isEmpty() && TYPE_CODE.equals(type)) {
+                error = judge.draftLanguageError(entry.questionId(), entry.response());
+            }
             if (error.isPresent()) {
                 reject(rejectedOut, entry.questionId(),
                         AttemptResponses.REASON_INVALID_RESPONSE, error.get());
@@ -161,7 +159,11 @@ public class AttemptWriter {
                 }
                 continue;
             }
-            row.setResponse(store(entry.response()));
+            if (TYPE_CODE.equals(type)) {
+                row.setResponse(codeResponse(entry.questionId(), entry.response()));
+            } else {
+                row.setResponse(store(entry.response()));
+            }
             if (entry.seq() != null) {
                 row.setDraftSeq(entry.seq());
             }
@@ -169,6 +171,18 @@ public class AttemptWriter {
                 savedOut.add(new AttemptResponses.Saved(entry.questionId(), row.getDraftSeq()));
             }
         }
+    }
+
+    private String codeResponse(Long questionId, JsonNode response) {
+        if (response == null || response.path("text").asText("").isBlank()) {
+            return null;
+        }
+        if (response.has("language")) {
+            return store(response);
+        }
+        com.fasterxml.jackson.databind.node.ObjectNode code = response.deepCopy();
+        code.put("language", judge.language(questionId));
+        return store(code);
     }
 
     private void reject(List<AttemptResponses.Rejected> out, Long questionId, String reason, String detail) {

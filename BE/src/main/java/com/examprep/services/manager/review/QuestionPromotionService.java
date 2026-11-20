@@ -133,7 +133,7 @@ public class QuestionPromotionService {
     }
 
     private void saveCodeConfiguration(Question question, CodeConfigDto config) {
-        String allowedLanguages = writeJson(config.getAllowedLanguages() == null ? List.of() : config.getAllowedLanguages());
+        String allowedLanguages = writeJson(config.getAllowedLanguages());
         codeQuestionConfigRepository.save(CodeQuestionConfig.builder()
                 .questionId(question.getQuestionId())
                 .allowedLanguages(allowedLanguages)

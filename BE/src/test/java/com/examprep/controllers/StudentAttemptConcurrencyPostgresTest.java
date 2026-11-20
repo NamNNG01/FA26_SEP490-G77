@@ -1,15 +1,21 @@
 package com.examprep.controllers;
 
+import com.examprep.dto.student.CodeExamRequests;
 import com.examprep.entities.AnswerOption;
 import com.examprep.entities.Category;
 import com.examprep.entities.Course;
 import com.examprep.entities.Enrollment;
 import com.examprep.entities.Exam;
+import com.examprep.entities.ExamAttempt;
 import com.examprep.entities.ExamQuestion;
 import com.examprep.entities.Module;
 import com.examprep.entities.Question;
 import com.examprep.entities.User;
 import com.examprep.security.UserPrincipal;
+import com.examprep.services.AttemptAutoSubmitter;
+import com.examprep.services.PistonClient;
+import com.examprep.services.StudentAttemptService;
+import com.examprep.services.StudentCodeExamService;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -18,6 +24,7 @@ import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
@@ -40,6 +47,8 @@ import java.util.concurrent.TimeUnit;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
@@ -62,6 +71,10 @@ class StudentAttemptConcurrencyPostgresTest {
     @Autowired JdbcTemplate db;
     @Autowired EntityManager em;
     @Autowired PlatformTransactionManager transactionManager;
+    @Autowired StudentAttemptService studentAttempts;
+    @Autowired StudentCodeExamService codeExams;
+    @Autowired AttemptAutoSubmitter autoSubmitter;
+    @MockBean PistonClient piston;
 
     private TransactionTemplate tx;
     private Long studentId;
@@ -165,6 +178,63 @@ class StudentAttemptConcurrencyPostgresTest {
         assertThrows(DataIntegrityViolationException.class, () -> insertActive(now),
                 "uq_attempt_one_active must reject a second IN_PROGRESS attempt");
         assertEquals(1, activeAttempts());
+    }
+
+    @Test
+    void deadlineCloserWaitsForCodeAcceptedBeforeExpiry() throws Exception {
+        Long questionId = tx.execute(status -> {
+            Question question = Question.builder().module(em.getReference(Module.class, moduleId))
+                    .questionType("CODE").content("Print the input").status("ACTIVE").approvalStatus("APPROVED").build();
+            em.persist(question);
+            em.persist(ExamQuestion.builder().exam(em.getReference(Exam.class, examId)).question(question)
+                    .weight(BigDecimal.ONE).orderIndex(1).build());
+            em.flush();
+            db.update("INSERT INTO code_question_configs(question_id, allowed_languages) VALUES (?, '[\"PYTHON\"]')",
+                    question.getQuestionId());
+            db.update("INSERT INTO code_test_cases(question_id, input_data, expected_output) VALUES (?, 'x', 'x')",
+                    question.getQuestionId());
+            return question.getQuestionId();
+        });
+        long attemptId = studentAttempts.start(studentId, examId, null).attemptId();
+        CountDownLatch judging = new CountDownLatch(1);
+        CountDownLatch providerReady = new CountDownLatch(1);
+        when(piston.judge(eq("PYTHON"), eq("print(input())"), anyList(), anyInt(), anyInt())).thenAnswer(call -> {
+            judging.countDown();
+            assertTrue(providerReady.await(15, TimeUnit.SECONDS));
+            List<PistonClient.CaseInput> cases = call.getArgument(2);
+            return cases.stream().map(test -> new PistonClient.CaseOutcome(test.testCaseId(), true, "x", null, null, 1)).toList();
+        });
+        var executor = Executors.newSingleThreadExecutor();
+        try {
+            var request = new CodeExamRequests.Submit(examId,
+                    List.of(new CodeExamRequests.Answer(questionId, "PYTHON", "print(input())")));
+            var submitted = executor.submit(() -> codeExams.submit(studentId, request));
+            assertTrue(judging.await(10, TimeUnit.SECONDS));
+            tx.executeWithoutResult(status -> em.find(ExamAttempt.class, attemptId)
+                    .setDeadlineAt(Instant.now().minusSeconds(10)));
+            assertEquals(Boolean.TRUE, tx.execute(status ->
+                    autoSubmitter.isExpired(em.find(ExamAttempt.class, attemptId), Instant.now())));
+
+            autoSubmitter.closeExpiredCodeAttempts();
+            assertEquals(1L, activeAttempts());
+            providerReady.countDown();
+            assertEquals("PASSED", submitted.get(15, TimeUnit.SECONDS).results().get(0).status());
+
+            autoSubmitter.closeExpiredCodeAttempts();
+            assertEquals("COMPLETED", db.queryForObject("SELECT status FROM exam_attempts WHERE attempt_id = ?",
+                    String.class, attemptId));
+            assertEquals("PYTHON", db.queryForObject(
+                    "SELECT response ->> 'language' FROM attempt_answers WHERE attempt_id = ? AND question_id = ?",
+                    String.class, attemptId, questionId));
+            assertEquals(1, db.queryForObject("SELECT count(*) FROM code_submissions WHERE attempt_id = ?",
+                    Integer.class, attemptId));
+            assertEquals(attemptId, codeExams.submissions(studentId, examId, null, 0, 10).getContent().get(0).attemptId());
+            assertEquals(1L, codeExams.submissions(studentId, examId, attemptId, 0, 10).getTotalElements());
+        } finally {
+            providerReady.countDown();
+            executor.shutdownNow();
+            assertTrue(executor.awaitTermination(15, TimeUnit.SECONDS));
+        }
     }
 
     private void insertActive(Instant now) {

@@ -4,6 +4,7 @@ import com.examprep.dto.ResponseCode;
 import com.examprep.dto.attempt.AttemptResponses;
 import com.examprep.dto.attempt.Snapshots;
 import com.examprep.entities.AnswerOption;
+import com.examprep.entities.AttemptAnswer;
 import com.examprep.entities.Exam;
 import com.examprep.entities.ExamConfig;
 import com.examprep.entities.ExamGroup;
@@ -345,6 +346,10 @@ public class AttemptPaperFactory {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    String questionType(AttemptAnswer row, Snapshots.DisplayQuestion display) {
+        return display != null && display.questionType() != null ? display.questionType() : row.getQuestion().getQuestionType();
     }
 
     /** Reads a stored {@code response} column into a tree; {@code null} means "no answer yet". */

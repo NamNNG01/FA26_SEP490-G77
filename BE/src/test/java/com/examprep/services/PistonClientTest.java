@@ -390,6 +390,23 @@ class PistonClientTest {
     // =================================================================================
 
     @Test
+    void providerSourceRejectionsMapToBadRequest() {
+        PistonClient client = new PistonClient(baseUrl, "secret-key");
+        HTTP_STATUS.set(400);
+        BaseException rejected = assertThrows(BaseException.class,
+                () -> client.run("JAVA", "x", "", 1_000, 65_536));
+        assertEquals(ResponseCode.BAD_REQUEST, rejected.getResponseCode());
+        assertEquals(Map.of("code", "SOURCE_REJECTED"), rejected.getData());
+
+        HTTP_STATUS.set(413);
+        BaseException tooLarge = assertThrows(BaseException.class,
+                () -> client.judge("JAVA", "x", List.of(new PistonClient.CaseInput(1L, "", "")), 1_000, 65_536));
+        assertEquals(ResponseCode.BAD_REQUEST, tooLarge.getResponseCode());
+        assertEquals(Map.of("code", "SOURCE_TOO_LARGE"), tooLarge.getData());
+        assertEquals(2, CALLS.size());
+    }
+
+    @Test
     void providerHttpErrorsMapToUnavailable() {
         PistonClient client = new PistonClient(baseUrl, "secret-key");
 

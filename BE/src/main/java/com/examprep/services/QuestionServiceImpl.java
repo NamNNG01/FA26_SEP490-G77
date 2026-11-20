@@ -949,9 +949,9 @@ public class QuestionServiceImpl implements QuestionService {
         CodeQuestionConfig existing = codeQuestionConfigRepository.findById(q.getQuestionId()).orElse(null);
 
         // A partial update (only codeConfig or only testCases) must not reset the other half.
-        String allowedLangsJson = cfgDto != null && cfgDto.getAllowedLanguages() != null
+        String allowedLangsJson = cfgDto != null
                 ? serializeJson(cfgDto.getAllowedLanguages(), "allowedLanguages")
-                : existing != null ? existing.getAllowedLanguages() : null;
+                : existing.getAllowedLanguages();
         String codeTemplate = cfgDto != null && cfgDto.getCodeTemplate() != null
                 ? cfgDto.getCodeTemplate()
                 : existing != null ? existing.getCodeTemplate() : null;

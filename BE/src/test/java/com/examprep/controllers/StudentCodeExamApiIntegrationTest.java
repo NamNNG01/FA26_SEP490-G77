@@ -4,6 +4,7 @@ import com.examprep.dto.ResponseCode;
 import com.examprep.entities.*;
 import com.examprep.exceptions.BaseException;
 import com.examprep.security.UserPrincipal;
+import com.examprep.services.AttemptAutoSubmitter;
 import com.examprep.services.PistonClient;
 import com.examprep.services.StudentAttemptService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -59,6 +60,7 @@ public class StudentCodeExamApiIntegrationTest {
     @Autowired ObjectMapper json;
     @Autowired EntityManager em;
     @Autowired StudentAttemptService attemptService;
+    @Autowired AttemptAutoSubmitter autoSubmitter;
     @MockBean PistonClient piston;
 
     User manager, student, other, outsider;
@@ -110,10 +112,11 @@ public class StudentCodeExamApiIntegrationTest {
 
         Instant now = Instant.now();
         codeConfig = CodeQuestionConfig.builder().questionId(codeQuestion.getQuestionId())
-                .allowedLanguages("[\"JAVA\",\"PYTHON\"]").codeTemplate("public class Main {}")
+                .allowedLanguages("[\"JAVA\"]").codeTemplate("public class Main {}")
                 .timeLimitMs(2_000).memoryLimitKb(131_072).createdAt(now).updatedAt(now).build();
         em.persist(codeConfig);
-        // sumQuestion intentionally has no config: every language is allowed with the defaults.
+        em.persist(CodeQuestionConfig.builder().questionId(sumQuestion.getQuestionId()).allowedLanguages("[\"CPP\"]")
+                .timeLimitMs(5_000).memoryLimitKb(262_144).createdAt(now).updatedAt(now).build());
         em.flush();
     }
 
@@ -136,7 +139,7 @@ public class StudentCodeExamApiIntegrationTest {
         assertEquals(codeQuestion.getQuestionId(), first.path("questionId").asLong());
         assertEquals(1, first.path("orderIndex").asInt());
         assertEquals("Reverse the string", first.path("content").asText());
-        assertEquals("[\"JAVA\", \"PYTHON\"]".replace(" ", ""), first.path("languages").toString().replace(" ", ""));
+        assertEquals("[\"JAVA\"]", first.path("languages").toString());
         assertEquals("public class Main {}", first.path("codeTemplate").asText());
         assertEquals("abc", first.path("sampleInput").asText());
         assertEquals("cba", first.path("sampleOutput").asText());
@@ -144,7 +147,7 @@ public class StudentCodeExamApiIntegrationTest {
         JsonNode second = data.path("questions").get(1);
         assertEquals(sumQuestion.getQuestionId(), second.path("questionId").asLong());
         assertEquals(2, second.path("orderIndex").asInt());
-        assertEquals(4, second.path("languages").size()); // no config → every supported language
+        assertEquals("[\"CPP\"]", second.path("languages").toString());
         assertFalse(second.has("codeTemplate"));
         assertEquals("1 2", second.path("sampleInput").asText());
         assertEquals("3", second.path("sampleOutput").asText());
@@ -235,9 +238,11 @@ public class StudentCodeExamApiIntegrationTest {
 
     @Test
     void runUsesThePublicSampleAndReturnsTheJudgeOutcome() throws Exception {
+        codeConfig.setAllowedLanguages("[\"PYTHON\"]");
+        startAttempt();
         when(piston.run(eq("PYTHON"), eq("print('cba')"), eq("abc"), eq(2_000), eq(131_072)))
                 .thenReturn(new PistonClient.RunOutcome("COMPLETED", "cba\n", null, 120));
-        when(piston.run(eq("JAVA"), eq("class Main {}"), eq("custom-input"), eq(5_000), eq(262_144)))
+        when(piston.run(eq("CPP"), eq("int main(){}"), eq("custom-input"), eq(5_000), eq(262_144)))
                 .thenReturn(new PistonClient.RunOutcome("FAILED", null, "error: ';' expected", null));
 
         call(student, post("/api/v1/student/code-exams/run").contentType(MediaType.APPLICATION_JSON)
@@ -252,7 +257,7 @@ public class StudentCodeExamApiIntegrationTest {
 
         call(student, post("/api/v1/student/code-exams/run").contentType(MediaType.APPLICATION_JSON)
                 .content(json.writeValueAsString(Map.of("questionId", sumQuestion.getQuestionId(),
-                        "language", "JAVA", "sourceCode", "class Main {}", "stdin", "custom-input"))))
+                        "language", "CPP", "sourceCode", "int main(){}", "stdin", "custom-input"))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("FAILED"))
                 .andExpect(jsonPath("$.data.stderr").value("error: ';' expected"))
@@ -262,13 +267,14 @@ public class StudentCodeExamApiIntegrationTest {
                 .thenThrow(new BaseException(ResponseCode.CODE_EXECUTION_UNAVAILABLE, "Piston is down"));
         call(student, post("/api/v1/student/code-exams/run").contentType(MediaType.APPLICATION_JSON)
                 .content(json.writeValueAsString(Map.of("questionId", codeQuestion.getQuestionId(),
-                        "language", "JAVA", "sourceCode", "class Main {}"))))
+                        "language", "PYTHON", "sourceCode", "class Main {}"))))
                 .andExpect(status().isServiceUnavailable())
                 .andExpect(jsonPath("$.message").value("Piston is down"));
     }
 
     @Test
     void runValidatesQuestionLanguageEnrollmentAndSourceSize() throws Exception {
+        startAttempt();
         String url = "/api/v1/student/code-exams/run";
         call(student, post(url).contentType(MediaType.APPLICATION_JSON)
                 .content(json.writeValueAsString(Map.of("questionId", codeQuestion.getQuestionId(),
@@ -291,17 +297,141 @@ public class StudentCodeExamApiIntegrationTest {
         call(outsider, post(url).contentType(MediaType.APPLICATION_JSON)
                 .content(json.writeValueAsString(Map.of("questionId", codeQuestion.getQuestionId(),
                         "language", "JAVA", "sourceCode", "class Main {}"))))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isNotFound());
         call(student, post(url).contentType(MediaType.APPLICATION_JSON)
                 .content(json.writeValueAsString(Map.of("questionId", codeQuestion.getQuestionId(),
                         "language", "JAVA", "sourceCode", "x".repeat(100 * 1024 + 1)))))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.data.code").value("SOURCE_TOO_LARGE"));
         verifyNoInteractions(piston);
     }
 
     // =================================================================================
     // CD-05
     // =================================================================================
+
+    @Test
+    void pythonDraftAndJudgedSubmissionKeepTheirLanguageOnReload() throws Exception {
+        codeConfig.setAllowedLanguages("[\"PYTHON\"]");
+        long attemptId = startAttempt();
+        String attemptUrl = "/api/v1/student/attempts/" + attemptId;
+        String source = "# PASS " + "x".repeat(50_000);
+        draft(attemptId, source, "PYTHON", 1)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.saved.length()").value(1));
+        JsonNode reloaded = data(call(student, get(attemptUrl)).andExpect(status().isOk()));
+        assertEquals("PYTHON", reloaded.path("answers").findValues("language").get(0).asText());
+        draft(attemptId, "do not overwrite", "JAVA", 2)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.rejected[0].reason").value("INVALID_RESPONSE"));
+        assertEquals(source, json.readTree(answerOf(attemptId, codeQuestion.getQuestionId()).getResponse()).path("text").asText());
+
+        stubJudge();
+        submit(student, codeBody("PYTHON", source)).andExpect(status().isOk());
+        assertEquals("PYTHON", json.readTree(answerOf(attemptId, codeQuestion.getQuestionId()).getResponse()).path("language").asText());
+        assertEquals("PYTHON", submissions().get(0).getLanguage());
+    }
+
+    @Test
+    void usesTheSameUtf8SourceLimitForRunSubmitAndDrafts() throws Exception {
+        long attemptId = startAttempt();
+        String ascii = "x".repeat(102_400);
+        String oversized = "\u1ec7".repeat(40_010);
+        when(piston.run(eq("JAVA"), eq(ascii), anyString(), anyInt(), anyInt()))
+                .thenReturn(new PistonClient.RunOutcome("COMPLETED", "", null, 1));
+        runCode(codeQuestion, "JAVA", ascii).andExpect(status().isOk());
+        runCode(codeQuestion, "JAVA", oversized).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.data.code").value("SOURCE_TOO_LARGE"));
+        submit(student, codeBody("JAVA", oversized)).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.data.code").value("SOURCE_TOO_LARGE"));
+        draft(attemptId, oversized, "JAVA", 1).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.rejected[0].detail").value("Code is larger than 100 KB"));
+        verify(piston).run("JAVA", ascii, "abc", 2_000, 131_072);
+        verifyNoMoreInteractions(piston);
+        stubJudge();
+        submit(student, codeBody("JAVA", ascii)).andExpect(status().isOk());
+    }
+
+    @Test
+    void runRequiresAnOwnedUnexpiredAttemptContainingTheQuestion() throws Exception {
+        exam.setStatus("DRAFT");
+        runCode(codeQuestion, "JAVA", "class Main {}").andExpect(status().isNotFound());
+        exam.setStatus("PUBLISHED");
+        runCode(codeQuestion, "JAVA", "class Main {}").andExpect(status().isNotFound());
+        verifyNoInteractions(piston);
+        long attemptId = startAttempt();
+        when(piston.run(anyString(), anyString(), anyString(), anyInt(), anyInt()))
+                .thenReturn(new PistonClient.RunOutcome("COMPLETED", "cba", null, 1));
+        runCode(codeQuestion, "JAVA", "class Main {}").andExpect(status().isOk());
+        em.find(ExamAttempt.class, attemptId).setDeadlineAt(Instant.now().minusSeconds(10));
+        runCode(codeQuestion, "JAVA", "class Main {}").andExpect(status().isNotFound());
+    }
+
+    @Test
+    void codeSubmitAcceptedBeforeTheDeadlinePersistsAfterTheGracePeriod() throws Exception {
+        long attemptId = startAttempt();
+        Instant deadline = Instant.now().minusSeconds(2);
+        em.find(ExamAttempt.class, attemptId).setDeadlineAt(deadline);
+        when(piston.judge(eq("JAVA"), eq("PASS"), anyList(), anyInt(), anyInt())).thenAnswer(invocation -> {
+            long wait = java.time.Duration.between(Instant.now(),
+                    deadline.plusSeconds(AttemptAutoSubmitter.EXPIRY_GRACE_SECONDS).plusMillis(50)).toMillis();
+            if (wait > 0) {
+                Thread.sleep(wait);
+            }
+            List<PistonClient.CaseInput> cases = invocation.getArgument(2);
+            return cases.stream().map(test -> new PistonClient.CaseOutcome(test.testCaseId(), true,
+                    test.expectedOutput(), null, null, 1)).toList();
+        });
+        submit(student, codeBody("JAVA", "PASS")).andExpect(status().isOk());
+        assertEquals(1, submissions().size());
+        assertEquals("PASSED", submissions().get(0).getStatus());
+    }
+
+    @Test
+    void scheduledExpiryGradesTheSavedCodeOnceForFullCredit() throws Exception {
+        em.createQuery("DELETE FROM ExamQuestion e WHERE e.exam = :exam AND e.question <> :question")
+                .setParameter("exam", exam).setParameter("question", codeQuestion).executeUpdate();
+        exam.setDurationMinutes(1);
+        long attemptId = startAttempt();
+        draft(attemptId, "PASS", null, 1).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.saved.length()").value(1));
+        em.find(ExamAttempt.class, attemptId).setDeadlineAt(Instant.now().minusSeconds(10));
+        em.flush();
+        stubJudge();
+
+        autoSubmitter.closeExpiredCodeAttempts();
+        autoSubmitter.closeExpiredCodeAttempts();
+
+        call(student, get("/api/v1/student/attempts/" + attemptId + "/result"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("COMPLETED"))
+                .andExpect(jsonPath("$.data.autoSubmitted").value(true))
+                .andExpect(jsonPath("$.data.totalScore").value(10.0))
+                .andExpect(jsonPath("$.data.questions[0].gradingStatus").value("AUTO"));
+        verify(piston, times(1)).judge(eq("JAVA"), eq("PASS"), anyList(), anyInt(), anyInt());
+        assertEquals(1, submissions().size());
+    }
+
+    @Test
+    void manualSubmitGradesCodeAndRecordsProviderFailureAsFinal() throws Exception {
+        long attemptId = startAttempt();
+        when(piston.judge(anyString(), anyString(), anyList(), anyInt(), anyInt()))
+                .thenThrow(new BaseException(ResponseCode.CODE_EXECUTION_UNAVAILABLE, "sandbox unavailable"));
+        String url = "/api/v1/student/attempts/" + attemptId + "/submit";
+        call(student, post(url).contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("answers", List.of(Map.of(
+                        "questionId", codeQuestion.getQuestionId(), "seq", 1,
+                        "response", Map.of("text", "PASS", "language", "JAVA")))))))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.status").value("COMPLETED"));
+        call(student, post(url)).andExpect(status().isOk());
+
+        AttemptAnswer row = answerOf(attemptId, codeQuestion.getQuestionId());
+        assertEquals("FAILED", row.getGradingStatus());
+        assertEquals(0, row.getScoreEarned().signum());
+        assertEquals("CODE_EXECUTION_UNAVAILABLE", row.getGradingError());
+        assertEquals(1, submissions().size());
+        assertEquals("FAILED", submissions().get(0).getStatus());
+    }
 
     @Test
     void submitJudgesEveryFixtureAndScoresTheRunningAttempt() throws Exception {
@@ -364,7 +494,7 @@ public class StudentCodeExamApiIntegrationTest {
         assertEquals("AUTO", passRow.getGradingStatus());
         assertNotNull(passRow.getGradedAt());
         assertNull(passRow.getGradingError());
-        assertEquals("{\"text\":\"PASS\"}", passRow.getResponse());
+        assertEquals(json.readTree("{\"text\":\"PASS\",\"language\":\"JAVA\"}"), json.readTree(passRow.getResponse()));
 
         AttemptAnswer failedRow = answerOf(attemptId, sumQuestion.getQuestionId());
         assertEquals(0, BigDecimal.ZERO.compareTo(failedRow.getScoreEarned()));
@@ -391,7 +521,8 @@ public class StudentCodeExamApiIntegrationTest {
                         "response", Map.of("text", "class Sneaky {}")))))));
         JsonNode draftSaved = data(draftSave.andExpect(status().isOk()));
         assertEquals("ALREADY_GRADED", draftSaved.path("rejected").get(0).path("reason").asText());
-        assertEquals("{\"text\":\"FAIL\"}", answerOf(attemptId, codeQuestion.getQuestionId()).getResponse());
+        assertEquals(json.readTree("{\"text\":\"FAIL\",\"language\":\"JAVA\"}"),
+                json.readTree(answerOf(attemptId, codeQuestion.getQuestionId()).getResponse()));
         assertTrue(draftSaved.path("saved").isEmpty());
     }
 
@@ -567,7 +698,7 @@ public class StudentCodeExamApiIntegrationTest {
 
     @Test
     void submissionsHistoryIsOwnerScopedNewestFirstAndPaged() throws Exception {
-        startAttempt();
+        long attemptId = startAttempt();
         stubJudge();
         submit(student, json.writeValueAsString(Map.of("examId", exam.getExamId(), "answers", List.of(
                 Map.of("questionId", codeQuestion.getQuestionId(), "language", "JAVA", "sourceCode", "PASS"),
@@ -584,6 +715,7 @@ public class StudentCodeExamApiIntegrationTest {
                 .andExpect(status().isOk()));
         assertEquals(3, data.path("content").size());
         assertEquals(3L, data.path("totalElements").asLong());
+        data.path("content").forEach(item -> assertEquals(attemptId, item.path("attemptId").asLong()));
         assertEquals(3, data.path("content").get(0).path("testCasesTotal").asInt());
         assertEquals("FAILED", data.path("content").get(0).path("status").asText());
         assertEquals(codeQuestion.getQuestionId(), data.path("content").get(0).path("questionId").asLong());
@@ -648,6 +780,16 @@ public class StudentCodeExamApiIntegrationTest {
                 .filter(row -> row.getSubmissionId().equals(otherHistory.path("content").get(0).path("submissionId").asLong()))
                 .findFirst().orElseThrow().getUser().getUserId());
 
+        String historyUrl = "/api/v1/student/code-exams/" + exam.getExamId() + "/submissions";
+        call(student, get(historyUrl).param("attemptId", Long.toString(attemptId)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.content.length()").value(3));
+        call(other, get(historyUrl).param("attemptId", Long.toString(attemptId)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.content.length()").value(0));
+        attemptService.submit(student.getUserId(), attemptId, null);
+        long emptyAttemptId = startAttempt();
+        call(student, get(historyUrl).param("attemptId", Long.toString(emptyAttemptId)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.content.length()").value(0));
+
         call(outsider, get("/api/v1/student/code-exams/" + exam.getExamId() + "/submissions"))
                 .andExpect(status().isForbidden());
         call(student, get("/api/v1/student/code-exams/" + Long.MAX_VALUE + "/submissions"))
@@ -690,6 +832,27 @@ public class StudentCodeExamApiIntegrationTest {
     private ResultActions submit(User actor, String body) throws Exception {
         return call(actor, post("/api/v1/student/code-exams/submit")
                 .contentType(MediaType.APPLICATION_JSON).content(body));
+    }
+
+    private ResultActions runCode(Question question, String language, String source) throws Exception {
+        return call(student, post("/api/v1/student/code-exams/run").contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("questionId", question.getQuestionId(),
+                        "language", language, "sourceCode", source))));
+    }
+
+    private String codeBody(String language, String source) throws Exception {
+        return json.writeValueAsString(Map.of("examId", exam.getExamId(), "answers", List.of(
+                Map.of("questionId", codeQuestion.getQuestionId(), "language", language, "sourceCode", source))));
+    }
+
+    private ResultActions draft(long attemptId, String source, String language, int seq) throws Exception {
+        var response = json.createObjectNode().put("text", source);
+        if (language != null) {
+            response.put("language", language);
+        }
+        return call(student, put("/api/v1/student/attempts/" + attemptId + "/answers")
+                .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("answers", List.of(
+                        Map.of("questionId", codeQuestion.getQuestionId(), "seq", seq, "response", response))))));
     }
 
     private JsonNode data(MvcResult result) throws Exception {

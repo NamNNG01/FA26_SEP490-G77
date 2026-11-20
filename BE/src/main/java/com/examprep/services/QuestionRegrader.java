@@ -124,7 +124,8 @@ public class QuestionRegrader {
                     .map(row -> AttemptScoring.contribution(
                             row.getWeightSnapshot(), totalWeight, maxScore, row.getScoreEarned()))
                     .toList())));
-            if ("SUBMITTED".equals(attempt.getStatus()) && rows.stream().noneMatch(r -> WAITING_FOR_AI.contains(r.getGradingStatus()))) {
+            if ("SUBMITTED".equals(attempt.getStatus()) && rows.stream()
+                    .noneMatch(r -> r.getScoreEarned() == null && WAITING_FOR_AI.contains(r.getGradingStatus()))) {
                 attempt.setStatus("COMPLETED");
             }
         }

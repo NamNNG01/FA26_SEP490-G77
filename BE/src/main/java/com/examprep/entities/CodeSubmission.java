@@ -44,19 +44,19 @@ public class CodeSubmission implements Serializable {
     @Column(name = "language", nullable = false, length = 30)
     private String language;
 
-    @Column(name = "source_code", nullable = false)
+    @Column(name = "source_code", nullable = false, columnDefinition = "text")
     private String sourceCode;
 
     @Column(name = "status", nullable = false, length = 30)
     private String status;
 
-    @Column(name = "stdout")
+    @Column(name = "stdout", columnDefinition = "text")
     private String stdout;
 
-    @Column(name = "stderr")
+    @Column(name = "stderr", columnDefinition = "text")
     private String stderr;
 
-    @Column(name = "compile_output")
+    @Column(name = "compile_output", columnDefinition = "text")
     private String compileOutput;
 
     @Column(name = "time_ms")

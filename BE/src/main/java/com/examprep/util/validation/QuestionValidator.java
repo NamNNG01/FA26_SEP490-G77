@@ -318,13 +318,12 @@ public class QuestionValidator {
                     if (cfg.getMemoryLimitKb() != null && cfg.getMemoryLimitKb() < 1) {
                         errors.add(new ValidationError(prefix + "codeConfig.memoryLimitKb", "Memory limit must be positive"));
                     }
-                    if (cfg.getAllowedLanguages() != null) {
-                        for (String lang : cfg.getAllowedLanguages()) {
-                            if (!PistonClient.supports(lang)) {
-                                errors.add(new ValidationError(prefix + "codeConfig.allowedLanguages", "Unsupported language: " + lang));
-                            }
-                        }
-                    }
+                }
+                List<String> languages = payload.getCodeConfig() == null ? null : payload.getCodeConfig().getAllowedLanguages();
+                if (languages == null || languages.size() != 1) {
+                    errors.add(new ValidationError(prefix + "codeConfig.allowedLanguages", "Exactly one language is required"));
+                } else if (!PistonClient.supports(languages.get(0))) {
+                    errors.add(new ValidationError(prefix + "codeConfig.allowedLanguages", "Unsupported language: " + languages.get(0)));
                 }
                 if (payload.getTestCases() == null || payload.getTestCases().isEmpty()) {
                     errors.add(new ValidationError(prefix + "testCases", "At least one test case is required for code questions"));

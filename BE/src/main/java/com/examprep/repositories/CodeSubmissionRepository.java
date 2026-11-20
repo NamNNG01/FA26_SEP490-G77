@@ -13,7 +13,8 @@ public interface CodeSubmissionRepository extends JpaRepository<CodeSubmission, 
 
     /** CD-07: my submissions of one exam, newest first. */
     @Query("SELECT s FROM CodeSubmission s WHERE s.user.userId = :userId "
-            + "AND s.attempt.exam.examId = :examId ORDER BY s.submittedAt DESC, s.submissionId DESC")
+            + "AND s.attempt.exam.examId = :examId AND (:attemptId IS NULL OR s.attempt.attemptId = :attemptId) "
+            + "ORDER BY s.submittedAt DESC, s.submissionId DESC")
     Page<CodeSubmission> findHistory(@Param("userId") Long userId, @Param("examId") Long examId,
-                                     Pageable pageable);
+                                     @Param("attemptId") Long attemptId, Pageable pageable);
 }

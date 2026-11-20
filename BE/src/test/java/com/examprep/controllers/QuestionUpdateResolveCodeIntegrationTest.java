@@ -65,6 +65,42 @@ class QuestionUpdateResolveCodeIntegrationTest {
     }
 
     @Test
+    void batchCreateWithoutCodeLanguageReturnsFieldErrorAndCreatesNothing() throws Exception {
+        String content = "Rejected code question missing a language";
+        String body = """
+                [{
+                  "courseId": %d,
+                  "questionType": "CODE",
+                  "content": "%s",
+                  "codeConfig": { "timeLimitMs": 3000 },
+                  "testCases": [
+                    { "inputData": "1", "expectedOutput": "2", "hidden": false },
+                    { "inputData": "2", "expectedOutput": "3", "hidden": true }
+                  ]
+                }]
+                """.formatted(course.getCourseId(), content);
+        send(post("/api/v1/manager/questions/batch").param("courseId", course.getCourseId().toString())
+                        .param("moduleId", module.getModuleId().toString()), manager, body)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.data[?(@.path =~ /.*codeConfig.allowedLanguages/)]").exists());
+        assertEquals(0L, em.createQuery("SELECT count(q) FROM Question q WHERE q.content = :content", Long.class)
+                .setParameter("content", content).getSingleResult());
+    }
+
+    @Test
+    void updateRejectsEmptyAndMultipleCodeLanguages() throws Exception {
+        Question question = persistCodeQuestion("INACTIVE", "A code question with one language");
+        em.flush();
+        for (String languages : List.of("[]", "[\"JAVA\",\"PYTHON\"]")) {
+            send(put("/api/v1/manager/questions/" + question.getQuestionId()), manager,
+                    "{\"codeConfig\":{\"allowedLanguages\":" + languages + "}}")
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.data[?(@.path=='codeConfig.allowedLanguages')]").exists());
+        }
+        assertEquals("[\"JAVA\"]", em.find(CodeQuestionConfig.class, question.getQuestionId()).getAllowedLanguages());
+    }
+
+    @Test
     void resolveCodeQuestionWithContentChangeUpdatesContentAndKeepsConfigAndTestCases() throws Exception {
         Question q = persistCodeQuestion("ACTIVE", "Print the sum of two integers");
         em.flush();
@@ -85,7 +121,7 @@ class QuestionUpdateResolveCodeIntegrationTest {
 
         CodeQuestionConfig cfg = em.find(CodeQuestionConfig.class, q.getQuestionId());
         assertNotNull(cfg);
-        assertEquals("[\"JAVA\",\"PYTHON\"]", cfg.getAllowedLanguages());
+        assertEquals("[\"JAVA\"]", cfg.getAllowedLanguages());
         assertEquals("public class Main {}", cfg.getCodeTemplate());
         assertEquals(4000, cfg.getTimeLimitMs());
         assertEquals(131072, cfg.getMemoryLimitKb());
@@ -108,7 +144,7 @@ class QuestionUpdateResolveCodeIntegrationTest {
                 .andExpect(status().isOk()));
 
         assertEquals("Updated code prompt", updated.path("content").asText());
-        assertEquals(List.of("JAVA", "PYTHON"),
+        assertEquals(List.of("JAVA"),
                 json.convertValue(updated.path("codeConfig").path("allowedLanguages"), List.class));
         assertEquals(2, updated.path("testCases").size());
         assertEquals("Updated code prompt", f.reload(q).getContent());
@@ -178,7 +214,7 @@ class QuestionUpdateResolveCodeIntegrationTest {
         JsonNode updated = data(send(put("/api/v1/manager/questions/" + q.getQuestionId()), manager, body)
                 .andExpect(status().isOk()));
 
-        assertEquals(List.of("JAVA", "PYTHON"),
+        assertEquals(List.of("JAVA"),
                 json.convertValue(updated.path("codeConfig").path("allowedLanguages"), List.class));
         assertEquals("public class Main {}", updated.path("codeConfig").path("codeTemplate").asText());
         assertEquals(4000, updated.path("codeConfig").path("timeLimitMs").asInt());
@@ -194,7 +230,7 @@ class QuestionUpdateResolveCodeIntegrationTest {
         String body = """
                 {
                   "codeConfig": {
-                    "allowedLanguages": ["C", "CPP"],
+                    "allowedLanguages": ["C"],
                     "codeTemplate": "int main() { return 0; }",
                     "timeLimitMs": 1500,
                     "memoryLimitKb": 32768
@@ -205,7 +241,7 @@ class QuestionUpdateResolveCodeIntegrationTest {
         JsonNode updated = data(send(put("/api/v1/manager/questions/" + q.getQuestionId()), manager, body)
                 .andExpect(status().isOk()));
 
-        assertEquals(List.of("C", "CPP"),
+        assertEquals(List.of("C"),
                 json.convertValue(updated.path("codeConfig").path("allowedLanguages"), List.class));
         assertEquals(1500, updated.path("codeConfig").path("timeLimitMs").asInt());
         assertEquals(2, updated.path("testCases").size());
@@ -345,7 +381,7 @@ class QuestionUpdateResolveCodeIntegrationTest {
         Instant now = Instant.now();
         em.persist(CodeQuestionConfig.builder()
                 .questionId(q.getQuestionId())
-                .allowedLanguages("[\"JAVA\",\"PYTHON\"]")
+                .allowedLanguages("[\"JAVA\"]")
                 .codeTemplate("public class Main {}")
                 .timeLimitMs(4000)
                 .memoryLimitKb(131072)

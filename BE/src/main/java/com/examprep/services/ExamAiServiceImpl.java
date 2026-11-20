@@ -80,7 +80,7 @@ public class ExamAiServiceImpl implements ExamAiService {
             - DIAGRAM_ESSAY: the learner draws a diagram and explains it in writing; content asks for both;
               graph has the same shape as DIAGRAM; essayGradingRubric judges both the diagram and written explanation.
             - CODE: content states the stdin/stdout format and constraints; no options, answerKey or rubric;
-              codeConfig has allowedLanguages drawn from JAVA, PYTHON, C, CPP, timeLimitMs and memoryLimitKb;
+              codeConfig has exactly one allowedLanguages entry drawn from JAVA, PYTHON, C, CPP, plus timeLimitMs and memoryLimitKb;
               testCases has 3-6 {inputData, expectedOutput, hidden} entries, with at least one hidden and one sample.
             Quality rules: questions must be answerable from the course/module/material given; one clear idea per question;
             distractors plausible but unambiguously wrong; no "all/none of the above"; EASY = recall, MEDIUM = apply,
@@ -442,9 +442,8 @@ public class ExamAiServiceImpl implements ExamAiService {
                 if (CODE_LANGUAGES.contains(language) && !languages.contains(language)) languages.add(language);
             });
         }
-        if (languages.isEmpty()) languages.addAll(CODE_LANGUAGES);
         // No AI starter code: the model wrote the full solution into it, and the student editor opens on it.
-        return CodeConfigDto.builder().allowedLanguages(languages)
+        return CodeConfigDto.builder().allowedLanguages(List.of(languages.isEmpty() ? PistonClient.JAVA : languages.get(0)))
                 .timeLimitMs(node.path("timeLimitMs").canConvertToInt() ? node.path("timeLimitMs").intValue() : 5000)
                 .memoryLimitKb(node.path("memoryLimitKb").canConvertToInt() ? node.path("memoryLimitKb").intValue() : 262144)
                 .build();

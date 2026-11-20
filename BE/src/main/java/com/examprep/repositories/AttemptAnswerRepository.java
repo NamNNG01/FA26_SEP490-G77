@@ -1,6 +1,7 @@
 package com.examprep.repositories;
 
 import com.examprep.entities.AttemptAnswer;
+import com.examprep.entities.ExamAttempt;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -15,7 +16,14 @@ import org.springframework.data.repository.query.Param;
 @Repository
 public interface AttemptAnswerRepository extends JpaRepository<AttemptAnswer, Long> {
     boolean existsByQuestion_QuestionId(Long questionId);
-    boolean existsByQuestion_QuestionIdAndAttempt_User_UserIdAndAttempt_Status(Long questionId, Long userId, String status);
+    @Query("""
+            SELECT DISTINCT a FROM AttemptAnswer aa JOIN aa.attempt a JOIN FETCH a.exam e
+            LEFT JOIN FETCH e.module m
+            WHERE aa.question.questionId = :questionId AND a.user.userId = :userId
+              AND a.status = 'IN_PROGRESS'
+              AND ((e.status = 'PUBLISHED' AND (m IS NULL OR m.status <> 'HIDDEN')) OR e.status = 'ARCHIVED')
+            """)
+    List<ExamAttempt> findRunnableAttempts(@Param("questionId") Long questionId, @Param("userId") Long userId);
     List<AttemptAnswer> findByAttempt_AttemptId(Long attemptId);
     List<AttemptAnswer> findByGradingStatus(String gradingStatus);
 
