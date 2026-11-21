@@ -36,13 +36,15 @@ public class JwtTokenProvider {
     }
 
     public String generateAccessToken(User user) {
-        Date now = new Date();
-        Date expiryDate = new Date(now.getTime() + ACCESS_TOKEN_EXPIRATION_MS);
+        long nowMs = System.currentTimeMillis();
+        Date now = new Date(nowMs);
+        Date expiryDate = new Date(nowMs + ACCESS_TOKEN_EXPIRATION_MS);
 
         return Jwts.builder()
                 .subject(user.getUserId().toString())
                 .claim("email", user.getEmail())
                 .claim("role", user.getRoleName())
+                .claim("iat_ms", nowMs)
                 .issuedAt(now)
                 .expiration(expiryDate)
                 .signWith(getSigningKey())

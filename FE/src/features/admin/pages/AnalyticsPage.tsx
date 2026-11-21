@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/Button';
+import { Badge } from '@/components/ui/Badge';
 import { StatCard } from '@/components/ui/StatCard';
 import { Select } from '@/components/ui/Select';
 import { Tabs } from '@/components/ui/Tabs';
@@ -15,10 +16,13 @@ export function AnalyticsPage() {
   return (
     <div className="p-8 space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-content">Analytics & Reports</h2>
+        <div className="flex items-center gap-3">
+          <h2 className="text-xl font-bold text-content">Analytics & Reports</h2>
+          <Badge variant="warning">Demo data</Badge>
+        </div>
         <div className="flex gap-2">
-          <Select value="30d" options={[{ label: 'Last 30 days', value: '30d' }, { label: 'Last 90 days', value: '90d' }, { label: 'This year', value: 'year' }]} />
-          <Button variant="outline" icon={<Icon.Download className="w-4 h-4" />}>Export</Button>
+          <Select disabled value="30d" options={[{ label: 'Last 30 days', value: '30d' }, { label: 'Last 90 days', value: '90d' }, { label: 'This year', value: 'year' }]} />
+          <Button disabled variant="outline" icon={<Icon.Download className="w-4 h-4" />}>Export</Button>
         </div>
       </div>
       <Tabs tabs={['Overview', 'Students', 'Exams', 'AI Performance']} active={tab} onChange={setTab} />

@@ -20,10 +20,17 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+import jakarta.annotation.PreDestroy;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Locale;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.regex.Pattern;
 
 @Slf4j
@@ -47,6 +54,21 @@ public class AuthServiceImpl implements AuthService {
 
     @Value("${app.frontend.password-reset-path:/reset-password}")
     private String passwordResetPath;
+
+    @Value("${app.mail.forgot-cooldown-ms:30000}")
+    private long forgotCooldownMs;
+
+    private final Map<String, Long> forgotLastSentAt = new ConcurrentHashMap<>();
+    private final ExecutorService resetMailExecutor = Executors.newFixedThreadPool(2, task -> {
+        Thread thread = new Thread(task, "reset-mail");
+        thread.setDaemon(true);
+        return thread;
+    });
+
+    @PreDestroy
+    void shutdownMailExecutor() {
+        resetMailExecutor.shutdown();
+    }
 
     public static final long RESET_TOKEN_EXPIRATION_MS = 15 * 60 * 1000L;
     public static final long RESET_TOKEN_EXPIRATION_MINUTES = RESET_TOKEN_EXPIRATION_MS / 60000L;
@@ -92,23 +114,13 @@ public class AuthServiceImpl implements AuthService {
     @Transactional
     public LoginResponse login(LoginRequest request) {
         String email = normalizeEmail(request.getEmail());
-        log.info("Login email received: [{}]", email);
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> {
-                    log.warn("Login failed: email not found");
-                    return new UnauthorizedException(
-                            "Invalid email or password.");
-                });
-
-        log.info("Login user found: id={}, email={}, status={}",
-                user.getUserId(), user.getEmail(), user.getStatus());
+                .orElseThrow(() -> new UnauthorizedException("Invalid email or password."));
 
         boolean passwordMatches =
-                passwordEncoder.matches(
+                user.getPasswordHash() != null && passwordEncoder.matches(
                         request.getPassword(),
                         user.getPasswordHash());
-
-        log.info("Login password matches: {}", passwordMatches);
 
         if (!passwordMatches) {
             throw new UnauthorizedException(
@@ -177,9 +189,14 @@ public class AuthServiceImpl implements AuthService {
                         user.getUserId());
                 throw new UnauthorizedException("This email address is linked to a different Google account.");
             }
-            // Link a pre-existing password account and backfill missing profile data.
+            // Linking an unverified password-only account by verified Google email must revoke
+            // any pre-existing password/session so a pre-registrant cannot retain account access.
             if (user.getGoogleId() == null) {
+                Instant now = Instant.now();
                 user.setGoogleId(googleUser.googleId());
+                user.setPasswordHash(null);
+                user.setPasswordChangedAt(now);
+                refreshTokenRepository.revokeAllByUserId(user.getUserId(), now);
             }
             if (user.getAvatarUrl() == null || user.getAvatarUrl().isBlank()) {
                 user.setAvatarUrl(safeAvatarUrl(googleUser.avatarUrl()));
@@ -283,6 +300,17 @@ public class AuthServiceImpl implements AuthService {
     public void forgotPassword(ForgotPasswordRequest request) {
         String email = normalizeEmail(request.getEmail());
         log.info("Password reset requested");
+        if (forgotCooldownMs > 0) {
+            long nowMs = System.currentTimeMillis();
+            Long last = forgotLastSentAt.get(email);
+            if (last != null && nowMs - last < forgotCooldownMs) {
+                return;
+            }
+            forgotLastSentAt.put(email, nowMs);
+            if (forgotLastSentAt.size() > 10_000) {
+                forgotLastSentAt.entrySet().removeIf(e -> nowMs - e.getValue() >= forgotCooldownMs);
+            }
+        }
 
         // Uniform response: never reveal whether the email exists.
         userRepository.findByEmail(email).ifPresent(this::sendPasswordResetEmail);
@@ -291,6 +319,7 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public void sendPasswordResetEmail(User user) {
+        passwordResetTokenRepository.invalidateAllActiveByUserId(user.getUserId(), Instant.now());
         String rawToken = tokenProvider.generateRawRefreshToken();
         passwordResetTokenRepository.save(PasswordResetToken.builder()
                 .user(user)
@@ -298,8 +327,23 @@ public class AuthServiceImpl implements AuthService {
                 .expiresAt(Instant.now().plusMillis(RESET_TOKEN_EXPIRATION_MS))
                 .build());
         String resetLink = buildResetLink(rawToken);
+        String targetEmail = user.getEmail();
+        String targetName = user.getFullName();
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    resetMailExecutor.execute(() -> deliverResetMail(targetEmail, targetName, resetLink));
+                }
+            });
+        } else {
+            deliverResetMail(targetEmail, targetName, resetLink);
+        }
+    }
+
+    private void deliverResetMail(String email, String fullName, String resetLink) {
         boolean delivered = mailService.sendPasswordResetEmail(
-                user.getEmail(), user.getFullName(), resetLink, RESET_TOKEN_EXPIRATION_MINUTES);
+                email, fullName, resetLink, RESET_TOKEN_EXPIRATION_MINUTES);
         if (delivered) {
             log.info("Password reset email sent");
         } else {
@@ -341,7 +385,7 @@ public class AuthServiceImpl implements AuthService {
             throw new UnauthorizedException("User account is no longer active.");
         }
 
-        if (passwordEncoder.matches(request.getNewPassword(), user.getPasswordHash())) {
+        if (user.getPasswordHash() != null && passwordEncoder.matches(request.getNewPassword(), user.getPasswordHash())) {
             throw new BadRequestException("New password must be different from the current password.");
         }
 
@@ -372,12 +416,12 @@ public class AuthServiceImpl implements AuthService {
             throw new UnauthorizedException("User account is no longer active.");
         }
 
-        if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPasswordHash())) {
+        if (user.getPasswordHash() == null || !passwordEncoder.matches(request.getCurrentPassword(), user.getPasswordHash())) {
             throw new UnauthorizedException("Current password is incorrect.");
         }
 
         if (request.getCurrentPassword().equals(request.getNewPassword())
-                || passwordEncoder.matches(request.getNewPassword(), user.getPasswordHash())) {
+                || (user.getPasswordHash() != null && passwordEncoder.matches(request.getNewPassword(), user.getPasswordHash()))) {
             throw new BadRequestException("New password must be different from the current password.");
         }
 

@@ -304,7 +304,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
         }
         String text = value.trim();
         try {
-            return switch (granularity) {
+            LocalDate parsed = switch (granularity) {
                 case "month" -> start ? YearMonth.parse(text).atDay(1) : YearMonth.parse(text).atEndOfMonth();
                 case "year" -> {
                     int year = Integer.parseInt(text);
@@ -312,6 +312,10 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                 }
                 default -> LocalDate.parse(text);
             };
+            if (parsed.getYear() < 2000 || parsed.getYear() > 2100) {
+                throw new BadRequestException("Date year must be between 2000 and 2100");
+            }
+            return parsed;
         } catch (DateTimeException | NumberFormatException ex) {
             throw new BadRequestException("Invalid " + (start ? "from" : "to") + " for granularity " + granularity);
         }
@@ -323,16 +327,25 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
         switch (granularity) {
             case "month" -> {
                 for (YearMonth month = YearMonth.from(start); !month.isAfter(YearMonth.from(end)); month = month.plusMonths(1)) {
+                    if (keys.size() >= 120) {
+                        throw new BadRequestException("Date range must not exceed 120 months");
+                    }
                     keys.add(month.toString());
                 }
             }
             case "year" -> {
                 for (int year = start.getYear(); year <= end.getYear(); year++) {
+                    if (keys.size() >= 50) {
+                        throw new BadRequestException("Date range must not exceed 50 years");
+                    }
                     keys.add(String.valueOf(year));
                 }
             }
             default -> {
                 for (LocalDate day = start; !day.isAfter(end); day = day.plusDays(1)) {
+                    if (keys.size() >= 366) {
+                        throw new BadRequestException("Date range must not exceed 366 days");
+                    }
                     keys.add(day.toString());
                 }
             }

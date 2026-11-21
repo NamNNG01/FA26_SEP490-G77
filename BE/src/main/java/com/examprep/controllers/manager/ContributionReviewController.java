@@ -165,7 +165,7 @@ public class ContributionReviewController {
         data.put("questionType", c.getQuestionType() != null ? c.getQuestionType() : "");
         data.put("options", c.getOptionsJson() == null ? List.of() : readJson(c.getOptionsJson(), new TypeReference<Object>() {}));
         Object answerKey = readJson(c.getAnswerKeyJson(), new TypeReference<Object>() {});
-        if ("CODE".equals(c.getQuestionType()) && answerKey instanceof Map<?, ?> answerKeyMap
+        if ("ORDERING".equals(c.getQuestionType()) && answerKey instanceof Map<?, ?> answerKeyMap
                 && answerKeyMap.containsKey("correctOrder")) {
             answerKey = Map.of("correctOrder", readJson(c.getCategoryIds(), new TypeReference<List<Object>>() {}));
         }

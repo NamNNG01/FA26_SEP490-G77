@@ -101,7 +101,9 @@ function DeckPage() {
   const [busy, setBusy] = useState(false);
   const [exporting, setExporting] = useState<'xlsx' | 'pdf' | null>(null);
   const [bookmarking, setBookmarking] = useState(false);
-  const study = useDeckStudy(deckId, setProgress);
+  const study = useDeckStudy(deckId, setProgress, delta =>
+    setDeck(d => (d ? { ...d, starredCount: Math.max(0, (d.starredCount ?? 0) + delta) } : d)),
+  );
 
   // A course deck counts towards the course's progress once every card is learned: when that flips
   // (learned in full, or reset), LP-01 stores the course's new percent. The first reading only records.
@@ -360,7 +362,7 @@ function DeckPage() {
             study={study}
             deckId={deckId}
             cardCount={deck.cardCount}
-            starredCount={cards.filter(card => card.isStarred).length}
+            starredCount={deck.starredCount ?? cards.filter(card => card.isStarred).length}
             quizCount={usableCards(cards, deck.mode).length}
             onProgress={setProgress}
           />

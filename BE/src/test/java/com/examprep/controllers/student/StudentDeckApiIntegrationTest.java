@@ -236,7 +236,7 @@ class StudentDeckApiIntegrationTest {
                 .andExpect(jsonPath("$.data.content[0].reviewStatus").value("PENDING_REVIEW"))
                 .andExpect(jsonPath("$.data.content[0].cardCount").value(1))
                 .andExpect(jsonPath("$.data.content[0].owner.id").value(student.getUserId()))
-                .andExpect(jsonPath("$.data.content[0].course.id").value(course.getCourseId()))
+                .andExpect(jsonPath("$.data.content[0].course.courseId").value(course.getCourseId()))
                 .andExpect(jsonPath("$.data.content[0].canReview").value(true));
 
         // The same manager, once the deck is approved, sees it under APPROVED / ACCEPTED only.
@@ -375,16 +375,17 @@ class StudentDeckApiIntegrationTest {
         em.persist(card1);
         em.flush();
 
-        // Before learning any cards, scope=COURSE returns 0 elements
+        // Since commit 777fe370, scope=COURSE lists course decks even before the student has learned a card.
         mvc.perform(get("/api/v1/student/decks?scope=COURSE").with(as(student)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.totalElements").value(0));
+                .andExpect(jsonPath("$.data.totalElements").value(1))
+                .andExpect(jsonPath("$.data.content[0].deckId").value(managerDeck.getDeckId()));
 
         // Mark card1 as KNOWN (learnedCount >= 1)
         em.persist(UserCardProgress.builder().user(student).card(card1).isStarred(false).status("KNOWN").build());
         em.flush();
 
-        // Now scope=COURSE returns managerDeck
+        // scope=COURSE still returns managerDeck with learnedCount updated
         mvc.perform(get("/api/v1/student/decks?scope=COURSE").with(as(student)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.totalElements").value(1))

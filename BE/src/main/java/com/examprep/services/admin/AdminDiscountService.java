@@ -43,8 +43,8 @@ public class AdminDiscountService {
 
         String[] parts = sort.split(",");
         Sort.Direction dir = parts.length > 1 && "asc".equalsIgnoreCase(parts[1]) ? Sort.Direction.ASC : Sort.Direction.DESC;
-        String prop = parts[0];
-        if (!List.of("discountId", "code", "name", "createdAt", "expiredAt", "usedCount").contains(prop)) {
+        String prop = "expiredAt".equals(parts[0]) ? "expiresAt" : parts[0];
+        if (!List.of("discountId", "code", "name", "createdAt", "expiresAt", "usedCount").contains(prop)) {
             prop = "createdAt";
         }
         Pageable pageable = PageRequest.of(page, size, Sort.by(dir, prop));

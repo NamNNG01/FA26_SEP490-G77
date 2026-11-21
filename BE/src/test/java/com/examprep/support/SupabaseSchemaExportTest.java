@@ -1,6 +1,7 @@
 package com.examprep.support;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -12,6 +13,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
+@EnabledIfSystemProperty(named = "postgresTests", matches = "true")
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @ActiveProfiles("postgres-test")
 public class SupabaseSchemaExportTest {

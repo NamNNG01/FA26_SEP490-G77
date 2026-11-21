@@ -10,6 +10,7 @@ public record ExamDetailDto(
         String description,
         Integer durationMinutes,
         BigDecimal maxScore,
+        BigDecimal passMark,
         Integer questionCount,
         Instant publishedAt,
         ExamMyStatsDto myStats,

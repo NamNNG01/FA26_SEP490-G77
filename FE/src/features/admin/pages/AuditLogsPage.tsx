@@ -20,11 +20,14 @@ export function AuditLogsPage() {
   return (
     <div className="p-8 space-y-5">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-content">Audit Logs</h2>
+        <div className="flex items-center gap-3">
+          <h2 className="text-xl font-bold text-content">Audit Logs</h2>
+          <Badge variant="warning">Demo data</Badge>
+        </div>
         <div className="flex gap-2">
-          <SearchInput className="w-full sm:w-60" placeholder="Search logs…" />
-          <Select value="all" options={[{ label: 'All Types', value: 'all' }, { label: 'Permission', value: 'perm' }, { label: 'Content', value: 'content' }, { label: 'System', value: 'system' }]} className="w-full sm:w-36" />
-          <Button variant="outline" icon={<Icon.Download className="w-4 h-4" />}>Export</Button>
+          <SearchInput disabled className="w-full sm:w-60" placeholder="Search logs…" />
+          <Select disabled value="all" options={[{ label: 'All Types', value: 'all' }, { label: 'Permission', value: 'perm' }, { label: 'Content', value: 'content' }, { label: 'System', value: 'system' }]} className="w-full sm:w-36" />
+          <Button disabled variant="outline" icon={<Icon.Download className="w-4 h-4" />}>Export</Button>
         </div>
       </div>
       <div className="card overflow-hidden">

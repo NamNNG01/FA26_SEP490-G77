@@ -10,6 +10,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.examprep.entities.AnswerOption;
 import com.examprep.entities.Course;
+import com.examprep.entities.Enrollment;
 import com.examprep.entities.Exam;
 import com.examprep.entities.ExamAttempt;
 import com.examprep.entities.ExamQuestion;
@@ -20,9 +21,11 @@ import com.examprep.exceptions.BadRequestException;
 import com.examprep.exceptions.BaseException;
 import com.examprep.exceptions.ResourceNotFoundException;
 import com.examprep.repositories.AnswerOptionRepository;
+import com.examprep.repositories.EnrollmentRepository;
 import com.examprep.repositories.ExamAttemptRepository;
 import com.examprep.repositories.ExamQuestionRepository;
 import com.examprep.repositories.ExamRepository;
+import com.examprep.repositories.QuestionPracticeProgressRepository;
 import com.examprep.repositories.QuestionRepository;
 import com.examprep.repositories.StudentQuestionReviewRepository;
 import com.examprep.repositories.UserRepository;
@@ -68,6 +71,8 @@ public class StudentNotebookServiceImpl implements StudentNotebookService {
     private final ExamQuestionRepository examQuestionRepository;
     private final StudentAttemptService studentAttemptService;
     private final com.examprep.repositories.CourseRepository courseRepository;
+    private final EnrollmentRepository enrollmentRepository;
+    private final QuestionPracticeProgressRepository practiceProgressRepository;
     private final com.examprep.util.QuestionNotebookPdfWriter questionNotebookPdfWriter;
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
 
@@ -157,6 +162,9 @@ public class StudentNotebookServiceImpl implements StudentNotebookService {
             r.setBookmark(newBookmarkState);
             reviewRepository.save(r);
         } else {
+            if (!canBookmarkQuestion(question, userId)) {
+                throw new ResourceNotFoundException("Question not found");
+            }
             User student = userRepository.findById(userId)
                     .orElseThrow(() -> new ResourceNotFoundException("User not found"));
             newBookmarkState = true;
@@ -173,6 +181,59 @@ public class StudentNotebookServiceImpl implements StudentNotebookService {
         }
 
         return Map.of("questionId", questionId, "isBookmarked", newBookmarkState);
+    }
+
+    private boolean canBookmarkQuestion(Question question, Long userId) {
+        if (question.getDeletedAt() != null
+                || !"ACTIVE".equals(question.getStatus())
+                || !"APPROVED".equals(question.getApprovalStatus())) {
+            return false;
+        }
+        Long qId = question.getQuestionId();
+        if (answerRepository.existsSubmittedByUserAndQuestion(userId, qId)
+                || practiceProgressRepository.existsByUser_UserIdAndQuestion_QuestionId(userId, qId)) {
+            return true;
+        }
+        if (question.getSourceDocumentId() != null
+                || ("AI".equals(question.getSource()) && "STUDENT".equals(question.getCreatorRole()))) {
+            return false;
+        }
+        if (question.getModule() != null && question.getModule().isHidden()) {
+            return false;
+        }
+        Course course = resolveCourse(question);
+        if (course == null || !Boolean.TRUE.equals(course.getIsPublished())) {
+            return false;
+        }
+        Long courseId = course.getCourseId();
+        boolean enrolled = enrollmentRepository.existsByCourse_CourseIdAndUser_UserIdAndStatus(
+                courseId, userId, Enrollment.STATUS_ACTIVE)
+                || enrollmentRepository.existsByCourse_CourseIdAndUser_UserIdAndStatus(
+                courseId, userId, Enrollment.STATUS_COMPLETED);
+        if (!enrolled) {
+            return false;
+        }
+        boolean inContest = examQuestionRepository.existsByQuestion_QuestionIdAndExam_Mode(qId, Exam.MODE_CONTEST);
+        boolean inNonContest = examQuestionRepository.existsByQuestion_QuestionIdAndExam_ModeNot(qId, Exam.MODE_CONTEST);
+        return !(inContest && !inNonContest && question.getModule() == null);
+    }
+
+    private Course resolveCourse(Question question) {
+        if (question.getCourse() != null) {
+            return question.getCourse();
+        }
+        if (question.getModule() != null && question.getModule().getCourse() != null) {
+            return question.getModule().getCourse();
+        }
+        if (question.getGroup() != null) {
+            if (question.getGroup().getCourse() != null) {
+                return question.getGroup().getCourse();
+            }
+            if (question.getGroup().getModule() != null) {
+                return question.getGroup().getModule().getCourse();
+            }
+        }
+        return null;
     }
 
     @Override
@@ -227,7 +288,7 @@ public class StudentNotebookServiceImpl implements StudentNotebookService {
             case "bookmarked" -> "Saved questions review";
             case "all" -> "Mistake notebook review";
             default -> "Wrong answers review";
-        } + " - " + ("ESSAY".equals(examType) ? "Essay" : "Multiple choice");
+        } + " - " + ("ESSAY".equals(examType) ? "Essay" : "CODE".equals(examType) ? "Coding" : "Multiple choice");
 
         String practiceConfig = writePracticeConfig(examType, size, null, List.of());
 

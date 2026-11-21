@@ -36,6 +36,10 @@ public class AdminSubscriptionPlanController {
 
     private final AdminSubscriptionPlanService service;
 
+    /**
+     * @deprecated Plans now use token-limit-only pricing (per commit 06dfa66); kept for API backward compatibility.
+     */
+    @Deprecated(forRemoval = false)
     @GetMapping("/feature-keys")
     public ResponseEntity<ApiResponse<List<FeatureKey>>> featureKeys() {
         return ResponseEntity.ok(ApiResponse.success(FEATURE_KEYS));

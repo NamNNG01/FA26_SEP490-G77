@@ -46,6 +46,10 @@ public class QuestionNotebookPdfWriter {
         return PDType0Font.load(doc, new java.io.ByteArrayInputStream(FONT_BYTES[index]), true);
     }
 
+    private static final float TOP_Y = 750f;
+    private static final float BOTTOM_Y = 55f;
+    private static final float PAGE_RIGHT = PDRectangle.A4.getWidth() - 40f;
+
     public RenderedPdf write(List<QuestionReviewItemDto> questions) {
         try (PDDocument doc = new PDDocument()) {
             PDFont regular = font(doc, 0);
@@ -54,76 +58,90 @@ public class QuestionNotebookPdfWriter {
             PDPage page = new PDPage(PDRectangle.A4);
             doc.addPage(page);
             PDPageContentStream cs = new PDPageContentStream(doc, page);
-
-            float y = 750f;
-            cs.beginText();
-            cs.setFont(bold, 16);
-            cs.newLineAtOffset(40, y);
-            cs.showText("Question Notebook Export");
-            cs.endText();
-            y -= 35;
-
-            for (int i = 0; i < questions.size(); i++) {
-                QuestionReviewItemDto q = questions.get(i);
-
-                // Estimate required space for question header, text, and options
-                int optionCount = q.getOptions() != null ? q.getOptions().size() : 0;
-                float estimatedHeight = 40f + (optionCount * 15f);
-                if (y < estimatedHeight || y < 80f) {
-                    cs.close();
-                    page = new PDPage(PDRectangle.A4);
-                    doc.addPage(page);
-                    cs = new PDPageContentStream(doc, page);
-                    y = 750f;
-                }
-
-                // Question Header
+            try {
+                float y = TOP_Y;
                 cs.beginText();
-                cs.setFont(bold, 10);
+                cs.setFont(bold, 16);
                 cs.newLineAtOffset(40, y);
-                String header = (i + 1) + ". [" + (q.getQuestionType() != null ? q.getQuestionType() : "QUESTION") + "]";
-                if (q.isWrong()) {
-                    header += " (Missed " + q.getWrongCount() + "x)";
-                }
-                cs.showText(header);
+                cs.showText("Question Notebook Export");
                 cs.endText();
-                y -= 15;
+                y -= 35;
 
-                // Question Text
-                cs.beginText();
-                cs.setFont(regular, 9);
-                cs.newLineAtOffset(50, y);
-                String text = q.getQuestionText() != null ? q.getQuestionText().replaceAll("\\r?\\n", " ") : "";
-                if (text.length() > 105) text = text.substring(0, 105) + "...";
-                cs.showText(text);
-                cs.endText();
-                y -= 18;
+                List<QuestionReviewItemDto> items = questions == null ? List.of() : questions;
+                for (int i = 0; i < items.size(); i++) {
+                    QuestionReviewItemDto q = items.get(i);
+                    if (y < BOTTOM_Y + 30f) {
+                        cs.close();
+                        page = new PDPage(PDRectangle.A4);
+                        doc.addPage(page);
+                        cs = new PDPageContentStream(doc, page);
+                        y = TOP_Y;
+                    }
 
-                // Options and Correct Answer indicator
-                if (q.getOptions() != null && !q.getOptions().isEmpty()) {
-                    char optionLabel = 'A';
-                    for (QuestionReviewItemDto.OptionDto opt : q.getOptions()) {
-                        boolean isCorrect = q.getCorrectOptionIds() != null && q.getCorrectOptionIds().contains(opt.getOptionId());
+                    // Question Header
+                    String header = (i + 1) + ". [" + (q.getQuestionType() != null ? q.getQuestionType() : "QUESTION") + "]";
+                    if (q.isWrong()) {
+                        header += " (Missed " + q.getWrongCount() + "x)";
+                    }
+                    header = FlashcardPdfWriter.safe(header, bold).replace('\n', ' ');
+                    cs.beginText();
+                    cs.setFont(bold, 10);
+                    cs.newLineAtOffset(40, y);
+                    cs.showText(header);
+                    cs.endText();
+                    y -= 15;
 
-                        cs.beginText();
-                        cs.setFont(isCorrect ? bold : regular, 9);
-                        cs.newLineAtOffset(60, y);
-                        String optPrefix = (optionLabel++) + ". ";
-                        String optText = opt.getOptionText() != null ? opt.getOptionText().replaceAll("\\r?\\n", " ") : "";
-                        if (optText.length() > 95) optText = optText.substring(0, 95) + "...";
-
-                        String line = optPrefix + optText;
-                        if (isCorrect) {
-                            line += " [CORRECT]";
+                    // Question Text (sanitized, wrapped cleanly across pages)
+                    String rawText = q.getQuestionText() != null ? q.getQuestionText() : "";
+                    for (String line : FlashcardPdfWriter.wrap(rawText, regular, 9f, PAGE_RIGHT - 50f)) {
+                        if (y < BOTTOM_Y) {
+                            cs.close();
+                            page = new PDPage(PDRectangle.A4);
+                            doc.addPage(page);
+                            cs = new PDPageContentStream(doc, page);
+                            y = TOP_Y;
                         }
+                        cs.beginText();
+                        cs.setFont(regular, 9);
+                        cs.newLineAtOffset(50, y);
                         cs.showText(line);
                         cs.endText();
-                        y -= 14;
+                        y -= 13;
                     }
+                    y -= 4;
+
+                    // Options and Correct Answer indicator (paginated per line so large option lists never overflow)
+                    if (q.getOptions() != null && !q.getOptions().isEmpty()) {
+                        for (int optIdx = 0; optIdx < q.getOptions().size(); optIdx++) {
+                            QuestionReviewItemDto.OptionDto opt = q.getOptions().get(optIdx);
+                            boolean isCorrect = q.getCorrectOptionIds() != null
+                                    && q.getCorrectOptionIds().contains(opt.getOptionId());
+                            PDFont optFont = isCorrect ? bold : regular;
+                            String label = optIdx < 26 ? String.valueOf((char) ('A' + optIdx)) : String.valueOf(optIdx + 1);
+                            String optText = opt.getOptionText() != null ? opt.getOptionText() : "";
+                            String fullOpt = label + ". " + optText + (isCorrect ? " [CORRECT]" : "");
+                            for (String line : FlashcardPdfWriter.wrap(fullOpt, optFont, 9f, PAGE_RIGHT - 60f)) {
+                                if (y < BOTTOM_Y) {
+                                    cs.close();
+                                    page = new PDPage(PDRectangle.A4);
+                                    doc.addPage(page);
+                                    cs = new PDPageContentStream(doc, page);
+                                    y = TOP_Y;
+                                }
+                                cs.beginText();
+                                cs.setFont(optFont, 9);
+                                cs.newLineAtOffset(60, y);
+                                cs.showText(line);
+                                cs.endText();
+                                y -= 13;
+                            }
+                        }
+                    }
+                    y -= 12; // spacing between questions
                 }
-                y -= 12; // spacing between questions
+            } finally {
+                cs.close();
             }
-            cs.close();
 
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             doc.save(out);

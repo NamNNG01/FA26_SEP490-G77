@@ -17,6 +17,7 @@ public interface CourseProgressSummaryRepository extends JpaRepository<Course, L
           AND (m IS NULL OR m.status <> 'HIDDEN')
           AND q.deletedAt IS NULL AND q.status = 'ACTIVE'
           AND q.approvalStatus = 'APPROVED' AND q.sourceDocumentId IS NULL
+          AND NOT (COALESCE(q.source, '') = 'AI' AND COALESCE(q.creatorRole, '') = 'STUDENT')
         GROUP BY COALESCE(m.course.courseId, q.course.courseId), m.moduleId
         """)
     List<Object[]> questionTotalsByCourse(@Param("courseId") Long courseId);
@@ -39,6 +40,7 @@ public interface CourseProgressSummaryRepository extends JpaRepository<Course, L
           AND (m IS NULL OR m.status <> 'HIDDEN')
           AND q.deletedAt IS NULL AND q.status = 'ACTIVE'
           AND q.approvalStatus = 'APPROVED' AND q.sourceDocumentId IS NULL
+          AND NOT (COALESCE(q.source, '') = 'AI' AND COALESCE(q.creatorRole, '') = 'STUDENT')
         GROUP BY COALESCE(m.course.courseId, q.course.courseId), m.moduleId
         """)
     List<Object[]> questionTotals(@Param("ids") List<Long> ids);

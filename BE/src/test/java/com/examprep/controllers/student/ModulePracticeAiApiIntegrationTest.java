@@ -169,6 +169,37 @@ class ModulePracticeAiApiIntegrationTest extends ModulePracticeTestBase {
     }
 
     @Test
+    void drainContinuesPastQuotaExhaustedStudentToGradeNextStudent() throws Exception {
+        consumeFreeQuota(brokeStudent);
+        JsonNode brokeSession = sessionOf(brokeStudent, moduleA.getModuleId());
+        long brokeSessionId = brokeSession.path("sessionId").asLong();
+        long brokeSqId = sessionQuestionIdOf(brokeSession, essay.getQuestionId());
+        answer(brokeStudent, brokeSessionId, brokeSqId, "{\"response\":{\"text\":\"Broke student answer.\"}}");
+
+        JsonNode fundedSession = sessionOf(student, moduleA.getModuleId());
+        long fundedSessionId = fundedSession.path("sessionId").asLong();
+        long fundedSqId = sessionQuestionIdOf(fundedSession, essay.getQuestionId());
+        answer(student, fundedSessionId, fundedSqId, "{\"response\":{\"text\":\"Funded student answer.\"}}");
+
+        REPLIES.add(gradingReply("Well explained."));
+        org.springframework.test.util.ReflectionTestUtils.invokeMethod(gradingWorker, "drain");
+
+        assertEquals(1, REQUESTS.size(), "drain must skip past QUOTA_EXHAUSTED and grade the next student");
+        JsonNode brokeAttempt = data(history(brokeStudent, brokeSessionId, brokeSqId).andExpect(status().isOk()))
+                .path("attempts").get(0);
+        assertEquals("FAILED", brokeAttempt.path("gradingStatus").asText());
+        String dbError = em.createQuery(
+                        "SELECT a.gradingError FROM QuestionPracticeAnswer a WHERE a.sessionQuestion.sessionQuestionId = :sq",
+                        String.class)
+                .setParameter("sq", brokeSqId).getSingleResult();
+        assertEquals("QUOTA_EXHAUSTED", dbError);
+
+        JsonNode fundedAttempt = data(history(student, fundedSessionId, fundedSqId).andExpect(status().isOk()))
+                .path("attempts").get(0);
+        assertEquals("AI_GRADED", fundedAttempt.path("gradingStatus").asText());
+    }
+
+    @Test
     void progressCountsAQueuedAnswerAsAnAttemptOnly() throws Exception {
         JsonNode session = sessionOf(student, moduleA.getModuleId());
         long sessionId = session.path("sessionId").asLong();

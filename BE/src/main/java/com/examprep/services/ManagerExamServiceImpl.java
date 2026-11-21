@@ -50,6 +50,7 @@ public class ManagerExamServiceImpl implements ManagerExamService {
     private final ExamGroupRepository groupLinks;
     private final ExamConfigRepository configs;
     private final ExamAttemptRepository attempts;
+    private final AttemptAnswerRepository attemptAnswers;
     private final QuestionRepository questions;
     private final QuestionGroupRepository groups;
     private final CourseRepository courses;
@@ -58,6 +59,7 @@ public class ManagerExamServiceImpl implements ManagerExamService {
     private final UserRepository users;
     private final ObjectMapper json;
     private final QuestionService questionService;
+    private final com.examprep.util.validation.QuestionValidator questionValidator;
     private final PdfTextExtractor pdfText;
     private final DocxTextExtractor docxText;
     private final TemplateBlockParser blockParser;
@@ -373,6 +375,7 @@ public class ManagerExamServiceImpl implements ManagerExamService {
         long t;
 
         BigDecimal maxScore = maxScore(r.getMaxScore());
+        BigDecimal passMark = validatePassMark(r.getPassMark(), maxScore);
         Module module = r.getModuleId() == null
                 ? null : module(r.getModuleId());
 
@@ -431,7 +434,7 @@ public class ManagerExamServiceImpl implements ManagerExamService {
 // Giữ nguyên kiểm tra quyền và trạng thái.
         for (var item : questionItems) {
             Question q = questionMap.get(item.getQuestionId());
-            active(user, q, checked);
+            active(user, q, checked, courseId);
         }
 
         Set<Long> groupIds = new HashSet<>();
@@ -439,10 +442,14 @@ public class ManagerExamServiceImpl implements ManagerExamService {
             if (!groupIds.add(item.getGroupId())) {
                 throw conflict("Group is duplicated.");
             }
-            groupAccess(user, group(item.getGroupId()), checked);
+            groupAccess(user, group(item.getGroupId()), checked, courseId);
         }
 
-        validateConfigs(r.getConfigs(), courseId);
+        Set<Long> excludedIds = new HashSet<>(ids);
+        if (!groupIds.isEmpty()) {
+            questions.findAllByGroupIds(groupIds).forEach(q -> excludedIds.add(q.getQuestionId()));
+        }
+        validateConfigs(r.getConfigs(), courseId, excludedIds);
         String mode = r.getMode() == null ? Exam.MODE_EXAM : r.getMode();
         if (!list(r.getImportedQuestions()).isEmpty() && module == null) {
             throw bad("Select a module for this exam before importing questions.");
@@ -459,6 +466,7 @@ public class ManagerExamServiceImpl implements ManagerExamService {
                 .mode(mode)
                 .generationType(r.getGenerationType())
                 .maxScore(maxScore)
+                .passMark(passMark)
                 .status("DRAFT")
                 .build();
 
@@ -496,6 +504,9 @@ public class ManagerExamServiceImpl implements ManagerExamService {
 
         for (var item : list(r.getGroupIds())) {
             attachGroup(user, e, item, checked);
+        }
+        if (!list(r.getConfigs()).isEmpty() && !list(r.getImportedQuestions()).isEmpty()) {
+            checkRules(courseId, toRules(r.getConfigs()), examQuestions(e).keySet());
         }
         long attached = System.nanoTime();
 
@@ -556,21 +567,36 @@ public class ManagerExamServiceImpl implements ManagerExamService {
     public ExamResponse update(UserPrincipal user,Long id,ExamRequests.Update r) {
         Exam e=write(user,id);
         boolean structural=r.getTitle()!=null || r.getCourseId()!=null || r.getModuleId()!=null || r.getDurationMinutes()!=null || r.getMode()!=null
-                || r.getGenerationType()!=null || r.getMaxScore()!=null || r.getConfigs()!=null;
+                || r.getGenerationType()!=null || r.getMaxScore()!=null || r.getPassMark()!=null || r.getConfigs()!=null;
         if(structural) editable(e);
-        Long courseId=r.getCourseId()==null?courseId(e):r.getCourseId();
+        Long currentCourseId=courseId(e);
+        Long courseId=r.getCourseId()==null?currentCourseId:r.getCourseId();
         Module module=r.getModuleId()==null?e.getModule():module(r.getModuleId());
         if(module!=null && !module.getCourse().getCourseId().equals(courseId)) throw bad("Module must belong to the selected course.");
-        if(r.getCourseId()!=null && r.getConfigs()==null)
-            for(ExamConfig config:configs.findByExamExamIdOrderByConfigIdAsc(id)) validateConfigModule(config.getModule(),courseId);
+        if(r.getCourseId()!=null && r.getConfigs()==null) {
+            List<ExamConfig> retainedConfigs=configs.findByExamExamIdOrderByConfigIdAsc(id);
+            for(ExamConfig config:retainedConfigs) validateConfigModule(config.getModule(),courseId);
+            if(!r.getCourseId().equals(currentCourseId) && !retainedConfigs.isEmpty()) {
+                checkRules(courseId,retainedConfigs.stream().map(c->new Rule(c.getQuestionType(),c.getModule()==null?null:c.getModule().getModuleId(),c.getDifficulty(),c.getNumberOfQuestions())).toList(),examQuestions(e).keySet());
+            }
+        }
+        if(r.getCourseId()!=null && !r.getCourseId().equals(currentCourseId)) {
+            boolean hasAttachments = !links.findByExamExamIdOrderByOrderIndexAscExamQuestionIdAsc(id).isEmpty()
+                    || !groupLinks.findByExamExamIdOrderByOrderIndexAscExamGroupIdAsc(id).isEmpty();
+            if(hasAttachments) throw conflict("Cannot change exam course after questions or groups are attached.");
+        }
+        BigDecimal effectiveMaxScore = r.getMaxScore()!=null ? maxScore(r.getMaxScore()) : e.getMaxScore();
+        BigDecimal effectivePassMark = r.getPassMark()!=null ? r.getPassMark() : e.getPassMark();
+        validatePassMark(effectivePassMark, effectiveMaxScore);
         if(r.getCourseId()!=null || r.getModuleId()!=null) { e.setCourse(access(user,courseId,true)); e.setModule(module); }
         if(r.getTitle()!=null) e.setTitle(r.getTitle().strip());
         if(r.getDescription()!=null) e.setDescription(r.getDescription());
         if(r.getDurationMinutes()!=null) e.setDurationMinutes(r.getDurationMinutes());
         if(r.getMode()!=null) e.setMode(r.getMode());
-        if(r.getMaxScore()!=null) e.setMaxScore(maxScore(r.getMaxScore()));
+        if(r.getMaxScore()!=null) e.setMaxScore(effectiveMaxScore);
+        if(r.getPassMark()!=null) e.setPassMark(effectivePassMark);
         if(r.getGenerationType()!=null) e.setGenerationType(r.getGenerationType());
-        if(r.getConfigs()!=null) { validateConfigs(r.getConfigs(),courseId); configs.deleteByExamExamId(id); configs.flush(); saveConfigs(e,r.getConfigs()); }
+        if(r.getConfigs()!=null) { validateConfigs(r.getConfigs(),courseId,examQuestions(e).keySet()); configs.deleteByExamExamId(id); configs.flush(); saveConfigs(e,r.getConfigs()); }
         if(r.getGenerationType()!=null) validateMode(e.getGenerationType(),links.findByExamExamIdOrderByOrderIndexAscExamQuestionIdAsc(id).size()+groupLinks.findByExamExamIdOrderByOrderIndexAscExamGroupIdAsc(id).size(),configs.findByExamExamIdOrderByConfigIdAsc(id).size());
         exams.flush(); return response(e,true);
     }
@@ -578,28 +604,37 @@ public class ManagerExamServiceImpl implements ManagerExamService {
     @Override @Transactional
     public ExamResponse.Published publish(UserPrincipal user,Long id,ExamRequests.Publish r) {
         Exam e=write(user,id); ExamResponse state=response(e,false);
-        // A published exam is final: it cannot go back to draft.
+        // A published exam is final: it cannot go back to draft; archived exams cannot revert to draft either.
         if("PUBLISHED".equals(e.getStatus()) && "DRAFT".equals(r.status()))
             throw conflict("Published exams cannot be unpublished.");
+        if("ARCHIVED".equals(e.getStatus()) && "DRAFT".equals(r.status()))
+            throw conflict("Archived exams cannot be moved back to draft.");
         if(r.status().equals("PUBLISHED")) {
             List<ExamConfig> configured=configs.findByExamExamIdOrderByConfigIdAsc(id);
             List<ExamQuestion> direct=links.findAllByExamIds(List.of(id));
-            validateMode(e.getGenerationType(),direct.size()
-                    +groupLinks.findByExamExamIdOrderByOrderIndexAscExamGroupIdAsc(id).size(),configured.size());
+            List<ExamGroup> grouped=groupLinks.findByExamExamIdOrderByOrderIndexAscExamGroupIdAsc(id);
+            validateMode(e.getGenerationType(),direct.size()+grouped.size(),configured.size());
             for(ExamConfig config:configured) validateConfigModule(config.getModule(),courseId(e));
             if(state.questionCount()==0) throw bad("Add at least one question before publishing.");
+            Map<Long, Question> allQuestions = examQuestions(e);
             // Re-checked here because the bank may have changed since the rules were saved.
-            checkRules(courseId(e),configured.stream().map(c->new Rule(c.getQuestionType(),c.getModule()==null?null:c.getModule().getModuleId(),c.getDifficulty(),c.getNumberOfQuestions())).toList());
+            checkRules(courseId(e),configured.stream().map(c->new Rule(c.getQuestionType(),c.getModule()==null?null:c.getModule().getModuleId(),c.getDifficulty(),c.getNumberOfQuestions())).toList(),allQuestions.keySet());
 
             for(ExamQuestion l : direct) {
                 if(l.getWeight().compareTo(BigDecimal.ZERO) <= 0) throw conflict("Question weight must be positive.");
-                if(!"ACTIVE".equals(l.getQuestion().getStatus()) || !"APPROVED".equals(l.getQuestion().getApprovalStatus()) || l.getQuestion().getDeletedAt() != null)
+            }
+            for(ExamGroup gl : grouped) {
+                if(questions.findByGroupGroupIdOrderByQuestionIdAsc(gl.getGroup().getGroupId()).isEmpty())
+                    throw conflict("Attached question group has no questions.");
+            }
+            for(Question q : allQuestions.values()) {
+                if(!"ACTIVE".equals(q.getStatus()) || !"APPROVED".equals(q.getApprovalStatus()) || q.getDeletedAt() != null)
                     throw conflict("All questions in a published exam must be active and approved.");
             }
         }
         if ("PUBLISHED".equals(r.status())) {
             e.setPublishedAt(Instant.now());
-        } else {
+        } else if ("DRAFT".equals(r.status())) {
             e.setPublishedAt(null);
         }
 
@@ -628,7 +663,7 @@ public class ManagerExamServiceImpl implements ManagerExamService {
         Set<Long> existingQuestionIds = new HashSet<>(examQuestions(e).keySet());
 
         Question q = question(r.getQuestionId());
-        active(user, q);
+        active(user, q, new HashSet<>(), courseId(e));
 
         ExamQuestion saved = attachValidatedQuestion(
                 e,
@@ -677,9 +712,36 @@ public class ManagerExamServiceImpl implements ManagerExamService {
     @Override @Transactional public Map<String,Object> rubric(UserPrincipal user,Long id,ExamRequests.Rubric r) {
         Question q=question(id); questionAccess(user,q);
         if(!Set.of("ESSAY","DIAGRAM","DIAGRAM_ESSAY","CODE").contains(q.getQuestionType())) throw bad("This question type does not use a rubric.");
-        ExamRequests.Rubric normalized=new ExamRequests.Rubric(r.criteria(),r.notes());
-        try { q.setEssayGradingRubric(json.writeValueAsString(normalized)); questions.flush(); }
-        catch(JsonProcessingException ex) { throw bad("Could not encode rubric."); }
+        if("ARCHIVED".equals(q.getStatus())) throw conflict("Cannot update rubric for an archived question.");
+        if(attemptAnswers.existsByQuestion_QuestionId(id)
+                || links.existsByQuestion_QuestionIdAndExam_Status(id, "PUBLISHED")
+                || (q.getGroup() != null && !groupLinks.findPublishedExamsByGroupId(q.getGroup().getGroupId()).isEmpty())) {
+            throw conflict("Cannot update rubric when question is used in a published exam or student attempts.");
+        }
+        Set<String> seenNames = new HashSet<>();
+        List<ExamRequests.Criterion> cleanedCriteria = new ArrayList<>(r.criteria().size());
+        for (ExamRequests.Criterion c : r.criteria()) {
+            String cleanName = questionValidator.sanitize(c.name());
+            if (cleanName == null || cleanName.isBlank()) {
+                throw bad("Criterion name is required.");
+            }
+            String key = cleanName.strip().toLowerCase(Locale.ROOT);
+            if (!seenNames.add(key)) {
+                throw bad("Duplicate rubric criterion name: " + cleanName.strip());
+            }
+            String cleanDesc = c.descriptors() == null ? null : questionValidator.sanitize(c.descriptors());
+            cleanedCriteria.add(new ExamRequests.Criterion(cleanName.strip(), c.weight(), cleanDesc));
+        }
+        String cleanNotes = r.notes() == null ? null : questionValidator.sanitize(r.notes());
+        ExamRequests.Rubric normalized=new ExamRequests.Rubric(cleanedCriteria, cleanNotes);
+        try {
+            String encoded = json.writeValueAsString(normalized);
+            if (!encoded.equals(q.getEssayGradingRubric())) {
+                q.setEssayGradingRubric(encoded);
+                q.setScoringVersion(q.getScoringVersion() + 1);
+            }
+            questions.flush();
+        } catch(JsonProcessingException ex) { throw bad("Could not encode rubric."); }
         return Map.of("questionId",id,"content",q.getContent(),"questionType",q.getQuestionType(),"essayGradingRubric",normalized);
     }
 
@@ -765,7 +827,8 @@ public class ManagerExamServiceImpl implements ManagerExamService {
     }
 
     private ExamGroup attachGroup(UserPrincipal user,Exam e,ExamRequests.GroupLink r,Set<Long> checked) {
-        QuestionGroup g=group(r.getGroupId()); groupAccess(user,g,checked);
+        Long examCourseId=courseId(e);
+        QuestionGroup g=group(r.getGroupId()); groupAccess(user,g,checked,examCourseId);
         List<ExamGroup> existing=groupLinks.findByExamExamIdOrderByOrderIndexAscExamGroupIdAsc(e.getExamId());
         if(existing.stream().anyMatch(l->l.getGroup().getGroupId().equals(r.getGroupId()))) throw conflict("Group is already in this exam.");
         List<Question> groupQuestions=questions.findByGroupGroupIdOrderByQuestionIdAsc(r.getGroupId());
@@ -780,7 +843,7 @@ public class ManagerExamServiceImpl implements ManagerExamService {
             weightMap.put(qp.getQuestionId(),weight(qp.getWeight()));
         }
         for(Question q:groupQuestions) {
-            active(user,q,checked);
+            active(user,q,checked,examCourseId);
             if(!weightMap.containsKey(q.getQuestionId())) throw bad("Missing weight for group question "+q.getQuestionId());
         }
         Map<Long,Question> used=examQuestions(e);
@@ -796,7 +859,10 @@ public class ManagerExamServiceImpl implements ManagerExamService {
         }
         return groupLinks.saveAndFlush(ExamGroup.builder().exam(e).group(g).orderIndex(groupOrder).build());
     }
-    private void validateConfigs(List<ExamRequests.Config> values,Long courseId) {
+    private List<Rule> toRules(List<ExamRequests.Config> rules) {
+        return list(rules).stream().map(c->new Rule(c.getQuestionType(),c.getModuleId(),c.getDifficulty(),c.getNumberOfQuestions())).toList();
+    }
+    private void validateConfigs(List<ExamRequests.Config> values,Long courseId,Set<Long> excludedIds) {
         List<ExamRequests.Config> rules=list(values);
         for(int i=0;i<rules.size();i++) {
             var c=rules.get(i);
@@ -804,14 +870,14 @@ public class ManagerExamServiceImpl implements ManagerExamService {
             validateConfigModule(c.getModuleId()==null?null:module(c.getModuleId()),courseId);
             if(c.getWeightEach()!=null) weight(c.getWeightEach());
         }
-        checkRules(courseId,rules.stream().map(c->new Rule(c.getQuestionType(),c.getModuleId(),c.getDifficulty(),c.getNumberOfQuestions())).toList());
+        checkRules(courseId,toRules(rules),excludedIds);
     }
     private record Rule(String type,Long moduleId,String difficulty,int count) {}
     // Every random rule must be fillable from the bank's active, approved questions (type, module, difficulty; null = any).
     // Same-type rules must draw from disjoint questions: overlapping ones ("all modules"/"any difficulty" overlaps every
     // module/difficulty) would compete for the same questions, so a per-rule count could pass while the draw can't fill both.
-    // With overlaps rejected, checking each rule alone is exact.
-    private void checkRules(Long courseId,List<Rule> rules) {
+    // With overlaps rejected, checking each rule alone is exact, minus any questions already pinned as fixed/grouped in MIXED exams.
+    private void checkRules(Long courseId,List<Rule> rules,Set<Long> excludedIds) {
         for(int i=0;i<rules.size();i++) {
             Rule a=rules.get(i);
             for(int j=0;j<i;j++) {
@@ -822,7 +888,10 @@ public class ManagerExamServiceImpl implements ManagerExamService {
                     throw bad("Random rules "+(j+1)+" and "+(i+1)+" both draw "+a.type()+" from the same questions. "
                             +"Merge them into one rule, or give them different modules or difficulties.");
             }
-            long available=questions.countDrawable(courseId,a.moduleId(),a.type(),a.difficulty());
+            long available = excludedIds == null || excludedIds.isEmpty()
+                    ? questions.countDrawable(courseId,a.moduleId(),a.type(),a.difficulty())
+                    : questions.findDrawableIds(courseId,a.moduleId(),a.type(),a.difficulty()).stream()
+                            .filter(qid -> !excludedIds.contains(qid)).count();
             if(available<a.count())
                 throw bad("Random rule "+(i+1)+" needs "+a.count()+" "+a.type()+(a.difficulty()==null?"":" "+a.difficulty())
                         +" question(s) but the question bank has only "+available+" active, approved one(s).");
@@ -841,12 +910,18 @@ public class ManagerExamServiceImpl implements ManagerExamService {
     private void editable(Exam e) {
         if(!"DRAFT".equals(e.getStatus()) || attempts.existsByExamExamId(e.getExamId())) throw conflict("Only draft exams with no attempts allow content changes. Archive exams with attempts.");
     }
-    private Exam read(Long id) { positive(id); return exams.findById(id).orElseThrow(()->missing("Exam")); }
+    private Exam read(Long id) {
+        positive(id);
+        Exam e=exams.findById(id).orElseThrow(()->missing("Exam"));
+        if(!Exam.MODE_EXAM.equals(e.getMode()) && !Exam.MODE_CONTEST.equals(e.getMode())) throw missing("Exam");
+        return e;
+    }
     private Exam write(UserPrincipal user,Long id) {
         Exam e=read(id); access(user,courseId(e),true);
         e=exams.findForUpdate(id).orElseThrow(()->missing("Exam")); check(user,e); return e;
     }
     private void check(UserPrincipal user,Exam e) {
+        if(!Exam.MODE_EXAM.equals(e.getMode()) && !Exam.MODE_CONTEST.equals(e.getMode())) throw missing("Exam");
         if(e.getCourse()!=null) access(user,e.getCourse().getCourseId(),false);
         if(e.getModule()!=null) access(user,e.getModule().getCourse().getCourseId(),false);
         if(e.getCourse()==null && e.getModule()==null && !admin(user)) throw new ForbiddenException("Exam has no managed course.");
@@ -862,11 +937,25 @@ public class ManagerExamServiceImpl implements ManagerExamService {
     private QuestionGroup group(Long id) { positive(id); return groups.findById(id).orElseThrow(()->missing("Question group")); }
     // checked = course ids already authorized in this request, so a 40-question exam costs one access query per course, not per question.
     private void courseAccess(UserPrincipal user,Long courseId,Set<Long> checked) { if(checked.add(courseId)) access(user,courseId,false); }
+    private Long groupCourseId(QuestionGroup g) {
+        if(g.getCourse()!=null) return g.getCourse().getCourseId();
+        return g.getModule()!=null && g.getModule().getCourse()!=null ? g.getModule().getCourse().getCourseId() : null;
+    }
+    private Long questionCourseId(Question q) {
+        if(q.getCourse()!=null) return q.getCourse().getCourseId();
+        if(q.getModule()!=null && q.getModule().getCourse()!=null) return q.getModule().getCourse().getCourseId();
+        return q.getGroup()!=null ? groupCourseId(q.getGroup()) : null;
+    }
     private void groupAccess(UserPrincipal user,QuestionGroup g) { groupAccess(user,g,new HashSet<>()); }
     private void groupAccess(UserPrincipal user,QuestionGroup g,Set<Long> checked) {
         if(g.getCourse()!=null) courseAccess(user,g.getCourse().getCourseId(),checked);
         if(g.getModule()!=null) courseAccess(user,g.getModule().getCourse().getCourseId(),checked);
         if(g.getCourse()==null && g.getModule()==null && !admin(user)) throw new ForbiddenException("Group has no managed course.");
+    }
+    private void groupAccess(UserPrincipal user,QuestionGroup g,Set<Long> checked,Long examCourseId) {
+        groupAccess(user,g,checked);
+        Long gc=groupCourseId(g);
+        if(examCourseId!=null && !examCourseId.equals(gc)) throw bad("Question group must belong to the exam's course.");
     }
     private void questionAccess(UserPrincipal user,Question q,Set<Long> checked) {
         if(q.getCourse()!=null) courseAccess(user,q.getCourse().getCourseId(),checked);
@@ -876,7 +965,18 @@ public class ManagerExamServiceImpl implements ManagerExamService {
     }
     private void questionAccess(UserPrincipal user,Question q) { questionAccess(user,q,new HashSet<>()); }
     private void active(UserPrincipal user,Question q) { active(user,q,new HashSet<>()); }
-    private void active(UserPrincipal user,Question q,Set<Long> checked) { questionAccess(user,q,checked); if(!"ACTIVE".equals(q.getStatus())) throw bad("Only ACTIVE questions can be selected from the bank."); }
+    private void active(UserPrincipal user,Question q,Set<Long> checked) {
+        questionAccess(user,q,checked);
+        if(q.getSourceDocumentId()!=null || ("AI".equals(q.getSource()) && "STUDENT".equals(q.getCreatorRole()))) {
+            throw bad("Private student material questions cannot be added to course exams.");
+        }
+        if(!"ACTIVE".equals(q.getStatus())) throw bad("Only ACTIVE questions can be selected from the bank.");
+    }
+    private void active(UserPrincipal user,Question q,Set<Long> checked,Long examCourseId) {
+        active(user,q,checked);
+        Long qc=questionCourseId(q);
+        if(examCourseId!=null && !examCourseId.equals(qc)) throw bad("Question must belong to the exam's course.");
+    }
     private Map<Long,Question> examQuestions(Exam e) {
         List<Long> examIds=List.of(e.getExamId());
         Map<Long,Question> result=new LinkedHashMap<>();
@@ -939,6 +1039,7 @@ public class ManagerExamServiceImpl implements ManagerExamService {
                 kind,
                 e.getDurationMinutes(),
                 e.getMaxScore(),
+                e.getPassMark(),
                 totalWeight,
                 count,
                 e.getStatus(),
@@ -982,6 +1083,13 @@ public class ManagerExamServiceImpl implements ManagerExamService {
             l.getGroup().getPassageText(),questionCount); }
     private BigDecimal weight(BigDecimal w) { if(w==null)return BigDecimal.ONE; if(w.signum()<=0 || w.compareTo(new BigDecimal("1000"))>0 || w.scale()>2) throw bad("Weight must be positive, at most 1000 and have at most two decimal places."); return w; }
     private BigDecimal maxScore(BigDecimal m) { if(m==null || m.signum()<=0 || m.compareTo(new BigDecimal("10000"))>0 || m.scale()>2) throw bad("Max score must be positive, at most 10000 and have at most two decimal places."); return m; }
+    private BigDecimal validatePassMark(BigDecimal passMark, BigDecimal maxScore) {
+        if (passMark == null) return null;
+        if (passMark.signum() < 0 || passMark.compareTo(maxScore) > 0 || passMark.scale() > 2) {
+            throw bad("Pass mark must be between 0 and maxScore (" + maxScore + ") with at most two decimal places.");
+        }
+        return passMark;
+    }
     private int next(List<Integer> values) { int max=values.stream().mapToInt(Integer::intValue).max().orElse(-1); if(max==Integer.MAX_VALUE)throw conflict("Question order limit reached."); return max+1; }
     private String family(String type) { String kind=QuestionTypeUtil.examKindOf(type); return kind==null?"QUIZ":kind; }
     private String pattern(String s) { return "%"+s.strip().toLowerCase(Locale.ROOT).replace("!","!!").replace("%","!%").replace("_","!_")+"%"; }

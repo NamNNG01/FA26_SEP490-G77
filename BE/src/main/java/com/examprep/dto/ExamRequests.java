@@ -166,6 +166,8 @@ public final class ExamRequests {
         private String generationType;
         @NotNull @DecimalMin(value="0", inclusive=false) @DecimalMax("10000") @Digits(integer=5, fraction=2)
         private BigDecimal maxScore;
+        @DecimalMin("0") @DecimalMax("10000") @Digits(integer=5, fraction=2)
+        private BigDecimal passMark;
         @Size(max=500)
         private List<@Valid QuestionLink> questionIds;
         @Size(max=100)
@@ -175,11 +177,6 @@ public final class ExamRequests {
         /** Questions from the create-screen import preview; created (or reused) and attached with the exam. */
         @Size(max=500)
         private List<@Valid ImportedQuestion> importedQuestions;
-
-        @JsonSetter("passMark")
-        public void setPassMark(Object passMark) {
-            log.warn("Deprecated passMark field received and ignored.");
-        }
 
         @JsonSetter("maxAttempts")
         public void setMaxAttempts(Object maxAttempts) {
@@ -208,13 +205,10 @@ public final class ExamRequests {
         private String generationType;
         @DecimalMin(value="0", inclusive=false) @DecimalMax("10000") @Digits(integer=5, fraction=2)
         private BigDecimal maxScore;
+        @DecimalMin("0") @DecimalMax("10000") @Digits(integer=5, fraction=2)
+        private BigDecimal passMark;
         @Size(max=100)
         private List<@Valid Config> configs;
-
-        @JsonSetter("passMark")
-        public void setPassMark(Object passMark) {
-            log.warn("Deprecated passMark field received and ignored.");
-        }
 
         @JsonSetter("maxAttempts")
         public void setMaxAttempts(Object maxAttempts) {

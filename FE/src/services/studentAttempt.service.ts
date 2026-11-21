@@ -94,6 +94,8 @@ export interface AttemptSession {
   questions: AttemptQuestion[];
   /** Exam.mode of the attempt — EXAM, PRACTICE, PRACTICE_EXAM, SMART_PRACTICE, MATERIAL_QUIZ, CONTEST. */
   examMode?: string | null;
+  /** Student choice for self-made attempts ("EXAM" | "PRACTICE") persisted server-side. */
+  takeAs?: string | null;
   /** SA-02 only. */
   answers: {
     questionId: number;
@@ -260,9 +262,15 @@ export const studentAttemptService = {
    */
   async start(examId: number | string): Promise<AttemptSession> {
     try {
-      // No Idempotency-Key: the BE CORS config does not allow that header yet,
-      // and the 409 fallback below already makes a double start harmless.
-      const res = await apiClient.post<ApiResponse<AttemptSession>>(`/student/exams/${examId}/attempts`);
+      const idempotencyKey =
+        typeof globalThis.crypto?.randomUUID === 'function'
+          ? globalThis.crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const res = await apiClient.post<ApiResponse<AttemptSession>>(
+        `/student/exams/${examId}/attempts`,
+        undefined,
+        { headers: { 'Idempotency-Key': idempotencyKey } },
+      );
       return res.data.data;
     } catch (err) {
       const e = err as AxiosLikeError;

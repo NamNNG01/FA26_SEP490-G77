@@ -13,6 +13,7 @@ import com.examprep.util.attempt.AnswerResponseValidator;
 import com.examprep.util.attempt.AttemptGrader;
 import com.examprep.util.attempt.AttemptScoring;
 import com.fasterxml.jackson.databind.JsonNode;
+import jakarta.annotation.PreDestroy;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,6 +21,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
@@ -30,6 +32,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 
 /**
@@ -45,6 +51,7 @@ public class AttemptAutoSubmitter {
 
     /** Past {@code deadlineAt} the student may still save (spec 6.3: 410 past deadline + 5s). */
     public static final long EXPIRY_GRACE_SECONDS = 5;
+    private static final long CODE_JUDGING_LEASE_SECONDS = 600;
     private static final Set<String> UNTIMED_MODES = Set.of("PRACTICE", "SMART_PRACTICE", "MATERIAL_QUIZ", "REVIEW");
 
     private static final String STATUS_SUBMITTED = "SUBMITTED";
@@ -59,6 +66,16 @@ public class AttemptAutoSubmitter {
     private final CodeAnswerJudge judge;
     private final EntityManager entityManager;
     private final PlatformTransactionManager transactionManager;
+    private final ExecutorService expiredPool = Executors.newFixedThreadPool(4, task -> {
+        Thread thread = new Thread(task, "code-auto-submit");
+        thread.setDaemon(true);
+        return thread;
+    });
+
+    @PreDestroy
+    void shutdown() {
+        expiredPool.shutdownNow();
+    }
 
     /** True past {@code deadlineAt + 5s}: from then on the server refuses further saves. */
     public boolean isExpired(ExamAttempt attempt, Instant now) {
@@ -98,12 +115,27 @@ public class AttemptAutoSubmitter {
         Instant now = Instant.now();
         List<Long> due = attempts.findExpiredCodeAttemptIds(now.minusSeconds(EXPIRY_GRACE_SECONDS), now,
                 PageRequest.of(0, 25));
-        for (Long id : due) {
-            try {
-                closeExpired(id, null, now);
-            } catch (RuntimeException ex) {
-                log.error("Auto-submitting code attempt {} failed", id, ex);
+        if (due.isEmpty()) {
+            return;
+        }
+        // Keep single items or @Transactional test calls on the caller thread; fan out scheduled batches concurrently.
+        if (due.size() == 1 || TransactionSynchronizationManager.isActualTransactionActive()) {
+            for (Long id : due) {
+                closeExpiredSafe(id, now);
             }
+            return;
+        }
+        List<CompletableFuture<Void>> futures = due.stream()
+                .map(id -> CompletableFuture.runAsync(() -> closeExpiredSafe(id, now), expiredPool))
+                .toList();
+        CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new)).join();
+    }
+
+    private void closeExpiredSafe(Long id, Instant now) {
+        try {
+            closeExpired(id, null, now);
+        } catch (RuntimeException ex) {
+            log.error("Auto-submitting code attempt {} failed", id, ex);
         }
     }
 
@@ -111,24 +143,54 @@ public class AttemptAutoSubmitter {
                   Consumer<List<AttemptAnswer>> applyDrafts) {
         TransactionTemplate tx = new TransactionTemplate(transactionManager);
         CloseStep step = tx.execute(status -> prepareClose(attemptId, userId, submittedAt, expiredOnly,
-                applyDrafts, List.of(), Map.of()));
-        while (!step.done() && !step.deferred()) {
-            List<CodeAnswerJudge.Plan> plans = step.plans();
-            Map<Long, CodeAnswerJudge.Verdict> verdicts = judge.judge(plans, true);
-            step = tx.execute(status -> prepareClose(attemptId, userId, submittedAt, expiredOnly, null, plans, verdicts));
+                applyDrafts, null, List.of(), Map.of()));
+        UUID ownerToken = step.token();
+        try {
+            while (!step.done() && !step.deferred()) {
+                List<CodeAnswerJudge.Plan> plans = step.plans();
+                Map<Long, CodeAnswerJudge.Verdict> verdicts = judge.judge(plans, true);
+                final UUID currentToken = ownerToken;
+                step = tx.execute(status -> prepareClose(attemptId, userId, submittedAt, expiredOnly, null,
+                        currentToken, plans, verdicts));
+                if (step.token() != null) {
+                    ownerToken = step.token();
+                }
+            }
+            return !step.deferred();
+        } finally {
+            if (ownerToken != null && (step == null || !step.done())) {
+                final UUID releaseToken = ownerToken;
+                try {
+                    tx.executeWithoutResult(status -> releaseJudgingIfOwned(attemptId, releaseToken));
+                } catch (RuntimeException cleanupEx) {
+                    log.warn("Failed to release code judging lock for attempt {}", attemptId, cleanupEx);
+                }
+            }
         }
-        return !step.deferred();
     }
 
-    private record CloseStep(boolean done, boolean deferred, List<CodeAnswerJudge.Plan> plans) {}
+    private record CloseStep(boolean done, boolean deferred, UUID token, List<CodeAnswerJudge.Plan> plans) {}
+
+    private void releaseJudgingIfOwned(Long attemptId, UUID ownerToken) {
+        ExamAttempt attempt = attempts.lockById(attemptId).orElse(null);
+        if (attempt == null) {
+            return;
+        }
+        entityManager.refresh(attempt);
+        if (ownerToken.equals(attempt.getCodeJudgingToken())) {
+            attempt.setCodeJudgingToken(null);
+            attempt.setCodeJudgingUntil(null);
+            attempts.flush();
+        }
+    }
 
     private CloseStep prepareClose(Long attemptId, Long userId, Instant submittedAt, boolean expiredOnly,
-                                   Consumer<List<AttemptAnswer>> applyDrafts, List<CodeAnswerJudge.Plan> judged,
-                                   Map<Long, CodeAnswerJudge.Verdict> verdicts) {
+                                   Consumer<List<AttemptAnswer>> applyDrafts, UUID ownerToken,
+                                   List<CodeAnswerJudge.Plan> judged, Map<Long, CodeAnswerJudge.Verdict> verdicts) {
         ExamAttempt attempt = attempts.lockById(attemptId).orElse(null);
         if (attempt == null) {
             if (userId == null) {
-                return new CloseStep(true, false, List.of());
+                return new CloseStep(true, false, null, List.of());
             }
             throw new ResourceNotFoundException("Attempt not found");
         }
@@ -138,10 +200,14 @@ public class AttemptAutoSubmitter {
         }
         boolean expired = isExpired(attempt, submittedAt);
         if (!"IN_PROGRESS".equals(attempt.getStatus()) || (expiredOnly && !expired)) {
-            return new CloseStep(true, false, List.of());
+            return new CloseStep(true, false, null, List.of());
         }
-        if (codeJudgingInProgress(attempt, Instant.now())) {
-            return new CloseStep(false, true, List.of());
+        if (ownerToken == null) {
+            if (codeJudgingInProgress(attempt, Instant.now())) {
+                return new CloseStep(false, true, null, List.of());
+            }
+        } else if (!ownerToken.equals(attempt.getCodeJudgingToken())) {
+            return new CloseStep(false, true, null, List.of());
         }
 
         List<AttemptAnswer> rows = answers.findByAttemptIdOrdered(attemptId);
@@ -156,7 +222,11 @@ public class AttemptAutoSubmitter {
         List<CodeAnswerJudge.Plan> plans = hasUngradedCode(rows)
                 ? judge.prepareDrafts(rows, maxScore(attempt, rows)) : List.of();
         if (!plans.isEmpty() && !plans.equals(judged)) {
-            return new CloseStep(false, false, plans);
+            UUID token = ownerToken != null ? ownerToken : UUID.randomUUID();
+            attempt.setCodeJudgingToken(token);
+            attempt.setCodeJudgingUntil(Instant.now().plusSeconds(CODE_JUDGING_LEASE_SECONDS));
+            attempts.flush();
+            return new CloseStep(false, false, token, plans);
         }
         for (CodeAnswerJudge.Plan plan : plans) {
             AttemptAnswer row = rows.stream().filter(answer -> plan.questionId().equals(answer.getQuestion().getQuestionId()))
@@ -164,7 +234,7 @@ public class AttemptAutoSubmitter {
             judge.persist(row, plan, verdicts.get(plan.questionId()), Instant.now());
         }
         gradeAndClose(attempt, rows, submittedAt);
-        return new CloseStep(true, false, List.of());
+        return new CloseStep(true, false, null, List.of());
     }
 
     private BigDecimal maxScore(ExamAttempt attempt, List<AttemptAnswer> rows) {

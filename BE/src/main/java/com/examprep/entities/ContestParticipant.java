@@ -33,7 +33,7 @@ public class ContestParticipant implements Serializable {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    @Column(name = "score", precision = 5, scale = 2)
+    @Column(name = "score", precision = 8, scale = 2)
     private BigDecimal score;
 
     @Column(name = "rank")

@@ -126,11 +126,13 @@ public interface DiscussionRepository extends JpaRepository<Discussion, Long> {
                     "JOIN FETCH d.user u " +
                     "INNER JOIN DiscussionBookmark db ON d.discussionId = db.discussion.discussionId " +
                     "WHERE db.user.userId = :userId " +
+                    "AND (u.userId = :userId OR (d.status <> 'HIDDEN' AND (d.approvalStatus IS NULL OR d.approvalStatus = 'APPROVED'))) " +
                     "ORDER BY db.createdAt DESC",
 
             countQuery = "SELECT COUNT(d) FROM Discussion d " +
                     "INNER JOIN DiscussionBookmark db ON d.discussionId = db.discussion.discussionId " +
-                    "WHERE db.user.userId = :userId"
+                    "WHERE db.user.userId = :userId " +
+                    "AND (d.user.userId = :userId OR (d.status <> 'HIDDEN' AND (d.approvalStatus IS NULL OR d.approvalStatus = 'APPROVED')))"
     )
     Page<Discussion> findBookmarkedByUser(@Param("userId") Long userId, Pageable pageable);
 }

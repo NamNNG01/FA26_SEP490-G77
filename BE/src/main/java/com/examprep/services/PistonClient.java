@@ -4,6 +4,7 @@ import com.examprep.dto.ResponseCode;
 import com.examprep.exceptions.BaseException;
 import com.examprep.util.attempt.CodeSource;
 import com.fasterxml.jackson.databind.JsonNode;
+import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
@@ -25,6 +26,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -89,12 +91,18 @@ public class PistonClient {
     /** Extra tries after a 429 or 5xx; the provider sheds load with both and recovers quickly. */
     private static final int MAX_RETRIES = 2;
     private static final long RETRY_BACKOFF_MS = 700;
+    private static final long DEFAULT_PERMIT_TIMEOUT_SECONDS = 45;
 
     private final RestClient client;
     private final String apiKey;
     private final Semaphore callPermits = new Semaphore(MAX_CONCURRENT_CALLS, true);
     /** Runs the fixtures of a submission side by side; the permits above cap the real concurrency. */
     private final ExecutorService fixturePool = Executors.newFixedThreadPool(16, daemonThreads("piston-judge-"));
+
+    @PreDestroy
+    void shutdown() {
+        fixturePool.shutdownNow();
+    }
 
     public PistonClient(
             @Value("${app.piston.base-url:https://api.onlinecompiler.io/api/v2/piston}") String baseUrl,
@@ -333,7 +341,9 @@ public class PistonClient {
             request = request.header(HttpHeaders.AUTHORIZATION, apiKey);
         }
         try {
-            callPermits.acquire();
+            if (!callPermits.tryAcquire(DEFAULT_PERMIT_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                throw unavailable("Code execution service is busy, please try again");
+            }
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
             throw unavailable("Code execution was interrupted");

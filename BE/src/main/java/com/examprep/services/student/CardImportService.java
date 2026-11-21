@@ -6,6 +6,7 @@ import com.examprep.dto.student.StudentDeckDtos.CardWrite;
 import com.examprep.entities.CardImport;
 import com.examprep.entities.Course;
 import com.examprep.entities.Deck;
+import com.examprep.entities.Enrollment;
 import com.examprep.entities.Flashcard;
 import com.examprep.entities.Module;
 import com.examprep.entities.User;
@@ -18,6 +19,7 @@ import com.examprep.repositories.CardImportRepository;
 import com.examprep.repositories.CourseManagerRepository;
 import com.examprep.repositories.CourseRepository;
 import com.examprep.repositories.DeckRepository;
+import com.examprep.repositories.EnrollmentRepository;
 import com.examprep.repositories.FlashcardRepository;
 import com.examprep.repositories.ModuleRepository;
 import com.examprep.repositories.UserRepository;
@@ -76,6 +78,7 @@ public class CardImportService {
     private final AiUsageLogRepository aiUsageLogRepository;
     private final ModuleRepository moduleRepository;
     private final UserRepository userRepository;
+    private final EnrollmentRepository enrollmentRepository;
 
     private final Map<Long, List<Row>> pending = new ConcurrentHashMap<>();
     private final ExecutorService worker = Executors.newFixedThreadPool(2, task -> {
@@ -88,7 +91,7 @@ public class CardImportService {
                              CardImportRepository imports, ObjectMapper json, PlatformTransactionManager transactionManager,
                              CourseRepository courseRepository, CourseManagerRepository courseManagerRepository,
                              AiUsageLogRepository aiUsageLogRepository, ModuleRepository moduleRepository,
-                             UserRepository userRepository) {
+                             UserRepository userRepository, EnrollmentRepository enrollmentRepository) {
         this.decks = decks;
         this.deckRepository = deckRepository;
         this.cards = cards;
@@ -100,6 +103,7 @@ public class CardImportService {
         this.aiUsageLogRepository = aiUsageLogRepository;
         this.moduleRepository = moduleRepository;
         this.userRepository = userRepository;
+        this.enrollmentRepository = enrollmentRepository;
     }
 
     public record Started(Long importId, String status, int totalRows) { }
@@ -170,6 +174,9 @@ public class CardImportService {
     private int insertChunk(Long importId, List<Row> chunk, List<ErrorRow> errors, int progress) {
         CardImport job = imports.findById(importId).orElseThrow();
         Deck deck = deckRepository.findForUpdate(job.getDeckId()).orElseThrow();
+        if ("PENDING_REVIEW".equals(deck.getReviewStatus()) || "APPROVED".equals(deck.getReviewStatus())) {
+            throw new IllegalStateException("Deck is locked by review status " + deck.getReviewStatus());
+        }
         int position = cards.maxPosition(deck.getDeckId());
         List<Flashcard> valid = new ArrayList<>();
         for (Row row : chunk) {
@@ -247,12 +254,15 @@ public class CardImportService {
 
         Set<String> deckCards = new HashSet<>();
         if (deckId != null) {
-            deckRepository.findById(deckId).ifPresent(d -> {
-                cards.findByDeckDeckIdOrderByCardIdAsc(deckId).forEach(c -> {
-                    String f = normalizeText(c.getFrontText());
-                    String b = normalizeText(c.getBackText());
-                    deckCards.add(f + "|||" + b);
-                });
+            Deck target = deckRepository.findById(deckId)
+                    .orElseThrow(() -> new BaseException(ResponseCode.RESOURCE_NOT_FOUND, "Deck not found", Map.of("code", "DECK_NOT_FOUND")));
+            if (!canReadDeck(userId, target)) {
+                throw new BaseException(ResponseCode.FORBIDDEN, "Not authorized", Map.of("code", "FORBIDDEN_DECK"));
+            }
+            cards.findByDeckDeckIdOrderByCardIdAsc(deckId).forEach(c -> {
+                String f = normalizeText(c.getFrontText());
+                String b = normalizeText(c.getBackText());
+                deckCards.add(f + "|||" + b);
             });
         }
 
@@ -318,10 +328,14 @@ public class CardImportService {
             deck = deckRepository.findById(req.deckId())
                     .orElseThrow(() -> new BaseException(ResponseCode.RESOURCE_NOT_FOUND, "Deck not found", Map.of("code", "DECK_NOT_FOUND")));
 
-            boolean isOwner = deck.getUser() != null && deck.getUser().getUserId().equals(userId);
-            boolean isManager = deck.getCourse() != null && courseManagerRepository.existsByCourse_CourseIdAndUser_UserId(deck.getCourse().getCourseId(), userId);
-            if (!isOwner && !isManager) {
+            if (!canModifyDeck(userId, deck)) {
                 throw new BaseException(ResponseCode.FORBIDDEN, "Not authorized", Map.of("code", "FORBIDDEN_DECK"));
+            }
+            if ("PENDING_REVIEW".equals(deck.getReviewStatus()) || "APPROVED".equals(deck.getReviewStatus())) {
+                throw new BaseException(ResponseCode.CONFLICT, "Deck is locked by review status", Map.of("code", "DECK_LOCKED"));
+            }
+            if (deck.getMode() != null && !"FLASHCARD".equals(deck.getMode())) {
+                throw new BaseException(ResponseCode.BAD_REQUEST, "Bulk save only supports FLASHCARD mode decks", Map.of("code", "INVALID_DECK_MODE"));
             }
         } else if (req.newDeck() != null) {
             var nd = req.newDeck();
@@ -360,8 +374,10 @@ public class CardImportService {
         if ("AI".equalsIgnoreCase(req.source())) {
             if (req.aiGenerationId() != null) {
                 aiUsageLogRepository.findById(req.aiGenerationId()).ifPresent(log -> {
-                    log.setSavedAt(Instant.now());
-                    aiUsageLogRepository.save(log);
+                    if (log.getUser() != null && userId.equals(log.getUser().getUserId())) {
+                        log.setSavedAt(Instant.now());
+                        aiUsageLogRepository.save(log);
+                    }
                 });
             }
         }
@@ -638,6 +654,53 @@ public class CardImportService {
 
     private static BaseException unsupported() {
         return new BaseException(ResponseCode.BAD_REQUEST, "Only CSV or XLSX files are supported.", Map.of("code", "UNSUPPORTED_FILE_TYPE"));
+    }
+
+    private boolean canModifyDeck(Long userId, Deck deck) {
+        if (deck.getUser() != null && deck.getUser().getUserId().equals(userId)) {
+            return true;
+        }
+        User caller = userRepository.findById(userId).orElse(null);
+        if (caller == null) {
+            return false;
+        }
+        if (User.ROLE_ADMIN.equals(caller.getRoleName())) {
+            return true;
+        }
+        return User.ROLE_COURSE_MANAGER.equals(caller.getRoleName()) && managesDeckCourse(userId, deck);
+    }
+
+    private boolean canReadDeck(Long userId, Deck deck) {
+        if (canModifyDeck(userId, deck)) {
+            return true;
+        }
+        if (deck.getModule() != null && deck.getModule().isHidden()) {
+            return false;
+        }
+        boolean isStudentDeck = deck.getUser() != null && User.ROLE_STUDENT.equals(deck.getUser().getRoleName());
+        if (!isStudentDeck && deck.getCourse() != null) {
+            Long courseId = deck.getCourse().getCourseId();
+            return enrollmentRepository.existsByCourse_CourseIdAndUser_UserIdAndStatus(courseId, userId, Enrollment.STATUS_ACTIVE)
+                    || enrollmentRepository.existsByCourse_CourseIdAndUser_UserIdAndStatus(courseId, userId, Enrollment.STATUS_COMPLETED);
+        }
+        if (isStudentDeck && Deck.VISIBILITY_PUBLIC.equals(deck.getVisibility())) {
+            if (deck.getCourse() == null) {
+                return true;
+            }
+            Long courseId = deck.getCourse().getCourseId();
+            return enrollmentRepository.existsByCourse_CourseIdAndUser_UserIdAndStatus(courseId, userId, Enrollment.STATUS_ACTIVE)
+                    || enrollmentRepository.existsByCourse_CourseIdAndUser_UserIdAndStatus(courseId, userId, Enrollment.STATUS_COMPLETED);
+        }
+        return false;
+    }
+
+    private boolean managesDeckCourse(Long userId, Deck deck) {
+        if (deck.getCourse() == null) {
+            return false;
+        }
+        Long courseId = deck.getCourse().getCourseId();
+        return (deck.getCourse().getManager() != null && deck.getCourse().getManager().getUserId().equals(userId))
+                || courseManagerRepository.existsByCourse_CourseIdAndUser_UserId(courseId, userId);
     }
 
     private String write(List<ErrorRow> errors) {

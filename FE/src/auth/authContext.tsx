@@ -82,7 +82,7 @@ interface AuthContextValue extends AuthState {
   register: (email: string, password: string, fullName: string) => Promise<UserResponse>;
   /** POST /auth/google with a Google ID token (AUTH-09). */
   loginWithGoogle: (idToken: string) => Promise<{ user: UserResponse; newUser: boolean }>;
-  logout: () => Promise<void>;
+  logout: (revokeRemote?: boolean) => Promise<void>;
   /** POST /auth/logout-all — revokes every session. Throws on failure. */
   logoutAll: () => Promise<void>;
   setAuth: (state: Partial<AuthState>) => void;
@@ -294,9 +294,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return login(email, password);
   }
 
-  async function logout() {
+  async function logout(revokeRemote = true) {
     const refreshToken = getRefreshToken();
-    if (refreshToken) {
+    if (revokeRemote && refreshToken) {
       try {
         await apiClient.post('/auth/logout', { refreshToken });
       } catch {

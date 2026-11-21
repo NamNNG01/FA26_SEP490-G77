@@ -40,7 +40,7 @@ class StudentContestServiceTest {
 
     @Test
     void registerContest_notFound() {
-        when(contestRepository.findById(1L)).thenReturn(Optional.empty());
+        when(contestRepository.findForUpdate(1L)).thenReturn(Optional.empty());
         assertThrows(ResourceNotFoundException.class, () -> contestService.registerContest(1L, 10L));
     }
 
@@ -48,9 +48,10 @@ class StudentContestServiceTest {
     void registerContest_alreadyStarted() {
         Contest contest = Contest.builder()
                 .contestId(1L)
+                .status("PUBLISHED")
                 .startTime(Instant.now().minusSeconds(100))
                 .build();
-        when(contestRepository.findById(1L)).thenReturn(Optional.of(contest));
+        when(contestRepository.findForUpdate(1L)).thenReturn(Optional.of(contest));
         assertThrows(BaseException.class, () -> contestService.registerContest(1L, 10L));
     }
 }

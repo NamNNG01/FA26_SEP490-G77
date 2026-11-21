@@ -125,6 +125,7 @@ public class StudentContestServiceImpl implements StudentContestService {
                     .toList();
             if (!examIds.isEmpty()) {
                 examQuestionRepository.countByExamIds(examIds).forEach(row -> questionCounts.put((Long) row[0], ((Number) row[1]).intValue()));
+                contestRepository.randomQuestionCounts(examIds).forEach(row -> questionCounts.merge((Long) row[0], ((Number) row[1]).intValue(), Integer::sum));
             }
         }
 
@@ -135,7 +136,7 @@ public class StudentContestServiceImpl implements StudentContestService {
                                 r.getRankPosition(),
                                 r.getDiscount() != null ? r.getDiscount().getCode() : r.getName(),
                                 r.getDiscount() != null ? r.getDiscount().getDiscountType() : r.getRewardType(),
-                                ContestRules.value(r.getDiscount())
+                                r.getDiscount() != null ? ContestRules.value(r.getDiscount()) : null
                         ), Collectors.toList())
                 ));
 
@@ -169,8 +170,14 @@ public class StudentContestServiceImpl implements StudentContestService {
 
     @Override
     public Map<String, Object> registerContest(Long contestId, Long userId) {
-        Contest c = contestRepository.findById(contestId)
+        Contest c = contestRepository.findForUpdate(contestId)
                 .orElseThrow(() -> new ResourceNotFoundException("Contest not found"));
+        if ("DRAFT".equals(c.getStatus())) {
+            throw new ResourceNotFoundException("Contest not found");
+        }
+        if (!"PUBLISHED".equals(c.getStatus())) {
+            throw new BaseException(ResponseCode.CONFLICT, "Contest is not open for registration");
+        }
         Instant now = Instant.now();
 
         if (c.getStartTime() != null && !now.isBefore(c.getStartTime())) {
@@ -203,8 +210,14 @@ public class StudentContestServiceImpl implements StudentContestService {
 
     @Override
     public ContestStartResponseDto startContest(Long contestId, Long userId) {
-        Contest c = contestRepository.findById(contestId)
+        Contest c = contestRepository.findForUpdate(contestId)
                 .orElseThrow(() -> new ResourceNotFoundException("Contest not found"));
+        if ("DRAFT".equals(c.getStatus())) {
+            throw new ResourceNotFoundException("Contest not found");
+        }
+        if (!"PUBLISHED".equals(c.getStatus())) {
+            throw new BaseException(ResponseCode.CONFLICT, "Contest is not published");
+        }
         Instant now = Instant.now();
 
         if (c.getStartTime() != null && now.isBefore(c.getStartTime())) {
@@ -214,29 +227,54 @@ public class StudentContestServiceImpl implements StudentContestService {
             throw new BaseException(ResponseCode.FORBIDDEN, "Contest ended");
         }
 
-        // Check if student has an active IN_PROGRESS attempt for this exam/contest
+        ContestParticipant participant = participantRepository.findByContest_ContestIdAndUser_UserId(contestId, userId)
+                .orElse(null);
+        if (participant == null) {
+            if (c.getMaxParticipants() != null
+                    && participantRepository.countByContest_ContestId(contestId) >= c.getMaxParticipants()) {
+                throw new BaseException(ResponseCode.CONFLICT, "Contest full");
+            }
+            User user = userRepository.findById(userId).orElseThrow(() -> new ResourceNotFoundException("User not found"));
+            participant = participantRepository.save(ContestParticipant.builder()
+                    .contest(c).user(user).rewardClaimed(false).joinedAt(now).build());
+        } else if (participant.getAttemptId() != null) {
+            ExamAttempt existing = examAttemptRepository.lockById(participant.getAttemptId()).orElse(null);
+            if (existing != null && "IN_PROGRESS".equals(existing.getStatus())) {
+                List<AttemptAnswer> rows = answerRepository.findByAttemptIdOrdered(existing.getAttemptId());
+                if (rows.isEmpty()) {
+                    freezePaper(existing, c.getExam());
+                    rows = answerRepository.findByAttemptIdOrdered(existing.getAttemptId());
+                }
+                return new ContestStartResponseDto(existing.getAttemptId(), c.getExam().getExamId(),
+                        c.getDurationMinutes(), existing.getDeadlineAt(), questionDtos(rows));
+            }
+            if (existing != null) {
+                throw new BaseException(ResponseCode.CONFLICT, "You have already completed this contest attempt");
+            }
+        }
+
+        // Legacy fallback if an IN_PROGRESS contest attempt existed without participant.attemptId recorded.
         List<ExamAttempt> activeAttempts = examAttemptRepository.findByUser_UserIdAndExam_ExamIdAndStatusAndMode(
                 userId, c.getExam().getExamId(), "IN_PROGRESS", "CONTEST");
         if (!activeAttempts.isEmpty()) {
             ExamAttempt att = activeAttempts.get(0);
+            if (participant.getAttemptId() == null) {
+                participant.setAttemptId(att.getAttemptId());
+                participantRepository.save(participant);
+            }
             List<AttemptAnswer> rows = answerRepository.findByAttemptIdOrdered(att.getAttemptId());
             if (rows.isEmpty()) {
                 freezePaper(att, c.getExam());
                 rows = answerRepository.findByAttemptIdOrdered(att.getAttemptId());
             }
-            return new ContestStartResponseDto(att.getAttemptId(), c.getExam().getExamId(), c.getDurationMinutes(), att.getDeadlineAt(), questionDtos(rows));
+            return new ContestStartResponseDto(att.getAttemptId(), c.getExam().getExamId(),
+                    c.getDurationMinutes(), att.getDeadlineAt(), questionDtos(rows));
         }
-
-        ContestParticipant participant = participantRepository.findByContest_ContestIdAndUser_UserId(contestId, userId)
-                .orElseGet(() -> {
-                    User user = userRepository.findById(userId).orElseThrow();
-                    return participantRepository.save(ContestParticipant.builder().contest(c).user(user).joinedAt(Instant.now()).build());
-                });
 
         Instant durationDeadline = now.plusSeconds((long) c.getDurationMinutes() * 60);
         Instant deadlineAt = (c.getEndTime() != null && durationDeadline.isAfter(c.getEndTime())) ? c.getEndTime() : durationDeadline;
 
-        User user = userRepository.findById(userId).orElseThrow();
+        User user = userRepository.findById(userId).orElseThrow(() -> new ResourceNotFoundException("User not found"));
         ExamAttempt attempt = ExamAttempt.builder()
                 .user(user)
                 .exam(c.getExam())
@@ -251,11 +289,8 @@ public class StudentContestServiceImpl implements StudentContestService {
         freezePaper(attempt, c.getExam());
         List<AttemptAnswer> rows = answerRepository.findByAttemptIdOrdered(attempt.getAttemptId());
 
-        // Only assign participant.attemptId if currently null (first official attempt)
-        if (participant.getAttemptId() == null) {
-            participant.setAttemptId(attempt.getAttemptId());
-            participantRepository.save(participant);
-        }
+        participant.setAttemptId(attempt.getAttemptId());
+        participantRepository.save(participant);
 
         return new ContestStartResponseDto(attempt.getAttemptId(), c.getExam().getExamId(), c.getDurationMinutes(), deadlineAt, questionDtos(rows));
     }
@@ -327,8 +362,11 @@ public class StudentContestServiceImpl implements StudentContestService {
     @Override
     @Transactional(readOnly = true)
     public Map<String, Object> getLeaderboard(Long contestId, Long userId) {
-        Contest c = contestRepository.findById(contestId)
+        Contest c = contestRepository.findLive(contestId)
                 .orElseThrow(() -> new ResourceNotFoundException("Contest not found"));
+        if ("DRAFT".equals(c.getStatus())) {
+            throw new ResourceNotFoundException("Contest not found");
+        }
         Instant now = Instant.now();
 
         if (c.getEndTime() != null && now.isBefore(c.getEndTime())) {
@@ -339,29 +377,26 @@ public class StudentContestServiceImpl implements StudentContestService {
             return res;
         }
 
-        List<ContestParticipant> participants = participantRepository.findByContest_ContestIdOrderByScoreDescFinishedAtAsc(contestId);
+        List<ContestParticipant> participants = participantRepository
+                .findByContest_ContestIdAndRankIsNotNullOrderByRankAscParticipantIdAsc(contestId);
         List<ContestReward> rewards = rewardRepository.findByContest_ContestId(contestId);
         Map<Integer, ContestReward> rewardByRank = rewards.stream()
                 .collect(Collectors.toMap(ContestReward::getRankPosition, r -> r, (r1, r2) -> r1));
 
         List<Map<String, Object>> rows = new ArrayList<>();
-        int rank = 1;
-        boolean userIncluded = false;
-
-        for (ContestParticipant p : participants) {
+        for (int i = 0; i < participants.size(); i++) {
+            ContestParticipant p = participants.get(i);
             boolean isCurrentUser = userId != null && p.getUser().getUserId().equals(userId);
-            if (isCurrentUser) {
-                userIncluded = true;
-            }
-            int actualRank = p.getRank() != null ? p.getRank() : rank;
-            if (rank <= 10 || isCurrentUser) {
+            int actualRank = p.getRank();
+            if (i < 10 || isCurrentUser) {
                 Map<String, Object> row = new HashMap<>();
                 row.put("rank", actualRank);
                 row.put("userId", p.getUser().getUserId());
                 row.put("studentName", p.getUser().getFullName());
                 row.put("avatarUrl", p.getUser().getAvatarUrl() != null ? p.getUser().getAvatarUrl() : "");
                 row.put("score", p.getScore() != null ? p.getScore() : BigDecimal.ZERO);
-                row.put("completedAt", p.getFinishedAt() != null ? p.getFinishedAt() : Instant.now());
+                row.put("completedAt", p.getFinishedAt());
+                row.put("timeTakenSec", p.getTimeTakenSec());
                 row.put("isCurrentUser", isCurrentUser);
 
                 ContestReward r = rewardByRank.get(actualRank);
@@ -370,14 +405,13 @@ public class StudentContestServiceImpl implements StudentContestService {
                     rewardMap.put("rankPosition", r.getRankPosition());
                     rewardMap.put("discountCode", r.getDiscount() != null ? r.getDiscount().getCode() : (r.getName() != null ? r.getName() : ""));
                     rewardMap.put("discountType", r.getDiscount() != null ? r.getDiscount().getDiscountType() : r.getRewardType());
-                    rewardMap.put("value", ContestRules.value(r.getDiscount()));
+                    rewardMap.put("value", r.getDiscount() != null ? ContestRules.value(r.getDiscount()) : null);
                     row.put("reward", rewardMap);
                 } else {
                     row.put("reward", null);
                 }
                 rows.add(row);
             }
-            rank++;
         }
 
         Map<String, Object> result = new HashMap<>();
@@ -389,8 +423,11 @@ public class StudentContestServiceImpl implements StudentContestService {
     @Override
     @Transactional(readOnly = true)
     public ContestResultDto getContestResult(Long contestId, Long userId) {
-        Contest c = contestRepository.findById(contestId)
+        Contest c = contestRepository.findLive(contestId)
                 .orElseThrow(() -> new ResourceNotFoundException("Contest not found"));
+        if ("DRAFT".equals(c.getStatus())) {
+            throw new ResourceNotFoundException("Contest not found");
+        }
         Instant now = Instant.now();
 
         if (c.getEndTime() != null && now.isBefore(c.getEndTime())) {
@@ -485,7 +522,7 @@ public class StudentContestServiceImpl implements StudentContestService {
 
     @Override
     public ClaimRewardResponseDto claimReward(Long contestId, Long rewardId, Long userId) {
-        Contest c = contestRepository.findById(contestId)
+        Contest c = contestRepository.findLive(contestId)
                 .orElseThrow(() -> new ResourceNotFoundException("Contest not found"));
         Instant now = Instant.now();
 
@@ -542,7 +579,7 @@ public class StudentContestServiceImpl implements StudentContestService {
     public ContestDetailDto getContestDetail(Long contestId, Long userId) {
         Contest c = contestRepository.findById(contestId)
                 .orElseThrow(() -> new ResourceNotFoundException("Contest not found"));
-        if (c.getDeletedAt() != null) {
+        if (c.getDeletedAt() != null || "DRAFT".equals(c.getStatus())) {
             throw new ResourceNotFoundException("Contest not found");
         }
         Instant now = Instant.now();
@@ -571,9 +608,13 @@ public class StudentContestServiceImpl implements StudentContestService {
                 : Optional.empty();
 
         boolean isRegistered = cpOpt.isPresent();
-        String participationStatus = cpOpt.map(p -> p.getRank() != null ? "FINISHED" : (p.getAttemptId() != null ? "IN_PROGRESS" : "REGISTERED")).orElse(null);
         boolean hasStarted = cpOpt.isPresent() && cpOpt.get().getAttemptId() != null;
-        boolean hasSubmitted = cpOpt.isPresent() && cpOpt.get().getFinishedAt() != null;
+        boolean hasSubmitted = cpOpt.filter(p -> p.getAttemptId() != null)
+                .flatMap(p -> examAttemptRepository.findById(p.getAttemptId()))
+                .map(a -> !"IN_PROGRESS".equals(a.getStatus()))
+                .orElse(cpOpt.isPresent() && cpOpt.get().getFinishedAt() != null);
+        String participationStatus = cpOpt.map(p -> (p.getRank() != null || hasSubmitted) ? "FINISHED"
+                : (p.getAttemptId() != null ? "IN_PROGRESS" : "REGISTERED")).orElse(null);
         BigDecimal score = cpOpt.map(ContestParticipant::getScore).orElse(null);
         Integer rank = cpOpt.map(ContestParticipant::getRank).orElse(null);
 
@@ -608,7 +649,14 @@ public class StudentContestServiceImpl implements StudentContestService {
             }
         }
 
-        int questionCount = c.getExam() != null ? examQuestionRepository.findByExamExamIdOrderByOrderIndexAscExamQuestionIdAsc(c.getExam().getExamId()).size() : 0;
+        int questionCount = 0;
+        if (c.getExam() != null) {
+            Long examId = c.getExam().getExamId();
+            questionCount = examQuestionRepository.findByExamExamIdOrderByOrderIndexAscExamQuestionIdAsc(examId).size();
+            for (Object[] rRow : contestRepository.randomQuestionCounts(List.of(examId))) {
+                questionCount += ((Number) rRow[1]).intValue();
+            }
+        }
 
         return ContestDetailDto.builder()
                 .contestId(c.getContestId())

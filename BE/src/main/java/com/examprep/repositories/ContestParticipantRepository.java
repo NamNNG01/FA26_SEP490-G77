@@ -33,7 +33,7 @@ public interface ContestParticipantRepository extends JpaRepository<ContestParti
     @Query("SELECT COUNT(a) FROM ExamAttempt a WHERE a.attemptId IN :ids AND a.status IN ('IN_PROGRESS', 'GRADING')")
     long countUnfinishedAttempts(@Param("ids") Collection<Long> attemptIds);
 
-    @Query("SELECT COUNT(aa) FROM AttemptAnswer aa WHERE aa.attempt.attemptId IN :ids AND aa.gradingStatus IN ('PENDING', 'PENDING_AI', 'GRADING')")
+    @Query("SELECT COUNT(aa) FROM AttemptAnswer aa WHERE aa.attempt.attemptId IN :ids AND aa.gradingStatus IN ('QUEUED', 'PENDING_AI', 'GRADING')")
     long countPendingGrading(@Param("ids") Collection<Long> attemptIds);
 
     /** Ranked rows only, best first (API 8). */
@@ -47,6 +47,9 @@ public interface ContestParticipantRepository extends JpaRepository<ContestParti
 
     @EntityGraph(attributePaths = "user")
     List<ContestParticipant> findByContest_ContestIdOrderByScoreDescFinishedAtAsc(Long contestId);
+
+    @EntityGraph(attributePaths = "user")
+    List<ContestParticipant> findByContest_ContestIdAndRankIsNotNullOrderByRankAscParticipantIdAsc(Long contestId);
 
     Page<ContestParticipant> findByUser_UserIdOrderByJoinedAtDesc(Long userId, Pageable pageable);
     List<ContestParticipant> findByContest_ContestIdIn(Collection<Long> contestIds);

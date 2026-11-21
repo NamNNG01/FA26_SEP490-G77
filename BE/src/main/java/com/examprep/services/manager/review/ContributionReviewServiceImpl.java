@@ -121,7 +121,7 @@ public class ContributionReviewServiceImpl implements ContributionReviewService 
 
         String title = "Câu hỏi của bạn đã được duyệt";
         String content = "Câu hỏi \"" + (c.getTitle() != null ? c.getTitle() : "Đóng góp") + "\" trong khóa \"" + course.getTitle() + "\" đã được duyệt và đưa vào ngân hàng câu hỏi.";
-        reviewNotificationService.sendNotification(c.getUserId(), title, content, "CONTRIBUTION_APPROVED", "QUESTION_CONTRIBUTION", String.valueOf(c.getContributionId()), "/contributions/" + c.getContributionId());
+        reviewNotificationService.sendNotification(c.getUserId(), title, content, "CONTRIBUTION_APPROVED", "QUESTION_CONTRIBUTION", String.valueOf(c.getContributionId()), "/student/contributions/" + c.getContributionId());
 
         return Map.of(
                 "contributionId", savedContribution.getContributionId(),
@@ -172,7 +172,7 @@ public class ContributionReviewServiceImpl implements ContributionReviewService 
         boolean canResubmit = (c.getResubmissionCount() < 1);
         String title = "Câu hỏi của bạn chưa được duyệt";
         String content = "Câu hỏi bị từ chối. Lý do: " + reason.strip() + (canResubmit ? " Bạn còn 1 lần chỉnh sửa và gửi lại." : " Bạn đã dùng hết số lần gửi.");
-        reviewNotificationService.sendNotification(c.getUserId(), title, content, "CONTRIBUTION_REJECTED", "QUESTION_CONTRIBUTION", String.valueOf(c.getContributionId()), "/contributions/" + c.getContributionId());
+        reviewNotificationService.sendNotification(c.getUserId(), title, content, "CONTRIBUTION_REJECTED", "QUESTION_CONTRIBUTION", String.valueOf(c.getContributionId()), "/student/contributions/" + c.getContributionId());
 
         return Map.of(
                 "contributionId", savedContribution.getContributionId(),

@@ -128,9 +128,6 @@ public interface ExamAttemptRepository extends JpaRepository<ExamAttempt, Long> 
             "     (:mode = a.mode))")
     Page<ExamAttempt> findActivityAttemptsByUserAndMode(@Param("userId") Long userId, @Param("mode") String mode, Pageable pageable);
 
-    @Query("SELECT a FROM ExamAttempt a LEFT JOIN FETCH a.exam e WHERE a.user.userId = :userId AND a.submitTime IS NOT NULL AND a.mode <> 'REVIEW' ORDER BY a.submitTime DESC")
-    Page<ExamAttempt> findActivityAttemptsByUser(@Param("userId") Long userId, Pageable pageable);
-
     @Query("""
     SELECT new com.examprep.dto.student.MyExamDto(
         ex.examId,

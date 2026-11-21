@@ -37,10 +37,7 @@ public class StudentExamServiceImpl implements StudentExamService {
         if (!exam.isVisibleToStudents()) {
             throw new ResourceNotFoundException("Exam not found");
         }
-
-        if (exam.getCourse() != null) {
-            validateActiveEnrollment(exam.getCourse().getCourseId(), userId);
-        }
+        validateStudentExamAccess(exam, userId);
 
         int totalCount = Math.toIntExact(examRepository.countActiveQuestionsByExamId(examId));
 
@@ -100,14 +97,16 @@ public class StudentExamServiceImpl implements StudentExamService {
                 reason
         );
 
+        Course resolvedCourse = resolvedCourse(exam);
         return new ExamDetailDto(
                 exam.getExamId(),
-                exam.getCourse() != null ? exam.getCourse().getCourseId() : null,
-                exam.getCourse() != null ? exam.getCourse().getTitle() : null,
+                resolvedCourse != null ? resolvedCourse.getCourseId() : null,
+                resolvedCourse != null ? resolvedCourse.getTitle() : null,
                 exam.getTitle(),
                 exam.getDescription(),
                 exam.getDurationMinutes(),
                 exam.getMaxScore(),
+                exam.getPassMark(),
                 totalCount,
                 exam.getPublishedAt(),
                 myStats,
@@ -122,9 +121,7 @@ public class StudentExamServiceImpl implements StudentExamService {
         if (!exam.isVisibleToStudents()) {
             throw new ResourceNotFoundException("Exam not found");
         }
-        if (exam.getCourse() != null) {
-            validateActiveEnrollment(exam.getCourse().getCourseId(), userId);
-        }
+        validateStudentExamAccess(exam, userId);
 
         Optional<ExamAttempt> activeAttempt =
                 examAttemptRepository.findActiveAttempt(examId, userId, "IN_PROGRESS");
@@ -158,12 +155,39 @@ public class StudentExamServiceImpl implements StudentExamService {
         return examAttemptRepository.findMyExams(userId, pageable);
     }
 
+    private void validateStudentExamAccess(Exam exam, Long userId) {
+        if (userId == null) {
+            throw new ForbiddenException("Authentication required");
+        }
+        if (Exam.MODE_CONTEST.equals(exam.getMode())) {
+            throw new ForbiddenException("Contest exams can only be taken through their contest");
+        }
+        if (!Exam.MODE_EXAM.equals(exam.getMode())
+                && (exam.getCreatedBy() == null || !exam.getCreatedBy().getUserId().equals(userId))) {
+            throw new ForbiddenException("This exam belongs to another student");
+        }
+        Course course = resolvedCourse(exam);
+        if (course != null) {
+            validateActiveEnrollment(course.getCourseId(), userId);
+        }
+    }
+
+    private Course resolvedCourse(Exam exam) {
+        if (exam.getCourse() != null) {
+            return exam.getCourse();
+        }
+        return exam.getModule() != null ? exam.getModule().getCourse() : null;
+    }
+
     private void validateActiveEnrollment(Long courseId, Long userId) {
         if (userId == null) {
             throw new ForbiddenException("Authentication required");
         }
-        boolean active = enrollmentRepository.existsByCourse_CourseIdAndUser_UserIdAndStatus(courseId, userId, "ACTIVE");
-        if (!active) {
+        boolean enrolled = enrollmentRepository.existsByCourse_CourseIdAndUser_UserIdAndStatus(
+                courseId, userId, Enrollment.STATUS_ACTIVE)
+                || enrollmentRepository.existsByCourse_CourseIdAndUser_UserIdAndStatus(
+                courseId, userId, Enrollment.STATUS_COMPLETED);
+        if (!enrolled) {
             throw new ForbiddenException("Student is not actively enrolled in this course");
         }
     }

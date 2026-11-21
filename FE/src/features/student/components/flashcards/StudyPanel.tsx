@@ -37,7 +37,11 @@ const isTyping = (t: EventTarget | null) => {
  * card by card. Going back does not count anything. "Start studying" takes every card in the BE's
  * order; "Review missed cards" only the cards not learned yet. The end closes the session (FP-02).
  */
-export function useDeckStudy(deckId: number, onProgress: (p: DeckProgress) => void) {
+export function useDeckStudy(
+  deckId: number,
+  onProgress: (p: DeckProgress) => void,
+  onStarDelta?: (delta: number) => void,
+) {
   const toast = useToast();
   const [run, setRun] = useState<Run | null>(null);
   const [cards, setCards] = useState<StudyCard[]>([]);
@@ -52,6 +56,8 @@ export function useDeckStudy(deckId: number, onProgress: (p: DeckProgress) => vo
   studiedRef.current = studied;
   const onProgressRef = useRef(onProgress);
   onProgressRef.current = onProgress;
+  const onStarDeltaRef = useRef(onStarDelta);
+  onStarDeltaRef.current = onStarDelta;
 
   const begin = async (kind: 'session' | 'review' | 'starred') => {
     setStarting(kind);
@@ -130,10 +136,13 @@ export function useDeckStudy(deckId: number, onProgress: (p: DeckProgress) => vo
     const card = cards[index];
     if (!card) return;
     const nextStar = !card.isStarred;
+    const delta = nextStar ? 1 : -1;
     const cardId = card.cardId;
     setCards(cs => cs.map(c => (c.cardId === cardId ? { ...c, isStarred: nextStar } : c)));
+    onStarDeltaRef.current?.(delta);
     studentDeckService.writeProgress(cardId, { isStarred: nextStar }).catch(err => {
       setCards(cs => cs.map(c => (c.cardId === cardId ? { ...c, isStarred: !nextStar } : c)));
+      onStarDeltaRef.current?.(-delta);
       toast.error(getApiErrorMessage(err, 'Could not update the star.'));
     });
   };

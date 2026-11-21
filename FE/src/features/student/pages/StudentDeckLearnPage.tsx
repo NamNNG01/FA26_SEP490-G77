@@ -67,6 +67,18 @@ function LearnScreen({ deckId }: { deckId: number }) {
   const [finishing, setFinishing] = useState(false);
   const questionSeq = useRef(0);
   const closed = useRef(false);
+  const activeSessionId = useRef<string | null>(null);
+  const knownRef = useRef(known);
+  knownRef.current = known;
+  const missedRef = useRef(missed);
+  missedRef.current = missed;
+  const closeActiveSession = useCallback(() => {
+    const sessionId = activeSessionId.current;
+    if (!sessionId || closed.current) return null;
+    closed.current = true;
+    activeSessionId.current = null;
+    return studentDeckService.finishSession(sessionId, [...knownRef.current], [...missedRef.current]);
+  }, []);
   /** "Learn again" after a finished run: the next session learns every card, known or not. */
   const learnEveryCard = useRef(false);
 
@@ -77,9 +89,14 @@ function LearnScreen({ deckId }: { deckId: number }) {
     studentDeckService
       .startSession(deckId, 0, 'PRACTICE')
       .then(s => {
-        if (cancelled) return;
+        if (cancelled) {
+          // StrictMode / early unmount: close the orphaned session immediately.
+          studentDeckService.finishSession(s.sessionId, [], []).catch(() => {});
+          return;
+        }
         const pool: QuizCard[] = usableCards(s.cards, s.deckMode);
         closed.current = false;
+        activeSessionId.current = s.sessionId;
         setLoaded({
           sessionId: s.sessionId,
           title: s.deckTitle,
@@ -92,8 +109,9 @@ function LearnScreen({ deckId }: { deckId: number }) {
       .catch(err => !cancelled && setLoadError(getApiErrorMessage(err, 'Could not open this deck.')));
     return () => {
       cancelled = true;
+      closeActiveSession()?.catch(() => {});
     };
-  }, [deckId, reload]);
+  }, [deckId, reload, closeActiveSession]);
 
   const startRound = useCallback(
     (cards: QuizCard[], number: number) => {
@@ -133,6 +151,7 @@ function LearnScreen({ deckId }: { deckId: number }) {
   const closeSession = useCallback(async () => {
     if (!loaded || closed.current) return null;
     closed.current = true;
+    activeSessionId.current = null;
     return studentDeckService.finishSession(loaded.sessionId, [...known], [...missed]);
   }, [loaded, known, missed]);
 
@@ -246,7 +265,14 @@ function LearnScreen({ deckId }: { deckId: number }) {
           <Button variant="outline" onClick={exit}>
             Back to deck
           </Button>
-          <Button variant="outline" icon={<Icon.ClipboardList className="w-4 h-4" />} onClick={() => navigate(studentDeckTestPath(deckId))}>
+          <Button
+            variant="outline"
+            icon={<Icon.ClipboardList className="w-4 h-4" />}
+            onClick={() => {
+              closeSession()?.catch(() => {});
+              navigate(studentDeckTestPath(deckId));
+            }}
+          >
             Take a test
           </Button>
           <Button

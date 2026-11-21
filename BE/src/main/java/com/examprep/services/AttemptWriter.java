@@ -68,6 +68,9 @@ public class AttemptWriter {
         if (autoSubmitter.isExpired(attempt, now)) {
             return Optional.empty();
         }
+        if (autoSubmitter.codeJudgingInProgress(attempt, now)) {
+            throw new ResourceConflictException("Code judging is already in progress");
+        }
 
         List<AttemptAnswer> rows = answers.findByAttemptIdOrdered(attemptId);
         List<AttemptResponses.Saved> saved = new ArrayList<>();

@@ -386,10 +386,11 @@ export function MaterialQuizModal({
     setStarting(true);
     setError(null);
     try {
-      const started = await materialService.start(job.jobId);
+      const started = await materialService.start(job.jobId, takeAs);
+      const serverTakeAs = started.takeAs === 'EXAM' || started.takeAs === 'PRACTICE' ? started.takeAs : takeAs;
       // The take screen opens by attempt id here, so the choice is kept for that attempt first
       // (a resumed attempt keeps the choice it was started with).
-      if (!takeAsOf(started.attemptId)) rememberTakeAs(started.attemptId, takeAs);
+      if (!takeAsOf(started.attemptId)) rememberTakeAs(started.attemptId, serverTakeAs);
       onClose();
       navigate(studentResumeAttemptPath(started.attemptId));
     } catch (err) {

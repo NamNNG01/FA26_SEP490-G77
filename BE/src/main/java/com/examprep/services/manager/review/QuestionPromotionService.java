@@ -3,6 +3,7 @@ package com.examprep.services.manager.review;
 import com.examprep.dto.question.CodeConfigDto;
 import com.examprep.dto.question.TestCaseDto;
 import com.examprep.entities.*;
+import com.examprep.exceptions.ResourceConflictException;
 import com.examprep.repositories.*;
 import com.examprep.util.validation.QuestionPayload;
 import com.examprep.util.validation.QuestionValidator;
@@ -10,10 +11,13 @@ import com.examprep.util.ContentHashUtil;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -59,12 +63,21 @@ public class QuestionPromotionService {
                 .build();
         questionValidator.validateOrThrow(payload);
 
-        List<String> optionTexts = rawOptions != null ? rawOptions.stream().map(o -> (String) o.get("optionText")).toList() : null;
-        String contentHash = ContentHashUtil.computeHash(c.getContent(), optionTexts);
+        List<String> optionTexts = rawOptions != null
+                ? rawOptions.stream().map(o -> questionValidator.sanitize((String) o.get("optionText"))).toList()
+                : null;
+        String sanitizedContent = questionValidator.sanitize(c.getContent());
+        String contentHash = ContentHashUtil.computeHash(sanitizedContent, optionTexts);
+        if (course != null && !questionRepository
+                .findDuplicateQuestionIds(course.getCourseId(), contentHash, null, Pageable.ofSize(1))
+                .isEmpty()) {
+            throw new ResourceConflictException("Question already exists in course");
+        }
 
         String rubricJson = c.getEssayGradingRubricJson();
         String metadataJson = c.getQuestionMetadataJson();
         String answerKeyJson = c.getAnswerKeyJson();
+        boolean isOrdering = "ORDERING".equals(questionType);
 
         Question question = Question.builder()
                 .course(course)
@@ -73,14 +86,14 @@ public class QuestionPromotionService {
                 .createdBy(User.builder().userId(c.getUserId()).build())
                 .questionType(questionType)
                 .difficulty(c.getDifficulty() != null ? c.getDifficulty() : "MEDIUM")
-                .content(c.getContent())
+                .content(sanitizedContent)
                 .questionMetadata(metadataJson)
                 .answerKey(answerKeyJson)
                 .source("STUDENT_CONTRIBUTION")
                 .creatorRole("STUDENT")
-                .approvalStatus("ACCEPTED")
+                .approvalStatus("APPROVED")
                 .status("ACTIVE")
-                .aiExplanation(c.getExplanation())
+                .aiExplanation(questionValidator.sanitize(c.getExplanation()))
                 .essayGradingRubric(rubricJson)
                 .contentHash(contentHash)
                 .scoringVersion(1)
@@ -90,11 +103,13 @@ public class QuestionPromotionService {
         Question savedQuestion = questionRepository.save(question);
 
         if (rawOptions != null) {
+            List<AnswerOption> savedOptions = new ArrayList<>(rawOptions.size());
             for (int i = 0; i < rawOptions.size(); i++) {
                 Map<String, Object> optMap = rawOptions.get(i);
-                String optText = (String) optMap.get("optionText");
-                Boolean isCorrect = optMap.get("isCorrect") instanceof Boolean b ? b : false;
-                String optExpl = (String) optMap.get("explanation");
+                String optText = questionValidator.sanitize((String) optMap.get("optionText"));
+                Boolean isCorrect = isOrdering ? Boolean.FALSE
+                        : (optMap.get("isCorrect") instanceof Boolean b ? b : false);
+                String optExpl = questionValidator.sanitize((String) optMap.get("explanation"));
                 Integer orderIdx = optMap.get("orderIndex") instanceof Number n ? n.intValue() : i;
 
                 AnswerOption option = AnswerOption.builder()
@@ -104,7 +119,38 @@ public class QuestionPromotionService {
                         .explanation(optExpl)
                         .orderIndex(orderIdx)
                         .build();
-                answerOptionRepository.save(option);
+                savedOptions.add(answerOptionRepository.save(option));
+            }
+            if (isOrdering) {
+                Map<String, Long> keyToIdMap = new HashMap<>();
+                for (int i = 0; i < rawOptions.size(); i++) {
+                    Object rawKey = rawOptions.get(i).get("key");
+                    String key = rawKey != null ? rawKey.toString() : String.valueOf(i);
+                    keyToIdMap.put(key, savedOptions.get(i).getOptionId());
+                }
+                List<Object> correctOrder = payload.getCorrectOrder();
+                if (correctOrder == null && payload.getAnswerKey() instanceof Map<?, ?> akMap
+                        && akMap.get("correctOrder") instanceof List<?> list) {
+                    correctOrder = new ArrayList<>(list);
+                }
+                List<Long> orderedOptionIds = new ArrayList<>();
+                if (correctOrder != null) {
+                    for (Object item : correctOrder) {
+                        String itemStr = item != null ? item.toString() : "";
+                        Long optionId = keyToIdMap.get(itemStr);
+                        if (optionId == null) {
+                            try {
+                                optionId = Long.parseLong(itemStr);
+                            } catch (NumberFormatException ignored) {}
+                        }
+                        if (optionId == null) {
+                            throw new IllegalArgumentException("Invalid option in correct order: " + itemStr);
+                        }
+                        orderedOptionIds.add(optionId);
+                    }
+                }
+                savedQuestion.setAnswerKey(writeJson(Map.of("correctOrder", orderedOptionIds)));
+                savedQuestion = questionRepository.save(savedQuestion);
             }
         }
 

@@ -392,7 +392,7 @@ public class StudentMaterialServiceImpl implements StudentMaterialService {
                 && (quizCourse == null || !lessonBelongsToCourse(request.sourceLessonId(), quizCourse))) {
             throw new BadRequestException("sourceLessonId does not belong to the course of this material");
         }
-        long estimated = AiQuotaService.estimate(content.length(), OUTPUT_BUDGET);
+        long estimated = estimateQuizTokens(content.length(), request.questionCount());
         quota.lock(userId);
         AiQuotaService.Snapshot snapshot = quota.snapshot(userId);
         List<String> sources = quota.allocate(snapshot, List.of(estimated));
@@ -432,6 +432,12 @@ public class StudentMaterialServiceImpl implements StudentMaterialService {
                 .updatedAt(now)
                 .build());
         return new JobAccepted(job.getJobId(), QuizGenerationWorker.STATUS_PROCESSING, job.getQuestionCount());
+    }
+
+    public static long estimateQuizTokens(int contentLength, int questionCount) {
+        int clippedChars = Math.min(Math.max(contentLength, 0), QuizGenerationWorker.MATERIAL_CLIP);
+        int outputBudget = Math.max(OUTPUT_BUDGET, Math.max(questionCount, 1) * 150);
+        return AiQuotaService.estimate(clippedChars, outputBudget);
     }
 
     /** The requested course of the material, or null (a quiz of no course) when the body omits one. */

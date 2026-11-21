@@ -23,6 +23,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -97,6 +98,11 @@ public class PersonalizationService {
         return thread;
     });
 
+    @PreDestroy
+    void shutdown() {
+        worker.shutdownNow();
+    }
+
     public PersonalizationService(PracticeExamService practice, LearningStats learning, AiPersonalizationJobRepository jobs,
                                   AiRecommendationCacheRepository caches, LearningStatsRepository statsRepository,
                                   AiUsageLogRepository logs, ExamRepository exams, UserRepository users, CourseRepository courses,
@@ -146,6 +152,11 @@ public class PersonalizationService {
 
         return tx.execute(s -> {
             Long logId = reserve(userId, courseId, "SMART_PRACTICE", estimate);
+            // Job starts immediately as PROCESSING; move its log to PROCESSING so house expirePending skips it.
+            logs.findById(logId).ifPresent(l -> {
+                l.setStatus("PROCESSING");
+                logs.save(l);
+            });
             ObjectNode state = json.createObjectNode().put("questionCount", count).put("durationMinutes", duration).put("logId", logId);
             state.set("analysis", json.valueToTree(analysis));
             AiPersonalizationJob job = jobs.save(AiPersonalizationJob.builder().studentId(userId).courseId(courseId)
@@ -193,7 +204,7 @@ public class PersonalizationService {
         AiResponse reply = response;
         try {
             tx.executeWithoutResult(s -> {
-                AiPersonalizationJob job = jobs.findById(jobId).orElse(null);
+                AiPersonalizationJob job = jobs.lockById(jobId).orElse(null);
                 if (job == null || !"PROCESSING".equals(job.getStatus())) return; // swept meanwhile: already refunded
                 Exam exam = practice.createGeneratedExam(work.userId(), work.courseId(), work.title(), "SMART_PRACTICE",
                         work.durationMinutes(), chosen.stream().map(QuestionCandidate::questionId).toList(), null);
@@ -210,7 +221,9 @@ public class PersonalizationService {
                 job.setStatus("COMPLETED");
                 job.setCompletedAt(Instant.now());
                 job.setActualTokens(tokens(reply));
-                logs.findById(work.logId()).ifPresent(l -> quota.settle(l, "SUCCESS", reply, System.currentTimeMillis() - started, null));
+                logs.lockById(work.logId())
+                        .filter(l -> "PENDING".equals(l.getStatus()) || "PROCESSING".equals(l.getStatus()))
+                        .ifPresent(l -> quota.settle(l, "SUCCESS", reply, System.currentTimeMillis() - started, null));
             });
         } catch (RuntimeException ex) {
             log.warn("Smart practice job {} could not save its exam: {}", jobId, ex.getClass().getSimpleName());
@@ -230,14 +243,17 @@ public class PersonalizationService {
 
     private void failJob(Long jobId, Long logId, String reason, AiResponse response, long started) {
         tx.executeWithoutResult(s -> {
-            AiPersonalizationJob job = jobs.findById(jobId).orElse(null);
+            AiPersonalizationJob job = jobs.lockById(jobId).orElse(null);
             if (job == null || !"PROCESSING".equals(job.getStatus())) return;
             job.setStatus("FAILED");
             job.setErrorMessage(reason);
             job.setCompletedAt(Instant.now());
             Long id = logId != null && logId > 0 ? logId : tree(job.getAnalysisJson()).path("logId").asLong(0);
-            logs.findById(id).filter(l -> "PENDING".equals(l.getStatus())).ifPresent(l -> quota.settle(l,
-                    AiCalls.TIMEOUT.equals(reason) ? "TIMEOUT" : "FAILED", response, started == 0 ? 0 : System.currentTimeMillis() - started, reason));
+            logs.lockById(id)
+                    .filter(l -> "PENDING".equals(l.getStatus()) || "PROCESSING".equals(l.getStatus()))
+                    .ifPresent(l -> quota.settle(l,
+                            AiCalls.TIMEOUT.equals(reason) ? "TIMEOUT" : "FAILED", response,
+                            started == 0 ? 0 : System.currentTimeMillis() - started, reason));
         });
     }
 

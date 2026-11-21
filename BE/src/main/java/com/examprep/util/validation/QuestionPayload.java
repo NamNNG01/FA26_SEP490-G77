@@ -70,10 +70,12 @@ public class QuestionPayload {
 
     public static QuestionPayload fromEntity(Question q, List<AnswerOption> options, ObjectMapper objectMapper) {
         if (q == null) return null;
+        boolean isOrdering = "ORDERING".equals(q.getQuestionType());
         List<AnswerOptionDto> optDtos = options != null ? options.stream().map(o -> AnswerOptionDto.builder()
                 .optionId(o.getOptionId())
                 .optionText(o.getOptionText())
-                .isCorrect(o.getIsCorrect())
+                .isCorrect(isOrdering ? null : o.getIsCorrect())
+                .key(isOrdering && o.getOptionId() != null ? String.valueOf(o.getOptionId()) : null)
                 .explanation(o.getExplanation())
                 .orderIndex(o.getOrderIndex())
                 .build()).collect(Collectors.toList()) : null;

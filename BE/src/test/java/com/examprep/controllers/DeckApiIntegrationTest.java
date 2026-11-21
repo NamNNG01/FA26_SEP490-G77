@@ -182,15 +182,15 @@ class DeckApiIntegrationTest {
     @Test
     void detailsUseDeckOwnersProgressAndDefaultForUnstudiedCards() throws Exception {
         Flashcard first = card(deck, "First"), second = card(deck, "Second");
-        progress(manager, first, "MASTERED", true);
+        progress(manager, first, "KNOWN", true);
         progress(collaborator, first, "LEARNING", false);
-        progress(student, second, "MASTERED", true);
+        progress(student, second, "KNOWN", true);
         call(collaborator, get(path(deck))).andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.cardCount").value(2))
                 .andExpect(jsonPath("$.data.cards[0].cardId").value(first.getCardId()))
                 .andExpect(jsonPath("$.data.cards[0].frontText").value("First"))
                 .andExpect(jsonPath("$.data.cards[0].backText").value("Answer"))
-                .andExpect(jsonPath("$.data.cards[0].status").value("MASTERED"))
+                .andExpect(jsonPath("$.data.cards[0].status").value("KNOWN"))
                 .andExpect(jsonPath("$.data.cards[0].isStarred").value(true))
                 .andExpect(jsonPath("$.data.cards[1].status").value("NEW"))
                 .andExpect(jsonPath("$.data.cards[1].isStarred").value(false))
@@ -254,11 +254,11 @@ class DeckApiIntegrationTest {
     @Test
     void deleteRemovesOnlyTargetDeckCardsAndAllRelatedProgress() throws Exception {
         Flashcard target = card(deck, "Delete me");
-        progress(manager, target, "MASTERED", true);
+        progress(manager, target, "KNOWN", true);
         progress(student, target, "LEARNING", false);
         Deck other = deck(stranger, foreignCourse, "Keep", true);
         Flashcard retained = card(other, "Retained");
-        progress(student, retained, "MASTERED", true);
+        progress(student, retained, "KNOWN", true);
         call(collaborator, delete(path(deck))).andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("Deck deleted successfully."))
                 .andExpect(jsonPath("$.data").doesNotExist());
@@ -526,7 +526,7 @@ class DeckApiIntegrationTest {
         String cards = "/api/v1/manager/cards";
         Flashcard doomed = card(deck, "Doomed front");
         Flashcard survivor = card(deck, "Survivor front");
-        progress(manager, doomed, "LEARNED", true);
+        progress(manager, doomed, "KNOWN", true);
         progress(collaborator, doomed, "NEW", false);
         progress(manager, survivor, "NEW", false);
 

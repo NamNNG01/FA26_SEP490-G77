@@ -617,7 +617,7 @@ class AuthServiceTest {
     }
 
     @Test
-    void loginWithGoogle_ExistingPasswordAccount_LinksGoogleIdAndKeepsPassword() {
+    void loginWithGoogle_ExistingPasswordAccount_LinksGoogleIdAndClearsUntrustedPassword() {
         when(googleTokenVerifier.verify("googleIdToken"))
                 .thenReturn(googleUser("google-sub-9", "Student@Gmail.com", true));
         when(userRepository.findByGoogleId("google-sub-9")).thenReturn(Optional.empty());
@@ -629,9 +629,11 @@ class AuthServiceTest {
 
         assertFalse(response.isNewUser());
         assertEquals("google-sub-9", testUser.getGoogleId());
-        assertEquals("hashedPassword", testUser.getPasswordHash(), "linking must not clear the password");
-        assertTrue(response.getUser().isHasPassword());
+        assertNull(testUser.getPasswordHash(), "first-time email link must clear untrusted password hash");
+        assertNotNull(testUser.getPasswordChangedAt());
+        assertFalse(response.getUser().isHasPassword());
         assertEquals("https://lh3.googleusercontent.com/a/avatar", testUser.getAvatarUrl());
+        verify(refreshTokenRepository).revokeAllByUserId(eq(101L), any(Instant.class));
     }
 
     @Test

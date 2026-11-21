@@ -99,8 +99,8 @@ public final class AttemptScoring {
             return WEIGHTLESS;
         }
         return questionMaxPoints
-                .multiply(criterionWeight.divide(totalCriterionWeight, INTERNAL_SCALE, RoundingMode.HALF_UP))
-                .setScale(INTERNAL_SCALE, RoundingMode.HALF_UP);
+                .multiply(criterionWeight)
+                .divide(totalCriterionWeight, INTERNAL_SCALE, RoundingMode.HALF_UP);
     }
 
     /**

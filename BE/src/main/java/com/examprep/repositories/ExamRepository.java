@@ -45,7 +45,11 @@ public interface ExamRepository extends JpaRepository<Exam, Long>, JpaSpecificat
             value = """
         SELECT new com.examprep.dto.student.CourseExamDto(
             ex.examId, ex.title, ex.durationMinutes, ex.maxScore,
-            (SELECT COUNT(eq) FROM ExamQuestion eq WHERE eq.exam = ex),
+            ((SELECT COUNT(q) FROM Question q
+              WHERE q.deletedAt IS NULL AND q.status = 'ACTIVE' AND q.approvalStatus = 'APPROVED'
+                AND (EXISTS (SELECT eq.examQuestionId FROM ExamQuestion eq WHERE eq.exam = ex AND eq.question = q)
+                     OR EXISTS (SELECT eg.examGroupId FROM ExamGroup eg WHERE eg.exam = ex AND eg.group = q.group)))
+             + COALESCE((SELECT SUM(ec.numberOfQuestions) FROM ExamConfig ec WHERE ec.exam = ex), 0L)),
             (SELECT COUNT(att) FROM ExamAttempt att WHERE att.exam = ex AND att.user.userId = :userId),
             (SELECT MAX(att.totalScore) FROM ExamAttempt att WHERE att.exam = ex AND att.user.userId = :userId),
             (SELECT latest.status FROM ExamAttempt latest
@@ -130,9 +134,16 @@ public interface ExamRepository extends JpaRepository<Exam, Long>, JpaSpecificat
     @Query("SELECT c.exam.examId, c.questionType FROM ExamConfig c WHERE c.exam.examId IN :examIds")
     List<Object[]> findConfigTypesByExamIds(@Param("examIds") java.util.Collection<Long> examIds);
 
-    @Query("SELECT COUNT(eq) " +
-           "FROM ExamQuestion eq JOIN eq.question q " +
-           "WHERE eq.exam.examId = :examId AND q.status = 'ACTIVE' AND q.deletedAt IS NULL")
+    @Query("""
+    SELECT
+      (SELECT COUNT(q) FROM Question q
+       WHERE q.deletedAt IS NULL AND q.status = 'ACTIVE' AND q.approvalStatus = 'APPROVED'
+         AND (EXISTS (SELECT eq.examQuestionId FROM ExamQuestion eq WHERE eq.exam.examId = :examId AND eq.question = q)
+              OR EXISTS (SELECT eg.examGroupId FROM ExamGroup eg WHERE eg.exam.examId = :examId AND eg.group = q.group)))
+      + COALESCE((SELECT SUM(ec.numberOfQuestions) FROM ExamConfig ec WHERE ec.exam.examId = :examId), 0L)
+    FROM Exam ex
+    WHERE ex.examId = :examId
+    """)
     long countActiveQuestionsByExamId(@Param("examId") Long examId);
 
     /** PQ-02: list custom practice exams owned by this user, newest first. */
@@ -143,7 +154,11 @@ public interface ExamRepository extends JpaRepository<Exam, Long>, JpaSpecificat
             value = """
         SELECT new com.examprep.dto.student.CourseExamDto(
             ex.examId, ex.title, ex.durationMinutes, ex.maxScore,
-            (SELECT COUNT(eq) FROM ExamQuestion eq WHERE eq.exam = ex),
+            ((SELECT COUNT(q) FROM Question q
+              WHERE q.deletedAt IS NULL AND q.status = 'ACTIVE' AND q.approvalStatus = 'APPROVED'
+                AND (EXISTS (SELECT eq.examQuestionId FROM ExamQuestion eq WHERE eq.exam = ex AND eq.question = q)
+                     OR EXISTS (SELECT eg.examGroupId FROM ExamGroup eg WHERE eg.exam = ex AND eg.group = q.group)))
+             + COALESCE((SELECT SUM(ec.numberOfQuestions) FROM ExamConfig ec WHERE ec.exam = ex), 0L)),
             (SELECT COUNT(att) FROM ExamAttempt att WHERE att.exam = ex AND att.user.userId = :userId),
             (SELECT MAX(att.totalScore) FROM ExamAttempt att WHERE att.exam = ex AND att.user.userId = :userId),
             (SELECT latest.status FROM ExamAttempt latest

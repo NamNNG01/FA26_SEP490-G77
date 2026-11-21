@@ -104,21 +104,20 @@ public class DocxTextExtractor implements DocumentTextExtractor {
                 }
 
                 long size = entry.getSize();
-                if (size > 0) {
-                    totalUncompressedSize += size;
-                    if (size > 50 * 1024 * 1024) {
+                if (size > 50L * 1024 * 1024) {
+                    throw new BadRequestException("DOCX uncompressed entry size exceeds limit");
+                }
+                byte[] buf = new byte[8192];
+                int read;
+                long entrySize = 0;
+                while ((read = zis.read(buf)) != -1) {
+                    entrySize += read;
+                    totalUncompressedSize += read;
+                    if (entrySize > 50L * 1024 * 1024) {
                         throw new BadRequestException("DOCX uncompressed entry size exceeds limit");
                     }
-                } else {
-                    byte[] buf = new byte[8192];
-                    int read;
-                    long entrySize = 0;
-                    while ((read = zis.read(buf)) != -1) {
-                        entrySize += read;
-                        totalUncompressedSize += read;
-                        if (entrySize > 50 * 1024 * 1024) {
-                            throw new BadRequestException("DOCX uncompressed entry size exceeds limit");
-                        }
+                    if (totalUncompressedSize > 50L * 1024 * 1024) {
+                        throw new BadRequestException("DOCX total uncompressed size exceeds 50 MB (zip bomb protection)");
                     }
                 }
             }

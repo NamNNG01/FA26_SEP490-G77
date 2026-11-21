@@ -61,9 +61,11 @@ export const SELF_MADE_MODES: ReadonlySet<string> = new Set(['PRACTICE', 'PRACTI
 
 export const canChooseTakeMode = (mode: string | null | undefined) => mode != null && SELF_MADE_MODES.has(mode);
 
-/** `?as=` of the take-exam URL. */
-export const parseTakeAs = (value: string | null | undefined): TakeAs | null =>
-  value === 'exam' ? 'EXAM' : value === 'practice' ? 'PRACTICE' : null;
+/** `?as=` of the take-exam URL or server `takeAs`. */
+export const parseTakeAs = (value: string | null | undefined): TakeAs | null => {
+  const normalized = value?.trim().toLowerCase();
+  return normalized === 'exam' ? 'EXAM' : normalized === 'practice' ? 'PRACTICE' : null;
+};
 
 const TAKE_AS_PREFIX = 'take-as:';
 

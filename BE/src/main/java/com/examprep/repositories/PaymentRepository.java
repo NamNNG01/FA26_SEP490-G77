@@ -49,6 +49,13 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
 
     boolean existsByUserUserIdAndDiscountDiscountIdAndStatus(Long userId, Long discountId, String status);
 
+    long countByUserUserIdAndDiscountDiscountIdAndStatus(Long userId, Long discountId, String status);
+
+    @Query("SELECT p.discount.discountId, COUNT(p) FROM Payment p "
+            + "WHERE p.discount.discountId IN :ids AND p.status = 'PENDING' AND p.discountReserved = true "
+            + "GROUP BY p.discount.discountId")
+    List<Object[]> countReservedPendingByDiscountIds(@Param("ids") java.util.Collection<Long> ids);
+
     /** Unpaid checkouts past their deadline, whether or not they reserved a discount. */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select p from Payment p where p.status = :status and p.expiresAt <= :now order by p.paymentId")

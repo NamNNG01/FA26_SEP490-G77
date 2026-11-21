@@ -1,6 +1,7 @@
 package com.examprep.services;
 
 import com.examprep.dto.attempt.Snapshots;
+import com.examprep.entities.AnswerOption;
 import com.examprep.entities.AnswerRegradeLog;
 import com.examprep.entities.AttemptAnswer;
 import com.examprep.entities.ExamAttempt;
@@ -9,11 +10,13 @@ import com.examprep.entities.QuestionRegradeJob;
 import com.examprep.repositories.AnswerOptionRepository;
 import com.examprep.repositories.AnswerRegradeLogRepository;
 import com.examprep.repositories.AttemptAnswerRepository;
+import com.examprep.repositories.ExamAttemptRepository;
 import com.examprep.repositories.QuestionRegradeJobRepository;
 import com.examprep.util.attempt.AnswerResponseValidator;
 import com.examprep.util.attempt.AttemptGrader;
 import com.examprep.util.attempt.AttemptScoring;
 import com.fasterxml.jackson.databind.JsonNode;
+import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -21,10 +24,15 @@ import org.springframework.stereotype.Component;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
+import java.util.stream.Collectors;
 
 /**
  * Re-scores the finished answers of one question after a reported-issue fix. Same scoring as submit
@@ -52,6 +60,8 @@ public class QuestionRegrader {
     private final AttemptAnswerRepository answers;
     private final AnswerOptionRepository options;
     private final AnswerRegradeLogRepository logs;
+    private final ExamAttemptRepository attempts;
+    private final EntityManager entityManager;
     private final AttemptPaperFactory paperFactory;
 
     /**
@@ -80,20 +90,34 @@ public class QuestionRegrader {
         }
 
         List<AttemptAnswer> stale = jobs.staleAnswers(question.getQuestionId(), FINISHED, to);
-        Map<ExamAttempt, List<AttemptAnswer>> byAttempt = new LinkedHashMap<>();
-        stale.forEach(a -> byAttempt.computeIfAbsent(a.getAttempt(), k -> new ArrayList<>()).add(a));
+        Map<Long, List<AttemptAnswer>> byAttempt = new LinkedHashMap<>();
+        stale.forEach(a -> byAttempt.computeIfAbsent(a.getAttempt().getAttemptId(), k -> new ArrayList<>()).add(a));
 
         job.setStatus(QuestionRegradeJob.RUNNING);
         job.setTotalAnswers(job.getProcessedAnswers() + stale.size());
         int done = 0;
         int failed = 0;
         Instant now = Instant.now();
-        for (Map.Entry<ExamAttempt, List<AttemptAnswer>> entry : byAttempt.entrySet()) {
-            ExamAttempt attempt = entry.getKey();
+        for (Map.Entry<Long, List<AttemptAnswer>> entry : byAttempt.entrySet()) {
+            ExamAttempt attempt = attempts.lockById(entry.getKey()).orElse(null);
+            if (attempt == null) continue;
+            entityManager.refresh(attempt);
             List<AttemptAnswer> rows = answers.findByAttempt_AttemptId(attempt.getAttemptId());
+            rows.forEach(entityManager::refresh);
+            if (!FINISHED.contains(attempt.getStatus())) continue;
+
+            Set<Long> targetIds = entry.getValue().stream()
+                    .map(AttemptAnswer::getAttemptAnswerId)
+                    .collect(Collectors.toSet());
+            List<AttemptAnswer> targetRows = rows.stream()
+                    .filter(r -> targetIds.contains(r.getAttemptAnswerId())
+                            && (r.getQuestionVersion() == null || r.getQuestionVersion() < to))
+                    .toList();
+            if (targetRows.isEmpty()) continue;
+
             BigDecimal maxScore = maxScore(attempt, rows.size());
             BigDecimal totalWeight = AttemptScoring.totalWeight(rows.stream().map(AttemptAnswer::getWeightSnapshot).toList());
-            for (AttemptAnswer row : entry.getValue()) {
+            for (AttemptAnswer row : targetRows) {
                 Outcome outcome;
                 try {
                     outcome = outcome(row, question, key, keyJson, totalWeight, maxScore);
@@ -129,13 +153,54 @@ public class QuestionRegrader {
                 attempt.setStatus("COMPLETED");
             }
         }
-        // Attempts still running keep their version (they are graded at submit). They must use the
-        // newest key, not this job's frozen one: a later correction supersedes it for future submits.
-        if (!voided) {
-            List<AttemptAnswer> inProgress = jobs.inProgressAnswers(question.getQuestionId());
-            if (!inProgress.isEmpty()) {
-                String liveKeyJson = keyJson(question);
-                inProgress.forEach(r -> r.setKeySnapshot(liveKeyJson));
+        // Attempts still running keep their version (unless voided). When voided, pre-score each answer
+        // to full points with AUTO status so gradeAndClose preserves it; when corrected, refresh both
+        // keySnapshot and displaySnapshot to keep them consistent.
+        List<AttemptAnswer> inProgress = jobs.inProgressAnswers(question.getQuestionId());
+        if (!inProgress.isEmpty()) {
+            List<AnswerOption> liveOpts = voided ? List.of() : options.findByQuestion_QuestionId(question.getQuestionId());
+            Snapshots.KeySnapshot liveKey = voided ? null : paperFactory.key(question, liveOpts);
+            String liveKeyJson = voided ? null : paperFactory.write(liveKey);
+
+            Map<Long, List<AttemptAnswer>> inProgressByAttempt = new TreeMap<>();
+            inProgress.forEach(r -> inProgressByAttempt
+                    .computeIfAbsent(r.getAttempt().getAttemptId(), k -> new ArrayList<>())
+                    .add(r));
+
+            for (Long attemptId : inProgressByAttempt.keySet()) {
+                ExamAttempt attempt = attempts.lockById(attemptId).orElse(null);
+                if (attempt == null) continue;
+                entityManager.refresh(attempt);
+                if (!"IN_PROGRESS".equals(attempt.getStatus())) continue;
+
+                List<AttemptAnswer> rows = answers.findByAttempt_AttemptId(attemptId);
+                rows.forEach(entityManager::refresh);
+                if (voided) {
+                    BigDecimal maxScore = maxScore(attempt, rows.size());
+                    BigDecimal totalWeight = AttemptScoring.totalWeight(rows.stream()
+                            .map(AttemptAnswer::getWeightSnapshot).toList());
+                    for (AttemptAnswer row : rows) {
+                        if (row.getQuestion() != null && question.getQuestionId().equals(row.getQuestion().getQuestionId())) {
+                            BigDecimal maxPoints = AttemptScoring.output(
+                                    AttemptScoring.questionMaxPoints(row.getWeightSnapshot(), totalWeight, maxScore));
+                            row.setScoreEarned(maxPoints);
+                            row.setIsCorrect(true);
+                            row.setGradingStatus("AUTO");
+                            row.setGradingError(null);
+                            row.setQuestionVersion(to);
+                            row.setGradedAt(now);
+                        }
+                    }
+                } else {
+                    for (AttemptAnswer row : rows) {
+                        if (row.getQuestion() != null && question.getQuestionId().equals(row.getQuestion().getQuestionId())) {
+                            row.setKeySnapshot(liveKeyJson);
+                            Snapshots.DisplayQuestion oldDisplay =
+                                    paperFactory.read(row.getDisplaySnapshot(), Snapshots.DisplayQuestion.class);
+                            row.setDisplaySnapshot(paperFactory.write(syncDisplay(oldDisplay, question, liveOpts, liveKey)));
+                        }
+                    }
+                }
             }
         }
 
@@ -169,6 +234,80 @@ public class QuestionRegrader {
 
     private record Outcome(BigDecimal newScore, boolean correct, String gradingStatus, String gradingError,
                            String keySnapshot, String checkResult) { }
+
+    private Snapshots.DisplayQuestion syncDisplay(Snapshots.DisplayQuestion oldDisplay,
+                                                 Question question,
+                                                 List<AnswerOption> liveOpts,
+                                                 Snapshots.KeySnapshot liveKey) {
+        String type = question.getQuestionType();
+        List<Snapshots.DisplayOption> displayOptions = null;
+        if (liveOpts != null && !liveOpts.isEmpty() && !"MATCHING".equals(type)) {
+            Map<Long, AnswerOption> byId = new LinkedHashMap<>();
+            for (AnswerOption opt : liveOpts) {
+                byId.put(opt.getOptionId(), opt);
+            }
+            displayOptions = new ArrayList<>();
+            Set<Long> added = new HashSet<>();
+            if (oldDisplay != null && oldDisplay.options() != null) {
+                for (Snapshots.DisplayOption prev : oldDisplay.options()) {
+                    AnswerOption opt = byId.get(prev.optionId());
+                    if (opt != null && added.add(opt.getOptionId())) {
+                        displayOptions.add(new Snapshots.DisplayOption(opt.getOptionId(), opt.getOptionText()));
+                    }
+                }
+            }
+            for (AnswerOption opt : liveOpts) {
+                if (added.add(opt.getOptionId())) {
+                    displayOptions.add(new Snapshots.DisplayOption(opt.getOptionId(), opt.getOptionText()));
+                }
+            }
+        }
+
+        Snapshots.Matching matching = oldDisplay == null ? null : oldDisplay.matching();
+        if ("MATCHING".equals(type) && liveKey != null && liveKey.pairs() != null && !liveKey.pairs().isEmpty()) {
+            Set<String> liveLefts = liveKey.pairs().stream()
+                    .map(Snapshots.Pair::left)
+                    .collect(Collectors.toCollection(LinkedHashSet::new));
+            Set<String> liveRights = liveKey.pairs().stream()
+                    .map(Snapshots.Pair::right)
+                    .collect(Collectors.toCollection(LinkedHashSet::new));
+            List<String> orderedLefts = mergePreservingOrder(
+                    matching == null ? null : matching.lefts(), liveLefts);
+            List<String> orderedRights = mergePreservingOrder(
+                    matching == null ? null : matching.rights(), liveRights);
+            matching = new Snapshots.Matching(orderedLefts, orderedRights);
+        } else if (!"MATCHING".equals(type)) {
+            matching = null;
+        }
+
+        return new Snapshots.DisplayQuestion(
+                question.getQuestionId(),
+                oldDisplay == null ? null : oldDisplay.orderIndex(),
+                type,
+                question.getContent(),
+                displayOptions,
+                matching,
+                oldDisplay == null ? null : oldDisplay.answerSpace(),
+                oldDisplay == null ? null : oldDisplay.group());
+    }
+
+    private List<String> mergePreservingOrder(List<String> previous, Set<String> liveSet) {
+        List<String> result = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        if (previous != null) {
+            for (String item : previous) {
+                if (liveSet.contains(item) && seen.add(item)) {
+                    result.add(item);
+                }
+            }
+        }
+        for (String item : liveSet) {
+            if (seen.add(item)) {
+                result.add(item);
+            }
+        }
+        return result;
+    }
 
     private BigDecimal maxScore(ExamAttempt attempt, int rows) {
         Snapshots.ExamSnapshot exam = paperFactory.read(attempt.getExamSnapshot(), Snapshots.ExamSnapshot.class);

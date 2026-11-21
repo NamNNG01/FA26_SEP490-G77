@@ -4,6 +4,7 @@ import com.examprep.ai.AiClient;
 import com.examprep.ai.AiRequest;
 import com.examprep.ai.AiResponse;
 import com.examprep.dto.question.AnswerOptionDto;
+import com.examprep.entities.AiUsageLog;
 import com.examprep.entities.AnswerOption;
 import com.examprep.entities.Course;
 import com.examprep.entities.Document;
@@ -28,6 +29,7 @@ import com.examprep.util.validation.QuestionValidator;
 import com.examprep.util.validation.ValidationError;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -74,7 +76,7 @@ public class QuizGenerationWorker {
 
     private static final Map<String, Object> STRING = Map.of("type", "STRING");
     private static final Map<String, Object> SCHEMA = schema();
-    private static final int MATERIAL_CLIP = 60_000;
+    public static final int MATERIAL_CLIP = 60_000;
     private static final int EXCERPT_CHARS = 1_000;
     private static final int ERROR_CHARS = 500;
 
@@ -122,6 +124,11 @@ public class QuizGenerationWorker {
         thread.setDaemon(true);
         return thread;
     });
+
+    @PreDestroy
+    void shutdown() {
+        pool.shutdownNow();
+    }
 
     private record Opt(String text, boolean correct) {}
 
@@ -207,6 +214,11 @@ public class QuizGenerationWorker {
             job.setProgress(10);
             job.setUpdatedAt(Instant.now());
             jobs.save(job);
+            AiUsageLog logRow = job.getAiUsageLog();
+            if (logRow != null && STATUS_PENDING.equals(logRow.getStatus())) {
+                logRow.setStatus(STATUS_PROCESSING);
+                logs.save(logRow);
+            }
             return new Claimed(job.getJobId(), job.getUser().getUserId(), course == null ? null : course.getCourseId(),
                     document.getDocId(), document.getTitle(), document.getExtractedContent(),
                     job.getQuestionCount(), job.getDifficulty(),
@@ -425,7 +437,9 @@ public class QuizGenerationWorker {
         if (job.getAiUsageLog() == null) {
             return;
         }
-        logs.findById(job.getAiUsageLog().getLogId()).ifPresent(log -> quota.settle(log, status, response, duration, error));
+        logs.lockById(job.getAiUsageLog().getLogId())
+                .filter(log -> STATUS_PENDING.equals(log.getStatus()) || STATUS_PROCESSING.equals(log.getStatus()))
+                .ifPresent(log -> quota.settle(log, status, response, duration, error));
     }
 
     private Integer actualTokens(AiResponse response) {

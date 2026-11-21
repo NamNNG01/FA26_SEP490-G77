@@ -20,6 +20,8 @@ public interface QuestionPracticeProgressRepository extends JpaRepository<Questi
     Optional<QuestionPracticeProgress> findByUser_UserIdAndModule_ModuleIdAndQuestion_QuestionId(
             Long userId, Long moduleId, Long questionId);
 
+    boolean existsByUser_UserIdAndQuestion_QuestionId(Long userId, Long questionId);
+
     /**
      * Locks the progress row while it is rebuilt, so two writers of the same
      * (student, module, question) — a submit and a late AI grade, possibly in two different sessions

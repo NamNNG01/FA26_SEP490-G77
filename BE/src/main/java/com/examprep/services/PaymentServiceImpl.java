@@ -35,6 +35,7 @@ import java.util.concurrent.locks.ReentrantLock;
 @Service
 @RequiredArgsConstructor
 public class PaymentServiceImpl implements PaymentService {
+    private static final BigDecimal MIN_PAYOS_AMOUNT = BigDecimal.valueOf(2000);
     // A checkout spans PayOS calls, so the per-user serialisation lives in the app, not a DB lock.
     private static final int CHECKOUT_LOCK_STRIPES = 64;
     private static final ReentrantLock[] CHECKOUT_LOCKS = new ReentrantLock[CHECKOUT_LOCK_STRIPES];
@@ -128,36 +129,56 @@ public class PaymentServiceImpl implements PaymentService {
         List<Payment> pending = payments.findByUserUserIdAndTypeAndRefIdAndStatusOrderByPaymentIdDesc(
                 userId, type, refId, Payment.PENDING);
         Instant now = Instant.now();
+        List<Payment> livePending = new java.util.ArrayList<>();
         for (Payment previous : pending) {
             if (previous.getExpiresAt() != null && !previous.getExpiresAt().isAfter(now)) {
                 transactions.expireIfDue(previous.getOrderCode(), false);
+            } else {
+                livePending.add(previous);
             }
         }
-        Discount discount = discountCode == null || discountCode.isBlank() ? null : validatedDiscount(userId, discountCode, type, original);
-        BigDecimal discountAmount = discount == null ? BigDecimal.ZERO : calculateDiscount(discount, original);
-        BigDecimal total = original.subtract(discountAmount).max(BigDecimal.ZERO).setScale(0, RoundingMode.HALF_UP);
-        if (total.signum() <= 0) throw new ResourceConflictException("Payment amount must be greater than zero");
-        // One live link per target: reuse the previous PENDING checkout when nothing changed, or
-        // close it before creating a new one (spec 16/17 keep at most one payable link per order).
+        // One live link per target: reuse the previous PENDING checkout when nothing changed BEFORE
+        // checking usage caps (its own reservation counts toward usedCount).
         Payment reusable = null;
-        for (Payment previous : pending) {
-            if (previous.getExpiresAt() != null && !previous.getExpiresAt().isAfter(now)) continue;
-            if (reusable == null && sameDiscount(previous.getDiscount(), discountCode)
+        for (Payment previous : livePending) {
+            if (sameDiscount(previous.getDiscount(), discountCode)
                     && previous.getCheckoutUrl() != null && previous.getExpiresAt() != null
                     && previous.getExpiresAt().isAfter(now.plusSeconds(120))) {
                 reusable = previous;
-            } else if (!cancelPreviousPending(userId, previous)
+                break;
+            }
+        }
+        if (reusable != null) {
+            for (Payment other : livePending) {
+                if (!other.getPaymentId().equals(reusable.getPaymentId())
+                        && !cancelPreviousPending(userId, other)
+                        && (other.getExpiresAt() == null || other.getExpiresAt().isAfter(Instant.now()))) {
+                    throw new BaseException(ResponseCode.PAYMENT_PROVIDER_ERROR,
+                            "Payment provider could not cancel the previous pending payment");
+                }
+            }
+            BigDecimal pendingDiscount = reusable.getDiscountAmount() == null ? BigDecimal.ZERO : reusable.getDiscountAmount();
+            return checkoutPayload(reusable.getOrderCode(), type, refId, reusable.getTitle(),
+                    reusable.getAmount().add(pendingDiscount), pendingDiscount, reusable.getAmount(),
+                    reusable.getCheckoutUrl(), reusable.getQrCodeUrl(), reusable.getExpiresAt());
+        }
+        boolean userHoldsSameDiscount = discountCode != null && !discountCode.isBlank()
+                && livePending.stream().anyMatch(p -> Boolean.TRUE.equals(p.getDiscountReserved())
+                        && p.getDiscount() != null && sameDiscount(p.getDiscount(), discountCode));
+        Discount discount = discountCode == null || discountCode.isBlank() ? null
+                : validatedDiscount(userId, discountCode, type, original, userHoldsSameDiscount);
+        BigDecimal discountAmount = discount == null ? BigDecimal.ZERO : calculateDiscount(discount, original);
+        BigDecimal total = original.subtract(discountAmount).max(BigDecimal.ZERO).setScale(0, RoundingMode.HALF_UP);
+        if (total.compareTo(MIN_PAYOS_AMOUNT) < 0) {
+            throw new ResourceConflictException("Final payment amount after discount must be at least 2,000 VND");
+        }
+        for (Payment previous : livePending) {
+            if (!cancelPreviousPending(userId, previous)
                     && (previous.getExpiresAt() == null || previous.getExpiresAt().isAfter(Instant.now()))) {
                 // Two live links would let the student pay twice.
                 throw new BaseException(ResponseCode.PAYMENT_PROVIDER_ERROR,
                         "Payment provider could not cancel the previous pending payment");
             }
-        }
-        if (reusable != null) {
-            BigDecimal pendingDiscount = reusable.getDiscountAmount() == null ? BigDecimal.ZERO : reusable.getDiscountAmount();
-            return checkoutPayload(reusable.getOrderCode(), type, refId, reusable.getTitle(),
-                    reusable.getAmount().add(pendingDiscount), pendingDiscount, reusable.getAmount(),
-                    reusable.getCheckoutUrl(), reusable.getQrCodeUrl(), reusable.getExpiresAt());
         }
         Instant expiresAt = Instant.now().plus(30, ChronoUnit.MINUTES).truncatedTo(ChronoUnit.SECONDS);
         // Epoch seconds alone collide when a student replaces a pending link for the same target
@@ -274,11 +295,16 @@ public class PaymentServiceImpl implements PaymentService {
             price = plan.getPrice(); type = Payment.SUBSCRIPTION;
         }
         try {
-            Discount discount = validatedDiscount(userId, code, type, price);
+            Discount discount = validatedDiscount(userId, code, type, price, false);
             BigDecimal discountAmount = calculateDiscount(discount, price);
+            BigDecimal finalPrice = price.subtract(discountAmount).max(BigDecimal.ZERO).setScale(0, RoundingMode.HALF_UP);
+            if (finalPrice.compareTo(MIN_PAYOS_AMOUNT) < 0) {
+                return new PaymentResponses.Discount(false, null, BigDecimal.ZERO,
+                        price.setScale(0, RoundingMode.HALF_UP), null,
+                        "Final payment amount after discount must be at least 2,000 VND");
+            }
             BigDecimal percent = "PERCENT".equalsIgnoreCase(discount.getDiscountType()) ? discount.getPercent() : null;
-            return new PaymentResponses.Discount(true, percent, discountAmount,
-                    price.subtract(discountAmount).max(BigDecimal.ZERO).setScale(0, RoundingMode.HALF_UP),
+            return new PaymentResponses.Discount(true, percent, discountAmount, finalPrice,
                     discount.getExpiresAt(), null);
         } catch (BaseException ex) {
             return new PaymentResponses.Discount(false, null, BigDecimal.ZERO, price.setScale(0, RoundingMode.HALF_UP), null, ex.getMessage());
@@ -305,7 +331,7 @@ public class PaymentServiceImpl implements PaymentService {
         return true;
     }
 
-    private Discount validatedDiscount(Long userId, String code, String type, BigDecimal price) {
+    private Discount validatedDiscount(Long userId, String code, String type, BigDecimal price, boolean userHoldsSameDiscount) {
         Discount discount = discounts.findByCodeIgnoreCaseAndDeletedAtIsNull(code.strip())
                 .orElseThrow(() -> new BaseException(ResponseCode.INVALID_DISCOUNT_CODE, "Discount code does not exist"));
         Instant now = Instant.now();
@@ -318,7 +344,7 @@ public class PaymentServiceImpl implements PaymentService {
         if (discount.getExpiresAt() != null && discount.getExpiresAt().isBefore(now)) {
             throw new BaseException(ResponseCode.INVALID_DISCOUNT_CODE, "Discount is expired");
         }
-        if (discount.getUsedCount() >= discount.getUsageLimit()) {
+        if (!userHoldsSameDiscount && discount.getUsedCount() >= discount.getUsageLimit()) {
             throw new BaseException(ResponseCode.INVALID_DISCOUNT_CODE, "Discount usage limit reached");
         }
         if (discount.getMinOrderAmount() != null && price.compareTo(discount.getMinOrderAmount()) < 0) {

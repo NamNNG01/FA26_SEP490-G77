@@ -238,7 +238,7 @@ public class FlashcardPdfWriter {
     }
 
     /** Word-wrap to a pixel width; hard-splits tokens longer than a whole line; newlines break. O(text length). */
-    private static List<String> wrap(String text, PDFont font, float size, float width) {
+    public static List<String> wrap(String text, PDFont font, float size, float width) {
         List<String> out = new ArrayList<>();
         for (String paragraph : safe(text, font).split("\n", -1)) {
             if (paragraph.trim().isEmpty()) {
@@ -302,21 +302,25 @@ public class FlashcardPdfWriter {
     }
 
     /** Replaces characters the font cannot encode (PDFBox would throw on showText) with '?'. */
-    private static String safe(String text, PDFont font) {
+    public static String safe(String text, PDFont font) {
         String cleaned = (text == null ? "" : text).replace("\t", "    ").replaceAll("[\\p{Cntrl}&&[^\n]]", "");
         StringBuilder out = new StringBuilder(cleaned.length());
-        for (int i = 0; i < cleaned.length(); i++) {
-            if (cleaned.charAt(i) == '\n') {
+        for (int i = 0; i < cleaned.length(); ) {
+            int cp = cleaned.codePointAt(i);
+            int count = Character.charCount(cp);
+            if (cp == '\n') {
                 out.append('\n');
+                i += count;
                 continue;
             }
-            String ch = String.valueOf(cleaned.charAt(i));
+            String glyph = cleaned.substring(i, i + count);
             try {
-                font.getStringWidth(ch);
-                out.append(ch);
+                font.getStringWidth(glyph);
+                out.append(glyph);
             } catch (IOException | IllegalArgumentException e) {
                 out.append('?');
             }
+            i += count;
         }
         return out.toString();
     }

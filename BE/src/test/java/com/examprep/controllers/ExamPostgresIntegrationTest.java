@@ -16,15 +16,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ActiveProfiles(value = "postgres-test", inheritProfiles = false)
 class ExamPostgresIntegrationTest extends ExamApiIntegrationTest {
     @Test void rubricAndMetadataRoundTripAsJsonb() throws Exception {
-        String rubric = "{\"criteria\":[{\"name\":\"Ideas\",\"maxScore\":4,\"weight\":100}],\"totalPoints\":4}";
+        String rubric = "{\"criteria\":[{\"name\":\"Ideas\",\"weight\":100}],\"notes\":\"Key rubric notes\"}";
         mvc.perform(put("/api/v1/manager/questions/" + essay.getQuestionId() + "/rubric")
                 .with(user(UserPrincipal.create(manager))).contentType(MediaType.APPLICATION_JSON).content(rubric))
                 .andExpect(status().isOk());
-        assertEquals(4, ((Number) em.createNativeQuery("select (essay_grading_rubric ->> 'totalPoints')::numeric from questions where question_id = :id")
+        assertEquals(100, ((Number) em.createNativeQuery("select (essay_grading_rubric -> 'criteria' -> 0 ->> 'weight')::numeric from questions where question_id = :id")
                 .setParameter("id", essay.getQuestionId()).getSingleResult()).intValue());
         Long id = essay.getQuestionId();
         em.clear();
-        assertEquals(4, json.readTree(em.find(Question.class, id).getEssayGradingRubric()).path("totalPoints").asInt());
+        assertEquals("Key rubric notes", json.readTree(em.find(Question.class, id).getEssayGradingRubric()).path("notes").asText());
         Question created = Question.builder().questionType("CODE").content("JSON insert")
                 .questionMetadata("{\"language\":\"java\"}").essayGradingRubric(rubric).build();
         em.persist(created); em.flush();

@@ -96,6 +96,7 @@ public class StudentAiApiIntegrationTest {
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper json;
     @Autowired EntityManager em;
+    @Autowired com.examprep.repositories.AiUsageLogRepository usageLogs;
     @Autowired EssayGradingWorker worker;
     @Autowired DataSource dataSource;
     User student, other;
@@ -386,7 +387,7 @@ public class StudentAiApiIntegrationTest {
         em.persist(orphan);
         em.flush();
         em.createNativeQuery("UPDATE ai_usage_logs SET created_at = :old WHERE log_id = :id")
-                .setParameter("old", Instant.now().minus(5, ChronoUnit.MINUTES)).setParameter("id", orphan.getLogId()).executeUpdate();
+                .setParameter("old", Instant.now().minus(6, ChronoUnit.MINUTES)).setParameter("id", orphan.getLogId()).executeUpdate();
         worker.sweep();
         em.flush();
         em.clear();
@@ -418,6 +419,44 @@ public class StudentAiApiIntegrationTest {
                 .andExpect(jsonPath("$.data.reservedPending").value(1_000))
                 .andExpect(jsonPath("$.data.plan").doesNotExist())
                 .andExpect(jsonPath("$.data.expiredPlan").doesNotExist());
+
+        // A PROCESSING reservation counts against quota, and expirePending protects active flashcard/quiz-job rows.
+        AiUsageLog processing = AiUsageLog.builder().user(student).purpose("FLASHCARD_GENERATE").status("PROCESSING")
+                .reservedTokens(1_500).billingSource("FREE").build();
+        AiUsageLog pendingFlashcard = AiUsageLog.builder().user(student).purpose("FLASHCARD_GENERATE").status("PENDING")
+                .reservedTokens(200).billingSource("FREE").build();
+        AiUsageLog quizLog = AiUsageLog.builder().user(student).purpose("QUIZ_GENERATION").status("PENDING")
+                .reservedTokens(300).billingSource("FREE").build();
+        AiUsageLog orphanExplain = AiUsageLog.builder().user(student).purpose("EXPLANATION").status("PENDING")
+                .reservedTokens(400).billingSource("FREE").build();
+        em.persist(processing);
+        em.persist(pendingFlashcard);
+        em.persist(quizLog);
+        em.persist(orphanExplain);
+        Document doc = Document.builder().user(student).generationType("MATERIAL").status("UPLOADED")
+                .extractedContent("Sample study text").title("Doc").fileName("doc.pdf").createdAt(Instant.now()).build();
+        em.persist(doc);
+        em.persist(QuizGenerationJob.builder().user(student).document(doc).course(course)
+                .questionCount(5).difficulty("MEDIUM").status("PENDING").progress(0)
+                .aiUsageLog(quizLog).createdAt(Instant.now()).updatedAt(Instant.now()).build());
+        em.flush();
+
+        // processing (1500) + pendingFlashcard (200) + quizLog (300) + orphanExplain (400) + prior pending (1000) + used (4000) = 7400 -> 2600 remaining.
+        quota(student).andExpect(jsonPath("$.data.free.remaining").value(2_600));
+
+        Instant oldTime = Instant.now().minus(10, ChronoUnit.MINUTES);
+        for (Long id : List.of(pendingFlashcard.getLogId(), quizLog.getLogId(), orphanExplain.getLogId())) {
+            em.createNativeQuery("UPDATE ai_usage_logs SET created_at = :t WHERE log_id = :id")
+                    .setParameter("t", oldTime).setParameter("id", id).executeUpdate();
+        }
+        em.flush();
+        usageLogs.expirePending(Instant.now().minus(5, ChronoUnit.MINUTES));
+        em.flush();
+        em.clear();
+
+        assertEquals("PENDING", em.find(AiUsageLog.class, pendingFlashcard.getLogId()).getStatus());
+        assertEquals("PENDING", em.find(AiUsageLog.class, quizLog.getLogId()).getStatus());
+        assertEquals("FAILED", em.find(AiUsageLog.class, orphanExplain.getLogId()).getStatus());
 
         subscribe(student, Instant.now().minus(60, ChronoUnit.DAYS), Instant.now().minus(30, ChronoUnit.DAYS));
         quota(student).andExpect(jsonPath("$.data.plan").doesNotExist())

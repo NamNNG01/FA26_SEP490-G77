@@ -60,11 +60,11 @@ class ManagerCoursePostgresIntegrationTest extends ManagerCourseApiIntegrationTe
                     userId = rows.getLong(1);
                 }
                 long examId;
-                try (var rows = statement.executeQuery("INSERT INTO exams(course_id,created_by,title) VALUES (" + courseId + "," + userId + ",'Keep exam') RETURNING exam_id")) {
+                try (var rows = statement.executeQuery("INSERT INTO exams(course_id,created_by,title,max_score) VALUES (" + courseId + "," + userId + ",'Keep exam',10.00) RETURNING exam_id")) {
                     rows.next();
                     examId = rows.getLong(1);
                 }
-                statement.executeUpdate("INSERT INTO exam_attempts(exam_id,user_id) VALUES (" + examId + "," + userId + ")");
+                statement.executeUpdate("INSERT INTO exam_attempts(exam_id,user_id,deadline_at) VALUES (" + examId + "," + userId + ",NOW() + INTERVAL '1 hour')");
                 Savepoint history = connection.setSavepoint();
                 SQLException courseRejected = assertThrows(SQLException.class,
                         () -> statement.executeUpdate("DELETE FROM courses WHERE course_id = " + courseId));

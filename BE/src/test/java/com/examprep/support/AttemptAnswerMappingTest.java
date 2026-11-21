@@ -3,6 +3,7 @@ package com.examprep.support;
 import com.examprep.entities.*;
 import com.examprep.repositories.*;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -11,6 +12,7 @@ import java.time.Instant;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+@EnabledIfSystemProperty(named = "postgresTests", matches = "true")
 public class AttemptAnswerMappingTest extends AbstractPostgresIT {
 
     @Autowired
@@ -46,7 +48,14 @@ public class AttemptAnswerMappingTest extends AbstractPostgresIT {
         });
 
         Course course = courseRepository.findAll().stream().findFirst().orElseGet(() -> {
-            return courseRepository.save(Course.builder().title("Test Course").category(cat).manager(user).isPublished(true).build());
+            return courseRepository.save(Course.builder()
+                    .title("Test Course")
+                    .slug("test-course-" + cat.getCategoryId())
+                    .category(cat)
+                    .categoryId(cat.getCategoryId())
+                    .manager(user)
+                    .isPublished(true)
+                    .build());
         });
 
         Exam exam = examRepository.save(Exam.builder()
@@ -55,7 +64,7 @@ public class AttemptAnswerMappingTest extends AbstractPostgresIT {
                 .title("Test Exam")
                 .durationMinutes(60)
                 .isPractice(false)
-                .generationType("FIXED")
+                .generationType("STATIC")
                 .maxScore(BigDecimal.TEN)
                 .status("PUBLISHED")
                 .build());

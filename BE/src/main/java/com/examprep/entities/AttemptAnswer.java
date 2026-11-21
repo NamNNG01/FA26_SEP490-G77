@@ -92,7 +92,7 @@ public class AttemptAnswer implements Serializable {
     @Column(name = "is_correct")
     private Boolean isCorrect;
 
-    @Column(name = "score_earned", precision = 5, scale = 2)
+    @Column(name = "score_earned", precision = 8, scale = 2)
     private BigDecimal scoreEarned;
 
     @Builder.Default

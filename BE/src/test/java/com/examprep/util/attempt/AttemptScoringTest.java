@@ -81,4 +81,24 @@ class AttemptScoringTest {
         BigDecimal points = AttemptScoring.questionMaxPoints(BigDecimal.ONE, BigDecimal.ZERO, TEN);
         assertTrue(points.signum() == 0);
     }
+
+    @Test
+    void criterionScalingMultipliesBeforeDividingAndSixEqualEssaysTotalTen() {
+        BigDecimal criterion = AttemptScoring.criterionMaxPoints(
+                TEN, BigDecimal.ONE, BigDecimal.valueOf(3));
+        assertEquals(new BigDecimal("3.3333"), criterion);
+
+        BigDecimal totalWeight = AttemptScoring.totalWeight(List.of(
+                BigDecimal.ONE, BigDecimal.ONE, BigDecimal.ONE,
+                BigDecimal.ONE, BigDecimal.ONE, BigDecimal.ONE));
+        BigDecimal cappedQuestionScore = AttemptScoring.output(
+                AttemptScoring.questionMaxPoints(BigDecimal.ONE, totalWeight, TEN));
+        assertEquals(new BigDecimal("1.67"), cappedQuestionScore);
+
+        List<BigDecimal> contributions = new java.util.ArrayList<>();
+        for (int i = 0; i < 6; i++) {
+            contributions.add(AttemptScoring.contribution(BigDecimal.ONE, totalWeight, TEN, cappedQuestionScore));
+        }
+        assertEquals(new BigDecimal("10.00"), AttemptScoring.output(AttemptScoring.sumScores(contributions)));
+    }
 }

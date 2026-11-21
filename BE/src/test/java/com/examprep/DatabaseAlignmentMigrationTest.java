@@ -13,14 +13,19 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 @EnabledIfSystemProperty(named = "postgresTests", matches = "true")
 class DatabaseAlignmentMigrationTest {
     @Test void upgradePreservesJsonAndTeamQuestionTypesAndNormalizesExamMode() throws Exception {
-        String server = "jdbc:postgresql://127.0.0.1:55439/";
+        String server = System.getProperty("postgres.serverUrl",
+                System.getenv().getOrDefault("POSTGRES_TEST_SERVER_URL", "jdbc:postgresql://localhost:5433/"));
+        String user = System.getProperty("postgres.user",
+                System.getenv().getOrDefault("POSTGRES_TEST_USER", "postgres"));
+        String pass = System.getProperty("postgres.password",
+                System.getenv().getOrDefault("POSTGRES_TEST_PASSWORD", "postgres"));
         String database = "alignment_" + UUID.randomUUID().toString().replace("-", "");
-        var configuration = Flyway.configure().dataSource(server + database, "examprep_test", "local-test-only")
+        var configuration = Flyway.configure().dataSource(server + database, user, pass)
                 .locations("classpath:db/migration");
-        try (var admin = DriverManager.getConnection(server + "postgres", "examprep_test", "local-test-only");
+        try (var admin = DriverManager.getConnection(server + "postgres", user, pass);
              var administration = admin.createStatement()) {
             administration.execute("CREATE DATABASE " + database);
-            try (var connection = DriverManager.getConnection(server + database, "examprep_test", "local-test-only");
+            try (var connection = DriverManager.getConnection(server + database, user, pass);
                  var sql = connection.createStatement()) {
                 configuration.target("8").load().migrate();
                 sql.execute("INSERT INTO questions(question_type,content,question_metadata,essay_grading_rubric) "

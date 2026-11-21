@@ -351,16 +351,14 @@ public class ManagerDiscussionServiceImpl implements ManagerDiscussionService {
             discussionRepository.save(comment.getDiscussion());
         }
 
-        User cAuthor = saved.getUser();
-        String cName = Boolean.TRUE.equals(saved.getIsAnonymous()) ? "Học sinh ẩn danh" : cAuthor.getFullName();
-        String cAvatar = Boolean.TRUE.equals(saved.getIsAnonymous()) ? null : cAuthor.getAvatarUrl();
+        boolean anonymous = Boolean.TRUE.equals(saved.getIsAnonymous());
 
         return new DiscussionDetailDto.CommentDto(
                 saved.getCommentId(),
                 saved.getContent(),
-                new DiscussionItemDto.AuthorDto(cAuthor.getUserId(), cName, cAvatar, cAuthor.getRoleName()),
+                DiscussionItemDto.AuthorDto.of(saved.getUser(), anonymous),
                 Boolean.TRUE.equals(saved.getIsAccepted()),
-                Boolean.TRUE.equals(saved.getIsAnonymous()),
+                anonymous,
                 saved.getImageUrl(),
                 saved.getStatus(),
                 saved.getCreatedAt()

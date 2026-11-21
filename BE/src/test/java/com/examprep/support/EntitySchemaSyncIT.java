@@ -6,6 +6,7 @@ import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 import org.hibernate.boot.model.naming.CamelCaseToUnderscoresNamingStrategy;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -26,6 +27,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 @TestPropertySource(properties = {
         "spring.jpa.hibernate.ddl-auto=validate"
 })
+@EnabledIfSystemProperty(named = "postgresTests", matches = "true")
 public class EntitySchemaSyncIT extends AbstractPostgresIT {
 
     @Autowired

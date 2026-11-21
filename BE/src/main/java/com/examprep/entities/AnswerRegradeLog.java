@@ -33,10 +33,10 @@ public class AnswerRegradeLog implements Serializable {
     @JoinColumn(name = "regrade_job_id")
     private QuestionRegradeJob regradeJob;
 
-    @Column(name = "old_score", precision = 5, scale = 2)
+    @Column(name = "old_score", precision = 8, scale = 2)
     private BigDecimal oldScore;
 
-    @Column(name = "new_score", precision = 5, scale = 2)
+    @Column(name = "new_score", precision = 8, scale = 2)
     private BigDecimal newScore;
 
     @Column(name = "question_version_from")

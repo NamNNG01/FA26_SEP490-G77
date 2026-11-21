@@ -27,12 +27,13 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import jakarta.validation.Validator;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -45,8 +46,6 @@ import java.util.concurrent.TimeoutException;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
-@Transactional(readOnly = true)
 @PreAuthorize("hasAnyRole('COURSE_MANAGER', 'ADMIN')")
 public class ExamAiServiceImpl implements ExamAiService {
     private static final Set<String> TYPES = Set.of("SINGLE_CHOICE", "MULTIPLE_CHOICE", "TRUE_FALSE", "FILL_BLANK",
@@ -103,12 +102,41 @@ public class ExamAiServiceImpl implements ExamAiService {
     private final ObjectMapper json;
     private final Validator validator;
     private final AiClient aiClient;
+    private final TransactionTemplate readTx;
     @Value("${app.exam-ai.timeout-ms:90000}") private long timeoutMillis;
     @Value("${app.exam-ai.material-timeout-ms:120000}") private long materialTimeoutMillis;
     @Value("${app.exam-ai.daily-limit:20}") private int dailyLimit;
     private final Map<Long, Integer> accountCalls = new HashMap<>();
     private final Map<Long, Integer> courseCalls = new HashMap<>();
     private LocalDate quotaDay = LocalDate.now(ZoneOffset.UTC);
+
+    @Autowired
+    public ExamAiServiceImpl(CourseRepository courses, CourseManagerRepository managers, ModuleRepository modules,
+            QuestionRepository questions, QuestionValidator questionValidator, ObjectMapper json, Validator validator,
+            AiClient aiClient, PlatformTransactionManager transactionManager) {
+        this.courses = courses;
+        this.managers = managers;
+        this.modules = modules;
+        this.questions = questions;
+        this.questionValidator = questionValidator;
+        this.json = json;
+        this.validator = validator;
+        this.aiClient = aiClient;
+        if (transactionManager != null) {
+            TransactionTemplate template = new TransactionTemplate(transactionManager);
+            template.setReadOnly(true);
+            this.readTx = template;
+        } else {
+            this.readTx = null;
+        }
+    }
+
+    /** Convenience constructor for unit tests without a Spring transaction manager. */
+    ExamAiServiceImpl(CourseRepository courses, CourseManagerRepository managers, ModuleRepository modules,
+            QuestionRepository questions, QuestionValidator questionValidator, ObjectMapper json, Validator validator,
+            AiClient aiClient) {
+        this(courses, managers, modules, questions, questionValidator, json, validator, aiClient, null);
+    }
 
     @Override
     public ExamAiDraftResponse generate(UserPrincipal user, ExamAiRequest request) {
@@ -123,33 +151,41 @@ public class ExamAiServiceImpl implements ExamAiService {
 
     private ExamAiDraftResponse draft(UserPrincipal user, ExamAiRequest request, String material, String fileName) {
         validate(request);
-        Course course = courses.findById(request.courseId()).orElseThrow(() -> new ResourceNotFoundException("Course not found."));
-        if (!User.ROLE_ADMIN.equals(user.getRole()) && !Objects.equals(course.getManager().getUserId(), user.getId()) && !managers.existsByCourseCourseIdAndUserUserId(request.courseId(), user.getId())) throw new BaseException(ResponseCode.FORBIDDEN);
-        Module module = request.moduleId() == null ? null : modules.findById(request.moduleId()).orElseThrow(() -> new ResourceNotFoundException("Module not found."));
-        if (module != null && !Objects.equals(module.getCourse().getCourseId(), request.courseId())) throw invalid("Module must belong to the requested course.");
         Map<String, Integer> remainingDifficulty = new LinkedHashMap<>();
         DIFFICULTIES.forEach(d -> remainingDifficulty.put(d, request.difficultyDistribution().getOrDefault(d, 0)));
         Map<String, Integer> remainingTypes = new LinkedHashMap<>();
         request.questionTypes().forEach(t -> remainingTypes.put(t.questionType(), t.count()));
-        Set<String> seen = new HashSet<>();
+        record PreparedContext(String courseTitle, Map<String, Object> context, Set<String> seen) {}
+        java.util.function.Supplier<PreparedContext> loader = () -> {
+            Course course = courses.findById(request.courseId()).orElseThrow(() -> new ResourceNotFoundException("Course not found."));
+            if (!User.ROLE_ADMIN.equals(user.getRole()) && !Objects.equals(course.getManager().getUserId(), user.getId()) && !managers.existsByCourseCourseIdAndUserUserId(request.courseId(), user.getId())) throw new BaseException(ResponseCode.FORBIDDEN);
+            Module module = request.moduleId() == null ? null : modules.findById(request.moduleId()).orElseThrow(() -> new ResourceNotFoundException("Module not found."));
+            if (module != null && !Objects.equals(module.getCourse().getCourseId(), request.courseId())) throw invalid("Module must belong to the requested course.");
+            Set<String> seen = new HashSet<>();
+            Map<String, Object> context = context(request, material);
+            context.put("course", Map.of("title", Objects.toString(course.getTitle(), ""),
+                    "description", Objects.toString(course.getDescription(), "")));
+            if (module != null) {
+                context.put("module", Map.of("title", Objects.toString(module.getTitle(), ""),
+                        "description", Objects.toString(module.getDescription(), "")));
+            }
+            List<Question> bankQuestions = questions.findAiBank(request.courseId(), request.moduleId());
+            List<Map<String, String>> existingQuestions = bankQuestions.stream()
+                    .map(question -> Map.of("questionType", Objects.toString(question.getQuestionType(), ""),
+                            "content", Objects.toString(question.getContent(), "")))
+                    .toList();
+            context.put("existingQuestions", existingQuestions);
+            bankQuestions.stream().map(Question::getContent).filter(Objects::nonNull).map(ExamAiServiceImpl::key)
+                    .forEach(seen::add);
+            return new PreparedContext(course.getTitle(), context, seen);
+        };
+        // DB connection is released before any quota check or blocking AI provider HTTP call runs.
+        PreparedContext prepared = readTx == null ? loader.get() : readTx.execute(status -> loader.get());
+        Map<String, Object> context = prepared.context();
+        Set<String> seen = prepared.seen();
         List<DraftQuestion> accepted = new ArrayList<>();
         List<String> warnings = new ArrayList<>();
         List<String> problems = new ArrayList<>();
-        Map<String, Object> context = context(request, material);
-        context.put("course", Map.of("title", Objects.toString(course.getTitle(), ""),
-                "description", Objects.toString(course.getDescription(), "")));
-        if (module != null) {
-            context.put("module", Map.of("title", Objects.toString(module.getTitle(), ""),
-                    "description", Objects.toString(module.getDescription(), "")));
-        }
-        List<Question> bankQuestions = questions.findAiBank(request.courseId(), request.moduleId());
-        List<Map<String, String>> existingQuestions = bankQuestions.stream()
-                .map(question -> Map.of("questionType", Objects.toString(question.getQuestionType(), ""),
-                        "content", Objects.toString(question.getContent(), "")))
-                .toList();
-        context.put("existingQuestions", existingQuestions);
-        bankQuestions.stream().map(Question::getContent).filter(Objects::nonNull).map(ExamAiServiceImpl::key)
-                .forEach(seen::add);
         takeQuota(user.getId(), request.courseId());
         long timeout = material == null ? timeoutMillis : materialTimeoutMillis;
         long deadline = System.currentTimeMillis() + timeout;
@@ -172,7 +208,7 @@ public class ExamAiServiceImpl implements ExamAiService {
             }
         }
         if (accepted.size() < request.questionCount()) warnings.add("Only " + accepted.size() + "/" + request.questionCount() + " valid questions could be generated.");
-        String fallbackTitle = fileName == null ? "AI Generated Quiz - " + course.getTitle() : "AI Quiz from " + fileName;
+        String fallbackTitle = fileName == null ? "AI Generated Quiz - " + prepared.courseTitle() : "AI Quiz from " + fileName;
         String title = text(generated.get("title")) ? generated.get("title").asText() : request.title() == null || request.title().isBlank() ? fallbackTitle : request.title();
         String description = text(generated.get("description")) ? generated.get("description").asText() : "AI draft. Review the questions before saving.";
         return new ExamAiDraftResponse(fileName, title, description, request.durationMinutes(), accepted.size(), accepted, material == null ? null : List.of(material.substring(0, Math.min(material.length(), 1000))), warnings);
@@ -225,9 +261,11 @@ public class ExamAiServiceImpl implements ExamAiService {
             throw upstream("Could not build the AI request.");
         }
         String text;
+        CompletableFuture<String> future = CompletableFuture.supplyAsync(() -> aiClient.complete(call).getText());
         try {
-            text = CompletableFuture.supplyAsync(() -> aiClient.complete(call).getText()).get(timeout, TimeUnit.MILLISECONDS);
+            text = future.get(timeout, TimeUnit.MILLISECONDS);
         } catch (TimeoutException ex) {
+            future.cancel(true);
             throw new BaseException(ResponseCode.AI_TIMEOUT);
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();

@@ -53,6 +53,12 @@ class StudentNotebookServiceTest {
     private StudentAttemptService studentAttemptService;
     @Mock
     private com.examprep.repositories.ExamAttemptRepository examAttemptRepository;
+    @Mock
+    private AttemptAnswerRepository answerRepository;
+    @Mock
+    private EnrollmentRepository enrollmentRepository;
+    @Mock
+    private QuestionPracticeProgressRepository practiceProgressRepository;
 
     @InjectMocks
     private StudentNotebookServiceImpl notebookService;

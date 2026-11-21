@@ -206,7 +206,9 @@ function ExamAttemptScreen() {
         // A reload reopens the question the student was on (remembered per attempt in this tab).
         setCurrent(Math.min(readCurrentQuestion(s.attemptId), Math.max(0, s.questions.length - 1)));
         setSaveState('saved');
-        const chosen = canChooseTakeMode(s.examMode) ? (takeAsOf(s.attemptId) ?? parseTakeAs(takeAsParam)) : null;
+        const chosen = canChooseTakeMode(s.examMode)
+          ? (parseTakeAs(s.takeAs) ?? takeAsOf(s.attemptId) ?? parseTakeAs(takeAsParam))
+          : null;
         if (chosen) rememberTakeAs(s.attemptId, chosen);
         setTakeAs(chosen);
         setChecks(takeExamBehavior(s.examMode, chosen).instantCheck ? restoreChecks(s) : {});
@@ -445,7 +447,11 @@ function ExamAttemptScreen() {
   };
 
   /* ── Timer (server clock) ─────────────────────────────────────────────── */
+  const submitRef = useRef(submit);
+  submitRef.current = submit;
+
   // Untimed (practice exam, material quiz): no countdown and no auto-submit.
+  // Recomputing clock offset on unrelated state changes (e.g. async codeMeta loads) would jump the countdown up.
   useEffect(() => {
     if (!session || !timed) {
       setRemaining(null);
@@ -459,12 +465,12 @@ function ExamAttemptScreen() {
       const codeWritten = session.questions.some(
         q => q.questionType === 'CODE' && Boolean(answersRef.current[q.questionId]?.text?.trim()),
       );
-      if (left === 0 || (codeWritten && left <= CODE_SUBMIT_LEAD_SECONDS)) submit(true);
+      if (left === 0 || (codeWritten && left <= CODE_SUBMIT_LEAD_SECONDS)) submitRef.current(true);
     };
     tick();
     const id = window.setInterval(tick, 1000);
     return () => window.clearInterval(id);
-  }, [session, submit, timed]);
+  }, [session, timed]);
 
   /* ── Derived ──────────────────────────────────────────────────────────── */
   const questions = session?.questions ?? [];

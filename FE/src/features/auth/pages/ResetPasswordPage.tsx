@@ -109,9 +109,9 @@ export function ResetPasswordPage() {
   };
 
   const goToLogin = async () => {
-    // The backend already revoked this account's sessions; drop ours too.
+    // The backend already revoked this account's sessions; clear local auth without calling /auth/logout.
     if (isAuthenticated) {
-      await logout();
+      await logout(false);
     }
     navigate(ROUTES.login, { replace: true, state: { passwordReset: true } });
   };

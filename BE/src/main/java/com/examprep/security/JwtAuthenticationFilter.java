@@ -2,6 +2,7 @@ package com.examprep.security;
 
 import com.examprep.entities.User;
 import com.examprep.repositories.UserRepository;
+import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -32,9 +33,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                                     FilterChain filterChain) throws ServletException, IOException {
         try {
             String jwt = getJwtFromRequest(request);
-            if (StringUtils.hasText(jwt) && tokenProvider.validateToken(jwt)) {
-                UserPrincipal userPrincipal = tokenProvider.getUserPrincipalFromToken(jwt);
-                if (isTokenStillValid(userPrincipal.getId(), jwt)) {
+            if (StringUtils.hasText(jwt)) {
+                Claims claims = tokenProvider.getClaimsFromToken(jwt);
+                Long userId = Long.parseLong(claims.getSubject());
+                String role = claims.get("role", String.class);
+                if (role == null || role.isBlank()) {
+                    throw new JwtException("Token is missing required role claim");
+                }
+                User liveUser = resolveValidUser(userId, claims);
+                if (liveUser != null) {
+                    UserPrincipal userPrincipal = UserPrincipal.create(
+                            liveUser.getUserId(), liveUser.getEmail(), liveUser.getRoleName());
                     UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
                             userPrincipal, null, userPrincipal.getAuthorities());
                     authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
@@ -51,22 +60,22 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
-    private boolean isTokenStillValid(Long userId, String jwt) {
+    private User resolveValidUser(Long userId, Claims claims) {
         User user = userRepository.findById(userId).orElse(null);
         if (user == null || !User.STATUS_ACTIVE.equalsIgnoreCase(user.getStatus())) {
-            return false;
+            return null;
         }
-        if (user.getPasswordChangedAt() != null) {
-            try {
-                java.util.Date issuedAt = tokenProvider.getIssuedAtFromToken(jwt);
-                if (issuedAt != null && issuedAt.toInstant().isBefore(user.getPasswordChangedAt())) {
-                    return false;
-                }
-            } catch (JwtException | IllegalArgumentException ex) {
-                return false;
-            }
+        Long iatMs = claims.get("iat_ms", Long.class);
+        if (iatMs == null && claims.getIssuedAt() != null) {
+            iatMs = claims.getIssuedAt().getTime();
         }
-        return true;
+        if (iatMs == null) {
+            return null;
+        }
+        if (user.getPasswordChangedAt() != null && iatMs < user.getPasswordChangedAt().toEpochMilli()) {
+            return null;
+        }
+        return user;
     }
 
     private String getJwtFromRequest(HttpServletRequest request) {

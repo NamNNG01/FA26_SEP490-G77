@@ -52,7 +52,7 @@ public class ExamAttempt implements Serializable {
     @Column(name = "exam_snapshot", columnDefinition = "jsonb")
     private String examSnapshot;
 
-    @Column(name = "total_score", precision = 5, scale = 2)
+    @Column(name = "total_score", precision = 8, scale = 2)
     private BigDecimal totalScore;
 
     @Column(name = "status", nullable = false, length = 50)

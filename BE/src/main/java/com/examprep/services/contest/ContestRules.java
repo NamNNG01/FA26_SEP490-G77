@@ -5,6 +5,7 @@ import com.examprep.dto.ResponseCode;
 import com.examprep.entities.Contest;
 import com.examprep.entities.Discount;
 import com.examprep.exceptions.BaseException;
+import com.examprep.repositories.PaymentRepository;
 import com.examprep.repositories.UserDiscountRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -27,6 +28,7 @@ public class ContestRules {
     public static final List<String> DERIVED = List.of(DRAFT, UPCOMING, ONGOING, PENDING_REWARD, REWARDED, CANCELLED);
 
     private final UserDiscountRepository userDiscounts;
+    private final PaymentRepository payments;
 
     /** Section 1.5: PUBLISHED splits by time into UPCOMING, ONGOING and PENDING_REWARD. */
     public static String status(Contest c, Instant now) {
@@ -42,14 +44,21 @@ public class ContestRules {
         return c.getRankedAt() == null ? "CALCULATING" : "READY";
     }
 
-    /** Section 6.2: usage_limit - used_count - assigned but unused, per discount id. */
+    /** Section 6.2: usage_limit - used_count - max(0, assigned_unused - pending_reserved), per discount id. */
     public Map<Long, Long> remaining(Collection<Discount> discounts) {
         Map<Long, Long> held = new HashMap<>();
+        Map<Long, Long> pendingReserved = new HashMap<>();
         List<Long> ids = discounts.stream().map(Discount::getDiscountId).distinct().toList();
-        if (!ids.isEmpty()) userDiscounts.countUnused(ids).forEach(r -> held.put((Long) r[0], ((Number) r[1]).longValue()));
+        if (!ids.isEmpty()) {
+            userDiscounts.countUnused(ids).forEach(r -> held.put((Long) r[0], ((Number) r[1]).longValue()));
+            payments.countReservedPendingByDiscountIds(ids)
+                    .forEach(r -> pendingReserved.put((Long) r[0], ((Number) r[1]).longValue()));
+        }
         Map<Long, Long> remaining = new HashMap<>();
         for (Discount d : discounts) {
-            remaining.put(d.getDiscountId(), (long) d.getUsageLimit() - d.getUsedCount() - held.getOrDefault(d.getDiscountId(), 0L));
+            long id = d.getDiscountId();
+            long extraHeld = Math.max(0L, held.getOrDefault(id, 0L) - pendingReserved.getOrDefault(id, 0L));
+            remaining.put(id, (long) d.getUsageLimit() - d.getUsedCount() - extraHeld);
         }
         return remaining;
     }

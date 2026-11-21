@@ -74,6 +74,7 @@ function refreshAccessToken(refreshToken: string): Promise<string> {
     const res = await axios.post(
       `${config.apiBaseUrl.replace(/\/+$/, '')}/auth/refresh`,
       { refreshToken },
+      { timeout: 15000 },
     );
     const body = res.data as { success: boolean; data?: unknown };
     if (!body?.success || !body.data) {
@@ -113,6 +114,7 @@ apiClient.interceptors.response.use(
 
     if (error.response?.status === 401 && original && !original._retry && !isPublic) {
       original._retry = true;
+      const hadSession = Boolean(getAccessToken() || getRefreshToken());
       const refreshToken = getRefreshToken();
 
       if (refreshToken) {
@@ -122,11 +124,11 @@ apiClient.interceptors.response.use(
           return apiClient(original);
         } catch {
           clearAuth();
-          emitSessionExpired();
+          if (hadSession) emitSessionExpired();
         }
       } else {
         clearAuth();
-        emitSessionExpired();
+        if (hadSession) emitSessionExpired();
       }
     }
 

@@ -320,8 +320,7 @@ public class EssayGradingWorker {
             scores.addObject().put("criterionId", c.criterionId()).put("name", c.name()).put("maxPoints", max)
                     .put("points", points).put("feedback", clip(feedback, MAX_FEEDBACK_CHARS));
         }
-        // Rounding each criterion can push the sum a cent over P_q.
-        BigDecimal score = total.min(prepared.maxPoints()).setScale(2, RoundingMode.DOWN);
+        BigDecimal score = AttemptScoring.output(total).min(AttemptScoring.output(prepared.maxPoints()));
         String overall = output.path("overallFeedback").asText("").strip();
         return new Outcome(scores, overall.isEmpty() ? null : clip(overall, MAX_FEEDBACK_CHARS), score, response, null, durationMillis);
     }
@@ -335,7 +334,7 @@ public class EssayGradingWorker {
         if (!GRADING.equals(answer.getGradingStatus())) return;
         Optional<AiUsageLog> reservation = logId == null
                 ? logs.findFirstByAttemptAnswerIdAndStatusOrderByLogIdDesc(answerId, "PENDING")
-                : logs.findById(logId).filter(l -> "PENDING".equals(l.getStatus()));
+                : logs.findById(logId).filter(l -> "PENDING".equals(l.getStatus()) || "PROCESSING".equals(l.getStatus()));
         String logStatus = outcome.error() == null ? "SUCCESS" : AiCalls.TIMEOUT.equals(outcome.error()) ? "TIMEOUT" : "FAILED";
         reservation.ifPresent(l -> quota.settle(l, logStatus, outcome.response(), outcome.durationMillis(), outcome.error()));
         answer.setGradingLockedAt(null);
@@ -413,7 +412,7 @@ public class EssayGradingWorker {
             JsonNode row = rows.get(i);
             String id = row.path("criterionId").asText("");
             result.add(new Criterion(id.isBlank() ? "c" + (i + 1) : id, row.path("name").asText("Criterion " + (i + 1)),
-                    maxPoints.multiply(weights.get(i)).divide(sum, 4, RoundingMode.HALF_UP),
+                    AttemptScoring.criterionMaxPoints(maxPoints, weights.get(i), sum),
                     row.hasNonNull("descriptors") ? row.get("descriptors").asText() : null));
         }
         return result;

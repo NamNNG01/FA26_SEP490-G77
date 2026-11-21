@@ -6,7 +6,7 @@ import java.util.List;
 
 public record ExamResponse(Long examId, String title, String description,
         Long courseId, String courseName, Long moduleId, String moduleName, String examKind,
-        int durationMinutes, BigDecimal maxScore, BigDecimal totalWeight, int questionCount,
+        int durationMinutes, BigDecimal maxScore, BigDecimal passMark, BigDecimal totalWeight, int questionCount,
         String status, String generationType, boolean isPractice, String mode, Instant createdAt,
         List<Config> configs, List<QuestionLink> questions, List<GroupLink> groups) {
     public record Config(Long configId, String questionType, int numberOfQuestions, Long moduleId, String difficulty, BigDecimal weightEach) {}

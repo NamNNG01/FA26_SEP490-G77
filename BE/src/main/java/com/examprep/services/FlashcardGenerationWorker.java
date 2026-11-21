@@ -10,6 +10,7 @@ import com.examprep.repositories.AiUsageLogRepository;
 import com.examprep.repositories.DocumentRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.annotation.PreDestroy;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -107,6 +108,11 @@ public class FlashcardGenerationWorker {
         thread.setDaemon(true);
         return thread;
     });
+
+    @PreDestroy
+    void shutdown() {
+        pool.shutdownNow();
+    }
 
     record Card(String tempId, String frontText, String backText) {}
 

@@ -33,7 +33,8 @@ public interface StudentQuestionReviewRepository extends JpaRepository<StudentQu
             + "WHERE r.student.userId = :studentId AND r.bookmark = true "
             + "AND r.question.module.moduleId = :moduleId "
             + "AND r.question.deletedAt IS NULL AND r.question.status = 'ACTIVE' "
-            + "AND r.question.approvalStatus = 'APPROVED' AND r.question.sourceDocumentId IS NULL")
+            + "AND r.question.approvalStatus = 'APPROVED' AND r.question.sourceDocumentId IS NULL "
+            + "AND NOT (COALESCE(r.question.source, '') = 'AI' AND COALESCE(r.question.creatorRole, '') = 'STUDENT')")
     List<Long> findBookmarkedQuestionIds(@Param("studentId") Long studentId, @Param("moduleId") Long moduleId);
 
     /** MP-02 (General, BOOKMARKED mode): the same bookmarks, for the course's questions without a module. */
@@ -41,7 +42,8 @@ public interface StudentQuestionReviewRepository extends JpaRepository<StudentQu
             + "WHERE r.student.userId = :studentId AND r.bookmark = true "
             + "AND r.question.course.courseId = :courseId AND r.question.module IS NULL "
             + "AND r.question.deletedAt IS NULL AND r.question.status = 'ACTIVE' "
-            + "AND r.question.approvalStatus = 'APPROVED' AND r.question.sourceDocumentId IS NULL")
+            + "AND r.question.approvalStatus = 'APPROVED' AND r.question.sourceDocumentId IS NULL "
+            + "AND NOT (COALESCE(r.question.source, '') = 'AI' AND COALESCE(r.question.creatorRole, '') = 'STUDENT')")
     List<Long> findGeneralBookmarkedQuestionIds(@Param("studentId") Long studentId,
                                                 @Param("courseId") Long courseId);
 
@@ -49,8 +51,13 @@ public interface StudentQuestionReviewRepository extends JpaRepository<StudentQu
     SELECT r
     FROM StudentQuestionReview r
     JOIN FETCH r.question q
-    JOIN q.module m
-    JOIN m.course c
+    LEFT JOIN q.course qc
+    LEFT JOIN q.module m
+    LEFT JOIN m.course mc
+    LEFT JOIN q.group g
+    LEFT JOIN g.course gc
+    LEFT JOIN g.module gm
+    LEFT JOIN gm.course gmc
     WHERE r.student.userId = :studentId
 
     AND (
@@ -69,9 +76,10 @@ public interface StudentQuestionReviewRepository extends JpaRepository<StudentQu
         OR (:examType = 'ESSAY' AND q.questionType IN (
             'ESSAY', 'DIAGRAM', 'DIAGRAM_ESSAY', 'CODE'
         ))
+        OR (:examType = 'CODE' AND q.questionType = 'CODE')
     )
 
-    AND (:courseId IS NULL OR c.courseId = :courseId)
+    AND (:courseId IS NULL OR qc.courseId = :courseId OR mc.courseId = :courseId OR gc.courseId = :courseId OR gmc.courseId = :courseId)
     AND (:search = '' OR LOWER(q.content)
         LIKE LOWER(CONCAT('%', :search, '%')))
 
@@ -81,8 +89,13 @@ public interface StudentQuestionReviewRepository extends JpaRepository<StudentQu
     SELECT COUNT(r)
     FROM StudentQuestionReview r
     JOIN r.question q
-    JOIN q.module m
-    JOIN m.course c
+    LEFT JOIN q.course qc
+    LEFT JOIN q.module m
+    LEFT JOIN m.course mc
+    LEFT JOIN q.group g
+    LEFT JOIN g.course gc
+    LEFT JOIN g.module gm
+    LEFT JOIN gm.course gmc
     WHERE r.student.userId = :studentId
     AND (
         (:type = 'all' AND
@@ -99,8 +112,9 @@ public interface StudentQuestionReviewRepository extends JpaRepository<StudentQu
         OR (:examType = 'ESSAY' AND q.questionType IN (
             'ESSAY', 'DIAGRAM', 'DIAGRAM_ESSAY', 'CODE'
         ))
+        OR (:examType = 'CODE' AND q.questionType = 'CODE')
     )
-    AND (:courseId IS NULL OR c.courseId = :courseId)
+    AND (:courseId IS NULL OR qc.courseId = :courseId OR mc.courseId = :courseId OR gc.courseId = :courseId OR gmc.courseId = :courseId)
     AND (:search = '' OR LOWER(q.content)
         LIKE LOWER(CONCAT('%', :search, '%')))
     """)
@@ -126,10 +140,10 @@ public interface StudentQuestionReviewRepository extends JpaRepository<StudentQu
 
     @Query("SELECT r FROM StudentQuestionReview r JOIN FETCH r.question q " +
            "LEFT JOIN q.course qc LEFT JOIN q.module m LEFT JOIN m.course mc " +
-           "LEFT JOIN q.group g LEFT JOIN q.course gc LEFT JOIN q.module gm LEFT JOIN gm.course gmc " +
+           "LEFT JOIN q.group g LEFT JOIN g.course gc LEFT JOIN g.module gm LEFT JOIN gm.course gmc " +
            "WHERE r.student.userId = :studentId " +
            "AND ((:type = 'all' AND (r.status = 'WRONG_BOOKMARKED' OR r.bookmark = true)) OR (:type = 'wrong' AND r.status = 'WRONG_BOOKMARKED') OR (:type = 'bookmarked' AND r.bookmark = true)) " +
-           "AND (:examType = 'ESSAY' AND q.questionType IN ('ESSAY', 'DIAGRAM', 'DIAGRAM_ESSAY', 'CODE') OR :examType = 'QUIZ' AND q.questionType NOT IN ('ESSAY', 'DIAGRAM', 'DIAGRAM_ESSAY', 'CODE')) " +
+           "AND (:examType = 'ESSAY' AND q.questionType IN ('ESSAY', 'DIAGRAM', 'DIAGRAM_ESSAY', 'CODE') OR :examType = 'CODE' AND q.questionType = 'CODE' OR :examType = 'QUIZ' AND q.questionType NOT IN ('ESSAY', 'DIAGRAM', 'DIAGRAM_ESSAY', 'CODE')) " +
            "AND (:courseId IS NULL OR qc.courseId = :courseId OR mc.courseId = :courseId OR gc.courseId = :courseId OR gmc.courseId = :courseId) " +
            "AND q.deletedAt IS NULL AND q.status = 'ACTIVE' " +
            "ORDER BY r.wrongCount DESC, r.lastPracticedAt DESC")

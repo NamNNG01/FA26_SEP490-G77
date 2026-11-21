@@ -6,6 +6,7 @@ import com.examprep.repositories.DiscountRepository;
 import com.examprep.repositories.UserDiscountRepository;
 import com.examprep.support.AbstractPostgresIT;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import java.io.File;
@@ -15,6 +16,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 
+@EnabledIfSystemProperty(named = "postgresTests", matches = "true")
 class DiscountDiagnosticTest extends AbstractPostgresIT {
 
     @Autowired DiscountRepository discountRepository;

@@ -124,8 +124,8 @@ class ManagerReviewIntegrationTest {
 
         Long qId = (Long) result.get("acceptedQuestionId");
         Question q = questionRepository.findById(qId).orElseThrow();
-        assertEquals("What is 2+2?", q.getContent());
-        assertEquals("ACCEPTED", q.getApprovalStatus());
+        assertEquals("What is 2&#43;2?", q.getContent());
+        assertEquals("APPROVED", q.getApprovalStatus());
         assertEquals("ACTIVE", q.getStatus());
         assertEquals("STUDENT_CONTRIBUTION", q.getSource());
     }

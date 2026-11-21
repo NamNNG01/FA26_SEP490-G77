@@ -46,3 +46,5 @@ app:
   # Material uploads stay on disk in tests: no Cloudinary credentials, no network.
   storage:
     provider: local
+  mail:
+    forgot-cooldown-ms: 0

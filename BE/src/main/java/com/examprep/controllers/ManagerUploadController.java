@@ -12,7 +12,10 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.Deque;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 /** D3: image upload for question/exam content. Returns a public URL the editor embeds; nothing is stored in the DB. */
 @RestController
@@ -21,14 +24,17 @@ import java.util.UUID;
 @Tag(name = "Manager Uploads", description = "D3: media upload to Cloudinary")
 public class ManagerUploadController {
     private final MaterialStorage storage;
+    private final Map<Long, Deque<Long>> uploadWindow = new ConcurrentHashMap<>();
 
     // ponytail: no DB record, so images dropped from a draft stay on Cloudinary; add a media table if storage cost matters.
     @PostMapping(consumes = "multipart/form-data")
     @Operation(summary = "D3: Upload an image (JPG/PNG/WEBP/GIF, max 5MB) and get its public URL")
     public ResponseEntity<ApiResponse<MaterialStorage.StoredImage>> upload(@AuthenticationPrincipal UserPrincipal user,
             @RequestParam MultipartFile file) {
+        UserController.checkUploadRate(uploadWindow, user.getId());
+        byte[] data = UserController.bytes(file);
         String publicId = "media/user" + user.getId() + "/" + UUID.randomUUID();
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success(storage.storeImage(publicId, UserController.bytes(file), false), "Uploaded"));
+                .body(ApiResponse.success(storage.storeImage(publicId, data, false), "Uploaded"));
     }
 }

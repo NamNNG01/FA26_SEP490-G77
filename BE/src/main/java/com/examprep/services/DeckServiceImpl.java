@@ -86,8 +86,12 @@ public class DeckServiceImpl implements DeckService {
         String title = request.title().strip();
         assertTitleAvailable(course, owner.getUserId(), title, -1L);
         com.examprep.entities.Module module = request.moduleId() == null ? null : courseModule(course, request.moduleId());
+        boolean isPub = Boolean.TRUE.equals(request.isPublic());
         Deck deck = decks.saveAndFlush(Deck.builder().user(owner).course(course).module(module).title(title)
-                .description(optionalText(request.description())).isPublic(request.isPublic()).build());
+                .description(optionalText(request.description()))
+                .isPublic(isPub)
+                .visibility(isPub ? Deck.VISIBILITY_PUBLIC : Deck.VISIBILITY_PRIVATE)
+                .build());
         return response(deck, 0, List.of());
     }
 
@@ -106,7 +110,11 @@ public class DeckServiceImpl implements DeckService {
         }
         if (request.title() != null) deck.setTitle(title);
         if (request.description() != null) deck.setDescription(optionalText(request.description()));
-        if (request.isPublic() != null) deck.setIsPublic(request.isPublic());
+        if (request.isPublic() != null) {
+            boolean pub = Boolean.TRUE.equals(request.isPublic());
+            deck.setIsPublic(pub);
+            deck.setVisibility(pub ? Deck.VISIBILITY_PUBLIC : Deck.VISIBILITY_PRIVATE);
+        }
         if (destination != null) deck.setCourse(destination);
         if (request.moduleId() != null) {
             deck.setModule(request.moduleId() == 0 ? null : courseModule(effectiveCourse, request.moduleId()));

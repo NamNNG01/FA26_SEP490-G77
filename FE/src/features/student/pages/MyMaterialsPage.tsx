@@ -149,9 +149,10 @@ export function MyMaterialsPage() {
   const startQuiz = async (jobId: number, takeAs: TakeAs) => {
     setStartingJob(jobId);
     try {
-      const started = await materialService.start(jobId);
+      const started = await materialService.start(jobId, takeAs);
+      const serverTakeAs = started.takeAs === 'EXAM' || started.takeAs === 'PRACTICE' ? started.takeAs : takeAs;
       // Opened by attempt id: the choice is kept for that attempt (a resumed one keeps its own).
-      if (!takeAsOf(started.attemptId)) rememberTakeAs(started.attemptId, takeAs);
+      if (!takeAsOf(started.attemptId)) rememberTakeAs(started.attemptId, serverTakeAs);
       navigate(studentResumeAttemptPath(started.attemptId));
     } catch (err) {
       toast.error(getApiErrorMessage(err, 'Failed to start the quiz.'));

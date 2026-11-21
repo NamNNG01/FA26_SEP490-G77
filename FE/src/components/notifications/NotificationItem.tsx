@@ -36,7 +36,11 @@ export function formatRelativeTime(iso: string): string {
 
 /** In-app path for the notification, or null when it only informs (clicking just marks it read). */
 export function notificationTarget(n: StudentNotification): string | null {
-  if (n.link && n.link.startsWith('/')) return n.link;
+  if (n.link && n.link.startsWith('/')) {
+    if (n.link.startsWith('/contributions/')) return `/student${n.link}`;
+    if (n.link.startsWith('/decks/')) return `${ROUTES.studentFlashcards}/${n.link.slice('/decks/'.length)}`;
+    return n.link;
+  }
   // Contest notifications carry no link yet (docs/notes/contest-be-gaps-2026-10-31.md): open the contests page.
   return n.type?.startsWith('CONTEST_') ? ROUTES.studentContests : null;
 }

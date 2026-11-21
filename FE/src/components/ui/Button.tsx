@@ -18,7 +18,7 @@ const btnSizes: Record<BtnSize, string> = {
 };
 
 export function Button({
-  variant = 'primary', size = 'md', className = '', children, icon, iconRight, loading, ...props
+  variant = 'primary', size = 'md', className = '', children, icon, iconRight, loading, disabled, ...props
 }: {
   variant?: BtnVariant; size?: BtnSize; className?: string; children?: React.ReactNode;
   icon?: React.ReactNode;
@@ -27,7 +27,12 @@ export function Button({
   loading?: boolean;
 } & React.ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
-    <button className={`${btnBase} ${btnVariants[variant]} ${btnSizes[size]} ${className}`} {...props}>
+    <button
+      className={`${btnBase} ${btnVariants[variant]} ${btnSizes[size]} ${className}`}
+      disabled={disabled || loading}
+      aria-busy={loading || undefined}
+      {...props}
+    >
       {loading ? <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full spinner" /> : icon}
       {children}
       {!loading && iconRight}

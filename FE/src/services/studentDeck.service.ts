@@ -208,6 +208,7 @@ export interface ViewerCard {
   codeBody: string | null;
   frontImageUrl?: string | null;
   backImageUrl?: string | null;
+  isStarred?: boolean;
 }
 
 export interface ViewerView {

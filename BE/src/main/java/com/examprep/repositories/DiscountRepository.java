@@ -23,13 +23,16 @@ public interface DiscountRepository extends JpaRepository<Discount, Long>, JpaSp
     Optional<Discount> findByCodeIgnoreCaseAndDeletedAtIsNull(String code);
 
     @Modifying
-    @Query("update Discount d set d.usedCount = d.usedCount + 1 where d.discountId = :discountId")
+    @Query("update Discount d set d.usedCount = case when d.usedCount < d.usageLimit then d.usedCount + 1 else d.usedCount end where d.discountId = :discountId")
     int incrementUsedCount(@Param("discountId") Long discountId);
 
     @Modifying
     @Query("update Discount d set d.usedCount = d.usedCount + 1 "
-            + "where d.discountId = :discountId and d.usedCount < d.usageLimit")
-    int reserveUsage(@Param("discountId") Long discountId);
+            + "where d.discountId = :discountId and d.usedCount < d.usageLimit "
+            + "and d.isActive = true and d.deletedAt is null "
+            + "and (d.startAt is null or d.startAt <= :now) "
+            + "and (d.expiresAt is null or d.expiresAt > :now)")
+    int reserveUsage(@Param("discountId") Long discountId, @Param("now") Instant now);
 
     @Modifying
     @Query("update Discount d set d.usedCount = case when d.usedCount > 0 then d.usedCount - 1 else 0 end "
@@ -38,7 +41,10 @@ public interface DiscountRepository extends JpaRepository<Discount, Long>, JpaSp
 
     @Query("SELECT d FROM Discount d WHERE d.isActive = true AND d.deletedAt IS NULL AND (d.expiresAt IS NULL OR d.expiresAt > :now) " +
             "AND d.appliesTo IN ('COURSE', 'ALL') AND d.accessType = 'CLAIM_REQUIRED' " +
-            "AND d.usageLimit - d.usedCount - (SELECT COUNT(ud) FROM UserDiscount ud WHERE ud.discount = d AND ud.isUsed = false) > 0 " +
+            "AND d.usageLimit - d.usedCount - CASE WHEN (SELECT COUNT(ud) FROM UserDiscount ud WHERE ud.discount = d AND ud.isUsed = false) " +
+            "> (SELECT COUNT(p) FROM Payment p WHERE p.discount = d AND p.status = 'PENDING' AND p.discountReserved = true) " +
+            "THEN ((SELECT COUNT(ud) FROM UserDiscount ud WHERE ud.discount = d AND ud.isUsed = false) " +
+            "- (SELECT COUNT(p) FROM Payment p WHERE p.discount = d AND p.status = 'PENDING' AND p.discountReserved = true)) ELSE 0L END > 0 " +
             "AND (LOWER(d.code) LIKE :keyword ESCAPE '!' OR LOWER(COALESCE(d.name, '')) LIKE :keyword ESCAPE '!') ORDER BY d.discountId DESC")
     Page<Discount> findContestPrizes(@Param("now") Instant now, @Param("keyword") String keyword, Pageable pageable);
 

@@ -47,7 +47,7 @@ class StudentExamControllerTest {
     void getExamDetail_Success() throws Exception {
         ExamDetailDto detail = new ExamDetailDto(
                 5L, 1L, "Course 1", "Midterm Exam", "Desc", 60,
-                BigDecimal.TEN, 10, Instant.now(),
+                BigDecimal.TEN, BigDecimal.valueOf(5), 10, Instant.now(),
                 new ExamMyStatsDto(1L, BigDecimal.valueOf(8), Instant.now(), 100L),
                 new ExamActionsDto(true, null, true, null)
         );

@@ -184,7 +184,8 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
 
         boolean isAuthor = userId != null && d.getUser().getUserId().equals(userId);
 
-        if (d.getApprovalStatus() != null && !Discussion.APPROVAL_APPROVED.equals(d.getApprovalStatus())) {
+        if ("HIDDEN".equals(d.getStatus())
+                || (d.getApprovalStatus() != null && !Discussion.APPROVAL_APPROVED.equals(d.getApprovalStatus()))) {
             if (!isAuthor) {
                 throw new ResourceNotFoundException("Discussion not found");
             }

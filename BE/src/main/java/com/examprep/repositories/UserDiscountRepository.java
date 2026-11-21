@@ -17,6 +17,8 @@ public interface UserDiscountRepository extends JpaRepository<UserDiscount, Long
 
     Optional<UserDiscount> findFirstByUserUserIdAndDiscountDiscountIdAndIsUsedFalse(Long userId, Long discountId);
 
+    long countByUserUserIdAndDiscountDiscountIdAndIsUsedFalse(Long userId, Long discountId);
+
     long countByDiscount_DiscountId(Long discountId);
 
     long countByDiscount_DiscountIdAndIsUsedFalse(Long discountId);

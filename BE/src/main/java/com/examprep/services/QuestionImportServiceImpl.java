@@ -21,8 +21,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
+import jakarta.annotation.PreDestroy;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
@@ -31,16 +34,33 @@ import java.util.concurrent.*;
 @RequiredArgsConstructor
 public class QuestionImportServiceImpl implements QuestionImportService {
 
+    private static final long MAX_IMPORT_BYTES = 10L * 1024 * 1024;
+    private static final int MAX_RATE_REQUESTS = 10;
+    private static final long RATE_WINDOW_MS = 60_000L;
+
     private final CourseManagerRepository courseManagerRepository;
     private final PdfTextExtractor pdfTextExtractor;
     private final DocxTextExtractor docxTextExtractor;
     private final TemplateBlockParser templateBlockParser;
     private final TemplateQuestionMapper templateQuestionMapper;
 
-    // Rate limiting tracker: userId -> list of timestamps
-    private final Map<Long, List<Long>> requestTimestamps = new ConcurrentHashMap<>();
+    // Rate limiting tracker: userId -> bounded timestamps deque
+    private final Map<Long, Deque<Long>> requestTimestamps = new ConcurrentHashMap<>();
 
-    private static final ExecutorService executor = Executors.newCachedThreadPool();
+    private final ExecutorService executor = new ThreadPoolExecutor(
+            2, 8, 60L, TimeUnit.SECONDS,
+            new LinkedBlockingQueue<>(32),
+            r -> {
+                Thread t = new Thread(r, "question-import");
+                t.setDaemon(true);
+                return t;
+            },
+            new ThreadPoolExecutor.AbortPolicy());
+
+    @PreDestroy
+    void shutdownExecutor() {
+        executor.shutdownNow();
+    }
 
     @Override
     public ImportPreviewResponse previewImport(MultipartFile file, Long courseId, Long moduleId, String difficulty, User user) throws Exception {
@@ -56,6 +76,9 @@ public class QuestionImportServiceImpl implements QuestionImportService {
 
         if (file == null || file.isEmpty()) {
             throw new BadRequestException("File is required");
+        }
+        if (file.getSize() > MAX_IMPORT_BYTES) {
+            throw new BadRequestException("File size must not exceed 10MB");
         }
         byte[] bytes = file.getBytes();
         String fileType;
@@ -128,7 +151,12 @@ public class QuestionImportServiceImpl implements QuestionImportService {
     }
 
     private <T> T executeWithTimeout(Callable<T> task, long timeoutSeconds) throws Exception {
-        Future<T> future = executor.submit(task);
+        Future<T> future;
+        try {
+            future = executor.submit(task);
+        } catch (RejectedExecutionException ex) {
+            throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "Import queue is busy, please try again shortly");
+        }
         try {
             return future.get(timeoutSeconds, TimeUnit.SECONDS);
         } catch (TimeoutException e) {
@@ -145,11 +173,22 @@ public class QuestionImportServiceImpl implements QuestionImportService {
 
     private void checkRateLimit(Long userId) {
         long now = System.currentTimeMillis();
-        List<Long> timestamps = requestTimestamps.computeIfAbsent(userId, k -> new CopyOnWriteArrayList<>());
-        timestamps.removeIf(t -> now - t > 60000); // 1 minute window
-        if (timestamps.size() >= 10) {
-            throw new BadRequestException("Rate limit exceeded: maximum 10 import requests per minute");
+        Deque<Long> timestamps = requestTimestamps.computeIfAbsent(userId, k -> new ArrayDeque<>());
+        synchronized (timestamps) {
+            while (!timestamps.isEmpty() && now - timestamps.peekFirst() > RATE_WINDOW_MS) {
+                timestamps.pollFirst();
+            }
+            if (timestamps.size() >= MAX_RATE_REQUESTS) {
+                throw new BadRequestException("Rate limit exceeded: maximum 10 import requests per minute");
+            }
+            timestamps.addLast(now);
         }
-        timestamps.add(now);
+        if (requestTimestamps.size() > 10_000) {
+            requestTimestamps.entrySet().removeIf(e -> {
+                synchronized (e.getValue()) {
+                    return e.getValue().isEmpty() || now - e.getValue().peekLast() > RATE_WINDOW_MS;
+                }
+            });
+        }
     }
 }

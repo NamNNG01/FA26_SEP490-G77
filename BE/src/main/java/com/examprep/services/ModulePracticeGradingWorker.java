@@ -17,6 +17,7 @@ import com.examprep.repositories.QuestionPracticeSessionRepository;
 import com.examprep.repositories.UserRepository;
 import com.examprep.services.student.ModulePracticeSupport;
 import com.examprep.services.student.QuestionReviewRecorder;
+import com.examprep.util.attempt.AttemptScoring;
 import com.examprep.util.diagram.DrawioNormalizer;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -179,6 +180,22 @@ public class ModulePracticeGradingWorker {
     private record Job(Long answerId, Long sessionId, Long sessionQuestionId, Long logId, Prepared prepared) {
     }
 
+    private enum ClaimStatus { EMPTY, SKIPPED, CLAIMED }
+
+    private record ClaimResult(ClaimStatus status, Job job, Long sessionId, Long sessionQuestionId) {
+        static ClaimResult empty() {
+            return new ClaimResult(ClaimStatus.EMPTY, null, null, null);
+        }
+
+        static ClaimResult skipped(Long sessionId, Long sessionQuestionId) {
+            return new ClaimResult(ClaimStatus.SKIPPED, null, sessionId, sessionQuestionId);
+        }
+
+        static ClaimResult claimed(Job job) {
+            return new ClaimResult(ClaimStatus.CLAIMED, job, null, null);
+        }
+    }
+
     private record Outcome(ArrayNode criteria, String overallFeedback, BigDecimal score, AiResponse response,
                            String error, long durationMillis) {
     }
@@ -201,8 +218,8 @@ public class ModulePracticeGradingWorker {
         try {
             do {
                 wanted.set(false);
-                while (gradeNext()) {
-                    // keep going while there is work
+                while (gradeOne() != ClaimStatus.EMPTY) {
+                    // Continue across SKIPPED (deleted/quota-exhausted) rows so one student never stalls others.
                 }
             } while (wanted.get());
             clean = true;
@@ -217,19 +234,44 @@ public class ModulePracticeGradingWorker {
     }
 
     /**
-     * Grades one QUEUED answer; false when there is none (or when the answer cannot be funded).
-     * The provider call runs outside every transaction.
+     * Grades one QUEUED answer; false when none was graded (empty queue or unfundable student).
+     * The background {@link #drain()} loop keeps going past skipped rows so other students are not stalled.
      */
     public boolean gradeNext() {
-        Job job = tx.execute(status -> claim());
-        if (job == null) {
-            return false;
+        return gradeOne() == ClaimStatus.CLAIMED;
+    }
+
+    private ClaimStatus gradeOne() {
+        ClaimResult result = tx.execute(status -> claim());
+        if (result == null || result.status() == ClaimStatus.EMPTY) {
+            return ClaimStatus.EMPTY;
         }
+        if (result.status() == ClaimStatus.SKIPPED) {
+            if (result.sessionId() != null && result.sessionQuestionId() != null) {
+                tx.executeWithoutResult(status ->
+                        refreshAfterFailure(result.sessionId(), result.sessionQuestionId()));
+            }
+            return ClaimStatus.SKIPPED;
+        }
+        Job job = result.job();
         Outcome outcome = job.prepared().error() != null
                 ? new Outcome(null, null, null, null, job.prepared().error(), 0)
                 : run(job.prepared());
         tx.executeWithoutResult(status -> finish(job, outcome));
-        return true;
+        return ClaimStatus.CLAIMED;
+    }
+
+    private void refreshAfterFailure(Long sessionId, Long sessionQuestionId) {
+        QuestionPracticeSession session = sessions.lockById(sessionId).orElse(null);
+        QuestionPracticeSessionQuestion sessionQuestion =
+                sessionQuestions.lockInSession(sessionId, sessionQuestionId).orElse(null);
+        if (session == null || sessionQuestion == null) {
+            return;
+        }
+        refresh(sessionQuestion);
+        support.refreshCounters(session, Instant.now());
+        sessions.save(session);
+        support.refreshProgress(sessionQuestion);
     }
 
     @Scheduled(initialDelayString = "${app.student-ai.sweep-ms:60000}", fixedDelayString = "${app.student-ai.sweep-ms:60000}")
@@ -256,37 +298,36 @@ public class ModulePracticeGradingWorker {
     // ------------------------------------------------------------------ claim
 
     /**
-     * Takes the next queued answer, locks it, reserves its quota and builds the prompt. Returns null
-     * when there is nothing to grade or when the reservation does not fit the student's quota — in
-     * that case the answer is marked failed so the queue never spins on it.
+     * Takes the next queued answer, locks it, reserves its quota and builds the prompt.
+     * Unfundable answers are marked {@code FAILED} and reported as {@code SKIPPED} so {@link #drain()}
+     * moves on immediately to subsequent queued answers without stalling other students.
      */
-    private Job claim() {
+    private ClaimResult claim() {
         List<Long> ids = answers.lockNextQueued();
         if (ids.isEmpty()) {
-            return null;
+            return ClaimResult.empty();
         }
         QuestionPracticeAnswer answer = answers.findById(ids.get(0)).orElse(null);
         if (answer == null) {
             // A reset removed it between the claim and the load.
-            return null;
+            return ClaimResult.skipped(null, null);
         }
         QuestionPracticeSessionQuestion sessionQuestion = answer.getSessionQuestion();
+        Long sessionId = sessionQuestion.getSession().getSessionId();
+        Long sessionQuestionId = sessionQuestion.getSessionQuestionId();
         answer.setGradingStatus(GRADING);
         answer.setGradingLockedAt(Instant.now());
         Prepared prepared = prepare(answer, sessionQuestion);
         // An answer that cannot even be prompted (over the diagram/essay limits) reserves nothing.
         Long logId = prepared.error() != null ? null : reserve(answer, prepared);
         if (prepared.error() == null && logId == null) {
-            // No fundable reservation: fail the answer and stop the drain instead of spinning on it.
             answer.setGradingStatus(FAILED);
             answer.setGradingError(QUOTA_EXHAUSTED);
             answer.setGradingLockedAt(null);
             answers.save(answer);
-            refresh(sessionQuestion);
-            return null;
+            return ClaimResult.skipped(sessionId, sessionQuestionId);
         }
-        return new Job(answer.getPracticeAnswerId(), sessionQuestion.getSession().getSessionId(),
-                sessionQuestion.getSessionQuestionId(), logId, prepared);
+        return ClaimResult.claimed(new Job(answer.getPracticeAnswerId(), sessionId, sessionQuestionId, logId, prepared));
     }
 
     private Long reserve(QuestionPracticeAnswer answer, Prepared prepared) {
@@ -405,7 +446,7 @@ public class ModulePracticeGradingWorker {
             result.add(new Criterion(
                     id.isBlank() ? "c" + (i + 1) : id,
                     row.path("name").asText("Criterion " + (i + 1)),
-                    maxPoints.multiply(weights.get(i)).divide(sum, 4, RoundingMode.HALF_UP),
+                    AttemptScoring.criterionMaxPoints(maxPoints, weights.get(i), sum),
                     row.hasNonNull("descriptors") ? row.get("descriptors").asText() : null));
         }
         return result;
@@ -480,8 +521,7 @@ public class ModulePracticeGradingWorker {
                     .put("points", points)
                     .put("feedback", clip(feedback, MAX_FEEDBACK_CHARS));
         }
-        // Rounding each criterion can push the sum a cent over the question's points.
-        BigDecimal score = total.min(prepared.maxPoints()).setScale(2, RoundingMode.DOWN);
+        BigDecimal score = AttemptScoring.output(total).min(AttemptScoring.output(prepared.maxPoints()));
         String overall = output.path("overallFeedback").asText("").strip();
         return new Outcome(scores, overall.isEmpty() ? null : clip(overall, MAX_FEEDBACK_CHARS),
                 score, response, null, durationMillis);
@@ -588,8 +628,8 @@ public class ModulePracticeGradingWorker {
         if (logId == null) {
             return;
         }
-        tx.executeWithoutResult(txStatus -> logs.findById(logId)
-                .filter(log -> "PENDING".equals(log.getStatus()))
+        tx.executeWithoutResult(txStatus -> logs.lockById(logId)
+                .filter(log -> "PENDING".equals(log.getStatus()) || "PROCESSING".equals(log.getStatus()))
                 .ifPresent(log -> quota.settle(log, status, outcome.response(), outcome.durationMillis(),
                         outcome.error())));
     }

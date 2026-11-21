@@ -780,6 +780,18 @@ class StudentPaymentApiIntegrationTest {
                 .param("code", "NOPE").param("courseId", String.valueOf(paidCourse.getCourseId())))
                 .andExpect(status().isOk()));
         assertFalse(unknown.path("valid").asBoolean());
+
+        // A5: discounts leaving finalAmount < 2,000 VND fail validation and cannot create a PayOS checkout.
+        discount("ALMOSTFREE", "FIXED_AMOUNT", "499000", "COURSE");
+        em.flush();
+        JsonNode tooCheap = data(call(student, get("/api/v1/student/discounts/validate")
+                .param("code", "ALMOSTFREE").param("courseId", String.valueOf(paidCourse.getCourseId())))
+                .andExpect(status().isOk()));
+        assertFalse(tooCheap.path("valid").asBoolean());
+        assertTrue(tooCheap.path("reason").asText().contains("2,000"));
+        call(student, post(checkoutUrl(paidCourse)).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"discountCode\":\"ALMOSTFREE\"}"))
+                .andExpect(status().isConflict());
     }
 
     @Test
@@ -975,6 +987,13 @@ class StudentPaymentApiIntegrationTest {
         mvc.perform(post("/api/v1/webhooks/payos").contentType(MediaType.APPLICATION_JSON)
                         .content(webhookBody("01", pending.getPayosOrderCode(), pending.getAmount().longValue())))
                 .andExpect(status().isOk());
+        // Spoofed outer code "00" with non-"00" signed data.code must be ignored too.
+        String spoofed = json.writeValueAsString(Map.of(
+                "code", "00",
+                "data", Map.of("orderCode", pending.getPayosOrderCode(), "amount", pending.getAmount().longValue(), "code", "01")));
+        mvc.perform(post("/api/v1/webhooks/payos").contentType(MediaType.APPLICATION_JSON)
+                        .content(spoofed))
+                .andExpect(status().isOk());
 
         assertEquals(Payment.PENDING, payment(orderCode).getStatus());
         assertEquals(0, enrollments(paidCourse, student).size());
@@ -1056,6 +1075,7 @@ class StudentPaymentApiIntegrationTest {
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("orderCode", payosOrderCode);
         data.put("amount", amount);
+        data.put("code", code);
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("code", code);
         payload.put("data", data);

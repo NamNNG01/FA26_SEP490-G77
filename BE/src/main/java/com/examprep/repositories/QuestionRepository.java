@@ -47,6 +47,8 @@ public interface QuestionRepository extends JpaRepository<Question, Long>, JpaSp
 
     @Query("SELECT q.questionId FROM Question q WHERE q.course.courseId = :courseId " +
             "AND q.status = 'ACTIVE' AND q.approvalStatus = 'APPROVED' AND q.deletedAt IS NULL " +
+            "AND q.sourceDocumentId IS NULL " +
+            "AND NOT (COALESCE(q.source, '') = 'AI' AND COALESCE(q.creatorRole, '') = 'STUDENT') " +
             "AND (:questionType IS NULL OR q.questionType = :questionType) " +
             "AND (:difficulty IS NULL OR q.difficulty = :difficulty) " +
             "AND (:moduleId IS NULL OR q.module.moduleId = :moduleId)")
@@ -56,17 +58,24 @@ public interface QuestionRepository extends JpaRepository<Question, Long>, JpaSp
                                        @Param("moduleId") Long moduleId);
 
     @Query("SELECT q FROM Question q LEFT JOIN q.course qc LEFT JOIN q.module m LEFT JOIN q.group g LEFT JOIN g.module gm " +
-            "WHERE q.status = 'ACTIVE' AND q.deletedAt IS NULL AND (qc.courseId = :courseId OR m.course.courseId = :courseId OR (q.module IS NULL AND " +
+            "WHERE q.status = 'ACTIVE' AND q.deletedAt IS NULL " +
+            "AND q.sourceDocumentId IS NULL " +
+            "AND NOT (COALESCE(q.source, '') = 'AI' AND COALESCE(q.creatorRole, '') = 'STUDENT') " +
+            "AND (qc.courseId = :courseId OR m.course.courseId = :courseId OR (q.module IS NULL AND " +
             "(g.course.courseId = :courseId OR (g.course IS NULL AND gm.course.courseId = :courseId)))) " +
             "AND (:moduleId IS NULL OR m.moduleId = :moduleId OR (q.module IS NULL AND gm.moduleId = :moduleId)) " +
             "ORDER BY q.questionId")
     List<Question> findAiBank(@Param("courseId") Long courseId, @Param("moduleId") Long moduleId);
 
-    List<Question> findByGroupGroupIdOrderByQuestionIdAsc(Long groupId);
+    @Query("SELECT q FROM Question q WHERE q.group.groupId = :groupId AND q.deletedAt IS NULL ORDER BY q.questionId ASC")
+    List<Question> findByGroupGroupIdOrderByQuestionIdAsc(@Param("groupId") Long groupId);
     List<Question> findByModuleModuleId(Long moduleId);
 
     @Query("SELECT q FROM Question q LEFT JOIN q.course qc LEFT JOIN q.module m LEFT JOIN q.group g LEFT JOIN g.module gm " +
-            "WHERE q.deletedAt IS NULL AND (qc.courseId = :courseId OR m.course.courseId = :courseId OR (q.module IS NULL AND (g.course.courseId = :courseId OR (g.course IS NULL AND gm.course.courseId = :courseId)))) " +
+            "WHERE q.deletedAt IS NULL " +
+            "AND q.sourceDocumentId IS NULL " +
+            "AND NOT (COALESCE(q.source, '') = 'AI' AND COALESCE(q.creatorRole, '') = 'STUDENT') " +
+            "AND (qc.courseId = :courseId OR m.course.courseId = :courseId OR (q.module IS NULL AND (g.course.courseId = :courseId OR (g.course IS NULL AND gm.course.courseId = :courseId)))) " +
             "AND (:moduleId IS NULL OR m.moduleId = :moduleId OR (q.module IS NULL AND gm.moduleId = :moduleId)) ORDER BY q.questionId")
     List<Question> findImportBank(@Param("courseId") Long courseId, @Param("moduleId") Long moduleId);
     boolean existsByModuleModuleId(Long moduleId);
@@ -78,7 +87,7 @@ public interface QuestionRepository extends JpaRepository<Question, Long>, JpaSp
     List<IdCount> countByModules(@Param("ids") List<Long> ids);
 
     @Query("SELECT q.group.groupId, COUNT(q) FROM Question q " +
-            "WHERE q.group.groupId IN :groupIds " +
+            "WHERE q.group.groupId IN :groupIds AND q.deletedAt IS NULL " +
             "GROUP BY q.group.groupId")
     List<Object[]> countByGroupIds(@Param("groupIds") Collection<Long> groupIds);
 
@@ -99,6 +108,7 @@ public interface QuestionRepository extends JpaRepository<Question, Long>, JpaSp
     FROM Question q
     LEFT JOIN FETCH q.group g
     WHERE g.groupId IN :groupIds
+      AND q.deletedAt IS NULL
     ORDER BY g.groupId, q.questionId
     """)
     List<Question> findAllByGroupIds(
@@ -184,7 +194,7 @@ public interface QuestionRepository extends JpaRepository<Question, Long>, JpaSp
 
     // Questions a RANDOM/MIXED exam rule could draw: publishable (active, approved) and matching the rule.
     // Student material-quiz questions live in the same course but are private to their owner, so the
-    // drawable pool excludes every AI question generated from a source document.
+    // drawable pool excludes every AI question generated from a source document or by a student.
     @Query("""
     SELECT COUNT(q)
     FROM Question q
@@ -194,6 +204,7 @@ public interface QuestionRepository extends JpaRepository<Question, Long>, JpaSp
       AND q.status = 'ACTIVE'
       AND q.approvalStatus = 'APPROVED'
       AND q.sourceDocumentId IS NULL
+      AND NOT (COALESCE(q.source, '') = 'AI' AND COALESCE(q.creatorRole, '') = 'STUDENT')
       AND q.questionType = :questionType
       AND (c.courseId = :courseId OR m.course.courseId = :courseId)
       AND (:moduleId IS NULL OR m.moduleId = :moduleId)
@@ -219,6 +230,7 @@ public interface QuestionRepository extends JpaRepository<Question, Long>, JpaSp
       AND q.status = 'ACTIVE'
       AND q.approvalStatus = 'APPROVED'
       AND q.sourceDocumentId IS NULL
+      AND NOT (COALESCE(q.source, '') = 'AI' AND COALESCE(q.creatorRole, '') = 'STUDENT')
       AND q.questionType = :questionType
       AND (c.courseId = :courseId OR m.course.courseId = :courseId)
       AND (:moduleId IS NULL OR m.moduleId = :moduleId)
@@ -257,6 +269,7 @@ public interface QuestionRepository extends JpaRepository<Question, Long>, JpaSp
       AND q.status = 'ACTIVE'
       AND q.approvalStatus = 'APPROVED'
       AND q.sourceDocumentId IS NULL
+      AND NOT (COALESCE(q.source, '') = 'AI' AND COALESCE(q.creatorRole, '') = 'STUDENT')
       AND q.module.moduleId = :moduleId
     ORDER BY q.questionId
     """)
@@ -269,6 +282,7 @@ public interface QuestionRepository extends JpaRepository<Question, Long>, JpaSp
       AND q.status = 'ACTIVE'
       AND q.approvalStatus = 'APPROVED'
       AND q.sourceDocumentId IS NULL
+      AND NOT (COALESCE(q.source, '') = 'AI' AND COALESCE(q.creatorRole, '') = 'STUDENT')
       AND q.module.moduleId = :moduleId
       AND (:difficulty IS NULL OR q.difficulty = :difficulty)
       AND (:hasTypes = false OR q.questionType IN :questionTypes)
@@ -287,6 +301,7 @@ public interface QuestionRepository extends JpaRepository<Question, Long>, JpaSp
       AND q.status = 'ACTIVE'
       AND q.approvalStatus = 'APPROVED'
       AND q.sourceDocumentId IS NULL
+      AND NOT (COALESCE(q.source, '') = 'AI' AND COALESCE(q.creatorRole, '') = 'STUDENT')
       AND q.module.moduleId = :moduleId
     """)
     long countPracticeDrawable(@Param("moduleId") Long moduleId);
@@ -306,6 +321,7 @@ public interface QuestionRepository extends JpaRepository<Question, Long>, JpaSp
       AND q.status = 'ACTIVE'
       AND q.approvalStatus = 'APPROVED'
       AND q.sourceDocumentId IS NULL
+      AND NOT (COALESCE(q.source, '') = 'AI' AND COALESCE(q.creatorRole, '') = 'STUDENT')
       AND q.course.courseId = :courseId
       AND q.module IS NULL
     ORDER BY q.questionId
@@ -319,6 +335,7 @@ public interface QuestionRepository extends JpaRepository<Question, Long>, JpaSp
       AND q.status = 'ACTIVE'
       AND q.approvalStatus = 'APPROVED'
       AND q.sourceDocumentId IS NULL
+      AND NOT (COALESCE(q.source, '') = 'AI' AND COALESCE(q.creatorRole, '') = 'STUDENT')
       AND q.course.courseId = :courseId
       AND q.module IS NULL
       AND (:difficulty IS NULL OR q.difficulty = :difficulty)
@@ -338,6 +355,7 @@ public interface QuestionRepository extends JpaRepository<Question, Long>, JpaSp
       AND q.status = 'ACTIVE'
       AND q.approvalStatus = 'APPROVED'
       AND q.sourceDocumentId IS NULL
+      AND NOT (COALESCE(q.source, '') = 'AI' AND COALESCE(q.creatorRole, '') = 'STUDENT')
       AND q.course.courseId = :courseId
       AND q.module IS NULL
     """)
@@ -360,7 +378,9 @@ public interface QuestionRepository extends JpaRepository<Question, Long>, JpaSp
     @Query("SELECT new com.examprep.dto.student.QuestionCandidate(q.questionId, m.moduleId, m.title, q.difficulty, q.questionType, q.content) " +
             "FROM Question q LEFT JOIN q.module m " +
             "WHERE q.course.courseId = :courseId AND q.status = 'ACTIVE' AND q.approvalStatus = 'APPROVED' " +
-            "AND q.deletedAt IS NULL AND q.group IS NULL AND q.questionType IN :types " +
+            "AND q.deletedAt IS NULL AND q.sourceDocumentId IS NULL " +
+            "AND NOT (COALESCE(q.source, '') = 'AI' AND COALESCE(q.creatorRole, '') = 'STUDENT') " +
+            "AND q.group IS NULL AND q.questionType IN :types " +
             "AND (m IS NULL OR m.status <> 'HIDDEN') " +
             "AND (:allModules = true OR m.moduleId IN :moduleIds) " +
             "AND (:difficulty IS NULL OR q.difficulty = :difficulty)")

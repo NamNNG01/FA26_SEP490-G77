@@ -16,6 +16,10 @@ import org.springframework.data.repository.query.Param;
 @Repository
 public interface AttemptAnswerRepository extends JpaRepository<AttemptAnswer, Long> {
     boolean existsByQuestion_QuestionId(Long questionId);
+
+    @Query("SELECT COUNT(aa) > 0 FROM AttemptAnswer aa WHERE aa.attempt.user.userId = :userId " +
+            "AND aa.question.questionId = :questionId AND aa.attempt.status <> 'IN_PROGRESS'")
+    boolean existsSubmittedByUserAndQuestion(@Param("userId") Long userId, @Param("questionId") Long questionId);
     @Query("""
             SELECT DISTINCT a FROM AttemptAnswer aa JOIN aa.attempt a JOIN FETCH a.exam e
             LEFT JOIN FETCH e.module m

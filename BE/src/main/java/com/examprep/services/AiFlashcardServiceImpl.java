@@ -184,34 +184,12 @@ public class AiFlashcardServiceImpl implements AiFlashcardService {
     }
 
     /**
-     * Spec 8 (line 1016): used = Σ(input+output) + Σ(reserved_tokens) of RUNNING jobs. The shared
-     * {@code snapshot()} counts reserved tokens of PENDING jobs only (house-wide, unchanged), so this
-     * scoped copy adds the PROCESSING reservations of each bucket's own window — the exact windows
-     * {@link AiQuotaService#snapshot} computes: the current house month for FREE, the subscription
-     * window (end date inclusive) for PLAN — and rebuilds the record without touching the shared
-     * service.
+     * Spec 8 (line 1016): {@link AiUsageLogRepository#sumStudentUsage} now includes both PENDING
+     * and PROCESSING reservations house-wide, so {@code quota.snapshot(userId)} already reflects
+     * running flashcard jobs without double-counting them.
      */
     private AiQuotaService.Snapshot snapshotWithRunningJobs(Long userId) {
-        AiQuotaService.Snapshot snapshot = quota.snapshot(userId);
-        long freeReserved = snapshot.freeReserved() + processingReserved(userId, AiQuotaService.FREE,
-                snapshot.freeResetAt().atZone(AiQuotaService.ZONE).toLocalDate().minusMonths(1).withDayOfMonth(1)
-                        .atStartOfDay(AiQuotaService.ZONE).toInstant(), snapshot.freeResetAt());
-        long planReserved = snapshot.planName() == null ? snapshot.planReserved()
-                : snapshot.planReserved() + processingReserved(userId, AiQuotaService.PLAN,
-                        snapshot.planStart(), snapshot.planEnd().plusSeconds(1));
-        return new AiQuotaService.Snapshot(snapshot.freeLimit(), snapshot.freeUsed(), freeReserved,
-                snapshot.freeResetAt(), snapshot.planName(), snapshot.planLimit(), snapshot.planStart(),
-                snapshot.planEnd(), snapshot.planUsed(), planReserved);
-    }
-
-    /** PROCESSING reservations grouped by billingSource in the window → the asked bucket's sum. */
-    private long processingReserved(Long userId, String source, Instant from, Instant to) {
-        for (Object[] row : logs.sumProcessingReservedByWindow(userId, from, to)) {
-            if (source.equals(row[0])) {
-                return ((Number) row[1]).longValue();
-            }
-        }
-        return 0;
+        return quota.snapshot(userId);
     }
 
     // ---------------------------------------------------------------- API 32/33 (Task 10/11)

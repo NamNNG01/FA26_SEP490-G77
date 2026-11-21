@@ -130,12 +130,14 @@ public class AdminUserServiceImpl implements AdminUserService {
         if (users.existsByEmailAndUserIdNot(email, id))
             throw new BaseException(ResponseCode.CONFLICT, "Email is already used by another account.");
 
+        String previousRole = user.getRoleName();
         user.setFullName(request.fullName().trim());
         user.setEmail(email);
         user.setRoleName(request.role());
         user.setStatus(request.status());
 
-        if (User.STATUS_INACTIVE.equalsIgnoreCase(request.status()))
+        if (User.STATUS_INACTIVE.equalsIgnoreCase(request.status())
+                || !java.util.Objects.equals(previousRole, request.role()))
             refreshTokens.revokeAllByUserId(id, Instant.now());
 
         return AdminUserResponse.from(user);
@@ -194,9 +196,13 @@ public class AdminUserServiceImpl implements AdminUserService {
         }
         quota.lock(id);
         Instant now = Instant.now();
-        for (var sub : subscriptions.findCurrentOrFutureByUser(id, now)) {
+        for (var sub : subscriptions.findByUserUserIdAndStatus(id, "ACTIVE")) {
             sub.setStatus("CANCELLED");
+            if (sub.getEndDate() != null && sub.getEndDate().isAfter(now)) {
+                sub.setEndDate(now);
+            }
         }
+        subscriptions.flush();
         if (plan == null) return null;
         Instant end = request.endDate().plusDays(1).atStartOfDay(AiQuotaService.ZONE).toInstant().minusNanos(1000);
         var sub = subscriptions.save(com.examprep.entities.UserSubscription.builder().user(user).plan(plan).startDate(now)

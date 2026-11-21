@@ -130,18 +130,24 @@ export const studentCodeExamService = {
   },
 
   /** CD-07 — newest first. */
-  async getSubmissions(examId: number | string, page = 0, size = 10): Promise<PageResponse<CodeSubmission>> {
+  async getSubmissions(
+    examId: number | string,
+    page = 0,
+    size = 10,
+    attemptId?: number | string,
+  ): Promise<PageResponse<CodeSubmission>> {
+    const attemptParam = attemptId != null ? `&attemptId=${encodeURIComponent(String(attemptId))}` : '';
     const res = await api.get<ApiResponse<PageResponse<CodeSubmission>>>(
-      `/student/code-exams/${examId}/submissions?page=${page}&size=${size}`,
+      `/student/code-exams/${examId}/submissions?page=${page}&size=${size}${attemptParam}`,
     );
     return res.data;
   },
 
   /** CD-07, every page. */
-  async getAllSubmissions(examId: number | string): Promise<CodeSubmission[]> {
+  async getAllSubmissions(examId: number | string, attemptId?: number | string): Promise<CodeSubmission[]> {
     const items: CodeSubmission[] = [];
     for (let page = 0; ; page++) {
-      const res = await studentCodeExamService.getSubmissions(examId, page, 100);
+      const res = await studentCodeExamService.getSubmissions(examId, page, 100, attemptId);
       items.push(...res.content);
       if (res.last || res.content.length === 0) return items;
     }

@@ -115,7 +115,8 @@ public interface DeckRepository extends JpaRepository<Deck, Long> {
             "(SELECT COUNT(p) FROM UserCardProgress p JOIN p.card f WHERE f.deck = d AND p.user.userId = :userId AND p.status = 'KNOWN'), " +
             "(SELECT COUNT(p) FROM UserCardProgress p JOIN p.card f WHERE f.deck = d AND p.user.userId = :userId AND p.isStarred = true), " +
             "d.module.moduleId) " +
-            "FROM Deck d WHERE d.course.courseId = :courseId " +
+            "FROM Deck d LEFT JOIN d.module m WHERE d.course.courseId = :courseId " +
+            "AND (m IS NULL OR m.status <> 'HIDDEN') " +
             // Students' own decks attached to the course stay private (FC-01, spec 9.6).
             "AND (d.user.roleName <> 'STUDENT' OR d.user.userId = :userId OR d.visibility = 'PUBLIC')")
     List<com.examprep.dto.student.DeckDto> findCourseDecksWithStats(@Param("courseId") Long courseId, @Param("userId") Long userId);
@@ -132,7 +133,7 @@ public interface DeckRepository extends JpaRepository<Deck, Long> {
             // Same rule as the other course deck queries: manager decks and the viewer's own decks
             // always show; another student's deck only once its public request was approved
             // (visibility flips to PUBLIC on approval, so a pending review stays private).
-            "AND  d.visibility = 'PUBLIC' " +
+            "AND (d.user.roleName <> 'STUDENT' OR d.user.userId = :userId OR d.visibility = 'PUBLIC') " +
             "ORDER BY d.title ASC, d.deckId ASC")
     List<DeckDto> findDecksByModuleOrGeneral(
             @Param("courseId") Long courseId,

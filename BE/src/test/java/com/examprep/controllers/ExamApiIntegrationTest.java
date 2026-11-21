@@ -189,7 +189,12 @@ class ExamApiIntegrationTest {
         // Bank has one active SINGLE_CHOICE in the module; a DRAFT one does not count. The rule draws two.
         question(module, "SINGLE_CHOICE", "Draft question").setStatus("DRAFT");
         // Material-quiz questions are private to their owner's generated quiz, not course draw stock.
-        question(module, "SINGLE_CHOICE", "Generated from a student material").setSourceDocumentId(424242L);
+        Document materialDoc = Document.builder().user(student).generationType("MATERIAL").status("UPLOADED")
+                .title("Student Material").fileName("notes.pdf").extractedContent("Student material content")
+                .createdAt(Instant.now()).build();
+        em.persist(materialDoc);
+        em.flush();
+        question(module, "SINGLE_CHOICE", "Generated from a student material").setSourceDocumentId(materialDoc.getDocId());
         submit(payload).andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("Random rule 1 needs 2 SINGLE_CHOICE question(s) but the question bank has only 1 active, approved one(s)."));
         Question second = question(module, "SINGLE_CHOICE", "Second active question");
@@ -495,21 +500,25 @@ class ExamApiIntegrationTest {
         weights.forEach(w -> assertEquals(0, BigDecimal.ONE.compareTo(w)));
     }
 
-    @Test void creatingAndUpdatingWithDeprecatedPassMarkAndMaxAttemptsSucceedsAndIgnoresThem() throws Exception {
+    @Test void creatingAndUpdatingWithPassMarkSucceedsWhileMaxAttemptsStaysIgnored() throws Exception {
         Map<String,Object> payload = create();
-        payload.put("passMark", 80);
+        payload.put("passMark", 5);
         payload.put("maxAttempts", 3);
         JsonNode created = data(submit(payload).andExpect(status().isCreated()));
-        assertFalse(created.has("passMark"));
+        assertEquals(0, new BigDecimal("5").compareTo(created.path("passMark").decimalValue()));
         assertFalse(created.has("maxAttempts"));
 
         long id = created.path("examId").asLong();
         call(manager, put("/api/v1/manager/exams/" + id).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"passMark\":70,\"maxAttempts\":2,\"title\":\"Updated Title\"}"))
+                .content("{\"passMark\":7,\"maxAttempts\":2,\"title\":\"Updated Title\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.title").value("Updated Title"))
-                .andExpect(jsonPath("$.data.passMark").doesNotExist())
+                .andExpect(jsonPath("$.data.passMark").value(7))
                 .andExpect(jsonPath("$.data.maxAttempts").doesNotExist());
+
+        call(manager, put("/api/v1/manager/exams/" + id).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"passMark\":15}"))
+                .andExpect(status().isBadRequest());
     }
 
     @Test void contestModeIsSavedAndListed() throws Exception {

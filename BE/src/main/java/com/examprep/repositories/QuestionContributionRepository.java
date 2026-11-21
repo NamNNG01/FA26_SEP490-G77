@@ -29,7 +29,8 @@ public interface QuestionContributionRepository extends JpaRepository<QuestionCo
     );
 
     @Query(value = "SELECT c FROM QuestionContribution c WHERE " +
-           "(:myCourseIds IS NULL OR c.courseId IN :myCourseIds) " +
+           "c.type = 'QUESTION' " +
+           "AND (:myCourseIds IS NULL OR c.courseId IN :myCourseIds) " +
            "AND (:moduleId IS NULL OR c.moduleId = :moduleId) " +
            "AND (:questionType IS NULL OR c.questionType = :questionType) " +
            "AND (:difficulty IS NULL OR c.difficulty = :difficulty) " +
@@ -40,7 +41,8 @@ public interface QuestionContributionRepository extends JpaRepository<QuestionCo
            "AND (cast(:submittedTo as timestamp) IS NULL OR c.submittedAt < :submittedTo) " +
            "ORDER BY c.submittedAt DESC, c.contributionId DESC",
            countQuery = "SELECT COUNT(c) FROM QuestionContribution c WHERE " +
-           "(:myCourseIds IS NULL OR c.courseId IN :myCourseIds) " +
+           "c.type = 'QUESTION' " +
+           "AND (:myCourseIds IS NULL OR c.courseId IN :myCourseIds) " +
            "AND (:moduleId IS NULL OR c.moduleId = :moduleId) " +
            "AND (:questionType IS NULL OR c.questionType = :questionType) " +
            "AND (:difficulty IS NULL OR c.difficulty = :difficulty) " +
@@ -65,7 +67,7 @@ public interface QuestionContributionRepository extends JpaRepository<QuestionCo
     @Query("SELECT COUNT(c) FROM QuestionContribution c WHERE c.status = 'PENDING' AND (:myCourseIds IS NULL OR c.courseId IN :myCourseIds)")
     long countPending(@Param("myCourseIds") List<Long> myCourseIds);
 
-    @Query("SELECT COUNT(c) FROM QuestionContribution c WHERE c.status = 'APPROVED' AND c.reviewedAt >= :since AND (:myCourseIds IS NULL OR c.courseId IN :myCourseIds)")
+    @Query("SELECT COUNT(c) FROM QuestionContribution c WHERE c.status = 'ACCEPTED' AND c.reviewedAt >= :since AND (:myCourseIds IS NULL OR c.courseId IN :myCourseIds)")
     long countApprovedSince(@Param("myCourseIds") List<Long> myCourseIds, @Param("since") Instant since);
 
     @Query("SELECT COUNT(c) FROM QuestionContribution c WHERE c.status = 'REJECTED' AND c.reviewedAt >= :since AND (:myCourseIds IS NULL OR c.courseId IN :myCourseIds)")

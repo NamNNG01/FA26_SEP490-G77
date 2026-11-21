@@ -476,18 +476,6 @@ export const menuByRole: Record<string, MenuItem[]> = {
       path: ROUTES.adminSubscriptions,
     },
     {
-      id: "admin-analytics",
-      title: "Analytics",
-      icon: <Icon.BarChart className="w-4 h-4" />,
-      path: ROUTES.adminAnalytics,
-    },
-    {
-      id: "admin-audit-logs",
-      title: "Audit Logs",
-      icon: <Icon.Activity className="w-4 h-4" />,
-      path: ROUTES.adminAuditLogs,
-    },
-    {
       id: "admin-settings",
       title: "System Settings",
       icon: <Icon.Settings className="w-4 h-4" />,

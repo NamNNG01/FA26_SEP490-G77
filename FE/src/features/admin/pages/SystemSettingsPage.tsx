@@ -179,6 +179,11 @@ export function SystemSettingsPage() {
         <p className="text-sm text-content-soft mt-1">Configure platform behavior, security, and maintenance options.</p>
       </div>
 
+      <Alert
+        type="info"
+        message="These settings are saved as configuration metadata in the database and are not yet enforced by backend runtime checks."
+      />
+
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
         {/* Left (25%): settings navigation */}
         <nav className="lg:col-span-1 lg:sticky lg:top-0 card p-2 space-y-0.5 min-w-0" aria-label="Settings sections">

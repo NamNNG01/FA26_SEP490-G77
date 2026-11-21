@@ -71,6 +71,7 @@ public class StudentMaterialApiIntegrationTest {
     @Autowired ObjectMapper json;
     @Autowired EntityManager em;
     @Autowired DataSource dataSource;
+    @Autowired com.examprep.repositories.DocumentRepository documentRepository;
     @MockBean MaterialStorage storage;
     @MockBean MaterialTextReader reader;
     @MockBean QuizGenerationWorker worker;
@@ -478,7 +479,7 @@ public class StudentMaterialApiIntegrationTest {
     @Test
     void generateReservesQuotaAndQueuesTheJob() throws Exception {
         Document subject = material("x".repeat(200));
-        long expected = AiQuotaService.estimate(subject.getExtractedContent().length(), 500);
+        long expected = AiQuotaService.estimate(subject.getExtractedContent().length(), 1_500);
 
         JsonNode data = data(call(student, post("/api/v1/student/materials/" + subject.getDocId() + "/generate-quiz")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -659,7 +660,7 @@ public class StudentMaterialApiIntegrationTest {
         em.persist(AiUsageLog.builder().user(student).purpose("EXPLANATION").status("SUCCESS")
                 .inputTokens(9_900).outputTokens(0).billingSource("FREE").createdAt(java.time.Instant.now()).build());
         em.flush();
-        long expected = AiQuotaService.estimate(subject.getExtractedContent().length(), 500);
+        long expected = AiQuotaService.estimate(subject.getExtractedContent().length(), 1_500);
 
         call(student, post("/api/v1/student/materials/" + subject.getDocId() + "/generate-quiz")
                 .contentType(MediaType.APPLICATION_JSON).content("{\"questionCount\":10}"))
@@ -897,6 +898,24 @@ public class StudentMaterialApiIntegrationTest {
     private ResultActions call(User actor, MockHttpServletRequestBuilder request) throws Exception {
         em.flush();
         return mvc.perform(request.with(user(UserPrincipal.create(actor))));
+    }
+
+    @Test
+    void flashcardDocumentsAreExcludedFromMaterialsAndEstimateClipsAtMaterialLimit() throws Exception {
+        Document materialDoc = material("Material content");
+        Document flashcardDoc = Document.builder().user(student).generationType("FLASHCARD").status("COMPLETED")
+                .extractedContent("Internal flashcard text").title("Internal flashcards")
+                .fileName("flashcard.txt").createdAt(Instant.now()).build();
+        em.persist(flashcardDoc);
+        em.flush();
+
+        assertEquals(1, documentRepository.countByUserUserId(student.getUserId()));
+        JsonNode listed = data(call(student, get("/api/v1/student/materials")).andExpect(status().isOk()));
+        assertEquals(1, listed.path("content").size());
+        assertEquals(materialDoc.getDocId(), listed.path("content").get(0).path("documentId").asLong());
+
+        assertEquals(StudentMaterialServiceImpl.estimateQuizTokens(60_000, 10),
+                StudentMaterialServiceImpl.estimateQuizTokens(200_000, 10));
     }
 
     private JsonNode data(MvcResult result) throws Exception {

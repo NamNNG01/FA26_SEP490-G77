@@ -11,7 +11,7 @@ import {
 import { useAuth, landingPathForRole, AFTER_AUTH_STATE } from '@/auth/authContext';
 import { RequireRole, ROLE_ADMIN, ROLE_MANAGER, ROLE_STUDENT, ROLE_COURSE_MANAGER_ONLY } from '@/auth/RequireRole';
 import { ROUTES } from '@/app/routes';
-import { safeRedirect } from '@/hooks/useRequireAuth';
+import { loginPathFor, safeRedirect } from '@/hooks/useRequireAuth';
 import { AuthLayout } from '@/layouts/AuthLayout';
 import { DashboardLayout } from '@/layouts/DashboardLayout';
 import { PublicLayout } from '@/layouts/PublicLayout';
@@ -145,9 +145,18 @@ function publicRoutes(home: React.ReactNode = <LandingPage />, withCatalog = tru
  */
 function LoggedInLoginRedirect() {
   const [searchParams] = useSearchParams();
+  const location = useLocation();
   const landing = useLandingPath();
-  const redirect = safeRedirect(searchParams.get('redirect'));
+  const fromState = (location.state as { from?: string } | null)?.from;
+  const redirect = safeRedirect(searchParams.get('redirect')) ?? safeRedirect(fromState);
   return <Navigate to={redirect ?? landing} replace state={redirect ? undefined : AFTER_AUTH_STATE} />;
+}
+
+/** Preserves the requested deep path across the login redirect for unauthenticated users. */
+function WildcardLoginRedirect() {
+  const location = useLocation();
+  const target = safeRedirect(location.pathname + location.search + location.hash);
+  return <Navigate to={target ? loginPathFor(target) : ROUTES.login} replace />;
 }
 
 /**
@@ -234,7 +243,7 @@ function AppRoutes() {
         />
 
         {/* Anything else → login (keeps ?redirect= so the destination survives). */}
-        <Route path="*" element={<Navigate to={ROUTES.login} replace />} />
+        <Route path="*" element={<WildcardLoginRedirect />} />
       </Routes>
     );
   }

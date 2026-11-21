@@ -64,19 +64,51 @@ public class QuestionServiceImpl implements QuestionService {
 
     public Page<QuestionListItemDto> getQuestions(Long courseId, List<Long> courseIds, Long moduleId, Long groupId, String groupType, String questionType, List<String> questionTypes, String difficulty, String status, String approvalStatus, String creatorRole, String source, Long createdBy, String search, Pageable pageable, User currentUser) {
         List<Long> scopeCourseIds = courseIds == null ? List.of() : courseIds.stream().filter(Objects::nonNull).distinct().toList();
+        List<Long> managedCourseIds = null;
 
         if (!User.ROLE_ADMIN.equals(currentUser.getRoleName())) {
+            managedCourseIds = courseRepository.findCourseIdsManagedByUser(currentUser.getUserId());
+            if (managedCourseIds.isEmpty()) {
+                return Page.empty(pageable);
+            }
+            Set<Long> managedSet = new HashSet<>(managedCourseIds);
             List<Long> requested = new ArrayList<>(scopeCourseIds);
             if (courseId != null) requested.add(courseId);
             for (Long id : requested.stream().distinct().toList()) {
-                if (!courseManagerRepository.existsByCourse_CourseIdAndUser_UserId(id, currentUser.getUserId())) {
+                if (!managedSet.contains(id)) {
                     throw new ForbiddenException("You do not have access to this course");
+                }
+            }
+            if (moduleId != null) {
+                Optional<Long> moduleCourseId = moduleRepository.findCourseId(moduleId);
+                if (moduleCourseId.isPresent() && !managedSet.contains(moduleCourseId.get())) {
+                    throw new ForbiddenException("You do not have access to this course");
+                }
+            }
+            if (groupId != null) {
+                Optional<QuestionGroup> grp = questionGroupRepository.findById(groupId);
+                if (grp.isPresent()) {
+                    Long groupCourseId = grp.get().getCourse() != null ? grp.get().getCourse().getCourseId()
+                            : (grp.get().getModule() != null && grp.get().getModule().getCourse() != null
+                            ? grp.get().getModule().getCourse().getCourseId() : null);
+                    if (groupCourseId == null || !managedSet.contains(groupCourseId)) {
+                        throw new ForbiddenException("You do not have access to this course");
+                    }
                 }
             }
         }
 
+        final List<Long> enforcedManagedIds = managedCourseIds;
         Specification<Question> spec = (root, query, cb) -> {
             var predicate = cb.isNull(root.get("deletedAt"));
+            predicate = cb.and(predicate, cb.isNull(root.get("sourceDocumentId")));
+            predicate = cb.and(predicate, cb.not(cb.and(
+                    cb.equal(cb.coalesce(root.<String>get("source"), ""), "AI"),
+                    cb.equal(cb.coalesce(root.<String>get("creatorRole"), ""), "STUDENT")
+            )));
+            if (enforcedManagedIds != null) {
+                predicate = cb.and(predicate, root.get("course").get("courseId").in(enforcedManagedIds));
+            }
             if (courseId != null) predicate = cb.and(predicate, cb.equal(root.get("course").get("courseId"), courseId));
             if (!scopeCourseIds.isEmpty()) predicate = cb.and(predicate, root.get("course").get("courseId").in(scopeCourseIds));
             if (moduleId != null) predicate = cb.and(predicate, cb.equal(root.get("module").get("moduleId"), moduleId));
@@ -223,14 +255,15 @@ public class QuestionServiceImpl implements QuestionService {
             }
 
             String metadataJson = serializeJson(req.getQuestionMetadata(), "questionMetadata");
-            String answerKeyJson = serializeJson(req.getAnswerKey(), "answerKey");
-            String rubricJson = serializeJson(req.getEssayGradingRubric(), "essayGradingRubric");
+            Object sanitizedAnswerKey = sanitizeAnswerKey(req.getQuestionType(), req.getAnswerKey());
+            String answerKeyJson = serializeJson(sanitizedAnswerKey, "answerKey");
+            String rubricJson = serializeJson(sanitizeRubric(req.getEssayGradingRubric()), "essayGradingRubric");
 
             boolean isOrdering = "ORDERING".equals(req.getQuestionType());
             List<Object> correctOrder = null;
             if (isOrdering) {
                 correctOrder = req.getCorrectOrder();
-                if (correctOrder == null && req.getAnswerKey() instanceof Map<?, ?> map && map.get("correctOrder") instanceof List<?> list) {
+                if (correctOrder == null && sanitizedAnswerKey instanceof Map<?, ?> map && map.get("correctOrder") instanceof List<?> list) {
                     correctOrder = new ArrayList<>(list);
                 }
             }
@@ -242,14 +275,14 @@ public class QuestionServiceImpl implements QuestionService {
                     .createdBy(currentUser)
                     .questionType(req.getQuestionType())
                     .difficulty(req.getDifficulty() != null ? req.getDifficulty() : "MEDIUM")
-                    .content(req.getContent())
+                    .content(questionValidator.sanitize(req.getContent()))
                     .questionMetadata(metadataJson)
                     .answerKey(answerKeyJson)
                     .source(source)
                     .creatorRole(creatorRole)
                     .approvalStatus(approvalStatus)
                     .status(status)
-                    .aiExplanation(req.getExplanation())
+                    .aiExplanation(questionValidator.sanitize(req.getExplanation()))
                     .essayGradingRubric(rubricJson)
                     .contentHash(hashes.get(i))
                     .scoringVersion(1)
@@ -282,9 +315,9 @@ public class QuestionServiceImpl implements QuestionService {
                     AnswerOptionDto optDto = optDtos.get(j);
                     AnswerOption opt = AnswerOption.builder()
                             .question(q)
-                            .optionText(optDto.getOptionText())
+                            .optionText(questionValidator.sanitize(optDto.getOptionText()))
                             .isCorrect(isOrdering ? false : (optDto.getIsCorrect() != null ? optDto.getIsCorrect() : false))
-                            .explanation(optDto.getExplanation())
+                            .explanation(questionValidator.sanitize(optDto.getExplanation()))
                             .orderIndex(optDto.getOrderIndex() != null ? optDto.getOrderIndex() : j)
                             .build();
                     qOptions.add(opt);
@@ -365,7 +398,7 @@ public class QuestionServiceImpl implements QuestionService {
         if ("ACTIVE".equalsIgnoreCase(q.getStatus()) || "ARCHIVED".equalsIgnoreCase(q.getStatus())) {
             throw new ResourceConflictException("Cannot update question when status is ACTIVE or ARCHIVED");
         }
-        return applyUpdate(q, req);
+        return applyUpdate(q, req, false);
     }
 
     @Override
@@ -373,10 +406,10 @@ public class QuestionServiceImpl implements QuestionService {
     public QuestionDetailDto correctQuestion(Long id, QuestionUpdateRequest req) {
         Question q = questionRepository.findActiveById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Question not found"));
-        return applyUpdate(q, req);
+        return applyUpdate(q, req, true);
     }
 
-    private QuestionDetailDto applyUpdate(Question q, QuestionUpdateRequest req) {
+    private QuestionDetailDto applyUpdate(Question q, QuestionUpdateRequest req, boolean allowNullModule) {
         if (req.getModuleId() != null) {
             com.examprep.entities.Module module = moduleRepository.findById(req.getModuleId())
                     .orElseThrow(() -> new ResourceNotFoundException("Module not found"));
@@ -389,7 +422,7 @@ public class QuestionServiceImpl implements QuestionService {
             }
 
             q.setModule(module);
-        } else if (q.getModule() == null) {
+        } else if (!allowNullModule && q.getModule() == null) {
             throw new BadRequestException("Module ID is required");
         }
         if (req.getLockVersion() != null && !req.getLockVersion().equals(q.getLockVersion())) {
@@ -435,13 +468,15 @@ public class QuestionServiceImpl implements QuestionService {
             q.setGroup(null);
         }
 
+        boolean isOrdering = "ORDERING".equals(typeToValidate);
         List<AnswerOptionDto> optionsToValidate = req.getOptions();
         if (optionsToValidate == null) {
             List<AnswerOption> existingOpts = answerOptionRepository.findByQuestion_QuestionId(q.getQuestionId());
             optionsToValidate = existingOpts.stream().map(o -> AnswerOptionDto.builder()
                     .optionId(o.getOptionId())
                     .optionText(o.getOptionText())
-                    .isCorrect(o.getIsCorrect())
+                    .isCorrect(isOrdering ? null : o.getIsCorrect())
+                    .key(isOrdering && o.getOptionId() != null ? String.valueOf(o.getOptionId()) : null)
                     .explanation(o.getExplanation())
                     .orderIndex(o.getOrderIndex())
                     .build()).collect(Collectors.toList());
@@ -452,7 +487,6 @@ public class QuestionServiceImpl implements QuestionService {
         Object rubricToValidate = req.getEssayGradingRubric() != null ? req.getEssayGradingRubric() : parseJson(q.getEssayGradingRubric());
         String contentToValidate = req.getContent() != null ? req.getContent() : q.getContent();
         String difficultyToValidate = req.getDifficulty() != null ? req.getDifficulty() : q.getDifficulty();
-        String statusToValidate = req.getStatus() != null ? req.getStatus() : q.getStatus();
 
         // CODE settings live in their own tables; an update that only touches content/explanation
         // must still validate against the stored config and test cases, not against null.
@@ -466,20 +500,24 @@ public class QuestionServiceImpl implements QuestionService {
         QuestionPayload payload = QuestionPayload.builder()
                 .questionType(typeToValidate)
                 .difficulty(difficultyToValidate)
-                .status(statusToValidate)
+                .status(q.getStatus())
                 .content(contentToValidate)
                 .questionMetadata(metadataToValidate)
                 .answerKey(answerKeyToValidate)
                 .essayGradingRubric(rubricToValidate)
                 .options(optionsToValidate)
+                .correctOrder(req.getCorrectOrder())
                 .codeConfig(codeConfigToValidate)
                 .testCases(testCasesToValidate)
                 .build();
 
         questionValidator.validateOrThrow(payload);
 
-        List<String> optionTextsForHash = optionsToValidate.stream().map(AnswerOptionDto::getOptionText).collect(Collectors.toList());
-        String newHash = ContentHashUtil.computeHash(contentToValidate, optionTextsForHash);
+        List<String> optionTextsForHash = optionsToValidate.stream()
+                .map(o -> questionValidator.sanitize(o.getOptionText()))
+                .collect(Collectors.toList());
+        String sanitizedContentToHash = questionValidator.sanitize(contentToValidate);
+        String newHash = ContentHashUtil.computeHash(sanitizedContentToHash, optionTextsForHash);
         Long courseId = q.getCourse() != null ? q.getCourse().getCourseId() : null;
         if (courseId != null) {
             List<Long> duplicateIds = questionRepository.findDuplicateQuestionIds(courseId, newHash, q.getQuestionId(), Pageable.ofSize(1));
@@ -492,12 +530,11 @@ public class QuestionServiceImpl implements QuestionService {
         boolean scoreAffectingChanged = false;
 
         if (req.getContent() != null) {
-            q.setContent(req.getContent());
+            q.setContent(questionValidator.sanitize(req.getContent()));
         }
         if (req.getDifficulty() != null) q.setDifficulty(req.getDifficulty());
-        if (req.getStatus() != null) q.setStatus(req.getStatus());
         if (req.getExplanation() != null) {
-            q.setAiExplanation(req.getExplanation());
+            q.setAiExplanation(questionValidator.sanitize(req.getExplanation()));
         }
 
         if (req.getQuestionMetadata() != null) {
@@ -512,29 +549,6 @@ public class QuestionServiceImpl implements QuestionService {
             }
         }
 
-        if (req.getAnswerKey() != null) {
-            String akJson = serializeJson(req.getAnswerKey(), "answerKey");
-            if (!akJson.equals(q.getAnswerKey())) {
-                q.setAnswerKey(akJson);
-                scoreAffectingChanged = true;
-            }
-        }
-
-        if (req.getEssayGradingRubric() != null) {
-            String rubricJson = serializeJson(req.getEssayGradingRubric(), "essayGradingRubric");
-            if (!rubricJson.equals(q.getEssayGradingRubric())) {
-                if (rubricWeightsChanged(q.getEssayGradingRubric(), rubricJson)) {
-                    scoreAffectingChanged = true;
-                }
-                q.setEssayGradingRubric(rubricJson);
-            }
-        }
-
-        if ("CODE".equals(typeToValidate) && (req.getCodeConfig() != null || req.getTestCases() != null)) {
-            saveCodeConfigAndTestCases(q, req.getCodeConfig(), req.getTestCases());
-        }
-
-        boolean isOrdering = "ORDERING".equals(typeToValidate);
         List<Long> oldCorrectOrder = new ArrayList<>();
         if (isOrdering && q.getAnswerKey() != null) {
             try {
@@ -545,6 +559,28 @@ public class QuestionServiceImpl implements QuestionService {
                             .collect(Collectors.toList());
                 }
             } catch (Exception ignored) {}
+        }
+
+        if (req.getAnswerKey() != null && !(isOrdering && req.getOptions() != null)) {
+            String akJson = serializeJson(sanitizeAnswerKey(typeToValidate, req.getAnswerKey()), "answerKey");
+            if (!akJson.equals(q.getAnswerKey())) {
+                q.setAnswerKey(akJson);
+                scoreAffectingChanged = true;
+            }
+        }
+
+        if (req.getEssayGradingRubric() != null) {
+            String rubricJson = serializeJson(sanitizeRubric(req.getEssayGradingRubric()), "essayGradingRubric");
+            if (!rubricJson.equals(q.getEssayGradingRubric())) {
+                if (rubricWeightsChanged(q.getEssayGradingRubric(), rubricJson)) {
+                    scoreAffectingChanged = true;
+                }
+                q.setEssayGradingRubric(rubricJson);
+            }
+        }
+
+        if ("CODE".equals(typeToValidate) && (req.getCodeConfig() != null || req.getTestCases() != null)) {
+            saveCodeConfigAndTestCases(q, req.getCodeConfig(), req.getTestCases());
         }
 
         List<AnswerOption> existingOptions = answerOptionRepository.findByQuestion_QuestionId(q.getQuestionId());
@@ -568,28 +604,28 @@ public class QuestionServiceImpl implements QuestionService {
                 AnswerOptionDto dto = req.getOptions().get(i);
                 if (dto.getOptionId() != null && existingMap.containsKey(dto.getOptionId())) {
                     AnswerOption opt = existingMap.get(dto.getOptionId());
-                    String text = dto.getOptionText();
+                    String text = questionValidator.sanitize(dto.getOptionText());
                     boolean correct = dto.getIsCorrect() != null ? dto.getIsCorrect() : false;
                     if (!isOrdering) {
-                        if (!opt.getOptionText().equals(text) || !opt.getIsCorrect().equals(correct)) {
+                        if (!Objects.equals(opt.getOptionText(), text) || !Objects.equals(opt.getIsCorrect(), correct)) {
                             scoreAffectingChanged = true;
                         }
                     } else {
-                        if (!opt.getOptionText().equals(text)) {
+                        if (!Objects.equals(opt.getOptionText(), text)) {
                             // scoring_version does not increase when only optionText changes for ORDERING
                         }
                     }
                     opt.setOptionText(text);
                     opt.setIsCorrect(isOrdering ? false : correct);
-                    opt.setExplanation(dto.getExplanation());
+                    opt.setExplanation(questionValidator.sanitize(dto.getExplanation()));
                     opt.setOrderIndex(dto.getOrderIndex() != null ? dto.getOrderIndex() : i);
                     updatedOptions.add(opt);
                 } else {
                     AnswerOption opt = AnswerOption.builder()
                             .question(q)
-                            .optionText(dto.getOptionText())
-                            .isCorrect(false)
-                            .explanation(dto.getExplanation())
+                            .optionText(questionValidator.sanitize(dto.getOptionText()))
+                            .isCorrect(isOrdering ? false : Boolean.TRUE.equals(dto.getIsCorrect()))
+                            .explanation(questionValidator.sanitize(dto.getExplanation()))
                             .orderIndex(dto.getOrderIndex() != null ? dto.getOrderIndex() : i)
                             .build();
                     updatedOptions.add(opt);
@@ -601,20 +637,26 @@ public class QuestionServiceImpl implements QuestionService {
             updatedOptions = existingOptions;
         }
 
-        if (isOrdering && req.getOptions() != null) {
+        if (isOrdering && (req.getOptions() != null || req.getCorrectOrder() != null || req.getAnswerKey() != null)) {
             Map<String, Long> keyToIdMap = new HashMap<>();
-            for (int i = 0; i < req.getOptions().size(); i++) {
-                AnswerOptionDto dto = req.getOptions().get(i);
-                String k = dto.getKey() != null ? dto.getKey() : (dto.getOptionId() != null ? String.valueOf(dto.getOptionId()) : String.valueOf(i));
-                AnswerOption matchedOpt = null;
-                if (dto.getOptionId() != null) {
-                    matchedOpt = updatedOptions.stream().filter(o -> o.getOptionId().equals(dto.getOptionId())).findFirst().orElse(null);
-                } else if (i < updatedOptions.size()) {
-                    matchedOpt = updatedOptions.get(i);
+            if (req.getOptions() != null) {
+                for (int i = 0; i < req.getOptions().size(); i++) {
+                    AnswerOptionDto dto = req.getOptions().get(i);
+                    String k = dto.getKey() != null ? dto.getKey() : (dto.getOptionId() != null ? String.valueOf(dto.getOptionId()) : String.valueOf(i));
+                    AnswerOption matchedOpt = null;
+                    if (dto.getOptionId() != null) {
+                        matchedOpt = updatedOptions.stream().filter(o -> o.getOptionId().equals(dto.getOptionId())).findFirst().orElse(null);
+                    } else if (i < updatedOptions.size()) {
+                        matchedOpt = updatedOptions.get(i);
+                    }
+                    if (matchedOpt != null) {
+                        keyToIdMap.put(k, matchedOpt.getOptionId());
+                        keyToIdMap.put(String.valueOf(matchedOpt.getOptionId()), matchedOpt.getOptionId());
+                    }
                 }
-                if (matchedOpt != null) {
-                    keyToIdMap.put(k, matchedOpt.getOptionId());
-                    keyToIdMap.put(String.valueOf(matchedOpt.getOptionId()), matchedOpt.getOptionId());
+            } else {
+                for (AnswerOption o : updatedOptions) {
+                    keyToIdMap.put(String.valueOf(o.getOptionId()), o.getOptionId());
                 }
             }
 
@@ -625,21 +667,21 @@ public class QuestionServiceImpl implements QuestionService {
                     coList = (List<Object>) coObj;
                 }
             }
+            if (coList == null) {
+                coList = new ArrayList<>(oldCorrectOrder);
+            }
 
             List<Long> newCorrectOrder = new ArrayList<>();
-            List<String> orderedOptionTexts = new ArrayList<>();
-            if (coList != null) {
-                for (Object item : coList) {
-                    String itemStr = item != null ? item.toString() : "";
-                    Long optId = keyToIdMap.get(itemStr);
-                    if (optId == null) {
-                        try {
-                            optId = Long.parseLong(itemStr);
-                        } catch (Exception ignored) {}
-                    }
-                    if (optId != null) {
-                        newCorrectOrder.add(optId);
-                    }
+            for (Object item : coList) {
+                String itemStr = item != null ? item.toString() : "";
+                Long optId = keyToIdMap.get(itemStr);
+                if (optId == null) {
+                    try {
+                        optId = Long.parseLong(itemStr);
+                    } catch (Exception ignored) {}
+                }
+                if (optId != null) {
+                    newCorrectOrder.add(optId);
                 }
             }
 
@@ -649,32 +691,12 @@ public class QuestionServiceImpl implements QuestionService {
 
             String akJson = serializeJson(Map.of("correctOrder", newCorrectOrder), "answerKey");
             q.setAnswerKey(akJson);
-
-            if (scoreAffectingChanged) {
-                q.setScoringVersion(q.getScoringVersion() + 1);
-            }
-
-            q.setContentHash(newHash);
-        } else {
-            if (req.getAnswerKey() != null) {
-                String akJson = serializeJson(req.getAnswerKey(), "answerKey");
-                if (!akJson.equals(q.getAnswerKey())) {
-                    q.setAnswerKey(akJson);
-                    scoreAffectingChanged = true;
-                }
-            }
-            if (req.getEssayGradingRubric() != null) {
-                String rubricJson = serializeJson(req.getEssayGradingRubric(), "essayGradingRubric");
-                if (!rubricJson.equals(q.getEssayGradingRubric())) {
-                    q.setEssayGradingRubric(rubricJson);
-                    scoreAffectingChanged = true;
-                }
-            }
-            if (scoreAffectingChanged) {
-                q.setScoringVersion(q.getScoringVersion() + 1);
-            }
-            q.setContentHash(newHash);
         }
+
+        if (scoreAffectingChanged) {
+            q.setScoringVersion(q.getScoringVersion() + 1);
+        }
+        q.setContentHash(newHash);
 
         q = questionRepository.save(q);
         return mapToDetailDto(q, updatedOptions);
@@ -690,14 +712,18 @@ public class QuestionServiceImpl implements QuestionService {
             throw new ForbiddenException("You do not have permission to delete this question");
         }
 
-        List<ExamQuestion> examQuestions = examQuestionRepository.findByQuestion_QuestionId(q.getQuestionId());
-        for (ExamQuestion eq : examQuestions) {
-            if ("PUBLISHED".equals(eq.getExam().getStatus())) {
-                throw new ResourceConflictException("Cannot delete question that is part of a published exam");
-            }
-        }
+        lockQuestionCourses(List.of(q));
+        entityManager.refresh(q);
+        checkArchiveImpact(q, Set.of(q.getQuestionId()));
 
-        examQuestionRepository.deleteByQuestion_QuestionId(q.getQuestionId());
+        List<ExamQuestion> examQuestions = examQuestionRepository.findByQuestion_QuestionId(q.getQuestionId());
+        List<ExamQuestion> draftLinks = examQuestions.stream()
+                .filter(eq -> eq.getExam() != null && "DRAFT".equals(eq.getExam().getStatus()))
+                .toList();
+        if (!draftLinks.isEmpty()) {
+            examQuestionRepository.deleteAll(draftLinks);
+        }
+        q.setGroup(null);
         q.setDeletedAt(Instant.now());
         questionRepository.save(q);
     }
@@ -725,7 +751,7 @@ public class QuestionServiceImpl implements QuestionService {
                 .source("MANUAL")
                 .creatorRole("MANAGER")
                 .approvalStatus("APPROVED")
-                .status("DRAFT")
+                .status("INACTIVE")
                 .aiExplanation(original.getAiExplanation())
                 .essayGradingRubric(original.getEssayGradingRubric())
                 .contentHash(original.getContentHash())
@@ -1078,8 +1104,65 @@ public class QuestionServiceImpl implements QuestionService {
 
     @Override
     public String contentHash(QuestionCreateRequest req) {
-        List<String> optionTexts = req.getOptions() == null ? null : req.getOptions().stream().map(AnswerOptionDto::getOptionText).collect(Collectors.toList());
-        return ContentHashUtil.computeHash(req.getContent(), optionTexts);
+        List<String> optionTexts = req.getOptions() == null ? null : req.getOptions().stream()
+                .map(o -> questionValidator.sanitize(o.getOptionText()))
+                .collect(Collectors.toList());
+        return ContentHashUtil.computeHash(questionValidator.sanitize(req.getContent()), optionTexts);
+    }
+
+    @SuppressWarnings("unchecked")
+    private Object sanitizeAnswerKey(String questionType, Object rawAnswerKey) {
+        if (rawAnswerKey == null || !"MATCHING".equals(questionType)) {
+            return rawAnswerKey;
+        }
+        Map<String, Object> copy = rawAnswerKey instanceof Map
+                ? new LinkedHashMap<>((Map<String, Object>) rawAnswerKey)
+                : objectMapper.convertValue(rawAnswerKey, new TypeReference<LinkedHashMap<String, Object>>() {});
+        if (copy.get("pairs") instanceof List<?> pairs) {
+            List<Object> cleanedPairs = new ArrayList<>(pairs.size());
+            for (Object p : pairs) {
+                if (p instanceof Map<?, ?> pairMap) {
+                    Map<String, Object> pairCopy = new LinkedHashMap<>();
+                    pairMap.forEach((k, v) -> pairCopy.put(String.valueOf(k), v));
+                    if (pairCopy.get("left") != null) pairCopy.put("left", questionValidator.sanitize(pairCopy.get("left").toString()));
+                    if (pairCopy.get("right") != null) pairCopy.put("right", questionValidator.sanitize(pairCopy.get("right").toString()));
+                    cleanedPairs.add(pairCopy);
+                } else {
+                    cleanedPairs.add(p);
+                }
+            }
+            copy.put("pairs", cleanedPairs);
+        }
+        return copy;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Object sanitizeRubric(Object rawRubric) {
+        if (rawRubric == null) {
+            return null;
+        }
+        Map<String, Object> copy = rawRubric instanceof Map
+                ? new LinkedHashMap<>((Map<String, Object>) rawRubric)
+                : objectMapper.convertValue(rawRubric, new TypeReference<LinkedHashMap<String, Object>>() {});
+        if (copy.get("notes") != null) {
+            copy.put("notes", questionValidator.sanitize(copy.get("notes").toString()));
+        }
+        if (copy.get("criteria") instanceof List<?> criteria) {
+            List<Object> cleaned = new ArrayList<>(criteria.size());
+            for (Object item : criteria) {
+                if (item instanceof Map<?, ?> critMap) {
+                    Map<String, Object> critCopy = new LinkedHashMap<>();
+                    critMap.forEach((k, v) -> critCopy.put(String.valueOf(k), v));
+                    if (critCopy.get("name") != null) critCopy.put("name", questionValidator.sanitize(critCopy.get("name").toString()));
+                    if (critCopy.get("descriptors") != null) critCopy.put("descriptors", questionValidator.sanitize(critCopy.get("descriptors").toString()));
+                    cleaned.add(critCopy);
+                } else {
+                    cleaned.add(item);
+                }
+            }
+            copy.put("criteria", cleaned);
+        }
+        return copy;
     }
 
     private String serializeJson(Object obj, String fieldName) {

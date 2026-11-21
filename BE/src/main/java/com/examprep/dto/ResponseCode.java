@@ -15,6 +15,7 @@ public enum ResponseCode {
     FORBIDDEN(HttpStatus.FORBIDDEN, "FORBIDDEN", "Access denied."),
     RESOURCE_NOT_FOUND(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", "Requested resource was not found"),
     METHOD_NOT_ALLOWED(HttpStatus.METHOD_NOT_ALLOWED, "METHOD_NOT_ALLOWED", "HTTP method not supported"),
+    TOO_MANY_REQUESTS(HttpStatus.TOO_MANY_REQUESTS, "TOO_MANY_REQUESTS", "Too many requests"),
     CONFLICT(HttpStatus.CONFLICT, "RESOURCE_CONFLICT", "Resource already exists or state conflict"),
     VALIDATION_ERROR(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", "Request payload validation failed"),
     /** Same business code as {@link #VALIDATION_ERROR} but for a payload the server understands and refuses (SA-01: exam has no questions). */

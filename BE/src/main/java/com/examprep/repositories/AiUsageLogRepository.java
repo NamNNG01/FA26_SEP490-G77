@@ -22,11 +22,11 @@ public interface AiUsageLogRepository extends JpaRepository<AiUsageLog, Long> {
     Integer sumTokensByUserSince(@Param("userId") Long userId, @Param("startDate") Instant startDate);
 
     // Student AI quota (Part 2 §9.9): [settled tokens, tokens still reserved] for every AI purpose.
-    // FAILED/TIMEOUT logs are refunded.
+    // FAILED/TIMEOUT logs are refunded; both PENDING and PROCESSING rows hold active reservations.
     @Query("""
             SELECT COALESCE(SUM(CASE WHEN l.status IN ('SUCCESS', 'PARTIAL')
                         THEN COALESCE(l.inputTokens, 0) + COALESCE(l.outputTokens, 0) ELSE 0 END), 0),
-                   COALESCE(SUM(CASE WHEN l.status = 'PENDING' THEN l.reservedTokens ELSE 0 END), 0)
+                   COALESCE(SUM(CASE WHEN l.status IN ('PENDING', 'PROCESSING') THEN l.reservedTokens ELSE 0 END), 0)
             FROM AiUsageLog l
             WHERE l.user.userId = :userId AND l.billingSource = :source
               AND l.createdAt >= :from AND l.createdAt < :to""")
@@ -48,14 +48,18 @@ public interface AiUsageLogRepository extends JpaRepository<AiUsageLog, Long> {
 
     Optional<AiUsageLog> findFirstByAttemptAnswerIdAndStatusOrderByLogIdDesc(Long attemptAnswerId, String status);
 
-    // Reservations nobody settled within the window are refunded; grading logs wait while their answer is queued.
+    // Reservations nobody settled within the window are refunded; grading, flashcard and quiz-job logs stay protected while active.
     @Modifying
     @Query(value = """
             UPDATE ai_usage_logs SET status = 'FAILED', reserved_tokens = 0, error_message = 'RESERVATION_EXPIRED'
             WHERE status = 'PENDING' AND created_at < :cutoff
+              AND purpose <> 'FLASHCARD_GENERATE'
               AND NOT EXISTS (SELECT 1 FROM attempt_answers a
                               WHERE a.attempt_answer_id = ai_usage_logs.attempt_answer_id
-                                AND a.grading_status IN ('QUEUED', 'GRADING'))""", nativeQuery = true)
+                                AND a.grading_status IN ('QUEUED', 'GRADING'))
+              AND NOT EXISTS (SELECT 1 FROM quiz_generation_jobs q
+                              WHERE q.ai_usage_log_id = ai_usage_logs.log_id
+                                AND q.status IN ('PENDING', 'PROCESSING'))""", nativeQuery = true)
     int expirePending(@Param("cutoff") Instant cutoff);
 
     // Worker claim (group E): pessimistic row lock so concurrent settlements cannot interleave.

@@ -41,11 +41,17 @@ public class PaymentTransactionService {
             Long discountId = discount.getDiscountId();
             // The usage limit is reserved while the link is payable, not when the webhook arrives;
             // otherwise two checkouts could both pass validation and overrun the cap.
-            if (userDiscounts.existsByUserUserIdAndDiscountDiscountIdAndIsUsedTrue(userId, discountId)
+            if ("CLAIM_REQUIRED".equalsIgnoreCase(discount.getAccessType())) {
+                long unused = userDiscounts.countByUserUserIdAndDiscountDiscountIdAndIsUsedFalse(userId, discountId);
+                long pendingCount = payments.countByUserUserIdAndDiscountDiscountIdAndStatus(userId, discountId, Payment.PENDING);
+                if (unused <= pendingCount) {
+                    throw new ResourceConflictException("Discount is already used or reserved by another checkout");
+                }
+            } else if (userDiscounts.existsByUserUserIdAndDiscountDiscountIdAndIsUsedTrue(userId, discountId)
                     || payments.existsByUserUserIdAndDiscountDiscountIdAndStatus(userId, discountId, Payment.PENDING)) {
                 throw new ResourceConflictException("Discount is already used or reserved by another checkout");
             }
-            if (discounts.reserveUsage(discountId) == 0) {
+            if (discounts.reserveUsage(discountId, Instant.now()) == 0) {
                 throw new BaseException(ResponseCode.INVALID_DISCOUNT_CODE, "Discount usage limit reached or discount is inactive/expired");
             }
             reserved = true;
@@ -123,13 +129,16 @@ public class PaymentTransactionService {
     @Transactional
     public boolean completeWebhook(JsonNode webhook) {
         JsonNode data = webhook.path("data");
-        if (!"00".equals(webhook.path("code").asText()) || !data.path("orderCode").canConvertToLong()) return false;
+        if (!"00".equals(webhook.path("code").asText())
+                || !"00".equals(data.path("code").asText())
+                || !data.path("orderCode").canConvertToLong()
+                || !data.path("amount").isIntegralNumber()) return false;
         Payment locked = payments.lockByPayosOrderCode(data.path("orderCode").asLong()).orElse(null);
         if (locked == null || Payment.SUCCEEDED.equals(locked.getStatus())) return locked != null;
         // EXPIRED rows stay payable for a late webhook: the sweep only runs after the PayOS link
         // itself expired, so a verified "paid" callback means the student paid just in time.
         if ((!Payment.PENDING.equals(locked.getStatus()) && !Payment.EXPIRED.equals(locked.getStatus()))
-                || data.path("amount").asLong(-1) != locked.getAmount().longValueExact()) return false;
+                || data.path("amount").longValue() != locked.getAmount().longValueExact()) return false;
         Instant now = Instant.now();
         if (locked.getExpiresAt() != null && now.isAfter(locked.getExpiresAt())) {
             // The money was still captured: keep the purchase, but leave a trace for reconciliation.
@@ -208,9 +217,10 @@ public class PaymentTransactionService {
         if (discount == null) {
             return;
         }
-        // Checkouts reserve their usage before the link is issued; only legacy rows consume here.
+        // Checkouts reserve their usage before the link is issued; only legacy or released rows consume here.
         if (!Boolean.TRUE.equals(payment.getDiscountReserved())) {
             discounts.incrementUsedCount(discount.getDiscountId());
+            payment.setDiscountReserved(true);
         }
         // Persist the one-per-student rule that validatedDiscount() checks before checkout.
         User user = payment.getUser();

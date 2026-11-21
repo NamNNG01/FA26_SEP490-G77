@@ -69,10 +69,16 @@ public class QuestionIssueService {
                 .orElseThrow(() -> error(ResponseCode.RESOURCE_NOT_FOUND, "QUESTION_NOT_FOUND", "Question not found"));
         List<AnswerOption> questionOptions = options.findByQuestion_QuestionId(question.getQuestionId());
         Context context = context(me, question, body, questionOptions);
-        List<Long> suggested = suggestedOptions(body.suggestedOptionIds(), questionOptions);
-        if (context.attempt() == null && context.session() == null && !canReport(me, question)) {
-            throw error(ResponseCode.FORBIDDEN, "QUESTION_NOT_ACCESSIBLE", "You can only report questions you have practised or that belong to your courses");
+        if (context.attempt() == null && context.session() == null && !admin(me)
+                && !issues.answeredBy(question.getQuestionId(), me.getId())) {
+            if (!isStudentVisible(question)) {
+                throw error(ResponseCode.RESOURCE_NOT_FOUND, "QUESTION_NOT_FOUND", "Question not found");
+            }
+            if (!canReport(me, question)) {
+                throw error(ResponseCode.FORBIDDEN, "QUESTION_NOT_ACCESSIBLE", "You can only report questions you have practised or that belong to your courses");
+            }
         }
+        List<Long> suggested = suggestedOptions(body.suggestedOptionIds(), questionOptions);
         QuestionIssue issue = issues.findFirstByQuestion_QuestionIdAndStatusIn(question.getQuestionId(), QuestionIssue.OPEN).orElse(null);
         boolean joined = issue != null;
         if (joined && reports.existsByIssue_IssueIdAndUser_UserId(issue.getIssueId(), me.getId())) {
@@ -383,12 +389,36 @@ public class QuestionIssueService {
                 .orElse(null);
     }
 
+    private boolean isStudentVisible(Question question) {
+        if (question.getDeletedAt() != null) return false;
+        if (!"ACTIVE".equals(question.getStatus()) || !"APPROVED".equals(question.getApprovalStatus())) return false;
+        if (question.getSourceDocumentId() != null) return false;
+        if ("AI".equals(question.getSource()) && "STUDENT".equals(question.getCreatorRole())) return false;
+        if (question.getModule() != null && question.getModule().isHidden()) return false;
+        com.examprep.entities.Course course = resolveCourse(question);
+        return course != null && Boolean.TRUE.equals(course.getIsPublished());
+    }
+
     /** Practised it (any attempt holds it), or enrolled in its course (module practice, notebook). */
     private boolean canReport(UserPrincipal me, Question question) {
         if (admin(me)) return true;
         if (issues.answeredBy(question.getQuestionId(), me.getId())) return true;
-        return question.getCourse() != null && enrollments.existsByCourse_CourseIdAndUser_UserIdAndStatus(
-                question.getCourse().getCourseId(), me.getId(), Enrollment.STATUS_ACTIVE);
+        if (!isStudentVisible(question)) return false;
+        Long courseId = resolveCourse(question).getCourseId();
+        return enrollments.existsByCourse_CourseIdAndUser_UserIdAndStatus(courseId, me.getId(), Enrollment.STATUS_ACTIVE)
+                || enrollments.existsByCourse_CourseIdAndUser_UserIdAndStatus(courseId, me.getId(), Enrollment.STATUS_COMPLETED);
+    }
+
+    private com.examprep.entities.Course resolveCourse(Question question) {
+        if (question.getCourse() != null) return question.getCourse();
+        if (question.getModule() != null && question.getModule().getCourse() != null) {
+            return question.getModule().getCourse();
+        }
+        if (question.getGroup() != null) {
+            if (question.getGroup().getCourse() != null) return question.getGroup().getCourse();
+            if (question.getGroup().getModule() != null) return question.getGroup().getModule().getCourse();
+        }
+        return null;
     }
 
     private static boolean admin(UserPrincipal me) {

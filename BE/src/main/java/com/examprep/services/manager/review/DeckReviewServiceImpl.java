@@ -191,7 +191,7 @@ public class DeckReviewServiceImpl implements DeckReviewService {
         String title = "Bộ flashcard đã được duyệt";
         String courseTitle = deck.getCourse() == null ? "kho flashcard" : deck.getCourse().getTitle();
         String content = "Bộ \"" + deck.getTitle() + "\" đã được duyệt cho \"" + courseTitle + "\".";
-        reviewNotificationService.sendNotification(deck.getUser().getUserId(), title, content, "DECK_APPROVED", "DECK", String.valueOf(deckId), "/decks/" + deckId);
+        reviewNotificationService.sendNotification(deck.getUser().getUserId(), title, content, "DECK_APPROVED", "DECK", String.valueOf(deckId), "/student/flashcards/" + deckId);
 
         return Map.of(
                 "deckId", savedDeck.getDeckId(),
@@ -247,7 +247,7 @@ public class DeckReviewServiceImpl implements DeckReviewService {
         boolean canResubmit = (deck.getResubmissionCount() < 1);
         String title = "Bộ flashcard chưa được duyệt";
         String content = "Bộ \"" + deck.getTitle() + "\" bị từ chối. Lý do: " + reason.strip();
-        reviewNotificationService.sendNotification(deck.getUser().getUserId(), title, content, "DECK_REJECTED", "DECK", String.valueOf(deckId), "/decks/" + deckId);
+        reviewNotificationService.sendNotification(deck.getUser().getUserId(), title, content, "DECK_REJECTED", "DECK", String.valueOf(deckId), "/student/flashcards/" + deckId);
 
         return Map.of(
                 "deckId", savedDeck.getDeckId(),

@@ -118,6 +118,7 @@ export interface MaterialJobState {
 /** MQ-05 */
 export interface MaterialQuizStarted {
   attemptId: number;
+  takeAs?: string;
 }
 
 /** MQ-06 */
@@ -214,8 +215,11 @@ export const materialService = {
   },
 
   /** MQ-05 — the questions in the response are reloaded by the take-exam screen (SA-02). */
-  async start(jobId: number): Promise<MaterialQuizStarted> {
-    return api.post<ApiResponse<MaterialQuizStarted>>(`/student/materials/quiz-jobs/${jobId}/start`).then(r => r.data);
+  async start(jobId: number, takeAs?: 'EXAM' | 'PRACTICE'): Promise<MaterialQuizStarted> {
+    return api.post<ApiResponse<MaterialQuizStarted>>(
+      `/student/materials/quiz-jobs/${jobId}/start`,
+      takeAs ? { takeAs } : undefined,
+    ).then(r => r.data);
   },
 
   /** MQ-06 */
