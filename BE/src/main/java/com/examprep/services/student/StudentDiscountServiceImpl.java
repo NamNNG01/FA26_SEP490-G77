@@ -28,6 +28,9 @@ public class StudentDiscountServiceImpl implements StudentDiscountService {
     @Override
     @Transactional(readOnly = true)
     public Page<StudentDiscountDtos.StudentDiscountItemDto> listStudentDiscounts(Long userId, String status, String sourceType, int page, int size) {
+        if (page < 0 || size < 1 || size > 100) {
+            throw new com.examprep.exceptions.BadRequestException("Invalid page or size");
+        }
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "assignedAt"));
         Instant now = Instant.now();
         Page<UserDiscount> udPage = userDiscountRepository.findByUserAndFilters(userId, sourceType, status, now, pageable);
@@ -40,12 +43,9 @@ public class StudentDiscountServiceImpl implements StudentDiscountService {
     public StudentDiscountDtos.StudentDiscountDetailDto getStudentDiscountDetail(Long userId, Long userDiscountId) {
         Instant now = Instant.now();
         UserDiscount ud = userDiscountRepository.findById(userDiscountId)
+                .filter(d -> d.getUser().getUserId().equals(userId))
                 .orElseGet(() -> userDiscountRepository.findFirstByUserUserIdAndDiscountDiscountIdAndIsUsedFalse(userId, userDiscountId)
                         .orElseThrow(() -> new ResourceNotFoundException("Discount not found")));
-
-        if (!ud.getUser().getUserId().equals(userId)) {
-            throw new ResourceNotFoundException("Discount not found");
-        }
 
         StudentDiscountDtos.StudentDiscountItemDto item = mapToItemDto(ud, now);
         StudentDiscountDtos.ContestSourceInfo contestInfo = null;

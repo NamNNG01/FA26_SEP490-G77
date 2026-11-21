@@ -522,6 +522,10 @@ public class ModulePracticeServiceImpl implements ModulePracticeService {
         return result(userId, sessionId, false);
     }
 
+    /**
+     * MP-08 with optional question snapshots. {@code includeQuestions=true} intentionally returns the
+     * session's full paper for the result screen rather than capping at {@link #MAX_BATCH_QUESTION_IDS}.
+     */
     @Override
     @Transactional(readOnly = true)
     public ModulePracticeResponses.Result result(Long userId, Long sessionId, boolean includeQuestions) {

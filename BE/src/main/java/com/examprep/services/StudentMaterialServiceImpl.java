@@ -35,10 +35,10 @@ import com.examprep.repositories.CourseRepository;
 import com.examprep.repositories.DocumentRepository;
 import com.examprep.repositories.EnrollmentRepository;
 import com.examprep.repositories.ExamAttemptRepository;
+import com.examprep.repositories.ModuleRepository;
 import com.examprep.repositories.QuestionRepository;
 import com.examprep.repositories.QuizGenerationJobRepository;
 import com.examprep.repositories.UserRepository;
-import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
@@ -101,7 +101,7 @@ public class StudentMaterialServiceImpl implements StudentMaterialService {
     private final AiQuotaService quota;
     private final QuizGenerationWorker worker;
     private final PlatformTransactionManager transactionManager;
-    private final EntityManager entityManager;
+    private final ModuleRepository modules;
 
     // ----------------------------------------------------------------------------------
     // MQ-01
@@ -154,6 +154,7 @@ public class StudentMaterialServiceImpl implements StudentMaterialService {
         Uploaded uploaded;
         try {
             uploaded = new TransactionTemplate(transactionManager).execute(status -> {
+                quota.lock(userId);
                 Course course = courseId == null ? null : requireEnrolledCourse(userId, courseId);
                 // Two uploads of the same file may race past the check above; the unique index decides.
                 Optional<Document> concurrent = documents.findByUserUserIdAndSha256(userId, sha256);
@@ -164,6 +165,11 @@ public class StudentMaterialServiceImpl implements StudentMaterialService {
                         documents.save(document);
                     }
                     return uploadedView(document, true);
+                }
+                if (documents.countByUserUserId(userId) >= MAX_MATERIALS) {
+                    throw new BaseException(ResponseCode.MATERIAL_LIMIT_REACHED,
+                            "You can keep at most " + MAX_MATERIALS + " materials. Delete one to upload another.",
+                            Map.of("code", "MATERIAL_LIMIT_REACHED", "limit", MAX_MATERIALS));
                 }
                 User student = users.findById(userId)
                         .orElseThrow(() -> new ResourceNotFoundException("User not found"));
@@ -317,6 +323,7 @@ public class StudentMaterialServiceImpl implements StudentMaterialService {
     @Override
     public void delete(Long userId, Long documentId) {
         String storageKey = new TransactionTemplate(transactionManager).execute(status -> {
+            quota.lock(userId);
             Document document = documents.findOwned(documentId, userId)
                     .orElseThrow(() -> new ResourceNotFoundException("Material not found"));
             if (jobs.existsByUserUserIdAndDocumentDocIdAndStatusIn(userId, documentId,
@@ -480,7 +487,10 @@ public class StudentMaterialServiceImpl implements StudentMaterialService {
             throw new ResourceConflictException("Quiz generation has not completed yet");
         }
         Long examId = job.getResultExam().getExamId();
-        String takeAs = request != null && request.takeAs() != null ? request.takeAs() : "PRACTICE";
+        String requestedTakeAs = request != null && request.takeAs() != null ? request.takeAs().strip() : "PRACTICE";
+        if (!"EXAM".equals(requestedTakeAs) && !"PRACTICE".equals(requestedTakeAs)) {
+            throw new BadRequestException("takeAs must be EXAM or PRACTICE");
+        }
         AttemptResponses.Session session;
         try {
             session = attemptService.start(userId, examId, null);
@@ -492,11 +502,11 @@ public class StudentMaterialServiceImpl implements StudentMaterialService {
             ExamAttempt active = attempts.findActiveAttempt(examId, userId, STATUS_IN_PROGRESS)
                     .orElseThrow(() -> ex);
             session = attemptService.get(userId, active.getAttemptId());
-            takeAs = active.getTakeAs() != null ? active.getTakeAs() : takeAs;
+            requestedTakeAs = active.getTakeAs() != null ? active.getTakeAs() : requestedTakeAs;
         }
         // No surrounding transaction here: catching ATTEMPT_IN_PROGRESS from the transactional
         // attempt service would otherwise mark this transaction rollback-only and fail at commit.
-        updateAttemptTakeAsAndMode(session.attemptId(), takeAs);
+        String persistedTakeAs = updateAttemptTakeAsAndMode(session.attemptId(), requestedTakeAs);
         List<StartedQuestion> questions = session.questions().stream()
                 .map(question -> new StartedQuestion(
                         question.questionId(),
@@ -508,25 +518,30 @@ public class StudentMaterialServiceImpl implements StudentMaterialService {
                                 .map(option -> new StartedOption(option.optionId(), option.optionText()))
                                 .toList()))
                 .toList();
-        return new Started(session.attemptId(), questions, takeAs);
+        return new Started(session.attemptId(), questions, persistedTakeAs);
     }
 
-    /** Marks the (already committed) attempt as a material quiz and updates takeAs in its own short transaction. */
-    private void updateAttemptTakeAsAndMode(Long attemptId, String takeAs) {
-        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
-            ExamAttempt attempt = attempts.findById(attemptId).orElse(null);
-            if (attempt != null) {
-                if (!MODE_MATERIAL_QUIZ.equals(attempt.getMode())) {
-                    attempt.setMode(MODE_MATERIAL_QUIZ);
-                }
+    /** Marks the (already committed) attempt as a material quiz and locks takeAs on first start. */
+    private String updateAttemptTakeAsAndMode(Long attemptId, String takeAs) {
+        String persisted = new TransactionTemplate(transactionManager).execute(status -> {
+            ExamAttempt attempt = attempts.lockById(attemptId).orElse(null);
+            if (attempt == null) {
+                return takeAs;
+            }
+            if (!MODE_MATERIAL_QUIZ.equals(attempt.getMode())) {
+                attempt.setMode(MODE_MATERIAL_QUIZ);
+            }
+            if (attempt.getTakeAs() == null) {
                 attempt.setTakeAs(takeAs);
                 if ("EXAM".equals(takeAs) && attempt.getExam() != null && attempt.getExam().getDurationMinutes() != null) {
                     Instant deadline = attempt.getStartTime().plus(attempt.getExam().getDurationMinutes(), java.time.temporal.ChronoUnit.MINUTES);
                     attempt.setDeadlineAt(deadline);
                 }
-                attempts.save(attempt);
             }
+            attempts.save(attempt);
+            return attempt.getTakeAs();
         });
+        return persisted != null ? persisted : takeAs;
     }
 
     // ----------------------------------------------------------------------------------
@@ -596,16 +611,10 @@ public class StudentMaterialServiceImpl implements StudentMaterialService {
     }
 
     private boolean lessonBelongsToCourse(Long lessonId, Course course) {
-        if (course == null) {
+        if (course == null || lessonId == null) {
             return false;
         }
-        Number count = (Number) entityManager.createNativeQuery(
-                        "SELECT COUNT(*) FROM lessons l JOIN modules m ON m.module_id = l.module_id "
-                                + "WHERE l.lesson_id = :lessonId AND m.course_id = :courseId")
-                .setParameter("lessonId", lessonId)
-                .setParameter("courseId", course.getCourseId())
-                .getSingleResult();
-        return count.longValue() > 0;
+        return modules.findModuleIdByLessonAndCourse(lessonId, course.getCourseId()).isPresent();
     }
 
     private static String resolveQuizTitle(QuizGenerationJob job, String materialTitle) {

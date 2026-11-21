@@ -143,8 +143,11 @@ public final class ModulePracticeResponses {
     }
 
     /** ESSAY / CODE only. */
-    @JsonInclude(JsonInclude.Include.ALWAYS)
-    public record AnswerSpaceView(Integer maxLength) {
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public record AnswerSpaceView(Integer maxLength, Integer minWords, Integer maxWords) {
+        public AnswerSpaceView(Integer maxLength) {
+            this(maxLength, null, null);
+        }
     }
 
     /** A displayable media asset of the question or of one of its options. */

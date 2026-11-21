@@ -59,6 +59,10 @@ public class QuestionReviewRecorder {
             return;
         }
         if (row == null) {
+            users.findForUpdate(userId);
+            row = reviews.findByStudent_UserIdAndQuestion_QuestionId(userId, question.getQuestionId()).orElse(null);
+        }
+        if (row == null) {
             row = StudentQuestionReview.builder().student(users.getReferenceById(userId)).question(question)
                     .bookmark(false).wrongCount(0).firstWrongAt(now).build();
         }

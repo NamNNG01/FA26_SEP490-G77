@@ -57,7 +57,25 @@ public class UserServiceImpl implements UserService {
 
         if (hasAvatarUrl) {
             String avatarUrl = request.getAvatarUrl().trim();
-            user.setAvatarUrl(avatarUrl.isEmpty() ? null : avatarUrl);
+            if (avatarUrl.isEmpty()) {
+                user.setAvatarUrl(null);
+            } else {
+                String scheme;
+                String host;
+                try {
+                    java.net.URI uri = java.net.URI.create(avatarUrl);
+                    scheme = uri.getScheme();
+                    host = uri.getHost();
+                } catch (IllegalArgumentException ex) {
+                    throw new BadRequestException("Avatar URL must use http or https.");
+                }
+                if (scheme == null
+                        || (!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme))
+                        || host == null || host.isBlank()) {
+                    throw new BadRequestException("Avatar URL must use http or https.");
+                }
+                user.setAvatarUrl(avatarUrl);
+            }
         }
 
         User savedUser = userRepository.save(user);

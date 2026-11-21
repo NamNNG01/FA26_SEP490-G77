@@ -57,8 +57,8 @@ public final class FlashcardImportDtos {
     ) {}
 
     public record CardInput(
-            @NotBlank String frontText,
-            @NotBlank String backText
+            @NotBlank @Size(max = 2000) String frontText,
+            @NotBlank @Size(max = 2000) String backText
     ) {}
 
     public record BulkSaveRequest(
@@ -67,7 +67,7 @@ public final class FlashcardImportDtos {
             @NotBlank String source, // IMPORT or AI
             Long aiGenerationId,
             Boolean skipDuplicates, // default true
-            List<CardInput> cards
+            @Valid @Size(max = 500) List<CardInput> cards
     ) {}
 
     @JsonInclude(JsonInclude.Include.ALWAYS)

@@ -35,7 +35,7 @@ public class PaymentTransactionService {
     @Transactional
     public Payment createPending(Long userId, String orderCode, String type, Long refId, String title,
                                  BigDecimal amount, BigDecimal discountAmount, Discount discount, Instant expiresAt) {
-        User user = users.findById(userId).orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        User user = users.findForUpdate(userId).orElseThrow(() -> new ResourceNotFoundException("User not found"));
         boolean reserved = false;
         if (discount != null) {
             Long discountId = discount.getDiscountId();
@@ -123,6 +123,8 @@ public class PaymentTransactionService {
             locked.setStatus(Payment.CANCELLED);
             locked.setCancelledAt(Instant.now());
             locked.setUpdatedAt(Instant.now());
+        } else if (!Payment.CANCELLED.equals(locked.getStatus())) {
+            throw new ResourceConflictException("Payment cannot be cancelled in status " + locked.getStatus());
         }
     }
 
@@ -200,14 +202,19 @@ public class PaymentTransactionService {
     private void grantSubscription(Payment payment, Instant now) {
         User user = users.findForUpdate(payment.getUser().getUserId()).orElseThrow(() -> new ResourceNotFoundException("User not found"));
         SubscriptionPlan plan = plans.findAvailable(payment.getRefId()).orElseThrow(() -> new ResourceNotFoundException("Subscription plan not found"));
-        subscriptions.findByUserUserIdAndStatus(user.getUserId(), "ACTIVE").forEach(old -> {
+        Instant baseEnd = now;
+        for (UserSubscription old : subscriptions.findByUserUserIdAndStatus(user.getUserId(), "ACTIVE")) {
+            if (old.getPlan() != null && java.util.Objects.equals(old.getPlan().getPlanId(), plan.getPlanId())
+                    && old.getEndDate() != null && old.getEndDate().isAfter(baseEnd)) {
+                baseEnd = old.getEndDate();
+            }
             old.setStatus("SUPERSEDED");
-        });
+        }
         // PostgreSQL enforces one ACTIVE row per user, even if its end date has passed.
         // Flush the updates before the IDENTITY insert of the replacement subscription.
         subscriptions.flush();
         subscriptions.save(UserSubscription.builder().user(user).plan(plan).startDate(now)
-                .endDate(now.plusSeconds(plan.getDurationDays().longValue() * 86400L)).status("ACTIVE")
+                .endDate(baseEnd.plusSeconds(plan.getDurationDays().longValue() * 86400L)).status("ACTIVE")
                 .paidAmount(payment.getAmount()).build());
         consumeDiscount(payment, now);
     }

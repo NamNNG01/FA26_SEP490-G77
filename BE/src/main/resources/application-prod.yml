@@ -39,3 +39,9 @@ logging:
   level:
     root: WARN
     com.examprep: INFO
+
+springdoc:
+  api-docs:
+    enabled: ${SPRINGDOC_ENABLED:false}
+  swagger-ui:
+    enabled: ${SPRINGDOC_ENABLED:false}

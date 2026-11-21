@@ -104,6 +104,12 @@ public class StudentNotebookServiceImpl implements StudentNotebookService {
         if (searchTerm.length() > 100) {
             searchTerm = searchTerm.substring(0, 100);
         }
+        if (!searchTerm.isEmpty()) {
+            searchTerm = searchTerm
+                    .replace("!", "!!")
+                    .replace("%", "!%")
+                    .replace("_", "!_");
+        }
 
         Page<StudentQuestionReview> reviews = reviewRepository.findSavedQuestions(
                 userId, type, normalizedExamType, courseId, searchTerm, pageable);

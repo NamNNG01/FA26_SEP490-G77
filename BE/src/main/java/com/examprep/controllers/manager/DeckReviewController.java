@@ -154,7 +154,7 @@ public class DeckReviewController {
 
     private Map<String, Object> courseSummary(com.examprep.entities.Course course) {
         if (course == null) return null;
-        return Map.of("courseId", course.getCourseId(), "title", course.getTitle());
+        return Map.of("id", course.getCourseId(), "courseId", course.getCourseId(), "title", course.getTitle());
     }
 
     private Map<String, Object> moduleSummary(com.examprep.entities.Module module) {
@@ -172,10 +172,10 @@ public class DeckReviewController {
     public ResponseEntity<ApiResponse<Map<String, Object>>> approve(
             @AuthenticationPrincipal UserPrincipal principal,
             @PathVariable Long id,
-            @RequestBody Map<String, Object> body) {
+            @RequestBody(required = false) Map<String, Object> body) {
         User manager = getUser(principal);
-        Long version = body.get("version") instanceof Number n ? n.longValue() : null;
-        String note = (String) body.get("note");
+        Long version = body != null && body.get("version") instanceof Number n ? n.longValue() : null;
+        String note = body != null && body.get("note") != null ? String.valueOf(body.get("note")) : null;
         Map<String, Object> result = service.approve(manager, id, version, note);
         return ResponseEntity.ok(ApiResponse.success(result, "Đã duyệt bộ flashcard."));
     }
@@ -185,10 +185,10 @@ public class DeckReviewController {
     public ResponseEntity<ApiResponse<Map<String, Object>>> reject(
             @AuthenticationPrincipal UserPrincipal principal,
             @PathVariable Long id,
-            @RequestBody Map<String, Object> body) {
+            @RequestBody(required = false) Map<String, Object> body) {
         User manager = getUser(principal);
-        Long version = body.get("version") instanceof Number n ? n.longValue() : null;
-        String reason = (String) body.get("reason");
+        Long version = body != null && body.get("version") instanceof Number n ? n.longValue() : null;
+        String reason = body != null && body.get("reason") != null ? String.valueOf(body.get("reason")) : null;
         Map<String, Object> result = service.reject(manager, id, version, reason);
         return ResponseEntity.ok(ApiResponse.success(result, "Đã từ chối bộ flashcard."));
     }

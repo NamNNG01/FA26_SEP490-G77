@@ -18,6 +18,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -49,7 +50,12 @@ class CodeAnswerJudge {
     private final AttemptPaperFactory paperFactory;
     private final ObjectMapper json;
     private final PistonClient piston;
-    private final ExecutorService pool = Executors.newCachedThreadPool(PistonClient.daemonThreads("code-submit-"));
+    private final ExecutorService pool = Executors.newFixedThreadPool(8, PistonClient.daemonThreads("code-submit-"));
+
+    @PreDestroy
+    void shutdown() {
+        pool.shutdownNow();
+    }
 
     record Plan(Long questionId, String language, String source, List<PistonClient.CaseInput> cases,
                 BigDecimal points, int timeLimitMs, int memoryLimitKb) {}
@@ -86,7 +92,7 @@ class CodeAnswerJudge {
     }
 
     Optional<String> draftLanguageError(Long questionId, JsonNode response) {
-        if (response != null && response.has("language")
+        if (response != null && response.hasNonNull("language")
                 && !language(questionId).equals(response.get("language").textValue())) {
             return Optional.of("This question does not allow the language " + response.get("language").asText());
         }

@@ -28,7 +28,7 @@ public interface FlashcardRepository extends JpaRepository<Flashcard, Long> {
             "WHERE f.deck.deckId IN :ids GROUP BY f.deck.deckId")
     List<IdCount> countByDecks(@Param("ids") List<Long> ids);
 
-    @Modifying
+    @Modifying(flushAutomatically = true)
     @Query("DELETE FROM Flashcard f WHERE f.deck.deckId = :deckId")
     void deleteByDeck(@Param("deckId") Long deckId);
 

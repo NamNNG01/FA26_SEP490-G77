@@ -82,7 +82,7 @@ public class ContributionReviewServiceImpl implements ContributionReviewService 
     @Override
     @Transactional
     public Map<String, Object> approve(User manager, Long id, Long requestVersion, String note) {
-        QuestionContribution c = contributionRepository.findById(id)
+        QuestionContribution c = contributionRepository.findForUpdate(id)
                 .orElseThrow(() -> new ReviewException(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", null, "Contribution not found"));
         assertCanAccessCourse(manager, c.getCourseId());
 
@@ -140,7 +140,7 @@ public class ContributionReviewServiceImpl implements ContributionReviewService 
             throw new ReviewException(HttpStatus.UNPROCESSABLE_ENTITY, "VALIDATION_ERROR", "REASON_REQUIRED", "Reason is required (at least 5 characters)");
         }
 
-        QuestionContribution c = contributionRepository.findById(id)
+        QuestionContribution c = contributionRepository.findForUpdate(id)
                 .orElseThrow(() -> new ReviewException(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", null, "Contribution not found"));
         assertCanAccessCourse(manager, c.getCourseId());
 
@@ -169,7 +169,7 @@ public class ContributionReviewServiceImpl implements ContributionReviewService 
                 .build();
         reviewLogRepository.save(log);
 
-        boolean canResubmit = (c.getResubmissionCount() < 1);
+        boolean canResubmit = (c.getResubmissionCount() == null || c.getResubmissionCount() < 1);
         String title = "Câu hỏi của bạn chưa được duyệt";
         String content = "Câu hỏi bị từ chối. Lý do: " + reason.strip() + (canResubmit ? " Bạn còn 1 lần chỉnh sửa và gửi lại." : " Bạn đã dùng hết số lần gửi.");
         reviewNotificationService.sendNotification(c.getUserId(), title, content, "CONTRIBUTION_REJECTED", "QUESTION_CONTRIBUTION", String.valueOf(c.getContributionId()), "/student/contributions/" + c.getContributionId());

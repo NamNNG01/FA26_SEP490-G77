@@ -95,8 +95,8 @@ function DiscussionList() {
   return <div className={`${STUDENT_PAGE_CLASS} space-y-6`}>
     <PageTitle title="Community" subtitle="Ask questions, share tips, and learn with the community." action={tab !== 'Announcements' ? <Button icon={<Icon.Plus className="h-4 w-4" />} onClick={() => setCreateOpen(true)}>Create post</Button> : undefined} />
     <Tabs tabs={['Discussions', 'My Discussions', 'Tips', 'Announcements']} active={tab} onChange={chooseTab} variant="underline" />
-    <div className="card flex flex-wrap items-center gap-3 p-4">
-      {(tab === 'Discussions' || tab === 'My Discussions') && <>
+    {(tab === 'Discussions' || tab === 'My Discussions') && (
+      <div className="card flex flex-wrap items-center gap-3 p-4">
         <Input className="w-full sm:w-72" aria-label={tab === 'My Discussions' ? 'Search my discussions' : 'Search discussions'} placeholder={tab === 'My Discussions' ? 'Search my posts…' : 'Search discussions…'} maxLength={100} value={search} onChange={event => { setSearch(event.target.value); setPage(0); }} />
         {tab === 'My Discussions' && <>
           <Select aria-label="Filter by tag" className="w-full sm:w-48" value={tagFilter} options={[{ label: 'All tags', value: 'ALL' }, { label: 'Questions', value: 'question' }, { label: 'Tips', value: 'tip' }, { label: 'Announcements', value: 'announcement' }]} onChange={value => { setTagFilter(value as DiscussionTag | 'ALL'); setPage(0); }} />
@@ -104,8 +104,8 @@ function DiscussionList() {
           <Select aria-label="Filter by post status" className="w-full sm:w-48" value={contentStatusFilter} options={[{ label: 'All post statuses', value: 'ALL' }, { label: 'Open', value: 'OPEN' }, { label: 'Closed', value: 'CLOSED' }, { label: 'Hidden', value: 'HIDDEN' }]} onChange={value => { setContentStatusFilter(value as DiscussionContentStatus); setPage(0); }} />
         </>}
         <Select aria-label="Sort discussions" className="w-full sm:w-52" value={sort} options={[{ label: 'Latest', value: 'latest' }, { label: 'Most commented', value: 'mostCommented' }, { label: 'Most upvoted', value: 'mostUpvoted' }]} onChange={value => { setSort(value as DiscussionSort); setPage(0); }} />
-      </>}
-    </div>
+      </div>
+    )}
     {error ? <LoadError message={error} onRetry={() => setReload(value => value + 1)} /> : loading ? <div className="card p-8 text-sm text-content-subtle">Loading posts…</div> : items.length === 0 ?
       <div className="card"><EmptyState icon={tab === 'Tips' ? <Icon.Lightbulb className="h-7 w-7" /> : tab === 'Announcements' ? <Icon.Bell className="h-7 w-7" /> : <Icon.Book className="h-7 w-7" />} title={emptyTitle(tab, hasMyFilters)} message={emptyMessage(tab, hasMyFilters)} action={tab !== 'Announcements' && !(tab === 'My Discussions' && hasMyFilters) ? <Button onClick={() => setCreateOpen(true)}>Create post</Button> : undefined} /></div> :
       <div className="space-y-3">{voteError && <Alert type="error" message={voteError} />}{items.map(item => <DiscussionCard key={item.discussionId} item={item} showReviewStatus={tab === 'My Discussions'} voting={votingIds.has(item.discussionId)} onUpvote={() => void toggleUpvote(item.discussionId)} onOpen={() => navigate(`${ROUTES.studentDiscussions}/${item.discussionId}`)} />)}
@@ -235,7 +235,7 @@ function DiscussionDetail({ discussionId }: { discussionId: string }) {
     setBusy(true); setActionError(null);
     try {
       const created = await studentCommunityService.addComment(discussionId, { content: comment.trim(), isAnonymous: anonymous, imageUrl: commentImageUrl || null });
-      setItem(current => current ? { ...current, comments: [...(current.comments ?? []), created].slice(-20), commentCount: current.commentCount + 1 } : current);
+      setItem(current => current ? { ...current, comments: [...(current.comments ?? []), created], commentCount: current.commentCount + 1 } : current);
       setComment(''); setCommentImageUrl('');
     } catch (err) { setActionError(getApiErrorMessage(err, 'Could not post your comment.')); }
     finally { setBusy(false); }

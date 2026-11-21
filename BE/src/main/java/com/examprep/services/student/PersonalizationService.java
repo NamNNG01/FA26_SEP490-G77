@@ -346,24 +346,29 @@ public class PersonalizationService {
         long estimate = AiQuotaService.estimate(text.length() + RECOMMEND_PROMPT.length(), 400);
         Long logId = tx.execute(s -> reserve(userId, courseId, "RECOMMENDATION", estimate));
         long started = System.currentTimeMillis();
-        AiResponse response = call(RECOMMEND_PROMPT, text, RECOMMEND_SCHEMA, recommendationTimeoutMillis, logId, started, false);
-        Map<Long, String> topics = topicNames(stats);
-        List<Recommendation> items = new ArrayList<>();
         try {
-            for (JsonNode item : json.readTree(response.getText()).path("recommendations")) {
-                Recommendation r = recommendation(item, resources, topics, prepared.wrongToReview());
-                if (r != null && items.stream().noneMatch(x -> x.type().equals(r.type()) && Objects.equals(x.refId(), r.refId()))) items.add(r);
+            AiResponse response = call(RECOMMEND_PROMPT, text, RECOMMEND_SCHEMA, recommendationTimeoutMillis, logId, started, false);
+            Map<Long, String> topics = topicNames(stats);
+            List<Recommendation> items = new ArrayList<>();
+            try {
+                for (JsonNode item : json.readTree(response.getText()).path("recommendations")) {
+                    Recommendation r = recommendation(item, resources, topics, prepared.wrongToReview());
+                    if (r != null && items.stream().noneMatch(x -> x.type().equals(r.type()) && Objects.equals(x.refId(), r.refId()))) items.add(r);
+                }
+            } catch (IOException ex) {
+                throw failCall(logId, response, started, "AI_UPSTREAM_ERROR");
             }
-        } catch (IOException ex) {
-            failCall(logId, response, started, "AI_UPSTREAM_ERROR");
+            items.sort(Comparator.comparingInt(r -> PRIORITIES.indexOf(r.priority())));
+            List<Recommendation> top = items.subList(0, Math.min(5, items.size()));
+            Recommendations result = new Recommendations(Instant.now(), "GENERATED", courseId, prepared.readiness(), strengths, weaknesses,
+                    List.copyOf(top), null, null);
+            store(userId, courseId, "RECOMMENDATION", null, result, result.generatedAt().plus(1, ChronoUnit.HOURS), logId, response, started);
+            return new Recommendations(result.generatedAt(), result.source(), courseId, result.overallReadiness(), strengths, weaknesses,
+                    result.recommendations(), null, readTx.execute(s -> quotaLeft(userId)));
+        } catch (RuntimeException ex) {
+            settle(logId, "FAILED", null, started, "INTERNAL_ERROR");
+            throw ex;
         }
-        items.sort(Comparator.comparingInt(r -> PRIORITIES.indexOf(r.priority())));
-        List<Recommendation> top = items.subList(0, Math.min(5, items.size()));
-        Recommendations result = new Recommendations(Instant.now(), "GENERATED", courseId, prepared.readiness(), strengths, weaknesses,
-                List.copyOf(top), null, null);
-        store(userId, courseId, "RECOMMENDATION", null, result, result.generatedAt().plus(1, ChronoUnit.HOURS), logId, response, started);
-        return new Recommendations(result.generatedAt(), result.source(), courseId, result.overallReadiness(), strengths, weaknesses,
-                result.recommendations(), null, readTx.execute(s -> quotaLeft(userId)));
     }
 
     /**
@@ -513,42 +518,47 @@ public class PersonalizationService {
         long estimate = AiQuotaService.estimate(text.length() + WEAKNESS_PROMPT.length(), 600);
         Long logId = tx.execute(s -> reserve(userId, courseId, "WEAKNESS_REPORT", estimate));
         long started = System.currentTimeMillis();
-        AiResponse response = call(WEAKNESS_PROMPT, text, WEAKNESS_SCHEMA, weaknessTimeoutMillis, logId, started, true);
-
-        JsonNode output;
         try {
-            output = json.readTree(response.getText());
-        } catch (IOException ex) {
-            throw failCall(logId, response, started, "AI_UPSTREAM_ERROR");
-        }
-        List<String> plan = new ArrayList<>();
-        output.path("actionPlan").forEach(step -> { if (!step.asText("").isBlank() && plan.size() < 5) plan.add(clip(step.asText(), 300)); });
-        String summary = clip(output.path("summary").asText(""), 1500);
-        if (plan.size() < 3 || summary.isBlank()) throw failCall(logId, response, started, "AI_UPSTREAM_ERROR");
-        Map<Long, List<Mistake>> mistakes = new HashMap<>();
-        for (JsonNode category : output.path("categories")) {
-            long categoryId = category.path("categoryId").asLong(-1);
-            Set<Long> shown = prepared.sample().getOrDefault(categoryId, Set.of());
-            List<Mistake> list = new ArrayList<>();
-            for (JsonNode m : category.path("commonMistakes")) {
-                String pattern = clip(m.path("pattern").asText(""), 300);
-                if (pattern.isBlank() || list.size() == 3) continue;
-                list.add(mistake(m, pattern, shown, prepared.resources(), topics));
+            AiResponse response = call(WEAKNESS_PROMPT, text, WEAKNESS_SCHEMA, weaknessTimeoutMillis, logId, started, true);
+
+            JsonNode output;
+            try {
+                output = json.readTree(response.getText());
+            } catch (IOException ex) {
+                throw failCall(logId, response, started, "AI_UPSTREAM_ERROR");
             }
-            mistakes.putIfAbsent(categoryId, list);
+            List<String> plan = new ArrayList<>();
+            output.path("actionPlan").forEach(step -> { if (!step.asText("").isBlank() && plan.size() < 5) plan.add(clip(step.asText(), 300)); });
+            String summary = clip(output.path("summary").asText(""), 1500);
+            if (plan.size() < 3 || summary.isBlank()) throw failCall(logId, response, started, "AI_UPSTREAM_ERROR");
+            Map<Long, List<Mistake>> mistakes = new HashMap<>();
+            for (JsonNode category : output.path("categories")) {
+                long categoryId = category.path("categoryId").asLong(-1);
+                Set<Long> shown = prepared.sample().getOrDefault(categoryId, Set.of());
+                List<Mistake> list = new ArrayList<>();
+                for (JsonNode m : category.path("commonMistakes")) {
+                    String pattern = clip(m.path("pattern").asText(""), 300);
+                    if (pattern.isBlank() || list.size() == 3) continue;
+                    list.add(mistake(m, pattern, shown, prepared.resources(), topics));
+                }
+                mistakes.putIfAbsent(categoryId, list);
+            }
+            List<CategoryBreakdown> categories = stats.modules().stream().map(m -> new CategoryBreakdown(m.categoryId(), m.name(),
+                    m.questionCount(), m.correctCount(), m.accuracy(), m.trend(), m.enoughData(),
+                    mistakes.getOrDefault(m.categoryId() == null ? 0L : m.categoryId(), List.of()))).toList();
+            List<TypeBreakdown> typeBreakdown = stats.types().stream().map(t -> new TypeBreakdown(t.questionType(), t.accuracy(), t.trend())).toList();
+            List<DifficultyBreakdown> difficultyBreakdown = stats.difficulties().stream()
+                    .map(d -> new DifficultyBreakdown(d.difficulty(), d.accuracy(), d.questionCount(), d.trend())).toList();
+            List<Topic> notPracticed = stats.notPracticed().stream().map(t -> new Topic(t.categoryId(), t.name())).toList();
+            WeaknessReport result = new WeaknessReport(Instant.now(), "GENERATED", courseId, period, summary, categories, typeBreakdown,
+                    difficultyBreakdown, notPracticed, List.copyOf(plan), null);
+            store(userId, courseId, "WEAKNESS_REPORT", period, result, result.generatedAt().plus(6, ChronoUnit.HOURS), logId, response, started);
+            return new WeaknessReport(result.generatedAt(), result.source(), courseId, period, summary, categories, typeBreakdown,
+                    difficultyBreakdown, notPracticed, result.actionPlan(), readTx.execute(s -> quotaLeft(userId)));
+        } catch (RuntimeException ex) {
+            settle(logId, "FAILED", null, started, "INTERNAL_ERROR");
+            throw ex;
         }
-        List<CategoryBreakdown> categories = stats.modules().stream().map(m -> new CategoryBreakdown(m.categoryId(), m.name(),
-                m.questionCount(), m.correctCount(), m.accuracy(), m.trend(), m.enoughData(),
-                mistakes.getOrDefault(m.categoryId() == null ? 0L : m.categoryId(), List.of()))).toList();
-        List<TypeBreakdown> typeBreakdown = stats.types().stream().map(t -> new TypeBreakdown(t.questionType(), t.accuracy(), t.trend())).toList();
-        List<DifficultyBreakdown> difficultyBreakdown = stats.difficulties().stream()
-                .map(d -> new DifficultyBreakdown(d.difficulty(), d.accuracy(), d.questionCount(), d.trend())).toList();
-        List<Topic> notPracticed = stats.notPracticed().stream().map(t -> new Topic(t.categoryId(), t.name())).toList();
-        WeaknessReport result = new WeaknessReport(Instant.now(), "GENERATED", courseId, period, summary, categories, typeBreakdown,
-                difficultyBreakdown, notPracticed, List.copyOf(plan), null);
-        store(userId, courseId, "WEAKNESS_REPORT", period, result, result.generatedAt().plus(6, ChronoUnit.HOURS), logId, response, started);
-        return new WeaknessReport(result.generatedAt(), result.source(), courseId, period, summary, categories, typeBreakdown,
-                difficultyBreakdown, notPracticed, result.actionPlan(), readTx.execute(s -> quotaLeft(userId)));
     }
 
     /**
@@ -666,7 +676,9 @@ public class PersonalizationService {
     }
 
     private void settle(Long logId, String status, AiResponse response, long started, String error) {
-        tx.executeWithoutResult(s -> logs.findById(logId)
+        if (logId == null) return;
+        tx.executeWithoutResult(s -> logs.lockById(logId)
+                .filter(l -> "PENDING".equals(l.getStatus()) || "PROCESSING".equals(l.getStatus()))
                 .ifPresent(l -> quota.settle(l, status, response, System.currentTimeMillis() - started, error)));
     }
 
@@ -701,7 +713,9 @@ public class PersonalizationService {
             row.setExpiresAt(expires);
             row.setActualTokens(tokens(response));
             caches.save(row);
-            logs.findById(logId).ifPresent(l -> quota.settle(l, "SUCCESS", response, System.currentTimeMillis() - started, null));
+            logs.lockById(logId)
+                    .filter(l -> "PENDING".equals(l.getStatus()) || "PROCESSING".equals(l.getStatus()))
+                    .ifPresent(l -> quota.settle(l, "SUCCESS", response, System.currentTimeMillis() - started, null));
         });
     }
 

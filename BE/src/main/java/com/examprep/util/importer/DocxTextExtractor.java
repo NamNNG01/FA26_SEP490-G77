@@ -1,6 +1,7 @@
 package com.examprep.util.importer;
 
 import com.examprep.exceptions.BadRequestException;
+import org.apache.poi.xwpf.usermodel.IBodyElement;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFParagraph;
 import org.apache.poi.xwpf.usermodel.XWPFTable;
@@ -38,38 +39,13 @@ public class DocxTextExtractor implements DocumentTextExtractor {
         try (InputStream is = new ByteArrayInputStream(bytes);
              XWPFDocument doc = new XWPFDocument(is)) {
 
-            int paragraphCount = doc.getParagraphs().size();
-            for (XWPFTable table : doc.getTables()) {
-                for (XWPFTableRow row : table.getRows()) {
-                    for (XWPFTableCell cell : row.getTableCells()) {
-                        paragraphCount += cell.getParagraphs().size();
-                    }
-                }
-            }
-
-            if (paragraphCount > 5000) {
-                throw new BadRequestException("DOCX exceeds maximum allowed 5000 paragraphs");
-            }
-
             List<String> lines = new ArrayList<>();
-            for (XWPFParagraph p : doc.getParagraphs()) {
-                String text = p.getText();
-                if (text != null) {
-                    lines.add(normalizeLine(text));
-                }
+            int[] paragraphCount = {0};
+            for (IBodyElement element : doc.getBodyElements()) {
+                collectElementLines(element, lines, paragraphCount);
             }
-
-            for (XWPFTable table : doc.getTables()) {
-                for (XWPFTableRow row : table.getRows()) {
-                    for (XWPFTableCell cell : row.getTableCells()) {
-                        for (XWPFParagraph p : cell.getParagraphs()) {
-                            String text = p.getText();
-                            if (text != null) {
-                                lines.add(normalizeLine(text));
-                            }
-                        }
-                    }
-                }
+            if (paragraphCount[0] > 5000) {
+                throw new BadRequestException("DOCX exceeds maximum allowed 5000 paragraphs");
             }
 
             return lines;
@@ -140,6 +116,27 @@ public class DocxTextExtractor implements DocumentTextExtractor {
         }
     }
 
+    private void collectElementLines(IBodyElement element, List<String> lines, int[] paragraphCount) {
+        if (element instanceof XWPFParagraph p) {
+            paragraphCount[0]++;
+            if (paragraphCount[0] > 5000) {
+                throw new BadRequestException("DOCX exceeds maximum allowed 5000 paragraphs");
+            }
+            String text = p.getText();
+            if (text != null) {
+                lines.add(normalizeLine(text));
+            }
+        } else if (element instanceof XWPFTable table) {
+            for (XWPFTableRow row : table.getRows()) {
+                for (XWPFTableCell cell : row.getTableCells()) {
+                    for (IBodyElement cellElement : cell.getBodyElements()) {
+                        collectElementLines(cellElement, lines, paragraphCount);
+                    }
+                }
+            }
+        }
+    }
+
     private String normalizeLine(String line) {
         if (line == null) return "";
         String normalized = line.replace(' ', ' ')
@@ -149,9 +146,15 @@ public class DocxTextExtractor implements DocumentTextExtractor {
                 .replace('”', '"')
                 .replace('‘', '\'')
                 .replace('’', '\'')
-                .trim()
-                .replaceAll("\\s+", " ");
+                .trim();
 
+        if (normalized.startsWith("CODE_CONFIG:")
+                || normalized.startsWith("TEST_CASE:")
+                || normalized.startsWith("DIAGRAM_XML:")) {
+            return normalized;
+        }
+
+        normalized = normalized.replaceAll("\\s+", " ");
         normalized = normalized.replaceAll("_{3,}", "____");
         return normalized;
     }

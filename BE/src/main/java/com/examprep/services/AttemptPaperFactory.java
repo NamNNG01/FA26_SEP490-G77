@@ -20,6 +20,7 @@ import com.examprep.repositories.QuestionGroupRepository;
 import com.examprep.repositories.QuestionRepository;
 import com.examprep.util.attempt.AnswerResponseValidator;
 import com.examprep.util.attempt.AttemptShuffler;
+import com.examprep.util.attempt.CodeSource;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -309,8 +310,13 @@ public class AttemptPaperFactory {
             matching = new Snapshots.Matching(shuffler.shuffle(lefts), shuffler.shuffle(rights));
         }
 
-        if ("ESSAY".equals(type) || "DIAGRAM_ESSAY".equals(type) || "CODE".equals(type)) {
-            answerSpace = new Snapshots.AnswerSpace(AnswerResponseValidator.ESSAY_MAX_CHARS);
+        if ("CODE".equals(type)) {
+            answerSpace = new Snapshots.AnswerSpace(CodeSource.MAX_BYTES);
+        } else if ("ESSAY".equals(type) || "DIAGRAM_ESSAY".equals(type)) {
+            Map<String, Object> metadata = readMap(question.getQuestionMetadata());
+            Integer minWords = intOrNull(metadata == null ? null : metadata.get("minWords"));
+            Integer maxWords = intOrNull(metadata == null ? null : metadata.get("maxWords"));
+            answerSpace = new Snapshots.AnswerSpace(AnswerResponseValidator.ESSAY_MAX_CHARS, minWords, maxWords);
         }
 
         Snapshots.DisplayGroup displayGroup = group == null ? null
@@ -507,6 +513,20 @@ public class AttemptPaperFactory {
             }
         }
         return parsed.isEmpty() ? null : new Snapshots.Rubric(List.copyOf(parsed));
+    }
+
+    private static Integer intOrNull(Object value) {
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        if (value instanceof String text && !text.isBlank()) {
+            try {
+                return Integer.parseInt(text.strip());
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+        return null;
     }
 
     private record Draw(Long questionId, BigDecimal weight) {

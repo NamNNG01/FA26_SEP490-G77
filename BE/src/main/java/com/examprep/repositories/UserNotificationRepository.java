@@ -22,7 +22,7 @@ public interface UserNotificationRepository extends JpaRepository<UserNotificati
     long countByUserUserIdAndIsReadFalse(Long userId);
     Optional<UserNotification> findByUserUserIdAndNotificationNotificationId(Long userId, Long notificationId);
 
-    @Modifying
+    @Modifying(flushAutomatically = true)
     @Query("update UserNotification un set un.isRead = true where un.user.userId = :userId and un.isRead = false")
     int markAllRead(@Param("userId") Long userId);
 }

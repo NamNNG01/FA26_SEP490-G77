@@ -252,6 +252,10 @@ public class StudentContributionServiceImpl implements StudentContributionServic
         if (!"REJECTED".equals(c.getStatus())) {
             throw new BaseException(ResponseCode.CONFLICT, "Only rejected contributions can be resubmitted", Map.of("code", "NOT_REJECTED"));
         }
+        int currentResubmissions = c.getResubmissionCount() != null ? c.getResubmissionCount() : 0;
+        if (currentResubmissions >= 1) {
+            throw new BaseException(ResponseCode.CONFLICT, "Contribution has already been resubmitted the maximum number of times", Map.of("code", "RESUBMISSION_LIMIT_REACHED"));
+        }
 
         if ("QUESTION".equals(c.getType())) {
             QuestionCreateRequest qReq;
@@ -304,7 +308,7 @@ public class StudentContributionServiceImpl implements StudentContributionServic
         }
 
         c.setStatus("PENDING");
-        c.setResubmissionCount(c.getResubmissionCount() + 1);
+        c.setResubmissionCount(currentResubmissions + 1);
         c.setReviewNote(null);
         QuestionContribution saved = contributionRepository.save(c);
 

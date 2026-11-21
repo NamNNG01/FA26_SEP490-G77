@@ -324,7 +324,7 @@ public class AttemptAutoSubmitter {
         Instant storedTime = now.truncatedTo(ChronoUnit.MICROS);
         attempt.setSubmittedAt(storedTime);
         attempt.setSubmitTime(storedTime);
-        attempt.setAutoSubmitted(attempt.getDeadlineAt() != null && now.isAfter(attempt.getDeadlineAt()));
+        attempt.setAutoSubmitted(isExpired(attempt, now));
         attempt.setStatus(waitingForAi ? STATUS_SUBMITTED : STATUS_COMPLETED);
         attempt.setCodeJudgingToken(null);
         attempt.setCodeJudgingUntil(null);

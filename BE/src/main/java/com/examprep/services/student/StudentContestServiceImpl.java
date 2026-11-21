@@ -482,6 +482,9 @@ public class StudentContestServiceImpl implements StudentContestService {
     @Override
     @Transactional(readOnly = true)
     public Page<ContestHistoryItemDto> listContestHistory(Long courseId, Instant from, Instant to, int page, int size, Long userId) {
+        if (page < 0 || size < 1 || size > 100) {
+            throw new com.examprep.exceptions.BadRequestException("Invalid page or size");
+        }
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "joinedAt"));
         Instant now = Instant.now();
 
@@ -522,6 +525,9 @@ public class StudentContestServiceImpl implements StudentContestService {
 
     @Override
     public ClaimRewardResponseDto claimReward(Long contestId, Long rewardId, Long userId) {
+        if (rewardId == null) {
+            throw new com.examprep.exceptions.BadRequestException("rewardId is required");
+        }
         Contest c = contestRepository.findLive(contestId)
                 .orElseThrow(() -> new ResourceNotFoundException("Contest not found"));
         Instant now = Instant.now();

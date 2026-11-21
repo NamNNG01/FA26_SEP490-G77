@@ -89,12 +89,7 @@ public class AuthServiceImpl implements AuthService {
         }
 
         String password = request.getPassword();
-        if (!REGISTRATION_PASSWORD_COMPLEXITY.matcher(password).matches()) {
-            throw new BadRequestException("Password must include an uppercase letter, a number and a symbol.");
-        }
-        if (password.getBytes(StandardCharsets.UTF_8).length > BCRYPT_PASSWORD_MAX_BYTES) {
-            throw new BadRequestException("Password is too long. Use at most 72 UTF-8 bytes.");
-        }
+        validatePasswordPolicy(password);
 
         // Always assign STUDENT role for registration (role stored directly on users.role_name)
         User user = User.builder()
@@ -240,6 +235,7 @@ public class AuthServiceImpl implements AuthService {
 
         if (refreshTokenEntity.getRevokedAt() != null) {
             log.warn("Attempted use of revoked refresh token for user ID: {}", refreshTokenEntity.getUser().getUserId());
+            refreshTokenRepository.revokeAllByUserId(refreshTokenEntity.getUser().getUserId(), Instant.now());
             throw new UnauthorizedException("Refresh token has been revoked.");
         }
 
@@ -255,6 +251,7 @@ public class AuthServiceImpl implements AuthService {
 
         int revoked = refreshTokenRepository.revokeIfActive(refreshTokenEntity.getRefreshTokenId(), Instant.now());
         if (revoked == 0) {
+            refreshTokenRepository.revokeAllByUserId(user.getUserId(), Instant.now());
             throw new UnauthorizedException("Refresh token has already been used.");
         }
 
@@ -292,7 +289,12 @@ public class AuthServiceImpl implements AuthService {
     @Transactional
     public void logoutAll(UserPrincipal currentUser) {
         log.info("Logging out ALL active sessions for user ID: {}", currentUser.getId());
-        refreshTokenRepository.revokeAllByUserId(currentUser.getId(), Instant.now());
+        Instant now = Instant.now();
+        refreshTokenRepository.revokeAllByUserId(currentUser.getId(), now);
+        userRepository.findById(currentUser.getId()).ifPresent(user -> {
+            user.setPasswordChangedAt(now);
+            userRepository.save(user);
+        });
     }
 
     @Override
@@ -388,6 +390,7 @@ public class AuthServiceImpl implements AuthService {
         if (user.getPasswordHash() != null && passwordEncoder.matches(request.getNewPassword(), user.getPasswordHash())) {
             throw new BadRequestException("New password must be different from the current password.");
         }
+        validatePasswordPolicy(request.getNewPassword());
 
         int marked = passwordResetTokenRepository.markAsUsed(resetToken.getResetTokenId(), Instant.now());
         if (marked == 0) {
@@ -424,6 +427,7 @@ public class AuthServiceImpl implements AuthService {
                 || (user.getPasswordHash() != null && passwordEncoder.matches(request.getNewPassword(), user.getPasswordHash()))) {
             throw new BadRequestException("New password must be different from the current password.");
         }
+        validatePasswordPolicy(request.getNewPassword());
 
         Instant now = Instant.now();
         user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
@@ -433,6 +437,18 @@ public class AuthServiceImpl implements AuthService {
         passwordResetTokenRepository.invalidateAllActiveByUserId(user.getUserId(), now);
 
         log.info("Password changed successfully for user ID: {}", user.getUserId());
+    }
+
+    private void validatePasswordPolicy(String password) {
+        if (password == null || password.length() < 8) {
+            throw new BadRequestException("Password must be at least 8 characters.");
+        }
+        if (!REGISTRATION_PASSWORD_COMPLEXITY.matcher(password).matches()) {
+            throw new BadRequestException("Password must include an uppercase letter, a number and a symbol.");
+        }
+        if (password.getBytes(StandardCharsets.UTF_8).length > BCRYPT_PASSWORD_MAX_BYTES) {
+            throw new BadRequestException("Password is too long. Use at most 72 UTF-8 bytes.");
+        }
     }
 
     private RefreshToken newRefreshToken(User user, String rawToken) {

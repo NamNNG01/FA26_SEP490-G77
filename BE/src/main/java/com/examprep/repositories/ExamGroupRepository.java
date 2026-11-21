@@ -22,7 +22,7 @@ public interface ExamGroupRepository extends JpaRepository<ExamGroup, Long> {
     @Query("SELECT eg.exam FROM ExamGroup eg WHERE eg.group.groupId = :groupId AND eg.exam.status = 'PUBLISHED'")
     List<com.examprep.entities.Exam> findPublishedExamsByGroupId(@Param("groupId") Long groupId);
 
-    @Modifying
+    @Modifying(flushAutomatically = true)
     @Query("DELETE FROM ExamGroup eg WHERE eg.group.groupId = :groupId")
     int deleteByGroupId(@Param("groupId") Long groupId);
     @Query("""

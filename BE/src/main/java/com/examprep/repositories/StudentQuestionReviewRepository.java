@@ -81,7 +81,7 @@ public interface StudentQuestionReviewRepository extends JpaRepository<StudentQu
 
     AND (:courseId IS NULL OR qc.courseId = :courseId OR mc.courseId = :courseId OR gc.courseId = :courseId OR gmc.courseId = :courseId)
     AND (:search = '' OR LOWER(q.content)
-        LIKE LOWER(CONCAT('%', :search, '%')))
+        LIKE LOWER(CONCAT('%', :search, '%')) ESCAPE '!')
 
     ORDER BY r.lastPracticedAt DESC
     """,
@@ -116,7 +116,7 @@ public interface StudentQuestionReviewRepository extends JpaRepository<StudentQu
     )
     AND (:courseId IS NULL OR qc.courseId = :courseId OR mc.courseId = :courseId OR gc.courseId = :courseId OR gmc.courseId = :courseId)
     AND (:search = '' OR LOWER(q.content)
-        LIKE LOWER(CONCAT('%', :search, '%')))
+        LIKE LOWER(CONCAT('%', :search, '%')) ESCAPE '!')
     """)
     Page<StudentQuestionReview> findSavedQuestions(
             @Param("studentId") Long studentId,
@@ -171,15 +171,15 @@ public interface StudentQuestionReviewRepository extends JpaRepository<StudentQu
            "AND (qc.courseId = :courseId OR mc.courseId = :courseId) AND r.lastPracticedAt < :before")
     long countStaleWrong(@Param("studentId") Long studentId, @Param("courseId") Long courseId, @Param("before") java.time.Instant before);
 
-    @Modifying
+    @Modifying(flushAutomatically = true)
     @Query("DELETE FROM StudentQuestionReview r WHERE r.student.userId = :studentId")
     void deleteAllByStudentUserId(@Param("studentId") Long studentId);
 
-    @Modifying
+    @Modifying(flushAutomatically = true)
     @Query("UPDATE StudentQuestionReview r SET r.bookmark = false WHERE r.student.userId = :studentId")
     void unbookmarkAllByStudentUserId(@Param("studentId") Long studentId);
 
-    @Modifying
+    @Modifying(flushAutomatically = true)
     @Query("UPDATE StudentQuestionReview r SET r.bookmark = true WHERE r.student.userId = :studentId")
     void bookmarkAllByStudentUserId(@Param("studentId") Long studentId);
 }

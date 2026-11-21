@@ -92,7 +92,7 @@ public class ContestRules {
                     : !Boolean.TRUE.equals(d.getIsActive()) ? "DISCOUNT_INACTIVE"
                     : d.getExpiresAt() != null && !d.getExpiresAt().isAfter(now) ? "DISCOUNT_EXPIRED"
                     : forPayment && d.getStartAt() != null && d.getStartAt().isAfter(now) ? "DISCOUNT_NOT_STARTED"
-                    : !forPayment && !Set.of("COURSE", "ALL").contains(d.getAppliesTo()) ? "DISCOUNT_NOT_APPLICABLE"
+                    : !Set.of("COURSE", "ALL").contains(d.getAppliesTo()) ? "DISCOUNT_NOT_APPLICABLE"
                     : null;
             if (reason != null) {
                 unavailable.add(d.getDiscountId());

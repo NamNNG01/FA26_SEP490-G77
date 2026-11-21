@@ -36,31 +36,34 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
             "en.enrolledAt, en.status, en.progress, " +
             "(SELECT COUNT(ex) FROM Exam ex WHERE ex.course = c AND ex.status = 'PUBLISHED' AND ex.mode = 'EXAM' " +
             "AND NOT EXISTS (SELECT hm FROM Module hm WHERE hm = ex.module AND hm.status = 'HIDDEN')), " +
-            "(SELECT COUNT(d) FROM Deck d WHERE d.course = c), " +
+            "(SELECT COUNT(d) FROM Deck d LEFT JOIN d.module dm WHERE d.course = c " +
+            "AND (dm IS NULL OR dm.status <> 'HIDDEN') " +
+            "AND (d.user.roleName <> 'STUDENT' OR (d.visibility = 'PUBLIC' AND d.reviewStatus = 'APPROVED'))), " +
             "null) " +
             "FROM Enrollment en JOIN en.course c JOIN c.category cat JOIN c.manager m " +
-            "WHERE en.user.userId = :userId AND (:status IS NULL OR en.status = :status)")
+            "WHERE en.user.userId = :userId AND en.status <> 'CANCELLED' AND (:status IS NULL OR en.status = :status)")
     Page<com.examprep.dto.student.MyCourseDto> findMyCourses(@Param("userId") Long userId, @Param("status") String status, Pageable pageable);
 
-    @Query("SELECT COUNT(e) FROM Enrollment e WHERE e.user.userId = :userId")
+    @Query("SELECT COUNT(e) FROM Enrollment e WHERE e.user.userId = :userId AND e.status <> 'CANCELLED'")
     long countByUserId(@Param("userId") Long userId);
 
     @Query("SELECT COUNT(e) FROM Enrollment e WHERE e.user.userId = :userId AND e.status = :status")
     long countByUserIdAndStatus(@Param("userId") Long userId, @Param("status") String status);
 
-    @Query("SELECT COUNT(DISTINCT e.user.userId) FROM Enrollment e JOIN e.course c WHERE " + CourseRepository.MANAGER_SCOPE)
+    @Query("SELECT COUNT(DISTINCT e.user.userId) FROM Enrollment e JOIN e.course c WHERE " + CourseRepository.MANAGER_SCOPE
+            + " AND e.status <> 'CANCELLED' AND e.user.roleName = 'STUDENT'")
     long countDistinctStudentsByManagerId(@Param("managerId") Long managerId);
 
     @Query("SELECT new com.examprep.dto.StudentRecentCourse(c.courseId, c.title, c.thumbnailUrl, e.progress) " +
             "FROM Enrollment e JOIN e.course c " +
-            "WHERE e.user.userId = :userId " +
+            "WHERE e.user.userId = :userId AND e.status <> 'CANCELLED' " +
             "ORDER BY e.enrolledAt DESC")
     List<StudentRecentCourse> findRecentCoursesByUserId(@Param("userId") Long userId, Pageable pageable);
 
     boolean existsByCourseCourseId(Long courseId);
 
     @Query("SELECT new com.examprep.dto.IdCount(e.course.courseId, COUNT(DISTINCT e.user.userId)) FROM Enrollment e " +
-            "WHERE e.course.courseId IN :ids AND e.user.roleName = 'STUDENT' GROUP BY e.course.courseId")
+            "WHERE e.course.courseId IN :ids AND e.user.roleName = 'STUDENT' AND e.status <> 'CANCELLED' GROUP BY e.course.courseId")
     List<IdCount> countByCourses(@Param("ids") List<Long> ids);
 
     // UM-01: enrolled-courses counter per user for one page of the admin user list.
@@ -69,7 +72,7 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
 
     @EntityGraph(attributePaths = "user")
     @Query("SELECT e FROM Enrollment e WHERE e.course.courseId = :courseId AND e.user.roleName = 'STUDENT' " +
-            "AND (:status IS NULL OR e.status = :status) " +
+            "AND e.status <> 'CANCELLED' AND (:status IS NULL OR e.status = :status) " +
             "AND (LOWER(e.user.fullName) LIKE :search ESCAPE '!' OR LOWER(e.user.email) LIKE :search ESCAPE '!')")
     Page<Enrollment> findStudents(@Param("courseId") Long courseId, @Param("status") String status,
                                   @Param("search") String search, Pageable pageable);

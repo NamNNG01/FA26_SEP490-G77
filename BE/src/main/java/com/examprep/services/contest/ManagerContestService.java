@@ -135,10 +135,12 @@ public class ManagerContestService {
             case DRAFT -> apply(contest, validate(user, body, id));
             case UPCOMING -> {
                 Plan plan = validate(user, body, id);
-                boolean moved = !plan.exam().getExamId().equals(contest.getExam().getExamId()) || !plan.start().equals(contest.getStartTime())
+                boolean startChanged = !plan.start().equals(contest.getStartTime());
+                boolean moved = !plan.exam().getExamId().equals(contest.getExam().getExamId()) || startChanged
                         || !rankIds(plan.ranks()).equals(rankIds(currentRanks(contest)));
                 if (moved) publishChecks(plan.start(), plan.ranks());
                 apply(contest, plan);
+                if (startChanged) contest.setReminderSentAt(null);
             }
             case ONGOING -> {
                 Plan plan = fields(body);
@@ -276,8 +278,9 @@ public class ManagerContestService {
         if (!examsWithTypes(List.of(exam.getExamId()), NON_QUIZ_TYPES).isEmpty()) {
             throw error(ResponseCode.UNPROCESSABLE_VALIDATION_ERROR, "EXAM_NOT_ELIGIBLE", "Contests can only use quiz exams.");
         }
-        if (Duration.between(fields.start(), fields.end()).toMinutes() < exam.getDurationMinutes()) {
-            throw invalid("endTime", "endTime - startTime must be at least the exam duration (" + exam.getDurationMinutes() + " minutes)");
+        int examDuration = exam.getDurationMinutes() != null ? exam.getDurationMinutes() : 0;
+        if (Duration.between(fields.start(), fields.end()).toMinutes() < examDuration) {
+            throw invalid("endTime", "endTime - startTime must be at least the exam duration (" + examDuration + " minutes)");
         }
         SortedMap<Integer, Discount> ranks = ranks(body.rewards());
         if (contests.countActiveForExam(exam.getExamId(), excludeContestId) > 0) {

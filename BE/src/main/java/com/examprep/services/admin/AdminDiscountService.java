@@ -36,7 +36,12 @@ public class AdminDiscountService {
 
     @Transactional(readOnly = true)
     public Page<DiscountItem> list(String keyword, String discountType, Boolean isActive, String validity, String accessType, int page, int size, String sort) {
-        String kw = (keyword != null && !keyword.isBlank()) ? "%" + keyword.trim().toLowerCase() + "%" : null;
+        String kw = (keyword != null && !keyword.isBlank())
+                ? "%" + keyword.trim().toLowerCase()
+                        .replace("!", "!!")
+                        .replace("%", "!%")
+                        .replace("_", "!_") + "%"
+                : null;
         String dt = (discountType != null && !discountType.isBlank()) ? discountType.trim().toUpperCase() : null;
         String val = (validity != null && !validity.isBlank()) ? validity.trim().toUpperCase() : null;
         String at = (accessType != null && !accessType.isBlank()) ? accessType.trim().toUpperCase() : null;
@@ -54,8 +59,8 @@ public class AdminDiscountService {
             p = cb.and(p, cb.isNull(root.get("deletedAt")));
             if (kw != null) {
                 p = cb.and(p, cb.or(
-                        cb.like(cb.lower(root.get("code")), kw),
-                        cb.like(cb.lower(cb.coalesce(root.get("name"), "")), kw)
+                        cb.like(cb.lower(root.get("code")), kw, '!'),
+                        cb.like(cb.lower(cb.coalesce(root.get("name"), "")), kw, '!')
                 ));
             }
             if (dt != null) {
@@ -169,7 +174,7 @@ public class AdminDiscountService {
     }
 
     public DiscountDetail update(Long id, DiscountWriteRequest req) {
-        Discount d = discountRepository.findById(id)
+        Discount d = discountRepository.findForUpdate(id)
                 .filter(x -> x.getDeletedAt() == null)
                 .orElseThrow(() -> ContestRules.error(ResponseCode.RESOURCE_NOT_FOUND, "DISCOUNT_NOT_FOUND", "Discount not found"));
 
@@ -218,7 +223,7 @@ public class AdminDiscountService {
     }
 
     public StatusUpdateResponse updateStatus(Long id, StatusUpdateRequest req) {
-        Discount d = discountRepository.findById(id)
+        Discount d = discountRepository.findForUpdate(id)
                 .filter(x -> x.getDeletedAt() == null)
                 .orElseThrow(() -> ContestRules.error(ResponseCode.RESOURCE_NOT_FOUND, "DISCOUNT_NOT_FOUND", "Discount not found"));
 
@@ -243,7 +248,7 @@ public class AdminDiscountService {
     }
 
     public void delete(Long id) {
-        Discount d = discountRepository.findById(id)
+        Discount d = discountRepository.findForUpdate(id)
                 .filter(x -> x.getDeletedAt() == null)
                 .orElseThrow(() -> ContestRules.error(ResponseCode.RESOURCE_NOT_FOUND, "DISCOUNT_NOT_FOUND", "Discount not found"));
 
@@ -266,7 +271,10 @@ public class AdminDiscountService {
         discountRepository.findById(id).filter(x -> x.getDeletedAt() == null)
                 .orElseThrow(() -> ContestRules.error(ResponseCode.RESOURCE_NOT_FOUND, "DISCOUNT_NOT_FOUND", "Discount not found"));
 
-        String kw = keyword == null ? "" : keyword.trim().toLowerCase();
+        String kw = keyword == null ? "" : keyword.trim().toLowerCase()
+                .replace("!", "!!")
+                .replace("%", "!%")
+                .replace("_", "!_");
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "assignedAt"));
 
         // Filter and pagination are now handled by repository query

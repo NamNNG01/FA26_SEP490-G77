@@ -67,7 +67,7 @@ public class Question implements Serializable {
     private String source = "MANUAL";
 
     @Builder.Default
-    @Column(name = "creator_role", nullable = false, length = 20)
+    @Column(name = "creator_role", nullable = false, length = 10)
     private String creatorRole = "MANAGER";
 
     @Column(name = "ai_usage_log_id")

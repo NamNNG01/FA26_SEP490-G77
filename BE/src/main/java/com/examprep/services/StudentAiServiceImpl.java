@@ -163,6 +163,13 @@ public class StudentAiServiceImpl implements StudentAiService {
                 left, duplicates);
     }
 
+    private static Course examCourse(ExamAttempt attempt) {
+        Exam exam = attempt == null ? null : attempt.getExam();
+        if (exam == null) return null;
+        if (exam.getCourse() != null) return exam.getCourse();
+        return exam.getModule() != null ? exam.getModule().getCourse() : null;
+    }
+
     private ExplanationWork loadExplanationWork(UserPrincipal user, Long attemptId, Set<Long> ids) {
         ExamAttempt attempt = ownedAttempt(user, attemptId, false);
         if ("IN_PROGRESS".equals(attempt.getStatus())) throw new ResourceConflictException("Submit the attempt before asking for explanations.");
@@ -173,8 +180,8 @@ public class StudentAiServiceImpl implements StudentAiService {
         List<Long> foreign = ids.stream().filter(id -> !byQuestion.containsKey(id)).toList();
         if (!foreign.isEmpty()) throw invalid("Questions " + foreign + " are not part of this attempt.");
 
-        // A material quiz may belong to no course.
-        Course examCourse = attempt.getExam().getCourse();
+        // A material quiz may belong to no course, and a module-scoped exam gets its course from its module.
+        Course examCourse = examCourse(attempt);
         ObjectNode course = json.createObjectNode().put("course", examCourse == null ? "" : examCourse.getTitle());
         Map<Long, ExplanationItem> done = new HashMap<>();
         List<Pending> pending = new ArrayList<>();
@@ -412,12 +419,13 @@ public class StudentAiServiceImpl implements StudentAiService {
             throw new BaseException(ResponseCode.QUOTA_EXCEEDED, "Not enough AI quota to grade these questions.",
                     new StudentAiResponse.GradingQuotaExceeded(required, snapshot.available(), quotaLeft(snapshot)));
         }
+        Course resolvedCourse = examCourse(attempt);
         User student = users.getReferenceById(user.getId());
         for (int i = 0; i < toQueue.size(); i++) {
             AttemptAnswer answer = toQueue.get(i);
             logs.save(AiUsageLog.builder()
                     .user(student)
-                    .course(attempt.getExam().getCourse())
+                    .course(resolvedCourse)
                     .attempt(attempt)
                     .attemptAnswerId(answer.getAttemptAnswerId())
                     .purpose("ESSAY_GRADING")

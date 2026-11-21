@@ -443,11 +443,14 @@ public class CardImportService {
                     continue;
                 }
                 rows.add(new ParsedRow(i + 1, front, back));
+                if (rows.size() >= 500) break;
             }
             if (ignored > 0) {
                 warnings.add(new PreviewWarning("ROWS_IGNORED", "Bỏ qua " + ignored + " dòng trống"));
             }
-        } catch (IOException e) {
+        } catch (BaseException e) {
+            throw e;
+        } catch (IOException | RuntimeException e) {
             throw new BaseException(ResponseCode.BAD_REQUEST, "Invalid Excel", Map.of("code", "FILE_CORRUPTED"));
         }
         return rows;
@@ -475,11 +478,14 @@ public class CardImportService {
                     continue;
                 }
                 rows.add(new ParsedRow(i + 1, front, back));
+                if (rows.size() >= 500) break;
             }
             if (ignored > 0) {
                 warnings.add(new PreviewWarning("ROWS_IGNORED", "Bỏ qua " + ignored + " dòng trống"));
             }
-        } catch (IOException e) {
+        } catch (BaseException e) {
+            throw e;
+        } catch (IOException | RuntimeException e) {
             throw new BaseException(ResponseCode.BAD_REQUEST, "Invalid Word", Map.of("code", "FILE_CORRUPTED"));
         }
         return rows;
@@ -503,9 +509,12 @@ public class CardImportService {
                 String[] parts = trimmed.split("\\t|\\s{2,}");
                 if (parts.length >= 2) {
                     rows.add(new ParsedRow(idx, parts[0], parts[1]));
+                    if (rows.size() >= 500) break;
                 }
             }
-        } catch (IOException e) {
+        } catch (BaseException e) {
+            throw e;
+        } catch (IOException | RuntimeException e) {
             throw new BaseException(ResponseCode.BAD_REQUEST, "Invalid PDF", Map.of("code", "FILE_CORRUPTED"));
         }
         return rows;

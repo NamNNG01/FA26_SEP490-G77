@@ -259,7 +259,12 @@ public class EssayGradingWorker {
     /** exam_snapshot.maxScore; attempts started before snapshots existed fall back to the exam. */
     public BigDecimal examMaxScore(ExamAttempt attempt) {
         JsonNode snapshot = tree(attempt.getExamSnapshot()).path("maxScore");
-        return snapshot.isNumber() ? snapshot.decimalValue() : attempt.getExam().getMaxScore();
+        if (snapshot.isNumber()) {
+            return snapshot.decimalValue();
+        }
+        return attempt.getExam() != null && attempt.getExam().getMaxScore() != null
+                ? attempt.getExam().getMaxScore()
+                : BigDecimal.ZERO;
     }
 
     private Job claim() {
@@ -387,7 +392,10 @@ public class EssayGradingWorker {
     }
 
     private void notifyCompleted(ExamAttempt attempt) {
-        String title = tree(attempt.getExamSnapshot()).path("title").asText(attempt.getExam().getTitle());
+        String fallbackTitle = attempt.getExam() != null && attempt.getExam().getTitle() != null
+                ? attempt.getExam().getTitle()
+                : "Exam";
+        String title = tree(attempt.getExamSnapshot()).path("title").asText(fallbackTitle);
         Notification notification = notifications.save(Notification.builder()
                 .title("Exam graded")
                 .content("Your attempt at \"" + title + "\" has been graded: " + attempt.getTotalScore().toPlainString()

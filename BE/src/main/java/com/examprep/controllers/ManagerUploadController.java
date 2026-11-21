@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -20,6 +21,7 @@ import java.util.concurrent.ConcurrentHashMap;
 /** D3: image upload for question/exam content. Returns a public URL the editor embeds; nothing is stored in the DB. */
 @RestController
 @RequestMapping("/api/v1/manager/uploads")
+@PreAuthorize("hasAnyRole('COURSE_MANAGER', 'ADMIN')")
 @RequiredArgsConstructor
 @Tag(name = "Manager Uploads", description = "D3: media upload to Cloudinary")
 public class ManagerUploadController {

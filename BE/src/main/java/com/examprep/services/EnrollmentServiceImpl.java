@@ -45,6 +45,8 @@ public class EnrollmentServiceImpl implements EnrollmentService {
         if (enrollment == null) {
             enrollment = enrollments.save(Enrollment.builder().course(course).user(user).status(Enrollment.STATUS_ACTIVE)
                     .enrolledAt(Instant.now()).paidAmount(BigDecimal.ZERO).progress(0).build());
+        } else if (Enrollment.STATUS_COMPLETED.equalsIgnoreCase(enrollment.getStatus())) {
+            throw new ResourceConflictException("Course already completed");
         } else if (!Enrollment.STATUS_ACTIVE.equals(enrollment.getStatus())) {
             enrollment.setStatus(Enrollment.STATUS_ACTIVE);
             enrollment.setEnrolledAt(Instant.now());

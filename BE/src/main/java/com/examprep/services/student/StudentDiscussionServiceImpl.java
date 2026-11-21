@@ -110,10 +110,9 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
                 Set.of("OPEN", "CLOSED", "HIDDEN"));
         validatePaging(page, size);
 
-        String searchTerm = search != null && !search.isBlank()
-                ? escapeLikePattern(search.trim())
-                : "";
-        if (searchTerm.length() > 100) searchTerm = searchTerm.substring(0, 100);
+        String rawSearch = search != null && !search.isBlank() ? search.trim() : "";
+        if (rawSearch.length() > 100) rawSearch = rawSearch.substring(0, 100);
+        String searchTerm = rawSearch.isEmpty() ? "" : escapeLikePattern(rawSearch);
 
         Pageable pageable = PageRequest.of(page, size);
         Page<Discussion> discussions;
@@ -264,12 +263,27 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
                 .commentCount(0)
                 .upvoteCount(0)
                 .isClosed(false)
-                .imageUrl(request.getImageUrl())
+                .imageUrl(validateImageUrl(request.getImageUrl()))
                 .approvalStatus(Discussion.APPROVAL_PENDING)
                 .build();
 
         Discussion saved = discussionRepository.save(d);
         return mapToDto(saved, userId, Collections.emptySet(), Collections.emptySet());
+    }
+
+    private static String validateImageUrl(String imageUrl) {
+        if (imageUrl == null || imageUrl.isBlank()) return imageUrl;
+        try {
+            java.net.URI uri = java.net.URI.create(imageUrl.trim());
+            String scheme = uri.getScheme();
+            if (scheme == null || (!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme))
+                    || uri.getHost() == null || uri.getHost().isBlank()) {
+                throw new BadRequestException("Invalid image URL");
+            }
+            return imageUrl.trim();
+        } catch (IllegalArgumentException e) {
+            throw new BadRequestException("Invalid image URL");
+        }
     }
 
     @Override
@@ -300,7 +314,7 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
                 .content(request.getContent().trim())
                 .isAnonymous(Boolean.TRUE.equals(request.getIsAnonymous()))
                 .status("VISIBLE")
-                .imageUrl(request.getImageUrl())
+                .imageUrl(validateImageUrl(request.getImageUrl()))
                 .isAccepted(false)
                 .build();
         commentRepository.save(comment);
@@ -378,6 +392,7 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
         if (userId == null) {
             throw new ForbiddenException("Authentication required");
         }
+        validatePaging(page, size);
         Pageable pageable = PageRequest.of(page, size);
         Page<Discussion> discussions = discussionRepository.findBookmarkedByUser(userId, pageable);
         List<Long> discussionIds = discussions.getContent().stream().map(Discussion::getDiscussionId).toList();
@@ -392,6 +407,7 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
     @Override
     @Transactional(readOnly = true)
     public Page<DiscussionItemDto> listTips(int page, int size, Long userId) {
+        validatePaging(page, size);
         Pageable pageable = PageRequest.of(page, size);
         // Tips are the APPROVED discussions tagged "tip" (the tag filter also keeps them out of
         // the announcement / question tabs).

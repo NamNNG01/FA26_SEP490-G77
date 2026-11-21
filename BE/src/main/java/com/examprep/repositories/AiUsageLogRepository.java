@@ -49,7 +49,7 @@ public interface AiUsageLogRepository extends JpaRepository<AiUsageLog, Long> {
     Optional<AiUsageLog> findFirstByAttemptAnswerIdAndStatusOrderByLogIdDesc(Long attemptAnswerId, String status);
 
     // Reservations nobody settled within the window are refunded; grading, flashcard and quiz-job logs stay protected while active.
-    @Modifying
+    @Modifying(flushAutomatically = true)
     @Query(value = """
             UPDATE ai_usage_logs SET status = 'FAILED', reserved_tokens = 0, error_message = 'RESERVATION_EXPIRED'
             WHERE status = 'PENDING' AND created_at < :cutoff

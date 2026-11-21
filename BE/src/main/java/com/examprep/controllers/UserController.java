@@ -53,8 +53,10 @@ public class UserController {
             @RequestParam MultipartFile file,
             @AuthenticationPrincipal UserPrincipal currentUser) {
         checkUploadRate(avatarUploadWindow, currentUser.getId());
+        byte[] data = bytes(file);
+        userService.getCurrentUser(currentUser.getId());
         // Fixed publicId + overwrite: a new avatar replaces the old file, nothing is left behind.
-        MaterialStorage.StoredImage image = storage.storeImage("avatars/user" + currentUser.getId(), bytes(file), true);
+        MaterialStorage.StoredImage image = storage.storeImage("avatars/user" + currentUser.getId(), data, true);
         return ResponseEntity.ok(ApiResponse.success(userService.setAvatar(currentUser.getId(), image.url()), "Avatar updated successfully."));
     }
 

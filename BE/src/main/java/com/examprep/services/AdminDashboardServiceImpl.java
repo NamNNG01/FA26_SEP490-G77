@@ -50,7 +50,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
     static final int TOP_COURSES = 5;
     static final int TOP_SELLING_COURSES = 3;
 
-    private static final ZoneId ZONE = ZoneId.systemDefault();
+    private static final ZoneId ZONE = AiQuotaService.ZONE;
     private static final DateTimeFormatter LOCAL_DATE_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
     private static final Set<String> GRANULARITIES = Set.of("day", "month", "year");
     private static final Set<String> SORTS = Set.of("revenue", "enrollments");

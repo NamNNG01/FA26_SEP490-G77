@@ -87,7 +87,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Map<String, String>>> handleValidationExceptions(MethodArgumentNotValidException ex) {
         Map<String, String> errors = new HashMap<>();
         ex.getBindingResult().getAllErrors().forEach((error) -> {
-            String fieldName = ((FieldError) error).getField();
+            String fieldName = error instanceof FieldError fe ? fe.getField() : error.getObjectName();
             String errorMessage = error.getDefaultMessage();
             errors.put(fieldName, errorMessage);
         });
@@ -101,15 +101,26 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(HandlerMethodValidationException.class)
-    public ResponseEntity<ApiResponse<Object>> handleHandlerMethodValidation(HandlerMethodValidationException ex) {
+    public ResponseEntity<ApiResponse<Map<String, String>>> handleHandlerMethodValidation(HandlerMethodValidationException ex) {
         Map<String, String> errors = new HashMap<>();
-        ex.getAllErrors().forEach(error -> {
-            String msg = error.getDefaultMessage();
-            errors.put("error", msg);
+        ex.getAllValidationResults().forEach(result -> {
+            String param = result.getMethodParameter().getParameterName();
+            String key = param != null && !param.isBlank() ? param : "request";
+            result.getResolvableErrors().forEach(error -> {
+                String msg = error.getDefaultMessage();
+                errors.putIfAbsent(key, msg != null ? msg : "Validation failed");
+            });
         });
+        if (errors.isEmpty()) {
+            ex.getAllErrors().forEach(error -> errors.putIfAbsent("error", error.getDefaultMessage()));
+        }
         log.warn("Handler Method Validation Error: {}", errors);
         return ResponseEntity.status(ResponseCode.VALIDATION_ERROR.getHttpStatus())
-                .body(ApiResponse.error(ResponseCode.VALIDATION_ERROR, "Validation failed"));
+                .body(ApiResponse.<Map<String, String>>builder()
+                        .success(false)
+                        .message("Validation failed")
+                        .data(errors)
+                        .build());
     }
 
     @ExceptionHandler(ConstraintViolationException.class)
@@ -184,9 +195,18 @@ public class GlobalExceptionHandler {
         for (Throwable cause = ex; cause != null; cause = cause.getCause()) {
             if (cause instanceof SQLException sql) {
                 for (SQLException failure = sql; failure != null; failure = failure.getNextException()) {
-                    if ("23505".equals(failure.getSQLState())) {
+                    String sqlState = failure.getSQLState();
+                    if ("23505".equals(sqlState)) {
                         return ResponseEntity.status(ResponseCode.CONFLICT.getHttpStatus())
                                 .body(ApiResponse.error(ResponseCode.CONFLICT, "Resource already exists"));
+                    }
+                    if ("23503".equals(sqlState)) {
+                        return ResponseEntity.status(ResponseCode.CONFLICT.getHttpStatus())
+                                .body(ApiResponse.error(ResponseCode.CONFLICT, "Referenced resource does not exist or is still in use"));
+                    }
+                    if ("23502".equals(sqlState) || "23514".equals(sqlState)) {
+                        return ResponseEntity.status(ResponseCode.BAD_REQUEST.getHttpStatus())
+                                .body(ApiResponse.error(ResponseCode.BAD_REQUEST, "Request violates data constraints"));
                     }
                 }
             }

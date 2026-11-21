@@ -48,7 +48,7 @@ public final class AnswerResponseValidator {
                                             JsonNode response,
                                             Snapshots.DisplayQuestion display) {
         if ("CODE".equals(questionType) && response != null && response.isObject()
-                && (response.has("text") || response.has("language"))) {
+                && (response.hasNonNull("text") || response.hasNonNull("language"))) {
             return validateCode(response);
         }
         if (isEmpty(response)) {
@@ -63,13 +63,18 @@ public final class AnswerResponseValidator {
             case "MATCHING" -> validateMatching(response, display);
             case "FILL_BLANK" -> validateFillBlank(response, display);
             case "ORDERING" -> validateOrdering(response, display);
-            case "ESSAY" -> validateText(response, "text");
+            case "ESSAY" -> validateText(response, "text", display);
             case "CODE" -> validateCode(response);
             case "DIAGRAM" -> validateDiagram(response);
             case "DIAGRAM_ESSAY" -> {
-                Optional<String> errText = validateText(response, "text");
-                if (errText.isPresent()) yield errText;
-                yield validateDiagram(response);
+                if (response.hasNonNull("text")) {
+                    Optional<String> errText = validateText(response, "text", display);
+                    if (errText.isPresent()) yield errText;
+                }
+                if (response.hasNonNull("drawioXml")) {
+                    yield validateDiagram(response);
+                }
+                yield Optional.empty();
             }
             default -> Optional.of("unsupported question type");
         };
@@ -77,14 +82,20 @@ public final class AnswerResponseValidator {
 
     private static Optional<String> validateCode(JsonNode response) {
         JsonNode text = response.get("text");
-        if (text == null || !text.isTextual()) {
-            return Optional.of("text must be a string");
+        if (text != null && !text.isNull()) {
+            if (!text.isTextual()) {
+                return Optional.of("text must be a string");
+            }
+            if (CodeSource.tooLarge(text.textValue())) {
+                return Optional.of(CodeSource.TOO_LARGE);
+            }
         }
         JsonNode language = response.get("language");
-        if (language != null && (!language.isTextual() || !PistonClient.supports(language.textValue()))) {
+        if (language != null && !language.isNull()
+                && (!language.isTextual() || !PistonClient.supports(language.textValue()))) {
             return Optional.of("language must be a supported language");
         }
-        return CodeSource.tooLarge(text.textValue()) ? Optional.of(CodeSource.TOO_LARGE) : Optional.empty();
+        return Optional.empty();
     }
 
     /**
@@ -207,10 +218,11 @@ public final class AnswerResponseValidator {
         Iterator<Map.Entry<String, JsonNode>> fields = blanks.fields();
         while (fields.hasNext()) {
             Map.Entry<String, JsonNode> field = fields.next();
-            if (!isIndex(field.getKey())) {
+            int blankIndex = parseIndex(field.getKey());
+            if (blankIndex < 0) {
                 return Optional.of("blank key must be the placeholder number");
             }
-            if (!placeholders.isEmpty() && !placeholders.contains(Integer.parseInt(field.getKey()))) {
+            if (!placeholders.isEmpty() && !placeholders.contains(blankIndex)) {
                 return Optional.of("blank is not part of this question");
             }
             JsonNode value = field.getValue();
@@ -269,13 +281,26 @@ public final class AnswerResponseValidator {
         return Optional.empty();
     }
 
-    private static Optional<String> validateText(JsonNode response, String field) {
+    private static Optional<String> validateText(JsonNode response, String field, Snapshots.DisplayQuestion display) {
         JsonNode text = response.get(field);
         if (text == null || !text.isTextual()) {
             return Optional.of(field + " must be a string");
         }
-        if (text.asText().length() > ESSAY_MAX_CHARS) {
+        String value = text.asText();
+        if (value.length() > ESSAY_MAX_CHARS) {
             return Optional.of("text too long");
+        }
+        String trimmed = value.trim();
+        if (!trimmed.isEmpty() && display != null && display.answerSpace() != null) {
+            int words = trimmed.split("\\s+").length;
+            Integer minWords = display.answerSpace().minWords();
+            Integer maxWords = display.answerSpace().maxWords();
+            if (minWords != null && words < minWords) {
+                return Optional.of("text must be at least " + minWords + " words");
+            }
+            if (maxWords != null && words > maxWords) {
+                return Optional.of("text must be at most " + maxWords + " words");
+            }
         }
         return Optional.empty();
     }
@@ -301,6 +326,17 @@ public final class AnswerResponseValidator {
             }
         }
         return ids;
+    }
+
+    private static int parseIndex(String value) {
+        if (!isIndex(value)) {
+            return -1;
+        }
+        try {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException ex) {
+            return -1;
+        }
     }
 
     private static boolean isIndex(String value) {

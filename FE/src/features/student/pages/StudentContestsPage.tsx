@@ -959,7 +959,9 @@ function ContestDetail({ contestId }: { contestId: string }) {
           {contest.bannerUrl && (
             <div
               className="absolute inset-0 bg-cover bg-center opacity-25"
-              style={{ backgroundImage: `url("${contest.bannerUrl}")` }}
+              style={{
+                backgroundImage: `url("${contest.bannerUrl.replace(/["\\()\r\n]/g, (ch) => `%${ch.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0")}`)}")`,
+              }}
             />
           )}
           <div className="absolute inset-0 bg-gradient-to-r from-surface-alt via-surface-alt/75 to-transparent" />
@@ -1148,7 +1150,7 @@ function Results({
               ? "Leaderboard unavailable"
               : contest.status === "CANCELLED"
                 ? "Contest cancelled"
-                : contest.status !== "ENDED"
+                : !["ENDED", "PENDING_REWARD", "REWARDED"].includes(contest.status)
                   ? "Leaderboard opens after the contest"
                   : "No entries yet"
           }
@@ -1157,7 +1159,7 @@ function Results({
               ? "We couldn’t load it right now. It will retry automatically."
               : contest.status === "CANCELLED"
                 ? "There are no results for this contest."
-                : contest.status !== "ENDED"
+                : !["ENDED", "PENDING_REWARD", "REWARDED"].includes(contest.status)
                   ? "Rankings appear here once the contest ends."
                   : "Nobody has a score for this contest."
           }

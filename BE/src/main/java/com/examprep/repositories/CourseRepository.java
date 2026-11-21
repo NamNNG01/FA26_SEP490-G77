@@ -58,7 +58,7 @@ public interface CourseRepository extends JpaRepository<Course, Long> {
     long countByManagerIdAndPublished(@Param("managerId") Long managerId, @Param("published") boolean published);
 
     @Query("SELECT new com.examprep.dto.ManagerCourseInfo(c.courseId, c.title, c.isPublished, COUNT(DISTINCT e.user.userId)) " +
-            "FROM Course c LEFT JOIN c.enrollments e " +
+            "FROM Course c LEFT JOIN c.enrollments e ON e.status <> 'CANCELLED' AND e.user.roleName = 'STUDENT' " +
             "WHERE " + MANAGER_SCOPE + " " +
             "GROUP BY c.courseId, c.title, c.isPublished, c.createdAt " +
             "ORDER BY c.createdAt DESC")
@@ -95,10 +95,12 @@ public interface CourseRepository extends JpaRepository<Course, Long> {
             "c.courseId, c.title, c.slug, c.thumbnailUrl, c.price, " +
             "new com.examprep.dto.student.CategoryRefDto(cat.categoryId, cat.name), " +
             "new com.examprep.dto.student.ManagerRefDto(m.userId, m.fullName), " +
-            "(SELECT COUNT(ex) FROM Exam ex WHERE ex.course = c AND ex.status = 'PUBLISHED' " +
+            "(SELECT COUNT(ex) FROM Exam ex WHERE ex.course = c AND ex.status = 'PUBLISHED' AND ex.mode = 'EXAM' " +
             "AND NOT EXISTS (SELECT hm FROM Module hm WHERE hm = ex.module AND hm.status = 'HIDDEN')), " +
-            "(SELECT COUNT(d) FROM Deck d WHERE d.course = c), " +
-            "CASE WHEN :userId IS NOT NULL AND EXISTS (SELECT 1 FROM Enrollment en WHERE en.course = c AND en.user.userId = :userId AND en.status = 'ACTIVE') THEN true ELSE false END) " +
+            "(SELECT COUNT(d) FROM Deck d LEFT JOIN d.module dm WHERE d.course = c " +
+            "AND (dm IS NULL OR dm.status <> 'HIDDEN') " +
+            "AND (d.user.roleName <> 'STUDENT' OR (d.visibility = 'PUBLIC' AND d.reviewStatus = 'APPROVED'))), " +
+            "CASE WHEN :userId IS NOT NULL AND EXISTS (SELECT 1 FROM Enrollment en WHERE en.course = c AND en.user.userId = :userId AND en.status IN ('ACTIVE', 'COMPLETED')) THEN true ELSE false END) " +
             "FROM Course c JOIN c.category cat JOIN c.manager m " +
             "WHERE c.isPublished = true " +
             "AND (:categoryId IS NULL OR c.categoryId = :categoryId) " +

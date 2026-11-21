@@ -281,7 +281,7 @@ export function publicExamPathFor(
   roleCode: string | null | undefined,
   id: string,
 ): string {
-  return roleCode === Role.COURSE_MANAGER
+  return roleCode === Role.COURSE_MANAGER || roleCode === Role.ADMIN
     ? managerPublicExamPath(id)
     : publicExamPath(id);
 }
@@ -290,7 +290,7 @@ export function publicExamPathFor(
 export function publicExamListPathFor(
   roleCode: string | null | undefined,
 ): string {
-  return roleCode === Role.COURSE_MANAGER
+  return roleCode === Role.COURSE_MANAGER || roleCode === Role.ADMIN
     ? ROUTES.managerPracticeExams
     : ROUTES.studentPublicExam;
 }

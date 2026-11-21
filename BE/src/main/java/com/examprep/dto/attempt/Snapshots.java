@@ -1,6 +1,7 @@
 package com.examprep.dto.attempt;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonInclude;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -59,9 +60,13 @@ public final class Snapshots {
     public record Matching(List<String> lefts, List<String> rights) {
     }
 
-    /** ESSAY/CODE only. */
+    /** ESSAY/DIAGRAM_ESSAY/CODE only. */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record AnswerSpace(Integer maxLength) {
+    public record AnswerSpace(Integer maxLength, Integer minWords, Integer maxWords) {
+        public AnswerSpace(Integer maxLength) {
+            this(maxLength, null, null);
+        }
     }
 
     /**

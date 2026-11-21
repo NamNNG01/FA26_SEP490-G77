@@ -521,7 +521,10 @@ public class ModulePracticeSupport {
                         display.matching().lefts(), display.matching().rights());
             }
             if (display.answerSpace() != null) {
-                answerSpace = new ModulePracticeResponses.AnswerSpaceView(display.answerSpace().maxLength());
+                answerSpace = new ModulePracticeResponses.AnswerSpaceView(
+                        display.answerSpace().maxLength(),
+                        display.answerSpace().minWords(),
+                        display.answerSpace().maxWords());
             }
         }
         List<ModulePracticeResponses.SubmittedAnswer> submitted = new ArrayList<>(attempts.size());

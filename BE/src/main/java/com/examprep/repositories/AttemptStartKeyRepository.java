@@ -21,7 +21,7 @@ public interface AttemptStartKeyRepository extends JpaRepository<AttemptStartKey
     List<AttemptStartKey> findByAttempt_AttemptId(Long attemptId);
 
     /** Keys expire 24h after creation (spec 6.1); stale rows are dropped on the next start. */
-    @Modifying
+    @Modifying(flushAutomatically = true)
     @Query("DELETE FROM AttemptStartKey k WHERE k.expiresAt < :now")
     int deleteExpiredBefore(@Param("now") Instant now);
 }

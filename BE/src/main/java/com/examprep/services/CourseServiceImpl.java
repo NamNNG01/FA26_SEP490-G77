@@ -199,13 +199,17 @@ public class CourseServiceImpl implements CourseService {
     @PreAuthorize("hasRole('ADMIN')")
     public void deleteCourse(Long id) {
         Course course = writeCourse(id);
+        if (Boolean.TRUE.equals(course.getIsPublished())) {
+            throw conflict("Cannot delete a published course. Please unpublish it first.");
+        }
         if (enrollments.existsByCourseCourseId(id)
                 || exams.existsByCourseCourseIdOrModuleCourseCourseId(id, id)
                 || questions.existsByCourseCourseIdOrModuleCourseCourseId(id, id)
                 || documents.existsByCoursesCourseId(id)
                 || aiLogs.existsByCourseCourseId(id)
                 || configs.existsByModuleCourseCourseId(id)
-                || groups.existsByCourseCourseIdOrModuleCourseCourseId(id, id))
+                || groups.existsByCourseCourseIdOrModuleCourseCourseId(id, id)
+                || decks.existsByCourseCourseIdOrModuleCourseCourseId(id, id))
             throw conflict("Course has enrollments or dependent content. Unpublish it instead.");
         assignments.deleteByCourseCourseId(id);
         modules.deleteByCourseCourseId(id);
@@ -259,13 +263,18 @@ public class CourseServiceImpl implements CourseService {
         Module module = writeModule(user, id);
         Course course = module.getCourse();
         if (questions.existsByModuleModuleId(id) || exams.existsByModuleModuleId(id)
-                || configs.existsByModuleModuleId(id) || groups.existsByModuleModuleId(id))
+                || configs.existsByModuleModuleId(id) || groups.existsByModuleModuleId(id)
+                || decks.existsByModuleModuleId(id))
             throw conflict("Module has dependent content. Remove or reassign it explicitly before deleting.");
         if (Boolean.TRUE.equals(course.getIsPublished()) && lastVisible(module))
             throw conflict("Unpublish the course before deleting its last visible module.");
         modules.delete(module);
         course.setUpdatedAt(Instant.now());
         modules.flush();
+        if (Boolean.TRUE.equals(course.getIsPublished())
+                && courses.findCoursesWithVisibleModuleContent(List.of(course.getCourseId())).isEmpty()) {
+            throw conflict("Published course must keep at least one visible module with content.");
+        }
     }
 
     @Override
@@ -280,6 +289,10 @@ public class CourseServiceImpl implements CourseService {
             module.setStatus(request.status());
             course.setUpdatedAt(Instant.now());
             modules.flush();
+            if (Module.STATUS_HIDDEN.equals(request.status()) && Boolean.TRUE.equals(course.getIsPublished())
+                    && courses.findCoursesWithVisibleModuleContent(List.of(course.getCourseId())).isEmpty()) {
+                throw conflict("Published course must keep at least one visible module with content.");
+            }
         }
         List<Long> ids = List.of(id);
         return moduleResponse(module, counts(questions.countByModules(ids)).getOrDefault(id, 0L),

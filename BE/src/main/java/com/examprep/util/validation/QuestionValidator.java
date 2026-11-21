@@ -107,7 +107,7 @@ public class QuestionValidator {
                 for (String key : metaMap.keySet()) {
                     if (key.equals("skillTag")) {
                         errors.add(new ValidationError(prefix + "questionMetadata.skillTag", "skillTag is not supported in question metadata"));
-                    } else if (isDiagram && key.equals("drawioXml")) {
+                    } else if (isDiagram && (key.equals("drawioXml") || key.equals("diagramType") || key.equals("plantUmlSource"))) {
                         // valid diagram metadata key
                     } else if (isEssay && (key.equals("minWords") || key.equals("maxWords"))) {
                         // valid essay word-limit metadata key
@@ -226,7 +226,10 @@ public class QuestionValidator {
                 for (int i = 0; i < opts.size(); i++) {
                     AnswerOptionDto opt = opts.get(i);
                     String optPrefix = prefix + "options[" + i + "].";
-                    if (opt == null) continue;
+                    if (opt == null) {
+                        errors.add(new ValidationError(prefix + "options[" + i + "]", "Option cannot be null"));
+                        continue;
+                    }
 
                     if (opt.getIsCorrect() != null) {
                         errors.add(new ValidationError(optPrefix + "isCorrect", "Ordering question options cannot have isCorrect"));
@@ -323,8 +326,8 @@ public class QuestionValidator {
                     if (cfg.getTimeLimitMs() != null && (cfg.getTimeLimitMs() < 1 || cfg.getTimeLimitMs() > 30000)) {
                         errors.add(new ValidationError(prefix + "codeConfig.timeLimitMs", "Time limit must be between 1 and 30000 ms"));
                     }
-                    if (cfg.getMemoryLimitKb() != null && cfg.getMemoryLimitKb() < 1) {
-                        errors.add(new ValidationError(prefix + "codeConfig.memoryLimitKb", "Memory limit must be positive"));
+                    if (cfg.getMemoryLimitKb() != null && (cfg.getMemoryLimitKb() < 1 || cfg.getMemoryLimitKb() > 1048576)) {
+                        errors.add(new ValidationError(prefix + "codeConfig.memoryLimitKb", "Memory limit must be between 1 and 1048576 KB"));
                     }
                 }
                 List<String> languages = payload.getCodeConfig() == null ? null : payload.getCodeConfig().getAllowedLanguages();
@@ -341,7 +344,10 @@ public class QuestionValidator {
                     for (int i = 0; i < payload.getTestCases().size(); i++) {
                         TestCaseDto tc = payload.getTestCases().get(i);
                         String tcPrefix = prefix + "testCases[" + i + "].";
-                        if (tc == null) continue;
+                        if (tc == null) {
+                            errors.add(new ValidationError(prefix + "testCases[" + i + "]", "Test case cannot be null"));
+                            continue;
+                        }
                         if (tc.getInputData() == null) {
                             errors.add(new ValidationError(tcPrefix + "inputData", "Test case input data is required"));
                         }
@@ -526,6 +532,10 @@ public class QuestionValidator {
                 return;
             }
             List<?> criteria = (List<?>) criteriaObj;
+            if (criteria.isEmpty()) {
+                errors.add(new ValidationError(path + ".criteria", "Rubric must contain at least one criterion"));
+                return;
+            }
             Set<String> seenNames = new HashSet<>();
 
             for (int i = 0; i < criteria.size(); i++) {

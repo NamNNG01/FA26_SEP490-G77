@@ -123,7 +123,7 @@ public final class AttemptGrader {
             return false;
         }
         JsonNode matches = response == null ? null : response.get("matches");
-        if (matches == null || !matches.isArray()) {
+        if (matches == null || !matches.isArray() || matches.size() != key.pairs().size()) {
             return false;
         }
         Map<String, String> given = new HashMap<>();
@@ -131,11 +131,15 @@ public final class AttemptGrader {
             JsonNode left = match == null ? null : match.get("left");
             JsonNode right = match == null ? null : match.get("right");
             if (left != null && left.isTextual() && right != null && right.isTextual()) {
-                given.put(left.asText().trim(), right.asText().trim());
+                given.put(left.asText().trim().toLowerCase(java.util.Locale.ROOT), right.asText().trim());
             }
         }
+        if (given.size() != key.pairs().size()) {
+            return false;
+        }
         for (Snapshots.Pair pair : key.pairs()) {
-            String answer = given.get(pair.left() == null ? "" : pair.left().trim());
+            String leftKey = pair.left() == null ? "" : pair.left().trim().toLowerCase(java.util.Locale.ROOT);
+            String answer = given.get(leftKey);
             String expected = pair.right() == null ? "" : pair.right().trim();
             if (answer == null || !answer.equalsIgnoreCase(expected)) {
                 return false;

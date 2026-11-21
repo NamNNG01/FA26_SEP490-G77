@@ -84,9 +84,9 @@ public class MaterialStorage {
 
     private String localStore(String publicId, byte[] bytes) {
         try {
-            Files.createDirectories(localDir);
-            String relative = publicId.replace('/', '_');
-            Path target = localDir.resolve(relative);
+            Path root = localDir.toAbsolutePath().normalize();
+            Files.createDirectories(root);
+            Path target = resolveLocalTarget(root, publicId);
             Files.write(target, bytes);
             return target.toString().replace('\\', '/');
         } catch (IOException ex) {
@@ -107,11 +107,24 @@ public class MaterialStorage {
             if (PROVIDER_CLOUDINARY.equalsIgnoreCase(provider)) {
                 cloudinaryDelete(publicId);
             } else {
-                Files.deleteIfExists(localDir.resolve(publicId.replace('/', '_')));
+                Path root = localDir.toAbsolutePath().normalize();
+                Files.deleteIfExists(resolveLocalTarget(root, publicId));
             }
         } catch (Exception ex) {
             log.warn("Material cleanup failed: {}", ex.getMessage());
         }
+    }
+
+    private static Path resolveLocalTarget(Path root, String publicId) {
+        String normalized = publicId == null ? "" : publicId.replace('\\', '/').replace('/', '_');
+        if (normalized.isBlank() || normalized.contains("..")) {
+            throw new BaseException(ResponseCode.BAD_REQUEST, "Invalid storage key");
+        }
+        Path target = root.resolve(normalized).normalize();
+        if (!target.startsWith(root) || target.equals(root)) {
+            throw new BaseException(ResponseCode.BAD_REQUEST, "Invalid storage key");
+        }
+        return target;
     }
 
     private void cloudinaryDelete(String publicId) {

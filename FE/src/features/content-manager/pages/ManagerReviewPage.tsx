@@ -212,6 +212,8 @@ export function ManagerReviewPage() {
     return () => { cancelled = true; };
   }, [courseId]);
 
+  const activeContributorSearch = courseId ? contributorSearch.trim() : '';
+
   useEffect(() => {
     if (courses.length === 0) return;
     let cancelled = false;
@@ -220,7 +222,7 @@ export function ManagerReviewPage() {
       try {
         const relevantCourses = courseId ? courses.filter(course => String(course.courseId) === courseId) : courses;
         const pages = await Promise.all(relevantCourses.map(course => courseService.getCourseStudents(course.courseId, {
-          search: contributorSearch.trim() || undefined,
+          search: activeContributorSearch || undefined,
           page: 0,
           size: 100,
         })));
@@ -234,9 +236,9 @@ export function ManagerReviewPage() {
       } finally {
         if (!cancelled) setStudentsLoading(false);
       }
-    }, contributorSearch ? 250 : 0);
+    }, activeContributorSearch ? 300 : 0);
     return () => { cancelled = true; window.clearTimeout(timeout); };
-  }, [courses, courseId, contributorSearch]);
+  }, [courses, courseId, activeContributorSearch]);
 
   useEffect(() => {
     let cancelled = false;

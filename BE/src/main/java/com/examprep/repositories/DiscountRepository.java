@@ -22,11 +22,11 @@ import java.util.Optional;
 public interface DiscountRepository extends JpaRepository<Discount, Long>, JpaSpecificationExecutor<Discount> {
     Optional<Discount> findByCodeIgnoreCaseAndDeletedAtIsNull(String code);
 
-    @Modifying
+    @Modifying(flushAutomatically = true)
     @Query("update Discount d set d.usedCount = case when d.usedCount < d.usageLimit then d.usedCount + 1 else d.usedCount end where d.discountId = :discountId")
     int incrementUsedCount(@Param("discountId") Long discountId);
 
-    @Modifying
+    @Modifying(flushAutomatically = true)
     @Query("update Discount d set d.usedCount = d.usedCount + 1 "
             + "where d.discountId = :discountId and d.usedCount < d.usageLimit "
             + "and d.isActive = true and d.deletedAt is null "
@@ -34,7 +34,7 @@ public interface DiscountRepository extends JpaRepository<Discount, Long>, JpaSp
             + "and (d.expiresAt is null or d.expiresAt > :now)")
     int reserveUsage(@Param("discountId") Long discountId, @Param("now") Instant now);
 
-    @Modifying
+    @Modifying(flushAutomatically = true)
     @Query("update Discount d set d.usedCount = case when d.usedCount > 0 then d.usedCount - 1 else 0 end "
             + "where d.discountId = :discountId")
     int releaseUsage(@Param("discountId") Long discountId);
@@ -47,6 +47,10 @@ public interface DiscountRepository extends JpaRepository<Discount, Long>, JpaSp
             "- (SELECT COUNT(p) FROM Payment p WHERE p.discount = d AND p.status = 'PENDING' AND p.discountReserved = true)) ELSE 0L END > 0 " +
             "AND (LOWER(d.code) LIKE :keyword ESCAPE '!' OR LOWER(COALESCE(d.name, '')) LIKE :keyword ESCAPE '!') ORDER BY d.discountId DESC")
     Page<Discount> findContestPrizes(@Param("now") Instant now, @Param("keyword") String keyword, Pageable pageable);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT d FROM Discount d WHERE d.discountId = :id")
+    Optional<Discount> findForUpdate(@Param("id") Long id);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT d FROM Discount d WHERE d.discountId IN :ids ORDER BY d.discountId")

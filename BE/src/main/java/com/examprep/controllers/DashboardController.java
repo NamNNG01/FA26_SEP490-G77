@@ -34,6 +34,7 @@ public class DashboardController {
     private final CourseManagerDashboardService courseManagerDashboardService;
 
     @GetMapping("/student")
+    @PreAuthorize("hasAnyRole('STUDENT', 'ADMIN')")
     @Operation(summary = "DASH-01: Student Dashboard",
             description = "Returns enrollment, progress, score summary and recent activity for the logged-in student.")
     public ResponseEntity<ApiResponse<StudentDashboardResponse>> studentDashboard(
@@ -43,6 +44,7 @@ public class DashboardController {
     }
 
     @GetMapping("/course-manager")
+    @PreAuthorize("hasAnyRole('COURSE_MANAGER', 'ADMIN')")
     @Operation(summary = "DASH-02: Course Manager Dashboard",
             description = "Returns course publication and student enrollment summaries for the logged-in course manager.")
     public ResponseEntity<ApiResponse<CourseManagerDashboardResponse>> courseManagerDashboard(
@@ -52,6 +54,7 @@ public class DashboardController {
     }
 
     @GetMapping("/admin")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "DASH-03: Admin Dashboard",
             description = "Returns global platform statistics and recent user registrations for administrators.")
     public ResponseEntity<ApiResponse<AdminDashboardResponse>> adminDashboard(

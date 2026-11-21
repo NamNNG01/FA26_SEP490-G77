@@ -852,8 +852,8 @@ function ScoreCard({
       {/* The breadcrumb names the exam; the heading stays for screen readers. */}
       <h1 className="sr-only">{result.examTitle} — result</h1>
       {/* Attempt picker | score, centred and large | actions. The 1fr side columns keep the score in the middle. */}
-      <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] md:items-center">
-        <div className="min-w-0 md:max-w-xs space-y-1">
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:items-center">
+        <div className="min-w-0 lg:max-w-xs space-y-1">
           {picker}
           {result.autoSubmitted && <p className="text-xs text-content-subtle">Submitted automatically when time ran out.</p>}
         </div>
@@ -861,7 +861,7 @@ function ScoreCard({
         {/* No score until the written answers are graded — "0 / 100" would read as a real result. */}
         {showScore && showCounts ? (
           // Practice quiz has no score: how many were right, wrong and left out.
-          <dl className="grid grid-cols-3 gap-2 text-center md:min-w-[18rem]">
+          <dl className="grid grid-cols-3 gap-2 text-center lg:min-w-[18rem]">
             {[
               { label: 'Correct', value: counts.correct, tone: 'text-success' },
               { label: 'Wrong', value: counts.incorrect, tone: 'text-danger' },
@@ -875,7 +875,7 @@ function ScoreCard({
           </dl>
         ) : showScore ? (
           // As tall as the Retake / Back pair beside it (~80px): label, one score line, bar.
-          <div className="text-center space-y-1.5 md:min-w-[16rem]">
+          <div className="text-center space-y-1.5 lg:min-w-[16rem]">
             <p className="text-xs font-semibold text-content-subtle uppercase tracking-wide leading-4">Your score</p>
             <p className={`flex flex-wrap items-baseline justify-center gap-x-1.5 leading-none ${tone}`}>
               <span className="text-[2.5rem] font-black break-all">{num(score)}</span>
@@ -888,7 +888,7 @@ function ScoreCard({
           </div>
         ) : (
           // Just the button while waiting; the warning box only when there is something to say.
-          <div className={`w-full md:w-64 ${grading || gradingError ? 'space-y-2 rounded-[10px] border border-warning-line bg-warning-light p-3' : ''}`}>
+          <div className={`w-full lg:w-64 lg:justify-self-center ${grading || gradingError ? 'space-y-2 rounded-[10px] border border-warning-line bg-warning-light p-3' : ''}`}>
             {grading && (
               <p className="flex items-start gap-2 text-xs text-warning">
                 <Icon.Clock className="w-4 h-4 flex-shrink-0" />
@@ -903,7 +903,7 @@ function ScoreCard({
           </div>
         )}
 
-        <div className="flex flex-wrap md:flex-col gap-2 md:justify-self-end">
+        <div className="flex flex-wrap lg:flex-col gap-2 lg:justify-self-end">
           {onRetake && (
             <Button icon={<Icon.RefreshCw className="w-4 h-4" />} onClick={onRetake}>
               Retake

@@ -178,7 +178,9 @@ public class AdminUserServiceImpl implements AdminUserService {
         String password = "Aa1!" + java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
         User user = users.saveAndFlush(User.builder().fullName(request.fullName().trim()).email(email)
                 .roleName(request.role()).status(User.STATUS_ACTIVE).passwordHash(passwordEncoder.encode(password)).build());
-        if (!mail.sendNewAccountEmail(email, password)) throw new IllegalStateException("Account email delivery failed");
+        if (!mail.sendNewAccountEmail(email, password)) {
+            throw new BaseException(ResponseCode.INTERNAL_SERVER_ERROR, "Account email delivery failed");
+        }
         return AdminUserResponse.from(user);
     }
 
@@ -225,7 +227,7 @@ public class AdminUserServiceImpl implements AdminUserService {
     }
 
     private static Instant startOfCurrentMonth() {
-        return LocalDate.now(ZoneOffset.UTC).withDayOfMonth(1).atStartOfDay(ZoneOffset.UTC).toInstant();
+        return LocalDate.now(AiQuotaService.ZONE).withDayOfMonth(1).atStartOfDay(AiQuotaService.ZONE).toInstant();
     }
 
     User requireUser(Long id) {

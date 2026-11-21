@@ -408,7 +408,9 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
                     paperFactory.read(attempt.getExamSnapshot(), Snapshots.ExamSnapshot.class);
             BigDecimal maxScore = snapshot != null && snapshot.maxScore() != null
                     ? snapshot.maxScore()
-                    : attempt.getExam().getMaxScore() != null ? attempt.getExam().getMaxScore() : BigDecimal.ZERO;
+                    : (attempt.getExam() != null && attempt.getExam().getMaxScore() != null
+                            ? attempt.getExam().getMaxScore()
+                            : BigDecimal.ZERO);
             Long attemptId = attempt.getAttemptId();
             content.add(new AttemptResponses.HistoryItem(
                     attemptId,
@@ -447,6 +449,9 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
         }
         if (!STATUS_IN_PROGRESS.equals(attempt.getStatus())) {
             throw new ResourceConflictException("Attempt has already been submitted");
+        }
+        if (autoSubmitter.codeJudgingInProgress(attempt, Instant.now())) {
+            throw new ResourceConflictException("Code judging is already in progress");
         }
 
         Long examId = attempt.getExam() != null ? attempt.getExam().getExamId() : null;
@@ -531,6 +536,7 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
         }
 
         JsonNode responseNode;
+        boolean responseUpdated = false;
         if (body != null && body.response() != null) {
             Optional<String> error = AnswerResponseValidator.validate(questionType, body.response(), display);
             if (error.isEmpty() && "CODE".equals(questionType)) {
@@ -539,14 +545,16 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
             if (error.isPresent()) {
                 throw new BadRequestException(error.get());
             }
-            responseNode = body.response();
+            responseNode = normalizeResponse(questionId, questionType, body.response());
             row.setResponse(storeResponse(responseNode));
+            responseUpdated = true;
         } else if (row.getResponse() != null) {
             responseNode = paperFactory.readResponse(row.getResponse());
             Optional<String> error = AnswerResponseValidator.validate(questionType, responseNode, display);
             if (error.isPresent()) {
                 throw new BadRequestException(error.get());
             }
+            responseNode = normalizeResponse(questionId, questionType, responseNode);
         } else {
             responseNode = null;
         }
@@ -555,22 +563,26 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
         AttemptResponses.CheckResult result;
         if (!supported) {
             result = new AttemptResponses.CheckResult(false, null, List.of(), null, null);
-        } else {
-            Snapshots.KeySnapshot key = paperFactory.read(row.getKeySnapshot(), Snapshots.KeySnapshot.class);
-            AttemptGrader.Grade grade = AttemptGrader.grade(questionType, responseNode, key, row.getWeightSnapshot());
-            List<Long> correctOptionIds = isChoice(questionType) && key != null && key.correctOptionIds() != null
-                    ? key.correctOptionIds()
-                    : List.of();
-            AttemptResponses.CorrectAnswer correctAnswer = correctAnswer(questionType, key);
-            if (correctAnswer == null && isChoice(questionType)) {
-                correctAnswer = new AttemptResponses.CorrectAnswer(null, null, null);
+            if (responseUpdated) {
+                answers.save(row);
             }
-            String explanation = row.getQuestion() != null && row.getQuestion().getAiExplanation() != null
-                    && !row.getQuestion().getAiExplanation().isBlank()
-                    ? row.getQuestion().getAiExplanation()
-                    : null;
-            result = new AttemptResponses.CheckResult(true, grade.correct(), correctOptionIds, correctAnswer, explanation);
+            return result;
         }
+
+        Snapshots.KeySnapshot key = paperFactory.read(row.getKeySnapshot(), Snapshots.KeySnapshot.class);
+        AttemptGrader.Grade grade = AttemptGrader.grade(questionType, responseNode, key, row.getWeightSnapshot());
+        List<Long> correctOptionIds = isChoice(questionType) && key != null && key.correctOptionIds() != null
+                ? key.correctOptionIds()
+                : List.of();
+        AttemptResponses.CorrectAnswer correctAnswer = correctAnswer(questionType, key);
+        if (correctAnswer == null && isChoice(questionType)) {
+            correctAnswer = new AttemptResponses.CorrectAnswer(null, null, null);
+        }
+        String explanation = row.getQuestion() != null && row.getQuestion().getAiExplanation() != null
+                && !row.getQuestion().getAiExplanation().isBlank()
+                ? row.getQuestion().getAiExplanation()
+                : null;
+        result = new AttemptResponses.CheckResult(true, grade.correct(), correctOptionIds, correctAnswer, explanation);
 
         row.setIsLocked(true);
         try {
@@ -581,6 +593,16 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
         answers.save(row);
 
         return result;
+    }
+
+    private JsonNode normalizeResponse(Long questionId, String questionType, JsonNode response) {
+        if (!"CODE".equals(questionType) || response == null || !response.isObject()
+                || response.path("text").asText("").isBlank() || response.hasNonNull("language")) {
+            return response;
+        }
+        com.fasterxml.jackson.databind.node.ObjectNode code = response.deepCopy();
+        code.put("language", codeJudge.language(questionId));
+        return code;
     }
 
     private String storeResponse(JsonNode response) {
@@ -692,7 +714,10 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
                     AttemptScoring.output(
                             AttemptScoring.questionMaxPoints(row.getWeightSnapshot(), totalWeight, maxScore)),
                     display.answerSpace() == null ? null
-                            : new AttemptResponses.AnswerSpace(display.answerSpace().maxLength()),
+                            : new AttemptResponses.AnswerSpace(
+                                    display.answerSpace().maxLength(),
+                                    display.answerSpace().minWords(),
+                                    display.answerSpace().maxWords()),
                     group(display),
                     practice ? practiceKey(row, display.questionType(), live.get(display.questionId())) : null));
             if (withAnswers) {

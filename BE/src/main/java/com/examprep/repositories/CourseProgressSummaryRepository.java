@@ -29,6 +29,9 @@ public interface CourseProgressSummaryRepository extends JpaRepository<Course, L
         WHERE p.user.userId = :userId AND p.correctAttempts > 0
           AND COALESCE(m.course.courseId, p.course.courseId) = :courseId
           AND (m IS NULL OR m.status <> 'HIDDEN')
+          AND p.question.deletedAt IS NULL AND p.question.status = 'ACTIVE'
+          AND p.question.approvalStatus = 'APPROVED' AND p.question.sourceDocumentId IS NULL
+          AND NOT (COALESCE(p.question.source, '') = 'AI' AND COALESCE(p.question.creatorRole, '') = 'STUDENT')
         GROUP BY COALESCE(m.course.courseId, p.course.courseId), m.moduleId
         """)
     List<Object[]> questionCompletionsByCourse(@Param("courseId") Long courseId, @Param("userId") Long userId);
@@ -51,6 +54,9 @@ public interface CourseProgressSummaryRepository extends JpaRepository<Course, L
         WHERE p.user.userId = :userId AND p.correctAttempts > 0
           AND COALESCE(m.course.courseId, p.course.courseId) IN :ids
           AND (m IS NULL OR m.status <> 'HIDDEN')
+          AND p.question.deletedAt IS NULL AND p.question.status = 'ACTIVE'
+          AND p.question.approvalStatus = 'APPROVED' AND p.question.sourceDocumentId IS NULL
+          AND NOT (COALESCE(p.question.source, '') = 'AI' AND COALESCE(p.question.creatorRole, '') = 'STUDENT')
         GROUP BY COALESCE(m.course.courseId, p.course.courseId), m.moduleId
         """)
     List<Object[]> questionCompletions(@Param("ids") List<Long> ids, @Param("userId") Long userId);

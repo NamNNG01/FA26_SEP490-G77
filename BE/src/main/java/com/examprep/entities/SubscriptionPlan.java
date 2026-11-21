@@ -43,8 +43,9 @@ public class SubscriptionPlan implements Serializable {
     private String description;
 
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "features_json", columnDefinition = "JSON")
-    private String featuresJson;
+    @Column(name = "features_json", nullable = false, columnDefinition = "JSON")
+    @Builder.Default
+    private String featuresJson = "[]";
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "feature_keys", columnDefinition = "JSONB")
@@ -69,4 +70,15 @@ public class SubscriptionPlan implements Serializable {
 
     @Column(name = "deleted_at")
     private Instant deletedAt;
+
+    @PrePersist
+    @PreUpdate
+    private void normalizeJsonDefaults() {
+        if (featuresJson == null || featuresJson.isBlank()) {
+            featuresJson = "[]";
+        }
+        if (featureKeysJson == null || featureKeysJson.isBlank()) {
+            featureKeysJson = "[]";
+        }
+    }
 }

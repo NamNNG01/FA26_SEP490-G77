@@ -87,7 +87,9 @@ public class DeckReviewServiceImpl implements DeckReviewService {
         }
         if (size > 100) size = 100;
         String[] sortParts = sort == null ? new String[0] : sort.split(",");
-        String sortField = sortParts.length > 0 && !sortParts[0].isBlank() ? sortParts[0] : "submittedAt";
+        String rawSortField = sortParts.length > 0 && !sortParts[0].isBlank() ? sortParts[0].trim() : "submittedAt";
+        String sortField = java.util.Set.of("submittedAt", "createdAt", "updatedAt", "title", "deckId").contains(rawSortField)
+                ? rawSortField : "submittedAt";
         Sort.Direction direction = sortParts.length > 1 && "desc".equalsIgnoreCase(sortParts[1])
                 ? Sort.Direction.DESC : Sort.Direction.ASC;
         Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortField));
@@ -244,7 +246,7 @@ public class DeckReviewServiceImpl implements DeckReviewService {
                 .build();
         reviewLogRepository.save(log);
 
-        boolean canResubmit = (deck.getResubmissionCount() < 1);
+        boolean canResubmit = (deck.getResubmissionCount() == null || deck.getResubmissionCount() < 1);
         String title = "Bộ flashcard chưa được duyệt";
         String content = "Bộ \"" + deck.getTitle() + "\" bị từ chối. Lý do: " + reason.strip();
         reviewNotificationService.sendNotification(deck.getUser().getUserId(), title, content, "DECK_REJECTED", "DECK", String.valueOf(deckId), "/student/flashcards/" + deckId);
@@ -263,7 +265,7 @@ public class DeckReviewServiceImpl implements DeckReviewService {
 
     private Map<String, Object> courseSummary(Course course) {
         if (course == null) return null;
-        return Map.of("courseId", course.getCourseId(), "title", course.getTitle());
+        return Map.of("id", course.getCourseId(), "courseId", course.getCourseId(), "title", course.getTitle());
     }
 
     private Map<String, Object> moduleSummary(com.examprep.entities.Module module) {

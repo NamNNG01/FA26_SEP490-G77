@@ -70,7 +70,12 @@ public final class AttemptResponses {
     /** MATCHING renders as two shuffled columns; the pairing only exists in {@code key_snapshot}. */
     public record Matching(List<String> lefts, List<String> rights) {}
 
-    public record AnswerSpace(Integer maxLength) {}
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public record AnswerSpace(Integer maxLength, Integer minWords, Integer maxWords) {
+        public AnswerSpace(Integer maxLength) {
+            this(maxLength, null, null);
+        }
+    }
 
     /** The reading-passage group of the question, exactly as the attempt froze it; null for a standalone question. */
     public record Group(Long groupId, String title, String passageText) {}

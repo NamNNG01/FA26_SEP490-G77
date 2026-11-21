@@ -249,12 +249,14 @@ public class QuizGenerationWorker {
             throw new IllegalStateException("Could not build the AI request");
         }
         AiResponse response;
+        CompletableFuture<AiResponse> future = CompletableFuture.supplyAsync(() -> aiClient.complete(call));
         try {
-            response = CompletableFuture.supplyAsync(() -> aiClient.complete(call))
-                    .get(timeoutMillis, TimeUnit.MILLISECONDS);
+            response = future.get(timeoutMillis, TimeUnit.MILLISECONDS);
         } catch (TimeoutException ex) {
+            future.cancel(true);
             throw new IllegalStateException("AI generation timed out");
         } catch (InterruptedException ex) {
+            future.cancel(true);
             Thread.currentThread().interrupt();
             throw new IllegalStateException("AI generation was interrupted");
         } catch (ExecutionException ex) {

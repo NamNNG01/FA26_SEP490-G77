@@ -111,6 +111,9 @@ public class PayosClient {
         data.properties().stream().sorted(Map.Entry.comparingByKey()).forEach(entry -> {
             JsonNode value = entry.getValue();
             String text = value == null || value.isNull() ? "" : value.isContainerNode() ? compactSorted(value) : value.asText();
+            if ("null".equalsIgnoreCase(text) || "undefined".equalsIgnoreCase(text)) {
+                text = "";
+            }
             fields.add(entry.getKey() + "=" + text);
         });
         return String.join("&", fields);

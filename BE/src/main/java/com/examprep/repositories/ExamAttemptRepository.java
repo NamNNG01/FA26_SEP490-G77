@@ -116,7 +116,7 @@ public interface ExamAttemptRepository extends JpaRepository<ExamAttempt, Long> 
             "AND (:mode IS NULL OR " +
             "     (:mode = 'EXAM' AND a.mode IN ('EXAM', 'CONTEST', 'PRACTICE', 'PRACTICE_EXAM')) OR " +
             "     (:mode = 'PRACTICE' AND a.mode IN ('PRACTICE', 'PRACTICE_EXAM')) OR " +
-            "     (:mode = 'QUIZ' AND a.mode = 'QUIZ') OR " +
+            "     (:mode = 'QUIZ' AND a.mode IN ('QUIZ', 'MATERIAL_QUIZ')) OR " +
             "     (:mode = a.mode)) " +
             "ORDER BY a.submitTime DESC",
             countQuery = "SELECT COUNT(a) FROM ExamAttempt a " +
@@ -124,7 +124,7 @@ public interface ExamAttemptRepository extends JpaRepository<ExamAttempt, Long> 
             "AND (:mode IS NULL OR " +
             "     (:mode = 'EXAM' AND a.mode IN ('EXAM', 'CONTEST', 'PRACTICE', 'PRACTICE_EXAM')) OR " +
             "     (:mode = 'PRACTICE' AND a.mode IN ('PRACTICE', 'PRACTICE_EXAM')) OR " +
-            "     (:mode = 'QUIZ' AND a.mode = 'QUIZ') OR " +
+            "     (:mode = 'QUIZ' AND a.mode IN ('QUIZ', 'MATERIAL_QUIZ')) OR " +
             "     (:mode = a.mode))")
     Page<ExamAttempt> findActivityAttemptsByUserAndMode(@Param("userId") Long userId, @Param("mode") String mode, Pageable pageable);
 

@@ -98,7 +98,7 @@ public class RestAiClient implements AiClient {
                                 "parts", List.of(
                                         Map.of(
                                                 "text",
-                                                request.getPrompt()
+                                                java.util.Objects.toString(request.getPrompt(), "")
                                         )
                                 )
                         )

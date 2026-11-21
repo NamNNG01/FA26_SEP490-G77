@@ -67,8 +67,6 @@ public class SecurityConfig {
                         // visitors must reach the landing / public-course screens).
                         .requestMatchers(HttpMethod.GET,
                                 "/api/v1/categories",
-                                "/api/v1/courses",
-                                "/api/v1/courses/*",
                                 "/api/v1/student/categories",
                                 "/api/v1/student/courses",
                                 "/api/v1/student/courses/*",

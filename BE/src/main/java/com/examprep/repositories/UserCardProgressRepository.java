@@ -14,18 +14,18 @@ import java.util.Optional;
 public interface UserCardProgressRepository extends JpaRepository<UserCardProgress, Long> {
     List<UserCardProgress> findByUserUserIdAndCardDeckDeckId(Long userId, Long deckId);
 
-    @Modifying
+    @Modifying(flushAutomatically = true)
     @Query("DELETE FROM UserCardProgress p WHERE p.user.userId = :userId AND p.card.deck.deckId = :deckId")
     void deleteByUserUserIdAndCardDeckDeckId(@Param("userId") Long userId, @Param("deckId") Long deckId);
 
-    @Modifying
+    @Modifying(flushAutomatically = true)
     @Query("DELETE FROM UserCardProgress p WHERE p.card.cardId IN " +
             "(SELECT f.cardId FROM Flashcard f WHERE f.deck.deckId = :deckId)")
     void deleteByDeck(@Param("deckId") Long deckId);
 
     // F-08: the database also cascades this on Postgres, but Hibernate's own
     // DDL (test schema) has no ON DELETE rule, so remove progress explicitly.
-    @Modifying
+    @Modifying(flushAutomatically = true)
     @Query("DELETE FROM UserCardProgress p WHERE p.card.cardId = :cardId")
     void deleteByCard(@Param("cardId") Long cardId);
 

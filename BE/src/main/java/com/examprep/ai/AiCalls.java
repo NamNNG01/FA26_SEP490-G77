@@ -16,7 +16,7 @@ public final class AiCalls {
     public static final String UPSTREAM = "AI_UPSTREAM_ERROR";
     static long retryDelayMillis = 1500;
 
-    private static final ExecutorService CALLS = Executors.newCachedThreadPool(task -> {
+    private static final ExecutorService CALLS = Executors.newFixedThreadPool(16, task -> {
         Thread thread = new Thread(task, "student-ai-call");
         thread.setDaemon(true);
         return thread;

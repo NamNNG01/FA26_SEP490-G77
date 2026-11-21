@@ -110,7 +110,7 @@ public class StudentMaterialController {
     @Operation(summary = "MQ-05: Start a completed generated quiz")
     public ResponseEntity<ApiResponse<MaterialResponses.Started>> start(
             @AuthenticationPrincipal UserPrincipal user, @PathVariable Long jobId,
-            @RequestBody(required = false) MaterialRequests.StartQuiz request) {
+            @Valid @RequestBody(required = false) MaterialRequests.StartQuiz request) {
         return ResponseEntity.ok(ApiResponse.success(service.start(user.getId(), jobId, request), "Quiz started"));
     }
 

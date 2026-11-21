@@ -50,7 +50,10 @@ public class AdminSubscriptionPlanService {
     @Transactional(readOnly = true)
     public Page<PlanItem> list(String keyword, Boolean isActive, int page, int size, String sort) {
         String kw = (keyword != null && !keyword.isBlank())
-                ? "%" + keyword.trim().toLowerCase(Locale.ROOT) + "%"
+                ? "%" + keyword.trim().toLowerCase(Locale.ROOT)
+                        .replace("!", "!!")
+                        .replace("%", "!%")
+                        .replace("_", "!_") + "%"
                 : null;
 
         Page<SubscriptionPlan> plans = planRepository.search(kw, isActive, pageable(page, size, sort));

@@ -26,7 +26,7 @@ public interface SubscriptionPlanRepository extends JpaRepository<SubscriptionPl
 
     /** API 20 admin list: optional case-insensitive name search + exact status, soft-deleted rows excluded. */
     @Query("SELECT p FROM SubscriptionPlan p WHERE p.deletedAt IS NULL " +
-            "AND (:keyword IS NULL OR LOWER(p.planName) LIKE :keyword) " +
+            "AND (:keyword IS NULL OR LOWER(p.planName) LIKE :keyword ESCAPE '!') " +
             "AND (:isActive IS NULL OR p.isActive = :isActive)")
     Page<SubscriptionPlan> search(@Param("keyword") String keyword, @Param("isActive") Boolean isActive, Pageable pageable);
 }

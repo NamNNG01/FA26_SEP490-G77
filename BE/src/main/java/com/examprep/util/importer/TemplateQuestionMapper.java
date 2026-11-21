@@ -191,7 +191,11 @@ public class TemplateQuestionMapper {
                 continue;
             }
 
-            if (optMatcher.matches()) {
+            boolean acceptsLetterOptions = qType.equals("SINGLE_CHOICE")
+                    || qType.equals("MULTIPLE_CHOICE")
+                    || qType.equals("ORDERING")
+                    || qType.equals("MATCHING");
+            if (acceptsLetterOptions && optMatcher.matches()) {
                 parsingContent = false;
                 parsingRubric = false;
                 parsingSample = false;
@@ -243,7 +247,7 @@ case "MULTIPLE_CHOICE":
                     }
                     List<AnswerOptionDto> scOpts = new ArrayList<>();
                     Set<String> correctLetters = Arrays.stream(answerRaw.split(","))
-                            .map(String::trim)
+                            .map(s -> s.trim().toUpperCase(Locale.ROOT))
                             .collect(Collectors.toSet());
 
                     for (int o = 0; o < optionsRaw.size(); o++) {
@@ -264,7 +268,12 @@ case "MULTIPLE_CHOICE":
                         errors.add(new ImportErrorDto("answerKey", "ANSWER is required", startLine));
                         break;
                     }
-                    boolean tfAns = Boolean.parseBoolean(answerRaw);
+                    String normalizedTf = answerRaw.trim().toLowerCase(Locale.ROOT);
+                    if (!normalizedTf.equals("true") && !normalizedTf.equals("false")) {
+                        errors.add(new ImportErrorDto("answerKey", "TRUE_FALSE answer must be True or False", startLine));
+                        break;
+                    }
+                    boolean tfAns = "true".equals(normalizedTf);
                     req.setOptions(List.of(
                             AnswerOptionDto.builder().optionText("True").isCorrect(tfAns).orderIndex(0).build(),
                             AnswerOptionDto.builder().optionText("False").isCorrect(!tfAns).orderIndex(1).build()
@@ -288,22 +297,26 @@ case "MULTIPLE_CHOICE":
                     req.setContent(sb.toString());
 
                     List<Map<String, Object>> blanksList = new ArrayList<>();
-                    if (blankCount == 1 && !answerRaw.contains("=")) {
+                    if (blankCount <= 1 && !answerRaw.matches("^\\s*(?:Blank\\s*)?\\d+\\s*[=:].*$")) {
                         List<String> accepted = Arrays.stream(answerRaw.split("\\|"))
                                 .map(String::trim)
                                 .collect(Collectors.toList());
                         blanksList.add(Map.of("index", 1, "accepted", accepted, "caseSensitive", false));
                     } else {
-                        // format: 1=Tokyo; 2=Japan or similar
+                        // format: 1=Tokyo; 2=Japan or Blank 1: Tokyo; Blank 2: Japan
                         String[] parts = answerRaw.split(";");
+                        Pattern blankEntry = Pattern.compile("^\\s*(?:Blank\\s*)?(\\d+)\\s*[=:]\\s*(.+)$", Pattern.CASE_INSENSITIVE);
                         for (String part : parts) {
-                            String[] kv = part.split("=", 2);
-                            if (kv.length == 2) {
-                                int idx = Integer.parseInt(kv[0].trim());
-                                List<String> accepted = Arrays.stream(kv[1].trim().split("\\|"))
+                            if (part.isBlank()) continue;
+                            Matcher bm = blankEntry.matcher(part);
+                            if (bm.matches()) {
+                                int idx = Integer.parseInt(bm.group(1));
+                                List<String> accepted = Arrays.stream(bm.group(2).trim().split("\\|"))
                                         .map(String::trim)
                                         .collect(Collectors.toList());
                                 blanksList.add(Map.of("index", idx, "accepted", accepted, "caseSensitive", false));
+                            } else {
+                                errors.add(new ImportErrorDto("answerKey", "Invalid FILL_BLANK answer entry: " + part.trim(), startLine));
                             }
                         }
                     }
@@ -316,7 +329,7 @@ case "MULTIPLE_CHOICE":
                         break;
                     }
                     List<String> correctOrder = Arrays.stream(answerRaw.split(","))
-                            .map(String::trim)
+                            .map(s -> s.trim().toUpperCase(Locale.ROOT))
                             .collect(Collectors.toList());
 
                     List<AnswerOptionDto> ordOpts = new ArrayList<>();
@@ -338,15 +351,17 @@ case "MULTIPLE_CHOICE":
                         errors.add(new ImportErrorDto("answerKey", "ANSWER is required", startLine));
                         break;
                     }
-                    Map<String, String> leftMap = optionsRaw.stream().collect(Collectors.toMap(o -> o[0], o -> o[1]));
-                    Map<String, String> rightMap = matchingRightRaw.stream().collect(Collectors.toMap(o -> o[0], o -> o[1]));
+                    Map<String, String> leftMap = optionsRaw.stream()
+                            .collect(Collectors.toMap(o -> o[0].toUpperCase(Locale.ROOT), o -> o[1], (a, b) -> b));
+                    Map<String, String> rightMap = matchingRightRaw.stream()
+                            .collect(Collectors.toMap(o -> o[0].toUpperCase(Locale.ROOT), o -> o[1], (a, b) -> b));
 
                     List<Map<String, String>> pairs = new ArrayList<>();
                     String[] pairParts = answerRaw.split(",");
                     for (String pp : pairParts) {
                         String[] lr = pp.trim().split("-");
                         if (lr.length == 2) {
-                            String lKey = lr[0].trim();
+                            String lKey = lr[0].trim().toUpperCase(Locale.ROOT);
                             String rKey = lr[1].trim();
                             String lText = leftMap.get(lKey);
                             String rText = rightMap.get(rKey);

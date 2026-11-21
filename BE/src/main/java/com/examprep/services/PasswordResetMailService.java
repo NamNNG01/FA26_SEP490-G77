@@ -66,7 +66,7 @@ public class PasswordResetMailService {
             mailSender.send(message);
             return true;
         } catch (Exception ex) {
-            log.warn("Account email delivery failed");
+            log.warn("Account email delivery failed ({}): {}", ex.getClass().getSimpleName(), ex.getMessage());
             return false;
         }
     }

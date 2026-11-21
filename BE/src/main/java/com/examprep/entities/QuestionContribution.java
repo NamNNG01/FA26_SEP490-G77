@@ -50,11 +50,11 @@ public class QuestionContribution implements Serializable {
     private String questionType;
 
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "options_json", columnDefinition = "jsonb")
+    @Column(name = "options_json", columnDefinition = "json")
     private String optionsJson;
 
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "answer_key_json", columnDefinition = "jsonb")
+    @Column(name = "answer_key_json", columnDefinition = "json")
     private String answerKeyJson;
 
     @Column(name = "explanation", columnDefinition = "TEXT")
@@ -64,15 +64,15 @@ public class QuestionContribution implements Serializable {
     private String difficulty;
 
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "category_ids", columnDefinition = "jsonb")
+    @Column(name = "category_ids", columnDefinition = "json")
     private String categoryIds;
 
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "essay_grading_rubric_json", columnDefinition = "jsonb")
+    @Column(name = "essay_grading_rubric_json", columnDefinition = "json")
     private String essayGradingRubricJson;
 
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "question_metadata_json", columnDefinition = "jsonb")
+    @Column(name = "question_metadata_json", columnDefinition = "json")
     private String questionMetadataJson;
 
     @JdbcTypeCode(SqlTypes.JSON)

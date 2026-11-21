@@ -245,17 +245,22 @@ public class FlashcardPdfWriter {
                 out.add("");
                 continue;
             }
-            StringBuilder line = new StringBuilder();
+            int firstNonSpace = 0;
+            while (firstNonSpace < paragraph.length() && paragraph.charAt(firstNonSpace) == ' ') {
+                firstNonSpace++;
+            }
+            String leadingSpaces = firstNonSpace > 0 ? paragraph.substring(0, firstNonSpace) : "";
+            StringBuilder line = new StringBuilder(leadingSpaces);
             for (String word : paragraph.trim().split(" +")) {
                 if (word.length() > 1 && widthOf(word, font, size) > width) {
-                    if (line.length() > 0) {
+                    if (line.length() > 0 && !line.toString().trim().isEmpty()) {
                         out.add(line.toString());
                     }
                     line = new StringBuilder(hardSplit(word, font, size, width, out));
                     continue;
                 }
-                String candidate = line.length() == 0 ? word : line + " " + word;
-                if (line.length() > 0 && widthOf(candidate, font, size) > width) {
+                String candidate = line.length() == 0 ? word : (line.toString().trim().isEmpty() ? line + word : line + " " + word);
+                if (!line.toString().trim().isEmpty() && widthOf(candidate, font, size) > width) {
                     out.add(line.toString());
                     line = new StringBuilder(word);
                 } else {

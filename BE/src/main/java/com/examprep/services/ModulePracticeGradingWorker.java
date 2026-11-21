@@ -18,6 +18,7 @@ import com.examprep.repositories.UserRepository;
 import com.examprep.services.student.ModulePracticeSupport;
 import com.examprep.services.student.QuestionReviewRecorder;
 import com.examprep.util.attempt.AttemptScoring;
+import com.examprep.util.attempt.CodeSource;
 import com.examprep.util.diagram.DrawioNormalizer;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -396,7 +397,11 @@ public class ModulePracticeGradingWorker {
             }
         } else {
             student = response.path("text").asText("");
-            if (student.length() > MAX_ESSAY_CHARS) {
+            if ("CODE".equals(type)) {
+                if (CodeSource.tooLarge(student)) {
+                    return tooLarge(criteria, maxPoints, TEXT_TOO_LONG);
+                }
+            } else if (student.length() > MAX_ESSAY_CHARS) {
                 return tooLarge(criteria, maxPoints, TEXT_TOO_LONG);
             }
         }

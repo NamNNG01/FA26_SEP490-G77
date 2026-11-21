@@ -74,12 +74,16 @@ public class StudentDeckService {
         }
         Course destination = request.courseId() == null ? null : enrolledCourse(userId, request.courseId());
         Course effectiveCourse = destination != null ? destination : deck.getCourse();
+        boolean courseChanged = request.courseId() != null && (deck.getCourse() == null
+                || !java.util.Objects.equals(deck.getCourse().getCourseId(), request.courseId()));
         if (request.courseId() != null) deck.setCourse(destination);
         if (request.title() != null) deck.setTitle(request.title().strip());
         if (request.description() != null) deck.setDescription(optionalText(request.description()));
         if (request.mode() != null) deck.setMode(request.mode());
         if (request.moduleId() != null) {
             deck.setModule(request.moduleId() == 0 ? null : deckModule(effectiveCourse, request.moduleId()));
+        } else if (courseChanged && deck.getModule() != null) {
+            deck.setModule(null);
         }
         decks.flush();
         return view(deck, count);
@@ -257,9 +261,16 @@ public class StudentDeckService {
 
     public PublishRequestView requestPublish(Long userId, Long deckId) {
         Deck deck = ownedDeck(userId, deckId);
+        boolean isResubmission = "REJECTED".equals(deck.getReviewStatus());
+        int currentResubmissions = deck.getResubmissionCount() != null ? deck.getResubmissionCount() : 0;
         switch (deck.getReviewStatus()) {
             case "PENDING_REVIEW" -> throw coded(ResponseCode.CONFLICT, "ALREADY_PENDING_REVIEW", "The deck is already waiting for review.");
             case "APPROVED" -> throw coded(ResponseCode.CONFLICT, "ALREADY_PUBLIC", "The deck is already public.");
+            case "REJECTED" -> {
+                if (currentResubmissions >= 1) {
+                    throw coded(ResponseCode.CONFLICT, "RESUBMISSION_LIMIT_REACHED", "The deck has already been resubmitted the maximum number of times.");
+                }
+            }
             default -> { }
         }
         if (cards.countByDeckDeckId(deckId) == 0) {
@@ -272,6 +283,9 @@ public class StudentDeckService {
         if (!enrollments.existsByCourse_CourseIdAndUser_UserIdAndStatus(
                 deck.getCourse().getCourseId(), userId, Enrollment.STATUS_ACTIVE)) {
             throw new ForbiddenException("You must be actively enrolled in the deck course to submit it for review.");
+        }
+        if (isResubmission) {
+            deck.setResubmissionCount(currentResubmissions + 1);
         }
         deck.setReviewStatus(REVIEW_PENDING);
         deck.setSubmittedAt(Instant.now());

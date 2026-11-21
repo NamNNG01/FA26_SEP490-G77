@@ -112,10 +112,10 @@ public class StudentContestController {
     @Operation(summary = "CT-07: Claim Contest Reward")
     public ResponseEntity<ApiResponse<ClaimRewardResponseDto>> claimReward(
             @PathVariable Long contestId,
-            @RequestBody Map<String, Long> body,
+            @RequestBody(required = false) Map<String, Long> body,
             @AuthenticationPrincipal UserPrincipal currentUser
     ) {
-        Long rewardId = body.get("rewardId");
+        Long rewardId = body != null ? body.get("rewardId") : null;
         ClaimRewardResponseDto dto = contestService.claimReward(contestId, rewardId, currentUser.getId());
         return ResponseEntity.ok(ApiResponse.success(dto, "Reward claimed"));
     }

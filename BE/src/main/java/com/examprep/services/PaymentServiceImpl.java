@@ -73,7 +73,9 @@ public class PaymentServiceImpl implements PaymentService {
                 plan.getPrice(), plan.getDurationDays(), parseFeatures(plan.getFeaturesJson()),
                 plan.getPrice() != null && plan.getPrice().signum() > 0
                         && cheapestPaid != null && plan.getPrice().compareTo(cheapestPaid) == 0,
-                Objects.equals(activePlan, plan.getPlanId()))).toList();
+                activePlan != null
+                        ? Objects.equals(activePlan, plan.getPlanId())
+                        : (currentUserId != null && plan.getPrice() != null && plan.getPrice().signum() == 0))).toList();
     }
 
     @Override
@@ -209,6 +211,9 @@ public class PaymentServiceImpl implements PaymentService {
         Payment payment = payments.findByOrderCodeAndUserUserId(orderCode, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Payment not found"));
         if (Payment.SUCCEEDED.equals(payment.getStatus())) throw new ResourceConflictException("Payment already succeeded");
+        if (!Payment.PENDING.equals(payment.getStatus()) && !Payment.CANCELLED.equals(payment.getStatus())) {
+            throw new ResourceConflictException("Payment cannot be cancelled in status " + payment.getStatus());
+        }
         if (Payment.PENDING.equals(payment.getStatus())) {
             if (payment.getPayosOrderCode() != null) {
                 try {
@@ -277,7 +282,8 @@ public class PaymentServiceImpl implements PaymentService {
                 && transactions.reconcilePaid(orderCode, remote.amountPaid(), remote.raw())) {
             log.info("Order {} confirmed through the PayOS status API", orderCode);
         }
-        return remote != null && Payment.EXPIRED.equalsIgnoreCase(remote.status());
+        return remote != null && (Payment.EXPIRED.equalsIgnoreCase(remote.status())
+                || Payment.CANCELLED.equalsIgnoreCase(remote.status()));
     }
 
     @Override
@@ -291,7 +297,9 @@ public class PaymentServiceImpl implements PaymentService {
                     .orElseThrow(() -> new ResourceNotFoundException("Course not found"));
             price = course.getPrice(); type = Payment.COURSE;
         } else {
-            SubscriptionPlan plan = plans.findAvailable(planId).orElseThrow(() -> new ResourceNotFoundException("Subscription plan not found"));
+            SubscriptionPlan plan = plans.findAvailable(planId)
+                    .filter(p -> !Boolean.FALSE.equals(p.getIsActive()))
+                    .orElseThrow(() -> new ResourceNotFoundException("Subscription plan not found"));
             price = plan.getPrice(); type = Payment.SUBSCRIPTION;
         }
         try {

@@ -14,6 +14,11 @@ import java.util.regex.Pattern;
 @Component
 public class TemplateBlockParser {
 
+    private static final Pattern PART_HEADER_PATTERN = Pattern.compile(
+            "^(?:PHẦN|PHAN|PART)\\s+(?:[IVXLCDM]+|\\d+)\\b.*",
+            Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE
+    );
+
     @Data
     @Builder
     @NoArgsConstructor
@@ -32,10 +37,14 @@ public class TemplateBlockParser {
         for (int i = 0; i < textLines.size(); i++) {
             int lineNum = i + 1;
             String line = textLines.get(i);
-            if (line == null || line.trim().isEmpty()) {
+            String trimmed = line.trim();
+            if (trimmed.isEmpty()) {
                 continue;
             }
-            if (line.startsWith("PART ") || line.startsWith("APEPP —") || line.startsWith("Course /")) {
+            if (PART_HEADER_PATTERN.matcher(trimmed).matches()
+                    || trimmed.startsWith("APEPP —")
+                    || trimmed.startsWith("APEPP -")
+                    || trimmed.startsWith("Course /")) {
                 // Skip header/part lines
                 continue;
             }

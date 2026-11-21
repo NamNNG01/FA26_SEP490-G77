@@ -58,7 +58,7 @@ public class StudentProgressServiceImpl implements StudentProgressService {
             int parts = 0;
             for (int i = 0; i < counts.length; i += 2) {
                 if (counts[i + 1] > 0) {
-                    sum += (double) counts[i] / counts[i + 1];
+                    sum += Math.min(1.0, (double) counts[i] / counts[i + 1]);
                     parts++;
                 }
             }
@@ -90,7 +90,8 @@ public class StudentProgressServiceImpl implements StudentProgressService {
         if (!courseRepository.existsById(courseId)) {
             throw new ResourceNotFoundException("Course not found");
         }
-        boolean active = enrollmentRepository.existsByCourse_CourseIdAndUser_UserIdAndStatus(courseId, userId, "ACTIVE");
+        boolean active = enrollmentRepository.existsByCourse_CourseIdAndUser_UserIdAndStatus(courseId, userId, "ACTIVE")
+                || enrollmentRepository.existsByCourse_CourseIdAndUser_UserIdAndStatus(courseId, userId, "COMPLETED");
         if (!active) {
             throw new ForbiddenException("Student is not actively enrolled in this course");
         }
@@ -189,13 +190,13 @@ public class StudentProgressServiceImpl implements StudentProgressService {
 
             List<Double> parts = new ArrayList<>();
             CourseProgressDto.ItemCount qItem = qTotal > 0 ? new CourseProgressDto.ItemCount(qDone, qTotal) : null;
-            if (qTotal > 0) parts.add((double) qDone / qTotal);
+            if (qTotal > 0) parts.add(Math.min(1.0, (double) qDone / qTotal));
 
             CourseProgressDto.ItemCount eItem = eTotal > 0 ? new CourseProgressDto.ItemCount(eDone, eTotal) : null;
-            if (eTotal > 0) parts.add((double) eDone / eTotal);
+            if (eTotal > 0) parts.add(Math.min(1.0, (double) eDone / eTotal));
 
             CourseProgressDto.ItemCount dItem = dTotal > 0 ? new CourseProgressDto.ItemCount(dDone, dTotal) : null;
-            if (dTotal > 0) parts.add((double) dDone / dTotal);
+            if (dTotal > 0) parts.add(Math.min(1.0, (double) dDone / dTotal));
 
             Integer modProgress = null;
             if (!parts.isEmpty()) {
@@ -229,13 +230,13 @@ public class StudentProgressServiceImpl implements StudentProgressService {
 
         List<Double> gParts = new ArrayList<>();
         CourseProgressDto.ItemCount gQItem = gQTotal > 0 ? new CourseProgressDto.ItemCount(gQDone, gQTotal) : null;
-        if (gQTotal > 0) gParts.add((double) gQDone / gQTotal);
+        if (gQTotal > 0) gParts.add(Math.min(1.0, (double) gQDone / gQTotal));
 
         CourseProgressDto.ItemCount gEItem = gETotal > 0 ? new CourseProgressDto.ItemCount(gEDone, gETotal) : null;
-        if (gETotal > 0) gParts.add((double) gEDone / gETotal);
+        if (gETotal > 0) gParts.add(Math.min(1.0, (double) gEDone / gETotal));
 
         CourseProgressDto.ItemCount gDItem = gDTotal > 0 ? new CourseProgressDto.ItemCount(gDDone, gDTotal) : null;
-        if (gDTotal > 0) gParts.add((double) gDDone / gDTotal);
+        if (gDTotal > 0) gParts.add(Math.min(1.0, (double) gDDone / gDTotal));
 
         if (!gParts.isEmpty()) {
             double gSum = gParts.stream().mapToDouble(Double::doubleValue).sum();
@@ -299,7 +300,7 @@ public class StudentProgressServiceImpl implements StudentProgressService {
         Page<ExamAttempt> attempts = examAttemptRepository.findActivityAttemptsByUserAndMode(userId, normalizedType, pageable);
 
         return attempts.map(att -> {
-            String actType = "QUIZ".equalsIgnoreCase(att.getMode()) ? "QUIZ" : "EXAM";
+            String actType = ("QUIZ".equalsIgnoreCase(att.getMode()) || "MATERIAL_QUIZ".equalsIgnoreCase(att.getMode())) ? "QUIZ" : "EXAM";
             return new StudentActivityDto(
                     actType,
                     att.getAttemptId(),

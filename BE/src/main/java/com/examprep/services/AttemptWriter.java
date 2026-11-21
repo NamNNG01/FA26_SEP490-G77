@@ -154,6 +154,11 @@ public class AttemptWriter {
                         AttemptResponses.REASON_INVALID_RESPONSE, error.get());
                 continue;
             }
+            if (savedOut != null && (entry.seq() == null || entry.seq() < 0)) {
+                reject(rejectedOut, entry.questionId(),
+                        AttemptResponses.REASON_INVALID_RESPONSE, "seq must be >= 0");
+                continue;
+            }
             Integer current = row.getDraftSeq();
             if (entry.seq() != null && current != null && current >= entry.seq()) {
                 // Older or equal sequence: ignore, report the draft that is actually stored.
@@ -180,7 +185,7 @@ public class AttemptWriter {
         if (response == null || response.path("text").asText("").isBlank()) {
             return null;
         }
-        if (response.has("language")) {
+        if (response.hasNonNull("language")) {
             return store(response);
         }
         com.fasterxml.jackson.databind.node.ObjectNode code = response.deepCopy();
@@ -230,7 +235,9 @@ public class AttemptWriter {
         Snapshots.ExamSnapshot exam = paperFactory.read(attempt.getExamSnapshot(), Snapshots.ExamSnapshot.class);
         BigDecimal maxScore = exam != null && exam.maxScore() != null
                 ? exam.maxScore()
-                : attempt.getExam().getMaxScore() != null ? attempt.getExam().getMaxScore() : BigDecimal.ZERO;
+                : (attempt.getExam() != null && attempt.getExam().getMaxScore() != null
+                        ? attempt.getExam().getMaxScore()
+                        : BigDecimal.ZERO);
         BigDecimal totalWeight = BigDecimal.ZERO;
         BigDecimal pendingWeight = BigDecimal.ZERO;
         for (AttemptAnswer row : rows) {

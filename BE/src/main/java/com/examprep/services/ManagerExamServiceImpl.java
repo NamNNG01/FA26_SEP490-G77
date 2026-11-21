@@ -566,15 +566,28 @@ public class ManagerExamServiceImpl implements ManagerExamService {
     @Override @Transactional
     public ExamResponse update(UserPrincipal user,Long id,ExamRequests.Update r) {
         Exam e=write(user,id);
-        boolean structural=r.getTitle()!=null || r.getCourseId()!=null || r.getModuleId()!=null || r.getDurationMinutes()!=null || r.getMode()!=null
-                || r.getGenerationType()!=null || r.getMaxScore()!=null || r.getPassMark()!=null || r.getConfigs()!=null;
-        if(structural) editable(e);
         Long currentCourseId=courseId(e);
+        Long currentModuleId=e.getModule()==null?null:e.getModule().getModuleId();
+        List<ExamConfig> retainedConfigs=configs.findByExamExamIdOrderByConfigIdAsc(id);
+        boolean structural=(r.getTitle()!=null && !r.getTitle().strip().equals(e.getTitle()))
+                || (r.getCourseId()!=null && !Objects.equals(r.getCourseId(), currentCourseId))
+                || (r.getModuleId()!=null && !Objects.equals(r.getModuleId(), currentModuleId))
+                || (r.getDurationMinutes()!=null && !Objects.equals(r.getDurationMinutes(), e.getDurationMinutes()))
+                || (r.getMode()!=null && !r.getMode().strip().equalsIgnoreCase(e.getMode()))
+                || (r.getGenerationType()!=null && !r.getGenerationType().strip().equalsIgnoreCase(e.getGenerationType()))
+                || (r.getMaxScore()!=null && !sameDecimal(r.getMaxScore(), e.getMaxScore()))
+                || (r.getPassMark()!=null && !sameDecimal(r.getPassMark(), e.getPassMark()))
+                || (r.getConfigs()!=null && configsChanged(retainedConfigs, r.getConfigs()));
+        if(!structural) {
+            if(r.getDescription()!=null) e.setDescription(r.getDescription());
+            exams.flush();
+            return response(e,true);
+        }
+        editable(e);
         Long courseId=r.getCourseId()==null?currentCourseId:r.getCourseId();
         Module module=r.getModuleId()==null?e.getModule():module(r.getModuleId());
         if(module!=null && !module.getCourse().getCourseId().equals(courseId)) throw bad("Module must belong to the selected course.");
         if(r.getCourseId()!=null && r.getConfigs()==null) {
-            List<ExamConfig> retainedConfigs=configs.findByExamExamIdOrderByConfigIdAsc(id);
             for(ExamConfig config:retainedConfigs) validateConfigModule(config.getModule(),courseId);
             if(!r.getCourseId().equals(currentCourseId) && !retainedConfigs.isEmpty()) {
                 checkRules(courseId,retainedConfigs.stream().map(c->new Rule(c.getQuestionType(),c.getModule()==null?null:c.getModule().getModuleId(),c.getDifficulty(),c.getNumberOfQuestions())).toList(),examQuestions(e).keySet());
@@ -1089,6 +1102,28 @@ public class ManagerExamServiceImpl implements ManagerExamService {
             throw bad("Pass mark must be between 0 and maxScore (" + maxScore + ") with at most two decimal places.");
         }
         return passMark;
+    }
+    private boolean sameDecimal(BigDecimal a, BigDecimal b) {
+        if (a == null && b == null) return true;
+        if (a == null || b == null) return false;
+        return a.compareTo(b) == 0;
+    }
+    private boolean configsChanged(List<ExamConfig> existing, List<ExamRequests.Config> incoming) {
+        if (existing.size() != incoming.size()) return true;
+        for (int i = 0; i < existing.size(); i++) {
+            ExamConfig a = existing.get(i);
+            ExamRequests.Config b = incoming.get(i);
+            if (b == null) return true;
+            Long modA = a.getModule() == null ? null : a.getModule().getModuleId();
+            if (!Objects.equals(a.getQuestionType(), b.getQuestionType())
+                    || !Objects.equals(a.getNumberOfQuestions(), b.getNumberOfQuestions())
+                    || !Objects.equals(modA, b.getModuleId())
+                    || !Objects.equals(a.getDifficulty(), b.getDifficulty())
+                    || !sameDecimal(a.getWeightEach(), b.getWeightEach())) {
+                return true;
+            }
+        }
+        return false;
     }
     private int next(List<Integer> values) { int max=values.stream().mapToInt(Integer::intValue).max().orElse(-1); if(max==Integer.MAX_VALUE)throw conflict("Question order limit reached."); return max+1; }
     private String family(String type) { String kind=QuestionTypeUtil.examKindOf(type); return kind==null?"QUIZ":kind; }

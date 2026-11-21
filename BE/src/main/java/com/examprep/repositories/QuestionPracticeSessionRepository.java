@@ -55,7 +55,7 @@ public interface QuestionPracticeSessionRepository extends JpaRepository<Questio
      * cascades into {@code question_practice_session_questions} and {@code question_practice_answers};
      * no question of the shared bank and no other student's row is affected.
      */
-    @Modifying
+    @Modifying(flushAutomatically = true)
     @Query("DELETE FROM QuestionPracticeSession s "
             + "WHERE s.user.userId = :userId AND s.module.moduleId = :moduleId")
     int deleteByUserIdAndModuleId(@Param("userId") Long userId, @Param("moduleId") Long moduleId);
@@ -65,7 +65,7 @@ public interface QuestionPracticeSessionRepository extends JpaRepository<Questio
      * runs of the same course are untouched, and the database cascades into the frozen paper and
      * every stored attempt of the deleted sessions.
      */
-    @Modifying
+    @Modifying(flushAutomatically = true)
     @Query("DELETE FROM QuestionPracticeSession s "
             + "WHERE s.user.userId = :userId AND s.course.courseId = :courseId AND s.module IS NULL")
     int deleteGeneralByUserIdAndCourseId(@Param("userId") Long userId, @Param("courseId") Long courseId);

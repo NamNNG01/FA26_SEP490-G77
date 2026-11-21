@@ -18,6 +18,9 @@ import java.util.Optional;
 
 @Repository
 public interface DeckRepository extends JpaRepository<Deck, Long> {
+    boolean existsByModuleModuleId(Long moduleId);
+
+    boolean existsByCourseCourseIdOrModuleCourseCourseId(Long courseId, Long moduleCourseId);
     @Query("""
         SELECT new com.examprep.dto.IdCount(d.module.moduleId, COUNT(d)) FROM Deck d
         WHERE d.module.moduleId IN :ids
@@ -40,7 +43,7 @@ public interface DeckRepository extends JpaRepository<Deck, Long> {
 
     @EntityGraph(attributePaths = {"course", "user", "module"})
     @Query(value = "SELECT d FROM Deck d JOIN d.course c WHERE d.course IS NOT NULL AND d.submittedAt IS NOT NULL AND d.user.roleName = 'STUDENT' " +
-            "AND (:myCourseIds IS NULL OR c.courseId IN :myCourseIds) " +
+            "AND (:filterCourses = false OR c.courseId IN :myCourseIds) " +
             "AND (:moduleId IS NULL OR d.module.moduleId = :moduleId) " +
             "AND (:status IS NULL OR d.reviewStatus = :status) " +
             "AND (:contributorId IS NULL OR d.user.userId = :contributorId) " +
@@ -48,7 +51,7 @@ public interface DeckRepository extends JpaRepository<Deck, Long> {
             "AND (cast(:submittedFrom as timestamp) IS NULL OR d.submittedAt >= :submittedFrom) " +
             "AND (cast(:submittedTo as timestamp) IS NULL OR d.submittedAt < :submittedTo)",
            countQuery = "SELECT COUNT(d) FROM Deck d JOIN d.course c WHERE d.course IS NOT NULL AND d.submittedAt IS NOT NULL AND d.user.roleName = 'STUDENT' " +
-            "AND (:myCourseIds IS NULL OR c.courseId IN :myCourseIds) " +
+            "AND (:filterCourses = false OR c.courseId IN :myCourseIds) " +
             "AND (:moduleId IS NULL OR d.module.moduleId = :moduleId) " +
             "AND (:status IS NULL OR d.reviewStatus = :status) " +
             "AND (:contributorId IS NULL OR d.user.userId = :contributorId) " +
@@ -56,6 +59,7 @@ public interface DeckRepository extends JpaRepository<Deck, Long> {
             "AND (cast(:submittedFrom as timestamp) IS NULL OR d.submittedAt >= :submittedFrom) " +
             "AND (cast(:submittedTo as timestamp) IS NULL OR d.submittedAt < :submittedTo)")
     Page<Deck> findManagedReviewDecks(
+            @Param("filterCourses") boolean filterCourses,
             @Param("myCourseIds") List<Long> myCourseIds,
             @Param("moduleId") Long moduleId,
             @Param("status") String status,
@@ -65,6 +69,21 @@ public interface DeckRepository extends JpaRepository<Deck, Long> {
             @Param("submittedTo") Instant submittedTo,
             Pageable pageable
     );
+
+    default Page<Deck> findManagedReviewDecks(
+            List<Long> myCourseIds,
+            Long moduleId,
+            String status,
+            Long contributorId,
+            String keyword,
+            Instant submittedFrom,
+            Instant submittedTo,
+            Pageable pageable
+    ) {
+        boolean filterCourses = myCourseIds != null;
+        List<Long> safeCourseIds = (myCourseIds == null || myCourseIds.isEmpty()) ? List.of(-1L) : myCourseIds;
+        return findManagedReviewDecks(filterCourses, safeCourseIds, moduleId, status, contributorId, keyword, submittedFrom, submittedTo, pageable);
+    }
 
     /** FC-13 MINE: every deck the caller owns, newest first. mode "" = any. */
     @EntityGraph(attributePaths = {"course", "user"})
@@ -161,11 +180,13 @@ public interface DeckRepository extends JpaRepository<Deck, Long> {
     /** FC-13 BOOKMARKED: decks bookmarked by the caller, only APPROVED student decks or their own decks */
     @EntityGraph(attributePaths = {"course", "user"})
     @Query(value = "SELECT d FROM Deck d JOIN d.bookmarks db WHERE db.user.userId = :userId " +
-            "AND (d.reviewStatus = 'APPROVED' OR d.user.userId = :userId OR d.user.roleName <> 'STUDENT') " +
+            "AND (d.user.userId = :userId OR ((d.reviewStatus = 'APPROVED' OR d.user.roleName <> 'STUDENT') " +
+            "AND (d.course IS NULL OR EXISTS (SELECT e.enrollmentId FROM Enrollment e WHERE e.course = d.course AND e.user.userId = :userId AND e.status IN ('ACTIVE', 'COMPLETED'))))) " +
             "AND (:mode = '' OR d.mode = :mode) AND LOWER(d.title) LIKE :search ESCAPE '!' " +
             "ORDER BY db.createdAt DESC, d.deckId DESC",
             countQuery = "SELECT COUNT(d) FROM Deck d JOIN d.bookmarks db WHERE db.user.userId = :userId " +
-            "AND (d.reviewStatus = 'APPROVED' OR d.user.userId = :userId OR d.user.roleName <> 'STUDENT') " +
+            "AND (d.user.userId = :userId OR ((d.reviewStatus = 'APPROVED' OR d.user.roleName <> 'STUDENT') " +
+            "AND (d.course IS NULL OR EXISTS (SELECT e.enrollmentId FROM Enrollment e WHERE e.course = d.course AND e.user.userId = :userId AND e.status IN ('ACTIVE', 'COMPLETED'))))) " +
             "AND (:mode = '' OR d.mode = :mode) AND LOWER(d.title) LIKE :search ESCAPE '!'")
     Page<Deck> findBookmarkedDecks(@Param("userId") Long userId, @Param("mode") String mode, @Param("search") String search,
                                    Pageable pageable);

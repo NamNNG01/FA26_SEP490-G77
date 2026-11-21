@@ -52,7 +52,8 @@ export function StudentQuestionNotebookPage() {
   const toast = useToast();
   const [filter, setFilter] = useState<"all" | "wrong" | "bookmarked">("all");
   const [search, setSearch] = useState("");
-  const [examType, setExamType] = useState<"" | "QUIZ" | "ESSAY">("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [examType, setExamType] = useState<"" | "QUIZ" | "ESSAY" | "CODE">("");
   const [courseId, setCourseId] = useState("");
   const [courses, setCourses] = useState<MyCourse[]>([]);
   const [page, setPage] = useState(0);
@@ -93,6 +94,13 @@ export function StudentQuestionNotebookPage() {
   }, []);
 
   useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [search]);
+
+  useEffect(() => {
     let cancelled = false;
     // A shared auto-refresh read keeps the list and any error as they are.
     const quiet = takeQuiet();
@@ -104,7 +112,7 @@ export function StudentQuestionNotebookPage() {
       page,
       size: SIZE,
       type: filter,
-      search: search.trim() || undefined,
+      search: debouncedSearch.trim() || undefined,
       examType: examType || undefined,
       courseId: courseId ? Number(courseId) : undefined,
     })
@@ -125,7 +133,7 @@ export function StudentQuestionNotebookPage() {
     return () => {
       cancelled = true;
     };
-  }, [page, filter, search, examType, courseId, reload]);
+  }, [page, filter, debouncedSearch, examType, courseId, reload]);
 
   const startSession = async () => {
     setActionError(null);
@@ -326,6 +334,7 @@ export function StudentQuestionNotebookPage() {
               { label: "All exam types", value: "" },
               { label: "Quiz", value: "QUIZ" },
               { label: "Essay", value: "ESSAY" },
+              { label: "Code", value: "CODE" },
             ]}
             onChange={(v) => {
               setExamType(v as typeof examType);

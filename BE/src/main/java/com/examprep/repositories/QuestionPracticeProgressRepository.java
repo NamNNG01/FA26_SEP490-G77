@@ -137,13 +137,13 @@ public interface QuestionPracticeProgressRepository extends JpaRepository<Questi
     List<Long> findReviewQuestionIdsGeneral(@Param("userId") Long userId, @Param("courseId") Long courseId);
 
     /** MP-12: the reset removes exactly the student's own progress rows of one module. */
-    @Modifying
+    @Modifying(flushAutomatically = true)
     @Query("DELETE FROM QuestionPracticeProgress p "
             + "WHERE p.user.userId = :userId AND p.module.moduleId = :moduleId")
     int deleteByUserIdAndModuleId(@Param("userId") Long userId, @Param("moduleId") Long moduleId);
 
     /** MP-12 (General): exactly the student's module-less progress rows of one course. */
-    @Modifying
+    @Modifying(flushAutomatically = true)
     @Query("DELETE FROM QuestionPracticeProgress p "
             + "WHERE p.user.userId = :userId AND p.course.courseId = :courseId AND p.module IS NULL")
     int deleteGeneralByUserIdAndCourseId(@Param("userId") Long userId, @Param("courseId") Long courseId);

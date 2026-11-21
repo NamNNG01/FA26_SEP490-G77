@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -19,6 +20,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 @RestController
 @RequestMapping("/api/v1/student/uploads")
+@PreAuthorize("hasAnyRole('STUDENT', 'COURSE_MANAGER', 'ADMIN')")
 @RequiredArgsConstructor
 @Tag(name = "Student Uploads", description = "Media upload to Cloudinary for students")
 public class StudentUploadController {

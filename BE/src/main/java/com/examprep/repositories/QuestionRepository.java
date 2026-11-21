@@ -95,12 +95,12 @@ public interface QuestionRepository extends JpaRepository<Question, Long>, JpaSp
             "WHERE q.group.groupId = :groupId AND q.deletedAt IS NULL")
     List<String> findDistinctQuestionTypesByGroupId(@Param("groupId") Long groupId);
 
-    @Modifying
+    @Modifying(flushAutomatically = true)
     @Query("UPDATE Question q SET q.group = null WHERE q.group.groupId = :groupId")
     int detachFromGroup(@Param("groupId") Long groupId);
 
     /** A deleted material no longer owns the questions generated from it. */
-    @Modifying
+    @Modifying(flushAutomatically = true)
     @Query("UPDATE Question q SET q.sourceDocumentId = null WHERE q.sourceDocumentId = :documentId")
     int clearSourceDocument(@Param("documentId") Long documentId);
     @Query("""
@@ -169,6 +169,8 @@ public interface QuestionRepository extends JpaRepository<Question, Long>, JpaSp
     WHERE q.course.courseId = :courseId
       AND q.contentHash = :contentHash
       AND q.deletedAt IS NULL
+      AND q.sourceDocumentId IS NULL
+      AND NOT (COALESCE(q.source, '') = 'AI' AND COALESCE(q.creatorRole, '') = 'STUDENT')
       AND (:excludeQuestionId IS NULL OR q.questionId <> :excludeQuestionId)
     ORDER BY q.questionId
     """)
@@ -185,7 +187,9 @@ public interface QuestionRepository extends JpaRepository<Question, Long>, JpaSp
     WHERE q.course.courseId = :courseId
       AND q.contentHash IN :contentHashes
       AND q.deletedAt IS NULL
-    ORDER BY q.questionId
+      AND q.sourceDocumentId IS NULL
+      AND NOT (COALESCE(q.source, '') = 'AI' AND COALESCE(q.creatorRole, '') = 'STUDENT')
+    ORDER BY CASE WHEN q.status = 'ACTIVE' AND q.approvalStatus = 'APPROVED' THEN 0 ELSE 1 END, q.questionId
     """)
     List<Question> findActiveByCourseAndContentHashes(
             @Param("courseId") Long courseId,
@@ -250,6 +254,8 @@ public interface QuestionRepository extends JpaRepository<Question, Long>, JpaSp
     WHERE q.course.courseId = :courseId
       AND q.contentHash IN :contentHashes
       AND q.deletedAt IS NULL
+      AND q.sourceDocumentId IS NULL
+      AND NOT (COALESCE(q.source, '') = 'AI' AND COALESCE(q.creatorRole, '') = 'STUDENT')
     """)
     Set<String> findExistingContentHashes(
             @Param("courseId") Long courseId,
@@ -362,7 +368,7 @@ public interface QuestionRepository extends JpaRepository<Question, Long>, JpaSp
     long countGeneralPracticeDrawable(@Param("courseId") Long courseId);
 
     // SE-01 cache write: never overwrites a manager explanation or a current AI one, and only for the version explained.
-    @Modifying
+    @Modifying(flushAutomatically = true)
     @Query("""
             UPDATE Question q SET q.aiExplanation = :text, q.aiExplanationSource = 'AI', q.aiExplanationVersion = :version
             WHERE q.questionId = :id AND q.scoringVersion = :version

@@ -171,7 +171,7 @@ public class QuestionServiceImpl implements QuestionService {
     @Transactional
     public List<QuestionDetailDto> createQuestionsBatch(Long courseId, Long moduleId, List<QuestionCreateRequest> requests, User currentUser) {
         if (requests == null || requests.isEmpty() || requests.size() > 50) throw new BadRequestException("Batch size must be between 1 and 50");
-        if (courseId == null || moduleId == null) throw new BadRequestException("Course ID and Module ID are required");
+        if (courseId == null) throw new BadRequestException("Course ID is required");
 
         List<ValidationError> errors = new ArrayList<>();
         for (int i = 0; i < requests.size(); i++) {
@@ -186,18 +186,23 @@ public class QuestionServiceImpl implements QuestionService {
                 .orElseThrow(() -> new ResourceNotFoundException("Course not found"));
 
         if (!User.ROLE_ADMIN.equals(currentUser.getRoleName())) {
-            boolean isManager = courseManagerRepository.existsByCourse_CourseIdAndUser_UserId(
+            boolean isPrimaryManager = course.getManager() != null
+                    && course.getManager().getUserId().equals(currentUser.getUserId());
+            boolean isManager = isPrimaryManager || courseManagerRepository.existsByCourse_CourseIdAndUser_UserId(
                     course.getCourseId(), currentUser.getUserId());
             if (!isManager) {
                 throw new ForbiddenException("You are not a manager of this course");
             }
         }
 
-        com.examprep.entities.Module module = moduleRepository.findById(moduleId)
-                .orElseThrow(() -> new ResourceNotFoundException("Module not found"));
+        com.examprep.entities.Module module = null;
+        if (moduleId != null) {
+            module = moduleRepository.findById(moduleId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Module not found"));
 
-        if (!module.getCourse().getCourseId().equals(course.getCourseId())) {
-            throw new BadRequestException("Module does not belong to the specified course");
+            if (!module.getCourse().getCourseId().equals(course.getCourseId())) {
+                throw new BadRequestException("Module does not belong to the specified course");
+            }
         }
 
         List<String> hashes = new ArrayList<>(requests.size());
@@ -206,7 +211,6 @@ public class QuestionServiceImpl implements QuestionService {
 
         for (int i = 0; i < requests.size(); i++) {
             QuestionCreateRequest req = requests.get(i);
-            validateMetadataKeys(req.getQuestionMetadata());
 
             if (req.getGroupId() != null) {
                 QuestionGroup group = questionGroupRepository.findById(req.getGroupId())
@@ -214,7 +218,7 @@ public class QuestionServiceImpl implements QuestionService {
                 if (group.getCourse() == null || !group.getCourse().getCourseId().equals(course.getCourseId())) {
                     throw new BadRequestException("Question group does not belong to the specified course");
                 }
-                if (group.getModule() != null && !group.getModule().getModuleId().equals(moduleId)) {
+                if (moduleId != null && group.getModule() != null && !group.getModule().getModuleId().equals(moduleId)) {
                     throw new BadRequestException("Question group does not belong to the specified module");
                 }
                 assertQuestionFitsGroup(group, req.getQuestionType());
@@ -422,8 +426,6 @@ public class QuestionServiceImpl implements QuestionService {
             }
 
             q.setModule(module);
-        } else if (!allowNullModule && q.getModule() == null) {
-            throw new BadRequestException("Module ID is required");
         }
         if (req.getLockVersion() != null && !req.getLockVersion().equals(q.getLockVersion())) {
             throw new ResourceConflictException("Resource was modified by another user (lock version mismatch)");
@@ -538,7 +540,6 @@ public class QuestionServiceImpl implements QuestionService {
         }
 
         if (req.getQuestionMetadata() != null) {
-            validateMetadataKeys(req.getQuestionMetadata());
             String metaJson = serializeJson(req.getQuestionMetadata(), "questionMetadata");
             if (!metaJson.equals(q.getQuestionMetadata())) {
                 if (("DIAGRAM".equals(typeToValidate) || "DIAGRAM_ESSAY".equals(typeToValidate))
@@ -580,7 +581,9 @@ public class QuestionServiceImpl implements QuestionService {
         }
 
         if ("CODE".equals(typeToValidate) && (req.getCodeConfig() != null || req.getTestCases() != null)) {
-            saveCodeConfigAndTestCases(q, req.getCodeConfig(), req.getTestCases());
+            if (saveCodeConfigAndTestCases(q, req.getCodeConfig(), req.getTestCases())) {
+                scoreAffectingChanged = true;
+            }
         }
 
         List<AnswerOption> existingOptions = answerOptionRepository.findByQuestion_QuestionId(q.getQuestionId());
@@ -971,13 +974,13 @@ public class QuestionServiceImpl implements QuestionService {
 
 
 
-    private void saveCodeConfigAndTestCases(Question q, CodeConfigDto cfgDto, List<TestCaseDto> tcDtos) {
+    private boolean saveCodeConfigAndTestCases(Question q, CodeConfigDto cfgDto, List<TestCaseDto> tcDtos) {
         CodeQuestionConfig existing = codeQuestionConfigRepository.findById(q.getQuestionId()).orElse(null);
 
         // A partial update (only codeConfig or only testCases) must not reset the other half.
         String allowedLangsJson = cfgDto != null
                 ? serializeJson(cfgDto.getAllowedLanguages(), "allowedLanguages")
-                : existing.getAllowedLanguages();
+                : existing != null ? existing.getAllowedLanguages() : null;
         String codeTemplate = cfgDto != null && cfgDto.getCodeTemplate() != null
                 ? cfgDto.getCodeTemplate()
                 : existing != null ? existing.getCodeTemplate() : null;
@@ -987,6 +990,12 @@ public class QuestionServiceImpl implements QuestionService {
         Integer memoryLimitKb = cfgDto != null && cfgDto.getMemoryLimitKb() != null
                 ? cfgDto.getMemoryLimitKb()
                 : existing != null && existing.getMemoryLimitKb() != null ? existing.getMemoryLimitKb() : 262144;
+
+        boolean configChanged = existing == null
+                || !Objects.equals(existing.getAllowedLanguages(), allowedLangsJson)
+                || !Objects.equals(existing.getCodeTemplate(), codeTemplate)
+                || !Objects.equals(existing.getTimeLimitMs(), timeLimitMs)
+                || !Objects.equals(existing.getMemoryLimitKb(), memoryLimitKb);
 
         CodeQuestionConfig config = CodeQuestionConfig.builder()
                 .questionId(q.getQuestionId())
@@ -999,8 +1008,9 @@ public class QuestionServiceImpl implements QuestionService {
                 .build();
         codeQuestionConfigRepository.save(config);
 
+        boolean testCasesChanged = false;
         if (tcDtos != null) {
-            codeTestCaseRepository.deleteAll(codeTestCaseRepository.findByQuestionQuestionIdOrderByOrderIndexAscTestCaseIdAsc(q.getQuestionId()));
+            List<CodeTestCase> existingCases = codeTestCaseRepository.findByQuestionQuestionIdOrderByOrderIndexAscTestCaseIdAsc(q.getQuestionId());
             List<CodeTestCase> testCases = new ArrayList<>();
             int order = 0;
             for (TestCaseDto tcDto : tcDtos) {
@@ -1013,8 +1023,28 @@ public class QuestionServiceImpl implements QuestionService {
                         .createdAt(Instant.now())
                         .build());
             }
+            testCasesChanged = testCasesChanged(existingCases, testCases);
+            codeTestCaseRepository.deleteAll(existingCases);
             codeTestCaseRepository.saveAll(testCases);
         }
+        return configChanged || testCasesChanged;
+    }
+
+    private boolean testCasesChanged(List<CodeTestCase> existingCases, List<CodeTestCase> updatedCases) {
+        if (existingCases.size() != updatedCases.size()) {
+            return true;
+        }
+        for (int i = 0; i < existingCases.size(); i++) {
+            CodeTestCase a = existingCases.get(i);
+            CodeTestCase b = updatedCases.get(i);
+            if (!Objects.equals(a.getInputData(), b.getInputData())
+                    || !Objects.equals(a.getExpectedOutput(), b.getExpectedOutput())
+                    || !Objects.equals(a.getHidden(), b.getHidden())
+                    || !Objects.equals(a.getOrderIndex(), b.getOrderIndex())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override
@@ -1202,32 +1232,6 @@ public class QuestionServiceImpl implements QuestionService {
 
         throw new ResourceConflictException(
                 "Question group contains mixed question types; assign a single type before adding more questions.");
-    }
-
-    private void validateMetadataKeys(Object metadata) {
-        if (metadata == null) return;
-
-        try {
-            Map<String, Object> map;
-
-            if (metadata instanceof Map) {
-                map = (Map<String, Object>) metadata;
-            } else {
-                map = objectMapper.convertValue(metadata, Map.class);
-            }
-
-            for (String key : map.keySet()) {
-                if (!key.equals("diagramType")
-                        && !key.equals("plantUmlSource")
-                        && !key.equals("drawioXml")) {
-                    throw new BadRequestException("Unknown metadata key: " + key);
-                }
-            }
-        } catch (BadRequestException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new BadRequestException("Invalid question metadata format");
-        }
     }
 
     private boolean rubricWeightsChanged(String oldRubricJson, String newRubricJson) {

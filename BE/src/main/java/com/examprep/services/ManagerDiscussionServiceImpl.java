@@ -159,7 +159,7 @@ public class ManagerDiscussionServiceImpl implements ManagerDiscussionService {
                 .commentCount(0)
                 .upvoteCount(0)
                 .isClosed(false)
-                .imageUrl(request.getImageUrl())
+                .imageUrl(validateImageUrl(request.getImageUrl()))
                 .approvalStatus(Discussion.APPROVAL_APPROVED)
                 .reviewedBy(manager)
                 .reviewedAt(Instant.now())
@@ -173,6 +173,9 @@ public class ManagerDiscussionServiceImpl implements ManagerDiscussionService {
     @Transactional(readOnly = true)
     public Page<DiscussionItemDto> listDiscussions(String approvalStatus, String status, String search, int page, int size, Long managerId) {
         validateManager(managerId);
+        if (page < 0 || size < 1 || size > 100) {
+            throw new BadRequestException("Invalid page or size");
+        }
 
         Pageable pageable = PageRequest.of(page, size);
 
@@ -184,10 +187,11 @@ public class ManagerDiscussionServiceImpl implements ManagerDiscussionService {
                 ? status.trim().toUpperCase()
                 : null;
 
-        String searchTerm = (search != null && !search.isBlank()) ? escapeLikePattern(search.trim()) : "";
-        if (searchTerm.length() > 100) {
-            searchTerm = searchTerm.substring(0, 100);
+        String rawSearch = (search != null && !search.isBlank()) ? search.trim() : "";
+        if (rawSearch.length() > 100) {
+            rawSearch = rawSearch.substring(0, 100);
         }
+        String searchTerm = rawSearch.isEmpty() ? "" : escapeLikePattern(rawSearch);
 
         Page<Discussion> discussions = discussionRepository.findDiscussionsForManager(
                 normalizedApproval, normalizedStatus, searchTerm, pageable);
@@ -197,6 +201,21 @@ public class ManagerDiscussionServiceImpl implements ManagerDiscussionService {
 
     private static String escapeLikePattern(String value) {
         return value.replace("!", "!!").replace("%", "!%").replace("_", "!_");
+    }
+
+    private static String validateImageUrl(String imageUrl) {
+        if (imageUrl == null || imageUrl.isBlank()) return imageUrl;
+        try {
+            java.net.URI uri = java.net.URI.create(imageUrl.trim());
+            String scheme = uri.getScheme();
+            if (scheme == null || (!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme))
+                    || uri.getHost() == null || uri.getHost().isBlank()) {
+                throw new BadRequestException("Invalid image URL");
+            }
+            return imageUrl.trim();
+        } catch (IllegalArgumentException e) {
+            throw new BadRequestException("Invalid image URL");
+        }
     }
 
     @Override
@@ -246,6 +265,7 @@ public class ManagerDiscussionServiceImpl implements ManagerDiscussionService {
         }
 
         discussion.setApprovalStatus(Discussion.APPROVAL_REJECTED);
+        discussion.setIsPinned(false);
         discussion.setReviewedBy(manager);
         discussion.setReviewedAt(Instant.now());
         discussion.setRejectionReason(request.getReason().trim());

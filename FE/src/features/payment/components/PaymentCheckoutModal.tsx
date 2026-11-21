@@ -196,8 +196,15 @@ export function PaymentCheckoutModal({
       setStatus('CANCELLED');
     } catch (err) {
       if (httpStatus(err) === 409) {
-        // Paid in the meantime — the next poll shows it.
-        setError('This payment has already been completed.');
+        const message = getApiErrorMessage(err, '');
+        if (/succeed/i.test(message)) {
+          // Paid in the meantime — the next poll shows it.
+          setError('This payment has already been completed.');
+        } else {
+          // Expired/failed link: it can no longer be cancelled, only replaced.
+          forgetPendingPayment();
+          setStatus('EXPIRED');
+        }
       } else {
         setError(getApiErrorMessage(err, 'Could not cancel the payment.'));
       }

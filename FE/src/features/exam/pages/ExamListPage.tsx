@@ -174,11 +174,13 @@ export function ExamListPage() {
         let currentPage = 0;
         let hasMore = true;
         while (hasMore) {
+          if (abortCtrl.signal.aborted) return;
           const response = await examService.getExams({
             ...filters,
             page: currentPage,
             size: 100,
           });
+          if (abortCtrl.signal.aborted) return;
           allAssessments.push(
             ...(response.content || []).filter(
               (exam) => exam.examKind !== "QUIZ" && exam.examKind !== "CODE",
@@ -201,12 +203,14 @@ export function ExamListPage() {
           page,
           size: 15,
         });
+        if (abortCtrl.signal.aborted) return;
         setExams(response.content || []);
         setTotalElements(response.totalElements || 0);
         setTotalPages(response.totalPages || 1);
       }
       setSelectedExamIds(new Set());
     } catch (err: unknown) {
+      if (abortCtrl.signal.aborted) return;
       const errorObj = err as {
         name?: string;
         response?: { status?: number; data?: { message?: string } };
@@ -225,7 +229,9 @@ export function ExamListPage() {
         toast.error(message, { title: "Could not load exams", duration: null });
       }
     } finally {
-      setLoading(false);
+      if (!abortCtrl.signal.aborted) {
+        setLoading(false);
+      }
     }
   };
 

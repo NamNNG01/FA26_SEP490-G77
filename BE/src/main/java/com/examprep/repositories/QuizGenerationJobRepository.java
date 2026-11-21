@@ -57,7 +57,7 @@ public interface QuizGenerationJobRepository extends JpaRepository<QuizGeneratio
     Optional<QuizGenerationJob> findFirstByResultExamExamIdAndUserUserIdOrderByJobIdDesc(Long examId, Long userId);
 
     /** A deleted material takes its generation jobs with it. */
-    @Modifying
+    @Modifying(flushAutomatically = true)
     @Query("delete from QuizGenerationJob j where j.document.docId = :docId")
     int deleteByDocumentDocId(@Param("docId") Long docId);
 

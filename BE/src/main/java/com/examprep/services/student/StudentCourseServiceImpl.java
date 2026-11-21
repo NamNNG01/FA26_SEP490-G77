@@ -221,7 +221,8 @@ public class StudentCourseServiceImpl implements StudentCourseService {
         if (userId == null) {
             throw new ForbiddenException("Authentication required");
         }
-        boolean active = enrollmentRepository.existsByCourse_CourseIdAndUser_UserIdAndStatus(courseId, userId, "ACTIVE");
+        boolean active = enrollmentRepository.existsByCourse_CourseIdAndUser_UserIdAndStatus(courseId, userId, "ACTIVE")
+                || enrollmentRepository.existsByCourse_CourseIdAndUser_UserIdAndStatus(courseId, userId, "COMPLETED");
         if (!active) {
             throw new ForbiddenException("Student is not actively enrolled in this course");
         }

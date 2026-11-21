@@ -36,8 +36,8 @@ public interface UserDiscountRepository extends JpaRepository<UserDiscount, Long
            "AND (:sourceType IS NULL OR ud.sourceType = :sourceType) " +
            "AND (:status IS NULL OR (" +
            "  (:status = 'USED' AND ud.isUsed = true) OR " +
-           "  (:status = 'REVOKED' AND (d.deletedAt IS NOT NULL OR d.isActive = false)) OR " +
-           "  (:status = 'EXPIRED' AND ud.isUsed = false AND d.expiresAt IS NOT NULL AND d.expiresAt <= :now) OR " +
+           "  (:status = 'REVOKED' AND ud.isUsed = false AND (d.deletedAt IS NOT NULL OR d.isActive = false)) OR " +
+           "  (:status = 'EXPIRED' AND ud.isUsed = false AND d.deletedAt IS NULL AND d.isActive = true AND d.expiresAt IS NOT NULL AND d.expiresAt <= :now) OR " +
            "  (:status = 'AVAILABLE' AND ud.isUsed = false AND (d.expiresAt IS NULL OR d.expiresAt > :now) AND d.deletedAt IS NULL AND d.isActive = true)" +
            "))")
     Page<UserDiscount> findByUserAndFilters(@Param("userId") Long userId,
@@ -53,8 +53,8 @@ public interface UserDiscountRepository extends JpaRepository<UserDiscount, Long
     @Query("SELECT ud FROM UserDiscount ud JOIN ud.user u " +
            "WHERE ud.discount.discountId = :discountId " +
            "AND (:isUsed IS NULL OR ud.isUsed = :isUsed) " +
-           "AND (:keyword = '' OR LOWER(COALESCE(u.fullName, '')) LIKE CONCAT('%', LOWER(:keyword), '%') " +
-           "OR LOWER(COALESCE(u.email, '')) LIKE CONCAT('%', LOWER(:keyword), '%')) " +
+           "AND (:keyword = '' OR LOWER(COALESCE(u.fullName, '')) LIKE CONCAT('%', LOWER(:keyword), '%') ESCAPE '!' " +
+           "OR LOWER(COALESCE(u.email, '')) LIKE CONCAT('%', LOWER(:keyword), '%') ESCAPE '!') " +
            "ORDER BY ud.assignedAt DESC")
     Page<UserDiscount> findByDiscountIdWithFilters(@Param("discountId") Long discountId,
                                                     @Param("isUsed") Boolean isUsed,

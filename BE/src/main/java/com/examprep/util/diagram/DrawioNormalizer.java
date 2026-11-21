@@ -22,6 +22,7 @@ import java.util.zip.Inflater;
  * the top-to-bottom order of connections, which is the message order of a sequence diagram.
  */
 public final class DrawioNormalizer {
+    private static final int MAX_DECOMPRESSED_BYTES = 5 * 1024 * 1024;
     private static final Set<String> RELATION_STYLE = Set.of("endArrow", "startArrow", "endFill", "startFill", "dashed");
 
     public record Result(String text, int elements) {}
@@ -35,22 +36,28 @@ public final class DrawioNormalizer {
         if ("mxGraphModel".equals(root.getNodeName())) {
             models.add(root);
         } else {
+            int[] totalBytes = {0};
             for (Element diagram : children(root, "diagram")) {
                 Element model = first(diagram, "mxGraphModel");
                 if (model == null && !diagram.getTextContent().isBlank()) {
-                    model = parse(inflate(diagram.getTextContent().strip())).getDocumentElement();
+                    model = parse(inflate(diagram.getTextContent().strip(), totalBytes)).getDocumentElement();
                 }
                 if (model != null) models.add(model);
             }
         }
         if (models.isEmpty()) throw new IllegalArgumentException("No diagram content");
 
-        Map<String, String> labels = new HashMap<>();
-        List<String[]> vertices = new ArrayList<>(); // id, label, shape, parent
-        List<String[]> edges = new ArrayList<>();    // id, source, target, label, relation style
-        Map<String, List<String>> edgeLabels = new HashMap<>();
-        Set<String> edgeIds = new HashSet<>();
+        int totalElements = 0;
+        StringBuilder shapesOut = new StringBuilder("Shapes:\n");
+        StringBuilder connectionsOut = new StringBuilder("Connections (top to bottom):\n");
+        int order = 0;
         for (Element model : models) {
+            Map<String, String> labels = new HashMap<>();
+            List<String[]> vertices = new ArrayList<>(); // id, label, shape, parent
+            List<String[]> pageEdges = new ArrayList<>(); // id, source, target, label, relation style
+            Map<String, List<String>> edgeLabels = new HashMap<>();
+            Set<String> edgeIds = new HashSet<>();
+
             NodeList cells = model.getElementsByTagName("mxCell");
             Map<String, Element> byId = new HashMap<>();
             for (int i = 0; i < cells.getLength(); i++) {
@@ -58,7 +65,6 @@ public final class DrawioNormalizer {
                 byId.put(id(cell), cell);
                 if ("1".equals(cell.getAttribute("edge"))) edgeIds.add(id(cell));
             }
-            List<String[]> pageEdges = new ArrayList<>();
             Map<String, Double> edgeY = new HashMap<>();
             for (int i = 0; i < cells.getLength(); i++) {
                 Element cell = (Element) cells.item(i);
@@ -81,28 +87,26 @@ public final class DrawioNormalizer {
                 }
             }
             pageEdges.sort(Comparator.comparingDouble(e -> edgeY.get(e[0]))); // stable: unpositioned keep file order
-            edges.addAll(pageEdges);
+
+            for (String[] v : vertices) {
+                shapesOut.append("- ").append(v[1].isEmpty() ? "(no label)" : v[1]);
+                if (!v[2].isEmpty()) shapesOut.append(" [").append(v[2]).append(']');
+                if (labels.containsKey(v[3])) shapesOut.append(" inside ").append(labels.get(v[3]));
+                shapesOut.append('\n');
+            }
+            for (String[] e : pageEdges) {
+                String label = String.join(" ", edgeLabels.getOrDefault(e[0], List.of()));
+                if (!e[3].isEmpty()) label = label.isEmpty() ? e[3] : e[3] + " " + label;
+                connectionsOut.append(++order).append(". ").append(labels.getOrDefault(e[1], "(unconnected)"))
+                        .append(" -> ").append(labels.getOrDefault(e[2], "(unconnected)"));
+                if (!label.isEmpty()) connectionsOut.append(" : ").append(label);
+                if (!e[4].isEmpty()) connectionsOut.append(" (").append(e[4]).append(')');
+                connectionsOut.append('\n');
+            }
+            totalElements += vertices.size() + pageEdges.size();
         }
 
-        StringBuilder text = new StringBuilder("Shapes:\n");
-        for (String[] v : vertices) {
-            text.append("- ").append(v[1].isEmpty() ? "(no label)" : v[1]);
-            if (!v[2].isEmpty()) text.append(" [").append(v[2]).append(']');
-            if (labels.containsKey(v[3])) text.append(" inside ").append(labels.get(v[3]));
-            text.append('\n');
-        }
-        text.append("Connections (top to bottom):\n");
-        int order = 0;
-        for (String[] e : edges) {
-            String label = String.join(" ", edgeLabels.getOrDefault(e[0], List.of()));
-            if (!e[3].isEmpty()) label = label.isEmpty() ? e[3] : e[3] + " " + label;
-            text.append(++order).append(". ").append(labels.getOrDefault(e[1], "(unconnected)"))
-                    .append(" -> ").append(labels.getOrDefault(e[2], "(unconnected)"));
-            if (!label.isEmpty()) text.append(" : ").append(label);
-            if (!e[4].isEmpty()) text.append(" (").append(e[4]).append(')');
-            text.append('\n');
-        }
-        return new Result(text.toString(), vertices.size() + edges.size());
+        return new Result(shapesOut.append(connectionsOut).toString(), totalElements);
     }
 
     /** Highest point of an edge: its own points, else the middle of its source (or target) shape. */
@@ -169,24 +173,28 @@ public final class DrawioNormalizer {
     }
 
     // Compressed diagrams: base64 -> raw deflate -> URL-encoded XML.
-    private static String inflate(String encoded) {
+    private static String inflate(String encoded, int[] totalBytes) {
+        Inflater inflater = new Inflater(true);
         try {
-            Inflater inflater = new Inflater(true);
             inflater.setInput(Base64.getDecoder().decode(encoded));
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             byte[] buffer = new byte[8192];
             while (!inflater.finished()) {
                 int n = inflater.inflate(buffer);
                 if (n == 0 && (inflater.needsInput() || inflater.needsDictionary())) break;
+                totalBytes[0] += n;
+                if (totalBytes[0] > MAX_DECOMPRESSED_BYTES) {
+                    throw new IllegalArgumentException("Diagram too large");
+                }
                 out.write(buffer, 0, n);
-                if (out.size() > 5 * 1024 * 1024) throw new IllegalArgumentException("Diagram too large");
             }
-            inflater.end();
             return URLDecoder.decode(out.toString(StandardCharsets.UTF_8), StandardCharsets.UTF_8);
         } catch (IllegalArgumentException ex) {
             throw ex;
         } catch (Exception ex) {
             throw new IllegalArgumentException("Unreadable compressed diagram", ex);
+        } finally {
+            inflater.end();
         }
     }
 

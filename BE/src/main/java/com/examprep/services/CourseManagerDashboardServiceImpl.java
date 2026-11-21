@@ -11,6 +11,7 @@ import com.examprep.repositories.ExamRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,6 +33,7 @@ import java.util.Set;
  * caller created in them. Scores are percentages of each attempt's own frozen max score, so an exam
  * edited later cannot restate an old attempt.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class CourseManagerDashboardServiceImpl implements CourseManagerDashboardService {
@@ -257,15 +259,15 @@ public class CourseManagerDashboardServiceImpl implements CourseManagerDashboard
 
         void add(CmAttemptFact fact, ObjectMapper json) {
             submitted++;
-            if (PENDING_GRADING.contains(fact.status())) {
+            if (fact.status() != null && PENDING_GRADING.contains(fact.status())) {
                 pending++;
             }
             if (GRADED.equals(fact.status())) {
-                BigDecimal percent = attemptPercent(fact, json);
-                if (percent != null) {
+                BigDecimal rawPercent = attemptPercentRaw(fact, json);
+                if (rawPercent != null) {
                     graded++;
-                    percentSum = percentSum.add(percent);
-                    if (percent.compareTo(PASS_THRESHOLD) >= 0) {
+                    percentSum = percentSum.add(rawPercent.setScale(1, RoundingMode.HALF_UP));
+                    if (rawPercent.compareTo(PASS_THRESHOLD) >= 0) {
                         passed++;
                     }
                 }
@@ -308,8 +310,8 @@ public class CourseManagerDashboardServiceImpl implements CourseManagerDashboard
         }
     }
 
-    /** The attempt's score as a percentage of its frozen max score, clamped to 0..100. */
-    private static BigDecimal attemptPercent(CmAttemptFact fact, ObjectMapper json) {
+    /** The attempt's unrounded score as a percentage of its frozen max score, clamped to 0..100. */
+    private static BigDecimal attemptPercentRaw(CmAttemptFact fact, ObjectMapper json) {
         if (fact.totalScore() == null) {
             return null;
         }
@@ -317,7 +319,7 @@ public class CourseManagerDashboardServiceImpl implements CourseManagerDashboard
         if (maxScore == null || maxScore.signum() <= 0) {
             return null;
         }
-        BigDecimal percent = fact.totalScore().multiply(HUNDRED).divide(maxScore, 1, RoundingMode.HALF_UP);
+        BigDecimal percent = fact.totalScore().multiply(HUNDRED).divide(maxScore, 6, RoundingMode.HALF_UP);
         if (percent.signum() < 0) {
             return BigDecimal.ZERO;
         }
@@ -333,8 +335,8 @@ public class CourseManagerDashboardServiceImpl implements CourseManagerDashboard
                 if (node.isNumber()) {
                     return node.decimalValue();
                 }
-            } catch (Exception ignored) {
-                // Unreadable snapshot → fall back to the live exam value below.
+            } catch (Exception ex) {
+                log.warn("Unreadable exam_snapshot: {}", ex.getMessage());
             }
         }
         return fact.examMaxScore();
