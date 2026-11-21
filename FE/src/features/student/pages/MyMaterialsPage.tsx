@@ -414,7 +414,7 @@ export function MyMaterialsPage() {
                   style={{ height: `${QUIZ_ROW_REM}rem` }}
                 >
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-content">Quiz {viewingRow.jobs.length - i}</p>
+                    <p className="truncate text-sm font-medium text-content" title={job.quizTitle || undefined}>{job.quizTitle?.trim() || `Quiz ${viewingRow.jobs.length - i}`}</p>
                     <p className="truncate text-xs text-content-subtle">
                       {job.questionCount} questions
                       {jobCourse(viewingRow, job) && <> · {jobCourse(viewingRow, job)}</>}

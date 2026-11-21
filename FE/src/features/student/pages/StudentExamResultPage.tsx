@@ -295,16 +295,16 @@ export function StudentExamResultPage() {
   const [codeSubs, setCodeSubs] = useState<CodeSubmission[] | null>(null);
   const resultHasCode = Boolean(result?.questions.some(x => x.questionType === 'CODE'));
   useEffect(() => {
-    if (!examId || !resultHasCode) return;
+    if (!examId || !resultHasCode || !attemptId) return;
     let cancelled = false;
-    studentCodeExamService.getAllSubmissions(examId).then(
-      subs => !cancelled && setCodeSubs(subs),
+    studentCodeExamService.getAllSubmissions(examId, attemptId).then(
+      subs => !cancelled && setCodeSubs(subs.filter(s => s.attemptId == null || String(s.attemptId) === attemptId)),
       () => !cancelled && setCodeSubs(null),
     );
     return () => {
       cancelled = true;
     };
-  }, [examId, resultHasCode]);
+  }, [examId, resultHasCode, attemptId]);
   /** SA-06 row of the attempt on screen: its time window keeps other attempts' CD-07 verdicts out. */
   const viewedAttempt = result ? (attempts?.find(a => a.attemptId === result.attemptId) ?? null) : null;
 

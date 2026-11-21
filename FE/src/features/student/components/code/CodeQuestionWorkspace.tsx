@@ -173,7 +173,7 @@ export function CodeQuestionWorkspace({
           ) : (
             <Skeleton className="h-8 w-32" />
           )}
-          {tooLarge && <span className="text-xs text-danger">Code is larger than 100 KB.</span>}
+          {tooLarge && <span className="text-xs text-danger">Code is larger than 64 KB.</span>}
           <Button
             size="sm"
             className="ml-auto"

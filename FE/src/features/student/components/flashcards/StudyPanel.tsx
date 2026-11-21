@@ -13,7 +13,7 @@ import { MIN_QUIZ_CARDS } from './flashcardQuiz';
  * A study run, always a server session (FP-01/02). "review" studies only the cards not learned
  * yet (NEW / LEARNING) — the cards the student has not reached.
  */
-type Run = { kind: 'session' | 'review'; sessionId: string };
+type Run = { kind: 'session' | 'review' | 'starred'; sessionId: string };
 
 export interface StudySummary {
   total: number;
@@ -46,23 +46,23 @@ export function useDeckStudy(deckId: number, onProgress: (p: DeckProgress) => vo
   /** Cards counted as studied in this run. */
   const [studied, setStudied] = useState<Record<number, true>>({});
   const [summary, setSummary] = useState<StudySummary | null>(null);
-  const [starting, setStarting] = useState<'session' | 'review' | null>(null);
+  const [starting, setStarting] = useState<'session' | 'review' | 'starred' | null>(null);
   const [finishing, setFinishing] = useState(false);
   const studiedRef = useRef(studied);
   studiedRef.current = studied;
   const onProgressRef = useRef(onProgress);
   onProgressRef.current = onProgress;
 
-  const begin = async (kind: 'session' | 'review') => {
+  const begin = async (kind: 'session' | 'review' | 'starred') => {
     setStarting(kind);
     try {
       const s = await studentDeckService.startSession(deckId);
       onProgressRef.current({ learned: s.cards.filter(c => c.status === 'KNOWN').length, total: s.cards.length });
-      const list = kind === 'review' ? s.cards.filter(c => c.status !== 'KNOWN') : s.cards;
+      const list = kind === 'review' ? s.cards.filter(c => c.status !== 'KNOWN') : kind === 'starred' ? s.cards.filter(c => c.isStarred) : s.cards;
       if (list.length === 0) {
         // Nothing to study: close the session that was just opened.
         studentDeckService.finishSession(s.sessionId, [], []).catch(() => {});
-        toast.info(s.cards.length === 0 ? 'This deck has no cards yet.' : 'Every card is learned already. Nice work!');
+        toast.info(s.cards.length === 0 ? 'This deck has no cards yet.' : kind === 'starred' ? 'You have no starred cards to review.' : 'Every card is learned already. Nice work!');
         return;
       }
       setRun({ kind, sessionId: s.sessionId });
@@ -81,7 +81,7 @@ export function useDeckStudy(deckId: number, onProgress: (p: DeckProgress) => vo
   const finish = useCallback(async () => {
     if (!run) return;
     const ids = Object.keys(studiedRef.current).map(Number);
-    let result: StudySummary = { total: cards.length, studied: ids.length, review: run.kind === 'review' };
+    let result: StudySummary = { total: cards.length, studied: ids.length, review: run.kind !== 'session' };
     setFinishing(true);
     try {
       const s = await studentDeckService.finishSession(run.sessionId, ids, []);
@@ -165,12 +165,14 @@ export function StudyActions({
   study,
   deckId,
   cardCount,
+  starredCount,
   quizCount,
   onProgress,
 }: {
   study: DeckStudy;
   deckId: number;
   cardCount: number;
+  starredCount: number;
   /** Cards Learn / Test can ask (a back with text); below MIN_QUIZ_CARDS both are off. */
   quizCount: number;
   onProgress: (p: DeckProgress) => void;
@@ -186,7 +188,7 @@ export function StudyActions({
     try {
       const res = await studentDeckService.learnAll(deckId);
       onProgress({ learned: res.learnedCount, total: res.totalCards });
-      toast.success('Every card is marked as learned.');
+      toast.success(`Marked ${res.learnedCount} / ${res.totalCards} cards as learned.`);
       setConfirm(null);
     } catch (err) {
       toast.error(getApiErrorMessage(err, 'Could not mark the deck as learned.'));
@@ -223,6 +225,17 @@ export function StudyActions({
         disabled={busy}
       >
         {study.summary ? 'Study again' : 'Start studying'}
+      </Button>
+      <Button
+        className="w-full"
+        variant="outline"
+        icon={<Icon.Star className="w-4 h-4" />}
+        onClick={() => study.begin('starred')}
+        loading={study.starting === 'starred'}
+        disabled={busy || starredCount === 0}
+        title={starredCount === 0 ? 'Star cards to review them here.' : undefined}
+      >
+        Review starred cards ({starredCount})
       </Button>
       <Button
         className="w-full"
