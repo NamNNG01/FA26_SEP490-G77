@@ -15,7 +15,7 @@ public final class MaterialResponses {
     public record Uploaded(Long documentId, String fileName, Integer pageCount, String title,
                            Boolean duplicate, List<Long> courseIds) {}
 
-    public record JobBrief(Long jobId, Integer questionCount, String status, Long courseId) {}
+    public record JobBrief(Long jobId, Integer questionCount, String status, Long courseId, String quizTitle) {}
 
     /** MQ-02 */
     public record DocumentItem(Long documentId, String title, String fileName, Integer pageCount,

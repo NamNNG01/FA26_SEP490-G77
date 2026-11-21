@@ -95,6 +95,7 @@ public class QuestionValidator {
 
         // 3. Question Metadata validation
         boolean isDiagram = "DIAGRAM".equals(type) || "DIAGRAM_ESSAY".equals(type);
+        boolean isEssay = "ESSAY".equals(type) || "DIAGRAM_ESSAY".equals(type);
         if (payload.getQuestionMetadata() != null) {
             try {
                 Map<String, Object> metaMap;
@@ -106,12 +107,19 @@ public class QuestionValidator {
                 for (String key : metaMap.keySet()) {
                     if (key.equals("skillTag")) {
                         errors.add(new ValidationError(prefix + "questionMetadata.skillTag", "skillTag is not supported in question metadata"));
-                    } else if (isDiagram) {
-                        if (!key.equals("drawioXml")) {
-                            errors.add(new ValidationError(prefix + "questionMetadata", "Unknown metadata key: " + key));
-                        }
+                    } else if (isDiagram && key.equals("drawioXml")) {
+                        // valid diagram metadata key
+                    } else if (isEssay && (key.equals("minWords") || key.equals("maxWords"))) {
+                        // valid essay word-limit metadata key
                     } else {
                         errors.add(new ValidationError(prefix + "questionMetadata", "Unknown metadata key: " + key));
+                    }
+                }
+                if (isEssay) {
+                    Integer minW = parsePositiveInt(metaMap.get("minWords"), prefix + "questionMetadata.minWords", "minWords", errors);
+                    Integer maxW = parsePositiveInt(metaMap.get("maxWords"), prefix + "questionMetadata.maxWords", "maxWords", errors);
+                    if (minW != null && maxW != null && minW > maxW) {
+                        errors.add(new ValidationError(prefix + "questionMetadata.minWords", "minWords must be less than or equal to maxWords"));
                     }
                 }
 
@@ -555,5 +563,17 @@ public class QuestionValidator {
         } catch (Exception e) {
             errors.add(new ValidationError(path, "Invalid rubric format"));
         }
+    }
+
+    private Integer parsePositiveInt(Object raw, String field, String label, List<ValidationError> errors) {
+        if (raw == null) return null;
+        if (raw instanceof Number num) {
+            double d = num.doubleValue();
+            if (d == Math.floor(d) && d > 0 && d <= Integer.MAX_VALUE) {
+                return num.intValue();
+            }
+        }
+        errors.add(new ValidationError(field, label + " must be a positive integer"));
+        return null;
     }
 }

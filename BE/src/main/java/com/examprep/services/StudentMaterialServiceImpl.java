@@ -258,12 +258,18 @@ public class StudentMaterialServiceImpl implements StudentMaterialService {
                 : documents.findCourseLinks(userId, docIds).stream().collect(Collectors.groupingBy(
                         MaterialResponses.DocumentCourse::documentId,
                         Collectors.mapping(link -> new CourseLink(link.courseId(), link.title()), Collectors.toList())));
+        Map<Long, String> docTitles = result.getContent().stream()
+                .collect(Collectors.toMap(DocumentSummary::documentId, d -> d.title() != null ? d.title() : "", (a, b) -> a));
         Map<Long, List<JobBrief>> jobsByDoc = docIds.isEmpty() ? Map.of()
                 : jobs.findByUserUserIdAndDocumentDocIdInOrderByCreatedAtDesc(userId, docIds).stream()
                 .collect(Collectors.groupingBy(
                         job -> job.getDocument().getDocId(),
-                        Collectors.mapping(job -> new JobBrief(job.getJobId(), job.getQuestionCount(),
-                                job.getStatus(), job.getCourse() == null ? null : job.getCourse().getCourseId()),
+                        Collectors.mapping(job -> new JobBrief(
+                                job.getJobId(),
+                                job.getQuestionCount(),
+                                job.getStatus(),
+                                job.getCourse() == null ? null : job.getCourse().getCourseId(),
+                                resolveQuizTitle(job, docTitles.getOrDefault(job.getDocument().getDocId(), ""))),
                                 Collectors.toList())));
         List<DocumentItem> items = result.getContent().stream()
                 .map(document -> new DocumentItem(document.documentId(), document.title(),
@@ -594,5 +600,15 @@ public class StudentMaterialServiceImpl implements StudentMaterialService {
                 .setParameter("courseId", course.getCourseId())
                 .getSingleResult();
         return count.longValue() > 0;
+    }
+
+    private static String resolveQuizTitle(QuizGenerationJob job, String materialTitle) {
+        if (job.getResultExam() != null && job.getResultExam().getTitle() != null && !job.getResultExam().getTitle().isBlank()) {
+            return job.getResultExam().getTitle();
+        }
+        if (job.getTitle() != null && !job.getTitle().isBlank()) {
+            return job.getTitle();
+        }
+        return materialTitle.isBlank() ? "Quiz from material" : "Quiz from material " + materialTitle;
     }
 }

@@ -47,8 +47,11 @@ public interface QuizGenerationJobRepository extends JpaRepository<QuizGeneratio
 
     Page<QuizGenerationJob> findByUserUserIdAndStatusOrderByCreatedAtDesc(Long userId, String status, Pageable pageable);
 
-    /** MQ-02: every job of one page of documents, one query. */
-    List<QuizGenerationJob> findByUserUserIdAndDocumentDocIdInOrderByCreatedAtDesc(Long userId, Collection<Long> docIds);
+    /** MQ-02: every job of one page of documents, one query (fetches resultExam and course to avoid N+1). */
+    @Query("SELECT j FROM QuizGenerationJob j LEFT JOIN FETCH j.resultExam LEFT JOIN FETCH j.course " +
+            "WHERE j.user.userId = :userId AND j.document.docId IN :docIds ORDER BY j.createdAt DESC")
+    List<QuizGenerationJob> findByUserUserIdAndDocumentDocIdInOrderByCreatedAtDesc(
+            @Param("userId") Long userId, @Param("docIds") Collection<Long> docIds);
 
     /** The job that generated an exam (a material quiz attempt carries it back as {@code quizJobId}). */
     Optional<QuizGenerationJob> findFirstByResultExamExamIdAndUserUserIdOrderByJobIdDesc(Long examId, Long userId);
