@@ -695,7 +695,7 @@ export function MaterialQuizModal({
 
         {phase === 'completed' && job && (
           <div className="space-y-4">
-            <Alert type="success" title="Your quiz is ready" message={`${job.questionCount} questions were generated from your material.`} />
+            <Alert type="success" title={quizTitle.trim() || 'Your quiz is ready'} message={`${job.questionCount} questions were generated from your material.`} />
             <p className="text-sm text-content-soft">
               Answers are checked when you submit. You can take the quiz again any time from My Materials or Exam History.
             </p>

@@ -360,6 +360,7 @@ function DeckPage() {
             study={study}
             deckId={deckId}
             cardCount={deck.cardCount}
+            starredCount={cards.filter(card => card.isStarred).length}
             quizCount={usableCards(cards, deck.mode).length}
             onProgress={setProgress}
           />

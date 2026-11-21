@@ -53,6 +53,8 @@ export interface MaterialCourse {
 
 export interface MaterialJobBrief {
   jobId: number;
+  /** Student-provided name, or the backend's fallback for older jobs. */
+  quizTitle?: string | null;
   questionCount: number;
   status: MaterialJobStatus;
   /** Course of the generated quiz. */

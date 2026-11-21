@@ -303,6 +303,7 @@ export function ExamAiGenerateTab({
   const questionCount = totalDiff;
   const canGenerate =
     courseId !== "" &&
+    moduleId !== "" &&
     isDiffMatch &&
     isTypeMatch &&
     maxScore > 0 &&
@@ -321,6 +322,7 @@ export function ExamAiGenerateTab({
   const handleGenerate = async () => {
     const errors: Record<string, string> = {};
     if (!courseId) errors.courseId = MSG01;
+    if (!moduleId) errors.moduleId = "Please select a module.";
     if (!context.trim()) errors.context = MSG01;
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
@@ -565,6 +567,10 @@ export function ExamAiGenerateTab({
 
   const handleSaveAndPublish = async () => {
     if (!draft || questionsPublished) return;
+    if (!moduleId) {
+      setFieldErrors(prev => ({ ...prev, moduleId: "Please select a module." }));
+      return;
+    }
     if (savedQuestionIds.length === 0 && !validateDraftForSave()) return;
 
     setSaving(true);
@@ -701,7 +707,7 @@ export function ExamAiGenerateTab({
 
             <div>
               <SearchableSelect
-                label="Module (optional)"
+                label="Module *"
                 value={moduleId}
                 onChange={(value) => {
                   setModuleId(value);
