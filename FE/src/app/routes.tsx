@@ -113,6 +113,7 @@ export const ROUTES = {
   adminCategories: "/admin/categories",
   adminDiscounts: "/admin/discounts",
   adminSubscriptions: "/admin/subscriptions",
+  adminCommunityDecks: "/admin/community-decks",
   adminAnalytics: "/admin/analytics",
   adminAuditLogs: "/admin/audit-logs",
   adminSettings: "/admin/settings",
@@ -474,6 +475,12 @@ export const menuByRole: Record<string, MenuItem[]> = {
       title: "Subscriptions",
       icon: <Icon.Package className="w-4 h-4" />,
       path: ROUTES.adminSubscriptions,
+    },
+    {
+      id: "admin-community-decks",
+      title: "Community Decks",
+      icon: <Icon.Layers className="w-4 h-4" />,
+      path: ROUTES.adminCommunityDecks,
     },
     {
       id: "admin-settings",

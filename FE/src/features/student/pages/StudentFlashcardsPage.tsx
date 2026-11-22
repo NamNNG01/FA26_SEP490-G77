@@ -31,6 +31,7 @@ const toDeckView = deckViewFromListItem;
 
 const SECTION_MINE = 'mine';
 const SECTION_BOOKMARKED = 'bookmarked';
+const SECTION_COMMUNITY = 'community';
 const courseSection = (courseId: number) => `course:${courseId}`;
 /** Which sections are open, kept per browser (a convenience — falls back to "My decks" open). */
 const OPEN_KEY = 'student:flashcards:open';
@@ -120,16 +121,18 @@ function groupByCourse(decks: DeckListItem[]): CourseGroup[] {
 interface FlashcardsData {
   mine: DeckListItem[] | null;
   bookmarks: DeckListItem[] | null;
+  community: DeckListItem[] | null;
   courses: CourseGroup[];
 }
 
 async function loadFlashcards(): Promise<FlashcardsData> {
-  const [mine, bookmarks, courses] = await Promise.all([
+  const [mine, bookmarks, community, courses] = await Promise.all([
     studentDeckService.listAllDecks({ scope: 'MINE' }).catch(err => {
       if (isEndpointMissing(err)) return null;
       throw err;
     }),
     studentDeckService.listAllDecks({ scope: 'BOOKMARKED' }).catch(() => null),
+    studentDeckService.listAllDecks({ scope: 'COMMUNITY' }).catch(() => null),
     studentDeckService
       .listAllDecks({ scope: 'COURSE' })
       .then(groupByCourse)
@@ -138,7 +141,7 @@ async function loadFlashcards(): Promise<FlashcardsData> {
         return loadCourseGroupsFallback();
       }),
   ]);
-  return { mine, bookmarks, courses };
+  return { mine, bookmarks, community, courses };
 }
 
 /**
@@ -243,10 +246,11 @@ export function StudentFlashcardsPage() {
 
   const mine = data?.mine?.filter(matches) ?? [];
   const bookmarks = data?.bookmarks?.filter(matches) ?? [];
+  const community = data?.community?.filter(matches) ?? [];
   const courses = (data?.courses ?? [])
     .map(g => ({ ...g, decks: g.decks.filter(matches) }))
     .filter(g => !searching || g.decks.length > 0);
-  const nothingFound = searching && data != null && mine.length === 0 && bookmarks.length === 0 && courses.length === 0;
+  const nothingFound = searching && data != null && mine.length === 0 && bookmarks.length === 0 && community.length === 0 && courses.length === 0;
 
   return (
     <div className={`${STUDENT_PAGE_CLASS} space-y-[clamp(1.25rem,2.5vw,1.75rem)]`}>
@@ -370,6 +374,33 @@ export function StudentFlashcardsPage() {
 
           {!searching && data.courses.length === 0 && (
             <p className="text-sm text-content-soft px-1">None of your active courses has a flashcard deck yet.</p>
+          )}
+
+          {data.community != null && (!searching || community.length > 0) && (
+            <DeckSection
+              sectionKey={SECTION_COMMUNITY}
+              title="Community Decks"
+              icon={<Icon.Users className="w-4 h-4" />}
+              count={community.length}
+              open={isOpen(SECTION_COMMUNITY)}
+              onToggle={() => toggleSection(SECTION_COMMUNITY)}
+            >
+              {community.length === 0 ? (
+                <p className="text-sm text-content-soft">No community flashcard decks published yet.</p>
+              ) : (
+                <div className={GRID}>
+                  {community.map(d => (
+                    <FlashDeckCard
+                      key={d.deckId}
+                      deck={{ ...d, reviewStatus: null, ownerName: d.ownerName ? `Community · ${d.ownerName}` : 'Community' }}
+                      onOpen={() => openDeck(d, isMine(d))}
+                      bookmarked={bookmarkedIds?.has(d.deckId)}
+                      onToggleBookmark={bookmarkedIds ? () => void toggleBookmark(d) : undefined}
+                    />
+                  ))}
+                </div>
+              )}
+            </DeckSection>
           )}
         </div>
       )}

@@ -94,7 +94,7 @@ export interface DeckListItem {
 }
 
 export interface DeckListParams {
-  scope: 'MINE' | 'COURSE' | 'BOOKMARKED';
+  scope: 'MINE' | 'COURSE' | 'BOOKMARKED' | 'COMMUNITY';
   courseId?: number;
   search?: string;
   mode?: DeckMode;
@@ -371,13 +371,13 @@ export const studentDeckService = {
   },
 
   async requestPublish(deckId: number | string): Promise<PublishRequestView> {
-    const res = await api.post<ApiResponse<PublishRequestView>>(`/student/decks/${deckId}/publish-request`);
+    const res = await api.post<ApiResponse<PublishRequestView>>(`/student/decks/${deckId}/publish`);
     return res.data;
   },
 
-  /** FC-15 */
+  /** Unpublish a public community deck back to private. */
   async withdrawReview(deckId: number | string): Promise<PublishRequestView> {
-    const res = await api.post<ApiResponse<PublishRequestView>>(`/student/decks/${deckId}/withdraw-review`);
+    const res = await api.post<ApiResponse<PublishRequestView>>(`/student/decks/${deckId}/unpublish`);
     return res.data;
   },
 

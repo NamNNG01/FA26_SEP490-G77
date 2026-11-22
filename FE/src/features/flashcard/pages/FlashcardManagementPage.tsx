@@ -19,6 +19,7 @@ import type { PageResponse } from '@/services/course.service';
 import { deckService, type Deck, type DeckListParams } from '@/services/deck.service';
 import { NO_COURSE, VisibilityBadge, errorMessage, useCourseModules, useManagedCourses } from '../components/DeckEditor';
 import { CreateDeckModal } from '../components/CreateDeckModal';
+import { CopyToCourseModal } from '../components/CopyToCourseModal';
 import { downloadDecksXlsx, fileSlug, type XlsxDeck } from '@/utils/flashcardXlsx';
 import { getApiErrorMessage } from '@/utils/apiError';
 
@@ -75,6 +76,14 @@ export function FlashcardManagementPage() {
   const [reloadKey, setReloadKey] = useState(0);
   const takeQuiet = useQuietRefresh(() => setReloadKey(k => k + 1));
 
+  const [activeTab, setActiveTab] = useState<'course' | 'community'>('course');
+  const [communitySearch, setCommunitySearch] = useState('');
+  const debouncedCommunitySearch = useDebounce(communitySearch.trim(), 400);
+  const [communityPage, setCommunityPage] = useState(1);
+  const [communityResult, setCommunityResult] = useState<PageResponse<Deck> | null>(null);
+  const [communityLoading, setCommunityLoading] = useState(false);
+  const [copyTarget, setCopyTarget] = useState<Deck | null>(null);
+
   const [createOpen, setCreateOpen] = useState(false);
   const [toDelete, setToDelete] = useState<Deck | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -108,6 +117,21 @@ export function FlashcardManagementPage() {
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `filters` is derived from these values
   }, [debouncedQuery, course, module, visibility, page, reloadKey]);
+
+  useEffect(() => {
+    if (activeTab !== 'community') return;
+    let cancelled = false;
+    setCommunityLoading(true);
+    deckService.getCommunityDecks({
+      search: debouncedCommunitySearch || undefined,
+      page: communityPage - 1,
+      size: DEFAULT_PAGE_SIZE,
+    })
+      .then(res => { if (!cancelled) setCommunityResult(res); })
+      .catch(err => { if (!cancelled) toast.error(errorMessage(err, 'Could not load community decks.')); })
+      .finally(() => { if (!cancelled) setCommunityLoading(false); });
+    return () => { cancelled = true; };
+  }, [activeTab, debouncedCommunitySearch, communityPage, toast]);
 
   const reload = () => setReloadKey(k => k + 1);
 
@@ -254,6 +278,44 @@ export function FlashcardManagementPage() {
     },
   ];
 
+  const communityColumns: TableColumn[] = [
+    {
+      key: 'title',
+      label: 'Community Deck',
+      render: (r: Record<string, unknown>) => {
+        const d = asDeck(r);
+        return (
+          <div className="min-w-0">
+            <div className="font-medium text-content truncate">{d.title}</div>
+            {d.description && <div className="text-xs text-content-subtle truncate">{d.description}</div>}
+          </div>
+        );
+      },
+    },
+    { key: 'ownerName', label: 'Author', render: (r: Record<string, unknown>) => <span className="text-sm text-content-soft">{asDeck(r).ownerName}</span> },
+    {
+      key: 'cardCount',
+      label: 'Cards',
+      render: (r: Record<string, unknown>) => {
+        const n = asDeck(r).cardCount;
+        return <Badge variant={n > 0 ? 'default' : 'warning'}>{n} card{n === 1 ? '' : 's'}</Badge>;
+      },
+    },
+    {
+      key: 'actions',
+      label: '',
+      width: '150px',
+      render: (r: Record<string, unknown>) => {
+        const d = asDeck(r);
+        return (
+          <Button size="sm" variant="outline" icon={<Icon.Copy className="w-4 h-4" />} onClick={() => setCopyTarget(d)}>
+            Copy to Course
+          </Button>
+        );
+      },
+    },
+  ];
+
   const decks = result?.content ?? [];
   const filtersActive = query !== '' || course !== ALL || module !== ALL || visibility !== ALL;
   const clearFilters = () => {
@@ -285,7 +347,56 @@ export function FlashcardManagementPage() {
         </div>
       </div>
 
-      <div className="card px-4 py-3 flex flex-wrap lg:flex-nowrap items-center gap-3">
+      <div className="flex items-center gap-4 border-b border-line">
+        <button
+          type="button"
+          onClick={() => setActiveTab('course')}
+          className={`pb-2.5 text-sm font-semibold border-b-2 transition-colors ${activeTab === 'course' ? 'border-brand-ink text-brand-ink' : 'border-transparent text-content-subtle hover:text-content'}`}
+        >
+          Course Decks
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('community')}
+          className={`pb-2.5 text-sm font-semibold border-b-2 transition-colors ${activeTab === 'community' ? 'border-brand-ink text-brand-ink' : 'border-transparent text-content-subtle hover:text-content'}`}
+        >
+          Community Decks
+        </button>
+      </div>
+
+      {activeTab === 'community' ? (
+        <div className="space-y-4">
+          <div className="card px-4 py-3 flex items-center gap-3">
+            <SearchInput
+              className="w-full sm:max-w-sm"
+              placeholder="Search community decks…"
+              value={communitySearch}
+              onChange={e => { setCommunitySearch(e.target.value); setCommunityPage(1); }}
+            />
+          </div>
+          <div className="card overflow-hidden">
+            <Table
+              columns={communityColumns}
+              data={(communityResult?.content ?? []) as unknown as Record<string, unknown>[]}
+              unit="community decks"
+              perPage={DEFAULT_PAGE_SIZE}
+              serverPagination={{ page: communityPage, total: communityResult?.totalElements ?? 0, onChange: setCommunityPage }}
+              emptyState={communityLoading ? 'Loading community decks…' : 'No public community decks found.'}
+            />
+          </div>
+          <CopyToCourseModal
+            deck={copyTarget}
+            onClose={() => setCopyTarget(null)}
+            onCopied={created => {
+              setActiveTab('course');
+              reload();
+              navigate(flashcardDeckPath(String(created.deckId)));
+            }}
+          />
+        </div>
+      ) : (
+        <>
+          <div className="card px-4 py-3 flex flex-wrap lg:flex-nowrap items-center gap-3">
         <SearchInput
           className="w-full sm:w-60 lg:w-auto lg:min-w-0 lg:flex-[1.5]"
           placeholder="Search flashcard decks…"
@@ -362,6 +473,8 @@ export function FlashcardManagementPage() {
         </>}
         confirmLabel="Delete"
       />
+        </>
+      )}
     </div>
   );
 }

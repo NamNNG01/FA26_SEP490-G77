@@ -27,7 +27,6 @@ import { CardFace, ConfirmModal, DeckModeBadge, DeckStatusBadge, plural } from '
 import { DeckFormModal } from '../components/flashcards/DeckFormModal';
 import { CardFormModal } from '../components/flashcards/CardFormModal';
 import { ImportCardsModal } from '../components/flashcards/ImportCardsModal';
-import { DeckContributionModal } from '../components/flashcards/DeckContributionModal';
 import { CopyDeckModal } from '../components/flashcards/CopyDeckModal';
 import { downloadDecksXlsx, fileSlug } from '@/utils/flashcardXlsx';
 import { usableCards } from '../components/flashcards/flashcardQuiz';
@@ -97,7 +96,6 @@ function DeckPage() {
   const [error, setError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
   const [dialog, setDialog] = useState<Dialog | null>(null);
-  const [contributionOpen, setContributionOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [exporting, setExporting] = useState<'xlsx' | 'pdf' | null>(null);
   const [bookmarking, setBookmarking] = useState(false);
@@ -391,7 +389,7 @@ function DeckPage() {
               </Button>
             </div>
           )}
-          {isOwner && (editable || deletable || deck.reviewStatus === 'PENDING_REVIEW') && (
+          {isOwner && (editable || deletable || deck.visibility === 'PUBLIC' || deck.reviewStatus === 'PENDING_REVIEW') && (
             <div className={`grid grid-cols-2 gap-2 ${deck.cardCount > 0 ? 'border-t border-line pt-3' : ''}`}>
               {editable && (
                 <>
@@ -399,25 +397,38 @@ function DeckPage() {
                     className="col-span-2"
                     variant="outline"
                     icon={<Icon.Upload className="w-4 h-4" />}
-                    onClick={() => setContributionOpen(true)}
-                    disabled={deck.cardCount === 0}
-                    title={deck.cardCount === 0 ? 'Add at least one card first' : undefined}
+                    loading={busy}
+                    onClick={() =>
+                      act(async () => {
+                        const res = await studentDeckService.requestPublish(deckId);
+                        setDeck(d => (d ? { ...d, reviewStatus: res.reviewStatus, visibility: res.visibility, submittedAt: res.submittedAt } : d));
+                        toast.success('Published to Community.');
+                      }, 'Could not publish deck.')
+                    }
+                    disabled={busy || deck.cardCount === 0 || deck.reviewStatus === 'REJECTED'}
+                    title={
+                      deck.reviewStatus === 'REJECTED'
+                        ? 'This deck was removed by an administrator'
+                        : deck.cardCount === 0
+                          ? 'Add at least one card first'
+                          : 'Share this deck publicly in Community'
+                    }
                   >
-                    {deck.reviewStatus === 'REJECTED' ? 'Resubmit for review' : 'Make public'}
+                    {deck.reviewStatus === 'REJECTED' ? 'Removed by Admin' : 'Publish to Community'}
                   </Button>
                   <Button variant="outline" size="sm" icon={<Icon.Edit className="w-4 h-4" />} onClick={() => setDialog({ kind: 'edit' })}>
                     Edit
                   </Button>
                 </>
               )}
-              {deck.reviewStatus === 'PENDING_REVIEW' && (
+              {(deck.visibility === 'PUBLIC' || deck.reviewStatus === 'PENDING_REVIEW') && (
                 <Button
                   className="col-span-2"
                   variant="outline"
                   icon={<Icon.RefreshCw className="w-4 h-4" />}
                   onClick={() => setDialog({ kind: 'withdraw' })}
                 >
-                  Withdraw request
+                  Make Private
                 </Button>
               )}
               {deletable && (
@@ -640,29 +651,19 @@ function DeckPage() {
           }
         />
       )}
-      <DeckContributionModal
-        open={contributionOpen}
-        initialDeckId={deckId}
-        onClose={() => setContributionOpen(false)}
-        onSubmitted={(_submittedDeckId, result) => {
-          setDeck(current => current ? { ...current, reviewStatus: result.reviewStatus, visibility: result.visibility, submittedAt: result.submittedAt } : current);
-          setContributionOpen(false);
-          toast.success('Sent for review.');
-        }}
-      />
       {dialog?.kind === 'withdraw' && (
         <ConfirmModal
-          title="Withdraw the review request?"
-          message="The deck goes back to private and you can edit it again. You can send it for review later."
-          confirmLabel="Withdraw"
+          title="Make this deck private?"
+          message="The deck will be hidden from Community and you can edit or delete it again."
+          confirmLabel="Make Private"
           busy={busy}
           onClose={() => setDialog(null)}
           onConfirm={() =>
             act(async () => {
               const res = await studentDeckService.withdrawReview(deckId);
               setDeck(d => (d ? { ...d, reviewStatus: res.reviewStatus, visibility: res.visibility, submittedAt: null } : d));
-              toast.success('Review request withdrawn.');
-            }, 'Could not withdraw the request.')
+              toast.success('Deck moved back to private.');
+            }, 'Could not make deck private.')
           }
         />
       )}

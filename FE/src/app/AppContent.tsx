@@ -70,6 +70,7 @@ import {
   CategoriesPage,
   DiscountsPage,
 } from '@/features/admin';
+import { AdminCommunityDecksPage } from '@/features/admin/pages/AdminCommunityDecksPage';
 
 /**
  * AppContent
@@ -359,6 +360,7 @@ function AppRoutes() {
           <Route path={ROUTES.adminCategories} element={<CategoriesPage />} />
           <Route path={ROUTES.adminDiscounts} element={<DiscountsPage />} />
           <Route path={ROUTES.adminSubscriptions} element={<SubscriptionPackagesPage />} />
+          <Route path={ROUTES.adminCommunityDecks} element={<AdminCommunityDecksPage />} />
           <Route path={ROUTES.adminAnalytics} element={<AnalyticsPage />} />
           <Route path={ROUTES.adminAuditLogs} element={<AuditLogsPage />} />
           <Route path={ROUTES.adminSettings} element={<SystemSettingsPage />} />

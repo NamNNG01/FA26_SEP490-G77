@@ -160,4 +160,22 @@ export const deckService = {
   async deleteCard(cardId: number | string): Promise<void> {
     await api.request<ApiResponse<null>>({ method: 'delete', url: `/manager/cards/${cardId}` });
   },
+
+  async getCommunityDecks(params: { search?: string; page?: number; size?: number } = {}): Promise<PageResponse<Deck>> {
+    const query = new URLSearchParams();
+    if (params.search) query.set('search', params.search);
+    if (params.page !== undefined) query.set('page', String(params.page));
+    if (params.size !== undefined) query.set('size', String(params.size));
+    const qs = query.toString();
+    const res = await api.get<ApiResponse<PageResponse<Deck>>>(`/manager/decks/community${qs ? `?${qs}` : ''}`);
+    return res.data;
+  },
+
+  async copyToCourse(
+    deckId: number | string,
+    payload: { courseId: number; moduleId?: number; title?: string },
+  ): Promise<Deck> {
+    const res = await api.post<ApiResponse<Deck>>(`/manager/decks/${deckId}/copy-to-course`, payload);
+    return res.data;
+  },
 };
