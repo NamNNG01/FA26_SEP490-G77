@@ -158,105 +158,78 @@ class StudentDeckApiIntegrationTest {
     }
 
     @Test void publishRequestTransitions() throws Exception {
-        long deck = courseDeck(student, "FLASHCARD");
+        long deck = deck(student, "FLASHCARD");
         mvc.perform(post("/api/v1/student/decks/" + deck + "/publish-request").with(as(student))).andExpect(status().isUnprocessableEntity());
         card(deck, "{\"frontText\":\"a\",\"backText\":\"b\"}");
         mvc.perform(post("/api/v1/student/decks/" + deck + "/publish-request").with(as(other))).andExpect(status().isForbidden());
         mvc.perform(post("/api/v1/student/decks/" + deck + "/publish-request").with(as(student)))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.message").value("Sent for review"))
-                .andExpect(jsonPath("$.data.visibility").value("PRIVATE"))
-                .andExpect(jsonPath("$.data.reviewStatus").value("PENDING_REVIEW"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.message").value("Deck published to community"))
+                .andExpect(jsonPath("$.data.visibility").value("PUBLIC"))
+                .andExpect(jsonPath("$.data.reviewStatus").value("APPROVED"))
                 .andExpect(jsonPath("$.data.submittedAt").exists());
         mvc.perform(post("/api/v1/student/decks/" + deck + "/publish-request").with(as(student)))
-                .andExpect(status().isConflict()).andExpect(jsonPath("$.data.code").value("ALREADY_PENDING_REVIEW"));
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.data.code").value("ALREADY_PUBLIC"));
+
+        mvc.perform(get("/api/v1/student/decks").param("scope", "COMMUNITY").with(as(other)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalElements").value(1));
 
         Deck entity = em.find(Deck.class, deck);
         entity.setReviewStatus("REJECTED");
-        entity.setReviewNote("Too short");
-        em.flush();
-        send(put("/api/v1/student/decks/" + deck), student, "{\"description\":\"longer now\"}")
-                .andExpect(status().isOk()).andExpect(jsonPath("$.data.reviewStatus").value("REJECTED"))
-                .andExpect(jsonPath("$.data.reviewNote").value("Too short"));
-        mvc.perform(post("/api/v1/student/decks/" + deck + "/publish-request").with(as(student)))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.data.reviewStatus").value("PENDING_REVIEW"));
-
-        entity.setReviewStatus("APPROVED");
-        entity.setVisibility("PUBLIC");
+        entity.setVisibility("PRIVATE");
+        entity.setIsPublic(false);
         em.flush();
         mvc.perform(post("/api/v1/student/decks/" + deck + "/publish-request").with(as(student)))
-                .andExpect(status().isConflict()).andExpect(jsonPath("$.data.code").value("ALREADY_PUBLIC"));
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.data.code").value("MODERATION_BLOCKED"));
     }
 
-    @Test void managerCanReviewSubmittedDeckAndInspectCardsWithImages() throws Exception {
-        long deckId = courseDeck(student, "FLASHCARD");
-        send(put("/api/v1/student/decks/" + deckId), student,
-                "{\"title\":\"Review me\"}").andExpect(status().isOk());
-        card(deckId, "{\"frontText\":\"Question\",\"backText\":\"Answer\",\"frontImageUrl\":\"https://cdn.example/front.png\"}");
-        card(deckId, "{\"frontText\":\"Second question\",\"backImageUrl\":\"https://cdn.example/back.png\"}");
+    @Test void managerCanListCommunityAndCopyToCourse() throws Exception {
+        long deckId = deck(student, "FLASHCARD");
+        send(put("/api/v1/student/decks/" + deckId), student, "{\"title\":\"Community deck\"}").andExpect(status().isOk());
+        card(deckId, "{\"frontText\":\"Question\",\"backText\":\"Answer\"}");
 
-        mvc.perform(post("/api/v1/student/decks/" + deckId + "/publish-request").with(as(student)))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.data.reviewStatus").value("PENDING_REVIEW"));
+        mvc.perform(post("/api/v1/student/decks/" + deckId + "/publish").with(as(student)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.reviewStatus").value("APPROVED"));
 
-        mvc.perform(get("/api/v1/manager/decks/review").param("courseId", course.getCourseId().toString()).with(as(manager)))
+        mvc.perform(get("/api/v1/manager/decks/community").with(as(manager)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.totalElements").value(1))
-                .andExpect(jsonPath("$.data.content[0].deckId").value(deckId))
-                .andExpect(jsonPath("$.data.content[0].reviewStatus").value("PENDING_REVIEW"))
-                .andExpect(jsonPath("$.data.content[0].canReview").value(true));
+                .andExpect(jsonPath("$.data.content[0].deckId").value(deckId));
 
-        mvc.perform(get("/api/v1/manager/decks/review/" + deckId).with(as(manager)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.cards.totalElements").value(2))
-                .andExpect(jsonPath("$.data.cards.content[0].frontText").value("Question"))
-                .andExpect(jsonPath("$.data.cards.content[0].frontImageUrl").value("https://cdn.example/front.png"))
-                .andExpect(jsonPath("$.data.cards.content[1].backImageUrl").value("https://cdn.example/back.png"));
-
-        long currentVersion = em.find(Deck.class, deckId).getVersion();
-        mvc.perform(post("/api/v1/manager/decks/review/" + deckId + "/approve")
+        mvc.perform(post("/api/v1/manager/decks/" + deckId + "/copy-to-course")
                         .with(as(manager)).contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"version\":" + currentVersion + ",\"note\":\"Looks good\"}"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.data.reviewStatus").value("APPROVED"))
-                .andExpect(jsonPath("$.data.visibility").value("PUBLIC"));
+                        .content("{\"courseId\":" + course.getCourseId() + ",\"title\":\"Official Copy\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.title").value("Official Copy"))
+                .andExpect(jsonPath("$.data.courseId").value(course.getCourseId()))
+                .andExpect(jsonPath("$.data.isPublic").value(true))
+                .andExpect(jsonPath("$.data.cardCount").value(1));
     }
 
-    @Test void managerListsStudentContributedDecksAtTheDeckListEndpoint() throws Exception {
-        long deckId = courseDeck(student, "FLASHCARD");
-        send(put("/api/v1/student/decks/" + deckId), student, "{\"title\":\"Contributed deck\"}").andExpect(status().isOk());
-        card(deckId, "{\"frontText\":\"a\",\"backText\":\"b\"}");
-        mvc.perform(post("/api/v1/student/decks/" + deckId + "/publish-request").with(as(student)))
-                .andExpect(status().isOk());
+    @Test void adminCanModerateCommunityDecks() throws Exception {
+        long deckId = deck(student, "FLASHCARD");
+        card(deckId, "{\"frontText\":\"Spam\",\"backText\":\"Bad\"}");
+        mvc.perform(post("/api/v1/student/decks/" + deckId + "/publish").with(as(student))).andExpect(status().isOk());
 
-        // PENDING is the manager review screen's label for PENDING_REVIEW.
-        mvc.perform(get("/api/v1/manager/decks").param("status", "PENDING")
-                        .param("courseId", course.getCourseId().toString()).with(as(manager)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.totalElements").value(1))
-                .andExpect(jsonPath("$.data.content[0].deckId").value(deckId))
-                .andExpect(jsonPath("$.data.content[0].title").value("Contributed deck"))
-                .andExpect(jsonPath("$.data.content[0].reviewStatus").value("PENDING_REVIEW"))
-                .andExpect(jsonPath("$.data.content[0].cardCount").value(1))
-                .andExpect(jsonPath("$.data.content[0].owner.id").value(student.getUserId()))
-                .andExpect(jsonPath("$.data.content[0].course.courseId").value(course.getCourseId()))
-                .andExpect(jsonPath("$.data.content[0].canReview").value(true));
-
-        // The same manager, once the deck is approved, sees it under APPROVED / ACCEPTED only.
-        Deck entity = em.find(Deck.class, deckId);
-        entity.setReviewStatus("APPROVED");
+        User admin = f.account(User.ROLE_ADMIN);
         em.flush();
-        mvc.perform(get("/api/v1/manager/decks").param("status", "PENDING")
-                        .param("courseId", course.getCourseId().toString()).with(as(manager)))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.data.totalElements").value(0));
-        mvc.perform(get("/api/v1/manager/decks").param("status", "ACCEPTED")
-                        .param("courseId", course.getCourseId().toString()).with(as(manager)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.totalElements").value(1))
-                .andExpect(jsonPath("$.data.content[0].reviewStatus").value("APPROVED"))
-                .andExpect(jsonPath("$.data.content[0].canReview").value(false));
 
-        // Without status the endpoint keeps serving the F-01 managed-deck list.
-        mvc.perform(get("/api/v1/manager/decks").with(as(manager)))
+        mvc.perform(get("/api/v1/admin/community-decks").with(as(admin)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.content[0].ownerName").value(student.getFullName()));
+                .andExpect(jsonPath("$.data.totalElements").value(1));
+
+        mvc.perform(patch("/api/v1/admin/community-decks/" + deckId + "/hide")
+                        .with(as(admin)).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"Spam content\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.isPublic").value(false));
+
+        mvc.perform(get("/api/v1/student/decks").param("scope", "COMMUNITY").with(as(other)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalElements").value(0));
+
+        mvc.perform(delete("/api/v1/admin/community-decks/" + deckId).with(as(admin)))
+                .andExpect(status().isOk());
     }
 
     // ------------------------------------------------------------------ FC-14 / FC-15 / DECK_LOCKED
@@ -290,21 +263,17 @@ class StudentDeckApiIntegrationTest {
     }
 
     @Test void withdrawReviewTransitions() throws Exception {
-        long deck = courseDeck(student, "FLASHCARD");
+        long deck = deck(student, "FLASHCARD");
         card(deck, "{\"frontText\":\"a\",\"backText\":\"b\"}");
         String path = "/api/v1/student/decks/" + deck + "/withdraw-review";
-        mvc.perform(post(path).with(as(student))).andExpect(status().isConflict()).andExpect(jsonPath("$.data.code").value("NOT_PENDING_REVIEW"));
+        mvc.perform(post(path).with(as(student))).andExpect(status().isConflict()).andExpect(jsonPath("$.data.code").value("NOT_PUBLIC"));
         mvc.perform(post("/api/v1/student/decks/" + deck + "/publish-request").with(as(student))).andExpect(status().isOk());
         mvc.perform(post(path).with(as(other))).andExpect(status().isForbidden());
         mvc.perform(post(path).with(as(student)))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.message").value("Review request withdrawn"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.message").value("Deck moved back to private"))
                 .andExpect(jsonPath("$.data.reviewStatus").value("NONE")).andExpect(jsonPath("$.data.visibility").value("PRIVATE"))
                 .andExpect(jsonPath("$.data.submittedAt").isEmpty());
-        Deck entity = em.find(Deck.class, deck);
-        entity.setReviewStatus("APPROVED");
-        entity.setVisibility("PUBLIC");
-        em.flush();
-        mvc.perform(post(path).with(as(student))).andExpect(status().isConflict()).andExpect(jsonPath("$.data.code").value("ALREADY_PUBLIC"));
+        mvc.perform(post(path).with(as(student))).andExpect(status().isConflict()).andExpect(jsonPath("$.data.code").value("NOT_PUBLIC"));
     }
 
     @Test void pendingOrPublicDeckIsLocked() throws Exception {
@@ -317,17 +286,12 @@ class StudentDeckApiIntegrationTest {
         mvc.perform(delete("/api/v1/student/cards/" + card).with(as(student))).andExpect(status().isConflict());
         send(put("/api/v1/student/cards/" + card + "/progress"), student, "{\"status\":\"KNOWN\"}").andExpect(status().isOk());
 
-        Deck entity = em.find(Deck.class, deck);
-        entity.setReviewStatus("APPROVED");
-        entity.setVisibility("PUBLIC");
-        em.flush();
         mvc.perform(delete("/api/v1/student/decks/" + deck).with(as(student)))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.data.code").value("DECK_LOCKED"));
 
-        long pending = courseDeck(student, "FLASHCARD");
-        card(pending, "{\"frontText\":\"a\",\"backText\":\"b\"}");
-        mvc.perform(post("/api/v1/student/decks/" + pending + "/publish-request").with(as(student))).andExpect(status().isOk());
-        mvc.perform(delete("/api/v1/student/decks/" + pending).with(as(student))).andExpect(status().isOk());
+        // Owner can unpublish back to private and then delete it.
+        mvc.perform(post("/api/v1/student/decks/" + deck + "/unpublish").with(as(student))).andExpect(status().isOk());
+        mvc.perform(delete("/api/v1/student/decks/" + deck).with(as(student))).andExpect(status().isOk());
     }
 
     @Test void classmatesDoNotSeePrivateCourseAttachedDeck() throws Exception {

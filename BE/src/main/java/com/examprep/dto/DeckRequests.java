@@ -34,4 +34,9 @@ public final class DeckRequests {
                              @Size(max = CARD_TEXT_MAX) String backText,
                              @Size(max = IMAGE_URL_MAX) @Pattern(regexp = IMAGE_URL, message = "must be an http(s) URL") String frontImageUrl,
                              @Size(max = IMAGE_URL_MAX) @Pattern(regexp = IMAGE_URL, message = "must be an http(s) URL") String backImageUrl) {}
+
+    /** Copy a public community deck into a managed course as an official deck. */
+    public record CopyToCourse(@NotNull @Positive Long courseId,
+                               @Positive Long moduleId,
+                               @Size(max = 255) String title) {}
 }

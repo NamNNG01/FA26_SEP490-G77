@@ -24,7 +24,7 @@ public interface DeckRepository extends JpaRepository<Deck, Long> {
     @Query("""
         SELECT new com.examprep.dto.IdCount(d.module.moduleId, COUNT(d)) FROM Deck d
         WHERE d.module.moduleId IN :ids
-          AND (d.user.roleName <> 'STUDENT' OR (d.visibility = 'PUBLIC' AND d.reviewStatus = 'APPROVED'))
+          AND d.user.roleName <> 'STUDENT'
         GROUP BY d.module.moduleId
         """)
     List<IdCount> countManagedByModules(@Param("ids") List<Long> ids);
@@ -106,9 +106,35 @@ public interface DeckRepository extends JpaRepository<Deck, Long> {
 
     String COURSE_DECKS = "EXISTS (SELECT e.enrollmentId FROM Enrollment e WHERE e.course = c AND e.user.userId = :userId " +
             "AND e.status = 'ACTIVE') AND d.user.userId <> :userId " +
-            "AND (d.user.roleName <> 'STUDENT' OR (d.visibility = 'PUBLIC' AND d.reviewStatus = 'APPROVED')) " +
+            "AND d.user.roleName <> 'STUDENT' " +
             "AND (:courseId IS NULL OR c.courseId = :courseId) AND (:mode = '' OR d.mode = :mode) " +
             "AND LOWER(d.title) LIKE :search ESCAPE '!'";
+
+    @EntityGraph(attributePaths = {"course", "user"})
+    @Query(value = "SELECT d FROM Deck d LEFT JOIN d.course c WHERE d.user.roleName = 'STUDENT' " +
+            "AND d.visibility = 'PUBLIC' AND d.reviewStatus = 'APPROVED' " +
+            "AND (:mode = '' OR d.mode = :mode) " +
+            "AND LOWER(d.title) LIKE :search ESCAPE '!' " +
+            "ORDER BY d.submittedAt DESC, d.deckId DESC",
+            countQuery = "SELECT COUNT(d) FROM Deck d WHERE d.user.roleName = 'STUDENT' " +
+            "AND d.visibility = 'PUBLIC' AND d.reviewStatus = 'APPROVED' " +
+            "AND (:mode = '' OR d.mode = :mode) " +
+            "AND LOWER(d.title) LIKE :search ESCAPE '!'")
+    Page<Deck> findCommunityDecks(@Param("mode") String mode, @Param("search") String search, Pageable pageable);
+
+    @EntityGraph(attributePaths = {"course", "user"})
+    @Query(value = "SELECT d FROM Deck d LEFT JOIN d.course c WHERE d.user.roleName = 'STUDENT' " +
+            "AND (:visibility = '' OR d.visibility = :visibility) " +
+            "AND (:reviewStatus = '' OR d.reviewStatus = :reviewStatus) " +
+            "AND LOWER(d.title) LIKE :search ESCAPE '!' " +
+            "ORDER BY d.submittedAt DESC, d.deckId DESC",
+            countQuery = "SELECT COUNT(d) FROM Deck d WHERE d.user.roleName = 'STUDENT' " +
+            "AND (:visibility = '' OR d.visibility = :visibility) " +
+            "AND (:reviewStatus = '' OR d.reviewStatus = :reviewStatus) " +
+            "AND LOWER(d.title) LIKE :search ESCAPE '!'")
+    Page<Deck> findAdminCommunityDecks(@Param("visibility") String visibility,
+                                       @Param("reviewStatus") String reviewStatus,
+                                       @Param("search") String search, Pageable pageable);
 
     @EntityGraph(attributePaths = {"course", "user", "module"})
     @Query("SELECT d FROM Deck d WHERE d.deckId = :id")
@@ -136,8 +162,8 @@ public interface DeckRepository extends JpaRepository<Deck, Long> {
             "d.module.moduleId) " +
             "FROM Deck d LEFT JOIN d.module m WHERE d.course.courseId = :courseId " +
             "AND (m IS NULL OR m.status <> 'HIDDEN') " +
-            // Students' own decks attached to the course stay private (FC-01, spec 9.6).
-            "AND (d.user.roleName <> 'STUDENT' OR d.user.userId = :userId OR d.visibility = 'PUBLIC')")
+            // Official course decks (managers) and the viewer's own personal decks attached to the course.
+            "AND (d.user.roleName <> 'STUDENT' OR d.user.userId = :userId)")
     List<com.examprep.dto.student.DeckDto> findCourseDecksWithStats(@Param("courseId") Long courseId, @Param("userId") Long userId);
 
     @Query("SELECT new com.examprep.dto.student.DeckDto(" +
@@ -149,10 +175,8 @@ public interface DeckRepository extends JpaRepository<Deck, Long> {
             "FROM Deck d LEFT JOIN d.module m " +
             "WHERE d.course.courseId = :courseId " +
             "AND ((:moduleId IS NULL AND d.module IS NULL) OR (m.moduleId = :moduleId)) " +
-            // Same rule as the other course deck queries: manager decks and the viewer's own decks
-            // always show; another student's deck only once its public request was approved
-            // (visibility flips to PUBLIC on approval, so a pending review stays private).
-            "AND (d.user.roleName <> 'STUDENT' OR d.user.userId = :userId OR d.visibility = 'PUBLIC') " +
+            // Official course decks (managers) and the viewer's own decks attached to the module/course.
+            "AND (d.user.roleName <> 'STUDENT' OR d.user.userId = :userId) " +
             "ORDER BY d.title ASC, d.deckId ASC")
     List<DeckDto> findDecksByModuleOrGeneral(
             @Param("courseId") Long courseId,

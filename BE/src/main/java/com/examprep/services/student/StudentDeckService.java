@@ -128,7 +128,8 @@ public class StudentDeckService {
                 yield decks.findEnrolledCourseDecks(userId, courseId, modeFilter, pattern, pageable);
             }
             case "BOOKMARKED" -> decks.findBookmarkedDecks(userId, modeFilter, pattern, pageable);
-            default -> throw new BadRequestException("scope must be MINE, COURSE, or BOOKMARKED.");
+            case "COMMUNITY" -> decks.findCommunityDecks(modeFilter, pattern, pageable);
+            default -> throw new BadRequestException("scope must be MINE, COURSE, BOOKMARKED, or COMMUNITY.");
         };
         List<Long> ids = result.getContent().stream().map(Deck::getDeckId).toList();
         if (ids.isEmpty()) return PageResponse.of(result, List.of());
@@ -261,33 +262,18 @@ public class StudentDeckService {
 
     public PublishRequestView requestPublish(Long userId, Long deckId) {
         Deck deck = ownedDeck(userId, deckId);
-        boolean isResubmission = "REJECTED".equals(deck.getReviewStatus());
-        int currentResubmissions = deck.getResubmissionCount() != null ? deck.getResubmissionCount() : 0;
-        switch (deck.getReviewStatus()) {
-            case "PENDING_REVIEW" -> throw coded(ResponseCode.CONFLICT, "ALREADY_PENDING_REVIEW", "The deck is already waiting for review.");
-            case "APPROVED" -> throw coded(ResponseCode.CONFLICT, "ALREADY_PUBLIC", "The deck is already public.");
-            case "REJECTED" -> {
-                if (currentResubmissions >= 1) {
-                    throw coded(ResponseCode.CONFLICT, "RESUBMISSION_LIMIT_REACHED", "The deck has already been resubmitted the maximum number of times.");
-                }
-            }
-            default -> { }
+        if (REVIEW_APPROVED.equals(deck.getReviewStatus()) && Deck.VISIBILITY_PUBLIC.equals(deck.getVisibility())) {
+            throw coded(ResponseCode.CONFLICT, "ALREADY_PUBLIC", "The deck is already public.");
+        }
+        if ("REJECTED".equals(deck.getReviewStatus())) {
+            throw coded(ResponseCode.CONFLICT, "MODERATION_BLOCKED", "This deck was removed by an administrator and cannot be published.");
         }
         if (cards.countByDeckDeckId(deckId) == 0) {
-            throw new BaseException(ResponseCode.UNPROCESSABLE_VALIDATION_ERROR, "Add at least one card before asking for review.");
+            throw new BaseException(ResponseCode.UNPROCESSABLE_VALIDATION_ERROR, "Add at least one card before publishing.");
         }
-        if (deck.getCourse() == null) {
-            throw new BaseException(ResponseCode.UNPROCESSABLE_VALIDATION_ERROR,
-                    "A deck must belong to a course before it can be submitted for review.");
-        }
-        if (!enrollments.existsByCourse_CourseIdAndUser_UserIdAndStatus(
-                deck.getCourse().getCourseId(), userId, Enrollment.STATUS_ACTIVE)) {
-            throw new ForbiddenException("You must be actively enrolled in the deck course to submit it for review.");
-        }
-        if (isResubmission) {
-            deck.setResubmissionCount(currentResubmissions + 1);
-        }
-        deck.setReviewStatus(REVIEW_PENDING);
+        deck.setIsPublic(true);
+        deck.setVisibility(Deck.VISIBILITY_PUBLIC);
+        deck.setReviewStatus(REVIEW_APPROVED);
         deck.setSubmittedAt(Instant.now());
         decks.flush();
         return new PublishRequestView(deck.getDeckId(), deck.getVisibility(), deck.getReviewStatus(), deck.getSubmittedAt());
@@ -295,15 +281,14 @@ public class StudentDeckService {
 
     // ------------------------------------------------------------------ FC-15
 
-    /** Takes a deck back out of the review queue so the owner can edit it again. */
+    /** Unpublishes a public community deck back to private so the owner can edit or hide it. */
     public PublishRequestView withdrawReview(Long userId, Long deckId) {
         Deck deck = ownedDeck(userId, deckId);
-        switch (deck.getReviewStatus()) {
-            case REVIEW_PENDING -> { }
-            case REVIEW_APPROVED -> throw coded(ResponseCode.CONFLICT, "ALREADY_PUBLIC", "The deck is already public.");
-            default -> throw coded(ResponseCode.CONFLICT, "NOT_PENDING_REVIEW", "The deck is not waiting for review.");
+        if (!Deck.VISIBILITY_PUBLIC.equals(deck.getVisibility()) && !REVIEW_PENDING.equals(deck.getReviewStatus())) {
+            throw coded(ResponseCode.CONFLICT, "NOT_PUBLIC", "The deck is not currently public.");
         }
         deck.setReviewStatus("NONE");
+        deck.setIsPublic(false);
         deck.setVisibility(Deck.VISIBILITY_PRIVATE);
         deck.setSubmittedAt(null);
         decks.flush();

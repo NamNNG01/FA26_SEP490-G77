@@ -28,4 +28,10 @@ public interface DeckService {
 
     /** F-08: delete a card together with its per-user progress. */
     void deleteCard(UserPrincipal user, Long id);
+
+    /** List public community decks so a course manager can browse and copy them. */
+    PageResponse<DeckResponse> listCommunity(UserPrincipal user, String search, int page, int size);
+
+    /** Copy a public community deck into a course managed by the caller. */
+    DeckResponse copyToCourse(UserPrincipal user, Long sourceDeckId, DeckRequests.CopyToCourse request);
 }

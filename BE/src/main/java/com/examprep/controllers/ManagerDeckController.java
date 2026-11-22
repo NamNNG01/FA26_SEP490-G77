@@ -56,6 +56,26 @@ public class ManagerDeckController {
         return ResponseEntity.ok(ApiResponse.success(service.list(user, search, courseId, moduleId, isPublic, page, size)));
     }
 
+    @GetMapping("/community")
+    @Operation(summary = "Browse public community flashcard decks")
+    public ResponseEntity<ApiResponse<PageResponse<DeckResponse>>> listCommunity(
+            @AuthenticationPrincipal UserPrincipal user,
+            @RequestParam(required = false) String search,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(ApiResponse.success(service.listCommunity(user, search, page, size)));
+    }
+
+    @PostMapping("/{id}/copy-to-course")
+    @Operation(summary = "Copy a community deck into a course managed by the caller")
+    public ResponseEntity<ApiResponse<DeckResponse>> copyToCourse(
+            @AuthenticationPrincipal UserPrincipal user,
+            @PathVariable Long id,
+            @Valid @RequestBody DeckRequests.CopyToCourse request) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success(service.copyToCourse(user, id, request), "Community deck copied to course."));
+    }
+
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "F-02: Create a deck")

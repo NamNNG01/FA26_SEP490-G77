@@ -80,14 +80,14 @@ public class StudentDeckController {
         return ResponseEntity.ok(ApiResponse.success(null, "Deleted"));
     }
 
-    @PostMapping("/decks/{deckId}/publish-request")
+    @PostMapping({"/decks/{deckId}/publish-request", "/decks/{deckId}/publish"})
     public ResponseEntity<ApiResponse<PublishRequestView>> publishRequest(@AuthenticationPrincipal UserPrincipal user, @PathVariable Long deckId) {
-        return ResponseEntity.ok(ApiResponse.success(decks.requestPublish(user.getId(), deckId), "Sent for review"));
+        return ResponseEntity.ok(ApiResponse.success(decks.requestPublish(user.getId(), deckId), "Deck published to community"));
     }
 
-    @PostMapping("/decks/{deckId}/withdraw-review")
+    @PostMapping({"/decks/{deckId}/withdraw-review", "/decks/{deckId}/unpublish"})
     public ResponseEntity<ApiResponse<PublishRequestView>> withdrawReview(@AuthenticationPrincipal UserPrincipal user, @PathVariable Long deckId) {
-        return ResponseEntity.ok(ApiResponse.success(decks.withdrawReview(user.getId(), deckId), "Review request withdrawn"));
+        return ResponseEntity.ok(ApiResponse.success(decks.withdrawReview(user.getId(), deckId), "Deck moved back to private"));
     }
 
     @PutMapping("/cards/{cardId}/progress")

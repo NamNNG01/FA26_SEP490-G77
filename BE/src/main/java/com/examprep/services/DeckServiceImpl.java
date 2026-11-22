@@ -58,6 +58,72 @@ public class DeckServiceImpl implements DeckService {
     }
 
     @Override
+    public PageResponse<DeckResponse> listCommunity(UserPrincipal user, String search, int page, int size) {
+        if (page < 0 || size < 1 || size > 100 || (long) page * size > Integer.MAX_VALUE)
+            throw new BadRequestException("Page must be nonnegative, size must be 1-100, and offset must fit a 32-bit integer.");
+        String text = search == null ? "" : search.strip().toLowerCase(Locale.ROOT);
+        String pattern = "%" + text.replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%";
+        Page<Deck> result = decks.findCommunityDecks("", pattern, PageRequest.of(page, size));
+        List<Long> ids = result.getContent().stream().map(Deck::getDeckId).toList();
+        if (ids.isEmpty()) return PageResponse.of(result, List.of());
+        Map<Long, Long> counts = cards.countByDecks(ids).stream().collect(Collectors.toMap(IdCount::id, IdCount::total));
+        return PageResponse.of(result, result.getContent().stream()
+                .map(d -> response(d, counts.getOrDefault(d.getDeckId(), 0L), null)).toList());
+    }
+
+    @Override
+    @Transactional
+    public DeckResponse copyToCourse(UserPrincipal user, Long sourceDeckId, DeckRequests.CopyToCourse request) {
+        positiveId(sourceDeckId);
+        Deck sourceDeck = decks.findDetail(sourceDeckId)
+                .orElseThrow(() -> new ResourceNotFoundException("Deck not found."));
+        boolean canCopy = Deck.VISIBILITY_PUBLIC.equals(sourceDeck.getVisibility())
+                || sourceDeck.getUser().getUserId().equals(user.getId())
+                || admin(user);
+        if (!canCopy) {
+            throw new BaseException(ResponseCode.FORBIDDEN, "Only public community decks can be copied.");
+        }
+        Course targetCourse = managedCourse(user, request.courseId());
+        com.examprep.entities.Module targetModule = request.moduleId() == null ? null
+                : courseModule(targetCourse, request.moduleId());
+        User owner = users.findById(user.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("User not found."));
+        String newTitle = (request.title() != null && !request.title().isBlank())
+                ? request.title().strip()
+                : sourceDeck.getTitle();
+        assertTitleAvailable(targetCourse, owner.getUserId(), newTitle, -1L);
+
+        Deck copiedDeck = decks.saveAndFlush(Deck.builder()
+                .user(owner)
+                .course(targetCourse)
+                .module(targetModule)
+                .title(newTitle)
+                .description(sourceDeck.getDescription())
+                .mode(sourceDeck.getMode() != null ? sourceDeck.getMode() : "FLASHCARD")
+                .isPublic(true)
+                .visibility(Deck.VISIBILITY_PUBLIC)
+                .reviewStatus("APPROVED")
+                .build());
+
+        List<Flashcard> sourceCards = cards.findByDeckDeckIdOrderByPositionAscCardIdAsc(sourceDeckId);
+        if (!sourceCards.isEmpty()) {
+            List<Flashcard> copiedCards = sourceCards.stream().map(c -> Flashcard.builder()
+                    .deck(copiedDeck)
+                    .position(c.getPosition())
+                    .frontText(c.getFrontText())
+                    .backText(c.getBackText())
+                    .frontImageUrl(c.getFrontImageUrl())
+                    .backImageUrl(c.getBackImageUrl())
+                    .codeLanguage(c.getCodeLanguage())
+                    .codeBody(c.getCodeBody())
+                    .sourceQuestionId(c.getSourceQuestionId())
+                    .build()).toList();
+            cards.saveAllAndFlush(copiedCards);
+        }
+        return detailResponse(copiedDeck);
+    }
+
+    @Override
     public DeckResponse detail(UserPrincipal user, Long id) {
         positiveId(id);
         Deck deck = decks.findDetail(id).orElseThrow(() -> new ResourceNotFoundException("Deck not found."));
