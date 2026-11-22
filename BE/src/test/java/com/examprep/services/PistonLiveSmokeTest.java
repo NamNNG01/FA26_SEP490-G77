@@ -61,6 +61,12 @@ class PistonLiveSmokeTest {
     }
 
     @Test
+    void memoryLimitAboveTheEngineCeilingIsClamped() {
+        // Questions may declare up to 1 GB; the engine rejects anything above 512 MB.
+        assertEquals("COMPLETED", piston.run("PYTHON", "print(1)", "", 2_000, 1_048_576).status());
+    }
+
+    @Test
     void runtimeVersionsComeFromTheEngine() {
         assertEquals(Map.of("JAVA", "15.0.2", "PYTHON", "3.12.0", "C", "10.2.0", "CPP", "10.2.0"),
                 piston.runtimeVersions());

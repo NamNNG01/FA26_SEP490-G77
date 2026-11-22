@@ -74,6 +74,11 @@ public class PistonClient {
     /** The hosted provider caps a run at 30 seconds, so never ask for more. */
     private static final int MAX_RUN_TIMEOUT_MS = 30_000;
     private static final int MIN_RUN_TIMEOUT_MS = 1_000;
+    /**
+     * Ceiling of both providers (hosted, and BE/piston PISTON_RUN_MEMORY_LIMIT); a self-hosted
+     * Piston answers 400 to anything above it, while questions may declare up to 1 GB.
+     */
+    private static final long MAX_RUN_MEMORY_BYTES = 512L * 1024 * 1024;
 
     private static final String STATUS_TIMEOUT = "TO";
     private static final String STATUS_OUTPUT_LIMIT = "OL";
@@ -357,7 +362,7 @@ public class PistonClient {
         body.put("compile_timeout", COMPILE_TIMEOUT_MS);
         if (memoryLimitKb > 0) {
             // Piston expects bytes; the hosted provider ignores it and enforces 512 MB itself.
-            body.put("run_memory_limit", (long) memoryLimitKb * 1024L);
+            body.put("run_memory_limit", Math.min(MAX_RUN_MEMORY_BYTES, (long) memoryLimitKb * 1024L));
         }
 
         for (int attempt = 0; ; attempt++) {
