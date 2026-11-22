@@ -74,7 +74,9 @@ app:
   # (PISTON_BASE_URL=http://localhost:2000/api/v2, no key). The default is the hosted
   # OnlineCompiler.io endpoint, which needs PISTON_API_KEY; without it CD-04/CD-05
   # answer 503 CODE_EXECUTION_UNAVAILABLE.
-  # PISTON_MAX_CONCURRENT_CALLS: keep 4 for the hosted plan (429 above ~6); self-hosted ≈ CPU cores.
+  # PISTON_MAX_CONCURRENT_CALLS: keep 4 for the hosted plan (429 above ~6). Self-hosted: match
+  # PISTON_MAX_CONCURRENT_JOBS in BE/piston/docker-compose.yml (measured with piston/bench.py);
+  # more parallel runs slow every run down until correct code times out.
   piston:
     base-url: ${PISTON_BASE_URL:https://api.onlinecompiler.io/api/v2/piston}
     api-key: ${PISTON_API_KEY:}

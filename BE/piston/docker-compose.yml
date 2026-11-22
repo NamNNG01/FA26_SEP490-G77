@@ -19,9 +19,19 @@ services:
     environment:
       PISTON_RUN_TIMEOUT: "30000" # default 3000 ms rejects questions with a 5 s limit
       PISTON_COMPILE_TIMEOUT: "10000"
+      # CPU-time cap (default 3000 ms) is separate from the wall-clock run_timeout the BE sends per
+      # question. A JVM burns CPU on JIT/GC threads, so under load correct Java code hit 3 s CPU at
+      # ~2.4 s wall and was killed as TLE. The question's wall-clock limit stays the real limit.
+      PISTON_RUN_CPU_TIME: "30000"
+      PISTON_COMPILE_CPU_TIME: "10000"
       PISTON_OUTPUT_MAX_SIZE: "65536" # default 1024 chars would truncate stdout and fail matches
       PISTON_RUN_MEMORY_LIMIT: "536870912" # 512 MB, same ceiling as the hosted provider
       PISTON_MAX_PROCESS_COUNT: "64"
+      # Jobs running at once; the rest wait in Piston's queue, and queue time does not count toward
+      # the time limit. Too many at once and every run slows down until correct code hits TLE
+      # (Java on a 16-thread laptop: 4 jobs ≈ 1 s/run, 8 ≈ 2 s, 16 ≈ 4 s). Measure with
+      # piston/bench.py on the real server and set it where Java p95 stays well under 2 s.
+      PISTON_MAX_CONCURRENT_JOBS: "4"
       PISTON_DISABLE_NETWORKING: "true"
 
 volumes:
