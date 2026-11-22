@@ -8,6 +8,7 @@ export type DiscussionApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 export type DiscussionScope = 'PUBLIC' | 'MINE';
 export type DiscussionContentStatus = 'OPEN' | 'CLOSED' | 'HIDDEN' | 'ALL';
 export type DiscussionApprovalFilter = DiscussionApprovalStatus | 'ALL';
+export type DiscussionAnswerFilter = 'ALL' | 'UNANSWERED' | 'ACCEPTED';
 
 export interface DiscussionAuthor {
   userId: number;
@@ -87,8 +88,12 @@ function query(params: Record<string, string | number | undefined | null>) {
 }
 
 export const studentCommunityService = {
-  async getDiscussions(params: { scope?: DiscussionScope; tag?: DiscussionTag | 'ALL'; approvalStatus?: DiscussionApprovalFilter; status?: DiscussionContentStatus; search?: string; sort?: DiscussionSort; page?: number; size?: number }) {
-    const res = await api.get<ApiResponse<StudentPage<DiscussionItem>>>(`/student/discussions?${query(params)}`);
+  async getDiscussions(params: { scope?: DiscussionScope; tag?: DiscussionTag | 'ALL'; approvalStatus?: DiscussionApprovalFilter; status?: DiscussionContentStatus; answerFilter?: DiscussionAnswerFilter; search?: string; sort?: DiscussionSort; page?: number; size?: number }) {
+    const queryParams = {
+      ...params,
+      answerFilter: params.answerFilter === 'ALL' ? undefined : params.answerFilter,
+    };
+    const res = await api.get<ApiResponse<StudentPage<DiscussionItem>>>(`/student/discussions?${query(queryParams)}`);
     return res.data;
   },
 
@@ -107,9 +112,27 @@ export const studentCommunityService = {
     return res.data;
   },
 
+  async resubmitDiscussion(id: number | string, body: { title: string; content: string; tag: DiscussionTag; isAnonymous: boolean; imageUrl?: string | null }) {
+    const res = await api.request<ApiResponse<DiscussionItem>>({ method: 'put', url: `/student/discussions/${id}/resubmit`, data: body });
+    return res.data;
+  },
+
   async addComment(id: number | string, body: { content: string; isAnonymous: boolean; imageUrl?: string | null }) {
     const res = await api.post<ApiResponse<DiscussionDetailComment>>(`/student/discussions/${id}/comments`, body);
     return res.data;
+  },
+
+  async acceptComment(discussionId: number | string, commentId: number | string) {
+    const res = await api.post<ApiResponse<DiscussionDetailComment>>(`/student/discussions/${discussionId}/comments/${commentId}/accept`);
+    return res.data;
+  },
+
+  async reportDiscussion(id: number | string, reason: string) {
+    await api.post<ApiResponse<null>>(`/student/discussions/${id}/report`, { reason });
+  },
+
+  async reportComment(discussionId: number | string, commentId: number | string, reason: string) {
+    await api.post<ApiResponse<null>>(`/student/discussions/${discussionId}/comments/${commentId}/report`, { reason });
   },
 
   async toggleUpvote(id: number | string) {

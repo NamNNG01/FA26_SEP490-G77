@@ -8,8 +8,17 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.Instant;
+import java.util.List;
+
 @Repository
 public interface DiscussionRepository extends JpaRepository<Discussion, Long> {
+
+    long countByUser_UserIdAndCreatedAtAfter(Long userId, Instant after);
+
+    long countByUser_UserIdAndApprovalStatus(Long userId, String approvalStatus);
+
+    long countByApprovalStatus(String approvalStatus);
 
     @Query(
             value = "SELECT d FROM Discussion d " +
@@ -42,6 +51,9 @@ public interface DiscussionRepository extends JpaRepository<Discussion, Long> {
                     "JOIN FETCH d.user u " +
                     "WHERE (:tag IS NULL OR d.tag = :tag) " +
                     "AND d.approvalStatus = 'APPROVED' AND d.status <> 'HIDDEN' " +
+                    "AND (:answerFilter IS NULL " +
+                    "  OR (:answerFilter = 'UNANSWERED' AND d.commentCount = 0) " +
+                    "  OR (:answerFilter = 'ACCEPTED' AND EXISTS (SELECT 1 FROM DiscussionComment c WHERE c.discussion = d AND c.isAccepted = true AND c.status = 'VISIBLE'))) " +
                     "AND (:search IS NULL OR :search = '' OR " +
                     "LOWER(d.title) LIKE LOWER(CONCAT('%', :search, '%')) ESCAPE '!' OR " +
                     "LOWER(d.content) LIKE LOWER(CONCAT('%', :search, '%')) ESCAPE '!') " +
@@ -52,11 +64,15 @@ public interface DiscussionRepository extends JpaRepository<Discussion, Long> {
             countQuery = "SELECT COUNT(d) FROM Discussion d " +
                     "WHERE (:tag IS NULL OR d.tag = :tag) " +
                     "AND d.approvalStatus = 'APPROVED' AND d.status <> 'HIDDEN' " +
+                    "AND (:answerFilter IS NULL " +
+                    "  OR (:answerFilter = 'UNANSWERED' AND d.commentCount = 0) " +
+                    "  OR (:answerFilter = 'ACCEPTED' AND EXISTS (SELECT 1 FROM DiscussionComment c WHERE c.discussion = d AND c.isAccepted = true AND c.status = 'VISIBLE'))) " +
                     "AND (:search IS NULL OR :search = '' OR " +
                     "LOWER(d.title) LIKE LOWER(CONCAT('%', :search, '%')) ESCAPE '!' OR " +
                     "LOWER(d.content) LIKE LOWER(CONCAT('%', :search, '%')) ESCAPE '!')")
     Page<Discussion> findAllDiscussions(
             @Param("tag") String tag,
+            @Param("answerFilter") String answerFilter,
             @Param("search") String search,
             @Param("sort") String sort,
             Pageable pageable
@@ -115,6 +131,42 @@ public interface DiscussionRepository extends JpaRepository<Discussion, Long> {
             @Param("approvalStatus") String approvalStatus,
             @Param("status") String status,
             @Param("search") String search,
+            Pageable pageable
+    );
+
+    @Query(
+            value = "SELECT d FROM Discussion d " +
+                    "JOIN FETCH d.user u " +
+                    "WHERE (:approvalStatus IS NULL OR d.approvalStatus = :approvalStatus) " +
+                    "AND (:status IS NULL OR d.status = :status) " +
+                    "AND (:tag IS NULL OR d.tag = :tag) " +
+                    "AND (:hasImage IS NULL " +
+                    "  OR (:hasImage = true AND d.imageUrl IS NOT NULL AND d.imageUrl <> '') " +
+                    "  OR (:hasImage = false AND (d.imageUrl IS NULL OR d.imageUrl = ''))) " +
+                    "AND (:search = '' OR " +
+                    "LOWER(d.title) LIKE LOWER(CONCAT('%', :search, '%')) ESCAPE '!' OR " +
+                    "LOWER(d.content) LIKE LOWER(CONCAT('%', :search, '%')) ESCAPE '!') " +
+                    "ORDER BY d.isPinned DESC, " +
+                    "CASE WHEN :sort = 'oldest' THEN d.createdAt END ASC, " +
+                    "CASE WHEN :sort <> 'oldest' THEN d.createdAt END DESC",
+            countQuery = "SELECT COUNT(d) FROM Discussion d " +
+                    "WHERE (:approvalStatus IS NULL OR d.approvalStatus = :approvalStatus) " +
+                    "AND (:status IS NULL OR d.status = :status) " +
+                    "AND (:tag IS NULL OR d.tag = :tag) " +
+                    "AND (:hasImage IS NULL " +
+                    "  OR (:hasImage = true AND d.imageUrl IS NOT NULL AND d.imageUrl <> '') " +
+                    "  OR (:hasImage = false AND (d.imageUrl IS NULL OR d.imageUrl = ''))) " +
+                    "AND (:search = '' OR " +
+                    "LOWER(d.title) LIKE LOWER(CONCAT('%', :search, '%')) ESCAPE '!' OR " +
+                    "LOWER(d.content) LIKE LOWER(CONCAT('%', :search, '%')) ESCAPE '!')"
+    )
+    Page<Discussion> findDiscussionsForAdmin(
+            @Param("approvalStatus") String approvalStatus,
+            @Param("status") String status,
+            @Param("tag") String tag,
+            @Param("hasImage") Boolean hasImage,
+            @Param("search") String search,
+            @Param("sort") String sort,
             Pageable pageable
     );
 

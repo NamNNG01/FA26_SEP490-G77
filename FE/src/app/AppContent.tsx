@@ -317,7 +317,6 @@ function AppRoutes() {
             administrators have full system access. */}
         <Route element={<RequireRole roles={ROLE_MANAGER} />}>
           <Route path={ROUTES.managerReviews} element={<ManagerReviewPage />} />
-          <Route path={ROUTES.managerDiscussions} element={<ManagerDiscussionPage />} />
           <Route path={ROUTES.managerQuestionIssues} element={<ManagerQuestionIssuesPage />} />
           <Route path={ROUTES.profile} element={<ProfilePage />} />
           <Route path={ROUTES.managerDashboard} element={<CMDashboard />} />
@@ -361,6 +360,7 @@ function AppRoutes() {
           <Route path={ROUTES.adminDiscounts} element={<DiscountsPage />} />
           <Route path={ROUTES.adminSubscriptions} element={<SubscriptionPackagesPage />} />
           <Route path={ROUTES.adminCommunityDecks} element={<AdminCommunityDecksPage />} />
+          <Route path={ROUTES.managerDiscussions} element={<ManagerDiscussionPage />} />
           <Route path={ROUTES.adminAnalytics} element={<AnalyticsPage />} />
           <Route path={ROUTES.adminAuditLogs} element={<AuditLogsPage />} />
           <Route path={ROUTES.adminSettings} element={<SystemSettingsPage />} />

@@ -11,6 +11,7 @@ public interface StudentDiscussionService {
             String tag,
             String approvalStatus,
             String status,
+            String answerFilter,
             String search,
             String sort,
             int page,
@@ -19,7 +20,11 @@ public interface StudentDiscussionService {
     );
     DiscussionDetailDto getDiscussionDetail(Long discussionId, Long userId);
     DiscussionItemDto createDiscussion(CreateDiscussionRequestDto request, Long userId);
+    DiscussionItemDto resubmitDiscussion(Long discussionId, ResubmitDiscussionRequestDto request, Long userId);
     DiscussionDetailDto.CommentDto createComment(Long discussionId, CreateCommentRequestDto request, Long userId);
+    DiscussionDetailDto.CommentDto acceptComment(Long discussionId, Long commentId, Long userId);
+    void reportDiscussion(Long discussionId, CreateReportRequestDto request, Long userId);
+    void reportComment(Long discussionId, Long commentId, CreateReportRequestDto request, Long userId);
     Map<String, Object> toggleUpvote(Long discussionId, Long userId);
     Map<String, Object> toggleBookmark(Long discussionId, Long userId);
     Page<DiscussionItemDto> listBookmarkedDiscussions(int page, int size, Long userId);

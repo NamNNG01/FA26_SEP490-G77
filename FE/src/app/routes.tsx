@@ -397,12 +397,6 @@ export const menuByRole: Record<string, MenuItem[]> = {
       path: ROUTES.managerReviews,
     },
     {
-      id: "manager-discussions",
-      title: "Discussions",
-      icon: <Icon.ClipboardList className="w-4 h-4" />,
-      path: ROUTES.managerDiscussions,
-    },
-    {
       id: "manager-question-issues",
       title: "Question issues",
       icon: <Icon.ClipboardList className="w-4 h-4" />,

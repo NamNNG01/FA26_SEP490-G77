@@ -17,10 +17,12 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
+
 @RestController
-@RequestMapping("/api/v1/manager")
+@RequestMapping("/api/v1/admin")
 @RequiredArgsConstructor
-@Tag(name = "Manager Discussions", description = "Global discussion creation, moderation, approval and comment control APIs")
+@Tag(name = "Admin Discussions", description = "Admin global discussion moderation, approval, reports and user mute APIs")
 public class ManagerDiscussionController {
 
     private final ManagerDiscussionService managerDiscussionService;
@@ -38,18 +40,31 @@ public class ManagerDiscussionController {
     }
 
     @GetMapping("/discussions")
-    @Operation(summary = "MD-02: Manager lists discussions",
-            description = "Lists global discussions with optional filtering by approvalStatus (PENDING, APPROVED, REJECTED, ALL) and status (OPEN, CLOSED, HIDDEN, ALL).")
+    @Operation(summary = "AD-02: Admin lists discussions",
+            description = "Lists global discussions with optional filtering by approvalStatus, status, tag, hasImage, search and sort (latest or oldest).")
     public ResponseEntity<ApiResponse<PageResponse<DiscussionItemDto>>> listDiscussions(
             @RequestParam(required = false, defaultValue = "PENDING") String approvalStatus,
             @RequestParam(required = false) String status,
+            @RequestParam(required = false) String tag,
+            @RequestParam(required = false) Boolean hasImage,
             @RequestParam(required = false) String search,
+            @RequestParam(required = false, defaultValue = "oldest") String sort,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @AuthenticationPrincipal UserPrincipal user
     ) {
-        Page<DiscussionItemDto> p = managerDiscussionService.listDiscussions(approvalStatus, status, search, page, size, user.getId());
+        Page<DiscussionItemDto> p = managerDiscussionService.listDiscussions(
+                approvalStatus, status, tag, hasImage, search, sort, page, size, user.getId());
         return ResponseEntity.ok(ApiResponse.success(PageResponse.of(p)));
+    }
+
+    @GetMapping("/discussions/summary")
+    @Operation(summary = "AD-02B: Admin moderation summary",
+            description = "Returns pending discussions count, pending reports count, and rejection reason templates.")
+    public ResponseEntity<ApiResponse<DiscussionManagerDtos.ModerationSummaryDto>> getSummary(
+            @AuthenticationPrincipal UserPrincipal user
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(managerDiscussionService.getModerationSummary(user.getId())));
     }
 
     @GetMapping("/discussions/{discussionId}")
@@ -133,7 +148,7 @@ public class ManagerDiscussionController {
     }
 
     @DeleteMapping("/discussions/comments/{commentId}")
-    @Operation(summary = "MD-10: Manager deletes comment",
+    @Operation(summary = "MD-10: Admin deletes comment",
             description = "Permanently deletes an inappropriate comment.")
     public ResponseEntity<ApiResponse<Void>> deleteComment(
             @PathVariable Long commentId,
@@ -141,5 +156,69 @@ public class ManagerDiscussionController {
     ) {
         managerDiscussionService.deleteComment(commentId, user.getId());
         return ResponseEntity.ok(ApiResponse.success(null, "Comment deleted"));
+    }
+
+    @PostMapping("/discussions/bulk-approve")
+    @Operation(summary = "AD-11: Admin bulk approves discussions")
+    public ResponseEntity<ApiResponse<Map<String, Integer>>> bulkApprove(
+            @Valid @RequestBody DiscussionManagerDtos.BulkIdsRequest request,
+            @AuthenticationPrincipal UserPrincipal user
+    ) {
+        int count = managerDiscussionService.bulkApproveDiscussions(request.getDiscussionIds(), user.getId());
+        return ResponseEntity.ok(ApiResponse.success(Map.of("updatedCount", count), "Approved " + count + " discussions"));
+    }
+
+    @PostMapping("/discussions/bulk-reject")
+    @Operation(summary = "AD-12: Admin bulk rejects discussions")
+    public ResponseEntity<ApiResponse<Map<String, Integer>>> bulkReject(
+            @Valid @RequestBody DiscussionManagerDtos.BulkRejectRequest request,
+            @AuthenticationPrincipal UserPrincipal user
+    ) {
+        int count = managerDiscussionService.bulkRejectDiscussions(request.getDiscussionIds(), request.getReason(), user.getId());
+        return ResponseEntity.ok(ApiResponse.success(Map.of("updatedCount", count), "Rejected " + count + " discussions"));
+    }
+
+    @GetMapping("/discussions/reports")
+    @Operation(summary = "AD-13: Admin lists community reports")
+    public ResponseEntity<ApiResponse<PageResponse<DiscussionManagerDtos.DiscussionReportItemDto>>> listReports(
+            @RequestParam(required = false, defaultValue = "PENDING") String status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @AuthenticationPrincipal UserPrincipal user
+    ) {
+        Page<DiscussionManagerDtos.DiscussionReportItemDto> p = managerDiscussionService.listReports(status, page, size, user.getId());
+        return ResponseEntity.ok(ApiResponse.success(PageResponse.of(p)));
+    }
+
+    @PostMapping("/discussions/reports/{reportId}/resolve")
+    @Operation(summary = "AD-14: Admin resolves or dismisses a report")
+    public ResponseEntity<ApiResponse<DiscussionManagerDtos.DiscussionReportItemDto>> resolveReport(
+            @PathVariable Long reportId,
+            @Valid @RequestBody DiscussionManagerDtos.ResolveReportRequest request,
+            @AuthenticationPrincipal UserPrincipal user
+    ) {
+        DiscussionManagerDtos.DiscussionReportItemDto dto = managerDiscussionService.resolveReport(reportId, request, user.getId());
+        return ResponseEntity.ok(ApiResponse.success(dto, "Report processed"));
+    }
+
+    @PostMapping("/discussions/users/{targetUserId}/mute")
+    @Operation(summary = "AD-15: Admin mutes user from community")
+    public ResponseEntity<ApiResponse<Void>> muteUser(
+            @PathVariable Long targetUserId,
+            @Valid @RequestBody DiscussionManagerDtos.MuteUserRequest request,
+            @AuthenticationPrincipal UserPrincipal user
+    ) {
+        managerDiscussionService.muteUser(targetUserId, request, user.getId());
+        return ResponseEntity.ok(ApiResponse.success(null, "User muted from community"));
+    }
+
+    @PostMapping("/discussions/users/{targetUserId}/unmute")
+    @Operation(summary = "AD-16: Admin unmutes user from community")
+    public ResponseEntity<ApiResponse<Void>> unmuteUser(
+            @PathVariable Long targetUserId,
+            @AuthenticationPrincipal UserPrincipal user
+    ) {
+        managerDiscussionService.unmuteUser(targetUserId, user.getId());
+        return ResponseEntity.ok(ApiResponse.success(null, "User unmuted"));
     }
 }

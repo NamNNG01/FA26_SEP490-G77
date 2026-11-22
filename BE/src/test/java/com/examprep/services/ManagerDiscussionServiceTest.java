@@ -34,7 +34,11 @@ class ManagerDiscussionServiceTest {
     @Mock
     private DiscussionCommentRepository commentRepository;
     @Mock
+    private DiscussionReportRepository reportRepository;
+    @Mock
     private UserRepository userRepository;
+    @Mock
+    private CommunityHelper communityHelper;
 
     @InjectMocks
     private ManagerDiscussionServiceImpl managerDiscussionService;
@@ -46,7 +50,7 @@ class ManagerDiscussionServiceTest {
 
     @BeforeEach
     void setUp() {
-        manager = User.builder().userId(10L).fullName("Course Manager").roleName(User.ROLE_COURSE_MANAGER).build();
+        manager = User.builder().userId(10L).fullName("Admin User").roleName(User.ROLE_ADMIN).build();
         student = User.builder().userId(20L).fullName("Student User").roleName(User.ROLE_STUDENT).build();
         discussion = Discussion.builder()
                 .discussionId(1L)
@@ -97,6 +101,18 @@ class ManagerDiscussionServiceTest {
     }
 
     @Test
+    void createDiscussion_asCourseManager_throwsForbidden() {
+        User cmUser = User.builder().userId(98L).fullName("Course Manager").roleName(User.ROLE_COURSE_MANAGER).build();
+        when(userRepository.findById(98L)).thenReturn(Optional.of(cmUser));
+        DiscussionManagerDtos.CreateDiscussionRequest req = DiscussionManagerDtos.CreateDiscussionRequest.builder()
+                .title("Test")
+                .content("Content")
+                .build();
+
+        assertThrows(ForbiddenException.class, () -> managerDiscussionService.createDiscussion(req, 98L));
+    }
+
+    @Test
     void createDiscussion_notCourseManager_throwsForbidden() {
         User otherUser = User.builder().userId(99L).fullName("Other User").roleName(User.ROLE_STUDENT).build();
         when(userRepository.findById(99L)).thenReturn(Optional.of(otherUser));
@@ -112,9 +128,9 @@ class ManagerDiscussionServiceTest {
     void listDiscussions_success() {
         when(userRepository.findById(10L)).thenReturn(Optional.of(manager));
         Page<Discussion> page = new PageImpl<>(List.of(discussion));
-        when(discussionRepository.findDiscussionsForManager(eq("PENDING"), isNull(), eq(""), any())).thenReturn(page);
+        when(discussionRepository.findDiscussionsForAdmin(eq("PENDING"), isNull(), isNull(), isNull(), eq(""), eq("oldest"), any())).thenReturn(page);
 
-        Page<DiscussionItemDto> res = managerDiscussionService.listDiscussions("PENDING", null, "", 0, 20, 10L);
+        Page<DiscussionItemDto> res = managerDiscussionService.listDiscussions("PENDING", null, null, null, "", "oldest", 0, 20, 10L);
 
         assertNotNull(res);
         assertEquals(1, res.getTotalElements());

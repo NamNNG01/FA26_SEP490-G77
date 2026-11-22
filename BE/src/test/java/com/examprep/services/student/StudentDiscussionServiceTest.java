@@ -8,6 +8,7 @@ import com.examprep.exceptions.BadRequestException;
 import com.examprep.exceptions.ForbiddenException;
 import com.examprep.exceptions.ResourceNotFoundException;
 import com.examprep.repositories.*;
+import com.examprep.services.CommunityHelper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -40,7 +41,11 @@ class StudentDiscussionServiceTest {
     @Mock
     private EnrollmentRepository enrollmentRepository;
     @Mock
+    private DiscussionReportRepository reportRepository;
+    @Mock
     private UserRepository userRepository;
+    @Mock
+    private CommunityHelper communityHelper;
 
     @InjectMocks
     private StudentDiscussionServiceImpl discussionService;
@@ -71,11 +76,11 @@ class StudentDiscussionServiceTest {
     @Test
     void listDiscussions_batchUpvotes() {
         Page<Discussion> page = new PageImpl<>(List.of(discussion1));
-        when(discussionRepository.findAllDiscussions(eq("question"), eq(""), eq("latest"), any())).thenReturn(page);
+        when(discussionRepository.findAllDiscussions(eq("question"), isNull(), eq(""), eq("latest"), any())).thenReturn(page);
         when(upvoteRepository.findUpvotedDiscussionIds(eq(200L), eq(List.of(1L)))).thenReturn(List.of(1L));
 
         Page<DiscussionItemDto> res = discussionService.listDiscussions(
-                "PUBLIC", "question", null, null, "", "latest", 0, 10, 200L);
+                "PUBLIC", "question", null, null, null, "", "latest", 0, 10, 200L);
 
         assertNotNull(res);
         assertEquals(1, res.getTotalElements());
@@ -95,7 +100,7 @@ class StudentDiscussionServiceTest {
         when(upvoteRepository.findUpvotedDiscussionIds(eq(200L), eq(List.of(1L)))).thenReturn(List.of());
 
         Page<DiscussionItemDto> result = discussionService.listDiscussions(
-                "MINE", "question", "REJECTED", "CLOSED", "dependency", "latest", 0, 10, 200L);
+                "MINE", "question", "REJECTED", "CLOSED", null, "dependency", "latest", 0, 10, 200L);
 
         assertEquals(1, result.getTotalElements());
         verify(discussionRepository).findMineDiscussions(
@@ -106,7 +111,7 @@ class StudentDiscussionServiceTest {
     @Test
     void listMineDiscussions_requiresAuthentication() {
         assertThrows(ForbiddenException.class, () -> discussionService.listDiscussions(
-                "MINE", "ALL", "ALL", "ALL", null, "latest", 0, 10, null));
+                "MINE", "ALL", "ALL", "ALL", null, null, "latest", 0, 10, null));
         verifyNoInteractions(discussionRepository);
     }
 

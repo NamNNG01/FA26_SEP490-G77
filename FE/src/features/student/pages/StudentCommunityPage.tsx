@@ -18,7 +18,7 @@ import { DiscussionImageAttachment } from '@/components/common/DiscussionImageAt
 import { ImageViewer } from '@/components/common/ImageViewer';
 import { useToast } from '@/components/ui/ToastHost';
 import { ROUTES } from '@/app/routes';
-import { studentCommunityService, type DiscussionApprovalFilter, type DiscussionContentStatus, type DiscussionDetail as DiscussionDetailItem, type DiscussionItem, type DiscussionSort, type DiscussionTag } from '@/services/studentCommunity.service';
+import { studentCommunityService, type DiscussionAnswerFilter, type DiscussionApprovalFilter, type DiscussionContentStatus, type DiscussionDetail as DiscussionDetailItem, type DiscussionItem, type DiscussionSort, type DiscussionTag } from '@/services/studentCommunity.service';
 import { getApiErrorMessage } from '@/utils/apiError';
 import { LoadError, PageTitle, STUDENT_PAGE_CLASS } from '../components/studentUi';
 
@@ -39,6 +39,7 @@ function DiscussionList() {
   const [tagFilter, setTagFilter] = useState<DiscussionTag | 'ALL'>('ALL');
   const [approvalFilter, setApprovalFilter] = useState<DiscussionApprovalFilter>('ALL');
   const [contentStatusFilter, setContentStatusFilter] = useState<DiscussionContentStatus>('ALL');
+  const [answerFilter, setAnswerFilter] = useState<DiscussionAnswerFilter>('ALL');
   const [page, setPage] = useState(0);
   const [items, setItems] = useState<DiscussionItem[]>([]);
   const [total, setTotal] = useState(0);
@@ -65,14 +66,14 @@ function DiscussionList() {
       ? studentCommunityService.getTips(params)
       : studentCommunityService.getDiscussions(tab === 'My Discussions'
         ? { ...params, scope: 'MINE', tag: tagFilter, approvalStatus: approvalFilter, status: contentStatusFilter, search: debouncedSearch || undefined, sort }
-        : { ...params, scope: 'PUBLIC', tag: tab === 'Announcements' ? 'announcement' : 'question', search: tab === 'Discussions' ? debouncedSearch || undefined : undefined, sort });
+        : { ...params, scope: 'PUBLIC', tag: tab === 'Announcements' ? 'announcement' : 'question', answerFilter: tab === 'Discussions' ? answerFilter : undefined, search: tab === 'Discussions' ? debouncedSearch || undefined : undefined, sort });
     request.then(result => {
       if (cancelled) return;
       setItems(result.content); setTotal(result.totalElements);
     }).catch(err => { if (!cancelled && !quiet) setError(getApiErrorMessage(err, 'Failed to load community posts.')); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [tab, debouncedSearch, sort, tagFilter, approvalFilter, contentStatusFilter, page, reload]);
+  }, [tab, debouncedSearch, sort, tagFilter, approvalFilter, contentStatusFilter, answerFilter, page, reload]);
 
   const chooseTab = (value: string) => { setTab(value as typeof tab); setPage(0); };
   const hasMyFilters = Boolean(debouncedSearch || tagFilter !== 'ALL' || approvalFilter !== 'ALL' || contentStatusFilter !== 'ALL');
@@ -103,6 +104,9 @@ function DiscussionList() {
           <Select aria-label="Filter by review status" className="w-full sm:w-52" value={approvalFilter} options={[{ label: 'All review statuses', value: 'ALL' }, { label: 'Pending approval', value: 'PENDING' }, { label: 'Approved', value: 'APPROVED' }, { label: 'Rejected', value: 'REJECTED' }]} onChange={value => { setApprovalFilter(value as DiscussionApprovalFilter); setPage(0); }} />
           <Select aria-label="Filter by post status" className="w-full sm:w-48" value={contentStatusFilter} options={[{ label: 'All post statuses', value: 'ALL' }, { label: 'Open', value: 'OPEN' }, { label: 'Closed', value: 'CLOSED' }, { label: 'Hidden', value: 'HIDDEN' }]} onChange={value => { setContentStatusFilter(value as DiscussionContentStatus); setPage(0); }} />
         </>}
+        {tab === 'Discussions' && (
+          <Select aria-label="Filter by answer status" className="w-full sm:w-48" value={answerFilter} options={[{ label: 'All questions', value: 'ALL' }, { label: 'Unanswered', value: 'UNANSWERED' }, { label: 'Has accepted answer', value: 'ACCEPTED' }]} onChange={value => { setAnswerFilter(value as DiscussionAnswerFilter); setPage(0); }} />
+        )}
         <Select aria-label="Sort discussions" className="w-full sm:w-52" value={sort} options={[{ label: 'Latest', value: 'latest' }, { label: 'Most commented', value: 'mostCommented' }, { label: 'Most upvoted', value: 'mostUpvoted' }]} onChange={value => { setSort(value as DiscussionSort); setPage(0); }} />
       </div>
     )}
@@ -111,7 +115,7 @@ function DiscussionList() {
       <div className="space-y-3">{voteError && <Alert type="error" message={voteError} />}{items.map(item => <DiscussionCard key={item.discussionId} item={item} showReviewStatus={tab === 'My Discussions'} voting={votingIds.has(item.discussionId)} onUpvote={() => void toggleUpvote(item.discussionId)} onOpen={() => navigate(`${ROUTES.studentDiscussions}/${item.discussionId}`)} />)}
         <div className="card"><Pagination page={page + 1} total={total} perPage={PAGE_SIZE} onChange={value => setPage(value - 1)} unit={tab.toLowerCase()} /></div>
       </div>}
-    <CreateDiscussionModal open={createOpen} defaultTag={tab === 'Tips' ? 'tip' : 'question'} onClose={() => setCreateOpen(false)} onCreated={item => { setCreateOpen(false); toast.info('Your post was submitted and is waiting for a manager to approve it before it becomes public. You can still view it here.'); navigate(`${ROUTES.studentDiscussions}/${item.discussionId}`); }} />
+    <CreateDiscussionModal open={createOpen} defaultTag={tab === 'Tips' ? 'tip' : 'question'} onClose={() => setCreateOpen(false)} onCreated={item => { setCreateOpen(false); toast.info(item.approvalStatus === 'APPROVED' ? 'Your post is now live in the community.' : 'Your post was submitted and is waiting for an admin to approve it before it becomes public.'); navigate(`${ROUTES.studentDiscussions}/${item.discussionId}`); }} />
   </div>;
 }
 
@@ -148,7 +152,14 @@ function DiscussionCard({ item, onOpen, onUpvote, voting, showReviewStatus = fal
   </article>;
 }
 
-function CreateDiscussionModal({ open, defaultTag, onClose, onCreated }: { open: boolean; defaultTag: 'question' | 'tip'; onClose: () => void; onCreated: (item: DiscussionItem) => void }) {
+function CreateDiscussionModal({ open, defaultTag, initialItem, onClose, onCreated }: {
+  open: boolean;
+  defaultTag: 'question' | 'tip';
+  initialItem?: DiscussionDetailItem | null;
+  onClose: () => void;
+  onCreated: (item: DiscussionItem) => void;
+}) {
+  const isResubmit = Boolean(initialItem);
   const [tag, setTag] = useState<'question' | 'tip'>(defaultTag);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
@@ -157,8 +168,17 @@ function CreateDiscussionModal({ open, defaultTag, onClose, onCreated }: { open:
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
-  useEffect(() => { if (open) { setTag(defaultTag); setError(null); } }, [open, defaultTag]);
-  const hasDraft = Boolean(title.trim() || content.trim() || anonymous || imageUrl);
+  useEffect(() => {
+    if (open) {
+      setTag(initialItem?.tag === 'tip' ? 'tip' : defaultTag);
+      setTitle(initialItem?.title ?? '');
+      setContent(initialItem?.content ?? '');
+      setAnonymous(false);
+      setImageUrl(initialItem?.imageUrl ?? '');
+      setError(null);
+    }
+  }, [open, defaultTag, initialItem]);
+  const hasDraft = Boolean(!isResubmit && (title.trim() || content.trim() || anonymous || imageUrl));
   const requestClose = () => {
     if (busy) return;
     if (hasDraft) setConfirmDiscard(true);
@@ -172,12 +192,15 @@ function CreateDiscussionModal({ open, defaultTag, onClose, onCreated }: { open:
     if (!title.trim() || !content.trim()) { setError('Complete the title and content.'); return; }
     setBusy(true);
     try {
-      const item = await studentCommunityService.createDiscussion({ tag, title: title.trim(), content: content.trim(), isAnonymous: anonymous, imageUrl: imageUrl || null });
+      const payload = { tag, title: title.trim(), content: content.trim(), isAnonymous: anonymous, imageUrl: imageUrl || null };
+      const item = isResubmit && initialItem
+        ? await studentCommunityService.resubmitDiscussion(initialItem.discussionId, payload)
+        : await studentCommunityService.createDiscussion(payload);
       onCreated(item); setTitle(''); setContent(''); setAnonymous(false); setImageUrl('');
-    } catch (err) { setError(getApiErrorMessage(err, 'Could not create this post.')); }
+    } catch (err) { setError(getApiErrorMessage(err, isResubmit ? 'Could not resubmit this post.' : 'Could not create this post.')); }
     finally { setBusy(false); }
   };
-  return <><Modal open={open} onClose={requestClose} title="Create a community post" size="lg" error={error && <Alert type="error" message={error} />} footer={<><Button variant="outline" onClick={requestClose} disabled={busy}>Cancel</Button><Button form="create-discussion-form" type="submit" loading={busy}>Publish</Button></>}>
+  return <><Modal open={open} onClose={requestClose} title={isResubmit ? 'Edit & resubmit post' : 'Create a community post'} size="lg" error={error && <Alert type="error" message={error} />} footer={<><Button variant="outline" onClick={requestClose} disabled={busy}>Cancel</Button><Button form="create-discussion-form" type="submit" loading={busy}>{isResubmit ? 'Resubmit for approval' : 'Publish'}</Button></>}>
     <form id="create-discussion-form" onSubmit={submit} className="space-y-4">
       <Select label="Post type" value={tag} options={[{ label: 'Question', value: 'question' }, { label: 'Tip', value: 'tip' }]} onChange={value => setTag(value as 'question' | 'tip')} />
       <Input label="Title" maxLength={200} value={title} onChange={event => setTitle(event.target.value)} placeholder="What would you like to discuss?" />
@@ -193,6 +216,7 @@ function CreateDiscussionModal({ open, defaultTag, onClose, onCreated }: { open:
 
 function DiscussionDetail({ discussionId }: { discussionId: string }) {
   const navigate = useNavigate();
+  const toast = useToast();
   const [item, setItem] = useState<DiscussionDetailItem | null>(null);
   const [comment, setComment] = useState('');
   const [commentImageUrl, setCommentImageUrl] = useState('');
@@ -202,6 +226,9 @@ function DiscussionDetail({ discussionId }: { discussionId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
+  const [resubmitOpen, setResubmitOpen] = useState(false);
+  const [reportTarget, setReportTarget] = useState<{ kind: 'discussion' } | { kind: 'comment'; commentId: number } | null>(null);
+  const [reportReason, setReportReason] = useState('');
   useEffect(() => {
     let cancelled = false;
     setComment('');
@@ -241,6 +268,38 @@ function DiscussionDetail({ discussionId }: { discussionId: string }) {
     finally { setBusy(false); }
   };
 
+  const toggleAcceptComment = async (commentId: number) => {
+    setBusy(true); setActionError(null);
+    try {
+      const updated = await studentCommunityService.acceptComment(discussionId, commentId);
+      setItem(current => current ? {
+        ...current,
+        comments: (current.comments ?? []).map(c => c.commentId === commentId ? updated : c),
+      } : current);
+    } catch (err) { setActionError(getApiErrorMessage(err, 'Could not update accepted answer.')); }
+    finally { setBusy(false); }
+  };
+
+  const submitReport = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!reportTarget || reportReason.trim().length < 5) return;
+    setBusy(true);
+    try {
+      if (reportTarget.kind === 'discussion') {
+        await studentCommunityService.reportDiscussion(discussionId, reportReason.trim());
+      } else {
+        await studentCommunityService.reportComment(discussionId, reportTarget.commentId, reportReason.trim());
+      }
+      toast.success('Report submitted to Admin.');
+      setReportTarget(null);
+      setReportReason('');
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Could not submit report.'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   if (loading) return <div className={`${STUDENT_PAGE_CLASS}`}><div className="card p-8 text-sm text-content-subtle">Loading discussion…</div></div>;
   if (error || !item) {
     const validId = /^\d+$/.test(discussionId) && Number(discussionId) > 0;
@@ -253,8 +312,13 @@ function DiscussionDetail({ discussionId }: { discussionId: string }) {
     <Button variant="ghost" onClick={() => navigate(ROUTES.studentDiscussions)}>← Community</Button>
     <article className="card space-y-4 p-5 sm:p-6">
       <div className="flex flex-wrap items-center gap-2"><Badge variant={item.tag === 'tip' ? 'success' : item.tag === 'announcement' ? 'warning' : 'info'}>{item.tag === 'tip' ? 'Tip' : item.tag === 'announcement' ? 'Announcement' : 'Question'}</Badge>{item.status === 'HIDDEN' ? <Badge variant="danger">Hidden</Badge> : <>{item.approvalStatus === 'PENDING' && <Badge variant="warning">Pending approval</Badge>}{item.approvalStatus === 'APPROVED' && <Badge variant="success">Approved</Badge>}{item.approvalStatus === 'REJECTED' && <Badge variant="danger">Rejected</Badge>}</>}{item.isPinned && <Badge variant="warning">Pinned</Badge>}{item.isClosed && <Badge>Closed</Badge>}</div>
-      {item.approvalStatus === 'PENDING' && item.status !== 'HIDDEN' && <Alert type="info" message="This post is waiting for a manager to approve it. It is not visible to other students yet." />}
-      {item.approvalStatus === 'REJECTED' && item.rejectionReason && <Alert type="error" message={`This post was not approved: ${item.rejectionReason}`} />}
+      {item.approvalStatus === 'PENDING' && item.status !== 'HIDDEN' && <Alert type="info" message="This post is waiting for an admin to approve it. It is not visible to other students yet." />}
+      {item.approvalStatus === 'REJECTED' && item.rejectionReason && (
+        <div className="space-y-3">
+          <Alert type="error" message={`This post was not approved: ${item.rejectionReason}`} />
+          {item.isAuthor && <Button size="sm" onClick={() => setResubmitOpen(true)}>Edit & resubmit</Button>}
+        </div>
+      )}
       <h1 className="text-2xl font-bold text-content">{item.title}</h1>
       <div className="flex items-center gap-3">
         <Avatar name={item.author.displayName} src={authorAvatar(item.author)} size="md" />
@@ -267,6 +331,7 @@ function DiscussionDetail({ discussionId }: { discussionId: string }) {
           <Button size="sm" variant={item.isUpvoted ? 'primary' : 'outline'} disabled={busy} icon={<Icon.Star className={`h-4 w-4 ${item.isUpvoted ? 'fill-current' : 'fill-none'}`} />} onClick={() => update('upvote')}>{item.isUpvoted ? 'Upvoted' : 'Upvote'} · {item.upvoteCount}</Button>
           <Button size="sm" variant={item.isBookmarked ? 'primary' : 'outline'} disabled={busy} icon={<Icon.Book className="h-4 w-4" />} onClick={() => update('bookmark')}>{item.isBookmarked ? 'Saved' : 'Save'}</Button>
           {item.isAuthor && item.status !== 'HIDDEN' && <Button size="sm" variant="outline" disabled={busy} icon={<Icon.Lock className="h-4 w-4" />} onClick={() => update('close')}>{item.isClosed ? 'Reopen discussion' : 'Close discussion'}</Button>}
+          {!item.isAuthor && <Button size="sm" variant="ghost" disabled={busy} onClick={() => { setReportTarget({ kind: 'discussion' }); setReportReason(''); }}>Report</Button>}
         </>}
       </div>
     </article>
@@ -275,16 +340,58 @@ function DiscussionDetail({ discussionId }: { discussionId: string }) {
       <h2 className="text-lg font-semibold text-content">Replies <span className="text-sm font-normal text-content-subtle">({visibleComments.length})</span></h2>
       <div className="mt-4 divide-y divide-line">{visibleComments.map(reply => <article key={reply.commentId} className="flex gap-3 py-4 first:pt-0 last:pb-0">
         <Avatar name={reply.author.displayName} src={authorAvatar(reply.author, reply.isAnonymous)} size="sm" />
-        <div className="min-w-0 flex-1"><p className="text-xs text-content-subtle">{reply.author.displayName} · {formatDate(reply.createdAt)}</p><p className="mt-2 whitespace-pre-wrap text-sm text-content-secondary">{reply.content}</p>{reply.imageUrl && <ImageViewer src={reply.imageUrl} alt="Reply attachment" className="mt-3" imageClassName="max-h-64" />}</div>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-xs text-content-subtle">{reply.author.displayName} · {formatDate(reply.createdAt)}</p>
+            {reply.isAccepted && <Badge variant="success">Accepted answer</Badge>}
+          </div>
+          <p className="mt-2 whitespace-pre-wrap text-sm text-content-secondary">{reply.content}</p>
+          {reply.imageUrl && <ImageViewer src={reply.imageUrl} alt="Reply attachment" className="mt-3" imageClassName="max-h-64" />}
+          {approved && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {item.isAuthor && (
+                <Button size="sm" variant={reply.isAccepted ? 'primary' : 'ghost'} disabled={busy} onClick={() => void toggleAcceptComment(reply.commentId)}>
+                  {reply.isAccepted ? 'Unmark solution' : 'Mark as solution'}
+                </Button>
+              )}
+              <Button size="sm" variant="ghost" disabled={busy} onClick={() => { setReportTarget({ kind: 'comment', commentId: reply.commentId }); setReportReason(''); }}>
+                Report
+              </Button>
+            </div>
+          )}
+        </div>
       </article>)}</div>
       {visibleComments.length === 0 && <p className="py-4 text-sm text-content-subtle">No replies yet.</p>}
-      {!approved ? <p className="mt-4 rounded-lg bg-surface-muted p-3 text-sm text-content-soft">{item.status === 'HIDDEN' ? 'This post is hidden and cannot receive replies or reactions.' : 'Replies and reactions are available after a manager approves this post.'}</p> : item.isClosed ? <p className="mt-4 rounded-lg bg-surface-muted p-3 text-sm text-content-soft">This discussion is closed to new replies.</p> : <form onSubmit={postComment} className="mt-5 space-y-3 border-t border-line pt-4">
+      {!approved ? <p className="mt-4 rounded-lg bg-surface-muted p-3 text-sm text-content-soft">{item.status === 'HIDDEN' ? 'This post is hidden and cannot receive replies or reactions.' : 'Replies and reactions are available after an admin approves this post.'}</p> : item.isClosed ? <p className="mt-4 rounded-lg bg-surface-muted p-3 text-sm text-content-soft">This discussion is closed to new replies.</p> : <form onSubmit={postComment} className="mt-5 space-y-3 border-t border-line pt-4">
         <label className="flex flex-col gap-1.5 text-sm font-medium text-content-secondary">Add a reply<textarea required maxLength={10000} rows={3} value={comment} onChange={event => setComment(event.target.value)} className="w-full rounded-[10px] border border-line bg-surface p-3 text-sm text-content focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/20" placeholder="Write a helpful reply…" /></label>
         <DiscussionImageAttachment imageUrl={commentImageUrl} onChange={setCommentImageUrl} label="Attach image to reply" />
         <div className="flex flex-wrap items-center justify-between gap-3"><Checkbox checked={anonymous} onChange={setAnonymous} label="Reply anonymously" /><Button type="submit" disabled={busy || !comment.trim()} loading={busy}>Post reply</Button></div>
       </form>}
       {actionError && <p role="alert" className="mt-3 text-sm text-danger">{actionError}</p>}
     </section>
+
+    <CreateDiscussionModal
+      open={resubmitOpen}
+      defaultTag={item.tag === 'tip' ? 'tip' : 'question'}
+      initialItem={item}
+      onClose={() => setResubmitOpen(false)}
+      onCreated={() => {
+        setResubmitOpen(false);
+        toast.success('Post resubmitted for admin approval.');
+        setReload(value => value + 1);
+      }}
+    />
+
+    <Modal open={!!reportTarget} onClose={() => { if (!busy) setReportTarget(null); }} title="Report inappropriate content" size="md" footer={<>
+      <Button variant="outline" onClick={() => setReportTarget(null)} disabled={busy}>Cancel</Button>
+      <Button form="report-community-form" type="submit" variant="danger" disabled={busy || reportReason.trim().length < 5} loading={busy}>Submit report</Button>
+    </>}>
+      <form id="report-community-form" onSubmit={submitReport} className="space-y-3">
+        <label className="grid gap-1.5 text-sm font-medium text-content-secondary">Reason for reporting
+          <textarea required maxLength={500} rows={3} value={reportReason} onChange={event => setReportReason(event.target.value)} className="w-full rounded-lg border border-line bg-surface p-3 text-sm text-content" placeholder="Describe the issue (at least 5 characters)..." />
+        </label>
+      </form>
+    </Modal>
   </div>;
 }
 

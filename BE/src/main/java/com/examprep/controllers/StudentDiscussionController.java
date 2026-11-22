@@ -32,6 +32,7 @@ public class StudentDiscussionController {
             @RequestParam(required = false) String tag,
             @RequestParam(required = false) String approvalStatus,
             @RequestParam(required = false) String status,
+            @RequestParam(required = false) String answerFilter,
             @RequestParam(required = false) String search,
             @RequestParam(defaultValue = "latest") String sort,
             @RequestParam(defaultValue = "0") int page,
@@ -40,7 +41,7 @@ public class StudentDiscussionController {
     ) {
         Long userId = currentUser != null ? currentUser.getId() : null;
         Page<DiscussionItemDto> p = discussionService.listDiscussions(
-                scope, tag, approvalStatus, status, search, sort, page, size, userId);
+                scope, tag, approvalStatus, status, answerFilter, search, sort, page, size, userId);
         return ResponseEntity.ok(ApiResponse.success(PageResponse.of(p)));
     }
 
@@ -129,5 +130,50 @@ public class StudentDiscussionController {
     ) {
         DiscussionItemDto dto = discussionService.updateDiscussion(discussionId, request, currentUser.getId());
         return ResponseEntity.ok(ApiResponse.success(dto));
+    }
+
+    @PutMapping("/discussions/{discussionId}/resubmit")
+    @Operation(summary = "DI-09: Edit and resubmit rejected discussion")
+    public ResponseEntity<ApiResponse<DiscussionItemDto>> resubmitDiscussion(
+            @PathVariable Long discussionId,
+            @Valid @RequestBody ResubmitDiscussionRequestDto request,
+            @AuthenticationPrincipal UserPrincipal currentUser
+    ) {
+        DiscussionItemDto dto = discussionService.resubmitDiscussion(discussionId, request, currentUser.getId());
+        return ResponseEntity.ok(ApiResponse.success(dto, "Discussion resubmitted for approval"));
+    }
+
+    @PostMapping("/discussions/{discussionId}/comments/{commentId}/accept")
+    @Operation(summary = "DI-10: Accept / unaccept comment as solution")
+    public ResponseEntity<ApiResponse<DiscussionDetailDto.CommentDto>> acceptComment(
+            @PathVariable Long discussionId,
+            @PathVariable Long commentId,
+            @AuthenticationPrincipal UserPrincipal currentUser
+    ) {
+        DiscussionDetailDto.CommentDto dto = discussionService.acceptComment(discussionId, commentId, currentUser.getId());
+        return ResponseEntity.ok(ApiResponse.success(dto, "Comment acceptance updated"));
+    }
+
+    @PostMapping("/discussions/{discussionId}/report")
+    @Operation(summary = "DI-11: Report a discussion")
+    public ResponseEntity<ApiResponse<Void>> reportDiscussion(
+            @PathVariable Long discussionId,
+            @Valid @RequestBody CreateReportRequestDto request,
+            @AuthenticationPrincipal UserPrincipal currentUser
+    ) {
+        discussionService.reportDiscussion(discussionId, request, currentUser.getId());
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(null, "Report submitted"));
+    }
+
+    @PostMapping("/discussions/{discussionId}/comments/{commentId}/report")
+    @Operation(summary = "DI-12: Report a comment")
+    public ResponseEntity<ApiResponse<Void>> reportComment(
+            @PathVariable Long discussionId,
+            @PathVariable Long commentId,
+            @Valid @RequestBody CreateReportRequestDto request,
+            @AuthenticationPrincipal UserPrincipal currentUser
+    ) {
+        discussionService.reportComment(discussionId, commentId, request, currentUser.getId());
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(null, "Report submitted"));
     }
 }

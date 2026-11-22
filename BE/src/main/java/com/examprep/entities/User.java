@@ -69,6 +69,12 @@ public class User implements Serializable {
     @Column(name = "last_login_at")
     private Instant lastLoginAt;
 
+    @Column(name = "community_muted_until")
+    private Instant communityMutedUntil;
+
+    @Column(name = "community_mute_reason", length = 500)
+    private String communityMuteReason;
+
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;

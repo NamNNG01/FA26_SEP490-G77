@@ -8,6 +8,7 @@ import com.examprep.exceptions.BaseException;
 import com.examprep.exceptions.ForbiddenException;
 import com.examprep.exceptions.ResourceNotFoundException;
 import com.examprep.repositories.*;
+import com.examprep.services.CommunityHelper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -16,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 
 @Service
@@ -23,6 +25,7 @@ import java.util.*;
 @Transactional
 public class StudentDiscussionServiceImpl implements StudentDiscussionService {
 
+    private static final int MAX_POSTS_PER_HOUR = 3;
     private static final String TAG_QUESTION = "question";
     private static final String TAG_TIP = "tip";
     private static final String TAG_ANNOUNCEMENT = "announcement";
@@ -32,8 +35,10 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
     private final DiscussionCommentRepository commentRepository;
     private final DiscussionUpvoteRepository upvoteRepository;
     private final DiscussionBookmarkRepository bookmarkRepository;
+    private final DiscussionReportRepository reportRepository;
     private final EnrollmentRepository enrollmentRepository;
     private final UserRepository userRepository;
+    private final CommunityHelper communityHelper;
 
     private void validateActiveEnrollment(Long userId) {
         if (userId == null) {
@@ -95,6 +100,7 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
             String tag,
             String approvalStatus,
             String status,
+            String answerFilter,
             String search,
             String sort,
             int page,
@@ -108,6 +114,8 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
                 Set.of(Discussion.APPROVAL_PENDING, Discussion.APPROVAL_APPROVED, Discussion.APPROVAL_REJECTED));
         String statusFilter = normalizeOptionalStatus(status, "status",
                 Set.of("OPEN", "CLOSED", "HIDDEN"));
+        String normalizedAnswerFilter = normalizeOptionalStatus(answerFilter, "answerFilter",
+                Set.of("UNANSWERED", "ACCEPTED"));
         validatePaging(page, size);
 
         String rawSearch = search != null && !search.isBlank() ? search.trim() : "";
@@ -122,7 +130,7 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
                     userId, tagFilter, approvalFilter, statusFilter, searchTerm, normalizedSort, pageable);
         } else {
             // Public feed visibility is fixed: query filters must never expose pending, rejected or hidden posts.
-            discussions = discussionRepository.findAllDiscussions(tagFilter, searchTerm, normalizedSort, pageable);
+            discussions = discussionRepository.findAllDiscussions(tagFilter, normalizedAnswerFilter, searchTerm, normalizedSort, pageable);
         }
         List<Long> discussionIds = discussions.getContent().stream().map(Discussion::getDiscussionId).toList();
         Set<Long> upvotedIds = (userId != null && !discussionIds.isEmpty())
@@ -238,6 +246,13 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
         validateActiveEnrollment(userId);
+        communityHelper.checkNotMuted(user);
+
+        long recentCount = discussionRepository.countByUser_UserIdAndCreatedAtAfter(
+                userId, Instant.now().minus(1, ChronoUnit.HOURS));
+        if (recentCount >= MAX_POSTS_PER_HOUR) {
+            throw new BadRequestException("Bạn chỉ có thể đăng tối đa " + MAX_POSTS_PER_HOUR + " bài viết mỗi giờ. Vui lòng thử lại sau.");
+        }
 
         if (request.getTitle() == null || request.getTitle().isBlank()) {
             throw new BadRequestException("Title is required");
@@ -248,13 +263,20 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
 
         String tag = normalizeTag(request.getTag());
         if (TAG_ANNOUNCEMENT.equals(tag)) {
-            throw new BadRequestException("Only managers can post announcements");
+            throw new BadRequestException("Only admins can post announcements");
         }
+
+        String title = request.getTitle().trim();
+        String content = request.getContent().trim();
+        String imageUrl = validateImageUrl(request.getImageUrl());
+
+        long rejectedCount = discussionRepository.countByUser_UserIdAndApprovalStatus(userId, Discussion.APPROVAL_REJECTED);
+        boolean autoApprove = communityHelper.shouldAutoApprove(user, title, content, imageUrl, rejectedCount);
 
         Discussion d = Discussion.builder()
                 .user(user)
-                .title(request.getTitle().trim())
-                .content(request.getContent().trim())
+                .title(title)
+                .content(content)
                 .tag(tag)
                 .isAnonymous(Boolean.TRUE.equals(request.getIsAnonymous()))
                 .status("OPEN")
@@ -263,9 +285,45 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
                 .commentCount(0)
                 .upvoteCount(0)
                 .isClosed(false)
-                .imageUrl(validateImageUrl(request.getImageUrl()))
-                .approvalStatus(Discussion.APPROVAL_PENDING)
+                .imageUrl(imageUrl)
+                .approvalStatus(autoApprove ? Discussion.APPROVAL_APPROVED : Discussion.APPROVAL_PENDING)
                 .build();
+
+        Discussion saved = discussionRepository.save(d);
+        return mapToDto(saved, userId, Collections.emptySet(), Collections.emptySet());
+    }
+
+    @Override
+    public DiscussionItemDto resubmitDiscussion(Long discussionId, ResubmitDiscussionRequestDto request, Long userId) {
+        Discussion d = discussionRepository.findById(discussionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Discussion not found"));
+
+        if (!d.getUser().getUserId().equals(userId)) {
+            throw new ForbiddenException("Only author can resubmit this discussion");
+        }
+        if (!Discussion.APPROVAL_REJECTED.equals(d.getApprovalStatus())) {
+            throw new BadRequestException("Only rejected discussions can be edited and resubmitted");
+        }
+
+        User user = d.getUser();
+        communityHelper.checkNotMuted(user);
+
+        String tag = normalizeTag(request.getTag());
+        if (TAG_ANNOUNCEMENT.equals(tag)) {
+            throw new BadRequestException("Only admins can post announcements");
+        }
+
+        d.setTitle(request.getTitle().trim());
+        d.setContent(request.getContent().trim());
+        d.setTag(tag);
+        d.setImageUrl(validateImageUrl(request.getImageUrl()));
+        if (request.getIsAnonymous() != null) {
+            d.setIsAnonymous(request.getIsAnonymous());
+        }
+        d.setApprovalStatus(Discussion.APPROVAL_PENDING);
+        d.setRejectionReason(null);
+        d.setReviewedBy(null);
+        d.setReviewedAt(null);
 
         Discussion saved = discussionRepository.save(d);
         return mapToDto(saved, userId, Collections.emptySet(), Collections.emptySet());
@@ -307,6 +365,7 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        communityHelper.checkNotMuted(user);
 
         DiscussionComment comment = DiscussionComment.builder()
                 .discussion(d)
@@ -322,6 +381,17 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
         d.setCommentCount(d.getCommentCount() + 1);
         discussionRepository.save(d);
 
+        if (!d.getUser().getUserId().equals(userId)) {
+            String commenterName = Boolean.TRUE.equals(comment.getIsAnonymous()) ? "Một học viên ẩn danh" : user.getFullName();
+            communityHelper.sendNotification(
+                    d.getUser(),
+                    "Có bình luận mới trong bài viết của bạn",
+                    commenterName + " đã bình luận vào bài viết \"" + d.getTitle() + "\".",
+                    "COMMUNITY_COMMENT",
+                    d.getDiscussionId()
+            );
+        }
+
         return new DiscussionDetailDto.CommentDto(
                 comment.getCommentId(),
                 comment.getContent(),
@@ -332,6 +402,98 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
                 comment.getStatus(),
                 comment.getCreatedAt()
         );
+    }
+
+    @Override
+    public DiscussionDetailDto.CommentDto acceptComment(Long discussionId, Long commentId, Long userId) {
+        Discussion d = discussionRepository.findById(discussionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Discussion not found"));
+        if (!d.getUser().getUserId().equals(userId)) {
+            throw new ForbiddenException("Only the discussion author can accept an answer");
+        }
+        DiscussionComment comment = commentRepository.findById(commentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Comment not found"));
+        if (!comment.getDiscussion().getDiscussionId().equals(discussionId)) {
+            throw new BadRequestException("Comment does not belong to this discussion");
+        }
+        if (!DiscussionComment.STATUS_VISIBLE.equals(comment.getStatus())) {
+            throw new BadRequestException("Cannot accept a hidden comment");
+        }
+
+        boolean newAccepted = !Boolean.TRUE.equals(comment.getIsAccepted());
+        comment.setIsAccepted(newAccepted);
+        DiscussionComment saved = commentRepository.save(comment);
+
+        if (newAccepted && !comment.getUser().getUserId().equals(userId)) {
+            communityHelper.sendNotification(
+                    comment.getUser(),
+                    "Câu trả lời của bạn đã được chọn làm giải pháp",
+                    "Tác giả bài viết \"" + d.getTitle() + "\" đã đánh dấu bình luận của bạn là câu trả lời hữu ích.",
+                    "COMMUNITY_ACCEPTED",
+                    discussionId
+            );
+        }
+
+        return new DiscussionDetailDto.CommentDto(
+                saved.getCommentId(),
+                saved.getContent(),
+                DiscussionItemDto.AuthorDto.of(saved.getUser(), Boolean.TRUE.equals(saved.getIsAnonymous())),
+                Boolean.TRUE.equals(saved.getIsAccepted()),
+                Boolean.TRUE.equals(saved.getIsAnonymous()),
+                saved.getImageUrl(),
+                saved.getStatus(),
+                saved.getCreatedAt()
+        );
+    }
+
+    @Override
+    public void reportDiscussion(Long discussionId, CreateReportRequestDto request, Long userId) {
+        User reporter = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        Discussion d = discussionRepository.findById(discussionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Discussion not found"));
+        ensureReactable(d);
+
+        if (reportRepository.existsByReporter_UserIdAndDiscussion_DiscussionIdAndCommentIsNullAndStatus(
+                userId, discussionId, DiscussionReport.STATUS_PENDING)) {
+            throw new BadRequestException("Bạn đã báo cáo bài viết này và đang chờ Admin xử lý.");
+        }
+
+        DiscussionReport report = DiscussionReport.builder()
+                .targetType(DiscussionReport.TARGET_DISCUSSION)
+                .discussion(d)
+                .reporter(reporter)
+                .reason(request.getReason().trim())
+                .status(DiscussionReport.STATUS_PENDING)
+                .build();
+        reportRepository.save(report);
+    }
+
+    @Override
+    public void reportComment(Long discussionId, Long commentId, CreateReportRequestDto request, Long userId) {
+        User reporter = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        Discussion d = discussionRepository.findById(discussionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Discussion not found"));
+        DiscussionComment comment = commentRepository.findById(commentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Comment not found"));
+        if (!comment.getDiscussion().getDiscussionId().equals(discussionId)) {
+            throw new BadRequestException("Comment does not belong to this discussion");
+        }
+        if (reportRepository.existsByReporter_UserIdAndComment_CommentIdAndStatus(
+                userId, commentId, DiscussionReport.STATUS_PENDING)) {
+            throw new BadRequestException("Bạn đã báo cáo bình luận này và đang chờ Admin xử lý.");
+        }
+
+        DiscussionReport report = DiscussionReport.builder()
+                .targetType(DiscussionReport.TARGET_COMMENT)
+                .discussion(d)
+                .comment(comment)
+                .reporter(reporter)
+                .reason(request.getReason().trim())
+                .status(DiscussionReport.STATUS_PENDING)
+                .build();
+        reportRepository.save(report);
     }
 
     @Override

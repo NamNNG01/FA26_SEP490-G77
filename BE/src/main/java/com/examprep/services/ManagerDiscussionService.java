@@ -5,56 +5,55 @@ import com.examprep.dto.student.DiscussionDetailDto;
 import com.examprep.dto.student.DiscussionItemDto;
 import org.springframework.data.domain.Page;
 
+import java.util.List;
+
 public interface ManagerDiscussionService {
 
-    /**
-     * Manager tạo bài thảo luận / thông báo mới trong khóa học.
-     * Bài tạo bởi Manager sẽ tự động được phê duyệt (APPROVED) và hiển thị ngay.
-     */
-    DiscussionDetailDto createDiscussion(DiscussionManagerDtos.CreateDiscussionRequest request, Long managerId);
+    DiscussionDetailDto createDiscussion(DiscussionManagerDtos.CreateDiscussionRequest request, Long adminId);
 
-    /**
-     * Manager lấy danh sách thảo luận trong khóa học (có thể lọc theo trạng thái duyệt PENDING, APPROVED, REJECTED).
-     */
-    Page<DiscussionItemDto> listDiscussions(String approvalStatus, String status, String search, int page, int size, Long managerId);
+    Page<DiscussionItemDto> listDiscussions(
+            String approvalStatus,
+            String status,
+            String tag,
+            Boolean hasImage,
+            String search,
+            String sort,
+            int page,
+            int size,
+            Long adminId
+    );
 
-    /**
-     * Manager xem chi tiết một bài thảo luận kèm toàn bộ bình luận (kể cả bình luận đã bị ẩn).
-     */
-    DiscussionDetailDto getDiscussionDetail(Long discussionId, Long managerId);
+    DiscussionDetailDto getDiscussionDetail(Long discussionId, Long adminId);
 
-    /**
-     * Manager phê duyệt bài thảo luận của học sinh.
-     */
-    DiscussionItemDto approveDiscussion(Long discussionId, Long managerId);
+    DiscussionItemDto approveDiscussion(Long discussionId, Long adminId);
 
-    /**
-     * Manager từ chối bài thảo luận của học sinh kèm lý do.
-     */
-    DiscussionItemDto rejectDiscussion(Long discussionId, DiscussionManagerDtos.RejectDiscussionRequest request, Long managerId);
+    DiscussionItemDto rejectDiscussion(Long discussionId, DiscussionManagerDtos.RejectDiscussionRequest request, Long adminId);
 
-    /**
-     * Manager ghim hoặc bỏ ghim bài thảo luận lên đầu danh sách khóa học.
-     */
-    DiscussionItemDto updatePin(Long discussionId, DiscussionManagerDtos.UpdatePinRequest request, Long managerId);
+    int bulkApproveDiscussions(List<Long> discussionIds, Long adminId);
 
-    /**
-     * Manager ẩn bài thảo luận khỏi public feed nhưng giữ lại cho tác giả xem.
-     */
-    DiscussionItemDto hideDiscussion(Long discussionId, Long managerId);
+    int bulkRejectDiscussions(List<Long> discussionIds, String reason, Long adminId);
 
-    /**
-     * Manager hiện lại bài thảo luận đã bị ẩn.
-     */
-    DiscussionItemDto restoreDiscussion(Long discussionId, Long managerId);
+    DiscussionItemDto updatePin(Long discussionId, DiscussionManagerDtos.UpdatePinRequest request, Long adminId);
 
-    /**
-     * Manager ẩn hoặc hiện lại bình luận vi phạm.
-     */
-    DiscussionDetailDto.CommentDto updateCommentStatus(Long commentId, DiscussionManagerDtos.UpdateCommentStatusRequest request, Long managerId);
+    DiscussionItemDto hideDiscussion(Long discussionId, Long adminId);
 
-    /**
-     * Manager xóa hẳn bình luận vi phạm.
-     */
-    void deleteComment(Long commentId, Long managerId);
+    DiscussionItemDto restoreDiscussion(Long discussionId, Long adminId);
+
+    DiscussionDetailDto.CommentDto updateCommentStatus(Long commentId, DiscussionManagerDtos.UpdateCommentStatusRequest request, Long adminId);
+
+    void deleteComment(Long commentId, Long adminId);
+
+    DiscussionManagerDtos.ModerationSummaryDto getModerationSummary(Long adminId);
+
+    Page<DiscussionManagerDtos.DiscussionReportItemDto> listReports(String status, int page, int size, Long adminId);
+
+    DiscussionManagerDtos.DiscussionReportItemDto resolveReport(
+            Long reportId,
+            DiscussionManagerDtos.ResolveReportRequest request,
+            Long adminId
+    );
+
+    void muteUser(Long targetUserId, DiscussionManagerDtos.MuteUserRequest request, Long adminId);
+
+    void unmuteUser(Long targetUserId, Long adminId);
 }
