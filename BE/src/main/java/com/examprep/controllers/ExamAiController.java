@@ -38,7 +38,9 @@ public class ExamAiController {
 
     @PostMapping(value = "/generate-from-material", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ApiResponse<ExamAiDraftResponse>> material(@AuthenticationPrincipal UserPrincipal user,
-            @RequestParam MultipartFile file, @RequestParam Long courseId, @RequestParam(required = false) Long moduleId,
+            @RequestParam MultipartFile file, @RequestParam Long courseId,
+            @RequestParam(required = false) Long moduleId,
+            @RequestParam(required = false) List<Long> moduleIds,
             @RequestParam Integer questionCount, @RequestParam String difficultyDistribution,
             @RequestParam String questionTypes, @RequestParam(required = false) String language,
             @RequestParam(required = false) String context) {
@@ -46,7 +48,8 @@ public class ExamAiController {
             if (file.getSize() > 10 * 1024 * 1024) throw new BadRequestException("Material must not exceed 10 MB.");
             ExamAiRequest request = new ExamAiRequest(courseId, moduleId, null, questionCount,
                     json.readValue(difficultyDistribution, new TypeReference<Map<String, Integer>>() { }),
-                    json.readValue(questionTypes, new TypeReference<List<ExamAiRequest.TypeCount>>() { }), null, language, context);
+                    json.readValue(questionTypes, new TypeReference<List<ExamAiRequest.TypeCount>>() { }),
+                    null, language, context, moduleIds);
             return ResponseEntity.ok(ApiResponse.success(service.generateFromMaterial(user, request,
                     materials.read(file.getOriginalFilename(), file.getBytes()), file.getOriginalFilename())));
         } catch (JsonProcessingException ex) {

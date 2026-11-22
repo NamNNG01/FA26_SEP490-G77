@@ -11,7 +11,14 @@ public record ExamAiRequest(@NotNull @Positive Long courseId, @Positive Long mod
         @NotEmpty List<@NotNull @Valid TypeCount> questionTypes,
         @Min(1) @Max(600) Integer durationMinutes, @Pattern(regexp = "vi|en") String language,
         // Course manager's own instructions (focus topics, learners, style); course/module data is added by the BE.
-        @Size(max = 2000) String context) {
+        @Size(max = 2000) String context,
+        List<@NotNull @Positive Long> moduleIds) {
+    public ExamAiRequest(Long courseId, Long moduleId, String title, Integer questionCount,
+            Map<String, Integer> difficultyDistribution, List<TypeCount> questionTypes,
+            Integer durationMinutes, String language, String context) {
+        this(courseId, moduleId, title, questionCount, difficultyDistribution, questionTypes, durationMinutes, language, context, null);
+    }
+
     public record TypeCount(@NotBlank String questionType, @NotNull @Min(1) @Max(50) Integer count) {
         // The FE exam AI tab sends MULTI_CHOICE; the question bank stores MULTIPLE_CHOICE.
         public TypeCount { if ("MULTI_CHOICE".equals(questionType)) questionType = "MULTIPLE_CHOICE"; }

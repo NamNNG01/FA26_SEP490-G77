@@ -187,7 +187,8 @@ export function ExamAiGenerateTab({
   const [modules, setModules] = useState<CourseModuleResponse[]>([]);
 
   const [courseId, setCourseId] = useState<string>("");
-  const [moduleId, setModuleId] = useState<string>("");
+  const [selectedModuleIds, setSelectedModuleIds] = useState<number[]>([]);
+  const [bulkModuleId, setBulkModuleId] = useState<string>("");
   const [title, setTitle] = useState("");
   const [durationMinutes, setDurationMinutes] = useState<number>(45);
   const [maxScore, setMaxScore] = useState<number>(100);
@@ -286,9 +287,26 @@ export function ExamAiGenerateTab({
         });
     } else {
       setModules([]);
-      setModuleId("");
+      setSelectedModuleIds([]);
+      setBulkModuleId("");
     }
   }, [courseId, toast]);
+
+  const toggleModuleId = (mid: number) => {
+    setSelectedModuleIds((prev) =>
+      prev.includes(mid) ? prev.filter((id) => id !== mid) : [...prev, mid],
+    );
+  };
+
+  const applyModuleToAll = (midStr: string) => {
+    setBulkModuleId(midStr);
+    if (!draft || !midStr) return;
+    const mid = Number(midStr);
+    setDraft({
+      ...draft,
+      questions: draft.questions.map((q) => ({ ...q, moduleId: mid })),
+    });
+  };
 
   const totalDiff =
     Number(diffDist.EASY || 0) +
@@ -303,7 +321,6 @@ export function ExamAiGenerateTab({
   const questionCount = totalDiff;
   const canGenerate =
     courseId !== "" &&
-    moduleId !== "" &&
     isDiffMatch &&
     isTypeMatch &&
     maxScore > 0 &&
@@ -322,7 +339,6 @@ export function ExamAiGenerateTab({
   const handleGenerate = async () => {
     const errors: Record<string, string> = {};
     if (!courseId) errors.courseId = MSG01;
-    if (!moduleId) errors.moduleId = "Please select a module.";
     if (!context.trim()) errors.context = MSG01;
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
@@ -342,7 +358,8 @@ export function ExamAiGenerateTab({
       const result = await examService.generateAiExam(
         {
           courseId: Number(courseId),
-          moduleId: moduleId ? Number(moduleId) : undefined,
+          moduleId: selectedModuleIds.length === 1 ? selectedModuleIds[0] : undefined,
+          moduleIds: selectedModuleIds.length > 0 ? selectedModuleIds : undefined,
           title: title.trim() || undefined,
           questionCount,
           difficultyDistribution: diffDist,
@@ -354,7 +371,18 @@ export function ExamAiGenerateTab({
         },
         abortCtrl.signal,
       );
-      setDraft(result);
+      setDraft({
+        ...result,
+        questions: (result.questions ?? []).map((q, index) => ({
+          ...q,
+          moduleId:
+            q.moduleId ??
+            (selectedModuleIds.length > 0
+              ? selectedModuleIds[index % selectedModuleIds.length]
+              : undefined),
+        })),
+      });
+      setBulkModuleId(selectedModuleIds.length === 1 ? String(selectedModuleIds[0]) : "");
       setEditingQuestion(null);
       setSavedQuestionIds([]);
       setQuestionsPublished(false);
@@ -536,6 +564,9 @@ export function ExamAiGenerateTab({
         return "Code question needs at least one hidden test case";
     }
     const editorErrors = validateDraft(toEditorDraft(q));
+    if (modules.length > 0 && !q.moduleId) {
+      return editorErrors.content ?? editorErrors.answers ?? editorErrors.type ?? "Please assign a module to this question";
+    }
     return editorErrors.content ?? editorErrors.answers ?? editorErrors.type ?? null;
   };
 
@@ -565,16 +596,13 @@ export function ExamAiGenerateTab({
     return true;
   };
 
-  const handleSaveAndPublish = async () => {
-    if (!draft || questionsPublished) return;
-    if (!moduleId) {
-      setFieldErrors(prev => ({ ...prev, moduleId: "Please select a module." }));
-      return;
-    }
+  const handleCreateExam = async () => {
+    if (!draft || draft.questions.length === 0) return;
     if (savedQuestionIds.length === 0 && !validateDraftForSave()) return;
 
     setSaving(true);
     let questionIds = [...savedQuestionIds];
+    let published = questionsPublished;
     try {
       if (questionIds.length === 0) {
         const questionsToSave = draft.questions.map(
@@ -585,59 +613,47 @@ export function ExamAiGenerateTab({
           }) => ({
             ...q,
             courseId: Number(courseId),
-            moduleId: moduleId ? Number(moduleId) : null,
+            moduleId: q.moduleId ?? null,
           }),
         ) as QuestionCreateRequest[];
 
         const batchRes = await questionService.createQuestionsBatch(
           Number(courseId),
-          moduleId ? Number(moduleId) : null,
+          null,
           questionsToSave,
         );
         questionIds = batchRes.map((r) => r.questionId);
         if (questionIds.length !== draft.questions.length) {
           throw new Error("Not all generated questions were saved.");
         }
-        // Retain IDs before activation so a retry will not duplicate the batch.
+        // Retain IDs before activation/exam creation so a retry will not duplicate the batch.
         setSavedQuestionIds(questionIds);
       }
 
-      await questionService.batchUpdateStatus(questionIds, "ACTIVE");
-      setQuestionsPublished(true);
-      toast.success("Generated questions saved and published to the Question Bank.");
-    } catch (err: unknown) {
-      toast.error(
-        getApiErrorMessage(
-          err,
-          questionIds.length > 0
-            ? "Questions were saved, but could not be published. Retry to publish them."
-            : "Failed to save and publish generated questions.",
+      if (!published) {
+        await questionService.batchUpdateStatus(questionIds, "ACTIVE");
+        published = true;
+        setQuestionsPublished(true);
+      }
+
+      const uniqueModuleIds = Array.from(
+        new Set(
+          draft.questions
+            .map((q) => q.moduleId)
+            .filter((mid): mid is number => typeof mid === "number" && mid > 0),
         ),
-        { title: questionIds.length > 0 ? "Could not publish questions" : "Could not save questions", duration: null },
       );
-    } finally {
-      setSaving(false);
-    }
-  };
+      const examModuleId = uniqueModuleIds.length === 1 ? uniqueModuleIds[0] : undefined;
 
-  const handleCreateExam = async () => {
-    if (
-      !draft ||
-      !questionsPublished ||
-      savedQuestionIds.length !== draft.questions.length
-    ) return;
-
-    setSaving(true);
-    try {
       const created = await examService.createExam({
         title: draft.title || title || "AI Generated Exam",
         description: draft.description,
         courseId: Number(courseId),
-        moduleId: moduleId ? Number(moduleId) : undefined,
+        moduleId: examModuleId,
         durationMinutes: draft.durationMinutes || durationMinutes || 45,
         mode,
         generationType: "STATIC",
-        questionIds: savedQuestionIds.map((qid, idx) => ({
+        questionIds: questionIds.map((qid, idx) => ({
           questionId: qid,
           weight: draft.questions[idx]?.defaultPoints ?? 1,
           orderIndex: idx,
@@ -679,12 +695,12 @@ export function ExamAiGenerateTab({
                 value={courseId}
                 onChange={(v) => {
                   setCourseId(v);
-                  setModuleId("");
+                  setSelectedModuleIds([]);
+                  setBulkModuleId("");
                   setModules([]);
                   setFieldErrors((prev) => ({
                     ...prev,
                     courseId: "",
-                    moduleId: "",
                   }));
                 }}
                 options={[
@@ -706,31 +722,65 @@ export function ExamAiGenerateTab({
             </div>
 
             <div>
-              <SearchableSelect
-                label="Module *"
-                value={moduleId}
-                onChange={(value) => {
-                  setModuleId(value);
-                  if (fieldErrors.moduleId)
-                    setFieldErrors((prev) => ({ ...prev, moduleId: "" }));
-                }}
-                disabled={!courseId}
-                placeholder={!courseId ? 'Select a course first' : 'No module'}
-                searchPlaceholder="Search modules…"
-                emptyText="No modules found"
-                options={[
-                  { label: "Select Module", value: "" },
-                  ...modules.map((m) => ({
-                    label: m.title,
-                    value: String(m.moduleId),
-                  })),
-                ]}
-              />
-              {fieldErrors.moduleId && (
-                <p className="text-xs text-danger mt-1">
-                  {fieldErrors.moduleId}
-                </p>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-sm font-medium text-content-secondary">
+                  Modules (optional, multi-select)
+                </label>
+                {modules.length > 0 && (
+                  <div className="flex items-center gap-2 text-xs">
+                    <button
+                      type="button"
+                      className="text-brand-ink hover:underline"
+                      onClick={() => setSelectedModuleIds(modules.map((m) => m.moduleId))}
+                    >
+                      Select all
+                    </button>
+                    {selectedModuleIds.length > 0 && (
+                      <button
+                        type="button"
+                        className="text-content-subtle hover:underline"
+                        onClick={() => setSelectedModuleIds([])}
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+              {!courseId ? (
+                <div className="px-3 py-2 text-xs text-content-subtle rounded-[10px] border border-line bg-surface-muted">
+                  Select a course first
+                </div>
+              ) : modules.length === 0 ? (
+                <div className="px-3 py-2 text-xs text-content-subtle rounded-[10px] border border-line bg-surface-muted">
+                  No modules in this course (questions will use course scope)
+                </div>
+              ) : (
+                <div className="max-h-32 overflow-y-auto rounded-[10px] border border-line bg-surface p-2 space-y-1">
+                  {modules.map((m) => {
+                    const checked = selectedModuleIds.includes(m.moduleId);
+                    return (
+                      <label
+                        key={m.moduleId}
+                        className="flex items-center gap-2 px-2 py-1 rounded hover:bg-accent cursor-pointer text-xs text-content"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleModuleId(m.moduleId)}
+                          className="rounded border-line text-brand-ink focus:ring-brand-ink"
+                        />
+                        <span className="truncate">{m.title}</span>
+                      </label>
+                    );
+                  })}
+                </div>
               )}
+              <p className="text-2xs text-content-subtle mt-1">
+                {selectedModuleIds.length === 0
+                  ? "Leave empty to generate across the whole course; you can assign each question's module in the draft."
+                  : `${selectedModuleIds.length} module(s) selected for AI generation.`}
+              </p>
             </div>
 
             <Input
@@ -980,33 +1030,39 @@ export function ExamAiGenerateTab({
               >
                 Back
               </Button>
-              {questionsPublished && savedQuestionIds.length === draft.questions.length && draft.questions.length > 0 ? (
-                <Button
-                  icon={<Icon.Check className="w-4 h-4" />}
-                  loading={saving}
-                  disabled={saving}
-                  onClick={handleCreateExam}
-                >
-                  Create Exam
-                </Button>
-              ) : (
-                <Button
-                  icon={<Icon.Check className="w-4 h-4" />}
-                  loading={saving}
-                  disabled={saving || editingQuestion !== null || draft.questions.length === 0}
-                  onClick={handleSaveAndPublish}
-                >
-                  {savedQuestionIds.length > 0 ? "Publish Saved Questions" : "Save and Publish Questions"}
-                </Button>
-              )}
+              <Button
+                icon={<Icon.Check className="w-4 h-4" />}
+                loading={saving}
+                disabled={saving || editingQuestion !== null || draft.questions.length === 0}
+                onClick={handleCreateExam}
+              >
+                Create Exam
+              </Button>
             </div>
           </div>
 
-          {savedQuestionIds.length > 0 && (
-            <div className="p-3 rounded-[8px] border border-success-line bg-success-light/40 text-sm text-content-secondary">
-              {questionsPublished
-                ? "Questions are saved and published. Create the exam when you’re ready."
-                : "Questions are saved but still inactive. Publish them before creating the exam."} The saved question content is locked to keep it in sync with the Question Bank.
+          {modules.length > 0 && savedQuestionIds.length === 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-[10px] border border-line bg-surface">
+              <span className="text-xs text-content-secondary">
+                Each question must belong to a module before saving to the Question Bank.
+              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-content-secondary whitespace-nowrap">
+                  Apply module to all:
+                </span>
+                <Select
+                  className="w-56 text-xs"
+                  value={bulkModuleId}
+                  onChange={applyModuleToAll}
+                  options={[
+                    { label: "Choose module...", value: "" },
+                    ...modules.map((m) => ({
+                      label: m.title,
+                      value: String(m.moduleId),
+                    })),
+                  ]}
+                />
+              </div>
             </div>
           )}
 
@@ -1091,6 +1147,24 @@ export function ExamAiGenerateTab({
                           { label: "HARD", value: "HARD" },
                         ]}
                       />
+                      {modules.length > 0 && (
+                        <Select
+                          className="w-44 text-xs"
+                          value={q.moduleId ? String(q.moduleId) : ""}
+                          onChange={(v) =>
+                            updateDraftQuestion(idx, {
+                              moduleId: v ? Number(v) : undefined,
+                            })
+                          }
+                          options={[
+                            { label: "Select module *", value: "" },
+                            ...modules.map((m) => ({
+                              label: m.title,
+                              value: String(m.moduleId),
+                            })),
+                          ]}
+                        />
+                      )}
                     </div>
                     <div className="flex flex-shrink-0 items-center gap-1">
                       <button

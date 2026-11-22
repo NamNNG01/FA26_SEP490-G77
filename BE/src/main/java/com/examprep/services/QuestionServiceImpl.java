@@ -177,7 +177,9 @@ public class QuestionServiceImpl implements QuestionService {
         for (int i = 0; i < requests.size(); i++) {
             QuestionCreateRequest req = requests.get(i);
             req.setCourseId(courseId);
-            req.setModuleId(moduleId);
+            if (req.getModuleId() == null) {
+                req.setModuleId(moduleId);
+            }
             errors.addAll(questionValidator.validate(QuestionPayload.from(req), "questions[" + i + "]."));
         }
         if (!errors.isEmpty()) throw new QuestionValidationException(errors);
@@ -195,14 +197,19 @@ public class QuestionServiceImpl implements QuestionService {
             }
         }
 
-        com.examprep.entities.Module module = null;
-        if (moduleId != null) {
-            module = moduleRepository.findById(moduleId)
+        Set<Long> requestedModuleIds = new LinkedHashSet<>();
+        if (moduleId != null) requestedModuleIds.add(moduleId);
+        for (QuestionCreateRequest req : requests) {
+            if (req.getModuleId() != null) requestedModuleIds.add(req.getModuleId());
+        }
+        Map<Long, com.examprep.entities.Module> moduleMap = new HashMap<>();
+        for (Long mid : requestedModuleIds) {
+            com.examprep.entities.Module mod = moduleRepository.findById(mid)
                     .orElseThrow(() -> new ResourceNotFoundException("Module not found"));
-
-            if (!module.getCourse().getCourseId().equals(course.getCourseId())) {
+            if (!mod.getCourse().getCourseId().equals(course.getCourseId())) {
                 throw new BadRequestException("Module does not belong to the specified course");
             }
+            moduleMap.put(mid, mod);
         }
 
         List<String> hashes = new ArrayList<>(requests.size());
@@ -218,7 +225,8 @@ public class QuestionServiceImpl implements QuestionService {
                 if (group.getCourse() == null || !group.getCourse().getCourseId().equals(course.getCourseId())) {
                     throw new BadRequestException("Question group does not belong to the specified course");
                 }
-                if (moduleId != null && group.getModule() != null && !group.getModule().getModuleId().equals(moduleId)) {
+                Long effectiveModuleId = req.getModuleId();
+                if (effectiveModuleId != null && group.getModule() != null && !group.getModule().getModuleId().equals(effectiveModuleId)) {
                     throw new BadRequestException("Question group does not belong to the specified module");
                 }
                 assertQuestionFitsGroup(group, req.getQuestionType());
@@ -274,7 +282,7 @@ public class QuestionServiceImpl implements QuestionService {
 
             Question question = Question.builder()
                     .course(course)
-                    .module(module)
+                    .module(req.getModuleId() != null ? moduleMap.get(req.getModuleId()) : null)
                     .group(group)
                     .createdBy(currentUser)
                     .questionType(req.getQuestionType())

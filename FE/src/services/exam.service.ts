@@ -239,6 +239,8 @@ export interface AiQuestionDraft {
     memoryLimitKb?: number | null;
   } | null;
   testCases?: { inputData: string; expectedOutput: string; hidden?: boolean | null; orderIndex?: number | null }[] | null;
+  /** Target module assigned to this generated question (when saved to Question Bank). */
+  moduleId?: number;
   /** DIAGRAM only: PlantUML behind questionMetadata.drawioXml, for previews. Q-03 doesn't take it. */
   plantUmlSource?: string;
   /** Local preview returned by draw.io while an AI draft is being edited. */
@@ -248,6 +250,7 @@ export interface AiQuestionDraft {
 export interface AiGenerateRequest {
   courseId: number;
   moduleId?: number;
+  moduleIds?: number[];
   title?: string;
   questionCount: number;
   difficultyDistribution: {

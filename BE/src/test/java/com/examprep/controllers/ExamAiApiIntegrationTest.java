@@ -344,6 +344,150 @@ class ExamAiApiIntegrationTest {
         assertEquals(0, calls);
     }
 
+    @Test void multiModuleAiGenerateAndBatchSaveAcrossModules() throws Exception {
+        Module module2 = Module.builder().course(course).title("Geometry").description("Triangles and circles").orderIndex(2).build();
+        em.persist(module2);
+        em.flush();
+
+        Map<String, Object> q1 = new java.util.LinkedHashMap<>(choice("SINGLE_CHOICE", "EASY", "What is 1/2 + 1/2?"));
+        q1.put("moduleId", module.getModuleId());
+        Map<String, Object> q2 = new java.util.LinkedHashMap<>(choice("SINGLE_CHOICE", "MEDIUM", "Sum of angles in a triangle?"));
+        q2.put("moduleId", module2.getModuleId());
+        providerContent = json.writeValueAsString(Map.of("title", "Midterm", "questions", List.of(q1, q2)));
+
+        String aiReq = json.writeValueAsString(Map.of(
+                "courseId", course.getCourseId(),
+                "moduleIds", List.of(module.getModuleId(), module2.getModuleId()),
+                "questionCount", 2,
+                "difficultyDistribution", Map.of("EASY", 1, "MEDIUM", 1, "HARD", 0),
+                "questionTypes", List.of(Map.of("questionType", "SINGLE_CHOICE", "count", 2)),
+                "language", "en",
+                "context", "Cover both arithmetic and geometry"));
+
+        String aiRes = generate(manager, aiReq)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.questionCount").value(2))
+                .andExpect(jsonPath("$.data.questions[0].moduleId").value(module.getModuleId()))
+                .andExpect(jsonPath("$.data.questions[1].moduleId").value(module2.getModuleId()))
+                .andReturn().getResponse().getContentAsString();
+        assertTrue(receivedRequest.contains("Geometry"));
+
+        JsonNode draftQuestions = json.readTree(aiRes).path("data").path("questions");
+        List<Map<String, Object>> batchBody = List.of(
+                Map.of("courseId", course.getCourseId(), "moduleId", draftQuestions.get(0).path("moduleId").asLong(),
+                        "questionType", "SINGLE_CHOICE", "difficulty", "EASY",
+                        "content", "Batch multi-module Q1",
+                        "options", List.of(Map.of("optionText", "A", "isCorrect", true, "orderIndex", 0), Map.of("optionText", "B", "isCorrect", false, "orderIndex", 1))),
+                Map.of("courseId", course.getCourseId(), "moduleId", draftQuestions.get(1).path("moduleId").asLong(),
+                        "questionType", "SINGLE_CHOICE", "difficulty", "MEDIUM",
+                        "content", "Batch multi-module Q2",
+                        "options", List.of(Map.of("optionText", "C", "isCorrect", true, "orderIndex", 0), Map.of("optionText", "D", "isCorrect", false, "orderIndex", 1)))
+        );
+
+        String batchRes = call(manager, post("/api/v1/manager/questions/batch")
+                .param("courseId", course.getCourseId().toString())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(batchBody)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data[0].moduleId").value(module.getModuleId()))
+                .andExpect(jsonPath("$.data[1].moduleId").value(module2.getModuleId()))
+                .andReturn().getResponse().getContentAsString();
+
+        JsonNode created = json.readTree(batchRes).path("data");
+        long id1 = created.get(0).path("questionId").asLong();
+        long id2 = created.get(1).path("questionId").asLong();
+
+        call(manager, patch("/api/v1/manager/questions/batch/status")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("questionIds", List.of(id1, id2), "status", "ACTIVE"))))
+                .andExpect(status().isOk());
+
+        call(manager, post("/api/v1/manager/exams")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of(
+                        "title", "Comprehensive Midterm",
+                        "courseId", course.getCourseId(),
+                        "durationMinutes", 45,
+                        "mode", "EXAM",
+                        "generationType", "STATIC",
+                        "maxScore", 10,
+                        "questionIds", List.of(
+                                Map.of("questionId", id1, "weight", 1, "orderIndex", 0),
+                                Map.of("questionId", id2, "weight", 1, "orderIndex", 1))))))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.moduleId").doesNotExist())
+                .andExpect(jsonPath("$.data.questionCount").value(2));
+    }
+
+    @Test void archiveQuestionInDraftExamBlocksPublishWhilePublishedExamBlocksArchive() throws Exception {
+        List<Map<String, Object>> batch = List.of(
+                Map.of("courseId", course.getCourseId(), "moduleId", module.getModuleId(),
+                        "questionType", "SINGLE_CHOICE", "difficulty", "EASY",
+                        "content", "Draft exam question to archive",
+                        "options", List.of(Map.of("optionText", "Yes", "isCorrect", true, "orderIndex", 0), Map.of("optionText", "No", "isCorrect", false, "orderIndex", 1))),
+                Map.of("courseId", course.getCourseId(), "moduleId", module.getModuleId(),
+                        "questionType", "SINGLE_CHOICE", "difficulty", "EASY",
+                        "content", "Published exam question cannot archive",
+                        "options", List.of(Map.of("optionText", "Yes", "isCorrect", true, "orderIndex", 0), Map.of("optionText", "No", "isCorrect", false, "orderIndex", 1)))
+        );
+        String batchRes = call(manager, post("/api/v1/manager/questions/batch")
+                .param("courseId", course.getCourseId().toString())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(batch)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        long draftQId = json.readTree(batchRes).path("data").get(0).path("questionId").asLong();
+        long publishedQId = json.readTree(batchRes).path("data").get(1).path("questionId").asLong();
+
+        call(manager, patch("/api/v1/manager/questions/batch/status")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("questionIds", List.of(draftQId, publishedQId), "status", "ACTIVE"))))
+                .andExpect(status().isOk());
+
+        String draftExamRes = call(manager, post("/api/v1/manager/exams")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of(
+                        "title", "Draft Exam", "courseId", course.getCourseId(), "durationMinutes", 30,
+                        "mode", "EXAM", "generationType", "STATIC", "maxScore", 10,
+                        "questionIds", List.of(Map.of("questionId", draftQId, "weight", 1, "orderIndex", 0))))))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        long draftExamId = json.readTree(draftExamRes).path("data").path("examId").asLong();
+
+        // Archiving a question in a DRAFT exam is allowed, but publishing that DRAFT exam is then blocked (409).
+        call(manager, patch("/api/v1/manager/questions/" + draftQId + "/status")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"status\":\"ARCHIVED\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("ARCHIVED"));
+
+        call(manager, patch("/api/v1/manager/exams/" + draftExamId + "/publish")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"status\":\"PUBLISHED\"}"))
+                .andExpect(status().isConflict());
+
+        String pubExamRes = call(manager, post("/api/v1/manager/exams")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of(
+                        "title", "Published Exam", "courseId", course.getCourseId(), "durationMinutes", 30,
+                        "mode", "EXAM", "generationType", "STATIC", "maxScore", 10,
+                        "questionIds", List.of(Map.of("questionId", publishedQId, "weight", 1, "orderIndex", 0))))))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        long pubExamId = json.readTree(pubExamRes).path("data").path("examId").asLong();
+
+        call(manager, patch("/api/v1/manager/exams/" + pubExamId + "/publish")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"status\":\"PUBLISHED\"}"))
+                .andExpect(status().isOk());
+
+        // Archiving a question in a PUBLISHED exam is blocked (409).
+        call(manager, patch("/api/v1/manager/questions/" + publishedQId + "/status")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"status\":\"ARCHIVED\"}"))
+                .andExpect(status().isConflict());
+    }
+
     private MockHttpServletRequestBuilder material(String name, String type, String text) {
         return multipart(path() + "-from-material").file(new MockMultipartFile("file", name, type, text.getBytes(StandardCharsets.UTF_8)))
                 .param("courseId", course.getCourseId().toString()).param("moduleId", module.getModuleId().toString())
