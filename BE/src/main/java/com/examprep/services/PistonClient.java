@@ -6,6 +6,7 @@ import com.examprep.util.attempt.CodeSource;
 import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -41,7 +42,8 @@ import java.util.regex.Pattern;
  * backend compares stdout with the expected output (the provider never sees hidden answers
  * because they are not part of the request).</p>
  *
- * <p>While {@code app.piston.api-key} is blank every call fails fast with
+ * <p>A self-hosted Piston (see {@code BE/piston/}) needs no key. Against the hosted provider a
+ * blank {@code app.piston.api-key} makes every call fail fast with
  * {@code 503 CODE_EXECUTION_UNAVAILABLE} instead of pretending an execution happened.</p>
  */
 @Slf4j
@@ -83,11 +85,8 @@ public class PistonClient {
             "\\bpublic\\s+(?:(?:final|abstract|sealed|non-sealed|strictfp)\\s+)*"
                     + "(?:class|interface|enum|record)\\s+([A-Za-z_$][\\w$]*)");
 
-    /**
-     * Calls in flight against the provider, across every request of this server. The hosted
-     * plan answers 429 from about six parallel calls, so judging stays under that.
-     */
-    private static final int MAX_CONCURRENT_CALLS = 4;
+    /** Only the hosted provider needs an API key; a self-hosted Piston runs without one. */
+    private static final String HOSTED_PROVIDER_HOST = "onlinecompiler.io";
     /** Extra tries after a 429 or 5xx; the provider sheds load with both and recovers quickly. */
     private static final int MAX_RETRIES = 2;
     private static final long RETRY_BACKOFF_MS = 700;
@@ -95,7 +94,15 @@ public class PistonClient {
 
     private final RestClient client;
     private final String apiKey;
-    private final Semaphore callPermits = new Semaphore(MAX_CONCURRENT_CALLS, true);
+    private final boolean hostedProvider;
+    /**
+     * Calls in flight against the provider, across every request of this server. The hosted
+     * plan answers 429 from about six parallel calls, so the default stays at 4; a self-hosted
+     * Piston can take about one call per CPU core of its machine.
+     */
+    private final Semaphore callPermits;
+    /** CD-06 runtime versions, read once from {@code /runtimes}. */
+    private volatile Map<String, String> runtimeVersions;
     /** Runs the fixtures of a submission side by side; the permits above cap the real concurrency. */
     private final ExecutorService fixturePool = Executors.newFixedThreadPool(16, daemonThreads("piston-judge-"));
 
@@ -104,9 +111,15 @@ public class PistonClient {
         fixturePool.shutdownNow();
     }
 
+    public PistonClient(String baseUrl, String apiKey) {
+        this(baseUrl, apiKey, 4);
+    }
+
+    @Autowired
     public PistonClient(
             @Value("${app.piston.base-url:https://api.onlinecompiler.io/api/v2/piston}") String baseUrl,
-            @Value("${app.piston.api-key:}") String apiKey) {
+            @Value("${app.piston.api-key:}") String apiKey,
+            @Value("${app.piston.max-concurrent-calls:4}") int maxConcurrentCalls) {
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout((int) Duration.ofSeconds(10).toMillis());
         // One call runs one fixture; the provider's own ceiling is 30 seconds.
@@ -117,13 +130,49 @@ public class PistonClient {
         }
         this.client = RestClient.builder().baseUrl(cleaned).requestFactory(requestFactory).build();
         this.apiKey = apiKey == null ? "" : apiKey.trim();
+        this.hostedProvider = cleaned.contains(HOSTED_PROVIDER_HOST);
+        this.callPermits = new Semaphore(Math.max(1, maxConcurrentCalls), true);
     }
 
-    /** CD-04/CD-05: {@code 503 CODE_EXECUTION_UNAVAILABLE} while no provider key is configured. */
+    /** CD-04/CD-05: {@code 503 CODE_EXECUTION_UNAVAILABLE} while the hosted provider has no key. */
     public void requireConfigured() {
-        if (apiKey.isEmpty()) {
+        if (hostedProvider && apiKey.isEmpty()) {
             throw new BaseException(ResponseCode.CODE_EXECUTION_UNAVAILABLE,
                     "Code execution is not configured; set PISTON_API_KEY to the hosted Piston API key");
+        }
+    }
+
+    /**
+     * CD-06: language id → runtime version installed on the provider, e.g. {@code JAVA → 15.0.2}.
+     * Empty when the provider cannot be asked; the caller then shows its built-in labels.
+     */
+    public Map<String, String> runtimeVersions() {
+        Map<String, String> cached = runtimeVersions;
+        if (cached != null) {
+            return cached;
+        }
+        try {
+            requireConfigured();
+            var request = client.get().uri("/runtimes");
+            if (!apiKey.isEmpty()) {
+                request = request.header(HttpHeaders.AUTHORIZATION, apiKey);
+            }
+            JsonNode runtimes = request.retrieve().body(JsonNode.class);
+            Map<String, String> versions = new LinkedHashMap<>();
+            if (runtimes != null) {
+                LANGUAGE_NAMES.forEach((id, name) -> {
+                    for (JsonNode runtime : runtimes) {
+                        if (name.equals(runtime.path("language").asText())) {
+                            versions.put(id, runtime.path("version").asText());
+                        }
+                    }
+                });
+            }
+            runtimeVersions = Map.copyOf(versions);
+            return runtimeVersions;
+        } catch (RuntimeException ex) {
+            log.info("Could not read Piston runtimes: {}", ex.getMessage());
+            return Map.of();
         }
     }
 

@@ -70,10 +70,12 @@ app:
       min-content-chars: 20
       max-cards: 50
       output-budget-per-card: 120
-  # CD-04/CD-05 code execution: Piston v2-compatible API. The default is the hosted
-  # OnlineCompiler.io endpoint; point PISTON_BASE_URL at a self-hosted Piston to switch.
-  # PISTON_API_KEY is required by the hosted provider; while it is blank CD-04/CD-05
+  # CD-04/CD-05 code execution: Piston v2-compatible API. Self-hosted engine: BE/piston/
+  # (PISTON_BASE_URL=http://localhost:2000/api/v2, no key). The default is the hosted
+  # OnlineCompiler.io endpoint, which needs PISTON_API_KEY; without it CD-04/CD-05
   # answer 503 CODE_EXECUTION_UNAVAILABLE.
+  # PISTON_MAX_CONCURRENT_CALLS: keep 4 for the hosted plan (429 above ~6); self-hosted ≈ CPU cores.
   piston:
     base-url: ${PISTON_BASE_URL:https://api.onlinecompiler.io/api/v2/piston}
     api-key: ${PISTON_API_KEY:}
+    max-concurrent-calls: ${PISTON_MAX_CONCURRENT_CALLS:4}

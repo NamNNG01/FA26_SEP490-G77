@@ -226,8 +226,8 @@ class PistonClientTest {
     }
 
     @Test
-    void blankApiKeyFailsFastWithoutAnyCall() {
-        PistonClient client = new PistonClient(baseUrl, "");
+    void blankApiKeyFailsFastAgainstTheHostedProvider() {
+        PistonClient client = new PistonClient("https://api.onlinecompiler.io/api/v2/piston", "");
 
         BaseException run = assertThrows(BaseException.class,
                 () -> client.run("JAVA", "x", "", 1_000, 262_144));
@@ -237,6 +237,46 @@ class PistonClientTest {
                         1_000, 262_144));
         assertEquals(ResponseCode.CODE_EXECUTION_UNAVAILABLE, judge.getResponseCode());
         assertEquals(0, CALLS.size());
+    }
+
+    @Test
+    void selfHostedPistonRunsWithoutApiKey() {
+        REPLIES.add("""
+                {"run":{"stdout":"ok","stderr":"","code":0,"signal":null,"status":null}}""");
+        PistonClient.RunOutcome outcome = new PistonClient(baseUrl, "").run("PYTHON", "print('ok')", "", 1_000, 0);
+
+        assertEquals("COMPLETED", outcome.status());
+        assertEquals(1, CALLS.size());
+        assertNull(CALLS.get(0).authorization());
+    }
+
+    @Test
+    void runtimeVersionsAreReadOnceFromTheProvider() {
+        REPLIES.add("""
+                [{"language":"java","version":"15.0.2"},{"language":"python","version":"3.12.0"},
+                 {"language":"c","version":"10.2.0"},{"language":"c++","version":"10.2.0"},
+                 {"language":"rust","version":"1.68.2"}]""");
+        PistonClient client = new PistonClient(baseUrl, "");
+
+        Map<String, String> versions = client.runtimeVersions();
+        assertEquals(Map.of("JAVA", "15.0.2", "PYTHON", "3.12.0", "C", "10.2.0", "CPP", "10.2.0"), versions);
+        assertEquals(versions, client.runtimeVersions());
+        assertEquals(1, CALLS.size());
+        assertEquals("/runtimes", CALLS.get(0).uri());
+    }
+
+    @Test
+    void maxConcurrentCallsIsConfigurable() {
+        REPLY_DELAY_MS.set(200);
+        List<PistonClient.CaseInput> cases = new ArrayList<>();
+        for (int i = 0; i < 8; i++) {
+            REPLIES_BY_STDIN.put("in" + i, """
+                    {"run":{"stdout":"ok","stderr":"","code":0,"signal":null,"status":null}}""");
+            cases.add(new PistonClient.CaseInput((long) i, "in" + i, "ok"));
+        }
+        new PistonClient(baseUrl, "", 8).judge("JAVA", "x", cases, 1_000, 65_536);
+
+        assertEquals(8, MAX_IN_FLIGHT.get());
     }
 
     // =================================================================================
@@ -456,6 +496,9 @@ class PistonClientTest {
             String keyed = REPLIES_BY_STDIN.get(JSON.readTree(body).path("stdin").asText());
             String next = keyed != null ? keyed : REPLIES.pollFirst();
             reply(exchange, 200, next == null ? "{}" : next);
+        } else if ("GET".equals(exchange.getRequestMethod()) && "/runtimes".equals(path)) {
+            String next = REPLIES.pollFirst();
+            reply(exchange, 200, next == null ? "[]" : next);
         } else {
             exchange.sendResponseHeaders(404, -1);
             exchange.close();

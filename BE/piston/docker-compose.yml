@@ -1,0 +1,28 @@
+# Self-hosted code execution engine (CD-04/CD-05). Replaces the hosted OnlineCompiler.io API.
+#   docker compose -f piston/docker-compose.yml up -d
+#   ./piston/install-runtimes.sh        (one time; packages live in the piston_packages volume)
+#   BE .env: PISTON_BASE_URL=http://localhost:2000/api/v2   PISTON_API_KEY=   (blank)
+# Needs a Linux Docker host that allows privileged containers with cgroup v2
+# (a VPS or Docker Desktop/WSL2; PaaS like Render/Railway cannot run it).
+services:
+  piston:
+    image: ghcr.io/engineer-man/piston:latest
+    container_name: piston
+    restart: unless-stopped
+    privileged: true # isolate sandbox needs cgroups + namespaces
+    ports:
+      - "127.0.0.1:2000:2000" # never public: only the BE calls it
+    tmpfs:
+      - /tmp:exec
+    volumes:
+      - piston_packages:/piston/packages
+    environment:
+      PISTON_RUN_TIMEOUT: "30000" # default 3000 ms rejects questions with a 5 s limit
+      PISTON_COMPILE_TIMEOUT: "10000"
+      PISTON_OUTPUT_MAX_SIZE: "65536" # default 1024 chars would truncate stdout and fail matches
+      PISTON_RUN_MEMORY_LIMIT: "536870912" # 512 MB, same ceiling as the hosted provider
+      PISTON_MAX_PROCESS_COUNT: "64"
+      PISTON_DISABLE_NETWORKING: "true"
+
+volumes:
+  piston_packages:

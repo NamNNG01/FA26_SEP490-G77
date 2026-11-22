@@ -324,11 +324,16 @@ public class StudentCodeExamServiceImpl implements StudentCodeExamService {
 
     @Override
     public List<CodeExamResponses.Language> languages() {
+        // Versions come from the engine's /runtimes (self-hosted Piston differs from the hosted one).
+        Map<String, String> v = piston.runtimeVersions();
+        if (v == null) {
+            v = Map.of();
+        }
         return List.of(
-                new CodeExamResponses.Language(PistonClient.JAVA, "Java 25"),
-                new CodeExamResponses.Language(PistonClient.PYTHON, "Python 3.14"),
-                new CodeExamResponses.Language(PistonClient.C, "C (gcc 15)"),
-                new CodeExamResponses.Language(PistonClient.CPP, "C++ (g++ 15)"));
+                new CodeExamResponses.Language(PistonClient.JAVA, "Java " + v.getOrDefault(PistonClient.JAVA, "25")),
+                new CodeExamResponses.Language(PistonClient.PYTHON, "Python " + v.getOrDefault(PistonClient.PYTHON, "3.14")),
+                new CodeExamResponses.Language(PistonClient.C, "C (gcc " + v.getOrDefault(PistonClient.C, "15") + ")"),
+                new CodeExamResponses.Language(PistonClient.CPP, "C++ (g++ " + v.getOrDefault(PistonClient.CPP, "15") + ")"));
     }
 
     // ----------------------------------------------------------------------------------
