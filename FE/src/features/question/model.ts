@@ -772,7 +772,11 @@ export function fromAiDraft(a: QuestionAiDraft): QuestionDraft {
   const plantUml = typeof draft.metadata.plantUmlSource === 'string' ? draft.metadata.plantUmlSource : '';
   const isDiagram = draft.type === 'DIAGRAM' || draft.type === 'DIAGRAM_ESSAY';
   const diagramXml = isDiagram && !draft.diagramXml && plantUml.trim() ? plantUmlToDrawioXml(plantUml) : draft.diagramXml;
-  return { ...draft, diagramXml, fromAi: true };
+  // The AI leaves the starter code empty: start from the language's sample, as a hand-made question does.
+  const code = draft.type === 'CODE' && !draft.code.template.trim()
+    ? { ...draft.code, template: defaultCodeTemplate(draft.code.languages[0]) }
+    : draft.code;
+  return { ...draft, diagramXml, code, fromAi: true };
 }
 
 /**
