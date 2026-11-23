@@ -36,6 +36,8 @@ export interface CodeQuestion {
   codeTemplate: string | null;
   sampleInput: string | null;
   sampleOutput: string | null;
+  /** The student writes only `codeTemplate`'s function; the BE reads the input, calls it and prints the result. */
+  functionMode?: boolean;
 }
 
 /** CD-03 — no hidden test cases, no answers. */
