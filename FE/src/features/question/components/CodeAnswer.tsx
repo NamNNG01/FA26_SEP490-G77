@@ -13,6 +13,7 @@ import {
   type QuestionDraft,
   type TestCaseDraft,
 } from '../model';
+import { defaultCodeTemplate, isDefaultCodeTemplate, splitTemplate } from '@/utils/codeTemplate';
 
 const MEMORY_OPTIONS = [64, 128, 256, 512].map(mb => ({ label: `${mb} MB`, value: String(mb * 1024) }));
 
@@ -41,7 +42,16 @@ export function CodeAnswer({ q, set, error, readOnly = false }: { q: QuestionDra
         <span className="block text-sm font-medium text-content-secondary mb-1.5">Language *</span>
         <div role="radiogroup" aria-label="Language" className="flex flex-wrap gap-x-5 gap-y-2">
           {CODE_LANGUAGE_OPTIONS.map(l => (
-            <Radio key={l.value} label={l.label} checked={c.languages[0] === l.value} disabled={readOnly} onChange={() => setCode({ languages: [l.value] })} />
+            <Radio
+              key={l.value}
+              label={l.label}
+              checked={c.languages[0] === l.value}
+              disabled={readOnly}
+              // An untouched sample follows the language; a template the manager edited is kept.
+              onChange={() =>
+                setCode(isDefaultCodeTemplate(c.template) ? { languages: [l.value], template: defaultCodeTemplate(l.value) } : { languages: [l.value] })
+              }
+            />
           ))}
         </div>
       </div>
@@ -68,20 +78,32 @@ export function CodeAnswer({ q, set, error, readOnly = false }: { q: QuestionDra
         </div>
       </div>
 
-      <label className="block">
-        <span className="block text-sm font-medium text-content-secondary mb-1.5">
-          Starter code <span className="font-normal text-content-subtle">(optional — shown in the editor for every language)</span>
-        </span>
+      <div>
+        <div className="flex items-center justify-between gap-2 mb-1.5">
+          <label htmlFor={`${q.key}-template`} className="text-sm font-medium text-content-secondary">
+            Starter code <span className="font-normal text-content-subtle">(optional)</span>
+          </label>
+          {!readOnly && c.template !== defaultCodeTemplate(c.languages[0]) && (
+            <Button type="button" variant="outline" size="sm" onClick={() => setCode({ template: defaultCodeTemplate(c.languages[0]) })}>
+              Use sample
+            </Button>
+          )}
+        </div>
         <textarea
+          id={`${q.key}-template`}
           value={c.template}
           readOnly={readOnly}
           onChange={e => setCode({ template: e.target.value })}
-          rows={6}
+          rows={14}
           spellCheck={false}
-          placeholder={'public class Main {\n    public static void main(String[] args) {\n        // ...\n    }\n}'}
-          className={MONO(false)}
+          className={MONO(Boolean(error) && /STUDENT CODE (START|END)/.test(c.template) && !splitTemplate(c.template))}
         />
-      </label>
+        <p className="text-xs text-content-subtle mt-1">
+          Students see and edit only the code between the <code className="font-mono">STUDENT CODE START</code> and{' '}
+          <code className="font-mono">STUDENT CODE END</code> lines. The code around them (reading the input, calling the function,
+          printing the result) is hidden and runs with their code. Without these lines, students edit the whole program.
+        </p>
+      </div>
 
       <div>
         <div className="flex items-center justify-between gap-2 mb-1.5">

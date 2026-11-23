@@ -89,7 +89,8 @@ const toPreview = (p: QuestionAiPreview, request: QuestionAiGenerateRequest): Pr
   request: { ...request, questionTypeCounts: { [p.question.questionType]: 1 }, difficultyCounts: { [p.question.difficulty ?? 'MEDIUM']: 1 } },
   duplicate: p.hasHashConflict,
   accepted: false,
-  editing: false,
+  // Opens as the full editor, so the manager reviews and fixes it without an extra click.
+  editing: true,
   edited: false,
   regenerating: false,
 });
@@ -240,7 +241,7 @@ export const AiGeneratePanel = forwardRef<AiGeneratePanelHandle, {
     setPreviews(prev => prev && prev.map((p, i) => (taken.includes(i) ? { ...p, accepted: true, editing: false } : p)));
   };
 
-  const unaccept = (i: number) => setPreviews(prev => prev && prev.map((p, pi) => (pi === i ? { ...p, accepted: false } : p)));
+  const unaccept = (i: number) => setPreviews(prev => prev && prev.map((p, pi) => (pi === i ? { ...p, accepted: false, editing: true } : p)));
 
   useImperativeHandle(ref, () => ({
     removeAccepted: () => {
@@ -272,7 +273,7 @@ export const AiGeneratePanel = forwardRef<AiGeneratePanelHandle, {
       const res = await questionService.generateAiQuestions(p.request, controller.signal);
       if (controller.signal.aborted) return;
       const next = res.questions[0];
-      if (next) patchPreview(p.id, { draft: fromAiDraft(next.question), duplicate: next.hasHashConflict, editing: false, edited: false, regenerating: false });
+      if (next) patchPreview(p.id, { draft: fromAiDraft(next.question), duplicate: next.hasHashConflict, editing: true, edited: false, regenerating: false });
       else patchPreview(p.id, { regenerating: false, regenerateError: 'The AI returned no usable question. Try again.' });
     } catch (err) {
       if (!controller.signal.aborted) patchPreview(p.id, { regenerating: false, regenerateError: aiErrorMessage(err) });
@@ -282,6 +283,7 @@ export const AiGeneratePanel = forwardRef<AiGeneratePanelHandle, {
   };
 
   const pending = useMemo(() => (previews ?? []).map((p, i) => (p.accepted ? -1 : i)).filter(i => i >= 0), [previews]);
+  const anyOpen = (previews ?? []).some(p => !p.accepted && p.editing);
   const accepted = useMemo(() => (previews ?? []).filter(p => p.accepted).map(p => p.draft), [previews]);
 
   useEffect(() => { onPendingChange?.(previews?.length ?? 0); }, [previews?.length, onPendingChange]);
@@ -409,9 +411,21 @@ export const AiGeneratePanel = forwardRef<AiGeneratePanelHandle, {
             <p className="text-sm text-content-soft">
               {previews.length} suggestion{previews.length === 1 ? '' : 's'} · {previews.length - pending.length} accepted
             </p>
-            <Button variant="outline" size="sm" icon={<Icon.Check className="w-3.5 h-3.5" />} onClick={() => accept(pending)} disabled={!pending.length || disabled}>
-              Accept all ({pending.length})
-            </Button>
+            <div className="flex items-center gap-2">
+              {pending.length > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={<Icon.ChevronDown className={`w-3.5 h-3.5 ${anyOpen ? 'rotate-180' : ''}`} />}
+                  onClick={() => setPreviews(prev => prev && prev.map(p => (p.accepted ? p : { ...p, editing: !anyOpen })))}
+                >
+                  {anyOpen ? 'Collapse all' : 'Expand all'}
+                </Button>
+              )}
+              <Button variant="outline" size="sm" icon={<Icon.Check className="w-3.5 h-3.5" />} onClick={() => accept(pending)} disabled={!pending.length || disabled}>
+                Accept all ({pending.length})
+              </Button>
+            </div>
           </div>
           <div className={`space-y-3 ${generating ? 'opacity-50 pointer-events-none' : ''}`} aria-busy={generating}>
             {previews.map((p, i) => (
@@ -493,7 +507,7 @@ function AiPreviewCard({ index, preview, allowedTypes, onAccept, onEdit, onChang
           actions={
             <>
               {regenerateBtn}
-              <Button size="sm" variant="ghost" icon={<Icon.Check className="w-3.5 h-3.5" />} onClick={() => onEdit(false)} disabled={regenerating}>Done</Button>
+              <Button size="sm" variant="ghost" icon={<Icon.ChevronDown className="w-3.5 h-3.5 rotate-180" />} onClick={() => onEdit(false)} disabled={regenerating}>Collapse</Button>
               {acceptBtn}
             </>
           }
@@ -506,7 +520,7 @@ function AiPreviewCard({ index, preview, allowedTypes, onAccept, onEdit, onChang
   return <AiPreviewView index={index} preview={preview} allowedTypes={allowedTypes} actions={
     <div className="flex items-center gap-1 flex-shrink-0">
       {!accepted && (
-        <button type="button" onClick={() => onEdit(true)} disabled={locked} className={iconBtn} aria-label={`Edit suggestion ${index + 1}`} title="Edit before accepting">
+        <button type="button" onClick={() => onEdit(true)} disabled={locked} className={iconBtn} aria-label={`Edit suggestion ${index + 1}`} title="Expand to edit">
           <Icon.Edit className="w-4 h-4" />
         </button>
       )}
@@ -628,7 +642,7 @@ function AiPreviewView({ index, preview, allowedTypes, actions }: { index: numbe
       {q.explanation && (
         <p className="text-sm text-content-soft"><span className="font-medium text-content-secondary">Explanation: </span>{q.explanation}</p>
       )}
-      {issue && !accepted && <p className="text-xs text-warning">{issue} Click Edit to fix it.</p>}
+      {issue && !accepted && <p className="text-xs text-warning">{issue} Expand it to fix it.</p>}
     </article>
   );
 }

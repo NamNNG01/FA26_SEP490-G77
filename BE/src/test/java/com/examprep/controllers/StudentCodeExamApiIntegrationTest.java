@@ -237,6 +237,38 @@ public class StudentCodeExamApiIntegrationTest {
     // =================================================================================
 
     @Test
+    void functionModeHidesTheDriverAndRunsTheStudentsCodeInsideIt() throws Exception {
+        String driver = "import sys\n# STUDENT CODE START\ndef solve(s):\n    return s\n# STUDENT CODE END\n"
+                + "print(solve(sys.stdin.read().strip()))  # DRIVER\n";
+        codeConfig.setAllowedLanguages("[\"PYTHON\"]");
+        codeConfig.setCodeTemplate(driver);
+        em.flush();
+
+        MvcResult questions = call(student, get("/api/v1/student/code-exams/" + exam.getExamId() + "/questions"))
+                .andExpect(status().isOk()).andReturn();
+        JsonNode first = data(questions).path("questions").get(0);
+        assertEquals("def solve(s):\n    return s\n", first.path("codeTemplate").asText());
+        assertTrue(first.path("functionMode").asBoolean());
+        assertFalse(data(questions).path("questions").get(1).path("functionMode").asBoolean());
+        assertFalse(questions.getResponse().getContentAsString().contains("DRIVER"), "the driver must not reach students");
+
+        startAttempt();
+        String code = "def solve(s):\n    return s[::-1]\n";
+        String program = driver.replace("    return s\n", "    return s[::-1]\n");
+        when(piston.run(eq("PYTHON"), eq(program), eq("abc"), anyInt(), anyInt()))
+                .thenReturn(new PistonClient.RunOutcome("FAILED", null, "File \"main.py\", line 4\n", 1));
+        runCode(codeQuestion, "PYTHON", code)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.stderr").value("File \"main.py\", line 2\n")); // counted in the student's code
+
+        stubJudge();
+        submit(student, codeBody("PYTHON", code + "# PASS\n")).andExpect(status().isOk());
+        verify(piston).judge(eq("PYTHON"), argThat(source -> source.startsWith("import sys\n") && source.contains("# DRIVER")),
+                anyList(), anyInt(), anyInt());
+        assertEquals(code + "# PASS\n", submissions().get(0).getSourceCode(), "the saved answer is only the student's code");
+    }
+
+    @Test
     void runUsesThePublicSampleAndReturnsTheJudgeOutcome() throws Exception {
         codeConfig.setAllowedLanguages("[\"PYTHON\"]");
         startAttempt();

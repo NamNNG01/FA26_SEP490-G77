@@ -27,6 +27,7 @@ import com.examprep.repositories.ExamQuestionRepository;
 import com.examprep.repositories.ExamRepository;
 import com.examprep.repositories.QuestionRepository;
 import com.examprep.util.attempt.AttemptScoring;
+import com.examprep.util.attempt.CodeDriver;
 import com.examprep.util.attempt.CodeSource;
 import jakarta.persistence.EntityManager;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -137,9 +138,10 @@ public class StudentCodeExamServiceImpl implements StudentCodeExamService {
                     orderById.getOrDefault(questionId, 0),
                     question.getContent(),
                     List.of(judge.language(cfg)),
-                    cfg == null ? null : cfg.getCodeTemplate(),
+                    cfg == null ? null : CodeDriver.studentTemplate(cfg.getCodeTemplate()),
                     sample == null ? null : sample.getInputData(),
-                    sample == null ? null : sample.getExpectedOutput()));
+                    sample == null ? null : sample.getExpectedOutput(),
+                    cfg != null && CodeDriver.hasDriver(cfg.getCodeTemplate())));
         }
         return new CodeExamResponses.Questions(examId, exam.getTitle(), exam.getDurationMinutes(), items);
     }
@@ -171,10 +173,11 @@ public class StudentCodeExamServiceImpl implements StudentCodeExamService {
                     .map(CodeTestCase::getInputData)
                     .orElse("");
         }
-        PistonClient.RunOutcome outcome = piston.run(request.language(), request.sourceCode(), stdin,
+        CodeDriver.Program program = CodeDriver.program(cfg == null ? null : cfg.getCodeTemplate(), request.sourceCode());
+        PistonClient.RunOutcome outcome = piston.run(request.language(), program.source(), stdin,
                 judge.timeLimit(cfg), judge.memoryLimit(cfg));
-        return new CodeExamResponses.RunResult(outcome.status(), outcome.stdout(), outcome.stderr(),
-                outcome.executionTimeMs());
+        return new CodeExamResponses.RunResult(outcome.status(), outcome.stdout(),
+                CodeDriver.studentLines(outcome.stderr(), program), outcome.executionTimeMs());
     }
 
     // ----------------------------------------------------------------------------------

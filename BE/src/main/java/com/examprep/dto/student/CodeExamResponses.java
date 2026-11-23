@@ -7,10 +7,14 @@ import java.util.List;
 public final class CodeExamResponses {
     private CodeExamResponses() {}
 
-    /** CD-03: no hidden fixture and no answer ever leaves the server. */
+    /**
+     * CD-03: no hidden fixture, no answer and no driver code ever leaves the server. With
+     * {@code functionMode} the student writes only {@code codeTemplate}'s part (a function or
+     * class); the server reads the input, calls it and prints the result.
+     */
     public record QuestionItem(Long questionId, Integer orderIndex, String content,
                                List<String> languages, String codeTemplate,
-                               String sampleInput, String sampleOutput) {}
+                               String sampleInput, String sampleOutput, boolean functionMode) {}
 
     public record Questions(Long examId, String title, Integer durationMinutes,
                             List<QuestionItem> questions) {}

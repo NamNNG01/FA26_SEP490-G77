@@ -4,6 +4,7 @@ import { Icon } from '@/assets/icons';
 import type { ResultQuestion } from '@/services/studentAttempt.service';
 import { DiagramReview } from './DiagramReview';
 import { isAnswered, optionLetter } from '../QuestionAnswerInput';
+import { studentCodeOf } from '@/utils/codeTemplate';
 
 /**
  * The student's answer to one question set against its key, shared by the exam result (SA-05)
@@ -105,7 +106,11 @@ export function AnswerReview({ question, hideVerdict = false }: { question: Resu
     );
   }
 
-  if (answered && q.questionType !== 'DIAGRAM') return <WrittenAnswer text={r?.text ?? ''} code={q.questionType === 'CODE'} />;
+  if (answered && q.questionType !== 'DIAGRAM') {
+    const isCode = q.questionType === 'CODE';
+    // A function-mode answer is saved with the hidden driver around it; show only the student's code.
+    return <WrittenAnswer text={isCode ? studentCodeOf(r?.text ?? '') : r?.text ?? ''} code={isCode} />;
+  }
 
   return (
     <div>
