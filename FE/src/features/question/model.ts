@@ -14,6 +14,7 @@ import type {
   QuestionUpdateRequest,
 } from '@/services/question.service';
 import { hasDiagramContent, plantUmlToDrawioXml } from './diagram';
+import { defaultCodeTemplate, splitTemplate } from '@/utils/codeTemplate';
 
 /**
  * Editor-side model for one question. It keeps every type's fields side by
@@ -228,10 +229,10 @@ export const emptyCriterion = (): RubricCriterionDraft => ({ key: newKey('crit')
 
 export const emptyTestCase = (hidden = false): TestCaseDraft => ({ key: newKey('tc'), input: '', expectedOutput: '', hidden });
 
-/** A new CODE question: the first language, the default limits, a public (sample) and a hidden test case. */
+/** A new CODE question: the first language with its sample template, the default limits, a public (sample) and a hidden test case. */
 const emptyCode = (): CodeDraft => ({
   languages: [CODE_LANGUAGE_OPTIONS[0].value],
-  template: '',
+  template: defaultCodeTemplate(CODE_LANGUAGE_OPTIONS[0].value),
   timeLimitMs: String(CODE_TIME_LIMIT_MS.default),
   memoryLimitKb: String(CODE_MEMORY_LIMIT_KB.default),
   testCases: [emptyTestCase(), emptyTestCase(true)],
@@ -442,6 +443,8 @@ export function codeError(c: CodeDraft | undefined): string | undefined {
   if (!c) return 'The code settings are missing — choose a language and add test cases.';
   if (c.languages.length !== 1) return 'Choose one language.';
   if (bytes(c.template) > MAX_CODE_TEXT_BYTES) return 'The starter code can be at most 100 KB.';
+  if (/STUDENT CODE (START|END)/.test(c.template) && !splitTemplate(c.template))
+    return 'The starter code needs a STUDENT CODE START line followed by a STUDENT CODE END line.';
   const time = Number(c.timeLimitMs);
   if (!Number.isInteger(time) || time < CODE_TIME_LIMIT_MS.min || time > CODE_TIME_LIMIT_MS.max)
     return `Time limit must be a whole number from ${CODE_TIME_LIMIT_MS.min} to ${CODE_TIME_LIMIT_MS.max} ms.`;
