@@ -117,7 +117,7 @@ export function SearchableSelect({ label, options, value, onChange, onSearchChan
         onKeyDown={e => { if ((e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') && !open) { e.preventDefault(); setOpen(true); } }}
         title={selected?.label}
         className={`relative w-full h-9 pl-3 pr-10 rounded-[10px] border bg-surface text-base text-left truncate focus:outline-none focus:ring-2 transition-all ${invalid || error ? 'border-danger-solid focus:ring-danger-solid/20 focus:border-danger-solid' : 'border-line focus:ring-brand-600/20 focus:border-brand-600'} ${
-          selected ? 'text-content' : 'text-content-subtle'
+          selected ? 'text-content' : 'text-content-placeholder'
         } ${disabled ? 'cursor-not-allowed bg-surface-alt text-content-subtle' : 'cursor-pointer'}`}
       >
         {selected?.label ?? placeholder}
@@ -143,7 +143,7 @@ export function SearchableSelect({ label, options, value, onChange, onSearchChan
               aria-expanded
               aria-controls={`${id}-list`}
               aria-activedescendant={filtered[active] ? `${id}-opt-${active}` : undefined}
-              className="w-full h-8 pl-8 pr-2 rounded-[8px] border border-line bg-surface text-sm text-content placeholder:text-content-subtle focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600"
+              className="w-full h-8 pl-8 pr-2 rounded-[8px] border border-line bg-surface text-sm text-content placeholder:text-content-placeholder focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600"
             />
           </div>
           <ul ref={listRef} id={`${id}-list`} role="listbox" className="max-h-64 overflow-y-auto py-1">

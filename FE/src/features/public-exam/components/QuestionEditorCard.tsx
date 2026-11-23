@@ -231,7 +231,7 @@ export function QuestionEditorCard({
             onChange={e => onChange({ text: e.target.value })}
             rows={2}
             placeholder="Enter the question text..."
-            className="w-full resize-y rounded-[10px] border border-line bg-surface px-3 py-2 text-base leading-relaxed text-foreground outline-none transition-colors placeholder:text-content-subtle focus:border-primary focus:ring-2 focus:ring-primary/20"
+            className="w-full resize-y rounded-[10px] border border-line bg-surface px-3 py-2 text-base leading-relaxed text-foreground outline-none transition-colors placeholder:text-content-placeholder focus:border-primary focus:ring-2 focus:ring-primary/20"
           />
         ) : (
           <p className="text-base font-medium leading-relaxed text-foreground">{question.text}</p>
@@ -382,7 +382,7 @@ export function QuestionGroupCard({
               onChange={e => onChange({ title: e.target.value })}
               placeholder="Group title"
               aria-label="Group title"
-              className="h-8 w-full rounded-[10px] border border-transparent bg-transparent px-2 text-lg font-semibold text-foreground outline-none transition-colors placeholder:text-content-subtle hover:border-line focus:border-primary focus:ring-2 focus:ring-primary/20"
+              className="h-8 w-full rounded-[10px] border border-transparent bg-transparent px-2 text-lg font-semibold text-foreground outline-none transition-colors placeholder:text-content-placeholder hover:border-line focus:border-primary focus:ring-2 focus:ring-primary/20"
             />
           ) : (
             <h3 className="text-lg font-semibold leading-snug text-foreground">{group.title}</h3>
@@ -401,7 +401,7 @@ export function QuestionGroupCard({
           rows={4}
           placeholder="Shared passage text..."
           aria-label="Shared passage"
-          className="mt-3 w-full resize-y rounded-[10px] border border-transparent bg-transparent px-2 py-1.5 text-sm leading-relaxed text-muted-foreground outline-none transition-colors placeholder:text-content-subtle hover:border-line focus:border-primary focus:ring-2 focus:ring-primary/20"
+          className="mt-3 w-full resize-y rounded-[10px] border border-transparent bg-transparent px-2 py-1.5 text-sm leading-relaxed text-muted-foreground outline-none transition-colors placeholder:text-content-placeholder hover:border-line focus:border-primary focus:ring-2 focus:ring-primary/20"
         />
       ) : (
         <p className="mt-2 border-l-2 border-line pl-3 text-sm leading-relaxed text-muted-foreground">

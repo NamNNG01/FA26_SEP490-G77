@@ -107,7 +107,7 @@ export function DiagramAnswerInput({
           }}
           placeholder="<mxfile>…</mxfile>"
           spellCheck={false}
-          className={`w-full resize-y rounded-[10px] border border-line bg-surface px-3 py-2.5 font-mono text-sm text-content placeholder:text-content-subtle focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600 ${
+          className={`w-full resize-y rounded-[10px] border border-line bg-surface px-3 py-2.5 font-mono text-sm text-content placeholder:text-content-placeholder focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600 ${
             roomy ? 'min-h-[50vh]' : 'min-h-[14rem]'
           }`}
         />

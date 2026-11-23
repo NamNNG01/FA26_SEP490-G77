@@ -12,7 +12,7 @@ import {
 } from '@/services/studentDeck.service';
 
 export const TEXTAREA_CLASS =
-  'w-full rounded-[10px] border border-line bg-surface px-3 py-2 text-base text-content placeholder:text-content-subtle transition-all focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600';
+  'w-full rounded-[10px] border border-line bg-surface px-3 py-2 text-base text-content placeholder:text-content-placeholder transition-all focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600';
 export const CODE_TEXTAREA_CLASS = `${TEXTAREA_CLASS} font-mono text-sm leading-relaxed`;
 
 const REVIEW_BADGE: Record<ReviewStatus, { label: string; variant: 'default' | 'warning' | 'success' | 'danger'; icon: React.ReactNode }> = {

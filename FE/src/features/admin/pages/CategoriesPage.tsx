@@ -328,7 +328,7 @@ export function CategoriesPage() {
                 rows={3}
                 maxLength={1000}
                 placeholder="Describe what this category covers"
-                className="w-full rounded-[10px] border border-line bg-surface px-3 py-2 text-sm text-content placeholder:text-content-subtle focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600"
+                className="w-full rounded-[10px] border border-line bg-surface px-3 py-2 text-sm text-content placeholder:text-content-placeholder focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600"
               />
             </div>
             <div className="flex items-center justify-between py-2">
@@ -381,7 +381,7 @@ export function CategoriesPage() {
                 rows={3}
                 maxLength={1000}
                 placeholder="Describe what this category covers"
-                className="w-full rounded-[10px] border border-line bg-surface px-3 py-2 text-sm text-content placeholder:text-content-subtle focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600"
+                className="w-full rounded-[10px] border border-line bg-surface px-3 py-2 text-sm text-content placeholder:text-content-placeholder focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600"
               />
             </div>
             <div>

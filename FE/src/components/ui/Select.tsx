@@ -127,7 +127,7 @@ export function Select({ label, options, value, onChange, className = '', trigge
         title={selected?.label}
         className={`relative ${sizeCls} border bg-surface text-left truncate focus:outline-none focus:ring-2 transition-all ${
           error || invalid ? 'border-danger-solid focus:ring-danger-solid/20' : 'border-line focus:ring-brand-600/20 focus:border-brand-600'
-        } ${disabled ? 'cursor-not-allowed bg-surface-alt text-content-subtle' : `cursor-pointer ${selected ? 'text-content' : 'text-content-subtle'}`}`}
+        } ${disabled ? 'cursor-not-allowed bg-surface-alt text-content-subtle' : `cursor-pointer ${selected ? 'text-content' : 'text-content-placeholder'}`}`}
       >
         {selected?.label ?? options[0]?.label ?? ''}
         <Icon.ChevronDown className={`absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-content-subtle pointer-events-none transition-transform ${open ? 'rotate-180' : ''}`} />

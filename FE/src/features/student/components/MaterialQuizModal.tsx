@@ -657,7 +657,7 @@ export function MaterialQuizModal({
                     value={aiContext}
                     onChange={e => setAiContext(e.target.value)}
                     placeholder="e.g. Focus on the definitions in section 2. More scenario-based questions please."
-                    className="w-full rounded-[10px] border border-line bg-surface p-3 text-sm text-content placeholder:text-content-subtle focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/20"
+                    className="w-full rounded-[10px] border border-line bg-surface p-3 text-sm text-content placeholder:text-content-placeholder focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/20"
                   />
                   <span className="flex justify-between gap-2 text-xs text-content-subtle">
                     <span>Tell the AI which parts of the material to focus on or the kind of questions you want.</span>

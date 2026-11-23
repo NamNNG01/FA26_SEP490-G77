@@ -96,7 +96,7 @@ export function MultiSelect<T extends string>({ label, options, value, onChange,
         title={selected.map(o => o.label).join(', ')}
         className={`relative w-full h-9 pl-3 pr-9 rounded-[10px] border bg-surface text-base text-left truncate focus:outline-none focus:ring-2 transition-all ${
           error ? 'border-danger-solid focus:ring-danger-solid/20' : 'border-line focus:ring-brand-600/20 focus:border-brand-600'
-        } ${selected.length ? 'text-content' : 'text-content-subtle'} ${disabled ? 'cursor-not-allowed bg-surface-alt text-content-subtle' : 'cursor-pointer'}`}
+        } ${selected.length ? 'text-content' : 'text-content-placeholder'} ${disabled ? 'cursor-not-allowed bg-surface-alt text-content-subtle' : 'cursor-pointer'}`}
       >
         {summary}
         <Icon.ChevronDown className={`absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-content-subtle pointer-events-none transition-transform ${open ? 'rotate-180' : ''}`} />
