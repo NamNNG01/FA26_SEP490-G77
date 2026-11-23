@@ -13,6 +13,7 @@ import com.examprep.repositories.CodeSubmissionRepository;
 import com.examprep.repositories.CodeTestCaseRepository;
 import com.examprep.services.student.QuestionReviewRecorder;
 import com.examprep.util.attempt.AttemptScoring;
+import com.examprep.util.attempt.CodeDriver;
 import com.examprep.util.attempt.CodeSource;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -57,8 +58,9 @@ class CodeAnswerJudge {
         pool.shutdownNow();
     }
 
-    record Plan(Long questionId, String language, String source, List<PistonClient.CaseInput> cases,
-                BigDecimal points, int timeLimitMs, int memoryLimitKb) {}
+    /** {@code source} is what the student wrote (saved as their answer); {@code program} is what runs: the question's driver around it. */
+    record Plan(Long questionId, String language, String source, CodeDriver.Program program,
+                List<PistonClient.CaseInput> cases, BigDecimal points, int timeLimitMs, int memoryLimitKb) {}
 
     record Verdict(List<PistonClient.CaseOutcome> outcomes, String error) {}
 
@@ -122,7 +124,8 @@ class CodeAnswerJudge {
         List<PistonClient.CaseInput> inputs = cases.stream()
                 .map(test -> new PistonClient.CaseInput(test.getTestCaseId(), test.getInputData(), test.getExpectedOutput()))
                 .toList();
-        return new Plan(questionId, language, source, inputs, points, timeLimit(config), memoryLimit(config));
+        CodeDriver.Program program = CodeDriver.program(config == null ? null : config.getCodeTemplate(), source);
+        return new Plan(questionId, language, source, program, inputs, points, timeLimit(config), memoryLimit(config));
     }
 
     List<Plan> prepareDrafts(List<AttemptAnswer> rows, BigDecimal maxScore) {
@@ -173,7 +176,7 @@ class CodeAnswerJudge {
             if (plan.cases().isEmpty()) {
                 return new Verdict(List.of(), "CODE_NO_TEST_CASES");
             }
-            return new Verdict(piston.judge(plan.language(), plan.source(), plan.cases(),
+            return new Verdict(piston.judge(plan.language(), plan.program().source(), plan.cases(),
                     plan.timeLimitMs(), plan.memoryLimitKb()), null);
         } catch (BaseException ex) {
             if (!recordFailure) {
@@ -199,8 +202,8 @@ class CodeAnswerJudge {
             }
         }
         var attempt = answer.getAttempt();
-        String stderr = first(outcomes, PistonClient.CaseOutcome::stderr);
-        String compile = first(outcomes, PistonClient.CaseOutcome::compileOutput);
+        String stderr = CodeDriver.studentLines(first(outcomes, PistonClient.CaseOutcome::stderr), plan.program());
+        String compile = CodeDriver.studentLines(first(outcomes, PistonClient.CaseOutcome::compileOutput), plan.program());
         submissions.save(CodeSubmission.builder()
                 .attemptAnswer(answer)
                 .attempt(attempt)
