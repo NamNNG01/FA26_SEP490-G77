@@ -48,9 +48,10 @@ const QUIZ_ROW_REM = 4;
 
 /** Row button of a material — e.g. "3 quizzes", "1 quiz · generating". */
 function quizCountLabel(row: MaterialItem): string {
-  const count = row.jobs.length;
+  const visibleJobs = row.jobs.filter(j => j.status !== 'FAILED');
+  const count = visibleJobs.length;
   const label = count === 0 ? 'No quizzes' : `${count} quiz${count === 1 ? '' : 'zes'}`;
-  return row.jobs.some(j => isJobRunning(j.status)) ? `${label} · generating` : label;
+  return visibleJobs.some(j => isJobRunning(j.status)) ? `${label} · generating` : label;
 }
 
 /**
@@ -176,6 +177,7 @@ export function MyMaterialsPage() {
   };
 
   const viewingRow = viewing == null ? null : (rows.find(r => r.documentId === viewing) ?? null);
+  const visibleQuizJobs = viewingRow?.jobs.filter(job => job.status !== 'FAILED') ?? [];
 
   const confirmDelete = async () => {
     if (!deleting) return;
@@ -396,7 +398,7 @@ export function MyMaterialsPage() {
         }
       >
         {viewingRow &&
-          (viewingRow.jobs.length === 0 ? (
+          (visibleQuizJobs.length === 0 ? (
             <EmptyState
               icon={<Icon.ClipboardList className="w-7 h-7" />}
               title="No quizzes yet"
@@ -408,14 +410,14 @@ export function MyMaterialsPage() {
               className="divide-y divide-line overflow-y-auto overscroll-contain rounded-[12px] border border-line"
               style={{ maxHeight: `calc(${QUIZ_ROWS_VISIBLE * QUIZ_ROW_REM}rem + ${QUIZ_ROWS_VISIBLE}px)` }}
             >
-              {viewingRow.jobs.map((job, i) => (
+              {visibleQuizJobs.map((job, i) => (
                 <li
                   key={job.jobId}
                   className="flex items-center gap-3 px-4"
                   style={{ height: `${QUIZ_ROW_REM}rem` }}
                 >
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-content" title={job.quizTitle || undefined}>{job.quizTitle?.trim() || `Quiz ${viewingRow.jobs.length - i}`}</p>
+                    <p className="truncate text-sm font-medium text-content" title={job.quizTitle || undefined}>{job.quizTitle?.trim() || `Quiz ${visibleQuizJobs.length - i}`}</p>
                     <p className="truncate text-xs text-content-subtle">
                       {job.questionCount} questions
                       {jobCourse(viewingRow, job) && <> · {jobCourse(viewingRow, job)}</>}
