@@ -8,6 +8,12 @@
    every bare button — cards, menu items, toggles, accordions — looked unclickable. Restore the
    pointer for enabled controls; in the base layer, so cursor-* utilities still win. */
 @layer base {
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--content-placeholder);
+    opacity: 1;
+  }
+
   button:not(:disabled),
   [role='button']:not([aria-disabled='true']),
   summary,
@@ -82,6 +88,7 @@
   --color-muted-foreground: var(--content-muted);
   --color-content-muted: var(--content-muted);
   --color-content-subtle: var(--content-subtle);
+  --color-content-placeholder: var(--content-placeholder);
   --color-line: var(--line);
   /* Extended neutral ladder. Each name is a (light, dark) pair defined in
      :root / .dark below, so components never need a dark: variant. */
@@ -146,6 +153,7 @@
   --content: #111827;
   --content-muted: #374151;
   --content-subtle: #374151;
+  --content-placeholder: #6B7280;
   --line: #D9DED9;
   --accent: #E7EAE7;
   --accent-foreground: #111827;
@@ -200,6 +208,7 @@
   --content: #F9FAFB;
   --content-muted: #D1D5DB;
   --content-subtle: #6B7280;
+  --content-placeholder: #9CA3AF;
   --line: #1F2937;
   --accent: #26324A;
   --accent-foreground: #F9FAFB;
@@ -420,7 +429,8 @@ body {
 .dark input,
 .dark select,
 .dark textarea { background-color: var(--surface); color: var(--content); border-color: var(--line); }
-.dark input::placeholder { color: var(--content-subtle); }
+.dark input::placeholder,
+.dark textarea::placeholder { color: var(--content-placeholder); }
 
 /* Theme-aware pieces of the plain-CSS helpers above. */
 .dark ::-webkit-scrollbar-thumb { background: #374151; }

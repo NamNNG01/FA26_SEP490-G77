@@ -11,7 +11,7 @@ const DEFAULT_TEXT_LIMIT = 10_000;
 const BLANK = /\{\{(\d+)\}\}/g;
 
 const FIELD =
-  'rounded-[10px] border border-line bg-surface px-3 text-base text-content placeholder:text-content-subtle transition-all focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600';
+  'rounded-[10px] border border-line bg-surface px-3 text-base text-content placeholder:text-content-placeholder transition-all focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600';
 
 export const QUESTION_TYPE_LABEL: Record<string, string> = {
   SINGLE_CHOICE: 'Single choice',
