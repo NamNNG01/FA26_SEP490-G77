@@ -42,8 +42,12 @@ export const QUESTION_TYPE_OPTIONS: { label: string; value: EditableQuestionType
   { label: 'Diagram + Essay', value: 'DIAGRAM_ESSAY' },
 ];
 
-/** Types the AI can draft (ExamAiServiceImpl.TYPES) — AI-01 doesn't draft ORDERING, CODE or DIAGRAM_ESSAY yet. */
-export const AI_QUESTION_TYPE_OPTIONS = QUESTION_TYPE_OPTIONS.filter(t => t.value !== 'ORDERING') as { label: string; value: QuestionType }[];
+/**
+ * Types the AI can draft (AI-01). ORDERING drafts arrive as keyed options plus
+ * answerKey.correctOrder (see fromDetail) — the backend needs an ordering prompt
+ * for them (docs/notes).
+ */
+export const AI_QUESTION_TYPE_OPTIONS = QUESTION_TYPE_OPTIONS as { label: string; value: QuestionType }[];
 
 /**
  * A question group holds exactly one kind (QuestionTypeUtil): every choice /

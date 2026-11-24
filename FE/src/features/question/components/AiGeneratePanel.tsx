@@ -599,6 +599,17 @@ function AiPreviewView({ index, preview, allowedTypes, actions }: { index: numbe
         </ul>
       )}
 
+      {q.type === 'ORDERING' && (
+        <ol className="space-y-1 text-sm text-content-secondary">
+          {q.ordering.filter(o => o.text).map((o, i) => (
+            <li key={o.key} className="flex items-center gap-2">
+              <span className="min-w-5 h-5 px-1 rounded-[6px] bg-surface-muted text-xs font-bold flex items-center justify-center">{i + 1}</span>
+              <span className="flex-1">{o.text}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+
       {q.type === 'FILL_BLANK' && (
         <ul className="space-y-1 text-sm text-content-secondary">
           {blankIndexes(q.content).map(n => (

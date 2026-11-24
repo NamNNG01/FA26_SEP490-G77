@@ -159,6 +159,34 @@ const MATCHING: Builder[] = [
   }),
 ];
 
+/** Items listed shuffled (orderIndex) with keys; answerKey.correctOrder holds the keys in the right order. */
+const ordered = (items: string[], shift: number): Pick<QuestionAiDraft, 'options' | 'answerKey'> => {
+  const keyed = items.map((optionText, i) => ({ key: `k${i + 1}`, optionText }));
+  const s = 1 + (shift % (items.length - 1));
+  const shown = [...keyed.slice(s), ...keyed.slice(0, s)];
+  return {
+    options: shown.map((o, orderIndex) => ({ ...o, orderIndex })),
+    answerKey: { correctOrder: keyed.map(o => o.key) },
+  };
+};
+
+const ORDERING: Builder[] = [
+  (topic, lang, i) => ({
+    content: t(lang, `Sắp xếp các bước áp dụng "${topic}" theo đúng thứ tự.`, `Put the steps for applying "${topic}" in the right order.`),
+    ...ordered(lang === 'vi'
+      ? ['Xác định vấn đề cần giải quyết', 'Phân tích yêu cầu', 'Thiết kế giải pháp', 'Cài đặt', 'Kiểm thử và đánh giá']
+      : ['Identify the problem', 'Analyse the requirements', 'Design a solution', 'Implement it', 'Test and evaluate'], i),
+    explanation: t(lang, 'Hiểu vấn đề trước, rồi thiết kế, cài đặt và cuối cùng kiểm thử.', 'Understand the problem first, then design, build and finally test.'),
+  }),
+  (topic, lang, i) => ({
+    content: t(lang, `Sắp xếp các giai đoạn của vòng đời phát triển phần mềm liên quan tới "${topic}".`, `Order the software development life-cycle phases related to "${topic}".`),
+    ...ordered(lang === 'vi'
+      ? ['Thu thập yêu cầu', 'Thiết kế', 'Lập trình', 'Kiểm thử', 'Triển khai', 'Bảo trì']
+      : ['Requirements', 'Design', 'Coding', 'Testing', 'Deployment', 'Maintenance'], i),
+    explanation: t(lang, 'Thứ tự kinh điển của mô hình thác nước.', 'The classic waterfall order.'),
+  }),
+];
+
 const FILL_BLANK: Builder[] = [
   (topic, lang) => ({
     content: t(lang, `Trong "${topic}", từ khoá {{1}} được dùng để một lớp kế thừa lớp khác trong Java.`, `In "${topic}", the {{1}} keyword lets one Java class inherit from another.`),
@@ -282,6 +310,7 @@ const BUILDERS: Partial<Record<QuestionType, Builder[]>> = {
   MULTIPLE_CHOICE: MULTIPLE,
   TRUE_FALSE: TRUE_FALSE,
   MATCHING,
+  ORDERING,
   FILL_BLANK,
   ESSAY,
   DIAGRAM,
