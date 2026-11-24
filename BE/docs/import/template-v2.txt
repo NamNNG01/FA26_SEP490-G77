@@ -1,104 +1,91 @@
 APEPP — Question Import Template v2
-Course / Module: chọn trên giao diện (không ghi trong file)
+Course / Module: chon tren giao dien (khong ghi trong file)
 
-Quy tắc ngắn:
-- Mỗi câu bắt đầu bằng dòng [TYPE: ...], kết thúc khi gặp [TYPE: ...] tiếp theo hoặc hết file.
-- Dòng tùy chọn: DIFFICULTY: EASY | MEDIUM | HARD ; EXPLANATION: giải thích.
-- POINTS không còn hỗ trợ trong file; điểm câu hỏi được đặt khi thêm vào đề thi.
-
-PART 1 — SINGLE_CHOICE
+Quy tac ngan:
+- Moi cau bat dau bang dong [TYPE: ...], ket thuc khi gap [TYPE: ...] tiep theo hoac het file.
+- Dong bat buoc: DIFFICULTY: EASY | MEDIUM | HARD (khong con default difficulty).
+- Dong tuy chon: EXPLANATION: giai thich (toi da 255 ky tu).
+- POINTS khong con ho tro trong file; diem cau hoi duoc dat khi them vao de thi.
+- CODE: 1 CODE_CONFIG JSON (1 ngon ngu trong allowedLanguages) + it nhat 1 TEST_CASE hidden=false va 1 hidden=true.
+- DIAGRAM / DIAGRAM_ESSAY: DIAGRAM_XML: XML draw.io (<mxGraphModel>...</mxGraphModel>) va RUBRIC:.
 
 [TYPE: SINGLE_CHOICE]
 Q1. What is the output of 2 + 2?
+DIFFICULTY: EASY
 A. 3
 B. 4
 C. 5
 D. 6
 ANSWER: B
-
-PART 2 — MULTIPLE_CHOICE
+EXPLANATION: 2 + 2 equals 4.
 
 [TYPE: MULTIPLE_CHOICE]
 Q2. Which are programming languages?
+DIFFICULTY: EASY
 A. Java
 B. Python
 C. Photoshop
 D. C++
 ANSWER: A, B, D
 
-PART 3 — TRUE_FALSE
-
 [TYPE: TRUE_FALSE]
 Q3. Java is an object-oriented language.
+DIFFICULTY: EASY
 ANSWER: TRUE
-
-PART 4 — FILL_BLANK
 
 [TYPE: FILL_BLANK]
 Q4. The capital of Japan is ____.
+DIFFICULTY: EASY
 ANSWER: Tokyo
 
 [TYPE: FILL_BLANK]
 Q4b. Tokyo is in ____ and Osaka is in ____.
+DIFFICULTY: MEDIUM
 ANSWER: 1=Japan; 2=Japan
 
 [TYPE: FILL_BLANK]
 Q4c. The HTTP method for creating a resource is ____.
+DIFFICULTY: MEDIUM
 ANSWER: POST|post
-
-PART 5 — ORDERING
 
 [TYPE: ORDERING]
 Q5. Arrange the steps in the correct order.
+DIFFICULTY: MEDIUM
 A. Execute the program
 B. Write the source code
 C. Compile the code
 D. Test the result
 ANSWER: B, C, A, D
 
-PART 6 — MATCHING
-
 [TYPE: MATCHING]
 Q6. Match each item with its definition.
+DIFFICULTY: MEDIUM
 A. HTML
 B. Java
 1. Programming language
 2. Markup language
 ANSWER: A-2, B-1
 
-PART 7 — ESSAY
-
 [TYPE: ESSAY]
 Q7. Explain why Java uses garbage collection and what trade-off it brings.
+DIFFICULTY: HARD
 RUBRIC:
 - Memory management | 2 | Explains that unreachable objects are reclaimed automatically
 - Trade-off | 2 | Mentions pause time or runtime overhead
 SAMPLE:
-Java reclaims memory of objects that are no longer referenced, so developers
-do not free memory manually. The cost is that collection runs at unpredictable
-times and can cause pauses.
-
-PART 8 — CODE
-
-For a code question, include one CODE_CONFIG line containing a JSON object and 3-6 TEST_CASE lines.
-Each test case must have inputData, expectedOutput and hidden. Include at least one sample (hidden=false)
-and one hidden test (hidden=true). codeTemplate, timeLimitMs and memoryLimitKb may be set in CODE_CONFIG.
+Java reclaims unreachable objects automatically, trading manual memory frees for occasional GC pauses.
 
 [TYPE: CODE]
 Q8. Read two integers from stdin and print their sum.
 DIFFICULTY: MEDIUM
-CODE_CONFIG: {"allowedLanguages":["JAVA","PYTHON"],"codeTemplate":"","timeLimitMs":5000,"memoryLimitKb":262144}
+CODE_CONFIG: {"allowedLanguages":["JAVA"],"codeTemplate":"","timeLimitMs":5000,"memoryLimitKb":262144}
 TEST_CASE: {"inputData":"2 3\n","expectedOutput":"5","hidden":false}
 TEST_CASE: {"inputData":"-4 1\n","expectedOutput":"-3","hidden":true}
 TEST_CASE: {"inputData":"0 0\n","expectedOutput":"0","hidden":true}
 
-PART 9 — DIAGRAM and DIAGRAM_ESSAY
-
-Provide draw.io XML on DIAGRAM_XML:; XML may continue on following lines until the next block field.
-Both types require a RUBRIC. DIAGRAM_ESSAY requires both a drawing and written explanation during an attempt.
-
 [TYPE: DIAGRAM_ESSAY]
 Q9. Draw a class diagram for the described library and explain the relationships.
+DIFFICULTY: HARD
 DIAGRAM_XML: <mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel>
 RUBRIC:
 - Classes and attributes | 2 | Includes the required classes and attributes.

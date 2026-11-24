@@ -420,7 +420,7 @@ export interface ImportBlock {
 /** Q-09 preview — nothing is saved; valid blocks go into the form and are saved through Q-03. */
 export interface ImportPreviewResponse {
   fileName: string;
-  fileType: 'PDF' | 'DOCX';
+  fileType: 'PDF' | 'DOCX' | 'XLSX';
   totalBlocks: number;
   totalValid: number;
   totalErrors: number;
@@ -430,13 +430,11 @@ export interface ImportPreviewResponse {
 export interface ImportPreviewParams {
   courseId: number;
   moduleId?: number | null;
-  /** Used for blocks without a DIFFICULTY line. */
-  difficulty?: QuestionDifficulty;
 }
 
-/** Import file limits (PdfTextExtractor / DocxTextExtractor). */
+/** Import file limits (PdfTextExtractor / DocxTextExtractor / ExcelQuestionParser). */
 export const IMPORT_MAX_BYTES = 10 * 1024 * 1024;
-export const IMPORT_EXTENSIONS = ['.pdf', '.docx'] as const;
+export const IMPORT_EXTENSIONS = ['.pdf', '.docx', '.xlsx', '.xls'] as const;
 /** AI-02 material files (MaterialTextReader) — any layout, also plain text. */
 export const AI_MATERIAL_EXTENSIONS = ['.pdf', '.docx', '.txt'] as const;
 
@@ -482,13 +480,12 @@ export const questionService = {
     return fromExamAiDraftResponse(res.data?.data);
   },
 
-  /** Q-09: reads a PDF / DOCX in the import template and returns the questions found — saves nothing. */
+  /** Q-09: reads a PDF / DOCX / Excel file in the import template and returns the questions found — saves nothing. */
   async previewImport(file: File, params: ImportPreviewParams, signal?: AbortSignal): Promise<ImportPreviewResponse> {
     const form = new FormData();
     form.append('file', file);
     form.append('courseId', String(params.courseId));
     if (params.moduleId != null) form.append('moduleId', String(params.moduleId));
-    if (params.difficulty) form.append('difficulty', params.difficulty);
     // The backend allows up to 20s to extract the text; leave room for the upload.
     const res = await apiClient.post<ApiResponse<ImportPreviewResponse>>('/manager/questions/import-preview', form, {
       headers: { 'Content-Type': 'multipart/form-data' },
@@ -499,7 +496,7 @@ export const questionService = {
   },
 
   /** Q-09: the blank import template, saved through the browser's download. */
-  async downloadImportTemplate(format: 'pdf' | 'docx'): Promise<void> {
+  async downloadImportTemplate(format: 'pdf' | 'docx' | 'xlsx'): Promise<void> {
     const res = await apiClient.get<Blob>('/manager/questions/import-template', { params: { format }, responseType: 'blob' });
     const disposition = String(res.headers['content-disposition'] ?? '');
     const filename = /filename="?([^";]+)"?/.exec(disposition)?.[1] ?? `question-import-template.${format}`;
