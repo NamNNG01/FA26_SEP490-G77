@@ -8,7 +8,7 @@ spring:
       maximum-pool-size: 35
       minimum-idle: 5
       idle-timeout: 300000
-      connection-timeout: 20000
+      connection-timeout: 30000
 
   jpa:
     open-in-view: false
