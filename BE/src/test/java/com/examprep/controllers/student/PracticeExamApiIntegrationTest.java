@@ -107,6 +107,34 @@ class PracticeExamApiIntegrationTest {
         assertEquals(essays, drawn);
     }
 
+    @Test void mixedTypeDrawsBalancedAcrossAvailableTypes() throws Exception {
+        for (int i = 0; i < 10; i++) {
+            Question q = Question.builder().course(course).module(io).questionType("ESSAY").status("ACTIVE").difficulty("EASY").content("essay mix " + i).build();
+            em.persist(q);
+        }
+        for (int i = 0; i < 10; i++) {
+            Question q = Question.builder().course(course).module(oop).questionType("MULTIPLE_CHOICE").status("ACTIVE").difficulty("EASY").content("mc mix " + i).build();
+            em.persist(q);
+        }
+        em.flush();
+
+        JsonNode data = data(create(student, "{\"courseId\":" + course.getCourseId() + ",\"questionCount\":15,\"durationMinutes\":30,"
+                + "\"examType\":\"MIXED\"}").andExpect(status().isCreated()));
+        assertEquals(15, data.path("questionCount").asInt());
+
+        List<String> drawnTypes = em.createQuery(
+                "select eq.question.questionType from ExamQuestion eq where eq.exam.examId = :e", String.class)
+                .setParameter("e", data.path("examId").asLong())
+                .getResultList();
+        assertEquals(15, drawnTypes.size());
+        long essayCount = drawnTypes.stream().filter("ESSAY"::equals).count();
+        long mcCount = drawnTypes.stream().filter("MULTIPLE_CHOICE"::equals).count();
+        long scCount = drawnTypes.stream().filter("SINGLE_CHOICE"::equals).count();
+        assertTrue(essayCount >= 4 && essayCount <= 6, "Expected balanced ESSAY count, got " + essayCount);
+        assertTrue(mcCount >= 4 && mcCount <= 6, "Expected balanced MULTIPLE_CHOICE count, got " + mcCount);
+        assertTrue(scCount >= 4 && scCount <= 6, "Expected balanced SINGLE_CHOICE count, got " + scCount);
+    }
+
     @Test void moduleQuestionCountsDrawExactlyPerModule() throws Exception {
         String c = "{\"courseId\":" + course.getCourseId() + ",\"durationMinutes\":30,\"moduleQuestionCounts\":[";
         String counts = "{\"categoryId\":" + oop.getModuleId() + ",\"questionCount\":4},{\"categoryId\":" + io.getModuleId() + ",\"questionCount\":3}]}";

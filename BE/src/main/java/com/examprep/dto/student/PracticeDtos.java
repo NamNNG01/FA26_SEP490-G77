@@ -13,11 +13,11 @@ public final class PracticeDtos {
 
     public record ModuleQuestionCount(@NotNull @Positive Long categoryId, @NotNull @Min(1) @Max(100) Integer questionCount) {}
 
-    /** examType QUIZ (default, auto-graded types) or ESSAY (graded later through SE-02). categoryIds are module ids of the course (a course has one category; modules are its topics). */
+    /** examType QUIZ (default, auto-graded types), ESSAY (assessment rubric types), or MIXED (balanced across all types). */
     public record Create(@NotNull @Positive Long courseId,
                          @Min(1) @Max(100) Integer questionCount,
                          @Min(1) @Max(180) Integer durationMinutes,
-                         @Pattern(regexp = "QUIZ|ESSAY") String examType,
+                         @Pattern(regexp = "QUIZ|ESSAY|MIXED") String examType,
                          @Size(max = 50) List<@NotNull @Positive Long> categoryIds,
                          @Pattern(regexp = "EASY|MEDIUM|HARD") String difficulty,
                          /** Name the student gives the exam; blank falls back to "Custom practice - <type>". */

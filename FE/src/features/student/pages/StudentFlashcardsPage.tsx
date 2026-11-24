@@ -33,22 +33,20 @@ const SECTION_MINE = 'mine';
 const SECTION_BOOKMARKED = 'bookmarked';
 const SECTION_COMMUNITY = 'community';
 const courseSection = (courseId: number) => `course:${courseId}`;
-/** Which sections are open, kept per browser (a convenience — falls back to "My decks" open). */
-const OPEN_KEY = 'student:flashcards:open';
+/** Which tab is active, kept per browser (falls back to "My decks"). */
+const ACTIVE_TAB_KEY = 'student:flashcards:tab';
 
-function readOpen(): Set<string> {
+function readActiveTab(): string {
   try {
-    const raw = window.localStorage.getItem(OPEN_KEY);
-    if (raw) return new Set(JSON.parse(raw) as string[]);
+    return window.localStorage.getItem(ACTIVE_TAB_KEY) || SECTION_MINE;
   } catch {
-    /* storage blocked or bad value */
+    return SECTION_MINE;
   }
-  return new Set([SECTION_MINE]);
 }
 
-function writeOpen(open: Set<string>) {
+function writeActiveTab(tab: string) {
   try {
-    window.localStorage.setItem(OPEN_KEY, JSON.stringify([...open]));
+    window.localStorage.setItem(ACTIVE_TAB_KEY, tab);
   } catch {
     /* storage blocked */
   }
@@ -165,12 +163,10 @@ export function StudentFlashcardsPage() {
   const [mode, setMode] = useState<DeckMode | ''>('');
   const [creating, setCreating] = useState(false);
   const [generating, setGenerating] = useState(false);
-  const [open, setOpen] = useState<Set<string>>(() => {
-    const initial = readOpen();
-    // Older links (?tab=mine / ?tab=bookmarked) open their section.
+  const [activeTab, setActiveTab] = useState<string>(() => {
     const tab = params.get('tab');
-    if (tab === SECTION_MINE || tab === SECTION_BOOKMARKED) initial.add(tab);
-    return initial;
+    if (tab === SECTION_MINE || tab === SECTION_BOOKMARKED || tab === SECTION_COMMUNITY) return tab;
+    return readActiveTab();
   });
 
   useEffect(() => {
@@ -190,19 +186,14 @@ export function StudentFlashcardsPage() {
     };
   }, [reload]);
 
-  const toggleSection = (key: string) =>
-    setOpen(prev => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      writeOpen(next);
-      return next;
-    });
+  const selectTab = (key: string) => {
+    setActiveTab(key);
+    writeActiveTab(key);
+  };
 
   const q = search.trim().toLowerCase();
   const searching = q !== '' || mode !== '';
   const matches = (d: DeckListItem) => (!q || d.title.toLowerCase().includes(q)) && (!mode || d.mode === mode);
-  const isOpen = (key: string) => searching || open.has(key);
 
   const bookmarkedIds = useMemo(() => (data?.bookmarks ? new Set(data.bookmarks.map(d => d.deckId)) : null), [data?.bookmarks]);
   const isMine = (d: DeckListItem) => user != null && d.ownerId === user.userId;
@@ -284,125 +275,160 @@ export function StudentFlashcardsPage() {
           <EmptyState icon={<Icon.Search className="w-7 h-7" />} title="No matching decks" message="Try a different keyword or card type." />
         </div>
       ) : (
-        <div className="space-y-3">
-          {(!searching || mine.length > 0) && (
-            <DeckSection
-              sectionKey={SECTION_MINE}
-              title="My decks"
-              icon={<Icon.Layers className="w-4 h-4" />}
-              count={data.mine == null ? null : mine.length}
-              open={isOpen(SECTION_MINE)}
-              onToggle={() => toggleSection(SECTION_MINE)}
-            >
-              {data.mine == null ? (
-                <p className="text-sm text-content-soft">The server can't list your decks yet. You can still create a deck — it opens right after.</p>
-              ) : mine.length === 0 ? (
-                <EmptyState
-                  icon={<Icon.Layers className="w-7 h-7" />}
-                  title="You have no decks yet"
-                  message="Create a deck, or save questions from an exam result as flashcards."
-                  action={newDeck}
-                />
-              ) : (
-                <div className={GRID}>
-                  {mine.map(d => (
-                    <FlashDeckCard key={d.deckId} deck={{ ...d, ownerName: null }} onOpen={() => openDeck(d, true)} />
-                  ))}
-                </div>
-              )}
-            </DeckSection>
-          )}
+        (() => {
+          const tabs: { key: string; label: string; icon: React.ReactNode; count: number | null }[] = [
+            { key: SECTION_MINE, label: 'My decks', icon: <Icon.Layers className="w-4 h-4" />, count: data.mine == null ? null : mine.length },
+            ...(data.bookmarks != null
+              ? [{ key: SECTION_BOOKMARKED, label: 'Bookmarked', icon: <Icon.Bookmark className="w-4 h-4" />, count: bookmarks.length }]
+              : []),
+            ...courses.map(g => ({
+              key: courseSection(g.courseId),
+              label: g.courseTitle,
+              icon: <Icon.BookOpen className="w-4 h-4" />,
+              count: g.error ? null : g.decks.length,
+            })),
+            ...(data.community != null
+              ? [{ key: SECTION_COMMUNITY, label: 'Community Decks', icon: <Icon.Users className="w-4 h-4" />, count: community.length }]
+              : []),
+          ];
+          const currentTab = tabs.some(t => t.key === activeTab) ? activeTab : (tabs[0]?.key ?? SECTION_MINE);
+          const activeCourse = courses.find(g => courseSection(g.courseId) === currentTab);
 
-          {data.bookmarks != null && (!searching || bookmarks.length > 0) && (
-            <DeckSection
-              sectionKey={SECTION_BOOKMARKED}
-              title="Bookmarked"
-              icon={<Icon.Bookmark className="w-4 h-4" />}
-              count={bookmarks.length}
-              open={isOpen(SECTION_BOOKMARKED)}
-              onToggle={() => toggleSection(SECTION_BOOKMARKED)}
-            >
-              {bookmarks.length === 0 ? (
-                <p className="text-sm text-content-soft">Bookmark a course deck or another student's public deck to keep it here.</p>
-              ) : (
-                <div className={GRID}>
-                  {bookmarks.map(d => (
-                    <FlashDeckCard
-                      key={d.deckId}
-                      // Review status and "by …" follow the owner: shown for my decks, hidden for others'.
-                      deck={isMine(d) ? { ...d, ownerName: null } : { ...d, reviewStatus: null }}
-                      onOpen={() => openDeck(d, isMine(d))}
-                      bookmarked
-                      onToggleBookmark={() => void toggleBookmark(d)}
-                    />
-                  ))}
-                </div>
-              )}
-            </DeckSection>
-          )}
+          return (
+            <div className="space-y-4">
+              {/* Horizontal tab bar */}
+              <div
+                role="tablist"
+                aria-label="Flashcard deck collections"
+                className="flex items-center gap-1 overflow-x-auto border-b border-line pb-px"
+              >
+                {tabs.map(t => {
+                  const selected = currentTab === t.key;
+                  return (
+                    <button
+                      key={t.key}
+                      type="button"
+                      role="tab"
+                      aria-selected={selected}
+                      onClick={() => selectTab(t.key)}
+                      className={`inline-flex items-center gap-2 whitespace-nowrap px-3.5 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors flex-shrink-0 ${
+                        selected
+                          ? 'border-brand-600 text-brand-ink'
+                          : 'border-transparent text-content-soft hover:text-content hover:border-line'
+                      }`}
+                    >
+                      <span className={selected ? 'text-brand-ink' : 'text-content-subtle'}>{t.icon}</span>
+                      <span>{t.label}</span>
+                      {t.count != null && (
+                        <span
+                          className={`rounded-full px-1.5 py-0.5 text-2xs font-semibold ${
+                            selected ? 'bg-brand-600/15 text-brand-ink' : 'bg-surface-muted text-content-subtle'
+                          }`}
+                        >
+                          {t.count}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
 
-          {courses.map(g => (
-            <DeckSection
-              key={g.courseId}
-              sectionKey={courseSection(g.courseId)}
-              title={g.courseTitle}
-              onTitleClick={() => navigate(studentCoursePath(g.courseId))}
-              titleHint="Open the course"
-              icon={<Icon.BookOpen className="w-4 h-4" />}
-              count={g.error ? null : g.decks.length}
-              open={isOpen(courseSection(g.courseId))}
-              onToggle={() => toggleSection(courseSection(g.courseId))}
-            >
-              {g.error ? (
-                <p className="text-sm text-content-soft">{g.error}</p>
-              ) : (
-                <div className={GRID}>
-                  {g.decks.map(d => (
-                    <FlashDeckCard
-                      key={d.deckId}
-                      // Review status is the owner's business — course decks show none.
-                      deck={{ ...d, reviewStatus: null }}
-                      onOpen={() => openDeck(d, false)}
-                      bookmarked={bookmarkedIds?.has(d.deckId)}
-                      onToggleBookmark={bookmarkedIds ? () => void toggleBookmark(d) : undefined}
-                    />
-                  ))}
-                </div>
-              )}
-            </DeckSection>
-          ))}
+              {/* Active tab panel */}
+              <div role="tabpanel" className="pt-1">
+                {currentTab === SECTION_MINE && (
+                  data.mine == null ? (
+                    <p className="text-sm text-content-soft">The server can't list your decks yet. You can still create a deck — it opens right after.</p>
+                  ) : mine.length === 0 ? (
+                    <div className="card">
+                      <EmptyState
+                        icon={<Icon.Layers className="w-7 h-7" />}
+                        title="You have no decks yet"
+                        message="Create a deck, or save questions from an exam result as flashcards."
+                        action={newDeck}
+                      />
+                    </div>
+                  ) : (
+                    <div className={GRID}>
+                      {mine.map(d => (
+                        <FlashDeckCard key={d.deckId} deck={{ ...d, ownerName: null }} onOpen={() => openDeck(d, true)} />
+                      ))}
+                    </div>
+                  )
+                )}
 
-          {!searching && data.courses.length === 0 && (
-            <p className="text-sm text-content-soft px-1">None of your active courses has a flashcard deck yet.</p>
-          )}
+                {currentTab === SECTION_BOOKMARKED && (
+                  bookmarks.length === 0 ? (
+                    <div className="card p-8 text-center text-sm text-content-soft">
+                      Bookmark a course deck or another student's public deck to keep it here.
+                    </div>
+                  ) : (
+                    <div className={GRID}>
+                      {bookmarks.map(d => (
+                        <FlashDeckCard
+                          key={d.deckId}
+                          deck={isMine(d) ? { ...d, ownerName: null } : { ...d, reviewStatus: null }}
+                          onOpen={() => openDeck(d, isMine(d))}
+                          bookmarked
+                          onToggleBookmark={() => void toggleBookmark(d)}
+                        />
+                      ))}
+                    </div>
+                  )
+                )}
 
-          {data.community != null && (!searching || community.length > 0) && (
-            <DeckSection
-              sectionKey={SECTION_COMMUNITY}
-              title="Community Decks"
-              icon={<Icon.Users className="w-4 h-4" />}
-              count={community.length}
-              open={isOpen(SECTION_COMMUNITY)}
-              onToggle={() => toggleSection(SECTION_COMMUNITY)}
-            >
-              {community.length === 0 ? (
-                <p className="text-sm text-content-soft">No community flashcard decks published yet.</p>
-              ) : (
-                <div className={GRID}>
-                  {community.map(d => (
-                    <FlashDeckCard
-                      key={d.deckId}
-                      deck={{ ...d, reviewStatus: null, ownerName: d.ownerName ? `Community · ${d.ownerName}` : 'Community' }}
-                      onOpen={() => openDeck(d, isMine(d))}
-                      bookmarked={bookmarkedIds?.has(d.deckId)}
-                      onToggleBookmark={bookmarkedIds ? () => void toggleBookmark(d) : undefined}
-                    />
-                  ))}
-                </div>
-              )}
-            </DeckSection>
-          )}
-        </div>
+                {activeCourse && (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm text-content-soft">{activeCourse.courseTitle}</span>
+                      <button
+                        type="button"
+                        onClick={() => navigate(studentCoursePath(activeCourse.courseId))}
+                        className="text-xs font-medium text-brand-ink hover:underline"
+                      >
+                        Open course →
+                      </button>
+                    </div>
+                    {activeCourse.error ? (
+                      <p className="text-sm text-content-soft">{activeCourse.error}</p>
+                    ) : (
+                      <div className={GRID}>
+                        {activeCourse.decks.map(d => (
+                          <FlashDeckCard
+                            key={d.deckId}
+                            deck={{ ...d, reviewStatus: null }}
+                            onOpen={() => openDeck(d, false)}
+                            bookmarked={bookmarkedIds?.has(d.deckId)}
+                            onToggleBookmark={bookmarkedIds ? () => void toggleBookmark(d) : undefined}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {currentTab === SECTION_COMMUNITY && (
+                  community.length === 0 ? (
+                    <div className="card p-8 text-center text-sm text-content-soft">
+                      No community flashcard decks published yet.
+                    </div>
+                  ) : (
+                    <div className={GRID}>
+                      {community.map(d => (
+                        <FlashDeckCard
+                          key={d.deckId}
+                          deck={{ ...d, reviewStatus: null, ownerName: d.ownerName ? `Community · ${d.ownerName}` : 'Community' }}
+                          onOpen={() => openDeck(d, isMine(d))}
+                          bookmarked={bookmarkedIds?.has(d.deckId)}
+                          onToggleBookmark={bookmarkedIds ? () => void toggleBookmark(d) : undefined}
+                        />
+                      ))}
+                    </div>
+                  )
+                )}
+              </div>
+            </div>
+          );
+        })()
       )}
 
       {creating && (
@@ -417,71 +443,5 @@ export function StudentFlashcardsPage() {
 
       {generating && <AiFlashcardGenerateModal onClose={() => setGenerating(false)} onSaved={() => setReload(r => r + 1)} />}
     </div>
-  );
-}
-
-/** A collapsible group of decks: the header toggles it, the grid drops down below. */
-function DeckSection({
-  sectionKey,
-  title,
-  icon,
-  count,
-  open,
-  onToggle,
-  onTitleClick,
-  titleHint,
-  children,
-}: {
-  sectionKey: string;
-  title: string;
-  icon: React.ReactNode;
-  /** null hides the count (the section couldn't be read). */
-  count: number | null;
-  open: boolean;
-  onToggle: () => void;
-  /** Makes the title a link of its own (e.g. a course section opens the course). */
-  onTitleClick?: () => void;
-  titleHint?: string;
-  children: React.ReactNode;
-}) {
-  const id = `deck-section-${sectionKey.replace(':', '-')}`;
-  return (
-    <section className="border-b border-line last:border-b-0 pb-3">
-      {/* The whole row toggles (a full-size button underneath); with onTitleClick the title sits on top as its own link. */}
-      <div className="relative flex items-center gap-3 px-2 py-2.5 rounded-[10px] hover:bg-surface-muted transition-colors">
-        <button
-          type="button"
-          onClick={onToggle}
-          aria-expanded={open}
-          aria-controls={id}
-          aria-label={`${open ? 'Collapse' : 'Expand'} ${title}`}
-          className="absolute inset-0 rounded-[10px] focus-visible:outline-2 focus-visible:outline-primary"
-        />
-        <Icon.ChevronRight
-          className={`pointer-events-none w-4 h-4 text-content-subtle flex-shrink-0 transition-transform ${open ? 'rotate-90' : ''}`}
-        />
-        <span className="pointer-events-none text-primary flex-shrink-0">{icon}</span>
-        <h2 className={`min-w-0 text-base font-semibold text-content ${onTitleClick ? 'relative' : 'pointer-events-none'}`}>
-          {onTitleClick ? (
-            <button
-              type="button"
-              onClick={onTitleClick}
-              title={titleHint}
-              className="max-w-full truncate text-left hover:text-primary hover:underline focus-visible:outline-2 focus-visible:outline-primary rounded-[4px]"
-            >
-              {title}
-            </button>
-          ) : (
-            <span className="block truncate">{title}</span>
-          )}
-        </h2>
-        {count != null && <span className="pointer-events-none text-sm text-content-subtle flex-shrink-0">({count})</span>}
-      </div>
-      {open && (
-        <div id={id} className="pt-3 px-2">
-          {children}
-        </div>
-      )}
-    </section>
   );
 }

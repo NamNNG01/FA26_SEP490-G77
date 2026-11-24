@@ -170,6 +170,8 @@ function ExamAttemptScreen() {
   // Draft bookkeeping lives in refs: the autosave timer must see the latest values.
   const answersRef = useRef(answers);
   answersRef.current = answers;
+  const checksRef = useRef(checks);
+  checksRef.current = checks;
   const seqRef = useRef<Record<number, number>>({});
   const dirtyRef = useRef<Set<number>>(new Set());
   const savingRef = useRef<Promise<void> | null>(null);
@@ -253,8 +255,15 @@ function ExamAttemptScreen() {
     if (!session) return;
     // One save at a time; a later call waits and then sends what is left.
     while (savingRef.current) await savingRef.current;
+    // Checked practice answers are already persisted and locked on the server via checkAnswer.
+    for (const qId of [...dirtyRef.current]) {
+      if (checksRef.current[qId]) dirtyRef.current.delete(qId);
+    }
     const ids = [...dirtyRef.current];
-    if (ids.length === 0) return;
+    if (ids.length === 0) {
+      setSaveState('saved');
+      return;
+    }
     const entries = ids.map(questionId => ({
       questionId,
       seq: seqRef.current[questionId] ?? 0,
@@ -267,15 +276,21 @@ function ExamAttemptScreen() {
           const chunk = entries.slice(i, i + DRAFT_BATCH_LIMIT);
           const res = await studentAttemptService.saveDrafts(session.attemptId, chunk);
           const saved = new Set(res.saved.map(s => s.questionId));
+          const lockedRejected = new Set(res.rejected.filter(r => r.reason === 'LOCKED').map(r => r.questionId));
           for (const e of chunk) {
             // Edited again while saving → stays dirty with its newer seq.
-            if (saved.has(e.questionId) && seqRef.current[e.questionId] === e.seq) dirtyRef.current.delete(e.questionId);
+            if (lockedRejected.has(e.questionId)) {
+              dirtyRef.current.delete(e.questionId);
+            } else if (saved.has(e.questionId) && seqRef.current[e.questionId] === e.seq) {
+              dirtyRef.current.delete(e.questionId);
+            }
           }
+          const actionableRejections = res.rejected.filter(r => r.reason !== 'LOCKED');
           // A rejected answer was NOT saved: unlike before, it is not treated as done. It stays
           // dirty (the next autosave or flush retries it) and the student is told about it.
           setSaveRejections(prev => [
             ...prev.filter(rejection => !chunk.some(entry => entry.questionId === rejection.questionId)),
-            ...res.rejected,
+            ...actionableRejections,
           ]);
         }
         setSaveState(dirtyRef.current.size > 0 ? 'dirty' : 'saved');
@@ -576,11 +591,11 @@ function ExamAttemptScreen() {
     setChecking(local ? null : questionId);
     setActionError(null);
     try {
-      // Saved alongside, not before: the check carries the answer itself, and waiting for the
-      // draft save (and any autosave in flight) delayed every check. Submit flushes anyway.
-      if (dirtyRef.current.has(questionId)) flush().catch(() => undefined);
-      // Stores and locks the answer; the server verdict wins over the local one.
+      // checkAnswer itself persists and locks the answer on the server, so mark it clean once checked (avoids racing with saveDrafts -> REASON_LOCKED).
       const res = await studentPracticeExamService.checkAnswer(session.attemptId, q, response);
+      dirtyRef.current.delete(questionId);
+      setSaveRejections(prev => prev.filter(r => r.questionId !== questionId));
+      setSaveState(dirtyRef.current.size > 0 ? 'dirty' : 'saved');
       store(res);
       if (!local) setJustChecked(questionId);
     } catch (err) {

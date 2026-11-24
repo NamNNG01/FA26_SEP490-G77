@@ -34,6 +34,12 @@ import java.util.*;
 public class PracticeExamService {
     /** Types SA-04 grades without AI, so a practice exam has a score as soon as it is submitted. */
     public static final List<String> AUTO_GRADED = List.of("SINGLE_CHOICE", "MULTIPLE_CHOICE", "TRUE_FALSE", "FILL_BLANK", "ORDERING", "MATCHING");
+    /** Assessment / rubric-graded types. */
+    public static final List<String> ASSESSMENT_TYPES = List.of("ESSAY", "DIAGRAM", "DIAGRAM_ESSAY");
+    /** Mixed types across both quiz and assessment banks. */
+    public static final List<String> ALL_PRACTICE_TYPES = List.of(
+            "SINGLE_CHOICE", "MULTIPLE_CHOICE", "TRUE_FALSE", "FILL_BLANK", "ORDERING", "MATCHING",
+            "ESSAY", "DIAGRAM", "DIAGRAM_ESSAY");
     public static final BigDecimal MAX_SCORE = BigDecimal.TEN;
 
     private final ExamRepository exams;
@@ -52,8 +58,10 @@ public class PracticeExamService {
     public PracticeDtos.Created create(Long userId, PracticeDtos.Create request) {
         Long courseId = request.courseId();
         requireEnrolled(userId, courseId);
-        boolean essay = "ESSAY".equals(request.examType());
-        List<String> types = essay ? List.of("ESSAY") : AUTO_GRADED;
+        String requestedType = request.examType();
+        boolean essay = "ESSAY".equals(requestedType);
+        boolean mixed = "MIXED".equals(requestedType);
+        List<String> types = mixed ? ALL_PRACTICE_TYPES : (essay ? ASSESSMENT_TYPES : AUTO_GRADED);
 
         List<Long> categoryIds = new ArrayList<>();
         List<QuestionCandidate> drawn = new ArrayList<>();
@@ -79,9 +87,7 @@ public class PracticeExamService {
                     throw new BaseException(ResponseCode.UNPROCESSABLE_VALIDATION_ERROR, "The question bank does not have enough questions.",
                             Map.of("code", "NOT_ENOUGH_QUESTIONS", "categoryId", moduleId, "available", pool.size()));
                 }
-                List<QuestionCandidate> modDrawn = new ArrayList<>(pool);
-                Collections.shuffle(modDrawn);
-                drawn.addAll(modDrawn.subList(0, count));
+                drawn.addAll(drawBalanced(pool, count));
                 categoryIds.add(moduleId);
                 totalCount += count;
             }
@@ -99,15 +105,13 @@ public class PracticeExamService {
             int count = request.questionCount();
             List<QuestionCandidate> pool = findCandidates(courseId, types, moduleIds.isEmpty(), moduleIds.isEmpty() ? List.of(-1L) : moduleIds, request.difficulty());
             if (pool.size() < count) throw notEnough(pool.size());
-            drawn = new ArrayList<>(pool);
-            Collections.shuffle(drawn);
-            drawn = drawn.subList(0, count);
+            drawn = drawBalanced(pool, count);
             categoryIds.addAll(moduleIds);
             totalCount = count;
         }
 
-        String examType = essay ? "ESSAY" : "QUIZ";
-        String title = titleOr(request.title(), "Custom practice - " + (essay ? "Essay" : "Multiple choice"));
+        String examType = mixed ? "MIXED" : (essay ? "ESSAY" : "QUIZ");
+        String title = titleOr(request.title(), "Custom practice - " + (mixed ? "Mixed" : (essay ? "Essay" : "Multiple choice")));
 
         // Build practice_config JSON
         String practiceConfig = writePracticeConfig(examType, totalCount, request.difficulty(),
@@ -253,6 +257,47 @@ public class PracticeExamService {
     static BaseException notEnough(int available) {
         return new BaseException(ResponseCode.UNPROCESSABLE_VALIDATION_ERROR, "The question bank does not have enough questions.",
                 Map.of("code", "NOT_ENOUGH_QUESTIONS", "available", available));
+    }
+
+    /**
+     * Draws {@code count} questions randomly while balancing across every {@code questionType}
+     * present in {@code pool} via round-robin sampling, then shuffles the final list.
+     */
+    static List<QuestionCandidate> drawBalanced(List<QuestionCandidate> pool, int count) {
+        if (count <= 0 || pool.isEmpty()) {
+            return List.of();
+        }
+        Map<String, List<QuestionCandidate>> byType = new LinkedHashMap<>();
+        for (QuestionCandidate candidate : pool) {
+            String typeKey = candidate.questionType() == null ? "UNKNOWN" : candidate.questionType();
+            byType.computeIfAbsent(typeKey, k -> new ArrayList<>()).add(candidate);
+        }
+        List<List<QuestionCandidate>> buckets = new ArrayList<>(byType.values());
+        for (List<QuestionCandidate> bucket : buckets) {
+            Collections.shuffle(bucket);
+        }
+        Collections.shuffle(buckets);
+
+        List<QuestionCandidate> drawn = new ArrayList<>(count);
+        int round = 0;
+        while (drawn.size() < count) {
+            boolean progressed = false;
+            for (List<QuestionCandidate> bucket : buckets) {
+                if (round < bucket.size()) {
+                    drawn.add(bucket.get(round));
+                    progressed = true;
+                    if (drawn.size() >= count) {
+                        break;
+                    }
+                }
+            }
+            if (!progressed) {
+                break;
+            }
+            round++;
+        }
+        Collections.shuffle(drawn);
+        return drawn;
     }
 
     /** findCandidates moved from PracticeExamRepository (which is now deleted). */

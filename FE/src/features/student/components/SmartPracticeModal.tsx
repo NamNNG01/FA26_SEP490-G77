@@ -48,6 +48,7 @@ const MODE_BY_TAB: Record<string, SmartPracticeMode> = { AI: 'AI', Random: 'RAND
 type Phase = 'form' | 'processing' | 'completed' | 'failed';
 
 const EXAM_TYPE_OPTIONS: { value: PracticeExamType; label: string }[] = [
+  { value: 'MIXED', label: 'All types (Balanced)' },
   { value: 'QUIZ', label: 'Quiz' },
   { value: 'ESSAY', label: 'Assessment' },
 ];

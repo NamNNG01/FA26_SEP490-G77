@@ -508,7 +508,7 @@ export function CourseDetailPage({
   const handleMoveModule = async (moduleId: number, direction: -1 | 1) => {
     if (reorderingModuleId !== null) return;
     const orderedModules = [...modules].sort(
-      (a, b) => a.orderIndex - b.orderIndex,
+      (a, b) => a.orderIndex - b.orderIndex || a.moduleId - b.moduleId,
     );
     const currentIndex = orderedModules.findIndex(
       (module) => module.moduleId === moduleId,
@@ -517,20 +517,24 @@ export function CourseDetailPage({
     if (currentIndex < 0 || targetIndex < 0 || targetIndex >= orderedModules.length) return;
 
     const currentModule = orderedModules[currentIndex];
-    const targetModule = orderedModules[targetIndex];
+    const reordered = [...orderedModules];
+    const [moved] = reordered.splice(currentIndex, 1);
+    reordered.splice(targetIndex, 0, moved);
+
+    // Assign clean 1-based @Positive orderIndex values sequentially so duplicates or 0 never break or race.
+    const updates = reordered
+      .map((mod, idx) => ({ mod, nextOrder: idx + 1 }))
+      .filter(({ mod, nextOrder }) => mod.orderIndex !== nextOrder);
+    if (updates.length === 0) return;
+
     setReorderingModuleId(moduleId);
     try {
-      await Promise.all([
-        courseService.updateModule(currentModule.moduleId, {
-          orderIndex: targetModule.orderIndex,
-        }),
-        courseService.updateModule(targetModule.moduleId, {
-          orderIndex: currentModule.orderIndex,
-        }),
-      ]);
+      for (const { mod, nextOrder } of updates) {
+        await courseService.updateModule(mod.moduleId, { orderIndex: nextOrder });
+      }
       const refreshedModules = await courseService.getCourseModules(courseId);
       setModules(
-        [...refreshedModules].sort((a, b) => a.orderIndex - b.orderIndex),
+        [...refreshedModules].sort((a, b) => a.orderIndex - b.orderIndex || a.moduleId - b.moduleId),
       );
       setToast({
         type: "success",
@@ -540,7 +544,7 @@ export function CourseDetailPage({
       try {
         const refreshedModules = await courseService.getCourseModules(courseId);
         setModules(
-          [...refreshedModules].sort((a, b) => a.orderIndex - b.orderIndex),
+          [...refreshedModules].sort((a, b) => a.orderIndex - b.orderIndex || a.moduleId - b.moduleId),
         );
       } catch {
         // Keep the current list if refreshing after a failed reorder also fails.
