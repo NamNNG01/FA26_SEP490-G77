@@ -35,6 +35,27 @@ export function isPasswordTooLong(password: string): boolean {
 
 export const PASSWORD_TOO_LONG_MESSAGE = `Password is too long. Use at most ${PASSWORD_MAX_BYTES} UTF-8 bytes.`;
 
+export interface PasswordCheck {
+  id: 'length' | 'uppercase' | 'number' | 'symbol' | 'maxBytes';
+  label: string;
+  met: boolean;
+}
+
+/**
+ * Every rule of the password policy with whether `password` meets it, for a
+ * live checklist. The byte limit is listed only once it is broken.
+ */
+export function getPasswordChecks(password: string): PasswordCheck[] {
+  const checks: PasswordCheck[] = [
+    { id: 'length', label: `At least ${PASSWORD_MIN_LENGTH} characters`, met: password.length >= PASSWORD_MIN_LENGTH },
+    { id: 'uppercase', label: 'An uppercase letter', met: /\p{Lu}/u.test(password) },
+    { id: 'number', label: 'A number', met: /\p{N}/u.test(password) },
+    { id: 'symbol', label: 'A symbol (e.g. ! @ # $)', met: /[\p{P}\p{S}]/u.test(password) },
+  ];
+  if (isPasswordTooLong(password)) checks.push({ id: 'maxBytes', label: `At most ${PASSWORD_MAX_BYTES} UTF-8 bytes`, met: false });
+  return checks;
+}
+
 /** Returns the first password policy error, or null when the password is valid. */
 export function getPasswordValidationError(password: string): string | null {
   if (!password.trim()) {
