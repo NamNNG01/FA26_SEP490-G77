@@ -174,7 +174,7 @@ public class QuestionController {
     }
 
     @GetMapping("/import-template")
-    @Operation(summary = "Q-09: Download question import template (PDF or DOCX)")
+    @Operation(summary = "Q-09: Download question import template (PDF, DOCX, or XLSX)")
     public ResponseEntity<org.springframework.core.io.Resource> downloadTemplate(
             @RequestParam String format,
             @AuthenticationPrincipal UserPrincipal currentUser) throws Exception {
@@ -183,12 +183,12 @@ public class QuestionController {
     }
 
     @PostMapping("/import-preview")
-    @Operation(summary = "Q-09: Preview question import from PDF or DOCX file")
+    @Operation(summary = "Q-09: Preview question import from PDF, DOCX, or Excel file")
     public ResponseEntity<ApiResponse<ImportPreviewResponse>> importPreview(
             @RequestParam("file") MultipartFile file,
             @RequestParam Long courseId,
             @RequestParam(required = false) Long moduleId,
-            @RequestParam(required = false, defaultValue = "MEDIUM") String difficulty,
+            @RequestParam(required = false) String difficulty,
             @AuthenticationPrincipal UserPrincipal currentUser) throws Exception {
         User user = resolveUser(currentUser);
         ImportPreviewResponse preview = questionImportService.previewImport(file, courseId, moduleId, difficulty, user);

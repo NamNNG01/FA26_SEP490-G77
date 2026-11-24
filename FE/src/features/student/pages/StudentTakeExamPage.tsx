@@ -509,8 +509,49 @@ function ExamAttemptScreen() {
     return m;
   }, [questions, checks, answers]);
 
-  const goTo = (index: number) => {
-    setCurrent(Math.max(0, Math.min(questions.length - 1, index)));
+  const examPages = useMemo(() => {
+    type ExamSessionQuestion = AttemptSession['questions'][number];
+    type PageItem = { question: ExamSessionQuestion; questionIndex: number; questionNumber: number };
+    type Page = {
+      key: string;
+      group: ExamSessionQuestion['group'];
+      isGroup: boolean;
+      items: PageItem[];
+    };
+    const pages: Page[] = [];
+    for (let i = 0; i < questions.length; i++) {
+      const item = questions[i];
+      const gId = item.group?.groupId ?? null;
+      const prev = pages[pages.length - 1];
+      if (gId != null && prev && prev.group?.groupId === gId) {
+        prev.items.push({ question: item, questionIndex: i, questionNumber: i + 1 });
+      } else {
+        pages.push({
+          key: gId != null ? `group-${gId}-${i}` : `q-${item.questionId}`,
+          group: item.group ?? null,
+          isGroup: gId != null,
+          items: [{ question: item, questionIndex: i, questionNumber: i + 1 }],
+        });
+      }
+    }
+    return pages;
+  }, [questions]);
+
+  const scrollToQuestionElement = useCallback((questionId: number, smooth = true) => {
+    requestAnimationFrame(() => {
+      document.getElementById(`exam-q-${questionId}`)?.scrollIntoView({
+        behavior: smooth ? 'smooth' : 'auto',
+        block: 'start',
+      });
+    });
+  }, []);
+
+  const goTo = (index: number, shouldScroll = true) => {
+    const clamped = Math.max(0, Math.min(questions.length - 1, index));
+    setCurrent(clamped);
+    if (shouldScroll && questions[clamped]) {
+      scrollToQuestionElement(questions[clamped].questionId, true);
+    }
     if (dirtyRef.current.size > 0) flush().catch(() => undefined);
   };
 
@@ -555,26 +596,53 @@ function ExamAttemptScreen() {
   }
 
   const q = questions[current];
-  /** A written essay: question on top, the answer box filling the rest of the column (md+). */
-  const fillEssay = isEssay && q?.questionType === 'ESSAY';
+  const currentPageIndex = Math.max(
+    0,
+    examPages.findIndex(p => p.items.some(it => it.questionIndex === current)),
+  );
+  const currentPage = examPages[currentPageIndex] ?? {
+    key: `q-${q.questionId}`,
+    group: q.group ?? null,
+    isGroup: q.group != null,
+    items: [{ question: q, questionIndex: current, questionNumber: current + 1 }],
+  };
+  const isMultiGroupPage = currentPage.items.length > 1;
+  const pageNumberSet = new Set(currentPage.items.map(it => it.questionNumber));
+  const isFirstPage = currentPageIndex === 0;
+  const isLastPage = currentPageIndex === examPages.length - 1;
+  const pageHasCode = currentPage.items.some(it => it.question.questionType === 'CODE');
+  const pageHasEssay = currentPage.items.some(it => RUBRIC_TYPES.has(it.question.questionType));
+  /** A written standalone essay: question on top, the answer box filling the rest of the column (md+). */
+  const fillEssay = !isMultiGroupPage && isEssay && q?.questionType === 'ESSAY';
   const isFlagged = flagged.has(current + 1);
-  const toggleFlag = () =>
+  const toggleFlagNumber = (questionNumber: number) =>
     setFlagged(prev => {
       const next = new Set(prev);
-      if (next.has(current + 1)) next.delete(current + 1);
-      else next.add(current + 1);
+      if (next.has(questionNumber)) next.delete(questionNumber);
+      else next.add(questionNumber);
       return next;
     });
+  const toggleFlag = () => toggleFlagNumber(current + 1);
   const check = checks[q.questionId];
   const checkable = instantCheck && CHECKABLE_TYPES.has(q.questionType);
   const progress = checkProgress(q, answers[q.questionId]);
   const isLast = current === questions.length - 1;
-  const isCode = q.questionType === 'CODE';
-  const goNext = () => (isLast ? setConfirm('submit') : goTo(current + 1));
+  const isCode = !isMultiGroupPage && q.questionType === 'CODE';
+  const goPrevPage = () => {
+    if (isFirstPage) return;
+    goTo(examPages[currentPageIndex - 1].items[0].questionIndex);
+  };
+  const goNextPage = () => {
+    if (isLastPage) {
+      setConfirm('submit');
+    } else {
+      goTo(examPages[currentPageIndex + 1].items[0].questionIndex);
+    }
+  };
 
-  const checkAnswer = async () => {
-    if (checking != null || check) return;
-    const questionId = q.questionId;
+  const checkAnswerFor = async (targetQ: AttemptSession['questions'][number]) => {
+    if (checking != null || checks[targetQ.questionId]) return;
+    const questionId = targetQ.questionId;
     const response = answersRef.current[questionId] ?? null;
     const store = (res: AnswerCheck) =>
       setChecks(prev => {
@@ -583,7 +651,7 @@ function ExamAttemptScreen() {
         return next;
       });
     // The paper carries the key of a practice question: reveal it now, SA-09 confirms it below.
-    const local = checkFromKey(q, response);
+    const local = checkFromKey(targetQ, response);
     if (local) {
       store(local);
       setJustChecked(questionId);
@@ -592,7 +660,7 @@ function ExamAttemptScreen() {
     setActionError(null);
     try {
       // checkAnswer itself persists and locks the answer on the server, so mark it clean once checked (avoids racing with saveDrafts -> REASON_LOCKED).
-      const res = await studentPracticeExamService.checkAnswer(session.attemptId, q, response);
+      const res = await studentPracticeExamService.checkAnswer(session.attemptId, targetQ, response);
       dirtyRef.current.delete(questionId);
       setSaveRejections(prev => prev.filter(r => r.questionId !== questionId));
       setSaveState(dirtyRef.current.size > 0 ? 'dirty' : 'saved');
@@ -606,10 +674,16 @@ function ExamAttemptScreen() {
   };
 
   /** Practice single choice / true-false: picking an option is the answer, check it at once. */
-  const changeAnswer = (response: AnswerResponse) => {
-    setAnswer(q.questionId, response);
-    if (instantCheck && !check && INSTANT_CHECK_TYPES.has(q.questionType)) void checkAnswer();
+  const changeAnswerFor = (targetQ: AttemptSession['questions'][number], targetIndex: number, response: AnswerResponse) => {
+    setCurrent(targetIndex);
+    setAnswer(targetQ.questionId, response);
+    if (instantCheck && !checks[targetQ.questionId] && INSTANT_CHECK_TYPES.has(targetQ.questionType)) {
+      void checkAnswerFor(targetQ);
+    }
   };
+
+  const checkAnswer = () => checkAnswerFor(q);
+  const changeAnswer = (response: AnswerResponse) => changeAnswerFor(q, current, response);
 
   keyHandlerRef.current = e => {
     if (!instantCheck || confirm || e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return;
@@ -621,7 +695,7 @@ function ExamAttemptScreen() {
       // Last question: Enter does not finish — that is the header button's job.
       if (check) {
         if (isLast) return;
-        goNext();
+        if (current < questions.length - 1) goTo(current + 1);
       }
       else if (checkable && progress.ready) void checkAnswer();
       else return;
@@ -715,8 +789,8 @@ function ExamAttemptScreen() {
         {/* Essay / diagram papers use the full width (30px gutters): draw.io and long answers need the room. */}
         {/* A question of a group: its passage in a column of its own (left), the question on the right. */}
         <GroupPassageSplit
-          group={isCode ? null : q?.group}
-          mainClassName={isCode ? 'p-[clamp(0.75rem,1.5vw,1.25rem)]' : isEssay ? 'p-[30px]' : 'p-[clamp(1rem,2.5vw,1.5rem)]'}
+          group={pageHasCode && !isMultiGroupPage ? null : currentPage.group}
+          mainClassName={isCode ? 'p-[clamp(0.75rem,1.5vw,1.25rem)]' : (isEssay || pageHasEssay) ? 'p-[30px]' : 'p-[clamp(1rem,2.5vw,1.5rem)]'}
         >
           {/* CODE: the workspace fills the height between the question header and the nav buttons. */}
           <div
@@ -725,108 +799,171 @@ function ExamAttemptScreen() {
                 ? 'w-full space-y-3 md:h-full md:flex md:flex-col'
                 : fillEssay
                   ? 'w-full flex flex-col gap-3 md:h-full'
-                  : isEssay
-                    ? 'w-full space-y-3'
+                  : (isEssay || pageHasEssay)
+                    ? 'w-full space-y-5'
                     : 'max-w-3xl mx-auto space-y-5'
             }
           >
-            {/* Question header: number, type and points — the card below holds only the question text. */}
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-sm font-semibold text-content uppercase tracking-wide">Question {current + 1}</h2>
-              <Badge variant="info">{QUESTION_TYPE_LABEL[q.questionType] ?? q.questionType}</Badge>
-              {q.maxPoints != null && <span className="text-xs text-content-subtle">{Number(q.maxPoints)} pts</span>}
-              <span className="text-xs text-content-subtle">
-                {current + 1} / {questions.length}
-              </span>
-              <ReportQuestionIssueButton className="ml-auto" questionId={q.questionId} attemptId={session.attemptId} options={q.options ?? []} />
-            </div>
-
-            {isCode ? (
-              <div className="md:min-h-0 md:flex-1">
-                <CodeQuestionWorkspace
-                  key={q.questionId}
-                  question={q}
-                  meta={codeMeta.get(q.questionId) ?? null}
-                  languages={codeLanguages}
-                  value={answers[q.questionId] ?? null}
-                  onChange={changeAnswer}
-                />
+            {isMultiGroupPage && (
+              <div className="flex flex-wrap items-center justify-between gap-2 pb-1 border-b border-line-soft">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="purple">Passage Group</Badge>
+                  <span className="text-sm font-semibold text-content">
+                    Questions {currentPage.items[0].questionNumber}–{currentPage.items[currentPage.items.length - 1].questionNumber} of {questions.length}
+                  </span>
+                </div>
+                <span className="text-xs text-content-subtle">
+                  {currentPage.items.length} questions in this group — scroll down to answer all
+                </span>
               </div>
-            ) : (
-              <>
-                {/* Essay: the question stops at ~35% of the column and scrolls, so the answer box stays on screen. */}
-                {fillEssay ? (
-                  <EssayQuestionPrompt key={q.questionId} content={q.content} />
-                ) : (
-                  <div className={`card ${isEssay ? 'px-3 py-2 max-h-[12vh] overflow-y-auto' : 'p-[clamp(1rem,2.5vw,1.5rem)]'}`}>
-                    <QuestionText
-                      content={q.content}
-                      className={`text-content font-medium ${isEssay ? 'text-xs leading-normal' : 'text-lg leading-relaxed'}`}
-                    />
-                  </div>
-                )}
+            )}
 
-                {/* A checked practice answer is locked: a revealed input locks itself (its key stays
-                    readable), any other checked one is disabled by the fieldset. */}
-                <fieldset
-                  disabled={Boolean(check) && !check?.supported}
-                  className={fillEssay ? 'min-w-0 md:flex-1 md:min-h-0 md:flex md:flex-col' : 'min-w-0'}
+            {currentPage.items.map(item => {
+              const itemQ = item.question;
+              const itemCheck = checks[itemQ.questionId];
+              const itemCheckable = instantCheck && CHECKABLE_TYPES.has(itemQ.questionType);
+              const itemProgress = checkProgress(itemQ, answers[itemQ.questionId]);
+              const itemIsFlagged = flagged.has(item.questionNumber);
+              const itemIsCode = itemQ.questionType === 'CODE';
+              const itemUseFill = fillEssay && !isMultiGroupPage;
+
+              return (
+                <div
+                  key={itemQ.questionId}
+                  id={`exam-q-${itemQ.questionId}`}
+                  onFocusCapture={() => { if (current !== item.questionIndex) setCurrent(item.questionIndex); }}
+                  className={
+                    isMultiGroupPage
+                      ? `rounded-[12px] border p-4 md:p-5 space-y-4 bg-surface transition-colors ${
+                          current === item.questionIndex ? 'border-brand-line' : 'border-line'
+                        }`
+                      : itemIsCode
+                        ? 'space-y-3 md:min-h-0 md:flex-1 md:flex md:flex-col'
+                        : itemUseFill
+                          ? 'flex flex-col gap-3 md:flex-1 md:min-h-0'
+                          : 'space-y-5'
+                  }
                 >
-                  <QuestionAnswerInput
-                    key={q.questionId}
-                    question={q}
-                    value={answers[q.questionId] ?? null}
-                    onChange={changeAnswer}
-                    roomy={isEssay}
-                    fill={fillEssay}
-                    practice={instantCheck}
-                    reveal={check?.supported ? check : null}
-                    onEnter={checkable && !check && progress.ready ? () => void checkAnswer() : undefined}
-                  />
-                </fieldset>
-              </>
-            )}
+                  {/* Question header: number, type, points, per-question flag (in group) & report issue */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="text-sm font-semibold text-content uppercase tracking-wide">
+                      Question {item.questionNumber}
+                    </h2>
+                    <Badge variant="info">{QUESTION_TYPE_LABEL[itemQ.questionType] ?? itemQ.questionType}</Badge>
+                    {itemQ.maxPoints != null && <span className="text-xs text-content-subtle">{Number(itemQ.maxPoints)} pts</span>}
+                    {!isMultiGroupPage && (
+                      <span className="text-xs text-content-subtle">
+                        {item.questionNumber} / {questions.length}
+                      </span>
+                    )}
+                    <div className="ml-auto flex items-center gap-2">
+                      {isMultiGroupPage && (
+                        <button
+                          type="button"
+                          aria-pressed={itemIsFlagged}
+                          onClick={() => toggleFlagNumber(item.questionNumber)}
+                          className={`inline-flex items-center gap-1 px-2 py-1 rounded-[6px] border text-xs font-medium transition-colors cursor-pointer ${
+                            itemIsFlagged
+                              ? 'border-warning-line bg-warning-light text-warning-strong'
+                              : 'border-line bg-surface text-content-subtle hover:bg-accent hover:text-content'
+                          }`}
+                        >
+                          <Icon.Flag className={`w-3.5 h-3.5 ${itemIsFlagged ? 'text-warning' : ''}`} />
+                          {itemIsFlagged ? 'Flagged' : 'Flag'}
+                        </button>
+                      )}
+                      <ReportQuestionIssueButton questionId={itemQ.questionId} attemptId={session.attemptId} options={itemQ.options ?? []} />
+                    </div>
+                  </div>
 
-            {instantCheck && !RUBRIC_TYPES.has(q.questionType) && (
-              <PracticeCheck
-                key={q.questionId}
-                question={q}
-                check={check}
-                checking={checking === q.questionId}
-                progress={progress}
-                checkable={CHECKABLE_TYPES.has(q.questionType)}
-                focusNext={justChecked === q.questionId}
-                onCheck={checkAnswer}
-              />
-            )}
+                  {itemIsCode ? (
+                    <div className={isMultiGroupPage ? 'min-h-[420px]' : 'md:min-h-0 md:flex-1'}>
+                      <CodeQuestionWorkspace
+                        key={itemQ.questionId}
+                        question={itemQ}
+                        meta={codeMeta.get(itemQ.questionId) ?? null}
+                        languages={codeLanguages}
+                        value={answers[itemQ.questionId] ?? null}
+                        onChange={resp => changeAnswerFor(itemQ, item.questionIndex, resp)}
+                      />
+                    </div>
+                  ) : (
+                    <>
+                      {itemUseFill ? (
+                        <EssayQuestionPrompt key={itemQ.questionId} content={itemQ.content} />
+                      ) : (
+                        <div className={`card ${RUBRIC_TYPES.has(itemQ.questionType) && !isMultiGroupPage ? 'px-3 py-2 max-h-[12vh] overflow-y-auto' : 'p-[clamp(1rem,2.2vw,1.35rem)]'}`}>
+                          <QuestionText
+                            content={itemQ.content}
+                            className={`text-content font-medium ${RUBRIC_TYPES.has(itemQ.questionType) && !isMultiGroupPage ? 'text-xs leading-normal' : 'text-lg leading-relaxed'}`}
+                          />
+                        </div>
+                      )}
 
-            <div className="flex flex-wrap items-center justify-between gap-2">
+                      <fieldset
+                        disabled={Boolean(itemCheck) && !itemCheck?.supported}
+                        className={itemUseFill ? 'min-w-0 md:flex-1 md:min-h-0 md:flex md:flex-col' : 'min-w-0'}
+                      >
+                        <QuestionAnswerInput
+                          key={itemQ.questionId}
+                          question={itemQ}
+                          value={answers[itemQ.questionId] ?? null}
+                          onChange={resp => changeAnswerFor(itemQ, item.questionIndex, resp)}
+                          roomy={isEssay}
+                          fill={itemUseFill}
+                          practice={instantCheck}
+                          reveal={itemCheck?.supported ? itemCheck : null}
+                          onEnter={itemCheckable && !itemCheck && itemProgress.ready ? () => void checkAnswerFor(itemQ) : undefined}
+                        />
+                      </fieldset>
+                    </>
+                  )}
+
+                  {instantCheck && !RUBRIC_TYPES.has(itemQ.questionType) && (
+                    <PracticeCheck
+                      key={itemQ.questionId}
+                      question={itemQ}
+                      check={itemCheck}
+                      checking={checking === itemQ.questionId}
+                      progress={itemProgress}
+                      checkable={CHECKABLE_TYPES.has(itemQ.questionType)}
+                      focusNext={justChecked === itemQ.questionId}
+                      onCheck={() => checkAnswerFor(itemQ)}
+                    />
+                  )}
+                </div>
+              );
+            })}
+
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
               <Button
                 variant="outline"
-                disabled={current === 0}
+                disabled={isFirstPage}
                 icon={<Icon.ChevronLeft className="w-4 h-4" />}
-                onClick={() => goTo(current - 1)}
+                onClick={goPrevPage}
               >
                 Previous
               </Button>
               <div className="flex flex-wrap gap-2">
-                <Button
-                  variant="outline"
-                  aria-pressed={isFlagged}
-                  onClick={toggleFlag}
-                  icon={<Icon.Flag className={`w-4 h-4 ${isFlagged ? 'text-warning' : ''}`} />}
-                  className={isFlagged ? '!border-warning-line !bg-warning-light' : ''}
-                >
-                  {isFlagged ? 'Flagged' : 'Flag for review'}
-                </Button>
-                {!isLast ? (
-                  <Button data-next-question iconRight={<Icon.ChevronRight className="w-4 h-4" />} onClick={goNext}>
-                    Next question
+                {!isMultiGroupPage && (
+                  <Button
+                    variant="outline"
+                    aria-pressed={isFlagged}
+                    onClick={toggleFlag}
+                    icon={<Icon.Flag className={`w-4 h-4 ${isFlagged ? 'text-warning' : ''}`} />}
+                    className={isFlagged ? '!border-warning-line !bg-warning-light' : ''}
+                  >
+                    {isFlagged ? 'Flagged' : 'Flag for review'}
+                  </Button>
+                )}
+                {!isLastPage ? (
+                  <Button data-next-question iconRight={<Icon.ChevronRight className="w-4 h-4" />} onClick={goNextPage}>
+                    {examPages[currentPageIndex + 1]?.items.length > 1 ? 'Next group' : 'Next question'}
                   </Button>
                 ) : (
                   // Practice finishes from the header only.
                   !instantCheck && (
-                    <Button data-next-question icon={<Icon.Check className="w-4 h-4" />} onClick={goNext}>
+                    <Button data-next-question icon={<Icon.Check className="w-4 h-4" />} onClick={goNextPage}>
                       Finish
                     </Button>
                   )
@@ -837,10 +974,16 @@ function ExamAttemptScreen() {
         </GroupPassageSplit>
 
         <aside className="md:w-72 max-h-[35vh] md:max-h-none bg-surface border-t md:border-t-0 md:border-l border-line-soft p-5 overflow-y-auto flex-shrink-0">
-          <h2 className="text-base font-semibold text-content mb-4">Question navigator</h2>
+          <h2 className="text-base font-semibold text-content mb-2">Question navigator</h2>
+          {isMultiGroupPage && (
+            <p className="text-xs text-content-subtle mb-3">
+              Group page: Questions {currentPage.items[0].questionNumber}–{currentPage.items[currentPage.items.length - 1].questionNumber}
+            </p>
+          )}
           <QuestionPalette
             total={questions.length}
             current={current + 1}
+            currentGroup={isMultiGroupPage ? pageNumberSet : undefined}
             answered={answeredSet}
             flagged={flagged}
             results={instantCheck ? results : undefined}

@@ -81,6 +81,7 @@ public class AttemptPaperFactory {
 
         Map<Long, Question> fixed = new LinkedHashMap<>();
         Map<Long, BigDecimal> weights = new LinkedHashMap<>();
+        Map<Long, Integer> linkOrders = new HashMap<>();
 
         // Direct links. ManagerExamServiceImpl also writes one link per group question, so a
         // question can appear twice here and again through the group pass: dedupe on questionId.
@@ -88,15 +89,20 @@ public class AttemptPaperFactory {
             Question question = link.getQuestion();
             if (question != null && fixed.putIfAbsent(question.getQuestionId(), question) == null) {
                 weights.put(question.getQuestionId(), positive(link.getWeight()));
+                linkOrders.put(question.getQuestionId(), link.getOrderIndex() == null ? Integer.MAX_VALUE : link.getOrderIndex());
             }
         }
 
         // Group links, kept in the order the manager attached the groups.
         List<ExamGroup> groups = examGroups.findAllByExamIds(List.of(examId));
+        Map<Long, Integer> groupTopOrders = new HashMap<>();
         if (!groups.isEmpty()) {
             Map<Long, Integer> groupOrder = new HashMap<>();
             for (int i = 0; i < groups.size(); i++) {
-                groupOrder.put(groups.get(i).getGroup().getGroupId(), i);
+                ExamGroup eg = groups.get(i);
+                Long gid = eg.getGroup().getGroupId();
+                groupOrder.put(gid, i);
+                groupTopOrders.put(gid, eg.getOrderIndex() == null ? i : eg.getOrderIndex());
             }
             List<Long> groupIds = groups.stream().map(group -> group.getGroup().getGroupId()).toList();
             List<Question> groupQuestions = new ArrayList<>(questions.findAllByGroupIds(groupIds));
@@ -183,7 +189,85 @@ public class AttemptPaperFactory {
                     new AttemptResponses.InvalidQuestions(invalid));
         }
 
-        return new Paper(shuffler.shuffle(items), shuffleSeed);
+        List<PaperUnit> units = groupIntoUnits(items, linkOrders, groupTopOrders);
+        List<PaperUnit> arranged;
+        if (Exam.ORDER_MANUAL.equalsIgnoreCase(exam.getQuestionOrder())) {
+            arranged = new ArrayList<>(units);
+            arranged.sort((a, b) -> {
+                int cmp = Integer.compare(a.unitOrder(), b.unitOrder());
+                if (cmp != 0) return cmp;
+                int rankCmp = Integer.compare(a.typeRank(), b.typeRank());
+                return rankCmp != 0 ? rankCmp : Integer.compare(a.seqIndex(), b.seqIndex());
+            });
+        } else {
+            arranged = shuffler.shuffle(units);
+        }
+
+        List<Item> orderedItems = new ArrayList<>(items.size());
+        for (PaperUnit unit : arranged) {
+            orderedItems.addAll(unit.items());
+        }
+
+        return new Paper(orderedItems, shuffleSeed);
+    }
+
+    private record PaperUnit(int unitOrder, int typeRank, int seqIndex, List<Item> items) {}
+
+    private List<PaperUnit> groupIntoUnits(
+            List<Item> items,
+            Map<Long, Integer> linkOrders,
+            Map<Long, Integer> groupTopOrders
+    ) {
+        List<PaperUnit> units = new ArrayList<>();
+        Map<Long, List<Item>> byGroupId = new LinkedHashMap<>();
+        List<Object> encounterSlots = new ArrayList<>();
+
+        for (Item item : items) {
+            Long gId = groupId(item.question());
+            if (gId == null) {
+                encounterSlots.add(item);
+            } else {
+                List<Item> list = byGroupId.computeIfAbsent(gId, k -> {
+                    List<Item> created = new ArrayList<>();
+                    encounterSlots.add(Map.entry(gId, created));
+                    return created;
+                });
+                list.add(item);
+            }
+        }
+
+        int seq = 0;
+        for (Object slot : encounterSlots) {
+            if (slot instanceof Item standalone) {
+                int order = linkOrders.getOrDefault(standalone.question().getQuestionId(), Integer.MAX_VALUE);
+                units.add(new PaperUnit(order, 0, seq++, List.of(standalone)));
+            } else {
+                @SuppressWarnings("unchecked")
+                Map.Entry<Long, List<Item>> entry = (Map.Entry<Long, List<Item>>) slot;
+                Long gId = entry.getKey();
+                List<Item> groupItems = new ArrayList<>(entry.getValue());
+                groupItems.sort((a, b) -> {
+                    int oa = linkOrders.getOrDefault(a.question().getQuestionId(), Integer.MAX_VALUE);
+                    int ob = linkOrders.getOrDefault(b.question().getQuestionId(), Integer.MAX_VALUE);
+                    return oa != ob ? Integer.compare(oa, ob)
+                            : Long.compare(a.question().getQuestionId(), b.question().getQuestionId());
+                });
+                int topOrder;
+                int typeRank;
+                if (groupTopOrders.containsKey(gId)) {
+                    topOrder = groupTopOrders.get(gId);
+                    typeRank = 1;
+                } else {
+                    topOrder = groupItems.stream()
+                            .mapToInt(it -> linkOrders.getOrDefault(it.question().getQuestionId(), Integer.MAX_VALUE))
+                            .min()
+                            .orElse(Integer.MAX_VALUE);
+                    typeRank = 0;
+                }
+                units.add(new PaperUnit(topOrder, typeRank, seq++, groupItems));
+            }
+        }
+        return units;
     }
 
     /** Every option of the paper in a single query, grouped by question. */

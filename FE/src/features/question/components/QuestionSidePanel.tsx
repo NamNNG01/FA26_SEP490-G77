@@ -58,7 +58,7 @@ export function QuestionSidePanel({
               <Button variant="secondary" className="w-full" icon={<Icon.Plus className="w-4 h-4" />} onClick={onAdd} disabled={saving}>Add Question</Button>
             )}
             {onImport && (
-              <Button variant="outline" className="w-full" icon={<Icon.Scan className="w-4 h-4" />} onClick={onImport} disabled={saving}>Import PDF / Word</Button>
+              <Button variant="outline" className="w-full" icon={<Icon.Scan className="w-4 h-4" />} onClick={onImport} disabled={saving}>Import Excel / Word / PDF</Button>
             )}
           </>
         )}

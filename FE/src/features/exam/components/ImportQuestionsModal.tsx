@@ -27,7 +27,7 @@ export function ImportQuestionsModal({
   const [result, setResult] = useState<ImportExamResponse | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
 
-  const MSG12 = 'Invalid file format or file cannot be extracted. Please select a PDF, DOCX, or TXT file under 10MB.';
+  const MSG12 = 'Invalid file format or file cannot be extracted. Please select an Excel (.xlsx, .xls), PDF, DOCX, or TXT file under 10MB.';
   const MSG13 = 'Questions imported successfully.';
   const MSG14 = 'Skipped duplicate questions:';
 
@@ -52,7 +52,7 @@ export function ImportQuestionsModal({
     const selected = e.target.files?.[0];
     if (!selected) return;
 
-    const allowedExts = ['.pdf', '.docx', '.txt'];
+    const allowedExts = ['.pdf', '.docx', '.xlsx', '.xls', '.txt'];
     const lowerName = selected.name.toLowerCase();
     const isAllowed = allowedExts.some((ext) => lowerName.endsWith(ext));
 
@@ -172,13 +172,13 @@ export function ImportQuestionsModal({
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".pdf,.docx,.txt"
+                accept=".pdf,.docx,.xlsx,.xls,.txt"
                 className="hidden"
                 onChange={handleFileChange}
               />
               <Icon.Upload className="w-8 h-8 mx-auto text-content-subtle mb-2" />
               <p className="text-sm font-medium text-content">
-                {file ? file.name : 'Click to select PDF, DOCX, or TXT file'}
+                {file ? file.name : 'Click to select Excel (.xlsx/.xls), PDF, DOCX, or TXT file'}
               </p>
               <p className="text-xs text-content-subtle mt-1">Maximum allowed size: 10MB</p>
             </div>
