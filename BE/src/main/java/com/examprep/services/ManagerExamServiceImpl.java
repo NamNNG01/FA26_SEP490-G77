@@ -454,6 +454,9 @@ public class ManagerExamServiceImpl implements ManagerExamService {
         if (!list(r.getImportedQuestions()).isEmpty() && module == null) {
             throw bad("Select a module for this exam before importing questions.");
         }
+        if (exams.existsCourseExamByTitle(courseId, r.getTitle().strip(), null)) {
+            throw conflict("An exam with this title already exists in this course.");
+        }
         long validated = System.nanoTime();
 
         Exam e = Exam.builder()
@@ -585,6 +588,10 @@ public class ManagerExamServiceImpl implements ManagerExamService {
         }
         editable(e);
         Long courseId=r.getCourseId()==null?currentCourseId:r.getCourseId();
+        String targetTitle = r.getTitle() != null ? r.getTitle().strip() : e.getTitle();
+        if (courseId != null && exams.existsCourseExamByTitle(courseId, targetTitle, e.getExamId())) {
+            throw conflict("An exam with this title already exists in this course.");
+        }
         Module module=r.getModuleId()==null?e.getModule():module(r.getModuleId());
         if(module!=null && !module.getCourse().getCourseId().equals(courseId)) throw bad("Module must belong to the selected course.");
         if(r.getCourseId()!=null && r.getConfigs()==null) {
@@ -671,7 +678,7 @@ public class ManagerExamServiceImpl implements ManagerExamService {
             ExamRequests.QuestionLink r
     ) {
         Exam e = write(user, id);
-        editable(e);
+        questionsEditable(e);
 
         Set<Long> existingQuestionIds = new HashSet<>(examQuestions(e).keySet());
 
@@ -694,29 +701,51 @@ public class ManagerExamServiceImpl implements ManagerExamService {
         return questionLink(saved);
     }
     @Override @Transactional public ExamResponse.QuestionLink updateQuestionWeight(UserPrincipal user,Long id,Long linkId,ExamRequests.QuestionWeight r) {
-        Exam e=write(user,id); editable(e); positive(linkId);
+        Exam e=write(user,id); questionsEditable(e); positive(linkId);
         ExamQuestion link=links.findById(linkId).filter(l->l.getExam().getExamId().equals(id)).orElseThrow(()->missing("Exam question link"));
         link.setWeight(weight(r.getWeight()));
         links.saveAndFlush(link);
         return questionLink(link);
     }
     @Override @Transactional public void removeQuestion(UserPrincipal user,Long id,Long linkId) {
-        Exam e=write(user,id); editable(e); positive(linkId);
+        Exam e=write(user,id); questionsEditable(e); positive(linkId);
         ExamQuestion link=links.findById(linkId).filter(l->l.getExam().getExamId().equals(id)).orElseThrow(()->missing("Exam question link"));
+        if ("PUBLISHED".equals(e.getStatus())) {
+            long remaining = links.findAllByExamIds(List.of(id)).stream()
+                    .filter(eq -> !eq.getExamQuestionId().equals(link.getExamQuestionId()))
+                    .count();
+            if (remaining == 0 && configs.findByExamExamIdOrderByConfigIdAsc(id).isEmpty()) {
+                throw conflict("Published exam must keep at least one question.");
+            }
+        }
         links.delete(link); links.flush();
     }
     @Override @Transactional public void removeAllQuestions(UserPrincipal user,Long id) {
-        Exam e=write(user,id); editable(e);
+        Exam e=write(user,id);
+        if ("PUBLISHED".equals(e.getStatus())) {
+            throw conflict("Published exam must keep at least one question.");
+        }
+        questionsEditable(e);
         links.deleteByExamExamId(id); groupLinks.deleteByExamExamId(id);
         links.flush(); groupLinks.flush();
     }
     @Override @Transactional public ExamResponse.GroupLink addGroup(UserPrincipal user,Long id,ExamRequests.GroupLink r) {
-        Exam e=write(user,id); editable(e); return groupLink(attachGroup(user,e,r,new HashSet<>()));
+        Exam e=write(user,id); questionsEditable(e); return groupLink(attachGroup(user,e,r,new HashSet<>()));
     }
     @Override @Transactional public void removeGroup(UserPrincipal user,Long id,Long linkId) {
-        Exam e=write(user,id); editable(e); positive(linkId);
+        Exam e=write(user,id); questionsEditable(e); positive(linkId);
         ExamGroup link=groupLinks.findById(linkId).filter(l->l.getExam().getExamId().equals(id)).orElseThrow(()->missing("Exam group link"));
-        for(Question q : questions.findByGroupGroupIdOrderByQuestionIdAsc(link.getGroup().getGroupId())) {
+        List<Question> grouped = questions.findByGroupGroupIdOrderByQuestionIdAsc(link.getGroup().getGroupId());
+        if ("PUBLISHED".equals(e.getStatus())) {
+            Set<Long> removedIds = grouped.stream().map(Question::getQuestionId).collect(Collectors.toSet());
+            long remaining = examQuestions(e).keySet().stream()
+                    .filter(qid -> !removedIds.contains(qid))
+                    .count();
+            if (remaining == 0 && configs.findByExamExamIdOrderByConfigIdAsc(id).isEmpty()) {
+                throw conflict("Published exam must keep at least one question.");
+            }
+        }
+        for(Question q : grouped) {
             links.findByExamExamIdAndQuestionQuestionId(id, q.getQuestionId()).ifPresent(links::delete);
         }
         groupLinks.delete(link); groupLinks.flush(); links.flush();
@@ -923,6 +952,9 @@ public class ManagerExamServiceImpl implements ManagerExamService {
     private void editable(Exam e) {
         if(!"DRAFT".equals(e.getStatus()) || attempts.existsByExamExamId(e.getExamId())) throw conflict("Only draft exams with no attempts allow content changes. Archive exams with attempts.");
     }
+    private void questionsEditable(Exam e) {
+        if("ARCHIVED".equals(e.getStatus())) throw conflict("Archived exams are read-only.");
+    }
     private Exam read(Long id) {
         positive(id);
         Exam e=exams.findById(id).orElseThrow(()->missing("Exam"));
@@ -983,7 +1015,9 @@ public class ManagerExamServiceImpl implements ManagerExamService {
         if(q.getSourceDocumentId()!=null || ("AI".equals(q.getSource()) && "STUDENT".equals(q.getCreatorRole()))) {
             throw bad("Private student material questions cannot be added to course exams.");
         }
-        if(!"ACTIVE".equals(q.getStatus())) throw bad("Only ACTIVE questions can be selected from the bank.");
+        if(!"ACTIVE".equals(q.getStatus()) || !"APPROVED".equals(q.getApprovalStatus()) || q.getDeletedAt() != null) {
+            throw bad("Only ACTIVE, approved questions can be selected from the bank.");
+        }
     }
     private void active(UserPrincipal user,Question q,Set<Long> checked,Long examCourseId) {
         active(user,q,checked);

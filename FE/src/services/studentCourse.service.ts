@@ -62,6 +62,8 @@ export interface CourseModuleSummary {
   examCount?: number;
   /** Flashcard decks of the module. */
   deckCount?: number;
+  /** Public practice questions of the module. */
+  questionCount?: number;
 }
 
 /** CL-02 CourseDetailDto */
@@ -75,7 +77,7 @@ export interface StudentCourseDetail {
   category: CategoryRef | null;
   manager: ManagerRef | null;
   modules: CourseModuleSummary[];
-  stats: { publishedExamCount: number; deckCount: number };
+  stats: { publishedExamCount: number; deckCount: number; questionCount?: number };
   isEnrolled?: boolean;
   publishedExamCount?: number;
   deckCount?: number;

@@ -19,6 +19,8 @@ public class QuestionListItemDto {
     private Long moduleId;
     private String moduleName;
     private Long groupId;
+    private String groupTitle;
+    private String groupQuestionType;
     private String questionType;
     private String difficulty;
     private String status;

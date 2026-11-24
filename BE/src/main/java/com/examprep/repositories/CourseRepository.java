@@ -35,6 +35,25 @@ public interface CourseRepository extends JpaRepository<Course, Long> {
         ))
         """;
 
+    String IS_PUBLISHABLE = """
+        (
+            EXISTS (SELECT 1 FROM Module m WHERE m.course = c AND m.status = 'VISIBLE')
+            AND NOT EXISTS (SELECT 1 FROM Module em WHERE em.course = c AND NOT (
+                EXISTS (SELECT 1 FROM Question q WHERE q.module = em AND q.deletedAt IS NULL
+                    AND q.approvalStatus = 'APPROVED' AND q.status = 'ACTIVE')
+                OR EXISTS (SELECT 1 FROM Exam ex WHERE ex.module = em AND ex.status = 'PUBLISHED' AND ex.mode = 'EXAM')
+                OR EXISTS (SELECT 1 FROM Deck d WHERE d.module = em AND d.visibility = 'PUBLIC'
+                    AND (d.user.roleName <> 'STUDENT' OR d.reviewStatus = 'APPROVED'))
+            ))
+            AND NOT EXISTS (SELECT 1 FROM Question dq LEFT JOIN dq.module dqm
+                WHERE (dq.course = c OR dqm.course = c)
+                  AND dq.deletedAt IS NULL
+                  AND dq.sourceDocumentId IS NULL
+                  AND COALESCE(dq.creatorRole, 'MANAGER') <> 'STUDENT'
+                  AND dq.status <> 'ACTIVE')
+        )
+        """;
+
     @Query("""
     SELECT DISTINCT c.courseId FROM Course c
     WHERE c.manager.userId = :userId
@@ -73,8 +92,8 @@ public interface CourseRepository extends JpaRepository<Course, Long> {
             "AND (:categoryId IS NULL OR c.categoryId = :categoryId) " +
             "AND (:published IS NULL OR c.isPublished = :published) " +
             "AND (:status IS NULL OR (:status = 'PUBLISHED' AND c.isPublished = true) " +
-            "OR (:status = 'READY_TO_PUBLISH' AND c.isPublished = false AND " + HAS_VISIBLE_MODULE_CONTENT + ") " +
-            "OR (:status = 'DRAFT' AND c.isPublished = false AND NOT " + HAS_VISIBLE_MODULE_CONTENT + ")) " +
+            "OR (:status = 'READY_TO_PUBLISH' AND c.isPublished = false AND " + IS_PUBLISHABLE + ") " +
+            "OR (:status = 'DRAFT' AND c.isPublished = false AND NOT " + IS_PUBLISHABLE + ")) " +
             "AND (LOWER(c.title) LIKE :search ESCAPE '!' OR LOWER(c.description) LIKE :search ESCAPE '!')")
     Page<Course> findManagedCourses(@Param("managerId") Long managerId, @Param("categoryId") Long categoryId,
                                    @Param("published") Boolean published, @Param("status") String status,
@@ -82,6 +101,9 @@ public interface CourseRepository extends JpaRepository<Course, Long> {
 
     @Query("SELECT c.courseId FROM Course c WHERE c.courseId IN :ids AND " + HAS_VISIBLE_MODULE_CONTENT)
     List<Long> findCoursesWithVisibleModuleContent(@Param("ids") List<Long> ids);
+
+    @Query("SELECT c.courseId FROM Course c WHERE c.courseId IN :ids AND " + IS_PUBLISHABLE)
+    List<Long> findPublishableCourses(@Param("ids") List<Long> ids);
 
     @EntityGraph(attributePaths = {"category", "manager"})
     @Query("SELECT c FROM Course c WHERE c.courseId = :id")

@@ -97,6 +97,11 @@ export function StudentCourseDetailPage() {
           </div>
           {course.description && <p className="text-sm text-content-soft whitespace-pre-line">{course.description}</p>}
           <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm text-content-soft">
+            {course.stats.questionCount != null && (
+              <span className="inline-flex items-center gap-1.5">
+                <Icon.HelpCircle className="w-4 h-4" /> {course.stats.questionCount} question{course.stats.questionCount === 1 ? '' : 's'}
+              </span>
+            )}
             <span className="inline-flex items-center gap-1.5">
               <Icon.ClipboardList className="w-4 h-4" /> {course.stats.publishedExamCount} exams
             </span>
@@ -217,7 +222,7 @@ function ModuleGrid({ content, onRetry }: { content: CourseDetailState; onRetry:
             index={i + 1}
             title={m.title}
             description={m.description}
-            counts={countItems(byModule.get(m.moduleId) ?? [])}
+            counts={{ ...countItems(byModule.get(m.moduleId) ?? []), questions: m.questionCount ?? 0 }}
             progress={moduleProgress(String(m.moduleId))}
             practiceLoading={opening === String(m.moduleId)}
             onOpen={() => navigate(studentModulePath(course.courseId, m.moduleId), { state: pageState })}
@@ -228,7 +233,10 @@ function ModuleGrid({ content, onRetry }: { content: CourseDetailState; onRetry:
           <ModuleCard
             title="General"
             description="Practice questions, exams and flashcard decks not filed under a module."
-            counts={countItems(general)}
+            counts={{
+              ...countItems(general),
+              questions: be !== 'error' ? (be.modules.find(pm => pm.moduleId == null)?.questions?.total ?? 0) : undefined,
+            }}
             progress={moduleProgress(GENERAL_MODULE)}
             practiceLoading={opening === GENERAL_MODULE}
             onOpen={() => navigate(studentModulePath(course.courseId, GENERAL_MODULE), { state: pageState })}
@@ -268,7 +276,7 @@ function ModuleCard({
   index?: number;
   title: string;
   description?: string | null;
-  counts: { exams: number; decks: number };
+  counts: { questions?: number; exams: number; decks: number };
   /** LP-01's entry for the module; null = nothing to count, undefined = LP-01 failed. */
   progress?: LearningProgress | null;
   /** MP-01 is being read before the practice modal opens. */
@@ -296,6 +304,11 @@ function ModuleCard({
         {/* Pinned to the bottom so counts and bars line up across cards whatever the description's length. */}
         <div className="mt-auto w-full space-y-3">
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-content-soft">
+            {counts.questions != null && (
+              <span className="inline-flex items-center gap-1">
+                <Icon.HelpCircle className="w-3.5 h-3.5" /> {counts.questions} question{counts.questions === 1 ? '' : 's'}
+              </span>
+            )}
             <span className="inline-flex items-center gap-1">
               <Icon.ClipboardList className="w-3.5 h-3.5" /> {counts.exams} exam{counts.exams === 1 ? '' : 's'}
             </span>
@@ -363,6 +376,11 @@ function LockedModules({ course }: { course: StudentCourseDetail }) {
             <div className="flex-1 min-w-0">
               <h3 className="text-base font-semibold text-content-soft leading-snug line-clamp-2">{m.title}</h3>
               {m.description && <p className="text-xs text-content-subtle mt-0.5 line-clamp-2">{m.description}</p>}
+              {m.questionCount != null && (
+                <p className="text-xs text-content-subtle mt-1 inline-flex items-center gap-1">
+                  <Icon.HelpCircle className="w-3.5 h-3.5" /> {m.questionCount} question{m.questionCount === 1 ? '' : 's'}
+                </p>
+              )}
             </div>
             <Icon.Lock className="w-4 h-4 text-content-subtle flex-shrink-0 mt-1" />
           </div>

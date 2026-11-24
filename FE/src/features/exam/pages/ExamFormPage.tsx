@@ -146,9 +146,9 @@ export function ExamFormPage({
   const isPublished = status === "PUBLISHED";
   const isArchived = status === "ARCHIVED";
   const isReadOnly = isPublished || isArchived;
-  // Published exams keep their configuration locked, but managers may still
-  // maintain the attached question set. Archived exams remain fully read-only.
-  const areQuestionsReadOnly = isArchived;
+  // Published exams keep their settings and question contents locked, while still allowing
+  // managers to add/remove questions & groups and adjust weights. Archived exams are read-only.
+  const canManageExamQuestions = !isArchived;
 
   const allowedQuestionTypes =
     formKind === "QUIZ"
@@ -847,14 +847,7 @@ export function ExamFormPage({
         setRemoveConfirmTarget(null);
         loadExamDetail(Number(id));
       } catch (err: unknown) {
-        const errorObj = err as { response?: { status?: number } };
-        if (errorObj?.response?.status === 409) {
-          toast.error(
-            "Cannot remove questions from a published exam. Please unpublish first.",
-          );
-        } else {
-          toast.error(getApiErrorMessage(err, "Failed to remove question."));
-        }
+        toast.error(getApiErrorMessage(err, "Failed to remove question."));
       } finally {
         setLoading(false);
       }
@@ -1006,50 +999,11 @@ export function ExamFormPage({
         setRemoveConfirmTarget(null);
         loadExamDetail(Number(id));
       } catch (err: unknown) {
-        const errorObj = err as { response?: { status?: number } };
-        if (errorObj?.response?.status === 409) {
-          toast.error(
-            "Cannot remove groups from a published exam. Unpublish first.",
-          );
-        } else {
-          toast.error(getApiErrorMessage(err, "Failed to remove group."));
-        }
+        toast.error(getApiErrorMessage(err, "Failed to remove group."));
       } finally {
         setLoading(false);
       }
     }
-  };
-
-  const handleAddConfigRow = () => {
-    setConfigs((prev) => [
-      ...prev,
-      {
-        questionType: allowedQuestionTypes[0],
-        numberOfQuestions: 5,
-        moduleId: moduleId ? Number(moduleId) : undefined,
-        difficulty: "MEDIUM",
-        weightEach: 1,
-      },
-    ]);
-    setIsDirty(true);
-  };
-
-  const handleRemoveConfigRow = (index: number) => {
-    setConfigs((prev) => prev.filter((_, i) => i !== index));
-    setIsDirty(true);
-  };
-
-  const handleConfigChange = (
-    index: number,
-    field: keyof ExamConfig,
-    val: unknown,
-  ) => {
-    setConfigs((prev) => {
-      const next = [...prev];
-      next[index] = { ...next[index], [field]: val };
-      return next;
-    });
-    setIsDirty(true);
   };
 
   const handleCancelClick = () => {
@@ -1096,16 +1050,7 @@ export function ExamFormPage({
         <div className="flex items-center gap-2">
           {isEdit && (
             <>
-              {status === "PUBLISHED" ? (
-                <Button
-                  variant="outline"
-                  icon={<Icon.EyeOff className="w-4 h-4" />}
-                  onClick={() => handlePublishStatusChange("DRAFT")}
-                  disabled={saving || loading}
-                >
-                  Unpublish to Draft
-                </Button>
-              ) : (
+              {status === "DRAFT" && (
                 <Button
                   variant="outline"
                   icon={<Icon.CheckCircle className="w-4 h-4" />}
@@ -1136,22 +1081,12 @@ export function ExamFormPage({
       </div>
 
       {isPublished && (
-        <div className="p-4 bg-info-light/40 border border-brand-line/60 rounded-[12px] flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <Icon.Info className="w-5 h-5 text-brand-ink flex-shrink-0" />
-            <span className="text-sm font-medium text-foreground">
-              This exam is published. You can edit question details, diagrams,
-              and rubrics; weights and exam settings are locked.
-            </span>
-          </div>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => handlePublishStatusChange("DRAFT")}
-            disabled={saving}
-          >
-            Unpublish
-          </Button>
+        <div className="p-4 bg-info-light/40 border border-brand-line/60 rounded-[12px] flex items-center gap-2.5">
+          <Icon.Info className="w-5 h-5 text-brand-ink flex-shrink-0" />
+          <span className="text-sm font-medium text-foreground">
+            This exam is published. Exam settings and published question contents
+            are locked, but you can add or remove questions from the bank.
+          </span>
         </div>
       )}
 
@@ -1321,7 +1256,7 @@ export function ExamFormPage({
                   </p>
                 )}
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
                     <label className="text-xs font-medium text-content-secondary block mb-1">
                       Duration (min) *
@@ -1370,32 +1305,6 @@ export function ExamFormPage({
                   </div>
 
                   <Select
-                    label="Generation"
-                    value={generationType}
-                    disabled={isReadOnly}
-                    onChange={(v) => {
-                      setGenerationType(v as GenerationType);
-                      if (v === "RANDOM" && !isEdit) {
-                        setQuestions([]);
-                        setGroups([]);
-                        setImportedQuestionDrafts([]);
-                        setImportedQuestionsSubmitted(false);
-                        setBankModalOpen(false);
-                        setGroupModalOpen(false);
-                        setImportPreviewOpen(false);
-                        setImportModalOpen(false);
-                      } else if (v === "STATIC" && !isEdit) {
-                        setConfigs([]);
-                      }
-                      setIsDirty(true);
-                    }}
-                    options={[
-                      { label: "STATIC", value: "STATIC" },
-                      { label: "RANDOM", value: "RANDOM" },
-                    ]}
-                  />
-
-                  <Select
                     label="Mode"
                     value={mode}
                     disabled={isReadOnly}
@@ -1409,158 +1318,7 @@ export function ExamFormPage({
               </div>
             </div>
 
-            {generationType === "RANDOM" && (
-              <div className="card p-5 space-y-4">
-                <div className="flex items-center justify-between border-b border-line-soft pb-2.5">
-                  <div>
-                    <h3 className="text-base font-bold text-content">
-                      Random Question Draw Matrix
-                    </h3>
-                    <p className="text-xs text-content-subtle mt-0.5">
-                      Define rules for sampling questions dynamically from the
-                      question bank.
-                    </p>
-                  </div>
-                  {!isReadOnly && (
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      icon={<Icon.Plus className="w-3.5 h-3.5" />}
-                      onClick={handleAddConfigRow}
-                    >
-                      Add Rule
-                    </Button>
-                  )}
-                </div>
-
-                {fieldErrors.configs && (
-                  <p className="text-xs text-danger font-medium">
-                    {fieldErrors.configs}
-                  </p>
-                )}
-
-                {configs.length === 0 ? (
-                  <p className="text-xs text-content-subtle py-4 text-center">
-                    No random sampling rules configured yet. Click "Add Rule" to
-                    define criteria.
-                  </p>
-                ) : (
-                  <div className="space-y-2.5">
-                    {configs.map((c, idx) => (
-                      <div
-                        key={idx}
-                        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.6fr)_minmax(96px,0.9fr)_minmax(140px,1.15fr)_minmax(160px,1.25fr)_auto] items-start gap-3 p-3 rounded-[10px] border border-line bg-surface-muted/40"
-                      >
-                        <div className="min-w-0">
-                          <label className="text-2xs text-content-subtle block mb-1">
-                            Type
-                          </label>
-                          <Select
-                            value={c.questionType}
-                            disabled={isReadOnly}
-                            onChange={(v) =>
-                              handleConfigChange(idx, "questionType", v)
-                            }
-                            options={allowedQuestionTypes.map((t) => ({
-                              label: t.replace("_", " "),
-                              value: t,
-                            }))}
-                          />
-                        </div>
-
-                        <div className="min-w-0">
-                          <label className="text-2xs text-content-subtle block mb-1">
-                            Count
-                          </label>
-                          <input
-                            type="number"
-                            min={1}
-                            max={100}
-                            disabled={isReadOnly}
-                            className="w-full px-2.5 py-1 text-sm rounded-[8px] border border-line bg-surface"
-                            value={c.numberOfQuestions}
-                            onChange={(e) =>
-                              handleConfigChange(
-                                idx,
-                                "numberOfQuestions",
-                                Math.max(1, Number(e.target.value) || 1),
-                              )
-                            }
-                          />
-                        </div>
-
-                        <div className="min-w-0">
-                          <label className="text-2xs text-content-subtle block mb-1">
-                            Weight Each
-                          </label>
-                          <input
-                            type="number"
-                            min={0}
-                            max={1000}
-                            step={1}
-                            disabled={isReadOnly}
-                            className="w-full px-2.5 py-1 text-sm rounded-[8px] border border-line bg-surface"
-                            value={c.weightEach ?? 1}
-                            onChange={(e) =>
-                              handleConfigChange(
-                                idx,
-                                "weightEach",
-                                Number(e.target.value) || 0,
-                              )
-                            }
-                          />
-                          <span className="mt-1 block text-2xs text-content-subtle">
-                            {formatScore(scoreForWeight(c.weightEach ?? 1))} pts
-                            each
-                          </span>
-                        </div>
-
-                        <div className="min-w-0">
-                          <label className="text-2xs text-content-subtle block mb-1">
-                            Difficulty
-                          </label>
-                          <Select
-                            value={c.difficulty || "ANY"}
-                            disabled={isReadOnly}
-                            onChange={(v) =>
-                              // "ANY" is UI-only; the API means "any difficulty" by omitting the field.
-                              handleConfigChange(
-                                idx,
-                                "difficulty",
-                                v === "ANY" ? undefined : v,
-                              )
-                            }
-                            options={[
-                              { label: "Any Difficulty", value: "ANY" },
-                              { label: "EASY", value: "EASY" },
-                              { label: "MEDIUM", value: "MEDIUM" },
-                              { label: "HARD", value: "HARD" },
-                            ]}
-                          />
-                        </div>
-
-                        {!isReadOnly && (
-                          <div className="self-center">
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveConfigRow(idx)}
-                              className="text-content-subtle hover:text-danger p-1 rounded hover:bg-danger-light cursor-pointer"
-                              title="Delete rule"
-                            >
-                              <Icon.Trash className="w-4 h-4" />
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            <div
-              className={`card p-5 space-y-4 ${generationType === "RANDOM" ? "hidden" : ""}`}
-            >
+            <div className="card p-5 space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line-soft pb-2.5">
                 <div>
                   <h3 className="text-base font-bold text-content">
@@ -1580,9 +1338,9 @@ export function ExamFormPage({
                   )}
                 </div>
 
-                {!isReadOnly && (
+                {canManageExamQuestions && (
                   <div className="flex items-center gap-2">
-                    {(questions.length > 0 || groups.length > 0 || importedQuestionDrafts.length > 0) && (
+                    {!isReadOnly && (questions.length > 0 || groups.length > 0 || importedQuestionDrafts.length > 0) && (
                       <Button
                         size="sm"
                         variant="outline"
@@ -1593,7 +1351,7 @@ export function ExamFormPage({
                         Remove All
                       </Button>
                     )}
-                    {formKind === "QUIZ" && isEdit && (
+                    {!isReadOnly && formKind === "QUIZ" && isEdit && (
                       <Button
                         size="sm"
                         variant="outline"
@@ -1603,7 +1361,7 @@ export function ExamFormPage({
                         Import Questions
                       </Button>
                     )}
-                    {!isEdit && generationType === "STATIC" && (
+                    {!isReadOnly && !isEdit && (
                       <Button
                         size="sm"
                         variant="outline"
@@ -1674,7 +1432,7 @@ export function ExamFormPage({
                                     min={0}
                                     max={1000}
                                     step={1}
-                                    disabled={isReadOnly}
+                                    disabled={!canManageExamQuestions}
                                     className="w-20 px-2 py-1 rounded border border-line bg-surface text-content disabled:opacity-60"
                                     value={q.weight ?? q.points ?? 1}
                                     onChange={(e) => {
@@ -1710,7 +1468,7 @@ export function ExamFormPage({
                                   pts
                                 </span>
 
-                                {isAssessment && isEssayQuestion(q) && (
+                                {!isReadOnly && isAssessment && isEssayQuestion(q) && (
                                   <button
                                     type="button"
                                     onClick={() =>
@@ -1728,20 +1486,23 @@ export function ExamFormPage({
                             </div>
                           </div>
 
-                          {!areQuestionsReadOnly && (
+                          {(!isReadOnly || (!q.groupId && canManageExamQuestions)) && (
                             <div className="flex items-center gap-1">
-                              <button
-                                type="button"
-                                onClick={() => setQuestionEditTarget(q)}
-                                className="text-content-subtle hover:text-brand-ink p-1 rounded hover:bg-surface-hover cursor-pointer"
-                                title="Edit Question"
-                                aria-label={`Edit question ${idx + 1}`}
-                              >
-                                <Icon.Edit className="w-4 h-4" />
-                              </button>
-                              {!q.groupId && !isReadOnly && (
+                              {!isReadOnly && (
                                 <button
                                   type="button"
+                                  onClick={() => setQuestionEditTarget(q)}
+                                  className="text-content-subtle hover:text-brand-ink p-1 rounded hover:bg-surface-hover cursor-pointer"
+                                  title="Edit Question"
+                                  aria-label={`Edit question ${idx + 1}`}
+                                >
+                                  <Icon.Edit className="w-4 h-4" />
+                                </button>
+                              )}
+                              {!q.groupId && canManageExamQuestions && (
+                                <button
+                                  type="button"
+                                  disabled={isPublished && totalQuestionCount <= 1}
                                   onClick={() =>
                                     setRemoveConfirmTarget({
                                       type: "question",
@@ -1749,8 +1510,12 @@ export function ExamFormPage({
                                       title: q.content,
                                     })
                                   }
-                                  className="text-content-subtle hover:text-danger p-1 rounded hover:bg-danger-light cursor-pointer"
-                                  title="Remove Question from Exam"
+                                  className="text-content-subtle hover:text-danger p-1 rounded hover:bg-danger-light cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                                  title={
+                                    isPublished && totalQuestionCount <= 1
+                                      ? "Published exam must keep at least one question"
+                                      : "Remove Question from Exam"
+                                  }
                                   aria-label={`Remove question ${idx + 1} from exam`}
                                 >
                                   <Icon.Trash className="w-4 h-4" />
@@ -1762,7 +1527,7 @@ export function ExamFormPage({
                         {(q.questionType === "DIAGRAM" || q.questionType === "DIAGRAM_ESSAY") && (
                           <ExamDiagramAnswer
                             questionId={q.questionId}
-                            readOnly={areQuestionsReadOnly}
+                            readOnly={isReadOnly}
                           />
                         )}
                       </div>
@@ -1771,8 +1536,7 @@ export function ExamFormPage({
               )}
             </div>
 
-            {generationType !== "RANDOM" &&
-              importedQuestionDrafts.length > 0 && (
+            {importedQuestionDrafts.length > 0 && (
                 <div className="card space-y-4 p-5">
                   <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line-soft pb-2.5">
                     <div>
@@ -1844,9 +1608,7 @@ export function ExamFormPage({
                 </div>
               )}
 
-            <div
-              className={`card p-5 space-y-4 ${generationType === "RANDOM" ? "hidden" : ""}`}
-            >
+            <div className="card p-5 space-y-4">
               <div className="flex items-center justify-between border-b border-line-soft pb-2.5">
                 <div>
                   <h3 className="text-base font-bold text-content">
@@ -1856,7 +1618,7 @@ export function ExamFormPage({
                     Attach comprehension passages with their bundled questions.
                   </p>
                 </div>
-                {!isReadOnly && (
+                {canManageExamQuestions && (
                   <Button
                     size="sm"
                     variant="secondary"
@@ -1914,9 +1676,17 @@ export function ExamFormPage({
                               questions
                             </span>
                           </button>
-                          {!isReadOnly && (
+                          {canManageExamQuestions && (
                             <button
                               type="button"
+                              disabled={
+                                isPublished &&
+                                totalQuestionCount -
+                                  (groupQuestions.length ||
+                                    g.questionCount ||
+                                    0) <
+                                  1
+                              }
                               onClick={() =>
                                 setRemoveConfirmTarget({
                                   type: "group",
@@ -1924,8 +1694,17 @@ export function ExamFormPage({
                                   title: g.title,
                                 })
                               }
-                              className="text-content-subtle hover:text-danger p-1 rounded hover:bg-danger-light cursor-pointer"
-                              title="Remove group"
+                              className="text-content-subtle hover:text-danger p-1 rounded hover:bg-danger-light cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                              title={
+                                isPublished &&
+                                totalQuestionCount -
+                                  (groupQuestions.length ||
+                                    g.questionCount ||
+                                    0) <
+                                  1
+                                  ? "Published exam must keep at least one question"
+                                  : "Remove group"
+                              }
                               aria-label={`Remove ${g.title}`}
                             >
                               <Icon.Trash className="w-4 h-4" />
@@ -1975,7 +1754,7 @@ export function ExamFormPage({
                                               min={0}
                                               max={1000}
                                               step={1}
-                                              disabled={isReadOnly}
+                                              disabled={!canManageExamQuestions}
                                               className="w-20 rounded border border-line bg-surface px-2 py-1 text-content disabled:opacity-60"
                                               value={q.weight ?? q.points ?? 1}
                                               onChange={(e) => {
@@ -2014,7 +1793,8 @@ export function ExamFormPage({
                                             )}{" "}
                                             pts
                                           </span>
-                                          {isAssessment &&
+                                          {!isReadOnly &&
+                                            isAssessment &&
                                             isEssayQuestion(q) && (
                                               <button
                                                 type="button"
@@ -2031,7 +1811,7 @@ export function ExamFormPage({
                                             )}
                                         </div>
                                       </div>
-                                      {!areQuestionsReadOnly && (
+                                      {!isReadOnly && (
                                         <button
                                           type="button"
                                           onClick={() =>
@@ -2048,7 +1828,7 @@ export function ExamFormPage({
                                     {(q.questionType === "DIAGRAM" || q.questionType === "DIAGRAM_ESSAY") && (
                                       <ExamDiagramAnswer
                                         questionId={q.questionId}
-                                        readOnly={areQuestionsReadOnly}
+                                        readOnly={isReadOnly}
                                       />
                                     )}
                                   </div>

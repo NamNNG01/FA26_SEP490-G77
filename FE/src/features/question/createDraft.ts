@@ -21,25 +21,43 @@ export interface CreateDraftSnapshot {
 
 const storageKey = () => `question-create-draft:${getUser()?.userId ?? 'anonymous'}`;
 
+/** True only when there is actual written question content, flagged import, or new-group title/passage worth restoring. */
+export function hasUnsavedCreateWork(
+  questions: QuestionDraft[],
+  touched: Set<string>,
+  groupCtx: GroupContextValue,
+): boolean {
+  const hasQuestions = questions.some(q => touched.has(q.key) || q.content.trim() !== '' || Boolean(q.importIssue));
+  const hasNewGroup = groupCtx.mode === 'new' && Boolean(groupCtx.newTitle.trim() || groupCtx.newPassage.trim());
+  return hasQuestions || hasNewGroup;
+}
+
 export function loadCreateDraft(): CreateDraftSnapshot | null {
   try {
     const raw = localStorage.getItem(storageKey());
     if (!raw) return null;
     const s = JSON.parse(raw) as Partial<CreateDraftSnapshot>;
     if (s?.version !== 1 || !Array.isArray(s.questions) || !s.groupCtx) return null;
+    const questions = s.questions.map(q => ({
+      ...q,
+      rubric: Array.isArray(q.rubric) ? q.rubric : [],
+      rubricNotes: q.rubricNotes ?? '',
+      code: normalizeCode(q.code),
+    }));
+    const groupCtx = { ...emptyGroupContext(), ...s.groupCtx };
+    const hasWrittenQuestion = questions.some(q => q.content.trim() !== '' || Boolean(q.importIssue));
+    const hasWrittenNewGroup = groupCtx.mode === 'new' && Boolean(groupCtx.newTitle.trim() || groupCtx.newPassage.trim());
+    if (!hasWrittenQuestion && !hasWrittenNewGroup) {
+      clearCreateDraft();
+      return null;
+    }
     return {
       version: 1,
       savedAt: typeof s.savedAt === 'string' ? s.savedAt : new Date().toISOString(),
-      // Drafts saved before a field was added get its default.
-      questions: s.questions.map(q => ({
-        ...q,
-        rubric: Array.isArray(q.rubric) ? q.rubric : [],
-        rubricNotes: q.rubricNotes ?? '',
-        code: normalizeCode(q.code),
-      })),
+      questions,
       courseId: typeof s.courseId === 'string' ? s.courseId : '',
       moduleId: typeof s.moduleId === 'string' ? s.moduleId : '',
-      groupCtx: { ...emptyGroupContext(), ...s.groupCtx },
+      groupCtx,
       touched: Array.isArray(s.touched) ? s.touched : [],
     };
   } catch {

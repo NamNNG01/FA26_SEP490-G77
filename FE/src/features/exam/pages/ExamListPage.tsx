@@ -468,7 +468,16 @@ export function ExamListPage() {
         trigger={<button type="button" aria-label={`Actions for ${exam.title}`} className="rounded-[6px] p-1.5 text-content-subtle hover:bg-surface-hover hover:text-content"><Icon.MoreHorizontal className="h-4 w-4" /></button>}
         items={[
           { label: 'Edit', icon: <Icon.Edit className="h-4 w-4" />, onClick: () => handleEditExam(exam) },
-          { label: exam.status === 'PUBLISHED' ? 'Unpublish to Draft' : 'Publish', icon: exam.status === 'PUBLISHED' ? <Icon.EyeOff className="h-4 w-4" /> : <Icon.CheckCircle className="h-4 w-4" />, disabled: exam.status !== 'PUBLISHED' && exam.questionCount === 0 && exam.generationType === 'STATIC', onClick: () => setStatusDialogTarget({ exam, targetStatus: exam.status === 'PUBLISHED' ? 'DRAFT' : 'PUBLISHED' }) },
+          ...(exam.status === 'DRAFT'
+            ? [
+                {
+                  label: 'Publish',
+                  icon: <Icon.CheckCircle className="h-4 w-4" />,
+                  disabled: exam.questionCount === 0 && exam.generationType === 'STATIC',
+                  onClick: () => setStatusDialogTarget({ exam, targetStatus: 'PUBLISHED' as const }),
+                },
+              ]
+            : []),
           { label: 'Archive', icon: <Icon.Archive className="h-4 w-4" />, disabled: exam.status === 'ARCHIVED', onClick: () => setStatusDialogTarget({ exam, targetStatus: 'ARCHIVED' }) },
           { divider: true } as { label: string; divider: true },
           { label: 'Delete', icon: <Icon.Trash className="h-4 w-4" />, danger: true, onClick: () => { setDeleteConflict409(false); setDeleteDialogTarget(exam); } },

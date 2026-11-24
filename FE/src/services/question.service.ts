@@ -53,6 +53,8 @@ export interface QuestionListItem {
   moduleId: number | null;
   moduleName: string | null;
   groupId: number | null;
+  groupTitle?: string | null;
+  groupQuestionType?: string | null;
   questionType: QuestionType | string;
   difficulty: QuestionDifficulty | string | null;
   status: QuestionStatus | string;
@@ -254,6 +256,10 @@ export interface QuestionAiGenerateRequest {
   difficultyCounts: Partial<Record<QuestionDifficulty, number>>;
   /** Topic / instructions for the AI — sent as AI-01's `context` (max 2000). */
   topic?: string;
+  /** Shared passage when generating for a Question Group (max 20000). */
+  passageText?: string;
+  /** Group title when generating for a Question Group. */
+  groupTitle?: string;
   language?: 'Vietnamese' | 'English';
 }
 
@@ -264,11 +270,13 @@ export const AI_CONTEXT_MAX = 2000;
 interface ExamAiRequest {
   courseId: number;
   moduleId?: number | null;
+  title?: string;
   questionCount: number;
   difficultyDistribution: Record<QuestionDifficulty, number>;
   questionTypes: { questionType: QuestionType; count: number }[];
   language: 'vi' | 'en';
   context?: string;
+  passageText?: string;
 }
 
 /**
@@ -280,7 +288,7 @@ interface ExamAiDraftQuestion {
   questionType: string;
   difficulty: string | null;
   defaultPoints?: number | null;
-  options?: { optionText: string; isCorrect?: boolean | null; orderIndex?: number | null }[] | null;
+  options?: { key?: string | null; optionText: string; isCorrect?: boolean | null; orderIndex?: number | null }[] | null;
   answerKey?: unknown;
   explanation?: string | null;
   questionMetadata?: Record<string, unknown> | null;
@@ -299,10 +307,13 @@ interface ExamAiDraftResponse {
 
 /** One AI-01 draft → the shape the editor accepts (same fields as a create request). */
 function fromExamAiDraft(d: ExamAiDraftQuestion): QuestionAiDraft {
+  const isOrdering = d.questionType === 'ORDERING';
   const options = [...(d.options ?? [])]
     .filter(o => o?.optionText?.trim())
     .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0))
-    .map((o, i) => ({ optionText: o.optionText, isCorrect: Boolean(o.isCorrect), orderIndex: i }));
+    .map((o, i): AnswerOption => (isOrdering
+      ? { ...(o.key ? { key: o.key } : {}), optionText: o.optionText, orderIndex: i }
+      : { optionText: o.optionText, isCorrect: Boolean(o.isCorrect), orderIndex: i }));
   return {
     content: d.content ?? '',
     questionType: (d.questionType === 'MULTI_CHOICE' ? 'MULTIPLE_CHOICE' : d.questionType) as QuestionType,
@@ -334,14 +345,18 @@ function toExamAiRequest(req: QuestionAiGenerateRequest): ExamAiRequest {
     .filter(([, count]) => count > 0)
     .map(([questionType, count]) => ({ questionType, count }));
   const context = req.topic?.trim();
+  const title = req.groupTitle?.trim();
+  const passageText = req.passageText?.trim();
   return {
     courseId: req.courseId,
     ...(req.moduleId != null ? { moduleId: req.moduleId } : {}),
+    ...(title ? { title: title.slice(0, 255) } : {}),
     questionCount: questionTypes.reduce((n, t) => n + t.count, 0),
     difficultyDistribution: { EASY: req.difficultyCounts.EASY ?? 0, MEDIUM: req.difficultyCounts.MEDIUM ?? 0, HARD: req.difficultyCounts.HARD ?? 0 },
     questionTypes,
     language: AI_LANGUAGE_CODES[req.language ?? 'English'],
     ...(context ? { context: context.slice(0, AI_CONTEXT_MAX) } : {}),
+    ...(passageText ? { passageText: passageText.slice(0, 20000) } : {}),
   };
 }
 

@@ -164,7 +164,7 @@ export function PublicCourseDetailPage() {
       setEnrolling(false);
     }
   }
-  // Empty modules (no exam, no flashcard deck) are neither listed nor counted.
+  // Empty modules (no question, exam, or flashcard deck) are neither listed nor counted.
   const modules = course.modules
     .filter(hasContent)
     .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
@@ -173,6 +173,9 @@ export function PublicCourseDetailPage() {
   const inDashboard = isStudent;
 
   const stats = [
+    ...(course.stats.questionCount != null
+      ? [{ label: plural(course.stats.questionCount, 'question'), icon: <Icon.HelpCircle className="h-3.5 w-3.5" /> }]
+      : []),
     { label: plural(course.stats.publishedExamCount, 'mock exam'), icon: <Icon.ClipboardList className="h-3.5 w-3.5" /> },
     { label: plural(course.stats.deckCount, 'flashcard deck'), icon: <Icon.Layers className="h-3.5 w-3.5" /> },
     { label: plural(modules.length, 'module'), icon: <Icon.Folder className="h-3.5 w-3.5" /> },
@@ -323,21 +326,22 @@ export function PublicCourseDetailPage() {
 /** Query flag of a purchase started as a guest: `/courses/12?checkout=1`. */
 const CHECKOUT_PARAM = 'checkout';
 
-/** A module with at least one exam or flashcard deck. Without the counts (an older BE) it is kept. */
+/** A module with at least one question, exam, or flashcard deck. Without the counts (an older BE) it is kept. */
 function hasContent(m: CourseModuleSummary): boolean {
-  if (m.examCount == null && m.deckCount == null) return true;
-  return (m.examCount ?? 0) + (m.deckCount ?? 0) > 0;
+  if (m.questionCount == null && m.examCount == null && m.deckCount == null) return true;
+  return (m.questionCount ?? 0) + (m.examCount ?? 0) + (m.deckCount ?? 0) > 0;
 }
 
 function plural(count: number, noun: string): string {
   return `${count} ${noun}${count === 1 ? '' : 's'}`;
 }
 
-/** One module — expands to its description and its exam / flashcard deck counts. */
+/** One module — expands to its description and its question / exam / flashcard deck counts. */
 function ModuleRow({ module, index }: { module: CourseModuleSummary; index: number }) {
   const [open, setOpen] = useState(false);
   const panelId = `module-${module.moduleId}`;
   const counts = [
+    module.questionCount != null && { icon: <Icon.HelpCircle className="h-4 w-4" />, label: plural(module.questionCount, 'question') },
     module.examCount != null && { icon: <Icon.ClipboardList className="h-4 w-4" />, label: plural(module.examCount, 'mock exam') },
     module.deckCount != null && { icon: <Icon.Layers className="h-4 w-4" />, label: plural(module.deckCount, 'flashcard deck') },
   ].filter(Boolean) as { icon: ReactNode; label: string }[];
@@ -355,6 +359,11 @@ function ModuleRow({ module, index }: { module: CourseModuleSummary; index: numb
           {index}
         </span>
         <span className="min-w-0 flex-1 text-base font-medium text-content-secondary">{module.title}</span>
+        {module.questionCount != null && (
+          <span className="flex-shrink-0 text-xs text-content-subtle">
+            {plural(module.questionCount, 'question')}
+          </span>
+        )}
         <Icon.ChevronDown className={`h-4 w-4 flex-shrink-0 text-content-subtle transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (

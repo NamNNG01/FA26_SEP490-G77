@@ -108,8 +108,9 @@ public class StudentAiServiceImpl implements StudentAiService {
 
     // ---------------------------------------------------------------- SE-01
 
-    /** One question still to explain: the prompt item, its estimate and the version its explanation is for. */
-    private record Pending(Long questionId, ObjectNode item, long estimate, Integer version, boolean cacheable) { }
+    /** One question still to explain: the prompt item, its estimate, version, and optional DB-cached AI text. */
+    private record Pending(Long questionId, ObjectNode item, long estimate, Integer version,
+                           boolean cacheable, String cachedText) { }
 
     private record ExplanationWork(Long courseId, ObjectNode course, Map<Long, ExplanationItem> done, List<Pending> pending) { }
 
@@ -207,12 +208,9 @@ public class StudentAiServiceImpl implements StudentAiService {
             String source = question.getAiExplanationSource();
             if (RUBRIC_TYPES.contains(question.getQuestionType())) {
                 done.put(id, new ExplanationItem(id, null, "NOT_APPLICABLE", null));
-            } else if (hasText && (source == null || "MANAGER".equals(source))) {
+            } else if (hasText && (source == null || source.isBlank() || "MANAGER".equals(source))) {
                 // Explanations typed in the question bank (Q-03) carry no source: they are the manager's.
                 done.put(id, new ExplanationItem(id, explanation, "MANAGER", null));
-            } else if (hasText && "AI".equals(source) && Objects.equals(question.getAiExplanationVersion(), question.getScoringVersion())
-                    && Objects.equals(question.getScoringVersion(), answer.getQuestionVersion())) {
-                done.put(id, new ExplanationItem(id, explanation, "CACHED", null));
             } else {
                 String correct = "CODE".equals(question.getQuestionType())
                         ? codeAnswer(id, codeConfigsById, publicSamples)
@@ -226,8 +224,12 @@ public class StudentAiServiceImpl implements StudentAiService {
                         .put("correctAnswer", correct);
                 // Only the bank's current version may be cached; an attempt on an older version gets a one-off answer.
                 Integer version = answer.getQuestionVersion() == null ? question.getScoringVersion() : answer.getQuestionVersion();
+                boolean isCachedAi = hasText && "AI".equals(source)
+                        && Objects.equals(question.getAiExplanationVersion(), question.getScoringVersion())
+                        && Objects.equals(question.getScoringVersion(), answer.getQuestionVersion());
+                String cachedText = isCachedAi ? explanation : null;
                 pending.add(new Pending(id, item, AiQuotaService.estimate(item.toString().length(), explanationOutputBudget),
-                        version, Objects.equals(version, question.getScoringVersion())));
+                        version, Objects.equals(version, question.getScoringVersion()), cachedText));
             }
         }
         return new ExplanationWork(examCourse == null ? null : examCourse.getCourseId(), course, done, pending);
@@ -275,20 +277,51 @@ public class StudentAiServiceImpl implements StudentAiService {
     }
 
     private void explainLot(ObjectNode course, List<Pending> lot, Long logId, long deadline, Map<Long, ExplanationItem> results) {
+        List<Pending> fromDb = lot.stream().filter(p -> p.cachedText() != null).toList();
+        List<Pending> toGenerate = lot.stream().filter(p -> p.cachedText() == null).toList();
+        int cachedInput = fromDb.isEmpty() ? 0
+                : LOT_ENVELOPE_TOKENS + fromDb.stream()
+                        .mapToInt(p -> (int) Math.ceil(Math.ceil(p.item().toString().length() / 2.5) * 1.3))
+                        .sum();
+        int cachedOutput = fromDb.stream()
+                .mapToInt(p -> Math.max(1, (int) Math.ceil(p.cachedText().length() / 2.5)))
+                .sum();
+        long started = System.currentTimeMillis();
+        fromDb.forEach(p -> results.put(p.questionId(), new ExplanationItem(p.questionId(), p.cachedText(), "CACHED", null)));
+        if (toGenerate.isEmpty()) {
+            AiResponse synthetic = AiResponse.builder()
+                    .text("")
+                    .inputTokens(cachedInput)
+                    .outputTokens(cachedOutput)
+                    .model("db-cache")
+                    .build();
+            settle(logId, "SUCCESS", synthetic, started, null);
+            return;
+        }
+
         ObjectNode prompt = course.deepCopy();
         ArrayNode items = prompt.putArray("questions");
-        lot.forEach(p -> items.add(p.item()));
-        long started = System.currentTimeMillis();
+        toGenerate.forEach(p -> items.add(p.item()));
         AiResponse response;
         try {
             response = AiCalls.complete(aiClient, AiRequest.builder().systemPrompt(EXPLAIN_PROMPT).prompt(prompt.toString())
                     // Headroom for thinking models, whose reasoning counts against maxOutputTokens.
-                    .maxTokens(lot.size() * 1024 + 8192).responseSchema(EXPLAIN_SCHEMA).build(),
+                    .maxTokens(toGenerate.size() * 1024 + 8192).responseSchema(EXPLAIN_SCHEMA).build(),
                     Math.min(30_000, deadline - System.currentTimeMillis()));
         } catch (AiCalls.Failure ex) {
             log.warn("Explanation AI call failed: {} ({} questions)", ex.reason(), lot.size());
-            settle(logId, AiCalls.TIMEOUT.equals(ex.reason()) ? "TIMEOUT" : "FAILED", null, started, ex.reason());
-            lot.forEach(p -> results.put(p.questionId(), failed(p.questionId(), ex.reason())));
+            if (fromDb.isEmpty()) {
+                settle(logId, AiCalls.TIMEOUT.equals(ex.reason()) ? "TIMEOUT" : "FAILED", null, started, ex.reason());
+            } else {
+                AiResponse partialCache = AiResponse.builder()
+                        .text("")
+                        .inputTokens(cachedInput)
+                        .outputTokens(cachedOutput)
+                        .model("db-cache")
+                        .build();
+                settle(logId, "PARTIAL", partialCache, started, ex.reason());
+            }
+            toGenerate.forEach(p -> results.put(p.questionId(), failed(p.questionId(), ex.reason())));
             return;
         }
 
@@ -305,12 +338,31 @@ public class StudentAiServiceImpl implements StudentAiService {
         } catch (JsonProcessingException ex) {
             texts.clear();
         }
-        List<Pending> answered = lot.stream().filter(p -> texts.containsKey(p.questionId())).toList();
-        String status = answered.isEmpty() ? "FAILED" : answered.size() == lot.size() ? "SUCCESS" : "PARTIAL";
-        settle(logId, status, response, started, answered.isEmpty() ? "AI_INCOMPLETE" : null);
-        lot.stream().filter(p -> !texts.containsKey(p.questionId()))
+        List<Pending> answered = toGenerate.stream().filter(p -> texts.containsKey(p.questionId())).toList();
+        toGenerate.stream().filter(p -> !texts.containsKey(p.questionId()))
                 .forEach(p -> results.put(p.questionId(), failed(p.questionId(), "AI_INCOMPLETE")));
-        if (answered.isEmpty()) return;
+        if (answered.isEmpty()) {
+            if (fromDb.isEmpty()) {
+                settle(logId, "FAILED", response, started, "AI_INCOMPLETE");
+            } else {
+                AiResponse partialCache = AiResponse.builder()
+                        .text("")
+                        .inputTokens(cachedInput)
+                        .outputTokens(cachedOutput)
+                        .model("db-cache")
+                        .build();
+                settle(logId, "PARTIAL", partialCache, started, "AI_INCOMPLETE");
+            }
+            return;
+        }
+        String status = answered.size() == toGenerate.size() ? "SUCCESS" : "PARTIAL";
+        AiResponse billed = fromDb.isEmpty() ? response : AiResponse.builder()
+                .text(response.getText())
+                .inputTokens((response.getInputTokens() == null ? 0 : response.getInputTokens()) + cachedInput)
+                .outputTokens((response.getOutputTokens() == null ? 0 : response.getOutputTokens()) + cachedOutput)
+                .model(response.getModel())
+                .build();
+        settle(logId, status, billed, started, null);
         tx.executeWithoutResult(s -> {
             for (Pending p : answered) {
                 String text = texts.get(p.questionId());

@@ -12,7 +12,7 @@ import { questionGroupService, type QuestionGroup } from '@/services/questionGro
 import { QuestionForm as QuestionFormBlock } from '../components/QuestionForm';
 import { QuestionSidePanel } from '../components/QuestionSidePanel';
 import { ImportPdfModal } from '../components/ImportPdfModal';
-import { GroupContextCard, contextKind, emptyGroupContext, groupContextErrors, type GroupContextValue } from '../components/GroupContextCard';
+import { GroupContextCard, contextGroupMeta, contextKind, emptyGroupContext, groupContextErrors, type GroupContextValue } from '../components/GroupContextCard';
 import { AiGeneratePanel, type AiGeneratePanelHandle } from '../components/AiGeneratePanel';
 import { Badge } from '@/components/ui/Badge';
 import { Checkbox } from '@/components/ui/Checkbox';
@@ -34,7 +34,7 @@ import {
   type GroupKind,
   type QuestionDraft,
 } from '../model';
-import { clearCreateDraft, loadCreateDraft, saveCreateDraft, type CreateDraftSnapshot } from '../createDraft';
+import { clearCreateDraft, hasUnsavedCreateWork, loadCreateDraft, saveCreateDraft, type CreateDraftSnapshot } from '../createDraft';
 import { Icon } from '@/assets/icons';
 import { describeSaveError, loadErrorMessage, type SaveError } from '../saveError';
 
@@ -51,11 +51,12 @@ type Confirm = 'publishOne' | 'publishSaved' | null;
  */
 type CreateMode = 'manual' | 'ai';
 
-/** A question saved on this visit, kept on the page (read-only) so it can be published from here. */
+/** A question saved on this visit, kept on the page (read-only) so its group & publish state are clear. */
 interface SavedQuestion {
   detail: QuestionDetail;
   /** Built once, so the card keeps its keys across renders. */
   draft: QuestionDraft;
+  groupMeta?: { groupId: number; title: string; questionType: string | null };
 }
 
 const typeLabel = (t: string) => QUESTION_TYPE_OPTIONS.find(o => o.value === t)?.label ?? t;
@@ -66,14 +67,29 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
   const [searchParams, setSearchParams] = useSearchParams();
   /** Create mode: "Duplicate" in the bank — start from a copy of this question (replaces any stored draft). */
   const [duplicateOf] = useState(() => (isEdit ? null : searchParams.get('duplicate')));
+  /** Create mode: entry intent from Question Bank (+ New Question Group / + Add Question to group). */
+  const [entryIntent] = useState(() => {
+    if (isEdit || searchParams.get('duplicate')) return null;
+    const context = searchParams.get('context');
+    const groupId = searchParams.get('groupId');
+    const courseIdParam = searchParams.get('courseId') ?? '';
+    const moduleIdParam = searchParams.get('moduleId') ?? '';
+    if (!context && !groupId && !courseIdParam && !moduleIdParam) return null;
+    return { context, groupId, courseId: courseIdParam, moduleId: moduleIdParam };
+  });
+  const hasGroupIntent = Boolean(entryIntent?.context === 'new-group' || entryIntent?.groupId);
   const navigate = useNavigate();
   const toast = useToast();
 
   /** Create mode: unsaved work from before a reload, read once. */
-  const [restored] = useState<CreateDraftSnapshot | null>(() => (isEdit || duplicateOf ? null : loadCreateDraft()));
-  const [questions, setQuestions] = useState<QuestionDraft[]>(() => (isEdit ? [] : restored?.questions ?? []));
-  const [courseId, setCourseId] = useState(restored?.courseId ?? '');
-  const [moduleId, setModuleId] = useState(restored?.moduleId ?? '');
+  const [restored] = useState<CreateDraftSnapshot | null>(() => (isEdit || duplicateOf || hasGroupIntent ? null : loadCreateDraft()));
+  const [questions, setQuestions] = useState<QuestionDraft[]>(() => {
+    if (isEdit) return [];
+    if (hasGroupIntent) return [emptyDraft()];
+    return restored?.questions ?? [];
+  });
+  const [courseId, setCourseId] = useState(() => (hasGroupIntent ? entryIntent?.courseId ?? '' : restored?.courseId || entryIntent?.courseId || ''));
+  const [moduleId, setModuleId] = useState(() => (hasGroupIntent ? entryIntent?.moduleId ?? '' : restored?.moduleId || entryIntent?.moduleId || ''));
   const [status, setStatus] = useState<QuestionStatus>('INACTIVE');
   /** Create mode: questions saved on this visit (manual and AI), in save order — they start as Draft. */
   const [saved, setSaved] = useState<SavedQuestion[]>([]);
@@ -81,7 +97,11 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
   const [toPublish, setToPublish] = useState<Set<number>>(() => new Set());
   const [publishing, setPublishing] = useState(false);
   /** Create mode: standalone batch, or questions that share one group passage. */
-  const [groupCtx, setGroupCtx] = useState<GroupContextValue>(() => restored?.groupCtx ?? emptyGroupContext());
+  const [groupCtx, setGroupCtx] = useState<GroupContextValue>(() => {
+    if (entryIntent?.context === 'new-group') return { ...emptyGroupContext(), mode: 'new' };
+    if (entryIntent?.groupId) return { ...emptyGroupContext(), mode: 'existing', existingGroupId: entryIntent.groupId };
+    return restored?.groupCtx ?? emptyGroupContext();
+  });
   const [groups, setGroups] = useState<QuestionGroup[]>([]);
   const [groupsLoading, setGroupsLoading] = useState(false);
 
@@ -91,6 +111,20 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
   const [dirty, setDirty] = useState(Boolean(restored));
   /** The latest edits are in localStorage, so a reload needs no browser prompt. */
   const [draftStored, setDraftStored] = useState(Boolean(restored));
+
+  // Clear one-time URL intent parameters after initializing state.
+  useEffect(() => {
+    if (!entryIntent) return;
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      next.delete('context');
+      next.delete('groupId');
+      next.delete('courseId');
+      next.delete('moduleId');
+      return next;
+    }, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once for opening intent
+  }, []);
 
   const [loading, setLoading] = useState(isEdit || Boolean(duplicateOf));
   /** Keys of questions the backend found already in the course — they can't be saved until changed. */
@@ -191,16 +225,23 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
     return () => { cancelled = true; };
   }, [isEdit, courseId]);
 
-  // Create mode: keep the work in localStorage so a reload restores it.
+  const hasRealCreateWork = !isEdit && hasUnsavedCreateWork(questions, touched, groupCtx);
+
+  // Create mode: keep only real unsaved work (written questions or drafted new group) in localStorage; clear empty shells so revisiting never pops an alert.
   useEffect(() => {
-    if (isEdit || !dirty || leavingRef.current) return;
+    if (isEdit || leavingRef.current) return;
+    if (!hasRealCreateWork) {
+      clearCreateDraft();
+      setDraftStored(false);
+      return;
+    }
     setDraftStored(false);
     // A save still pending when the user leaves must not bring the draft back.
     const id = setTimeout(() => {
       if (!leavingRef.current) setDraftStored(saveCreateDraft({ questions, courseId, moduleId, groupCtx, touched: [...touched] }));
     }, 400);
     return () => clearTimeout(id);
-  }, [isEdit, dirty, questions, courseId, moduleId, groupCtx, touched]);
+  }, [isEdit, hasRealCreateWork, questions, courseId, moduleId, groupCtx, touched]);
 
   /** Untouched blank questions (the starter one) give way to appended drafts; flagged imports stay. */
   const isKept = (q: QuestionDraft) => touched.has(q.key) || q.content.trim() !== '' || Boolean(q.importIssue);
@@ -230,10 +271,12 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- writtenKey stands in for writtenKinds (a new array every render)
   }, [writtenKey, groupCtx.mode, groups]);
 
-  // In a group every question must be of the group's kind (QUIZ / ESSAY / CODE / DIAGRAM).
-  // AI suggestions are saved as standalone questions, so no group limits them.
-  const kind = isEdit || createMode === 'ai' ? null : contextKind(groupCtx, groups);
+  // In a group every question must be of the group's kind (QUIZ / ESSAY / CODE / DIAGRAM / DIAGRAM_ESSAY) across BOTH Manual and AI Generate.
+  const kind = isEdit ? null : contextKind(groupCtx, groups);
   const allowedTypes = kind ? typesOfKind(kind) : undefined;
+  const activeGroupMeta = isEdit ? null : contextGroupMeta(groupCtx, groups);
+  const groupCtxErrors = groupContextErrors(groupCtx);
+  const firstGroupIssue = groupCtxErrors.group ?? groupCtxErrors.title ?? groupCtxErrors.passage;
   const kindError = (q: QuestionDraft) =>
     allowedTypes && !allowedTypes.includes(q.type) && kind
       ? `${typeLabel(q.type)} questions can’t go into a ${GROUP_KIND_LABELS[kind].toLowerCase()} group — pick a ${GROUP_KIND_LABELS[kind].toLowerCase()} type.`
@@ -252,12 +295,11 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- kindKey stands in for allowedTypes (a new array every render)
   }, [kindKey]);
 
-  /** Manual mode holds work that would be lost by switching to AI. */
-  const manualBusy = !isEdit && dirty && kept > 0;
+  /** Manual mode holds real written work or a new group draft that would be lost on exit. */
+  const manualBusy = hasRealCreateWork;
   const aiBusy = aiPending > 0;
   /**
-   * Edit mode: any change. Create mode: only questions actually written — a picked course, module or
-   * group, or a blank question, is nothing to lose (picking them used to hold the publish redirect).
+   * Edit mode: any change. Create mode: only real written questions or a drafted new group.
    */
   const unsaved = isEdit ? dirty : manualBusy;
 
@@ -417,15 +459,21 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
 
   const changeGroupCtx = (v: GroupContextValue) => {
     setGroupCtx(v);
-    if (createMode === 'manual') setDirty(true);
+    if (createMode === 'manual' && v.mode === 'new' && questions.length === 0) {
+      const types = typesOfKind(v.newKind);
+      const starter = types.length && !types.includes(emptyDraft().type) ? changeType(emptyDraft(), types[0]) : emptyDraft();
+      setQuestions([starter]);
+    }
+    if (createMode === 'manual') setDirty(hasUnsavedCreateWork(questions, touched, v));
   };
 
   const changeLocation = (c: string, m: string) => {
     // A group belongs to one course (and maybe one module), so a picked group may no longer apply.
-    if (c !== courseId || m !== moduleId) setGroupCtx(prev => ({ ...prev, existingGroupId: '' }));
+    const nextCtx = c !== courseId || m !== moduleId ? { ...groupCtx, existingGroupId: '' } : groupCtx;
+    if (nextCtx !== groupCtx) setGroupCtx(nextCtx);
     setCourseId(c);
     setModuleId(m);
-    if (createMode === 'manual') setDirty(true);
+    if (createMode === 'manual') setDirty(hasUnsavedCreateWork(questions, touched, nextCtx));
   };
 
   const locationNote =
@@ -435,37 +483,51 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
       : null;
 
   /**
-   * The group a new batch goes into. A new group is created here, at save time;
-   * if the batch then fails, the form switches to that group so a retry doesn't
-   * create a second copy.
+   * Persists a batch of questions (standalone, into an existing group, or atomically creating a new group + >= 1 question).
+   * Returns how many questions were saved.
    */
-  const resolveGroupId = async (): Promise<number | null> => {
-    if (groupCtx.mode === 'standalone') return null;
-    if (groupCtx.mode === 'existing') return Number(groupCtx.existingGroupId);
-    const group = await questionGroupService.createQuestionGroup({
-      courseId: Number(courseId),
-      moduleId: moduleId ? Number(moduleId) : null,
-      questionType: groupCtx.newKind,
-      title: groupCtx.newTitle.trim(),
-      passageText: groupCtx.newPassage.trim(),
-    });
-    setGroups(prev => [group, ...prev]);
-    setGroupCtx(prev => ({ ...prev, mode: 'existing', existingGroupId: String(group.groupId) }));
-    return group.groupId;
-  };
-
-  /** Q-03 for a batch of new questions — in the picked group (manual), standalone (AI). Returns how many were saved. */
   const createBatch = async (drafts: QuestionDraft[]): Promise<number> => {
-    const groupId = createMode === 'ai' ? null : await resolveGroupId();
-    const module = moduleId ? Number(moduleId) : null;
-    const payload = drafts.map(q => ({ ...toCreateRequest(q, Number(courseId), module), groupId }));
-    const created = await questionService.createQuestionsBatch(Number(courseId), module, payload);
+    const moduleVal = moduleId ? Number(moduleId) : null;
+    if (groupCtx.mode === 'new') {
+      const res = await questionGroupService.createGroupWithQuestions({
+        courseId: Number(courseId),
+        moduleId: moduleVal,
+        questionType: groupCtx.newKind,
+        title: groupCtx.newTitle.trim(),
+        passageText: groupCtx.newPassage.trim(),
+        questions: drafts.map(q => toCreateRequest(q, Number(courseId), moduleVal)),
+      });
+      setGroups(prev => [res.group, ...prev]);
+      setGroupCtx({ ...emptyGroupContext(), mode: 'existing', existingGroupId: String(res.group.groupId) });
+      const groupMeta = {
+        groupId: res.group.groupId,
+        title: res.group.title ?? `Group #${res.group.groupId}`,
+        questionType: res.group.questionType,
+      };
+      toast.success(`Group “${groupMeta.title}” created with ${res.questions.length} draft question${res.questions.length === 1 ? '' : 's'}.`);
+      setSaved(prev => [...prev, ...res.questions.map(detail => ({ detail, draft: fromDetail(detail), groupMeta }))]);
+      return res.questions.length;
+    }
+
+    const groupId = groupCtx.mode === 'existing' ? Number(groupCtx.existingGroupId) : null;
+    const pickedGroup = groupId != null ? groups.find(g => g.groupId === groupId) : undefined;
+    const payload = drafts.map(q => ({ ...toCreateRequest(q, Number(courseId), moduleVal), groupId }));
+    const created = await questionService.createQuestionsBatch(Number(courseId), moduleVal, payload);
+    if (groupId != null && courseId) {
+      questionGroupService.getQuestionGroups({ courseId: Number(courseId), size: 100 })
+        .then(res => setGroups(res.content))
+        .catch(() => {});
+    }
+    const groupMeta = groupId != null
+      ? { groupId, title: pickedGroup?.title?.trim() || `Group #${groupId}`, questionType: pickedGroup?.questionType ?? null }
+      : undefined;
     toast.success(`${created.length} question${created.length === 1 ? '' : 's'} saved as Draft${groupId != null ? ' to the question group' : ''}.`);
-    setSaved(prev => [...prev, ...created.map(detail => ({ detail, draft: fromDetail(detail) }))]);
+    setSaved(prev => [...prev, ...created.map(detail => ({ detail, draft: fromDetail(detail), groupMeta }))]);
     return created.length;
   };
 
   const savedDrafts = saved.filter(s => s.detail.status === 'INACTIVE');
+  const savedPublished = saved.filter(s => s.detail.status === 'ACTIVE');
   const pickedDrafts = savedDrafts.filter(s => toPublish.has(s.detail.questionId));
   const allDraftsPicked = savedDrafts.length > 0 && pickedDrafts.length === savedDrafts.length;
   const togglePublish = (id: number) =>
@@ -477,16 +539,31 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
     });
   const toggleAllDrafts = () => setToPublish(allDraftsPicked ? new Set() : new Set(savedDrafts.map(s => s.detail.questionId)));
 
-  /** Publishes the ticked drafts in one call, then shows their new status. */
-  const publishSaved = async () => {
-    const ids = pickedDrafts.map(s => s.detail.questionId);
+  const applyPublished = (updated: QuestionDetail[]) => {
+    const byId = new Map(updated.map(u => [u.questionId, u]));
+    setSaved(prev => prev.map(item => {
+      const u = byId.get(item.detail.questionId);
+      return u ? { ...item, detail: u } : item;
+    }));
+    setToPublish(prev => {
+      const next = new Set(prev);
+      updated.forEach(u => next.delete(u.questionId));
+      return next;
+    });
+    if (courseId) {
+      questionGroupService.getQuestionGroups({ courseId: Number(courseId), size: 100 })
+        .then(res => setGroups(res.content))
+        .catch(() => {});
+    }
+  };
+
+  const publishIds = async (ids: number[], successMsg?: string) => {
     if (!ids.length) return;
     setPublishing(true);
     try {
       const updated = await questionService.batchUpdateStatus(ids, 'ACTIVE');
-      toast.success(`${updated.length} question${updated.length === 1 ? '' : 's'} published.`);
-      // Back to the bank — anything still unsaved on the page asks before it's dropped.
-      goToBank();
+      applyPublished(updated);
+      toast.success(successMsg ?? `${updated.length} question${updated.length === 1 ? '' : 's'} published.`);
     } catch (err) {
       showSaveError(describeSaveError(err, 'Could not publish the questions.'));
     } finally {
@@ -494,6 +571,9 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
       setConfirm(null);
     }
   };
+
+  /** Publishes the ticked drafts in one call and keeps them visible with their updated Published status. */
+  const publishSaved = () => publishIds(pickedDrafts.map(s => s.detail.questionId));
 
   const groupReady = () => {
     if (Object.keys(groupContextErrors(groupCtx)).length === 0) return true;
@@ -504,7 +584,8 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
 
   const saveManual = async () => {
     if (!isEdit && questions.length === 0) {
-      toast.warning('Add a question or import a file first.');
+      if (groupCtx.mode === 'new') toast.warning('A question group must have at least 1 question before it can be created.');
+      else toast.warning('Add a question or import a file first.');
       return;
     }
     setSubmitted(true);
@@ -528,7 +609,7 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
         return;
       }
       await createBatch(questions);
-      // The saved questions stay on the page (read-only) to be published; "Add Question" starts the next one.
+      // The saved questions stay on the page (read-only) to inspect and publish; "Add Question" starts the next one.
       resetManual();
     } catch (err) {
       const error = describeSaveError(err, 'Could not save. Please try again.');
@@ -545,12 +626,18 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
     }
   };
 
-  /** Saves the accepted AI suggestions; the rest stay for review. */
+  /** Saves the accepted AI suggestions (standalone or into the selected/new group); the rest stay for review. */
   const saveAi = async () => {
     setSubmitted(true);
     if (!courseId || !moduleId) return;
+    if (!groupReady()) return;
     if (!aiAccepted.length) {
-      toast.warning('Accept at least one suggestion to save.');
+      if (groupCtx.mode === 'new') toast.warning('Accept at least 1 generated question before creating the group.');
+      else toast.warning('Accept at least one suggestion to save.');
+      return;
+    }
+    if (kind && aiAccepted.some(q => kindError(q))) {
+      toast.error(kindToast(kind));
       return;
     }
     setSaving(true);
@@ -646,8 +733,8 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
 
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px] gap-6 items-start">
         <div className="min-w-0 space-y-3 pb-4">
-          {/* Manual mode only: the questions written here go into this group (AI suggestions are saved standalone) */}
-          {!isEdit && createMode === 'manual' && (
+          {/* Shared across both Manual and AI Generate: choose Standalone or Question Group */}
+          {!isEdit && (
             <GroupContextCard
               value={groupCtx}
               onChange={changeGroupCtx}
@@ -656,8 +743,10 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
               courseSelected={Boolean(courseId)}
               moduleId={moduleId}
               questionKinds={writtenKinds}
+              draftQuestionCount={createMode === 'ai' ? aiAccepted.length : questions.length}
+              onAddQuestion={createMode === 'manual' ? addQuestion : undefined}
               showErrors={submitted}
-              kindInvalid={submitted && questions.some(q => kindError(q))}
+              kindInvalid={submitted && (createMode === 'manual' ? questions.some(q => kindError(q)) : aiAccepted.some(q => kindError(q)))}
               disabled={saving}
             />
           )}
@@ -670,6 +759,14 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
                 courseId={courseId}
                 moduleId={moduleId}
                 allowedTypes={allowedTypes}
+                isGroupMode={groupCtx.mode !== 'standalone'}
+                groupTitle={activeGroupMeta?.title}
+                groupPassage={activeGroupMeta?.passage}
+                groupIssue={firstGroupIssue}
+                onGroupInvalid={() => {
+                  setSubmitted(true);
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
                 onAcceptedChange={onAiAccepted}
                 onPendingChange={setAiPending}
                 disabled={saving}
@@ -677,62 +774,185 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
             </div>
           )}
 
-          {/* Question list header — Select all picks the saved drafts to publish */}
-          {!isEdit && (createMode === 'manual' || saved.length > 0) && (
+          {/* Questions saved on this visit — grouped visually by Question Group vs Standalone with clear Publish controls */}
+          {!isEdit && saved.length > 0 && (() => {
+            const groupedBuckets = new Map<number, { meta: { groupId: number; title: string; questionType: string | null }; items: SavedQuestion[] }>();
+            const standaloneItems: SavedQuestion[] = [];
+            saved.forEach(item => {
+              const gid = item.detail.groupId;
+              if (gid != null) {
+                const existing = groupedBuckets.get(gid);
+                if (existing) existing.items.push(item);
+                else {
+                  const foundGroup = groups.find(g => g.groupId === gid);
+                  groupedBuckets.set(gid, {
+                    meta: item.groupMeta ?? {
+                      groupId: gid,
+                      title: foundGroup?.title?.trim() || `Group #${gid}`,
+                      questionType: foundGroup?.questionType ?? null,
+                    },
+                    items: [item],
+                  });
+                }
+              } else {
+                standaloneItems.push(item);
+              }
+            });
+
+            const renderSavedCard = (item: SavedQuestion, idx: number) => {
+              const { detail, draft } = item;
+              const isDraft = detail.status === 'INACTIVE';
+              return (
+                <QuestionFormBlock
+                  key={draft.key}
+                  q={draft}
+                  index={idx}
+                  onChange={() => {}}
+                  showErrors={false}
+                  readOnly
+                  leading={
+                    <Checkbox
+                      checked={toPublish.has(detail.questionId)}
+                      onChange={() => togglePublish(detail.questionId)}
+                      disabled={!isDraft || publishing}
+                    />
+                  }
+                  actions={
+                    <div className="flex items-center gap-2">
+                      <Badge variant={isDraft ? 'default' : 'success'} className="whitespace-nowrap">
+                        {QUESTION_STATUS_LABELS[detail.status] ?? detail.status}
+                      </Badge>
+                      {isDraft && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          icon={<Icon.Upload className="w-3.5 h-3.5" />}
+                          onClick={() => publishIds([detail.questionId], 'Question published.')}
+                          disabled={publishing}
+                        >
+                          Publish
+                        </Button>
+                      )}
+                    </div>
+                  }
+                />
+              );
+            };
+
+            return (
+              <section aria-label="Saved questions in this session" className="card p-4 space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-line-soft">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="text-base font-semibold text-content">Saved in this session ({saved.length})</h3>
+                    <Badge variant="success">{savedPublished.length} Published</Badge>
+                    <Badge variant={savedDrafts.length > 0 ? 'warning' : 'default'}>{savedDrafts.length} Draft</Badge>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3">
+                    {savedDrafts.length > 0 && (
+                      <Checkbox
+                        label={`Select all drafts (${savedDrafts.length})`}
+                        checked={allDraftsPicked}
+                        indeterminate={pickedDrafts.length > 0 && !allDraftsPicked}
+                        onChange={toggleAllDrafts}
+                        disabled={publishing}
+                      />
+                    )}
+                    {pickedDrafts.length > 0 && (
+                      <Button
+                        size="sm"
+                        icon={<Icon.Upload className="w-3.5 h-3.5" />}
+                        onClick={() => setConfirm('publishSaved')}
+                        loading={publishing}
+                        disabled={publishing}
+                      >
+                        Publish Selected ({pickedDrafts.length})
+                      </Button>
+                    )}
+                    <Button size="sm" variant="ghost" onClick={goToBank}>
+                      Done · Question Bank
+                    </Button>
+                  </div>
+                </div>
+
+                {[...groupedBuckets.values()].map(bucket => {
+                  const gPub = bucket.items.filter(s => s.detail.status === 'ACTIVE').length;
+                  const gDraftIds = bucket.items.filter(s => s.detail.status === 'INACTIVE').map(s => s.detail.questionId);
+                  const gKind = asGroupKind(bucket.meta.questionType);
+                  const allGroupPub = gPub === bucket.items.length;
+                  return (
+                    <div key={bucket.meta.groupId} className="rounded-[10px] border border-line bg-surface-alt/40 p-3 space-y-2.5">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex flex-wrap items-center gap-2 min-w-0">
+                          <Icon.Layers className="w-4 h-4 text-brand-ink flex-shrink-0" />
+                          <span className="text-sm font-semibold text-content truncate">{bucket.meta.title}</span>
+                          {gKind && <Badge variant="purple">{GROUP_KIND_LABELS[gKind]}</Badge>}
+                          <Badge variant={allGroupPub ? 'success' : gPub > 0 ? 'warning' : 'default'}>
+                            {allGroupPub
+                              ? `Group Published (${gPub}/${bucket.items.length})`
+                              : gPub > 0
+                                ? `Partially Published (${gPub}/${bucket.items.length})`
+                                : `Draft (0/${bucket.items.length} published)`}
+                          </Badge>
+                        </div>
+                        {gDraftIds.length > 0 && (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            icon={<Icon.Upload className="w-3.5 h-3.5" />}
+                            onClick={() => publishIds(gDraftIds, `Published all ${gDraftIds.length} question(s) in “${bucket.meta.title}”.`)}
+                            disabled={publishing}
+                          >
+                            Publish Group ({gDraftIds.length})
+                          </Button>
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        {bucket.items.map((item, idx) => renderSavedCard(item, idx))}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {standaloneItems.length > 0 && (
+                  <div className="space-y-2">
+                    {groupedBuckets.size > 0 && (
+                      <h4 className="text-xs font-semibold uppercase tracking-wide text-content-subtle">
+                        Standalone Questions ({standaloneItems.length})
+                      </h4>
+                    )}
+                    {standaloneItems.map((item, idx) => renderSavedCard(item, idx))}
+                  </div>
+                )}
+              </section>
+            );
+          })()}
+
+          {/* Manual mode header */}
+          {!isEdit && createMode === 'manual' && (
             <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
               <h3 className="text-base font-semibold text-content">
-                Questions <span className="text-content-soft font-normal">({saved.length + (createMode === 'manual' ? questions.length : 0)})</span>
+                Drafting Questions <span className="text-content-soft font-normal">({questions.length})</span>
               </h3>
-              <Checkbox
-                label={savedDrafts.length > 0 ? `Select all drafts (${savedDrafts.length})` : 'Select all drafts'}
-                checked={allDraftsPicked}
-                indeterminate={pickedDrafts.length > 0 && !allDraftsPicked}
-                onChange={toggleAllDrafts}
-                disabled={publishing || savedDrafts.length === 0}
-              />
             </div>
           )}
 
-          {/* Questions saved on this visit stay in the list, read-only, until published */}
-          {!isEdit && saved.map(({ detail, draft }, i) => {
-            const isDraft = detail.status === 'INACTIVE';
-            return (
-              <QuestionFormBlock
-                key={draft.key}
-                q={draft}
-                index={i}
-                onChange={() => {}}
-                showErrors={false}
-                readOnly
-                leading={
-                  <Checkbox
-                    checked={toPublish.has(detail.questionId)}
-                    onChange={() => togglePublish(detail.questionId)}
-                    disabled={!isDraft || publishing}
-                  />
-                }
-                actions={
-                  <Badge variant={isDraft ? 'default' : 'success'} className="whitespace-nowrap">
-                    {QUESTION_STATUS_LABELS[detail.status] ?? detail.status}
-                  </Badge>
-                }
-              />
-            );
-          })}
-
           {/* Manual mode — question blocks scroll with the page; the side panel stays pinned */}
           <div ref={listRef} className={`space-y-3 scroll-mt-5 ${createMode === 'manual' ? '' : 'hidden'}`}>
-            {questions.length === 0 && saved.length === 0 && (
-              <div className="card p-10 text-center">
-                <p className="text-base font-medium text-content-secondary">No questions yet</p>
-                <p className="text-sm text-content-subtle mt-1">Use “Add Question” or import a PDF or Word file.</p>
+            {questions.length === 0 && (
+              <div className="card p-10 text-center space-y-2">
+                <p className="text-base font-medium text-content-secondary">No unsaved questions yet</p>
+                <p className="text-sm text-content-subtle">
+                  {groupCtx.mode === 'new'
+                    ? 'A question group requires at least 1 question — click “Add Question” to write one.'
+                    : 'Use “Add Question” or import a PDF or Word file.'}
+                </p>
               </div>
             )}
             {questions.map((q, i) => (
               <div key={q.key} id={q.key} className="scroll-mt-4">
                 <QuestionFormBlock
                   q={q}
-                  index={saved.length + i}
+                  index={i}
                   onChange={updated => updateQuestion(i, updated)}
                   showErrors={submitted}
                   removable={!isEdit}

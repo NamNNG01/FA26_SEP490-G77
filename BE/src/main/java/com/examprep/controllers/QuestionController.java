@@ -1,6 +1,7 @@
 package com.examprep.controllers;
 
 import com.examprep.dto.ApiResponse;
+import com.examprep.dto.QuestionGroupResponse;
 import com.examprep.dto.question.*;
 import com.examprep.entities.User;
 import com.examprep.exceptions.BadRequestException;
@@ -86,6 +87,27 @@ public class QuestionController {
         List<QuestionDetailDto> created = questionService.createQuestionsBatch(courseId, moduleId, requests, user);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(created, "Questions batch created successfully"));
+    }
+
+    @PostMapping("/groups-with-questions")
+    @Operation(summary = "Create a question group together with 1..50 questions")
+    public ResponseEntity<ApiResponse<QuestionGroupBatchCreateResponse>> createGroupWithQuestions(
+            @Valid @RequestBody QuestionGroupBatchCreateRequest request,
+            @AuthenticationPrincipal UserPrincipal currentUser) {
+        User user = resolveUser(currentUser);
+        QuestionGroupBatchCreateResponse created = questionService.createGroupWithQuestions(request, user);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success(created, "Question group and questions created successfully"));
+    }
+
+    @PostMapping("/groups/{groupId}/publish")
+    @Operation(summary = "Publish all draft questions in a question group")
+    public ResponseEntity<ApiResponse<QuestionGroupResponse>> publishGroupQuestions(
+            @PathVariable Long groupId,
+            @AuthenticationPrincipal UserPrincipal currentUser) {
+        User user = resolveUser(currentUser);
+        QuestionGroupResponse updated = questionService.publishGroupQuestions(groupId, user);
+        return ResponseEntity.ok(ApiResponse.success(updated, "Question group published successfully"));
     }
 
     @GetMapping("/{id}")

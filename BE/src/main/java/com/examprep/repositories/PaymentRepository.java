@@ -79,4 +79,6 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
             + "WHERE p.type = 'COURSE' AND p.status = 'SUCCEEDED' AND p.refId IS NOT NULL "
             + "GROUP BY p.refId")
     List<Object[]> sumCourseRevenueByCourse();
+
+    boolean existsByTypeAndRefIdAndStatus(String type, Long refId, String status);
 }

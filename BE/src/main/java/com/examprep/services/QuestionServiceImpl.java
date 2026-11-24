@@ -1,6 +1,7 @@
 package com.examprep.services;
 
 import com.examprep.ai.AiClient;
+import com.examprep.dto.QuestionGroupResponse;
 import com.examprep.dto.question.*;
 import com.examprep.entities.*;
 import com.examprep.entities.Module;
@@ -157,6 +158,8 @@ public class QuestionServiceImpl implements QuestionService {
                 .moduleId(q.getModule() != null ? q.getModule().getModuleId() : null)
                 .moduleName(q.getModule() != null ? q.getModule().getTitle() : null)
                 .groupId(q.getGroup() != null ? q.getGroup().getGroupId() : null)
+                .groupTitle(q.getGroup() != null ? q.getGroup().getTitle() : null)
+                .groupQuestionType(q.getGroup() != null ? q.getGroup().getQuestionType() : null)
                 .questionType(q.getQuestionType()).difficulty(q.getDifficulty())
                 .status(q.getStatus()).approvalStatus(q.getApprovalStatus())
                 .creatorRole(q.getCreatorRole()).source(q.getSource())
@@ -920,6 +923,144 @@ public class QuestionServiceImpl implements QuestionService {
             results.add(updateQuestionStatus(id, sReq, currentUser));
         }
         return results;
+    }
+
+    @Override
+    @Transactional
+    public QuestionGroupBatchCreateResponse createGroupWithQuestions(QuestionGroupBatchCreateRequest request, User currentUser) {
+        if (request == null || request.getQuestions() == null || request.getQuestions().isEmpty() || request.getQuestions().size() > 50) {
+            throw new BadRequestException("Question group must contain between 1 and 50 questions.");
+        }
+        if (request.getCourseId() == null) {
+            throw new BadRequestException("Course ID is required");
+        }
+
+        String questionType = QuestionTypeUtil.requireKind(request.getQuestionType());
+        String title = request.getTitle() == null ? "" : request.getTitle().trim();
+        String passageText = request.getPassageText() == null ? "" : request.getPassageText().trim();
+        if (title.isEmpty()) {
+            throw new BadRequestException("Group title is required");
+        }
+        if (passageText.isEmpty()) {
+            throw new BadRequestException("Shared passage is required");
+        }
+
+        Course course = courseRepository.findById(request.getCourseId())
+                .orElseThrow(() -> new ResourceNotFoundException("Course not found"));
+
+        if (!User.ROLE_ADMIN.equals(currentUser.getRoleName())) {
+            boolean isPrimaryManager = course.getManager() != null
+                    && course.getManager().getUserId().equals(currentUser.getUserId());
+            boolean isManager = isPrimaryManager || courseManagerRepository.existsByCourse_CourseIdAndUser_UserId(
+                    course.getCourseId(), currentUser.getUserId());
+            if (!isManager) {
+                throw new ForbiddenException("You are not a manager of this course");
+            }
+        }
+
+        com.examprep.entities.Module module = null;
+        if (request.getModuleId() != null) {
+            module = moduleRepository.findById(request.getModuleId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Module not found"));
+            if (!module.getCourse().getCourseId().equals(course.getCourseId())) {
+                throw new BadRequestException("Module does not belong to the specified course");
+            }
+        }
+
+        QuestionGroup group = QuestionGroup.builder()
+                .course(course)
+                .module(module)
+                .questionType(questionType)
+                .title(title)
+                .passageText(passageText)
+                .build();
+        QuestionGroup savedGroup = questionGroupRepository.saveAndFlush(group);
+
+        for (QuestionCreateRequest qReq : request.getQuestions()) {
+            qReq.setCourseId(request.getCourseId());
+            if (qReq.getModuleId() == null) {
+                qReq.setModuleId(request.getModuleId());
+            }
+            qReq.setGroupId(savedGroup.getGroupId());
+        }
+
+        List<QuestionDetailDto> createdQuestions = createQuestionsBatch(
+                request.getCourseId(), request.getModuleId(), request.getQuestions(), currentUser);
+
+        QuestionGroupResponse groupDto = QuestionGroupResponse.builder()
+                .groupId(savedGroup.getGroupId())
+                .courseId(course.getCourseId())
+                .courseName(course.getTitle())
+                .moduleId(module != null ? module.getModuleId() : null)
+                .moduleName(module != null ? module.getTitle() : null)
+                .questionType(savedGroup.getQuestionType())
+                .title(savedGroup.getTitle())
+                .passageText(savedGroup.getPassageText())
+                .questionCount(createdQuestions.size())
+                .publishedQuestionCount(0L)
+                .draftQuestionCount(createdQuestions.size())
+                .build();
+
+        return QuestionGroupBatchCreateResponse.builder()
+                .group(groupDto)
+                .questions(createdQuestions)
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public QuestionGroupResponse publishGroupQuestions(Long groupId, User currentUser) {
+        QuestionGroup group = questionGroupRepository.findById(groupId)
+                .orElseThrow(() -> new ResourceNotFoundException("Question group not found with id: " + groupId));
+
+        Course course = group.getCourse() != null
+                ? group.getCourse()
+                : (group.getModule() != null ? group.getModule().getCourse() : null);
+        if (!User.ROLE_ADMIN.equals(currentUser.getRoleName())) {
+            boolean isPrimaryManager = course != null && course.getManager() != null
+                    && course.getManager().getUserId().equals(currentUser.getUserId());
+            boolean isManager = isPrimaryManager || (course != null && courseManagerRepository.existsByCourse_CourseIdAndUser_UserId(
+                    course.getCourseId(), currentUser.getUserId()));
+            if (!isManager) {
+                throw new ForbiddenException("You are not a manager of this course");
+            }
+        }
+
+        List<Question> members = questionRepository.findByGroupGroupIdOrderByQuestionIdAsc(groupId);
+        if (members.isEmpty()) {
+            throw new BadRequestException("Question group has no questions to publish.");
+        }
+
+        List<Long> draftIds = members.stream()
+                .filter(q -> "INACTIVE".equalsIgnoreCase(q.getStatus()))
+                .map(Question::getQuestionId)
+                .toList();
+        if (!draftIds.isEmpty()) {
+            batchUpdateStatus(QuestionBatchStatusRequest.builder()
+                    .questionIds(draftIds)
+                    .status("ACTIVE")
+                    .build(), currentUser);
+            entityManager.flush();
+        }
+
+        List<Question> refreshed = questionRepository.findByGroupGroupIdOrderByQuestionIdAsc(groupId);
+        long total = refreshed.size();
+        long published = refreshed.stream().filter(q -> "ACTIVE".equalsIgnoreCase(q.getStatus())).count();
+        long draft = refreshed.stream().filter(q -> "INACTIVE".equalsIgnoreCase(q.getStatus())).count();
+
+        return QuestionGroupResponse.builder()
+                .groupId(group.getGroupId())
+                .courseId(course != null ? course.getCourseId() : null)
+                .courseName(course != null ? course.getTitle() : null)
+                .moduleId(group.getModule() != null ? group.getModule().getModuleId() : null)
+                .moduleName(group.getModule() != null ? group.getModule().getTitle() : null)
+                .questionType(group.getQuestionType())
+                .title(group.getTitle())
+                .passageText(group.getPassageText())
+                .questionCount(total)
+                .publishedQuestionCount(published)
+                .draftQuestionCount(draft)
+                .build();
     }
 
     private void lockQuestionCourses(List<Question> questions) {

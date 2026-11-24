@@ -12,11 +12,18 @@ public record ExamAiRequest(@NotNull @Positive Long courseId, @Positive Long mod
         @Min(1) @Max(600) Integer durationMinutes, @Pattern(regexp = "vi|en") String language,
         // Course manager's own instructions (focus topics, learners, style); course/module data is added by the BE.
         @Size(max = 2000) String context,
-        List<@NotNull @Positive Long> moduleIds) {
+        List<@NotNull @Positive Long> moduleIds,
+        @Size(max = 20000) String passageText) {
     public ExamAiRequest(Long courseId, Long moduleId, String title, Integer questionCount,
             Map<String, Integer> difficultyDistribution, List<TypeCount> questionTypes,
             Integer durationMinutes, String language, String context) {
-        this(courseId, moduleId, title, questionCount, difficultyDistribution, questionTypes, durationMinutes, language, context, null);
+        this(courseId, moduleId, title, questionCount, difficultyDistribution, questionTypes, durationMinutes, language, context, null, null);
+    }
+
+    public ExamAiRequest(Long courseId, Long moduleId, String title, Integer questionCount,
+            Map<String, Integer> difficultyDistribution, List<TypeCount> questionTypes,
+            Integer durationMinutes, String language, String context, List<Long> moduleIds) {
+        this(courseId, moduleId, title, questionCount, difficultyDistribution, questionTypes, durationMinutes, language, context, moduleIds, null);
     }
 
     public record TypeCount(@NotBlank String questionType, @NotNull @Min(1) @Max(50) Integer count) {

@@ -16,7 +16,7 @@ import { questionGroupService, type QuestionGroup } from '@/services/questionGro
 import { AnswerSection } from '../components/QuestionForm';
 import { QuestionLocationCard } from '../components/QuestionLocationCard';
 import { SIDEBAR_CLS } from '../components/QuestionSidePanel';
-import { GroupInfoCard, QuestionGroupPicker, groupFits } from '../components/QuestionGroupPicker';
+import { GroupInfoCard, QuestionGroupPicker, groupFits, type PendingGroupDraft } from '../components/QuestionGroupPicker';
 import {
   DIFFICULTY_OPTIONS,
   QUESTION_TYPE_OPTIONS,
@@ -62,6 +62,7 @@ export function QuestionDetailPage() {
 
   const [groups, setGroups] = useState<QuestionGroup[]>([]);
   const [groupsLoading, setGroupsLoading] = useState(false);
+  const [pendingGroup, setPendingGroup] = useState<PendingGroupDraft | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -132,26 +133,20 @@ export function QuestionDetailPage() {
   const markDirty = <T,>(setter: (v: T) => void) => (v: T) => { setter(v); setDirty(true); };
 
   /** Linked in the draft only — Save Changes stores it. */
-  const selectGroup = (group: QuestionGroup | null) => update({ groupId: group?.groupId ?? null });
+  const selectGroup = (group: QuestionGroup | null) => {
+    setPendingGroup(null);
+    update({ groupId: group?.groupId ?? null });
+  };
 
-  const createGroup = async (title: string, passageText: string) => {
+  /** Stages the new group locally and creates it atomically during Save Changes (so 0-question groups are never orphaned). */
+  const stageNewGroup = (title: string, passageText: string) => {
     if (!q) return;
-    try {
-      const group = await questionGroupService.createQuestionGroup({
-        courseId: Number(courseId),
-        moduleId: moduleId ? Number(moduleId) : null,
-        // A group holds one kind — the one of the question it is created for.
-        questionType: kindOf(q.type) ?? 'QUIZ',
-        title,
-        passageText,
-      });
-      setGroups(prev => [group, ...prev]);
-      selectGroup(group);
-      toast.success(`Group “${group.title || `Group #${group.groupId}`}” created. Save changes to link this question to it.`);
-    } catch (err) {
-      toast.error(errorMessage(err, 'Could not create the question group.'));
-      throw err;
-    }
+    setPendingGroup({
+      title,
+      passageText,
+      questionType: kindOf(q.type) ?? 'QUIZ',
+    });
+    setDirty(true);
   };
 
   /** Saved right away (not with Save Changes) — the passage is shared by every question in the group. */
@@ -176,16 +171,38 @@ export function QuestionDetailPage() {
       return;
     }
     setSaving(true);
+    let createdGroupId: number | null = null;
     try {
+      let targetQ = q;
+      if (pendingGroup) {
+        const created = await questionGroupService.createQuestionGroup({
+          courseId: Number(courseId),
+          moduleId: moduleId ? Number(moduleId) : null,
+          questionType: kindOf(q.type) ?? pendingGroup.questionType,
+          title: pendingGroup.title,
+          passageText: pendingGroup.passageText,
+        });
+        createdGroupId = created.groupId;
+        targetQ = { ...q, groupId: created.groupId };
+      }
       // Status is not part of this save — it changes on its own (changeStatus).
-      const updated = await questionService.updateQuestion(q.questionId, toUpdateRequest(q, moduleId ? Number(moduleId) : null));
+      const updated = await questionService.updateQuestion(targetQ.questionId!, toUpdateRequest(targetQ, moduleId ? Number(moduleId) : null));
       setQ(fromDetail(updated));
+      setPendingGroup(null);
+      if (createdGroupId != null) {
+        questionGroupService.getQuestionGroups({ courseId: Number(courseId), size: 100 })
+          .then(res => setGroups(res.content))
+          .catch(() => {});
+      }
       setSavedStatus(updated.status);
       setSavedGroupId(updated.groupId ?? null);
       setDirty(false);
       setSubmitted(false);
       toast.success('Question updated.');
     } catch (err) {
+      if (createdGroupId != null) {
+        questionGroupService.deleteQuestionGroup(createdGroupId).catch(() => {});
+      }
       setSaveError(describeSaveError(err, 'Could not save. Please try again.'));
       scrollRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } finally {
@@ -254,9 +271,9 @@ export function QuestionDetailPage() {
 
   const errors = submitted ? validateDraft(q) : {};
   const linkedGroup = groups.find(g => g.groupId === q.groupId) ?? null;
-  const groupPending = q.groupId !== savedGroupId;
+  const groupPending = Boolean(pendingGroup) || q.groupId !== savedGroupId;
   // In a group, the type stays within the group's kind (unlink the group to pick another kind).
-  const groupKind = asGroupKind(linkedGroup?.questionType);
+  const groupKind = pendingGroup ? pendingGroup.questionType : asGroupKind(linkedGroup?.questionType);
   const typeOptions = QUESTION_TYPE_OPTIONS.filter(o => o.value === q.type || typesOfKind(groupKind).includes(o.value));
   const locked = saving || busy;
   /** The backend won't save an archived question, so it's shown read-only (it can still be deleted). */
@@ -317,10 +334,11 @@ export function QuestionDetailPage() {
               groups={groups}
               loading={groupsLoading}
               currentGroupId={q.groupId}
+              pendingGroup={pendingGroup}
               kind={kindOf(q.type)}
               moduleId={moduleId}
               onSelect={selectGroup}
-              onCreate={createGroup}
+              onCreate={stageNewGroup}
               onUpdate={updateGroup}
               disabled={locked}
             />
@@ -384,7 +402,17 @@ export function QuestionDetailPage() {
             <p className="text-xs text-content-subtle">The course can't be changed after a question is created.</p>
           </div>
 
-          <GroupInfoCard group={linkedGroup} groupId={q.groupId} loading={groupsLoading} pending={groupPending} onUnlink={() => update({ groupId: savedGroupId })} />
+          <GroupInfoCard
+            group={linkedGroup}
+            groupId={q.groupId}
+            pendingGroup={pendingGroup}
+            loading={groupsLoading}
+            pending={groupPending}
+            onUnlink={() => {
+              if (pendingGroup) setPendingGroup(null);
+              else update({ groupId: savedGroupId });
+            }}
+          />
         </div>
       </div>
 

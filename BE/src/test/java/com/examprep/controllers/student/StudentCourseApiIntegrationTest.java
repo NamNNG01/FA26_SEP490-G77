@@ -125,7 +125,47 @@ class StudentCourseApiIntegrationTest {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.courseId").value(publishedCourse.getCourseId()))
                 .andExpect(jsonPath("$.data.modules[0].title").value("Intro"))
+                .andExpect(jsonPath("$.data.modules[0].questionCount").value(0))
+                .andExpect(jsonPath("$.data.stats.questionCount").value(0))
                 .andExpect(jsonPath("$.data.enrollment.isEnrolled").value(false));
+    }
+
+    @Test
+    void getCourseDetail_IncludesPublicQuestionCountsForQuestionOnlyModules() throws Exception {
+        Course questionsOnlyCourse = Course.builder()
+                .title("Course Test 23/11")
+                .slug("course-test-23-11-" + UUID.randomUUID())
+                .categoryId(publishedCourse.getCategoryId())
+                .category(publishedCourse.getCategory())
+                .manager(manager)
+                .isPublished(true)
+                .price(new BigDecimal("120000"))
+                .build();
+        em.persist(questionsOnlyCourse);
+
+        Module visibleMod = Module.builder().course(questionsOnlyCourse).title("Module 1").orderIndex(1).status("VISIBLE").build();
+        Module hiddenMod = Module.builder().course(questionsOnlyCourse).title("Hidden Module").orderIndex(2).status("HIDDEN").build();
+        em.persist(visibleMod);
+        em.persist(hiddenMod);
+
+        em.persist(Question.builder().course(questionsOnlyCourse).module(visibleMod)
+                .questionType("SINGLE_CHOICE").content("Visible Active 1").status("ACTIVE").approvalStatus("APPROVED").build());
+        em.persist(Question.builder().course(questionsOnlyCourse).module(visibleMod)
+                .questionType("SINGLE_CHOICE").content("Visible Active 2").status("ACTIVE").approvalStatus("APPROVED").build());
+        em.persist(Question.builder().course(questionsOnlyCourse).module(visibleMod)
+                .questionType("SINGLE_CHOICE").content("Visible Draft").status("INACTIVE").approvalStatus("APPROVED").build());
+        em.persist(Question.builder().course(questionsOnlyCourse).module(hiddenMod)
+                .questionType("SINGLE_CHOICE").content("Hidden Active").status("ACTIVE").approvalStatus("APPROVED").build());
+        em.flush();
+
+        mvc.perform(get("/api/v1/student/courses/" + questionsOnlyCourse.getCourseId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.modules.length()").value(1))
+                .andExpect(jsonPath("$.data.modules[0].title").value("Module 1"))
+                .andExpect(jsonPath("$.data.modules[0].questionCount").value(2))
+                .andExpect(jsonPath("$.data.stats.publishedExamCount").value(0))
+                .andExpect(jsonPath("$.data.stats.deckCount").value(0))
+                .andExpect(jsonPath("$.data.stats.questionCount").value(2));
     }
 
     @Test

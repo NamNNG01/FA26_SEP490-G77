@@ -4,6 +4,10 @@ import com.examprep.dto.PageResponse;
 import com.examprep.dto.QuestionGroupCreateRequest;
 import com.examprep.dto.QuestionGroupResponse;
 import com.examprep.dto.QuestionGroupUpdateRequest;
+import com.examprep.dto.question.AnswerOptionDto;
+import com.examprep.dto.question.QuestionCreateRequest;
+import com.examprep.dto.question.QuestionGroupBatchCreateRequest;
+import com.examprep.dto.question.QuestionGroupBatchCreateResponse;
 import com.examprep.entities.Category;
 import com.examprep.entities.Course;
 import com.examprep.entities.CourseManager;
@@ -44,6 +48,9 @@ class QuestionGroupIntegrationTest {
 
     @Autowired
     private QuestionGroupService questionGroupService;
+
+    @Autowired
+    private QuestionService questionService;
 
     @Autowired
     private EntityManager entityManager;
@@ -516,6 +523,71 @@ class QuestionGroupIntegrationTest {
         assertThrows(ResourceConflictException.class, () -> questionGroupService.updateQuestionGroup(
                 manager1.getUserId(), User.ROLE_COURSE_MANAGER, g4.getGroupId(),
                 QuestionGroupUpdateRequest.builder().questionType("ESSAY").build()));
+    }
+
+    @Test
+    void createGroupWithQuestionsRequiresAtLeastOneAndPublishGroupUpdatesCounts() {
+        long groupsBefore = questionGroupRepository.count();
+        assertThrows(BadRequestException.class, () -> questionService.createGroupWithQuestions(
+                QuestionGroupBatchCreateRequest.builder()
+                        .courseId(courseA.getCourseId())
+                        .moduleId(moduleA1.getModuleId())
+                        .questionType("QUIZ")
+                        .title("Empty group")
+                        .passageText("Passage text")
+                        .questions(List.of())
+                        .build(),
+                manager1));
+        assertEquals(groupsBefore, questionGroupRepository.count());
+
+        QuestionCreateRequest q1 = QuestionCreateRequest.builder()
+                .courseId(courseA.getCourseId())
+                .moduleId(moduleA1.getModuleId())
+                .questionType("SINGLE_CHOICE")
+                .difficulty("MEDIUM")
+                .content("Atomic group Q1")
+                .options(List.of(
+                        AnswerOptionDto.builder().optionText("Yes").isCorrect(true).orderIndex(0).build(),
+                        AnswerOptionDto.builder().optionText("No").isCorrect(false).orderIndex(1).build()))
+                .build();
+        QuestionCreateRequest q2 = QuestionCreateRequest.builder()
+                .courseId(courseA.getCourseId())
+                .moduleId(moduleA1.getModuleId())
+                .questionType("SINGLE_CHOICE")
+                .difficulty("EASY")
+                .content("Atomic group Q2")
+                .options(List.of(
+                        AnswerOptionDto.builder().optionText("True").isCorrect(true).orderIndex(0).build(),
+                        AnswerOptionDto.builder().optionText("False").isCorrect(false).orderIndex(1).build()))
+                .build();
+
+        QuestionGroupBatchCreateResponse created = questionService.createGroupWithQuestions(
+                QuestionGroupBatchCreateRequest.builder()
+                        .courseId(courseA.getCourseId())
+                        .moduleId(moduleA1.getModuleId())
+                        .questionType("QUIZ")
+                        .title("Atomic Quiz Group")
+                        .passageText("Shared passage for atomic group")
+                        .questions(List.of(q1, q2))
+                        .build(),
+                manager1);
+
+        assertEquals(2L, created.getGroup().getQuestionCount());
+        assertEquals(0L, created.getGroup().getPublishedQuestionCount());
+        assertEquals(2L, created.getGroup().getDraftQuestionCount());
+        assertEquals(2, created.getQuestions().size());
+
+        PageResponse<QuestionGroupResponse> listed = questionGroupService.getQuestionGroups(
+                manager1.getUserId(), User.ROLE_COURSE_MANAGER, courseA.getCourseId(), null, null, "Atomic Quiz", 0, 20);
+        assertEquals(1, listed.getContent().size());
+        assertEquals(2L, listed.getContent().get(0).getQuestionCount());
+        assertEquals(0L, listed.getContent().get(0).getPublishedQuestionCount());
+        assertEquals(2L, listed.getContent().get(0).getDraftQuestionCount());
+
+        QuestionGroupResponse published = questionService.publishGroupQuestions(created.getGroup().getGroupId(), manager1);
+        assertEquals(2L, published.getQuestionCount());
+        assertEquals(2L, published.getPublishedQuestionCount());
+        assertEquals(0L, published.getDraftQuestionCount());
     }
 
     private long questionCountOf(PageResponse<QuestionGroupResponse> response, Long groupId) {

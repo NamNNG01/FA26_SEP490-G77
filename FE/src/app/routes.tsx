@@ -232,6 +232,22 @@ export function managerQuestionDuplicatePath(id: number | string): string {
   return `${ROUTES.managerQuestionCreate}?duplicate=${encodeURIComponent(String(id))}`;
 }
 
+/** New Questions pre-opened with a location, new group builder, or an existing group. */
+export function managerQuestionCreateWithContextPath(opts?: {
+  context?: 'new-group';
+  groupId?: number | string;
+  courseId?: number | string | null;
+  moduleId?: number | string | null;
+}): string {
+  const qs = new URLSearchParams();
+  if (opts?.context) qs.set('context', opts.context);
+  if (opts?.groupId != null) qs.set('groupId', String(opts.groupId));
+  if (opts?.courseId != null) qs.set('courseId', String(opts.courseId));
+  if (opts?.moduleId != null) qs.set('moduleId', String(opts.moduleId));
+  const s = qs.toString();
+  return s ? `${ROUTES.managerQuestionCreate}?${s}` : ROUTES.managerQuestionCreate;
+}
+
 export function managerContestPath(id: number | string): string {
   return `${ROUTES.managerContests}/${id}`;
 }

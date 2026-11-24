@@ -112,12 +112,30 @@ export const AiGeneratePanel = forwardRef<AiGeneratePanelHandle, {
   moduleId: string;
   /** The group's kind limits the types (undefined = any type). */
   allowedTypes?: QuestionType[];
+  /** True when generating into a new or existing Question Group. */
+  isGroupMode?: boolean;
+  groupTitle?: string;
+  groupPassage?: string;
+  groupIssue?: string;
+  onGroupInvalid?: () => void;
   /** The suggestions accepted so far, in order — what Save stores. */
   onAcceptedChange: (drafts: QuestionDraft[]) => void;
   /** Suggestions not saved yet (accepted or not) — they're lost if the page is left. */
   onPendingChange?: (count: number) => void;
   disabled?: boolean;
-}>(function AiGeneratePanel({ courseId, moduleId, allowedTypes, onAcceptedChange, onPendingChange, disabled }, ref) {
+}>(function AiGeneratePanel({
+  courseId,
+  moduleId,
+  allowedTypes,
+  isGroupMode = false,
+  groupTitle,
+  groupPassage,
+  groupIssue,
+  onGroupInvalid,
+  onAcceptedChange,
+  onPendingChange,
+  disabled,
+}, ref) {
   const toast = useToast();
   const typeOptions = allowedTypes ? AI_QUESTION_TYPE_OPTIONS.filter(o => allowedTypes.includes(o.value)) : AI_QUESTION_TYPE_OPTIONS;
   const [typeCounts, setTypeCounts] = useState<TypeCounts<QuestionType>>({ SINGLE_CHOICE: String(DEFAULT_COUNT) });
@@ -128,7 +146,6 @@ export const AiGeneratePanel = forwardRef<AiGeneratePanelHandle, {
 
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [warnings, setWarnings] = useState<string[]>([]);
   /** The previews came from demo data, not the AI. */
   const [isDemo, setIsDemo] = useState(false);
   const [previews, setPreviews] = useState<Preview[] | null>(null);
@@ -153,6 +170,11 @@ export const AiGeneratePanel = forwardRef<AiGeneratePanelHandle, {
       const first = AI_QUESTION_TYPE_OPTIONS.find(o => allowedTypes.includes(o.value))?.value;
       return first ? { [first]: String(DEFAULT_COUNT) } : {};
     });
+    setPreviews(prev => prev && prev.map(p => (
+      p.accepted && !allowedTypes.includes(p.draft.type)
+        ? { ...p, accepted: false, editing: true }
+        : p
+    )));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- allowedKey stands in for allowedTypes (a new array every render)
   }, [allowedKey]);
 
@@ -171,7 +193,9 @@ export const AiGeneratePanel = forwardRef<AiGeneratePanelHandle, {
     if (onlyLevel && total) setDifficultyCounts(prev => (prev[onlyLevel] === String(total) ? prev : { [onlyLevel]: String(total) }));
   }, [onlyLevel, total]);
 
-  const contextError = showErrors && !context.trim() ? 'Describe what the questions should be about.' : undefined;
+  const hasPassage = Boolean(isGroupMode && groupPassage?.trim());
+  const contextOptional = hasPassage;
+  const contextError = showErrors && !contextOptional && !context.trim() ? 'Describe what the questions should be about.' : undefined;
   const typesError = !showErrors ? undefined
     : !counts.length ? 'Pick at least one question type.'
     : !countsValid ? `Enter a number from ${MIN_COUNT} to ${MAX_COUNT} for each type.`
@@ -187,7 +211,11 @@ export const AiGeneratePanel = forwardRef<AiGeneratePanelHandle, {
 
   const generate = async () => {
     setShowErrors(true);
-    if (!courseId || !moduleId || !context.trim() || !total || !levelsValid || totalError || mismatchError) return;
+    if (isGroupMode && (groupIssue || !groupPassage?.trim())) {
+      onGroupInvalid?.();
+      return;
+    }
+    if (!courseId || !moduleId || (!contextOptional && !context.trim()) || !total || !levelsValid || totalError || mismatchError) return;
 
     abortRef.current?.abort();
     abortRegenerations();
@@ -195,22 +223,21 @@ export const AiGeneratePanel = forwardRef<AiGeneratePanelHandle, {
     abortRef.current = controller;
     setGenerating(true);
     setError(null);
-    setWarnings([]);
     try {
-      // AI-01 drafts every type and difficulty in one call.
+      // AI-01 drafts every type and difficulty in one call (plus sharedPassage when generating into a group).
       const request: QuestionAiGenerateRequest = {
         courseId: Number(courseId),
         moduleId: Number(moduleId),
         questionTypeCounts: Object.fromEntries(counts),
         difficultyCounts: Object.fromEntries(levels),
-        topic: context.trim(),
+        ...(context.trim() ? { topic: context.trim() } : {}),
+        ...(isGroupMode && groupPassage?.trim() ? { passageText: groupPassage.trim(), groupTitle: groupTitle?.trim() || undefined } : {}),
         language,
       };
       const res = await questionService.generateAiQuestions(request, controller.signal);
       if (controller.signal.aborted) return;
       setPreviews(res.questions.map(q => toPreview(q, request)));
       setIsDemo(Boolean(res.mock));
-      setWarnings(res.warnings);
     } catch (err) {
       if (!controller.signal.aborted) setError(aiErrorMessage(err));
     } finally {
@@ -255,7 +282,6 @@ export const AiGeneratePanel = forwardRef<AiGeneratePanelHandle, {
       abortRegenerations();
       setGenerating(false);
       setPreviews(null);
-      setWarnings([]);
       setError(null);
     },
   }), [previews]);
@@ -300,9 +326,32 @@ export const AiGeneratePanel = forwardRef<AiGeneratePanelHandle, {
           </div>
         </div>
 
+        {isGroupMode && (
+          <div className={`rounded-[10px] border px-3 py-2 text-xs flex items-start gap-2 ${
+            groupIssue || !hasPassage
+              ? (showErrors ? 'border-danger-solid/40 bg-danger-solid/5 text-danger' : 'border-line bg-surface-alt text-content-soft')
+              : 'border-brand-600/25 bg-brand-600/5 text-content-secondary'
+          }`}>
+            <Icon.Layers className="w-4 h-4 mt-0.5 flex-shrink-0 text-brand-ink" />
+            <div>
+              {groupIssue ? (
+                <span>{groupIssue}</span>
+              ) : hasPassage ? (
+                <span>
+                  Shared passage from <strong className="font-semibold text-content">“{groupTitle || 'Question Group'}”</strong> will be sent to AI automatically. Question types are filtered to match this group.
+                </span>
+              ) : (
+                <span>Select a question group or enter the shared passage above before generating questions.</span>
+              )}
+            </div>
+          </div>
+        )}
+
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center justify-between gap-2">
-            <label htmlFor="ai-gen-context" className="text-sm font-medium text-content-secondary">Context *</label>
+            <label htmlFor="ai-gen-context" className="text-sm font-medium text-content-secondary">
+              {contextOptional ? 'Additional instructions (optional)' : 'Context *'}
+            </label>
             <span className="text-2xs text-content-subtle">{context.length}/{AI_CONTEXT_MAX}</span>
           </div>
           <textarea
@@ -311,7 +360,9 @@ export const AiGeneratePanel = forwardRef<AiGeneratePanelHandle, {
             onChange={e => setContext(e.target.value)}
             // Enter starts a new line; Ctrl/Cmd + Enter generates.
             onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && !generating) generate(); }}
-            placeholder={'What the questions should be about, e.g.\nOOP inheritance in Java: extends, method overriding, super, and when to prefer composition.'}
+            placeholder={contextOptional
+              ? 'Optional guidance for AI based on the shared passage, e.g. Focus on inference and vocabulary.'
+              : 'What the questions should be about, e.g.\nOOP inheritance in Java: extends, method overriding, super, and when to prefer composition.'}
             maxLength={AI_CONTEXT_MAX}
             disabled={generating}
             aria-invalid={contextError ? true : undefined}
@@ -383,13 +434,6 @@ export const AiGeneratePanel = forwardRef<AiGeneratePanelHandle, {
       {error && <Alert type="error" title="Could not generate questions" message={error} />}
       {isDemo && previews && !error && (
         <Alert type="info" title="Demo data" message="AI demo mode is on (VITE_AI_MOCK), so these are sample questions. They can be accepted and edited like real suggestions." />
-      )}
-      {warnings.length > 0 && (
-        <Alert
-          type="warning"
-          title="Some drafts were skipped"
-          message={warnings.join(' · ')}
-        />
       )}
 
       {generating && !previews && (

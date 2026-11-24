@@ -291,7 +291,8 @@ public class ManagerCourseApiIntegrationTest {
                 .andExpect(status().isBadRequest());
         call(admin, get(path())).andExpect(jsonPath("$.data.status").value("DRAFT"));
         call(admin, get(list).param("status", "READY_TO_PUBLISH")).andExpect(jsonPath("$.data.totalElements").value(0));
-        // Draft content (an INACTIVE question, a private deck) does not make the course publishable.
+        // Draft content (an INACTIVE question, a private deck) does not make the course publishable,
+        // and any remaining draft manager question blocks publishing even when active questions exist.
         Question draft = question(first);
         draft.setStatus("INACTIVE");
         em.persist(Deck.builder().course(course).module(first).user(manager).title("Private deck").isPublic(false).build());
@@ -299,10 +300,16 @@ public class ManagerCourseApiIntegrationTest {
         call(admin, patch(path() + "/publish").contentType(MediaType.APPLICATION_JSON).content(publish))
                 .andExpect(status().isBadRequest());
         question(first);
+        call(admin, get(path())).andExpect(jsonPath("$.data.status").value("DRAFT"))
+                .andExpect(jsonPath("$.data.draftQuestionCount").value(1));
+        call(admin, patch(path() + "/publish").contentType(MediaType.APPLICATION_JSON).content(publish))
+                .andExpect(status().isBadRequest());
+        draft.setStatus("ACTIVE");
         first.setStatus(Module.STATUS_HIDDEN);
         call(admin, get(path())).andExpect(jsonPath("$.data.status").value("DRAFT"));
         first.setStatus(Module.STATUS_VISIBLE);
-        call(admin, get(path())).andExpect(jsonPath("$.data.status").value("READY_TO_PUBLISH"));
+        call(admin, get(path())).andExpect(jsonPath("$.data.status").value("READY_TO_PUBLISH"))
+                .andExpect(jsonPath("$.data.draftQuestionCount").value(0));
         call(admin, get(list).param("status", "READY_TO_PUBLISH"))
                 .andExpect(jsonPath("$.data.totalElements").value(1))
                 .andExpect(jsonPath("$.data.content[0].courseId").value(course.getCourseId()));
@@ -312,6 +319,50 @@ public class ManagerCourseApiIntegrationTest {
                 .andExpect(jsonPath("$.data.status").value("PUBLISHED"));
         call(admin, patch(path() + "/publish").contentType(MediaType.APPLICATION_JSON).content("{\"isPublished\":false}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.isPublished").value(false));
+    }
+
+    @Test
+    void emptyModuleBlocksPublishAndPaidCourseLocksUnpublishAndPriceOnly() throws Exception {
+        Module first = module(course, "First", 1);
+        question(first);
+        Module second = module(course, "Second Empty", 2);
+
+        call(admin, get(path())).andExpect(jsonPath("$.data.status").value("DRAFT"));
+        call(admin, patch(path() + "/publish").contentType(MediaType.APPLICATION_JSON).content("{\"isPublished\":true}"))
+                .andExpect(status().isBadRequest());
+
+        question(second);
+        call(admin, get(path())).andExpect(jsonPath("$.data.status").value("READY_TO_PUBLISH"));
+        call(admin, patch(path() + "/publish").contentType(MediaType.APPLICATION_JSON).content("{\"isPublished\":true}"))
+                .andExpect(status().isOk());
+
+        // Pending payments or free enrollments without SUCCEEDED payment still allow price edit and unpublish.
+        enrollment(student, course, Enrollment.STATUS_ACTIVE, 0);
+        em.persist(Payment.builder().user(student).orderCode("ORD-PENDING-" + UUID.randomUUID()).type(Payment.COURSE)
+                .refId(course.getCourseId()).amount(new BigDecimal("100000")).currency("VND").status(Payment.PENDING)
+                .discountAmount(BigDecimal.ZERO).createdAt(Instant.now()).updatedAt(Instant.now()).build());
+        call(admin, put(path()).contentType(MediaType.APPLICATION_JSON).content("{\"price\":150000}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.hasPaidPurchases").value(false));
+        call(admin, patch(path() + "/publish").contentType(MediaType.APPLICATION_JSON).content("{\"isPublished\":false}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.isPublished").value(false));
+        call(admin, patch(path() + "/publish").contentType(MediaType.APPLICATION_JSON).content("{\"isPublished\":true}"))
+                .andExpect(status().isOk());
+
+        // Once a student has a SUCCEEDED payment, unpublish and price changes return 409, while other fields stay editable.
+        em.persist(Payment.builder().user(student).orderCode("ORD-PAID-" + UUID.randomUUID()).type(Payment.COURSE)
+                .refId(course.getCourseId()).amount(new BigDecimal("150000")).currency("VND").status(Payment.SUCCEEDED)
+                .discountAmount(BigDecimal.ZERO).paidAt(Instant.now()).createdAt(Instant.now()).updatedAt(Instant.now()).build());
+
+        call(admin, get(path())).andExpect(status().isOk()).andExpect(jsonPath("$.data.hasPaidPurchases").value(true));
+        call(admin, patch(path() + "/publish").contentType(MediaType.APPLICATION_JSON).content("{\"isPublished\":false}"))
+                .andExpect(status().isConflict());
+        call(admin, put(path()).contentType(MediaType.APPLICATION_JSON).content("{\"price\":200000}"))
+                .andExpect(status().isConflict());
+        call(admin, put(path()).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"title\":\"Python Pro Updated\",\"description\":\"Updated after purchase\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.title").value("Python Pro Updated"))
+                .andExpect(jsonPath("$.data.description").value("Updated after purchase"));
     }
 
     @Test
@@ -359,9 +410,11 @@ public class ManagerCourseApiIntegrationTest {
         call(manager, get(path() + "/modules")).andExpect(jsonPath("$.data[0].status").value("HIDDEN"))
                 .andExpect(jsonPath("$.data[1].status").value("VISIBLE"));
 
-        // Published course: the last visible module can be neither hidden nor deleted; hidden ones can.
+        // Empty hidden module still blocks initial publish; once published, the last visible module can be neither hidden nor deleted while hidden ones can.
         question(second);
-        call(admin, patch(path() + "/publish").contentType(MediaType.APPLICATION_JSON).content("{\"isPublished\":true}")).andExpect(status().isOk());
+        call(admin, patch(path() + "/publish").contentType(MediaType.APPLICATION_JSON).content("{\"isPublished\":true}")).andExpect(status().isBadRequest());
+        course.setIsPublished(true);
+        em.flush();
         call(manager, patch(modulePath(second) + "/status").contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"HIDDEN\"}"))
                 .andExpect(status().isConflict());
         call(manager, delete(modulePath(second))).andExpect(status().isConflict());

@@ -23,6 +23,20 @@ public interface ExamRepository extends JpaRepository<Exam, Long>, JpaSpecificat
     boolean existsByModuleModuleId(Long moduleId);
     boolean existsByCourseCourseIdOrModuleCourseCourseId(Long courseId, Long moduleCourseId);
 
+    @Query("""
+        SELECT COUNT(e) > 0 FROM Exam e
+        LEFT JOIN e.course c
+        LEFT JOIN e.module m
+        LEFT JOIN m.course mc
+        WHERE e.mode IN ('EXAM', 'CONTEST')
+          AND COALESCE(c.courseId, mc.courseId) = :courseId
+          AND LOWER(TRIM(e.title)) = LOWER(TRIM(:title))
+          AND (:excludeId IS NULL OR e.examId <> :excludeId)
+        """)
+    boolean existsCourseExamByTitle(@Param("courseId") Long courseId,
+                                    @Param("title") String title,
+                                    @Param("excludeId") Long excludeId);
+
     @Query("SELECT new com.examprep.dto.IdCount(e.module.moduleId, COUNT(e)) FROM Exam e WHERE e.module.moduleId IN :ids AND e.mode IN ('EXAM', 'CONTEST') GROUP BY e.module.moduleId")
     List<IdCount> countByModules(@Param("ids") List<Long> ids);
 

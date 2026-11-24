@@ -1,5 +1,6 @@
 package com.examprep.services;
 
+import com.examprep.dto.QuestionGroupResponse;
 import com.examprep.dto.question.*;
 import com.examprep.entities.Question;
 import com.examprep.entities.User;
@@ -17,6 +18,10 @@ public interface QuestionService {
 
 
     List<QuestionDetailDto> createQuestionsBatch(Long courseId, Long moduleId, List<QuestionCreateRequest> requests, User currentUser);
+
+    QuestionGroupBatchCreateResponse createGroupWithQuestions(QuestionGroupBatchCreateRequest request, User currentUser);
+
+    QuestionGroupResponse publishGroupQuestions(Long groupId, User currentUser);
 
     default QuestionDetailDto createQuestion(QuestionCreateRequest request, User currentUser) {
         List<QuestionDetailDto> created = createQuestionsBatch(request.getCourseId(), request.getModuleId(), List.of(request), currentUser);

@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
 import { Alert } from '@/components/ui/Alert';
 import { SearchInput } from '@/components/common/SearchInput';
 import { Icon } from '@/assets/icons';
 import { useToast } from '@/components/ui/ToastHost';
 import { examService, type ExamKind, type QuestionGroupItem } from '@/services/exam.service';
+import { ROUTES, managerQuestionCreateWithContextPath } from '@/app/routes';
 import { getApiErrorMessage } from '@/utils/apiError';
 
 interface QuestionGroupModalProps {
@@ -32,16 +33,11 @@ export function QuestionGroupModal({
   loading = false,
 }: QuestionGroupModalProps) {
   const toast = useToast();
-  const [tab, setTab] = useState<'existing' | 'new'>('existing');
+  const navigate = useNavigate();
   const [groups, setGroups] = useState<QuestionGroupItem[]>([]);
   const [search, setSearch] = useState('');
   const [selectedGroup, setSelectedGroup] = useState<QuestionGroupItem | null>(null);
   const [fetching, setFetching] = useState(false);
-
-  const [newTitle, setNewTitle] = useState('');
-  const [newPassage, setNewPassage] = useState('');
-  const [creating, setCreating] = useState(false);
-  const [errorMsg, setErrorMsg] = useState('');
 
   useEffect(() => {
     if (!open) return;
@@ -69,44 +65,9 @@ export function QuestionGroupModal({
 
   useEffect(() => {
     if (open) {
-      setTab('existing');
       setSelectedGroup(null);
-      setNewTitle('');
-      setNewPassage('');
-      setErrorMsg('');
     }
   }, [open]);
-
-  const handleCreateNewGroup = async () => {
-    if (!courseId) {
-      setErrorMsg('Select a course for the exam before creating a question group.');
-      return;
-    }
-    if (!newTitle.trim()) {
-      setErrorMsg('Please enter a group title.');
-      return;
-    }
-    if (!newPassage.trim()) {
-      setErrorMsg('Please enter the passage text.');
-      return;
-    }
-    setErrorMsg('');
-    setCreating(true);
-    try {
-      const created = await examService.createQuestionGroup({
-        courseId,
-        moduleId,
-        questionType,
-        title: newTitle.trim(),
-        passageText: newPassage.trim(),
-      });
-      onSelectGroup(created);
-    } catch (err) {
-      setErrorMsg(getApiErrorMessage(err, 'Failed to create question group.'));
-    } finally {
-      setCreating(false);
-    }
-  };
 
   const handleConfirmSelect = () => {
     if (!selectedGroup) return;
@@ -117,149 +78,107 @@ export function QuestionGroupModal({
     <Modal
       open={open}
       onClose={onClose}
-      title="Add Reading Passage Group"
+      title="Add Question Group"
       size="lg"
-      error={errorMsg && <Alert type="error" title="Could not create question group" message={errorMsg} />}
       footer={
-        <div className="flex items-center justify-end w-full">
+        <div className="flex items-center justify-between w-full gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={<Icon.Plus className="w-3.5 h-3.5" />}
+            onClick={() => {
+              onClose();
+              navigate(
+                courseId != null
+                  ? managerQuestionCreateWithContextPath({ context: 'new-group', courseId, moduleId })
+                  : ROUTES.managerQuestions,
+              );
+            }}
+          >
+            New Group in Question Bank
+          </Button>
           <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={onClose} disabled={loading || creating}>
+            <Button variant="outline" onClick={onClose} disabled={loading}>
               Cancel
             </Button>
-            {tab === 'existing' ? (
-              <Button
-                onClick={handleConfirmSelect}
-                disabled={!selectedGroup || loading}
-                loading={loading}
-                icon={<Icon.Plus className="w-4 h-4" />}
-              >
-                Add Group
-              </Button>
-            ) : (
-              <Button
-                onClick={handleCreateNewGroup}
-                disabled={!courseId || !newTitle.trim() || !newPassage.trim() || creating}
-                loading={creating}
-                icon={<Icon.Check className="w-4 h-4" />}
-              >
-                Create & Add
-              </Button>
-            )}
+            <Button
+              onClick={handleConfirmSelect}
+              disabled={!selectedGroup || loading}
+              loading={loading}
+              icon={<Icon.Plus className="w-4 h-4" />}
+            >
+              Add Group
+            </Button>
           </div>
         </div>
       }
     >
-      <div className="space-y-4">
-        <div className="flex border-b border-line">
-          <button
-            type="button"
-            onClick={() => setTab('existing')}
-            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors cursor-pointer ${
-              tab === 'existing'
-                ? 'border-brand-ink text-brand-ink'
-                : 'border-transparent text-content-subtle hover:text-content'
-            }`}
-          >
-            Select Existing Group
-          </button>
-          <button
-            type="button"
-            onClick={() => setTab('new')}
-            disabled={!courseId}
-            title={!courseId ? 'Select a course for the exam before creating a question group.' : undefined}
-            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
-              !courseId
-                ? 'border-transparent text-content-subtle opacity-50 cursor-not-allowed'
-                : tab === 'new'
-                ? 'border-brand-ink text-brand-ink cursor-pointer'
-                : 'border-transparent text-content-subtle hover:text-content cursor-pointer'
-            }`}
-          >
-            Create New Group
-          </button>
-        </div>
-
+      <div className="space-y-3">
         {!courseId && (
-          <p className="text-xs text-content-subtle">
-            Select a course for the exam before creating a question group.
-          </p>
+          <Alert
+            type="info"
+            title="Course required"
+            message="Select a course for the exam first to filter question groups of that course."
+          />
         )}
 
-        {tab === 'existing' ? (
-          <div className="space-y-3">
-            <SearchInput
-              placeholder="Search passage title or text…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-            <div className="border border-line rounded-[10px] overflow-hidden max-h-[300px] overflow-y-auto divide-y divide-line-faint">
-              {fetching ? (
-                <div className="py-10 text-center text-sm text-content-subtle">Loading groups…</div>
-              ) : groups.length === 0 ? (
-                <div className="py-10 text-center text-sm text-content-subtle">
-                  No question groups found. Switch to "Create New Group" to author one.
-                </div>
-              ) : (
-                groups.map((g) => {
-                  const isAttached = existingGroupIds.has(g.groupId);
-                  const isSelected = selectedGroup?.groupId === g.groupId;
+        <SearchInput
+          placeholder="Search passage title or text…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <div className="border border-line rounded-[10px] overflow-hidden max-h-[320px] overflow-y-auto divide-y divide-line-faint">
+          {fetching ? (
+            <div className="py-10 text-center text-sm text-content-subtle">Loading groups…</div>
+          ) : groups.length === 0 ? (
+            <div className="py-10 text-center text-sm text-content-subtle px-4">
+              No question groups with questions found. Use “New Group in Question Bank” to create a group with at least 1 question.
+            </div>
+          ) : (
+            groups.map((g) => {
+              const isAttached = existingGroupIds.has(g.groupId);
+              const isEmptyGroup = (g.questionCount ?? 0) === 0;
+              const disabledRow = isAttached || isEmptyGroup;
+              const isSelected = selectedGroup?.groupId === g.groupId;
 
-                  return (
-                    <div
-                      key={g.groupId}
-                      onClick={() => !isAttached && setSelectedGroup(g)}
-                      className={`p-3.5 transition-colors ${
-                        isAttached
-                          ? 'bg-surface-muted/60 opacity-60 cursor-not-allowed'
-                          : isSelected
-                          ? 'bg-primary-light border-l-4 border-brand-ink cursor-pointer'
-                          : 'hover:bg-surface-hover cursor-pointer'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <h4 className="text-sm font-semibold text-content">{g.title}</h4>
-                        <div className="flex items-center gap-1.5">
-                          <Badge variant="purple" className="text-2xs">
-                            {g.questionCount} questions
-                          </Badge>
-                          {isAttached && (
-                            <Badge variant="warning" className="text-2xs">
-                              Already added
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
-                      <p className="text-xs text-content-subtle mt-1.5 line-clamp-2 leading-relaxed">
-                        {g.passageText}
-                      </p>
+              return (
+                <div
+                  key={g.groupId}
+                  onClick={() => !disabledRow && setSelectedGroup(g)}
+                  className={`p-3.5 transition-colors ${
+                    disabledRow
+                      ? 'bg-surface-muted/60 opacity-60 cursor-not-allowed'
+                      : isSelected
+                      ? 'bg-primary-light border-l-4 border-brand-ink cursor-pointer'
+                      : 'hover:bg-surface-hover cursor-pointer'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <h4 className="text-sm font-semibold text-content">{g.title}</h4>
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <Badge variant="purple" className="text-2xs">
+                        {g.questionCount} question{g.questionCount === 1 ? '' : 's'}
+                      </Badge>
+                      {isAttached && (
+                        <Badge variant="warning" className="text-2xs">
+                          Already added
+                        </Badge>
+                      )}
+                      {isEmptyGroup && !isAttached && (
+                        <Badge variant="default" className="text-2xs">
+                          No questions yet
+                        </Badge>
+                      )}
                     </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            <Input
-              label="Group Title *"
-              placeholder="e.g. Reading Passage 1: Distributed Consensus"
-              value={newTitle}
-              onChange={(e) => setNewTitle(e.target.value)}
-            />
-            <div>
-              <label className="text-sm font-medium text-content-secondary block mb-1">
-                Passage Text *
-              </label>
-              <textarea
-                rows={5}
-                className="w-full px-3 py-2 text-sm rounded-[10px] border border-line bg-surface focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600"
-                placeholder="Enter shared reading passage text..."
-                value={newPassage}
-                onChange={(e) => setNewPassage(e.target.value)}
-              />
-            </div>
-          </div>
-        )}
+                  </div>
+                  <p className="text-xs text-content-subtle mt-1.5 line-clamp-2 leading-relaxed">
+                    {g.passageText}
+                  </p>
+                </div>
+              );
+            })
+          )}
+        </div>
       </div>
     </Modal>
   );

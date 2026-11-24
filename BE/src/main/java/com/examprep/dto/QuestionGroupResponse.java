@@ -13,9 +13,13 @@ public class QuestionGroupResponse {
 
     private Long groupId;
     private Long courseId;
+    private String courseName;
     private Long moduleId;
+    private String moduleName;
     private String questionType;
     private String title;
     private String passageText;
     private long questionCount;
+    private long publishedQuestionCount;
+    private long draftQuestionCount;
 }

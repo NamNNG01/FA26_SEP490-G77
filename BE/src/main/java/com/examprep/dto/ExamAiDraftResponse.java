@@ -24,5 +24,9 @@ public record ExamAiDraftResponse(String fileName, String title, String descript
         }
     }
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    public record Option(String optionText, Boolean isCorrect, Integer orderIndex) { }
+    public record Option(String key, String optionText, Boolean isCorrect, Integer orderIndex) {
+        public Option(String optionText, Boolean isCorrect, Integer orderIndex) {
+            this(null, optionText, isCorrect, orderIndex);
+        }
+    }
 }

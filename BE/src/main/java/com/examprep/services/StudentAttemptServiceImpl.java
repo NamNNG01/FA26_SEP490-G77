@@ -578,8 +578,7 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
         if (correctAnswer == null && isChoice(questionType)) {
             correctAnswer = new AttemptResponses.CorrectAnswer(null, null, null);
         }
-        String explanation = row.getQuestion() != null && row.getQuestion().getAiExplanation() != null
-                && !row.getQuestion().getAiExplanation().isBlank()
+        String explanation = hasManagerExplanation(row.getQuestion())
                 ? row.getQuestion().getAiExplanation()
                 : null;
         result = new AttemptResponses.CheckResult(true, grade.correct(), correctOptionIds, correctAnswer, explanation);
@@ -627,7 +626,7 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
         List<Long> correctOptionIds = isChoice(questionType) && key.correctOptionIds() != null
                 ? key.correctOptionIds()
                 : List.of();
-        String explanation = live != null && live.getAiExplanation() != null && !live.getAiExplanation().isBlank()
+        String explanation = hasManagerExplanation(live)
                 ? live.getAiExplanation()
                 : null;
         return new AttemptResponses.PracticeKey(correctOptionIds, correctAnswer(questionType, key), explanation);
@@ -960,14 +959,23 @@ public class StudentAttemptServiceImpl implements StudentAttemptService {
         return null;
     }
 
-    /** Explanations are cache only: SA-05 never calls the AI (spec 6.5). */
-    private AttemptResponses.Explanation explanation(Question question) {
+    private boolean hasManagerExplanation(Question question) {
         if (question == null || question.getAiExplanation() == null || question.getAiExplanation().isBlank()) {
+            return false;
+        }
+        String source = question.getAiExplanationSource();
+        return source == null || source.isBlank() || "MANAGER".equals(source);
+    }
+
+    /**
+     * Explanations on SA-05 are free manager-authored text only; AI-generated explanations go
+     * through SE-01 so each student's quota is checked and charged on access.
+     */
+    private AttemptResponses.Explanation explanation(Question question) {
+        if (!hasManagerExplanation(question)) {
             return null;
         }
-        String source = question.getAiExplanationSource() == null || question.getAiExplanationSource().isBlank()
-                ? "MANAGER" : question.getAiExplanationSource();
-        return new AttemptResponses.Explanation(question.getAiExplanation(), source);
+        return new AttemptResponses.Explanation(question.getAiExplanation(), "MANAGER");
     }
 
     private Map<Long, BigDecimal> weightSums(List<Object[]> rows) {

@@ -42,9 +42,6 @@ interface ManagerOption {
   email?: string;
 }
 
-const PUBLISH_REQUIREMENT =
-  "Add an active question, a published exam, or a public flashcard deck to a visible module before publishing the course.";
-
 /** Content students can see in the module (the backend's count; the totals when it doesn't send one). */
 const publicContentOf = (m: CourseModuleResponse) =>
   m.publicContentCount ?? m.questionCount + m.examCount + m.deckCount;
@@ -158,8 +155,18 @@ export function CourseDetailPage({
   const [categories, setCategories] = useState<CategoryResponse[]>([]);
 
   const [modules, setModules] = useState<CourseModuleResponse[]>([]);
-  // Publishing needs public content in a visible module (CourseServiceImpl.publish).
-  const hasPublicContent = modules.some((m) => m.status === "VISIBLE" && publicContentOf(m) > 0);
+  const isPaidPublished = Boolean(course?.isPublished && course?.hasPaidPurchases);
+  const hasVisibleModule = modules.some((m) => m.status === "VISIBLE");
+  const hasEmptyModule = modules.some((m) => publicContentOf(m) === 0);
+  const hasDraftQuestions = (course?.draftQuestionCount ?? 0) > 0;
+  const publishBlockedReason = !hasVisibleModule
+    ? "Add at least one visible module before publishing the course."
+    : hasEmptyModule
+      ? "Every module in the course must contain at least one active question, published exam, or public flashcard deck before publishing."
+      : hasDraftQuestions
+        ? "All questions in the course must be published before publishing the course."
+        : null;
+  const canPublish = publishBlockedReason === null;
   const [isAddModuleOpen, setIsAddModuleOpen] = useState(false);
   const [editingModule, setEditingModule] =
     useState<CourseModuleResponse | null>(null);
@@ -391,8 +398,8 @@ export function CourseDetailPage({
       }
 
       if (isPublished !== course.isPublished) {
-        if (isPublished && !hasPublicContent) {
-          throw new Error(PUBLISH_REQUIREMENT);
+        if (isPublished && !canPublish) {
+          throw new Error(publishBlockedReason ?? "Course does not meet publishing requirements.");
         }
         updated = await courseService.publishCourse(course.courseId, isPublished);
       }
@@ -437,9 +444,7 @@ export function CourseDetailPage({
         message: "Course changes saved successfully.",
       });
     } catch (err: unknown) {
-      const msg =
-        err instanceof Error ? err.message : "Failed to save changes.";
-      setToast({ type: "error", message: msg });
+      setToast({ type: "error", message: getApiErrorMessage(err, "Failed to save changes.") });
     } finally {
       setSaving(false);
     }
@@ -799,15 +804,20 @@ export function CourseDetailPage({
                 <Select
                   label="Publication Status"
                   value={isPublished ? "published" : "draft"}
-                  disabled={!canManageCourse}
+                  disabled={!canManageCourse || isPaidPublished}
                   onChange={(val) => setIsPublished(val === "published")}
                   options={[
                     { label: "Published", value: "published" },
                     { label: course.status === "READY_TO_PUBLISH" ? COURSE_STATUS_LABELS.READY_TO_PUBLISH : "Draft", value: "draft" },
                   ]}
                 />
-                {!course.isPublished && !hasPublicContent && (
-                  <p className="-mt-2 text-xs text-content-subtle">{PUBLISH_REQUIREMENT}</p>
+                {isPaidPublished && (
+                  <p className="-mt-2 text-xs text-content-subtle">
+                    Cannot unpublish a course that students have already purchased.
+                  </p>
+                )}
+                {!course.isPublished && publishBlockedReason && (
+                  <p className="-mt-2 text-xs text-content-subtle">{publishBlockedReason}</p>
                 )}
 
                 <Select
@@ -835,15 +845,19 @@ export function CourseDetailPage({
                   preserveNegativeSign
                   max={COURSE_PRICE_MAX}
                   value={price}
-                  disabled={!canManageCourse}
-                  readOnly={!canManageCourse}
+                  disabled={!canManageCourse || isPaidPublished}
+                  readOnly={!canManageCourse || isPaidPublished}
                   onValueChange={(value) => {
                     setPrice(value);
                     setPriceEdited(true);
                   }}
-                  hint={!hasPriceChanges && !Number.isInteger(course.price)
-                    ? `Stored price: ${formatStoredCoursePrice(course.price)}`
-                    : canManageCourse ? "0 = Free" : undefined}
+                  hint={
+                    isPaidPublished
+                      ? "Price cannot be changed after students have purchased the course."
+                      : !hasPriceChanges && !Number.isInteger(course.price)
+                        ? `Stored price: ${formatStoredCoursePrice(course.price)}`
+                        : canManageCourse ? "0 = Free" : undefined
+                  }
                 />
 
                 <CourseManagerList

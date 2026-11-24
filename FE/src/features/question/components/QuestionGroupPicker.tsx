@@ -54,10 +54,21 @@ export const groupKindLabel = (g: Pick<QuestionGroup, 'questionType'>) => {
   return kind ? GROUP_KIND_LABELS[kind] : null;
 };
 
-/** "[Quiz] Reading passage 1 · 3 questions" for group dropdowns. */
+/** "Quiz · 3 questions (Published)" / "Draft" / "1/3 published" */
+export const groupPublishLabel = (g: Pick<QuestionGroup, 'questionCount' | 'publishedQuestionCount'>): string => {
+  const total = g.questionCount ?? 0;
+  const pub = g.publishedQuestionCount;
+  if (total === 0) return '0 questions';
+  if (pub == null) return `${total} question${total === 1 ? '' : 's'}`;
+  if (pub >= total) return `${total} question${total === 1 ? '' : 's'} · Published`;
+  if (pub > 0) return `${total} question${total === 1 ? '' : 's'} · ${pub}/${total} published`;
+  return `${total} question${total === 1 ? '' : 's'} · Draft`;
+};
+
+/** "[Quiz] Reading passage 1 · 3 questions · Published" for group dropdowns. */
 export const groupOptionLabel = (g: QuestionGroup) => {
   const kind = groupKindLabel(g);
-  return `${kind ? `[${kind}] ` : ''}${groupLabel(g)} · ${g.questionCount} question${g.questionCount === 1 ? '' : 's'}`;
+  return `${kind ? `[${kind}] ` : ''}${groupLabel(g)} · ${groupPublishLabel(g)}`;
 };
 
 /**
@@ -69,28 +80,36 @@ export const groupOptionLabel = (g: QuestionGroup) => {
 export const groupFits = (g: QuestionGroup, kind: GroupKind | null, moduleId: string) =>
   (!g.questionType || !kind || g.questionType === kind) && (!moduleId || String(g.moduleId ?? '') === moduleId);
 
+const PENDING_GROUP_VALUE = '__pending__';
+
+export interface PendingGroupDraft {
+  title: string;
+  passageText: string;
+  questionType: GroupKind;
+}
+
 /**
  * Link the question to a shared passage: pick a group of the course (only the
  * ones this question fits are offered), or write a new one. Picking a group
- * links it at once — the link is stored with the next Save Changes. Creating
- * a group (onCreate) and editing one (onUpdate) are saved right away; an edit
- * changes the passage for every question in the group.
+ * links it at once — the link (and any newly drafted group) is stored with Save Changes.
  */
-export function QuestionGroupPicker({ groups, loading, currentGroupId, kind, moduleId, onSelect, onCreate, onUpdate, disabled }: {
+export function QuestionGroupPicker({ groups, loading, currentGroupId, pendingGroup, kind, moduleId, onSelect, onCreate, onUpdate, disabled }: {
   groups: QuestionGroup[];
   loading?: boolean;
   currentGroupId: number | null;
+  pendingGroup?: PendingGroupDraft | null;
   /** The question's kind — new groups get it, and only groups of it are offered. */
   kind: GroupKind | null;
   /** The question's module ('' = none). */
   moduleId: string;
   onSelect: (group: QuestionGroup | null) => void;
-  onCreate: (title: string, passageText: string) => Promise<void>;
+  onCreate: (title: string, passageText: string) => Promise<void> | void;
   onUpdate?: (group: QuestionGroup, title: string, passageText: string) => Promise<void>;
   disabled?: boolean;
 }) {
-  const selected = currentGroupId != null ? String(currentGroupId) : '';
-  const [creating, setCreating] = useState(false);
+  const hasPending = Boolean(pendingGroup);
+  const selected = hasPending ? PENDING_GROUP_VALUE : (currentGroupId != null ? String(currentGroupId) : '');
+  const [modalMode, setModalMode] = useState<'create' | 'editPending' | null>(null);
 
   const [editing, setEditing] = useState(false);
   const [editTitle, setEditTitle] = useState('');
@@ -105,9 +124,15 @@ export function QuestionGroupPicker({ groups, loading, currentGroupId, kind, mod
 
   const fitting = groups.filter(g => groupFits(g, kind, moduleId));
   const options = fitting.map(g => ({ label: groupOptionLabel(g), value: String(g.groupId) }));
-  const selectedGroup = groups.find(g => String(g.groupId) === selected);
+  if (pendingGroup) {
+    options.unshift({
+      label: `[${GROUP_KIND_LABELS[pendingGroup.questionType]}] ${pendingGroup.title} · 1 question (created on Save)`,
+      value: PENDING_GROUP_VALUE,
+    });
+  }
+  const selectedGroup = hasPending ? undefined : groups.find(g => String(g.groupId) === selected);
   // Keep the linked group selectable even when it isn't offered (not loaded, or the question no longer fits it).
-  if (currentGroupId != null && !options.some(o => o.value === selected)) {
+  if (!hasPending && currentGroupId != null && !options.some(o => o.value === selected)) {
     options.unshift({ label: selectedGroup ? groupOptionLabel(selectedGroup) : groupLabel({ groupId: currentGroupId, title: null }), value: selected });
   }
   const misfit = selectedGroup != null && !groupFits(selectedGroup, kind, moduleId);
@@ -115,11 +140,16 @@ export function QuestionGroupPicker({ groups, loading, currentGroupId, kind, mod
 
   const pick = (value: string) => {
     if (!value) return onSelect(null);
+    if (value === PENDING_GROUP_VALUE) return;
     const group = groups.find(g => String(g.groupId) === value);
     if (group) onSelect(group);
   };
 
   const startEdit = () => {
+    if (pendingGroup) {
+      setModalMode('editPending');
+      return;
+    }
     if (!selectedGroup) return;
     setEditTitle(selectedGroup.title ?? '');
     setEditPassage(selectedGroup.passageText ?? '');
@@ -155,7 +185,7 @@ export function QuestionGroupPicker({ groups, loading, currentGroupId, kind, mod
             aria-label="Question group"
             value={selected}
             onChange={pick}
-            action={{ label: 'New Group', onSelect: () => setCreating(true) }}
+            action={{ label: 'New Group', onSelect: () => setModalMode('create') }}
             placeholder="No group (standalone question)"
             searchPlaceholder="Search groups…"
             emptyText={`No ${kindName ? `${kindName} ` : ''}groups found`}
@@ -165,19 +195,23 @@ export function QuestionGroupPicker({ groups, loading, currentGroupId, kind, mod
               ...options,
             ]}
           />
-          {onUpdate && (
+          {(onUpdate || pendingGroup) && (
             <Button
               type="button"
               variant="outline"
               icon={<Icon.Edit className="w-4 h-4" />}
               onClick={startEdit}
-              disabled={disabled || !selectedGroup || editing}
+              disabled={disabled || (!selectedGroup && !pendingGroup) || editing}
             >
               Edit Group
             </Button>
           )}
         </div>
-        {misfit ? (
+        {pendingGroup ? (
+          <p className="text-xs text-content-subtle">
+            This new group will be created together with this question when you click Save Changes.
+          </p>
+        ) : misfit ? (
           <p className="text-xs text-danger">
             This {kindName ?? ''} question doesn’t fit this group{selectedGroup?.questionType ? ` (a ${groupKindLabel(selectedGroup)?.toLowerCase()} group)` : ''}
             {moduleId && String(selectedGroup?.moduleId ?? '') !== moduleId ? ' or its module' : ''}. Pick another group or change the type.
@@ -215,9 +249,10 @@ export function QuestionGroupPicker({ groups, loading, currentGroupId, kind, mod
       </div>
 
       <NewGroupModal
-        open={creating}
-        onClose={() => setCreating(false)}
+        open={modalMode != null}
+        onClose={() => setModalMode(null)}
         fixedKind={kind ?? 'QUIZ'}
+        initial={modalMode === 'editPending' && pendingGroup ? { title: pendingGroup.title, passage: pendingGroup.passageText, kind: pendingGroup.questionType } : undefined}
         onSave={g => onCreate(g.title, g.passage)}
       />
     </div>
@@ -225,10 +260,11 @@ export function QuestionGroupPicker({ groups, loading, currentGroupId, kind, mod
 }
 
 /** Sidebar card with the linked group's name and full passage. */
-export function GroupInfoCard({ group, groupId, loading, pending, onUnlink }: {
+export function GroupInfoCard({ group, groupId, pendingGroup, loading, pending, onUnlink }: {
   group: QuestionGroup | null;
   /** The question's group id — shown even when the group's details aren't in the loaded list. */
   groupId?: number | null;
+  pendingGroup?: PendingGroupDraft | null;
   loading?: boolean;
   pending?: boolean;
   onUnlink?: () => void;
@@ -239,12 +275,25 @@ export function GroupInfoCard({ group, groupId, loading, pending, onUnlink }: {
         <h3 className="flex items-center gap-1.5 text-base font-semibold text-content">
           <Icon.Layers className="w-4 h-4 text-brand-ink" /> Question Group
         </h3>
-        {pending && <span className="text-xs font-medium text-warning">Unsaved</span>}
+        {(pending || pendingGroup) && <span className="text-xs font-medium text-warning">Unsaved</span>}
       </div>
-      {group ? (
+      {pendingGroup ? (
+        <>
+          <p className="text-sm font-semibold text-content">{pendingGroup.title}</p>
+          <p className="text-xs text-content-subtle">{GROUP_KIND_LABELS[pendingGroup.questionType]} group · Created when you save</p>
+          <div className="max-h-[260px] overflow-y-auto rounded-[8px] bg-surface-alt px-3 py-2 text-sm text-content-secondary whitespace-pre-wrap">
+            {pendingGroup.passageText}
+          </div>
+          {onUnlink && (
+            <button type="button" onClick={onUnlink} className="text-xs font-medium text-content-soft hover:text-danger hover:underline">
+              Undo new group
+            </button>
+          )}
+        </>
+      ) : group ? (
         <>
           <p className="text-sm font-semibold text-content">{groupLabel(group)}</p>
-          <p className="text-xs text-content-subtle">{groupKindLabel(group) ? `${groupKindLabel(group)} group · ` : ''}{group.questionCount} question{group.questionCount === 1 ? '' : 's'} share this passage</p>
+          <p className="text-xs text-content-subtle">{groupKindLabel(group) ? `${groupKindLabel(group)} group · ` : ''}{groupPublishLabel(group)}</p>
           <div className="max-h-[260px] overflow-y-auto rounded-[8px] bg-surface-alt px-3 py-2 text-sm text-content-secondary whitespace-pre-wrap">
             {group.passageText?.trim() || <span className="text-content-subtle italic">No passage text.</span>}
           </div>

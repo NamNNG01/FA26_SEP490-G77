@@ -112,6 +112,8 @@ export interface CourseDetailResponse {
   modules: CourseModuleResponse[];
   createdAt: string;
   updatedAt: string;
+  hasPaidPurchases?: boolean;
+  draftQuestionCount?: number;
 }
 
 export interface CreateCourseRequest {

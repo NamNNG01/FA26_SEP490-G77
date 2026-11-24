@@ -92,10 +92,30 @@ public interface QuestionRepository extends JpaRepository<Question, Long>, JpaSp
             "GROUP BY q.module.moduleId")
     List<IdCount> countPublicByModules(@Param("ids") List<Long> ids);
 
+    @Query("""
+            SELECT COUNT(dq) FROM Question dq LEFT JOIN dq.module dqm
+            WHERE (dq.course.courseId = :courseId OR dqm.course.courseId = :courseId)
+              AND dq.deletedAt IS NULL
+              AND dq.sourceDocumentId IS NULL
+              AND COALESCE(dq.creatorRole, 'MANAGER') <> 'STUDENT'
+              AND dq.status <> 'ACTIVE'
+            """)
+    long countManagerDraftsByCourseId(@Param("courseId") Long courseId);
+
     @Query("SELECT q.group.groupId, COUNT(q) FROM Question q " +
             "WHERE q.group.groupId IN :groupIds AND q.deletedAt IS NULL " +
             "GROUP BY q.group.groupId")
     List<Object[]> countByGroupIds(@Param("groupIds") Collection<Long> groupIds);
+
+    @Query("SELECT q.group.groupId, COUNT(q) FROM Question q " +
+            "WHERE q.group.groupId IN :groupIds AND q.deletedAt IS NULL AND q.status = 'ACTIVE' " +
+            "GROUP BY q.group.groupId")
+    List<Object[]> countPublishedByGroupIds(@Param("groupIds") Collection<Long> groupIds);
+
+    @Query("SELECT q.group.groupId, COUNT(q) FROM Question q " +
+            "WHERE q.group.groupId IN :groupIds AND q.deletedAt IS NULL AND q.status = 'INACTIVE' " +
+            "GROUP BY q.group.groupId")
+    List<Object[]> countDraftByGroupIds(@Param("groupIds") Collection<Long> groupIds);
 
     @Query("SELECT DISTINCT q.questionType FROM Question q " +
             "WHERE q.group.groupId = :groupId AND q.deletedAt IS NULL")

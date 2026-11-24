@@ -235,7 +235,7 @@ class ModulePracticeAiApiIntegrationTest extends ModulePracticeTestBase {
     // ------------------------------------------------------------------ MP-09
 
     @Test
-    void anExplanationIsGeneratedFromTheFrozenSnapshotAndNeverCached() throws Exception {
+    void anExplanationIsGeneratedAndCachedForReuseWithTokenBilling() throws Exception {
         JsonNode session = sessionOf(student, moduleA.getModuleId());
         long sessionId = session.path("sessionId").asLong();
         long sessionQuestionId = sessionQuestionIdOf(session, single.getQuestionId());
@@ -249,43 +249,56 @@ class ModulePracticeAiApiIntegrationTest extends ModulePracticeTestBase {
         assertTrue(generated.path("explanation").asText().contains("extends"));
         assertEquals(sessionId, generated.path("sessionId").asLong());
         assertEquals(sessionQuestionId, generated.path("sessionQuestionId").asLong());
-        assertFalse(generated.path("quota").path("totalRemaining").isNull());
+        long remainingAfterFirst = generated.path("quota").path("totalRemaining").asLong();
+        assertTrue(remainingAfterFirst < 10_000L);
 
-        // The model is given the question, the correct answer and the student's own attempt only.
+        // The model receives the question and correct answer (reusable, no wrong options or per-student payload).
         String sent = REQUESTS.get(0);
         assertTrue(sent.contains("extends"), "the correct answer is the reference");
         assertFalse(sent.contains("implements"), "a wrong option is never part of the prompt");
-        assertTrue(sent.contains("studentAnswer"), "the student's own attempt personalises the explanation");
+        assertFalse(sent.contains("studentAnswer"));
 
-        // Never written to the shared question column: the text talks about this student's attempt.
+        // Written to questions.ai_explanation with source = AI and current scoringVersion.
         em.refresh(single);
-        assertNull(single.getAiExplanation(), "a personalized explanation must never be cached");
-        assertNull(single.getAiExplanationSource());
+        assertEquals("extends creates a subclass; implements is for interfaces.", single.getAiExplanation());
+        assertEquals("AI", single.getAiExplanationSource());
+        assertEquals(single.getScoringVersion(), single.getAiExplanationVersion());
 
-        // A second request therefore generates again instead of reusing, and is billed again.
-        REPLIES.add(explanationReply("A second, freshly generated explanation."));
-        JsonNode second = data(explain(student, single.getQuestionId(), body).andExpect(status().isOk()));
-        assertEquals("GENERATED", second.path("source").asText());
-        assertEquals("A second, freshly generated explanation.", second.path("explanation").asText());
-        assertEquals(2, REQUESTS.size());
+        // Student B practises the same question -> served from DB (no new provider call) AND Student B pays tokens.
+        enroll(otherStudent, course);
+        em.flush();
+        JsonNode sessionB = sessionOf(otherStudent, moduleA.getModuleId());
+        long sessionBId = sessionB.path("sessionId").asLong();
+        long sessionBQuestionId = sessionQuestionIdOf(sessionB, single.getQuestionId());
+        answer(otherStudent, sessionBId, sessionBQuestionId,
+                "{\"response\":{\"selectedOptionIds\":[" + singleWrong.getOptionId() + "]}}");
+
+        JsonNode reused = data(explain(otherStudent, single.getQuestionId(),
+                "{\"sessionId\":" + sessionBId + ",\"sessionQuestionId\":" + sessionBQuestionId + "}")
+                .andExpect(status().isOk()));
+        assertEquals("CACHED", reused.path("source").asText());
+        assertEquals("extends creates a subclass; implements is for interfaces.", reused.path("explanation").asText());
+        assertEquals(1, REQUESTS.size(), "reused explanation must not call Gemini again");
+        assertTrue(reused.path("quota").path("totalRemaining").asLong() < 10_000L, "Student B's tokens must be deducted");
 
         List<AiUsageLog> logs = em.createQuery(
                         "SELECT l FROM AiUsageLog l WHERE l.purpose = 'EXPLANATION' ORDER BY l.logId",
                         AiUsageLog.class)
                 .getResultList();
-        assertEquals(2, logs.size(), "each generated explanation is logged once");
+        assertEquals(2, logs.size(), "both generated and DB-cached AI explanations are logged");
+        assertEquals(student.getUserId(), logs.get(0).getUser().getUserId());
+        assertEquals(otherStudent.getUserId(), logs.get(1).getUser().getUserId());
+        assertEquals("db-cache", logs.get(1).getModel());
         for (AiUsageLog log : logs) {
             assertEquals("SUCCESS", log.getStatus());
             assertEquals("FREE", log.getBillingSource());
             assertEquals(1, log.getQuestionCount());
             assertNull(log.getAttempt());
         }
-        em.refresh(single);
-        assertNull(single.getAiExplanationVersion());
     }
 
     @Test
-    void aCurrentVersionAiExplanationOfTheBankIsReused() throws Exception {
+    void aCurrentVersionAiExplanationOfTheBankIsReusedAndChargesTokens() throws Exception {
         JsonNode session = sessionOf(student, moduleA.getModuleId());
         long sessionId = session.path("sessionId").asLong();
         long sessionQuestionId = sessionQuestionIdOf(session, single.getQuestionId());
@@ -302,8 +315,21 @@ class ModulePracticeAiApiIntegrationTest extends ModulePracticeTestBase {
                 + ",\"sessionQuestionId\":" + sessionQuestionId + "}").andExpect(status().isOk()));
         assertEquals("CACHED", cached.path("source").asText(), "a current-version explanation is reused");
         assertEquals("extends creates a subclass.", cached.path("explanation").asText());
-        assertEquals(0, REQUESTS.size(), "a reused explanation costs nothing");
-        assertEquals(0, count("SELECT COUNT(l) FROM AiUsageLog l WHERE l.purpose = 'EXPLANATION'"));
+        assertEquals(0, REQUESTS.size(), "a reused explanation does not call the AI provider");
+        assertEquals(1, count("SELECT COUNT(l) FROM AiUsageLog l WHERE l.purpose = 'EXPLANATION' AND l.status = 'SUCCESS'"));
+        assertTrue(cached.path("quota").path("totalRemaining").asLong() < 10_000L);
+
+        // Student with 0 quota gets 402 even when reusing a cached AI explanation.
+        consumeFreeQuota(brokeStudent);
+        JsonNode brokeSession = sessionOf(brokeStudent, moduleA.getModuleId());
+        long brokeSessionId = brokeSession.path("sessionId").asLong();
+        long brokeSqId = sessionQuestionIdOf(brokeSession, single.getQuestionId());
+        answer(brokeStudent, brokeSessionId, brokeSqId,
+                "{\"response\":{\"selectedOptionIds\":[" + singleRight.getOptionId() + "]}}");
+        explain(brokeStudent, single.getQuestionId(), "{\"sessionId\":" + brokeSessionId
+                + ",\"sessionQuestionId\":" + brokeSqId + "}")
+                .andExpect(status().isPaymentRequired());
+        assertEquals(0, REQUESTS.size());
     }
 
     @Test
@@ -363,7 +389,6 @@ class ModulePracticeAiApiIntegrationTest extends ModulePracticeTestBase {
         assertTrue(sent.contains("cba"));
         assertFalse(sent.contains("hidden-input"), "a hidden fixture must never reach the model");
         assertFalse(sent.contains("hidden-output"), "a hidden fixture must never reach the model");
-        assertTrue(sent.contains("studentAnswer"), "the student's own code personalises the explanation");
 
         // A manager's explanation of a CODE question is reused instead of calling the provider.
         code.setAiExplanation("A manager wrote this.");
@@ -465,16 +490,15 @@ class ModulePracticeAiApiIntegrationTest extends ModulePracticeTestBase {
                 "{\"response\":{\"selectedOptionIds\":[" + singleRight.getOptionId() + "]}}");
 
         long firstId = firstAttempt.path("practiceAnswerId").asLong();
-        REPLIES.add(explanationReply("Because the first attempt chose the interface keyword."));
+        REPLIES.add(explanationReply("Because extends creates a subclass."));
         JsonNode body = data(explain(student, single.getQuestionId(), "{\"sessionId\":" + sessionId
                 + ",\"sessionQuestionId\":" + sessionQuestionId + ",\"practiceAnswerId\":" + firstId + "}")
                 .andExpect(status().isOk()));
         assertEquals("GENERATED", body.path("source").asText());
         assertEquals(firstId, body.path("practiceAnswerId").asLong());
-        // A personalized explanation mentions this attempt's own payload, so it is not cached.
-        assertTrue(REQUESTS.get(0).contains("studentWasCorrect"));
         em.refresh(single);
-        assertNull(single.getAiExplanation());
+        assertEquals("Because extends creates a subclass.", single.getAiExplanation());
+        assertEquals("AI", single.getAiExplanationSource());
     }
 
     // ------------------------------------------------------------------ helpers

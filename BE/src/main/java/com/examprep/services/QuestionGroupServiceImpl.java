@@ -110,7 +110,7 @@ public class QuestionGroupServiceImpl implements QuestionGroupService {
 
         log.info("Question group {} created for course {} by user {}",
                 saved.getGroupId(), course.getCourseId(), currentUserId);
-        return toResponse(saved, 0L);
+        return toResponse(saved, 0L, 0L, 0L);
     }
 
     @Override
@@ -141,7 +141,10 @@ public class QuestionGroupServiceImpl implements QuestionGroupService {
         QuestionGroup saved = questionGroupRepository.save(group);
 
         log.info("Question group {} updated by user {}", groupId, currentUserId);
-        return toResponse(saved, countQuestions(groupId));
+        long total = countQuestions(groupId);
+        long published = toCountMap(questionRepository.countPublishedByGroupIds(List.of(groupId))).getOrDefault(groupId, 0L);
+        long draft = toCountMap(questionRepository.countDraftByGroupIds(List.of(groupId))).getOrDefault(groupId, 0L);
+        return toResponse(saved, total, published, draft);
     }
 
     @Override
@@ -222,26 +225,55 @@ public class QuestionGroupServiceImpl implements QuestionGroupService {
         }
 
         List<Long> groupIds = groups.stream().map(QuestionGroup::getGroupId).toList();
-        Map<Long, Long> questionCounts = new HashMap<>();
-        for (Object[] row : questionRepository.countByGroupIds(groupIds)) {
-            questionCounts.put((Long) row[0], ((Number) row[1]).longValue());
-        }
+        Map<Long, Long> questionCounts = toCountMap(questionRepository.countByGroupIds(groupIds));
+        Map<Long, Long> publishedCounts = toCountMap(questionRepository.countPublishedByGroupIds(groupIds));
+        Map<Long, Long> draftCounts = toCountMap(questionRepository.countDraftByGroupIds(groupIds));
 
         return groups.stream()
-                .map(group -> toResponse(group, questionCounts.getOrDefault(group.getGroupId(), 0L)))
+                .map(group -> toResponse(
+                        group,
+                        questionCounts.getOrDefault(group.getGroupId(), 0L),
+                        publishedCounts.getOrDefault(group.getGroupId(), 0L),
+                        draftCounts.getOrDefault(group.getGroupId(), 0L)))
                 .toList();
     }
 
-    private QuestionGroupResponse toResponse(QuestionGroup group, long questionCount) {
+    private Map<Long, Long> toCountMap(List<Object[]> rows) {
+        Map<Long, Long> counts = new HashMap<>();
+        if (rows == null) {
+            return counts;
+        }
+        for (Object[] row : rows) {
+            counts.put((Long) row[0], ((Number) row[1]).longValue());
+        }
+        return counts;
+    }
+
+    private QuestionGroupResponse toResponse(QuestionGroup group, long questionCount,
+                                             long publishedQuestionCount, long draftQuestionCount) {
         return QuestionGroupResponse.builder()
                 .groupId(group.getGroupId())
                 .courseId(resolveCourseId(group))
+                .courseName(resolveCourseName(group))
                 .moduleId(group.getModule() == null ? null : group.getModule().getModuleId())
+                .moduleName(group.getModule() == null ? null : group.getModule().getTitle())
                 .questionType(group.getQuestionType())
                 .title(group.getTitle())
                 .passageText(group.getPassageText())
                 .questionCount(questionCount)
+                .publishedQuestionCount(publishedQuestionCount)
+                .draftQuestionCount(draftQuestionCount)
                 .build();
+    }
+
+    private String resolveCourseName(QuestionGroup group) {
+        if (group.getCourse() != null) {
+            return group.getCourse().getTitle();
+        }
+        if (group.getModule() != null && group.getModule().getCourse() != null) {
+            return group.getModule().getCourse().getTitle();
+        }
+        return null;
     }
 
     private long countQuestions(Long groupId) {

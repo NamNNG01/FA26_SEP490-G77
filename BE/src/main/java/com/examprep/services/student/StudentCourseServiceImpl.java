@@ -39,6 +39,7 @@ public class StudentCourseServiceImpl implements StudentCourseService {
     private final UserCardProgressRepository userCardProgressRepository;
     private final CategoryService categoryService;
     private final StudentProgressService studentProgressService;
+    private final CourseProgressSummaryRepository progressSummaryRepository;
 
     @Override
     public Page<CourseCardDto> listCourses(Long categoryId, String keyword, String sort, int page, int size, Long userId) {
@@ -66,10 +67,20 @@ public class StudentCourseServiceImpl implements StudentCourseService {
         Map<Long, Long> decksByModule = new HashMap<>();
         deckRepository.countCourseDecksByModule(courseId, userId != null ? userId : 0L)
                 .forEach(c -> decksByModule.put(c.id(), c.total()));
+        Map<Long, Long> questionsByModule = new HashMap<>();
+        long totalQuestionCount = 0L;
+        for (Object[] row : progressSummaryRepository.questionTotalsByCourse(courseId)) {
+            long count = ((Number) row[2]).longValue();
+            totalQuestionCount += count;
+            if (row[1] != null) {
+                questionsByModule.put(((Number) row[1]).longValue(), count);
+            }
+        }
         List<ModuleItemDto> moduleDtos = modules.stream()
                 .map(m -> new ModuleItemDto(m.getModuleId(), m.getTitle(), m.getOrderIndex(), m.getDescription(),
                         examsByModule.getOrDefault(m.getModuleId(), 0L),
-                        decksByModule.getOrDefault(m.getModuleId(), 0L)))
+                        decksByModule.getOrDefault(m.getModuleId(), 0L),
+                        questionsByModule.getOrDefault(m.getModuleId(), 0L)))
                 .toList();
 
         long publishedExamCount =
@@ -100,7 +111,7 @@ public class StudentCourseServiceImpl implements StudentCourseService {
                 new CategoryRefDto(course.getCategoryId(), course.getCategory() != null ? course.getCategory().getName() : null),
                 new ManagerRefDto(course.getManager().getUserId(), course.getManager().getFullName()),
                 moduleDtos,
-                new CourseStatsDto(publishedExamCount, deckCount),
+                new CourseStatsDto(publishedExamCount, deckCount, totalQuestionCount),
                 enrollmentSummary
         );
     }

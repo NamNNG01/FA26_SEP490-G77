@@ -179,9 +179,88 @@ public class StudentAiApiIntegrationTest {
         assertEquals(choice.getScoringVersion(), choice.getAiExplanationVersion());
 
         explain(student, choice.getQuestionId()).andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.items[0].source").value("CACHED"));
+                .andExpect(jsonPath("$.data.items[0].source").value("CACHED"))
+                .andExpect(jsonPath("$.data.items[0].explanation").value(containsString("extends")))
+                .andExpect(jsonPath("$.data.quota.freeRemaining").value(org.hamcrest.Matchers.lessThan(10_000 - 230)));
         assertEquals(1, REQUESTS.size());
-        assertEquals(1, countLogs());
+        assertEquals(2, countLogs());
+    }
+
+    @Test void cachedAiExplanationIsHiddenFromResultAndDeductsSecondStudentsTokensWhileManagerStaysFree() throws Exception {
+        em.persist(Enrollment.builder().course(course).user(other).enrolledAt(Instant.now()).status(Enrollment.STATUS_ACTIVE).build());
+        Exam exam = attempt.getExam();
+        ExamAttempt otherAttempt = ExamAttempt.builder().exam(exam).user(other).startTime(Instant.now().minus(1, ChronoUnit.HOURS))
+                .deadlineAt(Instant.now()).submittedAt(Instant.now()).status("SUBMITTED")
+                .examSnapshot("{\"maxScore\":10,\"title\":\"Midterm\"}").totalScore(BigDecimal.ZERO).build();
+        em.persist(otherAttempt);
+        String displayTemplate = "{\"questionId\":%d,\"orderIndex\":%d,\"questionType\":\"SINGLE_CHOICE\",\"content\":%s,\"options\":[{\"optionId\":1,\"optionText\":\"implements\"},{\"optionId\":2,\"optionText\":\"extends\"}]}";
+        em.persist(AttemptAnswer.builder().attempt(otherAttempt).question(choice).weightSnapshot(BigDecimal.ONE)
+                .displaySnapshot(String.format(displayTemplate, choice.getQuestionId(), 1, json.writeValueAsString(choice.getContent())))
+                .keySnapshot("{\"correctOptionIds\":[2]}")
+                .response("{\"selectedOptionIds\":[1]}").gradingStatus("AUTO")
+                .questionVersion(choice.getScoringVersion()).scoreEarned(BigDecimal.ZERO).build());
+        em.persist(AttemptAnswer.builder().attempt(otherAttempt).question(managed).weightSnapshot(BigDecimal.ONE)
+                .displaySnapshot(String.format(displayTemplate, managed.getQuestionId(), 2, json.writeValueAsString(managed.getContent())))
+                .keySnapshot("{\"correctOptionIds\":[1]}")
+                .response("{\"selectedOptionIds\":[1]}").gradingStatus("AUTO")
+                .questionVersion(managed.getScoringVersion()).scoreEarned(BigDecimal.ONE).build());
+        em.flush();
+
+        // Student A generates & saves to DB.
+        REPLIES.add(json.writeValueAsString(Map.of("items", List.of(Map.of("questionId", choice.getQuestionId(),
+                "explanation", "extends creates a subclass.")))));
+        explain(student, choice.getQuestionId()).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[0].source").value("GENERATED"));
+        assertEquals(1, REQUESTS.size());
+        em.refresh(choice);
+        assertEquals("AI", choice.getAiExplanationSource());
+
+        // Student B's SA-05 result shows MANAGER explanation for free, but hides AI explanation until SE-01 is called.
+        mvc.perform(get("/api/v1/student/attempts/" + otherAttempt.getAttemptId() + "/result")
+                        .with(user(UserPrincipal.create(other))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.questions[0].questionId").value(choice.getQuestionId()))
+                .andExpect(jsonPath("$.data.questions[0].explanation").doesNotExist())
+                .andExpect(jsonPath("$.data.questions[1].questionId").value(managed.getQuestionId()))
+                .andExpect(jsonPath("$.data.questions[1].explanation.source").value("MANAGER"));
+
+        // Student B requests SE-01: reuses DB explanation (no new Gemini request) AND deducts Student B's tokens.
+        explainRaw(other, otherAttempt.getAttemptId(), "{\"questionIds\":[" + choice.getQuestionId() + "]}")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[0].source").value("CACHED"))
+                .andExpect(jsonPath("$.data.items[0].explanation").value("extends creates a subclass."))
+                .andExpect(jsonPath("$.data.quota.freeRemaining").value(org.hamcrest.Matchers.lessThan(10_000)));
+        assertEquals(1, REQUESTS.size(), "cached AI explanation must not call Gemini again");
+        long otherLogs = em.createQuery("select count(l) from AiUsageLog l where l.user = :u and l.status = 'SUCCESS'", Long.class)
+                .setParameter("u", other).getSingleResult();
+        assertEquals(1L, otherLogs);
+
+        // Student C with 0 quota gets 402 on the cached AI explanation, while Manager explanation stays free.
+        User broke = account(User.ROLE_STUDENT);
+        em.persist(Enrollment.builder().course(course).user(broke).enrolledAt(Instant.now()).status(Enrollment.STATUS_ACTIVE).build());
+        ExamAttempt brokeAttempt = ExamAttempt.builder().exam(exam).user(broke).startTime(Instant.now().minus(1, ChronoUnit.HOURS))
+                .deadlineAt(Instant.now()).submittedAt(Instant.now()).status("SUBMITTED")
+                .examSnapshot("{\"maxScore\":10,\"title\":\"Midterm\"}").totalScore(BigDecimal.ZERO).build();
+        em.persist(brokeAttempt);
+        em.persist(AttemptAnswer.builder().attempt(brokeAttempt).question(choice).weightSnapshot(BigDecimal.ONE)
+                .displaySnapshot(String.format(displayTemplate, choice.getQuestionId(), 1, json.writeValueAsString(choice.getContent())))
+                .keySnapshot("{\"correctOptionIds\":[2]}")
+                .response("{\"selectedOptionIds\":[1]}").gradingStatus("AUTO")
+                .questionVersion(choice.getScoringVersion()).scoreEarned(BigDecimal.ZERO).build());
+        em.persist(AttemptAnswer.builder().attempt(brokeAttempt).question(managed).weightSnapshot(BigDecimal.ONE)
+                .displaySnapshot(String.format(displayTemplate, managed.getQuestionId(), 2, json.writeValueAsString(managed.getContent())))
+                .keySnapshot("{\"correctOptionIds\":[1]}")
+                .response("{\"selectedOptionIds\":[1]}").gradingStatus("AUTO")
+                .questionVersion(managed.getScoringVersion()).scoreEarned(BigDecimal.ONE).build());
+        em.persist(AiUsageLog.builder().user(broke).purpose("EXPLANATION").status("SUCCESS").inputTokens(20_000).outputTokens(0)
+                .billingSource("FREE").build());
+        em.flush();
+
+        explainRaw(broke, brokeAttempt.getAttemptId(), "{\"questionIds\":[" + choice.getQuestionId() + "]}")
+                .andExpect(status().isPaymentRequired());
+        explainRaw(broke, brokeAttempt.getAttemptId(), "{\"questionIds\":[" + managed.getQuestionId() + "]}")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[0].source").value("MANAGER"));
     }
 
     @Test void aCodeQuestionIsExplainedFromItsLanguagesAndPublicSampleOnly() throws Exception {

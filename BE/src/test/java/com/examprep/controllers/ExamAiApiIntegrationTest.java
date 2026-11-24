@@ -83,8 +83,8 @@ class ExamAiApiIntegrationTest {
         registry.add("app.ai.api-key", () -> "local-fake-provider-key");
         registry.add("app.ai.model", () -> "fake-model");
         registry.add("app.ai.base-url", () -> "http://127.0.0.1:" + PROVIDER.getAddress().getPort() + "/v1beta");
-        registry.add("app.exam-ai.timeout-ms", () -> 250);
-        registry.add("app.exam-ai.material-timeout-ms", () -> 350);
+        registry.add("app.exam-ai.timeout-ms", () -> 600);
+        registry.add("app.exam-ai.material-timeout-ms", () -> 600);
         registry.add("app.exam-ai.daily-limit", () -> 3);
     }
 
@@ -223,10 +223,143 @@ class ExamAiApiIntegrationTest {
                 .andExpect(jsonPath("$.data.questions[0].essayGradingRubric").doesNotExist());
     }
 
-    @Test void rejectsTypesTheQuestionBankCannotSaveBeforeProviderCall() throws Exception {
-        for (String type : List.of("ORDERING"))
-            generate(manager, body().replace("SINGLE_CHOICE", type)).andExpect(status().isBadRequest());
-        assertEquals(0, calls);
+    @Test void orderingDraftReturnsShuffledKeyedOptionsAndSavesToQuestionBank() throws Exception {
+        try (var in = getClass().getClassLoader().getResourceAsStream("prompts/ordering.txt")) {
+            assertNotNull(in, "prompts/ordering.txt should exist on classpath");
+            assertFalse(new String(in.readAllBytes(), StandardCharsets.UTF_8).isBlank());
+        }
+        providerContent = json.writeValueAsString(Map.of(
+                "title", "Ordering Draft",
+                "questions", List.of(Map.of(
+                        "content", "Put the steps in order.",
+                        "questionType", "ORDERING",
+                        "difficulty", "EASY",
+                        "defaultPoints", 1,
+                        "explanation", "Understand first, analyse, then design.",
+                        "options", List.of(
+                                Map.of("key", "k3", "optionText", "Design", "orderIndex", 0),
+                                Map.of("key", "k1", "optionText", "Identify the problem", "orderIndex", 1),
+                                Map.of("key", "k2", "optionText", "Analyse requirements", "orderIndex", 2)),
+                        "answerKey", Map.of("correctOrder", List.of("k1", "k2", "k3"))))));
+        String aiRes = generate(manager, body().replace("SINGLE_CHOICE", "ORDERING"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.questionCount").value(1))
+                .andExpect(jsonPath("$.data.warnings").isEmpty())
+                .andExpect(jsonPath("$.data.questions[0].questionType").value("ORDERING"))
+                .andExpect(jsonPath("$.data.questions[0].options[0].key").value("k3"))
+                .andExpect(jsonPath("$.data.questions[0].options[0].optionText").value("Design"))
+                .andExpect(jsonPath("$.data.questions[0].options[0].orderIndex").value(0))
+                .andExpect(jsonPath("$.data.questions[0].options[0].isCorrect").doesNotExist())
+                .andExpect(jsonPath("$.data.questions[0].options[1].key").value("k1"))
+                .andExpect(jsonPath("$.data.questions[0].options[1].orderIndex").value(1))
+                .andExpect(jsonPath("$.data.questions[0].options[1].isCorrect").doesNotExist())
+                .andExpect(jsonPath("$.data.questions[0].options[2].key").value("k2"))
+                .andExpect(jsonPath("$.data.questions[0].options[2].orderIndex").value(2))
+                .andExpect(jsonPath("$.data.questions[0].options[2].isCorrect").doesNotExist())
+                .andExpect(jsonPath("$.data.questions[0].answerKey.correctOrder[0]").value("k1"))
+                .andExpect(jsonPath("$.data.questions[0].answerKey.correctOrder[1]").value("k2"))
+                .andExpect(jsonPath("$.data.questions[0].answerKey.correctOrder[2]").value("k3"))
+                .andReturn().getResponse().getContentAsString();
+
+        JsonNode reqNode = json.readTree(receivedRequest);
+        JsonNode qProps = reqNode.path("generationConfig").path("responseSchema")
+                .path("properties").path("questions").path("items").path("properties");
+        List<String> enumTypes = new java.util.ArrayList<>();
+        qProps.path("questionType").path("enum").forEach(n -> enumTypes.add(n.asText()));
+        assertTrue(enumTypes.contains("ORDERING"));
+        assertTrue(qProps.path("options").path("items").path("properties").has("key"));
+        List<String> optReq = new java.util.ArrayList<>();
+        qProps.path("options").path("items").path("required").forEach(n -> optReq.add(n.asText()));
+        assertFalse(optReq.contains("isCorrect"));
+        assertTrue(qProps.path("answerKey").path("properties").has("correctOrder"));
+
+        var draftNode = (com.fasterxml.jackson.databind.node.ObjectNode) json.readTree(aiRes)
+                .path("data").path("questions").get(0).deepCopy();
+        draftNode.put("courseId", course.getCourseId());
+        String batchRes = call(manager, post("/api/v1/manager/questions/batch")
+                .param("courseId", course.getCourseId().toString())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(List.of(draftNode))))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+
+        JsonNode saved = json.readTree(batchRes).path("data").get(0);
+        Map<String, Long> idByText = new java.util.HashMap<>();
+        saved.path("options").forEach(o -> idByText.put(o.path("optionText").asText(), o.path("optionId").asLong()));
+        List<Long> savedOrder = new java.util.ArrayList<>();
+        saved.path("answerKey").path("correctOrder").forEach(n -> savedOrder.add(n.asLong()));
+        assertEquals(
+                List.of(idByText.get("Identify the problem"), idByText.get("Analyse requirements"), idByText.get("Design")),
+                savedOrder);
+    }
+
+    @Test void orderingFromMaterialNormalizesUnshuffledOptionsAndSchemaNoise() throws Exception {
+        providerContent = json.writeValueAsString(Map.of(
+                "title", "Material Ordering",
+                "questions", List.of(Map.of(
+                        "content", "Order the SDLC stages.",
+                        "questionType", "ORDERING",
+                        "difficulty", "EASY",
+                        "options", List.of(
+                                Map.of("key", "k1", "optionText", "Identify", "isCorrect", false, "orderIndex", 1),
+                                Map.of("key", "k2", "optionText", "Analyse", "isCorrect", false, "orderIndex", 2),
+                                Map.of("key", "k3", "optionText", "Design", "isCorrect", false, "orderIndex", 3)),
+                        "answerKey", Map.of(
+                                "correctOrder", List.of("k1", "k2", "k3"),
+                                "blanks", List.of(),
+                                "pairs", List.of())))));
+        MockMultipartFile file = new MockMultipartFile("file", "sdlc.txt", "text/plain",
+                "SDLC steps: Identify, Analyse, Design".getBytes(StandardCharsets.UTF_8));
+        call(manager, multipart(path() + "-from-material").file(file)
+                .param("courseId", course.getCourseId().toString())
+                .param("moduleId", module.getModuleId().toString())
+                .param("questionCount", "1")
+                .param("difficultyDistribution", "{\"EASY\":1,\"MEDIUM\":0,\"HARD\":0}")
+                .param("questionTypes", "[{\"questionType\":\"ORDERING\",\"count\":1}]"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.questionCount").value(1))
+                .andExpect(jsonPath("$.data.warnings").isEmpty())
+                .andExpect(jsonPath("$.data.questions[0].options[0].key").value("k2"))
+                .andExpect(jsonPath("$.data.questions[0].options[0].orderIndex").value(0))
+                .andExpect(jsonPath("$.data.questions[0].options[0].isCorrect").doesNotExist())
+                .andExpect(jsonPath("$.data.questions[0].options[1].key").value("k3"))
+                .andExpect(jsonPath("$.data.questions[0].options[1].orderIndex").value(1))
+                .andExpect(jsonPath("$.data.questions[0].options[2].key").value("k1"))
+                .andExpect(jsonPath("$.data.questions[0].options[2].orderIndex").value(2))
+                .andExpect(jsonPath("$.data.questions[0].answerKey.correctOrder[0]").value("k1"))
+                .andExpect(jsonPath("$.data.questions[0].answerKey.correctOrder[1]").value("k2"))
+                .andExpect(jsonPath("$.data.questions[0].answerKey.correctOrder[2]").value("k3"))
+                .andExpect(jsonPath("$.data.questions[0].answerKey.blanks").doesNotExist())
+                .andExpect(jsonPath("$.data.questions[0].answerKey.pairs").doesNotExist());
+    }
+
+    @Test void rejectsInvalidOrderingDrafts() throws Exception {
+        List<Map<String, Object>> invalid = List.of(
+                Map.of("content", "Missing correct order", "questionType", "ORDERING", "difficulty", "EASY",
+                        "options", List.of(
+                                Map.of("key", "k1", "optionText", "A", "orderIndex", 0),
+                                Map.of("key", "k2", "optionText", "B", "orderIndex", 1))),
+                Map.of("content", "Unknown key in correct order", "questionType", "ORDERING", "difficulty", "EASY",
+                        "options", List.of(
+                                Map.of("key", "k1", "optionText", "A", "orderIndex", 0),
+                                Map.of("key", "k2", "optionText", "B", "orderIndex", 1)),
+                        "answerKey", Map.of("correctOrder", List.of("k1", "k99"))),
+                Map.of("content", "Missing option key", "questionType", "ORDERING", "difficulty", "EASY",
+                        "options", List.of(
+                                Map.of("optionText", "A", "orderIndex", 0),
+                                Map.of("key", "k2", "optionText", "B", "orderIndex", 1)),
+                        "answerKey", Map.of("correctOrder", List.of("k1", "k2"))));
+        providerContent = json.writeValueAsString(Map.of("questions", invalid));
+        String request = json.writeValueAsString(Map.of(
+                "courseId", course.getCourseId(),
+                "questionCount", 3,
+                "difficultyDistribution", Map.of("EASY", 3, "MEDIUM", 0, "HARD", 0),
+                "questionTypes", List.of(Map.of("questionType", "ORDERING", "count", 3))));
+        generate(manager, request)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.questionCount").value(0))
+                .andExpect(jsonPath("$.data.warnings.length()").value(7));
+        assertEquals(2, calls);
     }
 
     @Test void diagramDraftCarriesDrawioXmlAndRubric() throws Exception {
@@ -258,6 +391,61 @@ class ExamAiApiIntegrationTest {
                         org.hamcrest.Matchers.containsString("graph"), org.hamcrest.Matchers.containsString("diagram requires an essayGradingRubric"))));
         assertTrue(receivedRequest.contains("graph"));
         assertFalse(receivedRequest.contains("plantUmlSource"));
+    }
+
+    @Test void mixedCodeAndDiagramUsesRubricSchemaAndVietnameseEnforcesDiacritics() throws Exception {
+        Map<String, Object> rubric = Map.of(
+                "criteria", List.of(Map.of("name", "Cấu trúc", "weight", 3, "descriptors", "Đầy đủ thực thể")),
+                "notes", "Ghi rõ quan hệ");
+        Map<String, Object> graph = Map.of(
+                "diagramType", "ENTITY",
+                "nodes", List.of(Map.of("id", "n1", "label", "Khách hàng", "kind", "ENTITY")),
+                "edges", List.of());
+        Map<String, Object> codeQ = Map.of(
+                "content", "Tính tổng hai số nguyên.",
+                "questionType", "CODE",
+                "difficulty", "HARD",
+                "essayGradingRubric", Map.of("criteria", List.of(Map.of("name", "Ignored", "weight", 1)), "notes", "Ignored"),
+                "codeConfig", Map.of("allowedLanguages", List.of("JAVA"), "timeLimitMs", 5000, "memoryLimitKb", 262144),
+                "testCases", List.of(
+                        Map.of("inputData", "1 2", "expectedOutput", "3", "hidden", false),
+                        Map.of("inputData", "5 7", "expectedOutput", "12", "hidden", true),
+                        Map.of("inputData", "0 0", "expectedOutput", "0", "hidden", true)));
+        Map<String, Object> diagramQ = Map.of(
+                "content", "Vẽ sơ đồ thực thể cho Khách hàng.",
+                "questionType", "DIAGRAM",
+                "difficulty", "HARD",
+                "graph", graph,
+                "essayGradingRubric", rubric);
+        Map<String, Object> diagramEssayQ = Map.of(
+                "content", "Vẽ sơ đồ và giải thích quy trình Đặt hàng.",
+                "questionType", "DIAGRAM_ESSAY",
+                "difficulty", "HARD",
+                "graph", graph,
+                "essayGradingRubric", rubric);
+        providerContent = json.writeValueAsString(Map.of("questions", List.of(codeQ, diagramQ, diagramEssayQ)));
+        String request = json.writeValueAsString(Map.of(
+                "courseId", course.getCourseId(),
+                "questionCount", 3,
+                "difficultyDistribution", Map.of("EASY", 0, "MEDIUM", 0, "HARD", 3),
+                "questionTypes", List.of(
+                        Map.of("questionType", "CODE", "count", 1),
+                        Map.of("questionType", "DIAGRAM", "count", 1),
+                        Map.of("questionType", "DIAGRAM_ESSAY", "count", 1)),
+                "language", "vi"));
+
+        generate(manager, request)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.questionCount").value(3))
+                .andExpect(jsonPath("$.data.warnings").isEmpty())
+                .andExpect(jsonPath("$.data.questions[0].essayGradingRubric").doesNotExist())
+                .andExpect(jsonPath("$.data.questions[1].questionMetadata.drawioXml").value(org.hamcrest.Matchers.containsString("Khách hàng")))
+                .andExpect(jsonPath("$.data.questions[2].essayGradingRubric.notes").value("Ghi rõ quan hệ"));
+
+        assertTrue(requiredQuestionFields().contains("essayGradingRubric"),
+                "Mixed batches containing DIAGRAM/DIAGRAM_ESSAY alongside CODE must keep essayGradingRubric required");
+        assertTrue(receivedRequest.contains("CÓ DẤU ĐẦY ĐỦ"),
+                "Vietnamese requests must instruct the model to use full Vietnamese diacritics");
     }
 
     private String requiredQuestionFields() throws Exception {
@@ -486,6 +674,29 @@ class ExamAiApiIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"status\":\"ARCHIVED\"}"))
                 .andExpect(status().isConflict());
+    }
+
+    @Test void sharedPassageIsIncludedInPromptWhenProvided() throws Exception {
+        String passage = "Photosynthesis converts light energy into chemical energy inside chloroplasts.";
+        String reqBody = json.writeValueAsString(Map.of(
+                "courseId", course.getCourseId(),
+                "moduleId", module.getModuleId(),
+                "title", "Biology Passage 1",
+                "questionCount", 1,
+                "difficultyDistribution", Map.of("EASY", 1, "MEDIUM", 0, "HARD", 0),
+                "questionTypes", List.of(Map.of("questionType", "SINGLE_CHOICE", "count", 1)),
+                "language", "en",
+                "passageText", passage));
+
+        generate(manager, reqBody)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.questionCount").value(1));
+
+        JsonNode reqNode = json.readTree(receivedRequest);
+        String promptText = reqNode.path("contents").get(0).path("parts").get(0).path("text").asText();
+        JsonNode promptJson = json.readTree(promptText);
+        assertEquals(passage, promptJson.path("sharedPassage").asText());
+        assertTrue(promptJson.has("sharedPassageRule"));
     }
 
     private MockHttpServletRequestBuilder material(String name, String type, String text) {

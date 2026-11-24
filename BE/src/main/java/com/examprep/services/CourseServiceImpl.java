@@ -45,6 +45,7 @@ public class CourseServiceImpl implements CourseService {
     private final QuestionGroupRepository groups;
     private final DocumentRepository documents;
     private final AiUsageLogRepository aiLogs;
+    private final PaymentRepository payments;
     private final CategoryRepository categories;
     private final CategoryService categoryService;
     private final UserRepository users;
@@ -60,10 +61,10 @@ public class CourseServiceImpl implements CourseService {
         Map<Long, Long> moduleCounts = counts(modules.countByCourses(ids));
         Map<Long, Long> studentCounts = counts(enrollments.countByCourses(ids));
         Map<Long, Long> examCounts = counts(exams.countByCourses(ids));
-        Set<Long> ready = Set.copyOf(courses.findCoursesWithVisibleModuleContent(ids));
+        Set<Long> ready = Set.copyOf(courses.findPublishableCourses(ids));
         return PageResponse.of(result, result.getContent().stream().map(c -> response(c,
                 moduleCounts.getOrDefault(c.getCourseId(), 0L), studentCounts.getOrDefault(c.getCourseId(), 0L),
-                examCounts.getOrDefault(c.getCourseId(), 0L), ready.contains(c.getCourseId()), null, null)).toList());
+                examCounts.getOrDefault(c.getCourseId(), 0L), ready.contains(c.getCourseId()), null, null, null, null)).toList());
     }
 
     @Override
@@ -130,8 +131,14 @@ public class CourseServiceImpl implements CourseService {
     public CourseResponse update(UserPrincipal user, Long id, CourseRequests.Update request) {
         Course course = writeCourse(id);
         checkAccess(user, course);
-        if (!admin(user) && request.price() != null && request.price().compareTo(course.getPrice()) != 0) {
-            throw new ForbiddenException("Only administrators can change the course price.");
+        if (request.price() != null && request.price().compareTo(course.getPrice()) != 0) {
+            if (!admin(user)) {
+                throw new ForbiddenException("Only administrators can change the course price.");
+            }
+            if (Boolean.TRUE.equals(course.getIsPublished())
+                    && payments.existsByTypeAndRefIdAndStatus(Payment.COURSE, id, Payment.SUCCEEDED)) {
+                throw conflict("Cannot change the price of a published course that students have already purchased.");
+            }
         }
         if (request.title() != null) {
             course.setTitle(request.title().strip());
@@ -183,11 +190,22 @@ public class CourseServiceImpl implements CourseService {
     public CourseResponse publish(Long id, CourseRequests.Publish request) {
         Course course = writeCourse(id);
         if (request.isPublished() && !Boolean.TRUE.equals(course.getIsPublished())) {
-            if (modules.countByCourseCourseIdAndStatus(id, Module.STATUS_VISIBLE) == 0) {
+            List<ModuleResponse> moduleList = moduleResponses(id);
+            if (moduleList.stream().noneMatch(m -> Module.STATUS_VISIBLE.equals(m.status()))) {
                 throw new BadRequestException("Add at least one visible module before publishing the course.");
             }
-            if (courses.findCoursesWithVisibleModuleContent(List.of(id)).isEmpty()) {
-                throw new BadRequestException("Add an active question, a published exam, or a public flashcard deck to a visible module before publishing the course.");
+            if (moduleList.stream().anyMatch(m -> m.publicContentCount() == 0)) {
+                throw new BadRequestException("Every module in the course must contain at least one active question, published exam, or public flashcard deck before publishing.");
+            }
+            if (questions.countManagerDraftsByCourseId(id) > 0) {
+                throw new BadRequestException("All questions in the course must be published before publishing the course.");
+            }
+            if (courses.findPublishableCourses(List.of(id)).isEmpty()) {
+                throw new BadRequestException("Course does not meet publishing requirements.");
+            }
+        } else if (!request.isPublished() && Boolean.TRUE.equals(course.getIsPublished())) {
+            if (payments.existsByTypeAndRefIdAndStatus(Payment.COURSE, id, Payment.SUCCEEDED)) {
+                throw conflict("Cannot unpublish a course that students have already purchased.");
             }
         }
         course.setIsPublished(request.isPublished());
@@ -373,20 +391,23 @@ public class CourseServiceImpl implements CourseService {
                 assignments.findByCourseCourseIdOrderByCourseManagerIdAsc(course.getCourseId()).stream()
                         .map(CourseManager::getUser).filter(u -> !u.getUserId().equals(primary.getUserId()))
                         .map(u -> new CourseResponse.Manager(u.getUserId(), u.getFullName(), false))).toList();
+        boolean hasPaidPurchases = payments.existsByTypeAndRefIdAndStatus(Payment.COURSE, course.getCourseId(), Payment.SUCCEEDED);
+        long draftQuestionCount = questions.countManagerDraftsByCourseId(course.getCourseId());
         return response(course, content.size(), counts(enrollments.countByCourses(ids)).getOrDefault(course.getCourseId(), 0L),
                 counts(exams.countByCourses(ids)).getOrDefault(course.getCourseId(), 0L),
-                !courses.findCoursesWithVisibleModuleContent(ids).isEmpty(), managers, content);
+                !courses.findPublishableCourses(ids).isEmpty(), managers, content, hasPaidPurchases, draftQuestionCount);
     }
 
     private CourseResponse response(Course course, long moduleCount, long studentCount, long examCount, boolean ready,
-                                    List<CourseResponse.Manager> managers, List<ModuleResponse> content) {
+                                    List<CourseResponse.Manager> managers, List<ModuleResponse> content,
+                                    Boolean hasPaidPurchases, Long draftQuestionCount) {
         CourseResponse.Status status = CourseResponse.Status.DRAFT;
         if (Boolean.TRUE.equals(course.getIsPublished())) status = CourseResponse.Status.PUBLISHED;
         else if (ready) status = CourseResponse.Status.READY_TO_PUBLISH;
         return new CourseResponse(course.getCourseId(), course.getTitle(), course.getSlug(), course.getCategoryId(),
                 course.getCategory().getName(), course.getManager().getUserId(), course.getManager().getFullName(), managers,
                 course.getThumbnailUrl(), course.getPrice(), course.getIsPublished(), status, moduleCount, studentCount, examCount,
-                course.getCreatedAt(), course.getUpdatedAt(), course.getDescription(), content);
+                course.getCreatedAt(), course.getUpdatedAt(), course.getDescription(), content, hasPaidPurchases, draftQuestionCount);
     }
 
     private List<ModuleResponse> moduleResponses(Long courseId) {

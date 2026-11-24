@@ -130,16 +130,19 @@ class ExamApiIntegrationTest {
     @Test void diagramQuestionsFoldIntoTheEssayKind() throws Exception {
         Question diagram = question(module, "DIAGRAM", "Draw the request flow.");
         Map<String,Object> payload = create();
+        payload.put("title", "Essay + Diagram Exam");
         payload.put("questionIds", List.of(
                 Map.of("questionId", essay.getQuestionId(), "weight", 1, "orderIndex", 0),
                 Map.of("questionId", diagram.getQuestionId(), "weight", 1, "orderIndex", 1)));
         assertEquals("ESSAY", data(submit(payload).andExpect(status().isCreated())).path("examKind").asText());
 
         // A diagram-only exam is an essay exam too.
+        payload.put("title", "Diagram Only Exam");
         payload.put("questionIds", List.of(Map.of("questionId", diagram.getQuestionId(), "weight", 1, "orderIndex", 0)));
         assertEquals("ESSAY", data(submit(payload).andExpect(status().isCreated())).path("examKind").asText());
 
         // Random rules are classified the same way.
+        payload.put("title", "Random Diagram Exam");
         payload.put("generationType", "RANDOM");
         payload.put("questionIds", List.of());
         payload.put("configs", List.of(
@@ -180,7 +183,7 @@ class ExamApiIntegrationTest {
         submit(payload).andExpect(status().isBadRequest());
         payload.put("configs", List.of()); submit(payload).andExpect(status().isBadRequest());
         payload.put("generationType", "UNSUPPORTED"); submit(payload).andExpect(status().isBadRequest());
-        payload = create(); payload.put("moduleId", foreignModule.getModuleId()); submit(payload).andExpect(status().isBadRequest());
+        payload = create(); payload.put("title", "Foreign module check"); payload.put("moduleId", foreignModule.getModuleId()); submit(payload).andExpect(status().isBadRequest());
     }
 
     @Test void randomRulesMustBeFillableFromTheBankOnSaveAndPublish() throws Exception {
@@ -229,11 +232,13 @@ class ExamApiIntegrationTest {
         assertEquals(0, new BigDecimal("2").compareTo(imported.path("weight").decimalValue()));
 
         // Importing the same question again (Q-03 alone would answer 409) reuses the bank question.
+        payload.put("title", "Final exam 2");
         JsonNode second = data(call(collaborator, post("/api/v1/manager/exams").contentType(MediaType.APPLICATION_JSON)
                 .content(json.writeValueAsString(payload))).andExpect(status().isCreated()));
         assertEquals(imported.path("questionId").asLong(), second.path("questions").get(1).path("questionId").asLong());
 
         long questionCount = em.createQuery("select count(q) from Question q", Long.class).getSingleResult();
+        payload.put("title", "Final exam 3");
         payload.remove("moduleId");
         call(collaborator, post("/api/v1/manager/exams").contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(payload)))
                 .andExpect(status().isBadRequest());
@@ -258,13 +263,32 @@ class ExamApiIntegrationTest {
     }
 
     @Test void publishedContentIsLockedAndAPublishedExamCannotBeUnpublished() throws Exception {
-        Exam exam = exam(course, module); exam.setMaxScore(BigDecimal.ONE); attach(exam, question);
+        Exam exam = exam(course, module); exam.setMaxScore(BigDecimal.ONE);
+        ExamQuestion firstLink = attach(exam, question);
         call(manager, patch(path(exam) + "/publish").contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"PUBLISHED\"}"))
                 .andExpect(status().isOk());
+        em.persist(ExamAttempt.builder().exam(exam).user(student).startTime(Instant.now())
+                .deadlineAt(Instant.now().plusSeconds(3600)).status("SUBMITTED").submitTime(Instant.now()).build());
         call(manager, put(path(exam)).contentType(MediaType.APPLICATION_JSON).content("{\"title\":\"Changed\"}"))
                 .andExpect(status().isConflict());
-        call(manager, post(path(exam) + "/questions").contentType(MediaType.APPLICATION_JSON)
-                .content("{\"questionId\":" + essay.getQuestionId() + ",\"weight\":2}")).andExpect(status().isConflict());
+
+        // Published exams still allow adding/removing questions and updating weights, even after attempts exist,
+        // as long as at least one question remains.
+        JsonNode added = data(call(manager, post(path(exam) + "/questions").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"questionId\":" + essay.getQuestionId() + ",\"weight\":2}"))
+                .andExpect(status().isCreated()));
+        long secondLinkId = added.path("examQuestionId").asLong();
+        call(manager, put(path(exam) + "/questions/" + secondLinkId)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"weight\":5}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.weight").value(5));
+        call(manager, delete(path(exam) + "/questions/" + firstLink.getExamQuestionId()))
+                .andExpect(status().isOk());
+        call(manager, delete(path(exam) + "/questions/" + secondLinkId))
+                .andExpect(status().isConflict());
+        call(manager, delete(path(exam) + "/questions"))
+                .andExpect(status().isConflict());
+
         Long examId = exam.getExamId();
         call(manager, patch(path(exam) + "/publish").contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"DRAFT\"}"))
                 .andExpect(status().isConflict())
@@ -275,6 +299,40 @@ class ExamApiIntegrationTest {
         assertNotNull(stored.getPublishedAt());
         call(manager, put("/api/v1/manager/exams/" + examId).contentType(MediaType.APPLICATION_JSON).content("{\"title\":\"Changed\"}"))
                 .andExpect(status().isConflict());
+    }
+
+    @Test void examTitleMustBeUniqueWithinSameCourseButAllowedAcrossDifferentCourses() throws Exception {
+        Map<String, Object> payload = create();
+        payload.put("title", "Midterm 1");
+        long firstId = data(submit(payload).andExpect(status().isCreated())).path("examId").asLong();
+
+        // Duplicate (trimmed, case-insensitive) in the same course -> 409 Conflict.
+        payload.put("title", "  midterm 1 ");
+        submit(payload).andExpect(status().isConflict());
+
+        // Different course with the exact same title -> 201 Created.
+        Map<String, Object> otherCoursePayload = new HashMap<>();
+        otherCoursePayload.put("title", "Midterm 1");
+        otherCoursePayload.put("courseId", foreignCourse.getCourseId());
+        otherCoursePayload.put("moduleId", foreignModule.getModuleId());
+        otherCoursePayload.put("durationMinutes", 60);
+        otherCoursePayload.put("generationType", "STATIC");
+        otherCoursePayload.put("maxScore", 10);
+        otherCoursePayload.put("questionIds", List.of(Map.of("questionId", foreignQuestion.getQuestionId(), "weight", 1, "orderIndex", 0)));
+        call(other, post("/api/v1/manager/exams").contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(otherCoursePayload)))
+                .andExpect(status().isCreated());
+
+        // Renaming another exam in the same course to an existing title -> 409 Conflict.
+        payload.put("title", "Midterm 2");
+        long secondId = data(submit(payload).andExpect(status().isCreated())).path("examId").asLong();
+        call(manager, put("/api/v1/manager/exams/" + secondId).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"title\":\"MIDTERM 1\"}"))
+                .andExpect(status().isConflict());
+        // Updating description only on firstId keeps its own title without false duplicate error.
+        call(manager, put("/api/v1/manager/exams/" + firstId).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"title\":\"Midterm 1\",\"description\":\"Allowed\"}"))
+                .andExpect(status().isOk());
     }
 
     @Test void aPublishedExamStillAcceptsAnotherPublishAndArchive() throws Exception {
@@ -534,7 +592,9 @@ class ExamApiIntegrationTest {
                 .andExpect(jsonPath("$.data.content[?(@.examId == " + id + ")].mode").value("CONTEST"));
         call(manager, put("/api/v1/manager/exams/" + id).contentType(MediaType.APPLICATION_JSON).content("{\"mode\":\"EXAM\"}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.mode").value("EXAM"));
-        submit(create()).andExpect(status().isCreated()).andExpect(jsonPath("$.data.mode").value("EXAM"));
+        Map<String, Object> secondPayload = create();
+        secondPayload.put("title", "Second Final exam");
+        submit(secondPayload).andExpect(status().isCreated()).andExpect(jsonPath("$.data.mode").value("EXAM"));
     }
 
     private Map<String,Object> random(String type) {
@@ -556,7 +616,7 @@ class ExamApiIntegrationTest {
     private long[] statements(int count) throws Exception {
         List<Map<String,Object>> ids = new ArrayList<>();
         for (int i = 0; i < count; i++) ids.add(Map.of("questionId", question(module, "SINGLE_CHOICE", "Bulk " + count + "-" + i).getQuestionId(), "weight", 1));
-        Map<String,Object> payload = create(); payload.put("questionIds", ids);
+        Map<String,Object> payload = create(); payload.put("title", "Bulk Exam " + count); payload.put("questionIds", ids);
         em.flush(); em.clear();
         Statistics stats = em.getEntityManagerFactory().unwrap(SessionFactory.class).getStatistics();
         stats.setStatisticsEnabled(true); stats.clear();
@@ -599,6 +659,6 @@ class ExamApiIntegrationTest {
     private Course course(User owner, Category category) { Course result=Course.builder().manager(owner).category(category).categoryId(category.getCategoryId()).title("Course").slug(UUID.randomUUID().toString()).isPublished(false).build(); em.persist(result); return result; }
     private Module module(Course parent) { Module result=Module.builder().course(parent).title("Module").orderIndex(1).build(); em.persist(result); return result; }
     private Question question(Module parent, String type, String content) { Question result=Question.builder().module(parent).questionType(type).content(content).status("ACTIVE").build(); em.persist(result); return result; }
-    private Exam exam(Course parent, Module mod) { Exam result=Exam.builder().course(parent).module(mod).createdBy(manager).title("Exam").durationMinutes(60).generationType("STATIC").isPractice(false).maxScore(BigDecimal.TEN).build(); em.persist(result); return result; }
+    private Exam exam(Course parent, Module mod) { Exam result=Exam.builder().course(parent).module(mod).createdBy(manager).title("Exam " + UUID.randomUUID()).durationMinutes(60).generationType("STATIC").isPractice(false).maxScore(BigDecimal.TEN).build(); em.persist(result); return result; }
     private ExamQuestion attach(Exam exam, Question question) { ExamQuestion result=ExamQuestion.builder().exam(exam).question(question).weight(BigDecimal.ONE).build(); em.persist(result); return result; }
 }
