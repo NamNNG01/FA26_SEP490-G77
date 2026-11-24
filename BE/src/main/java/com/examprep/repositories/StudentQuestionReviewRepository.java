@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -16,6 +17,8 @@ import java.util.Optional;
 public interface StudentQuestionReviewRepository extends JpaRepository<StudentQuestionReview, Long> {
 
     Optional<StudentQuestionReview> findByStudent_UserIdAndQuestion_QuestionId(Long studentId, Long questionId);
+
+    List<StudentQuestionReview> findByStudent_UserIdAndQuestion_QuestionIdIn(Long studentId, Collection<Long> questionIds);
 
     boolean existsByStudent_UserIdAndQuestion_QuestionIdAndBookmarkTrue(Long studentId, Long questionId);
 
