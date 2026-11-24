@@ -47,8 +47,10 @@ class DashboardServiceTest {
 
     @Test
     void getStudentDashboard_Success() {
-        when(enrollmentRepository.summarizeByUserId(STUDENT_ID)).thenReturn(new Object[]{5L, 3L, 2L});
-        when(examAttemptRepository.summarizeByUserId(STUDENT_ID)).thenReturn(new Object[]{18L, new BigDecimal("78.5")});
+        when(enrollmentRepository.summarizeByUserId(STUDENT_ID))
+                .thenReturn(List.<Object[]>of(new Object[]{5L, 3L, 2L}));
+        when(examAttemptRepository.summarizeByUserId(STUDENT_ID))
+                .thenReturn(List.<Object[]>of(new Object[]{18L, new BigDecimal("78.5")}));
 
         StudentRecentCourse recentCourse = StudentRecentCourse.builder()
                 .courseId(12L)
@@ -96,8 +98,8 @@ class DashboardServiceTest {
 
     @Test
     void getStudentDashboard_NoData_ReturnsZeroSummaryAndEmptyLists() {
-        when(enrollmentRepository.summarizeByUserId(STUDENT_ID)).thenReturn(new Object[]{0L, 0L, 0L});
-        when(examAttemptRepository.summarizeByUserId(STUDENT_ID)).thenReturn(new Object[]{0L, null});
+        when(enrollmentRepository.summarizeByUserId(STUDENT_ID)).thenReturn(List.of());
+        when(examAttemptRepository.summarizeByUserId(STUDENT_ID)).thenReturn(List.of());
         when(enrollmentRepository.findRecentCoursesByUserId(eq(STUDENT_ID), any(Pageable.class)))
                 .thenReturn(List.of());
         when(examAttemptRepository.findRecentAttemptsByUserId(eq(STUDENT_ID), any(Pageable.class)))

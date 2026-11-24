@@ -9,8 +9,11 @@ export const PALETTE_RESULT_TONE = {
 
 const RESULT_LABEL = { correct: 'correct', partial: 'partly correct', wrong: 'wrong' } as const;
 
-export function QuestionPalette({ total, current, answered, flagged, results, onSelect }: {
-  total: number; current: number; answered: Set<number>; flagged: Set<number>;
+export function QuestionPalette({ total, current, currentGroup, answered, flagged, results, onSelect }: {
+  total: number; current: number;
+  /** Question numbers shown together on the active page (e.g. questions in the same group). */
+  currentGroup?: Set<number>;
+  answered: Set<number>; flagged: Set<number>;
   /** Practice: how each checked question went (question number → outcome). */
   results?: Map<number, keyof typeof PALETTE_RESULT_TONE>;
   onSelect: (n: number) => void;
@@ -19,6 +22,7 @@ export function QuestionPalette({ total, current, answered, flagged, results, on
     <div className="flex flex-wrap gap-2">
       {Array.from({ length: total }, (_, i) => i + 1).map(n => {
         const result = results?.get(n);
+        const onActivePage = n !== current && currentGroup?.has(n);
         return (
         <button key={n} type="button" onClick={() => onSelect(n)}
           aria-current={n === current ? 'step' : undefined}
@@ -28,7 +32,8 @@ export function QuestionPalette({ total, current, answered, flagged, results, on
               result ? PALETTE_RESULT_TONE[result] :
               flagged.has(n) ? 'bg-warning-light text-warning border-warning-line' :
               answered.has(n) ? 'bg-success-light text-success border-success-line' :
-              'bg-surface text-content-secondary border-line hover:bg-accent'}`}>
+              'bg-surface text-content-secondary border-line hover:bg-accent'}
+            ${onActivePage ? 'ring-2 ring-brand-600/45 ring-offset-1' : ''}`}>
           {n}
         </button>
         );

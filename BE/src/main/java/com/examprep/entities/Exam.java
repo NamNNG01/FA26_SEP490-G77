@@ -50,6 +50,13 @@ public class Exam implements Serializable {
     @Column(name = "generation_type", nullable = false, length = 50)
     private String generationType;
 
+    public static final String ORDER_MANUAL = "MANUAL";
+    public static final String ORDER_RANDOM = "RANDOM";
+
+    @Builder.Default
+    @Column(name = "question_order", nullable = false, length = 20)
+    private String questionOrder = ORDER_RANDOM;
+
     @Builder.Default
     @Column(name = "max_score", nullable = false, precision = 8, scale = 2)
     private BigDecimal maxScore = BigDecimal.TEN;

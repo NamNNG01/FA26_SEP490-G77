@@ -55,6 +55,8 @@ export function QuestionBankSelectModal({
   const [totalElements, setTotalElements] = useState(0);
   const [questionsError, setQuestionsError] = useState<string | null>(null);
 
+  const effectiveModuleId = initialModuleId != null ? String(initialModuleId) : moduleFilter;
+
   useEffect(() => {
     if (!open || !courseId) return;
     setFetching(true);
@@ -64,7 +66,7 @@ export function QuestionBankSelectModal({
         .getQuestions({
           search: search.trim() || undefined,
           courseId,
-          moduleId: moduleFilter ? Number(moduleFilter) : undefined,
+          moduleId: effectiveModuleId ? Number(effectiveModuleId) : undefined,
           groupType: "NONE",
           difficulty: difficulty !== "all" ? difficulty : undefined,
           questionType: questionType !== "all" ? questionType : undefined,
@@ -92,7 +94,7 @@ export function QuestionBankSelectModal({
     open,
     search,
     courseId,
-    moduleFilter,
+    effectiveModuleId,
     difficulty,
     questionType,
     page,
@@ -214,14 +216,11 @@ export function QuestionBankSelectModal({
           />
           <Select
             className="min-w-0"
-            value={moduleFilter}
-            onChange={(value) => {
-              setModuleFilter(value);
-              setPage(0);
-            }}
-            disabled={!courseId}
+            value={effectiveModuleId}
+            onChange={() => {}}
+            disabled
             options={[
-              { label: "All Modules", value: "" },
+              { label: "Module locked by exam", value: "" },
               ...modules.map((module) => ({
                 label: module.title,
                 value: String(module.moduleId),

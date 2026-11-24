@@ -48,15 +48,16 @@ public class DashboardServiceImpl implements DashboardService {
     private StudentDashboardResponse loadStudentDashboard(Long userId) {
         log.debug("Building student dashboard for user ID: {}", userId);
 
-        Object[] enrollSummary = unwrapRow(enrollmentRepository.summarizeByUserId(userId));
-        long enrolledCourses = toLong(enrollSummary, 0);
-        long activeCourses = toLong(enrollSummary, 1);
-        long completedCourses = toLong(enrollSummary, 2);
+        List<Object[]> enrollRows = enrollmentRepository.summarizeByUserId(userId);
+        Object[] er = enrollRows.isEmpty() ? new Object[]{0L, 0L, 0L} : enrollRows.get(0);
+        long enrolledCourses = er[0] == null ? 0L : ((Number) er[0]).longValue();
+        long activeCourses = er[1] == null ? 0L : ((Number) er[1]).longValue();
+        long completedCourses = er[2] == null ? 0L : ((Number) er[2]).longValue();
 
-        Object[] attemptSummary = unwrapRow(examAttemptRepository.summarizeByUserId(userId));
-        long totalAttempts = toLong(attemptSummary, 0);
-        double averageScore = attemptSummary != null && attemptSummary.length > 1 && attemptSummary[1] != null
-                ? ((Number) attemptSummary[1]).doubleValue() : 0.0;
+        List<Object[]> attemptRows = examAttemptRepository.summarizeByUserId(userId);
+        Object[] ar = attemptRows.isEmpty() ? new Object[]{0L, null} : attemptRows.get(0);
+        long totalAttempts = ar[0] == null ? 0L : ((Number) ar[0]).longValue();
+        double averageScore = ar[1] == null ? 0.0 : ((Number) ar[1]).doubleValue();
 
         List<StudentRecentCourse> recentCourses =
                 enrollmentRepository.findRecentCoursesByUserId(userId, PageRequest.of(0, RECENT_LIMIT));

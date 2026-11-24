@@ -445,8 +445,8 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
     const issues = fitting.filter(d => d.importIssue).length;
     const imported = `${fitting.length} question${fitting.length === 1 ? '' : 's'} imported`;
     if (issues > 0) {
-      toast.warning('The questions marked in red came in blank. Fill them in or remove them, then review the rest before saving.', {
-        title: `${imported} — ${issues} couldn’t be read`,
+      toast.warning('Questions marked in red kept their parsed fields — fix the highlighted errors or remove them before saving.', {
+        title: `${imported} — ${issues} need fixes`,
         duration: 8000,
       });
     } else {

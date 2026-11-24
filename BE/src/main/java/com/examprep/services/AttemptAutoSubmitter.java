@@ -271,6 +271,7 @@ public class AttemptAutoSubmitter {
         // Every addend keeps AGGREGATE_SCALE digits; only the total is rounded, so a paper whose
         // every question is fully correct totals exactly maxScore instead of drifting a cent.
         List<BigDecimal> scores = new ArrayList<>();
+        List<QuestionReviewRecorder.ReviewEntry> reviewEntries = new ArrayList<>(rows.size());
         for (AttemptAnswer row : rows) {
             // CD-05 finalized a code answer while the attempt was still running: its verdict and
             // score stand (spec 19.3), so this row is never re-graded here. A score that took the
@@ -313,11 +314,15 @@ public class AttemptAutoSubmitter {
                 row.setGradingStatus(GRADING_AUTO);
             }
             if (row.getIsCorrect() != null) {
-                reviews.record(attempt.getUser().getUserId(), row.getQuestion(), row.getIsCorrect(), row.getResponse());
+                reviewEntries.add(new QuestionReviewRecorder.ReviewEntry(
+                        row.getQuestion(), row.getIsCorrect(), row.getResponse()));
             }
             if (rawScore != null) {
                 scores.add(rawScore);
             }
+        }
+        if (!reviewEntries.isEmpty()) {
+            reviews.recordBatch(attempt.getUser().getUserId(), reviewEntries);
         }
 
         attempt.setTotalScore(AttemptScoring.output(AttemptScoring.sumScores(scores)));

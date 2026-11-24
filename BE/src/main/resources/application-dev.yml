@@ -5,12 +5,13 @@ spring:
     password: ${SUPABASE_DB_PASSWORD:postgres}
     driver-class-name: org.postgresql.Driver
     hikari:
-      maximum-pool-size: 30
-      minimum-idle: 10
+      maximum-pool-size: 35
+      minimum-idle: 5
       idle-timeout: 300000
       connection-timeout: 30000
 
   jpa:
+    open-in-view: false
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
       ddl-auto: validate

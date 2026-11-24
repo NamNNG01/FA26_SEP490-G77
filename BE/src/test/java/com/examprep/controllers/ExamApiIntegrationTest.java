@@ -402,7 +402,7 @@ class ExamApiIntegrationTest {
     @Test void importUsesQ09TemplateAndCreatesReusesOrSkipsByContentHash() throws Exception {
         Exam first = exam(course, module), second = exam(course, module);
         // Block 3 repeats block 1, so it is skipped inside the same file.
-        String contents = TEMPLATE + "\n[TYPE: SINGLE_CHOICE]\nQ3. What is two plus two?\nA. Three\nB. Four\nANSWER: B";
+        String contents = TEMPLATE + "\n[TYPE: SINGLE_CHOICE]\nQ3. What is two plus two?\nDIFFICULTY: EASY\nA. Three\nB. Four\nANSWER: B";
         importFile(first, contents).andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.imported").value(2))
                 .andExpect(jsonPath("$.data.reused").value(0))
@@ -421,7 +421,7 @@ class ExamApiIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"docx", "pdf"})
+    @ValueSource(strings = {"docx", "pdf", "xlsx"})
     void importAcceptsTheDownloadableQ09Template(String format) throws Exception {
         byte[] template = new org.springframework.core.io.ClassPathResource("templates/import/apepp-question-template-v2." + format).getContentAsByteArray();
         call(collaborator, multipart(path(exam(course, module))+"/import")
@@ -630,8 +630,8 @@ class ExamApiIntegrationTest {
         return new long[]{create, stats.getPrepareStatementCount()};
     }
 
-    private static final String TEMPLATE = "[TYPE: SINGLE_CHOICE]\nQ1. What is two plus two?\nA. Three\nB. Four\nANSWER: B\n"
-            + "[TYPE: TRUE_FALSE]\nQ2. Indexes speed up reads.\nANSWER: true";
+    private static final String TEMPLATE = "[TYPE: SINGLE_CHOICE]\nQ1. What is two plus two?\nDIFFICULTY: EASY\nA. Three\nB. Four\nANSWER: B\n"
+            + "[TYPE: TRUE_FALSE]\nQ2. Indexes speed up reads.\nDIFFICULTY: MEDIUM\nANSWER: true";
 
     // collaborator is in course_managers, which Q-03 (used to save new questions) requires.
     private ResultActions importFile(Exam exam, String contents) throws Exception {

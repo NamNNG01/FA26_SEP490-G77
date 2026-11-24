@@ -48,19 +48,84 @@ public class QuestionReviewRecorder {
         if (userId == null || question == null) return;
         Instant now = Instant.now();
         StudentQuestionReview row = reviews.findByStudent_UserIdAndQuestion_QuestionId(userId, question.getQuestionId()).orElse(null);
+        if (correct && row == null) return;
+        if (!correct && row == null) {
+            users.findForUpdate(userId);
+            row = reviews.findByStudent_UserIdAndQuestion_QuestionId(userId, question.getQuestionId()).orElse(null);
+        }
+        StudentQuestionReview updated = applyOutcome(userId, question, correct, response, null, row, now);
+        if (updated != null) {
+            reviews.save(updated);
+        }
+    }
+
+    public record ReviewEntry(Question question, boolean correct, String response) {}
+
+    /**
+     * Batch version of {@link #record} for exam submission: loads existing reviews, user lock (if any new wrong row),
+     * and option texts in bulk instead of per-question queries.
+     */
+    @Transactional
+    public void recordBatch(Long userId, List<ReviewEntry> entries) {
+        if (userId == null || entries == null || entries.isEmpty()) return;
+        Instant now = Instant.now();
+        List<Long> questionIds = entries.stream()
+                .map(e -> e.question() == null ? null : e.question().getQuestionId())
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList();
+        if (questionIds.isEmpty()) return;
+
+        Map<Long, StudentQuestionReview> byQuestion = reviews
+                .findByStudent_UserIdAndQuestion_QuestionIdIn(userId, questionIds).stream()
+                .collect(Collectors.toMap(r -> r.getQuestion().getQuestionId(), r -> r, (a, b) -> a));
+
+        boolean needsNewWrongRow = entries.stream().anyMatch(e ->
+                e.question() != null && !e.correct() && !byQuestion.containsKey(e.question().getQuestionId()));
+        if (needsNewWrongRow) {
+            users.findForUpdate(userId);
+            reviews.findByStudent_UserIdAndQuestion_QuestionIdIn(userId, questionIds)
+                    .forEach(r -> byQuestion.put(r.getQuestion().getQuestionId(), r));
+        }
+
+        Set<String> choiceTypes = Set.of("SINGLE_CHOICE", "MULTIPLE_CHOICE", "TRUE_FALSE", "ORDERING");
+        List<Long> choiceQuestionIds = entries.stream()
+                .filter(e -> e.question() != null && !e.correct()
+                        && e.response() != null && !e.response().isBlank()
+                        && choiceTypes.contains(e.question().getQuestionType()))
+                .map(e -> e.question().getQuestionId())
+                .distinct()
+                .toList();
+        Map<Long, String> loadedOptionTexts = choiceQuestionIds.isEmpty() ? Map.of() : optionTexts(choiceQuestionIds);
+
+        List<StudentQuestionReview> toSave = new ArrayList<>();
+        for (ReviewEntry entry : entries) {
+            Question question = entry.question();
+            if (question == null) continue;
+            Long qId = question.getQuestionId();
+            StudentQuestionReview updated = applyOutcome(
+                    userId, question, entry.correct(), entry.response(), loadedOptionTexts, byQuestion.get(qId), now);
+            if (updated != null) {
+                byQuestion.put(qId, updated);
+                toSave.add(updated);
+            }
+        }
+        if (!toSave.isEmpty()) {
+            reviews.saveAll(toSave);
+        }
+    }
+
+    private StudentQuestionReview applyOutcome(Long userId, Question question, boolean correct, String response,
+                                               Map<Long, String> preloadedOptionTexts, StudentQuestionReview row,
+                                               Instant now) {
         if (correct) {
-            if (row == null) return;
+            if (row == null) return null;
             row.setLastPracticedAt(now);
             if (WRONG.equals(row.getStatus())) {
                 row.setCorrectStreak(row.getCorrectStreak() + 1);
                 if (row.getCorrectStreak() >= RESOLVE_AFTER) row.setStatus(ANSWERED);
             }
-            reviews.save(row);
-            return;
-        }
-        if (row == null) {
-            users.findForUpdate(userId);
-            row = reviews.findByStudent_UserIdAndQuestion_QuestionId(userId, question.getQuestionId()).orElse(null);
+            return row;
         }
         if (row == null) {
             row = StudentQuestionReview.builder().student(users.getReferenceById(userId)).question(question)
@@ -69,9 +134,11 @@ public class QuestionReviewRecorder {
         row.setStatus(WRONG);
         row.setWrongCount(row.getWrongCount() + 1);
         row.setCorrectStreak(0);
-        row.setLastWrongChoice(describe(question, response));
+        row.setLastWrongChoice(preloadedOptionTexts != null
+                ? (response == null || response.isBlank() ? "(blank)" : describe(question, response, preloadedOptionTexts))
+                : describe(question, response));
         row.setLastPracticedAt(now);
-        reviews.save(row);
+        return row;
     }
 
     /** Rubric answers (essay/code/diagram) have points, not a verdict: half the question's points or more counts as right. */
@@ -83,6 +150,7 @@ public class QuestionReviewRecorder {
 
     /** The student's answer as a person reads it: option texts, blanks, pairs or the typed text. */
     String describe(Question question, String response) {
+        if (response == null || response.isBlank()) return "(blank)";
         boolean choice = Set.of("SINGLE_CHOICE", "MULTIPLE_CHOICE", "TRUE_FALSE", "ORDERING").contains(question.getQuestionType());
         return describe(question, response, choice ? optionTexts(List.of(question.getQuestionId())) : Map.of());
     }

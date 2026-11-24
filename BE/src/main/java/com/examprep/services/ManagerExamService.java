@@ -12,6 +12,7 @@ public interface ManagerExamService {
     ExamResponse detail(UserPrincipal user, Long id);
     ExamResponse create(UserPrincipal user, ExamRequests.Create request);
     ExamResponse update(UserPrincipal user, Long id, ExamRequests.Update request);
+    ExamResponse updateOrder(UserPrincipal user, Long id, ExamRequests.ExamOrder request);
     ExamResponse.Published publish(UserPrincipal user, Long id, ExamRequests.Publish request);
     void delete(UserPrincipal user, Long id);
     ExamResponse.QuestionLink addQuestion(UserPrincipal user, Long id, ExamRequests.QuestionLink request);
