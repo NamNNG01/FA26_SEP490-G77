@@ -6,12 +6,15 @@ import com.examprep.exceptions.BadRequestException;
 import com.examprep.exceptions.ForbiddenException;
 import com.examprep.exceptions.ResourceNotFoundException;
 import com.examprep.repositories.*;
+import com.examprep.util.ShortTtlCache;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -28,6 +31,10 @@ public class StudentExamServiceImpl implements StudentExamService {
     private final ExamRepository examRepository;
     private final EnrollmentRepository enrollmentRepository;
     private final ExamAttemptRepository examAttemptRepository;
+
+    @Value("${app.read-cache.ttl-ms:5000}")
+    private long cacheTtlMs = 5000L;
+    private volatile ShortTtlCache<String, Page<MyExamDto>> myExamsCache;
 
     @Override
     public ExamDetailDto getExamDetail(Long examId, Long userId) {
@@ -144,6 +151,7 @@ public class StudentExamServiceImpl implements StudentExamService {
     }
 
     @Override
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public Page<MyExamDto> listMyExams(int page, int size, Long userId) {
         if (page < 0) {
             throw new BadRequestException("Page index must not be less than zero");
@@ -152,7 +160,11 @@ public class StudentExamServiceImpl implements StudentExamService {
             throw new BadRequestException("Page size must be between 1 and 100");
         }
         Pageable pageable = PageRequest.of(page, size);
-        return examAttemptRepository.findMyExams(userId, pageable);
+        if (myExamsCache == null) {
+            myExamsCache = new ShortTtlCache<>(cacheTtlMs, 512);
+        }
+        String key = userId + "|" + page + "|" + size;
+        return myExamsCache.getOrCompute(key, () -> examAttemptRepository.findMyExams(userId, pageable));
     }
 
     private void validateStudentExamAccess(Exam exam, Long userId) {

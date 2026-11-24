@@ -10,12 +10,15 @@ import com.examprep.exceptions.ResourceNotFoundException;
 import com.examprep.repositories.*;
 import com.examprep.services.CategoryService;
 import com.examprep.util.QuestionTypeUtil;
+import com.examprep.util.ShortTtlCache;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashMap;
@@ -41,11 +44,21 @@ public class StudentCourseServiceImpl implements StudentCourseService {
     private final StudentProgressService studentProgressService;
     private final CourseProgressSummaryRepository progressSummaryRepository;
 
+    @Value("${app.read-cache.ttl-ms:5000}")
+    private long cacheTtlMs = 5000L;
+    private volatile ShortTtlCache<String, Page<CourseCardDto>> courseListCache;
+
     @Override
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public Page<CourseCardDto> listCourses(Long categoryId, String keyword, String sort, int page, int size, Long userId) {
         Pageable pageable = createPageable(page, size, sort, "createdAt");
         String search = sanitizeSearch(keyword);
-        return courseRepository.findPublishedCourses(categoryId, search, userId, pageable);
+        if (courseListCache == null) {
+            courseListCache = new ShortTtlCache<>(cacheTtlMs, 512);
+        }
+        String key = categoryId + "|" + search + "|" + sort + "|" + page + "|" + size + "|" + userId;
+        return courseListCache.getOrCompute(key,
+                () -> courseRepository.findPublishedCourses(categoryId, search, userId, pageable));
     }
 
     @Override

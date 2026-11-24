@@ -1,13 +1,15 @@
 package com.examprep.services;
 
 import com.examprep.dto.*;
-import com.examprep.entities.Enrollment;
 import com.examprep.entities.User;
 import com.examprep.repositories.*;
+import com.examprep.util.ShortTtlCache;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
@@ -26,17 +28,35 @@ public class DashboardServiceImpl implements DashboardService {
     private final ExamRepository examRepository;
     private final UserRepository userRepository;
 
-    @Override
-    @Transactional(readOnly = true)
-    public StudentDashboardResponse getStudentDashboard(Long userId) {
-        log.info("Building student dashboard for user ID: {}", userId);
+    @Value("${app.read-cache.ttl-ms:5000}")
+    private long cacheTtlMs = 5000L;
+    private volatile ShortTtlCache<Long, StudentDashboardResponse> studentCache;
 
-        long enrolledCourses = enrollmentRepository.countByUserId(userId);
-        long activeCourses = enrollmentRepository.countByUserIdAndStatus(userId, Enrollment.STATUS_ACTIVE);
-        long completedCourses = enrollmentRepository.countByUserIdAndStatus(userId, Enrollment.STATUS_COMPLETED);
-        long totalAttempts = examAttemptRepository.countByUserId(userId);
-        Number average = examAttemptRepository.averageScoreByUserId(userId);
-        double averageScore = average == null ? 0.0 : average.doubleValue();
+    private ShortTtlCache<Long, StudentDashboardResponse> cache() {
+        if (studentCache == null) {
+            studentCache = new ShortTtlCache<>(cacheTtlMs, 512);
+        }
+        return studentCache;
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public StudentDashboardResponse getStudentDashboard(Long userId) {
+        return cache().getOrCompute(userId, () -> loadStudentDashboard(userId));
+    }
+
+    private StudentDashboardResponse loadStudentDashboard(Long userId) {
+        log.debug("Building student dashboard for user ID: {}", userId);
+
+        Object[] enrollSummary = unwrapRow(enrollmentRepository.summarizeByUserId(userId));
+        long enrolledCourses = toLong(enrollSummary, 0);
+        long activeCourses = toLong(enrollSummary, 1);
+        long completedCourses = toLong(enrollSummary, 2);
+
+        Object[] attemptSummary = unwrapRow(examAttemptRepository.summarizeByUserId(userId));
+        long totalAttempts = toLong(attemptSummary, 0);
+        double averageScore = attemptSummary != null && attemptSummary.length > 1 && attemptSummary[1] != null
+                ? ((Number) attemptSummary[1]).doubleValue() : 0.0;
 
         List<StudentRecentCourse> recentCourses =
                 enrollmentRepository.findRecentCoursesByUserId(userId, PageRequest.of(0, RECENT_LIMIT));
@@ -54,6 +74,20 @@ public class DashboardServiceImpl implements DashboardService {
                 .recentCourses(recentCourses)
                 .recentAttempts(recentAttempts)
                 .build();
+    }
+
+    private static Object[] unwrapRow(Object[] row) {
+        if (row != null && row.length == 1 && row[0] instanceof Object[] nested) {
+            return nested;
+        }
+        return row;
+    }
+
+    private static long toLong(Object[] row, int idx) {
+        if (row == null || idx >= row.length || row[idx] == null) {
+            return 0L;
+        }
+        return ((Number) row[idx]).longValue();
     }
 
     @Override

@@ -51,6 +51,9 @@ public interface ExamAttemptRepository extends JpaRepository<ExamAttempt, Long> 
     @Query("SELECT AVG(a.totalScore) FROM ExamAttempt a WHERE a.user.userId = :userId AND a.totalScore IS NOT NULL AND (a.mode IS NULL OR a.mode <> 'REVIEW')")
     Number averageScoreByUserId(@Param("userId") Long userId);
 
+    @Query("SELECT COUNT(a), AVG(a.totalScore) FROM ExamAttempt a WHERE a.user.userId = :userId AND (a.mode IS NULL OR a.mode <> 'REVIEW')")
+    Object[] summarizeByUserId(@Param("userId") Long userId);
+
     @Query("SELECT new com.examprep.dto.StudentRecentAttempt(a.attemptId, a.exam.examId, a.exam.title, a.totalScore, a.status, a.submitTime) " +
             "FROM ExamAttempt a " +
             "WHERE a.user.userId = :userId AND a.submitTime IS NOT NULL AND (a.mode IS NULL OR a.mode <> 'REVIEW') " +
