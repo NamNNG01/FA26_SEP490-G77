@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { Input } from '@/components/ui/Input';
-import { Select } from '@/components/ui/Select';
+import { Button } from '@/components/ui/Button';
+import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { Icon } from '@/assets/icons';
 import type { QuestionGroup } from '@/services/questionGroup.service';
-import { GROUP_KIND_LABELS, GROUP_KIND_OPTIONS, asGroupKind, type GroupKind } from '../model';
+import { GROUP_KIND_LABELS, asGroupKind, type GroupKind } from '../model';
 import { groupOptionLabel } from './QuestionGroupPicker';
+import { NewGroupModal } from './NewGroupModal';
 
 /** standalone = independent questions; existing / new = every question shares one passage (e.g. an IELTS reading). */
 export type GroupMode = 'standalone' | 'existing' | 'new';
@@ -45,18 +46,22 @@ export function contextKind(v: GroupContextValue, groups: QuestionGroup[]): Grou
   return null;
 }
 
-const MODES: { value: GroupMode; label: string; hint: string }[] = [
+/** The pending new group's value in the group dropdown — never a group id. */
+const NEW_GROUP_VALUE = 'new';
+
+const MODES: { value: 'standalone' | 'group'; label: string; hint: string }[] = [
   { value: 'standalone', label: 'Standalone questions', hint: 'Each question stands on its own.' },
-  { value: 'existing', label: 'Existing group', hint: 'Add questions to a passage that already exists.' },
-  { value: 'new', label: 'New group', hint: 'Write a passage, then the questions about it.' },
+  { value: 'group', label: 'Question group', hint: 'Questions share one passage — pick a group or create one.' },
 ];
 
 /**
  * Top of the New Questions column: decides whether the batch is standalone or
  * a question group (shared passage / scenario, like one IELTS reading). A group
  * holds one kind of question — Quiz, Essay, Code or Diagram — so in group mode
- * the questions' types are limited to that kind. The passage stays visible
- * above the questions while they are written.
+ * the questions' types are limited to that kind. The group dropdown lists the
+ * course's groups under a "+ New Group" row; a new group is written in a modal,
+ * selected at once, and created on save together with the questions. The
+ * passage stays visible above the questions while they are written.
  */
 export function GroupContextCard({ value, onChange, groups, loadingGroups, courseSelected, moduleId, questionKinds = [], showErrors, kindInvalid, disabled }: {
   value: GroupContextValue;
@@ -73,11 +78,12 @@ export function GroupContextCard({ value, onChange, groups, loadingGroups, cours
    */
   questionKinds?: GroupKind[];
   showErrors?: boolean;
-  /** Some questions don't fit the new group's type — its Group type dropdown turns red. */
+  /** Some questions don't fit the new group's type — the group dropdown turns red. */
   kindInvalid?: boolean;
   disabled?: boolean;
 }) {
   const [collapsed, setCollapsed] = useState(false);
+  const [modal, setModal] = useState<'create' | 'edit' | null>(null);
   const set = (patch: Partial<GroupContextValue>) => onChange({ ...value, ...patch });
   const errors = showErrors ? groupContextErrors(value) : {};
   const mixed = questionKinds.length > 1;
@@ -86,14 +92,30 @@ export function GroupContextCard({ value, onChange, groups, loadingGroups, cours
   // Groups without a kind yet take the kind of the first questions saved into them.
   const offered = mixed ? [] : groupsForModule(groups, moduleId).filter(g => !writtenKind || !g.questionType || g.questionType === writtenKind);
   const hiddenByKind = writtenKind ? groupsForModule(groups, moduleId).length - offered.length : 0;
-  const mixedNote = mixed && (
-    <p className="flex items-start gap-1.5 text-xs text-danger">
-      <Icon.AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
-      Your questions mix {kindNames} types — a group holds one kind. Remove or change some questions first.
-    </p>
-  );
-  const selected = groups.find(g => String(g.groupId) === value.existingGroupId);
-  const selectedKind = asGroupKind(selected?.questionType);
+  const isGroup = value.mode !== 'standalone';
+  const isNew = value.mode === 'new';
+  /** A new group has been written — it stays in the list while another group is picked. */
+  const hasPending = Boolean(value.newTitle.trim() || value.newPassage.trim());
+  const selected = isNew ? undefined : groups.find(g => String(g.groupId) === value.existingGroupId);
+  const selectedKind = isNew ? value.newKind : asGroupKind(selected?.questionType);
+  const passage = isNew ? value.newPassage : selected?.passageText;
+  const groupError = errors.group ?? (errors.title || errors.passage ? 'Finish the new group — click Edit Group.' : undefined);
+
+  const options = [
+    ...(hasPending ? [{ label: `[${GROUP_KIND_LABELS[value.newKind]}] ${value.newTitle.trim() || 'Untitled group'} · new, created on save`, value: NEW_GROUP_VALUE }] : []),
+    ...offered.map(g => ({ label: groupOptionLabel(g), value: String(g.groupId) })),
+  ];
+
+  const pickMode = (m: 'standalone' | 'group') => {
+    setCollapsed(false);
+    if (m === 'standalone') set({ mode: 'standalone' });
+    else if (!isGroup) set({ mode: value.existingGroupId || !hasPending ? 'existing' : 'new' });
+  };
+
+  const pickGroup = (v: string) => {
+    if (v === NEW_GROUP_VALUE) set({ mode: 'new' });
+    else set({ mode: 'existing', existingGroupId: v });
+  };
 
   return (
     <section aria-labelledby="group-context-title" className="card px-4 py-3.5 space-y-3">
@@ -101,16 +123,16 @@ export function GroupContextCard({ value, onChange, groups, loadingGroups, cours
         <h3 id="group-context-title" className="flex items-center gap-1.5 text-base font-semibold text-content">
           <Icon.Layers className="w-4 h-4 text-brand-ink" /> Question Context
         </h3>
-        {value.mode !== 'standalone' && (
+        {isGroup && (selected || isNew) && (
           <button type="button" onClick={() => setCollapsed(c => !c)} className="text-xs font-medium text-brand-ink hover:underline" aria-expanded={!collapsed}>
             {collapsed ? 'Show passage' : 'Hide passage'}
           </button>
         )}
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2" role="radiogroup" aria-label="Question context">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2" role="radiogroup" aria-label="Question context">
         {MODES.map(m => {
-          const active = value.mode === m.value;
+          const active = m.value === 'group' ? isGroup : !isGroup;
           return (
             <button
               key={m.value}
@@ -118,7 +140,7 @@ export function GroupContextCard({ value, onChange, groups, loadingGroups, cours
               role="radio"
               aria-checked={active}
               disabled={disabled}
-              onClick={() => { set({ mode: m.value }); setCollapsed(false); }}
+              onClick={() => pickMode(m.value)}
               className={`text-left rounded-[10px] border px-3 py-2 transition-all disabled:opacity-60 ${
                 active ? 'border-brand-600 bg-brand-600/5 ring-2 ring-brand-600/15' : 'border-line hover:border-brand-600/50'
               }`}
@@ -130,94 +152,68 @@ export function GroupContextCard({ value, onChange, groups, loadingGroups, cours
         })}
       </div>
 
-      {value.mode === 'existing' && (
+      {isGroup && (
         <div className="space-y-2">
           <div>
-            <Select
-              label="Question group *"
-              value={value.existingGroupId}
-              onChange={v => set({ existingGroupId: v })}
-              disabled={disabled || !courseSelected || loadingGroups || offered.length === 0}
-              options={[
-                {
-                  label: !courseSelected ? 'Select a course first'
-                    : loadingGroups ? 'Loading groups…'
-                    : mixed ? 'No group fits mixed question types'
-                    : offered.length === 0 ? (writtenKind ? `No ${GROUP_KIND_LABELS[writtenKind].toLowerCase()} groups here yet` : 'No groups here yet')
-                    : 'Select a group',
-                  value: '',
-                },
-                ...offered.map(g => ({ label: groupOptionLabel(g), value: String(g.groupId) })),
-              ]}
-            />
-            {errors.group && <p className="text-xs text-danger mt-1">{errors.group}</p>}
-            {mixedNote}
-            {writtenKind && !selected && courseSelected && !loadingGroups && (
+            <div className="flex flex-col sm:flex-row sm:items-end gap-2">
+              <SearchableSelect
+                className="flex-1 min-w-0"
+                label="Question group *"
+                value={isNew ? NEW_GROUP_VALUE : value.existingGroupId}
+                onChange={pickGroup}
+                action={{ label: 'New Group', onSelect: () => setModal('create') }}
+                disabled={disabled || !courseSelected || loadingGroups}
+                invalid={Boolean(groupError) || (isNew && kindInvalid)}
+                placeholder={!courseSelected ? 'Select a course first' : loadingGroups ? 'Loading groups…' : 'Select a group'}
+                searchPlaceholder="Search groups…"
+                emptyText={mixed ? 'No group fits mixed question types'
+                  : writtenKind ? `No ${GROUP_KIND_LABELS[writtenKind].toLowerCase()} groups here yet`
+                  : 'No groups here yet'}
+                options={options}
+              />
+              {isNew && (
+                <Button type="button" variant="outline" icon={<Icon.Edit className="w-4 h-4" />} onClick={() => setModal('edit')} disabled={disabled}>
+                  Edit Group
+                </Button>
+              )}
+            </div>
+            {groupError && <p className="text-xs text-danger mt-1">{groupError}</p>}
+            {mixed && (
+              <p className="flex items-start gap-1.5 text-xs text-danger mt-1">
+                <Icon.AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                Your questions mix {kindNames} types — a group holds one kind. Remove or change some questions first.
+              </p>
+            )}
+            {writtenKind && !selected && !isNew && courseSelected && !loadingGroups && (
               <p className="text-xs text-content-subtle mt-1">
                 Only {GROUP_KIND_LABELS[writtenKind].toLowerCase()} groups are listed — they match the questions you’ve written
                 {hiddenByKind > 0 ? ` (${hiddenByKind} group${hiddenByKind === 1 ? '' : 's'} of other types hidden)` : ''}.
               </p>
             )}
-            {selected && (
-              <p className="text-xs text-content-subtle mt-1">
+            {(selected || isNew) && (
+              <p className={`text-xs mt-1 ${isNew && kindInvalid ? 'text-danger' : 'text-content-subtle'}`}>
                 {selectedKind
                   ? `A ${GROUP_KIND_LABELS[selectedKind].toLowerCase()} group — every question below must be a ${GROUP_KIND_LABELS[selectedKind].toLowerCase()} question.`
                   : 'This group has no kind yet — it takes the kind of the first questions saved into it.'}
+                {isNew && ' It is created when you save, together with the questions.'}
               </p>
             )}
           </div>
-          {selected && !collapsed && (
+          {(selected || isNew) && !collapsed && (
             <div className="max-h-[280px] overflow-y-auto rounded-[10px] bg-surface-alt px-3 py-2.5 text-sm text-content-secondary whitespace-pre-wrap">
-              {selected.passageText?.trim() || <span className="text-content-subtle italic">This group has no passage text.</span>}
+              {passage?.trim() || <span className="text-content-subtle italic">This group has no passage text.</span>}
             </div>
           )}
         </div>
       )}
 
-      {value.mode === 'new' && (
-        <div className="space-y-2">
-          <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] gap-3">
-            <Input
-              label="Group title *"
-              value={value.newTitle}
-              onChange={e => set({ newTitle: e.target.value })}
-              maxLength={255}
-              placeholder="e.g. IELTS Reading — Passage 1: The history of glass"
-              error={errors.title}
-              disabled={disabled}
-            />
-            <Select
-              label="Group type *"
-              value={value.newKind}
-              onChange={v => set({ newKind: v as GroupKind })}
-              invalid={kindInvalid}
-              // Free to change even with questions written — ones of another kind are reported on save.
-              disabled={disabled}
-              options={GROUP_KIND_OPTIONS.map(o => ({ label: o.label, value: o.value }))}
-            />
-          </div>
-          <p className="text-xs text-content-subtle -mt-1">
-            {`${GROUP_KIND_OPTIONS.find(o => o.value === value.newKind)?.hint}. A group can't mix question types of different kinds.`}
-          </p>
-          {(!collapsed || errors.passage) && (
-            <div>
-              <label htmlFor="group-context-passage" className="block text-sm font-medium text-content-secondary mb-1">Shared passage *</label>
-              <textarea
-                id="group-context-passage"
-                value={value.newPassage}
-                onChange={e => set({ newPassage: e.target.value })}
-                disabled={disabled}
-                placeholder="Paste the reading passage, listening transcript or scenario that every question below refers to…"
-                className={`w-full h-[200px] px-3 py-2 rounded-[10px] border text-base text-content bg-surface resize-y focus:outline-none focus:ring-2 transition-all ${
-                  errors.passage ? 'border-danger-solid focus:ring-danger-solid/20' : 'border-line focus:ring-brand-600/20 focus:border-brand-600'
-                }`}
-              />
-              {errors.passage && <p className="text-xs text-danger mt-1">{errors.passage}</p>}
-            </div>
-          )}
-          <p className="text-xs text-content-subtle">The group is created when you save, together with the questions.</p>
-        </div>
-      )}
+      <NewGroupModal
+        open={modal != null}
+        onClose={() => setModal(null)}
+        initial={modal === 'edit' ? { title: value.newTitle, passage: value.newPassage, kind: value.newKind } : { kind: writtenKind ?? 'QUIZ' }}
+        kindInvalid={kind => questionKinds.some(k => k !== kind)}
+        onSave={g => { set({ mode: 'new', newTitle: g.title, newPassage: g.passage, newKind: g.kind }); setCollapsed(false); }}
+      />
     </section>
   );
 }

@@ -1,13 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { Radio } from '@/components/ui/Radio';
-import { Select } from '@/components/ui/Select';
+import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { Icon } from '@/assets/icons';
 import type { QuestionGroup } from '@/services/questionGroup.service';
 import { GROUP_KIND_LABELS, asGroupKind, type GroupKind } from '../model';
-
-type Mode = 'existing' | 'new';
+import { NewGroupModal } from './NewGroupModal';
 
 export const groupLabel = (g: Pick<QuestionGroup, 'groupId' | 'title'>) => g.title?.trim() || `Group #${g.groupId}`;
 
@@ -91,12 +89,8 @@ export function QuestionGroupPicker({ groups, loading, currentGroupId, kind, mod
   onUpdate?: (group: QuestionGroup, title: string, passageText: string) => Promise<void>;
   disabled?: boolean;
 }) {
-  const [mode, setMode] = useState<Mode>('existing');
   const selected = currentGroupId != null ? String(currentGroupId) : '';
-  const [title, setTitle] = useState('');
-  const [passage, setPassage] = useState('');
   const [creating, setCreating] = useState(false);
-  const [showErrors, setShowErrors] = useState(false);
 
   const [editing, setEditing] = useState(false);
   const [editTitle, setEditTitle] = useState('');
@@ -123,21 +117,6 @@ export function QuestionGroupPicker({ groups, loading, currentGroupId, kind, mod
     if (!value) return onSelect(null);
     const group = groups.find(g => String(g.groupId) === value);
     if (group) onSelect(group);
-  };
-
-  const create = async () => {
-    setShowErrors(true);
-    if (!title.trim() || !passage.trim()) return;
-    setCreating(true);
-    try {
-      await onCreate(title.trim(), passage.trim());
-      setTitle('');
-      setPassage('');
-      setShowErrors(false);
-      setMode('existing');
-    } finally {
-      setCreating(false);
-    }
   };
 
   const startEdit = () => {
@@ -167,93 +146,80 @@ export function QuestionGroupPicker({ groups, loading, currentGroupId, kind, mod
     <div className="rounded-[10px] border border-line bg-surface-alt/50 p-3 space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="text-sm font-medium text-content-secondary">Question Group</span>
-        <div className="flex items-center gap-4" role="radiogroup" aria-label="Question group mode">
-          <Radio label="Choose existing" checked={mode === 'existing'} onChange={() => setMode('existing')} />
-          <Radio label="Create new" checked={mode === 'new'} onChange={() => setMode('new')} />
-        </div>
       </div>
 
-      {mode === 'existing' ? (
-        <div className="space-y-3">
-          <div className="flex flex-col sm:flex-row sm:items-end gap-2">
-            <Select
-              className="flex-1 min-w-0"
-              aria-label="Question group"
-              value={selected}
-              onChange={pick}
-              disabled={disabled || loading || savingEdit || editing}
-              options={[
-                { label: loading ? 'Loading groups…' : 'No group (standalone question)', value: '' },
-                ...options,
-              ]}
-            />
-            {onUpdate && (
-              <Button
-                type="button"
-                variant="outline"
-                icon={<Icon.Edit className="w-4 h-4" />}
-                onClick={startEdit}
-                disabled={disabled || !selectedGroup || editing}
-              >
-                Edit Group
-              </Button>
-            )}
-          </div>
-          {misfit ? (
-            <p className="text-xs text-danger">
-              This {kindName ?? ''} question doesn’t fit this group{selectedGroup?.questionType ? ` (a ${groupKindLabel(selectedGroup)?.toLowerCase()} group)` : ''}
-              {moduleId && String(selectedGroup?.moduleId ?? '') !== moduleId ? ' or its module' : ''}. Pick another group or change the type.
-            </p>
-          ) : (
-            <p className="text-xs text-content-subtle">
-              {!loading && options.length === 0
-                ? `No ${kindName ? `${kindName} ` : ''}groups in this ${moduleId ? 'module' : 'course'} yet — create one.`
-                : `Only ${kindName ? `${kindName} ` : ''}groups${moduleId ? ' of this module' : ''} are listed. The change is kept when you click Save Changes.`}
-            </p>
-          )}
-
-          {editing && selectedGroup && (
-            <div className="space-y-2 rounded-[10px] border border-line bg-surface p-3">
-              <GroupFields
-                idPrefix="edit"
-                title={editTitle}
-                passage={editPassage}
-                onTitle={setEditTitle}
-                onPassage={setEditPassage}
-                showErrors={showEditErrors}
-                disabled={disabled || savingEdit}
-              />
-              <p className="text-xs text-content-subtle">
-                Saved right away — the new passage is shown for all {selectedGroup.questionCount} question{selectedGroup.questionCount === 1 ? '' : 's'} in this group.
-              </p>
-              <div className="flex justify-end gap-2">
-                <Button type="button" variant="ghost" onClick={() => setEditing(false)} disabled={savingEdit}>Cancel</Button>
-                <Button type="button" icon={<Icon.CheckCircle className="w-4 h-4" />} onClick={saveEdit} loading={savingEdit} disabled={disabled || savingEdit}>
-                  Save Group
-                </Button>
-              </div>
-            </div>
-          )}
-        </div>
-      ) : (
-        <div className="space-y-2">
-          <GroupFields
-            idPrefix="new"
-            title={title}
-            passage={passage}
-            onTitle={setTitle}
-            onPassage={setPassage}
-            showErrors={showErrors}
-            disabled={disabled || creating}
+      <div className="space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-end gap-2">
+          <SearchableSelect
+            className="flex-1 min-w-0"
+            aria-label="Question group"
+            value={selected}
+            onChange={pick}
+            action={{ label: 'New Group', onSelect: () => setCreating(true) }}
+            placeholder="No group (standalone question)"
+            searchPlaceholder="Search groups…"
+            emptyText={`No ${kindName ? `${kindName} ` : ''}groups found`}
+            disabled={disabled || loading || savingEdit || editing}
+            options={[
+              { label: loading ? 'Loading groups…' : 'No group (standalone question)', value: '' },
+              ...options,
+            ]}
           />
-          <div className="flex justify-end">
-            {kindName && <span className="mr-auto self-center text-xs text-content-subtle">Created as a {kindName} group.</span>}
-            <Button type="button" variant="secondary" icon={<Icon.Plus className="w-4 h-4" />} onClick={create} loading={creating} disabled={disabled || creating}>
-              Create &amp; Link Group
+          {onUpdate && (
+            <Button
+              type="button"
+              variant="outline"
+              icon={<Icon.Edit className="w-4 h-4" />}
+              onClick={startEdit}
+              disabled={disabled || !selectedGroup || editing}
+            >
+              Edit Group
             </Button>
-          </div>
+          )}
         </div>
-      )}
+        {misfit ? (
+          <p className="text-xs text-danger">
+            This {kindName ?? ''} question doesn’t fit this group{selectedGroup?.questionType ? ` (a ${groupKindLabel(selectedGroup)?.toLowerCase()} group)` : ''}
+            {moduleId && String(selectedGroup?.moduleId ?? '') !== moduleId ? ' or its module' : ''}. Pick another group or change the type.
+          </p>
+        ) : (
+          <p className="text-xs text-content-subtle">
+            {!loading && options.length === 0
+              ? `No ${kindName ? `${kindName} ` : ''}groups in this ${moduleId ? 'module' : 'course'} yet — create one.`
+              : `Only ${kindName ? `${kindName} ` : ''}groups${moduleId ? ' of this module' : ''} are listed. The change is kept when you click Save Changes.`}
+          </p>
+        )}
+
+        {editing && selectedGroup && (
+          <div className="space-y-2 rounded-[10px] border border-line bg-surface p-3">
+            <GroupFields
+              idPrefix="edit"
+              title={editTitle}
+              passage={editPassage}
+              onTitle={setEditTitle}
+              onPassage={setEditPassage}
+              showErrors={showEditErrors}
+              disabled={disabled || savingEdit}
+            />
+            <p className="text-xs text-content-subtle">
+              Saved right away — the new passage is shown for all {selectedGroup.questionCount} question{selectedGroup.questionCount === 1 ? '' : 's'} in this group.
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="ghost" onClick={() => setEditing(false)} disabled={savingEdit}>Cancel</Button>
+              <Button type="button" icon={<Icon.CheckCircle className="w-4 h-4" />} onClick={saveEdit} loading={savingEdit} disabled={disabled || savingEdit}>
+                Save Group
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <NewGroupModal
+        open={creating}
+        onClose={() => setCreating(false)}
+        fixedKind={kind ?? 'QUIZ'}
+        onSave={g => onCreate(g.title, g.passage)}
+      />
     </div>
   );
 }
