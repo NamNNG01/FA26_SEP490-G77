@@ -50,6 +50,12 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
     @Query("SELECT COUNT(e) FROM Enrollment e WHERE e.user.userId = :userId AND e.status = :status")
     long countByUserIdAndStatus(@Param("userId") Long userId, @Param("status") String status);
 
+    @Query("SELECT COALESCE(SUM(CASE WHEN e.status <> 'CANCELLED' THEN 1 ELSE 0 END), 0), " +
+            "COALESCE(SUM(CASE WHEN e.status = 'ACTIVE' THEN 1 ELSE 0 END), 0), " +
+            "COALESCE(SUM(CASE WHEN e.status = 'COMPLETED' THEN 1 ELSE 0 END), 0) " +
+            "FROM Enrollment e WHERE e.user.userId = :userId")
+    List<Object[]> summarizeByUserId(@Param("userId") Long userId);
+
     @Query("SELECT COUNT(DISTINCT e.user.userId) FROM Enrollment e JOIN e.course c WHERE " + CourseRepository.MANAGER_SCOPE
             + " AND e.status <> 'CANCELLED' AND e.user.roleName = 'STUDENT'")
     long countDistinctStudentsByManagerId(@Param("managerId") Long managerId);

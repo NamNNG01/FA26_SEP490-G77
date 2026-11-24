@@ -47,11 +47,10 @@ class DashboardServiceTest {
 
     @Test
     void getStudentDashboard_Success() {
-        when(enrollmentRepository.countByUserId(STUDENT_ID)).thenReturn(5L);
-        when(enrollmentRepository.countByUserIdAndStatus(STUDENT_ID, Enrollment.STATUS_ACTIVE)).thenReturn(3L);
-        when(enrollmentRepository.countByUserIdAndStatus(STUDENT_ID, Enrollment.STATUS_COMPLETED)).thenReturn(2L);
-        when(examAttemptRepository.countByUserId(STUDENT_ID)).thenReturn(18L);
-        when(examAttemptRepository.averageScoreByUserId(STUDENT_ID)).thenReturn(new BigDecimal("78.5"));
+        when(enrollmentRepository.summarizeByUserId(STUDENT_ID))
+                .thenReturn(List.<Object[]>of(new Object[]{5L, 3L, 2L}));
+        when(examAttemptRepository.summarizeByUserId(STUDENT_ID))
+                .thenReturn(List.<Object[]>of(new Object[]{18L, new BigDecimal("78.5")}));
 
         StudentRecentCourse recentCourse = StudentRecentCourse.builder()
                 .courseId(12L)
@@ -99,11 +98,8 @@ class DashboardServiceTest {
 
     @Test
     void getStudentDashboard_NoData_ReturnsZeroSummaryAndEmptyLists() {
-        when(enrollmentRepository.countByUserId(STUDENT_ID)).thenReturn(0L);
-        when(enrollmentRepository.countByUserIdAndStatus(STUDENT_ID, Enrollment.STATUS_ACTIVE)).thenReturn(0L);
-        when(enrollmentRepository.countByUserIdAndStatus(STUDENT_ID, Enrollment.STATUS_COMPLETED)).thenReturn(0L);
-        when(examAttemptRepository.countByUserId(STUDENT_ID)).thenReturn(0L);
-        when(examAttemptRepository.averageScoreByUserId(STUDENT_ID)).thenReturn(null);
+        when(enrollmentRepository.summarizeByUserId(STUDENT_ID)).thenReturn(List.of());
+        when(examAttemptRepository.summarizeByUserId(STUDENT_ID)).thenReturn(List.of());
         when(enrollmentRepository.findRecentCoursesByUserId(eq(STUDENT_ID), any(Pageable.class)))
                 .thenReturn(List.of());
         when(examAttemptRepository.findRecentAttemptsByUserId(eq(STUDENT_ID), any(Pageable.class)))
