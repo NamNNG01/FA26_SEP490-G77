@@ -74,6 +74,8 @@ export interface CourseModuleResponse {
   questionCount: number;
   examCount: number;
   deckCount: number;
+  /** Active questions, published exams and public decks — what counts towards publishing the course. */
+  publicContentCount?: number;
 }
 
 export interface CreateModuleRequest {

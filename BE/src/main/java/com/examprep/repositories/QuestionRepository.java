@@ -86,6 +86,12 @@ public interface QuestionRepository extends JpaRepository<Question, Long>, JpaSp
             "WHERE q.module.moduleId IN :ids AND q.deletedAt IS NULL GROUP BY q.module.moduleId")
     List<IdCount> countByModules(@Param("ids") List<Long> ids);
 
+    /** Questions students can see: approved and ACTIVE (CourseRepository.HAS_VISIBLE_MODULE_CONTENT). */
+    @Query("SELECT new com.examprep.dto.IdCount(q.module.moduleId, COUNT(q)) FROM Question q " +
+            "WHERE q.module.moduleId IN :ids AND q.deletedAt IS NULL AND q.approvalStatus = 'APPROVED' AND q.status = 'ACTIVE' " +
+            "GROUP BY q.module.moduleId")
+    List<IdCount> countPublicByModules(@Param("ids") List<Long> ids);
+
     @Query("SELECT q.group.groupId, COUNT(q) FROM Question q " +
             "WHERE q.group.groupId IN :groupIds AND q.deletedAt IS NULL " +
             "GROUP BY q.group.groupId")

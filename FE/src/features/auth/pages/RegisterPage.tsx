@@ -10,7 +10,8 @@ import { GoogleSignInButton } from '../components/GoogleSignInButton';
 import { Icon } from '@/assets/icons';
 import { ROUTES } from '@/app/routes';
 import { safeRedirect, withRedirectTarget } from '@/hooks/useRequireAuth';
-import { getPasswordValidationError, PASSWORD_MIN_LENGTH } from '@/services/password.service';
+import { getPasswordChecks, getPasswordValidationError } from '@/services/password.service';
+import { PasswordRequirements } from '../components/PasswordRequirements';
 
 /**
  * Sign-up form. `?redirect=` (e.g. a guest buying a course) is where the new
@@ -31,12 +32,17 @@ export function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [confirmError, setConfirmError] = useState('');
+  const [submitted, setSubmitted] = useState(false);
+  const passwordChecks = getPasswordChecks(password);
+  const passwordValid = passwordChecks.every(c => c.met);
+  const passwordTouched = password.length > 0 || submitted;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
     setConfirmError('');
+    setSubmitted(true);
 
     // Backend validation (from RegisterRequest):
     // - Email: @NotBlank, @Email, @Size(max=150)
@@ -63,9 +69,9 @@ export function RegisterPage() {
       setLoading(false);
       return;
     }
-    const passwordError = getPasswordValidationError(password);
-    if (passwordError) {
-      setError(passwordError);
+    if (getPasswordValidationError(password)) {
+      // Every rule is listed under the field — point there rather than at one rule.
+      setError('Your password doesn’t meet all the requirements yet — see the list under the password field.');
       setLoading(false);
       return;
     }
@@ -151,7 +157,9 @@ export function RegisterPage() {
               autoComplete="new-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              hint={`Required: ${PASSWORD_MIN_LENGTH}+ characters, an uppercase letter, a number, and a symbol.`}
+              success={passwordValid}
+              aria-invalid={passwordTouched && !passwordValid ? true : undefined}
+              aria-describedby="register-password-requirements"
               icon={<Icon.Lock className="w-4 h-4" />}
               suffix={
                 <button
@@ -164,6 +172,7 @@ export function RegisterPage() {
                 </button>
               }
             />
+            <PasswordRequirements id="register-password-requirements" checks={passwordChecks} touched={passwordTouched} />
             <Input
               label="Confirm password"
               placeholder="Confirm your password"

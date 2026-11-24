@@ -21,13 +21,17 @@ public interface CourseRepository extends JpaRepository<Course, Long> {
 
     String MANAGER_SCOPE = "(c.manager.userId = :managerId OR EXISTS (SELECT cm.courseManagerId FROM CourseManager cm WHERE cm.course = c AND cm.user.userId = :managerId))";
 
+    /**
+     * A visible module holds public content: an approved ACTIVE question (an INACTIVE one is a draft),
+     * a published exam, or a PUBLIC deck (a student's one also approved).
+     */
     String HAS_VISIBLE_MODULE_CONTENT = """
         EXISTS (SELECT 1 FROM Module m WHERE m.course = c AND m.status = 'VISIBLE' AND (
             EXISTS (SELECT 1 FROM Question q WHERE q.module = m AND q.deletedAt IS NULL
-                AND q.approvalStatus = 'APPROVED' AND q.status IN ('INACTIVE', 'ACTIVE'))
+                AND q.approvalStatus = 'APPROVED' AND q.status = 'ACTIVE')
             OR EXISTS (SELECT 1 FROM Exam ex WHERE ex.module = m AND ex.status = 'PUBLISHED' AND ex.mode = 'EXAM')
-            OR EXISTS (SELECT 1 FROM Deck d WHERE d.module = m
-                AND (d.user.roleName <> 'STUDENT' OR (d.visibility = 'PUBLIC' AND d.reviewStatus = 'APPROVED')))
+            OR EXISTS (SELECT 1 FROM Deck d WHERE d.module = m AND d.visibility = 'PUBLIC'
+                AND (d.user.roleName <> 'STUDENT' OR d.reviewStatus = 'APPROVED'))
         ))
         """;
 

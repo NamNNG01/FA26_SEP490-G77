@@ -20,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.text.Normalizer;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -186,7 +187,7 @@ public class CourseServiceImpl implements CourseService {
                 throw new BadRequestException("Add at least one visible module before publishing the course.");
             }
             if (courses.findCoursesWithVisibleModuleContent(List.of(id)).isEmpty()) {
-                throw new BadRequestException("Add a question, published exam, or flashcard deck to a visible module before publishing the course.");
+                throw new BadRequestException("Add an active question, a published exam, or a public flashcard deck to a visible module before publishing the course.");
             }
         }
         course.setIsPublished(request.isPublished());
@@ -239,7 +240,8 @@ public class CourseServiceImpl implements CourseService {
                 .description(optionalText(request.description())).orderIndex(order).build());
         course.setUpdatedAt(Instant.now());
         modules.flush();
-        return moduleResponse(module, 0, 0, 0);
+        return new ModuleResponse(module.getModuleId(), course.getCourseId(), module.getTitle(), module.getDescription(),
+                module.getOrderIndex(), module.getStatus(), 0, 0, 0, 0);
     }
 
     @Override
@@ -251,10 +253,7 @@ public class CourseServiceImpl implements CourseService {
         if (request.orderIndex() != null) module.setOrderIndex(request.orderIndex());
         module.getCourse().setUpdatedAt(Instant.now());
         modules.flush();
-        List<Long> ids = List.of(id);
-        return moduleResponse(module, counts(questions.countByModules(ids)).getOrDefault(id, 0L),
-                counts(exams.countByModules(ids)).getOrDefault(id, 0L),
-                counts(decks.countManagedByModules(ids)).getOrDefault(id, 0L));
+        return moduleResponses(List.of(module)).get(0);
     }
 
     @Override
@@ -273,7 +272,7 @@ public class CourseServiceImpl implements CourseService {
         modules.flush();
         if (Boolean.TRUE.equals(course.getIsPublished())
                 && courses.findCoursesWithVisibleModuleContent(List.of(course.getCourseId())).isEmpty()) {
-            throw conflict("Published course must keep at least one visible module with content.");
+            throw conflict("Published course must keep at least one visible module with public content.");
         }
     }
 
@@ -291,13 +290,10 @@ public class CourseServiceImpl implements CourseService {
             modules.flush();
             if (Module.STATUS_HIDDEN.equals(request.status()) && Boolean.TRUE.equals(course.getIsPublished())
                     && courses.findCoursesWithVisibleModuleContent(List.of(course.getCourseId())).isEmpty()) {
-                throw conflict("Published course must keep at least one visible module with content.");
+                throw conflict("Published course must keep at least one visible module with public content.");
             }
         }
-        List<Long> ids = List.of(id);
-        return moduleResponse(module, counts(questions.countByModules(ids)).getOrDefault(id, 0L),
-                counts(exams.countByModules(ids)).getOrDefault(id, 0L),
-                counts(decks.countManagedByModules(ids)).getOrDefault(id, 0L));
+        return moduleResponses(List.of(module)).get(0);
     }
 
     private boolean lastVisible(Module module) {
@@ -394,19 +390,23 @@ public class CourseServiceImpl implements CourseService {
     }
 
     private List<ModuleResponse> moduleResponses(Long courseId) {
-        List<Module> content = modules.findByCourseCourseIdOrderByOrderIndexAscModuleIdAsc(courseId);
+        return moduleResponses(modules.findByCourseCourseIdOrderByOrderIndexAscModuleIdAsc(courseId));
+    }
+
+    private List<ModuleResponse> moduleResponses(List<Module> content) {
         if (content.isEmpty()) return List.of();
         List<Long> ids = content.stream().map(Module::getModuleId).toList();
         Map<Long, Long> questionCounts = counts(questions.countByModules(ids));
         Map<Long, Long> examCounts = counts(exams.countByModules(ids));
         Map<Long, Long> deckCounts = counts(decks.countManagedByModules(ids));
-        return content.stream().map(m -> moduleResponse(m, questionCounts.getOrDefault(m.getModuleId(), 0L),
-                examCounts.getOrDefault(m.getModuleId(), 0L), deckCounts.getOrDefault(m.getModuleId(), 0L))).toList();
-    }
-
-    private ModuleResponse moduleResponse(Module module, long questionCount, long examCount, long deckCount) {
-        return new ModuleResponse(module.getModuleId(), module.getCourse().getCourseId(), module.getTitle(),
-                module.getDescription(), module.getOrderIndex(), module.getStatus(), questionCount, examCount, deckCount);
+        // What counts towards publishing (CourseRepository.HAS_VISIBLE_MODULE_CONTENT).
+        Map<Long, Long> publicCounts = new HashMap<>();
+        Stream.of(questions.countPublicByModules(ids), exams.countPublishedByModules(ids), decks.countPublicByModules(ids))
+                .flatMap(List::stream).forEach(c -> publicCounts.merge(c.id(), c.total(), Long::sum));
+        return content.stream().map(m -> new ModuleResponse(m.getModuleId(), m.getCourse().getCourseId(), m.getTitle(),
+                m.getDescription(), m.getOrderIndex(), m.getStatus(), questionCounts.getOrDefault(m.getModuleId(), 0L),
+                examCounts.getOrDefault(m.getModuleId(), 0L), deckCounts.getOrDefault(m.getModuleId(), 0L),
+                publicCounts.getOrDefault(m.getModuleId(), 0L))).toList();
     }
 
     private Map<Long, Long> counts(List<IdCount> values) {

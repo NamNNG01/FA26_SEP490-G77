@@ -3,13 +3,17 @@ import { createPortal } from 'react-dom';
 import { Icon } from '@/assets/icons';
 
 const GAP = 4;
+/** Value of the pinned action row — never a real option value. */
+const ACTION_VALUE = '\u0000action';
 
 /**
  * <Select> with a search box — for long option lists such as courses. Type to
  * narrow the list, ↑/↓ to move, Enter to pick, Escape to close. The menu is
  * portalled to <body> (like <MultiSelect>) so scroll containers don't clip it.
+ * `action` pins a row (e.g. "+ New Group") above the options: always shown,
+ * whatever is searched, and picking it calls `action.onSelect` instead of `onChange`.
  */
-export function SearchableSelect({ label, options, value, onChange, onSearchChange, placeholder = 'Select…', searchPlaceholder = 'Search…', emptyText = 'No matches', disabled, invalid = false, error, className = '', showLabel = true, 'aria-label': ariaLabel }: {
+export function SearchableSelect({ label, options, value, onChange, onSearchChange, placeholder = 'Select…', searchPlaceholder = 'Search…', emptyText = 'No matches', disabled, invalid = false, error, className = '', showLabel = true, action, 'aria-label': ariaLabel }: {
   label?: string;
   options: { label: string; value: string }[];
   value: string;
@@ -24,6 +28,7 @@ export function SearchableSelect({ label, options, value, onChange, onSearchChan
   className?: string;
   /** Whether to show the visible title above the dropdown (defaults to true). */
   showLabel?: boolean;
+  action?: { label: string; onSelect: () => void };
   'aria-label'?: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -39,7 +44,8 @@ export function SearchableSelect({ label, options, value, onChange, onSearchChan
   const id = useId();
 
   const q = query.trim().toLowerCase();
-  const filtered = q ? options.filter(o => o.label.toLowerCase().includes(q)) : options;
+  const matches = q ? options.filter(o => o.label.toLowerCase().includes(q)) : options;
+  const filtered = action ? [{ label: action.label, value: ACTION_VALUE }, ...matches] : matches;
   const selected = options.find(o => o.value === value);
 
   const close = (refocus = false) => {
@@ -51,7 +57,7 @@ export function SearchableSelect({ label, options, value, onChange, onSearchChan
     if (!open) return;
     setQuery('');
     onSearchChangeRef.current?.('');
-    setActive(Math.max(0, options.findIndex(o => o.value === value)));
+    setActive(Math.max(0, options.findIndex(o => o.value === value) + (action ? 1 : 0)));
     requestAnimationFrame(() => searchRef.current?.focus());
     const onDown = (e: MouseEvent) => {
       const t = e.target as Node;
@@ -89,8 +95,9 @@ export function SearchableSelect({ label, options, value, onChange, onSearchChan
   }, [active]);
 
   const pick = (v: string) => {
-    onChange(v);
     close(true);
+    if (v === ACTION_VALUE) action?.onSelect();
+    else onChange(v);
   };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
@@ -147,8 +154,25 @@ export function SearchableSelect({ label, options, value, onChange, onSearchChan
             />
           </div>
           <ul ref={listRef} id={`${id}-list`} role="listbox" className="max-h-64 overflow-y-auto py-1">
-            {filtered.length === 0 && <li className="px-3 py-2 text-sm text-content-subtle">{emptyText}</li>}
             {filtered.map((o, i) => {
+              if (o.value === ACTION_VALUE) {
+                return (
+                  <li
+                    key={o.value}
+                    id={`${id}-opt-${i}`}
+                    data-index={i}
+                    role="option"
+                    aria-selected={false}
+                    onMouseEnter={() => setActive(i)}
+                    onMouseDown={e => e.preventDefault()}
+                    onClick={() => pick(o.value)}
+                    className={`flex items-center gap-2 px-3 py-2 text-sm font-medium text-brand-ink cursor-pointer border-b border-line-soft ${i === active ? 'bg-surface-hover' : ''}`}
+                  >
+                    <Icon.Plus className="w-4 h-4 flex-shrink-0" />
+                    <span className="flex-1 truncate">{o.label}</span>
+                  </li>
+                );
+              }
               const isSelected = o.value === value;
               return (
                 <li
@@ -167,6 +191,7 @@ export function SearchableSelect({ label, options, value, onChange, onSearchChan
                 </li>
               );
             })}
+            {matches.length === 0 && <li className="px-3 py-2 text-sm text-content-subtle">{emptyText}</li>}
           </ul>
         </div>,
         document.body,

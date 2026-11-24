@@ -290,49 +290,248 @@ function FillBlankInput({ question, value, onChange, reveal, onEnter }: InputPro
 function MatchingInput({ question, value, onChange, reveal }: InputProps) {
   const lefts = question.matching?.lefts ?? [];
   const rights = question.matching?.rights ?? [];
-  const current = new Map((value?.matches ?? []).map(m => [m.left, m.right]));
+  const current = new Map((value?.matches ?? []).filter(m => rights.includes(m.right)).map(m => [m.left, m.right]));
   const key = reveal?.correctAnswer?.pairs ? new Map(reveal.correctAnswer.pairs.map(p => [p.left, p.right])) : null;
-  const set = (left: string, right: string) => {
-    const next = new Map(current);
-    if (right) next.set(left, right);
-    else next.delete(left);
-    onChange({ matches: [...next].map(([l, r]) => ({ left: l, right: r })) });
-  };
+  if (key) return <MatchingReveal lefts={lefts} current={current} keyMap={key} />;
   return (
-    <div className="space-y-2.5">
-      {!key && <p className="text-xs text-content-subtle">Match every item on the left with one on the right.</p>}
-      {lefts.map(left => {
-        const ok = key ? key.get(left) === current.get(left) : null;
-        return (
-          <div key={left} className={`p-3 rounded-[10px] border ${ok == null ? 'border-line bg-surface' : partTone(ok)}`}>
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-              <span className="flex-1 text-sm text-content break-words">{left}</span>
-              <Icon.ChevronRight className="hidden sm:block w-4 h-4 text-content-subtle" />
-              <select
-                className={`${FIELD} h-10 sm:w-1/2`}
-                aria-label={`Match for ${left}`}
-                disabled={Boolean(key)}
-                value={current.get(left) ?? ''}
-                onChange={e => set(left, e.target.value)}
+    <MatchingBoard
+      lefts={lefts}
+      rights={rights}
+      current={current}
+      onChange={next => onChange({ matches: [...next].map(([l, r]) => ({ left: l, right: r })) })}
+    />
+  );
+}
+
+/** Where a dragged answer would land: the slot beside a left item (its index) or back in the pool. */
+type MatchingTarget = number | 'pool' | null;
+
+interface MatchingDrag {
+  right: string;
+  x: number;
+  y: number;
+  width: number;
+  over: MatchingTarget;
+}
+
+/**
+ * Matching: the left items are listed down the left; the answers start in a pool and are
+ * dragged into the slot beside a left item. Each answer is used once — dropping it on a filled
+ * slot swaps the two (an answer from the pool sends the old one back to the pool). A click on a
+ * pool answer fills the first empty slot; × (or dragging it back) returns it to the pool.
+ * Drag works with mouse, touch and pen (pointer events), like the ordering board.
+ */
+function MatchingBoard({
+  lefts,
+  rights,
+  current,
+  onChange,
+}: {
+  lefts: string[];
+  rights: string[];
+  current: Map<string, string>;
+  onChange: (next: Map<string, string>) => void;
+}) {
+  const [drag, setDrag] = React.useState<MatchingDrag | null>(null);
+  const dragRef = React.useRef(drag);
+  dragRef.current = drag;
+  /** Set once a press turned into a drag, so the click that follows does not also place the answer. */
+  const draggedRef = React.useRef(false);
+
+  const used = new Set(current.values());
+  const pool = rights.filter(r => !used.has(r));
+  const leftOf = (right: string) => [...current].find(([, r]) => r === right)?.[0];
+
+  /** Put `right` beside `lefts[slot]` (or in the first empty slot), swapping with what was there. */
+  const place = (right: string, slot?: number) => {
+    const target = slot != null ? lefts[slot] : lefts.find(l => !current.has(l));
+    if (target == null) return;
+    const next = new Map(current);
+    const from = leftOf(right);
+    const displaced = next.get(target);
+    if (from === target) return;
+    if (from != null) {
+      next.delete(from);
+      if (displaced != null) next.set(from, displaced);
+    }
+    next.set(target, right);
+    onChange(next);
+  };
+  const unplace = (right: string) => {
+    const from = leftOf(right);
+    if (from == null) return;
+    const next = new Map(current);
+    next.delete(from);
+    onChange(next);
+  };
+
+  const targetAt = (x: number, y: number): MatchingTarget => {
+    const el = document.elementFromPoint(x, y) as HTMLElement | null;
+    const slot = el?.closest<HTMLElement>('[data-match-slot]');
+    if (slot) return Number(slot.dataset.matchSlot);
+    return el?.closest('[data-match-pool]') ? 'pool' : null;
+  };
+
+  const startPress = (e: React.PointerEvent<HTMLElement>, right: string) => {
+    if (e.button !== 0 || (e.target as HTMLElement).closest('button[data-match-action]')) return;
+    // A sent answer sits in a disabled fieldset: nothing moves.
+    if (e.currentTarget.closest('fieldset:disabled')) return;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const width = e.currentTarget.getBoundingClientRect().width;
+    draggedRef.current = false;
+
+    const onMove = (ev: PointerEvent) => {
+      if (!dragRef.current && Math.hypot(ev.clientX - startX, ev.clientY - startY) < DRAG_THRESHOLD) return;
+      draggedRef.current = true;
+      ev.preventDefault();
+      const next = { right, x: ev.clientX, y: ev.clientY, width, over: targetAt(ev.clientX, ev.clientY) };
+      dragRef.current = next;
+      setDrag(next);
+    };
+    const onUp = (ev: PointerEvent) => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+      const done = dragRef.current;
+      dragRef.current = null;
+      setDrag(null);
+      window.setTimeout(() => {
+        draggedRef.current = false;
+      }, 0);
+      if (!done) return;
+      const over = ev.type === 'pointerup' ? targetAt(ev.clientX, ev.clientY) : null;
+      if (over === 'pool') unplace(done.right);
+      else if (typeof over === 'number') place(done.right, over);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+  };
+
+  const chipCls = 'touch-none select-none inline-flex items-center gap-2 rounded-[8px] border bg-surface px-3 py-2 text-left text-sm text-content shadow-sm cursor-grab transition-opacity';
+
+  return (
+    <div className={`space-y-4 ${drag ? 'select-none cursor-grabbing' : ''}`}>
+      <div>
+        <p className="text-xs font-semibold text-content-subtle uppercase tracking-wide mb-2">Answers</p>
+        <div
+          data-match-pool
+          className={`min-h-[3.25rem] flex flex-wrap gap-2 rounded-[10px] border-2 border-dashed p-2.5 transition-colors ${
+            drag?.over === 'pool' ? 'border-brand-600 bg-primary-light' : 'border-line bg-surface-alt'
+          }`}
+        >
+          {pool.length === 0 ? (
+            <p className="self-center px-1 text-xs text-content-subtle">Every answer is placed. Drag one back here to take it out.</p>
+          ) : (
+            pool.map(right => (
+              <button
+                key={right}
+                type="button"
+                onPointerDown={e => startPress(e, right)}
+                onDragStart={e => e.preventDefault()}
+                onClick={() => {
+                  if (draggedRef.current) return;
+                  place(right);
+                }}
+                aria-label={`Match "${right}" with the first empty item`}
+                className={`${chipCls} max-w-full border-line hover:border-brand-600 ${drag?.right === right ? 'opacity-40' : ''}`}
               >
-                <option value="">Choose…</option>
-                {rights.map(r => (
-                  <option key={r} value={r}>
-                    {r}
-                  </option>
-                ))}
-              </select>
-              {ok != null && <PartMark ok={ok} />}
+                <Icon.GripVertical className="w-4 h-4 flex-shrink-0 text-content-subtle" aria-hidden="true" />
+                <span className="break-words">{right}</span>
+              </button>
+            ))
+          )}
+        </div>
+      </div>
+
+      <div>
+        <p className="text-xs font-semibold text-content-subtle uppercase tracking-wide mb-2">
+          Matches ({current.size}/{lefts.length})
+        </p>
+        <ul className="space-y-2">
+          {lefts.map((left, i) => {
+            const right = current.get(left);
+            const highlight = drag?.over === i;
+            return (
+              <li key={left} className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-stretch sm:items-center gap-2">
+                <div className="rounded-[10px] border border-line bg-surface-alt px-3 py-2.5 text-sm text-content break-words">{left}</div>
+                <Icon.ChevronRight className="hidden sm:block w-4 h-4 text-content-subtle" aria-hidden="true" />
+                <div data-match-slot={i} className="min-w-0">
+                  {right != null ? (
+                    <div
+                      onPointerDown={e => startPress(e, right)}
+                      onDragStart={e => e.preventDefault()}
+                      className={`${chipCls} w-full py-2.5 rounded-[10px] ${
+                        highlight ? 'border-brand-600 bg-primary-light' : 'border-line hover:border-brand-600'
+                      } ${drag?.right === right ? 'opacity-40' : ''}`}
+                    >
+                      <Icon.GripVertical className="w-4 h-4 flex-shrink-0 text-content-subtle" aria-hidden="true" />
+                      <span className="flex-1 min-w-0 break-words">{right}</span>
+                      <button
+                        type="button"
+                        data-match-action
+                        aria-label={`Return "${right}" to the answers`}
+                        onClick={() => unplace(right)}
+                        className="p-1.5 rounded-[6px] text-content-subtle hover:bg-accent hover:text-danger"
+                      >
+                        <Icon.X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div
+                      className={`rounded-[10px] border-2 border-dashed px-3 py-2.5 text-sm transition-colors ${
+                        highlight ? 'border-brand-600 bg-primary-light text-brand-ink' : 'border-line text-content-subtle'
+                      }`}
+                    >
+                      Drop an answer here
+                    </div>
+                  )}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+
+      {drag && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none fixed z-50 flex items-center gap-2 rounded-[10px] border border-brand-600 bg-surface px-3 py-2.5 text-sm text-content shadow-lg ring-2 ring-brand-600/20"
+          style={{ left: drag.x, top: drag.y, width: Math.min(drag.width, 420), transform: 'translate(-24px, -50%)' }}
+        >
+          <Icon.GripVertical className="w-4 h-4 flex-shrink-0 text-content-subtle" />
+          <span className="truncate">{drag.right}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** A checked practice matching: each left item with the picked answer, marked right / wrong. */
+function MatchingReveal({ lefts, current, keyMap }: { lefts: string[]; current: Map<string, string>; keyMap: Map<string, string> }) {
+  return (
+    <ul className="space-y-2.5">
+      {lefts.map(left => {
+        const picked = current.get(left);
+        const ok = keyMap.get(left) === picked;
+        return (
+          <li key={left} className={`p-3 rounded-[10px] border ${partTone(ok)}`}>
+            <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto] sm:items-center gap-2">
+              <span className="text-sm text-content break-words">{left}</span>
+              <Icon.ChevronRight className="hidden sm:block w-4 h-4 text-content-subtle" aria-hidden="true" />
+              <span className="text-sm text-content break-words">{picked ?? <span className="italic text-content-subtle">No answer</span>}</span>
+              <PartMark ok={ok} />
             </div>
-            {ok === false && (
+            {!ok && (
               <p className="mt-2 text-sm text-success-strong sm:text-right">
-                Correct match: <span className="font-semibold">{key?.get(left) ?? '—'}</span>
+                Correct match: <span className="font-semibold">{keyMap.get(left) ?? '—'}</span>
               </p>
             )}
-          </div>
+          </li>
         );
       })}
-    </div>
+    </ul>
   );
 }
 

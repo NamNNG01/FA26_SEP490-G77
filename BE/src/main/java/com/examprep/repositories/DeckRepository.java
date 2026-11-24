@@ -29,6 +29,15 @@ public interface DeckRepository extends JpaRepository<Deck, Long> {
         """)
     List<IdCount> countManagedByModules(@Param("ids") List<Long> ids);
 
+    /** PUBLIC decks (a student's one also approved) — CourseRepository.HAS_VISIBLE_MODULE_CONTENT. */
+    @Query("""
+        SELECT new com.examprep.dto.IdCount(d.module.moduleId, COUNT(d)) FROM Deck d
+        WHERE d.module.moduleId IN :ids AND d.visibility = 'PUBLIC'
+          AND (d.user.roleName <> 'STUDENT' OR d.reviewStatus = 'APPROVED')
+        GROUP BY d.module.moduleId
+        """)
+    List<IdCount> countPublicByModules(@Param("ids") List<Long> ids);
+
     @EntityGraph(attributePaths = {"course", "user", "module"})
     @Query("SELECT d FROM Deck d LEFT JOIN d.course c WHERE (:managerId IS NULL " +
             "OR (c IS NULL AND d.user.userId = :managerId) " +
