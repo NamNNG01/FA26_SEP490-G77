@@ -84,7 +84,6 @@ public class DeckReviewController {
             Map<String, Object> cm = new HashMap<>();
             cm.put("cardId", f.getCardId());
             cm.put("position", f.getPosition() != null ? f.getPosition() : 0);
-            cm.put("cardType", cardType(f));
             cm.put("frontText", f.getFrontText());
             cm.put("backText", f.getBackText());
             cm.put("codeLanguage", f.getCodeLanguage() != null ? f.getCodeLanguage() : null);
@@ -139,17 +138,6 @@ public class DeckReviewController {
         data.put("version", d.getVersion() != null ? d.getVersion() : 0L);
 
         return ResponseEntity.ok(ApiResponse.success(data));
-    }
-
-    private String cardType(com.examprep.entities.Flashcard card) {
-        if (card.getCodeBody() != null && !card.getCodeBody().isBlank()) {
-            return "CODE";
-        }
-        if ((card.getFrontImageUrl() != null && !card.getFrontImageUrl().isBlank())
-                || (card.getBackImageUrl() != null && !card.getBackImageUrl().isBlank())) {
-            return "IMAGE";
-        }
-        return "TEXT";
     }
 
     private Map<String, Object> courseSummary(com.examprep.entities.Course course) {
