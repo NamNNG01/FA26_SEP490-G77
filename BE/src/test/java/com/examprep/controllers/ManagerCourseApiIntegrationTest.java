@@ -116,7 +116,9 @@ public class ManagerCourseApiIntegrationTest {
                 .andExpect(jsonPath("$.data.modules[0].moduleId").value(first.getModuleId()))
                 .andExpect(jsonPath("$.data.modules[0].questionCount").value(1))
                 .andExpect(jsonPath("$.data.modules[0].examCount").value(1))
-                .andExpect(jsonPath("$.data.modules[0].deckCount").value(1));
+                .andExpect(jsonPath("$.data.modules[0].deckCount").value(1))
+                // Only the ACTIVE question counts: the exam is a draft and the deck private.
+                .andExpect(jsonPath("$.data.modules[0].publicContentCount").value(1));
         call(manager, get(path() + "/modules")).andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[1].moduleId").value(second.getModuleId()));
     }
@@ -289,6 +291,13 @@ public class ManagerCourseApiIntegrationTest {
                 .andExpect(status().isBadRequest());
         call(admin, get(path())).andExpect(jsonPath("$.data.status").value("DRAFT"));
         call(admin, get(list).param("status", "READY_TO_PUBLISH")).andExpect(jsonPath("$.data.totalElements").value(0));
+        // Draft content (an INACTIVE question, a private deck) does not make the course publishable.
+        Question draft = question(first);
+        draft.setStatus("INACTIVE");
+        em.persist(Deck.builder().course(course).module(first).user(manager).title("Private deck").isPublic(false).build());
+        call(admin, get(path())).andExpect(jsonPath("$.data.status").value("DRAFT"));
+        call(admin, patch(path() + "/publish").contentType(MediaType.APPLICATION_JSON).content(publish))
+                .andExpect(status().isBadRequest());
         question(first);
         first.setStatus(Module.STATUS_HIDDEN);
         call(admin, get(path())).andExpect(jsonPath("$.data.status").value("DRAFT"));
@@ -542,7 +551,7 @@ public class ManagerCourseApiIntegrationTest {
     }
 
     private Question question(Module module) {
-        Question value = Question.builder().module(module).questionType("SINGLE_CHOICE").content("Question").build();
+        Question value = Question.builder().module(module).questionType("SINGLE_CHOICE").content("Question").status("ACTIVE").build();
         em.persist(value);
         return value;
     }

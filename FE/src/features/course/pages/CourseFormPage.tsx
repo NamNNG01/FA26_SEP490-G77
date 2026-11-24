@@ -302,7 +302,8 @@ export function CourseFormPage({
             <ul className="text-xs text-content-soft space-y-2 list-disc pl-4">
               <li>Newly created courses are saved as drafts by default.</li>
               <li>
-                A course requires at least 1 module before it can be published.
+                A course can be published once a visible module holds an active
+                question, a published exam, or a public flashcard deck.
               </li>
               <li>
                 Only administrators can assign or reassign course managers.

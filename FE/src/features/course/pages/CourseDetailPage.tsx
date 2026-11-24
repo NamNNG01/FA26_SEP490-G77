@@ -42,6 +42,13 @@ interface ManagerOption {
   email?: string;
 }
 
+const PUBLISH_REQUIREMENT =
+  "Add an active question, a published exam, or a public flashcard deck to a visible module before publishing the course.";
+
+/** Content students can see in the module (the backend's count; the totals when it doesn't send one). */
+const publicContentOf = (m: CourseModuleResponse) =>
+  m.publicContentCount ?? m.questionCount + m.examCount + m.deckCount;
+
 function formatTimestamp(isoString: string | null | undefined): string {
   if (!isoString) return "—";
   try {
@@ -151,6 +158,8 @@ export function CourseDetailPage({
   const [categories, setCategories] = useState<CategoryResponse[]>([]);
 
   const [modules, setModules] = useState<CourseModuleResponse[]>([]);
+  // Publishing needs public content in a visible module (CourseServiceImpl.publish).
+  const hasPublicContent = modules.some((m) => m.status === "VISIBLE" && publicContentOf(m) > 0);
   const [isAddModuleOpen, setIsAddModuleOpen] = useState(false);
   const [editingModule, setEditingModule] =
     useState<CourseModuleResponse | null>(null);
@@ -382,10 +391,8 @@ export function CourseDetailPage({
       }
 
       if (isPublished !== course.isPublished) {
-        if (isPublished && modules.length === 0) {
-          throw new Error(
-            "Course must have at least 1 module to be published.",
-          );
+        if (isPublished && !hasPublicContent) {
+          throw new Error(PUBLISH_REQUIREMENT);
         }
         updated = await courseService.publishCourse(course.courseId, isPublished);
       }
@@ -799,6 +806,9 @@ export function CourseDetailPage({
                     { label: course.status === "READY_TO_PUBLISH" ? COURSE_STATUS_LABELS.READY_TO_PUBLISH : "Draft", value: "draft" },
                   ]}
                 />
+                {!course.isPublished && !hasPublicContent && (
+                  <p className="-mt-2 text-xs text-content-subtle">{PUBLISH_REQUIREMENT}</p>
+                )}
 
                 <Select
                   label="Category"
@@ -981,6 +991,11 @@ export function CourseDetailPage({
                       >
                         {mod.status === "VISIBLE" ? "Visible" : "Hidden"}
                       </Badge>
+                      {mod.status === "HIDDEN" && (mod.publicContentCount ?? 0) > 0 && (
+                        <p className="w-full text-center text-2xs text-warning" title="Students don't see a hidden module or anything in it. Make the module visible to show this content.">
+                          {mod.publicContentCount} public item{mod.publicContentCount === 1 ? "" : "s"} hidden from students
+                        </p>
+                      )}
                     </div>
 
                     <div className="col-span-1 hidden text-center text-xs text-content-soft sm:block">
