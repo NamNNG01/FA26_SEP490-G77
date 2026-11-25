@@ -46,6 +46,10 @@ public class ManagerExamController {
     public ResponseEntity<ApiResponse<ExamResponse>> update(@AuthenticationPrincipal UserPrincipal user,@PathVariable Long id,@Valid @RequestBody ExamRequests.Update request) {
         return ResponseEntity.ok(ApiResponse.success(service.update(user,id,request)));
     }
+    @PutMapping("/exams/{id}/order")
+    public ResponseEntity<ApiResponse<ExamResponse>> updateOrder(@AuthenticationPrincipal UserPrincipal user,@PathVariable Long id,@Valid @RequestBody ExamRequests.ExamOrder request) {
+        return ResponseEntity.ok(ApiResponse.success(service.updateOrder(user,id,request)));
+    }
     @PatchMapping("/exams/{id}/publish")
     public ResponseEntity<ApiResponse<ExamResponse.Published>> publish(@AuthenticationPrincipal UserPrincipal user,@PathVariable Long id,@Valid @RequestBody ExamRequests.Publish request) {
         return ResponseEntity.ok(ApiResponse.success(service.publish(user,id,request)));

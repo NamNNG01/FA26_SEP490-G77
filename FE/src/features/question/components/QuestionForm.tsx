@@ -105,6 +105,7 @@ export function QuestionForm({
       : errors.answers
     : undefined;
   const typeError = kindError ?? (showErrors ? errors.type : undefined);
+  const diffError = showErrors ? errors.difficulty : undefined;
   const typeOptions = allowedTypes
     ? QUESTION_TYPE_OPTIONS.filter(
         (o) => o.value === q.type || allowedTypes.includes(o.value),
@@ -268,11 +269,12 @@ export function QuestionForm({
       {showSection('difficulty') || showSection('type') ? <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {showSection('difficulty') && <>
         <Select
-          label="Difficulty"
+          label={readOnly ? "Difficulty" : "Difficulty *"}
           value={q.difficulty}
           disabled={readOnly}
           onChange={(v) => set({ difficulty: v as QuestionDifficulty })}
-          options={DIFFICULTY_OPTIONS}
+          invalid={Boolean(diffError)}
+          options={q.difficulty ? DIFFICULTY_OPTIONS : [{ value: '', label: 'Select difficulty…' }, ...DIFFICULTY_OPTIONS]}
         />
         </>}
         {showSection('type') && <>
@@ -287,7 +289,12 @@ export function QuestionForm({
         </>}
       </div> : null}
 
-      {showSection('type') && typeError && <p className="text-xs text-danger -mt-1.5">{typeError}</p>}
+      {(showSection('difficulty') && diffError) || (showSection('type') && typeError) ? (
+        <div className="space-y-0.5 -mt-1.5">
+          {showSection('difficulty') && diffError && <p className="text-xs text-danger">{diffError}</p>}
+          {showSection('type') && typeError && <p className="text-xs text-danger">{typeError}</p>}
+        </div>
+      ) : null}
 
       {/* Question text */}
       {showSection('content') && <div>

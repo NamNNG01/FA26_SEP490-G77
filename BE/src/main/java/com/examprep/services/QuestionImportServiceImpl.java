@@ -6,6 +6,7 @@ import com.examprep.entities.User;
 import com.examprep.exceptions.BadRequestException;
 import com.examprep.exceptions.ForbiddenException;
 import com.examprep.util.importer.DocxTextExtractor;
+import com.examprep.util.importer.ExcelQuestionParser;
 import com.examprep.util.importer.PdfTextExtractor;
 import com.examprep.util.importer.TemplateBlockParser;
 import com.examprep.util.importer.TemplateQuestionMapper;
@@ -22,13 +23,17 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 import jakarta.annotation.PreDestroy;
+import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.*;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 @Service
 @RequiredArgsConstructor
@@ -41,6 +46,7 @@ public class QuestionImportServiceImpl implements QuestionImportService {
     private final CourseManagerRepository courseManagerRepository;
     private final PdfTextExtractor pdfTextExtractor;
     private final DocxTextExtractor docxTextExtractor;
+    private final ExcelQuestionParser excelQuestionParser;
     private final TemplateBlockParser templateBlockParser;
     private final TemplateQuestionMapper templateQuestionMapper;
 
@@ -79,26 +85,26 @@ public class QuestionImportServiceImpl implements QuestionImportService {
             throw new BadRequestException("File size must not exceed 10MB");
         }
         byte[] bytes = file.getBytes();
-        String fileType;
-        List<String> lines;
+        String fileType = detectFileType(file.getOriginalFilename(), bytes);
+        List<ImportBlockResult> blockResults;
 
-        if (bytes.length >= 5 && new String(bytes, 0, 5, StandardCharsets.US_ASCII).equals("%PDF-")) {
-            fileType = "PDF";
-            lines = executeWithTimeout(() -> pdfTextExtractor.extractText(file), 20);
+        if ("XLSX".equals(fileType) || "XLS".equals(fileType)) {
+            blockResults = executeWithTimeout(() -> excelQuestionParser.parseQuestions(bytes), 20);
+            fileType = "XLSX";
         } else {
-            fileType = "DOCX";
-            lines = executeWithTimeout(() -> docxTextExtractor.extractText(file), 20);
+            List<String> lines = "PDF".equals(fileType)
+                    ? executeWithTimeout(() -> pdfTextExtractor.extractText(file), 20)
+                    : executeWithTimeout(() -> docxTextExtractor.extractText(file), 20);
+            List<TemplateBlockParser.RawBlock> rawBlocks = templateBlockParser.parseBlocks(lines);
+            blockResults = new ArrayList<>(rawBlocks.size());
+            for (int i = 0; i < rawBlocks.size(); i++) {
+                blockResults.add(templateQuestionMapper.mapAndValidateBlock(rawBlocks.get(i), i + 1));
+            }
         }
 
-        List<TemplateBlockParser.RawBlock> rawBlocks = templateBlockParser.parseBlocks(lines);
-
-        List<ImportBlockResult> blockResults = new ArrayList<>();
         int validCount = 0;
         int errorCount = 0;
-
-        for (int i = 0; i < rawBlocks.size(); i++) {
-            ImportBlockResult res = templateQuestionMapper.mapAndValidateBlock(rawBlocks.get(i), i + 1, difficulty != null ? difficulty : "MEDIUM");
-            blockResults.add(res);
+        for (ImportBlockResult res : blockResults) {
             if (res.getErrors() == null || res.getErrors().isEmpty()) {
                 validCount++;
             } else {
@@ -109,11 +115,49 @@ public class QuestionImportServiceImpl implements QuestionImportService {
         return ImportPreviewResponse.builder()
                 .fileName(file.getOriginalFilename() != null ? file.getOriginalFilename() : "template")
                 .fileType(fileType)
-                .totalBlocks(rawBlocks.size())
+                .totalBlocks(blockResults.size())
                 .totalValid(validCount)
                 .totalErrors(errorCount)
                 .blocks(blockResults)
                 .build();
+    }
+
+    private String detectFileType(String originalFilename, byte[] bytes) {
+        String lowerName = originalFilename != null ? originalFilename.toLowerCase(Locale.ROOT) : "";
+        boolean isPdfMagic = bytes.length >= 5 && "%PDF-".equals(new String(bytes, 0, 5, StandardCharsets.US_ASCII));
+        boolean isZipMagic = bytes.length >= 4 && bytes[0] == 0x50 && bytes[1] == 0x4B && bytes[2] == 0x03 && bytes[3] == 0x04;
+        boolean isOle2Magic = bytes.length >= 4
+                && (bytes[0] & 0xFF) == 0xD0 && (bytes[1] & 0xFF) == 0xCF
+                && (bytes[2] & 0xFF) == 0x11 && (bytes[3] & 0xFF) == 0xE0;
+
+        if (isPdfMagic) {
+            return "PDF";
+        }
+        if (isZipMagic) {
+            try (ZipInputStream zis = new ZipInputStream(new ByteArrayInputStream(bytes))) {
+                ZipEntry entry;
+                while ((entry = zis.getNextEntry()) != null) {
+                    String name = entry.getName().toLowerCase(Locale.ROOT);
+                    if (name.startsWith("xl/")) return "XLSX";
+                    if (name.startsWith("word/")) return "DOCX";
+                }
+            } catch (Exception ignored) {
+                // Fall back to extension below
+            }
+            if (lowerName.endsWith(".xlsx")) return "XLSX";
+            if (lowerName.endsWith(".docx")) return "DOCX";
+            return "DOCX";
+        }
+        if (isOle2Magic || lowerName.endsWith(".xls")) {
+            return "XLS";
+        }
+        if (lowerName.endsWith(".xlsx")) {
+            return "XLSX";
+        }
+        if (lowerName.endsWith(".docx")) {
+            return "DOCX";
+        }
+        throw new BadRequestException("Unsupported file format. Supported: .pdf, .docx, .xlsx, .xls");
     }
 
     @Override
@@ -121,7 +165,7 @@ public class QuestionImportServiceImpl implements QuestionImportService {
         if (format == null) {
             throw new BadRequestException("Format parameter is required");
         }
-        String lowerFormat = format.toLowerCase().trim();
+        String lowerFormat = format.toLowerCase(Locale.ROOT).trim();
         Resource resource;
         String filename;
         MediaType mediaType;
@@ -134,8 +178,12 @@ public class QuestionImportServiceImpl implements QuestionImportService {
             resource = new ClassPathResource("templates/import/apepp-question-template-v2.docx");
             filename = "apepp-question-template-v2.docx";
             mediaType = MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+        } else if ("xlsx".equals(lowerFormat) || "excel".equals(lowerFormat)) {
+            resource = new ClassPathResource("templates/import/apepp-question-template-v2.xlsx");
+            filename = "apepp-question-template-v2.xlsx";
+            mediaType = MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         } else {
-            throw new BadRequestException("Invalid template format. Supported: pdf, docx");
+            throw new BadRequestException("Invalid template format. Supported: pdf, docx, xlsx");
         }
 
         if (!resource.exists()) {

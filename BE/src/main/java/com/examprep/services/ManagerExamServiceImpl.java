@@ -10,6 +10,7 @@ import com.examprep.dto.question.ImportBlockResult;
 import com.examprep.dto.question.QuestionCreateRequest;
 import com.examprep.util.QuestionTypeUtil;
 import com.examprep.util.importer.DocxTextExtractor;
+import com.examprep.util.importer.ExcelQuestionParser;
 import com.examprep.util.importer.PdfTextExtractor;
 import com.examprep.util.importer.TemplateBlockParser;
 import com.examprep.util.importer.TemplateQuestionMapper;
@@ -62,6 +63,7 @@ public class ManagerExamServiceImpl implements ManagerExamService {
     private final com.examprep.util.validation.QuestionValidator questionValidator;
     private final PdfTextExtractor pdfText;
     private final DocxTextExtractor docxText;
+    private final ExcelQuestionParser excelParser;
     private final TemplateBlockParser blockParser;
     private final TemplateQuestionMapper blockMapper;
 
@@ -468,6 +470,7 @@ public class ManagerExamServiceImpl implements ManagerExamService {
                 .durationMinutes(r.getDurationMinutes())
                 .mode(mode)
                 .generationType(r.getGenerationType())
+                .questionOrder(r.getQuestionOrder() != null ? r.getQuestionOrder() : Exam.ORDER_RANDOM)
                 .maxScore(maxScore)
                 .passMark(passMark)
                 .status("DRAFT")
@@ -502,11 +505,20 @@ public class ManagerExamServiceImpl implements ManagerExamService {
             attachImported(user, e,
                     r.getImportedQuestions().stream().map(ExamRequests.ImportedQuestion::getQuestion).toList(),
                     r.getImportedQuestions().stream().map(i -> weight(i.getWeight())).toList(),
+                    r.getImportedQuestions().stream().map(ExamRequests.ImportedQuestion::getOrderIndex).toList(),
                     attachedIds, nextOrder);
+            for (var imp : r.getImportedQuestions()) {
+                if (imp.getOrderIndex() != null) {
+                    nextOrder = Math.max(nextOrder, imp.getOrderIndex() + 1);
+                } else {
+                    nextOrder++;
+                }
+            }
         }
 
         for (var item : list(r.getGroupIds())) {
-            attachGroup(user, e, item, checked);
+            ExamGroup savedGroup = attachGroup(user, e, item, checked, nextOrder);
+            nextOrder = Math.max(nextOrder, savedGroup.getOrderIndex() + 1);
         }
         if (!list(r.getConfigs()).isEmpty() && !list(r.getImportedQuestions()).isEmpty()) {
             checkRules(courseId, toRules(r.getConfigs()), examQuestions(e).keySet());
@@ -578,6 +590,7 @@ public class ManagerExamServiceImpl implements ManagerExamService {
                 || (r.getDurationMinutes()!=null && !Objects.equals(r.getDurationMinutes(), e.getDurationMinutes()))
                 || (r.getMode()!=null && !r.getMode().strip().equalsIgnoreCase(e.getMode()))
                 || (r.getGenerationType()!=null && !r.getGenerationType().strip().equalsIgnoreCase(e.getGenerationType()))
+                || (r.getQuestionOrder()!=null && !r.getQuestionOrder().strip().equalsIgnoreCase(e.getQuestionOrder()))
                 || (r.getMaxScore()!=null && !sameDecimal(r.getMaxScore(), e.getMaxScore()))
                 || (r.getPassMark()!=null && !sameDecimal(r.getPassMark(), e.getPassMark()))
                 || (r.getConfigs()!=null && configsChanged(retainedConfigs, r.getConfigs()));
@@ -616,9 +629,100 @@ public class ManagerExamServiceImpl implements ManagerExamService {
         if(r.getMaxScore()!=null) e.setMaxScore(effectiveMaxScore);
         if(r.getPassMark()!=null) e.setPassMark(effectivePassMark);
         if(r.getGenerationType()!=null) e.setGenerationType(r.getGenerationType());
+        if(r.getQuestionOrder()!=null) e.setQuestionOrder(r.getQuestionOrder());
         if(r.getConfigs()!=null) { validateConfigs(r.getConfigs(),courseId,examQuestions(e).keySet()); configs.deleteByExamExamId(id); configs.flush(); saveConfigs(e,r.getConfigs()); }
         if(r.getGenerationType()!=null) validateMode(e.getGenerationType(),links.findByExamExamIdOrderByOrderIndexAscExamQuestionIdAsc(id).size()+groupLinks.findByExamExamIdOrderByOrderIndexAscExamGroupIdAsc(id).size(),configs.findByExamExamIdOrderByConfigIdAsc(id).size());
         exams.flush(); return response(e,true);
+    }
+
+    @Override @Transactional
+    public ExamResponse updateOrder(UserPrincipal user, Long id, ExamRequests.ExamOrder r) {
+        Exam e = write(user, id);
+        editable(e);
+        if (r.getQuestionOrder() != null) {
+            e.setQuestionOrder(r.getQuestionOrder());
+        }
+
+        List<ExamGroup> currentGroups = groupLinks.findByExamExamIdOrderByOrderIndexAscExamGroupIdAsc(id);
+        List<ExamQuestion> currentLinks = links.findByExamExamIdOrderByOrderIndexAscExamQuestionIdAsc(id);
+        Set<Long> linkedGroupIds = linkedGroupIds(currentGroups);
+
+        Map<Long, ExamQuestion> standaloneByLinkId = new LinkedHashMap<>();
+        Map<Long, Map<Long, ExamQuestion>> childByGroupAndQId = new HashMap<>();
+        for (ExamQuestion eq : currentLinks) {
+            Question q = eq.getQuestion();
+            Long gId = q.getGroup() != null ? q.getGroup().getGroupId() : null;
+            if (gId != null && linkedGroupIds.contains(gId)) {
+                childByGroupAndQId
+                        .computeIfAbsent(gId, k -> new LinkedHashMap<>())
+                        .put(q.getQuestionId(), eq);
+            } else {
+                standaloneByLinkId.put(eq.getExamQuestionId(), eq);
+            }
+        }
+        Map<Long, ExamGroup> groupByLinkId = currentGroups.stream()
+                .collect(Collectors.toMap(ExamGroup::getExamGroupId, Function.identity(), (a, b) -> a, LinkedHashMap::new));
+
+        Set<Long> seenQuestions = new HashSet<>();
+        Set<Long> seenGroups = new HashSet<>();
+        int topOrder = 0;
+
+        for (ExamRequests.OrderEntry entry : list(r.getItems())) {
+            if ("QUESTION".equals(entry.getItemType())) {
+                if (!seenQuestions.add(entry.getLinkId())) {
+                    throw bad("Duplicate question linkId in order list.");
+                }
+                ExamQuestion eq = standaloneByLinkId.remove(entry.getLinkId());
+                if (eq == null) {
+                    throw bad("Standalone question link " + entry.getLinkId() + " does not belong to this exam.");
+                }
+                eq.setOrderIndex(topOrder++);
+            } else if ("GROUP".equals(entry.getItemType())) {
+                if (!seenGroups.add(entry.getLinkId())) {
+                    throw bad("Duplicate group linkId in order list.");
+                }
+                ExamGroup eg = groupByLinkId.remove(entry.getLinkId());
+                if (eg == null) {
+                    throw bad("Group link " + entry.getLinkId() + " does not belong to this exam.");
+                }
+                eg.setOrderIndex(topOrder++);
+
+                if (entry.getQuestionIds() != null && !entry.getQuestionIds().isEmpty()) {
+                    Long gId = eg.getGroup().getGroupId();
+                    Map<Long, ExamQuestion> children = childByGroupAndQId.getOrDefault(gId, Map.of());
+                    Set<Long> seenChildQ = new HashSet<>();
+                    int childOrder = 0;
+                    for (Long qId : entry.getQuestionIds()) {
+                        if (!seenChildQ.add(qId)) {
+                            throw bad("Duplicate questionId inside group order.");
+                        }
+                        ExamQuestion child = children.get(qId);
+                        if (child == null) {
+                            throw bad("Question " + qId + " does not belong to group " + gId + " in this exam.");
+                        }
+                        child.setOrderIndex(childOrder++);
+                    }
+                    for (Map.Entry<Long, ExamQuestion> rem : children.entrySet()) {
+                        if (!seenChildQ.contains(rem.getKey())) {
+                            rem.getValue().setOrderIndex(childOrder++);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Preserve any remaining unmentioned standalone/group links deterministically after specified items.
+        for (ExamQuestion rem : standaloneByLinkId.values()) {
+            rem.setOrderIndex(topOrder++);
+        }
+        for (ExamGroup rem : groupByLinkId.values()) {
+            rem.setOrderIndex(topOrder++);
+        }
+
+        links.flush();
+        groupLinks.flush();
+        exams.flush();
+        return response(e, true);
     }
 
     @Override @Transactional
@@ -690,12 +794,7 @@ public class ManagerExamServiceImpl implements ManagerExamService {
                 r,
                 q,
                 existingQuestionIds,
-                next(
-                        links.findByExamExamIdOrderByOrderIndexAscExamQuestionIdAsc(id)
-                                .stream()
-                                .map(ExamQuestion::getOrderIndex)
-                                .toList()
-                )
+                nextUnifiedOrder(id)
         );
 
         return questionLink(saved);
@@ -730,7 +829,7 @@ public class ManagerExamServiceImpl implements ManagerExamService {
         links.flush(); groupLinks.flush();
     }
     @Override @Transactional public ExamResponse.GroupLink addGroup(UserPrincipal user,Long id,ExamRequests.GroupLink r) {
-        Exam e=write(user,id); questionsEditable(e); return groupLink(attachGroup(user,e,r,new HashSet<>()));
+        Exam e=write(user,id); questionsEditable(e); return groupLink(attachGroup(user,e,r,new HashSet<>(),nextUnifiedOrder(id)));
     }
     @Override @Transactional public void removeGroup(UserPrincipal user,Long id,Long linkId) {
         Exam e=write(user,id); questionsEditable(e); positive(linkId);
@@ -800,8 +899,8 @@ public class ManagerExamServiceImpl implements ManagerExamService {
             if(item.getIndex()<0 || item.getIndex()>=parsed.size()) throw bad("Import item index out of range.");
             weights.set(item.getIndex(),weight(item.getWeight()));
         }
-        int nextOrder=next(links.findByExamExamIdOrderByOrderIndexAscExamQuestionIdAsc(id).stream().map(ExamQuestion::getOrderIndex).toList());
-        ExamResponse.Imported result=attachImported(user,e,parsed,weights,new HashSet<>(examQuestions(e).keySet()),nextOrder);
+        int nextOrder=nextUnifiedOrder(id);
+        ExamResponse.Imported result=attachImported(user,e,parsed,weights,null,new HashSet<>(examQuestions(e).keySet()),nextOrder);
         links.flush();
         return result;
     }
@@ -810,7 +909,7 @@ public class ManagerExamServiceImpl implements ManagerExamService {
     // Q-03's content hash (course-wide, like Q-03's duplicate check, so creating the rest never hits its 409), skip
     // duplicates within the list or already in the exam, create the rest through Q-03, then attach in list order.
     // Callers must reject module-less exams first (Q-03 needs a module).
-    private ExamResponse.Imported attachImported(UserPrincipal user,Exam e,List<QuestionCreateRequest> requests,List<BigDecimal> weights,Set<Long> inExam,int nextOrder) {
+    private ExamResponse.Imported attachImported(UserPrincipal user,Exam e,List<QuestionCreateRequest> requests,List<BigDecimal> weights,List<Integer> orderIndices,Set<Long> inExam,int nextOrder) {
         Long courseId=courseId(e), moduleId=e.getModule().getModuleId();
         List<String> hashes=requests.stream().map(questionService::contentHash).toList();
         Map<String,Question> bank=new HashMap<>();
@@ -835,40 +934,57 @@ public class ManagerExamServiceImpl implements ManagerExamService {
         List<Long> ids=new ArrayList<>();
         for(var entry:picked.entrySet()) {
             Long questionId=entry.getValue()!=null?entry.getValue():newIds.next();
+            Integer requestedOrder = (orderIndices != null && entry.getKey() < orderIndices.size())
+                    ? orderIndices.get(entry.getKey())
+                    : null;
+            int targetOrder = requestedOrder != null ? requestedOrder : nextOrder;
             // Access was settled by write()/create (the exam's course) and Q-03; reused questions come from that same course.
-            ExamQuestion saved=attachValidatedQuestion(e,new ExamRequests.QuestionLink(questionId,weights.get(entry.getKey()),nextOrder),
-                    questions.getReferenceById(questionId),inExam,nextOrder);
-            nextOrder=saved.getOrderIndex()+1;
+            ExamQuestion saved=attachValidatedQuestion(e,new ExamRequests.QuestionLink(questionId,weights.get(entry.getKey()),targetOrder),
+                    questions.getReferenceById(questionId),inExam,targetOrder);
+            nextOrder=Math.max(nextOrder, saved.getOrderIndex()+1);
             ids.add(questionId);
         }
         return new ExamResponse.Imported(toCreate.size(),reused,skipped,ids);
     }
 
-    // E-13 reads files exactly like Q-09 (template v2: [TYPE: ...] then Q1. ...), so both Import buttons accept the same file.
+    // E-13 reads files exactly like Q-09 (template v2: [TYPE: ...], or Excel sheet 'Questions'), so both Import buttons accept the same files.
     private List<QuestionCreateRequest> importBlocks(MultipartFile file) {
         String name=file.getOriginalFilename()==null?"":file.getOriginalFilename().toLowerCase(Locale.ROOT);
-        List<String> lines;
+        boolean isExcel = name.endsWith(".xlsx") || name.endsWith(".xls");
+        List<ImportBlockResult> parsedBlocks;
         try {
-            if(name.endsWith(".pdf")) lines=pdfText.extractText(file);
-            else if(name.endsWith(".docx")) lines=docxText.extractText(file);
-            else if(name.endsWith(".txt")) lines=new String(file.getBytes(),java.nio.charset.StandardCharsets.UTF_8).lines().map(String::strip).toList();
-            else throw bad("Supported files: pdf, docx and txt.");
+            if(isExcel) {
+                parsedBlocks=excelParser.parseQuestions(file);
+            } else {
+                List<String> lines;
+                if(name.endsWith(".pdf")) lines=pdfText.extractText(file);
+                else if(name.endsWith(".docx")) lines=docxText.extractText(file);
+                else if(name.endsWith(".txt")) lines=new String(file.getBytes(),java.nio.charset.StandardCharsets.UTF_8).lines().map(String::strip).toList();
+                else throw bad("Supported files: pdf, docx, xlsx, xls and txt.");
+                List<TemplateBlockParser.RawBlock> rawBlocks=blockParser.parseBlocks(lines);
+                parsedBlocks=new ArrayList<>(rawBlocks.size());
+                for(int i=0;i<rawBlocks.size();i++) parsedBlocks.add(blockMapper.mapAndValidateBlock(rawBlocks.get(i),i+1));
+            }
         } catch(BadRequestException ex) { throw ex; }
         catch(Exception ex) { throw bad("Could not read the uploaded file."); }
-        List<TemplateBlockParser.RawBlock> blocks=blockParser.parseBlocks(lines);
-        if(blocks.isEmpty() || blocks.size()>500) throw bad("Import needs 1-500 questions in the import template format ([TYPE: ...] followed by Q1. ...).");
+        if(parsedBlocks.isEmpty() || parsedBlocks.size()>500) {
+            throw bad(isExcel
+                    ? "Import needs 1-500 questions in the Excel 'Questions' sheet."
+                    : "Import needs 1-500 questions in the import template format ([TYPE: ...] followed by Q1. ...).");
+        }
         List<QuestionCreateRequest> result=new ArrayList<>(); List<String> errors=new ArrayList<>();
-        for(int i=0;i<blocks.size();i++) {
-            ImportBlockResult block=blockMapper.mapAndValidateBlock(blocks.get(i),i+1,"MEDIUM");
+        String locWord = isExcel ? "row " : "line ";
+        for(int i=0;i<parsedBlocks.size();i++) {
+            ImportBlockResult block=parsedBlocks.get(i);
             int number=i+1;
             if(block.getErrors()==null || block.getErrors().isEmpty()) result.add(block.getQuestionData());
-            else block.getErrors().forEach(err->errors.add("Question "+number+" (line "+err.getLine()+"): "+err.getMessage()));
+            else block.getErrors().forEach(err->errors.add("Question "+number+" ("+locWord+err.getLine()+"): "+err.getMessage()));
         }
         if(!errors.isEmpty()) throw bad(String.join("; ",errors.subList(0,Math.min(5,errors.size())))+(errors.size()>5?" (+"+(errors.size()-5)+" more)":""));
         return result;
     }
 
-    private ExamGroup attachGroup(UserPrincipal user,Exam e,ExamRequests.GroupLink r,Set<Long> checked) {
+    private ExamGroup attachGroup(UserPrincipal user,Exam e,ExamRequests.GroupLink r,Set<Long> checked,int defaultGroupOrder) {
         Long examCourseId=courseId(e);
         QuestionGroup g=group(r.getGroupId()); groupAccess(user,g,checked,examCourseId);
         List<ExamGroup> existing=groupLinks.findByExamExamIdOrderByOrderIndexAscExamGroupIdAsc(e.getExamId());
@@ -876,26 +992,28 @@ public class ManagerExamServiceImpl implements ManagerExamService {
         List<Question> groupQuestions=questions.findByGroupGroupIdOrderByQuestionIdAsc(r.getGroupId());
         List<ExamRequests.GroupQuestionPoint> reqPoints=list(r.getQuestions());
         if(groupQuestions.size()!=reqPoints.size()) throw bad("Group questions and provided weight count do not match.");
+        Map<Long,Question> questionById=groupQuestions.stream().collect(Collectors.toMap(Question::getQuestionId, Function.identity()));
         Map<Long,BigDecimal> weightMap=new HashMap<>();
-        Set<Long> expectedIds = groupQuestions.stream().map(Question::getQuestionId).collect(Collectors.toSet());
+        List<Question> orderedQuestions = new ArrayList<>(reqPoints.size());
+        Set<Long> expectedIds = questionById.keySet();
         for(var qp:reqPoints) {
             positive(qp.getQuestionId());
             if(!expectedIds.contains(qp.getQuestionId())) throw bad("Question does not belong to this group.");
             if(weightMap.containsKey(qp.getQuestionId())) throw bad("Duplicate question in request.");
             weightMap.put(qp.getQuestionId(),weight(qp.getWeight()));
+            orderedQuestions.add(questionById.get(qp.getQuestionId()));
         }
-        for(Question q:groupQuestions) {
+        for(Question q:orderedQuestions) {
             active(user,q,checked,examCourseId);
             if(!weightMap.containsKey(q.getQuestionId())) throw bad("Missing weight for group question "+q.getQuestionId());
         }
         Map<Long,Question> used=examQuestions(e);
-        for(Question q:groupQuestions) {
+        for(Question q:orderedQuestions) {
             if(used.containsKey(q.getQuestionId())) throw conflict("A group question is already attached to this exam.");
         }
-        List<ExamQuestion> existingLinks=links.findByExamExamIdOrderByOrderIndexAscExamQuestionIdAsc(e.getExamId());
-        int groupOrder=r.getOrderIndex()==null?next(existing.stream().map(ExamGroup::getOrderIndex).toList()):r.getOrderIndex();
-        int qOrder=next(existingLinks.stream().map(ExamQuestion::getOrderIndex).toList());
-        for(Question q:groupQuestions) {
+        int groupOrder=r.getOrderIndex()==null?defaultGroupOrder:r.getOrderIndex();
+        int qOrder=0;
+        for(Question q:orderedQuestions) {
             BigDecimal wt = weightMap.getOrDefault(q.getQuestionId(), BigDecimal.ONE);
             links.save(ExamQuestion.builder().exam(e).question(q).weight(wt).orderIndex(qOrder++).build());
         }
@@ -1091,6 +1209,7 @@ public class ManagerExamServiceImpl implements ManagerExamService {
                 count,
                 e.getStatus(),
                 e.getGenerationType(),
+                e.getQuestionOrder(),
                 e.getIsPractice(),
                 e.getMode(),
                 e.getCreatedAt(),
@@ -1127,7 +1246,7 @@ public class ManagerExamServiceImpl implements ManagerExamService {
     }
     private ExamResponse.GroupLink groupLink(ExamGroup l) { return groupLink(l,questions.findByGroupGroupIdOrderByQuestionIdAsc(l.getGroup().getGroupId()).size()); }
     private ExamResponse.GroupLink groupLink(ExamGroup l,int questionCount) { return new ExamResponse.GroupLink(l.getExamGroupId(),l.getExam().getExamId(),l.getGroup().getGroupId(),l.getGroup().getTitle(),
-            l.getGroup().getPassageText(),questionCount); }
+            l.getGroup().getPassageText(),questionCount,l.getOrderIndex()); }
     private BigDecimal weight(BigDecimal w) { if(w==null)return BigDecimal.ONE; if(w.signum()<=0 || w.compareTo(new BigDecimal("1000"))>0 || w.scale()>2) throw bad("Weight must be positive, at most 1000 and have at most two decimal places."); return w; }
     private BigDecimal maxScore(BigDecimal m) { if(m==null || m.signum()<=0 || m.compareTo(new BigDecimal("10000"))>0 || m.scale()>2) throw bad("Max score must be positive, at most 10000 and have at most two decimal places."); return m; }
     private BigDecimal validatePassMark(BigDecimal passMark, BigDecimal maxScore) {
@@ -1158,6 +1277,22 @@ public class ManagerExamServiceImpl implements ManagerExamService {
             }
         }
         return false;
+    }
+    private int nextUnifiedOrder(Long examId) {
+        List<ExamGroup> currentGroups = groupLinks.findByExamExamIdOrderByOrderIndexAscExamGroupIdAsc(examId);
+        Set<Long> linkedGroupIds = linkedGroupIds(currentGroups);
+        int maxQ = links.findByExamExamIdOrderByOrderIndexAscExamQuestionIdAsc(examId).stream()
+                .filter(eq -> eq.getQuestion().getGroup() == null || !linkedGroupIds.contains(eq.getQuestion().getGroup().getGroupId()))
+                .mapToInt(ExamQuestion::getOrderIndex)
+                .max()
+                .orElse(-1);
+        int maxG = currentGroups.stream()
+                .mapToInt(ExamGroup::getOrderIndex)
+                .max()
+                .orElse(-1);
+        int max = Math.max(maxQ, maxG);
+        if (max == Integer.MAX_VALUE) throw conflict("Question order limit reached.");
+        return max + 1;
     }
     private int next(List<Integer> values) { int max=values.stream().mapToInt(Integer::intValue).max().orElse(-1); if(max==Integer.MAX_VALUE)throw conflict("Question order limit reached."); return max+1; }
     private String family(String type) { String kind=QuestionTypeUtil.examKindOf(type); return kind==null?"QUIZ":kind; }

@@ -7,6 +7,7 @@ import type { QuestionCreateRequest } from './question.service';
 export type ExamStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
 export type ExamKind = 'QUIZ' | 'ESSAY' | 'CODE' | 'DIAGRAM' | 'MIXED';
 export type GenerationType = 'STATIC' | 'RANDOM' | 'MIXED';
+export type QuestionOrder = 'MANUAL' | 'RANDOM';
 export type Difficulty = 'EASY' | 'MEDIUM' | 'HARD';
 
 export interface ExamListItem {
@@ -89,6 +90,7 @@ export interface ExamDetail {
   totalWeight?: number;
   status?: ExamStatus;
   generationType?: GenerationType;
+  questionOrder?: QuestionOrder;
   isPractice?: boolean;
   mode?: ExamMode;
   createdAt?: string;
@@ -106,11 +108,12 @@ export interface CreateExamRequest {
   durationMinutes: number;
   mode?: ExamMode;
   generationType: GenerationType;
+  questionOrder?: QuestionOrder;
   maxScore: number;
   status?: ExamStatus;
   questionIds?: { questionId: number; weight: number; orderIndex: number }[];
   /** Import-preview drafts (Q-03 payload shape); the server creates or reuses them and attaches them with the exam. */
-  importedQuestions?: { question: QuestionCreateRequest; weight: number }[];
+  importedQuestions?: { question: QuestionCreateRequest; weight: number; orderIndex?: number }[];
   configs?: ExamConfig[];
   groupIds?: { groupId: number; questions: { questionId: number; weight: number }[]; orderIndex: number }[];
 }
@@ -123,8 +126,20 @@ export interface UpdateExamRequest {
   durationMinutes?: number;
   mode?: ExamMode;
   generationType?: GenerationType;
+  questionOrder?: QuestionOrder;
   maxScore?: number;
   configs?: ExamConfig[];
+}
+
+export interface ExamOrderEntry {
+  itemType: 'QUESTION' | 'GROUP';
+  linkId: number;
+  questionIds?: number[];
+}
+
+export interface UpdateExamOrderRequest {
+  questionOrder?: QuestionOrder;
+  items: ExamOrderEntry[];
 }
 
 export interface ExamQuestionListParams {
@@ -325,6 +340,15 @@ export const examService = {
     return res.data;
   },
 
+  async updateExamOrder(id: number, payload: UpdateExamOrderRequest): Promise<ExamDetail> {
+    const res = await api.request<ApiResponse<ExamDetail>>({
+      method: 'put',
+      url: `/manager/exams/${id}/order`,
+      data: payload,
+    });
+    return res.data;
+  },
+
   async patchPublishExam(id: number, status: ExamStatus): Promise<{ examId: number; status: ExamStatus; warnings?: string[] }> {
     const res = await api.request<ApiResponse<{ examId: number; status: ExamStatus; warnings?: string[] }>>({
       method: 'patch',
@@ -338,7 +362,7 @@ export const examService = {
     await api.request<ApiResponse<null>>({ method: 'delete', url: `/manager/exams/${id}` });
   },
 
-  async addQuestionToExam(id: number, payload: { questionId: number; weight?: number }): Promise<ExamQuestion> {
+  async addQuestionToExam(id: number, payload: { questionId: number; weight?: number; orderIndex?: number }): Promise<ExamQuestion> {
     const res = await api.post<ApiResponse<ExamQuestion>>(`/manager/exams/${id}/questions`, payload);
     return res.data;
   },

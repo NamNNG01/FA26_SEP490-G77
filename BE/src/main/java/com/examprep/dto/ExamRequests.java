@@ -98,6 +98,8 @@ public final class ExamRequests {
         private com.examprep.dto.question.QuestionCreateRequest question;
         @DecimalMin(value="0", inclusive=false) @DecimalMax("1000") @Digits(integer=4, fraction=2)
         private BigDecimal weight;
+        @PositiveOrZero
+        private Integer orderIndex;
     }
 
     @Data
@@ -164,6 +166,8 @@ public final class ExamRequests {
         private String mode;
         @NotNull @Pattern(regexp="STATIC|RANDOM|MIXED")
         private String generationType;
+        @Pattern(regexp="MANUAL|RANDOM")
+        private String questionOrder;
         @NotNull @DecimalMin(value="0", inclusive=false) @DecimalMax("10000") @Digits(integer=5, fraction=2)
         private BigDecimal maxScore;
         @DecimalMin("0") @DecimalMax("10000") @Digits(integer=5, fraction=2)
@@ -203,6 +207,8 @@ public final class ExamRequests {
         private String mode;
         @Pattern(regexp="STATIC|RANDOM|MIXED")
         private String generationType;
+        @Pattern(regexp="MANUAL|RANDOM")
+        private String questionOrder;
         @DecimalMin(value="0", inclusive=false) @DecimalMax("10000") @Digits(integer=5, fraction=2)
         private BigDecimal maxScore;
         @DecimalMin("0") @DecimalMax("10000") @Digits(integer=5, fraction=2)
@@ -220,4 +226,30 @@ public final class ExamRequests {
     public record Criterion(@NotBlank @Size(max=255) String name,
             @NotNull @DecimalMin(value="0",inclusive=false) BigDecimal weight, String descriptors) {}
     public record Rubric(@NotEmpty @Size(max=100) List<@Valid Criterion> criteria, String notes) {}
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class OrderEntry {
+        @NotBlank @Pattern(regexp="QUESTION|GROUP")
+        private String itemType;
+        @NotNull @Positive
+        private Long linkId;
+        @Size(max=100)
+        private List<@NotNull @Positive Long> questionIds;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class ExamOrder {
+        @Pattern(regexp="MANUAL|RANDOM")
+        private String questionOrder;
+        @NotNull @Size(max=600)
+        private List<@Valid OrderEntry> items;
+    }
 }

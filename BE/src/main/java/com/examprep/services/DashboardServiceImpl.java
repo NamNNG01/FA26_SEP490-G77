@@ -1,13 +1,15 @@
 package com.examprep.services;
 
 import com.examprep.dto.*;
-import com.examprep.entities.Enrollment;
 import com.examprep.entities.User;
 import com.examprep.repositories.*;
+import com.examprep.util.ShortTtlCache;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
@@ -26,10 +28,25 @@ public class DashboardServiceImpl implements DashboardService {
     private final ExamRepository examRepository;
     private final UserRepository userRepository;
 
+    @Value("${app.read-cache.ttl-ms:5000}")
+    private long cacheTtlMs = 5000L;
+    private volatile ShortTtlCache<Long, StudentDashboardResponse> studentCache;
+
+    private ShortTtlCache<Long, StudentDashboardResponse> cache() {
+        if (studentCache == null) {
+            studentCache = new ShortTtlCache<>(cacheTtlMs, 512);
+        }
+        return studentCache;
+    }
+
     @Override
-    @Transactional(readOnly = true)
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public StudentDashboardResponse getStudentDashboard(Long userId) {
-        log.info("Building student dashboard for user ID: {}", userId);
+        return cache().getOrCompute(userId, () -> loadStudentDashboard(userId));
+    }
+
+    private StudentDashboardResponse loadStudentDashboard(Long userId) {
+        log.debug("Building student dashboard for user ID: {}", userId);
 
         List<Object[]> enrollRows = enrollmentRepository.summarizeByUserId(userId);
         Object[] er = enrollRows.isEmpty() ? new Object[]{0L, 0L, 0L} : enrollRows.get(0);
@@ -58,6 +75,20 @@ public class DashboardServiceImpl implements DashboardService {
                 .recentCourses(recentCourses)
                 .recentAttempts(recentAttempts)
                 .build();
+    }
+
+    private static Object[] unwrapRow(Object[] row) {
+        if (row != null && row.length == 1 && row[0] instanceof Object[] nested) {
+            return nested;
+        }
+        return row;
+    }
+
+    private static long toLong(Object[] row, int idx) {
+        if (row == null || idx >= row.length || row[idx] == null) {
+            return 0L;
+        }
+        return ((Number) row[idx]).longValue();
     }
 
     @Override

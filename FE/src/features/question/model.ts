@@ -180,7 +180,7 @@ export interface QuestionDraft {
   /** Original questionMetadata, so saving keeps keys the editor doesn't know about. */
   metadata: Record<string, unknown>;
   type: EditableQuestionType;
-  difficulty: QuestionDifficulty;
+  difficulty: QuestionDifficulty | '';
   content: string;
   /** SINGLE_CHOICE / MULTIPLE_CHOICE / TRUE_FALSE */
   options: OptionDraft[];
@@ -357,6 +357,7 @@ const splitAccepted = (s: string) => s.split(';').map(a => a.trim()).filter(Bool
 export interface QuestionErrors {
   /** Shown under the type / skill tag row. */
   type?: string;
+  difficulty?: string;
   content?: string;
   answers?: string;
 }
@@ -367,6 +368,7 @@ const hasDuplicates = (texts: string[]) => new Set(texts.map(normalize)).size !=
 
 export function validateDraft(q: QuestionDraft): QuestionErrors {
   const errors: QuestionErrors = {};
+  if (!q.difficulty) errors.difficulty = 'Difficulty is required (EASY, MEDIUM, or HARD).';
   if (q.content.trim() === '') errors.content = 'Question text is required.';
   else if (q.content.trim().length > MAX_CONTENT_LENGTH) errors.content = `Question text can be at most ${MAX_CONTENT_LENGTH.toLocaleString()} characters.`;
   if (q.skillTag.trim().length > MAX_SKILL_TAG_LENGTH) errors.type = `Skill tag can be at most ${MAX_SKILL_TAG_LENGTH} characters.`;
@@ -538,7 +540,7 @@ export function toCreateRequest(q: QuestionDraft, courseId: number, moduleId: nu
     courseId,
     moduleId,
     questionType: q.type,
-    difficulty: q.difficulty,
+    difficulty: q.difficulty || undefined,
     content: q.content.trim(),
     options: toOptions(q),
     answerKey: toAnswerKey(q),
@@ -656,7 +658,7 @@ export function toUpdateRequest(q: QuestionDraft, moduleId: number | null, extra
     explanation: q.explanation.trim(),
     questionMetadata: toMetadata(q),
     questionType: q.type,
-    difficulty: q.difficulty,
+    difficulty: q.difficulty || undefined,
     content: q.content.trim(),
     // Sending [] for non-choice types tells the backend to drop old options.
     options: toOptions(q),
@@ -796,22 +798,29 @@ export function fromImported(q: ImportedQuestionData): QuestionDraft {
 }
 
 /**
- * Any Q-09 import block → editor draft. The backend sends no question data for
- * a block with errors, so that one becomes a blank question of its type
- * carrying the errors, for the manager to fill in or remove.
+ * Any Q-09 import block → editor draft. The backend populates parsed fields even
+ * when validation errors exist so the manager can fix and save without retyping.
  */
-export function fromImportBlock(b: ImportBlock, difficulty: QuestionDifficulty): QuestionDraft {
-  if (!b.errors?.length && b.questionData) return fromImported(b.questionData);
+export function fromImportBlock(b: ImportBlock): QuestionDraft {
   const type = QUESTION_TYPE_OPTIONS.find(o => o.value === b.questionType)?.value;
-  const blank = { ...emptyDraft(), difficulty };
+  let baseDraft: QuestionDraft;
+  if (b.questionData) {
+    const imported = fromImported(b.questionData);
+    const rawDiff = b.questionData.difficulty;
+    const validDiff: QuestionDifficulty | '' =
+      rawDiff === 'EASY' || rawDiff === 'MEDIUM' || rawDiff === 'HARD' ? rawDiff : '';
+    baseDraft = { ...imported, difficulty: validDiff };
+  } else {
+    const blank = { ...emptyDraft(), difficulty: '' as const };
+    baseDraft = type ? changeType(blank, type) : blank;
+  }
+  if (!b.errors?.length) return baseDraft;
   return {
-    ...(type ? changeType(blank, type) : blank),
+    ...baseDraft,
     importIssue: {
       block: b.index,
       line: b.startLine,
-      errors: b.errors?.length
-        ? b.errors.map(e => ({ line: e.line, message: e.message }))
-        : [{ line: 0, message: 'This block could not be read.' }],
+      errors: b.errors.map(e => ({ line: e.line, message: e.message })),
     },
   };
 }
