@@ -1,5 +1,5 @@
 import { api } from './api';
-import type { ApiResponse } from '@/auth/authContext';
+import type { ApiResponse } from '@/types/api';
 
 export type DiscountType = 'PERCENT' | 'FIXED_AMOUNT';
 export type DiscountValidity = 'ACTIVE' | 'UPCOMING' | 'EXPIRED' | 'EXHAUSTED' | 'INACTIVE';

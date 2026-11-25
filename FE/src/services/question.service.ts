@@ -1,7 +1,7 @@
 import { api } from './api';
 import { apiClient } from './axios';
 import { mockGenerateAiQuestions } from './mockQuestionAiData';
-import type { ApiResponse } from '@/auth/authContext';
+import type { ApiResponse } from '@/types/api';
 
 /**
  * QuestionService

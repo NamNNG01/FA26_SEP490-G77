@@ -1,5 +1,5 @@
 import { apiClient } from './axios';
-import type { ApiResponse } from '@/auth/authContext';
+import type { ApiResponse } from '@/types/api';
 
 /**
  * StudentAiService — AI personalization (Deadline1 §25, StudentPersonalizationController).

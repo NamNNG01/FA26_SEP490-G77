@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { useAuth, type UserResponse } from '@/auth/authContext';
+import { useAuth } from '@/auth/authContext';
+import type { UserResponse } from '@/types/auth';
 import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';

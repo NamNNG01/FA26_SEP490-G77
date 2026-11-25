@@ -1,4 +1,4 @@
-import type { ApiResponse } from '@/auth/authContext';
+import type { ApiResponse } from '@/types/api';
 import { apiClient } from './axios';
 
 export type FlashcardImportFormat = 'docx' | 'xlsx';

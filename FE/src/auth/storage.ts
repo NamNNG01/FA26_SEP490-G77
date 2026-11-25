@@ -1,4 +1,4 @@
-import type { UserResponse } from './authContext';
+import type { UserResponse } from '@/types/auth';
 
 /**
  * Single source of truth for auth persistence.

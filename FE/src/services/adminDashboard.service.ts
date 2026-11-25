@@ -1,5 +1,5 @@
 import { api } from './api';
-import type { ApiResponse } from '@/auth/authContext';
+import type { ApiResponse } from '@/types/api';
 
 /**
  * DASH-04 — the admin dashboard report (GET /api/v1/dashboard/admin/report).

@@ -1,6 +1,6 @@
 import { api } from './api';
 import { apiClient } from './axios';
-import type { ApiResponse } from '@/auth/authContext';
+import type { ApiResponse } from '@/types/api';
 import type { PageResponse } from './course.service';
 import type { QuestionCreateRequest } from './question.service';
 

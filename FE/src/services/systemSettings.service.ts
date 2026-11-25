@@ -1,5 +1,5 @@
 import { api } from './api';
-import type { ApiResponse } from '@/auth/authContext';
+import type { ApiResponse } from '@/types/api';
 
 /**
  * AS-01 / AS-02 (admin System Settings). The screen owns the document's shape; the server
