@@ -5,10 +5,9 @@ import { Button } from '@/components/ui/Button';
 import { IMAGE_ACCEPT, imageFileError, uploadService } from '@/services/upload.service';
 
 /** Uploads one discussion image and exposes its URL for the post/comment request. */
-export function DiscussionImageAttachment({ imageUrl, onChange, scope = 'student', label = 'Attach an image' }: {
+export function DiscussionImageAttachment({ imageUrl, onChange, label = 'Attach an image' }: {
   imageUrl: string;
   onChange: (url: string) => void;
-  scope?: 'student' | 'manager';
   label?: string;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -28,9 +27,7 @@ export function DiscussionImageAttachment({ imageUrl, onChange, scope = 'student
     setUploading(true);
     setError('');
     try {
-      const uploaded = scope === 'manager'
-        ? await uploadService.uploadMedia(file)
-        : await uploadService.uploadStudentAttachment(file);
+      const uploaded = await uploadService.uploadMedia(file);
       onChange(uploaded.url);
     } catch {
       setError('Could not upload this image. Please try again.');

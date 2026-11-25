@@ -119,7 +119,7 @@ export interface CardWriteRequest {
   backText?: string;
   codeLanguage?: CodeLanguage;
   codeBody?: string;
-  /** FLASHCARD only: an image per face (uploaded through /student/uploads); a face needs text, an image or both. */
+  /** FLASHCARD only: an image per face (uploaded through /uploads); a face needs text, an image or both. */
   frontImageUrl?: string | null;
   backImageUrl?: string | null;
 }

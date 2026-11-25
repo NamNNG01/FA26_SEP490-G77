@@ -85,7 +85,7 @@ export function CardFormModal({
     setUploading(field);
     setSaveError(null);
     try {
-      const uploaded = await uploadService.uploadStudentAttachment(file);
+      const uploaded = await uploadService.uploadMedia(file);
       setImages(i => ({ ...i, [field]: uploaded.url }));
       setErrors(e => ({ ...e, [field]: undefined }));
     } catch (err) {

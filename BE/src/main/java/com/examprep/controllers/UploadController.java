@@ -19,16 +19,16 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 @RestController
-@RequestMapping("/api/v1/student/uploads")
+@RequestMapping("/api/v1/uploads")
 @PreAuthorize("hasAnyRole('STUDENT', 'COURSE_MANAGER', 'ADMIN')")
 @RequiredArgsConstructor
-@Tag(name = "Student Uploads", description = "Media upload to Cloudinary for students")
-public class StudentUploadController {
+@Tag(name = "Uploads", description = "Shared media image upload to Cloudinary")
+public class UploadController {
     private final MaterialStorage storage;
     private final Map<Long, Deque<Long>> uploadWindow = new ConcurrentHashMap<>();
 
     @PostMapping(consumes = "multipart/form-data")
-    @Operation(summary = "Upload an image for student (JPG/PNG/WEBP/GIF, max 5MB) and get its public URL")
+    @Operation(summary = "Upload an image (JPG/PNG/WEBP/GIF, max 5MB) and get its public URL")
     public ResponseEntity<ApiResponse<MaterialStorage.StoredImage>> upload(@AuthenticationPrincipal UserPrincipal user,
             @RequestParam MultipartFile file) {
         UserController.checkUploadRate(uploadWindow, user.getId());

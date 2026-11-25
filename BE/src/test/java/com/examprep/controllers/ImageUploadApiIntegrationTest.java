@@ -27,7 +27,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-/** USER-03 avatar, C-15 course thumbnail, D3 manager media upload. Cloudinary itself is mocked. */
+/** USER-03 avatar, C-15 course thumbnail, unified /api/v1/uploads media upload. Cloudinary itself is mocked. */
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
@@ -38,7 +38,7 @@ class ImageUploadApiIntegrationTest {
     @MockBean MaterialStorage storage;
 
     private final MockMultipartFile png = new MockMultipartFile("file", "a.png", "image/png", new byte[]{(byte) 0x89, 'P', 'N', 'G'});
-    private User manager, stranger, student;
+    private User manager, stranger, student, admin;
     private Course course;
 
     @BeforeEach
@@ -46,6 +46,7 @@ class ImageUploadApiIntegrationTest {
         manager = account(User.ROLE_COURSE_MANAGER);
         stranger = account(User.ROLE_COURSE_MANAGER);
         student = account(User.ROLE_STUDENT);
+        admin = account(User.ROLE_ADMIN);
         Category category = Category.builder().name("Img").slug(UUID.randomUUID().toString()).build();
         em.persist(category);
         course = Course.builder().categoryId(category.getCategoryId()).category(category).manager(manager)
@@ -82,21 +83,18 @@ class ImageUploadApiIntegrationTest {
         verify(storage).storeImage(eq(id), any(byte[].class), eq(true));
     }
 
-    @Test void mediaUploadIsForManagersAndReturnsTheImage() throws Exception {
-        call(student, multipart("/api/v1/manager/uploads").file(png)).andExpect(status().isForbidden());
-        call(manager, multipart("/api/v1/manager/uploads").file(png))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.data.url").value(org.hamcrest.Matchers.startsWith("https://cdn.test/media/user" + manager.getUserId() + "/")))
-                .andExpect(jsonPath("$.data.width").value(10))
-                .andExpect(jsonPath("$.data.format").value("png"));
-        verify(storage).storeImage(startsWith("media/user" + manager.getUserId() + "/"), any(byte[].class), eq(false));
-    }
+    @Test void mediaUploadRequiresAuthAndAllowsAllRoles() throws Exception {
+        mvc.perform(multipart("/api/v1/uploads").file(png))
+                .andExpect(status().isUnauthorized());
 
-    @Test void studentUploadIsForStudents() throws Exception {
-        call(manager, multipart("/api/v1/student/uploads").file(png)).andExpect(status().isForbidden());
-        call(student, multipart("/api/v1/student/uploads").file(png))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.data.url").value(org.hamcrest.Matchers.startsWith("https://cdn.test/media/user" + student.getUserId() + "/")));
+        for (User actor : new User[]{student, manager, admin}) {
+            call(actor, multipart("/api/v1/uploads").file(png))
+                    .andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.data.url").value(org.hamcrest.Matchers.startsWith("https://cdn.test/media/user" + actor.getUserId() + "/")))
+                    .andExpect(jsonPath("$.data.width").value(10))
+                    .andExpect(jsonPath("$.data.format").value("png"));
+            verify(storage).storeImage(startsWith("media/user" + actor.getUserId() + "/"), any(byte[].class), eq(false));
+        }
     }
 
     private ResultActions call(User actor, MockMultipartHttpServletRequestBuilder request) throws Exception {
