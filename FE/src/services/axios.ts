@@ -98,6 +98,24 @@ function refreshAccessToken(refreshToken: string): Promise<string> {
   return refreshInFlight;
 }
 
+/** How long to wait for the other tab to store its new pair after it won the refresh. */
+const OTHER_TAB_SAVE_GRACE_MS = 500;
+
+/**
+ * True when storage now holds a different refresh token than the one this
+ * tab sent — i.e. another tab rotated the pair. Its write may land a moment
+ * after our refresh failed, so check once more after a short wait.
+ */
+async function rotatedByOtherTab(sentRefreshToken: string): Promise<boolean> {
+  const rotated = () => {
+    const latest = getRefreshToken();
+    return latest !== null && latest !== sentRefreshToken;
+  };
+  if (rotated()) return true;
+  await new Promise((resolve) => setTimeout(resolve, OTHER_TAB_SAVE_GRACE_MS));
+  return rotated();
+}
+
 /**
  * Handle 401 responses from protected endpoints by refreshing the token.
  *
@@ -123,6 +141,13 @@ apiClient.interceptors.response.use(
           original.headers.Authorization = `Bearer ${accessToken}`;
           return apiClient(original);
         } catch {
+          // Another tab may have refreshed with the same token first: the
+          // backend then rejects ours as already used, but the other tab has
+          // stored a fresh pair. Retry with it instead of wiping it.
+          if (await rotatedByOtherTab(refreshToken)) {
+            original.headers.Authorization = `Bearer ${getAccessToken()}`;
+            return apiClient(original);
+          }
           clearAuth();
           if (hadSession) emitSessionExpired();
         }

@@ -2,6 +2,7 @@ import React, {
   createContext,
   useContext,
   useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -12,6 +13,7 @@ import {
   getAccessToken,
   getRefreshToken,
   getUser,
+  onExternalAuthChange,
   saveAuth,
   saveUser,
 } from './storage';
@@ -192,6 +194,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // is sent to sign in again.
   useEffect(() => {
     return onSessionExpired(() => clearLocalSession(true));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ---- Follow sign-in / sign-out done in another tab -------------------
+  // All tabs share one localStorage session, so this tab mirrors it: signed
+  // out elsewhere → sign out here too; a user written elsewhere (sign-in,
+  // account switch, profile edit) → adopt it.
+  const userIdRef = useRef<number | null>(null);
+  userIdRef.current = state.user?.userId ?? null;
+
+  useEffect(() => {
+    return onExternalAuthChange((change) => {
+      if (change === 'signedOut') {
+        if (userIdRef.current !== null) clearLocalSession(true);
+        return;
+      }
+      const user = getUser();
+      if (!user || !getRefreshToken()) return;
+      // Cached pages belong to the previous account.
+      if (userIdRef.current !== user.userId) clearQueryCache();
+      setState((prev) => ({
+        ...prev,
+        user,
+        isLoading: false,
+        isAuthenticated: true,
+        reauthRequired: false,
+      }));
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

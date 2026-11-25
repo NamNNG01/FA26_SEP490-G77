@@ -68,6 +68,28 @@ export function saveTokens(params: { accessToken: string; refreshToken: string }
 }
 
 /**
+ * Notify when ANOTHER tab changes the stored session ('storage' events never
+ * fire in the tab that wrote the change):
+ *  - 'signedOut'   — the refresh token was removed (logout, failed refresh)
+ *  - 'userChanged' — a user was written (sign-in, profile edit, account switch)
+ */
+export function onExternalAuthChange(
+  cb: (change: 'signedOut' | 'userChanged') => void,
+): () => void {
+  function handle(e: StorageEvent) {
+    if (e.storageArea !== localStorage) return;
+    // key === null → localStorage.clear() in the other tab.
+    if (e.key === null || (e.key === REFRESH_TOKEN_KEY && e.newValue === null)) {
+      cb('signedOut');
+    } else if (e.key === USER_KEY && e.newValue !== null) {
+      cb('userChanged');
+    }
+  }
+  window.addEventListener('storage', handle);
+  return () => window.removeEventListener('storage', handle);
+}
+
+/**
  * Clear ONLY auth-related keys. Never `localStorage.clear()` — that would
  * wipe unrelated app data (theme, preferences, …).
  */
