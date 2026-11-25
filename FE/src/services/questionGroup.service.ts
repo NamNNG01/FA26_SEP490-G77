@@ -77,11 +77,15 @@ export const questionGroupService = {
     });
     const qs = query.toString();
     const res = await api.get<ApiResponse<PageResponse<QuestionGroup>>>(`/manager/question-groups${qs ? `?${qs}` : ''}`);
+    if (!res.data || !Array.isArray(res.data.content)) {
+      throw new Error('The question group response is invalid.');
+    }
     return res.data;
   },
 
   async createQuestionGroup(payload: QuestionGroupCreateRequest): Promise<QuestionGroup> {
     const res = await api.post<ApiResponse<QuestionGroup>>('/manager/question-groups', payload);
+    if (!res.data) throw new Error('The question group response is invalid.');
     return res.data;
   },
 
