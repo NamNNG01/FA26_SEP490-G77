@@ -8,3 +8,4 @@ export { SystemSettingsPage } from './pages/SystemSettingsPage';
 export { CategoriesPage } from './pages/CategoriesPage';
 export { DiscountsPage } from './pages/DiscountsPage';
 
+export { AdminCommunityDecksPage } from './pages/AdminCommunityDecksPage';
