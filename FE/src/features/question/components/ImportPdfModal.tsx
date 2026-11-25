@@ -13,7 +13,7 @@ import {
   type ImportPreviewResponse,
 } from '@/services/question.service';
 import { fromImportBlock, type QuestionDraft } from '../model';
-import { QuestionLocationCard } from './QuestionLocationCard';
+import { courseService } from '@/services/course.service';
 
 type PreviewFilter = 'all' | 'errors' | 'valid';
 
@@ -80,16 +80,17 @@ function blockSummary(b: ImportBlock): string {
  * template, preview every parsed question with error/valid filtering, then
  * send selected blocks to the caller's form.
  */
-export function ImportPdfModal({ open, onClose, onImported, courseId: pageCourseId, moduleId: pageModuleId, lockLocation = false }: {
+export function ImportPdfModal({ open, onClose, onImported, courseId, moduleId, lockLocation = false }: {
   open: boolean;
   onClose: () => void;
   onImported: (drafts: QuestionDraft[], courseId: string, moduleId: string) => void;
   courseId: string;
   moduleId: string;
+  /** Module may be empty (exam import); otherwise the page picks one before opening. */
   lockLocation?: boolean;
 }) {
-  const [courseId, setCourseId] = useState(pageCourseId);
-  const [moduleId, setModuleId] = useState(pageModuleId);
+  const [courseName, setCourseName] = useState('');
+  const [moduleName, setModuleName] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -103,12 +104,25 @@ export function ImportPdfModal({ open, onClose, onImported, courseId: pageCourse
   const [templateBusy, setTemplateBusy] = useState<'pdf' | 'docx' | 'xlsx' | null>(null);
   const toast = useToast();
 
+  // The location is picked on the page; the modal only shows it.
   useEffect(() => {
-    if (!open) return;
-    setCourseId(pageCourseId);
-    setModuleId(pageModuleId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only reset location when opening
-  }, [open]);
+    if (!open || !courseId) return;
+    let cancelled = false;
+    setCourseName('');
+    setModuleName('');
+    courseService.getCourseById(courseId)
+      .then(c => { if (!cancelled) setCourseName(c.title); })
+      .catch(() => {});
+    if (moduleId) {
+      courseService.getCourseModules(courseId)
+        .then(mods => {
+          const m = mods.find(x => String(x.moduleId) === moduleId);
+          if (!cancelled && m) setModuleName(m.title);
+        })
+        .catch(() => {});
+    }
+    return () => { cancelled = true; };
+  }, [open, courseId, moduleId]);
 
   useEffect(() => {
     if (open) return;
@@ -367,34 +381,45 @@ export function ImportPdfModal({ open, onClose, onImported, courseId: pageCourse
         </div>
       ) : (
         <div className="space-y-4">
-          {lockLocation ? (
-            <p className="text-xs text-content-subtle">Imported questions will use the exam’s selected course and module.</p>
-          ) : (
-            <>
-              <QuestionLocationCard
-                hideHeading
-                courseId={courseId}
-                moduleId={moduleId}
-                onChange={(c, m) => { setCourseId(c); setModuleId(m); setError(null); }}
-                courseLocked={uploading}
-                moduleRequired
-              />
-              <p className="-mt-2 text-xs text-content-subtle">The imported questions go into this course and module.</p>
-            </>
-          )}
+          <div className="rounded-[10px] border border-line bg-surface-alt/60 px-3.5 py-2.5 space-y-1.5">
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-content-secondary">
+              <Icon.FolderOpen className="w-3.5 h-3.5 text-brand-ink" /> Importing into
+            </div>
+            <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
+              <dt className="text-content-subtle">Course</dt>
+              <dd className="font-medium text-content truncate">{courseName || `Course #${courseId}`}</dd>
+              <dt className="text-content-subtle">Module</dt>
+              <dd className="font-medium text-content truncate">
+                {moduleId ? (moduleName || `Module #${moduleId}`) : <span className="font-normal italic text-content-subtle">No module</span>}
+              </dd>
+            </dl>
+            <p className="text-2xs text-content-subtle">Close this window to change the course or module.</p>
+          </div>
 
-          <div className="flex flex-wrap items-center gap-2 rounded-[10px] border border-line px-3 py-2.5">
-            <Icon.FileText className="w-4 h-4 text-brand-ink flex-shrink-0" />
-            <p className="flex-1 min-w-[140px] text-sm text-content-secondary">Download import template (DIFFICULTY included):</p>
-            <Button size="sm" variant="outline" icon={<Icon.Download className="w-3.5 h-3.5" />} onClick={() => downloadTemplate('xlsx')} loading={templateBusy === 'xlsx'} disabled={templateBusy != null}>
-              Excel
-            </Button>
-            <Button size="sm" variant="outline" icon={<Icon.Download className="w-3.5 h-3.5" />} onClick={() => downloadTemplate('docx')} loading={templateBusy === 'docx'} disabled={templateBusy != null}>
-              Word
-            </Button>
-            <Button size="sm" variant="outline" icon={<Icon.Download className="w-3.5 h-3.5" />} onClick={() => downloadTemplate('pdf')} loading={templateBusy === 'pdf'} disabled={templateBusy != null}>
-              PDF
-            </Button>
+          <div className="rounded-[10px] border border-line px-3 py-2.5 space-y-2">
+            <p className="flex items-center gap-1.5 text-sm text-content-secondary">
+              <Icon.FileText className="w-4 h-4 text-brand-ink flex-shrink-0" /> Download import template
+            </p>
+            <div className="grid grid-cols-3 gap-2">
+              {([
+                { format: 'xlsx', label: 'Excel' },
+                { format: 'docx', label: 'Word' },
+                { format: 'pdf', label: 'PDF' },
+              ] as const).map(t => (
+                <Button
+                  key={t.format}
+                  size="sm"
+                  variant="outline"
+                  className="w-full"
+                  icon={<Icon.Download className="w-3.5 h-3.5" />}
+                  onClick={() => downloadTemplate(t.format)}
+                  loading={templateBusy === t.format}
+                  disabled={templateBusy != null}
+                >
+                  {t.label}
+                </Button>
+              ))}
+            </div>
           </div>
 
           <div
