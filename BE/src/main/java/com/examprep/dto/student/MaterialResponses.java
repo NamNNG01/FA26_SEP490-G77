@@ -38,6 +38,9 @@ public final class MaterialResponses {
     /** GET /lookup and POST /{documentId}/courses. */
     public record Lookup(Long documentId, String title, String fileName, List<CourseLink> courses) {}
 
+    /** GET /storage-quota */
+    public record StorageQuota(long usedKb, long limitKb, long usedFiles, long maxFiles) {}
+
     /** MQ-05: options never carry the correct flag. */
     public record StartedOption(Long optionId, String optionText) {}
 

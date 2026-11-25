@@ -81,6 +81,8 @@ public class StudentMaterialServiceImpl implements StudentMaterialService {
     private static final int MAX_BYTES = 20 * 1024 * 1024;
     /** Materials one student may keep; deleting one frees a slot. */
     public static final int MAX_MATERIALS = 50;
+    /** Cumulative material storage quota per account (100 MB). */
+    public static final long MAX_TOTAL_STORAGE_KB = 100L * 1024;
     private static final int MAX_PAGE_SIZE = 100;
     private static final int OUTPUT_BUDGET = 500;
     private static final String STATUS_IN_PROGRESS = "IN_PROGRESS";
@@ -122,6 +124,7 @@ public class StudentMaterialServiceImpl implements StudentMaterialService {
         if (bytes.length > MAX_BYTES) {
             throw new BaseException(ResponseCode.FILE_TOO_LARGE, "Material must not exceed 20MB");
         }
+        int fileSizeKb = (bytes.length + 1023) / 1024;
         // Checked before the file is read or stored: an unknown course is a 404, another course a 403.
         // No courseId: the material belongs to no course.
         if (courseId != null) {
@@ -137,6 +140,10 @@ public class StudentMaterialServiceImpl implements StudentMaterialService {
             throw new BaseException(ResponseCode.MATERIAL_LIMIT_REACHED,
                     "You can keep at most " + MAX_MATERIALS + " materials. Delete one to upload another.",
                     Map.of("code", "MATERIAL_LIMIT_REACHED", "limit", MAX_MATERIALS));
+        }
+        long usedKbPre = documents.sumFileSizeKbByUserId(userId);
+        if (usedKbPre + fileSizeKb > MAX_TOTAL_STORAGE_KB) {
+            throw storageQuotaExceeded(usedKbPre, fileSizeKb);
         }
 
         String text = reader.read(fileName, bytes);
@@ -170,6 +177,10 @@ public class StudentMaterialServiceImpl implements StudentMaterialService {
                     throw new BaseException(ResponseCode.MATERIAL_LIMIT_REACHED,
                             "You can keep at most " + MAX_MATERIALS + " materials. Delete one to upload another.",
                             Map.of("code", "MATERIAL_LIMIT_REACHED", "limit", MAX_MATERIALS));
+                }
+                long usedKb = documents.sumFileSizeKbByUserId(userId);
+                if (usedKb + fileSizeKb > MAX_TOTAL_STORAGE_KB) {
+                    throw storageQuotaExceeded(usedKb, fileSizeKb);
                 }
                 User student = users.findById(userId)
                         .orElseThrow(() -> new ResourceNotFoundException("User not found"));
@@ -239,6 +250,25 @@ public class StudentMaterialServiceImpl implements StudentMaterialService {
                     .map(document -> uploadedView(document, true))
                     .orElse(null));
         }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public MaterialResponses.StorageQuota storageQuota(Long userId) {
+        return new MaterialResponses.StorageQuota(
+                documents.sumFileSizeKbByUserId(userId),
+                MAX_TOTAL_STORAGE_KB,
+                documents.countByUserUserId(userId),
+                MAX_MATERIALS);
+    }
+
+    private BaseException storageQuotaExceeded(long usedKb, int fileSizeKb) {
+        return new BaseException(ResponseCode.STORAGE_QUOTA_EXCEEDED,
+                "Uploading this file would exceed your 100MB account storage quota. Delete an existing material and try again.",
+                Map.of("code", "STORAGE_QUOTA_EXCEEDED",
+                        "usedKb", usedKb,
+                        "limitKb", MAX_TOTAL_STORAGE_KB,
+                        "fileSizeKb", fileSizeKb));
     }
 
     private Uploaded uploadedView(Document document, boolean duplicate) {

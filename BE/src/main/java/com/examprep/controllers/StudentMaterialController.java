@@ -69,6 +69,13 @@ public class StudentMaterialController {
         return ResponseEntity.ok(ApiResponse.success(service.lookup(user.getId(), sha256)));
     }
 
+    @GetMapping("/storage-quota")
+    @Operation(summary = "Current account material storage usage and quota")
+    public ResponseEntity<ApiResponse<MaterialResponses.StorageQuota>> storageQuota(
+            @AuthenticationPrincipal UserPrincipal user) {
+        return ResponseEntity.ok(ApiResponse.success(service.storageQuota(user.getId())));
+    }
+
     @PostMapping("/{documentId}/courses")
     @Operation(summary = "Attach an existing material to another course of mine")
     public ResponseEntity<ApiResponse<MaterialResponses.Lookup>> attachCourse(

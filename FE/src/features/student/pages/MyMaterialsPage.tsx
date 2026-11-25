@@ -22,6 +22,7 @@ import {
   materialService,
   type MaterialItem,
   type MaterialJobBrief,
+  type MaterialStorageQuota,
 } from '@/services/studentMaterial.service';
 import { ListSkeleton, LoadError, PageTitle, STUDENT_PAGE_CLASS, formatDate } from '../components/studentUi';
 import { MaterialQuizModal } from '../components/MaterialQuizModal';
@@ -70,6 +71,7 @@ export function MyMaterialsPage() {
   const takeQuiet = useQuietRefresh(() => setReload(r => r + 1));
   const [courses, setCourses] = useState<MyCourse[]>([]);
   const [rows, setRows] = useState<MaterialItem[]>([]);
+  const [storageQuota, setStorageQuota] = useState<MaterialStorageQuota | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -97,11 +99,13 @@ export function MyMaterialsPage() {
     Promise.all([
       loadedOnce.current ? null : studentCourseService.getMyCourses({ page: 0, size: MY_COURSES_FETCH_SIZE }),
       materialService.listAll(null),
+      materialService.getStorageQuota().catch(() => null),
     ])
-      .then(([res, list]) => {
+      .then(([res, list, quota]) => {
         if (cancelled) return;
         if (res) setCourses(res.content);
         setRows(list);
+        if (quota) setStorageQuota(quota);
         loadedOnce.current = true;
       })
       .catch(err => {
@@ -216,7 +220,13 @@ export function MyMaterialsPage() {
       <PageTitle
         title="My Materials"
         subtitle={`Lecture notes and slides you uploaded, and the quizzes the AI generated from them.${
-          loading || error ? '' : ` ${Math.min(rows.length, MATERIAL_MAX_FILES)}/${MATERIAL_MAX_FILES} files used.`
+          loading || error
+            ? ''
+            : ` ${Math.min(rows.length, MATERIAL_MAX_FILES)}/${MATERIAL_MAX_FILES} files used${
+                storageQuota
+                  ? ` · ${(storageQuota.usedKb / 1024).toFixed(1)}/${Math.round(storageQuota.limitKb / 1024)} MB storage used`
+                  : ''
+              }.`
         }`}
         action={!loading && !error ? uploadButton : undefined}
       />

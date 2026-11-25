@@ -26,6 +26,9 @@ public interface StudentMaterialService {
     /** Deletes a material, its generation jobs and the stored file. */
     void delete(Long userId, Long documentId);
 
+    /** Current account material storage usage and quota. */
+    MaterialResponses.StorageQuota storageQuota(Long userId);
+
     /** MQ-03: reserves quota and queues the generation; the AI call runs outside the transaction. */
     MaterialResponses.JobAccepted generateQuiz(Long userId, Long documentId, MaterialRequests.GenerateQuiz request);
 

@@ -81,6 +81,13 @@ export interface MaterialLookup {
   courses: MaterialCourse[];
 }
 
+export interface MaterialStorageQuota {
+  usedKb: number;
+  limitKb: number;
+  usedFiles: number;
+  maxFiles: number;
+}
+
 /** MQ-03 body */
 export interface GenerateQuizRequest {
   questionCount: number;
@@ -157,6 +164,11 @@ export const materialService = {
     const qs = new URLSearchParams({ page: String(page), size: String(size) });
     if (courseId != null) qs.set('courseId', String(courseId));
     return api.get<ApiResponse<PageResponse<MaterialItem>>>(`/student/materials?${qs}`).then(r => r.data);
+  },
+
+  /** Account material storage usage and quota */
+  async getStorageQuota(): Promise<MaterialStorageQuota> {
+    return api.get<ApiResponse<MaterialStorageQuota>>('/student/materials/storage-quota').then(r => r.data);
   },
 
   /** MQ-02, every page; courseId null = every material of the student. */

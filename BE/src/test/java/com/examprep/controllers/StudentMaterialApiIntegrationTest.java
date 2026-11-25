@@ -286,6 +286,27 @@ public class StudentMaterialApiIntegrationTest {
         assertEquals(2, lookup.path("courses").size());
     }
 
+    @Test
+    void storageQuotaReturnsUsageAndRejectsUploadsExceedingTotalAccountLimit() throws Exception {
+        Document existing = document(student, course, "heavy", "Heavy material", Instant.now());
+        existing.setFileSizeKb((int) StudentMaterialServiceImpl.MAX_TOTAL_STORAGE_KB);
+        em.flush();
+
+        JsonNode quota = data(call(student, get("/api/v1/student/materials/storage-quota"))
+                .andExpect(status().isOk()));
+        assertEquals(StudentMaterialServiceImpl.MAX_TOTAL_STORAGE_KB, quota.path("usedKb").asLong());
+        assertEquals(StudentMaterialServiceImpl.MAX_TOTAL_STORAGE_KB, quota.path("limitKb").asLong());
+        assertEquals(1L, quota.path("usedFiles").asLong());
+        assertEquals(StudentMaterialServiceImpl.MAX_MATERIALS, quota.path("maxFiles").asLong());
+
+        MockMultipartFile overQuota = new MockMultipartFile("file", "extra.pdf", "application/pdf",
+                "EXTRA-CONTENT".getBytes(StandardCharsets.UTF_8));
+        call(student, multipart("/api/v1/student/materials").file(overQuota)
+                .param("courseId", course.getCourseId().toString()))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.data.code").value("STORAGE_QUOTA_EXCEEDED"));
+    }
+
     // =================================================================================
     // lookup / attach / delete
     // =================================================================================

@@ -51,6 +51,9 @@ public interface DocumentRepository extends JpaRepository<Document, Long> {
     @Query("SELECT COUNT(d) FROM Document d WHERE d.user.userId = :userId AND d.generationType = 'MATERIAL'")
     long countByUserUserId(@Param("userId") Long userId);
 
+    @Query("SELECT COALESCE(SUM(d.fileSizeKb), 0) FROM Document d WHERE d.user.userId = :userId AND d.generationType = 'MATERIAL'")
+    long sumFileSizeKbByUserId(@Param("userId") Long userId);
+
     @Query("select d from Document d where d.docId = :id and d.user.userId = :userId and d.generationType = 'MATERIAL'")
     Optional<Document> findOwned(@Param("id") Long id, @Param("userId") Long userId);
 }

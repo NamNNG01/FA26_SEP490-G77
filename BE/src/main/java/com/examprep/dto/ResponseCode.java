@@ -48,6 +48,8 @@ public enum ResponseCode {
     PAYLOAD_TOO_LARGE(HttpStatus.PAYLOAD_TOO_LARGE, "FILE_TOO_LARGE", "File is too large"),
     /** MQ-01: the student already holds the maximum number of materials. */
     MATERIAL_LIMIT_REACHED(HttpStatus.UNPROCESSABLE_ENTITY, "MATERIAL_LIMIT_REACHED", "Material limit reached"),
+    /** MQ-01: the student's cumulative material storage would exceed the per-account quota. */
+    STORAGE_QUOTA_EXCEEDED(HttpStatus.UNPROCESSABLE_ENTITY, "STORAGE_QUOTA_EXCEEDED", "Account storage quota exceeded"),
     PAYMENT_PROVIDER_ERROR(HttpStatus.BAD_GATEWAY, "PAYMENT_PROVIDER_ERROR", "Payment provider could not create checkout"),
     CODE_EXECUTION_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "CODE_EXECUTION_UNAVAILABLE", "Code execution service is unavailable"),
     /** MQ-03: reservation did not fit; {@code data} carries estimated/available/quota token counts. */
