@@ -1,4 +1,4 @@
-import type { UserResponse } from './authContext';
+import type { UserResponse } from '@/types/auth';
 
 /**
  * Single source of truth for auth persistence.
@@ -65,6 +65,28 @@ export function saveUser(user: UserResponse) {
 export function saveTokens(params: { accessToken: string; refreshToken: string }) {
   localStorage.setItem(ACCESS_TOKEN_KEY, params.accessToken);
   localStorage.setItem(REFRESH_TOKEN_KEY, params.refreshToken);
+}
+
+/**
+ * Notify when ANOTHER tab changes the stored session ('storage' events never
+ * fire in the tab that wrote the change):
+ *  - 'signedOut'   — the refresh token was removed (logout, failed refresh)
+ *  - 'userChanged' — a user was written (sign-in, profile edit, account switch)
+ */
+export function onExternalAuthChange(
+  cb: (change: 'signedOut' | 'userChanged') => void,
+): () => void {
+  function handle(e: StorageEvent) {
+    if (e.storageArea !== localStorage) return;
+    // key === null → localStorage.clear() in the other tab.
+    if (e.key === null || (e.key === REFRESH_TOKEN_KEY && e.newValue === null)) {
+      cb('signedOut');
+    } else if (e.key === USER_KEY && e.newValue !== null) {
+      cb('userChanged');
+    }
+  }
+  window.addEventListener('storage', handle);
+  return () => window.removeEventListener('storage', handle);
 }
 
 /**

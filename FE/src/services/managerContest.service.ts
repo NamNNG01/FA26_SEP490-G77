@@ -1,5 +1,5 @@
 import { api } from './api';
-import type { ApiResponse } from '@/auth/authContext';
+import type { ApiResponse } from '@/types/api';
 import type { PageResponse } from './course.service';
 import { examService } from './exam.service';
 import { apiFieldErrors } from '@/utils/apiError';

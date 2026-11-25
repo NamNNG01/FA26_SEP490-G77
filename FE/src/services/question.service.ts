@@ -1,7 +1,7 @@
 import { api } from './api';
 import { apiClient } from './axios';
 import { mockGenerateAiQuestions } from './mockQuestionAiData';
-import type { ApiResponse } from '@/auth/authContext';
+import type { ApiResponse } from '@/types/api';
 
 /**
  * QuestionService
@@ -76,6 +76,8 @@ export interface QuestionListParams {
   /** Kind of the question's group: QUIZ | ESSAY | CODE | DIAGRAM, or NONE for standalone questions. */
   groupType?: string;
   questionType?: string;
+  /** Any of these types (repeated query param); used when questionType is not set. */
+  questionTypes?: string[];
   difficulty?: string;
   status?: string;
   page?: number;
@@ -517,6 +519,7 @@ export const questionService = {
   /** Q-04 */
   async getQuestionById(id: number | string): Promise<QuestionDetail> {
     const res = await api.get<ApiResponse<QuestionDetail>>(`/manager/questions/${id}`);
+    if (!res.data?.questionId) throw new Error('The question response is invalid.');
     return res.data;
   },
 
@@ -571,6 +574,9 @@ export const questionService = {
     const res = await api.get<ApiResponse<RawSpringPage<QuestionListItem>>>(
       `/manager/questions${queryString ? `?${queryString}` : ''}`,
     );
+    if (!res.data || !Array.isArray(res.data.content)) {
+      throw new Error('The question response is invalid.');
+    }
     return toQuestionPage(res.data);
   },
 };

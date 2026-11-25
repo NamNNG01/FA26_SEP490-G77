@@ -1,5 +1,6 @@
 import { api } from './api';
-import type { ApiResponse, UserResponse } from '@/auth/authContext';
+import type { ApiResponse } from '@/types/api';
+import type { UserResponse } from '@/types/auth';
 
 /**
  * UserService

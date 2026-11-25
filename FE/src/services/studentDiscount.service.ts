@@ -1,5 +1,5 @@
 import { api } from './api';
-import type { ApiResponse } from '@/auth/authContext';
+import type { ApiResponse } from '@/types/api';
 import type { StudentPage } from './studentLearning.service';
 
 export type StudentDiscountStatus = 'AVAILABLE' | 'USED' | 'EXPIRED' | 'REVOKED';

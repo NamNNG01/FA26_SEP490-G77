@@ -25,7 +25,31 @@ export const api = {
   },
 
   /**
-   * Raw request (use for non-standard options).
+   * PUT <baseURL>/<endpoint>
+   */
+  async put<T>(endpoint: string, body?: unknown): Promise<T> {
+    const res = await apiClient.put(endpoint, body);
+    return assertApiResponse<T>(res.data);
+  },
+
+  /**
+   * PATCH <baseURL>/<endpoint>
+   */
+  async patch<T>(endpoint: string, body?: unknown): Promise<T> {
+    const res = await apiClient.patch(endpoint, body);
+    return assertApiResponse<T>(res.data);
+  },
+
+  /**
+   * DELETE <baseURL>/<endpoint>
+   */
+  async delete<T>(endpoint: string): Promise<T> {
+    const res = await apiClient.delete(endpoint);
+    return assertApiResponse<T>(res.data);
+  },
+
+  /**
+   * Raw request (use for non-standard options, e.g. a longer timeout).
    */
   async request<T>(options: {
     method: 'get' | 'post' | 'put' | 'patch' | 'delete';

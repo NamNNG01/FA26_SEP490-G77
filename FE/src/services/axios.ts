@@ -63,8 +63,30 @@ apiClient.interceptors.request.use(
  */
 let refreshInFlight: Promise<string> | null = null;
 
+/** Cross-tab lock name: only one tab at a time may rotate the shared pair. */
+const REFRESH_LOCK = 'examprep-auth-refresh';
+
+/** Run fn while holding the cross-tab refresh lock (no lock API → run as is). */
+function withRefreshLock<T>(fn: () => Promise<T>): Promise<T> {
+  if (typeof navigator !== 'undefined' && navigator.locks) {
+    return navigator.locks.request(REFRESH_LOCK, fn) as Promise<T>;
+  }
+  return fn();
+}
+
 function refreshAccessToken(refreshToken: string): Promise<string> {
-  refreshInFlight ??= (async () => {
+  refreshInFlight ??= withRefreshLock(async () => {
+    // Tabs share one token pair. If another tab rotated it while we waited for
+    // the lock, our token is now used: sending it would trip the backend's
+    // reuse detection, which revokes EVERY session of the user. Use the pair
+    // that tab stored instead.
+    const latest = getRefreshToken();
+    if (!latest) throw new Error('Signed out in another tab');
+    if (latest !== refreshToken) {
+      const accessToken = getAccessToken();
+      if (accessToken) return accessToken;
+    }
+
     // Backend contract: POST /auth/refresh with { refreshToken } in the
     // body (RefreshTokenRequest). No Authorization header needed — the
     // endpoint is permitAll. Response: ApiResponse<TokenResponse>.
@@ -73,7 +95,7 @@ function refreshAccessToken(refreshToken: string): Promise<string> {
     // in a silent logout.
     const res = await axios.post(
       `${config.apiBaseUrl.replace(/\/+$/, '')}/auth/refresh`,
-      { refreshToken },
+      { refreshToken: latest },
       { timeout: 15000 },
     );
     const body = res.data as { success: boolean; data?: unknown };
@@ -92,7 +114,7 @@ function refreshAccessToken(refreshToken: string): Promise<string> {
       refreshToken: data.refreshToken,
     });
     return data.accessToken;
-  })().finally(() => {
+  }).finally(() => {
     refreshInFlight = null;
   });
   return refreshInFlight;

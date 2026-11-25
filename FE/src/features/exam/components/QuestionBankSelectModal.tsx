@@ -8,17 +8,14 @@ import { Alert } from "@/components/ui/Alert";
 import { SearchInput } from "@/components/common/SearchInput";
 import { questionPlainText } from "@/components/common/QuestionContent";
 import { Icon } from "@/assets/icons";
-import {
-  examService,
-  type BankQuestionItem,
-  type Difficulty,
-} from "@/services/exam.service";
+import type { Difficulty } from "@/services/exam.service";
+import { questionService, type QuestionListItem } from "@/services/question.service";
 import { getApiErrorMessage } from "@/utils/apiError";
 
 interface QuestionBankSelectModalProps {
   open: boolean;
   onClose: () => void;
-  onSelect: (items: { question: BankQuestionItem; weight: number }[]) => void;
+  onSelect: (items: { question: QuestionListItem; weight: number }[]) => void;
   allowedQuestionTypes: string[];
   existingQuestionIds: Set<number>;
   courseId: number;
@@ -40,13 +37,13 @@ export function QuestionBankSelectModal({
   modules,
   loading = false,
 }: QuestionBankSelectModalProps) {
-  const [questions, setQuestions] = useState<BankQuestionItem[]>([]);
+  const [questions, setQuestions] = useState<QuestionListItem[]>([]);
   const [search, setSearch] = useState("");
   const [difficulty, setDifficulty] = useState<Difficulty | "all">("all");
   const [questionType, setQuestionType] = useState<string>("all");
   const [moduleFilter, setModuleFilter] = useState<string>("");
   const [defaultWeight, setDefaultWeight] = useState<number>(1);
-  const [selectedMap, setSelectedMap] = useState<Map<number, BankQuestionItem>>(
+  const [selectedMap, setSelectedMap] = useState<Map<number, QuestionListItem>>(
     new Map(),
   );
   const [fetching, setFetching] = useState(false);
@@ -62,7 +59,7 @@ export function QuestionBankSelectModal({
     setFetching(true);
     setQuestionsError(null);
     const timer = setTimeout(() => {
-      examService
+      questionService
         .getQuestions({
           search: search.trim() || undefined,
           courseId,
@@ -109,7 +106,7 @@ export function QuestionBankSelectModal({
     }
   }, [open, initialModuleId]);
 
-  const toggleSelect = (q: BankQuestionItem) => {
+  const toggleSelect = (q: QuestionListItem) => {
     if (existingQuestionIds.has(q.questionId)) return;
     setSelectedMap((prev) => {
       const next = new Map(prev);

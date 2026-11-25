@@ -1,6 +1,6 @@
 import { api } from './api';
 import { apiClient } from './axios';
-import type { ApiResponse } from '@/auth/authContext';
+import type { ApiResponse } from '@/types/api';
 
 /**
  * AiFlashcardService — AI flashcard generation and the caller's AI token quota.

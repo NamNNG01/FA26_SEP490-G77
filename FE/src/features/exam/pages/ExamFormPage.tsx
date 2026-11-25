@@ -25,9 +25,9 @@ import {
   type ExamStatus,
   type ExamMode,
   EXAM_MODE_OPTIONS,
-  type BankQuestionItem,
-  type QuestionGroupItem,
 } from "@/services/exam.service";
+import type { QuestionListItem } from "@/services/question.service";
+import type { QuestionGroup } from "@/services/questionGroup.service";
 import {
   courseService,
   type CourseSummaryItem,
@@ -538,7 +538,7 @@ export function ExamFormPage({
           Promise.allSettled(
             missingRubricQuestions
               .slice(0, 5)
-              .map((q) => examService.getQuestionById(q.questionId)),
+              .map((q) => questionService.getQuestionById(q.questionId)),
           ).then((results) => {
             setQuestions((prev) =>
               prev.map((pq) => {
@@ -925,7 +925,7 @@ export function ExamFormPage({
   };
 
   const handleAddQuestionsFromBank = async (
-    items: { question: BankQuestionItem; weight: number }[],
+    items: { question: QuestionListItem; weight: number }[],
   ) => {
     if (items.length === 0) return;
 
@@ -938,7 +938,8 @@ export function ExamFormPage({
         questionType: item.question.questionType,
         weight: item.weight,
         orderIndex: startOrder + idx,
-        hasRubric: !!item.question.essayGradingRubric,
+        // The bank list carries no rubric data.
+        hasRubric: false,
       }));
       setQuestions((prev) => [...prev, ...added]);
       setIsDirty(true);
@@ -1118,7 +1119,7 @@ export function ExamFormPage({
     }
   };
 
-  const handleAddGroup = async (group: QuestionGroupItem) => {
+  const handleAddGroup = async (group: QuestionGroup) => {
     setGroupModalOpen(false);
     setLoading(true);
     try {
@@ -1148,9 +1149,9 @@ export function ExamFormPage({
           {
             examGroupId: newExamGroupId,
             groupId: group.groupId,
-            title: group.title,
+            title: group.title ?? "",
             orderIndex: topOrder,
-            passageText: group.passageText,
+            passageText: group.passageText ?? undefined,
             questionCount: attachedQuestions.length,
           },
         ]);

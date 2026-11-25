@@ -18,11 +18,9 @@ import { PublicLayout } from '@/layouts/PublicLayout';
 import { LoadingScreen } from '@/components/LoadingScreen';
 import { Role } from '@/utils/permissions';
 
-import { LoginPage } from '@/features/auth';
+import { LoginPage, RegisterPage, ForgotPasswordPage, ResetPasswordPage } from '@/features/auth';
 import { LandingPage } from '@/features/landing';
 import { PlaceholderPage, PricingPage } from '@/features/public';
-import { RegisterPage } from '@/features/auth/pages/RegisterPage';
-import { ForgotPasswordPage, ResetPasswordPage } from '@/features/auth/pages/AuthPages';
 import { ProfilePage } from '@/features/profile';
 import {
   MyCoursesPage,
@@ -46,18 +44,21 @@ import {
   StudentContributionsPage,
   StudentWeaknessReportPage,
   StudentNotificationsPage,
+  StudentQuestionIssuesPage,
 } from '@/features/student';
 import { PaymentHistoryPage, PaymentReturnPage } from '@/features/payment';
 import { ExamListPage, ExamFormPage } from '@/features/exam';
 import { ManagerContestListPage, ManagerContestFormPage, ManagerContestDetailPage } from '@/features/contest';
 import { PublicExamsPage, PublicExamDetailPage } from '@/features/public-exam';
-import { CMDashboard, ManagerDiscussionPage } from '@/features/content-manager';
+import {
+  CMDashboard,
+  ManagerDiscussionPage,
+  ManagerReviewPage,
+  ManagerQuestionIssuesPage,
+} from '@/features/content-manager';
 import { QuestionBankPage, QuestionDetailPage, QuestionFormPage } from '@/features/question';
 import { CourseListPage, CourseDetailPage, CourseFormPage } from '@/features/course';
 import { FlashcardManagementPage, FlashcardDeckDetailPage } from '@/features/flashcard';
-import { ManagerReviewPage } from '@/features/content-manager/pages/ManagerReviewPage';
-import { ManagerQuestionIssuesPage } from '@/features/content-manager/pages/ManagerQuestionIssuesPage';
-import { StudentQuestionIssuesPage } from '@/features/student/pages/StudentQuestionIssuesPage';
 import { PublicCoursesPage, PublicCourseDetailPage } from '@/features/catalog';
 import {
   AdminDashboard,
@@ -69,8 +70,8 @@ import {
   SystemSettingsPage,
   CategoriesPage,
   DiscountsPage,
+  AdminCommunityDecksPage,
 } from '@/features/admin';
-import { AdminCommunityDecksPage } from '@/features/admin/pages/AdminCommunityDecksPage';
 
 /**
  * AppContent

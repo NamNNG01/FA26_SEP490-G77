@@ -7,14 +7,15 @@ import { Alert } from '@/components/ui/Alert';
 import { SearchInput } from '@/components/common/SearchInput';
 import { Icon } from '@/assets/icons';
 import { useToast } from '@/components/ui/ToastHost';
-import { examService, type ExamKind, type QuestionGroupItem } from '@/services/exam.service';
+import type { ExamKind } from '@/services/exam.service';
+import { questionGroupService, type QuestionGroup } from '@/services/questionGroup.service';
 import { ROUTES, managerQuestionCreateWithContextPath } from '@/app/routes';
 import { getApiErrorMessage } from '@/utils/apiError';
 
 interface QuestionGroupModalProps {
   open: boolean;
   onClose: () => void;
-  onSelectGroup: (group: QuestionGroupItem) => void;
+  onSelectGroup: (group: QuestionGroup) => void;
   existingGroupIds: Set<number>;
   courseId?: number;
   moduleId?: number;
@@ -34,15 +35,15 @@ export function QuestionGroupModal({
 }: QuestionGroupModalProps) {
   const toast = useToast();
   const navigate = useNavigate();
-  const [groups, setGroups] = useState<QuestionGroupItem[]>([]);
+  const [groups, setGroups] = useState<QuestionGroup[]>([]);
   const [search, setSearch] = useState('');
-  const [selectedGroup, setSelectedGroup] = useState<QuestionGroupItem | null>(null);
+  const [selectedGroup, setSelectedGroup] = useState<QuestionGroup | null>(null);
   const [fetching, setFetching] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     setFetching(true);
-    examService
+    questionGroupService
       .getQuestionGroups({
         courseId,
         moduleId,
@@ -52,7 +53,7 @@ export function QuestionGroupModal({
       })
       .then((res) => {
         const types = questionType === 'ESSAY' ? ['ESSAY', 'DIAGRAM', 'DIAGRAM_ESSAY'] : [questionType];
-        setGroups((res.content || []).filter((group) => types.includes(group.questionType)));
+        setGroups((res.content || []).filter((group) => group.questionType != null && types.includes(group.questionType)));
       })
       .catch((err) => {
         setGroups([]);

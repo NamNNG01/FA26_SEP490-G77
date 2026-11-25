@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Icon } from "@/assets/icons";
 import { useToast } from "@/components/ui/ToastHost";
-import { examService, type RubricCriterion } from "@/services/exam.service";
+import { examService, type RubricCriterion, type RubricData } from "@/services/exam.service";
+import { questionService } from "@/services/question.service";
 import { getApiErrorMessage } from "@/utils/apiError";
 import { focusFirstInvalidAfter } from "@/utils/focusFirstInvalid";
 import { Alert } from "@/components/ui/Alert";
@@ -46,17 +47,18 @@ export function RubricDetailModal({
     setSaveError("");
     setLoadFailed(false);
     setInvalidRowIdx(null);
-    examService
+    questionService
       .getQuestionById(questionId)
       .then((q) => {
-        if (q.essayGradingRubric && q.essayGradingRubric.criteria?.length > 0) {
+        const rubric = q.essayGradingRubric as RubricData | null;
+        if (rubric && rubric.criteria?.length > 0) {
           setCriteria(
-            q.essayGradingRubric.criteria.map((criterion) => ({
+            rubric.criteria.map((criterion) => ({
               ...criterion,
               weight: Number(criterion.weight ?? criterion.maxScore ?? 1),
             })),
           );
-          setNotes(q.essayGradingRubric.notes || "");
+          setNotes(rubric.notes || "");
         } else {
           setCriteria([{ name: "", weight: 1, descriptors: "" }]);
           setNotes("");

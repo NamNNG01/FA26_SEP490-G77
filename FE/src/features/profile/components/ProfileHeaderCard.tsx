@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router';
-import { useAuth, type UserResponse } from '@/auth/authContext';
+import { useAuth } from '@/auth/authContext';
+import type { UserResponse } from '@/types/auth';
 import { ROUTES } from '@/app/routes';
 import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';

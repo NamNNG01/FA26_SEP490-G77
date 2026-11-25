@@ -1,6 +1,6 @@
 import { api } from './api';
 import { apiClient } from './axios';
-import type { ApiResponse } from '@/auth/authContext';
+import type { ApiResponse } from '@/types/api';
 import type { PageResponse } from './course.service';
 import type { QuestionCreateRequest } from './question.service';
 
@@ -142,20 +142,6 @@ export interface UpdateExamOrderRequest {
   items: ExamOrderEntry[];
 }
 
-export interface ExamQuestionListParams {
-  search?: string;
-  courseId?: number;
-  moduleId?: number;
-  groupId?: number;
-  groupType?: string;
-  questionType?: string;
-  questionTypes?: string[];
-  difficulty?: Difficulty;
-  status?: string;
-  page?: number;
-  size?: number;
-}
-
 export interface ExamListParams {
   search?: string;
   courseId?: number;
@@ -196,33 +182,6 @@ export interface BankQuestionItem {
   explanation?: string;
   essayGradingRubric?: RubricData | null;
   updatedAt?: string;
-}
-
-export interface QuestionGroupItem {
-  groupId: number;
-  courseId?: number;
-  moduleId?: number;
-  questionType: ExamKind;
-  title: string;
-  passageText: string;
-  questionCount: number;
-}
-
-export interface QuestionGroupListParams {
-  courseId?: number;
-  moduleId?: number;
-  questionType?: ExamKind;
-  search?: string;
-  page?: number;
-  size?: number;
-}
-
-export interface CreateQuestionGroupRequest {
-  courseId: number;
-  moduleId?: number;
-  questionType: ExamKind;
-  title: string;
-  passageText: string;
 }
 
 export interface AiRubricCriterion {
@@ -394,36 +353,6 @@ export const examService = {
     await api.request<ApiResponse<null>>({ method: 'delete', url: `/manager/exams/${id}/groups/${examGroupId}` });
   },
 
-  async getQuestions(params?: ExamQuestionListParams): Promise<PageResponse<BankQuestionItem>> {
-    const q = new URLSearchParams();
-    if (params?.search) q.set('search', params.search);
-    if (params?.courseId) q.set('courseId', String(params.courseId));
-    if (params?.moduleId) q.set('moduleId', String(params.moduleId));
-    if (params?.groupId) q.set('groupId', String(params.groupId));
-    if (params?.groupType) q.set('groupType', params.groupType);
-    if (params?.questionType) q.set('questionType', params.questionType);
-    params?.questionTypes?.forEach((type) => q.append('questionTypes', type));
-    if (params?.difficulty) q.set('difficulty', params.difficulty);
-    if (params?.status) q.set('status', params.status);
-    if (params?.page !== undefined) q.set('page', String(params.page));
-    if (params?.size !== undefined) q.set('size', String(params.size));
-
-    const queryStr = q.toString();
-    const res = await api.get<ApiResponse<PageResponse<BankQuestionItem>>>(
-      `/manager/questions${queryStr ? `?${queryStr}` : ''}`
-    );
-    if (!res.data || !Array.isArray(res.data.content)) {
-      throw new Error('The question response is invalid.');
-    }
-    return res.data;
-  },
-
-  async getQuestionById(id: number): Promise<BankQuestionItem> {
-    const res = await api.get<ApiResponse<BankQuestionItem>>(`/manager/questions/${id}`);
-    if (!res.data?.questionId) throw new Error('The question response is invalid.');
-    return res.data;
-  },
-
   async updateRubric(questionId: number, payload: RubricData): Promise<BankQuestionItem> {
     const res = await api.request<ApiResponse<BankQuestionItem>>({
       method: 'put',
@@ -433,30 +362,6 @@ export const examService = {
     return res.data;
   },
 
-  async getQuestionGroups(params?: QuestionGroupListParams): Promise<PageResponse<QuestionGroupItem>> {
-    const q = new URLSearchParams();
-    if (params?.search) q.set('search', params.search);
-    if (params?.courseId) q.set('courseId', String(params.courseId));
-    if (params?.moduleId) q.set('moduleId', String(params.moduleId));
-    if (params?.questionType) q.set('questionType', params.questionType);
-    if (params?.page !== undefined) q.set('page', String(params.page));
-    if (params?.size !== undefined) q.set('size', String(params.size));
-
-    const queryStr = q.toString();
-    const res = await api.get<ApiResponse<PageResponse<QuestionGroupItem>>>(
-      `/manager/question-groups${queryStr ? `?${queryStr}` : ''}`
-    );
-    if (!res.data || !Array.isArray(res.data.content)) {
-      throw new Error('The question group response is invalid.');
-    }
-    return res.data;
-  },
-
-  async createQuestionGroup(payload: CreateQuestionGroupRequest): Promise<QuestionGroupItem> {
-    const res = await api.post<ApiResponse<QuestionGroupItem>>('/manager/question-groups', payload);
-    if (!res.data) throw new Error('The question group response is invalid.');
-    return res.data;
-  },
 
   async importQuestions(id: number, formData: FormData): Promise<ImportExamResponse> {
     const res = await apiClient.post<ApiResponse<ImportExamResponse>>(`/manager/exams/${id}/import`, formData, {
