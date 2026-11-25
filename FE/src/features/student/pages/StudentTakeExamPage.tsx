@@ -919,7 +919,7 @@ function ExamAttemptScreen() {
                     </>
                   )}
 
-                  {instantCheck && !RUBRIC_TYPES.has(itemQ.questionType) && (
+                  {instantCheck && !RUBRIC_TYPES.has(itemQ.questionType) && itemQ.questionType !== 'CODE' && (
                     <PracticeCheck
                       key={itemQ.questionId}
                       question={itemQ}

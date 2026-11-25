@@ -173,7 +173,6 @@ public class StudentCourseServiceImpl implements StudentCourseService {
 
         if ("general".equalsIgnoreCase(moduleIdStr)) {
             moduleDto = new ModuleDescriptorDto(null, "General", null);
-            modIdParam = null;
         } else {
             long modId;
             try {

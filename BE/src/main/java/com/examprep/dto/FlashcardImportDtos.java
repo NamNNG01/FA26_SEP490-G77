@@ -39,7 +39,6 @@ public final class FlashcardImportDtos {
     public record PreviewResponse(
             String fileName,
             String fileType,
-            String templateVersion,
             int totalRows,
             int validCount,
             int invalidCount,

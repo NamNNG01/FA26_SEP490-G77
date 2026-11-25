@@ -3,6 +3,8 @@ package com.examprep.controllers.student;
 import com.examprep.entities.AiUsageLog;
 import com.examprep.entities.CodeQuestionConfig;
 import com.examprep.entities.CodeTestCase;
+import com.examprep.entities.StudentQuestionReview;
+import com.examprep.services.PistonClient;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.junit.jupiter.api.Test;
 
@@ -13,6 +15,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -72,25 +79,60 @@ class ModulePracticeAiApiIntegrationTest extends ModulePracticeTestBase {
     }
 
     @Test
-    void aCodeAnswerIsGradedByTheRubricWorkerAndNeverTouchesTheJudge() throws Exception {
+    void aCodeAnswerIsGradedByTestCasesAndRecordsWrongInReview() throws Exception {
+        em.persist(CodeQuestionConfig.builder().questionId(code.getQuestionId()).allowedLanguages("[\"JAVA\"]")
+                .codeTemplate("class Main {}").timeLimitMs(2000).memoryLimitKb(262144)
+                .createdAt(Instant.now()).updatedAt(Instant.now()).build());
+        CodeTestCase tc1 = CodeTestCase.builder().question(code).inputData("abc").expectedOutput("cba")
+                .hidden(false).orderIndex(0).createdAt(Instant.now()).build();
+        CodeTestCase tc2 = CodeTestCase.builder().question(code).inputData("ab").expectedOutput("ba")
+                .hidden(true).orderIndex(1).createdAt(Instant.now()).build();
+        em.persist(tc1);
+        em.persist(tc2);
+        em.flush();
+
+        when(piston.judge(anyString(), anyString(), anyList(), anyInt(), anyInt())).thenReturn(List.of(
+                new PistonClient.CaseOutcome(tc1.getTestCaseId(), true, "cba", null, null, 12),
+                new PistonClient.CaseOutcome(tc2.getTestCaseId(), false, "ab", null, null, 15)
+        ));
+
         JsonNode session = sessionOf(student, moduleA.getModuleId());
         long sessionId = session.path("sessionId").asLong();
         long sessionQuestionId = sessionQuestionIdOf(session, code.getQuestionId());
-        answer(student, sessionId, sessionQuestionId,
-                "{\"response\":{\"text\":\"return new StringBuilder(s).reverse().toString();\"}}");
+        JsonNode wrongRes = answer(student, sessionId, sessionQuestionId,
+                "{\"response\":{\"text\":\"return s;\"}}");
 
-        REPLIES.add(gradingReply("Handles the empty string."));
-        assertTrue(gradingWorker.gradeNext());
-        assertEquals(1, REQUESTS.size());
-        // No hidden test case of the platform is ever sent to the model, and no judge submission is made.
-        assertTrue(REQUESTS.get(0).contains("must never be guessed at or mentioned"),
-                "the prompt must forbid reasoning about the hidden tests");
+        assertEquals("AUTO", wrongRes.path("gradingStatus").asText());
+        assertFalse(wrongRes.path("isCorrect").asBoolean());
+        assertEquals(0.0, wrongRes.path("scoreEarned").asDouble(), 1e-9);
+        assertEquals(1, wrongRes.path("feedback").path("passedCount").asInt());
+        assertEquals(2, wrongRes.path("feedback").path("totalCount").asInt());
+        assertEquals(2, wrongRes.path("feedback").path("firstFailure").asInt());
+        assertFalse(gradingWorker.gradeNext(), "CODE must not be queued for AI grading");
+        assertTrue(REQUESTS.isEmpty(), "CODE grading must not call the AI provider");
         assertEquals(0, count("SELECT COUNT(c) FROM CodeSubmission c"),
-                "practice grading must not create a judge submission");
-        JsonNode attempt = data(history(student, sessionId, sessionQuestionId).andExpect(status().isOk()))
-                .path("attempts").get(0);
-        assertEquals("AI_GRADED", attempt.path("gradingStatus").asText());
-        assertEquals(1.0, attempt.path("scoreEarned").asDouble(), 1e-9);
+                "practice grading must not create an exam judge submission");
+
+        StudentQuestionReview review = em.createQuery(
+                        "SELECT r FROM StudentQuestionReview r WHERE r.student.userId = :uid AND r.question.questionId = :qid",
+                        StudentQuestionReview.class)
+                .setParameter("uid", student.getUserId())
+                .setParameter("qid", code.getQuestionId())
+                .getSingleResult();
+        assertEquals("WRONG_BOOKMARKED", review.getStatus());
+        assertEquals(1, review.getWrongCount());
+
+        when(piston.judge(anyString(), anyString(), anyList(), anyInt(), anyInt())).thenReturn(List.of(
+                new PistonClient.CaseOutcome(tc1.getTestCaseId(), true, "cba", null, null, 10),
+                new PistonClient.CaseOutcome(tc2.getTestCaseId(), true, "ba", null, null, 11)
+        ));
+        JsonNode rightRes = answer(student, sessionId, sessionQuestionId,
+                "{\"response\":{\"text\":\"return new StringBuilder(s).reverse().toString();\"}}");
+        assertEquals("AUTO", rightRes.path("gradingStatus").asText());
+        assertTrue(rightRes.path("isCorrect").asBoolean());
+        assertEquals(1.0, rightRes.path("scoreEarned").asDouble(), 1e-9);
+        assertEquals(2, rightRes.path("feedback").path("passedCount").asInt());
+        assertEquals(2, rightRes.path("feedback").path("totalCount").asInt());
     }
 
     @Test
@@ -367,11 +409,18 @@ class ModulePracticeAiApiIntegrationTest extends ModulePracticeTestBase {
         em.persist(CodeQuestionConfig.builder().questionId(code.getQuestionId()).allowedLanguages("[\"JAVA\"]")
                 .codeTemplate("class Main {}").timeLimitMs(2000).memoryLimitKb(262144)
                 .createdAt(Instant.now()).updatedAt(Instant.now()).build());
-        em.persist(CodeTestCase.builder().question(code).inputData("abc").expectedOutput("cba")
-                .hidden(false).orderIndex(0).createdAt(Instant.now()).build());
-        em.persist(CodeTestCase.builder().question(code).inputData("hidden-input").expectedOutput("hidden-output")
-                .hidden(true).orderIndex(1).createdAt(Instant.now()).build());
+        CodeTestCase tc1 = CodeTestCase.builder().question(code).inputData("abc").expectedOutput("cba")
+                .hidden(false).orderIndex(0).createdAt(Instant.now()).build();
+        CodeTestCase tc2 = CodeTestCase.builder().question(code).inputData("hidden-input").expectedOutput("hidden-output")
+                .hidden(true).orderIndex(1).createdAt(Instant.now()).build();
+        em.persist(tc1);
+        em.persist(tc2);
         em.flush();
+
+        when(piston.judge(anyString(), anyString(), anyList(), anyInt(), anyInt())).thenReturn(List.of(
+                new PistonClient.CaseOutcome(tc1.getTestCaseId(), true, "cba", null, null, 10),
+                new PistonClient.CaseOutcome(tc2.getTestCaseId(), true, "hidden-output", null, null, 10)
+        ));
 
         JsonNode session = sessionOf(student, moduleA.getModuleId());
         long sessionId = session.path("sessionId").asLong();

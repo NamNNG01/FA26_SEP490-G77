@@ -184,7 +184,7 @@ class ModulePracticeAnswerApiIntegrationTest extends ModulePracticeTestBase {
     // ------------------------------------------------------------------ rubric types
 
     @Test
-    void essayDiagramAndCodeAreQueuedForTheAiRubricWorker() throws Exception {
+    void essayAndDiagramAreQueuedForTheAiRubricWorker() throws Exception {
         JsonNode session = sessionOf(student, moduleA.getModuleId());
         long sessionId = session.path("sessionId").asLong();
 
@@ -201,16 +201,11 @@ class ModulePracticeAnswerApiIntegrationTest extends ModulePracticeTestBase {
                 "{\"response\":{\"drawioXml\":" + quote(DIAGRAM_XML) + "}}");
         assertEquals("QUEUED", diagramAnswer.path("gradingStatus").asText());
 
-        long codeId = sessionQuestionIdOf(session, code.getQuestionId());
-        JsonNode codeAnswer = answer(student, sessionId, codeId,
-                "{\"response\":{\"text\":\"static String reverse(String s) { return new StringBuilder(s).reverse().toString(); }\"}}");
-        assertEquals("QUEUED", codeAnswer.path("gradingStatus").asText());
-
         // Queued rubric answers are counted as answered, never as correct or wrong.
-        assertEquals(3, count("SELECT COUNT(a) FROM QuestionPracticeAnswer a WHERE a.isCorrect IS NULL"));
-        assertEquals(3, count("SELECT COUNT(p) FROM QuestionPracticeProgress p WHERE p.lastIsCorrect IS NULL"));
+        assertEquals(2, count("SELECT COUNT(a) FROM QuestionPracticeAnswer a WHERE a.isCorrect IS NULL"));
+        assertEquals(2, count("SELECT COUNT(p) FROM QuestionPracticeProgress p WHERE p.lastIsCorrect IS NULL"));
         assertEquals(0, count("SELECT COUNT(a) FROM QuestionPracticeAnswer a WHERE a.isCorrect = TRUE"));
-        assertEquals(3, count("SELECT COUNT(a) FROM QuestionPracticeAnswer a WHERE a.gradingStatus = 'QUEUED'"));
+        assertEquals(2, count("SELECT COUNT(a) FROM QuestionPracticeAnswer a WHERE a.gradingStatus = 'QUEUED'"));
     }
 
     @Test

@@ -2,14 +2,12 @@ import { useEffect, useMemo, useRef } from 'react';
 import { cacheGeneration, getCached, setCached, useCachedQuery } from '@/hooks/useCachedQuery';
 import {
   studentCourseService,
-  type CourseExam,
   type MyCourse,
   type StudentCourseDetail,
-  type StudentDeck,
 } from '@/services/studentCourse.service';
 import { studentProgressService, type CourseProgress, type ProgressCount } from '@/services/studentProgress.service';
 import { getApiErrorMessage } from '@/utils/apiError';
-import { GENERAL_MODULE, groupCourseContent, sortedModules } from './courseContent';
+import { GENERAL_MODULE, sortedModules } from './courseContent';
 
 /**
  * Learning progress of a module, and of a course from its modules — the same numbers on My Courses'
@@ -42,7 +40,7 @@ export type BeProgressState = CourseProgress | 'error' | undefined;
 export const courseCacheKey = {
   /** MC-01 as My Courses lists it, with each course's live LP-01 percent. */
   myCourses: 'student:my-courses',
-  /** CL-02 + MC-02 + MC-03 + LP-01, as the course page reads them. */
+  /** CL-02 + LP-01, as the course page reads them. */
   detail: (courseId: number | string) => `student:course-detail:${courseId}`,
   /** CL-02 */
   course: (courseId: number | string) => `student:course:${courseId}`,
@@ -99,31 +97,26 @@ export function useBeCourseProgress(
 
 interface CourseDetailData {
   course: StudentCourseDetail;
-  /** MC-02 / MC-03; null when they failed (they also refuse an enrollment that is not ACTIVE). */
-  exams: CourseExam[] | null;
-  decks: StudentDeck[] | null;
   be: CourseProgress | 'error';
 }
 
 /**
- * Everything the course page needs, read together and shown at once: CL-02, MC-02 (every page),
- * MC-03 and LP-01 all start from the route's courseId, without waiting for CL-02. MC-02/03 and LP-01
- * only answer for an ACTIVE enrollment; for any other state their failures are dropped. MP-01 is not
- * read here (that would be one call per module): the course page reads it for one module only, when
- * its Practice button is pressed.
+ * Everything the course page needs, read together and shown at once: CL-02 and LP-01 both start
+ * from the route's courseId, without waiting for each other. LP-01 only answers for an ACTIVE
+ * enrollment; for any other state its failure is dropped. MP-01 is not read here (that would be
+ * one call per module): the course page reads it for one module only, when its Practice button is
+ * pressed.
  */
 export function useCourseDetail(courseId: string) {
   // Cached (useCachedQuery): opened again, the page shows the last reading at once and reads again behind it.
   const { data, loading, error, reload } = useCachedQuery<CourseDetailData>(courseCacheKey.detail(courseId), async () => {
     const gen = cacheGeneration();
-    const [course, exams, decks, be] = await Promise.all([
+    const [course, be] = await Promise.all([
       studentCourseService.getCourseDetail(courseId),
-      studentCourseService.getAllCourseExams(courseId).catch(() => null),
-      studentCourseService.getCourseDecks(courseId).catch(() => null),
       studentProgressService.getCourseProgress(courseId).catch(() => 'error' as const),
     ]);
     // Signed out meanwhile: nothing of this reading goes into the new session's cache.
-    if (gen !== cacheGeneration()) return { course, exams, decks, be };
+    if (gen !== cacheGeneration()) return { course, be };
     // The module page reads these two on their own; it can start from them too.
     setCached(courseCacheKey.course(courseId), course);
     if (be !== 'error') {
@@ -137,18 +130,29 @@ export function useCourseDetail(courseId: string) {
         );
       }
     }
-    return { course, exams, decks, be };
+    return { course, be };
   });
 
   const derived = useMemo(() => {
     if (!data) return null;
-    const { course, exams, decks, be } = data;
+    const { course, be } = data;
     const isActive = Boolean(course.enrollment?.isEnrolled && course.enrollment.status === 'ACTIVE');
     const modules = sortedModules(course);
-    const { byModule, general } = groupCourseContent(course, exams ?? [], decks ?? []);
+    const generalEntry = be !== 'error' ? be.modules.find(m => m.moduleId == null) : undefined;
+    const generalCounts = {
+      exams:
+        generalEntry?.exams?.total ??
+        Math.max(0, (course.stats.publishedExamCount ?? 0) - modules.reduce((sum, m) => sum + (m.examCount ?? 0), 0)),
+      decks:
+        generalEntry?.decks?.total ??
+        Math.max(0, (course.stats.deckCount ?? 0) - modules.reduce((sum, m) => sum + (m.deckCount ?? 0), 0)),
+      questions: be !== 'error' ? (generalEntry?.questions?.total ?? 0) : undefined,
+    };
     // Every course has a General pool; it counts as a module once it holds anything — practice
     // questions filed under no module, or such exams / decks. LP-01 lists it only then.
-    const hasGeneral = isActive && (general.length > 0 || (be !== 'error' && be.modules.some(m => m.moduleId == null)));
+    const hasGeneral =
+      isActive &&
+      (generalEntry != null || generalCounts.exams > 0 || generalCounts.decks > 0);
     /** A module's progress (`GENERAL_MODULE` = the General pool): undefined when LP-01 failed, null = nothing to count. */
     const moduleProgress = (key: string): LearningProgress | null | undefined =>
       be === 'error' ? undefined : beModuleProgress(be, key);
@@ -156,12 +160,10 @@ export function useCourseDetail(courseId: string) {
       course,
       isActive,
       modules,
-      byModule,
-      general,
+      generalCounts,
       hasGeneral,
       /** Modules shown on the course page: the course's own, plus General when it holds anything. */
       moduleCount: modules.length + (hasGeneral ? 1 : 0),
-      contentError: isActive && (exams == null || decks == null) ? 'Failed to load the course content.' : null,
       progress: (be === 'error' ? 'error' : beCourseProgress(be)) as LearningProgress | 'error',
       be,
       moduleProgress,

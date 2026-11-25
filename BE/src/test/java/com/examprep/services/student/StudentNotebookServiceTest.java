@@ -56,8 +56,6 @@ class StudentNotebookServiceTest {
     @Mock
     private AttemptAnswerRepository answerRepository;
     @Mock
-    private EnrollmentRepository enrollmentRepository;
-    @Mock
     private QuestionPracticeProgressRepository practiceProgressRepository;
 
     @InjectMocks
@@ -132,6 +130,98 @@ class StudentNotebookServiceTest {
         assertEquals(false, res.get("isBookmarked"));
         assertFalse(review1.getBookmark());
         verify(reviewRepository).save(review1);
+    }
+
+    @Test
+    void toggleBookmark_newFromSubmittedAnswer_success() {
+        Question activeQuestion = Question.builder()
+                .questionId(1L)
+                .content("What is Java?")
+                .questionType("SINGLE_CHOICE")
+                .status("ACTIVE")
+                .approvalStatus("APPROVED")
+                .build();
+        when(questionRepository.findById(1L)).thenReturn(Optional.of(activeQuestion));
+        when(reviewRepository.findByStudent_UserIdAndQuestion_QuestionId(100L, 1L)).thenReturn(Optional.empty());
+        when(answerRepository.existsSubmittedByUserAndQuestion(100L, 1L)).thenReturn(true);
+        when(userRepository.findById(100L)).thenReturn(Optional.of(student));
+
+        Map<String, Object> res = notebookService.toggleBookmark(1L, 100L);
+
+        assertEquals(1L, res.get("questionId"));
+        assertEquals(true, res.get("isBookmarked"));
+        verify(reviewRepository).save(any(StudentQuestionReview.class));
+    }
+
+    @Test
+    void toggleBookmark_newFromPracticeProgress_success() {
+        Question activeQuestion = Question.builder()
+                .questionId(1L)
+                .content("What is Java?")
+                .questionType("SINGLE_CHOICE")
+                .status("ACTIVE")
+                .approvalStatus("APPROVED")
+                .build();
+        when(questionRepository.findById(1L)).thenReturn(Optional.of(activeQuestion));
+        when(reviewRepository.findByStudent_UserIdAndQuestion_QuestionId(100L, 1L)).thenReturn(Optional.empty());
+        when(answerRepository.existsSubmittedByUserAndQuestion(100L, 1L)).thenReturn(false);
+        when(practiceProgressRepository.existsByUser_UserIdAndQuestion_QuestionId(100L, 1L)).thenReturn(true);
+        when(userRepository.findById(100L)).thenReturn(Optional.of(student));
+
+        Map<String, Object> res = notebookService.toggleBookmark(1L, 100L);
+
+        assertEquals(1L, res.get("questionId"));
+        assertEquals(true, res.get("isBookmarked"));
+        verify(reviewRepository).save(any(StudentQuestionReview.class));
+    }
+
+    @Test
+    void toggleBookmark_newUnanswered_throwsNotFound() {
+        Question activeQuestion = Question.builder()
+                .questionId(1L)
+                .content("What is Java?")
+                .questionType("SINGLE_CHOICE")
+                .status("ACTIVE")
+                .approvalStatus("APPROVED")
+                .build();
+        when(questionRepository.findById(1L)).thenReturn(Optional.of(activeQuestion));
+        when(reviewRepository.findByStudent_UserIdAndQuestion_QuestionId(100L, 1L)).thenReturn(Optional.empty());
+        when(answerRepository.existsSubmittedByUserAndQuestion(100L, 1L)).thenReturn(false);
+        when(practiceProgressRepository.existsByUser_UserIdAndQuestion_QuestionId(100L, 1L)).thenReturn(false);
+
+        assertThrows(ResourceNotFoundException.class, () -> notebookService.toggleBookmark(1L, 100L));
+        verify(reviewRepository, never()).save(any());
+    }
+
+    @Test
+    void toggleBookmark_newDeletedOrInactiveOrUnapproved_throwsNotFound() {
+        Question deletedQuestion = Question.builder()
+                .questionId(1L)
+                .status("ACTIVE")
+                .approvalStatus("APPROVED")
+                .deletedAt(Instant.now())
+                .build();
+        when(questionRepository.findById(1L)).thenReturn(Optional.of(deletedQuestion));
+        when(reviewRepository.findByStudent_UserIdAndQuestion_QuestionId(100L, 1L)).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class, () -> notebookService.toggleBookmark(1L, 100L));
+
+        Question draftQuestion = Question.builder()
+                .questionId(1L)
+                .status("DRAFT")
+                .approvalStatus("APPROVED")
+                .build();
+        when(questionRepository.findById(1L)).thenReturn(Optional.of(draftQuestion));
+        assertThrows(ResourceNotFoundException.class, () -> notebookService.toggleBookmark(1L, 100L));
+
+        Question pendingQuestion = Question.builder()
+                .questionId(1L)
+                .status("ACTIVE")
+                .approvalStatus("PENDING")
+                .build();
+        when(questionRepository.findById(1L)).thenReturn(Optional.of(pendingQuestion));
+        assertThrows(ResourceNotFoundException.class, () -> notebookService.toggleBookmark(1L, 100L));
+        verify(reviewRepository, never()).save(any());
     }
 
     @Test

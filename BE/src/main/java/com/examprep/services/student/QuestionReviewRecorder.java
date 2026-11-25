@@ -141,7 +141,7 @@ public class QuestionReviewRecorder {
         return row;
     }
 
-    /** Rubric answers (essay/code/diagram) have points, not a verdict: half the question's points or more counts as right. */
+    /** Rubric answers (essay/diagram) have points, not a verdict: half the question's points or more counts as right. */
     public static boolean rubricPassed(BigDecimal score, BigDecimal maxPoints) {
         if (score == null) return false;
         if (maxPoints == null || maxPoints.signum() <= 0) return score.signum() > 0;

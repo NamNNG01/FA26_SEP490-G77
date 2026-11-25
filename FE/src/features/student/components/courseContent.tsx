@@ -24,25 +24,6 @@ export function sortedModules(course: StudentCourseDetail) {
   return [...course.modules].sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
 }
 
-/**
- * MC-02 exams and MC-03 decks of a course, grouped by their explicit module assignment. Only
- * items with a null moduleId belong to `general`; a stale or invalid module ID is not General.
- */
-export function groupCourseContent(course: StudentCourseDetail, exams: CourseExam[], decks: StudentDeck[]) {
-  const byModule = new Map<number, ContentItem[]>(course.modules.map(m => [m.moduleId, []]));
-  const general: ContentItem[] = [];
-  const file = (moduleId: number | null, item: ContentItem) => {
-    if (moduleId == null) {
-      general.push(item);
-      return;
-    }
-    byModule.get(moduleId)?.push(item);
-  };
-  exams.forEach(exam => file(exam.moduleId, { kind: 'exam', exam }));
-  decks.forEach(deck => file(deck.moduleId, { kind: 'deck', deck }));
-  return { byModule, general };
-}
-
 /** Opens an exam's detail page, or a deck's study page with the course for its breadcrumb. */
 export function useOpenContent(course: StudentCourseDetail) {
   const navigate = useNavigate();

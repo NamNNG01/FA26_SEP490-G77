@@ -13,6 +13,7 @@ import com.examprep.exceptions.ResourceNotFoundException;
 import com.examprep.repositories.QuestionPracticeAnswerRepository;
 import com.examprep.repositories.QuestionPracticeSessionQuestionRepository;
 import com.examprep.repositories.QuestionPracticeSessionRepository;
+import com.examprep.services.CodeAnswerJudge;
 import com.examprep.services.ModulePracticeGradingWorker;
 import com.examprep.util.attempt.AnswerResponseValidator;
 import com.examprep.util.attempt.AttemptGrader;
@@ -54,6 +55,7 @@ public class ModulePracticeAnswerServiceImpl implements ModulePracticeAnswerServ
     private final QuestionPracticeSessionQuestionRepository sessionQuestions;
     private final QuestionPracticeAnswerRepository answers;
     private final ModulePracticeGradingWorker gradingWorker;
+    private final CodeAnswerJudge codeJudge;
     private final QuestionReviewRecorder reviews;
 
     // ------------------------------------------------------------------ MP-05
@@ -103,6 +105,7 @@ public class ModulePracticeAnswerServiceImpl implements ModulePracticeAnswerServ
         Boolean previousIsCorrect = sessionQuestion.getLatestIsCorrect();
         int attemptNumber = (sessionQuestion.getAttemptCount() == null ? 0 : sessionQuestion.getAttemptCount()) + 1;
         boolean rubric = AttemptGrader.isRubricType(questionType);
+        boolean isCode = "CODE".equals(questionType);
         QuestionPracticeAnswer answer = QuestionPracticeAnswer.builder()
                 .sessionQuestion(sessionQuestion)
                 .attemptNumber(attemptNumber)
@@ -113,7 +116,17 @@ public class ModulePracticeAnswerServiceImpl implements ModulePracticeAnswerServ
                 .answeredAt(now)
                 .requestKey(requestKey)
                 .build();
-        if (!rubric) {
+        if (isCode) {
+            CodeAnswerJudge.PracticeGrade grade = codeJudge.judgePractice(
+                    sessionQuestion.getQuestion().getQuestionId(), response, QUESTION_MAX_POINTS);
+            answer.setGradingStatus(grade.gradingStatus());
+            answer.setIsCorrect(grade.correct());
+            answer.setScoreEarned(grade.score());
+            answer.setFeedback(grade.feedbackJson());
+            if (AUTO.equals(grade.gradingStatus())) {
+                answer.setGradedAt(now);
+            }
+        } else if (!rubric) {
             Snapshots.KeySnapshot key = support.keyOf(sessionQuestion);
             AttemptGrader.Grade grade = AttemptGrader.grade(questionType, response, key, QUESTION_MAX_POINTS);
             answer.setIsCorrect(grade.correct());

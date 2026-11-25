@@ -39,7 +39,7 @@ import java.util.stream.Collectors;
 @Component
 @RequiredArgsConstructor
 @Slf4j
-class CodeAnswerJudge {
+public class CodeAnswerJudge {
     private static final int DEFAULT_TIME_LIMIT_MS = 5000;
     private static final int DEFAULT_MEMORY_KB = 262144;
     private static final int OUTPUT_CAP = 10_000;
@@ -235,6 +235,54 @@ class CodeAnswerJudge {
             reviews.record(attempt.getUser().getUserId(), answer.getQuestion(), allPassed, answer.getResponse());
         }
         return new CodeExamResponses.CaseResult(plan.questionId(), status, passed, total, firstFailure);
+    }
+
+    public record PracticeGrade(Boolean correct, BigDecimal score, String gradingStatus, String feedbackJson) {}
+
+    public PracticeGrade judgePractice(Long questionId, JsonNode response, BigDecimal maxPoints) {
+        CodeQuestionConfig config = configs.findById(questionId).orElse(null);
+        List<CodeTestCase> cases = fixtures.findByQuestionIds(List.of(questionId));
+        String source = response == null ? "" : response.path("text").asText("");
+        String savedLanguage = response == null ? null : response.path("language").textValue();
+        String language = PistonClient.supports(savedLanguage) ? savedLanguage : language(config);
+        Plan plan = plan(questionId, language, source, maxPoints, config, cases);
+        Verdict verdict = judge(plan, true);
+        if (verdict.error() != null) {
+            ObjectNode feedback = json.createObjectNode()
+                    .put("status", CodeSubmission.FAILED)
+                    .put("error", verdict.error())
+                    .put("passedCount", 0)
+                    .put("totalCount", plan.cases().size());
+            return new PracticeGrade(null, null, "FAILED", feedback.toString());
+        }
+        List<PistonClient.CaseOutcome> outcomes = verdict.outcomes();
+        int total = plan.cases().size();
+        int passed = (int) outcomes.stream().filter(PistonClient.CaseOutcome::passed).count();
+        boolean allPassed = total > 0 && outcomes.size() == total && passed == total;
+        Integer firstFailure = null;
+        for (int i = 0; i < outcomes.size(); i++) {
+            if (!outcomes.get(i).passed()) {
+                firstFailure = i + 1;
+                break;
+            }
+        }
+        String stderr = CodeDriver.studentLines(first(outcomes, PistonClient.CaseOutcome::stderr), plan.program());
+        String compile = CodeDriver.studentLines(first(outcomes, PistonClient.CaseOutcome::compileOutput), plan.program());
+        ObjectNode feedback = json.createObjectNode()
+                .put("status", allPassed ? CodeSubmission.PASSED : CodeSubmission.FAILED)
+                .put("passedCount", passed)
+                .put("totalCount", total);
+        if (firstFailure != null) {
+            feedback.put("firstFailure", firstFailure);
+        }
+        if (stderr != null && !stderr.isBlank()) {
+            feedback.put("stderr", stderr);
+        }
+        if (compile != null && !compile.isBlank()) {
+            feedback.put("compileOutput", compile);
+        }
+        BigDecimal earned = allPassed ? AttemptScoring.output(maxPoints) : BigDecimal.ZERO.setScale(2);
+        return new PracticeGrade(allPassed, earned, "AUTO", feedback.toString());
     }
 
     private String testResultsJson(List<PistonClient.CaseOutcome> outcomes) {
