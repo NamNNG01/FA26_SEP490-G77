@@ -210,7 +210,7 @@ public class StudentContestServiceImpl implements StudentContestService {
 
     @Override
     public ContestStartResponseDto startContest(Long contestId, Long userId) {
-        Contest c = contestRepository.findForUpdate(contestId)
+        Contest c = contestRepository.findById(contestId)
                 .orElseThrow(() -> new ResourceNotFoundException("Contest not found"));
         if ("DRAFT".equals(c.getStatus())) {
             throw new ResourceNotFoundException("Contest not found");
@@ -227,14 +227,18 @@ public class StudentContestServiceImpl implements StudentContestService {
             throw new BaseException(ResponseCode.FORBIDDEN, "Contest ended");
         }
 
+        User user = null;
         ContestParticipant participant = participantRepository.findByContest_ContestIdAndUser_UserId(contestId, userId)
                 .orElse(null);
         if (participant == null) {
-            if (c.getMaxParticipants() != null
-                    && participantRepository.countByContest_ContestId(contestId) >= c.getMaxParticipants()) {
-                throw new BaseException(ResponseCode.CONFLICT, "Contest full");
+            if (c.getMaxParticipants() != null) {
+                c = contestRepository.findForUpdate(contestId)
+                        .orElseThrow(() -> new ResourceNotFoundException("Contest not found"));
+                if (participantRepository.countByContest_ContestId(contestId) >= c.getMaxParticipants()) {
+                    throw new BaseException(ResponseCode.CONFLICT, "Contest full");
+                }
             }
-            User user = userRepository.findById(userId).orElseThrow(() -> new ResourceNotFoundException("User not found"));
+            user = userRepository.findById(userId).orElseThrow(() -> new ResourceNotFoundException("User not found"));
             participant = participantRepository.save(ContestParticipant.builder()
                     .contest(c).user(user).rewardClaimed(false).joinedAt(now).build());
         } else if (participant.getAttemptId() != null) {
@@ -274,7 +278,9 @@ public class StudentContestServiceImpl implements StudentContestService {
         Instant durationDeadline = now.plusSeconds((long) c.getDurationMinutes() * 60);
         Instant deadlineAt = (c.getEndTime() != null && durationDeadline.isAfter(c.getEndTime())) ? c.getEndTime() : durationDeadline;
 
-        User user = userRepository.findById(userId).orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        if (user == null) {
+            user = userRepository.findById(userId).orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        }
         ExamAttempt attempt = ExamAttempt.builder()
                 .user(user)
                 .exam(c.getExam())

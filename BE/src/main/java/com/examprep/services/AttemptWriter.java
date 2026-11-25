@@ -96,8 +96,16 @@ public class AttemptWriter {
                 entries.isEmpty() ? null : rows -> apply(rows, entries, null, null))) {
             throw new ResourceConflictException("Code judging is already in progress");
         }
-        return new TransactionTemplate(transactionManager).execute(status ->
-                submitted(lockedOwnedAttempt(userId, attemptId), answers.findByAttemptIdOrdered(attemptId)));
+        TransactionTemplate readTx = new TransactionTemplate(transactionManager);
+        readTx.setReadOnly(true);
+        return readTx.execute(status -> {
+            ExamAttempt attempt = attempts.findById(attemptId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Attempt not found"));
+            if (!Objects.equals(attempt.getUser().getUserId(), userId)) {
+                throw new ForbiddenException("Attempt belongs to another student");
+            }
+            return submitted(attempt, answers.findByAttemptIdOrdered(attemptId));
+        });
     }
 
     private ExamAttempt lockedOwnedAttempt(Long userId, Long attemptId) {
