@@ -63,8 +63,30 @@ apiClient.interceptors.request.use(
  */
 let refreshInFlight: Promise<string> | null = null;
 
+/** Cross-tab lock name: only one tab at a time may rotate the shared pair. */
+const REFRESH_LOCK = 'examprep-auth-refresh';
+
+/** Run fn while holding the cross-tab refresh lock (no lock API → run as is). */
+function withRefreshLock<T>(fn: () => Promise<T>): Promise<T> {
+  if (typeof navigator !== 'undefined' && navigator.locks) {
+    return navigator.locks.request(REFRESH_LOCK, fn) as Promise<T>;
+  }
+  return fn();
+}
+
 function refreshAccessToken(refreshToken: string): Promise<string> {
-  refreshInFlight ??= (async () => {
+  refreshInFlight ??= withRefreshLock(async () => {
+    // Tabs share one token pair. If another tab rotated it while we waited for
+    // the lock, our token is now used: sending it would trip the backend's
+    // reuse detection, which revokes EVERY session of the user. Use the pair
+    // that tab stored instead.
+    const latest = getRefreshToken();
+    if (!latest) throw new Error('Signed out in another tab');
+    if (latest !== refreshToken) {
+      const accessToken = getAccessToken();
+      if (accessToken) return accessToken;
+    }
+
     // Backend contract: POST /auth/refresh with { refreshToken } in the
     // body (RefreshTokenRequest). No Authorization header needed — the
     // endpoint is permitAll. Response: ApiResponse<TokenResponse>.
@@ -73,7 +95,7 @@ function refreshAccessToken(refreshToken: string): Promise<string> {
     // in a silent logout.
     const res = await axios.post(
       `${config.apiBaseUrl.replace(/\/+$/, '')}/auth/refresh`,
-      { refreshToken },
+      { refreshToken: latest },
       { timeout: 15000 },
     );
     const body = res.data as { success: boolean; data?: unknown };
@@ -92,28 +114,10 @@ function refreshAccessToken(refreshToken: string): Promise<string> {
       refreshToken: data.refreshToken,
     });
     return data.accessToken;
-  })().finally(() => {
+  }).finally(() => {
     refreshInFlight = null;
   });
   return refreshInFlight;
-}
-
-/** How long to wait for the other tab to store its new pair after it won the refresh. */
-const OTHER_TAB_SAVE_GRACE_MS = 500;
-
-/**
- * True when storage now holds a different refresh token than the one this
- * tab sent — i.e. another tab rotated the pair. Its write may land a moment
- * after our refresh failed, so check once more after a short wait.
- */
-async function rotatedByOtherTab(sentRefreshToken: string): Promise<boolean> {
-  const rotated = () => {
-    const latest = getRefreshToken();
-    return latest !== null && latest !== sentRefreshToken;
-  };
-  if (rotated()) return true;
-  await new Promise((resolve) => setTimeout(resolve, OTHER_TAB_SAVE_GRACE_MS));
-  return rotated();
 }
 
 /**
@@ -141,13 +145,6 @@ apiClient.interceptors.response.use(
           original.headers.Authorization = `Bearer ${accessToken}`;
           return apiClient(original);
         } catch {
-          // Another tab may have refreshed with the same token first: the
-          // backend then rejects ours as already used, but the other tab has
-          // stored a fresh pair. Retry with it instead of wiping it.
-          if (await rotatedByOtherTab(refreshToken)) {
-            original.headers.Authorization = `Bearer ${getAccessToken()}`;
-            return apiClient(original);
-          }
           clearAuth();
           if (hadSession) emitSessionExpired();
         }
