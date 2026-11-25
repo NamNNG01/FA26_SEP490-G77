@@ -30,7 +30,7 @@ export type QuestionType =
   | 'DIAGRAM_ESSAY';
 
 /** Essay-like types are graded against a rubric (by the AI worker), not auto-graded. */
-export const RUBRIC_TYPES: ReadonlySet<string> = new Set(['ESSAY', 'CODE', 'DIAGRAM', 'DIAGRAM_ESSAY']);
+export const RUBRIC_TYPES: ReadonlySet<string> = new Set(['ESSAY', 'DIAGRAM', 'DIAGRAM_ESSAY']);
 
 /**
  * `response` payload per question type (BE AnswerResponseValidator):

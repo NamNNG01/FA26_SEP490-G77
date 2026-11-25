@@ -17,13 +17,13 @@ import java.util.Set;
  * <p>All-or-nothing: a question only earns its {@code maxPoints} when every part of the answer is
  * right ("đúng hết mới được điểm"). A partially answered question scores 0.</p>
  *
- * <p>The rubric types (ESSAY, DIAGRAM, CODE) are never graded here — they go to
+ * <p>The rubric types (ESSAY, DIAGRAM, DIAGRAM_ESSAY) are never graded here — they go to
  * {@code PENDING_AI} and are scored later by the AI worker (spec 6.4 rule 3).</p>
  */
 public final class AttemptGrader {
 
     /** Questions whose rubric the AI worker scores. */
-    private static final Set<String> RUBRIC_TYPES = Set.of("ESSAY", "DIAGRAM", "CODE", "DIAGRAM_ESSAY");
+    private static final Set<String> RUBRIC_TYPES = Set.of("ESSAY", "DIAGRAM", "DIAGRAM_ESSAY");
 
     /** The six types scored here against the frozen key; everything else waits for the AI worker. */
     private static final Set<String> AUTO_GRADED_TYPES = Set.of(

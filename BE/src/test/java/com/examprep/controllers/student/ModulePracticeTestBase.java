@@ -4,6 +4,7 @@ import com.examprep.entities.*;
 import com.examprep.entities.Module;
 import com.examprep.security.UserPrincipal;
 import com.examprep.services.ModulePracticeGradingWorker;
+import com.examprep.services.PistonClient;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpServer;
@@ -12,6 +13,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -125,6 +127,7 @@ public abstract class ModulePracticeTestBase {
     @Autowired protected EntityManager em;
     @Autowired protected DataSource dataSource;
     @Autowired protected ModulePracticeGradingWorker gradingWorker;
+    @MockBean protected PistonClient piston;
 
     protected User student;
     protected User otherStudent;

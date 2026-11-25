@@ -67,7 +67,6 @@ class StudentDiscussionServiceTest {
                 .isPinned(false)
                 .commentCount(2)
                 .upvoteCount(5)
-                .isClosed(false)
                 .createdAt(Instant.now())
                 .updatedAt(Instant.now())
                 .build();
@@ -76,11 +75,11 @@ class StudentDiscussionServiceTest {
     @Test
     void listDiscussions_batchUpvotes() {
         Page<Discussion> page = new PageImpl<>(List.of(discussion1));
-        when(discussionRepository.findAllDiscussions(eq("question"), isNull(), eq(""), eq("latest"), any())).thenReturn(page);
+        when(discussionRepository.findAllDiscussions(eq("question"), eq(""), eq("latest"), any())).thenReturn(page);
         when(upvoteRepository.findUpvotedDiscussionIds(eq(200L), eq(List.of(1L)))).thenReturn(List.of(1L));
 
         Page<DiscussionItemDto> res = discussionService.listDiscussions(
-                "PUBLIC", "question", null, null, null, "", "latest", 0, 10, 200L);
+                "PUBLIC", "question", null, null, "", "latest", 0, 10, 200L);
 
         assertNotNull(res);
         assertEquals(1, res.getTotalElements());
@@ -100,7 +99,7 @@ class StudentDiscussionServiceTest {
         when(upvoteRepository.findUpvotedDiscussionIds(eq(200L), eq(List.of(1L)))).thenReturn(List.of());
 
         Page<DiscussionItemDto> result = discussionService.listDiscussions(
-                "MINE", "question", "REJECTED", "CLOSED", null, "dependency", "latest", 0, 10, 200L);
+                "MINE", "question", "REJECTED", "CLOSED", "dependency", "latest", 0, 10, 200L);
 
         assertEquals(1, result.getTotalElements());
         verify(discussionRepository).findMineDiscussions(
@@ -111,7 +110,7 @@ class StudentDiscussionServiceTest {
     @Test
     void listMineDiscussions_requiresAuthentication() {
         assertThrows(ForbiddenException.class, () -> discussionService.listDiscussions(
-                "MINE", "ALL", "ALL", "ALL", null, null, "latest", 0, 10, null));
+                "MINE", "ALL", "ALL", "ALL", null, "latest", 0, 10, null));
         verifyNoInteractions(discussionRepository);
     }
 
@@ -174,6 +173,22 @@ class StudentDiscussionServiceTest {
 
         assertNotNull(dto);
         assertTrue(dto.isClosed());
+        assertEquals(Discussion.STATUS_CLOSED, discussion1.getStatus());
+    }
+
+    @Test
+    void updateDiscussion_reopen_setsStatusOpenAndIsClosedFalse() {
+        discussion1.setApprovalStatus(Discussion.APPROVAL_APPROVED);
+        discussion1.setStatus(Discussion.STATUS_CLOSED);
+        when(discussionRepository.findById(1L)).thenReturn(Optional.of(discussion1));
+        when(discussionRepository.save(any(Discussion.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        com.examprep.dto.student.UpdateDiscussionRequestDto req = new com.examprep.dto.student.UpdateDiscussionRequestDto(false);
+        DiscussionItemDto dto = discussionService.updateDiscussion(1L, req, 200L);
+
+        assertNotNull(dto);
+        assertFalse(dto.isClosed());
+        assertEquals(Discussion.STATUS_OPEN, discussion1.getStatus());
     }
 
     @Test

@@ -58,9 +58,8 @@ class ManagerDiscussionServiceTest {
                 .title("Student Question")
                 .content("Question Content")
                 .tag("question")
-                .status("OPEN")
+                .status(Discussion.STATUS_OPEN)
                 .approvalStatus(Discussion.APPROVAL_PENDING)
-                .isClosed(false)
                 .isPinned(false)
                 .commentCount(1)
                 .upvoteCount(0)
@@ -189,24 +188,25 @@ class ManagerDiscussionServiceTest {
 
         DiscussionItemDto result = managerDiscussionService.hideDiscussion(1L, 10L);
 
-        assertEquals("HIDDEN", result.getStatus());
-        assertTrue(discussion.getIsClosed());
+        assertEquals(Discussion.STATUS_HIDDEN, result.getStatus());
+        assertEquals(Discussion.STATUS_HIDDEN, discussion.getStatus());
+        assertFalse(result.isClosed());
         assertFalse(discussion.getIsPinned());
         verify(discussionRepository).save(discussion);
     }
 
     @Test
     void restoreDiscussion_success() {
-        discussion.setStatus("HIDDEN");
-        discussion.setIsClosed(true);
+        discussion.setStatus(Discussion.STATUS_HIDDEN);
         when(discussionRepository.findById(1L)).thenReturn(Optional.of(discussion));
         when(userRepository.findById(10L)).thenReturn(Optional.of(manager));
         when(discussionRepository.save(any(Discussion.class))).thenAnswer(inv -> inv.getArgument(0));
 
         DiscussionItemDto result = managerDiscussionService.restoreDiscussion(1L, 10L);
 
-        assertEquals("OPEN", result.getStatus());
-        assertFalse(discussion.getIsClosed());
+        assertEquals(Discussion.STATUS_OPEN, result.getStatus());
+        assertEquals(Discussion.STATUS_OPEN, discussion.getStatus());
+        assertFalse(result.isClosed());
         verify(discussionRepository).save(discussion);
     }
 

@@ -534,12 +534,15 @@ export function ModulePracticeRunner({ sessionId }: { sessionId: string }) {
   };
 
   const isBookmarked = bookmarkOverrides[summary.questionId] ?? view?.isBookmarked ?? false;
+  const canBookmark = latest != null || isBookmarked;
 
   const toggleBookmark = async () => {
     if (bookmarkBusy) return;
     setBookmarkBusy(true);
     setActionError(null);
     try {
+      const pendingSave = savesRef.current.get(summary.sessionQuestionId);
+      if (pendingSave) await pendingSave;
       const res = await studentProgressService.toggleBookmark(summary.questionId);
       setBookmarkOverrides(prev => ({ ...prev, [summary.questionId]: res.isBookmarked }));
     } catch (err) {
@@ -559,7 +562,7 @@ export function ModulePracticeRunner({ sessionId }: { sessionId: string }) {
           disabled={busy || !progress?.ready}
           onClick={() => void submitAnswer(value)}
         >
-          {isRubric ? 'Submit for AI grading' : (progress?.label ?? 'Check answer')}
+          {summary.questionType === 'CODE' ? 'Run & check code' : isRubric ? 'Submit for AI grading' : (progress?.label ?? 'Check answer')}
         </Button>
         {progress?.hint && !isRubric && <span className="text-xs text-content-subtle">{progress.hint}</span>}
       </div>
@@ -642,18 +645,20 @@ export function ModulePracticeRunner({ sessionId }: { sessionId: string }) {
                   {summary.attemptCount} attempt{summary.attemptCount === 1 ? '' : 's'}
                 </span>
               )}
-              <Button
-                size="sm"
-                variant="ghost"
-                className="ml-auto"
-                disabled={bookmarkBusy}
-                aria-pressed={isBookmarked}
-                aria-label={isBookmarked ? 'Remove bookmark' : 'Bookmark question'}
-                title={isBookmarked ? 'Remove bookmark' : 'Bookmark question'}
-                onClick={toggleBookmark}
-              >
-                <Icon.Star className={`w-4 h-4 ${isBookmarked ? 'fill-current text-warning' : ''}`} />
-              </Button>
+              {canBookmark && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="ml-auto"
+                  disabled={bookmarkBusy}
+                  aria-pressed={isBookmarked}
+                  aria-label={isBookmarked ? 'Remove bookmark' : 'Bookmark question'}
+                  title={isBookmarked ? 'Remove bookmark' : 'Bookmark question'}
+                  onClick={toggleBookmark}
+                >
+                  <Icon.Star className={`w-4 h-4 ${isBookmarked ? 'fill-current text-warning' : ''}`} />
+                </Button>
+              )}
               <ReportQuestionIssueButton
                 questionId={summary.questionId}
                 practiceSessionId={session.sessionId}
@@ -714,7 +719,7 @@ export function ModulePracticeRunner({ sessionId }: { sessionId: string }) {
                     question={question}
                     value={value}
                     onChange={changeAnswer}
-                    roomy={isRubric}
+                    roomy={isRubric || summary.questionType === 'CODE'}
                     fill={fillEssay}
                     readOnly={!editing}
                     practice

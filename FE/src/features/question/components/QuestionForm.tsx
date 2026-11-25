@@ -58,7 +58,6 @@ export function QuestionForm({
   duplicateError,
   leading,
   readOnly,
-  imageUploadScope = 'manager',
 }: {
   q: QuestionDraft;
   index: number;
@@ -89,8 +88,6 @@ export function QuestionForm({
   leading?: React.ReactNode;
   /** Shows the question without letting it be edited (a saved question on the create page). */
   readOnly?: boolean;
-  /** Selects the upload endpoint for images inserted into the question content. */
-  imageUploadScope?: 'manager' | 'student';
 }) {
   const textRef = useRef<HTMLTextAreaElement>(null);
   const errors = validateDraft(q);
@@ -306,7 +303,7 @@ export function QuestionForm({
             {readOnly ? "Question Text" : "Question Text *"}
           </label>
           <div className="flex items-center gap-2">
-          {!readOnly && <InsertImageButton value={q.content} onChange={(content) => set({ content })} uploadScope={imageUploadScope} />}
+          {!readOnly && <InsertImageButton value={q.content} onChange={(content) => set({ content })} />}
           {!readOnly && q.type === "FILL_BLANK" && (
             <button
               type="button"

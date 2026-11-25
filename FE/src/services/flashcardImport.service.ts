@@ -23,7 +23,6 @@ export interface FlashcardImportCard {
 export interface FlashcardImportPreview {
   fileName: string;
   fileType: 'DOCX' | 'XLSX' | 'PDF';
-  templateVersion: string | null;
   totalRows: number;
   validCount: number;
   invalidCount: number;

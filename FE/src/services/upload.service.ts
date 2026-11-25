@@ -7,8 +7,7 @@ import type { CourseDetailResponse } from './course.service';
  * Image uploads to Cloudinary through the BE (see BE/docs/image-upload-fe-guide.md).
  *   POST /users/me/avatar                  USER-03 → UserResponse
  *   POST /manager/courses/{id}/thumbnail   C-15    → CourseDetailResponse
- *   POST /manager/uploads                  D3      → UploadedImage
- *   POST /student/uploads                  Student question/attachment image → UploadedImage
+ *   POST /uploads                          Shared media/attachment image → UploadedImage
  */
 
 export const IMAGE_ACCEPT = 'image/jpeg,image/png,image/webp,image/gif';
@@ -41,6 +40,5 @@ export const uploadService = {
   uploadAvatar: (file: File) => upload<UserResponse>('/users/me/avatar', file),
   uploadCourseThumbnail: (courseId: number | string, file: File) =>
     upload<CourseDetailResponse>(`/manager/courses/${courseId}/thumbnail`, file),
-  uploadMedia: (file: File) => upload<UploadedImage>('/manager/uploads', file),
-  uploadStudentAttachment: (file: File) => upload<UploadedImage>('/student/uploads', file),
+  uploadMedia: (file: File) => upload<UploadedImage>('/uploads', file),
 };

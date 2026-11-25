@@ -12,7 +12,7 @@ import { ROUTES, studentModulePath } from '@/app/routes';
 import type { StudentCourseDetail } from '@/services/studentCourse.service';
 import { modulePracticeService, type ModulePracticeOverview, type PracticeScope } from '@/services/modulePractice.service';
 import { CardGridSkeleton, CourseThumb, LoadError, STUDENT_PAGE_CLASS } from '../components/studentUi';
-import { GENERAL_MODULE, countItems, sortedModules } from '../components/courseContent';
+import { GENERAL_MODULE, sortedModules } from '../components/courseContent';
 import { useCourseDetail, type CourseDetailState, type LearningProgress } from '../components/courseProgress';
 import { ModulePracticeModal } from '../components/ModulePracticeModal';
 import { SmartPracticeModal } from '../components/SmartPracticeModal';
@@ -20,11 +20,11 @@ import type { ModulePageState } from './StudentModuleDetailPage';
 
 /**
  * Student course detail — course info (CL-02), then the course content as a grid of module cards.
- * Each card shows the module's exams (MC-02) and decks (MC-03), its progress (LP-01) and a
- * Practice button; clicking it opens the module page. Exams and decks not filed under a module sit
- * on a "General" card, practised as the course's General pool. CL-02, MC-02, MC-03 and LP-01 are
- * read together and the page is shown once all are in (useCourseDetail). MC-02/03 only answer for
- * an ACTIVE enrollment, so other states only list the modules. An enrolled student can create a
+ * Each card shows the module's exam, deck, and question counts (from CL-02), its progress (LP-01)
+ * and a Practice button; clicking it opens the module page. Exams and decks not filed under a
+ * module sit on a "General" card, practised as the course's General pool. CL-02 and LP-01 are read
+ * together and the page is shown once both are in (useCourseDetail). LP-01 only answers for an
+ * ACTIVE enrollment, so other states only list the modules. An enrolled student can create a
  * practice exam for the course from the info card (AI-01 / PQ-01, course fixed).
  */
 export function StudentCourseDetailPage() {
@@ -130,7 +130,7 @@ export function StudentCourseDetailPage() {
       )}
 
       {isActive ? (
-        <ModuleGrid content={data} onRetry={retry} />
+        <ModuleGrid content={data} />
       ) : (
         <LockedModules course={course} />
       )}
@@ -176,9 +176,9 @@ function CourseProgressPanel({ progress }: { progress: LearningProgress | 'error
  * it and each card show progress from LP-01. MP-01 is read only for the module whose Practice
  * button is pressed, to open its practice modal (with the session in progress, if any).
  */
-function ModuleGrid({ content, onRetry }: { content: CourseDetailState; onRetry: () => void }) {
+function ModuleGrid({ content }: { content: CourseDetailState }) {
   const navigate = useNavigate();
-  const { course, byModule, general, contentError, modules, hasGeneral, progress: overall, be, moduleProgress } = content;
+  const { course, generalCounts, modules, hasGeneral, progress: overall, be, moduleProgress } = content;
   const [practicing, setPracticing] = useState<{ scope: PracticeScope; title: string; overview: ModulePracticeOverview | null } | null>(null);
   // The card whose MP-01 is being read before its practice modal opens.
   const [opening, setOpening] = useState<string | null>(null);
@@ -195,8 +195,6 @@ function ModuleGrid({ content, onRetry }: { content: CourseDetailState; onRetry:
       .catch(() => setPracticing({ scope, title, overview: null }))
       .finally(() => setOpening(null));
   };
-
-  if (contentError) return <LoadError message={contentError} onRetry={onRetry} />;
 
   if (modules.length === 0 && !hasGeneral) {
     return (
@@ -222,7 +220,7 @@ function ModuleGrid({ content, onRetry }: { content: CourseDetailState; onRetry:
             index={i + 1}
             title={m.title}
             description={m.description}
-            counts={{ ...countItems(byModule.get(m.moduleId) ?? []), questions: m.questionCount ?? 0 }}
+            counts={{ exams: m.examCount ?? 0, decks: m.deckCount ?? 0, questions: m.questionCount ?? 0 }}
             progress={moduleProgress(String(m.moduleId))}
             practiceLoading={opening === String(m.moduleId)}
             onOpen={() => navigate(studentModulePath(course.courseId, m.moduleId), { state: pageState })}
@@ -233,10 +231,7 @@ function ModuleGrid({ content, onRetry }: { content: CourseDetailState; onRetry:
           <ModuleCard
             title="General"
             description="Practice questions, exams and flashcard decks not filed under a module."
-            counts={{
-              ...countItems(general),
-              questions: be !== 'error' ? (be.modules.find(pm => pm.moduleId == null)?.questions?.total ?? 0) : undefined,
-            }}
+            counts={generalCounts}
             progress={moduleProgress(GENERAL_MODULE)}
             practiceLoading={opening === GENERAL_MODULE}
             onOpen={() => navigate(studentModulePath(course.courseId, GENERAL_MODULE), { state: pageState })}

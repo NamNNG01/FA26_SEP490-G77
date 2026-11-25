@@ -430,17 +430,19 @@ function PracticeQuestionCard({
 
       <div className="flex justify-end border-t border-line px-4 py-3">
         <div className="flex flex-wrap gap-2">
-          <Button
-            size="sm"
-            variant={bookmarked ? 'primary' : 'outline'}
-            disabled={bookmarkBusy || !view}
-            aria-pressed={bookmarked}
-            aria-label={bookmarked ? 'Remove bookmark' : 'Bookmark question'}
-            icon={<Icon.Star className={`w-4 h-4 ${bookmarked ? 'fill-current' : ''}`} />}
-            onClick={onToggleBookmark}
-          >
-            {bookmarked ? 'Bookmarked' : 'Bookmark'}
-          </Button>
+          {(q.attemptCount > 0 || bookmarked) && (
+            <Button
+              size="sm"
+              variant={bookmarked ? 'primary' : 'outline'}
+              disabled={bookmarkBusy || !view}
+              aria-pressed={bookmarked}
+              aria-label={bookmarked ? 'Remove bookmark' : 'Bookmark question'}
+              icon={<Icon.Star className={`w-4 h-4 ${bookmarked ? 'fill-current' : ''}`} />}
+              onClick={onToggleBookmark}
+            >
+              {bookmarked ? 'Bookmarked' : 'Bookmark'}
+            </Button>
+          )}
           <ReportQuestionIssueButton questionId={q.questionId} practiceSessionId={sessionId} options={view?.options ?? []} />
         </div>
       </div>

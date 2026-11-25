@@ -53,6 +53,28 @@ export function PracticeVerdict({ attempt, questionType }: { attempt: PracticeAt
     );
   }
 
+  if (questionType === 'CODE' && attempt.isCorrect !== null) {
+    const fb = codeFeedback(attempt.feedback);
+    const tone = attempt.isCorrect ? 'success' : 'danger';
+    const icon = attempt.isCorrect ? <Icon.CheckCircle className="w-4 h-4" /> : <Icon.XCircle className="w-4 h-4" />;
+    return (
+      <div className="space-y-2">
+        <Box tone={tone} icon={icon}>
+          <span className="flex-1">
+            {attempt.isCorrect ? 'Correct! ' : 'Not quite. '}
+            {fb && fb.totalCount > 0 ? `Passed ${fb.passedCount} / ${fb.totalCount} test cases.` : ''}
+            {!attempt.isCorrect && fb?.firstFailure != null ? ` Failed at test case #${fb.firstFailure}.` : ''}
+          </span>
+        </Box>
+        {(fb?.compileOutput || fb?.stderr) && (
+          <pre className="rounded-[10px] border border-line bg-surface px-3 py-2 text-xs font-mono text-danger-strong whitespace-pre-wrap overflow-x-auto">
+            {fb.compileOutput ?? fb.stderr}
+          </pre>
+        )}
+      </div>
+    );
+  }
+
   if (!scoreOnly && attempt.isCorrect === true) {
     return (
       <Box tone="success" icon={<Icon.CheckCircle className="w-4 h-4" />}>
@@ -95,6 +117,25 @@ export function PracticeVerdict({ attempt, questionType }: { attempt: PracticeAt
       )}
     </div>
   );
+}
+
+function codeFeedback(feedback: unknown): {
+  passedCount: number;
+  totalCount: number;
+  firstFailure?: number;
+  stderr?: string;
+  compileOutput?: string;
+} | null {
+  if (!feedback || typeof feedback !== 'object') return null;
+  const f = feedback as Record<string, unknown>;
+  if (typeof f.passedCount !== 'number' || typeof f.totalCount !== 'number') return null;
+  return {
+    passedCount: f.passedCount,
+    totalCount: f.totalCount,
+    firstFailure: typeof f.firstFailure === 'number' ? f.firstFailure : undefined,
+    stderr: typeof f.stderr === 'string' ? f.stderr : undefined,
+    compileOutput: typeof f.compileOutput === 'string' ? f.compileOutput : undefined,
+  };
 }
 
 function feedbackText(feedback: unknown): string | null {

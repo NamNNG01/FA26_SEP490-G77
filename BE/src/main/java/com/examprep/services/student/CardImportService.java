@@ -228,7 +228,6 @@ public class CardImportService {
 
         String fileType = "UNKNOWN";
         List<ParsedRow> parsedRows = new ArrayList<>();
-        String templateVersion = "V1";
         List<PreviewWarning> warnings = new ArrayList<>();
 
         if (filename.endsWith(".xlsx")) {
@@ -236,7 +235,7 @@ public class CardImportService {
             parsedRows = parseXlsxForPreview(bytes, warnings);
         } else if (filename.endsWith(".docx")) {
             fileType = "DOCX";
-            parsedRows = parseDocxForPreview(bytes, templateVersion, warnings);
+            parsedRows = parseDocxForPreview(bytes, warnings);
         } else if (filename.endsWith(".pdf")) {
             fileType = "PDF";
             parsedRows = parsePdfForPreview(bytes, warnings);
@@ -311,7 +310,6 @@ public class CardImportService {
         return new PreviewResponse(
                 file.getOriginalFilename(),
                 fileType,
-                templateVersion,
                 parsedRows.size(),
                 validCount,
                 invalidCount,
@@ -456,12 +454,9 @@ public class CardImportService {
         return rows;
     }
 
-    private List<ParsedRow> parseDocxForPreview(byte[] bytes, String templateVersion, List<PreviewWarning> warnings) {
+    private List<ParsedRow> parseDocxForPreview(byte[] bytes, List<PreviewWarning> warnings) {
         List<ParsedRow> rows = new ArrayList<>();
         try (org.apache.poi.xwpf.usermodel.XWPFDocument doc = new org.apache.poi.xwpf.usermodel.XWPFDocument(new ByteArrayInputStream(bytes))) {
-            if (!doc.getParagraphs().isEmpty() && doc.getParagraphs().get(0).getText().contains("TEMPLATE=FLASHCARD_V1")) {
-                templateVersion = "V1";
-            }
             List<org.apache.poi.xwpf.usermodel.XWPFTable> tables = doc.getTables();
             if (tables.isEmpty()) {
                 throw new BaseException(ResponseCode.BAD_REQUEST, "No table", Map.of("code", "TEMPLATE_INVALID"));

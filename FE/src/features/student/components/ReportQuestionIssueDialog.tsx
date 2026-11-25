@@ -140,7 +140,7 @@ export function ReportQuestionIssueDialog({
     setUploading(true);
     setError("");
     try {
-      const image = await uploadService.uploadStudentAttachment(file);
+      const image = await uploadService.uploadMedia(file);
       setAttachmentUrl(image.url);
       setAttachmentName(file.name);
     } catch (err) {

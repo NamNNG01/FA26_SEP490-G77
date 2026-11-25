@@ -585,7 +585,6 @@ function QuestionContributionModal({
           q={question}
           index={0}
           heading="Question details"
-          imageUploadScope="student"
           onChange={(next) => {
             setQuestion(next);
             setError(null);

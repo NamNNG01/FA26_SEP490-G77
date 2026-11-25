@@ -38,9 +38,13 @@ public class Discussion implements Serializable {
     @Column(name = "content", nullable = false, columnDefinition = "TEXT")
     private String content;
 
+    public static final String STATUS_OPEN = "OPEN";
+    public static final String STATUS_CLOSED = "CLOSED";
+    public static final String STATUS_HIDDEN = "HIDDEN";
+
     @Builder.Default
     @Column(name = "status", nullable = false, length = 20)
-    private String status = "OPEN"; // OPEN, CLOSED, HIDDEN
+    private String status = STATUS_OPEN; // OPEN, CLOSED, HIDDEN
 
     @Builder.Default
     @Column(name = "is_pinned", nullable = false)
@@ -71,10 +75,6 @@ public class Discussion implements Serializable {
     @Column(name = "upvote_count", nullable = false)
     private Integer upvoteCount = 0;
 
-    @Builder.Default
-    @Column(name = "is_closed", nullable = false)
-    private Boolean isClosed = false;
-
     @Column(name = "image_url", length = 1000)
     private String imageUrl;
 
@@ -99,4 +99,8 @@ public class Discussion implements Serializable {
     @LastModifiedDate
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
+
+    public boolean isClosed() {
+        return STATUS_CLOSED.equalsIgnoreCase(this.status);
+    }
 }

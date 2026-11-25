@@ -92,8 +92,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/manager/courses/*").hasRole(User.ROLE_ADMIN)
                         // All other /api/v1/manager/** endpoints are strictly COURSE_MANAGER-only
                         .requestMatchers("/api/v1/manager/**").hasRole(User.ROLE_COURSE_MANAGER)
-                        // Shared media upload used by Student Community and Admin Discussion Moderation
-                        .requestMatchers(HttpMethod.POST, "/api/v1/student/uploads")
+                        // Shared media upload for authenticated students, course managers, and admins
+                        .requestMatchers(HttpMethod.POST, "/api/v1/uploads")
                         .hasAnyRole(User.ROLE_STUDENT, User.ROLE_COURSE_MANAGER, User.ROLE_ADMIN)
                         .requestMatchers("/api/v1/student/**").hasRole(User.ROLE_STUDENT)
                         // Each dashboard prefix and everything under it: the reports live on sub-paths

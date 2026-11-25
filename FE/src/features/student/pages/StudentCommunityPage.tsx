@@ -18,7 +18,7 @@ import { DiscussionImageAttachment } from '@/components/common/DiscussionImageAt
 import { ImageViewer } from '@/components/common/ImageViewer';
 import { useToast } from '@/components/ui/ToastHost';
 import { ROUTES } from '@/app/routes';
-import { studentCommunityService, type DiscussionAnswerFilter, type DiscussionApprovalFilter, type DiscussionContentStatus, type DiscussionDetail as DiscussionDetailItem, type DiscussionItem, type DiscussionSort, type DiscussionTag } from '@/services/studentCommunity.service';
+import { studentCommunityService, type DiscussionApprovalFilter, type DiscussionContentStatus, type DiscussionDetail as DiscussionDetailItem, type DiscussionItem, type DiscussionSort, type DiscussionTag } from '@/services/studentCommunity.service';
 import { getApiErrorMessage } from '@/utils/apiError';
 import { LoadError, PageTitle, STUDENT_PAGE_CLASS } from '../components/studentUi';
 
@@ -39,7 +39,6 @@ function DiscussionList() {
   const [tagFilter, setTagFilter] = useState<DiscussionTag | 'ALL'>('ALL');
   const [approvalFilter, setApprovalFilter] = useState<DiscussionApprovalFilter>('ALL');
   const [contentStatusFilter, setContentStatusFilter] = useState<DiscussionContentStatus>('ALL');
-  const [answerFilter, setAnswerFilter] = useState<DiscussionAnswerFilter>('ALL');
   const [page, setPage] = useState(0);
   const [items, setItems] = useState<DiscussionItem[]>([]);
   const [total, setTotal] = useState(0);
@@ -66,14 +65,14 @@ function DiscussionList() {
       ? studentCommunityService.getTips(params)
       : studentCommunityService.getDiscussions(tab === 'My Discussions'
         ? { ...params, scope: 'MINE', tag: tagFilter, approvalStatus: approvalFilter, status: contentStatusFilter, search: debouncedSearch || undefined, sort }
-        : { ...params, scope: 'PUBLIC', tag: tab === 'Announcements' ? 'announcement' : 'question', answerFilter: tab === 'Discussions' ? answerFilter : undefined, search: tab === 'Discussions' ? debouncedSearch || undefined : undefined, sort });
+        : { ...params, scope: 'PUBLIC', tag: tab === 'Announcements' ? 'announcement' : 'question', search: tab === 'Discussions' ? debouncedSearch || undefined : undefined, sort });
     request.then(result => {
       if (cancelled) return;
       setItems(result.content); setTotal(result.totalElements);
     }).catch(err => { if (!cancelled && !quiet) setError(getApiErrorMessage(err, 'Failed to load community posts.')); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [tab, debouncedSearch, sort, tagFilter, approvalFilter, contentStatusFilter, answerFilter, page, reload]);
+  }, [tab, debouncedSearch, sort, tagFilter, approvalFilter, contentStatusFilter, page, reload]);
 
   const chooseTab = (value: string) => { setTab(value as typeof tab); setPage(0); };
   const hasMyFilters = Boolean(debouncedSearch || tagFilter !== 'ALL' || approvalFilter !== 'ALL' || contentStatusFilter !== 'ALL');
@@ -104,9 +103,6 @@ function DiscussionList() {
           <Select aria-label="Filter by review status" className="w-full sm:w-52" value={approvalFilter} options={[{ label: 'All review statuses', value: 'ALL' }, { label: 'Pending approval', value: 'PENDING' }, { label: 'Approved', value: 'APPROVED' }, { label: 'Rejected', value: 'REJECTED' }]} onChange={value => { setApprovalFilter(value as DiscussionApprovalFilter); setPage(0); }} />
           <Select aria-label="Filter by post status" className="w-full sm:w-48" value={contentStatusFilter} options={[{ label: 'All post statuses', value: 'ALL' }, { label: 'Open', value: 'OPEN' }, { label: 'Closed', value: 'CLOSED' }, { label: 'Hidden', value: 'HIDDEN' }]} onChange={value => { setContentStatusFilter(value as DiscussionContentStatus); setPage(0); }} />
         </>}
-        {tab === 'Discussions' && (
-          <Select aria-label="Filter by answer status" className="w-full sm:w-48" value={answerFilter} options={[{ label: 'All questions', value: 'ALL' }, { label: 'Unanswered', value: 'UNANSWERED' }, { label: 'Has accepted answer', value: 'ACCEPTED' }]} onChange={value => { setAnswerFilter(value as DiscussionAnswerFilter); setPage(0); }} />
-        )}
         <Select aria-label="Sort discussions" className="w-full sm:w-52" value={sort} options={[{ label: 'Latest', value: 'latest' }, { label: 'Most commented', value: 'mostCommented' }, { label: 'Most upvoted', value: 'mostUpvoted' }]} onChange={value => { setSort(value as DiscussionSort); setPage(0); }} />
       </div>
     )}
@@ -252,7 +248,7 @@ function DiscussionDetail({ discussionId }: { discussionId: string }) {
         setItem(current => current ? { ...current, isBookmarked: result.isBookmarked } : current);
       } else {
         const result = await studentCommunityService.setClosed(discussionId, !item.isClosed);
-        setItem(current => current ? { ...current, isClosed: result.isClosed } : current);
+        setItem(current => current ? { ...current, isClosed: result.isClosed, status: result.isClosed ? 'CLOSED' : 'OPEN' } : current);
       }
     } catch (err) { setActionError(getApiErrorMessage(err, 'Could not update this discussion.')); }
     finally { setBusy(false); }
@@ -265,18 +261,6 @@ function DiscussionDetail({ discussionId }: { discussionId: string }) {
       setItem(current => current ? { ...current, comments: [...(current.comments ?? []), created], commentCount: current.commentCount + 1 } : current);
       setComment(''); setCommentImageUrl('');
     } catch (err) { setActionError(getApiErrorMessage(err, 'Could not post your comment.')); }
-    finally { setBusy(false); }
-  };
-
-  const toggleAcceptComment = async (commentId: number) => {
-    setBusy(true); setActionError(null);
-    try {
-      const updated = await studentCommunityService.acceptComment(discussionId, commentId);
-      setItem(current => current ? {
-        ...current,
-        comments: (current.comments ?? []).map(c => c.commentId === commentId ? updated : c),
-      } : current);
-    } catch (err) { setActionError(getApiErrorMessage(err, 'Could not update accepted answer.')); }
     finally { setBusy(false); }
   };
 
@@ -343,17 +327,11 @@ function DiscussionDetail({ discussionId }: { discussionId: string }) {
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-xs text-content-subtle">{reply.author.displayName} · {formatDate(reply.createdAt)}</p>
-            {reply.isAccepted && <Badge variant="success">Accepted answer</Badge>}
           </div>
           <p className="mt-2 whitespace-pre-wrap text-sm text-content-secondary">{reply.content}</p>
           {reply.imageUrl && <ImageViewer src={reply.imageUrl} alt="Reply attachment" className="mt-3" imageClassName="max-h-64" />}
           {approved && (
             <div className="mt-2 flex flex-wrap gap-2">
-              {item.isAuthor && (
-                <Button size="sm" variant={reply.isAccepted ? 'primary' : 'ghost'} disabled={busy} onClick={() => void toggleAcceptComment(reply.commentId)}>
-                  {reply.isAccepted ? 'Unmark solution' : 'Mark as solution'}
-                </Button>
-              )}
               <Button size="sm" variant="ghost" disabled={busy} onClick={() => { setReportTarget({ kind: 'comment', commentId: reply.commentId }); setReportReason(''); }}>
                 Report
               </Button>
