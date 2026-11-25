@@ -367,11 +367,6 @@ public class QuestionServiceImpl implements QuestionService {
                         String itemStr = item != null ? item.toString() : "";
                         Long optionId = keyToIdMap.get(itemStr);
                         if (optionId == null) {
-                            try {
-                                optionId = Long.parseLong(itemStr);
-                            } catch (NumberFormatException ignored) {}
-                        }
-                        if (optionId == null) {
                             throw new BadRequestException("Invalid option in correct order: " + itemStr);
                         }
                         orderedOptionIds.add(optionId);
