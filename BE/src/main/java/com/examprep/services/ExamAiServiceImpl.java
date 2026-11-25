@@ -2,6 +2,8 @@ package com.examprep.services;
 
 import com.examprep.ai.AiClient;
 import com.examprep.ai.AiRequest;
+import com.examprep.ai.AiResponse;
+import com.examprep.entities.AiUsageLog;
 import com.examprep.util.diagram.DiagramGraph;
 import com.examprep.util.diagram.DiagramGraphToDrawioConverter;
 import com.examprep.util.diagram.DiagramGraphValidator;
@@ -33,6 +35,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
@@ -114,6 +117,9 @@ public class ExamAiServiceImpl implements ExamAiService {
     private final Validator validator;
     private final AiClient aiClient;
     private final TransactionTemplate readTx;
+    private final TransactionTemplate logTx;
+    @Autowired(required = false) private AiUsageLogRepository aiUsageLogs;
+    @Autowired(required = false) private UserRepository users;
     @Value("${app.exam-ai.timeout-ms:90000}") private long timeoutMillis;
     @Value("${app.exam-ai.material-timeout-ms:120000}") private long materialTimeoutMillis;
     @Value("${app.exam-ai.daily-limit:20}") private int dailyLimit;
@@ -137,8 +143,12 @@ public class ExamAiServiceImpl implements ExamAiService {
             TransactionTemplate template = new TransactionTemplate(transactionManager);
             template.setReadOnly(true);
             this.readTx = template;
+            TransactionTemplate writeTemplate = new TransactionTemplate(transactionManager);
+            writeTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+            this.logTx = writeTemplate;
         } else {
             this.readTx = null;
+            this.logTx = null;
         }
     }
 
@@ -213,7 +223,7 @@ public class ExamAiServiceImpl implements ExamAiService {
         takeQuota(user.getId(), request.courseId());
         long timeout = material == null ? timeoutMillis : materialTimeoutMillis;
         long deadline = System.currentTimeMillis() + timeout;
-        JsonNode generated = callAi(context, remainingTypes, remainingDifficulty, timeout);
+        JsonNode generated = callAi(user.getId(), request.courseId(), context, remainingTypes, remainingDifficulty, timeout);
         collect(generated, accepted, problems, seen, remainingTypes, remainingDifficulty, targetModuleIds);
         warnings.addAll(problems);
         // Models often stop one short or write a slot that fails validation: top up only the missing slots.
@@ -224,7 +234,7 @@ public class ExamAiServiceImpl implements ExamAiService {
             context.put("previousProblems", List.copyOf(problems));
             problems.clear();
             try {
-                collect(callAi(context, remainingTypes, remainingDifficulty, left), accepted, problems, seen, remainingTypes, remainingDifficulty, targetModuleIds);
+                collect(callAi(user.getId(), request.courseId(), context, remainingTypes, remainingDifficulty, left), accepted, problems, seen, remainingTypes, remainingDifficulty, targetModuleIds);
                 warnings.addAll(problems);
             } catch (BaseException ex) {
                 warnings.add("Retry for the missing questions failed: " + ex.getMessage());
@@ -278,7 +288,7 @@ public class ExamAiServiceImpl implements ExamAiService {
 
 
 
-    private JsonNode callAi(Map<String, Object> context, Map<String, Integer> types, Map<String, Integer> difficulty, long timeout) {
+    private JsonNode callAi(Long userId, Long courseId, Map<String, Object> context, Map<String, Integer> types, Map<String, Integer> difficulty, long timeout) {
         Map<String, Object> prompt = new LinkedHashMap<>(context);
         prompt.put("questionTypes", positive(types));
         prompt.put("difficultyDistribution", positive(difficulty));
@@ -293,19 +303,25 @@ public class ExamAiServiceImpl implements ExamAiService {
         } catch (JsonProcessingException ex) {
             throw upstream("Could not build the AI request.");
         }
+        long startMs = System.currentTimeMillis();
+        AiResponse aiResponse;
         String text;
-        CompletableFuture<String> future = CompletableFuture.supplyAsync(() -> aiClient.complete(call).getText());
+        CompletableFuture<AiResponse> future = CompletableFuture.supplyAsync(() -> aiClient.complete(call));
         try {
-            text = future.get(timeout, TimeUnit.MILLISECONDS);
+            aiResponse = future.get(timeout, TimeUnit.MILLISECONDS);
+            text = aiResponse == null ? "" : Objects.toString(aiResponse.getText(), "");
         } catch (TimeoutException ex) {
             future.cancel(true);
+            recordUsageLog(userId, courseId, plan.size(), null, null, null, (int) (System.currentTimeMillis() - startMs), "FAILED", "AI request timed out");
             throw new BaseException(ResponseCode.AI_TIMEOUT);
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
+            recordUsageLog(userId, courseId, plan.size(), null, null, null, (int) (System.currentTimeMillis() - startMs), "FAILED", "AI generation interrupted");
             throw upstream("AI generation was interrupted.");
         } catch (ExecutionException ex) {
             String reason = String.valueOf(ex.getCause() == null ? ex.getMessage() : ex.getCause().getMessage());
             log.warn("Exam AI provider call failed: {}", reason);
+            recordUsageLog(userId, courseId, plan.size(), null, null, null, (int) (System.currentTimeMillis() - startMs), "FAILED", reason);
             if (reason.contains("HTTP 429")) throw new BaseException(ResponseCode.AI_RATE_LIMITED, "AI provider quota or rate limit exceeded.");
             if (reason.contains("HTTP 503")) throw upstream("AI provider is overloaded right now. Please try again later.");
             throw upstream("AI provider returned an unsuccessful response.");
@@ -313,11 +329,53 @@ public class ExamAiServiceImpl implements ExamAiService {
         int open = text.indexOf('{'), close = text.lastIndexOf('}');
         try {
             JsonNode result = open < 0 || close < open ? null : json.readTree(text.substring(open, close + 1));
-            if (result == null || !result.isObject() || !result.path("questions").isArray())
+            if (result == null || !result.isObject() || !result.path("questions").isArray()) {
+                recordUsageLog(userId, courseId, plan.size(), aiResponse != null ? aiResponse.getModel() : null,
+                        aiResponse != null ? aiResponse.getInputTokens() : null, aiResponse != null ? aiResponse.getOutputTokens() : null,
+                        (int) (System.currentTimeMillis() - startMs), "FAILED", "Invalid draft JSON");
                 throw upstream("AI provider returned an invalid draft.");
+            }
+            recordUsageLog(userId, courseId, plan.size(), aiResponse != null ? aiResponse.getModel() : null,
+                    aiResponse != null ? aiResponse.getInputTokens() : null, aiResponse != null ? aiResponse.getOutputTokens() : null,
+                    (int) (System.currentTimeMillis() - startMs), "SUCCESS", null);
             return result;
         } catch (JsonProcessingException ex) {
+            recordUsageLog(userId, courseId, plan.size(), aiResponse != null ? aiResponse.getModel() : null,
+                    aiResponse != null ? aiResponse.getInputTokens() : null, aiResponse != null ? aiResponse.getOutputTokens() : null,
+                    (int) (System.currentTimeMillis() - startMs), "FAILED", "Invalid draft JSON");
             throw upstream("AI provider returned an invalid draft.");
+        }
+    }
+
+    private void recordUsageLog(Long userId, Long courseId, int questionCount, String model,
+            Integer inputTokens, Integer outputTokens, int durationMs, String status, String errorMessage) {
+        if (aiUsageLogs == null || users == null || userId == null) return;
+        try {
+            Runnable saveAction = () -> {
+                Optional<User> u = users.findById(userId);
+                if (u.isEmpty()) return;
+                Course c = courseId != null ? courses.findById(courseId).orElse(null) : null;
+                String err = errorMessage != null && errorMessage.length() > 500 ? errorMessage.substring(0, 500) : errorMessage;
+                aiUsageLogs.save(AiUsageLog.builder()
+                        .user(u.get())
+                        .course(c)
+                        .purpose("EXAM_GEN")
+                        .model(model)
+                        .inputTokens(inputTokens)
+                        .outputTokens(outputTokens)
+                        .durationMs(durationMs)
+                        .status(status)
+                        .errorMessage(err)
+                        .questionCount(questionCount)
+                        .build());
+            };
+            if (logTx != null) {
+                logTx.executeWithoutResult(tx -> saveAction.run());
+            } else {
+                saveAction.run();
+            }
+        } catch (Exception ex) {
+            log.warn("Failed to persist EXAM_GEN AiUsageLog: {}", ex.getMessage());
         }
     }
 

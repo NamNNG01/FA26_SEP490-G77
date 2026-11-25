@@ -146,7 +146,7 @@ public class QuestionImportServiceImpl implements QuestionImportService {
             }
             if (lowerName.endsWith(".xlsx")) return "XLSX";
             if (lowerName.endsWith(".docx")) return "DOCX";
-            return "DOCX";
+            throw new BadRequestException("Unsupported file format. Supported: .pdf, .docx, .xlsx, .xls");
         }
         if (isOle2Magic || lowerName.endsWith(".xls")) {
             return "XLS";
