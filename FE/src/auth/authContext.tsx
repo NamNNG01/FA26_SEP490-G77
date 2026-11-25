@@ -7,7 +7,10 @@ import React, {
   type ReactNode,
 } from 'react';
 import axios from 'axios';
-import { apiClient } from '@/services/axios';
+import { authService } from '@/services/auth.service';
+import { userService } from '@/services/user.service';
+import { ROUTES } from '@/app/routes';
+import { Role } from '@/utils/permissions';
 import {
   clearAuth,
   getAccessToken,
@@ -19,12 +22,10 @@ import {
 } from './storage';
 import { onSessionExpired } from './sessionExpired';
 import { clearQueryCache } from '@/hooks/useCachedQuery';
-import type { ApiResponse } from '@/types/api';
-import type { GoogleLoginResponse, LoginResponse, UserResponse } from '@/types/auth';
+import type { LoginResponse, UserResponse } from '@/types/auth';
 
 export interface AuthState {
   user: UserResponse | null;
-  accessToken: string | null;
   isLoading: boolean;
   isAuthenticated: boolean;
   /**
@@ -42,7 +43,6 @@ interface AuthContextValue extends AuthState {
   logout: (revokeRemote?: boolean) => Promise<void>;
   /** POST /auth/logout-all — revokes every session. Throws on failure. */
   logoutAll: () => Promise<void>;
-  setAuth: (state: Partial<AuthState>) => void;
   /** Replace the signed-in user (state + storage), e.g. after PUT /users/me. */
   updateUser: (user: UserResponse) => void;
   /** Called once the visitor has reached /login after a forced sign-out. */
@@ -56,14 +56,14 @@ const AuthContext = createContext<AuthContextValue | null>(null);
  */
 export function landingPathForRole(roleCode: string | undefined | null): string {
   switch (roleCode) {
-    case 'ADMIN':
-      return '/admin/dashboard';
-    case 'COURSE_MANAGER':
-      return '/manager/dashboard';
-    case 'STUDENT':
+    case Role.ADMIN:
+      return ROUTES.adminDashboard;
+    case Role.COURSE_MANAGER:
+      return ROUTES.managerDashboard;
+    case Role.STUDENT:
     default:
       // My Courses is the student home (the old dashboard was merged into it).
-      return '/student/courses';
+      return ROUTES.studentCourses;
   }
 }
 
@@ -94,7 +94,6 @@ function sessionStillValid(stored: UserResponse, server: UserResponse): boolean 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AuthState>({
     user: null,
-    accessToken: null,
     isLoading: true,
     isAuthenticated: false,
     reauthRequired: false,
@@ -109,7 +108,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     clearQueryCache();
     setState({
       user: null,
-      accessToken: null,
       isLoading: false,
       isAuthenticated: false,
       reauthRequired,
@@ -141,8 +139,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     async function verifySession(cachedUser: UserResponse) {
       try {
-        const res = await apiClient.get('/users/me');
-        const serverUser = (res.data as ApiResponse<UserResponse>).data;
+        const serverUser = await userService.getCurrentUser();
         if (cancelled) return;
 
         if (!serverUser || !sessionStillValid(cachedUser, serverUser)) {
@@ -153,8 +150,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         saveUser(serverUser);
         setState({
           user: serverUser,
-          // The interceptor may have rotated the token pair during the check.
-          accessToken: getAccessToken(),
           isLoading: false,
           isAuthenticated: true,
           reauthRequired: false,
@@ -162,15 +157,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch (error) {
         if (cancelled) return;
 
-        const status = axios.isAxiosError(error) ? error.response?.status : undefined;
-        const backendUnreachable = status === undefined || status >= 500;
+        // Only a transport failure counts as an outage: api.get also throws a
+        // plain Error for { success: false }, which is a rejected session.
+        const backendUnreachable =
+          axios.isAxiosError(error) && (!error.response || error.response.status >= 500);
 
         // getAccessToken() is null when the interceptor's refresh failed and
         // already cleared storage — that is a dead session, not an outage.
         if (backendUnreachable && getAccessToken()) {
           setState({
             user: cachedUser,
-            accessToken: getAccessToken(),
             isLoading: false,
             isAuthenticated: true,
             reauthRequired: false,
@@ -227,11 +223,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Store the token pair + user from AUTH-02 / AUTH-09 and mark the session
   // authenticated.
-  function startSession(body: ApiResponse<LoginResponse>): UserResponse {
-    const data = body.data;
-
+  function startSession(data: LoginResponse | null | undefined): UserResponse {
     if (!data?.accessToken || !data.user) {
-      throw new Error(body.message || 'Login failed');
+      throw new Error('Login failed');
     }
 
     // A new session starts with an empty page cache (useCachedQuery).
@@ -244,7 +238,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     setState({
       user: data.user,
-      accessToken: data.accessToken,
       isLoading: false,
       isAuthenticated: true,
       reauthRequired: false,
@@ -253,17 +246,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function login(email: string, password: string): Promise<UserResponse> {
-    const res = await apiClient.post('/auth/login', { email, password });
-    return startSession(res.data as ApiResponse<LoginResponse>);
+    return startSession(await authService.login(email, password));
   }
 
   async function loginWithGoogle(
     idToken: string,
   ): Promise<{ user: UserResponse; newUser: boolean }> {
-    const res = await apiClient.post('/auth/google', { idToken });
-    const body = res.data as ApiResponse<GoogleLoginResponse>;
-    const user = startSession(body);
-    return { user, newUser: body.data.newUser === true };
+    const data = await authService.loginWithGoogle(idToken);
+    const user = startSession(data);
+    return { user, newUser: data.newUser === true };
   }
 
   async function register(
@@ -271,11 +262,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     password: string,
     fullName: string,
   ): Promise<UserResponse> {
-    await apiClient.post('/auth/register', {
-      email,
-      password,
-      fullName,
-    });
+    await authService.register(email, password, fullName);
     return login(email, password);
   }
 
@@ -283,7 +270,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const refreshToken = getRefreshToken();
     if (revokeRemote && refreshToken) {
       try {
-        await apiClient.post('/auth/logout', { refreshToken });
+        await authService.logout(refreshToken);
       } catch {
       }
     }
@@ -293,13 +280,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function logoutAll() {
     // Keep this device signed in if the server could not revoke the other
     // sessions. The caller handles the error and only navigates away on success.
-    await apiClient.post('/auth/logout-all');
+    await authService.logoutAll();
     clearLocalSession();
-  }
-
-  // ---- Set auth state (used by the Axios interceptor's refresh flow) ----
-  function setAuth(next: Partial<AuthState>) {
-    setState((prev) => ({ ...prev, ...next }));
   }
 
   // ---- Update the signed-in user (profile edits) --------------------------
@@ -322,7 +304,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loginWithGoogle,
         logout,
         logoutAll,
-        setAuth,
         updateUser,
         clearReauthRequired,
       }}
