@@ -43,6 +43,11 @@ export function QuestionSidePanel({
   statusBusy?: boolean;
 }) {
   const isEdit = mode === 'edit';
+  // New questions need both a course and a module before anything can be added or saved.
+  const locationHint = isEdit ? undefined
+    : !courseId ? 'Select a course first'
+      : !moduleId ? 'Select a module first'
+        : undefined;
   return (
     <div className={SIDEBAR_CLS}>
       {tabs}
@@ -55,14 +60,23 @@ export function QuestionSidePanel({
         {!isEdit && (
           <>
             {onAdd && (
-              <Button variant="secondary" className="w-full" icon={<Icon.Plus className="w-4 h-4" />} onClick={onAdd} disabled={saving}>Add Question</Button>
+              <Button variant="secondary" className="w-full" icon={<Icon.Plus className="w-4 h-4" />} onClick={onAdd} disabled={saving || !!locationHint} title={locationHint}>Add Question</Button>
             )}
             {onImport && (
-              <Button variant="outline" className="w-full" icon={<Icon.Scan className="w-4 h-4" />} onClick={onImport} disabled={saving}>Import Excel / Word / PDF</Button>
+              <Button
+                variant="outline"
+                className="w-full"
+                icon={<Icon.Scan className="w-4 h-4" />}
+                onClick={onImport}
+                disabled={saving || !!locationHint}
+                title={locationHint}
+              >
+                Import Excel / Word / PDF
+              </Button>
             )}
           </>
         )}
-        <Button className="w-full" icon={<Icon.CheckCircle className="w-4 h-4" />} onClick={onSave} loading={saving} disabled={saving || statusBusy}>
+        <Button className="w-full" icon={<Icon.CheckCircle className="w-4 h-4" />} onClick={onSave} loading={saving} disabled={saving || statusBusy || !!locationHint} title={locationHint}>
           {saveLabel ?? (isEdit ? 'Save Changes' : `Save All (${count})`)}
         </Button>
         {prerequisiteNote && (
