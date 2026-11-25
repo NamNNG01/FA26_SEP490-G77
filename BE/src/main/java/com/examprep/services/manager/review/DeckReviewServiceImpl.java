@@ -32,16 +32,10 @@ public class DeckReviewServiceImpl implements DeckReviewService {
 
     private List<Long> getMyCourseIds(User manager) {
         if (manager == null) return List.of();
-        if (User.ROLE_ADMIN.equals(manager.getRoleName())) {
-            return null;
-        }
         return courseRepository.findCourseIdsManagedByUser(manager.getUserId());
     }
 
     private void assertCanAccessCourse(User manager, Long courseId) {
-        if (User.ROLE_ADMIN.equals(manager.getRoleName())) {
-            return;
-        }
         boolean hasAccess = courseRepository.existsManagedCourse(courseId, manager.getUserId());
         if (!hasAccess) {
             throw new ReviewException(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", null, "Course not found or outside scope");

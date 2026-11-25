@@ -345,7 +345,7 @@ public class DeckServiceImpl implements DeckService {
                 deck.getModule() == null ? null : deck.getModule().getTitle());
     }
 
-    private boolean admin(UserPrincipal user) { return User.ROLE_ADMIN.equals(user.getRole()); }
+    private boolean admin(UserPrincipal user) { return false; }
     private String optionalText(String value) { return value == null || value.isBlank() ? null : value.strip(); }
     private void positiveId(Long id) {
         if (id == null || id <= 0) throw new BadRequestException("ID must be a positive integer.");

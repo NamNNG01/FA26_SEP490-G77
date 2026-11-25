@@ -66,7 +66,7 @@ class ExamApiIntegrationTest {
         call(manager, get(path(foreign))).andExpect(status().isForbidden());
         call(manager, get("/api/v1/manager/exams")).andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.totalElements").value(1));
-        call(admin, get("/api/v1/manager/exams")).andExpect(jsonPath("$.data.totalElements").value(2));
+        call(admin, get("/api/v1/manager/exams")).andExpect(status().isForbidden());
         call(manager, get("/api/v1/manager/exams").param("size", "101")).andExpect(status().isBadRequest());
     }
 
@@ -74,7 +74,7 @@ class ExamApiIntegrationTest {
         Exam published = exam(course, module);
         published.setStatus("PUBLISHED");
         attach(published, question);
-        call(admin, patch("/api/v1/manager/questions/" + question.getQuestionId() + "/status")
+        call(manager, patch("/api/v1/manager/questions/" + question.getQuestionId() + "/status")
                 .contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"ARCHIVED\"}"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString(published.getExamId().toString())));
@@ -88,7 +88,7 @@ class ExamApiIntegrationTest {
         published.setGenerationType("RANDOM");
         em.persist(ExamConfig.builder().exam(published).module(module).questionType("SINGLE_CHOICE")
                 .numberOfQuestions(1).build());
-        call(admin, patch("/api/v1/manager/questions/batch/status").contentType(MediaType.APPLICATION_JSON)
+        call(manager, patch("/api/v1/manager/questions/batch/status").contentType(MediaType.APPLICATION_JSON)
                 .content(json.writeValueAsString(Map.of("questionIds", List.of(question.getQuestionId(), second.getQuestionId()), "status", "ARCHIVED"))))
                 .andExpect(status().isConflict());
         em.clear();
@@ -103,7 +103,7 @@ class ExamApiIntegrationTest {
         published.setGenerationType("RANDOM");
         em.persist(ExamConfig.builder().exam(published).module(module).questionType("SINGLE_CHOICE")
                 .numberOfQuestions(1).build());
-        call(admin, patch("/api/v1/manager/questions/" + question.getQuestionId() + "/status")
+        call(manager, patch("/api/v1/manager/questions/" + question.getQuestionId() + "/status")
                 .contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"ARCHIVED\"}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.status").value("ARCHIVED"));
     }
@@ -458,7 +458,9 @@ class ExamApiIntegrationTest {
 
     @Test void changingCourseRejectsRetainedConfigFromPreviousCourse() throws Exception {
         long id = data(submit(random("ESSAY")).andExpect(status().isCreated())).path("examId").asLong();
-        call(admin, put("/api/v1/manager/exams/" + id).contentType(MediaType.APPLICATION_JSON)
+        foreignCourse.setManager(manager);
+        em.flush();
+        call(manager, put("/api/v1/manager/exams/" + id).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"courseId\":" + foreignCourse.getCourseId() + "}"))
                 .andExpect(status().isBadRequest());
     }
@@ -658,7 +660,7 @@ class ExamApiIntegrationTest {
     private User account(String role) { User result=User.builder().email(UUID.randomUUID()+"@example.com").fullName(role).passwordHash("test").roleName(role).build(); em.persist(result); return result; }
     private Course course(User owner, Category category) { Course result=Course.builder().manager(owner).category(category).categoryId(category.getCategoryId()).title("Course").slug(UUID.randomUUID().toString()).isPublished(false).build(); em.persist(result); return result; }
     private Module module(Course parent) { Module result=Module.builder().course(parent).title("Module").orderIndex(1).build(); em.persist(result); return result; }
-    private Question question(Module parent, String type, String content) { Question result=Question.builder().module(parent).questionType(type).content(content).status("ACTIVE").build(); em.persist(result); return result; }
+    private Question question(Module parent, String type, String content) { Question result=Question.builder().course(parent.getCourse()).module(parent).questionType(type).content(content).status("ACTIVE").build(); em.persist(result); return result; }
     private Exam exam(Course parent, Module mod) { Exam result=Exam.builder().course(parent).module(mod).createdBy(manager).title("Exam " + UUID.randomUUID()).durationMinutes(60).generationType("STATIC").isPractice(false).maxScore(BigDecimal.TEN).build(); em.persist(result); return result; }
     private ExamQuestion attach(Exam exam, Question question) { ExamQuestion result=ExamQuestion.builder().exam(exam).question(question).weight(BigDecimal.ONE).build(); em.persist(result); return result; }
 }

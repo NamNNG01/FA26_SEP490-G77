@@ -75,14 +75,33 @@ public class SecurityConfig {
                         ).permitAll()
                         // Role-restricted Endpoints
                         .requestMatchers("/api/v1/admin/**").hasRole(User.ROLE_ADMIN)
-                        .requestMatchers("/api/v1/manager/**").hasAnyRole(User.ROLE_COURSE_MANAGER, User.ROLE_ADMIN)
-                        .requestMatchers("/api/v1/student/**").hasAnyRole(User.ROLE_STUDENT, User.ROLE_ADMIN)
+                        // Course shell management shared between ADMIN and COURSE_MANAGER
+                        .requestMatchers(HttpMethod.GET,
+                                "/api/v1/manager/courses",
+                                "/api/v1/manager/courses/*",
+                                "/api/v1/manager/courses/*/modules",
+                                "/api/v1/manager/courses/*/students"
+                        ).hasAnyRole(User.ROLE_COURSE_MANAGER, User.ROLE_ADMIN)
+                        .requestMatchers(HttpMethod.POST, "/api/v1/manager/courses/*/thumbnail")
+                        .hasAnyRole(User.ROLE_COURSE_MANAGER, User.ROLE_ADMIN)
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/manager/courses/*")
+                        .hasAnyRole(User.ROLE_COURSE_MANAGER, User.ROLE_ADMIN)
+                        // Course creation, publish, delete are ADMIN-only
+                        .requestMatchers(HttpMethod.POST, "/api/v1/manager/courses").hasRole(User.ROLE_ADMIN)
+                        .requestMatchers(HttpMethod.PATCH, "/api/v1/manager/courses/*/publish").hasRole(User.ROLE_ADMIN)
+                        .requestMatchers(HttpMethod.DELETE, "/api/v1/manager/courses/*").hasRole(User.ROLE_ADMIN)
+                        // All other /api/v1/manager/** endpoints are strictly COURSE_MANAGER-only
+                        .requestMatchers("/api/v1/manager/**").hasRole(User.ROLE_COURSE_MANAGER)
+                        // Shared media upload used by Student Community and Admin Discussion Moderation
+                        .requestMatchers(HttpMethod.POST, "/api/v1/student/uploads")
+                        .hasAnyRole(User.ROLE_STUDENT, User.ROLE_COURSE_MANAGER, User.ROLE_ADMIN)
+                        .requestMatchers("/api/v1/student/**").hasRole(User.ROLE_STUDENT)
                         // Each dashboard prefix and everything under it: the reports live on sub-paths
                         // (…/admin/report, …/course-manager/summary|courses|exams).
                         .requestMatchers("/api/v1/dashboard/student", "/api/v1/dashboard/student/**")
-                        .hasAnyRole(User.ROLE_STUDENT, User.ROLE_ADMIN)
+                        .hasRole(User.ROLE_STUDENT)
                         .requestMatchers("/api/v1/dashboard/course-manager", "/api/v1/dashboard/course-manager/**")
-                        .hasAnyRole(User.ROLE_COURSE_MANAGER, User.ROLE_ADMIN)
+                        .hasRole(User.ROLE_COURSE_MANAGER)
                         .requestMatchers("/api/v1/dashboard/admin", "/api/v1/dashboard/admin/**")
                         .hasRole(User.ROLE_ADMIN)
                         // All other endpoints (including /api/v1/auth/logout, /api/v1/auth/logout-all) require authentication

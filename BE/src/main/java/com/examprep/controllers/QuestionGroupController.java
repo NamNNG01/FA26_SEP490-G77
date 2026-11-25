@@ -29,7 +29,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1/manager/question-groups")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('COURSE_MANAGER', 'ADMIN')")
+@PreAuthorize("hasRole('COURSE_MANAGER')")
 @Tag(name = "Question Groups", description = "Question group (shared passage) management for course managers")
 public class QuestionGroupController {
 

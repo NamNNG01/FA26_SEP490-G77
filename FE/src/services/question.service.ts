@@ -71,8 +71,6 @@ export interface QuestionListItem {
 export interface QuestionListParams {
   search?: string;
   courseId?: number;
-  /** Several courses at once — sent as repeated `courseIds` params; each must be one the caller manages. */
-  courseIds?: number[];
   moduleId?: number;
   groupId?: number;
   /** Kind of the question's group: QUIZ | ESSAY | CODE | DIAGRAM, or NONE for standalone questions. */

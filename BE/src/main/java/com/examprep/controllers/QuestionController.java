@@ -23,6 +23,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -31,6 +32,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/manager/questions")
+@PreAuthorize("hasRole('COURSE_MANAGER')")
 @RequiredArgsConstructor
 @Tag(name = "Question Bank", description = "Question Bank APIs for Course Managers and Admins")
 public class QuestionController {
@@ -48,8 +50,6 @@ public class QuestionController {
     @Operation(summary = "Q-01: List questions with filters and pagination")
     public ResponseEntity<ApiResponse<Page<QuestionListItemDto>>> getQuestions(
             @RequestParam(required = false) Long courseId,
-            @Parameter(description = "Limit to these courses (repeat the param: courseIds=1&courseIds=2); each must be one the caller manages")
-            @RequestParam(required = false) List<Long> courseIds,
             @RequestParam(required = false) Long moduleId,
             @RequestParam(required = false) Long groupId,
             @Parameter(description = "Kind of the group the question is in: QUIZ, ESSAY, CODE, DIAGRAM, or NONE for standalone questions")
@@ -70,7 +70,7 @@ public class QuestionController {
         User user = resolveUser(currentUser);
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "updatedAt"));
         Page<QuestionListItemDto> result = questionService.getQuestions(
-                courseId, courseIds, moduleId, groupId, groupType, questionType, questionTypes, difficulty, status, approvalStatus,
+                courseId, moduleId, groupId, groupType, questionType, questionTypes, difficulty, status, approvalStatus,
                 creatorRole, source, createdBy, search, pageable, user);
         return ResponseEntity.ok(ApiResponse.success(result, "Questions retrieved successfully"));
     }

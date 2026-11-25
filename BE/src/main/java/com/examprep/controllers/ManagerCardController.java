@@ -22,7 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1/manager/cards")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('COURSE_MANAGER', 'ADMIN')")
+@PreAuthorize("hasRole('COURSE_MANAGER')")
 @Tag(name = "Manager Cards", description = "Card operations addressed directly by card id (F-07..08); "
         + "permissions are always derived from the card's deck")
 public class ManagerCardController {

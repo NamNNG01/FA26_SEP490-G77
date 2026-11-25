@@ -45,7 +45,6 @@ public class QuestionPayload {
                 .answerKey(req.getAnswerKey())
                 .essayGradingRubric(req.getEssayGradingRubric())
                 .options(req.getOptions())
-                .correctOrder(req.getCorrectOrder())
                 .codeConfig(req.getCodeConfig())
                 .testCases(req.getTestCases())
                 .build();
@@ -62,7 +61,6 @@ public class QuestionPayload {
                 .answerKey(req.getAnswerKey())
                 .essayGradingRubric(req.getEssayGradingRubric())
                 .options(req.getOptions())
-                .correctOrder(req.getCorrectOrder())
                 .codeConfig(req.getCodeConfig())
                 .testCases(req.getTestCases())
                 .build();

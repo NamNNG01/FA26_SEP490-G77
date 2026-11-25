@@ -17,7 +17,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/v1/manager/contributions")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('COURSE_MANAGER', 'ADMIN')")
+@PreAuthorize("hasRole('COURSE_MANAGER')")
 @Tag(name = "Manager Contribution Review", description = "Manager review for student contributed questions")
 public class ContributionReviewController {
 

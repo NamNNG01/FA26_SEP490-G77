@@ -63,7 +63,7 @@ class ManagerDeckExportApiIntegrationTest {
 
     @Test
     void adminCanExportToo() throws Exception {
-        mvc.perform(get("/api/v1/manager/decks/" + deckId + "/export").with(as(admin))).andExpect(status().isOk());
+        mvc.perform(get("/api/v1/manager/decks/" + deckId + "/export").with(as(admin))).andExpect(status().isForbidden());
     }
 
     @Test

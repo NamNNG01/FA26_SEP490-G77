@@ -23,7 +23,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/manager/exams/ai")
-@PreAuthorize("hasAnyRole('COURSE_MANAGER', 'ADMIN')")
+@PreAuthorize("hasRole('COURSE_MANAGER')")
 @RequiredArgsConstructor
 public class ExamAiController {
     private final ExamAiService service;

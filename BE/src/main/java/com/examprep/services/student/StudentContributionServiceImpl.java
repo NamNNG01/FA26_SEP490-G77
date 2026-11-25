@@ -111,7 +111,6 @@ public class StudentContributionServiceImpl implements StudentContributionServic
                 .answerKeyJson(writeJson(request.getAnswerKey()))
                 .explanation(request.getExplanation())
                 .difficulty(request.getDifficulty())
-                .categoryIds(writeJson(request.getCorrectOrder()))
                 .essayGradingRubricJson(writeJson(request.getEssayGradingRubric()))
                 .questionMetadataJson(writeJson(request.getQuestionMetadata()))
                 .codeConfigJson(writeJson(request.getCodeConfig()))
@@ -280,7 +279,7 @@ public class StudentContributionServiceImpl implements StudentContributionServic
             c.setAnswerKeyJson(writeJson(qReq.getAnswerKey()));
             c.setExplanation(qReq.getExplanation());
             c.setDifficulty(qReq.getDifficulty());
-            c.setCategoryIds(writeJson(qReq.getCorrectOrder()));
+            c.setCategoryIds(null);
             c.setEssayGradingRubricJson(writeJson(qReq.getEssayGradingRubric()));
             c.setQuestionMetadataJson(writeJson(qReq.getQuestionMetadata()));
             c.setCodeConfigJson(writeJson(qReq.getCodeConfig()));

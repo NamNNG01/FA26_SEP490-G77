@@ -381,10 +381,6 @@ public class QuestionGroupServiceImpl implements QuestionGroupService {
     }
 
     private boolean isAdmin(String role) {
-        if (role == null) {
-            return false;
-        }
-        String roleName = role.startsWith(ROLE_PREFIX) ? role.substring(ROLE_PREFIX.length()) : role;
-        return User.ROLE_ADMIN.equals(roleName);
+        return false;
     }
 }

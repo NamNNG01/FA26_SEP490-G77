@@ -21,7 +21,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/** Q-01 `courseIds`: list several courses at once, each one the caller manages. */
+/** Q-01 course scope: managers only see questions in courses they manage; single `courseId` is validated. */
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
@@ -46,26 +46,22 @@ class QuestionListScopeIntegrationTest {
         question(foreign, "Foreign course question");
     }
 
-    @Test void courseIdsLimitsTheListToThoseCourses() throws Exception {
-        call(manager, get("/api/v1/manager/questions")
-                .param("courseIds", first.getCourseId().toString())
-                .param("courseIds", second.getCourseId().toString()))
+    @Test void managerOnlySeesManagedCoursesAndCanFilterBySingleCourseId() throws Exception {
+        call(manager, get("/api/v1/manager/questions"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.totalElements").value(2));
-        call(manager, get("/api/v1/manager/questions").param("courseIds", first.getCourseId().toString()))
+        call(manager, get("/api/v1/manager/questions").param("courseId", first.getCourseId().toString()))
+                .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.totalElements").value(1));
     }
 
-    @Test void courseIdsMustAllBeManagedByTheCaller() throws Exception {
+    @Test void courseIdMustBeManagedByTheCaller() throws Exception {
         call(manager, get("/api/v1/manager/questions")
-                .param("courseIds", first.getCourseId().toString())
-                .param("courseIds", foreign.getCourseId().toString()))
+                .param("courseId", foreign.getCourseId().toString()))
                 .andExpect(status().isForbidden());
         call(admin, get("/api/v1/manager/questions")
-                .param("courseIds", first.getCourseId().toString())
-                .param("courseIds", foreign.getCourseId().toString()))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.totalElements").value(2));
+                .param("courseId", foreign.getCourseId().toString()))
+                .andExpect(status().isForbidden());
     }
 
     private ResultActions call(User actor, MockHttpServletRequestBuilder request) throws Exception {

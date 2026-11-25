@@ -208,14 +208,11 @@ export function QuestionBankPage() {
     return () => { cancelled = true; };
   }, [course]);
 
-  const scopeCourseIds = !isAdmin && course === ALL && courses ? courses.map(c => c.courseId) : undefined;
-  const scopeKey = scopeCourseIds?.join(',');
   const notAssigned = !isAdmin && courses !== null && courses.length === 0;
 
   // Fetch Questions tab
   useEffect(() => {
     if (activeTab !== 'questions') return;
-    if (!isAdmin && course === ALL && courses === null) return;
     if (notAssigned) {
       setResult({ content: [], page: 0, size: PAGE_SIZE, totalElements: 0, totalPages: 0 });
       setLoading(false);
@@ -232,7 +229,6 @@ export function QuestionBankPage() {
       .getQuestions({
         search: debouncedQuery || undefined,
         courseId: optionalNumber(course),
-        courseIds: scopeCourseIds,
         moduleId: optionalNumber(module),
         groupType: optionalString(groupType),
         questionType: optionalString(type),
@@ -254,7 +250,7 @@ export function QuestionBankPage() {
       });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, debouncedQuery, course, module, groupType, type, difficulty, status, page, reloadKey, scopeKey, notAssigned]);
+  }, [activeTab, debouncedQuery, course, module, groupType, type, difficulty, status, page, reloadKey, notAssigned]);
 
   // Fetch Question Groups tab
   useEffect(() => {

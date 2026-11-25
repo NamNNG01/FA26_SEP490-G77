@@ -492,7 +492,7 @@ public class ManagerContestService {
         userNotifications.save(UserNotification.builder().user(user).notification(n).isRead(false).build());
     }
 
-    private static boolean admin(UserPrincipal user) { return User.ROLE_ADMIN.equals(user.getRole()); }
+    private static boolean admin(UserPrincipal user) { return false; }
 
     private static CourseRef courseRef(Course course) {
         return course == null ? null : new CourseRef(course.getCourseId(), course.getTitle());

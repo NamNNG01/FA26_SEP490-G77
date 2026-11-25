@@ -75,8 +75,7 @@ class DeckApiIntegrationTest {
         call(collaborator, get(BASE)).andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.totalElements").value(1))
                 .andExpect(jsonPath("$.data.content[0].deckId").value(deck.getDeckId()));
-        call(admin, get(BASE)).andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.totalElements").value(5));
+        call(admin, get(BASE)).andExpect(status().isForbidden());
     }
 
     @Test
@@ -158,7 +157,7 @@ class DeckApiIntegrationTest {
         call(manager, post(BASE).contentType(MediaType.APPLICATION_JSON).content(createBody(null)))
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.data.courseId").doesNotExist());
         call(admin, post(BASE).contentType(MediaType.APPLICATION_JSON).content(createBody(foreignCourse.getCourseId())))
-                .andExpect(status().isCreated());
+                .andExpect(status().isForbidden());
     }
 
     @Test
@@ -247,8 +246,8 @@ class DeckApiIntegrationTest {
         call(collaborator, get(path(personal))).andExpect(status().isOk());
         call(admin, put(path(personal)).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"courseId\":" + foreignCourse.getCourseId() + "}"))
-                .andExpect(status().isOk());
-        call(manager, get(path(personal))).andExpect(status().isForbidden());
+                .andExpect(status().isForbidden());
+        call(manager, get(path(personal))).andExpect(status().isOk());
     }
 
     @Test
@@ -269,7 +268,7 @@ class DeckApiIntegrationTest {
         assertNotNull(em.find(Deck.class, other.getDeckId()));
         assertNotNull(em.find(Flashcard.class, retained.getCardId()));
         assertEquals(1, count("UserCardProgress"));
-        call(admin, delete(path(other))).andExpect(status().isOk());
+        call(admin, delete(path(other))).andExpect(status().isForbidden());
     }
 
     @Test
@@ -326,10 +325,10 @@ class DeckApiIntegrationTest {
                         .content(cardBody("Q", "A")))
                 .andExpect(status().isUnauthorized());
 
-        // admin may append to any deck
+        // admin is forbidden from manager deck endpoints
         call(admin, post(path(foreignDeck) + "/cards").contentType(MediaType.APPLICATION_JSON)
                         .content(cardBody("Admin card", "Yes")))
-                .andExpect(status().isCreated());
+                .andExpect(status().isForbidden());
     }
 
     @Test
@@ -386,16 +385,15 @@ class DeckApiIntegrationTest {
                         .content("{\"frontText\":\"Nope\"}"))
                 .andExpect(status().isUnauthorized());
 
-        // admin may edit any card
+        // admin is forbidden from manager card endpoints
         call(admin, put(cards + "/" + foreignCard.getCardId()).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"frontText\":\"Admin edit\"}"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.frontText").value("Admin edit"));
+                .andExpect(status().isForbidden());
 
         em.flush();
         em.clear();
         assertEquals("Only front", em.find(Flashcard.class, mine.getCardId()).getFrontText());
-        assertEquals("Admin edit", em.find(Flashcard.class, foreignCard.getCardId()).getFrontText());
+        assertEquals("Foreign front", em.find(Flashcard.class, foreignCard.getCardId()).getFrontText());
     }
 
     @Test
@@ -557,11 +555,11 @@ class DeckApiIntegrationTest {
                 .andExpect(jsonPath("$.data.cardCount").value(1))
                 .andExpect(jsonPath("$.data.cards[0].cardId").value(survivor.getCardId()));
 
-        // admin may delete any card
-        call(admin, delete(cards + "/" + foreignCard.getCardId())).andExpect(status().isOk());
+        // admin is forbidden from manager card endpoints
+        call(admin, delete(cards + "/" + foreignCard.getCardId())).andExpect(status().isForbidden());
         em.flush();
         em.clear();
-        assertNull(em.find(Flashcard.class, foreignCard.getCardId()));
+        assertNotNull(em.find(Flashcard.class, foreignCard.getCardId()));
     }
 
     @Test
@@ -615,8 +613,7 @@ class DeckApiIntegrationTest {
 
         call(admin, put(path(personal)).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"courseId\":" + foreignCourse.getCourseId() + "}"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.courseId").value(foreignCourse.getCourseId()));
+                .andExpect(status().isForbidden());
     }
 
     @Test

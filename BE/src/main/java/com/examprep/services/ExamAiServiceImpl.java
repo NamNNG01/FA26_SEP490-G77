@@ -169,7 +169,7 @@ public class ExamAiServiceImpl implements ExamAiService {
         record PreparedContext(String courseTitle, Map<String, Object> context, Set<String> seen, List<Long> targetModuleIds) {}
         java.util.function.Supplier<PreparedContext> loader = () -> {
             Course course = courses.findById(request.courseId()).orElseThrow(() -> new ResourceNotFoundException("Course not found."));
-            if (!User.ROLE_ADMIN.equals(user.getRole()) && !Objects.equals(course.getManager().getUserId(), user.getId()) && !managers.existsByCourseCourseIdAndUserUserId(request.courseId(), user.getId())) throw new BaseException(ResponseCode.FORBIDDEN);
+            if (!Objects.equals(course.getManager().getUserId(), user.getId()) && !managers.existsByCourseCourseIdAndUserUserId(request.courseId(), user.getId())) throw new BaseException(ResponseCode.FORBIDDEN);
             List<Long> requestedModuleIds = resolveModuleIds(request);
             List<com.examprep.entities.Module> targetModules = new ArrayList<>();
             for (Long mid : requestedModuleIds) {

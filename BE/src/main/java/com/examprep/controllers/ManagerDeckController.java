@@ -24,7 +24,7 @@ import java.time.Instant;
 @RestController
 @RequestMapping("/api/v1/manager/decks")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('COURSE_MANAGER', 'ADMIN')")
+@PreAuthorize("hasRole('COURSE_MANAGER')")
 @Tag(name = "Manager Decks", description = "Scoped flashcard deck and card administration (F-01..08)")
 public class ManagerDeckController {
     private final DeckService service;

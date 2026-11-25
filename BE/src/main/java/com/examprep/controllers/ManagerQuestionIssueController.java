@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
@@ -17,6 +18,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/manager/question-issues")
+@PreAuthorize("hasRole('COURSE_MANAGER')")
 @RequiredArgsConstructor
 @Tag(name = "Manager Question Issues", description = "Ticket queue of reported questions, corrections and regrade jobs")
 public class ManagerQuestionIssueController {

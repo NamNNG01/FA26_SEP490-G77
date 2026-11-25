@@ -63,43 +63,36 @@ public class QuestionServiceImpl implements QuestionService {
     @Transactional(readOnly = true)
 
 
-    public Page<QuestionListItemDto> getQuestions(Long courseId, List<Long> courseIds, Long moduleId, Long groupId, String groupType, String questionType, List<String> questionTypes, String difficulty, String status, String approvalStatus, String creatorRole, String source, Long createdBy, String search, Pageable pageable, User currentUser) {
-        List<Long> scopeCourseIds = courseIds == null ? List.of() : courseIds.stream().filter(Objects::nonNull).distinct().toList();
-        List<Long> managedCourseIds = null;
-
-        if (!User.ROLE_ADMIN.equals(currentUser.getRoleName())) {
-            managedCourseIds = courseRepository.findCourseIdsManagedByUser(currentUser.getUserId());
-            if (managedCourseIds.isEmpty()) {
-                return Page.empty(pageable);
+    public Page<QuestionListItemDto> getQuestions(Long courseId, Long moduleId, Long groupId, String groupType, String questionType, List<String> questionTypes, String difficulty, String status, String approvalStatus, String creatorRole, String source, Long createdBy, String search, Pageable pageable, User currentUser) {
+        if (!User.ROLE_COURSE_MANAGER.equals(currentUser.getRoleName())) {
+            throw new ForbiddenException("Only course managers can access the question bank");
+        }
+        List<Long> managedCourseIds = courseRepository.findCourseIdsManagedByUser(currentUser.getUserId());
+        if (managedCourseIds.isEmpty()) {
+            return Page.empty(pageable);
+        }
+        Set<Long> managedSet = new HashSet<>(managedCourseIds);
+        if (courseId != null && !managedSet.contains(courseId)) {
+            throw new ForbiddenException("You do not have access to this course");
+        }
+        if (moduleId != null) {
+            Optional<Long> moduleCourseId = moduleRepository.findCourseId(moduleId);
+            if (moduleCourseId.isPresent() && !managedSet.contains(moduleCourseId.get())) {
+                throw new ForbiddenException("You do not have access to this course");
             }
-            Set<Long> managedSet = new HashSet<>(managedCourseIds);
-            List<Long> requested = new ArrayList<>(scopeCourseIds);
-            if (courseId != null) requested.add(courseId);
-            for (Long id : requested.stream().distinct().toList()) {
-                if (!managedSet.contains(id)) {
+        }
+        if (groupId != null) {
+            Optional<QuestionGroup> grp = questionGroupRepository.findById(groupId);
+            if (grp.isPresent()) {
+                Long groupCourseId = grp.get().getCourse() != null ? grp.get().getCourse().getCourseId()
+                        : (grp.get().getModule() != null && grp.get().getModule().getCourse() != null
+                        ? grp.get().getModule().getCourse().getCourseId() : null);
+                if (groupCourseId == null || !managedSet.contains(groupCourseId)) {
                     throw new ForbiddenException("You do not have access to this course");
-                }
-            }
-            if (moduleId != null) {
-                Optional<Long> moduleCourseId = moduleRepository.findCourseId(moduleId);
-                if (moduleCourseId.isPresent() && !managedSet.contains(moduleCourseId.get())) {
-                    throw new ForbiddenException("You do not have access to this course");
-                }
-            }
-            if (groupId != null) {
-                Optional<QuestionGroup> grp = questionGroupRepository.findById(groupId);
-                if (grp.isPresent()) {
-                    Long groupCourseId = grp.get().getCourse() != null ? grp.get().getCourse().getCourseId()
-                            : (grp.get().getModule() != null && grp.get().getModule().getCourse() != null
-                            ? grp.get().getModule().getCourse().getCourseId() : null);
-                    if (groupCourseId == null || !managedSet.contains(groupCourseId)) {
-                        throw new ForbiddenException("You do not have access to this course");
-                    }
                 }
             }
         }
 
-        final List<Long> enforcedManagedIds = managedCourseIds;
         Specification<Question> spec = (root, query, cb) -> {
             var predicate = cb.isNull(root.get("deletedAt"));
             predicate = cb.and(predicate, cb.isNull(root.get("sourceDocumentId")));
@@ -107,11 +100,10 @@ public class QuestionServiceImpl implements QuestionService {
                     cb.equal(cb.coalesce(root.<String>get("source"), ""), "AI"),
                     cb.equal(cb.coalesce(root.<String>get("creatorRole"), ""), "STUDENT")
             )));
-            if (enforcedManagedIds != null) {
-                predicate = cb.and(predicate, root.get("course").get("courseId").in(enforcedManagedIds));
-            }
+
+                predicate = cb.and(predicate, root.get("course").get("courseId").in(managedCourseIds));
+
             if (courseId != null) predicate = cb.and(predicate, cb.equal(root.get("course").get("courseId"), courseId));
-            if (!scopeCourseIds.isEmpty()) predicate = cb.and(predicate, root.get("course").get("courseId").in(scopeCourseIds));
             if (moduleId != null) predicate = cb.and(predicate, cb.equal(root.get("module").get("moduleId"), moduleId));
             if (groupId != null) predicate = cb.and(predicate, cb.equal(root.get("group").get("groupId"), groupId));
 
@@ -190,14 +182,12 @@ public class QuestionServiceImpl implements QuestionService {
         Course course = courseRepository.findById(courseId)
                 .orElseThrow(() -> new ResourceNotFoundException("Course not found"));
 
-        if (!User.ROLE_ADMIN.equals(currentUser.getRoleName())) {
-            boolean isPrimaryManager = course.getManager() != null
-                    && course.getManager().getUserId().equals(currentUser.getUserId());
-            boolean isManager = isPrimaryManager || courseManagerRepository.existsByCourse_CourseIdAndUser_UserId(
-                    course.getCourseId(), currentUser.getUserId());
-            if (!isManager) {
-                throw new ForbiddenException("You are not a manager of this course");
-            }
+        boolean isPrimaryManager = course.getManager() != null
+                && course.getManager().getUserId().equals(currentUser.getUserId());
+        boolean isManager = isPrimaryManager || courseManagerRepository.existsByCourse_CourseIdAndUser_UserId(
+                course.getCourseId(), currentUser.getUserId());
+        if (!isManager) {
+            throw new ForbiddenException("You are not a manager of this course");
         }
 
         Set<Long> requestedModuleIds = new LinkedHashSet<>();
@@ -276,11 +266,8 @@ public class QuestionServiceImpl implements QuestionService {
 
             boolean isOrdering = "ORDERING".equals(req.getQuestionType());
             List<Object> correctOrder = null;
-            if (isOrdering) {
-                correctOrder = req.getCorrectOrder();
-                if (correctOrder == null && sanitizedAnswerKey instanceof Map<?, ?> map && map.get("correctOrder") instanceof List<?> list) {
-                    correctOrder = new ArrayList<>(list);
-                }
+            if (isOrdering && sanitizedAnswerKey instanceof Map<?, ?> map && map.get("correctOrder") instanceof List<?> list) {
+                correctOrder = new ArrayList<>(list);
             }
 
             Question question = Question.builder()
@@ -331,7 +318,7 @@ public class QuestionServiceImpl implements QuestionService {
                     AnswerOption opt = AnswerOption.builder()
                             .question(q)
                             .optionText(questionValidator.sanitize(optDto.getOptionText()))
-                            .isCorrect(isOrdering ? false : (optDto.getIsCorrect() != null ? optDto.getIsCorrect() : false))
+                            .isCorrect(!isOrdering && (optDto.getIsCorrect() != null ? optDto.getIsCorrect() : false))
                             .explanation(questionValidator.sanitize(optDto.getExplanation()))
                             .orderIndex(optDto.getOrderIndex() != null ? optDto.getOrderIndex() : j)
                             .build();
@@ -366,11 +353,6 @@ public class QuestionServiceImpl implements QuestionService {
                     for (Object item : correctOrder) {
                         String itemStr = item != null ? item.toString() : "";
                         Long optionId = keyToIdMap.get(itemStr);
-                        if (optionId == null) {
-                            try {
-                                optionId = Long.parseLong(itemStr);
-                            } catch (NumberFormatException ignored) {}
-                        }
                         if (optionId == null) {
                             throw new BadRequestException("Invalid option in correct order: " + itemStr);
                         }
@@ -519,7 +501,6 @@ public class QuestionServiceImpl implements QuestionService {
                 .answerKey(answerKeyToValidate)
                 .essayGradingRubric(rubricToValidate)
                 .options(optionsToValidate)
-                .correctOrder(req.getCorrectOrder())
                 .codeConfig(codeConfigToValidate)
                 .testCases(testCasesToValidate)
                 .build();
@@ -651,7 +632,7 @@ public class QuestionServiceImpl implements QuestionService {
             updatedOptions = existingOptions;
         }
 
-        if (isOrdering && (req.getOptions() != null || req.getCorrectOrder() != null || req.getAnswerKey() != null)) {
+        if (isOrdering && (req.getOptions() != null || req.getAnswerKey() != null)) {
             Map<String, Long> keyToIdMap = new HashMap<>();
             if (req.getOptions() != null) {
                 for (int i = 0; i < req.getOptions().size(); i++) {
@@ -674,12 +655,9 @@ public class QuestionServiceImpl implements QuestionService {
                 }
             }
 
-            List<Object> coList = req.getCorrectOrder();
-            if (coList == null && req.getAnswerKey() instanceof Map) {
-                Object coObj = ((Map<?, ?>) req.getAnswerKey()).get("correctOrder");
-                if (coObj instanceof List) {
-                    coList = (List<Object>) coObj;
-                }
+            List<Object> coList = null;
+            if (req.getAnswerKey() instanceof Map<?, ?> map && map.get("correctOrder") instanceof List<?> list) {
+                coList = new ArrayList<>(list);
             }
             if (coList == null) {
                 coList = new ArrayList<>(oldCorrectOrder);
@@ -948,14 +926,12 @@ public class QuestionServiceImpl implements QuestionService {
         Course course = courseRepository.findById(request.getCourseId())
                 .orElseThrow(() -> new ResourceNotFoundException("Course not found"));
 
-        if (!User.ROLE_ADMIN.equals(currentUser.getRoleName())) {
-            boolean isPrimaryManager = course.getManager() != null
-                    && course.getManager().getUserId().equals(currentUser.getUserId());
-            boolean isManager = isPrimaryManager || courseManagerRepository.existsByCourse_CourseIdAndUser_UserId(
-                    course.getCourseId(), currentUser.getUserId());
-            if (!isManager) {
-                throw new ForbiddenException("You are not a manager of this course");
-            }
+        boolean isPrimaryManager = course.getManager() != null
+                && course.getManager().getUserId().equals(currentUser.getUserId());
+        boolean isManager = isPrimaryManager || courseManagerRepository.existsByCourse_CourseIdAndUser_UserId(
+                course.getCourseId(), currentUser.getUserId());
+        if (!isManager) {
+            throw new ForbiddenException("You are not a manager of this course");
         }
 
         com.examprep.entities.Module module = null;
@@ -1016,14 +992,12 @@ public class QuestionServiceImpl implements QuestionService {
         Course course = group.getCourse() != null
                 ? group.getCourse()
                 : (group.getModule() != null ? group.getModule().getCourse() : null);
-        if (!User.ROLE_ADMIN.equals(currentUser.getRoleName())) {
-            boolean isPrimaryManager = course != null && course.getManager() != null
-                    && course.getManager().getUserId().equals(currentUser.getUserId());
-            boolean isManager = isPrimaryManager || (course != null && courseManagerRepository.existsByCourse_CourseIdAndUser_UserId(
-                    course.getCourseId(), currentUser.getUserId()));
-            if (!isManager) {
-                throw new ForbiddenException("You are not a manager of this course");
-            }
+        boolean isPrimaryManager = course != null && course.getManager() != null
+                && course.getManager().getUserId().equals(currentUser.getUserId());
+        boolean isManager = isPrimaryManager || (course != null && courseManagerRepository.existsByCourse_CourseIdAndUser_UserId(
+                course.getCourseId(), currentUser.getUserId()));
+        if (!isManager) {
+            throw new ForbiddenException("You are not a manager of this course");
         }
 
         List<Question> members = questionRepository.findByGroupGroupIdOrderByQuestionIdAsc(groupId);

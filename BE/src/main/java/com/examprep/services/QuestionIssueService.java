@@ -367,7 +367,6 @@ public class QuestionIssueService {
     }
 
     private boolean canManage(Long userId, String roleName, Course course) {
-        if (User.ROLE_ADMIN.equals(roleName)) return true;
         if (course == null) return false;
         return (course.getManager() != null && course.getManager().getUserId().equals(userId))
                 || assignments.existsByCourseCourseIdAndUserUserId(course.getCourseId(), userId);
@@ -422,7 +421,7 @@ public class QuestionIssueService {
     }
 
     private static boolean admin(UserPrincipal me) {
-        return User.ROLE_ADMIN.equals(me.getRole());
+        return false;
     }
 
     // ------------------------------------------------------------------ helpers

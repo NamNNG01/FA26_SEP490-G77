@@ -67,10 +67,8 @@ public class QuestionImportServiceImpl implements QuestionImportService {
         if (user == null) {
             throw new ForbiddenException("Unauthorized");
         }
-        if (!User.ROLE_ADMIN.equals(user.getRoleName())) {
-            if (courseId == null || !courseManagerRepository.existsByCourse_CourseIdAndUser_UserId(courseId, user.getUserId())) {
-                throw new ForbiddenException("You do not have access to this course");
-            }
+        if (courseId == null || !courseManagerRepository.existsByCourse_CourseIdAndUser_UserId(courseId, user.getUserId())) {
+            throw new ForbiddenException("You do not have access to this course");
         }
         checkRateLimit(user.getUserId());
 

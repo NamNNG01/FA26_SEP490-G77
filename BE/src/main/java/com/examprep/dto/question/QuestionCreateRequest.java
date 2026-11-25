@@ -35,7 +35,6 @@ public class QuestionCreateRequest {
     private Object answerKey;
     private Object essayGradingRubric;
     private List<AnswerOptionDto> options;
-    private List<Object> correctOrder;
     private CodeConfigDto codeConfig;
     private List<TestCaseDto> testCases;
 }

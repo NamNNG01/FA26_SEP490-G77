@@ -34,7 +34,7 @@ public class DashboardController {
     private final CourseManagerDashboardService courseManagerDashboardService;
 
     @GetMapping("/student")
-    @PreAuthorize("hasAnyRole('STUDENT', 'ADMIN')")
+    @PreAuthorize("hasRole('STUDENT')")
     @Operation(summary = "DASH-01: Student Dashboard",
             description = "Returns enrollment, progress, score summary and recent activity for the logged-in student.")
     public ResponseEntity<ApiResponse<StudentDashboardResponse>> studentDashboard(
@@ -44,7 +44,7 @@ public class DashboardController {
     }
 
     @GetMapping("/course-manager")
-    @PreAuthorize("hasAnyRole('COURSE_MANAGER', 'ADMIN')")
+    @PreAuthorize("hasRole('COURSE_MANAGER')")
     @Operation(summary = "DASH-02: Course Manager Dashboard",
             description = "Returns course publication and student enrollment summaries for the logged-in course manager.")
     public ResponseEntity<ApiResponse<CourseManagerDashboardResponse>> courseManagerDashboard(
@@ -88,7 +88,7 @@ public class DashboardController {
     // ---------------------------------------------------------------------------------------------
 
     @GetMapping("/course-manager/summary")
-    @PreAuthorize("hasAnyRole('COURSE_MANAGER', 'ADMIN')")
+    @PreAuthorize("hasRole('COURSE_MANAGER')")
     @Operation(summary = "DASH-05a: Course Manager Dashboard Summary",
             description = "KPI figures of the caller's courses and the exams they created: managed courses, "
                     + "active students, my exams by status, submissions of the last 7 days, average score, "
@@ -102,7 +102,7 @@ public class DashboardController {
     }
 
     @GetMapping("/course-manager/courses")
-    @PreAuthorize("hasAnyRole('COURSE_MANAGER', 'ADMIN')")
+    @PreAuthorize("hasRole('COURSE_MANAGER')")
     @Operation(summary = "DASH-05b: Course Manager Course Panel",
             description = "One row per course the caller manages: active students, exams they created, "
                     + "submitted attempts and score/pass rate. Lowest pass rate first, no data last.")
@@ -113,7 +113,7 @@ public class DashboardController {
     }
 
     @GetMapping("/course-manager/exams")
-    @PreAuthorize("hasAnyRole('COURSE_MANAGER', 'ADMIN')")
+    @PreAuthorize("hasRole('COURSE_MANAGER')")
     @Operation(summary = "DASH-05c: Course Manager Exam Panel",
             description = "One row per course exam the caller created: submissions, average score, pass rate, "
                     + "average duration and pending grading. Lowest pass rate first; exams under "

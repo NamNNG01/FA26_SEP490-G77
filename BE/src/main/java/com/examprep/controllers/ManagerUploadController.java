@@ -21,7 +21,7 @@ import java.util.concurrent.ConcurrentHashMap;
 /** D3: image upload for question/exam content. Returns a public URL the editor embeds; nothing is stored in the DB. */
 @RestController
 @RequestMapping("/api/v1/manager/uploads")
-@PreAuthorize("hasAnyRole('COURSE_MANAGER', 'ADMIN')")
+@PreAuthorize("hasRole('COURSE_MANAGER')")
 @RequiredArgsConstructor
 @Tag(name = "Manager Uploads", description = "D3: media upload to Cloudinary")
 public class ManagerUploadController {

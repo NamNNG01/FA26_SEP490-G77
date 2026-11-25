@@ -235,10 +235,8 @@ class CourseManagerDashboardApiIntegrationTest {
         for (String url : List.of(SUMMARY, COURSES, EXAMS)) {
             mvc.perform(get(url)).andExpect(status().isUnauthorized());
             call(account(User.ROLE_STUDENT), get(url)).andExpect(status().isForbidden());
+            call(account(User.ROLE_ADMIN), get(url)).andExpect(status().isForbidden());
         }
-        // An admin passes the role gate (and simply has no managed courses here).
-        JsonNode adminSummary = data(call(account(User.ROLE_ADMIN), get(SUMMARY)).andExpect(status().isOk()));
-        assertEquals(0, adminSummary.path("managedCourses").asLong());
     }
 
     // =================================================================================

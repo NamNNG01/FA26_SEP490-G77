@@ -114,24 +114,10 @@ class QuestionGroupControllerTest {
 
     @Test
     void getQuestionGroups_AdminWithoutFilters_UsesDefaultPaging() throws Exception {
-        PageResponse<QuestionGroupResponse> body = PageResponse.<QuestionGroupResponse>builder()
-                .content(List.of())
-                .page(0)
-                .size(20)
-                .totalElements(0L)
-                .totalPages(0)
-                .first(true)
-                .last(true)
-                .build();
-        when(questionGroupService.getQuestionGroups(1L, "ADMIN", null, null, null, null, 0, 20))
-                .thenReturn(body);
-
         mockMvc.perform(get("/api/v1/manager/question-groups").with(user(admin)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.content").isArray())
-                .andExpect(jsonPath("$.data.content").isEmpty());
+                .andExpect(status().isForbidden());
 
-        verify(questionGroupService).getQuestionGroups(1L, "ADMIN", null, null, null, null, 0, 20);
+        verifyNoInteractions(questionGroupService);
     }
 
     @Test
@@ -355,11 +341,9 @@ class QuestionGroupControllerTest {
                         .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.data.groupId").value(8))
-                .andExpect(jsonPath("$.data.moduleId").doesNotExist());
+                .andExpect(status().isForbidden());
 
-        verify(questionGroupService).createQuestionGroup(eq(1L), eq("ADMIN"), any(QuestionGroupCreateRequest.class));
+        verifyNoInteractions(questionGroupService);
     }
 
     @Test

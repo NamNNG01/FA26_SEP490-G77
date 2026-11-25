@@ -125,7 +125,7 @@ class ExamAiApiIntegrationTest {
         generate(manager, body().replace("\"moduleId\":" + module.getModuleId(), "\"moduleId\":9223372036854775807"))
                 .andExpect(status().isNotFound());
         generate(assigned, body()).andExpect(status().isOk());
-        generate(admin, body()).andExpect(status().isOk());
+        generate(admin, body()).andExpect(status().isForbidden());
     }
 
     @Test void generatesPreviewWithCorrectProviderContractAndNoDatabaseWrites() throws Exception {

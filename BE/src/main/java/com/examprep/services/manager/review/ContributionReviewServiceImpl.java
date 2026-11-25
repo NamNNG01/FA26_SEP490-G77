@@ -289,9 +289,6 @@ public class ContributionReviewServiceImpl implements ContributionReviewService 
         if (manager == null) {
             return List.of();
         }
-        if (User.ROLE_ADMIN.equals(manager.getRoleName())) {
-            return null; // admin has no restrictions
-        }
         return courseRepository.findCourseIdsManagedByUser(manager.getUserId());
     }
 
@@ -304,9 +301,6 @@ public class ContributionReviewServiceImpl implements ContributionReviewService 
     }
 
     private void assertCanAccessCourse(User manager, Long courseId) {
-        if (User.ROLE_ADMIN.equals(manager.getRoleName())) {
-            return;
-        }
         boolean hasAccess = courseRepository.existsManagedCourse(courseId, manager.getUserId());
         if (!hasAccess) {
             throw new ReviewException(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", null, "Course not found or outside scope");
@@ -469,9 +463,11 @@ public class ContributionReviewServiceImpl implements ContributionReviewService 
     private Object resolveAnswerKey(QuestionContribution c) {
         Object answerKey = readJson(c.getAnswerKeyJson(), new TypeReference<Object>() {});
         if ("ORDERING".equals(c.getQuestionType())
-                && answerKey instanceof Map<?, ?> answerKeyMap
-                && answerKeyMap.containsKey("correctOrder")) {
-            return Map.of("correctOrder", readJson(c.getCategoryIds(), new TypeReference<List<Object>>() {}));
+                && !(answerKey instanceof Map<?, ?> answerKeyMap && answerKeyMap.containsKey("correctOrder"))) {
+            List<Object> legacyOrder = readJson(c.getCategoryIds(), new TypeReference<List<Object>>() {});
+            if (legacyOrder != null) {
+                return Map.of("correctOrder", legacyOrder);
+            }
         }
         return answerKey;
     }

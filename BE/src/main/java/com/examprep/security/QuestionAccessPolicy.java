@@ -26,7 +26,6 @@ public class QuestionAccessPolicy {
 
     private boolean hasAccess(User user, Question question) {
         if (user == null || question == null) return false;
-        if (User.ROLE_ADMIN.equals(user.getRoleName())) return true;
         if (!User.ROLE_COURSE_MANAGER.equals(user.getRoleName())) return false;
         if (question.getCourse() == null) return false;
         if (question.getCourse().getManager() != null

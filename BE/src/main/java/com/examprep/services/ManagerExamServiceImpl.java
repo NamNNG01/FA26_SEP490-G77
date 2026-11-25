@@ -1162,7 +1162,7 @@ public class ManagerExamServiceImpl implements ManagerExamService {
     private int next(List<Integer> values) { int max=values.stream().mapToInt(Integer::intValue).max().orElse(-1); if(max==Integer.MAX_VALUE)throw conflict("Question order limit reached."); return max+1; }
     private String family(String type) { String kind=QuestionTypeUtil.examKindOf(type); return kind==null?"QUIZ":kind; }
     private String pattern(String s) { return "%"+s.strip().toLowerCase(Locale.ROOT).replace("!","!!").replace("%","!%").replace("_","!_")+"%"; }
-    private boolean admin(UserPrincipal user) { return "ADMIN".equals(user.getRole()); }
+    private boolean admin(UserPrincipal user) { return false; }
     private void positive(Long id) { if(id==null || id<=0)throw bad("ID must be a positive integer."); }
     private <T> List<T> list(List<T> value) { return value==null?List.of():value; }
     private int size(List<?> value) { return value==null?0:value.size(); }

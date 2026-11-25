@@ -234,35 +234,21 @@ class DashboardControllerTest {
                 .build();
 
         UserPrincipal principal = UserPrincipal.create(1L, "admin@gmail.com", "ADMIN");
-        when(dashboardService.getStudentDashboard(1L)).thenReturn(body);
 
         mockMvc.perform(get("/api/v1/dashboard/student").with(user(principal)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(true));
+                .andExpect(status().isForbidden());
 
-        verify(dashboardService).getStudentDashboard(1L);
+        verifyNoInteractions(dashboardService);
     }
 
     @Test
     void courseManagerDashboard_AdminAllowed_ReturnsOk() throws Exception {
-        CourseManagerDashboardResponse body = CourseManagerDashboardResponse.builder()
-                .summary(CourseManagerDashboardResponse.Summary.builder()
-                        .totalCourses(0)
-                        .publishedCourses(0)
-                        .draftCourses(0)
-                        .totalStudents(0)
-                        .build())
-                .recentCourses(List.of())
-                .build();
-
         UserPrincipal principal = UserPrincipal.create(1L, "admin@gmail.com", "ADMIN");
-        when(dashboardService.getCourseManagerDashboard(1L)).thenReturn(body);
 
         mockMvc.perform(get("/api/v1/dashboard/course-manager").with(user(principal)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(true));
+                .andExpect(status().isForbidden());
 
-        verify(dashboardService).getCourseManagerDashboard(1L);
+        verifyNoInteractions(dashboardService);
     }
 
     // =================================================================================

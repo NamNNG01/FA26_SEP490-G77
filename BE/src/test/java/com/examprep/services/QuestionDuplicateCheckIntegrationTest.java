@@ -166,7 +166,7 @@ class QuestionDuplicateCheckIntegrationTest {
                 AnswerOptionDto.builder().key("k1").optionText("1").orderIndex(0).build(),
                 AnswerOptionDto.builder().key("k2").optionText("2").orderIndex(1).build()
         ));
-        r1.setCorrectOrder(List.of("k1", "k2"));
+        r1.setAnswerKey(Map.of("correctOrder", List.of("k1", "k2")));
         questionService.createQuestionsBatch(course.getCourseId(), module.getModuleId(), List.of(r1), manager);
 
         QuestionCreateRequest r2 = new QuestionCreateRequest();
@@ -176,7 +176,7 @@ class QuestionDuplicateCheckIntegrationTest {
                 AnswerOptionDto.builder().key("k1").optionText("1").orderIndex(0).build(),
                 AnswerOptionDto.builder().key("k2").optionText("2").orderIndex(1).build()
         ));
-        r2.setCorrectOrder(List.of("k2", "k1"));
+        r2.setAnswerKey(Map.of("correctOrder", List.of("k2", "k1")));
 
         assertThrows(ResourceConflictException.class, () ->
             questionService.createQuestionsBatch(course.getCourseId(), module.getModuleId(), List.of(r2), manager)

@@ -28,7 +28,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/v1/manager/decks/review")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('COURSE_MANAGER', 'ADMIN')")
+@PreAuthorize("hasRole('COURSE_MANAGER')")
 @Tag(name = "Manager Deck Review", description = "Manager review for student submitted flashcard decks")
 public class DeckReviewController {
 

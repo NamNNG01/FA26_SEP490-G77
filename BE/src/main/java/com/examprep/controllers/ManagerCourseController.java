@@ -89,6 +89,7 @@ public class ManagerCourseController {
 
     @PostMapping("/courses/{id}/modules")
     @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasRole('COURSE_MANAGER')")
     @Operation(summary = "C-11: Add module; omitted order appends")
     public ResponseEntity<ApiResponse<ModuleResponse>> createModule(@AuthenticationPrincipal UserPrincipal user, @PathVariable Long id,
             @Valid @RequestBody CourseRequests.CreateModule request) {
@@ -96,6 +97,7 @@ public class ManagerCourseController {
     }
 
     @PutMapping("/modules/{id}")
+    @PreAuthorize("hasRole('COURSE_MANAGER')")
     @Operation(summary = "C-12: Update module")
     public ResponseEntity<ApiResponse<ModuleResponse>> updateModule(@AuthenticationPrincipal UserPrincipal user, @PathVariable Long id,
             @Valid @RequestBody CourseRequests.UpdateModule request) {
@@ -103,6 +105,7 @@ public class ManagerCourseController {
     }
 
     @PatchMapping("/modules/{id}/status")
+    @PreAuthorize("hasRole('COURSE_MANAGER')")
     @Operation(summary = "C-15: Show or hide a module for students; hiding the last visible module of a published course returns 409")
     public ResponseEntity<ApiResponse<ModuleResponse>> updateModuleStatus(@AuthenticationPrincipal UserPrincipal user, @PathVariable Long id,
             @Valid @RequestBody CourseRequests.ModuleStatus request) {
@@ -110,6 +113,7 @@ public class ManagerCourseController {
     }
 
     @DeleteMapping("/modules/{id}")
+    @PreAuthorize("hasRole('COURSE_MANAGER')")
     @Operation(summary = "C-13: Delete empty module; content or last published module returns 409")
     public ResponseEntity<ApiResponse<Void>> deleteModule(@AuthenticationPrincipal UserPrincipal user, @PathVariable Long id) {
         service.deleteModule(user, id);

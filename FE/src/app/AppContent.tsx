@@ -313,15 +313,18 @@ function AppRoutes() {
         <Route path={ROUTES.forgotPassword} element={<ForgotPasswordPage />} />
         <Route path={ROUTES.resetPassword} element={<ResetPasswordPage />} />
 
-        {/* COURSE_MANAGER — authors content. Includes ADMIN, since
-            administrators have full system access. */}
+        {/* Shared Course shell & profile — accessible to both COURSE_MANAGER and ADMIN. */}
         <Route element={<RequireRole roles={ROLE_MANAGER} />}>
-          <Route path={ROUTES.managerReviews} element={<ManagerReviewPage />} />
-          <Route path={ROUTES.managerQuestionIssues} element={<ManagerQuestionIssuesPage />} />
           <Route path={ROUTES.profile} element={<ProfilePage />} />
-          <Route path={ROUTES.managerDashboard} element={<CMDashboard />} />
           <Route path={ROUTES.managerCourses} element={<CourseListPage />} />
           <Route path={ROUTES.managerCourseDetail} element={<CourseDetailPage />} />
+        </Route>
+
+        {/* COURSE_MANAGER only — ADMIN is NOT allowed here. */}
+        <Route element={<RequireRole roles={ROLE_COURSE_MANAGER_ONLY} />}>
+          <Route path={ROUTES.managerReviews} element={<ManagerReviewPage />} />
+          <Route path={ROUTES.managerQuestionIssues} element={<ManagerQuestionIssuesPage />} />
+          <Route path={ROUTES.managerDashboard} element={<CMDashboard />} />
           <Route path={ROUTES.managerQuestions} element={<QuestionBankPage />} />
           <Route path={ROUTES.managerQuestionCreate} element={<QuestionFormPage mode="create" />} />
           <Route path={ROUTES.managerQuestionEdit} element={<QuestionDetailPage />} />
@@ -341,10 +344,6 @@ function AppRoutes() {
           <Route path={ROUTES.managerContestCreate} element={<ManagerContestFormPage mode="create" />} />
           <Route path={ROUTES.managerContestDetail} element={<ManagerContestDetailPage />} />
           <Route path={ROUTES.managerContestEdit} element={<ManagerContestFormPage mode="edit" />} />
-        </Route>
-
-        {/* COURSE_MANAGER only — ADMIN is NOT allowed here. */}
-        <Route element={<RequireRole roles={ROLE_COURSE_MANAGER_ONLY} />}>
           <Route path={ROUTES.managerFlashcards} element={<FlashcardManagementPage />} />
           <Route path={ROUTES.managerFlashcardDetail} element={<FlashcardDeckDetailPage />} />
         </Route>

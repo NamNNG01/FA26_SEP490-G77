@@ -343,7 +343,7 @@ case "MULTIPLE_CHOICE":
                                 .build());
                     }
                     req.setOptions(ordOpts);
-                    req.setCorrectOrder(correctOrder.stream().map(s -> (Object) s).collect(Collectors.toList()));
+                    req.setAnswerKey(Map.of("correctOrder", correctOrder));
                     break;
 
                 case "MATCHING":
