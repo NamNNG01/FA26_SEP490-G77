@@ -8,7 +8,6 @@ export type DiscussionApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 export type DiscussionScope = 'PUBLIC' | 'MINE';
 export type DiscussionContentStatus = 'OPEN' | 'CLOSED' | 'HIDDEN' | 'ALL';
 export type DiscussionApprovalFilter = DiscussionApprovalStatus | 'ALL';
-export type DiscussionAnswerFilter = 'ALL' | 'UNANSWERED' | 'ACCEPTED';
 
 export interface DiscussionAuthor {
   userId: number;
@@ -27,7 +26,6 @@ export interface DiscussionComment {
 }
 
 export interface DiscussionDetailComment extends DiscussionComment {
-  isAccepted: boolean;
   isAnonymous: boolean;
   status?: 'VISIBLE' | 'HIDDEN';
 }
@@ -88,12 +86,8 @@ function query(params: Record<string, string | number | undefined | null>) {
 }
 
 export const studentCommunityService = {
-  async getDiscussions(params: { scope?: DiscussionScope; tag?: DiscussionTag | 'ALL'; approvalStatus?: DiscussionApprovalFilter; status?: DiscussionContentStatus; answerFilter?: DiscussionAnswerFilter; search?: string; sort?: DiscussionSort; page?: number; size?: number }) {
-    const queryParams = {
-      ...params,
-      answerFilter: params.answerFilter === 'ALL' ? undefined : params.answerFilter,
-    };
-    const res = await api.get<ApiResponse<StudentPage<DiscussionItem>>>(`/student/discussions?${query(queryParams)}`);
+  async getDiscussions(params: { scope?: DiscussionScope; tag?: DiscussionTag | 'ALL'; approvalStatus?: DiscussionApprovalFilter; status?: DiscussionContentStatus; search?: string; sort?: DiscussionSort; page?: number; size?: number }) {
+    const res = await api.get<ApiResponse<StudentPage<DiscussionItem>>>(`/student/discussions?${query(params)}`);
     return res.data;
   },
 
@@ -119,11 +113,6 @@ export const studentCommunityService = {
 
   async addComment(id: number | string, body: { content: string; isAnonymous: boolean; imageUrl?: string | null }) {
     const res = await api.post<ApiResponse<DiscussionDetailComment>>(`/student/discussions/${id}/comments`, body);
-    return res.data;
-  },
-
-  async acceptComment(discussionId: number | string, commentId: number | string) {
-    const res = await api.post<ApiResponse<DiscussionDetailComment>>(`/student/discussions/${discussionId}/comments/${commentId}/accept`);
     return res.data;
   },
 

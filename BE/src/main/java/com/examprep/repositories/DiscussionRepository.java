@@ -51,9 +51,6 @@ public interface DiscussionRepository extends JpaRepository<Discussion, Long> {
                     "JOIN FETCH d.user u " +
                     "WHERE (:tag IS NULL OR d.tag = :tag) " +
                     "AND d.approvalStatus = 'APPROVED' AND d.status <> 'HIDDEN' " +
-                    "AND (:answerFilter IS NULL " +
-                    "  OR (:answerFilter = 'UNANSWERED' AND d.commentCount = 0) " +
-                    "  OR (:answerFilter = 'ACCEPTED' AND EXISTS (SELECT 1 FROM DiscussionComment c WHERE c.discussion = d AND c.isAccepted = true AND c.status = 'VISIBLE'))) " +
                     "AND (:search IS NULL OR :search = '' OR " +
                     "LOWER(d.title) LIKE LOWER(CONCAT('%', :search, '%')) ESCAPE '!' OR " +
                     "LOWER(d.content) LIKE LOWER(CONCAT('%', :search, '%')) ESCAPE '!') " +
@@ -64,15 +61,11 @@ public interface DiscussionRepository extends JpaRepository<Discussion, Long> {
             countQuery = "SELECT COUNT(d) FROM Discussion d " +
                     "WHERE (:tag IS NULL OR d.tag = :tag) " +
                     "AND d.approvalStatus = 'APPROVED' AND d.status <> 'HIDDEN' " +
-                    "AND (:answerFilter IS NULL " +
-                    "  OR (:answerFilter = 'UNANSWERED' AND d.commentCount = 0) " +
-                    "  OR (:answerFilter = 'ACCEPTED' AND EXISTS (SELECT 1 FROM DiscussionComment c WHERE c.discussion = d AND c.isAccepted = true AND c.status = 'VISIBLE'))) " +
                     "AND (:search IS NULL OR :search = '' OR " +
                     "LOWER(d.title) LIKE LOWER(CONCAT('%', :search, '%')) ESCAPE '!' OR " +
                     "LOWER(d.content) LIKE LOWER(CONCAT('%', :search, '%')) ESCAPE '!')")
     Page<Discussion> findAllDiscussions(
             @Param("tag") String tag,
-            @Param("answerFilter") String answerFilter,
             @Param("search") String search,
             @Param("sort") String sort,
             Pageable pageable

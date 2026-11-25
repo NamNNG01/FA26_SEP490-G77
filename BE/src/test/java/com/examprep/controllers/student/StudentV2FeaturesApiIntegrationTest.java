@@ -32,7 +32,7 @@ class StudentV2FeaturesApiIntegrationTest {
     @Autowired EntityManager em;
     @Autowired ObjectMapper json;
     Fixtures f;
-    User student, other, manager;
+    User student, other, manager, admin;
     Course course, foreignCourse;
     Module oop;
     Question q;
@@ -40,6 +40,7 @@ class StudentV2FeaturesApiIntegrationTest {
     @BeforeEach void setUp() {
         f = new Fixtures(em);
         manager = f.account(User.ROLE_COURSE_MANAGER);
+        admin = f.account(User.ROLE_ADMIN);
         student = f.account(User.ROLE_STUDENT);
         other = f.account(User.ROLE_STUDENT);
         course = f.course(manager);
@@ -74,6 +75,22 @@ class StudentV2FeaturesApiIntegrationTest {
     }
 
     @Test void testMistakeNotebookMn01ToMn05Comprehensive() throws Exception {
+        mvc.perform(post("/api/v1/student/questions/" + q.getQuestionId() + "/bookmark")
+                .with(as(student)))
+                .andExpect(status().isNotFound());
+
+        em.persist(QuestionPracticeProgress.builder()
+                .user(student)
+                .course(course)
+                .module(oop)
+                .question(q)
+                .totalAttempts(1)
+                .gradedAttempts(1)
+                .correctAttempts(1)
+                .updatedAt(java.time.Instant.now())
+                .build());
+        em.flush();
+
         mvc.perform(post("/api/v1/student/questions/" + q.getQuestionId() + "/bookmark")
                 .with(as(student)))
                 .andExpect(status().isOk())
@@ -163,7 +180,7 @@ class StudentV2FeaturesApiIntegrationTest {
         JsonNode created = json.readTree(mvc.perform(post("/api/v1/student/discussions")
                 .with(as(student))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"courseId\":" + course.getCourseId() + ",\"title\":\"How to learn Java?\",\"content\":\"Please share tips.\",\"tag\":\"question\"}"))
+                .content("{\"courseId\":" + course.getCourseId() + ",\"title\":\"How to learn Java?\",\"content\":\"Please share tips.\",\"tag\":\"question\",\"imageUrl\":\"https://cdn.test/java.png\"}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.data.approvalStatus").value("PENDING"))
                 .andExpect(jsonPath("$.data.tag").value("question"))
@@ -186,8 +203,8 @@ class StudentV2FeaturesApiIntegrationTest {
                 .andExpect(jsonPath("$.data.title").value("How to learn Java?"))
                 .andExpect(jsonPath("$.data.isAuthor").value(true));
 
-        // A course manager approves it; only then does the post become public.
-        mvc.perform(post("/api/v1/manager/discussions/" + discId + "/approve").with(as(manager)))
+        // An admin approves it; only then does the post become public.
+        mvc.perform(post("/api/v1/admin/discussions/" + discId + "/approve").with(as(admin)))
                 .andExpect(status().isOk());
 
         mvc.perform(get("/api/v1/student/discussions")
@@ -252,7 +269,7 @@ class StudentV2FeaturesApiIntegrationTest {
         assertEquals(DiscussionItemDto.AuthorDto.ANONYMOUS_DISPLAY_NAME, own.path("author").path("displayName").asText());
 
         // Approval comes before the reply: an unapproved post refuses comments.
-        mvc.perform(post("/api/v1/manager/discussions/" + discId + "/approve").with(as(manager)))
+        mvc.perform(post("/api/v1/admin/discussions/" + discId + "/approve").with(as(admin)))
                 .andExpect(status().isOk());
 
         JsonNode comment = utf8(mvc.perform(post("/api/v1/student/discussions/" + discId + "/comments")

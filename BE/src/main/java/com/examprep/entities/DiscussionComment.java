@@ -43,10 +43,6 @@ public class DiscussionComment implements Serializable {
     public static final String STATUS_HIDDEN = "HIDDEN";
 
     @Builder.Default
-    @Column(name = "is_accepted", nullable = false)
-    private Boolean isAccepted = false;
-
-    @Builder.Default
     @Column(name = "status", nullable = false, length = 20)
     private String status = STATUS_VISIBLE; // VISIBLE, HIDDEN
 

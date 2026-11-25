@@ -84,7 +84,7 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
                 .isUpvoted(isUpvoted)
                 .isBookmarked(isBookmarked)
                 .isAuthor(isAuthor)
-                .isClosed(Boolean.TRUE.equals(d.getIsClosed()) || "CLOSED".equals(d.getStatus()))
+                .isClosed(d.isClosed())
                 .imageUrl(d.getImageUrl())
                 .approvalStatus(d.getApprovalStatus())
                 .status(d.getStatus())
@@ -100,7 +100,6 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
             String tag,
             String approvalStatus,
             String status,
-            String answerFilter,
             String search,
             String sort,
             int page,
@@ -114,8 +113,6 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
                 Set.of(Discussion.APPROVAL_PENDING, Discussion.APPROVAL_APPROVED, Discussion.APPROVAL_REJECTED));
         String statusFilter = normalizeOptionalStatus(status, "status",
                 Set.of("OPEN", "CLOSED", "HIDDEN"));
-        String normalizedAnswerFilter = normalizeOptionalStatus(answerFilter, "answerFilter",
-                Set.of("UNANSWERED", "ACCEPTED"));
         validatePaging(page, size);
 
         String rawSearch = search != null && !search.isBlank() ? search.trim() : "";
@@ -130,7 +127,7 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
                     userId, tagFilter, approvalFilter, statusFilter, searchTerm, normalizedSort, pageable);
         } else {
             // Public feed visibility is fixed: query filters must never expose pending, rejected or hidden posts.
-            discussions = discussionRepository.findAllDiscussions(tagFilter, normalizedAnswerFilter, searchTerm, normalizedSort, pageable);
+            discussions = discussionRepository.findAllDiscussions(tagFilter, searchTerm, normalizedSort, pageable);
         }
         List<Long> discussionIds = discussions.getContent().stream().map(Discussion::getDiscussionId).toList();
         Set<Long> upvotedIds = (userId != null && !discussionIds.isEmpty())
@@ -210,7 +207,6 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
                 c.getCommentId(),
                 c.getContent(),
                 DiscussionItemDto.AuthorDto.of(c.getUser(), Boolean.TRUE.equals(c.getIsAnonymous())),
-                Boolean.TRUE.equals(c.getIsAccepted()),
                 Boolean.TRUE.equals(c.getIsAnonymous()),
                 c.getImageUrl(),
                 c.getStatus(),
@@ -229,7 +225,7 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
                 .isUpvoted(isUpvoted)
                 .isBookmarked(isBookmarked)
                 .isAuthor(isAuthor)
-                .isClosed(Boolean.TRUE.equals(d.getIsClosed()) || "CLOSED".equals(d.getStatus()))
+                .isClosed(d.isClosed())
                 .imageUrl(d.getImageUrl())
                 .approvalStatus(d.getApprovalStatus())
                 .status(d.getStatus())
@@ -279,12 +275,11 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
                 .content(content)
                 .tag(tag)
                 .isAnonymous(Boolean.TRUE.equals(request.getIsAnonymous()))
-                .status("OPEN")
+                .status(Discussion.STATUS_OPEN)
                 .isPinned(false)
                 .viewCount(0)
                 .commentCount(0)
                 .upvoteCount(0)
-                .isClosed(false)
                 .imageUrl(imageUrl)
                 .approvalStatus(autoApprove ? Discussion.APPROVAL_APPROVED : Discussion.APPROVAL_PENDING)
                 .build();
@@ -349,7 +344,7 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
         Discussion d = discussionRepository.findById(discussionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Discussion not found"));
 
-        if (Boolean.TRUE.equals(d.getIsClosed()) || "CLOSED".equals(d.getStatus())) {
+        if (d.isClosed()) {
             throw new BaseException(ResponseCode.CONFLICT, "Discussion closed");
         }
 
@@ -374,7 +369,6 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
                 .isAnonymous(Boolean.TRUE.equals(request.getIsAnonymous()))
                 .status("VISIBLE")
                 .imageUrl(validateImageUrl(request.getImageUrl()))
-                .isAccepted(false)
                 .build();
         commentRepository.save(comment);
 
@@ -396,53 +390,10 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
                 comment.getCommentId(),
                 comment.getContent(),
                 DiscussionItemDto.AuthorDto.of(user, Boolean.TRUE.equals(comment.getIsAnonymous())),
-                false,
                 comment.getIsAnonymous(),
                 comment.getImageUrl(),
                 comment.getStatus(),
                 comment.getCreatedAt()
-        );
-    }
-
-    @Override
-    public DiscussionDetailDto.CommentDto acceptComment(Long discussionId, Long commentId, Long userId) {
-        Discussion d = discussionRepository.findById(discussionId)
-                .orElseThrow(() -> new ResourceNotFoundException("Discussion not found"));
-        if (!d.getUser().getUserId().equals(userId)) {
-            throw new ForbiddenException("Only the discussion author can accept an answer");
-        }
-        DiscussionComment comment = commentRepository.findById(commentId)
-                .orElseThrow(() -> new ResourceNotFoundException("Comment not found"));
-        if (!comment.getDiscussion().getDiscussionId().equals(discussionId)) {
-            throw new BadRequestException("Comment does not belong to this discussion");
-        }
-        if (!DiscussionComment.STATUS_VISIBLE.equals(comment.getStatus())) {
-            throw new BadRequestException("Cannot accept a hidden comment");
-        }
-
-        boolean newAccepted = !Boolean.TRUE.equals(comment.getIsAccepted());
-        comment.setIsAccepted(newAccepted);
-        DiscussionComment saved = commentRepository.save(comment);
-
-        if (newAccepted && !comment.getUser().getUserId().equals(userId)) {
-            communityHelper.sendNotification(
-                    comment.getUser(),
-                    "Câu trả lời của bạn đã được chọn làm giải pháp",
-                    "Tác giả bài viết \"" + d.getTitle() + "\" đã đánh dấu bình luận của bạn là câu trả lời hữu ích.",
-                    "COMMUNITY_ACCEPTED",
-                    discussionId
-            );
-        }
-
-        return new DiscussionDetailDto.CommentDto(
-                saved.getCommentId(),
-                saved.getContent(),
-                DiscussionItemDto.AuthorDto.of(saved.getUser(), Boolean.TRUE.equals(saved.getIsAnonymous())),
-                Boolean.TRUE.equals(saved.getIsAccepted()),
-                Boolean.TRUE.equals(saved.getIsAnonymous()),
-                saved.getImageUrl(),
-                saved.getStatus(),
-                saved.getCreatedAt()
         );
     }
 
@@ -600,8 +551,7 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
         }
 
         if (request.getIsClosed() != null) {
-            d.setIsClosed(request.getIsClosed());
-            d.setStatus(request.getIsClosed() ? "CLOSED" : "OPEN");
+            d.setStatus(request.getIsClosed() ? Discussion.STATUS_CLOSED : Discussion.STATUS_OPEN);
         }
 
         Discussion saved = discussionRepository.save(d);

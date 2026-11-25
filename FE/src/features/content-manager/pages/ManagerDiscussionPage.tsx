@@ -282,7 +282,7 @@ export function ManagerDiscussionPage() {
   const togglePin = () => void runAction(detail?.isPinned ? 'Discussion unpinned.' : 'Discussion pinned.', () => managerDiscussionService.setPinned(detail!.discussionId, !detail!.isPinned));
   const hideDiscussion = () => void runAction('Discussion hidden from students.', async () => {
     await managerDiscussionService.hide(detail!.discussionId);
-    setDetail(current => current ? { ...current, status: 'HIDDEN', isClosed: true, isPinned: false } : current);
+    setDetail(current => current ? { ...current, status: 'HIDDEN', isClosed: false, isPinned: false } : current);
   });
   const restoreDiscussion = () => void runAction('Discussion restored for students.', async () => {
     await managerDiscussionService.restore(detail!.discussionId);

@@ -69,7 +69,7 @@ public class ManagerDiscussionServiceImpl implements ManagerDiscussionService {
         }
 
         boolean isAuthor = currentUserId != null && author.getUserId().equals(currentUserId);
-        boolean isClosed = Boolean.TRUE.equals(d.getIsClosed()) || "CLOSED".equalsIgnoreCase(d.getStatus());
+        boolean isClosed = d.isClosed();
 
         return DiscussionItemDto.builder()
                 .discussionId(d.getDiscussionId())
@@ -102,7 +102,6 @@ public class ManagerDiscussionServiceImpl implements ManagerDiscussionService {
                 c.getCommentId(),
                 c.getContent(),
                 DiscussionItemDto.AuthorDto.of(c.getUser(), Boolean.TRUE.equals(c.getIsAnonymous())),
-                Boolean.TRUE.equals(c.getIsAccepted()),
                 Boolean.TRUE.equals(c.getIsAnonymous()),
                 c.getImageUrl(),
                 c.getStatus(),
@@ -110,7 +109,7 @@ public class ManagerDiscussionServiceImpl implements ManagerDiscussionService {
         )).toList();
 
         boolean isAuthor = currentUserId != null && author.getUserId().equals(currentUserId);
-        boolean isClosed = Boolean.TRUE.equals(d.getIsClosed()) || "CLOSED".equalsIgnoreCase(d.getStatus());
+        boolean isClosed = d.isClosed();
 
         return DiscussionDetailDto.builder()
                 .discussionId(d.getDiscussionId())
@@ -161,12 +160,11 @@ public class ManagerDiscussionServiceImpl implements ManagerDiscussionService {
                 .content(request.getContent().trim())
                 .tag(tag)
                 .isAnonymous(false)
-                .status("OPEN")
+                .status(Discussion.STATUS_OPEN)
                 .isPinned(isPinned)
                 .viewCount(0)
                 .commentCount(0)
                 .upvoteCount(0)
-                .isClosed(false)
                 .imageUrl(validateImageUrl(request.getImageUrl()))
                 .approvalStatus(Discussion.APPROVAL_APPROVED)
                 .reviewedBy(admin)
@@ -378,8 +376,7 @@ public class ManagerDiscussionServiceImpl implements ManagerDiscussionService {
             throw new BadRequestException("Discussion is already hidden");
         }
 
-        discussion.setStatus("HIDDEN");
-        discussion.setIsClosed(true);
+        discussion.setStatus(Discussion.STATUS_HIDDEN);
         discussion.setIsPinned(false);
         Discussion saved = discussionRepository.save(discussion);
         return mapToItemDto(saved, adminId);
@@ -395,8 +392,7 @@ public class ManagerDiscussionServiceImpl implements ManagerDiscussionService {
             throw new BadRequestException("Discussion is not hidden");
         }
 
-        discussion.setStatus("OPEN");
-        discussion.setIsClosed(false);
+        discussion.setStatus(Discussion.STATUS_OPEN);
         Discussion saved = discussionRepository.save(discussion);
         return mapToItemDto(saved, adminId);
     }
@@ -446,7 +442,6 @@ public class ManagerDiscussionServiceImpl implements ManagerDiscussionService {
                 saved.getCommentId(),
                 saved.getContent(),
                 DiscussionItemDto.AuthorDto.of(saved.getUser(), anonymous),
-                Boolean.TRUE.equals(saved.getIsAccepted()),
                 anonymous,
                 saved.getImageUrl(),
                 saved.getStatus(),
@@ -532,9 +527,8 @@ public class ManagerDiscussionServiceImpl implements ManagerDiscussionService {
                 }
             } else {
                 Discussion d = report.getDiscussion();
-                if (!"HIDDEN".equals(d.getStatus())) {
-                    d.setStatus("HIDDEN");
-                    d.setIsClosed(true);
+                if (!Discussion.STATUS_HIDDEN.equals(d.getStatus())) {
+                    d.setStatus(Discussion.STATUS_HIDDEN);
                     d.setIsPinned(false);
                     discussionRepository.save(d);
                 }

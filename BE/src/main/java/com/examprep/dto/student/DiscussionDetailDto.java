@@ -54,7 +54,6 @@ public class DiscussionDetailDto {
         private Long commentId;
         private String content;
         private DiscussionItemDto.AuthorDto author;
-        private boolean isAccepted;
         private boolean isAnonymous;
         private String imageUrl;
         private String status;
