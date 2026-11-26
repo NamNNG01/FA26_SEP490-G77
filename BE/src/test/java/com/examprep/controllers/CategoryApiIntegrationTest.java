@@ -57,18 +57,24 @@ class CategoryApiIntegrationTest {
     }
 
     @Test
-    void createNormalizesCodeAndBuildsBothSortedLists() throws Exception {
-        long second = create(Map.of("code", "  lớp-ĐẶC  ", "name", "Second", "sortOrder", 2));
-        long first = create(Map.of("code", "first", "name", "First", "sortOrder", 1));
+    void createWithoutCodeGeneratesSlugPersistsDescriptionAndBuildsBothSortedLists() throws Exception {
+        long second = create(Map.of("name", "Lớp Đặc Biệt", "description", "Desc 2", "sortOrder", 2));
+        long first = create(Map.of("name", "First Category", "sortOrder", 1));
         call(admin, get(PATH)).andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.items[0].categoryId").value(first))
-                .andExpect(jsonPath("$.data.items[1].code").value("LOP-DAC"))
+                .andExpect(jsonPath("$.data.items[0].slug").value("first-category"))
+                .andExpect(jsonPath("$.data.items[0].isActive").value(true))
+                .andExpect(jsonPath("$.data.items[0].code").doesNotExist())
+                .andExpect(jsonPath("$.data.items[1].categoryId").value(second))
+                .andExpect(jsonPath("$.data.items[1].slug").value("lop-dac-biet"))
+                .andExpect(jsonPath("$.data.items[1].description").value("Desc 2"))
                 .andExpect(jsonPath("$.data.items[1].isActive").value(true))
+                .andExpect(jsonPath("$.data.items[1].code").doesNotExist())
                 .andExpect(jsonPath("$.data.items[1].parentId").doesNotExist())
                 .andExpect(jsonPath("$.data.items[1].children").doesNotExist())
                 .andExpect(jsonPath("$.data.items[1].isDeleted").doesNotExist());
         call(admin, get(PATH + "/tree")).andExpect(status().isOk())
-                .andExpect(jsonPath("$.data[1].label").value("Second"))
+                .andExpect(jsonPath("$.data[1].label").value("Lớp Đặc Biệt"))
                 .andExpect(jsonPath("$.data[1].value").value(second))
                 .andExpect(jsonPath("$.data[1].disabled").value(false))
                 .andExpect(jsonPath("$.data[1].children").doesNotExist());
@@ -79,61 +85,99 @@ class CategoryApiIntegrationTest {
     }
 
     @Test
-    void rejectsDuplicateNormalizedCodesAndInvalidNames() throws Exception {
-        create(Map.of("code", "lớp", "name", "A"));
-        for (Map<String, ?> payload : java.util.List.of(
-                Map.of("code", "LOP", "name", "Duplicate"), Map.of("code", " ", "name", "A"),
-                Map.of("code", "\u2003", "name", "A"), Map.of("code", "ok", "name", "\u2003"),
-                Map.of("code", "ok", "name", "A".repeat(256)))) {
-            write(post(PATH), payload).andExpect(status().isBadRequest());
-        }
-        create(Map.of("code", "maximum", "name", "A".repeat(255)));
+    void slugCollisionsReceiveDeterministicSuffixes() throws Exception {
+        long first = create(Map.of("name", "Java Basics"));
+        long second = create(Map.of("name", "Java Basics"));
+        long third = create(Map.of("name", "Java Basics"));
+
+        call(admin, get(PATH)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[?(@.categoryId==" + first + ")].slug").value("java-basics"))
+                .andExpect(jsonPath("$.data.items[?(@.categoryId==" + second + ")].slug").value("java-basics-2"))
+                .andExpect(jsonPath("$.data.items[?(@.categoryId==" + third + ")].slug").value("java-basics-3"));
     }
 
     @Test
-    void partialUpdateKeepsCode() throws Exception {
-        long id = create(Map.of("code", "item", "name", "Item"));
+    void rejectsInvalidNamesAndOverlongDescriptionsWithoutRequiringCode() throws Exception {
+        for (Map<String, ?> payload : java.util.List.of(
+                Map.of("description", "Missing name"),
+                Map.of("name", " "),
+                Map.of("name", "\u2003"),
+                Map.of("name", "A".repeat(256)),
+                Map.of("name", "Valid", "description", "D".repeat(1001)))) {
+            write(post(PATH), payload).andExpect(status().isBadRequest());
+        }
+        create(Map.of("name", "A".repeat(255), "description", "D".repeat(1000)));
+    }
+
+    @Test
+    void partialUpdatePreservesSlugAndUpdatesOrClearsDescription() throws Exception {
+        long id = create(Map.of("name", "Item One", "description", "Initial description"));
         write(put(PATH + "/" + id), Map.of("name", "Renamed", "sortOrder", 6, "isActive", false))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.data.code").value("ITEM"))
-                .andExpect(jsonPath("$.data.name").value("Renamed")).andExpect(jsonPath("$.data.sortOrder").value(6));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.code").doesNotExist())
+                .andExpect(jsonPath("$.data.slug").value("item-one"))
+                .andExpect(jsonPath("$.data.description").value("Initial description"))
+                .andExpect(jsonPath("$.data.name").value("Renamed"))
+                .andExpect(jsonPath("$.data.sortOrder").value(6))
+                .andExpect(jsonPath("$.data.isActive").value(false));
         call(admin, get(PATH + "/tree")).andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[0].disabled").value(true));
-        write(put(PATH + "/" + id), Map.of("code", "CHANGED"))
-                .andExpect(status().isBadRequest());
+
+        // Explicit empty string clears description
+        write(put(PATH + "/" + id), Map.of("description", ""))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.description").doesNotExist());
+
+        // Set again then clear with explicit null
+        write(put(PATH + "/" + id), Map.of("description", "Restored"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.description").value("Restored"));
+        call(admin, put(PATH + "/" + id).contentType(MediaType.APPLICATION_JSON).content("{\"description\":null}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.description").doesNotExist());
     }
 
     @Test
     void updateRejectsMissingIdsAndInvalidFieldsWithoutPartialWrites() throws Exception {
-        long root = create(Map.of("code", "root", "name", "Root"));
+        long root = create(Map.of("name", "Root", "description", "Keep me"));
         write(put(PATH + "/" + Long.MAX_VALUE), Map.of("name", "Missing")).andExpect(status().isNotFound());
         write(put(PATH + "/" + root), Map.of("name", " ")).andExpect(status().isBadRequest());
         write(put(PATH + "/" + root), Map.of("name", "A".repeat(256))).andExpect(status().isBadRequest());
-        call(admin, get(PATH)).andExpect(status().isOk()).andExpect(jsonPath("$.data.items[0].name").value("Root"));
+        write(put(PATH + "/" + root), Map.of("description", "D".repeat(1001))).andExpect(status().isBadRequest());
+        call(admin, get(PATH)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[0].name").value("Root"))
+                .andExpect(jsonPath("$.data.items[0].description").value("Keep me"));
     }
 
     @Test
-    void deletionProtectsCoursesThenSoftDeletesAndReservesCode() throws Exception {
-        long id = create(Map.of("code", "item", "name", "Item"));
-        Category entity = em.find(Category.class, id);
-        Course course = Course.builder().categoryId(id).category(entity).manager(manager)
+    void deletionProtectsChildrenAndCoursesThenSoftDeletes() throws Exception {
+        long parentId = create(Map.of("name", "Parent"));
+        long childId = create(Map.of("name", "Child", "parentId", parentId));
+        call(admin, delete(PATH + "/" + parentId)).andExpect(status().isConflict());
+
+        // Delete child first so parent has no active children, then attach a course to parent
+        call(admin, delete(PATH + "/" + childId)).andExpect(status().isOk());
+
+        Category entity = em.find(Category.class, parentId);
+        Course course = Course.builder().categoryId(parentId).category(entity).manager(manager)
                 .title("Dependency").slug(UUID.randomUUID().toString()).isPublished(false).build();
         em.persist(course);
-        call(admin, delete(PATH + "/" + id)).andExpect(status().isConflict());
+        call(admin, delete(PATH + "/" + parentId)).andExpect(status().isConflict());
         em.remove(course);
-        call(admin, delete(PATH + "/" + id)).andExpect(status().isOk())
+
+        call(admin, delete(PATH + "/" + parentId)).andExpect(status().isOk())
                 .andExpect(jsonPath("$.data").doesNotExist());
-        assertNotNull(em.find(Category.class, id));
+        assertNotNull(em.find(Category.class, parentId));
         call(admin, get(PATH)).andExpect(status().isOk()).andExpect(jsonPath("$.data.items").isEmpty());
-        write(post(PATH), Map.of("code", "ITEM", "name", "Reuse")).andExpect(status().isBadRequest());
-        call(admin, delete(PATH + "/" + id)).andExpect(status().isNotFound());
+        call(admin, delete(PATH + "/" + parentId)).andExpect(status().isNotFound());
     }
 
     @Test
     void publicListOmitsInactiveAndDeleted() throws Exception {
-        create(Map.of("code", "hidden", "name", "Hidden", "isActive", false));
-        long deleted = create(Map.of("code", "deleted", "name", "Deleted"));
+        create(Map.of("name", "Hidden", "isActive", false));
+        long deleted = create(Map.of("name", "Deleted"));
         call(admin, delete(PATH + "/" + deleted)).andExpect(status().isOk());
-        long visible = create(Map.of("code", "visible", "name", "Visible"));
+        long visible = create(Map.of("name", "Visible"));
         mvc.perform(get("/api/v1/categories")).andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.length()").value(1))
                 .andExpect(jsonPath("$.data[0].categoryId").value(visible));
@@ -141,7 +185,7 @@ class CategoryApiIntegrationTest {
 
     @Test
     void successfulMutationsPersistAuditEventsWithActor() throws Exception {
-        long id = create(Map.of("code", "audit", "name", "Audit"));
+        long id = create(Map.of("name", "Audit"));
         write(put(PATH + "/" + id), Map.of("name", "Changed")).andExpect(status().isOk());
         call(admin, delete(PATH + "/" + id)).andExpect(status().isOk());
         em.flush();

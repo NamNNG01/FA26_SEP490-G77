@@ -128,7 +128,7 @@ public class TemplateGeneratorTest {
                     "Type", "Difficulty", "Content",
                     "Option A", "Option B", "Option C", "Option D", "Option E", "Option F",
                     "Matching Right", "Answer", "Explanation", "Rubric",
-                    "Code Config", "Test Cases", "Diagram XML"
+                    "Code Config", "Test Cases"
             };
 
             Row headerRow = qSheet.createRow(0);
@@ -143,55 +143,46 @@ public class TemplateGeneratorTest {
                     new String[]{
                             "SINGLE_CHOICE", "EASY", "What is the output of 2 + 2?",
                             "3", "4", "5", "6", "", "",
-                            "", "B", "2 + 2 equals 4.", "", "", "", ""
+                            "", "B", "2 + 2 equals 4.", "", "", ""
                     },
                     new String[]{
                             "MULTIPLE_CHOICE", "EASY", "Which are programming languages?",
                             "Java", "Python", "Photoshop", "C++", "", "",
-                            "", "A, B, D", "Java, Python, and C++ are programming languages.", "", "", "", ""
+                            "", "A, B, D", "Java, Python, and C++ are programming languages.", "", "", ""
                     },
                     new String[]{
                             "TRUE_FALSE", "EASY", "Java is an object-oriented language.",
                             "True", "False", "", "", "", "",
-                            "", "True", "Java supports classes, inheritance, and polymorphism.", "", "", "", ""
+                            "", "True", "Java supports classes, inheritance, and polymorphism.", "", "", ""
                     },
                     new String[]{
                             "FILL_BLANK", "MEDIUM", "Tokyo is in ____ and Osaka is in ____.",
                             "", "", "", "", "", "",
-                            "", "1=Japan; 2=Japan", "Both cities are located in Japan.", "", "", "", ""
+                            "", "1=Japan; 2=Japan", "Both cities are located in Japan.", "", "", ""
                     },
                     new String[]{
                             "ORDERING", "MEDIUM", "Arrange the steps in the correct order.",
                             "Execute the program", "Write the source code", "Compile the code", "Test the result", "", "",
-                            "", "B, C, A, D", "", "", "", "", ""
+                            "", "B, C, A, D", "", "", "", ""
                     },
                     new String[]{
                             "MATCHING", "MEDIUM", "Match each item with its definition.",
                             "HTML", "Java", "", "", "", "",
-                            "1. Programming language\n2. Markup language", "A-2, B-1", "", "", "", "", ""
+                            "1. Programming language\n2. Markup language", "A-2, B-1", "", "", "", ""
                     },
                     new String[]{
                             "ESSAY", "HARD", "Explain why Java uses garbage collection and what trade-off it brings.",
                             "", "", "", "", "", "",
                             "", "", "Reclaims unreferenced objects automatically with GC pause overhead.",
                             "- Memory management | 2 | Explains that unreachable objects are reclaimed automatically\n- Trade-off | 2 | Mentions pause time or runtime overhead",
-                            "", "", ""
+                            "", ""
                     },
                     new String[]{
                             "CODE", "MEDIUM", "Read two integers from stdin and print their sum.",
                             "", "", "", "", "", "",
                             "", "", "", "",
                             "{\"allowedLanguages\":[\"JAVA\"],\"codeTemplate\":\"\",\"timeLimitMs\":5000,\"memoryLimitKb\":262144}",
-                            "[{\"inputData\":\"2 3\\n\",\"expectedOutput\":\"5\",\"hidden\":false},{\"inputData\":\"-4 1\\n\",\"expectedOutput\":\"-3\",\"hidden\":true}]",
-                            ""
-                    },
-                    new String[]{
-                            "DIAGRAM_ESSAY", "HARD", "Draw a class diagram for the described library and explain the relationships.",
-                            "", "", "", "", "", "",
-                            "", "", "Separate Book from physical copies for lending.",
-                            "- Classes and attributes | 2 | Includes the required classes and attributes\n- Relationships | 3 | Uses correct associations and multiplicities",
-                            "", "",
-                            "<mxGraphModel><root><mxCell id=\"0\"/><mxCell id=\"1\" parent=\"0\"/></root></mxGraphModel>"
+                            "[{\"inputData\":\"2 3\\n\",\"expectedOutput\":\"5\",\"hidden\":false},{\"inputData\":\"-4 1\\n\",\"expectedOutput\":\"-3\",\"hidden\":true}]"
                     }
             );
 
@@ -205,7 +196,7 @@ public class TemplateGeneratorTest {
                 }
             }
 
-            int[] widths = {18, 13, 42, 20, 20, 20, 20, 18, 18, 28, 22, 30, 40, 36, 42, 36};
+            int[] widths = {18, 13, 42, 20, 20, 20, 20, 18, 18, 28, 22, 30, 40, 36, 42};
             for (int c = 0; c < widths.length; c++) {
                 qSheet.setColumnWidth(c, widths[c] * 256);
             }
@@ -214,7 +205,7 @@ public class TemplateGeneratorTest {
             DataValidationHelper dvHelper = qSheet.getDataValidationHelper();
             DataValidationConstraint typeConstraint = dvHelper.createExplicitListConstraint(new String[]{
                     "SINGLE_CHOICE", "MULTIPLE_CHOICE", "TRUE_FALSE", "MATCHING", "FILL_BLANK",
-                    "ORDERING", "ESSAY", "CODE", "DIAGRAM", "DIAGRAM_ESSAY"
+                    "ORDERING", "ESSAY", "CODE"
             });
             DataValidation typeValidation = dvHelper.createValidation(typeConstraint, new CellRangeAddressList(1, 500, 0, 0));
             typeValidation.setShowErrorBox(true);
@@ -238,16 +229,15 @@ public class TemplateGeneratorTest {
                 {"Field / Rule", "Details"},
                 {"Sheet 'Questions'", "Each non-empty row after Row 1 represents one question. Max 500 questions per file."},
                 {"Course & Module", "Selected on the import screen UI — do not put Course or Module columns inside Excel."},
-                {"Type (Required)", "SINGLE_CHOICE, MULTIPLE_CHOICE, TRUE_FALSE, MATCHING, FILL_BLANK, ORDERING, ESSAY, CODE, DIAGRAM, DIAGRAM_ESSAY"},
+                {"Type (Required)", "SINGLE_CHOICE, MULTIPLE_CHOICE, TRUE_FALSE, MATCHING, FILL_BLANK, ORDERING, ESSAY, CODE"},
                 {"Difficulty (Required)", "EASY, MEDIUM, or HARD (required for every question — there is no default difficulty)."},
                 {"Content (Required)", "Question prompt text. For FILL_BLANK, use ____ or {{1}}, {{2}} placeholders."},
                 {"Option A..Option F", "Choices for SINGLE_CHOICE, MULTIPLE_CHOICE, ORDERING, or Left items for MATCHING."},
                 {"Matching Right", "Used for MATCHING only. Enter one numbered item per line, e.g. '1. HyperText' then Alt+Enter '2. Mail Protocol'."},
                 {"Answer", "SC: B | MC: A, B, D | TF: True / False | ORDERING: B, C, A, D | MATCHING: A-2, B-1 | FILL_BLANK: Tokyo or 1=Japan; 2=Japan"},
-                {"Rubric (Essay/Diagram)", "Required for ESSAY, DIAGRAM, DIAGRAM_ESSAY. Format each line: - Criteria | weight | description"},
+                {"Rubric (Essay)", "Required for ESSAY. Format each line: - Criteria | weight | description"},
                 {"Code Config", "Required JSON object for CODE with exactly 1 allowed language, e.g. {\"allowedLanguages\":[\"JAVA\"],\"timeLimitMs\":5000,\"memoryLimitKb\":262144}"},
-                {"Test Cases", "Required for CODE (at least 1 hidden=false and 1 hidden=true). Paste a JSON array [...] or 1 JSON object per line."},
-                {"Diagram XML", "Required for DIAGRAM and DIAGRAM_ESSAY: valid draw.io <mxGraphModel> or <mxfile> XML."}
+                {"Test Cases", "Required for CODE (at least 1 hidden=false and 1 hidden=true). Paste a JSON array [...] or 1 JSON object per line."}
         };
         for (int r = 0; r < guideRows.length; r++) {
             Row row = gSheet.createRow(r);

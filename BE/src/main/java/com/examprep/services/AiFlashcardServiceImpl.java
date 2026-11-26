@@ -299,14 +299,29 @@ public class AiFlashcardServiceImpl implements AiFlashcardService {
         return courses.getReferenceById(courseId);
     }
 
-    /** A PDF without a text layer and any other unreadable file both map to 422, with distinct codes. */
+    /** A PDF without a text layer and any other unreadable file map to distinct 422 error codes. */
     private String extract(MultipartFile file, String fileName) {
         try {
             return reader.read(fileName, file.getBytes());
+        } catch (MaterialTextReader.MaterialReadException ex) {
+            if (fileName.toLowerCase(Locale.ROOT).endsWith(".pdf")) {
+                throw switch (ex.getKind()) {
+                    case PDF_NO_TEXT_LAYER -> ContestRules.error(ResponseCode.UNPROCESSABLE_VALIDATION_ERROR,
+                            "PDF_NO_TEXT_LAYER", "PDF không có lớp văn bản để đọc");
+                    case PDF_PROTECTED -> ContestRules.error(ResponseCode.UNPROCESSABLE_VALIDATION_ERROR,
+                            "PDF_PROTECTED", "PDF được bảo vệ bằng mật khẩu hoặc không cho phép trích xuất văn bản");
+                    case PDF_TOO_LARGE, TEXT_TOO_LARGE -> ContestRules.error(ResponseCode.UNPROCESSABLE_VALIDATION_ERROR,
+                            "PDF_TOO_LARGE", "PDF vượt quá giới hạn số trang hoặc dung lượng nội dung");
+                    default -> ContestRules.error(ResponseCode.UNPROCESSABLE_VALIDATION_ERROR,
+                            "INVALID_FILE", "PDF bị hỏng hoặc không phải PDF");
+                };
+            }
+            throw ContestRules.error(ResponseCode.UNPROCESSABLE_VALIDATION_ERROR, "EMPTY_CONTENT",
+                    "Không đọc được nội dung tệp");
         } catch (BadRequestException ex) {
             if (fileName.toLowerCase(Locale.ROOT).endsWith(".pdf")) {
-                throw ContestRules.error(ResponseCode.UNPROCESSABLE_VALIDATION_ERROR, "PDF_NO_TEXT_LAYER",
-                        "PDF không có lớp văn bản để đọc");
+                throw ContestRules.error(ResponseCode.UNPROCESSABLE_VALIDATION_ERROR, "INVALID_FILE",
+                        "PDF bị hỏng hoặc không phải PDF");
             }
             throw ContestRules.error(ResponseCode.UNPROCESSABLE_VALIDATION_ERROR, "EMPTY_CONTENT",
                     "Không đọc được nội dung tệp");

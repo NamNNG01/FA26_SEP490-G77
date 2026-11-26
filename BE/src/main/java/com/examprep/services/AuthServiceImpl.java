@@ -14,6 +14,7 @@ import com.examprep.security.GoogleTokenVerifier;
 import com.examprep.security.GoogleUserInfo;
 import com.examprep.security.JwtTokenProvider;
 import com.examprep.security.UserPrincipal;
+import com.examprep.util.validation.ValidPasswordValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -24,22 +25,17 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import jakarta.annotation.PreDestroy;
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.regex.Pattern;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class AuthServiceImpl implements AuthService {
-    private static final Pattern REGISTRATION_PASSWORD_COMPLEXITY =
-            Pattern.compile("(?s)(?=.*\\p{Lu})(?=.*\\p{N})(?=.*[\\p{P}\\p{S}]).*");
-    private static final int BCRYPT_PASSWORD_MAX_BYTES = 72;
 
     private final UserRepository userRepository;
     private final RefreshTokenRepository refreshTokenRepository;
@@ -440,15 +436,9 @@ public class AuthServiceImpl implements AuthService {
     }
 
     private void validatePasswordPolicy(String password) {
-        if (password == null || password.length() < 8) {
-            throw new BadRequestException("Password must be at least 8 characters.");
-        }
-        if (!REGISTRATION_PASSWORD_COMPLEXITY.matcher(password).matches()) {
-            throw new BadRequestException("Password must include an uppercase letter, a number and a symbol.");
-        }
-        if (password.getBytes(StandardCharsets.UTF_8).length > BCRYPT_PASSWORD_MAX_BYTES) {
-            throw new BadRequestException("Password is too long. Use at most 72 UTF-8 bytes.");
-        }
+        ValidPasswordValidator.violation(password).ifPresent(msg -> {
+            throw new BadRequestException(msg);
+        });
     }
 
     private RefreshToken newRefreshToken(User user, String rawToken) {

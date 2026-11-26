@@ -33,7 +33,7 @@ public class ImportedQuestionAssembler {
 
     public static final Set<String> SUPPORTED_TYPES = Set.of(
             "SINGLE_CHOICE", "MULTIPLE_CHOICE", "TRUE_FALSE", "MATCHING", "FILL_BLANK",
-            "ESSAY", "ORDERING", "CODE", "DIAGRAM", "DIAGRAM_ESSAY"
+            "ESSAY", "ORDERING", "CODE"
     );
 
     private static final Pattern BLANK_UNDERSCORES = Pattern.compile("____");
@@ -115,8 +115,7 @@ public class ImportedQuestionAssembler {
             case "FILL_BLANK" -> mapFillBlank(finalContent, answerRaw, loc, req, errors);
             case "ORDERING" -> mapOrdering(optionsRaw, answerRaw, loc, req, errors);
             case "MATCHING" -> mapMatching(optionsRaw, matchingRightRaw, answerRaw, loc, req, errors);
-            case "ESSAY", "DIAGRAM", "DIAGRAM_ESSAY" -> mapEssayAndDiagram(
-                    qType, in.rubricLines(), in.sampleLines(), in.diagramXml(), loc, req, errors);
+            case "ESSAY" -> mapEssay(in.rubricLines(), in.sampleLines(), loc, req, errors);
             case "CODE" -> mapCode(in.codeConfigJson(), in.testCaseJsonLines(), loc, req, errors);
         }
 
@@ -397,11 +396,9 @@ public class ImportedQuestionAssembler {
         req.setAnswerKey(Map.of("pairs", pairs));
     }
 
-    private void mapEssayAndDiagram(
-            String qType,
+    private void mapEssay(
             List<String> rubricLines,
             List<String> sampleLines,
-            String diagramXml,
             int loc,
             QuestionCreateRequest req,
             List<ImportErrorDto> errors
@@ -434,11 +431,6 @@ public class ImportedQuestionAssembler {
                 }
                 req.setExplanation(sampleText);
             }
-        }
-
-        if ("DIAGRAM".equals(qType) || "DIAGRAM_ESSAY".equals(qType)) {
-            String xml = diagramXml != null ? diagramXml.trim() : "";
-            req.setQuestionMetadata(Map.of("drawioXml", xml));
         }
     }
 

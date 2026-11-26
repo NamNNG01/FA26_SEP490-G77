@@ -172,8 +172,53 @@ class QuestionImportApiTest {
         var xlsxJson = com.fasterxml.jackson.databind.json.JsonMapper.builder().build()
                 .readTree(xlsxPreview.getResponse().getContentAsString()).path("data");
         assertEquals("XLSX", xlsxJson.path("fileType").asText());
-        assertEquals(9, xlsxJson.path("totalBlocks").asInt());
+        assertEquals(8, xlsxJson.path("totalBlocks").asInt());
         assertEquals(0, xlsxJson.path("totalErrors").asInt());
+    }
+
+    @Test
+    void testDiagramAndDiagramEssayRejected() throws Exception {
+        UserPrincipal managerPrincipal = UserPrincipal.create(manager.getUserId(), manager.getEmail(), manager.getRoleName());
+
+        byte[] bytes;
+        try (org.apache.poi.xssf.usermodel.XSSFWorkbook wb = new org.apache.poi.xssf.usermodel.XSSFWorkbook();
+             java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream()) {
+            var sheet = wb.createSheet("Questions");
+            var header = sheet.createRow(0);
+            String[] cols = {"Type", "Difficulty", "Content", "Rubric", "Diagram XML"};
+            for (int c = 0; c < cols.length; c++) header.createCell(c).setCellValue(cols[c]);
+
+            var r1 = sheet.createRow(1);
+            r1.createCell(0).setCellValue("DIAGRAM");
+            r1.createCell(1).setCellValue("EASY");
+            r1.createCell(2).setCellValue("Draw an ERD");
+            r1.createCell(4).setCellValue("<mxGraphModel><root><mxCell id=\"0\"/></root></mxGraphModel>");
+
+            var r2 = sheet.createRow(2);
+            r2.createCell(0).setCellValue("DIAGRAM_ESSAY");
+            r2.createCell(1).setCellValue("HARD");
+            r2.createCell(2).setCellValue("Draw a class diagram and explain");
+            r2.createCell(3).setCellValue("- Classes | 2 | Required classes");
+            r2.createCell(4).setCellValue("<mxGraphModel><root><mxCell id=\"0\"/></root></mxGraphModel>");
+
+            wb.write(out);
+            bytes = out.toByteArray();
+        }
+
+        MockMultipartFile file = new MockMultipartFile("file", "diagram.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", bytes);
+        MvcResult res = mockMvc.perform(multipart("/api/v1/manager/questions/import-preview")
+                        .file(file)
+                        .param("courseId", course.getCourseId().toString())
+                        .with(user(managerPrincipal)))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        var data = com.fasterxml.jackson.databind.json.JsonMapper.builder().build()
+                .readTree(res.getResponse().getContentAsString()).path("data");
+        assertEquals(2, data.path("totalBlocks").asInt());
+        assertEquals(0, data.path("totalValid").asInt());
+        assertEquals(2, data.path("totalErrors").asInt());
     }
 
     @Test
@@ -260,6 +305,70 @@ class QuestionImportApiTest {
                         .file(txtFile)
                         .param("courseId", course.getCourseId().toString())
                         .with(user(managerPrincipal)))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.message")
+                        .value("Unsupported file format. Supported: .pdf, .docx, .xlsx, .xls"));
+
+        // .pptx ZIP must report unsupported format instead of DOCX structure error
+        byte[] pptxBytes;
+        try (java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+             java.util.zip.ZipOutputStream zip = new java.util.zip.ZipOutputStream(out)) {
+            zip.putNextEntry(new java.util.zip.ZipEntry("ppt/presentation.xml"));
+            zip.write("<p:presentation/>".getBytes());
+            zip.closeEntry();
+            zip.finish();
+            pptxBytes = out.toByteArray();
+        }
+        MockMultipartFile pptxFile = new MockMultipartFile("file", "slides.pptx",
+                "application/vnd.openxmlformats-officedocument.presentationml.presentation", pptxBytes);
+        mockMvc.perform(multipart("/api/v1/manager/questions/import-preview")
+                        .file(pptxFile)
+                        .param("courseId", course.getCourseId().toString())
+                        .with(user(managerPrincipal)))
+                .andExpect(status().isBadRequest())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.message")
+                        .value("Unsupported file format. Supported: .pdf, .docx, .xlsx, .xls"));
+    }
+
+    @Test
+    void testEmptyQuestionsFileRejectedWithValidationFailed() throws Exception {
+        UserPrincipal managerPrincipal = UserPrincipal.create(manager.getUserId(), manager.getEmail(), manager.getRoleName());
+
+        byte[] xlsxBytes;
+        try (org.apache.poi.xssf.usermodel.XSSFWorkbook wb = new org.apache.poi.xssf.usermodel.XSSFWorkbook();
+             java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream()) {
+            var sheet = wb.createSheet("Questions");
+            var header = sheet.createRow(0);
+            header.createCell(0).setCellValue("Type");
+            header.createCell(1).setCellValue("Content");
+            wb.write(out);
+            xlsxBytes = out.toByteArray();
+        }
+        mockMvc.perform(multipart("/api/v1/manager/questions/import-preview")
+                        .file(new MockMultipartFile("file", "header-only.xlsx",
+                                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", xlsxBytes))
+                        .param("courseId", course.getCourseId().toString())
+                        .with(user(managerPrincipal)))
+                .andExpect(status().isBadRequest())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.data.code")
+                        .value("VALIDATION_FAILED"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.message")
+                        .value("The file contains no questions in the import template format."));
+
+        byte[] docxBytes;
+        try (org.apache.poi.xwpf.usermodel.XWPFDocument doc = new org.apache.poi.xwpf.usermodel.XWPFDocument();
+             java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream()) {
+            doc.createParagraph().createRun().setText("Just plain notes without any TYPE block");
+            doc.write(out);
+            docxBytes = out.toByteArray();
+        }
+        mockMvc.perform(multipart("/api/v1/manager/questions/import-preview")
+                        .file(new MockMultipartFile("file", "no-blocks.docx",
+                                "application/vnd.openxmlformats-officedocument.wordprocessingml.document", docxBytes))
+                        .param("courseId", course.getCourseId().toString())
+                        .with(user(managerPrincipal)))
+                .andExpect(status().isBadRequest())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.data.code")
+                        .value("VALIDATION_FAILED"));
     }
 }

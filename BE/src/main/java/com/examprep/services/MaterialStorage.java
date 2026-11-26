@@ -4,15 +4,22 @@ import com.examprep.dto.ResponseCode;
 import com.examprep.exceptions.BaseException;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
+import org.springframework.web.client.HttpServerErrorException;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 
 import java.io.IOException;
+import java.net.http.HttpClient;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -21,7 +28,6 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Base64;
 import java.util.HexFormat;
 import java.util.Locale;
 import java.util.Map;
@@ -46,20 +52,32 @@ public class MaterialStorage {
     private final String apiSecret;
     private final RestClient cloudinary;
 
+    @Autowired
     public MaterialStorage(@Value("${app.storage.provider:cloudinary}") String provider,
                            @Value("${app.storage.local-dir:data/materials}") String localDir,
                            @Value("${app.cloudinary.cloud-name:}") String cloudName,
                            @Value("${app.cloudinary.api-key:}") String apiKey,
                            @Value("${app.cloudinary.api-secret:}") String apiSecret) {
+        this(provider, localDir, cloudName, apiKey, apiSecret, defaultCloudinaryClient());
+    }
+
+    MaterialStorage(String provider, String localDir, String cloudName, String apiKey, String apiSecret,
+                    RestClient cloudinary) {
         this.provider = provider;
         this.localDir = Paths.get(localDir);
         this.cloudName = cloudName == null ? "" : cloudName.trim();
         this.apiKey = apiKey == null ? "" : apiKey.trim();
         this.apiSecret = apiSecret == null ? "" : apiSecret.trim();
-        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
-        requestFactory.setConnectTimeout((int) Duration.ofSeconds(10).toMillis());
-        requestFactory.setReadTimeout((int) Duration.ofSeconds(60).toMillis());
-        this.cloudinary = RestClient.builder()
+        this.cloudinary = cloudinary;
+    }
+
+    private static RestClient defaultCloudinaryClient() {
+        HttpClient httpClient = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(15))
+                .build();
+        JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
+        requestFactory.setReadTimeout(Duration.ofSeconds(60));
+        return RestClient.builder()
                 .baseUrl("https://api.cloudinary.com")
                 .requestFactory(requestFactory)
                 .build();
@@ -215,23 +233,44 @@ public class MaterialStorage {
     }
 
     private JsonNode signedUpload(String resourceType, Map<String, String> signed, String mime, byte[] bytes) {
-        MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
-        form.add("file", "data:" + mime + ";base64," + Base64.getEncoder().encodeToString(bytes));
+        String ext = fileExtensionForMime(mime);
+        MediaType partMediaType = MediaType.parseMediaType(mime);
+        HttpHeaders fileHeaders = new HttpHeaders();
+        fileHeaders.setContentType(partMediaType);
+        ByteArrayResource resource = new ByteArrayResource(bytes) {
+            @Override
+            public String getFilename() {
+                return "upload." + ext;
+            }
+        };
+
+        MultiValueMap<String, Object> form = new LinkedMultiValueMap<>();
+        form.add("file", new HttpEntity<>(resource, fileHeaders));
         signed.forEach(form::add);
         form.add("api_key", apiKey);
         form.add("signature", sha1(signable(signed) + apiSecret));
 
-        JsonNode response;
-        try {
-            response = cloudinary.post()
-                    .uri("/v1_1/{cloud}/{type}/upload", cloudName, resourceType)
-                    .contentType(MediaType.MULTIPART_FORM_DATA)
-                    .body(form)
-                    .retrieve()
-                    .body(JsonNode.class);
-        } catch (RuntimeException ex) {
-            log.warn("Cloudinary upload failed: {}", ex.getMessage());
-            throw new BaseException(ResponseCode.STORAGE_ERROR, "File storage rejected the upload");
+        JsonNode response = null;
+        int maxAttempts = 2;
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                response = cloudinary.post()
+                        .uri("/v1_1/{cloud}/{type}/upload", cloudName, resourceType)
+                        .contentType(MediaType.MULTIPART_FORM_DATA)
+                        .body(form)
+                        .retrieve()
+                        .body(JsonNode.class);
+                break;
+            } catch (ResourceAccessException | HttpServerErrorException ex) {
+                log.warn("Cloudinary upload transient failure (attempt {}/{}): {}", attempt, maxAttempts, ex.getMessage());
+                if (attempt == maxAttempts) {
+                    throw new BaseException(ResponseCode.STORAGE_ERROR, "File storage rejected the upload");
+                }
+                sleepBeforeRetry();
+            } catch (RuntimeException ex) {
+                log.warn("Cloudinary upload failed: {}", ex.getMessage());
+                throw new BaseException(ResponseCode.STORAGE_ERROR, "File storage rejected the upload");
+            }
         }
         String url = response == null ? null : response.path("secure_url").asText(null);
         if (url == null || url.isBlank()) {
@@ -240,6 +279,25 @@ public class MaterialStorage {
             throw new BaseException(ResponseCode.STORAGE_ERROR, "File storage rejected the upload");
         }
         return response;
+    }
+
+    private static String fileExtensionForMime(String mime) {
+        if (mime == null) return "bin";
+        return switch (mime.toLowerCase(Locale.ROOT)) {
+            case "image/jpeg" -> "jpg";
+            case "image/png" -> "png";
+            case "image/webp" -> "webp";
+            case "image/gif" -> "gif";
+            default -> "bin";
+        };
+    }
+
+    private static void sleepBeforeRetry() {
+        try {
+            Thread.sleep(400);
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     private String signable(Map<String, String> signed) {

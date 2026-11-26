@@ -50,6 +50,7 @@ type Confirm = 'publishOne' | 'publishSaved' | null;
  * to the other one when nothing is left unsaved in the current one.
  */
 type CreateMode = 'manual' | 'ai';
+type DraftFilter = 'all' | 'errors' | 'valid';
 
 /** A question saved on this visit, kept on the page (read-only) so its group & publish state are clear. */
 interface SavedQuestion {
@@ -136,6 +137,8 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
   const [confirm, setConfirm] = useState<Confirm>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [createMode, setCreateMode] = useState<CreateMode>('manual');
+  const [draftFilter, setDraftFilter] = useState<DraftFilter>('all');
+  const [draftTypeFilter, setDraftTypeFilter] = useState<string>('ALL');
   /** Index of a written question waiting for a delete confirmation (blank ones go at once). */
   const [confirmRemove, setConfirmRemove] = useState<number | null>(null);
   /** AI suggestions on the page, accepted or not — none of them saved yet. */
@@ -325,6 +328,8 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
     setTouched(new Set());
     setSubmitted(false);
     setInBank(new Set());
+    setDraftFilter('all');
+    setDraftTypeFilter('ALL');
     setDirty(false);
   };
 
@@ -415,6 +420,19 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
 
   const scrollTo = (key: string) => document.getElementById(key)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
+  const hasDraftError = (q: QuestionDraft) =>
+    !isDraftValid(q) || Boolean(kindError(q)) || inBank.has(q.key) || (Boolean(q.importIssue) && !touched.has(q.key));
+
+  const revealAndScrollTo = (key: string, forceReset = false) => {
+    if (forceReset || draftFilter !== 'all' || draftTypeFilter !== 'ALL') {
+      setDraftFilter('all');
+      setDraftTypeFilter('ALL');
+      requestAnimationFrame(() => requestAnimationFrame(() => scrollTo(key)));
+    } else {
+      requestAnimationFrame(() => scrollTo(key));
+    }
+  };
+
   const addQuestion = () => {
     if (questions.length >= MAX_BATCH) {
       toast.warning(`You can save up to ${MAX_BATCH} questions at a time — save these first.`);
@@ -422,7 +440,7 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
     }
     const draft = newDraft();
     setQuestions(prev => [...prev, draft]);
-    requestAnimationFrame(() => scrollTo(draft.key));
+    revealAndScrollTo(draft.key);
   };
 
   /** Append drafts, replacing the untouched blank starter question instead of keeping it around. */
@@ -442,17 +460,17 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
     setShowImport(false);
     if (!fitting.length) return;
     appendDrafts(fitting);
-    const issues = fitting.filter(d => d.importIssue).length;
+    const issues = fitting.filter(d => d.importIssue || !isDraftValid(d)).length;
     const imported = `${fitting.length} question${fitting.length === 1 ? '' : 's'} imported`;
     if (issues > 0) {
-      toast.warning('Questions marked in red kept their parsed fields — fix the highlighted errors or remove them before saving.', {
+      toast.warning('Questions with errors are highlighted below — filter by Errors or click Save to jump straight to them.', {
         title: `${imported} — ${issues} need fixes`,
         duration: 8000,
       });
     } else {
-      toast.success('Review the extracted questions before saving.', { title: imported });
+      toast.success('Review and filter the imported questions below before saving.', { title: imported });
     }
-    requestAnimationFrame(() => scrollTo(fitting[0].key));
+    revealAndScrollTo(fitting[0].key, true);
   };
 
   const onAiAccepted = useCallback((drafts: QuestionDraft[]) => setAiAccepted(drafts), []);
@@ -589,11 +607,28 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
       return;
     }
     setSubmitted(true);
-    const firstInvalid = questions.find(q => !isDraftValid(q) || kindError(q) || inBank.has(q.key));
-    if (firstInvalid) {
-      if (kind && questions.some(q => kindError(q))) toast.error(kindToast(kind));
-      else if (inBank.has(firstInvalid.key)) toast.error('Some questions already exist in this course — change them before saving.');
-      requestAnimationFrame(() => scrollTo(firstInvalid.key));
+    const invalidEntries = questions
+      .map((q, idx) => ({ q, idx }))
+      .filter(({ q }) => hasDraftError(q));
+    if (invalidEntries.length > 0) {
+      const nums = invalidEntries.slice(0, 8).map(e => `#${e.idx + 1}`).join(', ') + (invalidEntries.length > 8 ? '…' : '');
+      if (kind && questions.some(q => kindError(q))) {
+        toast.error(kindToast(kind), {
+          title: `${invalidEntries.length} question${invalidEntries.length === 1 ? '' : 's'} need fixes (${nums})`,
+          duration: 8000,
+        });
+      } else if (inBank.has(invalidEntries[0].q.key)) {
+        toast.error(`Some questions already exist in this course (${nums}) — change them before saving.`, {
+          title: 'Cannot save yet',
+          duration: 8000,
+        });
+      } else {
+        toast.error(
+          `${invalidEntries.length} question${invalidEntries.length === 1 ? '' : 's'} have errors (${nums}). Fix the highlighted fields before saving.`,
+          { title: 'Cannot save yet', duration: 8000 },
+        );
+      }
+      revealAndScrollTo(invalidEntries[0].q.key);
       return;
     }
     if (locationNote || questions.length === 0) return;
@@ -619,7 +654,7 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
       }
       // Batch field errors carry "questions[i]." — jump to that question.
       const target = error.questionIndex != null ? questions[error.questionIndex] : undefined;
-      if (target) requestAnimationFrame(() => scrollTo(target.key));
+      if (target) revealAndScrollTo(target.key);
       else listRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } finally {
       setSaving(false);
@@ -927,48 +962,167 @@ export function QuestionFormPage({ mode }: { mode: 'create' | 'edit' }) {
             );
           })()}
 
-          {/* Manual mode header */}
-          {!isEdit && createMode === 'manual' && (
-            <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-              <h3 className="text-base font-semibold text-content">
-                Drafting Questions <span className="text-content-soft font-normal">({questions.length})</span>
-              </h3>
+          {/* Manual mode header + inline filter bar */}
+          {!isEdit && createMode === 'manual' && (() => {
+            const draftEntries = questions.map((q, idx) => ({ q, idx, hasError: hasDraftError(q) }));
+            const errorEntries = draftEntries.filter(e => e.hasError);
+            const validEntries = draftEntries.filter(e => !e.hasError);
+            const presentTypes = [...new Set(questions.map(q => q.type))];
+            const activeTypeFilter =
+              draftTypeFilter === 'ALL' || presentTypes.includes(draftTypeFilter as QuestionDraft['type'])
+                ? draftTypeFilter
+                : 'ALL';
+            const filteredEntries = draftEntries.filter(e => {
+              if (draftFilter === 'errors' && !e.hasError) return false;
+              if (draftFilter === 'valid' && e.hasError) return false;
+              if (activeTypeFilter !== 'ALL' && e.q.type !== activeTypeFilter) return false;
+              return true;
+            });
+
+            return (
+              <>
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="text-base font-semibold text-content">
+                      Drafting Questions <span className="text-content-soft font-normal">({questions.length})</span>
+                    </h3>
+                    {questions.length > 0 && (
+                      <span className="text-xs text-content-subtle">
+                        <span className="text-success font-medium">{validEntries.length} valid</span>
+                        {' · '}
+                        <span className={errorEntries.length > 0 ? 'text-danger font-medium' : 'text-content-subtle'}>
+                          {errorEntries.length} with errors
+                        </span>
+                      </span>
+                    )}
+                  </div>
+
+                  {questions.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="inline-flex items-center rounded-[8px] border border-line bg-surface p-0.5 gap-0.5">
+                        {([
+                          { key: 'all', label: `All (${questions.length})` },
+                          { key: 'errors', label: `Errors (${errorEntries.length})` },
+                          { key: 'valid', label: `Valid (${validEntries.length})` },
+                        ] as const).map(tab => (
+                          <button
+                            key={tab.key}
+                            type="button"
+                            onClick={() => setDraftFilter(tab.key)}
+                            className={`px-2.5 py-1 rounded-[6px] text-xs font-medium transition-colors cursor-pointer ${
+                              draftFilter === tab.key
+                                ? 'bg-brand-600 text-white'
+                                : 'text-content-secondary hover:bg-surface-alt'
+                            }`}
+                          >
+                            {tab.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      {presentTypes.length > 1 && (
+                        <select
+                          aria-label="Filter by question type"
+                          value={activeTypeFilter}
+                          onChange={e => setDraftTypeFilter(e.target.value)}
+                          className="h-8 px-2.5 rounded-[8px] border border-line bg-surface text-xs text-content-secondary focus:outline-none focus:ring-2 focus:ring-brand-600/20"
+                        >
+                          <option value="ALL">All types</option>
+                          {presentTypes.map(t => (
+                            <option key={t} value={t}>{typeLabel(t)}</option>
+                          ))}
+                        </select>
+                      )}
+
+                      {errorEntries.length > 0 && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => revealAndScrollTo(errorEntries[0].q.key)}
+                        >
+                          Jump to error (#{errorEntries[0].idx + 1})
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Manual mode — question blocks scroll with the page; the side panel stays pinned */}
+                <div ref={listRef} className="space-y-3 scroll-mt-5">
+                  {questions.length === 0 ? (
+                    <div className="card p-10 text-center space-y-2">
+                      <p className="text-base font-medium text-content-secondary">No unsaved questions yet</p>
+                      <p className="text-sm text-content-subtle">
+                        {groupCtx.mode === 'new'
+                          ? 'A question group requires at least 1 question — click “Add Question” to write one.'
+                          : 'Use “Add Question” or import an Excel, Word, or PDF file.'}
+                      </p>
+                    </div>
+                  ) : filteredEntries.length === 0 ? (
+                    <div className="card p-8 text-center space-y-3">
+                      <p className="text-sm text-content-subtle">
+                        {draftFilter === 'errors'
+                          ? 'No questions with errors under this filter.'
+                          : draftFilter === 'valid'
+                            ? 'No completely valid questions under this filter.'
+                            : 'No questions match the selected type filter.'}
+                      </p>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => { setDraftFilter('all'); setDraftTypeFilter('ALL'); }}
+                      >
+                        Show all questions
+                      </Button>
+                    </div>
+                  ) : (
+                    filteredEntries.map(({ q, idx }) => (
+                      <div key={q.key} id={q.key} className="scroll-mt-4">
+                        <QuestionFormBlock
+                          q={q}
+                          index={idx}
+                          onChange={updated => updateQuestion(idx, updated)}
+                          showErrors={submitted || Boolean(q.importIssue)}
+                          removable={!isEdit}
+                          onRemove={() => (isKept(q) ? setConfirmRemove(idx) : remove(idx))}
+                          onDuplicate={isEdit ? undefined : () => duplicateQuestion(idx)}
+                          duplicateError={inBank.has(q.key) ? 'This question already exists in this course. Change its content or answers before saving, or remove it.' : undefined}
+                          canMoveUp={idx > 0}
+                          canMoveDown={idx < questions.length - 1}
+                          onMoveUp={isEdit ? undefined : () => move(idx, -1)}
+                          onMoveDown={isEdit ? undefined : () => move(idx, 1)}
+                          allowedTypes={allowedTypes}
+                          kindError={submitted || Boolean(q.importIssue) ? kindError(q) : undefined}
+                        />
+                      </div>
+                    ))
+                  )}
+                </div>
+              </>
+            );
+          })()}
+
+          {isEdit && (
+            <div ref={listRef} className="space-y-3 scroll-mt-5">
+              {questions.map((q, i) => (
+                <div key={q.key} id={q.key} className="scroll-mt-4">
+                  <QuestionFormBlock
+                    q={q}
+                    index={i}
+                    onChange={updated => updateQuestion(i, updated)}
+                    showErrors={submitted}
+                    removable={false}
+                    onRemove={() => {}}
+                    duplicateError={inBank.has(q.key) ? 'This question already exists in this course. Change its content or answers before saving, or remove it.' : undefined}
+                    canMoveUp={false}
+                    canMoveDown={false}
+                    allowedTypes={allowedTypes}
+                    kindError={submitted ? kindError(q) : undefined}
+                  />
+                </div>
+              ))}
             </div>
           )}
-
-          {/* Manual mode — question blocks scroll with the page; the side panel stays pinned */}
-          <div ref={listRef} className={`space-y-3 scroll-mt-5 ${createMode === 'manual' ? '' : 'hidden'}`}>
-            {questions.length === 0 && (
-              <div className="card p-10 text-center space-y-2">
-                <p className="text-base font-medium text-content-secondary">No unsaved questions yet</p>
-                <p className="text-sm text-content-subtle">
-                  {groupCtx.mode === 'new'
-                    ? 'A question group requires at least 1 question — click “Add Question” to write one.'
-                    : 'Use “Add Question” or import a PDF or Word file.'}
-                </p>
-              </div>
-            )}
-            {questions.map((q, i) => (
-              <div key={q.key} id={q.key} className="scroll-mt-4">
-                <QuestionFormBlock
-                  q={q}
-                  index={i}
-                  onChange={updated => updateQuestion(i, updated)}
-                  showErrors={submitted}
-                  removable={!isEdit}
-                  onRemove={() => (isKept(q) ? setConfirmRemove(i) : remove(i))}
-                  onDuplicate={isEdit ? undefined : () => duplicateQuestion(i)}
-                  duplicateError={inBank.has(q.key) ? 'This question already exists in this course. Change its content or answers before saving, or remove it.' : undefined}
-                  canMoveUp={i > 0}
-                  canMoveDown={i < questions.length - 1}
-                  onMoveUp={isEdit ? undefined : () => move(i, -1)}
-                  onMoveDown={isEdit ? undefined : () => move(i, 1)}
-                  allowedTypes={allowedTypes}
-                  kindError={submitted ? kindError(q) : undefined}
-                />
-              </div>
-            ))}
-          </div>
         </div>
 
         <QuestionSidePanel

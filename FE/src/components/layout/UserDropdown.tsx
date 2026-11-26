@@ -14,7 +14,7 @@ import { useCurrentSubscription } from '@/services/studentSubscription.service';
  * Header user menu (top-right) with role-aware navigation:
  *   - Profile → students use the header-based student profile route; managers
  *               and admins use the dashboard profile route.
- *   - Students also get a quick link to the Question Notebook.
+ *   - Students also get quick links to Subscription, My Discounts, and Payments.
  *   - Under the name: a student's ACTIVE plan (SB-02, 'Free' without one); the role for others.
  *   - Theme   → INSTANTLY toggles to the next registered theme via
  *               useTheme().toggleTheme() — cycles dynamically through all
@@ -164,41 +164,31 @@ export function UserDropdown({ avatarOnly = false }: { avatarOnly?: boolean }) {
                 type="button"
                 role="menuitem"
                 data-menu-item
-                onClick={() => handleNavigate(ROUTES.studentQuestionNotebook)}
+                onClick={() => handleNavigate(ROUTES.studentSubscription)}
                 className={menuItemClass}
               >
-                <Icon.Book className="w-4 h-4 text-muted-foreground" />
-                Question Notebook
+                <Icon.Package className="w-4 h-4 text-muted-foreground" />
+                Subscription
               </button>
               <button
                 type="button"
                 role="menuitem"
                 data-menu-item
-                onClick={() => handleNavigate(ROUTES.studentQuestionIssues)}
+                onClick={() => handleNavigate(ROUTES.studentDiscounts)}
                 className={menuItemClass}
               >
-                <Icon.ClipboardList className="w-4 h-4 text-muted-foreground" />
-                My Question Reports
+                <Icon.Award className="w-4 h-4 text-muted-foreground" />
+                My Discounts
               </button>
               <button
                 type="button"
                 role="menuitem"
                 data-menu-item
-                onClick={() => handleNavigate(ROUTES.studentDiscussions)}
+                onClick={() => handleNavigate(ROUTES.studentPayments)}
                 className={menuItemClass}
               >
-                <Icon.Users className="w-4 h-4 text-muted-foreground" />
-                Community
-              </button>
-              <button
-                type="button"
-                role="menuitem"
-                data-menu-item
-                onClick={() => handleNavigate(ROUTES.studentContributions)}
-                className={menuItemClass}
-              >
-                <Icon.FileText className="w-4 h-4 text-muted-foreground" />
-                My Contributions
+                <Icon.Archive className="w-4 h-4 text-muted-foreground" />
+                Payments
               </button>
             </>
           )}

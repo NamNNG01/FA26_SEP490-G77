@@ -400,12 +400,59 @@ public class AiFlashcardApiTest {
     @Test
     void generateMapsPdfWithoutTextLayer() throws Exception {
         User student = f.account(User.ROLE_STUDENT);
-        MockMultipartFile file = new MockMultipartFile("file", "notes.pdf", "application/pdf",
-                "not really a pdf".getBytes(StandardCharsets.UTF_8));
+        byte[] blankPdf;
+        try (var doc = new org.apache.pdfbox.pdmodel.PDDocument();
+             var out = new java.io.ByteArrayOutputStream()) {
+            doc.addPage(new org.apache.pdfbox.pdmodel.PDPage());
+            doc.save(out);
+            blankPdf = out.toByteArray();
+        }
+        MockMultipartFile file = new MockMultipartFile("file", "scan.pdf", "application/pdf", blankPdf);
 
         mvc.perform(multipart(URL).file(file).with(as(student)))
                 .andExpect(status().isUnprocessableEntity())
-                .andExpect(jsonPath("$.data.code").value("PDF_NO_TEXT_LAYER"));
+                .andExpect(jsonPath("$.data.code").value("PDF_NO_TEXT_LAYER"))
+                .andExpect(jsonPath("$.message").value("PDF không có lớp văn bản để đọc"));
+    }
+
+    @Test
+    void generateMapsInvalidProtectedAndOversizedPdfs() throws Exception {
+        User student = f.account(User.ROLE_STUDENT);
+
+        MockMultipartFile nonPdf = new MockMultipartFile("file", "notes.pdf", "application/pdf",
+                "not really a pdf".getBytes(StandardCharsets.UTF_8));
+        mvc.perform(multipart(URL).file(nonPdf).with(as(student)))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.data.code").value("INVALID_FILE"))
+                .andExpect(jsonPath("$.message").value("PDF bị hỏng hoặc không phải PDF"));
+
+        byte[] protectedPdf;
+        try (var doc = new org.apache.pdfbox.pdmodel.PDDocument();
+             var out = new java.io.ByteArrayOutputStream()) {
+            doc.addPage(new org.apache.pdfbox.pdmodel.PDPage());
+            var ap = new org.apache.pdfbox.pdmodel.encryption.AccessPermission();
+            ap.setCanExtractContent(false);
+            var spp = new org.apache.pdfbox.pdmodel.encryption.StandardProtectionPolicy("owner123", "user123", ap);
+            doc.protect(spp);
+            doc.save(out);
+            protectedPdf = out.toByteArray();
+        }
+        mvc.perform(multipart(URL).file(new MockMultipartFile("file", "locked.pdf", "application/pdf", protectedPdf)).with(as(student)))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.data.code").value("PDF_PROTECTED"));
+
+        byte[] tooManyPagesPdf;
+        try (var doc = new org.apache.pdfbox.pdmodel.PDDocument();
+             var out = new java.io.ByteArrayOutputStream()) {
+            for (int i = 0; i < 501; i++) {
+                doc.addPage(new org.apache.pdfbox.pdmodel.PDPage());
+            }
+            doc.save(out);
+            tooManyPagesPdf = out.toByteArray();
+        }
+        mvc.perform(multipart(URL).file(new MockMultipartFile("file", "501pages.pdf", "application/pdf", tooManyPagesPdf)).with(as(student)))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.data.code").value("PDF_TOO_LARGE"));
     }
 
     @Test
