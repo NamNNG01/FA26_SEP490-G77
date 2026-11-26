@@ -29,7 +29,7 @@ public class RestAiClient implements AiClient {
             String baseUrl,
             @Value("${app.ai.api-key:}")
             String apiKey,
-            @Value("${app.ai.model:gemini-2.5-flash}")
+            @Value("${app.ai.model:gemini-3.5-flash}")
             String defaultModel,
             // Must exceed the longest caller timeout (AI-02 material: 120 s); it only frees the thread of a call
             // the caller already gave up on, since CompletableFuture timeouts do not abort the HTTP request.

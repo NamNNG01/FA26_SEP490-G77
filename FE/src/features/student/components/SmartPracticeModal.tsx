@@ -40,8 +40,8 @@ import type { TakeAs } from '../examModes';
 
 const DEFAULT_POLL_MS = 2000;
 
-/** The AI tab is hidden for now: the modal opens on Random whatever `initialMode` asks. Flip to bring it back. */
-const AI_ENABLED = false;
+/** AI tab on; a module-focused open (Focus next) still starts on Random, since AI-01 has no focusModuleId. */
+const AI_ENABLED = true;
 
 export type SmartPracticeMode = 'AI' | 'RANDOM';
 
@@ -129,7 +129,7 @@ export function SmartPracticeModal({
   focusModule?: { id: number | null; name: string } | null;
 }) {
   const navigate = useNavigate();
-  const startMode: SmartPracticeMode = AI_ENABLED ? initialMode : 'RANDOM';
+  const startMode: SmartPracticeMode = AI_ENABLED && !focusModule ? initialMode : 'RANDOM';
   const [mode, setMode] = useState<SmartPracticeMode>(startMode);
   /** Random: take the new exam as an Exam (timed) or as Practice (each answer checked at once). */
   const [takeAs, setTakeAs] = useState<TakeAs>('PRACTICE');
