@@ -117,6 +117,7 @@ export function SmartPracticeModal({
   initialCourseId,
   initialMode = 'AI',
   lockCourse = false,
+  focusModule = null,
 }: {
   open: boolean;
   onClose: () => void;
@@ -124,6 +125,8 @@ export function SmartPracticeModal({
   initialCourseId?: number | null;
   initialMode?: SmartPracticeMode;
   lockCourse?: boolean;
+  /** Personalized practice of this one module only (id null = the course questions outside any module). */
+  focusModule?: { id: number | null; name: string } | null;
 }) {
   const navigate = useNavigate();
   const startMode: SmartPracticeMode = AI_ENABLED ? initialMode : 'RANDOM';
@@ -152,6 +155,8 @@ export function SmartPracticeModal({
   const [plan, setPlan] = useState<PracticePlan | null>(null);
   const [planError, setPlanError] = useState<string | null>(null);
   const [planLoading, setPlanLoading] = useState(false);
+  /** The module this practice is limited to; the student can widen it back to the whole course. */
+  const [focus, setFocus] = useState<{ id: number | null; name: string } | null>(null);
 
   const [phase, setPhase] = useState<Phase>('form');
   const [busy, setBusy] = useState(false);
@@ -184,7 +189,8 @@ export function SmartPracticeModal({
     setMode(startMode);
     setTakeAs('PRACTICE');
     setMinutes(String(PRACTICE_MINUTES.default));
-    setTitle('');
+    setTitle(focusModule ? `${focusModule.name} practice`.slice(0, TITLE_MAX) : '');
+    setFocus(focusModule);
     resetCounts(startMode);
     setExamType('QUIZ');
     setDifficulty('');
@@ -201,7 +207,7 @@ export function SmartPracticeModal({
     setRandomError(null);
     setStarted(null);
     setResult(null);
-  }, [open, initialCourseId, startMode, courses]);
+  }, [open, initialCourseId, startMode, courses, focusModule]);
 
   useEffect(() => stopPolling, []);
 
@@ -262,7 +268,8 @@ export function SmartPracticeModal({
   };
 
   const limits = limitsOf(mode);
-  const smart = mode === 'RANDOM' && allocation === 'SMART';
+  const smart = mode === 'RANDOM' && (allocation === 'SMART' || focus != null);
+  const focusModuleId = smart && focus ? (focus.id ?? 0) : undefined;
   // Random with modules picked: the count is set per module and the total is their sum.
   const perModule = mode === 'RANDOM' && !smart && moduleIds.length > 0;
   const moduleCountErrors: Record<string, string | undefined> = {};
@@ -317,6 +324,7 @@ export function SmartPracticeModal({
           examType,
           difficulty: difficulty || undefined,
           allocation: 'SMART',
+          focusModuleId,
         })
         .then(p => {
           if (!cancelled) setPlan(p);
@@ -332,7 +340,7 @@ export function SmartPracticeModal({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [open, phase, smart, courseId, countNum, countInvalid, examType, difficulty, limits.minutes.max]);
+  }, [open, phase, smart, courseId, countNum, countInvalid, examType, difficulty, limits.minutes.max, focusModuleId]);
 
   const generateAi = async () => {
     setBusy(true);
@@ -373,6 +381,7 @@ export function SmartPracticeModal({
         title: title.trim(),
         mode: takeAs,
         allocation: smart ? 'SMART' : undefined,
+        focusModuleId,
       });
       onClose();
       navigate(studentTakeExamPath(created.examId, takeAs));
@@ -427,7 +436,9 @@ export function SmartPracticeModal({
     <Modal open={open} onClose={() => !busy && onClose()} title="Create Practice Exam" size="lg" footer={footer}
       description={phase === 'form' && (mode === 'AI'
         ? 'The AI looks at the questions you got wrong in a course and builds a practice exam focused on your weak modules (about 70 % weak, 20 % medium, 10 % strong). You need at least 5 finished exams in the course.'
-        : 'Questions from the course question bank, personalized to your weak spots or from the modules you pick. Practice exams do not count towards your course progress.')}
+        : focus
+          ? `Questions from ${focus.name} only: your open mistakes there first, then the ones you have not seen yet. Practice exams do not count towards your course progress.`
+          : 'Questions from the course question bank, personalized to your weak spots or from the modules you pick. Practice exams do not count towards your course progress.')}
       error={mode === 'RANDOM' ? randomError && <Alert type="error" message={randomError} /> : error && <AiErrorAlert error={error} />}>
       <div className="space-y-5">
         {phase === 'form' && (
@@ -526,7 +537,24 @@ export function SmartPracticeModal({
                     )}
                     <div className="min-w-0 space-y-1.5 sm:col-span-2">
                       <span className="block text-sm font-medium text-content-secondary">Questions from</span>
-                      <AllocationPicker value={allocation} onChange={setAllocation} />
+                      {focus ? (
+                        <div className="flex flex-wrap items-center gap-3 rounded-[12px] border border-primary bg-primary-light px-3 py-3">
+                          <Icon.Target className="w-5 h-5 flex-shrink-0 text-primary" />
+                          <span className="min-w-0 flex-1 text-sm">
+                            <span className="block font-semibold text-content break-words">{focus.name}</span>
+                            <span className="block text-xs text-content-soft">This module only, personalized to your mistakes in it.</span>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setFocus(null)}
+                            className="text-xs font-medium text-primary hover:underline"
+                          >
+                            Whole course instead
+                          </button>
+                        </div>
+                      ) : (
+                        <AllocationPicker value={allocation} onChange={setAllocation} />
+                      )}
                     </div>
                     <Select
                       label="Exam Type"

@@ -28,7 +28,9 @@ public final class PracticeDtos {
                          @Size(max = 50) List<@NotNull @jakarta.validation.Valid ModuleQuestionCount> moduleQuestionCounts,
                          /** SMART: questionCount is spread over the modules by the student's weak spots (categoryIds and
                           *  moduleQuestionCounts are ignored); CUSTOM or null: as picked. */
-                         @Pattern(regexp = "SMART|CUSTOM") String allocation) {}
+                         @Pattern(regexp = "SMART|CUSTOM") String allocation,
+                         /** SMART only: draw from this one module (0 = the course questions outside any module). */
+                         @PositiveOrZero Long focusModuleId) {}
 
     /** One module of a SMART split; categoryId null = course questions outside any module. */
     @JsonInclude(JsonInclude.Include.ALWAYS)

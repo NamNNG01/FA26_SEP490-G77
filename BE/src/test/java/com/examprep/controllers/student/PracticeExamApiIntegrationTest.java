@@ -280,6 +280,14 @@ class PracticeExamApiIntegrationTest {
         assertEquals(10, drawn.size());
         assertTrue(drawn.contains(ioWrong.getQuestionId()));
 
+        // One module only: every question comes from IO; more than IO holds is 422; General (0) has none here.
+        String focused = "{\"courseId\":" + course.getCourseId() + ",\"questionCount\":%d,\"durationMinutes\":30,\"allocation\":\"SMART\",\"focusModuleId\":%d}";
+        JsonNode ioOnly = data(create(student, focused.formatted(3, io.getModuleId())).andExpect(status().isCreated()));
+        assertEquals(List.of(io.getModuleId()), em.createQuery("select distinct eq.question.module.moduleId from ExamQuestion eq where eq.exam.examId = :e", Long.class)
+                .setParameter("e", ioOnly.path("examId").asLong()).getResultList());
+        create(student, focused.formatted(4, io.getModuleId())).andExpect(status().isUnprocessableEntity());
+        create(student, focused.formatted(1, 0)).andExpect(status().isUnprocessableEntity());
+
         mvc.perform(get("/api/v1/student/ai/insights").param("courseId", course.getCourseId().toString()).with(as(student)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.stillWrong").value(1))

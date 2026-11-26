@@ -134,6 +134,12 @@ export function StudentWeaknessReportPage() {
     studentAiService.getInsights(Number(courseId)),
   );
   const [practiceOpen, setPracticeOpen] = useState(false);
+  /** Set by a "Focus next" card: practise that module only. Kept in state so the modal gets a stable object. */
+  const [practiceModule, setPracticeModule] = useState<{ id: number | null; name: string } | null>(null);
+  const openPractice = (module: { id: number | null; name: string } | null) => {
+    setPracticeModule(module);
+    setPracticeOpen(true);
+  };
 
   return (
     <div className={`${STUDENT_PAGE_CLASS} space-y-[clamp(1.25rem,2.5vw,1.75rem)]`}>
@@ -149,7 +155,7 @@ export function StudentWeaknessReportPage() {
         title="Weakness Analysis"
         subtitle={courseTitle ? `Where you stand in ${courseTitle} and what to practise next.` : 'Where you stand and what to practise next.'}
         action={
-          <Button icon={<Icon.Target className="w-4 h-4" />} onClick={() => setPracticeOpen(true)}>
+          <Button icon={<Icon.Target className="w-4 h-4" />} onClick={() => openPractice(null)}>
             Personalized practice
           </Button>
         }
@@ -163,7 +169,7 @@ export function StudentWeaknessReportPage() {
       ) : insights.error || !insights.data ? (
         <LoadError message={getApiErrorMessage(insights.error, 'Failed to load your results.')} onRetry={insights.reload} />
       ) : (
-        <Standing insights={insights.data} courseId={courseId} onPractice={() => setPracticeOpen(true)} />
+        <Standing insights={insights.data} courseId={courseId} onPractice={openPractice} />
       )}
 
       <AiAnalysis userId={userId} courseId={courseId} />
@@ -174,6 +180,7 @@ export function StudentWeaknessReportPage() {
         courses={[{ courseId: Number(courseId), title: courseTitle ?? 'This course' }]}
         initialCourseId={Number(courseId)}
         lockCourse
+        focusModule={practiceModule}
       />
     </div>
   );
@@ -181,7 +188,15 @@ export function StudentWeaknessReportPage() {
 
 // ------------------------------------------------------------- standing (no AI)
 
-function Standing({ insights: s, courseId, onPractice }: { insights: Insights; courseId: string; onPractice: () => void }) {
+function Standing({
+  insights: s,
+  courseId,
+  onPractice,
+}: {
+  insights: Insights;
+  courseId: string;
+  onPractice: (module: { id: number | null; name: string }) => void;
+}) {
   const focus = s.modules.filter(m => m.mastery !== 'MASTERED').slice(0, FOCUS_COUNT);
   return (
     <div className="space-y-[clamp(1rem,2vw,1.25rem)]">
@@ -232,8 +247,13 @@ function Standing({ insights: s, courseId, onPractice }: { insights: Insights; c
                 </div>
                 <p className="text-xs text-content-soft">{moduleReason(m)}</p>
                 <div className="mt-auto flex flex-wrap gap-2 pt-1">
-                  <Button size="sm" variant="outline" icon={<Icon.Target className="w-3.5 h-3.5" />} onClick={onPractice}>
-                    Practice
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    icon={<Icon.Target className="w-3.5 h-3.5" />}
+                    onClick={() => onPractice({ id: m.categoryId, name: m.name })}
+                  >
+                    Practice this module
                   </Button>
                   <Link
                     to={studentModulePath(courseId, m.categoryId ?? 'general')}

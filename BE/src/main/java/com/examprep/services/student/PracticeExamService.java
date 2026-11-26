@@ -161,6 +161,9 @@ public class PracticeExamService {
     private SmartSplit smartSplit(Long userId, Long courseId, PracticeDtos.Create request) {
         if (request.questionCount() == null) throw new BadRequestException("questionCount is required.");
         List<QuestionCandidate> pool = findCandidates(courseId, typesOf(request.examType()), true, List.of(-1L), request.difficulty());
+        Long focus = request.focusModuleId();
+        // The pool holds only this course's visible modules, so a foreign or hidden module just leaves it empty (422).
+        if (focus != null) pool = pool.stream().filter(c -> focus == 0 ? c.moduleId() == null : focus.equals(c.moduleId())).toList();
         if (pool.size() < request.questionCount()) throw notEnough(pool.size());
         StudyPlanner.Snapshot snapshot = planner.snapshot(userId, courseId, pool);
         return new SmartSplit(snapshot, StudyPlanner.allocate(snapshot.modules(), request.questionCount()));

@@ -40,6 +40,8 @@ export interface PracticeExamRequest {
   mode?: 'EXAM' | 'PRACTICE';
   /** SMART: the BE spreads questionCount over the modules by the student's weak spots (module fields are ignored). */
   allocation?: 'SMART' | 'CUSTOM';
+  /** With SMART: only this module (0 = the course questions outside any module). */
+  focusModuleId?: number;
 }
 
 /** One module of a SMART split (POST /student/practice-exams/plan); categoryId null = questions outside any module. */
