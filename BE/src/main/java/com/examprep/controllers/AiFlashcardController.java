@@ -45,7 +45,7 @@ public class AiFlashcardController {
             @RequestParam(name = "focusTopic", required = false) String focusTopic,
             @RequestParam(name = "courseId", required = false) Long courseId) {
         GenerateAccepted accepted = service.generate(user, file, text, numberOfCards, language, style, focusTopic, courseId);
-        return ResponseEntity.status(HttpStatus.ACCEPTED).body(ApiResponse.success(accepted, "Đã tiếp nhận yêu cầu"));
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(ApiResponse.success(accepted, "Request accepted"));
     }
 
     /** API 32: poll one generation; only its owner can see it (foreign/missing ids are both 404). */

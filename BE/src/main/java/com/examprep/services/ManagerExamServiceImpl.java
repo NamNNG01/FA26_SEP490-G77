@@ -76,7 +76,7 @@ public class ManagerExamServiceImpl implements ManagerExamService {
                 .map(Exam::getExamId)
                 .toList();
 
-        // Load toàn bộ dữ liệu của trang bằng batch queries
+        // Load all page data via batch queries
         List<ExamQuestion> directLinks =
                 links.findAllByExamIds(examIds);
 
@@ -86,7 +86,7 @@ public class ManagerExamServiceImpl implements ManagerExamService {
         List<ExamConfig> allConfigs =
                 configs.findAllByExamIds(examIds);
 
-        // Gom dữ liệu theo examId
+        // Group data by examId
         Map<Long, List<ExamQuestion>> directByExam =
                 directLinks.stream().collect(
                         Collectors.groupingBy(
@@ -114,13 +114,13 @@ public class ManagerExamServiceImpl implements ManagerExamService {
                         )
                 );
 
-        // Lấy ID của toàn bộ group trong trang
+        // Collect IDs of all groups in the page
         List<Long> groupIds = groupedLinks.stream()
                 .map(x -> x.getGroup().getGroupId())
                 .distinct()
                 .toList();
 
-        // Chỉ query questions nếu có group
+        // Only query questions if there are groups
         List<Question> groupedQuestions = groupIds.isEmpty()
                 ? List.of()
                 : questions.findAllByGroupIds(groupIds);
@@ -134,7 +134,7 @@ public class ManagerExamServiceImpl implements ManagerExamService {
                         )
                 );
 
-        // Mapping: không gọi repository trong vòng lặp này
+        // Mapping: do not call repositories inside this loop
         List<ExamResponse> items = new ArrayList<>(exams.size());
 
         for (Exam exam : exams) {
@@ -154,8 +154,8 @@ public class ManagerExamServiceImpl implements ManagerExamService {
 
             Map<Long, Question> all = new LinkedHashMap<>();
 
-            // Giữ thứ tự và cách tính unique question như logic cũ:
-            // direct questions trước, sau đó đến questions thuộc groups.
+            // Preserve ordering and unique question calculation:
+            // direct questions first, followed by questions in groups.
             for (ExamQuestion link : direct) {
                 Question q = link.getQuestion();
                 all.put(q.getQuestionId(), q);
@@ -190,7 +190,7 @@ public class ManagerExamServiceImpl implements ManagerExamService {
     ) {
         long start = System.nanoTime();
 
-        // 1. Validate request và kiểm tra quyền
+        // 1. Validate request and check permissions
         if (page < 0 || size < 1 || size > 100
                 || (long) page * size > Integer.MAX_VALUE) {
             throw bad("Invalid page or size (1-100).");
@@ -215,7 +215,7 @@ public class ManagerExamServiceImpl implements ManagerExamService {
 
         long validated = System.nanoTime();
 
-        // 2. Build Specification: giữ nguyên điều kiện nghiệp vụ
+        // 2. Build Specification: preserve business filter conditions
         Specification<Exam> filter = (root, query, cb) -> {
             Join<Exam, Course> c = root.join("course", JoinType.LEFT);
             Join<Exam, Module> m = root.join("module", JoinType.LEFT);
@@ -303,7 +303,7 @@ public class ManagerExamServiceImpl implements ManagerExamService {
 
         long built = System.nanoTime();
 
-        // 3. Execute query (có thể bao gồm cả query COUNT)
+        // 3. Execute query (may include COUNT query)
         Pageable pageable = PageRequest.of(
                 page,
                 size,
@@ -317,12 +317,12 @@ public class ManagerExamServiceImpl implements ManagerExamService {
 
         long queried = System.nanoTime();
 
-        // 4. Map entity sang response
+        // 4. Map entities to responses
         List<ExamResponse> items = mapExamPage(result.getContent(), false);
 
         long mapped = System.nanoTime();
 
-        // 5. Log thời gian từng giai đoạn
+        // 5. Log duration of each stage
         log.debug(
                 "EXAM_LIST_DEBUG | userId={} | page={} | size={} "
                         + "| kind={} | resultCount={} | totalElements={} "
@@ -433,7 +433,7 @@ public class ManagerExamServiceImpl implements ManagerExamService {
             }
         }
 
-// Giữ nguyên kiểm tra quyền và trạng thái.
+        // Preserve permission and status checks.
         for (var item : questionItems) {
             Question q = questionMap.get(item.getQuestionId());
             active(user, q, checked, courseId);

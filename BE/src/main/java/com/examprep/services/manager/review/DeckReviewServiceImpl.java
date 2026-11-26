@@ -184,9 +184,9 @@ public class DeckReviewServiceImpl implements DeckReviewService {
                 .build();
         reviewLogRepository.save(log);
 
-        String title = "Bộ flashcard đã được duyệt";
-        String courseTitle = deck.getCourse() == null ? "kho flashcard" : deck.getCourse().getTitle();
-        String content = "Bộ \"" + deck.getTitle() + "\" đã được duyệt cho \"" + courseTitle + "\".";
+        String title = "Flashcard deck approved";
+        String courseTitle = deck.getCourse() == null ? "flashcard library" : deck.getCourse().getTitle();
+        String content = "Your deck \"" + deck.getTitle() + "\" has been approved for \"" + courseTitle + "\".";
         reviewNotificationService.sendNotification(deck.getUser().getUserId(), title, content, "DECK_APPROVED", "DECK", String.valueOf(deckId), "/student/flashcards/" + deckId);
 
         return Map.of(
@@ -241,8 +241,8 @@ public class DeckReviewServiceImpl implements DeckReviewService {
         reviewLogRepository.save(log);
 
         boolean canResubmit = (deck.getResubmissionCount() == null || deck.getResubmissionCount() < 1);
-        String title = "Bộ flashcard chưa được duyệt";
-        String content = "Bộ \"" + deck.getTitle() + "\" bị từ chối. Lý do: " + reason.strip();
+        String title = "Flashcard deck not approved";
+        String content = "Your deck \"" + deck.getTitle() + "\" was rejected. Reason: " + reason.strip();
         reviewNotificationService.sendNotification(deck.getUser().getUserId(), title, content, "DECK_REJECTED", "DECK", String.valueOf(deckId), "/student/flashcards/" + deckId);
 
         return Map.of(

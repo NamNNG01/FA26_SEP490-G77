@@ -107,7 +107,6 @@ public class ExcelQuestionParser {
         String rubricCell = readCell(row, colMap.get("rubric"), formatter);
         String codeConfigCell = readCell(row, colMap.get("codeconfig"), formatter).trim();
         String testCasesCell = readCell(row, colMap.get("testcases"), formatter).trim();
-        String diagramXml = readCell(row, colMap.get("diagramxml"), formatter).trim();
 
         List<String[]> rawOptions = new ArrayList<>();
         for (Map.Entry<String, Integer> entry : optionColumns) {
@@ -142,7 +141,6 @@ public class ExcelQuestionParser {
                 List.of(),
                 codeConfigCell.isEmpty() ? null : codeConfigCell,
                 testCaseLines,
-                diagramXml,
                 preErrors
         ));
     }

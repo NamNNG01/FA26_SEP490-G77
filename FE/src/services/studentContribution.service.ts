@@ -3,7 +3,7 @@ import type { ApiResponse } from '@/types/api';
 import type { StudentPage } from './studentLearning.service';
 import type { CodeQuestionConfig, CodeTestCaseDto } from './question.service';
 
-export type ContributionType = 'question' | 'tip' | 'document';
+export type ContributionType = 'question' | 'document';
 export type ContributionStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED';
 
 export interface ContributionItem {
@@ -72,7 +72,7 @@ function query(params: Record<string, string | number | undefined | null>) {
 
 function normalizeContributionType(value: string): ContributionType {
   const normalized = value.toLowerCase();
-  return normalized === 'tip' || normalized === 'document' ? normalized : 'question';
+  return normalized === 'document' ? normalized : 'question';
 }
 
 function normalizeContributionItem(item: ContributionItem): ContributionItem {
@@ -106,11 +106,6 @@ export const studentContributionService = {
 
   async createQuestion(body: QuestionContributionBody) {
     const res = await api.post<ApiResponse<{ contributionId: number; status: ContributionStatus; createdAt: string }>>('/student/contributions', body);
-    return res.data;
-  },
-
-  async createTip(body: { courseId: number; title: string; content: string; sourceReference?: string | null }) {
-    const res = await api.post<ApiResponse<{ contributionId: number; status: ContributionStatus }>>('/student/tips/contributions', body);
     return res.data;
   },
 

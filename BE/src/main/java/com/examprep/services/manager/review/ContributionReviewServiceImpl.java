@@ -174,9 +174,9 @@ public class ContributionReviewServiceImpl implements ContributionReviewService 
 
         saveReviewLog(c.getContributionId(), manager.getUserId(), "APPROVED", note);
 
-        String title = "Câu hỏi của bạn đã được duyệt";
-        String contribTitle = c.getTitle() != null ? c.getTitle() : "Đóng góp";
-        String content = "Câu hỏi \"" + contribTitle + "\" trong khóa \"" + course.getTitle() + "\" đã được duyệt và đưa vào ngân hàng câu hỏi.";
+        String title = "Your contributed question was approved";
+        String contribTitle = c.getTitle() != null ? c.getTitle() : "Contribution";
+        String content = "Your question \"" + contribTitle + "\" in course \"" + course.getTitle() + "\" has been approved and added to the question bank.";
         reviewNotificationService.sendNotification(
                 c.getUserId(), title, content, "CONTRIBUTION_APPROVED",
                 TARGET_TYPE, String.valueOf(c.getContributionId()),
@@ -218,9 +218,9 @@ public class ContributionReviewServiceImpl implements ContributionReviewService 
         saveReviewLog(c.getContributionId(), manager.getUserId(), "REJECTED", cleanReason);
 
         boolean canResubmit = c.getResubmissionCount() == null || c.getResubmissionCount() < 1;
-        String title = "Câu hỏi của bạn chưa được duyệt";
-        String content = "Câu hỏi bị từ chối. Lý do: " + cleanReason
-                + (canResubmit ? " Bạn còn 1 lần chỉnh sửa và gửi lại." : " Bạn đã dùng hết số lần gửi.");
+        String title = "Your contributed question was not approved";
+        String content = "Your question was rejected. Reason: " + cleanReason
+                + (canResubmit ? " You have 1 remaining attempt to edit and resubmit." : " You have used all submission attempts.");
         reviewNotificationService.sendNotification(
                 c.getUserId(), title, content, "CONTRIBUTION_REJECTED",
                 TARGET_TYPE, String.valueOf(c.getContributionId()),

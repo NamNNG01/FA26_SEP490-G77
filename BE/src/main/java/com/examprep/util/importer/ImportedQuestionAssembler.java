@@ -58,7 +58,6 @@ public class ImportedQuestionAssembler {
             List<String> sampleLines,
             String codeConfigJson,
             List<String> testCaseJsonLines,
-            String diagramXml,
             List<ImportErrorDto> preErrors
     ) {}
 

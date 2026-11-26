@@ -15,7 +15,7 @@ import java.util.Set;
  * Grades one auto-marked answer against its frozen {@code key_snapshot} (spec 1 and 6.4 rule 3).
  *
  * <p>All-or-nothing: a question only earns its {@code maxPoints} when every part of the answer is
- * right ("đúng hết mới được điểm"). A partially answered question scores 0.</p>
+ * right ("all-or-nothing scoring"). A partially answered question scores 0.</p>
  *
  * <p>The rubric types (ESSAY, DIAGRAM, DIAGRAM_ESSAY) are never graded here — they go to
  * {@code PENDING_AI} and are scored later by the AI worker (spec 6.4 rule 3).</p>

@@ -14,23 +14,23 @@ import java.util.Optional;
 public interface DeckBookmarkRepository extends JpaRepository<DeckBookmark, Long> {
 
     /**
-     * Kiểm tra xem deck có được bookmark bởi user không
+     * Check whether the deck is bookmarked by the user.
      */
     boolean existsByDeck_DeckIdAndUser_UserId(Long deckId, Long userId);
 
     /**
-     * Lấy bookmark nếu tồn tại
+     * Get the bookmark if it exists.
      */
     Optional<DeckBookmark> findByDeck_DeckIdAndUser_UserId(Long deckId, Long userId);
 
     /**
-     * Xóa bookmark
+     * Delete the bookmark.
      */
     void deleteByDeck_DeckIdAndUser_UserId(Long deckId, Long userId);
 
     /**
-     * Lấy danh sách bookmarked decks của user
-     * Chỉ lấy APPROVED decks hoặc decks của user
+     * Get the list of bookmarked decks for a user.
+     * Only includes APPROVED decks or decks owned by the user.
      */
     @Query("SELECT db FROM DeckBookmark db " +
             "WHERE db.user.userId = :userId " +
@@ -39,7 +39,7 @@ public interface DeckBookmarkRepository extends JpaRepository<DeckBookmark, Long
     Page<DeckBookmark> findBookmarkedDecks(@Param("userId") Long userId, Pageable pageable);
 
     /**
-     * Đếm số bookmarks của một deck
+     * Count bookmarks for a deck.
      */
     long countByDeck_DeckId(Long deckId);
 }

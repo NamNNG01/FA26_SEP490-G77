@@ -392,6 +392,6 @@ function emptyMessage(tab: 'Discussions' | 'My Discussions' | 'Tips' | 'Announce
 }
 
 function authorAvatar(author: DiscussionItem['author'], isAnonymous = false) {
-  const anonymousName = author.displayName.toLowerCase().includes('ẩn danh') || author.displayName.toLowerCase().includes('anonymous');
+  const anonymousName = author.displayName.toLowerCase().includes('anonymous');
   return isAnonymous || anonymousName ? '/images/anonymous_student.png' : author.avatarUrl || undefined;
 }

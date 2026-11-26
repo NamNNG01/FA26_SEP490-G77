@@ -5,7 +5,6 @@ import com.examprep.dto.question.AnswerOptionDto;
 import com.examprep.dto.question.QuestionCreateRequest;
 import com.examprep.dto.student.ContributionDetailDto;
 import com.examprep.dto.student.ContributionItemDto;
-import com.examprep.dto.student.TipContributionRequestDto;
 import com.examprep.entities.QuestionContribution;
 import com.examprep.exceptions.BadRequestException;
 import com.examprep.exceptions.BaseException;
@@ -129,36 +128,6 @@ public class StudentContributionServiceImpl implements StudentContributionServic
     }
 
     @Override
-    public Map<String, Object> createTipContribution(TipContributionRequestDto request, Long userId) {
-        if (request == null || request.getCourseId() == null) {
-            throw new BadRequestException("Invalid request data");
-        }
-        validateActiveEnrollment(request.getCourseId(), userId);
-
-        if (request.getTitle() == null || request.getTitle().isBlank() || request.getContent() == null || request.getContent().isBlank()) {
-            throw new BadRequestException("Title and content are required");
-        }
-
-        QuestionContribution contribution = QuestionContribution.builder()
-                .userId(userId)
-                .courseId(request.getCourseId())
-                .type("TIP")
-                .title(request.getTitle().trim())
-                .content(request.getContent().trim())
-                .sourceReference(request.getSourceReference())
-                .status("PENDING")
-                .resubmissionCount(0)
-                .build();
-
-        QuestionContribution saved = contributionRepository.save(contribution);
-
-        return Map.of(
-                "contributionId", saved.getContributionId(),
-                "status", saved.getStatus()
-        );
-    }
-
-    @Override
     @Transactional(readOnly = true)
     public Page<ContributionItemDto> listContributions(String type, String status, int page, int size, Long userId) {
         if (userId == null) {
@@ -205,10 +174,14 @@ public class StudentContributionServiceImpl implements StudentContributionServic
             throw new ForbiddenException("Only the owner can view this contribution");
         }
 
-        List<AnswerOptionDto> options = readJson(c.getOptionsJson(), new TypeReference<List<AnswerOptionDto>>() {});
-        Object answerKey = readJson(c.getAnswerKeyJson(), new TypeReference<Object>() {});
-        Object essayGradingRubric = readJson(c.getEssayGradingRubricJson(), new TypeReference<Object>() {});
-        Object questionMetadata = readJson(c.getQuestionMetadataJson(), new TypeReference<Object>() {});
+        List<AnswerOptionDto> options = readJson(c.getOptionsJson(), new TypeReference<>() {
+        });
+        Object answerKey = readJson(c.getAnswerKeyJson(), new TypeReference<>() {
+        });
+        Object essayGradingRubric = readJson(c.getEssayGradingRubricJson(), new TypeReference<>() {
+        });
+        Object questionMetadata = readJson(c.getQuestionMetadataJson(), new TypeReference<>() {
+        });
 
         return ContributionDetailDto.builder()
                 .contributionId(c.getContributionId())
@@ -226,8 +199,10 @@ public class StudentContributionServiceImpl implements StudentContributionServic
                 .difficulty(c.getDifficulty())
                 .essayGradingRubric(essayGradingRubric)
                 .questionMetadata(questionMetadata)
-                .codeConfig(readJson(c.getCodeConfigJson(), new TypeReference<com.examprep.dto.question.CodeConfigDto>() {}))
-                .testCases(readJson(c.getTestCasesJson(), new TypeReference<List<com.examprep.dto.question.TestCaseDto>>() {}))
+                .codeConfig(readJson(c.getCodeConfigJson(), new TypeReference<>() {
+                }))
+                .testCases(readJson(c.getTestCasesJson(), new TypeReference<>() {
+                }))
                 .sourceReference(c.getSourceReference())
                 .reviewNote(c.getReviewNote())
                 .resubmissionCount(c.getResubmissionCount())
@@ -256,55 +231,37 @@ public class StudentContributionServiceImpl implements StudentContributionServic
             throw new BaseException(ResponseCode.CONFLICT, "Contribution has already been resubmitted the maximum number of times", Map.of("code", "RESUBMISSION_LIMIT_REACHED"));
         }
 
-        if ("QUESTION".equals(c.getType())) {
-            QuestionCreateRequest qReq;
-            if (requestBody instanceof QuestionCreateRequest) {
-                qReq = (QuestionCreateRequest) requestBody;
-            } else {
-                qReq = objectMapper.convertValue(requestBody, QuestionCreateRequest.class);
-            }
-            if (qReq.getCourseId() == null) {
-                qReq.setCourseId(c.getCourseId());
-            }
-            validateActiveEnrollment(qReq.getCourseId(), userId);
-            questionValidator.validateOrThrow(QuestionPayload.from(qReq));
-            rejectIfQuestionAlreadyExists(qReq);
-
-            c.setCourseId(qReq.getCourseId());
-            c.setContent(qReq.getContent());
-            c.setModuleId(qReq.getModuleId());
-            c.setGroupId(qReq.getGroupId());
-            c.setQuestionType(qReq.getQuestionType());
-            c.setOptionsJson(writeJson(qReq.getOptions()));
-            c.setAnswerKeyJson(writeJson(qReq.getAnswerKey()));
-            c.setExplanation(qReq.getExplanation());
-            c.setDifficulty(qReq.getDifficulty());
-            c.setCategoryIds(null);
-            c.setEssayGradingRubricJson(writeJson(qReq.getEssayGradingRubric()));
-            c.setQuestionMetadataJson(writeJson(qReq.getQuestionMetadata()));
-            c.setCodeConfigJson(writeJson(qReq.getCodeConfig()));
-            c.setTestCasesJson(writeJson(qReq.getTestCases()));
-        } else if ("TIP".equals(c.getType())) {
-            TipContributionRequestDto tReq;
-            if (requestBody instanceof TipContributionRequestDto) {
-                tReq = (TipContributionRequestDto) requestBody;
-            } else if (requestBody instanceof Map) {
-                tReq = objectMapper.convertValue(requestBody, TipContributionRequestDto.class);
-            } else {
-                throw new BadRequestException("Invalid tip resubmission request");
-            }
-            if (tReq.getCourseId() == null) {
-                tReq.setCourseId(c.getCourseId());
-            }
-            validateActiveEnrollment(tReq.getCourseId(), userId);
-            if (tReq.getTitle() == null || tReq.getTitle().isBlank() || tReq.getContent() == null || tReq.getContent().isBlank()) {
-                throw new BadRequestException("Title and content are required");
-            }
-            c.setCourseId(tReq.getCourseId());
-            c.setTitle(tReq.getTitle().trim());
-            c.setContent(tReq.getContent().trim());
-            c.setSourceReference(tReq.getSourceReference());
+        if (!"QUESTION".equals(c.getType())) {
+            throw new BadRequestException("Only question contributions can be resubmitted");
         }
+
+        QuestionCreateRequest qReq;
+        if (requestBody instanceof QuestionCreateRequest) {
+            qReq = (QuestionCreateRequest) requestBody;
+        } else {
+            qReq = objectMapper.convertValue(requestBody, QuestionCreateRequest.class);
+        }
+        if (qReq.getCourseId() == null) {
+            qReq.setCourseId(c.getCourseId());
+        }
+        validateActiveEnrollment(qReq.getCourseId(), userId);
+        questionValidator.validateOrThrow(QuestionPayload.from(qReq));
+        rejectIfQuestionAlreadyExists(qReq);
+
+        c.setCourseId(qReq.getCourseId());
+        c.setContent(qReq.getContent());
+        c.setModuleId(qReq.getModuleId());
+        c.setGroupId(qReq.getGroupId());
+        c.setQuestionType(qReq.getQuestionType());
+        c.setOptionsJson(writeJson(qReq.getOptions()));
+        c.setAnswerKeyJson(writeJson(qReq.getAnswerKey()));
+        c.setExplanation(qReq.getExplanation());
+        c.setDifficulty(qReq.getDifficulty());
+        c.setCategoryIds(null);
+        c.setEssayGradingRubricJson(writeJson(qReq.getEssayGradingRubric()));
+        c.setQuestionMetadataJson(writeJson(qReq.getQuestionMetadata()));
+        c.setCodeConfigJson(writeJson(qReq.getCodeConfig()));
+        c.setTestCasesJson(writeJson(qReq.getTestCases()));
 
         c.setStatus("PENDING");
         c.setResubmissionCount(currentResubmissions + 1);

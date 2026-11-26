@@ -175,7 +175,7 @@ public class AdminSubscriptionPlanService {
                 && requested.size() == ordered.size()
                 && requested.equals(byId.keySet());
         if (!complete) {
-            throw ContestRules.invalid("orderedPlanIds", "Phải truyền đủ toàn bộ gói chưa xoá");
+            throw ContestRules.invalid("orderedPlanIds", "All active (non-deleted) plan IDs must be provided");
         }
 
         List<SubscriptionPlan> reordered = new ArrayList<>(ordered.size());
@@ -326,7 +326,7 @@ public class AdminSubscriptionPlanService {
     private static String planName(PlanWriteRequest req) {
         String name = req.planName() == null ? "" : req.planName().trim();
         if (name.isEmpty()) {
-            throw ContestRules.invalid("planName", "Tên gói không được để trống");
+            throw ContestRules.invalid("planName", "Plan name must not be blank");
         }
         return name;
     }
@@ -340,12 +340,12 @@ public class AdminSubscriptionPlanService {
             String value = feature.trim();
             if (value.isEmpty()) continue;
             if (value.length() > MAX_FEATURE_LENGTH) {
-                throw ContestRules.invalid("features", "Mỗi mục tối đa " + MAX_FEATURE_LENGTH + " ký tự");
+                throw ContestRules.invalid("features", "Each feature item must not exceed " + MAX_FEATURE_LENGTH + " characters");
             }
             normalized.add(value);
         }
         if (normalized.size() > MAX_FEATURES) {
-            throw ContestRules.invalid("features", "Tối đa " + MAX_FEATURES + " mục");
+            throw ContestRules.invalid("features", "At most " + MAX_FEATURES + " feature items are allowed");
         }
         return normalized;
     }

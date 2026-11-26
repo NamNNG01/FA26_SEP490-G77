@@ -247,7 +247,7 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
         long recentCount = discussionRepository.countByUser_UserIdAndCreatedAtAfter(
                 userId, Instant.now().minus(1, ChronoUnit.HOURS));
         if (recentCount >= MAX_POSTS_PER_HOUR) {
-            throw new BadRequestException("Bạn chỉ có thể đăng tối đa " + MAX_POSTS_PER_HOUR + " bài viết mỗi giờ. Vui lòng thử lại sau.");
+            throw new BadRequestException("You can post at most " + MAX_POSTS_PER_HOUR + " discussions per hour. Please try again later.");
         }
 
         if (request.getTitle() == null || request.getTitle().isBlank()) {
@@ -376,11 +376,11 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
         discussionRepository.save(d);
 
         if (!d.getUser().getUserId().equals(userId)) {
-            String commenterName = Boolean.TRUE.equals(comment.getIsAnonymous()) ? "Một học viên ẩn danh" : user.getFullName();
+            String commenterName = Boolean.TRUE.equals(comment.getIsAnonymous()) ? "An anonymous student" : user.getFullName();
             communityHelper.sendNotification(
                     d.getUser(),
-                    "Có bình luận mới trong bài viết của bạn",
-                    commenterName + " đã bình luận vào bài viết \"" + d.getTitle() + "\".",
+                    "New comment on your discussion",
+                    commenterName + " commented on your discussion \"" + d.getTitle() + "\".",
                     "COMMUNITY_COMMENT",
                     d.getDiscussionId()
             );
@@ -407,7 +407,7 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
 
         if (reportRepository.existsByReporter_UserIdAndDiscussion_DiscussionIdAndCommentIsNullAndStatus(
                 userId, discussionId, DiscussionReport.STATUS_PENDING)) {
-            throw new BadRequestException("Bạn đã báo cáo bài viết này và đang chờ Admin xử lý.");
+            throw new BadRequestException("You have already reported this post and it is pending Admin review.");
         }
 
         DiscussionReport report = DiscussionReport.builder()
@@ -433,7 +433,7 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
         }
         if (reportRepository.existsByReporter_UserIdAndComment_CommentIdAndStatus(
                 userId, commentId, DiscussionReport.STATUS_PENDING)) {
-            throw new BadRequestException("Bạn đã báo cáo bình luận này và đang chờ Admin xử lý.");
+            throw new BadRequestException("You have already reported this comment and it is pending Admin review.");
         }
 
         DiscussionReport report = DiscussionReport.builder()
@@ -512,7 +512,7 @@ public class StudentDiscussionServiceImpl implements StudentDiscussionService {
         Set<Long> upvotedIds = !discussionIds.isEmpty()
                 ? new HashSet<>(upvoteRepository.findUpvotedDiscussionIds(userId, discussionIds))
                 : Collections.emptySet();
-        Set<Long> bookmarkedIds = new HashSet<>(discussionIds); // Tất cả đều bookmarked
+        Set<Long> bookmarkedIds = new HashSet<>(discussionIds); // All items are bookmarked
 
         return discussions.map(d -> mapToDto(d, userId, upvotedIds, bookmarkedIds));
     }

@@ -60,7 +60,7 @@ public class DiscussionItemDto {
     @AllArgsConstructor
     public static class AuthorDto {
         /** Shown instead of the real identity of an anonymous post or comment. */
-        public static final String ANONYMOUS_DISPLAY_NAME = "Học sinh ẩn danh";
+        public static final String ANONYMOUS_DISPLAY_NAME = "Anonymous Student";
 
         private Long userId;
         private String displayName;

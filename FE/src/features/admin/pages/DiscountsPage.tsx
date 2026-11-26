@@ -129,7 +129,7 @@ const toPayload = (f: FormState): DiscountPayload => ({
 });
 const dateLabel = (value?: string | null) =>
   value
-    ? new Date(value).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })
+    ? new Date(value).toLocaleString("en-US", { timeZone: "Asia/Ho_Chi_Minh" })
     : "—";
 const badgeVariant = (status: string) =>
   status === "ACTIVE"

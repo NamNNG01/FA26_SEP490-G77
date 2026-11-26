@@ -9,7 +9,6 @@ import com.examprep.exceptions.ForbiddenException;
 import com.examprep.exceptions.ResourceConflictException;
 import com.examprep.exceptions.ResourceNotFoundException;
 import com.examprep.repositories.*;
-import com.examprep.services.student.StudentProgressService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,7 +23,6 @@ public class EnrollmentServiceImpl implements EnrollmentService {
     private final EnrollmentRepository enrollments;
     private final UserRepository users;
     private final PaymentService payments;
-    private final StudentProgressService progressService;
 
     @Override
     public EnrollmentResponses.Checkout checkout(Long userId, Long courseId, String discountCode) {
@@ -64,19 +62,7 @@ public class EnrollmentServiceImpl implements EnrollmentService {
         if (enrollment == null) return new EnrollmentResponses.State(false, null, 0, null);
         boolean active = Enrollment.STATUS_ACTIVE.equals(enrollment.getStatus());
         int stored = enrollment.getProgress() == null ? 0 : Math.max(0, Math.min(100, enrollment.getProgress()));
-        int progress = stored;
-        if (active) {
-            // EN-03 reports the same live completion LP-01 computes; persist it so no reader sees 0.
-            int live = progressService.liveProgressPercent(userId, courseId);
-            if (live >= 0) {
-                progress = live;
-                if (enrollment.getProgress() == null || enrollment.getProgress() != progress) {
-                    enrollment.setProgress(progress);
-                    enrollments.save(enrollment);
-                }
-            }
-        }
-        return new EnrollmentResponses.State(active, enrollment.getStatus(), progress, enrollment.getEnrolledAt());
+        return new EnrollmentResponses.State(active, enrollment.getStatus(), stored, enrollment.getEnrolledAt());
     }
 
     @Override

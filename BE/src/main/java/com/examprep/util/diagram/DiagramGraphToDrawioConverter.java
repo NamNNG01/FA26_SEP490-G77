@@ -187,7 +187,7 @@ public class DiagramGraphToDrawioConverter {
                     "edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;";
 
             default ->
-                // Kind mới vẫn được giữ lại và render bằng connector mặc định
+                // Unknown kinds are preserved and rendered with the default connector
                     "edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;";
         };
     }

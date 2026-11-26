@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react';
-import { cacheGeneration, getCached, setCached, useCachedQuery } from '@/hooks/useCachedQuery';
+import { cacheGeneration, setCached, useCachedQuery } from '@/hooks/useCachedQuery';
 import {
   studentCourseService,
-  type MyCourse,
   type StudentCourseDetail,
 } from '@/services/studentCourse.service';
 import { studentProgressService, type CourseProgress, type ProgressCount } from '@/services/studentProgress.service';
@@ -52,23 +51,20 @@ export const courseCacheKey = {
   moduleOverview: (courseId: number | string, moduleKey: number | string) => `student:module-overview:${courseId}:${moduleKey}`,
 };
 
-/** An LP-01 scope (course, module or General) as a LearningProgress: only the parts it has. */
-function fromBe(percent: number | null, counts: Record<ProgressPartKey, ProgressCount | null>): LearningProgress {
-  const order: ProgressPartKey[] = ['questions', 'exams', 'decks'];
-  const parts = order
-    .map(key => ({ key, done: counts[key]?.done ?? 0, total: counts[key]?.total ?? 0 }))
-    .filter(p => p.total > 0);
+/** An LP-01 module scope as a LearningProgress (questions answered right in Practice or Exam). */
+function fromBe(percent: number | null, questions: ProgressCount | null): LearningProgress {
+  const parts: ProgressPart[] =
+    questions && questions.total > 0
+      ? [{ key: 'questions', done: questions.done, total: questions.total }]
+      : [];
   return { percent, parts };
 }
 
-/** LP-01's course total. */
-export const beCourseProgress = (p: CourseProgress): LearningProgress =>
-  fromBe(p.progress, { questions: p.questions, exams: p.exams, decks: p.decks });
-
-/** LP-01's entry for a module (`GENERAL_MODULE` = the General pool); null when LP-01 has none, i.e. nothing to count. */
+/** LP-01's entry for a module (`GENERAL_MODULE` = the General pool); null when LP-01 has none or nothing to count. */
 export function beModuleProgress(p: CourseProgress, key: string): LearningProgress | null {
   const m = p.modules.find(x => (x.moduleId == null ? GENERAL_MODULE : String(x.moduleId)) === key);
-  return m ? fromBe(m.progress, { questions: m.questions, exams: m.exams, decks: m.decks }) : null;
+  if (!m || m.progress == null) return null;
+  return fromBe(m.progress, m.questions);
 }
 
 /**
@@ -121,14 +117,6 @@ export function useCourseDetail(courseId: string) {
     setCached(courseCacheKey.course(courseId), course);
     if (be !== 'error') {
       setCached(courseCacheKey.progress(courseId), be);
-      // Back on My Courses, this course's bar shows the percent just read.
-      const myCourses = getCached<MyCourse[]>(courseCacheKey.myCourses);
-      if (myCourses) {
-        setCached(
-          courseCacheKey.myCourses,
-          myCourses.map(c => (c.courseId === be.courseId ? { ...c, progress: be.progress } : c)),
-        );
-      }
     }
     return { course, be };
   });
@@ -164,7 +152,6 @@ export function useCourseDetail(courseId: string) {
       hasGeneral,
       /** Modules shown on the course page: the course's own, plus General when it holds anything. */
       moduleCount: modules.length + (hasGeneral ? 1 : 0),
-      progress: (be === 'error' ? 'error' : beCourseProgress(be)) as LearningProgress | 'error',
       be,
       moduleProgress,
     };

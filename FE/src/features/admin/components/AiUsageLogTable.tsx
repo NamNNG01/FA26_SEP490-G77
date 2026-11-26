@@ -15,7 +15,7 @@ const PAGE_SIZE = 20;
 type ResultFilter = 'all' | 'success' | 'failed';
 type SortKey = 'time' | 'tokens';
 
-/** Lower-case and strip Vietnamese diacritics so "huy" matches "Vũ Đức Huy". */
+/** Lower-case and strip diacritics so "huy" matches accented names. */
 function normalize(text: string): string {
   return text
     .normalize('NFD')

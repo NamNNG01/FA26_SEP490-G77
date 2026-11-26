@@ -6,7 +6,6 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Pagination } from '@/components/ui/Pagination';
 import { EmptyState } from '@/components/ui/Card';
-import { Progress } from '@/components/ui/Progress';
 import { SearchInput } from '@/components/common/SearchInput';
 import { Icon } from '@/assets/icons';
 import { ROUTES, studentCoursePath, studentWeaknessReportPath } from '@/app/routes';
@@ -14,7 +13,6 @@ import { useDashboard } from '@/hooks/useDashboard';
 import type { StudentRecentAttempt } from '@/services/dashboard.service';
 import { getApiErrorMessage } from '@/utils/apiError';
 import { studentCourseService, type MyCourse } from '@/services/studentCourse.service';
-import { studentProgressService } from '@/services/studentProgress.service';
 import { cacheGeneration, getCached, setCached } from '@/hooks/useCachedQuery';
 import { courseCacheKey } from '../components/courseProgress';
 import { CardGridSkeleton, CourseThumb, LoadError, PageTitle, STUDENT_PAGE_CLASS, formatDate } from '../components/studentUi';
@@ -85,20 +83,7 @@ export function MyCoursesPage() {
             return;
           }
         }
-        // Keep the live percents read last time until LP-01 gives the new ones, so the bars do not
-        // drop to MC-01's stored percent and climb back.
-        const known = new Map((cached ?? []).map(c => [c.courseId, c.progress]));
-        let list = owned.map(c => (known.has(c.courseId) ? { ...c, progress: known.get(c.courseId)! } : c));
-        update(list);
-        // LP-01 per active course: the bars show the BE's live percent.
-        studentProgressService.refreshCoursesProgress(
-          owned.filter(c => c.status === 'ACTIVE').map(c => c.courseId),
-          (courseId, progress) => {
-            list = list.map(c => (c.courseId === courseId ? { ...c, progress } : c));
-            update(list);
-          },
-          () => cancelled,
-        );
+        update(owned);
       })
       .catch(err => {
         // With a cached list on screen, keep it; the next visit tries again.
@@ -249,7 +234,6 @@ function MyCourseCard({ course, onOpen }: { course: MyCourse; onOpen: () => void
               <Icon.Calendar className="w-3.5 h-3.5" /> {formatDate(course.enrolledAt)}
             </span>
           </div>
-          {course.status !== 'CANCELLED' && <Progress value={course.progress ?? 0} label="Progress" size="sm" />}
           {course.nextExam && (
             <p className="mt-auto pt-2 border-t border-line text-xs text-content-soft truncate">
               Next exam: <span className="font-medium text-content-secondary">{course.nextExam.title}</span>

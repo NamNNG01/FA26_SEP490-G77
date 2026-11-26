@@ -165,7 +165,7 @@ public class DeckReviewController {
         Long version = body != null && body.get("version") instanceof Number n ? n.longValue() : null;
         String note = body != null && body.get("note") != null ? String.valueOf(body.get("note")) : null;
         Map<String, Object> result = service.approve(manager, id, version, note);
-        return ResponseEntity.ok(ApiResponse.success(result, "Đã duyệt bộ flashcard."));
+        return ResponseEntity.ok(ApiResponse.success(result, "Flashcard deck approved."));
     }
 
     @PostMapping("/{id}/reject")
@@ -178,6 +178,6 @@ public class DeckReviewController {
         Long version = body != null && body.get("version") instanceof Number n ? n.longValue() : null;
         String reason = body != null && body.get("reason") != null ? String.valueOf(body.get("reason")) : null;
         Map<String, Object> result = service.reject(manager, id, version, reason);
-        return ResponseEntity.ok(ApiResponse.success(result, "Đã từ chối bộ flashcard."));
+        return ResponseEntity.ok(ApiResponse.success(result, "Flashcard deck rejected."));
     }
 }

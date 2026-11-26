@@ -21,7 +21,7 @@ import { planLines } from '@/utils/planDescription';
 import { PaymentCheckoutModal, type PaymentItem } from '@/features/payment/components/PaymentCheckoutModal';
 import { CardGridSkeleton, LoadError, PageTitle, STUDENT_PAGE_CLASS, formatDate } from '../components/studentUi';
 
-const formatTokens = (n: number) => Math.max(0, n).toLocaleString('vi-VN');
+const formatTokens = (n: number) => Math.max(0, n).toLocaleString('en-US');
 type PlanWithDescription = SubscriptionPlan & { description: string | null };
 type TokenBalance = { status: 'loading' | 'error' } | { status: 'ready'; usage: AiUsage };
 
