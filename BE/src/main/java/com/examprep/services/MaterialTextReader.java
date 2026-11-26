@@ -2,6 +2,7 @@ package com.examprep.services;
 
 import com.examprep.exceptions.BadRequestException;
 import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.pdmodel.encryption.InvalidPasswordException;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.springframework.stereotype.Component;
 import org.w3c.dom.Node;
@@ -17,32 +18,70 @@ public class MaterialTextReader {
     private static final int LIMIT=20*1024*1024;
     private static final int TEXT_LIMIT=1_000_000;
 
+    public enum ReadErrorKind {
+        EMPTY_OR_TOO_LARGE_FILE,
+        UNSUPPORTED_FORMAT,
+        INVALID_FILE,
+        PDF_PROTECTED,
+        PDF_TOO_LARGE,
+        PDF_NO_TEXT_LAYER,
+        TEXT_TOO_LARGE,
+        READ_FAILED
+    }
+
+    public static class MaterialReadException extends BadRequestException {
+        private final ReadErrorKind kind;
+
+        public MaterialReadException(ReadErrorKind kind, String message) {
+            super(message);
+            this.kind = kind;
+        }
+
+        public ReadErrorKind getKind() {
+            return kind;
+        }
+    }
+
     public String read(String filename,byte[] bytes) {
-        if(bytes==null || bytes.length==0 || bytes.length>LIMIT) throw bad("File must contain data and be at most 20MB.");
+        if(bytes==null || bytes.length==0 || bytes.length>LIMIT) throw err(ReadErrorKind.EMPTY_OR_TOO_LARGE_FILE, "File must contain data and be at most 20MB.");
         String name=filename==null?"":filename.toLowerCase(Locale.ROOT);
         try {
             String text;
             if(name.endsWith(".txt")) {
                 text=StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(bytes)).toString();
-                if(text.indexOf('\0')>=0) throw bad("TXT must contain UTF-8 text.");
+                if(text.indexOf('\0')>=0) throw err(ReadErrorKind.INVALID_FILE, "TXT must contain UTF-8 text.");
             } else if(name.endsWith(".pdf")) {
-                if(bytes.length<5 || !new String(bytes,0,5,StandardCharsets.US_ASCII).equals("%PDF-")) throw bad("Invalid PDF file.");
+                if(bytes.length<5 || !new String(bytes,0,5,StandardCharsets.US_ASCII).equals("%PDF-")) throw err(ReadErrorKind.INVALID_FILE, "Invalid PDF file.");
                 try(var document=Loader.loadPDF(bytes)) {
-                    if(document.getNumberOfPages()>500 || !document.getCurrentAccessPermission().canExtractContent()) throw bad("PDF is too large or does not allow text extraction.");
+                    if(document.getNumberOfPages()>500) throw err(ReadErrorKind.PDF_TOO_LARGE, "PDF is too large or does not allow text extraction.");
+                    if(!document.getCurrentAccessPermission().canExtractContent()) throw err(ReadErrorKind.PDF_PROTECTED, "PDF is too large or does not allow text extraction.");
                     StringBuilder result=new StringBuilder(); PDFTextStripper stripper=new PDFTextStripper();
                     for(int page=1;page<=document.getNumberOfPages();page++) {
                         stripper.setStartPage(page); stripper.setEndPage(page); result.append(stripper.getText(document));
-                        if(result.length()>TEXT_LIMIT) throw bad("Extracted text is too large.");
+                        if(result.length()>TEXT_LIMIT) throw err(ReadErrorKind.PDF_TOO_LARGE, "Extracted text is too large.");
                     }
                     text=result.toString();
+                } catch (InvalidPasswordException ex) {
+                    throw err(ReadErrorKind.PDF_PROTECTED, "Could not extract text from this file. Use a valid, unencrypted PDF, DOCX or UTF-8 TXT file.");
                 }
             } else if(name.endsWith(".docx")) text=docx(bytes);
-            else throw bad("Supported files: pdf, docx and txt.");
+            else throw err(ReadErrorKind.UNSUPPORTED_FORMAT, "Supported files: pdf, docx and txt.");
             text=text.replace("\uFEFF", "").strip();
-            if(text.isEmpty() || text.length()>TEXT_LIMIT) throw bad("File must contain readable text (at most 1,000,000 characters).");
+            if(text.isEmpty()) {
+                throw err(name.endsWith(".pdf") ? ReadErrorKind.PDF_NO_TEXT_LAYER : ReadErrorKind.READ_FAILED,
+                        "File must contain readable text (at most 1,000,000 characters).");
+            }
+            if(text.length()>TEXT_LIMIT) {
+                throw err(name.endsWith(".pdf") ? ReadErrorKind.PDF_TOO_LARGE : ReadErrorKind.TEXT_TOO_LARGE,
+                        "File must contain readable text (at most 1,000,000 characters).");
+            }
             return text;
-        } catch(BadRequestException ex) { throw ex; }
-        catch(Exception ex) { throw bad("Could not extract text from this file. Use a valid, unencrypted PDF, DOCX or UTF-8 TXT file."); }
+        } catch(MaterialReadException ex) { throw ex; }
+        catch(BadRequestException ex) { throw ex; }
+        catch(Exception ex) {
+            throw err(name.endsWith(".pdf") ? ReadErrorKind.INVALID_FILE : ReadErrorKind.READ_FAILED,
+                    "Could not extract text from this file. Use a valid, unencrypted PDF, DOCX or UTF-8 TXT file.");
+        }
     }
 
     /** Page count of a PDF upload; DOCX has no stable page count, so callers get {@code null}. */
@@ -87,4 +126,5 @@ public class MaterialTextReader {
         else for(Node child=node.getFirstChild();child!=null;child=child.getNextSibling()) appendText(child,text);
     }
     private BadRequestException bad(String message) { return new BadRequestException(message); }
+    private MaterialReadException err(ReadErrorKind kind, String message) { return new MaterialReadException(kind, message); }
 }

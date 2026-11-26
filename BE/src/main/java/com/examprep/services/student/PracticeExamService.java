@@ -51,6 +51,7 @@ public class PracticeExamService {
     private final EnrollmentRepository enrollments;
     private final QuestionRepository questions;
     private final UserRepository users;
+    private final StudyPlanner planner;
     private final ObjectMapper json;
 
     // ------------------------------------------------------------------ PQ-01
@@ -61,13 +62,22 @@ public class PracticeExamService {
         String requestedType = request.examType();
         boolean essay = "ESSAY".equals(requestedType);
         boolean mixed = "MIXED".equals(requestedType);
-        List<String> types = mixed ? ALL_PRACTICE_TYPES : (essay ? ASSESSMENT_TYPES : AUTO_GRADED);
+        boolean smart = "SMART".equals(request.allocation());
+        List<String> types = typesOf(requestedType);
 
         List<Long> categoryIds = new ArrayList<>();
         List<QuestionCandidate> drawn = new ArrayList<>();
         int totalCount = 0;
 
-        if (request.moduleQuestionCounts() != null && !request.moduleQuestionCounts().isEmpty()) {
+        if (smart) {
+            SmartSplit split = smartSplit(userId, courseId, request);
+            drawn = StudyPlanner.draw(split.snapshot(), split.counts());
+            for (int i = 0; i < split.counts().size(); i++) {
+                Long moduleId = split.snapshot().modules().get(i).moduleId();
+                if (split.counts().get(i) > 0 && moduleId != null) categoryIds.add(moduleId);
+            }
+            totalCount = drawn.size();
+        } else if (request.moduleQuestionCounts() != null && !request.moduleQuestionCounts().isEmpty()) {
             if (request.moduleQuestionCounts().stream().mapToInt(PracticeDtos.ModuleQuestionCount::questionCount).sum() > 100) {
                 throw new BadRequestException("moduleQuestionCounts must add up to at most 100 questions.");
             }
@@ -111,7 +121,8 @@ public class PracticeExamService {
         }
 
         String examType = mixed ? "MIXED" : (essay ? "ESSAY" : "QUIZ");
-        String title = titleOr(request.title(), "Custom practice - " + (mixed ? "Mixed" : (essay ? "Essay" : "Multiple choice")));
+        String title = titleOr(request.title(), smart ? "Personalized practice"
+                : "Custom practice - " + (mixed ? "Mixed" : (essay ? "Essay" : "Multiple choice")));
 
         // Build practice_config JSON
         String practiceConfig = writePracticeConfig(examType, totalCount, request.difficulty(),
@@ -129,6 +140,37 @@ public class PracticeExamService {
                 drawn.stream().map(QuestionCandidate::questionId).toList(), practiceConfig);
 
         return new PracticeDtos.Created(exam.getExamId(), title, totalCount, duration, exam.getExamId());
+    }
+
+    /** The SMART split PQ-01 would use, without creating anything; every module of the pool is listed, by priority. */
+    @Transactional(readOnly = true)
+    public PracticeDtos.Plan plan(Long userId, PracticeDtos.Create request) {
+        requireEnrolled(userId, request.courseId());
+        SmartSplit split = smartSplit(userId, request.courseId(), request);
+        List<PracticeDtos.PlanItem> items = new ArrayList<>();
+        for (int i = 0; i < split.counts().size(); i++) {
+            StudyPlanner.Profile p = split.snapshot().modules().get(i);
+            items.add(new PracticeDtos.PlanItem(p.moduleId(), p.name(), split.counts().get(i), p.bankSize(), p.mastery(),
+                    p.accuracy(), p.answered(), p.stillWrong(), p.priority()));
+        }
+        return new PracticeDtos.Plan(request.questionCount(), items);
+    }
+
+    private record SmartSplit(StudyPlanner.Snapshot snapshot, List<Integer> counts) { }
+
+    private SmartSplit smartSplit(Long userId, Long courseId, PracticeDtos.Create request) {
+        if (request.questionCount() == null) throw new BadRequestException("questionCount is required.");
+        List<QuestionCandidate> pool = findCandidates(courseId, typesOf(request.examType()), true, List.of(-1L), request.difficulty());
+        Long focus = request.focusModuleId();
+        // The pool holds only this course's visible modules, so a foreign or hidden module just leaves it empty (422).
+        if (focus != null) pool = pool.stream().filter(c -> focus == 0 ? c.moduleId() == null : focus.equals(c.moduleId())).toList();
+        if (pool.size() < request.questionCount()) throw notEnough(pool.size());
+        StudyPlanner.Snapshot snapshot = planner.snapshot(userId, courseId, pool);
+        return new SmartSplit(snapshot, StudyPlanner.allocate(snapshot.modules(), request.questionCount()));
+    }
+
+    private static List<String> typesOf(String examType) {
+        return "MIXED".equals(examType) ? ALL_PRACTICE_TYPES : "ESSAY".equals(examType) ? ASSESSMENT_TYPES : AUTO_GRADED;
     }
 
     /** The student's exam name, or the fallback when it is blank. */

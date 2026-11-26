@@ -12,8 +12,8 @@ import java.util.function.Function;
 
 /**
  * Per-module (the API calls them categories), per-type and per-difficulty accuracy of one student in one course, with a
- * 7-day trend. A question counts once, by its latest graded answer, so retrying it does not pile up and a mistake the
- * student has since fixed no longer drags the module down.
+ * 7-day trend. A question counts once, by its latest graded answer in an exam attempt or in Module Practice, so retrying
+ * it does not pile up and a mistake the student has since fixed no longer drags the module down.
  */
 @Component
 @RequiredArgsConstructor
@@ -42,16 +42,26 @@ public class LearningStats {
     public record Stats(int finishedAttempts, int wrongAnswers, List<ModuleStat> modules, List<TypeStat> types,
                         List<DifficultyStat> difficulties, List<Topic> notPracticed) { }
 
-    private record Verdict(Long questionId, Long moduleId, String moduleName, String type, String difficulty, boolean correct, Instant at) { }
+    public record Verdict(Long questionId, Long moduleId, String moduleName, String type, String difficulty, boolean correct, Instant at) { }
+
+    /** Graded answers since {@code from}, exam attempts and Module Practice together, oldest first. */
+    public List<Verdict> verdicts(Long userId, Long courseId, Instant from) {
+        List<Verdict> all = new ArrayList<>();
+        java.util.function.Consumer<Object[]> add = r -> all.add(
+                new Verdict((Long) r[0], (Long) r[1], (String) r[2], (String) r[3], (String) r[4], (Boolean) r[5], (Instant) r[6]));
+        repository.verdicts(userId, courseId, from).forEach(add);
+        // ponytail: Module Practice keeps only the last answer per question, so its history is one point in the trend.
+        repository.practiceVerdicts(userId, courseId, from).forEach(add);
+        all.sort(Comparator.comparing(Verdict::at));
+        return all;
+    }
 
     public Stats forStudent(Long userId, Long courseId, Instant from) {
         Instant now = Instant.now();
         Instant weekAgo = now.minus(7, ChronoUnit.DAYS), twoWeeksAgo = now.minus(14, ChronoUnit.DAYS);
         // ponytail: loads every graded answer of the student in the course into memory; aggregate in SQL if one student
         // ever reaches hundreds of thousands of answers in a course.
-        List<Verdict> all = repository.verdicts(userId, courseId, from.isBefore(twoWeeksAgo) ? from : twoWeeksAgo).stream()
-                .map(r -> new Verdict((Long) r[0], (Long) r[1], (String) r[2], (String) r[3], (String) r[4], (Boolean) r[5], (Instant) r[6]))
-                .toList();
+        List<Verdict> all = verdicts(userId, courseId, from.isBefore(twoWeeksAgo) ? from : twoWeeksAgo);
         Collection<Verdict> period = latest(all, v -> !v.at().isBefore(from));
         Collection<Verdict> recent = latest(all, v -> !v.at().isBefore(weekAgo));
         Collection<Verdict> before = latest(all, v -> !v.at().isBefore(twoWeeksAgo) && v.at().isBefore(weekAgo));

@@ -32,7 +32,10 @@ export function imageFileError(file: File): string | null {
 async function upload<T>(url: string, file: File): Promise<T> {
   const form = new FormData();
   form.append('file', file);
-  const res = await apiClient.post<ApiResponse<T>>(url, form, { headers: { 'Content-Type': 'multipart/form-data' } });
+  const res = await apiClient.post<ApiResponse<T>>(url, form, {
+    headers: { 'Content-Type': undefined },
+    timeout: 60000,
+  });
   return res.data.data;
 }
 

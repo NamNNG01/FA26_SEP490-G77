@@ -90,6 +90,87 @@ class AuthControllerTest {
     }
 
     @Test
+    void registerRejectsMissingWeakAndOversizedMultibytePasswords() throws Exception {
+        // Missing password
+        mockMvc.perform(post("/api/v1/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(RegisterRequest.builder()
+                                .email("student@example.test")
+                                .password("")
+                                .fullName("Test Student")
+                                .build())))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.data.password").value("Password is required"));
+
+        // Numeric only, missing uppercase, missing number, missing symbol
+        for (String weak : java.util.List.of("123456789", "password@1", "Password@!", "Password123")) {
+            mockMvc.perform(post("/api/v1/auth/register")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(RegisterRequest.builder()
+                                    .email("student@example.test")
+                                    .password(weak)
+                                    .fullName("Test Student")
+                                    .build())))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.data.password").value(
+                            "Password must include at least one uppercase letter, one number, and one symbol"));
+        }
+
+        // Multibyte UTF-8 exceeding 72 bytes (27 chars = 75 bytes)
+        String multibyteOver72 = "A1!" + "ệ".repeat(24);
+        mockMvc.perform(post("/api/v1/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(RegisterRequest.builder()
+                                .email("student@example.test")
+                                .password(multibyteOver72)
+                                .fullName("Test Student")
+                                .build())))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.data.password").value("Password must not exceed 72 UTF-8 bytes"));
+    }
+
+    @Test
+    void registerAcceptsValidMultibytePasswordWithin72Bytes() throws Exception {
+        String validMultibyte = "A1!" + "é".repeat(34); // 37 chars, 71 UTF-8 bytes
+        when(authService.register(any(RegisterRequest.class))).thenReturn(UserResponse.builder()
+                .userId(105L).email("student@example.test").fullName("Test Student").role("STUDENT").status("ACTIVE").build());
+
+        mockMvc.perform(post("/api/v1/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(RegisterRequest.builder()
+                                .email("student@example.test")
+                                .password(validMultibyte)
+                                .fullName("Test Student")
+                                .build())))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
+    void resetAndChangePasswordEnforceSamePasswordPolicy() throws Exception {
+        mockMvc.perform(post("/api/v1/auth/password/reset")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(ResetPasswordRequest.builder()
+                                .token("rawResetToken")
+                                .newPassword("123456789")
+                                .build())))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.data.newPassword").exists());
+
+        UserPrincipal principal = UserPrincipal.create(101L, "student@gmail.com", "STUDENT");
+        mockMvc.perform(put("/api/v1/auth/password/change")
+                        .with(csrf())
+                        .with(user(principal))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(ChangePasswordRequest.builder()
+                                .currentPassword("Password@123")
+                                .newPassword("A1!" + "ệ".repeat(24))
+                                .build())))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.data.newPassword").value("Password must not exceed 72 UTF-8 bytes"));
+    }
+
+    @Test
     void login_Success() throws Exception {
         LoginRequest request = LoginRequest.builder()
                 .email("student@gmail.com")

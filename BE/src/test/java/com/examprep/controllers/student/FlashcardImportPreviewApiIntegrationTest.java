@@ -124,6 +124,22 @@ class FlashcardImportPreviewApiIntegrationTest {
     }
 
     @Test
+    void rejectsMoreThan500RowsAcrossFormats() throws Exception {
+        List<List<String>> rows500 = new java.util.ArrayList<>();
+        for (int i = 1; i <= 500; i++) rows500.add(List.of("Front " + i, "Back " + i));
+        preview(table("xlsx", rows500)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalRows").value(500));
+
+        List<List<String>> rows501 = new java.util.ArrayList<>(rows500);
+        rows501.add(List.of("Front 501", "Back 501"));
+        preview(table("xlsx", rows501)).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.data.code").value("TOO_MANY_ROWS"))
+                .andExpect(jsonPath("$.message").value("File has more than 500 rows"));
+        preview(table("docx", rows501)).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.data.code").value("TOO_MANY_ROWS"));
+    }
+
+    @Test
     void courseOwnerCanImportIntoModuleWithoutAnAssignmentRow() throws Exception {
         JsonNode saved = data(bulk(manager, newDeck(course.getCourseId(), module.getModuleId()), "IMPORT")
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.data.createdCount").value(1)));

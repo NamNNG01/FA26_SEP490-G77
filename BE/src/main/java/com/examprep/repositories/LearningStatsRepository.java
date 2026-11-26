@@ -22,6 +22,13 @@ public interface LearningStatsRepository extends Repository<AttemptAnswer, Long>
             "AND aa.isCorrect IS NOT NULL AND a.submittedAt >= :from ORDER BY a.submittedAt ASC, aa.attemptAnswerId ASC")
     List<Object[]> verdicts(@Param("userId") Long userId, @Param("courseId") Long courseId, @Param("from") Instant from);
 
+    /** The same shape as {@link #verdicts} for Module Practice: the last graded answer per practised question since :from. */
+    @Query("SELECT q.questionId, m.moduleId, m.title, q.questionType, q.difficulty, p.lastIsCorrect, p.lastAnsweredAt " +
+            "FROM QuestionPracticeProgress p JOIN p.question q LEFT JOIN q.module m " +
+            "WHERE p.user.userId = :userId AND p.course.courseId = :courseId AND p.lastIsCorrect IS NOT NULL " +
+            "AND p.lastAnsweredAt >= :from")
+    List<Object[]> practiceVerdicts(@Param("userId") Long userId, @Param("courseId") Long courseId, @Param("from") Instant from);
+
     /** [moduleId, title] of the course's visible modules that have live questions, in course order. */
     @Query("SELECT m.moduleId, m.title FROM Module m WHERE m.course.courseId = :courseId AND m.status <> 'HIDDEN' " +
             "AND EXISTS (SELECT q FROM Question q WHERE q.module = m AND q.deletedAt IS NULL AND q.status = 'ACTIVE') " +

@@ -1,9 +1,11 @@
 package com.examprep.services;
 
+import com.examprep.dto.ResponseCode;
 import com.examprep.dto.question.ImportBlockResult;
 import com.examprep.dto.question.ImportPreviewResponse;
 import com.examprep.entities.User;
 import com.examprep.exceptions.BadRequestException;
+import com.examprep.exceptions.BaseException;
 import com.examprep.exceptions.ForbiddenException;
 import com.examprep.util.importer.DocxTextExtractor;
 import com.examprep.util.importer.ExcelQuestionParser;
@@ -101,6 +103,11 @@ public class QuestionImportServiceImpl implements QuestionImportService {
                 blockResults.add(templateQuestionMapper.mapAndValidateBlock(rawBlocks.get(i), i + 1));
             }
         }
+        if (blockResults.isEmpty()) {
+            throw new BaseException(ResponseCode.BAD_REQUEST,
+                    "The file contains no questions in the import template format.",
+                    Map.of("code", "VALIDATION_FAILED"));
+        }
 
         int validCount = 0;
         int errorCount = 0;
@@ -123,7 +130,16 @@ public class QuestionImportServiceImpl implements QuestionImportService {
     }
 
     private String detectFileType(String originalFilename, byte[] bytes) {
-        String lowerName = originalFilename != null ? originalFilename.toLowerCase(Locale.ROOT) : "";
+        String lowerName = originalFilename != null ? originalFilename.toLowerCase(Locale.ROOT).trim() : "";
+        if (lowerName.contains(".")) {
+            boolean supportedExt = lowerName.endsWith(".pdf")
+                    || lowerName.endsWith(".docx")
+                    || lowerName.endsWith(".xlsx")
+                    || lowerName.endsWith(".xls");
+            if (!supportedExt) {
+                throw new BadRequestException("Unsupported file format. Supported: .pdf, .docx, .xlsx, .xls");
+            }
+        }
         boolean isPdfMagic = bytes.length >= 5 && "%PDF-".equals(new String(bytes, 0, 5, StandardCharsets.US_ASCII));
         boolean isZipMagic = bytes.length >= 4 && bytes[0] == 0x50 && bytes[1] == 0x4B && bytes[2] == 0x03 && bytes[3] == 0x04;
         boolean isOle2Magic = bytes.length >= 4

@@ -168,6 +168,11 @@ public interface StudentQuestionReviewRepository extends JpaRepository<StudentQu
            "ORDER BY r.wrongCount DESC, r.lastPracticedAt ASC")
     List<StudentQuestionReview> findWeakSpots(@Param("studentId") Long studentId, @Param("courseId") Long courseId, Pageable pageable);
 
+    /** Study planner: the ids among these questions that are still wrong in the student's notebook. */
+    @Query("SELECT r.question.questionId FROM StudentQuestionReview r WHERE r.student.userId = :studentId " +
+           "AND r.status = 'WRONG_BOOKMARKED' AND r.question.questionId IN :questionIds")
+    List<Long> findWrongQuestionIdsIn(@Param("studentId") Long studentId, @Param("questionIds") Collection<Long> questionIds);
+
     /** AI-03: still-wrong live questions of a course not practised since :before. */
     @Query("SELECT COUNT(r) FROM StudentQuestionReview r JOIN r.question q LEFT JOIN q.course qc LEFT JOIN q.module m LEFT JOIN m.course mc " +
            "WHERE r.student.userId = :studentId AND r.status = 'WRONG_BOOKMARKED' AND q.deletedAt IS NULL AND q.status = 'ACTIVE' " +

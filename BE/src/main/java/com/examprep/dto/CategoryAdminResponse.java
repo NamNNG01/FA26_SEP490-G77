@@ -1,3 +1,10 @@
 package com.examprep.dto;
 
-public record CategoryAdminResponse(Long categoryId, String code, String name, Integer sortOrder, Boolean isActive) {}
+public record CategoryAdminResponse(
+        Long categoryId,
+        String name,
+        String slug,
+        String description,
+        Integer sortOrder,
+        Boolean isActive
+) {}

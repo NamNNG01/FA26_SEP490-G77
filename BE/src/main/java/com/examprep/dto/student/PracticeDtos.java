@@ -25,7 +25,20 @@ public final class PracticeDtos {
                          /** How the student takes it: EXAM (default, saved as PRACTICE_EXAM) or PRACTICE (saved as PRACTICE).
                           *  durationMinutes is required when mode is EXAM (or omitted); PRACTICE mode may omit it. */
                          @Pattern(regexp = "EXAM|PRACTICE") String mode,
-                         @Size(max = 50) List<@NotNull @jakarta.validation.Valid ModuleQuestionCount> moduleQuestionCounts) {}
+                         @Size(max = 50) List<@NotNull @jakarta.validation.Valid ModuleQuestionCount> moduleQuestionCounts,
+                         /** SMART: questionCount is spread over the modules by the student's weak spots (categoryIds and
+                          *  moduleQuestionCounts are ignored); CUSTOM or null: as picked. */
+                         @Pattern(regexp = "SMART|CUSTOM") String allocation,
+                         /** SMART only: draw from this one module (0 = the course questions outside any module). */
+                         @PositiveOrZero Long focusModuleId) {}
+
+    /** One module of a SMART split; categoryId null = course questions outside any module. */
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record PlanItem(Long categoryId, String name, int questionCount, int available, String mastery, int accuracy,
+                           int answered, int stillWrong, int priority) {}
+
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record Plan(int questionCount, List<PlanItem> modules) {}
 
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record Created(Long practiceId, String title, int questionCount, Integer durationMinutes, Long examId) {}

@@ -14,6 +14,8 @@ import java.util.Optional;
 public interface CategoryRepository extends JpaRepository<Category, Long> {
     boolean existsByCode(String code);
 
+    boolean existsBySlug(String slug);
+
     @Query("select c from Category c order by c.sortOrder, c.name, c.categoryId")
     List<Category> findTree();
 
@@ -24,6 +26,9 @@ public interface CategoryRepository extends JpaRepository<Category, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select c from Category c where c.categoryId = :id")
     Optional<Category> findForUpdate(Long id);
+
+    @Query("select count(c) from Category c where c.parentId = :parentId and c.isDeleted = false")
+    long countActiveChildren(Long parentId);
 
     @Query("select count(c) from Course c where c.categoryId = :categoryId")
     long countCourses(Long categoryId);

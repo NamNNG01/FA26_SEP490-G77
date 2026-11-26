@@ -4,7 +4,7 @@ import type { ApiResponse } from '@/types/api';
 export interface AdminCategoryNode {
   categoryId: number;
   slug?: string;
-  code: string;
+  code?: string;
   name: string;
   description?: string | null;
   sortOrder: number;
@@ -30,7 +30,7 @@ export interface UpdateCategoryRequest {
 export interface AdminCategoryItem {
   categoryId: number;
   slug?: string;
-  code: string;
+  code?: string;
   name: string;
   description?: string | null;
   sortOrder: number;

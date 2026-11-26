@@ -21,7 +21,7 @@ public class AuthController {
     private final AuthService authService;
 
     @PostMapping("/register")
-    @Operation(summary = "AUTH-01: Register Student Account", description = "Registers a new user account. Role is strictly assigned to STUDENT.")
+    @Operation(summary = "AUTH-01: Register Student Account", description = "Registers a new user account (role strictly assigned to STUDENT). Password must be at least 8 characters, include an uppercase letter, number, and symbol, and not exceed 72 UTF-8 bytes.")
     public ResponseEntity<ApiResponse<UserResponse>> register(@Valid @RequestBody RegisterRequest request) {
         UserResponse response = authService.register(request);
         return ResponseEntity.status(HttpStatus.CREATED)
@@ -73,14 +73,14 @@ public class AuthController {
     }
 
     @PostMapping("/password/reset")
-    @Operation(summary = "AUTH-07: Reset Password", description = "Resets the password with a valid reset token and revokes all sessions.")
+    @Operation(summary = "AUTH-07: Reset Password", description = "Resets the password with a valid reset token and revokes all sessions. New password must be at least 8 characters, include an uppercase letter, number, and symbol, and not exceed 72 UTF-8 bytes.")
     public ResponseEntity<ApiResponse<Void>> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
         authService.resetPassword(request);
         return ResponseEntity.ok(ApiResponse.success(null, "Password reset successfully."));
     }
 
     @PutMapping("/password/change")
-    @Operation(summary = "AUTH-08: Change Password", description = "Changes the password of the logged-in user and revokes all other sessions.")
+    @Operation(summary = "AUTH-08: Change Password", description = "Changes the password of the logged-in user and revokes all other sessions. New password must be at least 8 characters, include an uppercase letter, number, and symbol, and not exceed 72 UTF-8 bytes.")
     public ResponseEntity<ApiResponse<Void>> changePassword(@Valid @RequestBody ChangePasswordRequest request,
                                                            @AuthenticationPrincipal UserPrincipal currentUser) {
         authService.changePassword(request, currentUser);

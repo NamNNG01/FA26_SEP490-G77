@@ -1,4 +1,4 @@
--- V100__seed_short_term_ai_token_packs.sql
+-- V104__seed_short_term_ai_token_packs.sql
 -- Seed short-term exam-cram AI Token Packs (7-day and 14-day) for crash exam preparation.
 
 INSERT INTO subscription_plans (plan_name, price, duration_days, ai_token_limit, is_active, sort_order, features_json, created_at, updated_at)

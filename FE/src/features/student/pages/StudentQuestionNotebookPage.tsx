@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuietRefresh } from '@/hooks/useAutoRefresh';
-import { useNavigate } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { Button } from "@/components/ui/Button";
 import { Alert } from "@/components/ui/Alert";
 import { Pagination } from "@/components/ui/Pagination";
@@ -50,11 +50,16 @@ const SESSION_EXAM_TYPES = [
 export function StudentQuestionNotebookPage() {
   const navigate = useNavigate();
   const toast = useToast();
-  const [filter, setFilter] = useState<"all" | "wrong" | "bookmarked">("all");
+  // ?courseId=&filter=wrong opens the notebook pre-filtered (e.g. from the Weakness Analysis page).
+  const [params] = useSearchParams();
+  const initialFilter = params.get("filter");
+  const [filter, setFilter] = useState<"all" | "wrong" | "bookmarked">(
+    initialFilter === "wrong" || initialFilter === "bookmarked" ? initialFilter : "all",
+  );
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [examType, setExamType] = useState<"" | "QUIZ" | "ESSAY" | "CODE">("");
-  const [courseId, setCourseId] = useState("");
+  const [courseId, setCourseId] = useState(() => (/^\d+$/.test(params.get("courseId") ?? "") ? params.get("courseId")! : ""));
   const [courses, setCourses] = useState<MyCourse[]>([]);
   const [page, setPage] = useState(0);
   const [sessionType, setSessionType] = useState<
