@@ -22,6 +22,20 @@ public interface QuestionRepository extends JpaRepository<Question, Long>, JpaSp
     @Query("SELECT q FROM Question q WHERE q.questionId = :id AND q.deletedAt IS NULL")
     Optional<Question> findActiveById(@Param("id") Long id);
 
+    @Query("""
+            SELECT q FROM Question q
+            LEFT JOIN FETCH q.course c
+            LEFT JOIN FETCH c.manager
+            LEFT JOIN FETCH q.module m
+            LEFT JOIN FETCH m.course
+            LEFT JOIN FETCH q.group g
+            LEFT JOIN FETCH g.course
+            LEFT JOIN FETCH g.module gm
+            LEFT JOIN FETCH gm.course
+            WHERE q.questionId IN :ids AND q.deletedAt IS NULL
+            """)
+    List<Question> findActiveByIdsWithHierarchy(@Param("ids") Collection<Long> ids);
+
     // Questions a student may receive: active and approved, not just soft-deleted.
     @Query("""
     SELECT q
