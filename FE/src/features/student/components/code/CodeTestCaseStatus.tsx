@@ -48,6 +48,11 @@ export function CodeTestCaseStatus({ submission }: { submission: CodeSubmission 
             <li key={testCase.testCaseId ?? `case-${index}`} className="rounded-[10px] border border-line-soft bg-surface-muted px-3 py-2">
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                 <span className="text-xs font-bold text-content-soft">Test case {(testCase.orderIndex ?? index) + 1}</span>
+                {testCase.hidden && (
+                  <Badge size="sm" variant="default">
+                    Hidden
+                  </Badge>
+                )}
                 <Badge size="sm" variant={testCase.passed ? 'success' : 'danger'}>
                   {testCase.passed ? 'Passed' : 'Failed'}
                 </Badge>

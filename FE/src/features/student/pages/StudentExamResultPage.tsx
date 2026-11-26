@@ -679,9 +679,14 @@ export function StudentExamResultPage() {
                   ) : undefined
                 }
                 gradeDetail={
-                  q.questionType === 'CODE' && codeSubs && viewedAttempt
+                  q.questionType === 'CODE' && codeSubs
                     ? (() => {
-                        const sub = latestSubmissionOfAttempt(codeSubs, q.questionId, viewedAttempt);
+                        const attemptRef = viewedAttempt ?? {
+                          attemptId: result.attemptId,
+                          startTime: '',
+                          submittedAt: result.submittedAt,
+                        };
+                        const sub = latestSubmissionOfAttempt(codeSubs, q.questionId, attemptRef);
                         return sub ? (
                           <div className="rounded-[10px] border border-line bg-surface p-4 text-sm text-content-soft">
                             <CodeTestCaseStatus submission={sub} />
@@ -1088,6 +1093,7 @@ function ResultQuestionCard({
       /* Answers are always shown; only the explanation is collapsible. */
       <div className="border-t border-line px-4 py-4 space-y-4">
         <AnswerReview question={q} />
+        {gradeDetail}
         {q.gradingError && <p className="text-sm text-danger">Grading failed: {q.gradingError}</p>}
         {/* Exams and practice alike: the explanation shows once the attempt is submitted. */}
         {hasExplanation(q) && (
