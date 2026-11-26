@@ -1,7 +1,6 @@
 package com.examprep.services.student;
 
 import com.examprep.dto.student.QuestionCandidate;
-import com.examprep.repositories.LearningStatsRepository;
 import com.examprep.repositories.StudentQuestionReviewRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -12,13 +11,13 @@ import java.util.*;
 /**
  * Where one student stands in each module of a course, and how a personalized practice exam spreads its questions over
  * the modules. Pure numbers from the student's answers and mistake notebook: no AI, no quota.
- * A question counts by its latest graded answer, like {@link LearningStats}.
+ * A question counts by its latest graded answer, exam or Module Practice, like {@link LearningStats}.
  */
 @Component
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class StudyPlanner {
-    private final LearningStatsRepository stats;
+    private final LearningStats learning;
     private final StudentQuestionReviewRepository reviews;
 
     /** One module (moduleId null = course questions outside any module) restricted to the given question pool. */
@@ -55,7 +54,7 @@ public class StudyPlanner {
 
     public Snapshot snapshot(Long userId, Long courseId, List<QuestionCandidate> pool) {
         Map<Long, Boolean> latest = new HashMap<>();
-        for (Object[] r : stats.verdicts(userId, courseId, LearningStats.ALL_TIME)) latest.put((Long) r[0], (Boolean) r[5]);
+        for (LearningStats.Verdict v : learning.verdicts(userId, courseId, LearningStats.ALL_TIME)) latest.put(v.questionId(), v.correct());
         List<Long> ids = pool.stream().map(QuestionCandidate::questionId).toList();
         // ponytail: one IN over the whole pool; page it if a course bank grows past a few thousand questions.
         Set<Long> stillWrong = ids.isEmpty() ? Set.of() : new HashSet<>(reviews.findWrongQuestionIdsIn(userId, ids));

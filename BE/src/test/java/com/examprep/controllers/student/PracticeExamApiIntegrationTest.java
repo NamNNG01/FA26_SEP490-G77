@@ -298,6 +298,28 @@ class PracticeExamApiIntegrationTest {
                 .andExpect(status().isForbidden());
     }
 
+    @Test void modulePracticeAnswersCountAsSeen() throws Exception {
+        Question practised = em.createQuery("select q from Question q where q.module = :m order by q.questionId", Question.class)
+                .setParameter("m", io).getResultList().get(0);
+        em.persist(QuestionPracticeProgress.builder().user(student).course(course).module(io).question(practised)
+                .totalAttempts(1).gradedAttempts(1).correctAttempts(1).lastIsCorrect(true).lastAnsweredAt(Instant.now())
+                .updatedAt(Instant.now()).build());
+        em.flush();
+        JsonNode insights = data(mvc.perform(get("/api/v1/student/ai/insights").param("courseId", course.getCourseId().toString())
+                .with(as(student))).andExpect(status().isOk()));
+        JsonNode ioRow = null;
+        for (JsonNode m : insights.path("modules")) if ("IO".equals(m.path("name").asText())) ioRow = m;
+        assertNotNull(ioRow);
+        assertEquals(1, ioRow.path("answered").asInt());
+        assertEquals(100, ioRow.path("accuracy").asInt());
+        // 2 of IO's 3 questions: the two never seen come before the one already right in Module Practice.
+        JsonNode created = data(create(student, "{\"courseId\":" + course.getCourseId() + ",\"questionCount\":2,\"durationMinutes\":30,"
+                + "\"allocation\":\"SMART\",\"focusModuleId\":" + io.getModuleId() + "}").andExpect(status().isCreated()));
+        List<Long> drawn = em.createQuery("select eq.question.questionId from ExamQuestion eq where eq.exam.examId = :e", Long.class)
+                .setParameter("e", created.path("examId").asLong()).getResultList();
+        assertFalse(drawn.contains(practised.getQuestionId()));
+    }
+
     ResultActions create(User actor, String body) throws Exception {
         return mvc.perform(post("/api/v1/student/practice-exams").with(as(actor)).contentType(MediaType.APPLICATION_JSON).content(body));
     }
